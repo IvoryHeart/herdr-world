@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -191,7 +192,7 @@ describe("agent interest", () => {
     let terminals = ["term_2"];
     let listings = 0;
     let reconciliation = Promise.resolve();
-    type Runtime = ConnectionRuntime & { herdr: { call(): Promise<unknown> } };
+    type Runtime = ConnectionRuntime & ReturnType<typeof herdrRuntimeFixture>;
     const manager = new ConnectionManager<Runtime>("conn-a", (status) => {
       if (status.state === "ready")
         reconciliation = reconcileReadyInterest(
@@ -212,12 +213,12 @@ describe("agent interest", () => {
         startTransport: async () => {},
         startBackground: () => {},
         stop: async () => {},
-        herdr: {
+        ...herdrRuntimeFixture({
           call: async () => {
             listings += 1;
             return { panes: terminals.map((terminal_id) => ({ terminal_id })) };
           },
-        },
+        }),
       }),
     });
     try {
@@ -249,12 +250,12 @@ describe("agent interest", () => {
         connectionId: "conn-a",
         isCurrent: () => true,
         runtime: {
-          herdr: {
+          ...herdrRuntimeFixture({
             call: async () => {
               calls += 1;
               return calls === 1 ? older.promise : { panes: [] };
             },
-          },
+          }),
         },
       },
       () => {},

@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -13,7 +15,7 @@ import type { SshTunnelError } from "./ssh-tunnel";
 const herdrPath = String.raw`C:\Herdr O'Brien\herdr.exe`;
 
 function config() {
-  const directory = mkdtempSync("/tmp/roamgate-stdio-test-");
+  const directory = mkdtempSync(join(tmpdir(), "roamgate-stdio-test-"));
   return {
     socketPath: `${directory}/control.sock`,
     clientSocketPath: `${directory}/render.sock`,

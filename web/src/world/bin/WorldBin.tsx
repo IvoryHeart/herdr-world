@@ -9,6 +9,12 @@ import { tabCardKey } from "../../../../shared/terminalColor";
 import { sharedBoardStore } from "../board/boardDocument";
 import type { WorldLeafObject, WorldObject } from "../worldObject";
 import { binAddRequest, binBusLabel, binCloseLabel } from "./binStore";
+import {
+  coreKillConfirmation,
+  coreKillPlan,
+  type CoreKillPlan,
+} from "../coreControl";
+import { confirmCoreKill } from "../CoreKillConfirm";
 import { useWorldBin, worldBinStore } from "./useWorldBin";
 import { WORLD_BIN_OPEN_EVENT } from "./worldBinEvents";
 import "./bin.css";
@@ -23,9 +29,24 @@ export async function putInBin(
   view: BinView,
   pinnedDesk: boolean,
 ) {
-  const error = await worldBinStore().add(
-    binAddRequest(leaf, view, pinnedDesk, tabPinsFor(leaf.connectionId)),
+  const request = binAddRequest(
+    leaf,
+    view,
+    pinnedDesk,
+    tabPinsFor(leaf.connectionId),
   );
+  let error: string | null;
+  if (leaf.coreControl) {
+    // A herdr-core agent: the bus's close is a native kill, which ends its
+    // children too. They are named first; nothing beyond them ends.
+    const confirmation = await confirmCoreBin(leaf);
+    if (!confirmation) return false;
+    error = await worldBinStore().add({
+      ...request,
+      runtime: "herdr-core",
+      confirmation,
+    });
+  } else error = await worldBinStore().add(request);
   if (error)
     store.notify({
       kind: "error",
@@ -33,6 +54,43 @@ export async function putInBin(
       detail: error,
     });
   return !error;
+}
+
+/** What ends with a core agent, confirmed when there is more than it. */
+async function confirmCoreBin(leaf: WorldLeafObject) {
+  let plan: CoreKillPlan;
+  try {
+    plan = await coreKillPlan(
+      { connectionId: leaf.connectionId, generation: leaf.generation },
+      { terminals: [leaf.terminalId] },
+    );
+  } catch (cause) {
+    store.notify({
+      kind: "error",
+      message: `${leaf.label} was not put in the bin`,
+      detail: cause instanceof Error ? cause.message : String(cause),
+    });
+    return null;
+  }
+  if (!plan.roots.length) {
+    store.notify({
+      kind: "error",
+      message: `${leaf.label} was not put in the bin`,
+      detail: "It has already ended.",
+    });
+    return null;
+  }
+  if (
+    plan.descendants.length &&
+    !(await confirmCoreKill({
+      title: "Put in the bin",
+      message: `When the bus takes ${leaf.label}, it ends.`,
+      confirmLabel: "Put in the bin",
+      plan,
+    }))
+  )
+    return null;
+  return coreKillConfirmation(plan);
 }
 
 /**
@@ -251,9 +309,7 @@ export function WorldBin({
                 .map((outcome) => (
                   <li key={outcome.id} data-result={outcome.result}>
                     <b>{outcome.label}</b> {OUTCOME[outcome.result]}
-                    {outcome.result !== "closed" && outcome.detail
-                      ? `: ${outcome.detail}`
-                      : ""}
+                    {outcome.detail ? `: ${outcome.detail}` : ""}
                   </li>
                 ))}
             </ol>

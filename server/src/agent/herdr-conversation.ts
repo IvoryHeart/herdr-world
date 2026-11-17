@@ -405,8 +405,12 @@ export function createHerdrConversationSource(args: {
           stringValue(info.terminal_title),
         ])
       : null,
+    // A number from Herdr; core's `<occupancy>:<turn>` (agent-sessions.ts).
     seq:
-      typeof info?.state_change_seq === "number" ? info.state_change_seq : null,
+      typeof info?.state_change_seq === "number" ||
+      typeof info?.state_change_seq === "string"
+        ? info.state_change_seq
+        : null,
   });
 
   /** The prompt a blocked agent shows at the bottom of its screen. */

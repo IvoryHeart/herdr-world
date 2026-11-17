@@ -47,6 +47,19 @@ function host(
 }
 
 describe("Harness readiness", () => {
+  test("resolves the executable names shipped by Herdr rather than profile names", async () => {
+    const check = host({
+      "cursor-agent": "exit 0",
+      agy: "exit 0",
+      "kiro-cli": "exit 0",
+    });
+    expect(
+      (await check(["cursor", "antigravity-cli", "kiro"])).map(
+        (r) => r.installed,
+      ),
+    ).toEqual([true, true, true]);
+  });
+
   test("reads each harness's own status without forwarding its output", async () => {
     const check = host(
       {

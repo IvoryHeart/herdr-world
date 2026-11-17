@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -45,7 +46,7 @@ function setup(options: Parameters<typeof fakeHerdr>[0] = {}) {
   };
   return {
     context,
-    herdr,
+    ...herdrRuntimeFixture(herdr),
     board,
     source,
     destination,
@@ -246,7 +247,7 @@ test.each(destinationEdits)(
               connectionId: connection_id,
               generation: state.context.generation,
               isCurrent: state.context.isCurrent,
-              runtime: { herdr: { call: runtimeCall } },
+              runtime: { ...herdrRuntimeFixture({ call: runtimeCall }) },
             }),
           },
         },
@@ -303,7 +304,7 @@ test("RPC and another adapter serialize through the same service-owned queue", a
       generation: 4,
     },
     requestIsCurrent: state.context.isCurrent,
-    connection: { herdr: { call: state.context.call } },
+    connection: { ...herdrRuntimeFixture({ call: state.context.call }) },
     services: {
       board: () => state.board,
       townMoveQueues: state.context.queues,

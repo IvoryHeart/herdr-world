@@ -33,6 +33,19 @@ disposable named Herdr session, including verified pane witnesses and refusal of
 terminal writes. `snapshot.test.ts` retains production cache, projection and
 retired-lease behavior after factoring its raw reads into the Herdr adapter.
 
+The runtime operation seam adds direct translation and consumer evidence in
+`herdr-runtime.test.ts` and `runtime-consumers.test.ts`: named reads preserve native
+parameters and replies; deadlines, pre-send hooks and cancellation reach the same
+client; session reports translate identity without replaying uncertain writes;
+terminal dispatch keeps the viewer and captured currency guard. A runtime with no
+raw client exercises actual snapshot, Desk screen and terminal-setting consumers.
+The retained native-traffic fixtures exercise existing consumer ownership and
+refusal assertions through the TUI provider. This is a transport refactor, with no
+new ordering, authority or recovery transitions, so the maintained runtime,
+qualified-operation and observation models keep their existing scope. It proves
+neither core protocol compatibility nor the still TUI-only callback areas listed
+in the runtime-adapter guide.
+
 P3 explicitly selects direct external-source evidence rather than a finite model.
 This boundary neither implements durable World binding policy nor proves source
 truth, cross-source claim conflict resolution, legacy mutation actor policy, or

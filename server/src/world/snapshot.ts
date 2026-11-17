@@ -2,11 +2,15 @@ import { parseSnapshotParameters } from "./snapshot-parameters";
 import { WorldObservation, parseObservationBase } from "./observation-v1";
 import * as observation from "./snapshot-observers";
 import { nativeId, priorityKey } from "./snapshot-identity";
-import { readHerdrSnapshot } from "../adapters/herdr";
+import {
+  readRuntimeSnapshot,
+  type RuntimeReader,
+} from "../adapters/runtime-ports";
 import { createHash } from "node:crypto";
 import { sanitizeConnectionError } from "../connections/manager";
 import type { ConnectionId, ConnectionStatus } from "../connections/types";
 import type { WorldWatchlist } from "./watchlist";
+import type { WorldRuntimeStatus } from "./runtime-registry";
 
 const MAX_WORKSPACES = 512;
 const MAX_TABS = 2_048;
@@ -46,15 +50,7 @@ export type WorldSnapshotCoverage = {
   by_workspace: WorldWorkspaceCoverage[];
 };
 
-type RuntimeWithHerdr = {
-  herdr: {
-    call(
-      method: string,
-      params?: Record<string, unknown>,
-      timeoutMs?: number,
-    ): Promise<unknown>;
-  };
-};
+type RuntimeWithOperations = { operations: RuntimeReader };
 
 type RuntimeLease<Runtime> = {
   connectionId: ConnectionId;
@@ -86,6 +82,8 @@ export type WorldConnectionSnapshot = {
   connection_id: string;
   label: string;
   source: string;
+  /** Present only for herdr-core: its agents are observed, not controlled. */
+  runtime?: "herdr-core";
   is_default: boolean;
   state: ConnectionStatus["state"];
   generation: number;
@@ -104,7 +102,7 @@ export type WorldSnapshotResult = {
 };
 
 type Registry<Runtime> = {
-  list(): ConnectionStatus[];
+  list(): WorldRuntimeStatus[];
   readyRuntimeLease(connectionId: ConnectionId): RuntimeLease<Runtime> | null;
 };
 
@@ -121,7 +119,7 @@ type CachedSnapshot = {
 type RawHostSnapshot = readonly [unknown, unknown, unknown, unknown];
 type HostOutcome = { raw: RawHostSnapshot } | { error: string };
 type HostWork<Runtime> = {
-  status: ConnectionStatus;
+  status: WorldRuntimeStatus;
   lease: RuntimeLease<Runtime>;
   priorities: readonly WorldSnapshotPriority[];
   invalidationVersion: number;
@@ -206,6 +204,10 @@ function boundedReservedRelevantRecords(
     admitted.add(record);
   }
   return records.filter((record) => admitted.has(record));
+}
+
+function runtimeOf(status: WorldRuntimeStatus) {
+  return status.runtime === "herdr-core" ? { runtime: status.runtime } : {};
 }
 
 function emptyStatusCounts(): WorldAgentStatusCounts {
@@ -318,7 +320,7 @@ function topologyCoverage(
   };
 }
 
-export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
+export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   readonly observation: WorldObservation;
   private revision = 0;
   private readonly cache = new Map<string, CachedSnapshot>();
@@ -486,7 +488,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   }
 
   private freshCachedConnection(
-    status: ConnectionStatus,
+    status: WorldRuntimeStatus,
     priorities: readonly WorldSnapshotPriority[],
   ): WorldConnectionSnapshot | null {
     const cached = this.cache.get(status.id);
@@ -517,6 +519,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       connection_id: status.id,
       label: status.label,
       source: status.source,
+      ...runtimeOf(status),
       is_default: status.is_default,
       state: status.state,
       generation: status.generation,
@@ -528,7 +531,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   }
 
   private workFor(
-    status: ConnectionStatus,
+    status: WorldRuntimeStatus,
     priorities: readonly WorldSnapshotPriority[],
     selected: boolean,
   ): HostWork<Runtime> | null {
@@ -622,8 +625,8 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
     const observedAt = this.now();
     let outcome: HostOutcome;
     try {
-      const raw: RawHostSnapshot = await readHerdrSnapshot(
-        work.lease.runtime.herdr,
+      const raw: RawHostSnapshot = await readRuntimeSnapshot(
+        work.lease.runtime.operations,
       );
       // An expired catalogue can complete every downstream read immediately.
       // Break that microtask chain before host projection/digest work so native
@@ -732,7 +735,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   }
 
   private async observe(
-    status: ConnectionStatus,
+    status: WorldRuntimeStatus,
     work: HostWork<Runtime>,
     priorities: readonly WorldSnapshotPriority[],
   ): Promise<WorldConnectionSnapshot> {
@@ -748,6 +751,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       connection_id: status.id,
       label: status.label,
       source: status.source,
+      ...runtimeOf(status),
       is_default: status.is_default,
       state: status.state,
       generation: work.lease.generation,
@@ -764,7 +768,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   }
 
   private fallback(
-    status: ConnectionStatus,
+    status: WorldRuntimeStatus,
     snapshotError?: string,
   ): WorldConnectionSnapshot {
     const cached = this.cache.get(status.id);
@@ -772,6 +776,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       connection_id: status.id,
       label: status.label,
       source: status.source,
+      ...runtimeOf(status),
       is_default: status.is_default,
       state: status.state,
       generation: status.generation,
@@ -785,7 +790,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   }
 
   private projectSnapshot(
-    status: ConnectionStatus,
+    status: WorldRuntimeStatus,
     raw: RawHostSnapshot,
     priorities: readonly WorldSnapshotPriority[],
     watchlist: WorldWatchlist,

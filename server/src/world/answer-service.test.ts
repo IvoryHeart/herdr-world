@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -32,7 +33,7 @@ test.skipIf(process.platform !== "linux")(
       ...f.lease,
       runtime: {
         ...f.lease.runtime,
-        herdr: {
+        ...herdrRuntimeFixture({
           call: async (
             method: string,
             params: Record<string, unknown> = {},
@@ -46,7 +47,7 @@ test.skipIf(process.platform !== "linux")(
               return { process_info: { shell_pid: process.pid } };
             return f.lease.runtime.herdr.call(method, params);
           },
-        },
+        }),
       },
     };
     const board = new BoardStore(join(root, "board.json"));

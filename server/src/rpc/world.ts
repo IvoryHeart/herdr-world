@@ -7,9 +7,13 @@ import {
 } from "../world/appearance-observation";
 import { handleAppearanceRpc } from "./appearance";
 import { handleDeskRpc } from "./desk";
+import { handleCoreWatchRpc } from "./core-watch";
 import { handleBinRpc } from "./bin";
+import { handleCoreRpc } from "./core";
+import { handleFloatRpc } from "./float";
 import { handleWorldIntegrationRpc } from "./integration";
 import { ownerPresence } from "./presence";
+import { handleCoreSharedRpc } from "./core-shared";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
@@ -69,12 +73,32 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     sendReply({ id, result: ownerPresence.seen() }, method);
     return;
   }
+  if (method === "world.core.seen" || method === "world.core.favourite")
+    return handleCoreSharedRpc(rpc);
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
   if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
+  if (
+    method === "world.core.watch" ||
+    method === "world.core.unwatch" ||
+    method === "world.core.input" ||
+    method === "world.core.hold"
+  )
+    return handleCoreWatchRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
+  if (method.startsWith("world.core.")) return handleCoreRpc(rpc);
+  if (method.startsWith("world.float.")) return handleFloatRpc(rpc);
   if (method.startsWith("world.integration."))
     return handleWorldIntegrationRpc(rpc);
   if (method === "world.snapshot") {
+    // The snapshot lists herdr-core connections too; only Herdr (TUI)
+    // connections have runtimes these Board observers act through.
+    const tuiLease = (connectionId: string) => {
+      try {
+        return connectionManager.readyRuntimeLease(connectionId);
+      } catch {
+        return null; // not a Herdr connection: no runtime to act through
+      }
+    };
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
     try {
       const base = parseObservationBase(params);
@@ -92,11 +116,11 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         beforeAppearanceRead,
         snapshot,
         (connectionId, generation) => {
-          const lease = connectionManager.readyRuntimeLease(connectionId);
+          const lease = tuiLease(connectionId);
           return lease && lease.generation === generation && lease.isCurrent()
             ? {
                 call: (method, params) =>
-                  lease.runtime.herdr.call(method, params, 10_000),
+                  lease.runtime.tui.call(method, params, 10_000),
                 isCurrent: () => lease.isCurrent(),
               }
             : null;
@@ -114,7 +138,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         logger,
         rpc.services.clock.now(),
         (id, generation) => {
-          const lease = connectionManager.readyRuntimeLease(id);
+          const lease = tuiLease(id);
           return Boolean(
             lease && lease.generation === generation && lease.isCurrent(),
           );
@@ -129,7 +153,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
               current,
               observations,
               (connectionId, generation) => {
-                const lease = connectionManager.readyRuntimeLease(connectionId);
+                const lease = tuiLease(connectionId);
                 return Boolean(
                   lease && lease.generation === generation && lease.isCurrent(),
                 );
@@ -356,7 +380,10 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
       if (!lease || lease.generation !== generation || !lease.isCurrent()) {
         throw new Error("World watch target is unavailable");
       }
-      const paneResult = await lease.runtime.herdr.call("pane.list", {}, 5_000);
+      const paneResult = await lease.runtime.operations.listTerminals(
+        {},
+        { timeoutMs: 5_000 },
+      );
       const panes = (paneResult as { panes?: unknown })?.panes;
       const matches = Array.isArray(panes)
         ? panes.filter(

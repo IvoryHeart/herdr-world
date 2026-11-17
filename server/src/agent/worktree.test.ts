@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { createAgentWorktree } from "./worktree";
 import {
@@ -57,14 +58,14 @@ function fixture(onInspect?: (path: string) => Promise<void>) {
   const model = createAgentWorktree({
     connectionId: "alpha",
     generation: 7,
-    herdr: {
+    ...herdrRuntimeFixture({
       async call(method) {
         if (method === "pane.get") return { pane: state.pane };
         if (method === "workspace.get")
           return { workspace: { cwd: "/project/main" } };
         throw new Error(method);
       },
-    },
+    }),
     inspect: async (path) => {
       await onInspect?.(path);
       return state.roots.get(path) ?? null;

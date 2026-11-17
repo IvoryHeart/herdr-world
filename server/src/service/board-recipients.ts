@@ -36,7 +36,7 @@ export function createBoardRecipientRecorder(
         );
         witnesses.push(isCurrent);
         const read = await readPaneRecipient(
-          (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),
+          (rpc, rpcParams) => runtime.tui.call(rpc, rpcParams, 10_000),
           paneId,
         );
         return isCurrent() ? read : null;

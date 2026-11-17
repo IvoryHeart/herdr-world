@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -67,11 +68,11 @@ test("virtual service time controls auto-sync not-due, due, force, persisted tim
     clock: time,
     scheduler: time,
     connectionId: "studio",
-    herdr: {
+    ...herdrRuntimeFixture({
       call: async () => ({
         workspaces: [{ workspace_id: "workspace-a", cwd: "/synthetic/repo" }],
       }),
-    } as any,
+    } as any),
     sshHost: () => undefined,
     shQuote,
     runProcessWithCodeTimeout: async () => {

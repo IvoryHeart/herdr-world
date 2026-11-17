@@ -10,7 +10,7 @@
  * the room out by tab order again) or the page reloads.
  */
 
-import type { TownInput, TownLayout, TownPinnedCells } from "./townLayout";
+import type { TownInput, TownLayout, TownHeldCells } from "./townLayout";
 
 type Cell = { col: number; row: number };
 
@@ -119,7 +119,7 @@ type Held = { shape: string; order: string[]; cells: Map<string, Cell> };
 export class TownJoinSeats {
   private pending: { request: TownJoinRequest; at: number }[] = [];
   private readonly held = new Map<string, Held>();
-  private cells: TownPinnedCells = new Map();
+  private cells: TownHeldCells = new Map();
   private readonly listeners = new Set<() => void>();
   private version = 0;
   private readonly now: () => number;
@@ -158,7 +158,7 @@ export class TownJoinSeats {
     shown: TownLayout | null,
     shape: string,
     deskColumns: number,
-  ): TownPinnedCells {
+  ): TownHeldCells {
     const rooms = new Map(input.rooms.map((room) => [room.key, room.deskKeys]));
     const roomOf = new Map<string, string>();
     for (const room of input.rooms)

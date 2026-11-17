@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -64,7 +65,7 @@ live(
           : {
               generation,
               isCurrent: () => id !== "alpha" || alphaOnline,
-              runtime: { herdr: server.client },
+              runtime: { ...herdrRuntimeFixture(server.client) },
             };
       const aStore = new ProfileStore(join(root, "a.json")),
         bStore = new ProfileStore(join(root, "b.json"));

@@ -1,6 +1,11 @@
 import { binEmptiesTab } from "../../../shared/bin";
 import type { BinAdd } from "../world/bin";
 import type { BridgeRpcContext } from "./context";
+import { coreKillRefusal } from "../herdr-core/kill-plan";
+import {
+  parseCoreKillConfirmation,
+  planCoreKill,
+} from "../herdr-core/operations";
 
 /**
  * The agent bin (world.bin.*). Every method changes only the reversible,
@@ -30,6 +35,34 @@ export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
       );
     if (method !== "world.bin.add") throw new Error("unknown bin operation");
     const target = p as unknown as BinAdd;
+    if (target.runtime === "herdr-core") {
+      // A core terminal: its close is a native kill, admitted only when the
+      // confirmation names everything that would end with it right now.
+      const lease = bin.coreLease(String(target.connection_id));
+      if (
+        !lease ||
+        lease.generation !== target.connection_generation ||
+        !lease.isCurrent()
+      )
+        throw new Error("That agent's host is unavailable");
+      if (target.pane_id !== target.terminal_id)
+        throw new Error("invalid bin target");
+      const plan = await planCoreKill(lease, [String(target.terminal_id)]);
+      if (!plan.roots.length) throw new Error("That agent has already ended");
+      const refusal = coreKillRefusal(
+        {
+          coreId: plan.core_id,
+          roots: plan.roots,
+          descendants: plan.descendants,
+        },
+        parseCoreKillConfirmation(target.confirmation),
+      );
+      if (refusal) {
+        sendReply({ id, error: { message: refusal, plan } }, "world-bin-error");
+        return;
+      }
+      return reply(registry.add(target));
+    }
     // Admission: the pane must still be this terminal on its current runtime.
     const lease = bin.lease(target.connection_id);
     if (

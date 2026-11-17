@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -77,7 +78,7 @@ async function fixture(root?: string, generation = 1) {
       isCurrent: () =>
         host ? host.current && host.generation === capturedGeneration : current,
       runtime: {
-        herdr: {
+        ...herdrRuntimeFixture({
           call: async () => {
             const captured = structuredClone(host?.panes ?? panes),
               pending = held;
@@ -88,7 +89,7 @@ async function fixture(root?: string, generation = 1) {
             }
             return { panes: captured };
           },
-        },
+        }),
       },
     };
   };

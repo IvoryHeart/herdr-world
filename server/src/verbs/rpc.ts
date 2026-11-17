@@ -1,3 +1,4 @@
+import { CORE_LOCAL_ADDRESS_PATTERN } from "../../../shared/coreAddress";
 import { Type } from "typebox";
 import { declare, object, policies, text } from "./declaration";
 import { rpcInput, rpcOutput } from "./rpc-contracts";
@@ -123,6 +124,10 @@ export const rpcVerbs = [
   rpc("bridge.ui_settings.get", "read", "world"),
   rpc("bridge.ui_settings.update", "reconcilable", "world"),
   rpc("connections.connect", "reconcilable", "world"),
+  // Testing switch: the in-process herdr-core stand-in (start/kill/remove).
+  rpc("connections.core_fixture", "reconcilable", "world"),
+  // Probe, then a confirmed herdr-core install on this computer or an SSH host.
+  rpc("connections.core_install", "reconcilable", "world"),
   rpc("connections.create", "reconcilable", "world"),
   rpc("connections.disconnect", "reconcilable", "world"),
   rpc("connections.list", "read", "world"),
@@ -247,6 +252,8 @@ export const rpcVerbs = [
       label: Type.Optional(Type.String({ maxLength: 200 })),
       view: Type.Optional(Type.String({ maxLength: 16 })),
       preserve_tab: Type.Optional(Type.Boolean()),
+      runtime: Type.Optional(Type.Literal("herdr-core")),
+      confirmation: Type.Optional(Type.Unknown()),
     }),
   ),
   rpc(
@@ -262,6 +269,123 @@ export const rpcVerbs = [
   rpc("world.bin.restore", "reconcilable", "world", object({ id: text })),
   rpc("world.bin.resume", "reconcilable", "world"),
   rpc("world.board.get", "read", "world"),
+  // herdr-core control: the handler takes the lease from the core manager
+  // only and checks the generation the browser saw (rpc/core.ts).
+  rpc(
+    "world.core.catalog",
+    "read",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+    }),
+  ),
+  rpc(
+    "world.core.launch",
+    "opaque",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+    }),
+  ),
+  rpc(
+    "world.core.kill_plan",
+    "read",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+    }),
+  ),
+  rpc(
+    "world.core.kill",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      terminals: Type.Array(text, { minItems: 1, maxItems: 64 }),
+      confirmation: Type.Unknown(),
+    }),
+  ),
+  rpc(
+    "world.core.room.create",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+    }),
+  ),
+  rpc(
+    "world.core.room.rename",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      label: text,
+    }),
+  ),
+  rpc(
+    "world.core.room.close",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      confirmation: Type.Unknown(),
+    }),
+  ),
+  // Worktrees of a core room (P4): host Git and World's own rooms.
+  rpc(
+    "world.core.worktree.list",
+    "read",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+    }),
+  ),
+  rpc(
+    "world.core.worktree.create",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      branch: text,
+    }),
+  ),
+  rpc(
+    "world.core.worktree.open",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      path: text,
+    }),
+  ),
+  rpc(
+    "world.core.worktree.remove",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      workspace_id: text,
+      force: Type.Optional(Type.Boolean()),
+      confirmation: Type.Optional(Type.Unknown()),
+    }),
+  ),
   rpc(
     "world.board.patch",
     "reconcilable",
@@ -269,6 +393,95 @@ export const rpcVerbs = [
     object({ ops: Type.Array(Type.Unknown()) }),
   ),
   rpc("world.chimes.save", "reconcilable", "world"),
+  // Seen and favourite shared with Herdr's apps: one label on one live local
+  // herdr-core agent, under the runtime fence (rpc/core-shared.ts).
+  rpc(
+    "world.core.favourite",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      terminal: Type.String({ pattern: CORE_LOCAL_ADDRESS_PATTERN }),
+      favourite: Type.Boolean(),
+    }),
+  ),
+  rpc(
+    "world.core.seen",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      terminal: Type.String({ pattern: CORE_LOCAL_ADDRESS_PATTERN }),
+      turn: Type.Integer({ minimum: 0 }),
+      seen: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
+    }),
+  ),
+  // Observe-only streams of herdr-core terminals; the handler fences each.
+  rpc("world.core.unwatch", "reconcilable", "world"),
+  rpc("world.core.watch", "reconcilable", "world"),
+  // Typing into a watched core terminal: never retried (keys go once).
+  rpc(
+    "world.core.input",
+    "opaque",
+    "world",
+    // Base64 of at most 64 KiB of keys.
+    object({
+      stream: text,
+      data: Type.String({ minLength: 1, maxLength: 90_000 }),
+      cols: Type.Integer({ minimum: 1, maximum: 65535 }),
+      rows: Type.Integer({ minimum: 1, maximum: 65535 }),
+      automatic: Type.Optional(Type.Boolean()),
+    }),
+  ),
+  // World's seat at the page's fitted grid while its view is open (size only
+  // while no Herdr app pane has the terminal); a repeat is a no-op.
+  rpc(
+    "world.core.hold",
+    "reconcilable",
+    "world",
+    object({
+      stream: text,
+      cols: Type.Integer({ minimum: 1, maximum: 65535 }),
+      rows: Type.Integer({ minimum: 1, maximum: 65535 }),
+    }),
+  ),
+  // World's float shell on herdr-core (the TUI's Herdr Float popup there).
+  // The handler qualifies the named core connection's lease itself.
+  rpc(
+    "world.float.open",
+    "reconcilable",
+    "world",
+    object({
+      connection_id: text,
+      connection_generation: Type.Integer({ minimum: 0 }),
+      terminal_id: text,
+      // The agent's room (World workspace); the service refuses another.
+      room: Type.Optional(Type.String({ minLength: 1, maxLength: 600 })),
+      cols: Type.Integer({ minimum: 1, maximum: 65535 }),
+      rows: Type.Integer({ minimum: 1, maximum: 65535 }),
+    }),
+  ),
+  rpc(
+    "world.float.input",
+    "opaque",
+    "world",
+    // Base64 of at most 64 KiB of keys.
+    object({ stream: text, data: Type.String({ maxLength: 90_000 }) }),
+  ),
+  rpc(
+    "world.float.resize",
+    "reconcilable",
+    "world",
+    object({
+      stream: text,
+      cols: Type.Integer({ minimum: 1, maximum: 65535 }),
+      rows: Type.Integer({ minimum: 1, maximum: 65535 }),
+    }),
+  ),
+  rpc("world.float.hide", "reconcilable", "world", object({ stream: text })),
+  rpc("world.float.stop", "reconcilable", "world", object({ stream: text })),
   rpc("world.desk.get", "read", "world"),
   rpc("world.desk.observe", "reconcilable", "world"),
   rpc("world.desk.open", "reconcilable", "world"),

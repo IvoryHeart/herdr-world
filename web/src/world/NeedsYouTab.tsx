@@ -19,7 +19,11 @@ import {
 } from "./worldAsks";
 import { useAnswerDeliveryCounts } from "./worldAnswerDeliveries";
 import type { WorldDeskStore } from "./deskStateStore";
-import type { WorldLeafObject, WorldObject } from "./worldObject";
+import {
+  isLiveNode,
+  type WorldLeafObject,
+  type WorldObject,
+} from "./worldObject";
 import {
   closeNeedsYou,
   itemName,
@@ -65,8 +69,7 @@ export function useWaitingCount(world: Pick<WorldObject, "leaves">) {
         (leaf) =>
           leaf.kind === "agent" &&
           leaf.status === "blocked" &&
-          leaf.actionable &&
-          !leaf.stale,
+          isLiveNode(leaf),
       ).length,
     [world.leaves],
   );

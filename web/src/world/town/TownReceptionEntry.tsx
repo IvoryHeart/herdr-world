@@ -47,7 +47,7 @@ export function ReceptionEntry({
       className={`town-reception-entry${!asking && agent.semanticStatus === "done" ? " town-reception-done" : ""}`}
       data-agent-key={agent.key}
       data-owner-question={asking || undefined}
-      disabled={agent.stale || !agent.canOpenInSpaces}
+      disabled={agent.stale || !(agent.canOpenInSpaces || agent.coreChat)}
       aria-label={
         asking
           ? `${title}, owner question`

@@ -1,0 +1,21 @@
+// Herdr's integration names, including its experimental Letta integration.
+export const WORLD_HARNESSES = [
+  "pi",
+  "omp",
+  "claude",
+  "codex",
+  "copilot",
+  "devin",
+  "droid",
+  "kimi",
+  "opencode",
+  "kilo",
+  "hermes",
+  "qodercli",
+  "qwen",
+  "letta",
+  "cursor",
+  "mastracode",
+  "antigravity-cli",
+  "grok",
+] as const;

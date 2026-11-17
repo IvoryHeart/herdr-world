@@ -9,17 +9,24 @@ import type { WorldLeafObject, WorldObject } from "./worldObject";
  */
 export function askMatchesLeaf(ask: WorldAsk, leaf: WorldLeafObject) {
   const actor = ask.actor;
+  // A live herdr-core agent is not actionable (World only watches it), but
+  // its ask is placed by the program that asked: the service's occupant
+  // fingerprint of that terminal, which a replaced program never shares.
+  const core = leaf.coreControl === true && !leaf.actionable;
   return (
     !askClosed(ask) &&
     !leaf.stale &&
-    leaf.actionable &&
+    (leaf.actionable || core) &&
     actor.connection_id === leaf.connectionId &&
     actor.pane_id === leaf.pane.pane_id &&
     Boolean(actor.terminal_id) &&
     actor.terminal_id === leaf.terminalId &&
     actor.connection_generation === leaf.generation &&
-    (actor.agent_session_fingerprint === undefined ||
-      actor.agent_session_fingerprint === leaf.agentSessionFingerprint) &&
+    (core
+      ? typeof actor.agent_session_fingerprint === "string" &&
+        actor.agent_session_fingerprint === leaf.pane.core_occupant_fingerprint
+      : actor.agent_session_fingerprint === undefined ||
+        actor.agent_session_fingerprint === leaf.agentSessionFingerprint) &&
     (actor.agent_session_id === undefined ||
       actor.agent_session_id === leaf.pane.agent_session?.value)
   );

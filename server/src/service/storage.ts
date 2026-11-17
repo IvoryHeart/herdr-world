@@ -20,6 +20,8 @@ import type { Clock, Scheduler } from "./ports";
 export type WorldStorage = {
   terminalMarks: import("../storage/terminal-marks").TerminalMarksPort;
   runtimeStatus: import("../storage/runtime-status").RuntimeStatusPort;
+  /** World's layout of each herdr-core (M1); absent in older test doubles. */
+  coreTopology?: import("../storage/core-topology").CoreTopologyPort;
   bindings: import("../storage/world-bindings").WorldBindings;
   ids: import("../storage/world-ids").WorldIds;
   settings: GuiSettingsStore;
@@ -74,6 +76,7 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
   return {
     terminalMarks: world.terminalMarks,
     runtimeStatus: world.runtimeStatus,
+    coreTopology: world.coreTopology,
     ids: world.ids,
     bindings: world.bindings,
     settings,

@@ -45,7 +45,7 @@ export async function handleAppearanceRpc(
     if (!lease || lease.generation !== generation || !lease.isCurrent())
       throw new Error("Appearance target is unavailable");
     const call = (method: string, values: Record<string, unknown> = {}) =>
-      lease.runtime.herdr.call(method, values, 10_000);
+      lease.runtime.tui.call(method, values, 10_000);
     const [paneResult, tabResult, workspaceResult] = await Promise.all([
       call("pane.list"),
       call("tab.list"),

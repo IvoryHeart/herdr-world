@@ -7,7 +7,8 @@
 A **visual control plane** for [Herdr](https://herdr.dev). Connect local and SSH
 hosts, see their agents together in Town, Board or Desk, and chat with them,
 start them from profiles, and use independently qualified terminals, files and
-changes on desktop or mobile. **Requires a running Herdr server.**
+changes on desktop or mobile. **Requires a running Herdr (TUI) or herdr-core
+runtime.** Both can run side by side.
 
 ## What's new in 0.3.0
 
@@ -92,15 +93,22 @@ a view yourself. See [Chat](./docs/CHAT.md) and the
 
 ## Quick start
 
-1. Herdr World runs on [Herdr](https://herdr.dev). A fresh standalone install
-   reuses existing Herdr and installs it only if missing; Homebrew does the same
-   on first World launch. Set `HERDR_WORLD_SKIP_HERDR=1` to skip this setup.
-   With npm or a Windows archive, run `herdr-world herdr upgrade --install`
-   once if needed.
-   `herdr-world herdr setup` configures future startup as a user service and starts
-   Herdr if down; an already-running server keeps running without a restart. If
-   you open World before Herdr is installed or running, Town offers **Set up
-   Herdr**, which installs or starts it only after you confirm.
+1. Herdr World supports [Herdr](https://herdr.dev) and
+   [herdr-core](https://github.com/herdrdev/herdr-core) (see [Runtimes](#runtimes)).
+   A fresh standalone install uses whichever runtime is installed and changes
+   nothing about it. When neither `hc` (herdr-core) nor `herdr` is found, it
+   installs herdr-core with core's official checksum-verified steps, starts it
+   now and at login, and connects World to it; Homebrew does the same on first
+   World launch. Set `HERDR_WORLD_SKIP_HERDR=1` to skip this setup.
+   With npm, run `herdr-world herdr upgrade --install` once if needed; it also
+   installs herdr-core first when no runtime exists, on Windows x64 too (core's
+   own PowerShell steps, started now and from your Startup folder at login).
+   `herdr-world herdr setup` configures future Herdr TUI startup as a user
+   service and starts it if down. If you open World with no runtime running,
+   Town offers **Set up herdr-core** first (or **Use the Herdr TUI instead**),
+   and **Hosts → Manage connections** offers **Install herdr-core…** for this
+   computer and each Unix SSH host; each one installs or starts only after you
+   confirm.
 2. On Linux or macOS, install Herdr World with the standalone installer:
 
    ```bash
@@ -145,6 +153,36 @@ login` is done for the user running World; add Jira in **Settings → Sources**.
 See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
 updates, and services.
 
+## Runtimes
+
+**herdr-core** is the primary runtime for new agents when a core connection is
+ready. The installers set it up when no runtime is installed. Otherwise start
+core with `hc server start` (or use **Install herdr-core…** in **Hosts → Manage
+connections**, which installs or starts it after you confirm), then choose
+**Add herdr-core** there. Choose this computer, a Unix SSH host or a Windows SSH host; use
+the core session name (`default` unless you changed `HC_SESSION`). World connects
+to an existing core and never starts or installs it during connection or retry.
+
+Open **New agent** and choose an installed harness. The launcher says **Starts
+in herdr-core**; agents are kept and placed in Herdr’s apps. Plain shells start
+unplaced. To use the **Herdr TUI** for a launch, choose one of its rooms instead.
+Each runtime has its own connection; Town, Board, Desk and Needs you show both.
+World’s core rooms and Herdr’s app layout are arranged separately.
+
+Core agents support Chat, answers, Terminal, Files, Changes, worktrees and the
+room’s floating shell. World reads core’s status and uses its send/keys for every
+supported harness. Looking at an agent’s foreground Town or Board peek clears
+Done in Herdr’s apps too; pins are shared. An open Terminal tab keeps the agent
+at a readable size while no Herdr app pane holds it, and never takes the size
+from one; typing takes the size by core’s rule, and closing the tab gives it back.
+
+Use the latest core: World applies no version pin or certification gate and
+retains full read-write support after updates. A daily and manually dispatched
+[release smoke](./docs/development.md#herdr-core-release-smoke) flags drift.
+If a send times out, its result is **uncertain**; check the agent before sending
+again. See [Features](./FEATURES.md#remote-multi-client-and-operations) for limits,
+replacement checks, SSH requirements and recovery.
+
 ## Install as a PWA
 
 **PWA installation is recommended for daily use:** a separate app window without
@@ -179,7 +217,7 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 ## Development
 
-Use Bun 1.4.4 or newer and a running Herdr server:
+Use Bun 1.4.4 or newer and a running Herdr or herdr-core runtime:
 
 ```bash
 bun install --frozen-lockfile

@@ -1013,6 +1013,45 @@ describe("Pixel Office projection", () => {
     }
   });
 
+  test("Town admits pinned tabs first in a folded room, before and after expanding", () => {
+    const tabs = Array.from({ length: 40 }, (_, index) =>
+      tab(`tab-${index}`, index + 1),
+    );
+    const world = buildWorldObject(
+      [
+        connection(
+          "local",
+          tabs,
+          tabs.map((entry, index) => pane(entry.tab_id, "idle", `a${index}`)),
+        ),
+      ],
+      "local",
+    );
+    const ids = (room: { desks: { tabRef: { nativeId: string } }[] }) =>
+      room.desks.map((d) => d.tabRef.nativeId);
+    const pinned = new Set([
+      tabCardKey("local", "tab-39", new Set(["workspace"])),
+    ]);
+    const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
+    const plain = project(world, 1, null).rooms[0]!;
+    expect(ids(plain)).not.toContain("tab-39");
+    // Pinning tab 40 folds tab 24 away so tab 40 can take the first seat.
+    const folded = project(world, 2, null, pinned).rooms[0]!;
+    expect(ids(folded)).toHaveLength(24);
+    expect(ids(folded)).toContain("tab-39");
+    expect(ids(folded)).not.toContain("tab-23");
+    expect(folded.deskFold).toBe("folded");
+    expect(folded.omittedDeskCount).toBe(16);
+    const room = new Set([folded.key]);
+    expect(ids(project(world, 3, null, pinned, room).rooms[0]!)).toEqual(
+      tabs.map((t) => t.tab_id),
+    );
+    // Folding again keeps the pin admitted.
+    expect(ids(project(world, 4, null, pinned).rooms[0]!)).toEqual(ids(folded));
+    // Unpinning returns the native prefix.
+    expect(ids(project(world, 5, null).rooms[0]!)).toEqual(ids(plain));
+  });
+
   test("keeps mixed-status shared tabs truthful beyond the eight-desk scene bound", () => {
     const tabs = Array.from({ length: 9 }, (_, index) =>
       tab(`tab-${index}`, index + 1),

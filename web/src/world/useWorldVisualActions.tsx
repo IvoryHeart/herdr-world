@@ -42,6 +42,7 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
     setPinnedOnly,
     connectionSelection,
     operationalSnapshot,
+    hosts,
     world,
     setSelection,
     watchStatus,
@@ -212,9 +213,7 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
         title: "New workspace",
         detail: "Confirm a destination host",
         keywords: ["new", "create", "workspace", "room"],
-        disabledReason: operationalSnapshot.connections.some(
-          (connection) => connection.state === "ready",
-        )
+        disabledReason: hosts.some((host) => host.state === "ready")
           ? null
           : "No destination host is ready.",
         run: () => {

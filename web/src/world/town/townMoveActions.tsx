@@ -18,13 +18,14 @@ import type { Relation } from "../../../../shared/relations";
 import { terminalColorKey, type TerminalColor } from "../terminalColor";
 import { officeRoomActionCapabilities } from "../officeRoomActions";
 import type { WorldObject } from "../worldObject";
-import type { DeskPins } from "../useDeskPins";
+import { saveDeskPinOrder, type DeskPins } from "../useDeskPins";
 import { TownChooser } from "./TownChooser";
 import type { TownToast } from "./TownToasts";
 import { townDeskColorTarget, townRoomColorKey } from "./townModel";
 import { saveRoomSpots } from "./townRoomPins";
 import type { TownRoomPlacement } from "./townRoomPlace";
 import { townMoveMenu, type TownMoveFlow } from "./townMoveMenu";
+import { townPinnedReorder, townRoomPinnedSeats } from "./townPinOrder";
 import {
   requestAgentMove,
   requestDeskMove,
@@ -167,6 +168,33 @@ export function townMoveActions({
       setMovingKey(null);
     }
   };
+  /**
+   * A pinned desk takes another pinned desk's place on the rug: World saves
+   * the order as its own view layout; Herdr's tab order stays as it is.
+   */
+  const runPinnedReorder = async (
+    deskKey: string,
+    label: string,
+    seats: ReturnType<typeof townRoomPinnedSeats>,
+    ontoKey: string | null,
+  ): Promise<TownMoveResult> => {
+    const next = ontoKey ? townPinnedReorder(seats, deskKey, ontoKey) : null;
+    if (!next) return "returned";
+    setMovingKey(deskKey);
+    try {
+      const conflict = await saveDeskPinOrder(next.map((seat) => seat.pinKey));
+      if (DEVTOOLS)
+        trace.record("move", { label, status: conflict ? "failed" : "moved" });
+      if (!conflict) return "moved";
+      toast("error", `${label} was not moved: ${conflict}`);
+      return "returned";
+    } catch (cause) {
+      toast("error", `${label} may not have moved: ${String(cause)}`);
+      return "uncertain";
+    } finally {
+      setMovingKey(null);
+    }
+  };
   /** Reorder a desk in its room: into `ontoKey`'s slot, or last when null. */
   const runDeskReorder = async (
     deskKey: string,
@@ -176,6 +204,9 @@ export function townMoveActions({
     const room = desk ? roomForKey(desk.roomKey) : null;
     const onto = ontoKey ? deskForKey(ontoKey) : null;
     if (!desk || !room || (ontoKey && !onto) || movingKey) return "returned";
+    const pinned = townRoomPinnedSeats(office, room, deskPins);
+    if (pinned.some((seat) => seat.deskKey === desk.key))
+      return runPinnedReorder(desk.key, desk.displayLabel, pinned, ontoKey);
     setMovingKey(desk.key);
     try {
       const outcome = await requestDeskReorder(desk, onto);
@@ -312,6 +343,8 @@ export function townMoveActions({
       deskForKey,
       roomForKey,
       agentOf: (key) => agentByKey.get(key)?.agent,
+      pinnedSeats: (room) =>
+        townRoomPinnedSeats(office, room, deskPins).map((seat) => seat.deskKey),
       close: () => setMoveFlow(null),
       runDeskReorder,
       runDeskMove,

@@ -1,3 +1,4 @@
+import type { HostResources } from "../adapters/runtime-ports";
 import type { RuntimeStatusPort } from "../storage/runtime-status";
 import { commandReplies } from "../verbs/replies";
 import {
@@ -9,7 +10,6 @@ import {
   CONNECTION_CHANGED_DURING_REQUEST,
   serializeConnectionEnvelope,
 } from "../connections/protocol";
-import type { HerdrClient } from "./herdr-client";
 import { LEGACY_DEFAULT_CONNECTION_ID } from "../connections/types";
 import {
   connectionSettingsPrefix,
@@ -55,7 +55,7 @@ export function createSettingsRpcHandler(args: {
   runtimeStatus: Pick<RuntimeStatusPort, "get">;
   /** The service's settings file. */
   settings: Pick<GuiSettingsStore, "path" | "read" | "update">;
-  herdr: HerdrClient;
+  resources: HostResources;
   sshHost: () => string | undefined;
   readWorktreeHooks: ReadWorktreeHooks;
   resolveWorkspaceGitRoot: (workspaceId: string) => Promise<{
@@ -191,7 +191,7 @@ export function createSettingsRpcHandler(args: {
         if (!workspaceId) {
           return fail("settings.worktree_directory.get requires workspace_id");
         }
-        const workspaceResult = await args.herdr.call("workspace.get", {
+        const workspaceResult = await args.resources.getWorkspace({
           workspace_id: workspaceId,
         });
         const key = repoSettingsKey(workspaceResult?.workspace);
@@ -207,7 +207,7 @@ export function createSettingsRpcHandler(args: {
         if (!workspaceId) {
           return fail("settings.worktree_hooks.get requires workspace_id");
         }
-        const workspaceResult = await args.herdr.call("workspace.get", {
+        const workspaceResult = await args.resources.getWorkspace({
           workspace_id: workspaceId,
         });
         const workspace = workspaceResult?.workspace;

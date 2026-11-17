@@ -1,3 +1,4 @@
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { memoryRuntimeStatus } from "../storage/testing/runtime-status";
 import { expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
@@ -72,7 +73,7 @@ test("terminal transport settings validate input, persist by connection, and rec
       expect(settings.terminal_transport?.alpha.surface_codecs).toBe(value);
       changed.push(value);
     },
-    herdr: {} as HerdrClient,
+    ...herdrRuntimeFixture({} as HerdrClient),
     sshHost: () => undefined,
     readWorktreeHooks: async () => null,
     resolveWorkspaceGitRoot: async () => ({ workspace: {}, root: "/tmp" }),
@@ -142,7 +143,7 @@ test("settings RPC errors carry their runtime connection identity", async () => 
     settings: memorySettings(),
     connectionId: "remote-dev",
     connectionGeneration: 6,
-    herdr: {} as HerdrClient,
+    ...herdrRuntimeFixture({} as HerdrClient),
     sshHost: () => undefined,
     readWorktreeHooks: async () => null,
     resolveWorkspaceGitRoot: async () => ({ workspace: {}, root: "/tmp" }),
@@ -207,7 +208,7 @@ test("settings RPC lists and mutates only its connection namespace", async () =>
         return settings;
       },
     },
-    herdr: {} as HerdrClient,
+    ...herdrRuntimeFixture({} as HerdrClient),
     sshHost: () => undefined,
     readWorktreeHooks: async () => null,
     resolveWorkspaceGitRoot: async () => ({ workspace: {}, root: "/same" }),
@@ -266,9 +267,9 @@ test("settings RPC suppresses a delayed result after replacement", async () => {
     runtimeStatus: memoryRuntimeStatus(),
     settings: memorySettings(),
     connectionId: "remote-dev",
-    herdr: {
+    ...herdrRuntimeFixture({
       call: () => workspace.promise,
-    } as unknown as HerdrClient,
+    } as unknown as HerdrClient),
     sshHost: () => undefined,
     readWorktreeHooks: async () => null,
     resolveWorkspaceGitRoot: async () => ({ workspace: {}, root: "/tmp" }),
@@ -333,7 +334,7 @@ test("settings RPC cancels a queued mutation after replacement", async () => {
         return settings;
       },
     },
-    herdr: {} as HerdrClient,
+    ...herdrRuntimeFixture({} as HerdrClient),
     sshHost: () => undefined,
     readWorktreeHooks: async () => null,
     resolveWorkspaceGitRoot: async () => ({ workspace: {}, root: "/same" }),
@@ -380,13 +381,13 @@ test("hook settings expose selected config and errors without mislabeling native
   const handler = createSettingsRpcHandler({
     runtimeStatus: memoryRuntimeStatus(),
     settings: memorySettings(),
-    herdr: {
+    ...herdrRuntimeFixture({
       call: async () => ({
         workspace: {
           worktree: { checkout_path: "/target", repo_root: "/source" },
         },
       }),
-    } as unknown as HerdrClient,
+    } as unknown as HerdrClient),
     sshHost: () => undefined,
     readWorktreeHooks: async (target, source) => {
       expect([target, source]).toEqual(["/target", "/source"]);
@@ -454,7 +455,7 @@ test("worktree commands are set globally and per repository, and cleared when em
         return settings;
       },
     },
-    herdr: {} as HerdrClient,
+    ...herdrRuntimeFixture({} as HerdrClient),
     sshHost: () => undefined,
     readWorktreeHooks: async () => null,
     resolveWorkspaceGitRoot: async () => ({ workspace: {}, root: "/tmp" }),

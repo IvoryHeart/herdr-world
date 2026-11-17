@@ -30,6 +30,12 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
     CustomEvent: dom.CustomEvent,
     localStorage: dom.localStorage,
     sessionStorage: dom.sessionStorage,
+    getComputedStyle: dom.getComputedStyle.bind(dom),
+    ResizeObserver: dom.ResizeObserver,
+    Element: dom.Element,
+    HTMLInputElement: dom.HTMLInputElement,
+    Node: dom.Node,
+    NodeFilter: dom.NodeFilter,
     IS_REACT_ACT_ENVIRONMENT: true,
   }))
     Object.defineProperty(globalThis, key, { value, configurable: true });
@@ -54,6 +60,7 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
   const { worldLocalStorage } = await import("../browserStorage");
   const { store, __storeTesting, useStoreSelector } = await import("../store");
   const { bridge } = await import("../api");
+  const { worldHosts } = await import("../worldHosts");
   const previous = store.get();
   const previousCall = bridge.call;
   const connections = ["alpha", "beta", "offline"].map((id) => ({
@@ -68,7 +75,7 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
   let filter: ReturnType<typeof useHostsFilter>;
   function Harness() {
     // Same production selectors and hook inputs as WorldFoundationApp.
-    const catalogue = useStoreSelector((state) => state.connections);
+    const catalogue = useStoreSelector(worldHosts);
     const ready = useStoreSelector((state) => state.catalogueReady);
     filter = useHostsFilter(
       catalogue.map(({ id }) => id),
@@ -160,6 +167,76 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
     await act(() => root.render(createElement(Harness)));
     expect(filter.ids).toEqual(["beta"]);
     expect(filter.explanation).toBe("");
+  });
+
+  test("a herdr-core host is listed, kept and selectable like a Herdr host", async () => {
+    await mount('["core-synthetic"]');
+    const core = {
+      id: "core-synthetic",
+      label: "Synthetic core",
+      type: "local",
+      runtime: "herdr-core",
+      state: "ready",
+      generation: 3,
+      core_session: "",
+      core_state_dir: "",
+      observation: null,
+    };
+    bridge.call = (async () => ({
+      connections,
+      core_connections: [core],
+    })) as typeof bridge.call;
+    await act(async () => {
+      expect(await store.refreshConnections()).toBe(true);
+    });
+    // The saved core selection survives admission instead of being pruned.
+    expect(filter.ids).toEqual(["core-synthetic"]);
+    expect(saved()).toBe('["core-synthetic"]');
+    expect(filter.explanation).toBe("");
+    // Operational (TUI) connections stay Herdr's alone.
+    expect(store.get().connections).toEqual(connections);
+    await act(async () =>
+      (
+        document.querySelector('button[aria-label="Hosts"]') as HTMLElement
+      ).click(),
+    );
+    const row = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Synthetic core"]',
+    );
+    expect(row?.checked).toBe(true);
+    expect(row?.parentElement?.textContent).toBe(
+      "Synthetic core · herdr-core · ready",
+    );
+    // Ticking a Herdr host keeps the core host selected beside it.
+    await act(async () =>
+      document
+        .querySelector<HTMLInputElement>('input[aria-label="Synthetic alpha"]')!
+        .click(),
+    );
+    expect(saved()).toBe('["core-synthetic","alpha"]');
+    // A refresh with the same catalogue keeps the host list's identity.
+    const before = worldHosts(store.get());
+    await act(async () => {
+      expect(await store.refreshConnections()).toBe(true);
+    });
+    expect(worldHosts(store.get())).toBe(before);
+    // The page's bridge.status poll from a service that sends no core field says
+    // nothing about core hosts: the host stays listed and selected.
+    bridge.call = (async () => ({ connections })) as typeof bridge.call;
+    await act(async () => {
+      expect(await store.refreshConnections()).toBe(true);
+    });
+    expect(filter.ids).toEqual(["core-synthetic", "alpha"]);
+    expect(worldHosts(store.get())).toBe(before);
+    // A removed core profile prunes like a removed Herdr profile.
+    bridge.call = (async () => ({
+      connections,
+      core_connections: [],
+    })) as typeof bridge.call;
+    await act(async () => {
+      expect(await store.refreshConnections()).toBe(true);
+    });
+    expect(filter.ids).toEqual(["alpha"]);
   });
 
   test("empty explicit selection means All hosts without changing operational ownership", async () => {

@@ -1,3 +1,5 @@
+import { CORE_WATCH_TITLE, viewOnlyMessage } from "./viewOnly";
+import { Screen } from "./DeskScreen";
 import { useDrawReadiness } from "./useDrawReadiness";
 import { agentDirectory } from "./deskDirectory";
 export { agentDirectory, type DirectoryGroup } from "./deskDirectory";
@@ -12,14 +14,7 @@ import {
 import { useWorldAsks, type WorldAsk } from "./worldAsks";
 import { asksForWorld } from "./worldAskTargets";
 import { WorldAskMark } from "./WorldAskMark";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bridge } from "../api";
 import { worldSessionStorage } from "../browserStorage";
 import {
@@ -49,6 +44,7 @@ import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import type { WorldDeskStore } from "./deskStateStore";
 import type { DeskRevealResult } from "./deskReveal";
 import { DeskOtherHosts } from "./DeskOtherHosts";
+import { leafPinnedBy, useDeskPins } from "./useDeskPins";
 import { useGreetingAnchor } from "./townMasterGreeting";
 import {
   keyTakenByViewSearch,
@@ -84,6 +80,7 @@ export function partitionDesk(
   stops: Map<string, number> = new Map(),
   stopIds: ReadonlyMap<string, string> = new Map(),
   asks: ReadonlyMap<string, WorldAsk> = new Map(),
+  pinned: (leaf: WorldLeafObject) => boolean = () => false,
 ) {
   const needs: Item[] = [];
   const review: Item[] = [];
@@ -147,41 +144,12 @@ export function partitionDesk(
       Number(left.handled) - Number(right.handled) || oldestFirst(left, right),
   );
   working.sort(oldestFirst);
-  return { needs, review, working, quiet };
-}
-
-function Screen({
-  lines,
-  live,
-  fallback,
-}: {
-  lines: string[];
-  live?: boolean;
-  fallback: string;
-}) {
-  const ref = useRef<HTMLPreElement | null>(null);
-  // Follow the newest lines (the question and its choices) unless the reader
-  // has scrolled up to read earlier output.
-  const pinned = useRef(true);
-  const text = lines.join("\n");
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (element && pinned.current) element.scrollTop = element.scrollHeight;
-  }, [text]);
-  if (!lines.length) return <p className="desk-card-missing">{fallback}</p>;
-  return (
-    <pre
-      ref={ref}
-      className={`desk-screen${live ? " is-live" : ""}`}
-      onScroll={(event) => {
-        const element = event.currentTarget;
-        pinned.current =
-          element.scrollHeight - element.scrollTop - element.clientHeight < 24;
-      }}
-    >
-      {text}
-    </pre>
+  // Quiet agents have no order of their own: pinned ones come first.
+  const pins = new Map(quiet.map((leaf) => [leaf.id, pinned(leaf)]));
+  quiet.sort(
+    (left, right) => Number(pins.get(right.id)) - Number(pins.get(left.id)),
   );
+  return { needs, review, working, quiet };
 }
 
 export { useMediaQuery } from "./deskMediaQuery";
@@ -244,7 +212,12 @@ export function DeskView(props: {
       bridge.connection(leaf.connectionId, leaf.generation),
     [],
   );
-  return <DeskBoard {...props} client={client} />;
+  const deskPins = useDeskPins();
+  const pinned = useMemo(
+    () => leafPinnedBy(deskPins, props.world.spaces),
+    [deskPins, props.world.spaces],
+  );
+  return <DeskBoard {...props} client={client} pinned={pinned} />;
 }
 
 /** Desk triage follows the host filter; reads retain each leaf's owner. */
@@ -258,8 +231,11 @@ export function DeskBoard({
   onPreview = null,
   onCloseReading,
   deskStore,
+  pinned,
 }: {
   deskStore?: WorldDeskStore;
+  /** Whether an agent is pinned; quiet agents list pinned ones first. */
+  pinned?: (leaf: WorldLeafObject) => boolean;
   world: WorldObject;
   aggregate?: WorldObject;
   client: DeskClients;
@@ -332,6 +308,7 @@ export function DeskBoard({
     stops,
     stopIds,
     asking,
+    pinned,
   );
   const pendingReview = review.filter((item) => !item.handled);
   const matches = (item: Item) =>
@@ -418,8 +395,14 @@ export function DeskBoard({
   const focused = order[focusIndex];
   const open = (leaf: WorldLeafObject) => {
     cancelPreview();
+    // World can't control it: watch its terminal, or say why not.
+    if (leaf.viewOnly && !leaf.watch) {
+      setError(leaf.viewOnly);
+      return;
+    }
     setError(null);
-    void recordOpen(leaf);
+    // Watching a core terminal is not opening it in World's own record.
+    if (!leaf.watch) void recordOpen(leaf);
     void onOpen(leaf.id).catch((reason: unknown) =>
       setError(
         reason instanceof Error ? reason.message : "Could not open this agent",
@@ -654,7 +637,12 @@ export function DeskBoard({
             {ask}
           </p>
         ) : null}
-        {item.lane === "needs" ? (
+        {leaf.viewOnly ? (
+          // No transcript or screen for it: its own words, and why.
+          <p className="desk-card-report" title={leaf.viewOnly}>
+            {viewOnlyMessage(leaf)}
+          </p>
+        ) : item.lane === "needs" ? (
           <Screen
             lines={
               item.question
@@ -740,6 +728,17 @@ export function DeskBoard({
           <button
             type="button"
             className="is-primary"
+            // Answer only goes to Needs you; a core agent opens as a watch.
+            disabled={
+              item.lane !== "needs" && Boolean(leaf.viewOnly) && !leaf.watch
+            }
+            title={
+              item.lane === "needs"
+                ? undefined
+                : leaf.watch
+                  ? CORE_WATCH_TITLE
+                  : leaf.viewOnly
+            }
             onClick={() =>
               item.lane === "needs"
                 ? openNeedsYou(needsYouLeafKey(leaf.id))
@@ -756,9 +755,10 @@ export function DeskBoard({
           {item.lane === "review" ? (
             <button
               type="button"
-              disabled={item.pending}
+              disabled={item.pending || Boolean(leaf.viewOnly)}
               title={
-                item.pending ? "Waiting for this turn's receipt" : undefined
+                leaf.viewOnly ??
+                (item.pending ? "Waiting for this turn's receipt" : undefined)
               }
               onClick={() => toggleReviewed(item)}
             >
@@ -891,6 +891,7 @@ export function DeskBoard({
           world={aggregate ?? world}
           filtered={world}
           label={hostLabel}
+          pinned={pinned}
           onReveal={
             onReveal
               ? async (leaf) => {

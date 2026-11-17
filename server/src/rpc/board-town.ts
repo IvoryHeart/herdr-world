@@ -36,14 +36,14 @@ async function dispatchBoardTownRpc(
     connection,
   } = rpc;
   const { board, logger, publishBoardChanged, townMoveQueues } = rpc.services;
-  const { herdr } = connection;
+  const { tui } = connection;
   // Town desk and agent moves: several confirmed pane moves on this exact
   // connection and runtime generation, with rollback (see world/desk-move).
   if (method === "board.check_anchor") {
     try {
       const p = (params ?? {}) as Record<string, unknown>;
       const result = await checkAnchor(
-        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
+        (rpc, rpcParams) => tui.call(rpc, rpcParams, 10_000),
         {
           kind: p.kind as "workspace" | "tab" | "pane",
           native_id: String(p.native_id ?? ""),
@@ -94,14 +94,14 @@ async function dispatchBoardTownRpc(
             service_incarnation: rpc.services.serviceIncarnation,
           },
           isCurrent: requestIsCurrent,
-          call: (method, params) => herdr.call(method, params, 10_000),
+          call: (method, params) => tui.call(method, params, 10_000),
         }));
       // The note/string may change while its source listing or commit is awaited.
       if (attached) linked = readLinked();
       const result =
         "text" in linked && attached
           ? await sendNote(
-              (rpc, rpcParams) => herdr.call(rpc, rpcParams, 15_000),
+              (rpc, rpcParams) => tui.call(rpc, rpcParams, 15_000),
               {
                 pane_id: String(p.pane_id ?? ""),
                 terminal_id: String(p.terminal_id ?? ""),
@@ -162,7 +162,7 @@ async function dispatchBoardTownRpc(
   }
   if (method === "town.move_desk" || method === "town.move_pane") {
     const call = (rpc: string, rpcParams: Record<string, unknown>) =>
-      herdr.call(rpc, rpcParams, 15_000);
+      tui.call(rpc, rpcParams, 15_000);
     try {
       const p = params ?? {};
       const result = await executeTownMove(

@@ -59,6 +59,12 @@ export type ValidationSelection = {
 
 const NATIVE =
   /^(?:server\/|shared\/|scripts\/(?:install|installer|package|release|prepare-release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
+/** Real systemd acceptance is part of the Linux x64 native installation job. */
+export function isInstallationInput(path: string): boolean {
+  return /^(?:scripts\/(?:install[^/]*|installer[^/]*|herdr-core-install\.[^/]+|herdr-bootstrap[^/]*|(?:generate-|check-)?homebrew[^/]*|package-release\.sh)$|scripts\/install-linux\/|server\/src\/(?:herdr-core\/install\.[^/]+|connections\/|cli\/connections\.ts))/.test(
+    path,
+  );
+}
 const WORLD_RUNTIME =
   /^(?:web\/src\/world\/|server\/src\/(?:world|connections|bridge)\/|server\/src\/index\.ts$|web\/src\/(?:store(?:\/|\.ts$)|api\.ts$|worldSnapshotDecode\.ts$)|shared\/world)/;
 
@@ -217,6 +223,7 @@ export function selectValidation(
       (full ||
         paths.some(
           (path) =>
+            isInstallationInput(path) ||
             nativeTestConsumers.has(path) ||
             (NATIVE.test(path) && !TEST.test(path)),
         ) ||

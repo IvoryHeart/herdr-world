@@ -1,3 +1,4 @@
+import type { RuntimeOperations } from "../adapters/runtime-ports";
 import type {
   TerminalMarksPort,
   SavedTerminalMark,
@@ -46,13 +47,7 @@ type Lease = {
   generation: number;
   isCurrent(): boolean;
   runtime: {
-    herdr: {
-      call(
-        method: string,
-        params: Record<string, unknown>,
-        timeout: number,
-      ): Promise<unknown>;
-    };
+    operations: RuntimeOperations;
   };
 };
 type Options = {
@@ -487,10 +482,9 @@ export class PersistentTerminalMarks {
       };
       this.admissions.add(guard);
       try {
-        const result = (await lease.runtime.herdr.call(
-          "pane.list",
+        const result = (await lease.runtime.operations.listTerminals(
           {},
-          5_000,
+          { timeoutMs: 5_000 },
         )) as { panes?: unknown };
         if (!Array.isArray(result?.panes) || !lease.isCurrent() || !guard.valid)
           throw new Error("terminal mark target changed during admission");

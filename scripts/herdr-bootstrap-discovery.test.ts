@@ -102,7 +102,7 @@ printf 'World started\n' >> "$FIXTURE_LOG"
           env: {
             ...process.env,
             HOME: root,
-            PATH: tools + ":" + (process.env.PATH ?? ""),
+            PATH: tools + ":/usr/bin:/bin",
             HERDR_INSTALL_DIR: runtime,
             HERDR_WORLD_SKIP_HERDR: "",
             HERDR_SSH_HOST: "",

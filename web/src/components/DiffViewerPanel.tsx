@@ -940,9 +940,9 @@ export const DiffViewerPanel = forwardRef<
   { workspaceId, resourceKey, onSelectionChange, onOpenFile },
   ref,
 ) {
-  const store = useOperationalStore();
   const workspaces = useStoreSelector((state) => state.workspaces);
   const connectionClient = useConnectionClient();
+  const store = useOperationalStore(connectionClient);
   const canReveal = useCanRevealInFileManager();
   const continuousReview = useStoreSelector(
     (state) =>

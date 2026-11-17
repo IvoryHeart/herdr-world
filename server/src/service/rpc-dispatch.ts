@@ -1,3 +1,4 @@
+import { terminalStreamVerb } from "../adapters/runtime-ports";
 import type { ServerWebSocket } from "bun";
 import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
 import { commandEvidence } from "../verbs/evidence";
@@ -28,6 +29,8 @@ import type {
   ConnectionRpcContext,
   RpcServices,
 } from "../rpc/context";
+import { answersOnCore, callCoreHost } from "../rpc/core-host";
+import { coreHostRefusal } from "../../../shared/coreHostMethods";
 import { handleFilesRpc } from "../rpc/files";
 import { handleGitRpc } from "../rpc/git";
 import { handleLauncherRpc } from "../rpc/launcher";
@@ -175,6 +178,21 @@ async function handleRpc(
     return;
   }
   const evidence = commandEvidence(verb);
+  // A herdr-core connection answers only its host methods, from its own
+  // manager: a Herdr (TUI) connection of any ID never reaches it.
+  if (
+    validationConnectionId !== undefined &&
+    !connectionManager.has(validationConnectionId) &&
+    services.coreControl?.manager.has(validationConnectionId)
+  )
+    return dispatchCoreHostRpc(
+      services,
+      ws,
+      req,
+      validationConnectionId,
+      admission,
+      evidence,
+    );
   let route: ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;
   try {
     route = resolveRpcRoute({
@@ -322,7 +340,8 @@ async function handleRpc(
     );
     return;
   }
-  const { sshHost, herdr, handleSettingsRpc, terminalBridge } = connection;
+  const { sshHost, tui, operations, handleSettingsRpc, terminalBridge } =
+    connection;
 
   if (method.startsWith("forward.")) {
     try {
@@ -431,6 +450,16 @@ async function handleRpc(
   }
   if (method.startsWith("terminal.")) {
     recheck();
+    const streamVerb = terminalStreamVerb(method);
+    if (streamVerb)
+      return connection.terminals.dispatch(
+        ws,
+        id,
+        streamVerb,
+        params ?? {},
+        requestIsCurrent,
+      );
+    // Popups and other TUI-specific surfaces remain on its native bridge.
     return terminalBridge.handleTerminalRpc(
       ws,
       id,
@@ -462,10 +491,9 @@ async function handleRpc(
     let inputTerminalId: string | undefined;
     if (PANE_INPUT_METHODS.has(method) && typeof params?.pane_id === "string") {
       try {
-        const pane = await herdr.call(
-          "pane.get",
+        const pane = await operations.getTerminal(
           { pane_id: params.pane_id },
-          2000,
+          { timeoutMs: 2000 },
         );
         if (typeof pane?.pane?.terminal_id === "string")
           inputTerminalId = pane.pane.terminal_id;
@@ -473,7 +501,7 @@ async function handleRpc(
         // Input still goes; only its clipboard routing is unknown.
       }
     }
-    const rawResult = await herdr.call(method, params ?? {}, 8000, () => {
+    const rawResult = await tui.call(method, params ?? {}, 8000, () => {
       recheck();
       if (inputTerminalId)
         terminalBridge.noteTerminalInput(ws, inputTerminalId);
@@ -492,7 +520,7 @@ async function handleRpc(
       result = await enrichIntegrationVersions(result, {
         run: connection.runProcessWithCodeTimeout,
         sshHost: sshHost(),
-        ping: () => herdr.ping(),
+        ping: () => connection.herdr.ping(),
       });
     }
     sendReply({ id, result }, method);
@@ -505,5 +533,103 @@ async function handleRpc(
         reason: (e as Error).message,
       });
     sendError(`${method}-error`, e);
+  }
+}
+
+/**
+ * A connection method naming a herdr-core connection (P4: Files, Git and an
+ * agent's worktree). It must name the runtime generation it saw: the reply
+ * is published only while that generation is current, and a retired one
+ * answers "connection changed", never another generation's result.
+ */
+async function dispatchCoreHostRpc(
+  services: RpcServices,
+  ws: ServerWebSocket<unknown>,
+  req: RpcRequest,
+  connectionId: string,
+  admission: Admission,
+  evidence: ReturnType<typeof commandEvidence>,
+) {
+  const { id, method } = req;
+  const params = req.params ?? {};
+  const core = services.coreControl!;
+  const lease = core.manager.readyRuntimeLease(connectionId);
+  const generation = lease?.generation ?? req.connection_generation;
+  const refuse = (message: string) => {
+    services.markRpcError(ws, id, message);
+    services.safeSend(
+      ws,
+      serializeConnectionEnvelope(
+        connectionId,
+        { id, error: { message }, command_evidence: { stage: "refused" } },
+        typeof generation === "number" ? generation : undefined,
+      ),
+      "core-host-refused",
+    );
+  };
+  if (!lease?.isCurrent())
+    return refuse("The host's herdr-core is not connected.");
+  if (req.connection_generation !== lease.generation)
+    return refuse("The host's herdr-core reconnected; look again and retry.");
+  if (!answersOnCore(method)) return refuse(coreHostRefusal(method));
+  admission.preconditions = () => services.clients.has(ws) && lease.isCurrent();
+  admission.capabilities = () => routeCapabilities("connection");
+  const verb = registeredVerb("rpc", method);
+  const publisher = createConnectionReplyPublisher({
+    connectionId,
+    generation: lease.generation,
+    requestId: id,
+    isCurrent: () => services.clients.has(ws) && lease.isCurrent(),
+    send: (payload, context) => services.safeSend(ws, payload, context),
+    markError: (message) => services.markRpcError(ws, id, message),
+  });
+  try {
+    admitVerb(verb, params, admission);
+    const host = core.hostRuntime(lease);
+    const result = await callCoreHost(host, method, params, {
+      remoteAddress: ws.remoteAddress,
+      owner: ws,
+      // The same notice a Herdr connection's watch sends (rpc/agent.ts).
+      conversationChanged: (paneId) =>
+        services.safeSend(
+          ws,
+          JSON.stringify({
+            control: {
+              type: "agent_conversation_changed",
+              connection_id: connectionId,
+              connection_generation: lease.generation,
+              pane_id: paneId,
+            },
+          }),
+          "agent-conversation",
+        ),
+    });
+    if (method === "agent_conversation.watch") {
+      // A closed browser stops watching (listener.ts).
+      const sessions = host.agentSessions();
+      let watchers = services.conversationWatchers.get(ws);
+      if (!watchers) {
+        watchers = new Set();
+        services.conversationWatchers.set(ws, watchers);
+      }
+      watchers.add(sessions);
+    }
+    checkVerbResult(verb, result);
+    publisher.send(
+      { id, result, command_evidence: evidence.get() },
+      `core-${method}`,
+    );
+  } catch (error) {
+    const message = (error as Error).message;
+    services.markRpcError(ws, id, message);
+    if (evidence.get().stage !== "uncertain")
+      evidence.record({
+        stage: error instanceof VerbRefusal ? "refused" : "failed",
+        reason: message,
+      });
+    publisher.send(
+      { id, error: { message }, command_evidence: evidence.get() },
+      `core-${method}-error`,
+    );
   }
 }

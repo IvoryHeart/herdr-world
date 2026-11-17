@@ -17,6 +17,12 @@ harness remains available when its readiness is unknown.
 - Windows hosts do not run the POSIX probe. Their installation/authentication
   remain unknown and the UI identifies the unsupported check.
 
+The core launcher uses the full [Herdr/app harness inventory](core-harnesses.md).
+Lookup follows the actual command: Cursor uses `cursor-agent`, Antigravity uses
+`agy`, and Kiro uses `kiro-cli`; Kilo and Qoder command aliases are accepted too.
+These aliases change executable discovery only, never login or agent-status
+inference. Core status continues to come exclusively from its native records.
+
 ## Wire and admission
 
 [The shared wire/parser](../shared/harnessReadiness.ts) is consumed by the service

@@ -1,6 +1,12 @@
 import type { ConnectionClient } from "./api";
 import { connectionHttpPath } from "./connectionHttp";
 
+/** What an upload needs of a connection: its identity and whether it is current. */
+export type UploadTarget = Pick<
+  ConnectionClient,
+  "connectionId" | "serverRuntimeGeneration" | "isCurrent"
+>;
+
 /**
  * Uploads an image through the connection's HTTP endpoint and returns the
  * server-side path as text ready to insert at a shell or agent prompt. The
@@ -9,7 +15,7 @@ import { connectionHttpPath } from "./connectionHttp";
  * writes to a PTY by itself.
  */
 export async function uploadTerminalImage(
-  client: ConnectionClient,
+  client: UploadTarget,
   file: File,
   onProgress?: UploadProgress,
 ): Promise<string> {
@@ -27,7 +33,7 @@ export async function uploadTerminalImage(
 }
 
 export function uploadTerminalFile(
-  client: ConnectionClient,
+  client: UploadTarget,
   file: File,
   onProgress?: UploadProgress,
 ): Promise<string> {
@@ -92,7 +98,7 @@ function postWithProgress(
 }
 
 async function uploadTerminalPayload(
-  client: ConnectionClient,
+  client: UploadTarget,
   file: File,
   endpoint: "/upload-image" | "/terminal-upload",
   headers?: Record<string, string>,

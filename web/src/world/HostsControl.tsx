@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Server } from "lucide-react";
-import type { ConnectionSummary } from "../api";
 import { ConnectionManagerDialog } from "../components/ConnectionSwitcher";
 import {
   Popover,
@@ -9,15 +8,19 @@ import {
   PopoverTrigger,
 } from "../components/ui/popover";
 import type { HostsFilter } from "./hostsFilter";
-import { hostCount } from "./hostCount";
+import { hostCount, hostRuntimeLabel, type WorldHost } from "../worldHosts";
 
+/**
+ * The overview's Hosts menu: every host of `worldHosts`, Herdr (TUI) and
+ * herdr-core alike, to show or hide in World's views.
+ */
 export function HostsControl({
   connections,
   ids,
   explanation,
   onChange,
 }: {
-  connections: readonly ConnectionSummary[];
+  connections: readonly WorldHost[];
   ids: HostsFilter;
   explanation: string;
   onChange(ids: HostsFilter): void;
@@ -84,7 +87,14 @@ export function HostsControl({
                   );
                 }}
               />
-              {connection.label} · {connection.state}
+              {connection.label}
+              {hostRuntimeLabel(connection) ? (
+                <span className="world-hosts-runtime">
+                  {" "}
+                  · {hostRuntimeLabel(connection)}
+                </span>
+              ) : null}{" "}
+              · {connection.state}
             </label>
           ))}
           {!connections.length ? (
