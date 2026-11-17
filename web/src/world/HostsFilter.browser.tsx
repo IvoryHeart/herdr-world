@@ -3,6 +3,7 @@ import { clock } from "./testing/installHostsFilterClock";
 import { runDeskRevealCancellationAcceptance } from "./testing/deskRevealCancellationAcceptance";
 import { runDeskRevealAcceptance } from "./testing/deskRevealAcceptance";
 import { checkTownIdleDraws } from "./town/townIdleDraws.browser";
+import { setTownDaylightMode } from "./town/townDaylight";
 import { Profiler } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -97,6 +98,12 @@ const requestedView =
 // Idle Town proves it is drawing through the renderer's frame counters.
 if (operation.startsWith("town-idle"))
   window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
+// Town's time of day follows the device's clock, which the test clock does
+// not govern, so hold noon: each case then draws the same frames at whatever
+// hour the runner starts it. At dusk and night the lightmap's full-screen
+// composite makes every frame dearer on software GL, enough to move the large
+// Town cases toward their deadline. The golden images hold night instead.
+setTownDaylightMode("day");
 const coldMaster = operation === "cold-master";
 const coldHost =
   operation === "cold-host" ||
