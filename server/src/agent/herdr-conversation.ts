@@ -12,6 +12,7 @@ import {
 import { withMenuSize } from "./menu-size";
 import { isSlashCommand } from "../../../shared/conversationInput";
 import { usageStopCurrent } from "../../../shared/usageStop";
+import { withoutTitleSpinner } from "../../../shared/titleActivity";
 import { basename } from "node:path";
 import { createCodexSessionWatch } from "./codex-session-watch";
 import {
@@ -663,7 +664,12 @@ export function createHerdrConversationSource(args: {
         key: JSON.stringify([
           base.agent_status,
           // A change of task in the title is news; its spinner turning is not.
-          base.terminal_title?.replace(/^[^\p{L}\p{N}]+/u, "") ?? null,
+          base.terminal_title
+            ? withoutTitleSpinner(base.terminal_title).replace(
+                /^[^\p{L}\p{N}]+/u,
+                "",
+              )
+            : null,
           base.session_binding,
           base.session_fingerprint,
           resolved.reason ?? null,

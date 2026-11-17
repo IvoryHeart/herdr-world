@@ -634,6 +634,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     is admitted. Search and Hosts
     use the shared aggregate. Reception and bar positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
+    Terminal title-spinner and scroll repaints keep healthy hosts actionable;
+    topology or agent-state changes still require a fresh observation.
   - **Search shows where things are.** Town's search hangs from the top
     edge beside the view buttons in Zen, World's default, and sits in the top
     bar when the bars are shown; on a phone in Zen it is the search button in
@@ -1665,6 +1667,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   A Now bar shows the agent's status, its current task from the terminal title
   and how long it has been at it, with Stop (or Esc twice) for Claude Code,
   Codex and Pi; the step running now shows with its command and timer.
+  Harness task titles omit animated spinner glyphs even after a letter or name
+  prefix. On Herdr TUI connections those frames alone do not refresh Chat;
+  changes to the task text, status or conversation still do.
   When the agent waits on a permission prompt, a question (one or several,
   with each choice's description) or plan approval, Chat shows it as an ask
   card and answers with the option you pick (click or its number key), after
