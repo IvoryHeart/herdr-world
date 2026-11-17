@@ -2572,6 +2572,12 @@ load asynchronously; editing the name takes precedence over a late suggestion.
 
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
   automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
+  Notification sync waits while a tab is hidden. If the browser temporarily
+  rejects sync because the document is inactive, World retries quietly when
+  the tab becomes visible or resumes; other sync failures still show an error.
+  Testing only: open `?notificationSync=invalid-state` (removed immediately),
+  switch to another tab, then return to World. The first sync simulates an
+  inactive document; returning retries without a red sync-error notice.
   **Open agent** follows **Agents open** (Chat by default when supported,
   otherwise Terminal), after checking the notification's owning runtime and
   agent session. In Spaces it enters that owning host; a refused notification

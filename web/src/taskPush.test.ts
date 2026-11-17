@@ -1,5 +1,5 @@
 import { expect, mock, test } from "bun:test";
-import { syncTaskPush } from "./taskPush";
+import { syncTaskPush, taskPushSyncTrial } from "./taskPush";
 
 const origin = "https://world.example";
 const publicKey = btoa(String.fromCharCode(4, ...Array(64).fill(1)))
@@ -118,6 +118,39 @@ test("unconfigured servers fall back locally and passive restoration never promp
     f.available = true;
     expect(await syncTaskPush(true, preferences)).toBe("local");
     expect(f.registration.pushManager.subscribe).not.toHaveBeenCalled();
+  });
+});
+
+test("the inactive-document preview switch is removed and fails only one sync", async () => {
+  await browser(async () => {
+    const previous = new Map<string, PropertyDescriptor | undefined>();
+    const location = new URL(
+      origin + "/town?notificationSync=invalid-state&keep=1#example",
+    );
+    const replaceState = mock<History["replaceState"]>(() => {});
+    for (const [key, value] of Object.entries({
+      location,
+      history: { state: null, replaceState },
+    })) {
+      previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+      Object.defineProperty(globalThis, key, { configurable: true, value });
+    }
+    try {
+      taskPushSyncTrial(location.search);
+      expect(String(replaceState.mock.calls[0]?.[2])).toBe(
+        origin + "/town?keep=1#example",
+      );
+      await expect(syncTaskPush(false, preferences)).rejects.toMatchObject({
+        name: "InvalidStateError",
+      });
+      expect(await syncTaskPush(false, preferences)).toBe("local");
+    } finally {
+      taskPushSyncTrial("");
+      for (const [key, value] of previous) {
+        if (value) Object.defineProperty(globalThis, key, value);
+        else Reflect.deleteProperty(globalThis, key);
+      }
+    }
   });
 });
 
