@@ -99,12 +99,17 @@ test("every road crossing has a stop, and the bus passes each on its way off the
               TOWN_STOP_SPACING,
             );
       // The leftmost junctions too: each edge road meets both its streets
-      // at a stop, on the map.
+      // at a stop, on the map (two rows' edge roads a tile apart share one).
       const edges = layout.verticalRoads.filter((side) => side.edge);
       expect(edges.length).toBeGreaterThan(0);
       for (const side of edges)
         for (const road of [side.y0 - 5, side.y1]) {
-          const stop = route.stops.find((s) => s.key === `${side.x}:${road}`);
+          const stop = route.stops.find((s) => {
+            const at = stopAt(s);
+            return (
+              at.road === road && Math.abs(at.x - side.x) < TOWN_STOP_SPACING
+            );
+          });
           expect(stop).toBeDefined();
           expect(stop!.wait.x).toBeGreaterThan(0);
         }
