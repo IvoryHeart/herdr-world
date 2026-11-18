@@ -1,7 +1,5 @@
 # Herdr World independence and upstream synchronization
 
-> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
-
 - **Spec ID:** `004-world-packaging-and-upstream-boundaries`
 - **Status:** Approved
 - **Created:** 2026-08-10

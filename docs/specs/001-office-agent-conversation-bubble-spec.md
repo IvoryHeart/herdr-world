@@ -1,7 +1,5 @@
 # Office agent conversation bubble
 
-> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
-
 - **Spec ID:** `001-office-agent-conversation-bubble`
 - **Status:** Approved
 - **Created:** 2026-08-04

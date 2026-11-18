@@ -1,7 +1,5 @@
 # Implementation summary — Herdr World automated release distribution
 
-> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
-
 - **Parent spec:** [`017-herdr-world-automated-release-distribution-spec.md`](017-herdr-world-automated-release-distribution-spec.md)
 - **Implemented at:** 2026-08-30
 - **Implementation status:** Complete; first stable release remains pending

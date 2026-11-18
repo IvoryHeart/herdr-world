@@ -34,8 +34,6 @@ For an optional visible two-agent run, use the
 
 ## Documentation maintenance
 
-Synchronize delivered contract changes and their consumer mappings in the same change; unfinished requirements stay in active deltas.
-
 Every significant product, API, configuration, installation or workflow change
 must update the relevant current documentation in the same change. Use the
 knowledge map to identify affected guides. `FEATURES.md` is the reference: put

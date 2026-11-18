@@ -1,7 +1,5 @@
 # Implementation summary — Office agent conversation bubble
 
-> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
-
 - **Parent spec:** [`001-office-agent-conversation-bubble-spec.md`](001-office-agent-conversation-bubble-spec.md)
 - **Implemented at:** 2026-08-04
 - **Implementation status:** Complete

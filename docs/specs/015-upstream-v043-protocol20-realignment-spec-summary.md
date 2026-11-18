@@ -1,7 +1,5 @@
 # Implementation summary — Herdr v0.8.2 / protocol-20 and Web v0.4.2/v0.4.3 replay
 
-> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
-
 - **Parent spec:** [`015-upstream-v043-protocol20-realignment-spec.md`](015-upstream-v043-protocol20-realignment-spec.md)
 - **Implemented at:** 2026-08-20
 - **Implementation status:** Complete

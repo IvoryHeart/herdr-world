@@ -1777,25 +1777,20 @@ and Board/Desk marks without inventing an agent harness or changing Herdr status
 ### Requirement: Pinned Town desks
 
 The user SHALL be able to pin and unpin a Town desk from its agent window's
-menu. Herdr TUI pins SHALL be World-owned view settings saved on the World
-service by tab. A herdr-core desk SHALL be pinned while any of its terminals
-has `herdr.pinned`: pinning SHALL pin its agents, or all terminals when it has
-no agents, and unpinning SHALL clear every terminal's pin through that exact
-current connection. World SHALL derive core pin state from those labels and
-save only the World pin rank, without a second authoritative pin flag. Pins
-SHALL remain separate from Spaces' browser-local close-protection pins.
-
-Admitted pinned desks SHALL show pins and take their room's first seats in
-saved pin-rank order; other desks SHALL follow in native tab order. Dragging a
-pinned desk onto another pinned seat in the same room SHALL reorder its rank
-without unpinning it. A saved legacy cell SHALL NOT fix its seat. An agent at
+menu. A pin SHALL be a World view setting saved on the World service with the
+terminal colours, keyed by the desk's tab, so every device sees it; it SHALL NOT
+change Herdr and SHALL be separate from Spaces' browser-local tab pins. A pinned
+desk SHALL show a pin and keep its cell in its room through tab reorders,
+capacity steps and rebuilt scenes; the room SHALL grow to hold the cell, and
+the other desks SHALL take the free cells in tab order. A pinned desk SHALL NOT
+be picked up for a drag, nor be a reorder target, until unpinned. An agent at
 a pinned desk SHALL NOT go to the lounge: it SHALL leave its seat only for
 reception, when blocked or done and not yet checked, and SHALL return to its
 seat once checked or answered. A pin SHALL follow its tab to another workspace
 and SHALL be dropped when its tab closes. When a room has more desks than Town
 presents, admission SHALL remain the native tab-order prefix. A pin or selection
-SHALL NOT promote a hidden tab across the fold boundary. Pin ordering SHALL
-apply only among admitted tabs; expanding SHALL reveal the next tabs in
+SHALL NOT promote a hidden tab across the fold boundary. A saved pin cell SHALL
+apply only while its tab is admitted; expanding SHALL reveal the next tabs in
 order, including any hidden pinned or selected tab.
 
 #### Scenario: A pinned agent finishes and is seen
@@ -1811,22 +1806,11 @@ order, including any hidden pinned or selected tab.
   expansions reveal it in native tab order
 - **AND** refolding restores the first 24 tabs without pin or selection promotion
 
-#### Scenario: A room reflows around pinned desks
+#### Scenario: A room reflows around a pinned desk
 
-- **WHEN** tabs are added or reordered in a room with pinned desks
-- **THEN** admitted pinned desks take its first seats in pin-rank order and
-  the other desks follow in native tab order
-
-#### Scenario: Reorder a pinned desk
-
-- **WHEN** the user drags a pinned desk onto another pinned seat in its room
-- **THEN** the saved pin order changes and both desks remain pinned
-
-#### Scenario: Another core client changes a pin
-
-- **WHEN** Herdr's app changes a terminal's `herdr.pinned` label
-- **THEN** Town and Board derive the core tab's pin from the observed labels
-  without retaining a conflicting World pin flag
+- **WHEN** tabs are added or reordered in a room with a pinned desk
+- **THEN** the pinned desk keeps its cell and the other desks fill the free
+  cells in tab order
 
 ### Requirement: Needs you tab
 
@@ -3153,27 +3137,21 @@ workspace or the requested point without displacing other cards. Folding a
 workspace SHALL gather its tabs into it and show their count; unfolding SHALL
 place them into free space. Tidy SHALL rearrange the selected workspace's tabs,
 or the whole board when nothing is selected, and SHALL offer an undo that
-restores the previous positions. Pinned tab cards SHALL occupy a derived shelf
-above their workspace in native tab order, under a shared tinted band, and
-SHALL follow that workspace. A pinned tab dragged away SHALL return to its
-shelf; unpinning SHALL place it in free space near its workspace. A pinned
-workspace card SHALL keep its absolute board position. Core tab pins SHALL
-derive from `herdr.pinned` as specified by Pinned Town desks; Herdr TUI tab
-pins and workspace pins SHALL remain World-owned.
+restores the previous positions. A pinned card SHALL keep its board position and
+SHALL NOT follow its workspace.
 
 #### Scenario: Pin a card
 
 - **WHEN** the user pins a selected card from its bar (on a phone, from its
   terminal's header) and then tidies its workspace
-- **THEN** a tab card shows a pin badge on its workspace's shelf while the
-  other cards are rearranged, and unpinning places it in free space nearby
-- **AND** pinning a workspace card preserves its absolute board position
+- **THEN** the card shows a pin badge and keeps its position while the other
+  cards are rearranged, and unpinning it lets it belong where it is beside its
+  workspace again
 
 #### Scenario: Drag a workspace
 
 - **WHEN** the user drags a workspace card and releases it
-- **THEN** its unpinned tabs keep their arrangement around it, its pinned tabs
-  follow on the shelf above it, and the board is still within about one second
+- **THEN** its unpinned tabs follow and keep their arrangement around it, and the board is still within about one second
 
 #### Scenario: Unfold into free space
 
@@ -3328,13 +3306,11 @@ for that attempt; a match with the saved recipient SHALL NOT override it.
 Herdr cannot hold a pane between a check and the prompt, so
 the service SHALL read the pane's agent again after the prompt and report a
 change as possibly delivered to another agent, never as sent. A note SHALL offer to
-start a new agent, from a profile or an agent kind, in a chosen workspace
-through the shared launcher (see New agent from a profile or a kind), with the
-note as its first prompt, and SHALL string the note to the new pane whenever
-one was created. Only definite refused starts MAY retry within the launcher's
-bound; lost replies SHALL be inspected without relaunch. A timeout SHALL be
-reported as uncertain without sending the note, and a failure SHALL report
-what was created. Agent replies or results MAY be
+start a new agent in a chosen workspace, which creates a tab, starts the agent
+in it, waits within a bound for the agent to become interactive, then prompts
+it with the note and strings the note to it. A timeout SHALL be reported as
+uncertain without sending the note; a failure at any step SHALL be reported
+with what was created; no step SHALL be retried automatically. Agent replies or results MAY be
 shown on the note when they are reported; World SHALL NOT invent them.
 
 #### Scenario: Send a note
@@ -3434,13 +3410,10 @@ failed or rolled back, the service SHALL reconcile witnessed anchors from the
 terminals the outcome positively observed and leave the rest unresolved. Items SHALL NOT be
 deleted or re-attached without the user.
 
-Card positions, World-owned pins, folds and workspace/host colours are layout
-preferences keyed by connection profile and native ID, not claims of identity:
-a new entity that reuses an ID may inherit that arrangement. Tab colour and
-terminal appearance SHALL instead follow Shared terminal appearance and
-require continuing terminal evidence; a replacement with conflicting terminal
-witnesses SHALL NOT inherit bound choices. Core pins derive from runtime labels.
-Strings SHALL retain the continuity rules above.
+Card positions, pins, folds and colours are a layout preference keyed by
+connection profile and Herdr ID, not a claim of identity: a new entity that
+reuses an ID inherits that arrangement, while strings keep the continuity rules
+above.
 
 #### Scenario: World restarts while Herdr keeps running
 
@@ -4399,378 +4372,3 @@ first observed complete on a ready runtime after this change. It SHALL:
   the runtime retires during it
 - **THEN** World shows the failure, does not show the setting as saved, and leaves the
   previous setting in place
-
-### Requirement: Agent profiles
-
-The World service SHALL keep agent profiles: a name, an agent kind (the
-harness), an optional model, reasoning effort and permission mode, a role,
-skills, tools, a starting brief, whether to send the brief once the agent is
-ready, an optional home room, an optional terminal colour and a Town look
-(skin, hair and its style, outfit, shirt and trouser colours, accessory).
-Profiles SHALL be bounded, validated and revisioned, committed through the
-instance SQLite single writer as specified by Durable World-owned agent profiles
-in [World storage](../world-storage/spec.md), and shared by every authenticated
-browser of the service. Legacy JSON is an import source, not the live store. A profile SHALL NOT hold credentials: text that looks like a key
-or token SHALL be refused. World SHALL seed editable starter profiles (Reviewer,
-Builder, Designer, FirstMate) once; deleting one SHALL NOT bring it back.
-
-The profile editor SHALL be reachable from World settings, the Actions menu, the launcher and Board, show
-a live preview of the look with Town's sprites and the exact launch the profile
-maps to. At launch World SHALL map a profile to its harness's own configuration:
-for Claude Code an inline subagent definition (description, prompt, tools,
-model, skills) selected as the session's agent, and its permission mode; for
-Codex its model, approval policy, sandbox (writable when the tools include Edit
-or Write), reasoning effort and the role and skills as developer instructions;
-for any other kind no options, with the role sent ahead of the first prompt.
-An empty choice SHALL leave the harness's default.
-
-Profile definitions SHALL stay per World. A launched terminal's profile
-assignment SHALL live in Herdr metadata and end with that terminal, as
-specified by Per-terminal settings live with the terminal in the current
-world-surfaces spec. Every World on that Herdr SHALL read the assignment,
-resolving its ID against its own profiles; a missing profile SHALL show
-the recorded name with the default look.
-
-#### Scenario: Edit a starter
-
-- **WHEN** the user changes the Builder starter's model and saves
-- **THEN** every browser of the service shows the change and Builder is still marked as a starter
-
-#### Scenario: A credential in a profile
-
-- **WHEN** the user saves a profile whose role contains an API key
-- **THEN** the service refuses the profile and nothing is written
-
-#### Scenario: Launch a Codex profile
-
-- **WHEN** the user starts the Reviewer profile (Codex, high effort, read-only tools)
-- **THEN** Codex starts with its approval policy, a read-only sandbox, high reasoning effort and the role as developer instructions
-
-### Requirement: New agent from a profile or a kind
-
-The shell's Actions menu in the visual views, each actionable Town room
-(including on phones), Spaces (beside New tab) and Board's New tab dialog SHALL
-offer New agent; like other view actions, it SHALL NOT add buttons to a view's
-toolbar. It SHALL name a destination room on a
-ready host and start, in one tap, a profile or an agent kind. The kinds SHALL be
-those the host's Herdr reports as supported (its agent manifests); a Herdr that
-reports none SHALL be offered Claude and Codex, and Herdr SHALL validate the
-choice.
-
-For a Herdr TUI destination, through the room's own connection and runtime generation, the service SHALL
-create a tab labelled with the profile or kind, start the agent in its root
-pane under a Herdr agent name derived from the label and unused on that host,
-wait within a bound until that same agent in that pane and terminal is
-interactive, then send the first prompt once. When Herdr refuses the start
-because the new shell is not yet at its prompt or the name is taken, nothing
-has started, and the service SHALL retry the start within a bound. Any other
-refusal SHALL fail with Herdr's reason. A lost start reply SHALL be inspected,
-never relaunched. An agent that stops on a question before it is ready, or that
-exits as it starts (the shell is back in the foreground), SHALL be reported at
-once without a prompt; a timeout SHALL be reported as uncertain. Every outcome
-SHALL say what was created and offer to open it. A ready agent SHALL open in a
-terminal window. A launch from a profile SHALL give the new tab the profile's
-colour, and Town SHALL draw that agent with the profile's look; other agents
-keep the look derived from their identity.
-
-Herdr-core launch admission and native operations SHALL follow
-[Herdr-core runtime](../herdr-core-runtime/spec.md).
-
-#### Scenario: Start Claude in a new tab
-
-- **WHEN** the user chooses Claude in New agent for a room whose new shell takes a moment to reach its prompt
-- **THEN** Claude starts in the new tab once the shell is ready, rather than leaving a plain shell
-
-#### Scenario: A harness refuses its options
-
-- **WHEN** a harness exits as it starts because it rejects an option
-- **THEN** World reports that the agent exited, without waiting for the timeout, and offers to open the tab
-
-#### Scenario: A question before the agent is ready
-
-- **WHEN** the new agent asks whether to trust its folder
-- **THEN** World reports that the agent is waiting on a question, sends nothing and offers to open the tab
-
-### Requirement: Harness readiness
-
-For each agent kind a host supports, the service SHALL report whether the
-harness is installed (on the service's PATH or a usual install folder) and, when
-the harness has a status command World can read, whether it is logged in and by
-which method. It SHALL run the harness's own status command on the room's host
-(locally or over the connection's OpenSSH destination) and keep only those
-fields; it SHALL NOT read credentials or forward the command's output. Harness
-commands SHALL be data per harness, not logic. The launcher and the profile
-editor SHALL show a missing or logged-out harness, and SHALL offer Log in, which
-opens a new tab in the room and shows the harness's own fixed login command,
-with Copy and Open its tab, for the user to run there and complete; World SHALL
-then re-check on request. The login command SHALL find the executable by the
-same lookup readiness uses on that host. World SHALL NOT type into the login
-tab: Herdr reports no prompt state, and a startup script reading a key would
-take typed text as its answer. Windows hosts
-SHALL NOT be probed; they SHALL report no readiness, which blocks no kind their
-Herdr supports.
-
-#### Scenario: Logged out
-
-- **WHEN** Codex is installed on a host and reports that it is not logged in
-- **THEN** New agent says Codex is logged out there and offers Log in, which opens a tab running Codex's own login
-
-#### Scenario: Status names the account
-
-- **WHEN** a harness's status output includes the account's email address
-- **THEN** World reports only whether it is logged in and the method, never the address
-
-#### Scenario: A startup question in the login tab
-
-- **WHEN** the user chooses Log in and the new tab's startup script waits for a single key
-- **THEN** World has typed nothing there; the user sees the question, answers it and then runs the login command shown in New agent
-
-#### Scenario: A Windows host
-
-- **WHEN** New agent targets a room on a Windows host whose Herdr supports Claude
-- **THEN** World does not probe the host and still offers Claude
-
-### Requirement: Built-in sources
-
-World SHALL include built-in sources for GitHub and Jira Cloud, each enabled
-by default and switchable in World settings. The service SHALL make every
-source request with the service user's credentials, bound each refresh in
-time, size and frequency, and refresh only while a browser asks. A source
-without its prerequisites SHALL report that it is not connected with plain
-guidance, and a failed refresh SHALL keep its last items. The browser SHALL
-NOT contact a source directly or receive a source credential.
-
-World SHALL link a work item to an agent pane only through that pane's own
-reported pull request, or through the branch and GitHub remotes of its
-reported, pane or workspace checkout on its own connection. Board SHALL offer
-a Work lens of pull requests by lane and tickets by status whose cards name
-their linked agents, and Town SHALL show a linked item's badge on the agent's
-desk.
-
-For the user's own open pull requests World SHALL compute readiness from what
-GitHub reports, never store it, and show each rule as met, failed or unknown.
-World SHALL merge, close or mark a pull request ready only after the user
-confirms a sheet that states the outcome, SHALL pin a merge to the head the
-user saw, and SHALL NOT bypass branch protection.
-
-Reviewer attribution SHALL be an explicit sender claim in the review or comment,
-not an identity inferred from a shared GitHub login. Unattributed RESULT evidence
-SHALL remain visible with its source link and SHALL NOT confirm readiness.
-Reviewed heads SHALL come only from review commit metadata or an unambiguous
-explicit SHA, never timestamps; conflicting claims SHALL remain unknown.
-
-Pull request detail SHALL have its own source, head and read-time qualification,
-independent of successful list refreshes. Failed, partial, expired or deferred
-detail SHALL NOT establish current readiness or authorize a merge. Matching
-cached evidence MAY remain visible as stale with its original observation time.
-The service SHALL retain bounded ten-item detail requests and at most twenty
-details per refresh, isolate retired configuration caches, and revalidate source
-generation, detail expiry and exact-head admission before dispatching a merge.
-
-#### Scenario: List succeeds while expired detail fails
-- **WHEN** an unchanged pull request list succeeds but its expired detail read
-  fails or returns only a partial response
-- **THEN** matching old evidence remains labelled stale, findings and screenshot
-  readiness remain unknown, and a list success does not update its read time
-- **AND** Refresh Sources can recover current detail within the existing bounds;
-  a changed head never inherits the old detail
-
-#### Scenario: Prerequisite missing
-- **WHEN** `gh` is not signed in, or Jira has no site, email or token
-- **THEN** that source shows not connected with how to connect it, and other
-  sources and views keep working
-
-#### Scenario: Agent works on a pull request
-- **WHEN** an agent's checkout is on the head branch of one of the user's
-  open pull requests and has that branch's own repository (the fork, for a
-  fork's pull request) as a GitHub remote
-- **THEN** the Work lens names the agent on that pull request's card and the
-  agent's Town desk shows its number and check state
-
-#### Scenario: Jira token saved
-- **WHEN** the user saves a Jira API token in Sources settings
-- **THEN** the service keeps it in private storage and every later response
-  reports only that a token is set
-
-#### Scenario: Pane reused after a restart
-- **WHEN** a Herdr runtime restarts or a new agent session starts and reuses
-  a linked pane ID
-- **THEN** Board and Town show no item for that pane until World links it
-  again
-
-#### Scenario: A busy merged window
-- **WHEN** more than a hundred pull requests the user authored were merged
-  in the merged window (seven days unless changed in Sources settings)
-- **THEN** the Work lens shows every one, grouped by the day it merged with
-  only the newest day open, when at most 400 fit within the shared one-minute
-  refresh deadline; due action details for the user's own open pull requests
-  are read before merged history
-
-#### Scenario: Merged history exceeds the refresh bounds
-- **WHEN** the first merged page reports more than 400 pull requests, history
-  continues beyond eight pages of fifty, or the history exhausts the shared
-  one-minute refresh deadline
-- **THEN** the source reports that history was shortened, keeps its last
-  complete list and asks the user to shorten the window in Settings → Sources
-- **AND** a count over 400 stops immediately after the first merged page;
-  the message names the oldest valid merge date actually observed, or states
-  that no merge date could be confirmed, without claiming continuous coverage
-- **AND** partial history never replaces the list, proves absence or grants
-  action authority; cached action details retain their head and read-time
-  qualification independently of the failed history
-
-#### Scenario: A pull request merges between list requests
-- **WHEN** an open-work request reports a pull request as OPEN and a later
-  history request reports the same pull request as MERGED
-- **THEN** World keeps one merged item with its observed merge time and all
-  observed roles, without attaching open-only action details
-
-#### Scenario: Merge confirmed on the head the user saw
-- **WHEN** the user confirms Merge on a pull request GitHub would merge as it
-  is, and nobody pushed since the card was read
-- **THEN** World merges it with a merge commit and keeps the branch; if the
-  head moved, World refuses with "Head changed: review again"
-
-#### Scenario: Required review outstanding
-- **WHEN** GitHub still requires a review on the user's own pull request
-- **THEN** the card offers Open on GitHub and the plain merge command instead
-  of Merge, and World runs no merge
-
-#### Scenario: A reviewer confirmed an older head
-- **WHEN** a rev agent's latest result confirms its findings on a commit
-  before the current head
-- **THEN** the findings rule is unknown and says which commit it confirmed
-  and how many commits came since
-
-#### Scenario: Jira site or account changed
-- **WHEN** the user changes the Jira site or email without entering a token
-- **THEN** the service removes the saved token and never sends it to the new
-  site
-
-### Requirement: Chimes
-
-While a World page is open, World SHALL play its own chime for a change that
-needs the user: a timbre for who it came from, played as a motif for why. The
-timbre SHALL be the Town master's for the agent holding that role, else the
-agent's profile chime, else the crew's; a change with no known sender SHALL
-use the crew's. The motif SHALL be needs you (blocked, or a Herdr custom
-notification with the request sound), finished (finished, or a custom
-notification with the done sound) or for you (a custom notification with no
-sound), decided in one mapping.
-
-A chime SHALL NOT play when its motif is switched off, when the change's pane
-is already on screen, when this device's sounds are off or when the agent is
-muted; while any agent is focused, only focused agents and the Town master's
-needs-you SHALL chime. Changes within 3 seconds SHALL play one chime, with a
-higher-priority change (Town master, then needs you, for you, finished) played
-once more at the window's end. Every chime SHALL come with a toast whose reason
-line names the sender, or says the sender is unknown, and why; a burst's toast
-SHALL read "N changes" with each reason. World SHALL NOT guess a sender from
-notification text.
-Sender claims SHALL travel explicitly through the service relay; missing or
-invalid sender metadata SHALL remain unknown, including with a known pane or
-profile. Unknown senders SHALL retain the crew timbre and the mapped motif.
-Queued escalations SHALL recheck the current sound and interest policy before
-playing. Intentionally suppressed page notifications SHALL stay silent when
-Web Audio is unavailable.
-
-The user's class timbres and motif switches and each profile's chime SHALL
-be committed through each World service's instance SQLite single writer with
-its profiles, and shared by its browsers. Legacy profile JSON SHALL remain an
-import source only. The Town master
-role SHALL live with the terminal in Herdr metadata, shared by every World
-on that Herdr and ending with the terminal. The newest claim SHALL win,
-with revision ties broken by the greater terminal ID, as specified by
-[Per-terminal settings live with the terminal](#requirement-per-terminal-settings-live-with-the-terminal). The Town master's timbre SHALL NOT be given to the crew or a profile. Exactly one
-agent MAY hold the Town master role; only the user SHALL assign it, and moving
-it from another live agent SHALL ask first. A terminal launched from a profile
-that offers the role SHALL be suggested, never assigned. Whether this device
-plays chimes, and how loud, SHALL be the device's own setting.
-
-When World plays the sound on a page, it SHALL mark that page's notifications
-silent, and push notifications SHALL be silent while a page has reported
-playing chimes or muting this device within the last minute. This SHALL work
-on first installation without reloading, and one page's OS fallback SHALL NOT
-override another page's current silence policy; otherwise the OS sound SHALL play.
-
-#### Scenario: The Town master needs you during Focus
-
-- **WHEN** another agent is focused and the Town master becomes blocked
-- **THEN** World plays the needs-you motif in the Town master's timbre and shows its reason line
-
-<a id="scenario-a-message-for-the-owner"></a>
-
-#### Scenario: A message for the user
-
-- **WHEN** an agent runs `herdr notification show "Review ready"` with no sound
-- **THEN** World plays the for-you motif in the crew's timbre with the reason "For you · sender unknown: Review ready"
-
-#### Scenario: A burst
-
-- **WHEN** an agent finishes and, within 3 seconds, the Town master becomes blocked
-- **THEN** World plays the finished chime at once and the Town master's needs-you once at the window's end, and the toast reads "2 changes" with both reasons
-
-#### Scenario: Two Town masters
-
-- **WHEN** the user makes a second agent Town master while the first is open
-- **THEN** World asks before moving the role
-
-### Requirement: Town Master greeting
-
-World SHALL greet the user once per visit with the Town Master's card while
-**Show this on start** is on, which it SHALL be by default. A visit SHALL be
-World opening, or the World page coming back on screen after being hidden for
-30 minutes or more. The Town Master SHALL be World's own script, with no agent
-behind it.
-
-The card SHALL say hello with the time the user was last here, show the same
-since-you-left lines as the Town board sign, each opening Needs you as the
-board's line does, or one line saying nothing is new, and, when World's
-update check reports a newer release, one line naming it whose control leads
-to World's update control. The greeting SHALL NOT install anything, answer,
-merge or review.
-
-On wide screens the card SHALL open from the Town Master's figure beside the
-Town board, at the hub in Board and at the summary in Desk; on phones it SHALL
-be a sheet with Back. The card SHALL close with ✕, Escape, Back or a press
-outside it. It SHALL NOT draw over an open window or sheet such as Chat or
-Needs you: a greeting due while one covers its place SHALL wait until none
-does. On phones any open window or sheet SHALL cover it; on wide screens only
-one over the figure or anchor, or over where the card opens, SHALL cover it,
-so a window docked or floating elsewhere SHALL NOT hold the greeting back.
-
-**Show this on start** at the card's foot and its setting SHALL be one value
-kept per browser. Turning it off SHALL also stop a greeting that is waiting
-for a window to close. Every visit SHALL greet, the very first on a browser
-too; with no last time known, the hello SHALL leave the time out.
-
-#### Scenario: Greeted on return
-
-- **WHEN** the user opens World after being away
-- **THEN** the Town Master's card says when they were last here and lists the
-  board sign's since-you-left lines
-- **AND** choosing a line opens Needs you at its item and closes the card
-
-#### Scenario: A window is open
-
-- **WHEN** a visit starts while Chat or Needs you is open over the greeting's
-  place, or any window or sheet is open on a phone
-- **THEN** no greeting covers it
-- **AND** the greeting opens once nothing covers its place
-
-#### Scenario: A window elsewhere
-
-- **WHEN** a visit starts on a wide screen while an intent window or Chat is
-  docked away from the Town Master and the card's place
-- **THEN** the greeting opens beside the Town Master as usual
-
-#### Scenario: Turned off
-
-- **WHEN** the user unticks **Show this on start**
-- **THEN** later visits on that browser do not greet
-- **AND** switching the setting back on greets again from the next visit
-
-#### Scenario: Short absence
-
-- **WHEN** the page comes back on screen after less than 30 minutes hidden
-- **THEN** it is not a new visit and no greeting opens

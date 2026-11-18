@@ -1,7 +1,5 @@
 # Implementation summary — Herdr observability extension contract
 
-> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
-
 - **Parent spec:** [`002-herdr-observability-extension-contract-spec.md`](002-herdr-observability-extension-contract-spec.md)
 - **Implemented at:** 2026-08-10
 - **Implementation status:** Complete

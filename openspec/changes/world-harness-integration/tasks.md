@@ -1,4 +1,4 @@
-## Design (original proposal)
+## Design (this PR)
 
 - [x] Research Herdr's integration paradigm (source, docs, `herdr integration status`) and Roamgate; adopt Herdr's shape.
 - [x] Per-harness table for all Herdr harnesses: Herdr's file, World skill file, World limits.
@@ -30,5 +30,5 @@ items for the local host. Slices 2 and 3 remain separate.
 ## Slice 3: SSH hosts and updates
 
 - [ ] Run the installer through each host's qualified connection; stale rows for unreachable hosts.
-- [ ] Complete the qualified SSH/update and Herdr-upgrade refresh of installed `outdated` World integrations, reported beside Herdr's; local World-update discovery is already delivered.
+- [ ] `herdr-world herdr upgrade` and World update reinstall only `outdated` World integrations, reported beside Herdr's.
 - [ ] Tests: host isolation; upgrade installs nothing new.

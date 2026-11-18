@@ -1,7 +1,5 @@
 # UI-managed Herdr network connections
 
-> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md). [Bridge access](../../openspec/specs/bridge-access/spec.md) and [runtime federation](../../openspec/specs/runtime-federation/spec.md) supersede this record.
-
 - **Spec ID:** `019-remote-bridge-access-ux`
 - **Status:** Draft
 - **Created:** 2026-09-02

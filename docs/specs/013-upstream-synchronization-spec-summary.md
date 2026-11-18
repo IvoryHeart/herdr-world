@@ -1,7 +1,5 @@
 # Implementation summary — Upstream synchronization and compatibility boundary
 
-> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
-
 - **Parent spec:** [`013-upstream-synchronization-spec.md`](013-upstream-synchronization-spec.md)
 - **Implemented at:** 2026-08-14
 - **Implementation status:** Complete
