@@ -20,7 +20,8 @@ class StageBin
     self
   end
   def write(content)
-    raise "missing conditional bootstrap" unless content.include?("herdr status") && content.include?('ln "$staging/herdr" "$install_dir/"')
+    # The bootstrap checks for a runtime and, with none, installs and registers herdr-core.
+    raise "missing conditional bootstrap" unless content.include?("herdr status") && content.include?("herdr_core_setup") && content.include?("connections add core-local")
   end
   def chmod(_mode); end
 end
