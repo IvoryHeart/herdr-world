@@ -103,6 +103,7 @@ test("cleanup failures retain the original installation failure", async () => {
 });
 
 test("reuse is explicit and versions cannot become shell or URL input", () => {
+  expect(installOptions(["--case", "core-only"]).only).toBe("core-only");
   expect(installOptions([]).reuse).toBe(false);
   expect(
     installOptions([

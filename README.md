@@ -14,8 +14,9 @@ World works with the **Herdr TUI**, **herdr-core**, or both on one computer.
 you choose a Herdr TUI room. Each runtime has its own connection.
 
 - **herdr-core:** install it with the [official instructions](https://github.com/herdrdev/herdr-core)
-  or World's setup below. Run `hc server start`, then open **Hosts → Manage
-  connections → Add herdr-core**. Choose **This computer**, **A Unix host over SSH** or
+  or World's setup below. With core already running and no Herdr TUI, World's
+  first run connects to it automatically and makes it the default. For another
+  connection, open **Hosts → Manage connections → Add herdr-core**. Choose **This computer**, **A Unix host over SSH** or
   **A Windows host over SSH** and connect. Keep session **default** unless you changed
   `HC_SESSION`. Windows core needs Windows x64 and PowerShell; over SSH, install
   and start it on Windows first and use SSH key login.
@@ -51,7 +52,7 @@ Connection and retry never install or start herdr-core.
 
    | Already installed | What to do |
    | --- | --- |
-   | Only herdr-core | Run `hc server start`; add its connection as described above. No Herdr TUI is needed. |
+   | Only herdr-core | Run `hc server start`; World's first run finds it and makes it the default. No Herdr TUI is needed. |
    | Only Herdr TUI | Run `herdr-world herdr setup`. |
    | Both | Start each runtime you want, then add its connection. |
    | Neither | Standalone installs core; Homebrew does so on first launch. With npm or an archive, run `herdr-world herdr upgrade --install`. |
