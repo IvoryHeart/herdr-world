@@ -1,0 +1,57 @@
+name: Homebrew runtime acceptance
+
+on:
+  pull_request:
+    paths:
+      - scripts/check-homebrew-runtime.rb
+      - scripts/check-homebrew-runtime.test.ts
+      - scripts/homebrew-tap-workflow.yml
+      - scripts/open-homebrew-pr.sh
+      - .github/workflows/homebrew-runtime.yml
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    name: Published 0.3.5 (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_AUTOREMOVE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install the published 0.3.5 Formula
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Immutable Formula from the 0.3.5 tap PR (#15).
+          curl -fsSL https://raw.githubusercontent.com/IvoryHeart/homebrew-tap/7078346510e49fc33c77764a803ca680e6adb8fa/Formula/herdr-world.rb -o formula.rb
+          brew update
+          tap=herdrworld/runtime-baseline
+          brew tap-new --no-git "$tap"
+          install -m 0644 formula.rb "$(brew --repository "$tap")/Formula/herdr-world.rb"
+          brew install --formula "$tap/herdr-world"
+          test "$("$(brew --prefix "$tap/herdr-world")/bin/herdr-world" --version)" = "herdr-world 0.3.5"
+          brew test "$tap/herdr-world"
+      - name: Bootstrap signed core and preserve it across World reinstall
+        shell: bash
+        run: |
+          set -euo pipefail
+          package=herdrworld/runtime-baseline/herdr-world
+          world="$(brew --prefix "$package")/bin/herdr-world"
+          fixture_home="$(mktemp -d /tmp/hw.XXXXXX)"
+          trap 'rm -rf "$fixture_home"' EXIT
+          ruby scripts/check-homebrew-runtime.rb "$world" "$fixture_home"
+          brew reinstall --formula "$package"
+          ruby scripts/check-homebrew-runtime.rb "$world" "$fixture_home"
