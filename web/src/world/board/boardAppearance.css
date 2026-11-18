@@ -1,12 +1,38 @@
-/* Board: a pin board drawn from World's theme tokens, so a light theme reads as
-   a whiteboard and a dark theme as a blackboard. */
+/* Board: a pin board drawn from World's theme tokens, so a dark theme reads as
+   Town at night and a light theme as a whiteboard. */
 .board,
 .town-work {
-  /* The prototype's palettes: a blackboard for dark themes (the default)
-     and a whiteboard for light ones. Town's Work lens (.town-work) follows
-     the theme the same way. */
+  /* Night (the default on a dark theme): Town's night ground and its agent
+     state colours (town/townStateColors.ts), so Board and Town read as one
+     World (#906). The light theme and Whiteboard use the whiteboard below;
+     an explicit Blackboard keeps its chalk palette. Town's Work lens
+     (.town-work) follows the theme the same way. */
+  --board-ground: #151a2c;
+  --board-grid: #1f2640;
+  --board-glow: radial-gradient(
+    ellipse at 50% 40%,
+    rgb(86 104 190 / 16%),
+    transparent 62%
+  );
+  --board-card: #1c2134;
+  --board-line: #3a3f55;
+  --board-wire: #66709a;
+  --board-ink: #f4f1e8;
+  --board-soft: #a7abbe;
+  --board-zone: #a9bfff;
+  --board-accent: #a9bfff;
+  --board-shadow: 0 1px 0 rgb(4 6 14 / 30%), 0 8px 24px rgb(4 6 14 / 40%);
+  --board-lift: 0 18px 40px rgb(4 6 14 / 60%);
+  --s-working: #6fc3ff;
+  --s-blocked: #ffb547;
+  --s-done: #7be08f;
+  --s-idle: #8b93ad;
+  --s-unknown: #c3a2ff;
+}
+.board[data-surface="blackboard"] {
   --board-ground: #1c2320;
   --board-grid: #2b3430;
+  --board-glow: none;
   --board-card: #252d29;
   --board-line: #45504a;
   --board-wire: #7d8a82;
@@ -32,17 +58,18 @@
   cursor: grab;
   color: var(--board-ink);
   background-color: var(--board-ground);
-  background-image: radial-gradient(
-    circle,
-    var(--board-grid) 1.2px,
-    transparent 1.4px
-  );
+  background-image:
+    var(--board-glow, none),
+    radial-gradient(circle, var(--board-grid) 1.2px, transparent 1.4px);
+  /* Sizes and positions per layer come from boardGroundLayers. */
+  background-repeat: no-repeat, repeat;
 }
 :root[data-theme="light"]
   :is(.board:not([data-surface="blackboard"]), .town-work),
 .board[data-surface="whiteboard"] {
   --board-ground: #f2f3ee;
   --board-grid: #d6d9cf;
+  --board-glow: none;
   --board-card: #ffffff;
   --board-line: #c2c7bb;
   --board-wire: #8f978b;
@@ -57,4 +84,24 @@
   --s-done: #2a8753;
   --s-idle: #8a9189;
   --s-unknown: #8656c4;
+}
+
+/* Host and workspace names carry Town's sign lettering, as its room plaques
+   and building signs do (town/townRoomPlaque.css); tab and pane names stay in
+   the reading face. The extra .board keeps these ahead of board.css. */
+.board .board-zone-name,
+.board .board-workspace .board-label {
+  font-family: "Silkscreen", "Pixelify Sans", ui-monospace, monospace;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.board:not(.board-far) .board-workspace .board-label {
+  font-size: 14px;
+}
+/* A workspace waiting on you glows amber, as Town's reception does. */
+.board .board-workspace.board-attn:not(.board-lifted) {
+  box-shadow:
+    var(--board-shadow),
+    0 0 0 3px color-mix(in srgb, var(--s-blocked) 16%, transparent),
+    0 0 26px color-mix(in srgb, var(--s-blocked) 22%, transparent);
 }

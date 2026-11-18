@@ -3,8 +3,11 @@ import {
   BOARD_STATUS_LABELS,
   boardAppearance,
   boardAppearanceStyle,
+  boardGroundLayers,
   defaultBoardStatusColor,
 } from "./boardAppearance";
+import { TOWN_STATE_COLORS } from "../town/townStateColors";
+import type { WorldAgentStatus } from "../worldObject";
 
 test("Board surface and status colours validate independently of card colours", () => {
   expect(boardAppearance(null)).toEqual({ surface: "theme", statusColors: {} });
@@ -45,20 +48,37 @@ test("default status colours follow the selected surface without changing the th
   ).toBe("#c47f08");
 });
 
+test("a dark theme's Board takes Town's state colours; Blackboard keeps its chalk", () => {
+  for (const status of Object.keys(BOARD_STATUS_LABELS) as WorldAgentStatus[])
+    expect(defaultBoardStatusColor(status, boardAppearance(null), "dark")).toBe(
+      TOWN_STATE_COLORS[status],
+    );
+  expect(
+    defaultBoardStatusColor(
+      "blocked",
+      boardAppearance({ surface: "blackboard" }),
+      "dark",
+    ),
+  ).toBe("#ffc25a");
+});
+
 test("default status colours match the CSS palette for both themes and surface overrides", async () => {
   const css = await Bun.file(
     new URL("./boardAppearance.css", import.meta.url),
   ).text();
-  const [dark, light] = css.split(':root[data-theme="light"]');
+  const [night, rest] = css.split('.board[data-surface="blackboard"] {');
+  const [blackboard, light] = rest!.split(':root[data-theme="light"]');
   for (const surface of ["theme", "whiteboard", "blackboard"] as const) {
     for (const theme of ["light", "dark"]) {
       const palette =
         surface === "whiteboard" || (surface === "theme" && theme === "light")
           ? light!
-          : dark!;
+          : surface === "blackboard"
+            ? blackboard!
+            : night!;
       for (const status of Object.keys(
         BOARD_STATUS_LABELS,
-      ) as (keyof typeof BOARD_STATUS_LABELS)[]) {
+      ) as WorldAgentStatus[]) {
         const color = palette.match(
           new RegExp(`--s-${status}:\\s*(#[0-9a-f]{6})`),
         )?.[1];
@@ -69,4 +89,19 @@ test("default status colours match the CSS palette for both themes and surface o
       }
     }
   }
+});
+
+test("the night glow fills the view once while the grid follows the camera", async () => {
+  const css = await Bun.file(
+    new URL("./boardAppearance.css", import.meta.url),
+  ).text();
+  const board = css.slice(css.indexOf("\n.board {"));
+  const rule = board.slice(0, board.indexOf("}"));
+  // Layer order: glow first, grid second; each layer has its own repeat.
+  expect(rule).toMatch(/var\(--board-glow, none\),\s*radial-gradient/);
+  expect(rule).toMatch(/background-repeat:\s*no-repeat,\s*repeat;/);
+  expect(boardGroundLayers(-40, 12.5, 2)).toEqual({
+    backgroundSize: "100% 100%, 56px 56px",
+    backgroundPosition: "0 0, -40px 12.5px",
+  });
 });

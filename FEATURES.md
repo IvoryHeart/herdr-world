@@ -943,6 +943,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Blackboard), **Status colours…** and **Help**. Surface and status choices
     persist in this browser and stay separate from shared card colours;
     **Reset status colours** restores the chosen surface's defaults.
+    Following a dark theme, Board takes Town's night: its ground, its agent
+    state colours (blue working, amber waiting on you, green done) and its
+    sign lettering on host and workspace names, and a workspace waiting on
+    you glows amber as Town's reception does. A light theme or Whiteboard
+    shows the whiteboard; Blackboard keeps its green chalk palette.
   - Drag a pane row or the grip on a single-pane tab onto another tab on the
     same host to move only that pane, or hold the row or grip first on a phone.
     The move keeps its terminal running and its strings attached; cancelling sends nothing. Moving the
