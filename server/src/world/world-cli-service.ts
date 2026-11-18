@@ -1,4 +1,8 @@
 import {
+  handleConnectionCli,
+  type ConnectionCliAdmission,
+} from "../connections/cli-admission";
+import {
   identifyCoreAsker,
   type CoreAnswerConnections,
 } from "../herdr-core/ask-recipient";
@@ -35,6 +39,7 @@ import type { TownMoveContext } from "./town-move";
 type Lease = AnswerLease;
 
 export function createWorldCliService(deps: {
+  connectionProfiles?(): ConnectionCliAdmission;
   core?(): CoreAnswerConnections | CoreCallerSource | null;
   ledger(): LedgerStore;
   attention?(): WorldLedgerStorage["outbox"];
@@ -456,6 +461,10 @@ export function createWorldCliService(deps: {
         serverPort,
         bearerAuth,
         handle: async (body, locate) => {
+          const admission = deps.connectionProfiles?.();
+          const connectionReply =
+            admission && (await handleConnectionCli(body, admission));
+          if (connectionReply) return connectionReply;
           const reply = await cli.handle(body as never, locate);
           if (
             reply.ok &&

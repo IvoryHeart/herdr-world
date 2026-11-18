@@ -22,6 +22,13 @@ hold deltas and decisions at different delivery stages. Check their task state w
 spec or prove verification. [Historical numbered specs](specs/) explain earlier
 decisions and are not current operational guidance.
 
+Live connection CLI edits enter the same profile queue as Settings through
+[CLI transport](../server/src/cli/connections-live.ts) and
+[service admission](../server/src/connections/cli-admission.ts). The
+[in-process HTTP regressions](../server/src/cli/connections-live.test.ts) cover
+concurrent Settings edits, lifecycle isolation and local authentication;
+[store tests](../web/src/store.test.ts) cover a removed selected connection.
+
 Browser startup has dedicated [fresh import-order coverage](../web/src/storeImportOrder.test.ts)
 and a [real Vite application-entry browser check](../web/src/appStartup.browser.test.ts).
 React version evidence and the development diagnostic patch are maintained in

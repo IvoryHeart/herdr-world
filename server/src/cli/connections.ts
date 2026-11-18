@@ -1,3 +1,5 @@
+import type { ConnectionCliChange } from "../connections/cli-admission";
+import { applyLiveConnectionChange } from "./connections-live";
 import {
   type ManagedConnectionProfile,
   type StartupLocalProfile,
@@ -33,12 +35,12 @@ import {
   readServiceSetup,
   restartRunningService,
   serviceHerdrSockets,
-  serviceStatus,
   type ServiceSetup,
 } from "./service-context";
 
 export interface ConnectionsDependencies {
   probe?: ListenerProbe;
+  applyLive?: typeof applyLiveConnectionChange;
   test?: typeof testConnectionProfile;
   /** Whether this computer has the Herdr TUI; `herdr status`'s detection. */
   herdrInstalled?: (implicit: StartupLocalProfile) => Promise<boolean>;
@@ -60,9 +62,9 @@ Usage:
 
 Common add options:
   --label <text>     display name (default: the id)
-  --auto-connect     connect when Herdr World starts
+  --auto-connect     connect now if running, and when Herdr World starts
   --default          make it the default connection
-  --restart          see below
+  --restart          also restart a running managed service (optional)
 
 SSH add options:
   --remote-control-socket <path>, --remote-client-socket <path>
@@ -80,11 +82,11 @@ herdr-core add options:
                      default and no Local profile is saved.
 
 The profiles are the same ones the connection selector edits. A running
-Herdr World keeps its own copy and would overwrite a change made here, so edits
-are refused while it serves; with --restart a running managed service is
-restarted to load the change. Only the address in the service config is
-checked: stop any other herdr-world process that shares this registry, such as
-a foreground run on another port, before editing here. SSH tests need a
+Herdr World admits edits live, preserving concurrent changes from Settings.
+Other connections and browser sessions stay open; --restart is optional and
+still restarts a running managed service. Without a listener, edits are saved
+for the next start. Only the configured service address is checked: stop any
+other World process sharing this registry before editing here. SSH tests need a
 running remote Herdr and non-interactive SSH authentication.
 `;
 }
@@ -144,41 +146,6 @@ function describe(profile: ManagedConnectionProfile): string {
       ? ` (Windows${profile.remote_session ? `, session ${profile.remote_session}` : ""})`
       : "";
   return `ssh    ${profile.ssh_destination}${remote}`;
-}
-
-/** Refuse to write while a Herdr World listener holds its own copy of the registry. */
-async function guardRunningServer(
-  context: CliContext,
-  setup: ServiceSetup,
-  restart: boolean,
-  probe: ListenerProbe,
-): Promise<"write" | "write-and-restart" | number> {
-  if (!(await probe(readServiceAccess(setup)))) return "write";
-  let active = false;
-  try {
-    active = serviceStatus(context).active;
-  } catch {
-    // Unsupported platform: only a foreground process can be serving.
-  }
-  if (!active) {
-    context.error(
-      "herdr-world connections: a herdr-world process is serving and would overwrite this change.",
-    );
-    context.error(
-      "Use the connection selector in the web UI, or stop that process first.",
-    );
-    return EXIT_FAILURE;
-  }
-  if (!restart) {
-    context.error(
-      "herdr-world connections: the running service keeps its own copy of the profiles and would overwrite this change.",
-    );
-    context.error(
-      "Use the connection selector in the web UI, or rerun with --restart to restart the service.",
-    );
-    return EXIT_FAILURE;
-  }
-  return "write-and-restart";
 }
 
 function profileFromFlags(
@@ -408,15 +375,50 @@ export function createConnectionsCommand(
           string | boolean | undefined
         >;
 
-        let next: PersistedConnectionRegistry | null;
+        let addedProfile: ConnectionProfile | undefined;
         if (action === "add") {
-          let profile: ConnectionProfile;
           try {
-            profile = profileFromFlags(id, flagValues);
+            addedProfile = profileFromFlags(id, flagValues);
           } catch (error) {
             if (error instanceof UsageError) throw error;
             throw new UsageError((error as Error).message, { cause: error });
           }
+        }
+
+        // Decide ownership before consulting the disk snapshot for mutations.
+        // The service revalidates against its current catalogue in Settings' queue.
+        if (await probe(readServiceAccess(setup))) {
+          const change: ConnectionCliChange =
+            action === "add"
+              ? {
+                  action,
+                  profile: addedProfile!,
+                  make_default: flagValues.default === true,
+                }
+              : { action, id };
+          await (dependencies.applyLive ?? applyLiveConnectionChange)(
+            context,
+            setup,
+            change,
+          );
+          context.log(
+            action === "add"
+              ? `Added connection ${id}.`
+              : action === "remove"
+                ? `Removed connection ${id}.`
+                : `Default connection is now ${id}.`,
+          );
+          if (flagValues.restart === true) {
+            const code = restartRunningService(context);
+            if (code === 0) context.log("Restarted the service.");
+            return code ?? EXIT_OK;
+          }
+          return EXIT_OK;
+        }
+
+        let next: PersistedConnectionRegistry | null;
+        if (action === "add") {
+          const profile = addedProfile!;
           if (profiles.some((entry) => entry.id === id))
             throw new UsageError(`connection already exists: ${id}`);
           if (registry) {
@@ -514,13 +516,6 @@ export function createConnectionsCommand(
           }
         }
 
-        const decision = await guardRunningServer(
-          context,
-          setup,
-          flagValues.restart === true,
-          probe,
-        );
-        if (typeof decision === "number") return decision;
         if (next) await store.save(next);
         else await store.clear();
         context.log(
@@ -530,11 +525,6 @@ export function createConnectionsCommand(
               ? `Removed connection ${id}.`
               : `Default connection is now ${id}.`,
         );
-        if (decision === "write-and-restart") {
-          const code = restartRunningService(context);
-          if (code === 0) context.log("Restarted the service.");
-          return code ?? EXIT_OK;
-        }
         return EXIT_OK;
       }
 

@@ -43,6 +43,18 @@ with that World service rather than connecting to independently deployed bridges
 - **THEN** World stops only its runtime and transport without stopping that Herdr server, session,
   workspace or agent
 
+#### Scenario: Connection CLI edits a running World
+- **WHEN** `connections add`, `remove` or `set-default` runs against the configured
+  running service
+- **THEN** that service admits the mutation through the same serialized profile
+  queue as Settings, preserving concurrent changes without a restart
+- **AND** an auto-connect addition starts its own runtime, removal retires only
+  that connection, and changing the default preserves other runtime generations
+- **AND** a browser viewing a removed profile returns to the default and disposes
+  only the removed connection's terminal contexts
+- **AND** failed live admission does not fall back to a direct registry write;
+  offline edits and an explicitly requested `--restart` remain supported
+
 #### Scenario: A second bridge targets the same runtime
 - **WHEN** another managed profile or World process attempts to own the same Herdr client socket
 - **THEN** it is rejected before the runtimes can compete for terminal attachment ownership

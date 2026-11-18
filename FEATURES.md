@@ -2170,6 +2170,15 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   exists, otherwise on the service's default; phones still open on Town.
   Disconnect does not stop Herdr/workspaces. A Linux/macOS World service can reach Unix or Windows SSH hosts;
   a Windows World service supports local profiles. See [connection setup](docs/DEPLOYMENT.md#local-and-ssh-connections).
+- **Connection CLI changes apply live.** `herdr-world connections add`,
+  `remove` and `set-default` use the running service's admission queue with
+  Settings, so concurrent changes are preserved. `--auto-connect` starts an
+  added connection immediately. Removing a connection closes only its contexts;
+  a browser viewing it returns to the default. Other connections, terminals and
+  browser sessions stay open. The default cannot be removed, and explicit
+  startup Herdr settings still pin the default. With World stopped, changes
+  are saved for its next start. `--restart` remains optional and restarts a
+  running managed service after the live change succeeds.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
 - **herdr-core connections.** Open **Hosts → Manage connections → Add

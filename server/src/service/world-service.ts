@@ -1,3 +1,4 @@
+import { noHerdrTuiForMigration } from "../connections/profile-migration";
 import { findHerdrBinary } from "../herdr/bootstrap";
 import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
 import { createCoreInstall } from "../herdr-core/install";
@@ -278,6 +279,10 @@ async function compose(
   );
 
   const worldCli = createWorldCliService({
+    connectionProfiles: () => ({
+      service: connectionProfiles,
+      path: storage.connections.path,
+    }),
     core: () => coreCallers,
     board,
     ledger: () => storage.ledger(),
@@ -686,14 +691,8 @@ async function compose(
     changed: publishConnectionsChanged,
     bootstrap: connectionBootstrap,
     createRuntime: runtimeFactoryForProfile,
-    // The setup card's lookup; a ready implicit local server is Herdr (#935).
     noHerdrTui: () =>
-      findHerdrBinary() === null &&
-      !(
-        connectionManager.has(STARTUP_DEFAULT_CONNECTION_ID) &&
-        connectionManager.status(STARTUP_DEFAULT_CONNECTION_ID).state ===
-          "ready"
-      ),
+      noHerdrTuiForMigration(connectionManager, findHerdrBinary),
     retry: {
       schedule: (callback, delayMs) => scheduler.schedule(callback, delayMs),
     },

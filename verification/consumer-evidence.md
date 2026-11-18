@@ -48,6 +48,21 @@ This reconciles the remaining baseline entries without treating a component mode
 | Q32 File search and annotation drafts | Runtime-qualified late-result admission is the shared rule; real File Explorer tests exercise retired prefetch/preview and annotation tests retain durable checkout identity and stale anchors. Models: browser-preparation, runtime-leases. | Draft persistence intentionally uses durable checkout identity rather than transient generation; glob expansion and anchor reconstruction remain pure/fixture tests. |
 | Q37 Whole-service startup/shutdown | Manager shutdown prevents new starts and drains retained owners. Startup/shutdown tests verify listener availability, one shared drain and forced exit deadline. Models: runtime-control, runtime-drain. | Actual listener/process/service-manager lifecycle and forced-exit policy are integration/platform evidence; models do not prove OS termination. |
 
+### Live connection CLI admission (Q01/Q02/Q15)
+
+The connection CLI consumes the unchanged runtime-control/drain guarantees via
+Settings' serialized profile service. `connections-live.test.ts` drives the
+production CLI parser and transport through the authenticated in-process HTTP
+handler and profile service, using real temporary persistence and fake runtime
+ports. Concurrent Settings create/update operations are queued after the CLI's
+disk read; add+default, default changes and removal must preserve those edits and
+healthy sibling leases. Refusals for browser/remote/wrong-token clients, different
+registries, pinned defaults and persistence failure must leave the catalogue
+unchanged. Core profiles retain their separate manager. `store.test.ts` verifies
+removing the selected profile disposes its presenters, returns to the default
+and retains the healthy session. These finite integration schedules supplement
+existing models; they do not expand lifecycle/reconnect or native SSH claims.
+
 ### Hosts scope admission (Q15)
 
 `useHostsFilter.test.ts` mounts the production hook with the shell's actual store

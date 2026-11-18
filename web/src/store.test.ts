@@ -2492,6 +2492,16 @@ describe("connection-partitioned store state", () => {
     const originalSetActiveConnection = bridge.setActiveConnection;
     bridge.setActiveConnection = (() =>
       22) as typeof bridge.setActiveConnection;
+    const previous = store.get();
+    const disposals: Array<{ host: string; remote: boolean }> = [];
+    const releaseAlpha = registerTerminalConnectionDisposer(
+      { connectionId: "alpha", generation: 1 },
+      (remote) => disposals.push({ host: "alpha", remote }),
+    );
+    const releaseBeta = registerTerminalConnectionDisposer(
+      { connectionId: "beta", generation: 1 },
+      (remote) => disposals.push({ host: "beta", remote }),
+    );
     try {
       const snapshot = activateConnectionState(partitionState(), "beta", 11);
       __storeTesting.replaceState(snapshot);
@@ -2502,9 +2512,20 @@ describe("connection-partitioned store state", () => {
       expect(store.get().activeConnectionId).toBe("alpha");
       expect(store.get().connectionGeneration).toBe(22);
       expect(store.get().workspaces[0]?.label).toBe("alpha");
+      expect(store.get().sessionsByConnectionId.beta).toBeUndefined();
+      expect(store.get().sessionsByConnectionId.alpha.panes).toEqual(
+        snapshot.sessionsByConnectionId.alpha.panes,
+      );
+      expect(store.get().sessionsByConnectionId.alpha.workspaces).toEqual(
+        snapshot.sessionsByConnectionId.alpha.workspaces,
+      );
+      expect(store.get().status).toBe(snapshot.status);
+      expect(disposals).toEqual([{ host: "beta", remote: false }]);
     } finally {
       bridge.setActiveConnection = originalSetActiveConnection;
-      __storeTesting.replaceState(partitionState());
+      releaseAlpha();
+      releaseBeta();
+      __storeTesting.replaceState(previous);
     }
   });
 
