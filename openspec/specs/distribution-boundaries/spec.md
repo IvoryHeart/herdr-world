@@ -83,6 +83,14 @@ verified, in Herdr's own default location; an installed core SHALL stay unchange
 - **AND** a discovered directory or non-executable entry is preserved and refused before service mutation
 - **AND** existing SSH, named-session and custom-socket setup restrictions remain enforced
 
+#### Scenario: Uninstall current and legacy World user services
+- **WHEN** the user runs `herdr-world service uninstall` on macOS or Linux
+- **THEN** World removes its current and legacy user service definitions after
+  successful stop/disable, using each launchd definition's actual label
+- **AND** ownership evidence is required; unrelated services and herdr-core's
+  login item remain untouched, configuration and tokens are preserved, and a
+  service-manager failure retains the affected definition for retry
+
 ### Requirement: Reviewed release identity
 Release preparation SHALL use a branch and reviewed PR. Final artifacts SHALL be built
 from the final reviewed immutable release tag.

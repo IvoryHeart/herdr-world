@@ -149,15 +149,44 @@ test("Release checks missing and existing external Herdr through the installed l
   expect(after).toBeGreaterThan(reinstall);
 });
 
-test("Native runtime acceptance installs and starts only a fake herdr-core", () => {
+test("Native runtime acceptance uses signed core on macOS and a fake only on Linux", () => {
   const check = readFileSync(
     new URL("./check-homebrew-runtime.rb", import.meta.url),
     "utf8",
   );
-  // A fake curl first on PATH serves the fixture's release; nothing real runs.
-  expect(check).toContain('"PATH" => "#{fake_bin}:');
+  expect(check).toContain('RUBY_PLATFORM.include?("darwin")');
+  expect(check).toContain("unless macos");
   expect(check).toContain('File.join(fake_bin, "curl")');
   expect(check).toContain('File.join(fake_bin, "systemctl")');
   expect(check).toContain('"HC_INSTALL_DIR" => nil');
-  expect(check).not.toMatch(/"server", "stop"/);
+  expect(check).toContain('"/usr/bin/codesign", "--verify", "--strict"');
+  expect(check).toContain('"server", "stop"');
+  expect(check).toContain("UNIXSocket.open");
+});
+
+test("Homebrew native acceptance covers both Macs against the published 0.3.5 Formula", () => {
+  const workflow = readWorkflow("homebrew-runtime.yml");
+  expect(workflow.jobs.ownership).toMatchObject({
+    strategy: {
+      "fail-fast": false,
+      matrix: { runner: ["macos-15", "macos-15-intel"] },
+    },
+  });
+  const script = workflow.jobs
+    .ownership!.steps!.map((step) => step.run ?? "")
+    .join("\n");
+  expect(script).toContain("7078346510e49fc33c77764a803ca680e6adb8fa");
+  expect(script).toContain('= "herdr-world 0.3.5"');
+  expect(script).toContain("ruby scripts/check-homebrew-runtime.rb");
+  for (const source of [
+    script,
+    homebrewInstallScript(),
+    readFileSync(
+      new URL("./homebrew-tap-workflow.yml", import.meta.url),
+      "utf8",
+    ),
+  ]) {
+    expect(source).toContain("mktemp -d /tmp/hw.XXXXXX");
+    expect(source).toContain("trap 'rm -rf \"$fixture_home\"' EXIT");
+  }
 });

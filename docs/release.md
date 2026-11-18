@@ -182,9 +182,22 @@ existing runtime (Herdr or herdr-core) or installs herdr-core only when neither
 exists. The bootstrap reads core's release list and checks the archive's
 published SHA-256; it does not call older World's upgrade command.
 Metadata/management commands and remote/custom endpoints do not bootstrap. The
-native smoke check exercises missing herdr-core installation (stopping the core it
-started) and preservation across World reinstallation on Apple Silicon and Intel; it must not compile a core dependency.
+native smoke check uses the real signed herdr-core release on Apple Silicon and
+Intel: it verifies installation and a live core socket, stops the core it started,
+then checks that reinstalling World preserves core without starting it again.
+The check recognizes both `localhost` and `127.0.0.1` in World's listener log,
+then verifies the actual loopback TCP connection.
+Its fixture HOME is a short temporary directory under `/tmp` to fit macOS's
+103-byte Unix socket limit. Linux keeps an offline fake-release check. It must
+not compile a core dependency or bypass Apple's signature verification.
 Run the generated Ruby formula/launcher regressions when changing this policy.
+
+The **Homebrew runtime acceptance** PR/dispatch workflow runs the current check
+against the published 0.3.5 Formula on `macos-15` and `macos-15-intel`. Its Formula
+is pinned to the immutable 0.3.5 tap PR revision so this baseline cannot silently
+advance. Open that workflow's two **Published 0.3.5** jobs to inspect the signed
+bootstrap and preservation steps; the normal Release smoke jobs check each new
+release's generated Formula.
 
 ## Publishing a candidate or stable release
 
@@ -265,7 +278,12 @@ Run the generated Ruby formula/launcher regressions when changing this policy.
    followed by `@ivoryheart/herdr-world`. RCs use GitHub prerelease status,
    npm's `next` tag and the `herdr-world-rc` Formula. Stable releases become GitHub
    Latest, use npm's `latest` tag and update the `herdr-world` Formula. The workflow
-   opens a ready PR in `IvoryHeart/homebrew-tap`; merge it after independent review.
+   opens a ready PR in `IvoryHeart/homebrew-tap` with the Formula and matching
+   `scripts/check-homebrew-runtime.rb` and `scripts/homebrew-tap-workflow.yml`
+   copied to the tap's `.github/scripts/check-homebrew-runtime.rb` and
+   `.github/workflows/herdr-world.yml`. Retries compare all three files before
+   reusing a branch or PR, so the tap runs that release's acceptance check rather
+   than a separately maintained copy. Merge it after independent review.
 5. Verify the installer, npm installation with optional dependencies, Homebrew
    installation after the tap PR merges, and Herdr plugin download/start/status/url
    flow against the published assets. For stable releases, also verify the project-site
@@ -288,7 +306,9 @@ OIDC without an npm token. The platform names are
 `@ivoryheart/herdr-world-{linux,darwin,windows}-{x64,arm64}`.
 The existing `HOMEBREW_TAP_TOKEN` must have permission to push a branch and open a PR
 in `IvoryHeart/homebrew-tap`. A fine-grained token needs repository access with
-Contents and Pull requests permissions set to Read and write. A successful branch
+Contents, Pull requests and Workflows permissions set to Read and write; the
+release PR synchronizes the tap's acceptance workflow as well as its Formula.
+A successful branch
 push does not prove PR creation access: if `createPullRequest` reports
 `Resource not accessible by personal access token`, correct that token's repository
 access and PR permissions in GitHub settings. Workflow changes cannot grant token

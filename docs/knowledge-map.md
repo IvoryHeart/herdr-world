@@ -9,7 +9,9 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 
 | Area | Contract | Owning source | Focused tests |
 | --- | --- | --- | --- |
-| Runtime support and first run | [Contract](../FEATURES.md#runtime-support) | [Source](../shared/herdrIdentity.ts) | [Tests](../shared/herdrIdentity.test.ts) |
+| Runtime support | [Contract](../FEATURES.md#runtime-support) | [Source](../shared/herdrIdentity.ts) | [Tests](../shared/herdrIdentity.test.ts) |
+| First-run discovery | [Contract](../README.md#quick-start) | [Source](../server/src/connections/first-run.ts) | [Tests](../server/src/connections/first-run.test.ts) |
+| Local runtime presence | [Contract](../FEATURES.md#runtime-support) | [Source](../server/src/connections/local-discovery.ts) | [Tests](../server/src/connections/first-run.test.ts) |
 | Linux installation acceptance | [Contract](release.md#linux-systemd-installation-gate) | [Source](../scripts/install-linux.ts) | [Tests](../scripts/install-linux.test.ts) |
 | Core harnesses and transcripts | [Contract](../openspec/specs/herdr-core-runtime/spec.md) | [Source](../server/src/herdr-core/harness.ts) | [Tests](../server/src/herdr-core/history.test.ts) |
 | Core runtime ordering and authority | [Contract](../openspec/specs/herdr-core-runtime/spec.md) | [Source](../server/src/herdr-core/) | [Tests](../server/src/herdr-core/connections.test.ts) |
@@ -73,6 +75,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Agent Chat and task summaries | [Contract](CHAT.md) | [Source](../server/src/agent/conversation.ts) | [Tests](../server/src/agent/pending-prompt-captured.test.ts) |
 | Ranger assistant | [Contract](../openspec/specs/workspace-assistant/spec.md) | [Source](../server/src/assistant/service.ts) | [Tests](../server/src/assistant/service.test.ts) |
 | Notifications and Web Push | [Contract](../openspec/specs/runtime-federation/spec.md) | [Source](../server/src/notifications/herdr-notification-listener.ts) | [Tests](../server/src/notifications/web-push.test.ts) |
+| Legacy World service cleanup | [Contract](../openspec/specs/distribution-boundaries/spec.md) | [Source](../server/src/config/service-discovery.ts) | [Tests](../server/src/config/service-uninstall.test.ts) |
 | Runtime setup and updates | [Contract](../openspec/specs/bridge-access/spec.md) | [Source](../server/src/herdr/cli.ts) | [Tests](../server/src/http/herdr-setup.test.ts) |
 | Distribution and releases | [Contract](../openspec/specs/distribution-boundaries/spec.md) | [Source](../scripts/prepare-release.ts) | [Tests](../scripts/prepare-release.test.ts) |
 | PR evidence capture | [Contract](SCREENSHOTS.md#pr-screenshot-viewports) | [Source](../web/src/world/useDrawReadiness.ts) | [Tests](../web/src/world/drawReadiness.test.ts) |

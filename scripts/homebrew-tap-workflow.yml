@@ -1,0 +1,56 @@
+# Synced by herdr-world's release PR with check-homebrew-runtime.rb.
+name: Herdr World runtime reuse
+
+on:
+  pull_request:
+    paths:
+      - Formula/herdr-world.rb
+      - .github/workflows/herdr-world.yml
+      - .github/scripts/check-homebrew-runtime.rb
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    name: Herdr reuse (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_AUTOREMOVE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install World without a mandatory Herdr formula
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew update
+          tap=herdrworld/ownership-check
+          brew tap-new --no-git "$tap"
+          install -m 0644 Formula/herdr-world.rb "$(brew --repository "$tap")/Formula/herdr-world.rb"
+          brew install --formula "$tap/herdr-world"
+          test -z "$(brew deps "$tap/herdr-world")"
+          test ! -e "$(brew --prefix "$tap/herdr-world")/bin/herdr"
+          brew test "$tap/herdr-world"
+      - name: Bootstrap missing core and preserve it across World reinstall
+        shell: bash
+        run: |
+          set -euo pipefail
+          package=herdrworld/ownership-check/herdr-world
+          world="$(brew --prefix "$package")/bin/herdr-world"
+          fixture_home="$(mktemp -d /tmp/hw.XXXXXX)"
+          trap 'rm -rf "$fixture_home"' EXIT
+          ruby .github/scripts/check-homebrew-runtime.rb "$world" "$fixture_home"
+          brew reinstall --formula "$package"
+          test ! -e "$(brew --prefix "$package")/bin/herdr"
+          ruby .github/scripts/check-homebrew-runtime.rb "$world" "$fixture_home"
+          brew test "$package"

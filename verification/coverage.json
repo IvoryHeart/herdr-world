@@ -62,6 +62,7 @@
         "server/src/connections/profile-service.test.ts",
         "server/src/connections/ssh-preflight-recovery.test.ts",
         "server/src/connections/profiles.test.ts",
+        "server/src/connections/first-run.test.ts",
         "server/src/connections/local-recovery.test.ts",
         "server/src/service/local-recovery.test.ts"
       ],
@@ -1874,6 +1875,7 @@
         "server/src/http/update.test.ts",
         "server/src/http/update-install.test.ts",
         "server/src/config/service-manager.test.ts",
+        "server/src/config/service-uninstall.test.ts",
         "scripts/world-plugin.test.ts",
         "scripts/install-plugin.test.ts",
         "scripts/install-plugin.windows.test.ts",

@@ -116,11 +116,12 @@ to Ubuntu, GitHub releases and releases.herdr.dev. No root shell or
 cgroups or a failed download fails the run. `--version` selects the candidate
 build version (or exact package in `dist/` with `--reuse`).
 
-Every default run uses four fresh containers:
+Every default run uses five fresh containers:
 
 | Case | Checks |
 | --- | --- |
 | `fresh` | Neither runtime installed; installer downloads and verifies core, enables its login unit and starts it. A container restart exercises reboot and the lingering user unit. Saved profiles contain only core, `core-local` is default, CLI lists it, and Town's snapshot has no dead Local building. |
+| `core-only` | Core is already running at login, with no TUI or World profiles. First World startup discovers and saves core as its only default, and CLI/Town see it. Uninstall removes a running legacy World unit while preserving the core binary, login unit and running core. |
 | `tui` | Official checksum-pinned Herdr TUI is present; installer preserves it without adding core or a unit. Manage connections' `connections.core_install` probe/install RPC installs, enables, starts and connects core, preserving the TUI binary and default. |
 | `stopped` | A real core is installed but stopped; installer preserves it without a unit. Town's setup card's probe/install RPC starts and connects it, enables login and checks core-only profiles/default/topology. |
 | `upgrade` | Installs the latest published stable World first, seeds synthetic connections/default and a real enabled core unit, then installs the candidate. Connections, default, unit contents/enabled state and live core connectivity survive. |

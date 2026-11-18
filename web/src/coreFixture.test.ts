@@ -24,7 +24,7 @@ afterEach(() => {
   resetCoreFixture();
 });
 
-test.each(["", "=alphabet", "=unknown"])(
+test.each(["", "=alphabet", "=first-run", "=unknown"])(
   "coreFixture%s is consumed immediately and retained only for this page",
   (suffix) => {
     const replacements: URL[] = [];
@@ -46,7 +46,11 @@ test.each(["", "=alphabet", "=unknown"])(
     });
     expect(coreFixtureEnabled()).toBe(true);
     expect(coreFixtureScenario()).toBe(
-      suffix === "=alphabet" ? "alphabet" : "default",
+      suffix === "=alphabet"
+        ? "alphabet"
+        : suffix === "=first-run"
+          ? "first-run"
+          : "default",
     );
     expect(replacements.map(String)).toEqual([
       "https://world.example.invalid/?other=keep#desk",
