@@ -105,7 +105,8 @@ reader = Thread.new do
     output.sync = true
     read.each_line do |line|
       output.write(line)
-      ready << :listening if line.include?("listening url=http://127.0.0.1:#{port}")
+      # World may display the loopback listener as localhost (including 0.3.5).
+      ready << :listening if line.match?(/listening url=http:\/\/(?:127\.0\.0\.1|localhost):#{port}(?:\s|$)/)
     end
   end
   ready << :exited

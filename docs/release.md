@@ -185,6 +185,8 @@ Metadata/management commands and remote/custom endpoints do not bootstrap. The
 native smoke check uses the real signed herdr-core release on Apple Silicon and
 Intel: it verifies installation and a live core socket, stops the core it started,
 then checks that reinstalling World preserves core without starting it again.
+The check recognizes both `localhost` and `127.0.0.1` in World's listener log,
+then verifies the actual loopback TCP connection.
 Its fixture HOME is a short temporary directory under `/tmp` to fit macOS's
 103-byte Unix socket limit. Linux keeps an offline fake-release check. It must
 not compile a core dependency or bypass Apple's signature verification.

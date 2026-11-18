@@ -6,9 +6,9 @@ import { renderHerdrBootstrap } from "./herdr-bootstrap";
 
 // This listener is a fixture, not a World service. The production launcher
 // still performs its real bootstrap against the check's Linux fake release.
-test.skipIf(process.platform !== "linux")(
-  "Linux acceptance installs once, preserves the existing core and rejects a repeated start",
-  () => {
+test.skipIf(process.platform !== "linux").each(["127.0.0.1", "localhost"])(
+  "Linux acceptance with %s logs installs once, preserves the existing core and rejects a repeated start",
+  (logHost) => {
     const root = mkdtempSync(join(tmpdir(), "homebrew-runtime-"));
     try {
       const binary = join(root, "world-fixture");
@@ -26,7 +26,7 @@ else
   port = ARGV[ARGV.index("--port") + 1].to_i
   server = TCPServer.new("127.0.0.1", port)
   STDOUT.sync = true
-  puts "listening url=http://127.0.0.1:#{port}"
+  puts "INFO bridge listening url=http://#{ENV.fetch("CHECK_LOG_HOST")}:#{port} websocket=/ws log_level=info"
   loop { server.accept.close }
 end
 `,
@@ -45,6 +45,9 @@ end
         Bun.spawnSync(
           [
             "ruby",
+            "-rtimeout",
+            "-e",
+            "Timeout.timeout(5) { load ARGV.shift }",
             join(import.meta.dir, "check-homebrew-runtime.rb"),
             launcher,
             home,
@@ -52,6 +55,7 @@ end
           {
             env: {
               ...process.env,
+              CHECK_LOG_HOST: logHost,
               CHECK_EXTRA_START: extraStart ? "1" : undefined,
             },
             stdout: "pipe",
