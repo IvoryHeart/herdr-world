@@ -88,7 +88,14 @@ describe("World's writes to a real herdr-core", () => {
         state: "live",
         name: "reviewer",
         keep: true,
-        argv: ["/bin/sh", ...REPORTING],
+        argv: [
+          "/bin/sh",
+          "-c",
+          expect.stringContaining('exec "$@"'),
+          "world-agent",
+          "/bin/sh",
+          ...REPORTING,
+        ],
       });
       expect(record.parent ?? null).toBeNull();
       expect(record.labels).toMatchObject({

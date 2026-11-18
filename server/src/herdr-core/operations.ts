@@ -1,4 +1,5 @@
 import { deliverLaunchBrief } from "./launch-brief";
+import { coreShellArgv } from "./shell";
 import { randomBytes, randomUUID } from "node:crypto";
 import { agentNameFor, AGENT_KIND } from "../../../shared/agentProfile";
 import type { ReadyRuntimeLease } from "../connections/manager";
@@ -314,7 +315,7 @@ export async function launchCore(
     try {
       record = await lease.runtime.run(fence, {
         argv: executable
-          ? [
+          ? coreShellArgv([
               executable,
               ...args,
               ...(sessionArgument &&
@@ -322,7 +323,7 @@ export async function launchCore(
                 ? sessionArgument(sessionId)
                 : []),
               ...(text && promptArgument ? promptArgument(text) : []),
-            ]
+            ])
           : [],
         ...(cwd ? { cwd } : {}),
         labels,

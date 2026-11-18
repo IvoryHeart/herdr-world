@@ -24,9 +24,21 @@ Sources inspected on 2026-11-11:
 
 Every row has a **launch profile**, **native status** and **native send/answers/keys**.
 Native status means exactly core's records: without OSC 7501 it is **unknown**.
+This applies to Codex on Linux too: a missing core/harness report cannot be
+repaired by mapping it to idle. An isolated Linux core 0.1.21 / Codex 0.167.0
+launch publishes native idle/working through World's provider; the previously
+reported Linux-only absence was not reproduced with those versions.
 World does not copy the TUI's screen-status inference or install status-writing
 hooks for core. Seen and the pin use the existing shared labels. A stopped
 program may return to a kept shell; its old Chat cannot send to that replacement.
+
+On Unix, New agent resolves the executable and launches it through the account's
+interactive `$SHELL` (fallback `/bin/sh`), using login mode on macOS as core's
+plain terminals do. POSIX-style shells and fish pass the executable, profile
+arguments and first prompt as separate arguments. Shell startup supplies PATH
+and version-manager tools to the agent; World never collects or copies the
+environment. Absolute executables still bypass core templates. Windows keeps
+native launching. No change to the user's shell configuration is required.
 
 | Harness kind | Executable | Core profile / status / delivery | Chat transcript |
 | --- | --- | --- | --- |
