@@ -85,8 +85,7 @@
   let terminal = "Scout",
     attached = false,
     warned = false,
-    panel = "changes",
-    mobile = "agents";
+    panel = "changes";
   let changed = false,
     picker = false,
     handoff = false,
@@ -332,8 +331,6 @@ Existing agent attached. No replacement process.`
         ),
       );
     }
-    $("#native-content").hidden = mobile !== "files";
-    $("#ide").dataset.mobile = mobile;
     $("#branch-label").textContent =
       `⑂ ${checkout === "agent" ? r.branch : "main"}`;
     $("#connection-state").textContent =
@@ -352,7 +349,6 @@ Existing agent attached. No replacement process.`
         checkout,
         file,
         panel,
-        mobile,
         provider: h.selected,
       }[node.dataset.action];
       if (selection !== undefined)
@@ -419,11 +415,7 @@ Existing agent attached. No replacement process.`
       warned = false;
       message = `${terminal}'s existing ${room().runtime} terminal selected. Checkout is unchanged.`;
     }
-    if (action === "panel") {
-      panel = value;
-      mobile = "changes";
-    }
-    if (action === "mobile") mobile = value;
+    if (action === "panel") panel = value;
     if (action === "attach" && !unavailable()) {
       if (room().ssh && !attached && !warned) {
         warned = true;
@@ -482,7 +474,6 @@ Existing agent attached. No replacement process.`
       checkout = "agent";
       file = "source";
       changed = true;
-      mobile = "ide";
       message = `Native VS Code comparison requested for ${room().builder}'s exact checkout (mock). PR #42 is synthetic.`;
     }
     if (action === "offline") {
@@ -507,7 +498,6 @@ Existing agent attached. No replacement process.`
       hosts = { orchard: initialHost(false), notes: initialHost(true) };
       selectRoom("orchard");
       view = "Town";
-      mobile = "agents";
       panel = "changes";
       picker = false;
       handoff = false;

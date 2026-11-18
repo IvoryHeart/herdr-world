@@ -25,8 +25,8 @@ The owner's real-IDE direction supersedes the earlier native-editor proposal.
 - Propose a small World extension supplying profiles for existing Herdr panes and
   core terminals, with qualified identity, detach semantics, core-specific adapter
   checks and an explicit warning about Herdr's shared pane resize.
-- Preserve native World phone workflows and provide explicit desktop handoff.
-  Resource/lifecycle ownership and unavailable states are visible, never guessed.
+- Provide explicit desktop handoff. Resource/lifecycle ownership and unavailable
+  states are visible, never guessed.
 
 ## Capabilities
 

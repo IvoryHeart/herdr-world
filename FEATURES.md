@@ -1786,10 +1786,9 @@ nothing installs, connects, saves, executes or launches an app. **Block embeddin
 (mock)**, **Disconnect host (mock)** and the SSH host's missing-provider fixture
 expose failure states; **Mark installed (mock)** only changes fixture state.
 **Attach profile (mock)** demonstrates existing agent terminals; Herdr TUI requires
-acknowledging that attach resizes the pane for every viewer. Phones retain native
-World **Agents / Files / Changes** sketches; **IDE preview** is optional with a
-larger-screen warning. **Reset study** clears memory-only state. Real embedding
-remains gated on upstream terms, same-origin/worker/webview compatibility and
+acknowledging that attach resizes the pane for every viewer. The mock presents
+the desktop workbench in World's frame. **Reset study** clears memory-only state.
+Real embedding remains gated on upstream terms, same-origin/worker/webview compatibility and
 explicit trust in full shell/write and same-origin extension authority.
 
 ## Workspace Inspector

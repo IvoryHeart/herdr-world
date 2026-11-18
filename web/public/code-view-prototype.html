@@ -26,10 +26,9 @@
         </div>
         <p class="footnote">Room cards are simplified sketches of the same entities in Town and Board. Shipping views are unchanged.</p>
       </section>
-      <section id="ide" hidden data-mobile="agents" aria-label="Code workspace">
+      <section id="ide" hidden aria-label="Code workspace">
         <div class="project-bar"><div><p class="eyebrow" id="location"></p><h1 id="project-title"></h1></div><div class="project-actions"><button data-action="integrations">IDE integrations</button><button data-action="desktop">Open in desktop IDE</button><button data-action="view" data-value="Town">← Room</button></div></div>
         <div class="context-bar"><label>Project <select id="project-select" aria-label="Project"><option value="orchard">Orchard</option><option value="notes">Field notes · SSH</option></select></label><button data-action="checkout" data-value="room">Room · main</button><button id="agent-checkout" data-action="checkout" data-value="agent">Scout’s checkout</button><span id="checkout-label"></span></div>
-        <div class="phone-advice">VS Code is designed for a larger screen. Keep using World's native agents, Files and Changes on your phone; this study does not simulate phone editing.</div>
         <div class="workspace">
           <section class="ide-container" aria-label="Installed IDE workbench stand-in">
             <div class="embed-caption"><span id="provider-label">VS Code web · Microsoft CLI</span><strong>LABELLED STAND-IN · NOT A RUNNING VS CODE</strong></div>
@@ -47,9 +46,8 @@
               <div class="vscode-status"><span id="branch-label"></span><span>World terminal profiles · User profile managed by IDE</span><span>TypeScript · UTF-8</span></div>
             </div>
           </section>
-          <aside class="world-context" aria-label="World project context"><p class="eyebrow">STILL YOUR WORLD</p><h2>People &amp; progress</h2><div id="agent-context"></div><div class="tabs"><button data-action="panel" data-value="changes">Changes</button><button data-action="panel" data-value="pr">PR #42</button></div><div id="change-content"></div><div id="native-content" hidden><p class="eyebrow">WORLD / NATIVE FILES</p><h3>greeting.ts</h3><pre>export const greeting = "Welcome";</pre><p>Existing World Files stays available. No new phone editor.</p></div></aside>
+          <aside class="world-context" aria-label="World project context"><p class="eyebrow">STILL YOUR WORLD</p><h2>People &amp; progress</h2><div id="agent-context"></div><div class="tabs"><button data-action="panel" data-value="changes">Changes</button><button data-action="panel" data-value="pr">PR #42</button></div><div id="change-content"></div></aside>
         </div>
-        <nav class="phone-nav" aria-label="Native World phone panel"><button data-action="mobile" data-value="agents">Agents</button><button data-action="mobile" data-value="files">Files</button><button data-action="mobile" data-value="changes">Changes</button><button data-action="mobile" data-value="ide">IDE preview</button></nav>
         <div class="status-bar"><span id="connection-state"></span><span>Same hosts · rooms · agents · terminals</span></div>
         <div class="scenarios"><span>MOCK SCENARIOS</span><button data-action="agent-change">Agent changes file</button><button id="blocked" data-action="blocked">Block embedding (mock)</button><button id="offline" data-action="offline">Disconnect host (mock)</button><button data-action="reset">Reset study</button></div>
         <p id="notice" role="status" aria-live="polite">All controls use synthetic data.</p>

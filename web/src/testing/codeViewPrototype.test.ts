@@ -193,16 +193,9 @@ describe("real IDE integration design walkthrough", () => {
     });
   });
 
-  test("phones retain native panels and core profiles do not inherit TUI resize confirmation", () => {
+  test("core profiles attach without TUI resize confirmation and reset returns to rooms", () => {
     fixture((window) => {
       click(window, "open", "orchard");
-      click(window, "mobile", "files");
-      expect(
-        window.document
-          .querySelector("#native-content")
-          ?.hasAttribute("hidden"),
-      ).toBe(false);
-      click(window, "mobile", "agents");
       click(window, "terminal", "Wren");
       expect(
         window.document.querySelector("#agent-context")?.textContent,
@@ -214,10 +207,6 @@ describe("real IDE integration design walkthrough", () => {
       expect(
         window.document.querySelector("#terminal-output")?.textContent,
       ).toContain("Core screen-watch");
-      click(window, "mobile", "changes");
-      expect(
-        window.document.querySelector("#ide")?.getAttribute("data-mobile"),
-      ).toBe("changes");
       click(window, "reset");
       expect(
         window.document.querySelector("#overview")?.hasAttribute("hidden"),

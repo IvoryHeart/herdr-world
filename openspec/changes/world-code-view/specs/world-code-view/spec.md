@@ -143,26 +143,19 @@ cases with licence, entitlement and web/remote-host limitations recorded.
 - **WHEN** the owner's existing desktop profile is not present in the server/web client
 - **THEN** World explains the separate state and supported Sync/import path without copying secrets or promising all desktop extensions are already installed
 
-### Requirement: Desktop handoff and native phone workflows
+### Requirement: Desktop IDE handoff
 
 World SHALL offer explicit project-qualified desktop IDE handoff through enabled
 provider adapters, preserving the exact host and checkout. It SHALL distinguish
 host detection from browser-device client availability, validate/encode provider
 URIs and omit World credentials. Unavailable clients SHALL receive supported setup
 or copyable connection instructions; World SHALL NOT execute a GUI on the service
-host or mistake a remote path for browser-local files. Native World phone agent,
-Files and Changes workflows SHALL remain primary without a custom mobile editor
-or promise of full phone VS Code parity.
+host or mistake a remote path for browser-local files.
 
 #### Scenario: Open remote project in Gateway or VS Code desktop
 
 - **WHEN** the owner selects a desktop handoff for an SSH project
 - **THEN** the chosen adapter supplies a supported remote connection/project handoff for that exact host, with no local-folder substitution, owner-token leakage or silent app launch
-
-#### Scenario: Phone opens a project
-
-- **WHEN** the owner opens Code context on a phone
-- **THEN** native World agent/file/change access and the qualified project remain available with desktop IDE limitations explained
 
 ### Requirement: Agent activity and pull requests
 

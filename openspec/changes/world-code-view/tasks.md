@@ -25,7 +25,6 @@ No implementation or install is authorized by these planning artifacts.
 - [ ] 3.2 Add validated desktop provider handoffs for VS Code, Cursor, Gateway and Zed; test browser-device availability unknown, local/remote path encoding, exact connection and no credentials/command injection.
 - [ ] 3.3 Package/pair the narrow World extension and terminal profiles; test capability scope/expiry, SSH callback transport, TUI shared-resize acknowledgment and core screen/typing fidelity with no runtime changes.
 - [ ] 3.4 Test profile attach/control, focus isolation, hide/close/detach, replacement, disconnect and no key replay across VS Code and existing World viewers; refuse unsupported core adapters without substituting TUI.
-- [ ] 3.5 Preserve native phone agent/Files/Changes flows and project context; verify actual iOS/Android access and accessible provider/fallback controls without promising phone VS Code parity.
 
 ## 4. Verify, document and retire the study
 

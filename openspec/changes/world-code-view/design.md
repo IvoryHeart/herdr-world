@@ -21,7 +21,7 @@ authentication and terminal owners before any implementation.
 The proposed outcome is installed real VS Code in World's center, with the same
 host/room/agent context, IDE integration selection and per-project desktop handoff.
 VS Code retains its native editing, Source Control, extensions, profiles and trust
-prompts. Native World phone flows remain primary.
+prompts.
 
 No implementation in this PR. No custom save API/editor, fork/bundled IDE,
 Herdr/core API changes, multi-user hosting, generic remote-port forwarding,
@@ -178,7 +178,7 @@ VS Code may retain server/extension hosts independently; hiding Code suspends th
 World extension's attach demand through a narrow authenticated lifecycle signal,
 not arbitrary window messages or assumptions that an iframe has unmounted.
 
-### Project activity, phone behavior and lifecycle
+### Project activity and lifecycle
 
 World keeps agent status, attention and qualified PR linkage alongside the IDE.
 VS Code Source Control shows actual working-tree changes; a World PR card may
@@ -186,10 +186,6 @@ request the matching native diff through the companion extension after checking
 repository/checkout/branch evidence. No association by branch/display name alone,
 no inferred line authorship, and no new World merge/approve/write contract. Missing
 evidence is unavailable; stale PR badges remain labelled and non-actionable.
-
-On phones keep native World agent/Files/Changes views and retained project context.
-Do not build a mobile replacement editor or assert that a resizable mock validates
-VS Code IME/keyboard support. Desktop handoff remains explicit and device-dependent.
 
 Resource ownership distinguishes externally started servers from World-started
 children. Start on demand, reuse only a compatible host/user/provider/profile

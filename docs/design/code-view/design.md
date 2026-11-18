@@ -11,7 +11,8 @@ explain the unresolved licence, single-origin and full-shell trust gates.
 
 ## Try it on the preview
 
-Open **`/code-view-prototype.html`** on the dispatcher's preview origin. No runtime,
+In a desktop browser, open **`/code-view-prototype.html`** on the dispatcher's
+preview origin. No runtime,
 repository, account, query parameter or database setup is needed. The permanent
 **DESIGN STUDY / 981** banner and **LABELLED STAND-IN · NOT A RUNNING VS CODE**
 caption identify the fixture. **Return to World** leaves it. **Reset study**
@@ -58,14 +59,6 @@ restores all initial memory-only state.
    agent running. Open the desktop handoff to see SSH-specific instructions,
    rather than incorrectly treating the remote folder as client-local.
 
-On a phone open Orchard and use **Agents / Files / Changes**. These sketch World's
-existing native phone surfaces, keeping host/project context and no custom phone
-editor. **IDE preview** deliberately shows the compact stand-in with a larger-screen
-warning; it is not evidence of real phone VS Code support. PR selection lives under
-Changes; scroll below the current panel for mock scenario controls. The provider
-picker and handoff remain usable on a phone, with no assumption a desktop client
-is installed. Try portrait and landscape.
-
 ## Proposed interaction and ownership
 
 Code stays a peer of Town, Board, Desk and Spaces in the common shell. A room's
@@ -103,7 +96,7 @@ checkout/comparison through the proposed extension; a terminal label or matching
 branch name alone is not proof of authorship or PR association. Stale or missing
 provider evidence stays non-actionable. No new World commit/merge authority.
 
-## Failure and responsive design
+## Failure states and desktop presentation
 
 | State | Proposed experience |
 | --- | --- |
@@ -117,11 +110,10 @@ provider evidence stays non-actionable. No new World commit/merge authority.
 
 Desktop gives most space to the real workbench and a narrow World context rail.
 The mock's proportions are illustrative, not a replacement IDE layout engine.
-Phone defaults to native World panels. Controls use 44 px phone targets, text
-state labels, keyboard focus, Escape dismissal, modal focus containment and polite
-status announcements. Actual IDE browser/keyboard/IME/accessibility behavior must
-be verified against the installed product before shipping; synthetic rendering
-cannot establish compatibility or phone parity.
+Controls use text state labels, keyboard focus, Escape dismissal, modal focus
+containment and polite status announcements. Actual IDE browser/keyboard and
+accessibility behavior must be verified against the installed product before
+shipping; synthetic rendering cannot establish compatibility.
 
 Research/design-only changes do not alter first-run install or learner steps, so
 README and TUTORIAL remain accurate. FEATURES and the knowledge map identify the
