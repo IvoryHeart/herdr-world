@@ -67,10 +67,15 @@ no control for it. Platform and harness limits apply across the table.
   app-created room. Linked-machine core terminals are observations, not
   directly controllable desks.
 - **Core agent environment (Unix):** New agent finds and starts the harness
-  through the core host's `$SHELL` (or `/bin/sh`): interactive on Linux,
-  login and interactive on macOS. Bash/Zsh and fish startup files can add tools
-  such as nvm and bun. World receives the executable path, without collecting,
-  copying or saving the shell environment. Windows keeps native launching.
+  through the core host's `$SHELL` (`/bin/sh` when unset): interactive on Linux,
+  login and interactive on macOS. Supported shells are sh, bash, zsh, dash,
+  ksh, mksh and fish. Their startup files can add tools such as nvm and bun.
+  World receives the executable path, without collecting,
+  copying or saving the shell environment. Other shells (including csh, tcsh,
+  nu, xonsh and elvish) keep direct launching with the inherited environment;
+  their startup files are not loaded. Startup files that replace the shell
+  with another shell or tmux can prevent launch or time out the catalog probe.
+  Windows keeps native launching.
 - **Codex status on Linux core:** working/idle comes from Codex's native
   OSC 7501 reports, just as on macOS. If core publishes no status, World
   shows **unknown** even when Chat and Terminal work. World cannot recover

@@ -37,7 +37,7 @@ function fixture(platform: "Linux" | "Darwin", shellProgram?: string) {
   // A synthetic account shell: insist on the platform's terminal startup mode,
   // then add tools just as its interactive rc would. Never read the real rc.
   const shell = executable(
-    join(bin, "account shell"),
+    join(bin, "bash"),
     [
       `[ "$1" = ${platform === "Darwin" ? "-lic" : "-ic"} ] || exit 91`,
       "shift",
@@ -62,10 +62,44 @@ function fixture(platform: "Linux" | "Darwin", shellProgram?: string) {
     ]);
     return { stdout, code };
   };
-  return { tools, run };
+  return { tools, env, run };
 }
 
 describe("the core agent's shell environment", () => {
+  for (const platform of ["Linux", "Darwin"] as const) {
+    for (const shell of ["csh", "tcsh", "nu", "xonsh", "elvish"])
+      test(`${platform} ${shell}: unsupported shells preserve direct discovery and launch`, async () => {
+        const host = fixture(platform);
+        host.env.SHELL = join(host.tools, shell);
+        // Fail if World tries to enter this unsupported account shell.
+        writeFileSync(host.env.SHELL, "#!/bin/sh\nexit 94\n");
+        chmodSync(host.env.SHELL, 0o755);
+        host.env.PATH = `${host.tools}:${host.env.PATH}`;
+        const coreHost = {
+          windows: false,
+          run: (script: string) => host.run(["/bin/sh", "-c", script]),
+        };
+        const readiness = await coreHarnessReadiness(coreHost, [
+          "claude",
+          "codex",
+        ]);
+        expect(readiness).toMatchObject([
+          { kind: "claude", installed: true },
+          { kind: "codex", installed: true },
+        ]);
+        for (const kind of ["claude", "codex"]) {
+          const executable = await resolveCoreExecutable(coreHost, kind);
+          expect(executable).toBe(join(host.tools, kind));
+          const args = ["", "a b", "quote'\"", "$(exit 92); `exit 93`\nnext"];
+          const result = await host.run(coreShellArgv([executable, ...args]));
+          expect(result).toEqual({
+            code: 0,
+            stdout: `shell-bun\n${args.map((arg) => `<${arg}>\n`).join("")}`,
+          });
+        }
+      });
+  }
+
   for (const platform of ["Linux", "Darwin"] as const) {
     for (const kind of ["claude", "codex"])
       test(`${platform} ${kind}: resolve and run with shell-only tools, keeping arguments literal`, async () => {

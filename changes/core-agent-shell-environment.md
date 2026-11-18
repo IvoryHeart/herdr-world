@@ -2,6 +2,8 @@
 
 - Start core agents with the host's interactive shell environment, including
   shell-added tools such as bun and nvm, with login startup on macOS.
+- Preserve direct core discovery and launching for unsupported account shells,
+  including csh, tcsh, nu, xonsh and elvish.
 
 ### Known issues
 

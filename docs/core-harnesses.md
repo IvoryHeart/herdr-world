@@ -33,12 +33,17 @@ hooks for core. Seen and the pin use the existing shared labels. A stopped
 program may return to a kept shell; its old Chat cannot send to that replacement.
 
 On Unix, New agent resolves the executable and launches it through the account's
-interactive `$SHELL` (fallback `/bin/sh`), using login mode on macOS as core's
-plain terminals do. POSIX-style shells and fish pass the executable, profile
-arguments and first prompt as separate arguments. Shell startup supplies PATH
+interactive `$SHELL` (`/bin/sh` when unset), using login mode on macOS as core's
+plain terminals do. Supported shells are sh, bash, zsh, dash, ksh, mksh and fish;
+they pass the executable, profile arguments and first prompt as separate arguments.
+Shell startup supplies PATH
 and version-manager tools to the agent; World never collects or copies the
 environment. Absolute executables still bypass core templates. Windows keeps
-native launching. No change to the user's shell configuration is required.
+native launching. Other account shells, including csh, tcsh, nu, xonsh and elvish,
+keep direct discovery and launch with the inherited environment; their startup
+files do not supply additional tools. Startup files that replace the shell with
+another shell or tmux can prevent launch or time out the catalog probe. No change
+to the user's shell configuration is required.
 
 | Harness kind | Executable | Core profile / status / delivery | Chat transcript |
 | --- | --- | --- | --- |
