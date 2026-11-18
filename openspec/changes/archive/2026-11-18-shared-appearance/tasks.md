@@ -16,8 +16,15 @@
 - [x] 3.3 Format the staged candidate, pass repository hooks and push, then validate the final PR description and open a ready independently reviewed PR fixing #221 with creation-time labels; record the PR and verification evidence in the handoff.
 
 The implementation tasks above describe delivered code and evidence consumers.
-The external gate and PR outcome are recorded in the PR handoff; independent
-review and acceptance remain required before archiving this change.
+Final acceptance is recorded at `b8aaf3d358e705088b685304f9ca10fda0700c9d` by
+[rev-opus](https://github.com/IvoryHeart/herdr-world/pull/492#pullrequestreview-5705044269),
+[rev2](https://github.com/IvoryHeart/herdr-world/pull/492#pullrequestreview-5705075126)
+and [rev-astra](https://github.com/IvoryHeart/herdr-world/pull/492#pullrequestreview-5705436728):
+all findings resolved, none new. Required
+[Delivery checks](https://github.com/IvoryHeart/herdr-world/actions/runs/40952654137/job/123727695687)
+passed; #492 merged as `0692d9e24`. Both delivered current requirements were
+already synchronized byte-for-byte before archive. Synthetic native transport
+and existing platform-consumer limits remain binding.
 
 ## 4. Independent review repairs
 

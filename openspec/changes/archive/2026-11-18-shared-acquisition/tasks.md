@@ -61,4 +61,10 @@ The timer-removal part advertises the capability for both focused and Desk paths
 The composed case runs a real Bridge/store in a Worker and a second native socket
 against createWorldService with two synthetic runtime adapters (architect-approved
 alternative to two stores). Both spec deltas are synchronized into current specs.
-The change remains active for independent review; archive follows acceptance.
+Acceptance is recorded by [the resolved implementation review](https://github.com/IvoryHeart/herdr-world/pull/577#pullrequestreview-5720452730)
+at `9cc38093e6e57d1a940adcb8d2d4edf862d821b3` and the successful
+[Delivery checks](https://github.com/IvoryHeart/herdr-world/actions/runs/41157096982/job/124407431299).
+The contract-only #551 merge `0aca7d71c` establishes the earlier contract review;
+it does not by itself accept implementation. Implementation merged as `7753dc371`.
+Both current requirements were already synchronized byte-for-byte before archive.
+Platform and external runtime limits remain those of the current contracts.

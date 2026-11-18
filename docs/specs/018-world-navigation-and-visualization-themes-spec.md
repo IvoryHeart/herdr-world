@@ -1,5 +1,7 @@
 # World navigation and visualization themes
 
+> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
+
 - **Spec ID:** `018-world-navigation-and-visualization-themes`
 - **Status:** Draft
 - **Created:** 2026-08-31
