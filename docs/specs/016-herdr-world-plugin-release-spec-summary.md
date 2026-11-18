@@ -1,5 +1,7 @@
 # Implementation summary — Herdr World plugin distribution and lifecycle facade
 
+> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
+
 - **Parent spec:** [`016-herdr-world-plugin-release-spec.md`](016-herdr-world-plugin-release-spec.md)
 - **Implemented at:** 2026-08-29
 - **Implementation status:** Complete; tagged three-platform validation passed

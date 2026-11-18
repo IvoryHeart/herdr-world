@@ -25,9 +25,9 @@ import {
 import {
   ConnectionProfileService,
   connectionIdentityForProfile,
-  loadConnectionProfileBootstrap,
   type StartupLocalProfile,
 } from "../connections/profile-service";
+import { initializeConnectionProfiles } from "../connections/first-run";
 import { connectionFailureReporters } from "../connections/failure-reporters";
 import { type TuiConnectionProfile } from "../connections/profiles";
 import { composeCore } from "../rpc/core";
@@ -226,7 +226,7 @@ async function compose(
   );
   let connectionBootstrap;
   try {
-    connectionBootstrap = loadConnectionProfileBootstrap({
+    connectionBootstrap = await initializeConnectionProfiles({
       store: storage.connections,
       startupProfile: startupDefaultProfile,
       explicitStartupOverride,

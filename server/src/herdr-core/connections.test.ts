@@ -427,6 +427,25 @@ describe("herdr-core connections", () => {
     expect(w.service.coreList()).toEqual([]);
   });
 
+  test("the first-run preview checks production discovery without replacing saved connections", async () => {
+    const w = world();
+    const fixture = createCoreFixture(() => w.service);
+    try {
+      expect(await fixture.start("first-run")).toMatchObject({
+        running: true,
+        first_run_default: "core-local",
+      });
+      await until(() => observed(w, "core-fixture")?.state === "live");
+      expect(observed(w, "core-fixture")!.terminals.length).toBeGreaterThan(0);
+      // The preview maps its scratch discovery to its own removable fixture ID.
+      expect(
+        w.service.coreList().some((item) => item.id === "core-local"),
+      ).toBeFalse();
+    } finally {
+      await fixture.remove();
+    }
+  });
+
   test("the preview fixture can report that its programs stop at logout", async () => {
     const w = world();
     const fixture = createCoreFixture(() => w.service);

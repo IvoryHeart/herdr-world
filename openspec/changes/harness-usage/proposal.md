@@ -1,3 +1,11 @@
+## Delivery state
+
+Implementation delivered; acceptance evidence still to reconcile: review and gate coverage for the later subscription-limit, context-fill and installed Claude-tap additions beyond the base numeric-reader acceptance in #642.
+
+Delivered requirements are synchronized into [the current contract](../../specs/world-usage/spec.md).
+No unsynchronized requirement delta remains in this record; unfinished tasks
+and acceptance above keep the change active.
+
 ## Why
 
 Expenses currently depend on configured OTel aggregates with no reliable pane attribution.

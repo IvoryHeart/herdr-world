@@ -1,5 +1,7 @@
 # Implementation summary — Office UX and seat actions
 
+> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
+
 - **Parent spec:** [`007-office-ux-and-seat-actions-spec.md`](007-office-ux-and-seat-actions-spec.md)
 - **Implemented at:** 2026-08-11
 - **Implementation status:** Core slice delivered; bounded canvas callouts, room-targeted seat actions, graphical Agent Bar with a semantic overlay, elastic room layout, and capability-gated room lifecycle actions delivered

@@ -1,3 +1,11 @@
+## Delivery state
+
+Implementation delivered; acceptance evidence still to reconcile: final confirmation of the original #267 source-link/privacy findings and the later PR detail/readiness/action consumers. #287 and #653 acceptance covers merged-history repairs, not all source additions.
+
+Delivered requirements are synchronized into [the current contract](../../specs/world-surfaces/spec.md#requirement-built-in-sources).
+No unsynchronized requirement delta remains in this record; unfinished tasks
+and acceptance above keep the change active.
+
 ## Why
 
 The user wants to see their GitHub pull requests and Jira tickets in World,

@@ -1,3 +1,11 @@
+## Delivery state
+
+Chimes and live Group Interest are delivered. Only tasks 3.2 (message-ledger sender identity) and 3.3 (sub-agent class) remain, pending their upstream evidence sources.
+
+Delivered requirements are synchronized into [the current contract](../../specs/world-surfaces/spec.md#requirement-chimes).
+No unsynchronized requirement delta remains in this record; unfinished tasks
+and acceptance above keep the change active.
+
 ## 1. Model and service
 
 - [x] 1.1 Timbres, motifs, the motif mapping, the gate, burst priority and the reason line in `shared/chimes.ts`; verify in unit tests.
@@ -11,6 +19,6 @@
 
 ## 3. Follow-ups
 
-- [ ] 3.1 Read interest from layers' `useAgentInterest` once it lands (the gate already takes it).
+- [x] 3.1 Connect the live `useAgentInterest` policy to chime decisions through `startAgentChimeInterest`; direct interest and chime-center tests cover the delivered gate.
 - [ ] 3.2 Name the sender of a "for you" once the message ledger lands (relay).
 - [ ] 3.3 A sub-agent class once a lineage source exists.

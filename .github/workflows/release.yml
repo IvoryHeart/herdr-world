@@ -351,7 +351,8 @@ jobs:
           test "$("$(brew --prefix "$tap/$package")/bin/herdr-world" --version)" = "herdr-world $version"
           brew test "$tap/$package"
           world="$(brew --prefix "$tap/$package")/bin/herdr-world"
-          fixture_home="$RUNNER_TEMP/herdr-world-runtime"
+          fixture_home="$(mktemp -d /tmp/hw.XXXXXX)"
+          trap 'rm -rf "$fixture_home"' EXIT
           ruby scripts/check-homebrew-runtime.rb "$world" "$fixture_home"
           brew reinstall --formula "$tap/$package"
           ruby scripts/check-homebrew-runtime.rb "$world" "$fixture_home"

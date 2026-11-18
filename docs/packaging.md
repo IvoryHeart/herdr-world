@@ -11,6 +11,8 @@ they install **herdr-core** using its checksum-verified official steps
 (`scripts/herdr-core-install.sh` and its Windows PowerShell twin), start it now
 and at login, and save its connection. Homebrew has no mandatory Herdr formula
 dependency and installs core outside its keg, without an Intel source build.
+With core already installed and no Herdr TUI, World's first run discovers and
+saves the local core as its default without changing the runtime or its login item.
 
 Standalone replacements and World updates refresh the TUI and its integrations,
 then restart the matching managed World service. Installed core is left unchanged;
