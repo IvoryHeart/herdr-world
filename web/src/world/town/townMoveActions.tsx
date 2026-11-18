@@ -24,6 +24,7 @@ import type { TownToast } from "./TownToasts";
 import { townDeskColorTarget, townRoomColorKey } from "./townModel";
 import { saveRoomSpots } from "./townRoomPins";
 import { saveBuildingOrder } from "./townBuildingPins";
+import { townFirstLotsPerStreet } from "./townLots";
 import type { TownRoomPlacement } from "./townRoomPlace";
 import { townMoveMenu, type TownMoveFlow } from "./townMoveMenu";
 import { townPinnedReorder, townRoomPinnedSeats } from "./townPinOrder";
@@ -55,6 +56,7 @@ export function townMoveActions({
   moveConfirm,
   setMoveConfirm,
   world,
+  aggregate = world,
   office,
   deskPins,
   relations,
@@ -74,6 +76,8 @@ export function townMoveActions({
   moveConfirm: TownMoveConfirm | null;
   setMoveConfirm(confirm: TownMoveConfirm | null): void;
   world: WorldObject;
+  /** Every host, the ones the Hosts filter hides too (TownView). */
+  aggregate?: WorldObject;
   office: HerdrOfficeProjection;
   deskPins: DeskPins;
   relations: readonly Relation[];
@@ -340,7 +344,8 @@ export function townMoveActions({
   /**
    * Save the order the buildings stand in (World keeps it, so a reload and
    * every device show it). `order` is the buildings shown, by host key;
-   * hosts not shown keep their lots.
+   * hosts not shown keep their lots: the first move places every host,
+   * hidden ones too, where it stood.
    */
   const runBuildingPlace = async (
     hostKey: string,
@@ -356,6 +361,8 @@ export function townMoveActions({
     try {
       const conflict = await saveBuildingOrder(
         hosts.map((host) => host!.connectionId),
+        aggregate.hosts.map((host) => host.connectionId),
+        townFirstLotsPerStreet(aggregate.hosts.length),
       );
       if (DEVTOOLS)
         trace.record("move", { label, status: conflict ?? "moved" });

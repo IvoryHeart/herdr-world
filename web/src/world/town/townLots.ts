@@ -69,6 +69,23 @@ export type TownVerticalRoad = {
 /** A room column: its left and right edge and the row under its last room. */
 export type TownColumnSpan = { x0: number; x1: number; bottom: number };
 
+/**
+ * How many lots stand on each street of a wide town of `count` buildings
+ * before any was moved: up to four share one street, larger towns wrap into
+ * a roughly square grid.
+ */
+export const townLotsPerStreet = (count: number) =>
+  count <= 4 ? count : Math.ceil(Math.sqrt(count * 1.6));
+
+/**
+ * The lots per street a wide town of `count` buildings keeps once the first
+ * building was moved (Board's `building_columns`, never changed after): a
+ * new host's building then takes the next free lot and moves none of the
+ * placed ones. A town of four or fewer keeps one street of four.
+ */
+export const townFirstLotsPerStreet = (count: number) =>
+  Math.max(4, townLotsPerStreet(count));
+
 /** The narrowest building of a shape. */
 const minWidthOf = (shape: TownShape) =>
   townPhoneShape(shape) ? MIN_PHONE_BUILDING_WIDTH : MIN_BUILDING_WIDTH;
@@ -111,7 +128,8 @@ export function townFloor(
 /**
  * Where the buildings (floors, in host order) and the town center stand.
  * Up to four buildings share one street; larger towns wrap into a grid of
- * streets. Every row of lots has a street above and below it (neighbouring
+ * streets (townLotsPerStreet), or `perStreet` lots once buildings were
+ * moved (a phone always stacks them). Every row of lots has a street above and below it (neighbouring
  * rows share one), and a road right of every lot from street to street; a
  * matching road down the left of each row's first lot (`edge`) bounds the
  * town on that side too.
@@ -124,14 +142,11 @@ export function townFloor(
 export function townPlaceLots(
   floors: readonly { w: number; h: number }[],
   shape: TownShape,
+  perStreet?: number,
 ) {
   const narrow = shape.formFactor === "narrow";
   const centerW = townCenterWidth(townPhoneShape(shape));
-  const perRow = narrow
-    ? 1
-    : floors.length <= 4
-      ? floors.length
-      : Math.ceil(Math.sqrt(floors.length * 1.6));
+  const perRow = narrow ? 1 : (perStreet ?? townLotsPerStreet(floors.length));
   const placed: {
     x: number;
     y: number;

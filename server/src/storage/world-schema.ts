@@ -16,6 +16,7 @@ import { newWorldId } from "./world-identifiers";
 import { worldIdsMigration } from "./world-ids";
 import {
   worldBoardMigration,
+  worldBuildingColumnsMigration,
   worldBuildingPinsMigration,
   worldRoomPinsMigration,
 } from "./world-board";
@@ -104,6 +105,7 @@ export const worldMigrations = [
   worldRoomPinsMigration,
   coreTopologyMigration,
   worldBuildingPinsMigration,
+  worldBuildingColumnsMigration,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */

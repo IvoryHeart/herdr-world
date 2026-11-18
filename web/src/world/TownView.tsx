@@ -530,10 +530,8 @@ export default function TownView({
     else if (!holdPeek.current) schedulePeek(null, 320);
   };
 
-  /**
-   * Replying opens the pane in World's terminal window with its composer
-   * open, the same composer (with uploads) used everywhere else.
-   */
+  // Replying opens the pane in World's terminal window with its composer
+  // open, the same composer (with uploads) used everywhere else.
   const crowdedDesk = (key: string) => {
     const desk = office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
     return desk && desk.observedPaneCount > desk.paneDevices.length
@@ -556,6 +554,7 @@ export default function TownView({
     moveConfirm,
     setMoveConfirm,
     world,
+    aggregate,
     office,
     deskPins,
     relations: relations.relations,

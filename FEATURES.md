@@ -638,9 +638,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     keyboard; they glide, or simply change places under reduced motion. A
     town of one building has nothing to move. World saves the order of
     buildings with the Board layout, by host connection, so a reload and
-    every device show the same town; a host not shown keeps its place, and a
-    new host's building takes the next free lot without moving placed ones.
-    Buildings keep their shapes, and rooms stay in their own building.
+    every device show the same town. The first move places every host, the
+    ones the Hosts filter hides too, where it stood, and fixes how many lots
+    stand on each street of a wide town (the town's count then, at least
+    four), so a new host's building takes the next free lot without moving
+    placed ones. A hidden host keeps its place; while it is hidden the
+    buildings after it close up. Buildings keep their shapes, and rooms stay
+    in their own building.
   - **Tidy rooms.** **Tidy rooms** (sparkles) on a building's sign, or the
     sparkles button on its reception board (next to its colour), puts every
     room of that building back in order in one step: in Herdr's workspace

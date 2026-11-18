@@ -223,6 +223,8 @@ export type TownLayout = {
   formFactor: TownFormFactor;
   /** The container shape the town was laid out for. */
   shape: TownShape;
+  /** Lots per street the buildings were placed on (TownInput.perStreet). */
+  perStreet?: number;
   /** Size in tiles. */
   width: number;
   height: number;
@@ -273,6 +275,11 @@ export type TownInputHost = { key: string; displayOrder: number };
 export type TownInput = {
   hosts: readonly TownInputHost[];
   rooms: readonly TownInputRoom[];
+  /**
+   * Lots per street on a wide screen once a building was moved (Board's
+   * `building_columns`, townBuildingPlace.ts); absent, the town's size sets it.
+   */
+  perStreet?: number;
 };
 
 type RoomMemory = {
@@ -595,7 +602,7 @@ export function layoutTown(
       seatsOf.set(key, room.deskSeats?.[index] ?? 4),
     );
   // The hosts' buildings stand on the streets, the town center above them.
-  const lots = townPlaceLots(drafts, shape);
+  const lots = townPlaceLots(drafts, shape, input.perStreet);
   const { verticalRoads, roads, center } = lots;
   const placedBuildings = drafts.map((draft, index) => {
     const { x, y, h, roadY, topRoadY } = lots.buildings[index]!;
@@ -816,6 +823,7 @@ export function layoutTown(
     layout: {
       formFactor,
       shape,
+      ...(input.perStreet === undefined ? {} : { perStreet: input.perStreet }),
       width,
       height,
       ground,

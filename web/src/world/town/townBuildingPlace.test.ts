@@ -7,8 +7,10 @@ import {
   townBuildingSwap,
   townBuildingsReordered,
   townOrderHosts,
+  type BuildingPins,
 } from "./townBuildingPlace";
 import { layoutTown, townShapeFor, type TownInput } from "./townLayout";
+import { townFirstLotsPerStreet } from "./townLots";
 import { townModelFromProjection } from "./townModel";
 import { town, working } from "./scene/townScene.fixture";
 
@@ -109,12 +111,11 @@ test("saved ranks order the hosts; a host without one takes the next lot", () =>
   const { model } = setup();
   const keys = model.input.hosts.map((host) => host.key);
   const hosts = new Map(keys.map((key) => [key, { connectionId: `c-${key}` }]));
-  expect(townOrderHosts(model.input, hosts, {})).toBe(model.input);
+  expect(townOrderHosts(model.input, hosts, { ranks: {} })).toBe(model.input);
   const [a, b, c] = keys;
   // b and a are placed (b first); c is new and goes after them.
   const ordered = townOrderHosts(model.input, hosts, {
-    [`c-${b}`]: 0,
-    [`c-${a}`]: 1,
+    ranks: { [`c-${b}`]: 0, [`c-${a}`]: 1 },
   });
   expect(ordered.hosts).toEqual([
     { key: b, displayOrder: 0 },
@@ -123,9 +124,7 @@ test("saved ranks order the hosts; a host without one takes the next lot", () =>
   ]);
   // A rank of a host not shown leaves the others in their saved order.
   const gap = townOrderHosts(model.input, hosts, {
-    "c-gone": 0,
-    [`c-${c}`]: 1,
-    [`c-${a}`]: 2,
+    ranks: { "c-gone": 0, [`c-${c}`]: 1, [`c-${a}`]: 2 },
   });
   expect(gap.hosts.map((host) => host.key)).toEqual([c, a, b]);
   const { layout } = setupFrom(ordered);
@@ -135,3 +134,45 @@ test("saved ranks order the hosts; a host without one takes the next lot", () =>
 function setupFrom(input: TownInput) {
   return { layout: layoutTown(input, townShapeFor(1440, 900)).layout };
 }
+
+test("a new host takes the next free lot: the placed buildings stay where they stand", () => {
+  const names = ["h1", "h2", "h3", "h4", "h5"];
+  const projection = (count: number) =>
+    town(
+      Object.fromEntries(
+        names.slice(0, count).map((name) => [name, { ws: working(2) }]),
+      ),
+    );
+  const four = townModelFromProjection(projection(4));
+  const five = townModelFromProjection(projection(5));
+  const keys = four.input.hosts.map((host) => host.key);
+  const id = (key: string) => four.hosts.get(key)!.connectionId;
+  // The first move saves the order and four lots per street.
+  const pins = {
+    ranks: Object.fromEntries(
+      [keys[3]!, keys[0]!, keys[1]!, keys[2]!].map((key, rank) => [
+        id(key),
+        rank,
+      ]),
+    ),
+    perStreet: townFirstLotsPerStreet(4),
+  };
+  const shape = townShapeFor(1440, 900);
+  const lots = (model: typeof four, saved: BuildingPins) =>
+    new Map(
+      layoutTown(
+        townOrderHosts(model.input, model.hosts, saved),
+        shape,
+      ).layout.buildings.map((b) => [b.hostKey, [b.x, b.y]]),
+    );
+  const before = lots(four, pins);
+  const after = lots(five, pins);
+  for (const key of keys) expect(after.get(key)).toEqual(before.get(key)!);
+  const added = five.input.hosts.find((host) => !keys.includes(host.key))!;
+  expect(after.get(added.key)![1]).toBeGreaterThan(before.get(keys[3]!)![1]!);
+  // Without the saved lots per street, five buildings wrap three to a street.
+  const reflowed = lots(five, { ranks: pins.ranks });
+  expect(
+    keys.some((key) => `${reflowed.get(key)}` !== `${before.get(key)}`),
+  ).toBe(true);
+});

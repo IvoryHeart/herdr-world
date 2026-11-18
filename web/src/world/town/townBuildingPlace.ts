@@ -65,6 +65,7 @@ export function townBuildingPlacements(
     const placed = townPlaceLots(
       next.map((key) => floors.get(key)!),
       layout.shape,
+      layout.perStreet,
     ).buildings;
     return {
       hostKey,
@@ -136,24 +137,35 @@ export function townBuildingsReordered(
   return was.some((key, index) => key !== is[index]);
 }
 
-/** Saved building ranks (Board's `building_pins`) by connection ID. */
-export type BuildingPins = Readonly<Record<string, number>>;
+/**
+ * Where the buildings were placed (Board's layout): each one's rank in the
+ * town's reading order by connection ID (`building_pins`), and the lots per
+ * street of a wide town (`building_columns`), saved with the first move.
+ */
+export type BuildingPins = Readonly<{
+  ranks: Readonly<Record<string, number>>;
+  perStreet?: number;
+}>;
 
-export const NO_BUILDING_PINS: BuildingPins = Object.freeze({});
+export const NO_BUILDING_PINS: BuildingPins = Object.freeze({
+  ranks: Object.freeze({}),
+});
 
 /**
  * The town's hosts in their saved order: ranked hosts first by rank, then
- * the others in host order. Without saved ranks the input is unchanged.
+ * the others in host order, on the saved lots per street. Without a saved
+ * placement the input is unchanged.
  */
 export function townOrderHosts(
   input: TownInput,
   hosts: ReadonlyMap<string, Pick<OfficeHost, "connectionId">>,
   pins: BuildingPins,
 ): TownInput {
-  if (!Object.keys(pins).length) return input;
+  const { ranks, perStreet } = pins;
+  if (!Object.keys(ranks).length && perStreet === undefined) return input;
   const rank = (key: string) => {
     const id = hosts.get(key)?.connectionId;
-    return id === undefined ? undefined : pins[id];
+    return id === undefined ? undefined : ranks[id];
   };
   const sorted = [...input.hosts].sort((a, b) => {
     const ra = rank(a.key);
@@ -169,5 +181,6 @@ export function townOrderHosts(
       key: host.key,
       displayOrder,
     })),
+    ...(perStreet === undefined ? {} : { perStreet }),
   };
 }

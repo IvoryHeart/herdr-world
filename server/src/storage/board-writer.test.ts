@@ -440,7 +440,14 @@ test("Town building lots are saved in their own rows, after an upgrade from the 
           request: {
             type: "board" as const,
             operation: {
-              ops: [{ op: "building.place", order: ["studio", "lab"] }],
+              ops: [
+                {
+                  op: "building.place",
+                  order: ["studio", "lab"],
+                  hosts: ["lab", "studio"],
+                  columns: 4,
+                },
+              ],
             },
           },
         },
@@ -450,6 +457,7 @@ test("Town building lots are saved in their own rows, after an upgrade from the 
     expect(result!.error).toBeUndefined();
     after = writer.read().board!;
     expect(after.layout.building_pins).toEqual({ studio: 0, lab: 1 });
+    expect(after.layout.building_columns).toBe(4);
   } finally {
     writer.close();
   }

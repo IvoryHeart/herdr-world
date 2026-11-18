@@ -317,24 +317,52 @@ function buildingPins(value: unknown): Record<string, number> {
   return out;
 }
 
+function buildingColumns(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !Number.isSafeInteger(value) ||
+    (value as number) < 1 ||
+    (value as number) > BUILDING_PINS_MAX
+  )
+    fail("building columns");
+  return value as number;
+}
+
+function buildingKeys(value: unknown, label: string): string[] {
+  if (!Array.isArray(value) || value.length > BUILDING_PINS_MAX) fail(label);
+  const keys = value.map((key) => text(key, "building key", BOARD_LIMITS.key));
+  if (new Set(keys).size !== keys.length) fail("duplicate buildings");
+  return keys;
+}
+
 /**
  * The saved building ranks after `order` (connection IDs) is placed: the
  * named buildings take, in that order, the places they held among the saved
- * ones (a building not saved yet joins at the end), and every other building
- * keeps its place. Ranks are renumbered from 0.
+ * ones, and every other building keeps its place. The places are the saved
+ * buildings by rank, then the viewer's other `hosts` in host order, where
+ * they stood (so a first move made with some hosts hidden keeps those where
+ * they were), then any named building still missing. Ranks are renumbered
+ * from 0.
  */
 export function placeBuildings(
   saved: Readonly<Record<string, number>>,
   order: readonly string[],
+  hosts: readonly string[] = [],
 ): Record<string, number> {
   const named = new Set(order);
   const line = Object.keys(saved).sort(
     (a, b) => saved[a]! - saved[b]! || a.localeCompare(b),
   );
-  for (const key of order) if (!(key in saved)) line.push(key);
+  const placed = new Set(line);
+  for (const key of [...hosts, ...order])
+    if (!placed.has(key)) {
+      placed.add(key);
+      line.push(key);
+    }
   let next = 0;
-  const placed = line.map((key) => (named.has(key) ? order[next++]! : key));
-  return Object.fromEntries(placed.map((key, rank) => [key, rank]));
+  return Object.fromEntries(
+    line.map((key, rank) => [named.has(key) ? order[next++]! : key, rank]),
+  );
 }
 
 function anchor(value: unknown): BoardAnchor {
@@ -454,6 +482,9 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       room_pins: roomPins(layout.room_pins),
       // Boards saved before building moves have none: host order stands.
       building_pins: buildingPins(layout.building_pins),
+      ...(layout.building_columns === undefined
+        ? {}
+        : { building_columns: buildingColumns(layout.building_columns) }),
       // Boards saved before interest have none: every agent is watched.
       interest: interests(layout.interest, BOARD_LIMITS.key),
       group_interest: groupInterests(layout.group_interest, BOARD_LIMITS.key),
@@ -808,15 +839,14 @@ function applyOp(
       return;
     }
     case "building.place": {
-      if (!Array.isArray(op.order) || op.order.length > BUILDING_PINS_MAX)
-        fail("building order");
-      const order = op.order.map((key) =>
-        text(key, "building key", BOARD_LIMITS.key),
-      );
-      if (new Set(order).size !== order.length) fail("duplicate buildings");
+      const order = buildingKeys(op.order, "building order");
+      const hosts = buildingKeys(op.hosts, "building hosts");
+      const columns = buildingColumns(op.columns);
+      if (columns === undefined) fail("building columns");
       next.layout.building_pins = buildingPins(
-        placeBuildings(next.layout.building_pins, order),
+        placeBuildings(next.layout.building_pins, order, hosts),
       );
+      next.layout.building_columns ??= columns;
       return;
     }
     case "interest.set":
