@@ -5,18 +5,25 @@ import {
   useRef,
   useState,
 } from "react";
-import { Command, Maximize2 } from "lucide-react";
+import { Command, Maximize2, Server } from "lucide-react";
 import { openCommandBox } from "../commandBoxKey";
 import { shortcutTitle, useShortcutPreferences } from "../shortcutPreferences";
 import { useLayer } from "../layerStack";
 import type { WorldView } from "./worldViewRouting";
+import {
+  ConnectionManagerPortal,
+  HostsFilterOptions,
+  hostsSelectionLabel,
+  type HostsControlProps,
+} from "./HostsControl";
 import { WORLD_VIEW_DESTINATIONS, worldViewLabel } from "./WorldMobileNav";
 import "./WorldViewPicker.css";
 
 /**
  * Zen hides the topbar and the phone's bottom navigation, so the views stay
  * one choice away here: a row beside Exit Zen on desktop, and a corner button
- * with a short menu on a phone, where the thumb rests.
+ * with a short menu on a phone, where the thumb rests. The phone menu also
+ * holds Hosts, the top bar's filter, so it stays one tap away (#991).
  */
 export function WorldViewPicker({
   view,
@@ -25,6 +32,7 @@ export function WorldViewPicker({
   onExitZen,
   extra,
   search,
+  hosts,
 }: {
   view: WorldView;
   mobile: boolean;
@@ -37,6 +45,8 @@ export function WorldViewPicker({
    * views on desktop, and in the bottom corner opposite the views on a phone.
    */
   search?: ReactNode;
+  /** The top bar's Hosts filter, offered in the phone's corner menu. */
+  hosts?: HostsControlProps;
 }) {
   const searchSlot = search ? (
     <div className={`world-zen-search${mobile ? " is-phone" : ""}`}>
@@ -72,7 +82,12 @@ export function WorldViewPicker({
     <>
       {searchSlot}
       {extra ? <div className="world-view-picker-extra">{extra}</div> : null}
-      <PhoneViewPicker view={view} onSelect={onSelect} onExitZen={onExitZen} />
+      <PhoneViewPicker
+        view={view}
+        onSelect={onSelect}
+        onExitZen={onExitZen}
+        hosts={hosts}
+      />
     </>
   );
 }
@@ -81,15 +96,25 @@ function PhoneViewPicker({
   view,
   onSelect,
   onExitZen,
+  hosts,
 }: {
   view: WorldView;
   onSelect: (view: WorldView) => void;
   onExitZen: () => void;
+  hosts?: HostsControlProps;
 }) {
   const [open, setOpen] = useState(false);
+  // Hosts takes the menu's place, in the same layer, so Escape, Back or a
+  // press outside closes it as it closes the menu.
+  const [showHosts, setShowHosts] = useState(false);
+  const [managing, setManaging] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
-  useLayer(open, () => setOpen(false), {
+  const close = () => {
+    setOpen(false);
+    setShowHosts(false);
+  };
+  useLayer(open, close, {
     element: () => menu.current,
     anchors: () => [trigger.current],
   });
@@ -103,11 +128,13 @@ function PhoneViewPicker({
   useEffect(() => {
     if (!open) return;
     menu.current
-      ?.querySelector<HTMLButtonElement>(
-        '[aria-checked="true"], [role^="menuitem"]',
+      ?.querySelector<HTMLElement>(
+        showHosts
+          ? "button, input"
+          : '[aria-checked="true"], [role^="menuitem"]',
       )
       ?.focus();
-  }, [open]);
+  }, [open, showHosts]);
   const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Tab") {
       setOpen(false);
@@ -133,12 +160,27 @@ function PhoneViewPicker({
     items[next]?.focus();
   };
   const choose = (action: () => void) => {
-    setOpen(false);
+    close();
     action();
   };
   return (
     <div className="world-view-picker-phone">
-      {open ? (
+      {open && showHosts && hosts ? (
+        <div
+          ref={menu}
+          className="world-view-picker-menu world-view-picker-hosts"
+          role="group"
+          aria-label="Hosts filter"
+        >
+          <HostsFilterOptions
+            connections={hosts.connections}
+            ids={hosts.ids}
+            onChange={hosts.onChange}
+            onManage={() => choose(() => setManaging(true))}
+          />
+          {hosts.explanation ? <p role="status">{hosts.explanation}</p> : null}
+        </div>
+      ) : open ? (
         <div
           ref={menu}
           className="world-view-picker-menu"
@@ -163,6 +205,19 @@ function PhoneViewPicker({
             </button>
           ))}
           <hr />
+          {hosts ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => setShowHosts(true)}
+            >
+              <Server size={18} aria-hidden />
+              Hosts
+              <span className="world-view-picker-detail">
+                {hostsSelectionLabel(hosts.connections, hosts.ids)}
+              </span>
+            </button>
+          ) : null}
           <button
             type="button"
             role="menuitem"
@@ -189,10 +244,13 @@ function PhoneViewPicker({
         aria-label={`Switch view, now ${worldViewLabel(view)}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => (open ? close() : setOpen(true))}
       >
         {CurrentIcon ? <CurrentIcon size={22} aria-hidden /> : null}
       </button>
+      {managing ? (
+        <ConnectionManagerPortal onClose={() => setManaging(false)} />
+      ) : null}
     </div>
   );
 }

@@ -1177,6 +1177,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   runtime endpoint count once). Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
+  On a phone in Zen, the corner view menu's **Hosts** (with the current
+  selection beside it) opens the same filter and **Manage connections** in the
+  menu's place; it is the top bar's filter, one per browser, so ticks stay in
+  step. The filter stays open between ticks; Escape, Back, a press outside or
+  the corner button closes it, and the menu reopens on the views.
 - **Needs you** in the top bar (in the view picker in Zen, including on a phone;
   outside Zen a phone shows it as an inbox icon with a count badge, hidden at
   zero, right after the view's name) counts
@@ -1644,7 +1649,8 @@ preview**. Chat and its draft stay open.
   settings menu's **Zen mode** switch turns it off or back on. While Zen is on,
   a view picker beside Exit Zen switches between the views. On a phone, Zen
   hides the top bar and bottom navigation on every root screen, Spaces' list
-  included; a corner button opens the views and **Show the bars**. A terminal is
+  included; a corner button opens the views, **Hosts**, **Find or act** and
+  **Show the bars**. A terminal is
   a detail screen and keeps its own bar, with Back. Stored in this browser.
 
 Herdr 0.9.0 uses **Local navigation** per browser/connection; legacy connections
