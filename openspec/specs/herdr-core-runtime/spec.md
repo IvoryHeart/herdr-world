@@ -63,6 +63,15 @@ and service/runtime/occupant fences at admission, dispatch and publication.
   (setup also starts that core now and at login); with neither, herdr-core is
   installed and started, on Windows x64 as on Linux and macOS
 
+#### Scenario: First run with an existing local core and no TUI
+
+- **WHEN** World has no saved connections or explicit Herdr socket, session or
+  SSH override, core is installed locally and the Herdr TUI is absent
+- **THEN** World discovers core from its standard state or executable locations,
+  saves only `core-local` as its default and connects using `HC_SESSION` or `default`
+- **AND** discovery never starts core or alters its login item; saved defaults
+  and explicit startup choices remain authoritative on subsequent starts
+
 #### Scenario: Confirmed install from World
 
 - **WHEN** a person chooses Install herdr-core for this computer or a Unix SSH
