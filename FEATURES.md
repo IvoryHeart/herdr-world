@@ -9,6 +9,10 @@ Open an agent's desk, choose **Agent settings → Move to…**, select the
 connected destination runtime and room, then choose **Move agent**. Claude
 and Codex continue the same conversation. The new terminal runs the harness
 inside the destination user's shell, so it inherits that shell's environment.
+World carries the source's launch options, including the model, permission or
+approval mode, sandbox and Claude custom agent definitions, into both the
+destination and any recovery resume. It replaces old session selectors with the
+exact conversation ID and uses the chosen destination folder for Codex.
 The tab keeps its name in the chosen room. Use **Folder on destination** when
 the project has a different absolute path on the other host; otherwise World
 uses the original folder. Project files and shell sessions are not transferred.
@@ -41,6 +45,10 @@ messages, running tools/background processes, unknown process evidence, stale
 connections, missing folders/binaries/sessions, and divergent destination copies
 refuse before quitting. Scrollback is not moved; Chat reads the resumed
 conversation. Background work must finish first.
+World also refuses when exact foreground launch arguments are unavailable or
+their syntax cannot be reused safely (for example, an unknown option, a different
+subcommand or an initial positional prompt). It never guesses argument quoting
+from a joined command line or replays an initial prompt as new work.
 
 For an agent already moved by hand, copy an old desk's remaining saved details
 with the CLI (the destination agent is never restarted):

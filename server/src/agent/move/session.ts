@@ -3,6 +3,7 @@ import { basename } from "node:path";
 import type { AgentAddress } from "../../../../shared/agentMove";
 import type { MoveRuntime } from "./runtime";
 import { shQuote as q } from "../../utils/process-utils";
+import { moveLaunchArgs } from "./launch-args";
 
 export type MoveSession = {
   kind: "claude" | "codex";
@@ -10,6 +11,7 @@ export type MoveSession = {
   path: string;
   cwd: string;
   group: number;
+  launchArgs: string[];
 };
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 export async function readMoveSession(
@@ -86,15 +88,17 @@ export async function readMoveSession(
     throw new Error(
       "The source conversation or readiness changed during the check. Wait until it is idle and try again.",
     );
-  const fg = await runtime.foreground(a);
+  const kind = conversation.agent as MoveSession["kind"];
+  const fg = await runtime.foreground(a, kind);
   if (!fg.cwd.startsWith("/") || /[\r\n\0]/.test(fg.cwd))
     throw new Error("The agent's folder cannot be used for a move.");
   return {
-    kind: conversation.agent as MoveSession["kind"],
+    kind,
     id: id.toLowerCase(),
     path: resolved.path,
     cwd: fg.cwd,
     group: fg.group,
+    launchArgs: moveLaunchArgs(kind, fg.argv),
   };
 }
 
@@ -169,8 +173,8 @@ export async function resumeInShell(
 ): Promise<void> {
   const args =
     session.kind === "codex"
-      ? ["resume", session.id, "--cd", shell.cwd]
-      : ["--resume", session.id];
+      ? ["resume", session.id, ...session.launchArgs, "--cd", shell.cwd]
+      : ["--resume", session.id, ...session.launchArgs];
   await shell.runtime.input(
     shell.address,
     `cd ${q(shell.cwd)} && ${[shell.executable, ...args].map(q).join(" ")}`,

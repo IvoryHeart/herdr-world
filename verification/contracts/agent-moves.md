@@ -9,6 +9,11 @@ quit; verified destination readiness precedes source terminal closure; confirmed
 destination closure precedes rollback in the original tab. Busy/dialog/tool and
 background-work evidence must refuse before quit. Saved metadata must follow the
 chosen occupant, while another occupant never inherits it through ID reuse.
+The same agent's launch policy must survive: exact foreground argv supplies
+model, permission/approval, sandbox and custom-agent options to both destination
+and rollback. Replace only conversation selectors and Codex cwd. Unreadable argv
+or ambiguous syntax refuses before quit; no joined-cmdline parsing or positional
+prompt replay is admitted.
 
 The unchanged runtime-leases and herdr-core fences establish connection/occupant
 currency. A direct finite fault matrix drives the production handoff controller:
@@ -29,12 +34,17 @@ that omits the native terminal and transcript consumers.
   evidence. Process names alone never establish an idle harness descendant.
 - `server/src/agent/move/session.test.ts`: exact session admission, busy/dialog/
   pending-tool/message refusals, forged key and reading-only-link refusal, preflight staging, final
-  transcript installation and divergent destination protection.
+  transcript installation and divergent destination protection. Real shell
+  execution with synthetic harnesses checks Claude model/auto-mode, Codex
+  approval/sandbox/model, custom-agent JSON and literal quoting for both resume
+  calls; selector/wrapper variants and unsafe syntax check the admission boundary.
 - `server/src/agent/move/runtime.test.ts`: real framed core provider and layout
   store, native shell preparation in the original tab, source closure without
   losing that tab, shared favourite labels and generation refusal. Successful
   native kills can invalidate their own publication fence; current observed
-  absence/finished state, never the exception alone, establishes closure.
+  absence/finished state, never the exception alone, establishes closure. Foreground
+  argv is read from real framed core inspection (never stale terminal launch argv)
+  and TUI process-info arrays; unavailable/ambiguous TUI argv refuses.
 - `server/src/world/agent-rehome.test.ts`: actual persistent Board store reopened
   after transfer; pins, colours, independent appearance, strings and parent/child
   claims, shared desk retention, replacement refusal, server-only admission and

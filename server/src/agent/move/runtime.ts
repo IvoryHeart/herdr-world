@@ -9,6 +9,7 @@ import { launchCore } from "../../herdr-core/operations";
 import { sshCommandArgv } from "../../bridge/ssh-command";
 import { observeUntil } from "./wait";
 import { shQuote } from "../../utils/process-utils";
+import { harnessLaunchArgs } from "./launch-args";
 
 type Row = Record<string, unknown>;
 const row = (v: unknown) => (v && typeof v === "object" ? v : {}) as Row;
@@ -160,7 +161,8 @@ export function moveRuntime(
   };
   const foreground = async (
     a: AgentAddress,
-  ): Promise<{ group: number; cwd: string }> => {
+    kind: "claude" | "codex",
+  ): Promise<{ group: number; cwd: string; argv: unknown }> => {
     if (core) {
       const record = await core.runtime.inspect(
         CoreOperationFence.admit(core, a.pane_id),
@@ -168,7 +170,9 @@ export function moveRuntime(
       const fg = row(record.foreground);
       if (typeof fg.pid !== "number" || typeof fg.cwd !== "string")
         throw new Error("World cannot identify the foreground process.");
-      return { group: fg.pid, cwd: fg.cwd };
+      // record.argv is the original terminal command, often just a shell.
+      // Only the current foreground can supply this agent's launch settings.
+      return { group: fg.pid, cwd: fg.cwd, argv: fg.argv };
     }
     const result = row(
       (await call("pane.process_info", { pane_id: a.pane_id })).process_info,
@@ -178,10 +182,31 @@ export function moveRuntime(
     const processes = Array.isArray(result.foreground_processes)
       ? (result.foreground_processes as Row[])
       : [];
-    const cwd = processes.find((p) => typeof p.cwd === "string")?.cwd;
-    if (typeof cwd !== "string")
+    const candidates = processes.filter(
+      (p) => harnessLaunchArgs(kind, p.argv) !== null,
+    );
+    const leader = candidates.find(
+      (p) => p.pid === result.foreground_process_group_id,
+    );
+    const selected = leader ?? candidates[0];
+    if (
+      !selected ||
+      candidates.some(
+        (p) =>
+          JSON.stringify(harnessLaunchArgs(kind, p.argv)) !==
+          JSON.stringify(harnessLaunchArgs(kind, selected.argv)),
+      )
+    )
+      throw new Error(
+        "World cannot read unambiguous foreground launch arguments.",
+      );
+    if (typeof selected.cwd !== "string")
       throw new Error("World cannot read the agent's working folder.");
-    return { group: result.foreground_process_group_id, cwd };
+    return {
+      group: result.foreground_process_group_id,
+      cwd: selected.cwd,
+      argv: selected.argv,
+    };
   };
   const close = async (a: AgentAddress) => {
     current();

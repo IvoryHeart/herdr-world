@@ -117,7 +117,8 @@ export async function moveAgent(
       if (
         now.id !== session.id ||
         now.kind !== session.kind ||
-        now.group !== session.group
+        now.group !== session.group ||
+        JSON.stringify(now.launchArgs) !== JSON.stringify(session.launchArgs)
       )
         throw new Error(
           "The source conversation or process changed before the move.",

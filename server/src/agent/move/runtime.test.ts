@@ -29,6 +29,35 @@ test("real core provider prepares a shell in the original tab and preserves it a
     } as unknown as RpcServices;
     const runtime = moveRuntime(services, "box", lease.generation);
     const original = await runtime.address(started.pane_id);
+    const argv = [
+      "/opt/example/bin/codex",
+      "-a",
+      "never",
+      "-s",
+      "danger-full-access",
+      "-m",
+      "example-model",
+    ];
+    world.fake.foreground(started.pane_id, {
+      pid: 101,
+      name: "codex",
+      cwd: "/work/example",
+      argv,
+    });
+    await world.settle();
+    expect(await runtime.foreground(original, "codex")).toEqual({
+      group: 101,
+      cwd: "/work/example",
+      argv,
+    });
+    // Missing foreground argv must never fall back to the stale terminal launch.
+    world.fake.foreground(started.pane_id, {
+      pid: 101,
+      name: "codex",
+      cwd: "/work/example",
+    });
+    await world.settle();
+    expect((await runtime.foreground(original, "codex")).argv).toBeUndefined();
     const recovery = await runtime.openShell(
       original.workspace_id,
       "Builder",
@@ -59,6 +88,72 @@ test("real core provider prepares a shell in the original tab and preserves it a
   } finally {
     await world.dispose();
   }
+});
+
+test("TUI foreground argv retains custom agents and selects the harness folder", async () => {
+  const argv = [
+    "claude",
+    "--model",
+    "sonnet",
+    "--permission-mode",
+    "auto",
+    "--agents",
+    '{"reviewer":{"prompt":"Check carefully"}}',
+  ];
+  let processes: Record<string, unknown>[] = [
+    { pid: 10, name: "sh", cwd: "/wrong", argv: ["sh"] },
+    { pid: 11, name: "claude", cwd: "/work/example", argv },
+  ];
+  const services = {
+    connectionManager: {
+      has: () => true,
+      readyRuntimeLease: () => ({
+        generation: 1,
+        isCurrent: () => true,
+        runtime: {
+          sshHost: () => undefined,
+          tui: {
+            call: async (method: string, params: unknown) => {
+              expect(method).toBe("pane.process_info");
+              expect(params).toEqual({ pane_id: "w1:p1" });
+              return {
+                process_info: {
+                  foreground_process_group_id: 10,
+                  foreground_processes: processes,
+                },
+              };
+            },
+          },
+        },
+      }),
+    },
+  } as unknown as RpcServices;
+  const runtime = moveRuntime(services, "example", 1);
+  const address = { pane_id: "w1:p1" } as Parameters<
+    typeof runtime.foreground
+  >[0];
+  expect(await runtime.foreground(address, "claude")).toEqual({
+    group: 10,
+    cwd: "/work/example",
+    argv,
+  });
+  processes = [
+    { pid: 11, name: "claude", cwd: "/work/example", cmdline: argv.join(" ") },
+  ];
+  await expect(runtime.foreground(address, "claude")).rejects.toThrow(
+    "launch arguments",
+  );
+  processes = [
+    { pid: 11, cwd: "/work/example", argv },
+    { pid: 12, cwd: "/work/example", argv: ["claude", "--model", "other"] },
+  ];
+  await expect(runtime.foreground(address, "claude")).rejects.toThrow(
+    "unambiguous",
+  );
+  processes[0]!.pid = 10;
+  await expect(runtime.foreground(address, "claude")).rejects.toThrow(
+    "unambiguous",
+  );
 });
 
 test("a retired core generation cannot prepare or close anything", async () => {

@@ -4383,6 +4383,13 @@ SHALL NOT authorize a move without matching native resume evidence. Busy/dialog 
 messages/tools and background-process evidence SHALL refuse. A destination
 folder MAY be chosen explicitly. Shell environment comes from the destination
 user's shell; project files, shell state and terminal scrollback are excluded.
+World SHALL read the source's exact foreground launch argument array and retain
+its model, permission/approval, sandbox and custom-agent options for destination
+resume and rollback. It SHALL replace old conversation selectors with the exact
+current ID and replace Codex's working-folder option with the chosen folder.
+Unreadable or ambiguous launch syntax SHALL refuse before source quit; joined
+command strings SHALL NOT supply guessed argument boundaries, and initial
+positional prompts SHALL NOT be replayed as new work.
 
 World SHALL quit the source before resuming the same conversation at the
 destination, and SHALL close the source terminal only after verifying the
@@ -4399,6 +4406,14 @@ start another copy. Native runtime actions remain generation/occupant-qualified.
   the tab's label in the chosen room and receives the Board/desk pins, colours,
   appearance, Board strings and World spawned-by claims
 - **AND** any other source desk occupants keep their desk choices
+
+#### Scenario: Launch settings follow a move
+
+- **WHEN** an idle Claude launched with a model, permission mode or custom agent
+  definitions, or a Codex launched with approval, sandbox and model options, moves
+- **THEN** the destination and any recovery resume receive those same options as
+  literal arguments, with only the conversation selectors and Codex folder replaced
+- **AND** unavailable foreground argv or ambiguous launch syntax refuses before quit
 
 #### Scenario: Destination fails after quit
 

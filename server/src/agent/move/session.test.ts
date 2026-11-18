@@ -6,6 +6,7 @@ import {
   prepareShell,
   copyMoveSession,
   readMoveSession,
+  resumeInShell,
   type PreparedShell,
   type MoveSession,
 } from "./session";
@@ -46,7 +47,11 @@ function runtime(change: Record<string, unknown> = {}) {
       path: "/synthetic/00000000-0000-0000-0000-000000000001.jsonl",
       session: { kind: "id", value: "00000000-0000-0000-0000-000000000001" },
     }),
-    foreground: async () => ({ group: 10, cwd: "/work/example" }),
+    foreground: async () => ({
+      group: 10,
+      cwd: "/work/example",
+      argv: [change.agent ?? "claude"],
+    }),
   } as unknown as MoveRuntime;
 }
 test.each([
@@ -101,6 +106,7 @@ test("preflight stages only; post-quit copy installs the final transcript withou
     cwd: "/work/example",
   } as PreparedShell;
   const session: MoveSession = {
+    launchArgs: [],
     kind: "claude",
     id: "00000000-0000-0000-0000-000000000001",
     cwd: shell.cwd,
@@ -159,6 +165,7 @@ test.each(["claude", "codex"] as const)(
       },
     } as unknown as MoveRuntime;
     const session: MoveSession = {
+      launchArgs: [],
       kind,
       id: "00000000-0000-0000-0000-000000000001",
       cwd: root,
@@ -215,3 +222,220 @@ test("a source session switch between conversation and session reads refuses", a
     "changed during",
   );
 });
+
+test.each([
+  {
+    kind: "claude",
+    argv: ["claude", "--model", "sonnet", "--permission-mode", "auto"],
+    kept: ["--model", "sonnet", "--permission-mode", "auto"],
+  },
+  {
+    kind: "codex",
+    argv: [
+      "codex",
+      "-a",
+      "never",
+      "-s",
+      "danger-full-access",
+      "-m",
+      "example-model",
+      "resume",
+      "00000000-0000-0000-0000-000000000002",
+      "--cd",
+      "/old/folder",
+    ],
+    kept: ["-a", "never", "-s", "danger-full-access", "-m", "example-model"],
+  },
+  {
+    kind: "claude",
+    argv: [
+      "claude",
+      "--session-id=00000000-0000-0000-0000-000000000002",
+      "--agents",
+      '{"reviewer":{"description":"Owner\'s helper","prompt":"Check $(touch injected) `touch injected`"}}',
+      "--append-system-prompt",
+      "--resume",
+      "--continue",
+    ],
+    kept: [
+      "--agents",
+      '{"reviewer":{"description":"Owner\'s helper","prompt":"Check $(touch injected) `touch injected`"}}',
+      "--append-system-prompt",
+      "--resume",
+    ],
+  },
+])(
+  "$kind move keeps launch settings as literal shell arguments",
+  async ({ kind, argv, kept }) => {
+    const root = await mkdtemp(join(tmpdir(), "move-launch-"));
+    roots.push(root);
+    const originalCwd = join(root, "source");
+    const destinationCwd = join(root, "destination");
+    await mkdir(originalCwd);
+    await mkdir(destinationCwd);
+    const source = runtime({ agent: kind });
+    const summary = await source.summary(address);
+    source.summary = async () => ({ ...summary, agent: kind }) as never;
+    source.foreground = async () => ({ group: 10, cwd: originalCwd, argv });
+    const session = await readMoveSession(source, address);
+    const executable = join(root, kind);
+    await writeFile(executable, "#!/bin/sh\nprintf '%s\\0' \"$@\" > argv\n", {
+      mode: 0o700,
+    });
+    const destination = {
+      ...source,
+      subscribe: () => () => {},
+      input: async (_address: unknown, command: string) => {
+        const result = await runProcessWithCodeTimeout(
+          ["sh", "-c", command],
+          5000,
+        );
+        if (result.code) throw new Error("resume command failed");
+      },
+    } as unknown as MoveRuntime;
+    // The same launch settings apply to the destination and the recovery shell.
+    for (const cwd of [destinationCwd, originalCwd]) {
+      const shell = {
+        address,
+        runtime: destination,
+        executable,
+        cwd,
+      } as PreparedShell;
+      await resumeInShell(shell, session);
+      expect(
+        (await readFile(join(cwd, "argv"), "utf8")).split("\0").slice(0, -1),
+      ).toEqual(
+        kind === "codex"
+          ? ["resume", session.id, ...kept, "--cd", cwd]
+          : ["--resume", session.id, ...kept],
+      );
+      expect(await Bun.file(join(cwd, "injected")).exists()).toBe(false);
+    }
+  },
+);
+
+test.each(
+  [
+    undefined,
+    [],
+    ["sh"],
+    ["claude", 123],
+    ["claude", "--agents", "line\nbreak"],
+  ].map((argv) => ({ argv })),
+)(
+  "missing or unsafe launch argv refuses before quitting: %j",
+  async ({ argv }) => {
+    const source = runtime();
+    source.foreground = async () =>
+      ({ group: 10, cwd: "/work/example", argv }) as never;
+    await expect(readMoveSession(source, address)).rejects.toThrow(
+      "launch arguments",
+    );
+  },
+);
+
+test.each([
+  [
+    "claude",
+    ["claude", "-r", "old-session", "--fork-session", "--model=sonnet"],
+    ["--model=sonnet"],
+  ],
+  [
+    "claude",
+    [
+      "node",
+      "/opt/example/claude-code/cli.js",
+      "--continue",
+      "--permission-mode=auto",
+    ],
+    ["--permission-mode=auto"],
+  ],
+  [
+    "codex",
+    [
+      "node",
+      "/opt/example/codex.js",
+      "resume",
+      "--model",
+      "resume",
+      "old-session",
+      "-a",
+      "never",
+      "-C",
+      "/old",
+    ],
+    ["--model", "resume", "-a", "never"],
+  ],
+  [
+    "codex",
+    [
+      "codex",
+      "resume",
+      "--last",
+      "--all",
+      "--cd=/old",
+      "--config",
+      'model_reasoning_effort="high"',
+      "--full-auto",
+    ],
+    ["--config", 'model_reasoning_effort="high"', "--full-auto"],
+  ],
+  [
+    "claude",
+    ["zsh", "-ic", '"$@"; exec "$0" -i', "zsh", "claude", "--agents={}"],
+    ["--agents={}"],
+  ],
+  [
+    "claude",
+    ["claude", "-rold-session", "--model", "sonnet"],
+    ["--model", "sonnet"],
+  ],
+  [
+    "codex",
+    [
+      "codex",
+      "-anever",
+      "-sdanger-full-access",
+      "-mexample-model",
+      "resume",
+      "old-session",
+      "-C/old",
+    ],
+    ["-anever", "-sdanger-full-access", "-mexample-model"],
+  ],
+] as const)(
+  "launch policy survives supported selectors and wrappers: %s %j",
+  async (kind, argv, kept) => {
+    const source = runtime({ agent: kind });
+    source.summary = async () =>
+      ({
+        status: "ok",
+        agent: kind,
+        path: "/synthetic/session.jsonl",
+        session: { kind: "id", value: "00000000-0000-0000-0000-000000000001" },
+      }) as never;
+    source.foreground = async () => ({ group: 10, cwd: "/work/example", argv });
+    expect((await readMoveSession(source, address)).launchArgs).toEqual([
+      ...kept,
+    ]);
+  },
+);
+
+test.each([
+  ["claude", ["claude", "original prompt"]],
+  ["claude", ["claude", "--unknown-option", "--resume"]],
+  ["claude", ["claude", "--agents"]],
+  ["codex", ["codex", "exec", "original prompt"]],
+  ["codex", ["codex", "resume", "old-session", "original prompt"]],
+] as const)(
+  "ambiguous launch syntax refuses instead of replaying work: %s %j",
+  async (kind, argv) => {
+    const source = runtime({ agent: kind });
+    const summary = await source.summary(address);
+    source.summary = async () => ({ ...summary, agent: kind }) as never;
+    source.foreground = async () => ({ group: 10, cwd: "/work/example", argv });
+    await expect(readMoveSession(source, address)).rejects.toThrow(
+      "launch arguments",
+    );
+  },
+);
