@@ -5,6 +5,9 @@ import { townUsageFixture } from "../testing/usageFixture";
 import { TownBoard } from "./TownBoard";
 import { TownFuel } from "./TownFuelGauge";
 import { townFuelGauges } from "./townLimits";
+import type { TownCensusItem } from "./townCensus";
+import type { TownCensusControl } from "./useTownCensus";
+import "./townCensus.css";
 import "../../styles/tokens.css";
 import "../../styles/base.css";
 import "../worldFonts.css";
@@ -119,6 +122,72 @@ createRoot(signHost).render(
   </div>,
 );
 
+// A census board (#980) with every optional count and long skill names, lit
+// so its "Showing … · N off-screen" line shows too.
+const count = (id: string, label: string, n: number): TownCensusItem => ({
+  id,
+  label,
+  count: n,
+  keys: Array.from({ length: n }, (_, index) => `${id}-${index}`),
+  showing: `${n} ${label.toLowerCase()}`,
+  ...(id === "waiting" ? { attention: true } : {}),
+});
+const census = {
+  places: [
+    count("buildings", "Buildings", 12),
+    count("offline", "Offline", 3),
+    count("rooms", "Rooms", 148),
+    count("tables", "Tables", 1024),
+  ],
+  population: [
+    count("agents", "Agents", 120),
+    count("working", "Busy", 40),
+    count("waiting", "Waiting", 12),
+    count("done", "Done", 30),
+    count("quiet", "Quiet", 38),
+    count("fuel", "Out of fuel", 7),
+    count("unknown", "Unknown", 3),
+  ],
+  skills: [
+    count("harness:claude", "Claude", 60),
+    count("harness:codex", "Codex", 50),
+    count("harness:other", "Other agents", 10),
+    count("shells", "Plain shells", 24),
+    count("skill:release-preparation", "release-preparation", 9),
+    count("skill:code-review", "code-review", 8),
+  ],
+};
+const censusControl: TownCensusControl = {
+  census,
+  lit: census.skills[4]!,
+  show() {},
+  clear() {},
+  next() {},
+  offscreen: 7,
+  setOffscreen() {},
+  light: { keys: census.skills[4]!.keys, chosen: null },
+};
+const censusHost = document.createElement("div");
+censusHost.className = "town-shell";
+censusHost.style.left = "640px";
+document.body.append(censusHost);
+createRoot(censusHost).render(
+  <TownBoard
+    counts={{
+      agents: 120,
+      buildings: 12,
+      working: 40,
+      needsYou: 12,
+      finished: 30,
+      quiet: 38,
+      unknown: 3,
+      outOfFuel: 7,
+    }}
+    census={censusControl}
+    onOpenSummary={() => {}}
+  />,
+);
+
 async function waitFor(condition: () => boolean, message: string) {
   const until = performance.now() + 10_000;
   while (!condition()) {
@@ -151,12 +220,12 @@ async function run() {
   const boards = () => document.querySelectorAll<HTMLElement>(".town-board");
   await waitFor(
     () =>
-      boards().length === 2 &&
+      boards().length === 3 &&
       boards()[0]!.querySelectorAll(".town-fuel-gauge").length === 2 &&
       boards()[0]!.querySelector(".town-board-economy-caveats") !== null,
     "the board never showed its fuel gauges and caveat line",
   );
-  const [board, sign] = boards();
+  const [board, sign, censusBoard] = boards();
   await document.fonts.ready;
   const values = [...board!.querySelectorAll(".town-fuel-value")].map(
     (value) => value.textContent,
@@ -169,6 +238,8 @@ async function run() {
     board!.style.width = sign!.style.width = `${width}px`;
     checkInside(board!, `board at ${width}px`);
     checkInside(sign!, `reached and low gauges at ${width}px`);
+    censusBoard!.style.width = `${width}px`;
+    checkInside(censusBoard!, `census board at ${width}px`);
   }
 }
 

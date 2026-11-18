@@ -10,6 +10,7 @@ import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import { officePresentationKey } from "../officeSelection";
 import type { WorldObject } from "../worldObject";
 import { worldSearchResults, type WorldSearchResult } from "../worldSearch";
+import type { TownCensusControl } from "./useTownCensus";
 
 /**
  * A search result's Town key: rooms, tables, agents and buildings are keyed
@@ -38,6 +39,8 @@ export function useTownSearch(
   world: WorldObject,
   office: HerdrOfficeProjection,
   onSelect: (id: string) => unknown,
+  /** The census: a lit count shows through the search light (#980). */
+  census?: TownCensusControl,
 ) {
   const [query, setQuery] = useState("");
   const results = useMemo(
@@ -136,6 +139,8 @@ export function useTownSearch(
       // A new query starts afresh: a result chosen for an earlier one is
       // not chosen again when that query comes back.
       onQueryChange: (next: string) => {
+        // A search takes over the light from a lit census count.
+        if (next.trim()) census?.clear();
         setQuery(next);
         setActive(null);
         setChosenResult(null);
@@ -166,8 +171,12 @@ export function useTownSearch(
     },
     /** TownCanvas's search prop. */
     canvas: {
-      search,
-      onOffscreen: setOffscreen,
+      search: search ?? census?.light ?? null,
+      onOffscreen: (count: number) => {
+        setOffscreen(count);
+        if (!search) census?.setOffscreen(count);
+      },
+      census,
       onUnmapped: (key: string) => {
         // Nothing to show on the map: open it as selecting does.
         if (chosen?.key === key) void onSelect(chosen.nodeId);

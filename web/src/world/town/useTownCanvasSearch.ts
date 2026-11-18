@@ -9,6 +9,7 @@ import type { TownSceneCamera } from "./scene/townSceneCamera";
 import type { TownLayout } from "./townLayout";
 import type { TownModel } from "./townModel";
 import type { TownRendererHandle } from "./townRenderer";
+import type { TownCensusControl } from "./useTownCensus";
 import {
   townRectOnScreen,
   townSearchLight,
@@ -33,6 +34,8 @@ export type TownCanvasSearchProps = {
   onOffscreen?: (count: number) => void;
   /** A chosen match Town does not draw, so it cannot be shown. */
   onUnmapped?: (key: string) => void;
+  /** Town's census, for the board sign: its counts light their places. */
+  census?: TownCensusControl;
 };
 
 export function useTownCanvasSearch(

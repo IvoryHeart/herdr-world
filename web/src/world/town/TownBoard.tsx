@@ -34,6 +34,12 @@ import {
   townFuelLowestText,
 } from "./TownFuelGauge";
 import { TownExpenseCaveats } from "./TownExpenseCaveats";
+import {
+  TownCensusBoard,
+  TownCensusCounts,
+  TownCensusShowing,
+} from "./TownCensusView";
+import type { TownCensusControl } from "./useTownCensus";
 
 /**
  * The Town board counts the whole town from the Town summary (townSummary.ts):
@@ -41,11 +47,14 @@ import { TownExpenseCaveats } from "./TownExpenseCaveats";
  */
 export function TownBoard({
   counts,
+  census,
   usageStore,
   onOpenSummary,
   sinceYouLeft,
 }: {
   counts: TownSummary["counts"];
+  /** The census (#980): with it, every number lights what it counts. */
+  census?: TownCensusControl;
   usageStore?: TownUsageStore;
   onOpenSummary?: () => void;
   /** "Since you left" after a return: on the sign, and under the phone chip. */
@@ -101,6 +110,7 @@ export function TownBoard({
         {lowest ? <TownFuelChip lowest={lowest} now={now} /> : null}
       </button>
       {sinceYouLeft?.chip}
+      <TownCensusShowing control={census} variant="chip" />
       <div
         id="town-board"
         className="town-board"
@@ -122,12 +132,21 @@ export function TownBoard({
           ) : null}
         </div>
         {sinceYouLeft?.board}
-        <TownBoardCounts counts={counts} />
-        <p className="town-board-population">
-          {population}
-          {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
-          {counts.outOfFuel ? ` · ${counts.outOfFuel} out of fuel` : ""}
-        </p>
+        {census ? (
+          <>
+            <TownCensusCounts control={census} />
+            <TownCensusBoard control={census} />
+          </>
+        ) : (
+          <>
+            <TownBoardCounts counts={counts} />
+            <p className="town-board-population">
+              {population}
+              {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
+              {counts.outOfFuel ? ` · ${counts.outOfFuel} out of fuel` : ""}
+            </p>
+          </>
+        )}
         <TownBoardEconomy
           label={
             expenses.status === "ready" && expenses.coverage.testData
