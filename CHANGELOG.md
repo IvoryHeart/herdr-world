@@ -9,6 +9,8 @@ prepared.
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-11-18
+
 ### Added
 
 - Use herdr-core as World's runtime, beside or instead of the Herdr TUI: locally, over Unix or Windows SSH, or on the same Windows computer.
