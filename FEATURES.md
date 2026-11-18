@@ -9,6 +9,23 @@ herdr-core is primary for new agents when installed and connected. Choose a
 Herdr TUI room to launch there instead. Both appear in **Hosts** and
 **Manage connections**, with separate connections.
 
+With no saved connections or explicit Herdr socket/session/SSH override, first
+run finds an installed local core when the Herdr TUI is absent, saves only
+`core-local` and makes it the default. It uses `HC_SESSION` (otherwise `default`)
+and core's standard state directory, including `XDG_STATE_HOME`. A running core's
+agents appear immediately; discovery never starts core or changes its login item.
+Saved connections and their chosen default stay as they are. When the TUI is
+installed, first run keeps its existing local discovery; add core in **Manage
+connections** if wanted.
+
+CLI connection edits (`connections add`, `remove` and `set-default`) need
+`--restart` while the managed World service runs. World saves the change and
+restarts that service to load it. Stop a foreground World process before editing
+its registry, or use **Manage connections** for changes while World stays open.
+`service uninstall` removes current and legacy World user services on macOS and
+Linux when their definitions identify them as World-owned. It preserves settings,
+tokens, unrelated services and herdr-core's login item.
+
 ✓ means supported. **partial** links to a limit; **not yet** means World has
 no control for it. Platform and harness limits apply across the table.
 
@@ -872,6 +889,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   Windows on Arm has no core build, so there setup stops with "herdr-core has
   no build for this computer". `HERDR_WORLD_SKIP_HERDR=1` skips all of this.
   Explicit runtime upgrades remain available.
+  For a preview without core installed, open `?coreFixture=first-run`, then
+  **Hosts → Manage connections → Start fixture core**. The success message confirms
+  that production discovery saved `core-local` in isolated fresh state; close
+  Manage connections to see the synthetic agents in Town. The parameter disappears
+  immediately. This fixture does not exercise the operating system's login manager.
 - **Finish installer upgrades.** Replacing an existing standalone World executable
   upgrades Herdr and refreshes detected harness integrations and the installed
   World plugin through the same path as `herdr-world update`, then restarts the

@@ -5,7 +5,7 @@ This guide maps the implemented service and browser foundation. Start with the
 this guide when a change crosses modules. [Architecture](ARCHITECTURE.md) records
 the detailed system boundaries; [deployment](DEPLOYMENT.md) records operator
 configuration. The application source is [derived from Roamgate](../UPSTREAM.md),
-with Herdr as an external runtime. Git history and `UPSTREAM.md` establish source
+with Herdr TUI and herdr-core as external runtimes. Git history and `UPSTREAM.md` establish source
 lineage; a file's directory alone does not identify its origin. The current focused
 client lives in [App.tsx](../web/src/App.tsx) and [store.ts](../web/src/store.ts).
 The active service-side Herdr socket adapter lives in [server/src/bridge/](../server/src/bridge/).
@@ -37,6 +37,23 @@ on the captured connection; [command preferences](../web/src/agentLauncher.ts) u
 the World storage namespace per connection and agent. The optional attributed
 [Codex shell helper](../scripts/codex-herdr.sh) applies pane-scoped launch flags;
 see [History guidance](HISTORY.md#pane-scoped-codex-launches).
+
+## Delivered contracts and remaining work
+
+Delivered [usage](../openspec/specs/world-usage/spec.md),
+[local harness integration](../openspec/specs/world-harness-integration/spec.md),
+[answer delivery](../openspec/specs/ask-answer-delivery/spec.md),
+[profiles and launcher](../openspec/specs/world-surfaces/spec.md#requirement-agent-profiles),
+[chimes](../openspec/specs/world-surfaces/spec.md#requirement-chimes) and the
+[Town Master greeting](../openspec/specs/world-surfaces/spec.md#requirement-town-master-greeting)
+have current requirements. Their active records retain unfinished follow-ups or
+explicit acceptance reconciliation; synchronization alone does not accept them.
+See the [usage guide](usage.md), [harness integration guide](harness-integrations.md)
+and [remaining SSH/update tasks](../openspec/changes/world-harness-integration/tasks.md)
+for operational details and remaining scope. Focused acquisition's
+[design](../openspec/changes/archive/2026-11-18-shared-acquisition/design.md) is archived;
+current contracts cover [focused observation](../openspec/specs/runtime-federation/spec.md#requirement-focused-observation-without-per-client-polling)
+and [bounded Desk observation](../openspec/specs/world-surfaces/spec.md#requirement-bounded-desk-observation).
 
 ## Process and request path
 
@@ -318,14 +335,14 @@ embed those assets in a Bun executable. [Package tooling](../scripts/package-rel
 and [release preparation](../scripts/prepare-release.ts) form the distribution
 path. [Packaging](packaging.md), [release](release.md) and [UPSTREAM](../UPSTREAM.md)
 own exact artifacts, versions and source lineage. [CI](../.github/workflows/ci.yml)
-repeats the root `bun run check` gate. Generated assets and binaries stay out of
+runs the selected lanes described in [contributor validation](../CONTRIBUTING.md#validation). Generated assets and binaries stay out of
 Git.
 
 The [site builder](../scripts/build-pages.ts) publishes the landing page and
 [tutorial](TUTORIAL.md); [dependency notices](../scripts/dependency-notices.ts)
 derive the tracked legal inventory from the resolved dependency graph. The
 [worktree helper](../scripts/agent/worktree.mjs) creates isolated agent branches,
-and [agent development](agent-development.md) documents the delivery loop. Use
+and [candidate-delivery](../.agents/skills/candidate-delivery/SKILL.md) owns the delivery loop. Use
 the [site workflow](../.github/workflows/pages.yml), [release workflows](../.github/workflows/)
 and their [script tests](../scripts/) when changing those paths.
 
@@ -334,3 +351,277 @@ this guide or the [knowledge map](knowledge-map.md) only where its ownership or
 navigation changed. Use the OpenSpec change lifecycle for a new product decision;
 ordinary source repairs and documentation updates can amend current knowledge in
 the same PR. Keep historical specs as rationale.
+
+## Browser startup and test isolation
+
+React version evidence and the development diagnostic patch are maintained in
+[React 19 migration](react-19.md), with deterministic coverage in
+[the installed-renderer regression](../web/src/testing/reactPerformanceTracks.test.ts).
+Notification wiring is described in the [World startup guide](../web/src/world/README.md#application-startup-and-owner-questions).
+
+Test isolation and tool portability are maintained in the
+[test runner](../scripts/run-tests.ts), [startup environment](../scripts/test-isolation.ts),
+[process preload](../scripts/test-process-preload.ts), [tripwire](../scripts/test-tripwire.ts)
+and [portability lint](../scripts/test-portability.ts). See the
+[subprocess, aliased scratch-root, live shell and browser-diagnostics controls](../scripts/test-isolation.test.ts),
+[resource-gate live startup](../scripts/verification-resources.test.ts),
+[coreutils regressions](../scripts/test-portability.test.ts),
+[contributor guide](../CONTRIBUTING.md#validation) and
+[development guide](development.md) for isolation, fakes and explicit live opt-out.
+
+
+## Additional source routes
+
+History terminal input and mobile shell launching are mapped in the
+[foundation guide](foundation-guide.md) and [History guide](HISTORY.md#history-terminal-input).
+Start with [HistoryTerminalComposer](../web/src/components/HistoryTerminalComposer.tsx),
+[AgentLauncher](../web/src/components/AgentLauncher.tsx) and their Q09 consumers in
+[the coverage inventory](../verification/coverage.json).
+
+Desktop shortcut discovery lives in [the read-only cheat sheet](../web/src/components/ShortcutCheatSheet.tsx)
+and [its preset-derived rows and filtering](../web/src/shortcutCheatSheet.ts), with
+[preset/filter regressions](../web/src/shortcutCheatSheet.test.ts). Workspace and
+worktree naming uses [the lazy generator](../web/src/luckyName.ts) and
+[the suggestion lifecycle hook](../web/src/components/useSuggestedName.ts);
+[dialog regressions](../web/src/components/ModalDialogs.test.ts) cover late suggestions.
+
+## Mobile resume design and evidence
+
+The [diagnosis](mobile-resume-diagnosis.md) and [L1/L2/L3 proposal](mobile-resume-proposal.md)
+record the transport teardown analysis and scope. Current L1 ownership lives in
+[the frontend guide](foundation-guide.md#browser-ownership),
+[terminal renderer](../web/src/terminalRenderer.ts) and
+[resource presentation cache identity](../web/src/resourcePresentationClient.ts).
+The [Inspector status row](../web/src/components/WorkspaceInspectorStatus.tsx)
+keeps stale notices clear of the retained Message editor.
+The [real resource-child regression](../web/src/world/WorldInspectorResourceResume.test.ts)
+covers disconnect, delayed worktree readmission and replacement; a
+[stale-worktree Chat regression](../web/src/world/WorldInspectorChatWorktree.test.ts)
+checks that a worktree being re-read holds only Files, Changes and Commits,
+never Chat ([`?worktreeChanged` preview switch](../web/src/agentWorktreeTrial.ts));
+the
+[World browser regression](../web/src/world/WorldTerminalHandoff.test.ts) covers
+window, renderer and Message-draft retention. See the
+[visual gallery](reviews/mobile-resume.md) for synthetic viewport evidence.
+
+## CI and release validation
+
+For on-demand performance evidence, use the [synthetic scale harness](scale-harness.md)
+and [`scripts/scale/run.ts`](../scripts/scale/run.ts). It measures existing service
+and production view behavior under the shared heavy queue; it defines no CI
+wall-clock gate. Raw, bounded and rendered counts have separate evidence boundaries.
+
+The advisory [Town golden-image report](SCREENSHOTS.md#town-golden-image-report)
+uses the [capture harness](../scripts/town-golden.ts), its
+[synthetic production Town fixture](../web/src/world/testing/town-golden/TownGolden.browser.tsx),
+[exact comparator and workflow tests](../scripts/town-golden.test.ts), and the
+[report-only workflow](../.github/workflows/town-golden.yml).
+The [production visual negative control](../scripts/town-golden-negative-control.ts)
+and [hosted acceptance procedure](SCREENSHOTS.md#hosted-stability-and-production-visual-negative-control)
+exercise the capture/failure/restoration path in the opt-in stability job.
+See [initial stability evidence](reviews/town-golden.md) for the reference's bounds.
+
+The website's Town, Board and sharing images come from the
+[site capture](../scripts/site-screenshots.ts) of the production Town and Board
+with a [synthetic site scene](../web/src/world/testing/site-shots/scene.ts)
+([scene tests](../web/src/world/testing/site-shots/scene.test.ts)); see
+[the release set](SCREENSHOTS.md#capture-the-shared-release-set).
+
+[Upstream automation](upstream-automation.md) covers Roamgate release detection,
+frozen integration PRs, independent Codex review, credentials and recovery.
+[Installer upgrade CI](release.md#pre-merge-installer-upgrades) builds proposed merges
+and checks fresh installation and upgrade from a frozen latest stable release on
+all six native platforms. Start with [the harness](../scripts/installer-upgrade.ts),
+[gate regressions](../scripts/installer-upgrade.test.ts) and
+[the reusable workflow](../.github/workflows/installer-upgrade.yml).
+Start with [the synchronization helper](../scripts/upstream-sync.ts) and its
+[regressions](../scripts/upstream-sync.test.ts) for automation changes.
+The [local worker launcher](../scripts/upstream-local.ts) uses cached Codex
+subscription sign-in and serializes scheduled runs on the user's machine.
+
+The [file size ratchet](../scripts/file-size-ratchet.ts) with its
+[exceptions](../scripts/file-size-exceptions.json) and the
+[move-only check](../scripts/move-check.ts) keep big files from regrowing and
+splits honest; see their [ratchet](../scripts/file-size-ratchet.test.ts) and
+[move](../scripts/move-check.test.ts) tests.
+
+[Development verification](development.md#verification) describes local and CI
+runner settings. [CI](../.github/workflows/ci.yml) runs on pull requests and on
+every push to main; [Main gate](../.github/workflows/main-gate.yml) turns a red
+main run into one `main-red` issue and a prepared revert PR through
+[its script](../scripts/main-gate.ts) and [regressions](../scripts/main-gate.test.ts).
+[Web asset headroom](../.github/workflows/web-asset-headroom.yml) judges each
+PR's asset delta against current main through [its script](../scripts/web-asset-headroom.ts)
+and [regressions](../scripts/web-asset-headroom.test.ts).
+CI and [Release](../.github/workflows/release.yml) call the same
+[World browser workflow](../.github/workflows/world-browser.yml).
+[Prepare Release](../.github/workflows/prepare-release.yml) validates generated
+files in its own checkout. Start with [CI workflow tests](../scripts/ci-workflow.test.ts)
+and [release validation tests](../scripts/release-validation.test.ts) when changing
+concurrency, shard coverage or publication dependencies. Release and labeled PR
+previews share [package verification](../scripts/verify-release-package.sh) and its
+[executable header check](../scripts/check-binary-format.ts).
+For first-case browser timeouts, use the opt-in lifecycle comparison described in
+[development verification](development.md#verification), the
+[diagnostic adapter](../scripts/browser-diagnostics.ts) and its
+[regression tests](../scripts/browser-diagnostics.test.ts). Keep baseline and
+candidate evidence together before diagnosing a runner or fixture defect.
+World harnesses separate bounded Chrome startup from fixture execution using
+[the browser deadline helper](../web/src/browserChrome.ts) and its
+[regression tests](../web/src/browserChrome.test.ts). The fixture clock starts at
+the main HTML request, before loading assets or initializing the application;
+responsiveness and operation limits remain unchanged. On CI the test runner
+first pays a fresh runner's one-time Chrome launch cost (font cache, cold disk)
+through [the Chrome warm-up](../scripts/chrome-warmup.ts) and its
+[regression tests](../scripts/chrome-warmup.test.ts), so no test's startup
+budget absorbs it.
+
+## RPC paths
+
+`web/src/api.ts` owns one WebSocket to the World service. Bridge-global methods such as
+`connections.*` and `world.snapshot` carry no connection identity. New downstream
+browser methods carry an immutable `connection_id` and runtime
+`connection_generation`; routing and lease revalidation live in
+`server/src/connections/` and `server/src/service/rpc-dispatch.ts`. The retained compatibility
+route accepts an omitted connection ID by selecting the process default, and
+compares generation only when supplied. Legacy HTTP paths have the same default
+route; do not use either omission for new browser work.
+
+Runtime operation ownership and the remaining TUI-only callback areas are mapped
+in [Runtime adapters](world-adapters.md#typed-runtime-operations). The typed
+ports live in `server/src/adapters/runtime-ports.ts`; their TUI translation is in
+`server/src/adapters/herdr-runtime.ts`.
+
+The aggregate observation path is read-only: `server/src/world/snapshot.ts` schedules
+at most four per-host observations, rotates open-context priorities with background
+progress, and returns a
+complete catalogue by its 20-second deadline with unfinished cached hosts stale.
+`web/src/world/runtimeStore.ts` rejects late aggregate responses, and
+negotiated [snapshot admission](../server/src/bridge/world-snapshot-admission.ts)
+bounds unadmitted chunk batches on each browser socket independently of terminal
+replies. Old transports retain the ordinary chunk protocol.
+`web/src/world/worldObject.ts` qualifies every node by connection. Mutations and terminal
+attachments use captured operational contexts and independently addressable sessions
+through the public `web/src/store.ts` entry, with
+[qualified commands](../web/src/store/operations.ts),
+[session transitions](../web/src/store/sessions.ts) and
+[React bindings](../web/src/store/react.ts) in its internal slices.
+Every host list and choice (Hosts menu, its filter, New room's destination)
+reads [one catalogue of both runtimes](../web/src/worldHosts.ts).
+The persisted `hostsFilter.ts` affects visibility only;
+`spaceAdmission.ts` shares the navigator's capacity fairly and `WorldSearchResults.tsx`
+pages full-observation matches beyond renderer bounds.
+
+Local pre-push runs unqueued static checks and affected non-browser units through
+[the lane runner](../scripts/check-delivery.ts); CI owns browser and behavioral
+acceptance. [Command regressions](../scripts/gate-commands.test.ts) cover scope,
+log reset, disk-guard removal and queue isolation; [queue tests](../scripts/check-lock.test.ts)
+cover slot ownership and recovery.
+
+CI selection distinguishes model-backed and model-free owners through
+[coverage scope](../scripts/coverage-scope.ts) ([tests](../scripts/coverage-scope.test.ts)).
+Metadata reuse requires [source and selection proof](../scripts/ci-validation-proof.ts)
+([tests](../scripts/ci-validation-proof.test.ts)). [Measured assignment](../scripts/balance-shards.ts)
+([tests](../scripts/balance-shards.test.ts)) partitions World suites and verification
+models; [the CI guide](ci-pipelines.md#shared-suite-plan-and-sharding) describes
+weights and full-main coverage. Town's 22 browser cases share [one harness](../web/src/world/testing/TownCanvas.ts)
+and [one parameter inventory](../web/src/world/town/TownCanvas.cases.ts).
+
+Process-fixture startup and lifetime guidance is in
+[development verification](development.md#verification). The
+[diagnostics core](../scripts/browser-diagnostics.ts) and
+[plugin dispatcher](../server/src/config/plugin-command.ts) expose process seams;
+[SSH fixture forwarding](../server/src/connections/testing/inProcessSsh.ts) runs in
+the test process while preserving real child PIDs and Unix sockets. Consumer tests
+remain beside their owners; launcher and hook tests retain real CLI boundaries.
+
+Repository workflow lives in [AGENTS.md](../AGENTS.md) and
+[agent development](agent-development.md). The optional visible-team recipe is
+under [`.hwf/workflows/`](../.hwf/workflows/). Agent work is dispatched by the separate herdr-crew dispatcher; this repo only defines how code is built, tested and delivered. The
+former usage, readiness-gate and crew-watcher tooling was retired on 2026-11-06;
+[the usage guide](agent-usage-audit.md) is historical. The parked
+[World primitives research](world-primitives-research.md) generalised the old crew process into
+goals, workflows, loops, skills, personas, templates and policies attached at
+each level of the world; it is research, not a contract.
+The optional [Quint adoption spike](quint-adoption-spike.md) inventories formal
+modeling candidates and records bounded model/replay experiments; it is not a CI gate.
+The [Quint adoption proposal](../openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/proposal.md)
+defines the planned policy, promotion criteria and staged repository-wide coverage.
+The [maintained behavioral evidence](../verification/README.md) maps the coverage inventory
+to current requirements, existing tests, accepted delivery and concrete model/consumer
+or alternative evidence decisions. The [implementation report](quint-adoption-implementation.md)
+records maintained checks, actual-delivery audit, claim limits and completed acceptance.
+[Consumer evidence](../verification/consumer-evidence.md) explains shared guarantees
+and implementation/browser/platform alternatives.
+
+[Promotion review](../verification/promotion-review.md) tracks each contract's bounds,
+accepted consumer obligations and exclusions. [Observation progress](../verification/contracts/observation-progress.md)
+records scheduler/deadline assumptions separately from model reachability.
+
+Canonical Quint execution uses the tracked [bounded worker configuration](../tools/quint/execution.json)
+and produces an aggregate requiring all isolated model-case manifests; see the
+[parallel execution contract](../verification/README.md#bounded-parallel-execution).
+
+Maintained models and replay adapters live in top-level [`quint/`](../quint/README.md).
+Protected delivery includes the [behavioral workflow](../.github/workflows/behavioral-verification.yml),
+[local delivery command](../package.json), [aggregate resource runner](../scripts/verification-resources.ts)
+with its [OOM-isolated supervisor](../scripts/verification-resource-supervisor.ts)
+and [hard Linux envelope](../tools/quint/resources.json).
+
+Evidence publication uses [the shared acceptance boundary](../scripts/verification-publication.ts).
+[Canonical finalization regressions](../scripts/verification-parallel.test.ts)
+verify late cancellation invalidates aggregates and retains diagnostics;
+[checker regressions](../scripts/verification-checker.test.ts) cover owned teardown.
+The [verification guide](../verification/README.md) describes the protected gate
+and its acceptance record. Use the inventory in [`quint/models.ts`](../quint/models.ts)
+for current model cases.
+
+Quint adoption is accepted and merged in PR #188; [archived completion](../openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/tasks.md#accepted-completion-and-archival) records final reviews, source-bound CI and the no-op spec synchronization. Current evidence remains maintained under `verification/` and `quint/`.
+
+Roamgate v0.8.6 comparisons use [branch selection](../server/src/workspace/diff-base.ts)
+and [its repository-ref tests](../server/src/workspace/diff-base.test.ts), with
+[qualified comparison caches](../web/src/components/DiffViewerPanel.test.ts).
+[Tab-strip scrolling](../web/src/components/useTabStripScroll.ts) uses
+[pure overflow geometry](../web/src/tabStripScroll.ts) and
+[geometry regressions](../web/src/tabStripScroll.test.ts). Cross-tab pane dragging
+lives in [PaneMoveMenu](../web/src/components/PaneMoveMenu.tsx), whose moves use
+[qualified operational commands](../web/src/store.ts) and
+[owner-retirement regressions](../web/src/store.test.ts). Mobile input remains in
+each terminal; [the shared World app bar](../web/src/components/MobileControls.tsx)
+continues to own Tabs and More.
+
+Ranger busy-turn admission, held queue recovery and captured-generation tests live
+in [the service](../server/src/assistant/service.ts) and
+[its regressions](../server/src/assistant/service.test.ts).
+[Queue controls](../web/src/components/AssistantQueue.tsx) and
+[bounded Thinking display](../web/src/components/AssistantThinking.tsx) share the
+[workspace-assistant contract](../openspec/specs/workspace-assistant/spec.md);
+[the tutorial](TUTORIAL.md#ranger) describes their use.
+
+Roamgate transport integration routes through the [service forwarding owner](../server/src/service/forward-service.ts),
+[qualified forwarding RPC](../server/src/bridge/forward-rpc.ts),
+[SSH command sessions](../server/src/bridge/ssh-sessions.ts),
+[private master lifecycle](../server/src/bridge/ssh-master.ts),
+[background RPC lanes](../web/src/rpcLanes.ts) and
+[checkout status pushes](../web/src/gitStatusPush.ts).
+Ownership consumers are [SSH routing](../server/src/bridge/ssh-owner.test.ts),
+[forward generations](../server/src/bridge/forward-owner.test.ts),
+[dispatch admission](../server/src/service/forward-dispatch.test.ts) and
+[inactive-host status reconciliation](../web/src/store/gitStatusPush.test.ts).
+The [integration test plan](reviews/roamgate-sync-test-plan.md) keeps whole-system
+acceptance separate from the transport part's evidence.
+
+Ranger engine dispatch lives in [ranger-driver](../server/src/assistant/ranger-driver.ts),
+[Claude CLI](../server/src/assistant/claude-driver.ts) and its
+[owned MCP listener](../server/src/assistant/claude-mcp.ts). Persisted state and task
+validation are in [assistant-state](../server/src/assistant/assistant-state.ts) and
+[task-validation](../server/src/assistant/task-validation.ts). The
+[show adapter](../web/src/world/useAssistantShow.ts) uses shared Inspector admission,
+with the Chrome consumer in [shared Inspector checks](../web/src/world/testing/sharedInspectorBrowser.tsx).
+Claude transcript projection and common ATIF construction are in
+[claude-trajectory](../server/src/agent/claude-trajectory.ts) and
+[trajectory-common](../server/src/agent/trajectory-common.ts).
+
+The SSH transport [runner ownership audit](reviews/roamgate-runner-audit.md) maps
+required runtime process ports through file/Git/ignore, status, discovery and
+forwarding helpers to the shared retirement control.

@@ -267,8 +267,14 @@ On Linux or macOS:
 
 A fresh standalone install keeps an installed Herdr TUI or herdr-core. With
 neither installed, it installs herdr-core, starts it now and at login, and saves
-its connection. With only core already installed, run `hc server start` and
-connect through **Hosts → Manage connections → Add herdr-core**.
+its connection. With only core already installed, run `hc server start`; World's
+first run discovers it, saves `core-local` as its default and shows its agents
+without adding a connection by hand. Discovery uses core's standard state directory
+and `HC_SESSION` (otherwise `default`), honors `XDG_STATE_HOME`, and never starts
+core or changes its login item. Saved connections/defaults and explicit Herdr
+socket, session or SSH settings take precedence. With the Herdr TUI installed,
+World keeps its existing local discovery; add core through **Hosts → Manage
+connections → Add herdr-core** if wanted.
 
 Rerun the installer to upgrade: like `herdr-world update`, it upgrades the Herdr TUI,
 refreshes its harness integrations and installed World plugin, then restarts the
@@ -980,7 +986,27 @@ file), then restart to use a different port. The service identities are:
 - Windows: a per-user `dev.herdr-world-<key>` scheduled task
 
 Verify readiness with `curl -fsS http://127.0.0.1:8787/healthz`, substituting the
-configured port. Uninstall preserves configuration and tokens. The updater installs
+configured port. Uninstall also finds older World-owned definitions in the user's
+LaunchAgents or systemd user directory, stops/disables them and removes their
+definitions. A launchd item's own label is used even if its filename differs.
+Unrelated services and herdr-core's login item are left alone. Uninstall preserves
+configuration and tokens, including older World configuration files. A stop or
+manager error is reported and the affected definition is kept for a retry.
+
+CLI changes to saved connections need `--restart` while the managed service runs:
+
+```bash
+herdr-world connections add core-local --core --auto-connect --restart
+herdr-world connections set-default core-local --restart
+herdr-world connections remove unused-host --restart
+```
+
+Each command saves its change and restarts the managed service to load it. With
+World stopped, omit `--restart`. A foreground World process must be stopped before
+CLI edits; use **Hosts → Manage connections** to edit connections while World stays
+open. You cannot remove the current default; choose another default first.
+
+The updater installs
 a checksum-verified replacement and leaves `herdr-world.previous` for recovery.
 The in-app checker follows newer release candidates on the same version line and
 then the stable release; stable builds follow GitHub Latest. Automatic installation
@@ -1021,8 +1047,9 @@ The Vite URL is <http://localhost:5173>; it proxies the service on port 8787.
 
 ### The default profile cannot connect
 
-For herdr-core, run `hc server start`, then **Hosts → Manage connections →
-Add herdr-core**. A stopped core is never started by retrying a connection.
+For herdr-core, run `hc server start`. A fresh core-only World connects automatically;
+with saved connections, add it through **Hosts → Manage connections → Add herdr-core**
+if absent. A stopped core is never started by retrying a connection.
 
 For the Herdr TUI, confirm it is running and inspect its sockets:
 

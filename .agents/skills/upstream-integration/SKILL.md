@@ -22,8 +22,8 @@ changes to these paths before candidate workflows could run. If integrating an
 upstream feature requires changing them, stop and report the required manual work.
 
 Update the exact synchronization point and adopted/excluded behavior in UPSTREAM.md
-and the Unreleased changelog. Update dependency notices if the resolved graph
-changes, and affected contracts, consumer tests and source navigation when needed.
+and add a [changelog fragment](../../../changes/README.md); never edit
+`CHANGELOG.md`. Update dependency notices if the resolved graph changes, and affected contracts, consumer tests and source navigation when needed.
 Assess verification/coverage.json and add meaningful regressions for adaptations.
 Do not manufacture a new OpenSpec proposal for ordinary source synchronization.
 

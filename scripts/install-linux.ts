@@ -18,7 +18,7 @@ import {
   VERIFIED_HERDR_VERSION,
 } from "../server/src/herdr/release";
 
-const cases = ["fresh", "tui", "stopped", "upgrade"] as const;
+const cases = ["fresh", "core-only", "tui", "stopped", "upgrade"] as const;
 type Run = (args: string[], env?: Record<string, string>) => Promise<string>;
 type Resources = { containers: Set<string>; image?: string };
 
@@ -209,7 +209,9 @@ async function main() {
         ]);
         const checks = out
           .split("\n")
-          .filter((line) => /^\[(fresh|tui|stopped|upgrade)\]/.test(line));
+          .filter((line) =>
+            /^\[(fresh|core-only|tui|stopped|upgrade)\]/.test(line),
+          );
         for (const line of checks) console.info(line);
         assert(
           code === 0,

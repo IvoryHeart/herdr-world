@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeCore } from "./testing/fake-core";
+import { checkCoreOnlyFirstRun } from "./first-run-fixture";
 
 /** The connection the fixture adds; its runtime kind is herdr-core. */
 export const CORE_FIXTURE_CONNECTION_ID = "core-fixture";
@@ -199,6 +200,8 @@ export type CoreFixtureStatus = {
   pane: { cols: number; rows: number } | null;
   /** Whether the fixture core reports that its programs stop at logout. */
   stops_at_logout: boolean;
+  /** Result of the isolated production discovery check in the first-run scenario. */
+  first_run_default: string | null;
 };
 
 /**
@@ -239,7 +242,8 @@ export function createCoreFixture(
   let ticker: ReturnType<typeof setInterval> | null = null;
   let ticks = 0;
   let paneStep = 0;
-  let scenario: "default" | "alphabet" = "default";
+  let scenario: "default" | "alphabet" | "first-run" = "default";
+  let firstRunDefault: string | null = null;
   const status = (): CoreFixtureStatus => {
     const size = FIXTURE_PANE_SIZES[paneStep];
     return {
@@ -250,6 +254,7 @@ export function createCoreFixture(
         : 0,
       pane: fake && size ? { cols: size[0], rows: size[1] } : null,
       stops_at_logout: fake?.logout?.keeps_running_after_logout === false,
+      first_run_default: firstRunDefault,
     };
   };
   const runningScout = () => {
@@ -302,7 +307,7 @@ export function createCoreFixture(
       };
     },
     async start(value: unknown = "default"): Promise<CoreFixtureStatus> {
-      if (value !== "default" && value !== "alphabet")
+      if (value !== "default" && value !== "alphabet" && value !== "first-run")
         throw new Error("unknown core fixture scenario");
       const service = profiles();
       const existing = fixtureProfile(service);
@@ -381,6 +386,8 @@ export function createCoreFixture(
         fake.revive();
       }
       socket ??= await fake.listen(join(root, "state"), join(root, "run"));
+      if (scenario === "first-run")
+        firstRunDefault = await checkCoreOnlyFirstRun(root, socket);
       if (owner !== "current")
         await service.create({
           id: CORE_FIXTURE_CONNECTION_ID,
@@ -489,6 +496,7 @@ export function createCoreFixture(
       socket = null;
       scout = null;
       agents = null;
+      firstRunDefault = null;
       if (owner === "foreign")
         throw new Error(
           `the connection with ID ${CORE_FIXTURE_CONNECTION_ID} is not this fixture's; it was left in place`,
