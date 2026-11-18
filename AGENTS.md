@@ -19,6 +19,7 @@
   - `docs/TUTORIAL.md`: only learner steps; run `bun run build:site` after tutorial/site changes.
   - `README.md`: only first-run changes; update operational/contributor guides as applicable.
   - Name updated docs in the handoff, or explain why existing guidance remains accurate.
+- Synchronize delivered contract changes and their consumer mappings in the same change; unfinished requirements stay in active deltas.
 - Functional commits only; keep verification metadata in the PR. One review/fix pass, in place; split PRs with too many findings.
 - Record exact upstream synchronization in `UPSTREAM.md`: source is “derived from”; external runtimes are “compatible with”.
 - Prepare releases on clean branches from `origin/main` through reviewed PRs; tag/package only the merged, verified release commit.

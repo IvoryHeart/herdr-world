@@ -14,12 +14,12 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Core harnesses and transcripts | [Contract](../openspec/specs/herdr-core-runtime/spec.md) | [Source](../server/src/herdr-core/harness.ts) | [Tests](../server/src/herdr-core/history.test.ts) |
 | Core runtime ordering and authority | [Contract](../openspec/specs/herdr-core-runtime/spec.md) | [Source](../server/src/herdr-core/) | [Tests](../server/src/herdr-core/connections.test.ts) |
 | Core Files, Git, asks and Ranger | [Contract](../openspec/specs/herdr-core-runtime/spec.md) | [Source](../server/src/herdr-core/host-runtime.ts) | [Tests](../server/src/herdr-core/host-runtime.test.ts) |
-| Harness usage and estimates | [Contract](usage.md) | [Source](../server/src/usage/projection.ts) | [Tests](../server/src/usage/projection.test.ts) |
-| Harness integrations | [Contract](harness-integrations.md) | [Source](../server/src/cli/integration.ts) | [Tests](../server/src/cli/integration.test.ts) |
+| Harness usage and estimates | [Contract](../openspec/specs/world-usage/spec.md) | [Source](../server/src/usage/projection.ts) | [Tests](../server/src/usage/projection.test.ts) |
+| Harness integrations | [Contract](../openspec/specs/world-harness-integration/spec.md) | [Source](../server/src/cli/integration.ts) | [Tests](../server/src/cli/integration.test.ts) |
 | World IDs and bindings | [Contract](../openspec/specs/world-identity/spec.md) | [Source](../server/src/storage/world-ids.ts) | [Tests](../server/src/world/binding-resolution.test.ts) |
 | Durable asks/results and attention | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/storage/world-storage.ts) | [Tests](../server/src/storage/world-storage-crash.test.ts) |
 | Effect recovery and deadlines | [Contract](../openspec/specs/world-effects/spec.md) | [Source](../server/src/effects/runner.ts) | [Tests](../server/src/effects/recovery-matrix.test.ts) |
-| Saved answer delivery | [Contract](../openspec/specs/world-effects/spec.md) | [Source](../server/src/world/ask-recipient.ts) | [Tests](../server/src/storage/answer-delivery-crash.test.ts) |
+| Saved answer delivery | [Contract](../openspec/specs/ask-answer-delivery/spec.md) | [Source](../server/src/world/ask-recipient.ts) | [Tests](../server/src/storage/answer-delivery-crash.test.ts) |
 | Agent bin and scheduled close | [Contract](../openspec/specs/world-effects/spec.md) | [Source](../shared/bin.ts) | [Tests](../server/src/world/bin.test.ts) |
 | Runtime adapter registry | [Contract](../openspec/specs/world-adapters/spec.md) | [Source](../server/src/adapters/registry.ts) | [Tests](../server/src/adapters/conformance.test.ts) |
 | Connection profiles and leases | [Contract](../openspec/specs/runtime-federation/spec.md) | [Source](../server/src/connections/manager.ts) | [Tests](../server/src/connections/manager.test.ts) |
@@ -28,12 +28,12 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Protocol/identity planning | [Contract](../openspec/changes/world-protocol-identity/design.md) | [Source](../server/src/world/snapshot.ts) | [Tests](../server/src/service/observation-v1.test.ts) |
 | Snapshots and aggregate filters | [Contract](../openspec/specs/runtime-federation/spec.md) | [Source](../server/src/world/snapshot.ts) | [Tests](../server/src/world/snapshot.test.ts) |
 | World shell and Inspector | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/WorldFoundationApp.tsx) | [Tests](../web/src/world/WorldFoundationApp.test.ts) |
-| Focused acquisition | [Contract](../openspec/changes/shared-acquisition/design.md) | [Source](../server/src/world/focused-acquisition.ts) | [Tests](../server/src/world/focused-acquisition.test.ts) |
+| Focused acquisition | [Contract](../openspec/specs/runtime-federation/spec.md#requirement-focused-observation-without-per-client-polling) | [Source](../server/src/world/focused-acquisition.ts) | [Tests](../server/src/world/focused-acquisition.test.ts) |
 | Durable Desk/watch marks | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/storage/terminal-marks.ts) | [Tests](../server/src/storage/terminal-marks.test.ts) |
 | Desk triage and turn receipts | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/DeskView.tsx) | [Tests](../web/src/world/DeskView.test.ts) |
 | Inspector focus | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/useWorldInspectorWindows.ts) | [Tests](../web/src/chatFocus.test.ts) |
 | Optional cost metrics | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../server/src/world/observability.ts) | [Tests](../web/src/world/officeObservability.test.ts) |
-| Work sources and PR links | [Contract](../FEATURES.md#sources-github-and-jira) | [Source](../shared/worldSources.ts) | [Tests](../server/src/sources/github.test.ts) |
+| Work sources and PR links | [Contract](../openspec/specs/world-surfaces/spec.md#requirement-built-in-sources) | [Source](../shared/worldSources.ts) | [Tests](../server/src/sources/github.test.ts) |
 | Town view | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/TownView.tsx) | [Tests](../web/src/world/town/TownCanvas.test.ts) |
 | Board view | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/BoardView.tsx) | [Tests](../web/src/world/board/boardModel.test.ts) |
 | Board attention and moves | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/board/boardAttention.ts) | [Tests](../web/src/world/BoardView.test.ts) |
@@ -48,9 +48,10 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Durable runtime status | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/storage/runtime-status.ts) | [Tests](../server/src/service/runtime-status-storage.test.ts) |
 | Durable Board state | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/storage/board-port.ts) | [Tests](../server/src/service/board-storage.test.ts) |
 | Durable profiles and chimes | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/storage/profile-port.ts) | [Tests](../server/src/service/profile-storage.test.ts) |
-| Agent launcher and profiles | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../shared/agentProfile.ts) | [Tests](../shared/agentProfile.test.ts) |
+| Agent launcher and profiles | [Contract](../openspec/specs/world-surfaces/spec.md#requirement-agent-profiles) | [Source](../shared/agentProfile.ts) | [Tests](../shared/agentProfile.test.ts) |
 | Terminal profile assignments | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../server/src/agent/profile-service.ts) | [Tests](../server/src/agent/terminal-settings.test.ts) |
-| Chimes and Town master | [Contract](../FEATURES.md#visual-control-plane) | [Source](../shared/chimes.ts) | [Tests](../shared/chimes.test.ts) |
+| Town Master greeting | [Contract](../openspec/specs/world-surfaces/spec.md#requirement-town-master-greeting) | [Source](../server/src/cli/world.ts) | [Tests](../server/src/cli/world.test.ts) |
+| Chimes | [Contract](../openspec/specs/world-surfaces/spec.md#requirement-chimes) | [Source](../shared/chimes.ts) | [Tests](../shared/chimes.test.ts) |
 | Terminal colour | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../shared/terminalColor.ts) | [Tests](../web/src/world/terminalColor.test.ts) |
 | Desk and card pins | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/useDeskPins.ts) | [Tests](../web/src/world/town/townLayout.test.ts) |
 | Agent interest | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../shared/interest.ts) | [Tests](../server/src/world/interest-prune.test.ts) |

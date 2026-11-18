@@ -1,5 +1,7 @@
 # Office agent conversation bubble — desk terminal extension
 
+> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
+
 - **Parent spec:** [`001-office-agent-conversation-bubble-spec.md`](001-office-agent-conversation-bubble-spec.md)
 - **Extension ID:** `001-office-agent-conversation-bubble-extension-003`
 - **Status:** Approved

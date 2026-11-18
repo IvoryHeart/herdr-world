@@ -38,6 +38,23 @@ the World storage namespace per connection and agent. The optional attributed
 [Codex shell helper](../scripts/codex-herdr.sh) applies pane-scoped launch flags;
 see [History guidance](HISTORY.md#pane-scoped-codex-launches).
 
+## Delivered contracts and remaining work
+
+Delivered [usage](../openspec/specs/world-usage/spec.md),
+[local harness integration](../openspec/specs/world-harness-integration/spec.md),
+[answer delivery](../openspec/specs/ask-answer-delivery/spec.md),
+[profiles and launcher](../openspec/specs/world-surfaces/spec.md#requirement-agent-profiles),
+[chimes](../openspec/specs/world-surfaces/spec.md#requirement-chimes) and the
+[Town Master greeting](../openspec/specs/world-surfaces/spec.md#requirement-town-master-greeting)
+have current requirements. Their active records retain unfinished follow-ups or
+explicit acceptance reconciliation; synchronization alone does not accept them.
+See the [usage guide](usage.md), [harness integration guide](harness-integrations.md)
+and [remaining SSH/update tasks](../openspec/changes/world-harness-integration/tasks.md)
+for operational details and remaining scope. Focused acquisition's
+[design](../openspec/changes/archive/2026-11-18-shared-acquisition/design.md) is archived;
+current contracts cover [focused observation](../openspec/specs/runtime-federation/spec.md#requirement-focused-observation-without-per-client-polling)
+and [bounded Desk observation](../openspec/specs/world-surfaces/spec.md#requirement-bounded-desk-observation).
+
 ## Process and request path
 
 The [static verb registry](../server/src/verbs/registry.ts) owns browser RPC,

@@ -1,5 +1,7 @@
 # Herdr Web v0.4.3 and Herdr protocol 20 realignment
 
+> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
+
 - **Spec ID:** `015-upstream-v043-protocol20-realignment`
 - **Status:** Approved
 - **Created:** 2026-08-20

@@ -1,5 +1,7 @@
 # Office scene continuity — lower bottle row
 
+> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
+
 - **Parent spec:** [`009-office-scene-continuity-spec.md`](009-office-scene-continuity-spec.md)
 - **Extension:** `001`
 - **Status:** Approved
