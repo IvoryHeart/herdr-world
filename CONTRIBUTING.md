@@ -2,7 +2,8 @@
 
 ## Development Setup
 
-1. Install Bun 1.4.4 or newer (CI uses 1.4.4) and start a local Herdr server.
+1. Install Bun 1.4.4 or newer (CI uses 1.4.4) and start a local Herdr TUI or herdr-core runtime.
+   Both runtimes are external; see [runtime setup](README.md#runtimes).
 2. From the repository root, run `bun install --frozen-lockfile`.
 3. Run these in separate terminals, then open <http://localhost:5173>:
 
@@ -10,6 +11,8 @@
    bun run dev:server
    bun run dev:web
    ```
+
+For a worktree preview, use the [isolated preview recipe](docs/development.md#isolated-worktree-preview).
 
 Keep `bun.lock` (the application lockfile) and shared tools (TypeScript, Bun types,
 formatting/linting) at root; browser/Vite dependencies in `web/package.json`;
@@ -35,14 +38,17 @@ assets required by server typechecks and process tests.
 
 | During iteration | Command / limits |
 | --- | --- |
-| Types | `bun run typecheck:quick` checks root scripts, web, and server without rebuilding assets or validating production bundles. |
+| Types | `bun run typecheck:quick` checks the same three projects as `typecheck` (root scripts, web, server). It saves the asset rebuild, not a smaller typecheck; use after assets exist. |
 | Lint | `bun run lint` runs Oxlint across the repository. |
-| Related tests | `bun run test <path>` or `bun run test:quick` (includes integration tests and excludes the dedicated browser suite). |
+| Related tests | `bun run test <path>`; `test:quick` omits only the filename patterns listed below and can still launch Chrome. |
 | Browser regressions | `bun run test:browser` runs every Chrome-driven test and World browser suite; requires Chrome/Chromium or `CHROME_BIN`. |
-| Completed candidate | Stage intended files, run `bun run format:staged` once, restage and inspect the diff. The command rejects staged files with unstaged edits; docs-only candidates are a safe no-op. |
-| Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus affected non-browser unit tests. Browser suites and behavioral verification run in CI, where required `Delivery checks` blocks merges. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`; a push that only merges `origin/main` runs `bun run check:static`. CI runs the applicable gate on the PR head; every main push runs the full matrix. |
-| Full local gate | `bun run check:delivery` runs every check, in parallel lanes; `HERDR_WORLD_PREPUSH=full git push` makes the hook run it. |
+| Completed candidate | Follow the [candidate-delivery procedure](.agents/skills/candidate-delivery/SKILL.md). |
+| Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus affected non-browser unit tests. Browser suites and behavioral verification run in CI, where required `Delivery checks` blocks merges. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`; a push that only merges `origin/main` runs `bun run check:static`. CI tests the proposed merge of the PR base and head; every main push runs the full matrix. |
+| Full local gate | `bun run check:delivery` runs all local lanes; `HERDR_WORLD_PREPUSH=full git push` makes the hook run it. Native platform acceptance and enforced CI resource accounting remain separate. |
 | Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); manage disk capacity separately; it never blocks a check. |
+
+`test:quick` excludes only `{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,ThemedSelect.browser,HerdrSetupCard}.test.ts`; it includes other browser and integration tests.
+Tests sit beside their source. `bun scripts/affected.ts origin/main` lists branch impact.
 
 Tests launched with `bun run test`, the local gates and CI receive a fresh
 HOME, XDG config/cache/data/state/runtime directories and World data directory
@@ -121,10 +127,8 @@ and Delivery checks includes both macOS lifecycle results. See the
 [pipeline ownership guide](docs/ci-pipelines.md) for the job boundaries and
 failure diagnosis.
 
-Static checks run outside the machine-wide heavy queue. Units share two light
-slots; World and other Chrome tests share one browser slot, and behavioral
-verification has one slot. No delivery lane takes the whole machine. Lane logs
-are cleared at the start of each run, including lanes that are skipped.
+Lane logs are cleared at the start of each run, including skipped lanes.
+See the [local queue](#local-check-queue) for shared slot ownership.
 
 PR CI and pre-push share affected-unit selection; CI also selects browser,
 behavioral and platform suites. Static checks always run for code;
@@ -161,7 +165,8 @@ native steps when installation is inapplicable. Aggregate checks require every
 selected job to succeed and only accept skips declared by scope. Leaf job checks
 report failure as soon as their job ends; `Delivery checks` waits for the aggregate.
 The crew's reaction to those early failures is maintained separately. Main pushes
-and explicit `check:delivery` always run everything.
+run the full CI matrix; explicit `check:delivery` runs all local lanes, with
+native platform acceptance and enforced CI resource accounting separate.
 
 CI verification groups are partial evidence. The aggregate requires every accepted
 model exactly once, the current complete source inventory/revision, matching tool
@@ -177,16 +182,9 @@ accounting. Reruns select the newest artifact attempt for each group and cannot
 fall back from incomplete newer evidence. The canonical local gate still accepts
 no model filters.
 
-Prepare the final PR description in a file after committing, then run:
-
-```bash
-bun run check:pr-body <file>
-gh pr create --body-file <file> # include the required labels at creation
-```
-
-The local check uses the same knowledge-map and changelog functions as CI against
-the committed diff from `origin/main`. For a stacked PR, append its base ref to
-the check command. It validates fragment contents as well as the description.
+Use the [candidate-delivery skill](.agents/skills/candidate-delivery/SKILL.md) for
+formatting, commits, pushing and the exact PR-body validation/creation procedure.
+The [changelog guide](changes/README.md) owns the fragment format and exemption.
 
 `check:commit` names the hook's guard: it refuses staged files under `.agents/`
 other than the shared skills (`check:agents`), then checks format and lint. Release workflows use
@@ -205,10 +203,11 @@ without conflicts, except a `CHANGELOG.md` conflict resolved by taking main's fi
 The merge commit's tree must equal that clean merge apart from changelog
 fragments. Any other conflict resolution or edit, including one that touches
 code, gets the normal check.
-The three required CI job names remain the same. `bun run check:delivery` runs
-the full gate locally: static checks first (later lanes read the build), then
-behavioral verification alongside unit tests and the World browser suites, then
-the Chrome-driven tests outside World once the CPU is quieter. No suite asserts
+The protected CI job names remain unchanged. `bun run check:delivery` runs all
+local lanes: static checks first (later lanes read the build), then behavioral
+verification alongside units and World browser suites, followed by the other
+Chrome-driven tests in the same browser slot. It does not replace native platform
+acceptance or CI resource accounting. No suite asserts
 a wall-clock budget: input delays are reported by the non-blocking World latency
 trend ([development](docs/development.md)). Each fixture still exercises its own
 concurrent production contexts and deadlines.
@@ -219,29 +218,23 @@ and requires the application shell to mount. A fresh-process unit regression
 loads the asks model before the application store with browser storage present.
 These checks exercise entry initialization as well as the focused UI fixtures.
 
-Heavy local checks share one machine-wide queue (`scripts/check-lock.ts`) across
-all worktrees and clones: one browser lane (World browser suites, Chrome-driven
-tests) and one behavioral verification at a time, and at most two light lanes
-(static checks, unit tests). The delivery gate's quiet lane (Chrome-driven tests
-outside World) needs the whole machine: it takes every slot, waiting for running
-heavy lanes, and nothing heavy starts beside it. It reserves admission while
-waiting, so later ordinary requests cannot starve it. Canonical paths, directory selectors,
-filters and ambiguous options in direct test runs are queued conservatively.
-Admission is reserved before heavy slots drain, so even otherwise-free light
-slots wait while a whole-machine request is pending; this can take minutes.
-Direct runs that may include a browser suite, including the default full run
-and unknown selectors, take the browser slot.
-Known value-taking flags such as `-t` and `--timeout` leave explicit file
-selection intact; a flags-only invocation still selects the full run.
-`bun run check:changed`, `check:delivery`,
-`test:browser`, `scripts/run-world-tests.ts` and any `bun run test` that includes a
-Chrome-driven suite all queue, and a waiting lane prints `waiting for <worktree>
-<lane> (pid, since)`. Slots are
-`flock(2)` locks under `$XDG_RUNTIME_DIR/herdr-world-checks` (or the temporary
-directory), released by the kernel when their holder exits however it exits, so a
-crashed gate never leaves a stale lock. A lane holds one slot, or all of them taken
-in one fixed order, and its children run inside it, so gates cannot deadlock. CI
-does not queue.
+### Local check queue
+
+Heavy checks share one machine-wide queue (`scripts/check-lock.ts`) across all
+worktrees and clones: one browser slot for World and other Chrome tests, one
+behavioral verification slot, and two unit slots. Static checks bypass the queue;
+no delivery lane takes the whole machine. Direct runs with browser files, directory
+selectors, filters or ambiguous options take the browser slot conservatively.
+Known value-taking flags such as `-t` and `--timeout` preserve explicit file
+selection; a flags-only invocation still selects the full run.
+
+`check:changed`, `check:delivery`, `test:browser`, `scripts/run-world-tests.ts` and
+`bun run test` all use the appropriate slots. Waiting work prints its holder and
+lane; wait for completion. Slots are kernel-released `flock(2)` locks under
+`$XDG_RUNTIME_DIR/herdr-world-checks` (or the temporary directory), so crashes do
+not leave stale locks. Children run inside their parent's slot. The exclusive
+API remains available for callers requiring every slot, with admission reserved
+before slots drain; ordinary delivery never uses it. CI does not queue.
 
 Test Chrome renders WebGL with SwiftShader, the software renderer that CI's pixel
 and visual comparisons are calibrated against. Locally, `HERDR_WORLD_TEST_GPU=1`
@@ -266,7 +259,7 @@ Releases: package and inspect every supported archive/checksum; see
 
 ## Behavioral evidence
 
-Assess every changed contract against the stable [43-area inventory](verification/coverage.json).
+Assess every changed contract against the [coverage inventory](verification/coverage.json).
 Use existing requirements, fixtures and regressions to state allowed and forbidden
 behavior before choosing evidence. Ordering, ownership, authority and recovery
 normally warrant maintained Quint models connected to real implementation replay.
@@ -290,12 +283,13 @@ checks dependency whenever the shared scope selects it. Verification inputs,
 contract owners and full changes require all accepted models; the agent-tooling
 exception and unrelated ordinary docs skip it. Full CI covers every repository
 check, accepted model and diagnostic/resource control across its workers. Pre-push runs
-`bun run check:changed`, which runs the full `verification:gate` (never `--case`)
-when a change touches verification inputs or a contract owner, and leaves the
-rest to CI; `bun run check:delivery` runs everything locally. Linux CI additionally enforces the aggregate resource envelope described
+`bun run check:changed` for static checks and affected non-browser units;
+browser suites and behavioral acceptance run in CI. `bun run check:delivery`
+runs all local lanes, including the full `verification:gate` (never `--case`). Linux CI additionally enforces the aggregate resource envelope described
 in [behavioral evidence](verification/README.md#candidate-commands-and-promotion).
 Independent acceptance is recorded in [promotion decisions](verification/promotion-review.md);
-Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+The [verification guide](verification/README.md) retains final gate/resource
+acceptance, mandatory consumers and excluded claims.
 
 For an unmodeled critical change, record and execute the proposed model or justified
 alternative before review. For a mechanical change, explain why contracts and
@@ -351,8 +345,11 @@ run the checks below and verify the rendered result.
 ## Pages Website and Tutorial
 
 Edit `site/` for the landing page; **only `docs/TUTORIAL.md`** for tutorial text.
-`scripts/build-pages.ts` renders into `site/tutorial/index.html`, rewrites
-screenshots/references, and checks built-site links/fragments.
+`scripts/build-pages.ts` uses `site/tutorial/index.html` as the template and
+renders to `.pages-dist/tutorial/index.html`, rewrites screenshots/references,
+and checks built-site links/fragments. `check:docs` also checks repository-local
+paths and Markdown fragments in the knowledge map with
+`bun scripts/check-knowledge-map-links.ts`; remote URLs are not fetched.
 
 The tutorial is for someone learning World: numbered steps that say what to do
 and what they will see, ending with a "You are done when" check. It is not the
