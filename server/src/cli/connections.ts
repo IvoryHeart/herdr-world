@@ -1,5 +1,8 @@
 import type { ConnectionCliChange } from "../connections/cli-admission";
-import { applyLiveConnectionChange } from "./connections-live";
+import {
+  applyLiveConnectionChange,
+  liveConnectionUrl,
+} from "./connections-live";
 import {
   type ManagedConnectionProfile,
   type StartupLocalProfile,
@@ -84,7 +87,9 @@ herdr-core add options:
 The profiles are the same ones the connection selector edits. A running
 Herdr World admits edits live, preserving concurrent changes from Settings.
 Other connections and browser sessions stay open; --restart is optional and
-still restarts a running managed service. Without a listener, edits are saved
+still restarts a running managed service. Live edits require a loopback or
+wildcard listener. A specific non-loopback listener requires --restart to save
+and restart instead, closing open sessions. Without a listener, edits are saved
 for the next start. Only the configured service address is checked: stop any
 other World process sharing this registry before editing here. SSH tests need a
 running remote Herdr and non-interactive SSH authentication.
@@ -387,7 +392,8 @@ export function createConnectionsCommand(
 
         // Decide ownership before consulting the disk snapshot for mutations.
         // The service revalidates against its current catalogue in Settings' queue.
-        if (await probe(readServiceAccess(setup))) {
+        const running = await probe(readServiceAccess(setup));
+        if (running && liveConnectionUrl(setup)) {
           const change: ConnectionCliChange =
             action === "add"
               ? {
@@ -415,6 +421,10 @@ export function createConnectionsCommand(
           }
           return EXIT_OK;
         }
+        if (running && flagValues.restart !== true)
+          throw new UsageError(
+            "live connection edits require a loopback or wildcard listener; use --restart to save and restart the managed service (closes open sessions)",
+          );
 
         let next: PersistedConnectionRegistry | null;
         if (action === "add") {
@@ -525,6 +535,13 @@ export function createConnectionsCommand(
               ? `Removed connection ${id}.`
               : `Default connection is now ${id}.`,
         );
+        // Specific non-loopback listeners cannot use the local-only endpoint.
+        // Preserve the explicit save-and-restart path for those installations.
+        if (running) {
+          const code = restartRunningService(context);
+          if (code === 0) context.log("Restarted the service.");
+          return code ?? EXIT_OK;
+        }
         return EXIT_OK;
       }
 

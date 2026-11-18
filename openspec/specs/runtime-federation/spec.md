@@ -45,7 +45,7 @@ with that World service rather than connecting to independently deployed bridges
 
 #### Scenario: Connection CLI edits a running World
 - **WHEN** `connections add`, `remove` or `set-default` runs against the configured
-  running service
+  running service with a loopback or wildcard listener
 - **THEN** that service admits the mutation through the same serialized profile
   queue as Settings, preserving concurrent changes without a restart
 - **AND** an auto-connect addition starts its own runtime, removal retires only
@@ -54,6 +54,13 @@ with that World service rather than connecting to independently deployed bridges
   only the removed connection's terminal contexts
 - **AND** failed live admission does not fall back to a direct registry write;
   offline edits and an explicitly requested `--restart` remain supported
+
+#### Scenario: Connection CLI edits a service bound to a specific non-loopback address
+- **WHEN** a running service listens only on a specific non-loopback address
+- **THEN** connection CLI mutations without `--restart` are refused without
+  changing saved profiles, with guidance to use `--restart`
+- **AND** with `--restart`, the CLI saves the change and restarts the managed
+  service, closing open sessions; restart failures are reported
 
 #### Scenario: A second bridge targets the same runtime
 - **WHEN** another managed profile or World process attempts to own the same Herdr client socket

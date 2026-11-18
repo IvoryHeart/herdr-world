@@ -2178,7 +2178,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   browser sessions stay open. The default cannot be removed, and explicit
   startup Herdr settings still pin the default. With World stopped, changes
   are saved for its next start. `--restart` remains optional and restarts a
-  running managed service after the live change succeeds.
+  running managed service after the live change succeeds. Live admission needs
+  a loopback or wildcard listener (`0.0.0.0` or `::`). A service bound to a
+  specific non-loopback address requires `--restart`; the CLI saves the change
+  and restarts the managed service, closing open sessions.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
 - **herdr-core connections.** Open **Hosts → Manage connections → Add

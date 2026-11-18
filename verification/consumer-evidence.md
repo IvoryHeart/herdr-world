@@ -62,6 +62,13 @@ unchanged. Core profiles retain their separate manager. `store.test.ts` verifies
 removing the selected profile disposes its presenters, returns to the default
 and retains the healthy session. These finite integration schedules supplement
 existing models; they do not expand lifecycle/reconnect or native SSH claims.
+`connections.test.ts` enumerates add/remove/set-default for specific IPv4/IPv6
+listeners: refusal must preserve the registry without `--restart`, while the flag
+must save before the managed restart and report restart failure. Loopback and
+wildcard address cases retain live routing, and admission errors retain their
+no-write boundary. These direct CLI checks use fake probes and service commands;
+they do not claim native listener or service-manager acceptance and do not change
+the manager models.
 
 ### Hosts scope admission (Q15)
 

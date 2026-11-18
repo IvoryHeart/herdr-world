@@ -631,12 +631,20 @@ removed, and explicit startup Herdr settings still pin the default. Without a
 listener, changes are saved for the next start. `--restart` is still accepted
 and explicitly restarts a running managed service after a successful live edit.
 
+Live admission needs a loopback or wildcard listener (`0.0.0.0` or `::`);
+wildcard listeners are contacted over loopback. If `--host` or `HOST` binds World
+to one specific non-loopback address, pass `--restart` to save the change and
+restart the managed service instead. That restart closes open sessions. Without
+the flag, the CLI refuses the edit and leaves the saved profiles unchanged.
+
 Live edits require local access to the service's data directory and its CLI
 signing token, even when browser login uses a password. They target the service
 configuration, ignoring agent `HERDR_WORLD_URL`/`HERDR_WORLD_TOKEN` overrides;
 errors or a mismatched registry are refused without a direct file write.
 Only the configured service address is checked. Stop any foreground World on
 another address sharing this registry before using the CLI.
+After upgrading from a version without live admission, run
+`herdr-world service restart` once before using live connection edits.
 
 The command-line default remains useful for a single connection:
 

@@ -10,6 +10,13 @@ import {
 } from "./service-context";
 import { isLoopbackAddress } from "../workspace/file-manager";
 
+/** Wildcard listeners are reached over loopback; specific remote binds cannot admit CLI edits. */
+export function liveConnectionUrl(setup: ServiceSetup): URL | null {
+  const url = new URL("/api/world/cli", probeUrl(readServiceAccess(setup)));
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  return host === "localhost" || isLoopbackAddress(host) ? url : null;
+}
+
 /** Target the configured service, ignoring agent-CLI URL/token overrides. */
 export async function applyLiveConnectionChange(
   context: CliContext,
@@ -17,9 +24,8 @@ export async function applyLiveConnectionChange(
   change: ConnectionCliChange,
   request: typeof fetch = fetch,
 ): Promise<void> {
-  const url = new URL("/api/world/cli", probeUrl(readServiceAccess(setup)));
-  const host = url.hostname.replace(/^\[|\]$/g, "");
-  if (host !== "localhost" && !isLoopbackAddress(host))
+  const url = liveConnectionUrl(setup);
+  if (!url)
     throw new Error("live connection edits require a loopback service address");
   const token = readWorldCliToken(
     sessionSecretPath(runtimeDataRoot(context.runtime, setup.env)),
