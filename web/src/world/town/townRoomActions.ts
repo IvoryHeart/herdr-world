@@ -5,6 +5,7 @@
 
 import type { TownMoveResult } from "./townMoves";
 import type { TownRoomPlacement } from "./townRoomPlace";
+import type { TownMoveCommand } from "./scene/townInteraction";
 
 /** A place's colour in the shared picker (ColorSwatch.tsx). */
 export type PlaceColorChoice = {
@@ -140,3 +141,32 @@ export type TownRoomActions = {
   /** An agent, or a desk's agents, dropped on the bin or a bus stop. */
   onBinDrop?(kind: "agent" | "desk", key: string): void;
 };
+
+/** Carries out a finished Town drag through the view's actions. */
+export function runTownMove(
+  actions: TownRoomActions,
+  command: TownMoveCommand,
+): Promise<TownMoveResult> {
+  switch (command.kind) {
+    case "agent":
+      return actions.onDropAgent(command.agentKey, command.deskKey);
+    case "group":
+      return actions.onGroupDesk(command.deskKey, command.targetDeskKey);
+    case "ungroup":
+      return actions.onUngroupDesk(command.deskKey);
+    case "reorder":
+      return actions.onReorderDesk(command.deskKey, command.ontoDeskKey);
+    case "desk":
+      return actions.onDropDesk(command.deskKey, command.roomKey);
+    case "room":
+      return (
+        actions.onPlaceRooms?.(command.roomKey, command.placement) ??
+        Promise.resolve("returned")
+      );
+    case "building":
+      return (
+        actions.onPlaceBuildings?.(command.hostKey, command.order) ??
+        Promise.resolve("returned")
+      );
+  }
+}

@@ -95,7 +95,7 @@ import { TownLensBoard, TownLensLayer, useTownLenses } from "./TownLenses";
 import type { OfficeAgent } from "../officeProjectionTypes";
 
 export type { PlaceColorChoice, TownRoomActions } from "./townRoomActions";
-import type { TownRoomActions } from "./townRoomActions";
+import { runTownMove, type TownRoomActions } from "./townRoomActions";
 
 /** Camera kept across Office visits within one page session. */
 const savedCameras = new Map<string, { x: number; y: number; z: number }>();
@@ -674,31 +674,7 @@ export function TownCanvas({
       activateRoom: (key) => latest.current.onActivateRoom(key),
       openReception: setOpenReception,
       openCenter: ring.openRing,
-      move: (command) => {
-        const actions = latest.current.roomActions;
-        switch (command.kind) {
-          case "agent":
-            return actions.onDropAgent(command.agentKey, command.deskKey);
-          case "group":
-            return actions.onGroupDesk(command.deskKey, command.targetDeskKey);
-          case "ungroup":
-            return actions.onUngroupDesk(command.deskKey);
-          case "reorder":
-            return actions.onReorderDesk(command.deskKey, command.ontoDeskKey);
-          case "desk":
-            return actions.onDropDesk(command.deskKey, command.roomKey);
-          case "room":
-            return (
-              actions.onPlaceRooms?.(command.roomKey, command.placement) ??
-              Promise.resolve("returned")
-            );
-          case "building":
-            return (
-              actions.onPlaceBuildings?.(command.hostKey, command.order) ??
-              Promise.resolve("returned")
-            );
-        }
-      },
+      move: (command) => runTownMove(latest.current.roomActions, command),
       ghost: {
         lift(label, at) {
           ghost.textContent = label;
