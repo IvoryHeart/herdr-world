@@ -74,6 +74,7 @@ export class TownSceneCamera {
   /** The reception boards as last measured (townBoardPlacement). */
   private boardHeights: TownBoardHeights = new Map();
   private consumedRoomFocus: number | null = null;
+  private consumedBuildingFocus: number | null = null;
   /** Where the camera looked before a search moved it, at the focus point. */
   private searchReturn: TownPose | null = null;
   private consumedSearch: number | null = null;
@@ -621,6 +622,27 @@ export class TownSceneCamera {
       return;
     this.zoomToRoom(layout, request.roomKey);
     this.consumedRoomFocus = request.seq;
+  }
+
+  /**
+   * A building to move to, as for a host Add building added (a new `seq`
+   * asks again). It waits for a ready camera and a layout that has the
+   * building, then runs once; true when it moved.
+   */
+  buildingFocus(
+    request: { hostKey: string; seq: number } | null,
+    layout: TownLayout,
+  ) {
+    if (
+      !request ||
+      !this.camera ||
+      this.consumedBuildingFocus === request.seq ||
+      !layout.buildings.some((building) => building.hostKey === request.hostKey)
+    )
+      return false;
+    this.zoomToBuilding(layout, request.hostKey);
+    this.consumedBuildingFocus = request.seq;
+    return true;
   }
 
   /**

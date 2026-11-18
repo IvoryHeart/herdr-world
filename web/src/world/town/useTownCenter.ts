@@ -1,7 +1,8 @@
 /**
  * The town center's actions (TownCenterMenu.tsx), each reusing what World
  * already has: the agent launcher and profiles, the Town master's chat,
- * Needs you, the Town summary and room creation. Board's hub beside the bin
+ * Needs you, the Town summary, room creation and Manage connections' add
+ * flow (Add building). Board's hub beside the bin
  * (board/BoardHub.tsx) offers the same actions, built by the same helpers.
  */
 
@@ -9,6 +10,7 @@ import {
   ClipboardList,
   Crown,
   DoorOpen,
+  HousePlus,
   Inbox,
   Shirt,
   UserPlus,
@@ -24,6 +26,7 @@ import type {
   HerdrOfficeProjection,
   OfficeAgent,
 } from "../herdrOfficeProjection";
+import { requestAddHost } from "../addHost";
 import { openNeedsYou } from "../needsYou";
 import type { WorldObject } from "../worldObject";
 import type { TownCenterAction } from "./TownCenterMenu";
@@ -173,6 +176,7 @@ export function townCenterActions({
         : undefined,
       run: () => rooms.onCreateRoom(selectedRoomKey),
     },
+    addHostAction("Add building"),
   ];
 }
 
@@ -282,4 +286,16 @@ export const profilesAction = (): TownCenterAction => ({
   label: "Profiles",
   icon: Shirt,
   run: () => openProfileEditor(),
+});
+
+/**
+ * A new host: Add building in Town, Add host on Board. It opens Hosts →
+ * Manage connections on its first step, and the view moves to the host it
+ * adds once that shows (addHost.ts).
+ */
+export const addHostAction = (label: string): TownCenterAction => ({
+  id: "add-host",
+  label,
+  icon: HousePlus,
+  run: requestAddHost,
 });

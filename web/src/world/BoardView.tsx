@@ -1,4 +1,5 @@
 import { useDrawReadiness } from "./useDrawReadiness";
+import { hostArrivals, useHostArrivalIn } from "./addHost";
 import { worldRuntimeStore } from "./runtimeStore";
 import { AppearanceAvatar } from "./AppearanceAvatar";
 import { visibleAppearanceColors, saveAppearance } from "./appearance";
@@ -776,6 +777,15 @@ export default function BoardView({
     invalidate("physics");
   };
   const fitted = useRef(false);
+  /** The host Add host added, until Board frames it (addHost.ts). */
+  const arrivingHost = useHostArrivalIn(world.hosts, (host) => host.id);
+  const hostFocus = useRef(arrivingHost);
+  useLayoutEffect(() => {
+    hostFocus.current = arrivingHost;
+    if (arrivingHost) invalidate("change");
+    // invalidate is stable in effect: it reaches the loop through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrivingHost]);
   const capture = useDrawReadiness("board", boardRef, () =>
     invalidate("capture"),
   );
@@ -1251,14 +1261,16 @@ export default function BoardView({
     }
     return out;
   };
-  function fit(instant: boolean) {
+  /** Frame every shown card, or only the keys in `only`; false if none. */
+  function fit(instant: boolean, only?: ReadonlySet<string>) {
     const el = boardRef.current;
-    if (!el) return;
+    if (!el) return false;
     let x0 = Infinity,
       y0 = Infinity,
       x1 = -Infinity,
       y1 = -Infinity;
     for (const [key, card] of visibleCards()) {
+      if (only && !only.has(key)) continue;
       const shown = farRef.current ? shownSize(key) : undefined;
       const w = shown?.w ?? card.size.w;
       const h = shown?.h ?? card.size.h;
@@ -1267,7 +1279,7 @@ export default function BoardView({
       x1 = Math.max(x1, card.x + w / 2);
       y1 = Math.max(y1, card.y + h / 2);
     }
-    if (x0 === Infinity) return;
+    if (x0 === Infinity) return false;
     const pad = farRef.current ? 110 : 70;
     x0 -= pad;
     // Room above the top cards for a host's heading and summary lines.
@@ -1289,7 +1301,20 @@ export default function BoardView({
       cam.current = goal;
     else camGoal.current = goal;
     invalidate("change");
+    return true;
   }
+  /** Frame a host's zone (World's host ID), once it has cards; false before. */
+  const fitHost = (hostId: string) => {
+    const m = latest.current.model;
+    const host = m.hosts.find((candidate) => candidate.id === hostId);
+    const keys = new Set(
+      host?.workspaceKeys.flatMap((key) => [
+        key,
+        ...(m.workspaceByKey.get(key)?.tabKeys ?? []),
+      ]),
+    );
+    return keys.size > 0 && fit(false, keys);
+  };
 
   /* ---------- Frame loop ---------- */
   /** One frame: tweens, physics, camera, then paint. True while moving. */
@@ -1376,6 +1401,12 @@ export default function BoardView({
     }
     const svg = svgRef.current;
     if (svg) paint(svg, m);
+    // A host Add host added: frame its zone once its cards are placed.
+    const arriving = hostFocus.current;
+    if (arriving && fitHost(arriving.hostKey)) {
+      hostFocus.current = null;
+      hostArrivals.settle(arriving.seq);
+    }
     capture.current?.drawn(
       !built ||
         shownWorld !== world ||

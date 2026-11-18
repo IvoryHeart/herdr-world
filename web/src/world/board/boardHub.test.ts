@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { requestAddHost } from "../addHost";
 import { WORLD_AGENT_LAUNCH_EVENT } from "../agentProfiles";
 import type { WorldObject } from "../worldObject";
 import { boardHubActions, boardLaunchSpace } from "./BoardHub";
@@ -100,10 +101,14 @@ test("the hub offers the town center's actions, New agent first", () => {
     "summary",
     "profiles",
     "workspace",
+    "add-host",
   ]);
   expect(action("launch").primary).toBe(true);
   expect(action("master").detail).toBe("firstmate");
   expect(action("workspace").disabled).toBe(false);
+  // Town's Add building, in Board's words: the same add-a-connection flow.
+  expect(action("add-host").label).toBe("Add host");
+  expect(action("add-host").run).toBe(requestAddHost);
 });
 
 test("a new agent starts in the selected card's workspace, else the launcher asks", () => {
