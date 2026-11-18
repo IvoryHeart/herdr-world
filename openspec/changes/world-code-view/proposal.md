@@ -1,60 +1,60 @@
 ## Why
 
-World already shows projects, agents and terminals as Town, Board, Desk and Spaces,
-but working through source beside those agents requires switching between Inspector
-surfaces. A Code projection can make that workflow familiar without creating a
-second app, runtime authority or authentication system.
+The owner wants the real VS Code ecosystem inside World's project view, with
+other IDEs available as integrations. A custom editor would duplicate the IDE
+and lose extensions, settings and community features the request depends on.
 
-**Status: proposed for owner decision; no implementation approval implied.** This
-change delivers research, a synthetic clickable design study and proposed contracts.
-Future implementation tasks remain unchecked. No changes to Herdr or herdr-core.
+**Decision proposal only.** #981/#988 delivers research and a synthetic clickable
+mock, not an installed server, proxy, extension, live navigation or runtime change.
+The owner's real-IDE direction supersedes the earlier native-editor proposal.
 
 ## What Changes
 
-- Propose Code in the common World shell and `/code`, with **Open in Code** from
-  a room, explicit project/checkout selection, file review, agent terminals and PR context.
-- Recommend the existing CodeMirror family and World terminal adapters. Compare
-  Monaco, code-server, OpenVSCode Server, Theia, a VS Code extension and Microsoft's
-  remote/tunnel model in the [research note](../../../docs/design/code-view/research.md).
-- Specify qualified access to local/SSH project files and existing terminals,
-  one World login/origin, stale-state refusal and detached-view lifecycle.
-- Recommend read/review and terminal access as the initial implementation boundary.
-  The mock also explores editing/conflicts; live saves require a separate explicit
-  decision on external-writer concurrency and verified provider support.
-- Deliver a [clickable design](../../../docs/design/code-view/design.md) at
-  `/code-view-prototype.html`, using only synthetic in-memory data. This is not
-  the proposed `/code` route or a working editor.
+- Propose Code as another projection of the same qualified World hosts, rooms,
+  projects, agents and terminals. World's frame contains the installed IDE's web
+  workbench; VS Code owns editing, extensions, Git and its Workspace Trust.
+- Extend the existing integrations direction with IDE providers: detect and
+  enable per host, open per project. Recommend Microsoft `code serve-web` as
+  the first candidate; offer explicit OpenVSCode/code-server alternatives and
+  desktop handoffs to VS Code, Cursor, JetBrains Gateway, Zed and later adapters.
+- Require owner acceptance of upstream terms and full shell/write authority;
+  never bundle an IDE, silently accept licences or infer shared desktop settings.
+- Propose a same-origin HTTP/WS proxy to private local or SSH-forwarded servers.
+  Embedding remains unavailable unless licence, base-path, webview/service-worker,
+  authentication and extension compatibility gates pass. No automatic CSP change.
+- Propose a small World extension supplying profiles for existing Herdr panes and
+  core terminals, with qualified identity, detach semantics, core-specific adapter
+  checks and an explicit warning about Herdr's shared pane resize.
+- Preserve native World phone workflows and provide explicit desktop handoff.
+  Resource/lifecycle ownership and unavailable states are visible, never guessed.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `world-code-view`: Qualified projects, file/change/PR review, existing agent
-  terminals, phone navigation and failure behavior within a native Code projection.
+- `world-code-view`: host-qualified IDE integrations, embedded workbench and
+  desktop handoff, security/feasibility gates, project/agent/PR context and
+  runtime-specific terminal extension behavior.
 
 ### Modified Capabilities
 
-- `world-surfaces`: Add Code and `/code` to common navigation while retaining the
-  existing shell, history, annotations, qualified context and terminal ownership.
+- `world-surfaces`: add Code and `/code` to the shared navigation/frame while
+  retaining the same entity context and all existing projections.
 
 ## Impact
 
-Future implementation would touch the view router/shell, shared project-resource
-admission, file/Git consumers and TUI/core terminal consumers. Local and SSH
-operations stay behind the Bun service and existing OpenSSH profiles. This PR
-adds only docs, OpenSpec deltas, standalone static design assets and fixture tests;
-it changes no current capability spec or production transport/auth/ownership code.
+Research: [comparison, hurdles and owner decisions](../../../docs/design/code-view/research.md).
+Design: [mock walkthrough](../../../docs/design/code-view/design.md), served at
+`/code-view-prototype.html` with synthetic data only. No dependency or production
+contract owner changes in this PR; no current capability spec is synchronized.
 
-No new editor dependency, IDE server, extension marketplace, external login,
-tunnel or background process is introduced. Full language servers, debugging,
-build/tasks, filesystem writes, Git mutation, PR merge, collaboration, runtime
-changes and workbench-server installation are outside the proposed initial slice.
+Future implementation would touch common shell navigation, integration
+catalogue/adapters, service process/auth/HTTP/WS and SSH transport ownership, plus
+a separately packaged World VS Code extension. Existing local-only harness skill
+RPCs do not already provide that remote IDE contract. Enabling a full IDE changes
+the security boundary from bounded World file reads to trusted full host-user
+shell/write access; current file/Git APIs are not repurposed into a new editor.
 
-## Decision requested
-
-Choose the native World/CodeMirror direction or require a full VS Code workbench.
-The recommended initial scope is read/review plus terminals; decide separately
-whether optimistic writes in the presence of external agent processes are acceptable.
-The [owner questions](../../../docs/design/code-view/research.md#trade-offs-and-owner-decisions)
-state the consequences. Approving this research PR does not authorize applying its
-future task list, synchronize the deltas or mark the capability delivered.
+Implementation tasks remain unchecked and gated. No Herdr/herdr-core changes,
+custom editor, World save protocol, arbitrary port proxy, public IDE hosting,
+new authentication scheme or promise of unrestricted desktop parity is proposed.

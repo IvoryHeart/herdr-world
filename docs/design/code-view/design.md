@@ -1,115 +1,130 @@
-# Code view interaction study
+# Code: the real IDE, in World's frame
 
-**Proposed, not implemented.** Read the [research and recommendation](research.md)
-and [proposed contracts](../../../openspec/changes/world-code-view/specs/world-code-view/spec.md).
-The preview is a standalone design fixture served by World's existing static
-asset path, outside the live view router. It changes no shipping navigation or
-runtime behavior. Its World shell and room cards are simplified sketches.
+**Design study, not a shipping feature.** The owner selected real VS Code and
+IDE integrations. This revision replaces the earlier custom-editor mock.
+The three standalone assets at `/code-view-prototype.html` use fixed synthetic
+fixtures only: no IDE/extension is loaded, nothing installs, no network or storage
+is used, no desktop app opens, no command executes and no real file or PR changes.
+The workbench is a **clearly labelled stand-in**, not a screenshot or working IDE.
+The [research](research.md) and [architecture](../../../openspec/changes/world-code-view/design.md)
+explain the unresolved licence, single-origin and full-shell trust gates.
 
-## Try the preview
+## Try it on the preview
 
-On the dispatcher's preview, open **`/code-view-prototype.html`** on the same
-origin. For example, replace the preview URL's path with that exact path; no
-query switch, real repository or connected runtime is needed. The persistent
-**DESIGN STUDY / 981** banner distinguishes every screen from the real app.
-**Return to World** leaves the fixture. **Reset study** reloads its initial state.
+Open **`/code-view-prototype.html`** on the dispatcher's preview origin. No runtime,
+repository, account, query parameter or database setup is needed. The permanent
+**DESIGN STUDY / 981** banner and **LABELLED STAND-IN · NOT A RUNNING VS CODE**
+caption identify the fixture. **Return to World** leaves it. **Reset study**
+restores all initial memory-only state.
 
-1. Click **Open Orchard in Code →**. The room's project opens with files on the
-   left, code in the middle, Scout/Wren terminals below and Changes on the right.
-   Click **README.md**, then **greeting.ts** to switch example buffers.
-2. Click **Scout's checkout**. The branch and checkout label change to the
-   agent's linked worktree. Edit the example file, switch to **Room · main**,
-   then back: drafts belong to their original checkout.
-3. Click **Wren** below **TERMINALS**, then **Take control (mock)**. Type an
-   example message and click **Send example**. It is labelled as mock input;
-   nothing is executed. Select Scout to return to the builder's terminal.
-4. Click **Agent changes file**. A clean source buffer refreshes and Changes
-   shows the example patch. Click **PR #42**, then **Review changed file**.
-   The PR card includes branch, checks and review state; it is a synthetic PR,
-   not a link to an actual repository.
-5. Edit `greeting.ts`, then click **Agent changes file** again. The draft is
-   preserved; **Save example** refuses an overwrite and asks you to compare.
-   Changes shows both versions. **Use agent version (discard example draft)**
-   explicitly resolves this mock conflict by discarding the local example.
-6. Click **Disconnect host (mock)**. Files become stale/read-only and terminal
-   input is disabled. Click **Reconnect host (mock)**: the draft survives,
-   control must be taken again and nothing is replayed. Click **Town**, then
-   **Code** to see the selected project persist across projections.
-7. Click **Field notes** under Projects (on a phone, first tap **Files**).
-   This opens the other room on the synthetic SSH connection with Finch's
-   **Herdr TUI** terminal. There is no fallback from one room or host to another.
+1. Click **Open Orchard in Code →**. World's host/room header surrounds a VS Code
+   workbench stand-in: activity rail, Explorer, code, integrated terminals and
+   native Source Control context. Click **README.md** and **greeting.ts**.
+   The example is read-only because this study does not build a World editor.
+2. Click **Scout’s checkout**. The branch changes to `scout/welcome`. Click
+   **World: Wren** in the workbench's terminal tabs: the terminal changes, while
+   the checkout stays Scout's. Click **Attach profile (mock)**, then **Detach
+   profile (mock)**. These represent the proposed World VS Code extension
+   attaching an existing core terminal, not launching a new agent or shell.
+3. Click **Agent changes file**, then **PR #42** in the World sidebar, then
+   **Review in VS Code (mock)**. The synthetic file changes and the review request
+   selects the agent checkout. Real Git diffs, saves and conflicts belong to
+   VS Code; World supplies verified project/PR context. No actual PR is opened.
+4. Click **IDE integrations**. This host has Microsoft VS Code web detected and
+   enabled. OpenVSCode and code-server are separate providers with Open VSX
+   labels. Click **Enable (mock)** for OpenVSCode, then **Use web IDE (mock)**:
+   the provider label changes. Open the picker and return to Microsoft explicitly.
+   Each row discloses detected/enabled state and the full-shell/write trust warning.
+   Press **Escape** or **Done** to close. Nothing installs or accepts real terms.
+5. Click **Open in desktop IDE**, then **Cursor**, **JetBrains Gateway** or **Zed**.
+   The handoff preview retains the exact project, checkout and owning host. It
+   explains that the browser device's installed apps are unknown and launches
+   nothing. Press **Escape** to return to the selected project.
+6. Click **Block embedding (mock)**. The workbench is replaced by an explicit
+   webview-origin blocker with desktop handoff. No automatic CSP change or provider
+   fallback occurs. Click **Clear embed block (mock)** to restore it. Click
+   **Disconnect host (mock)**: context becomes stale, profiles detach and desktop
+   handoff refuses. **Reconnect host (mock)** restores that exact host with no
+   profile automatically reattached and no input replay.
+7. In **Project**, select **Field notes · SSH**. Its Microsoft provider is missing,
+   demonstrating independent host state. Open **IDE integrations**. Either enable
+   the detected code-server and explicitly use it, or click **Mark installed (mock)**
+   for Microsoft, **Enable (mock)**, then **Use web IDE (mock)**. Mark installed is
+   a testing-only switch; it downloads/starts nothing. The future product would
+   require owner setup and validated licence/security admission.
+8. On Field notes click **Attach profile (mock)**. Read the warning: **Herdr attach
+   resizes the pane for every viewer**, even when observing. Click **Confirm shared
+   resize (mock)** to attach Finch. Closing/detaching would leave the existing
+   agent running. Open the desktop handoff to see SSH-specific instructions,
+   rather than incorrectly treating the remote folder as client-local.
 
-On a phone, the same project uses **Files / Code / Agents / Changes** at the bottom
-of the workspace. Tap **Agents** for terminals, **Changes** for the diff and PR,
-and **Code** to return to the retained buffer. Scenario controls remain below
-the panel; scroll down if needed. Try both portrait and landscape. The mock is
-responsive rather than a separate phone app, and uses native textarea editing.
+On a phone open Orchard and use **Agents / Files / Changes**. These sketch World's
+existing native phone surfaces, keeping host/project context and no custom phone
+editor. **IDE preview** deliberately shows the compact stand-in with a larger-screen
+warning; it is not evidence of real phone VS Code support. PR selection lives under
+Changes; scroll below the current panel for mock scenario controls. The provider
+picker and handoff remain usable on a phone, with no assumption a desktop client
+is installed. Try portrait and landscape.
 
-## What the proposed product does
+## Proposed interaction and ownership
 
-Code is a peer of Town, Board, Desk and Spaces in the existing view picker. A
-room's **Open in Code** action passes its qualified identity, not a guessed
-directory. Its default project is the room checkout. A room without a known
-project shows **Choose a project**; an offline room shows its stale state and
-cannot open a new actionable editor. Multiple known projects are explicit choices,
-never an unbounded scan of the host filesystem.
+Code stays a peer of Town, Board, Desk and Spaces in the common shell. A room's
+Open in Code passes its qualified project and connection; multiple/missing roots
+require a choice, never a host-wide scan. The common navigator, attention, Hosts
+filter and annotations remain World-owned; this simplified fixture does not
+recreate the entire production shell. Changing projection preserves selection
+and never moves an agent or silently swaps host, checkout or IDE provider.
 
-The left explorer keeps host, room and checkout visible. Selecting an agent's
-checkout changes the file/Git context explicitly; selecting its terminal alone
-changes only the terminal. Switching projects keeps separate buffers and branch
-labels. No view reassigns an agent, moves a desk, switches branches or opens a
-new runtime. Common Needs you/Hosts navigation remains available in the real shell;
-the fixture omits those live controls rather than simulating authority.
+The central workbench belongs to the selected installed IDE. Explorer, editing,
+debugging, tasks, extension management, settings, profiles, Workspace Trust and
+Source Control remain native IDE UI. World does not intercept saves or promise a
+new external-writer conflict protocol. Project configuration travels with the
+project; personal/browser/server/desktop settings and remote extensions may need
+supported Sync/import and separate setup. No promise of unlimited desktop parity.
 
-The proposed initial live surface opens read-only text files and comparison tabs.
-The mock explores an editing extension: an explicit Save would report success,
-conflict, disconnected, unsupported or outcome-unknown. Dirty buffers do not silently
-reload when agents write. Binary/oversized/unsupported files remain previews or
-downloads under current limits. No tasks, extensions or project code run just
-because a folder opens. The textarea demonstrates draft interactions, not syntax
-services, editor quality or actual file saving. Editing is deferred pending the
-external-writer decision described in the architecture; the initial spec makes
-no filesystem-write promise.
+IDE integrations live in the existing integrations direction, grouped with harness
+integrations but with distinct provider capabilities. Detection is per host and
+read-only; enablement is per host and requires explicit full host-user shell/write
+and same-origin trust consent. Installed servers start only on explicit admitted
+open/start actions. Microsoft terms are accepted by the user, never silently by
+World. Setup guidance is separate from starting known installed software.
 
-Terminals are existing World terminals, selected by agent with runtime and
-connection context. They begin in observe mode. Input uses each runtime's current
-control semantics and phone composer. The proposed **Take control** affordance is
-presentation of those rules, not a new cross-runtime lock. Hide/switch/close detaches
-the visible consumer and releases input authority; it never ends an agent. A
-separate explicit lifecycle action remains in World.
+A small optional World extension exposes existing agent terminals through terminal
+profiles. Profiles start in observation under runtime-specific admission, with TUI
+shared-size effects disclosed before attaching. Core uses a screen/typing adapter,
+not an assumed raw PTY. Editor focus never sends terminal keys. Closing/leaving
+Code releases World attach/input demand; it does not kill agents or an externally
+started IDE server. The IDE's ordinary shell terminals remain available under the
+IDE's own authority and are distinct from World-attached agent profiles.
 
-Changes is scoped to the selected checkout and shows working-tree changes alongside
-agent activity. Agent identity is contextual information, not inferred authorship
-from a modified timestamp. PR association uses existing validated repository,
-branch and reported work links; missing association says **No linked PR**, stale
-checks say **Stale**, and no GitHub authorization says **Connect GitHub in World**.
-Review opens the exact checkout/file comparison. Opening a PR uses the validated
-GitHub URL; approve/merge/commit/push are outside this proposal.
+World's right-side context shows agents, attention and qualified PR evidence.
+The real IDE shows working-tree changes. Review requests select a verified
+checkout/comparison through the proposed extension; a terminal label or matching
+branch name alone is not proof of authorship or PR association. Stale or missing
+provider evidence stays non-actionable. No new World commit/merge authority.
 
-## Layout, access and failure states
+## Failure and responsive design
 
-Desktop uses explorer / editor-with-terminal / review columns. The terminal dock
-and review surface can later use existing World panel controls; this mock fixes
-their sizes to compare the arrangement without implementing a layout system.
-On phones only one workspace panel is visible; host/project/branch context and
-Needs you remain reachable. Keep drafts and selection when navigating. Use 44 px
-phone targets, visible keyboard focus, text status labels and announced save and
-connection outcomes. Screen-reader/editor and real touch/IME validation remains
-an acceptance task for the future editor, not a claim of the mock.
-
-| State | Person sees and can do |
+| State | Proposed experience |
 | --- | --- |
-| Agent writes a clean open file | Fresh content plus a change indicator; review the diff. |
-| Agent writes a dirty open file | Kept draft, conflict message and a comparison; explicit resolution before save. |
-| Host disconnects or runtime changes | Stale label; no input or saving; kept draft and exact-target revalidation. No queued writes or keys. |
-| Terminal/agent is replaced | Retired target message; explicitly select its replacement. Never attach by display name. |
-| Checkout missing, moved or outside admitted root | Unavailable project; choose a newly admitted root. No fallback to room cwd. |
-| Read/write or platform capability absent | Read-only explanation, existing supported terminal/review actions retained. |
-| Save reply lost after possible write | Outcome unknown; compare a fresh read before any retry. |
+| Provider missing/disabled | Exact host and reason; setup/enable or explicit provider choice. No install-on-open. |
+| Licence or origin/worker/webview check fails | Block embed, explain hurdle, offer desktop handoff. Never silently weaken policy or switch marketplace. |
+| Host/session retires | Stale context, revoked proxy/extension input, no automatic host fallback or key replay. |
+| Core adapter unsupported | Disable that profile with reason; keep native World terminal access. |
+| Desktop client unknown | Explicit launch confirmation or supported connection instructions; no host-side GUI or guessed local file path. |
+| Too many active servers/windows | Measured limit explanation and explicit close/stop choices; never kill external servers or agents. |
+| IDE update changes behavior | Revalidate actual server commit and disable incompatible embedding until verified. |
 
-Only conflict and disconnect are interactive fault scenarios in this bounded
-fixture; the other states above are proposed acceptance cases. Tests exercise
-the actual fixture HTML/script, project and checkout retention, conflicts,
-terminal selection/control, phone panels and the absence of storage/network effects.
-They do not validate live editor or runtime behavior. The future implementation
-must satisfy the OpenSpec scenarios and the verification plan.
+Desktop gives most space to the real workbench and a narrow World context rail.
+The mock's proportions are illustrative, not a replacement IDE layout engine.
+Phone defaults to native World panels. Controls use 44 px phone targets, text
+state labels, keyboard focus, Escape dismissal, modal focus containment and polite
+status announcements. Actual IDE browser/keyboard/IME/accessibility behavior must
+be verified against the installed product before shipping; synthetic rendering
+cannot establish compatibility or phone parity.
+
+Research/design-only changes do not alter first-run install or learner steps, so
+README and TUTORIAL remain accurate. FEATURES and the knowledge map identify the
+study and its limits. On implementation **or rejection**, retire the three mock
+assets and lower the extra asset-count allowance; the OpenSpec task list records
+this lifecycle explicitly.

@@ -4,15 +4,6 @@ World's views are Town, Board, Desk and Spaces. Office, Tree and Graph were
 retired; their addresses redirect to Town and Board, and their source and tests
 were removed.
 
-Code view (#981) is a proposal, not a shipping view. Read its
-[research and recommendation](design/code-view/research.md),
-[design and preview walkthrough](design/code-view/design.md) and
-[OpenSpec proposal](../openspec/changes/world-code-view/proposal.md).
-The synthetic preview at `/code-view-prototype.html` is owned by
-[`web/public/code-view-prototype/`](../web/public/code-view-prototype/), with
-[interaction evidence](../web/src/testing/codeViewPrototype.test.ts); it never
-connects to a runtime or writes project files.
-
 Use this map to locate ownership, then read the relevant contract, source and focused
 test. For end-to-end module and data-flow navigation, use the
 [foundation source guide](foundation-guide.md); for visual and terminal tasks,
@@ -50,6 +41,7 @@ and [portability lint](../scripts/test-portability.ts). See the
 
 | When changing | Current contract | Start in source | Focused evidence or runbook |
 | --- | --- | --- | --- |
+| Code view research/proposal and IDE integration study (not shipping) | [Research, provider comparison and gates](design/code-view/research.md), [OpenSpec proposal](../openspec/changes/world-code-view/proposal.md) | [Synthetic mock](../web/public/code-view-prototype.html), [interaction code](../web/public/code-view-prototype/mock.js); no live IDE adapter | [Exact preview clicks](design/code-view/design.md), [fixture tests](../web/src/testing/codeViewPrototype.test.ts); `/code-view-prototype.html` |
 | Runtime support, versions and first run | [Support table and limits](../FEATURES.md#runtime-support), [quick start](../README.md#quick-start) | [TUI compatibility](../shared/herdrIdentity.ts), [core transport](../server/src/herdr-core/transport.ts), [launcher choice](../web/src/world/AgentLauncherDialog.tsx), [usage wiring](../server/src/service/world-service.ts) | [TUI identity](../shared/herdrIdentity.test.ts), [core connections](../server/src/herdr-core/connections.test.ts), [Windows relay](../server/src/herdr-core/windows.test.ts), [core controls](../server/src/rpc/core.test.ts), [Linux acceptance](development.md#linux-installation-acceptance) |
 | Linux installer/runtime setup and release acceptance | [Release gate](release.md#linux-systemd-installation-gate), [runbook](development.md#linux-installation-acceptance) | [Container harness](../scripts/install-linux.ts), [systemd cases](../scripts/install-linux/scenarios.py), [suite selection](../scripts/validation-scope.ts) | [Harness regressions](../scripts/install-linux.test.ts), [selection regressions](../scripts/validation-scope.test.ts) |
 | Core harness inventory, profile aliases and transcript reading | [Core runtime requirement](../openspec/specs/herdr-core-runtime/spec.md), [harness matrix](core-harnesses.md) | [Harness names](../server/src/herdr-core/harness.ts), [native launch brief](../server/src/herdr-core/launch-brief.ts), [history reader](../server/src/herdr-core/history.ts), [shared Chat on core](../server/src/herdr-core/agent-sessions.ts) | [Shared transcript fixtures](../server/src/agent/testing/conversation-fixtures.ts), [reader parity and fences](../server/src/herdr-core/history.test.ts), [live harness-name smoke](../server/src/herdr-core/harnesses.live.test.ts), [Chat browser captures](../server/src/herdr-core/files.browser.test.ts) |

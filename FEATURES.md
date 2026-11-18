@@ -1769,19 +1769,28 @@ to search.
 
 ## Code view design preview
 
-Code is a proposed IDE-style projection of the same World rooms, projects, agents
-and terminals. It is not a shipping view. The
-[research and recommendation](docs/design/code-view/research.md) compare editor
-options; the [design walkthrough](docs/design/code-view/design.md) explains the
-preview at **`/code-view-prototype.html`** on your World/preview origin.
+Code is a proposal to show the user's installed real VS Code web workbench inside
+World, projecting the same hosts, rooms, projects, agents and terminals. IDEs fit
+the existing integrations direction: detect and enable per host, open per project,
+with desktop handoffs to VS Code, Cursor, JetBrains Gateway and Zed. The
+[research and recommendation](docs/design/code-view/research.md) compare Microsoft
+`code serve-web`, OpenVSCode and code-server, marketplace/settings differences,
+licence, origin/authentication, SSH, terminal and resource hurdles. The
+[design walkthrough](docs/design/code-view/design.md) gives exact preview clicks.
+No live editor, server, extension, installer, proxy or navigation is delivered.
 
-The standalone **DESIGN STUDY / 981** fixture opens synthetic projects with files,
-agent terminals, Changes and a PR card. On phones use **Files / Code / Agents /
-Changes**. **Agent changes file** and **Disconnect host (mock)** expose conflict
-and stale-host scenarios without real agents. Edits, Save example and Send example
-use memory only: no file is saved, command executed or PR changed. Reset study
-clears the fixture. The proposed first implementation is read/review plus existing
-terminals; live saves and full VS Code extensions are not delivered by this study.
+Open **`/code-view-prototype.html`** on your World/preview origin. The standalone
+**DESIGN STUDY / 981** uses a clearly labelled VS Code **stand-in**, an IDE picker
+and an **Open in desktop IDE** handoff preview. All data/actions are synthetic;
+nothing installs, connects, saves, executes or launches an app. **Block embedding
+(mock)**, **Disconnect host (mock)** and the SSH host's missing-provider fixture
+expose failure states; **Mark installed (mock)** only changes fixture state.
+**Attach profile (mock)** demonstrates existing agent terminals; Herdr TUI requires
+acknowledging that attach resizes the pane for every viewer. Phones retain native
+World **Agents / Files / Changes** sketches; **IDE preview** is optional with a
+larger-screen warning. **Reset study** clears memory-only state. Real embedding
+remains gated on upstream terms, same-origin/worker/webview compatibility and
+explicit trust in full shell/write and same-origin extension authority.
 
 ## Workspace Inspector
 

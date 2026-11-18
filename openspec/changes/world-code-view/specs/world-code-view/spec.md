@@ -1,125 +1,198 @@
 ## Purpose
 
-Present qualified World projects, changes and existing agent terminals in a native
-Code view, preserving the same entities, origin and authority as other World views.
+Define a real installed-IDE projection of World with qualified per-host integrations,
+explicit trust, secure transport, project handoffs and existing runtime terminals.
+This is a decision proposal; it does not describe a shipped editor or proxy.
 
 ## ADDED Requirements
 
-### Requirement: Room projects in the same World
+### Requirement: IDE integrations per host and project
 
-Code SHALL be a projection of existing hosts, rooms, agents and terminals in the
-common World shell. Opening a room in Code SHALL resolve its project on its exact
-connection and runtime generation. Project and agent-checkout selection SHALL be
-explicit and preserve separate qualified file contexts. The initial capability
-SHALL provide reading/review and terminal access without filesystem writes.
+World SHALL represent IDEs within its integrations model, with read-only detection,
+explicit enablement per immutable host connection and opening per admitted project.
+The provider SHALL identify its installed product/version, web/desktop capability
+and availability reason. Discovery SHALL NOT start, install or update an IDE.
+World SHALL NOT bundle an IDE, silently accept its terms, change a selected
+provider or overwrite user-managed configuration. Existing harness integration
+behavior SHALL remain unchanged. Microsoft VS Code web, OpenVSCode, code-server,
+VS Code desktop, Cursor, JetBrains Gateway and Zed SHALL be distinct provider
+choices/capability records rather than aliases claiming identical functionality.
 
-#### Scenario: Open a room project
-- **WHEN** a user opens an available room in Code
-- **THEN** its admitted project opens with owning host, room, checkout and branch visible
-- **AND** opening the view neither moves an agent nor starts a process
+#### Scenario: Detect without starting
 
-#### Scenario: Agent has a linked worktree
-- **WHEN** a user explicitly selects that agent's checkout
-- **THEN** files and changes use the verified linked checkout on its original connection
-- **AND** selecting only the agent's terminal does not implicitly switch the file checkout
+- **WHEN** the owner views IDE integrations for an SSH host
+- **THEN** World reports detected, missing, disabled or unsupported providers for that exact connection without installing software, launching a server or altering another host's enablement
 
-#### Scenario: No project can be admitted
-- **WHEN** the room has no known root, ambiguous roots or an unavailable checkout
-- **THEN** Code explains the missing context or offers explicit known choices
-- **AND** it does not guess a cwd or substitute another room or host
+#### Scenario: Open disabled or missing provider
 
-### Requirement: Bounded qualified file and change reads
+- **WHEN** the selected provider is disabled, absent or incompatible on the project's host
+- **THEN** World explains the state and offers explicit enablement/setup guidance or another deliberate provider selection without opening another host's IDE
 
-Each Code project resource SHALL bind immutable connection ID, runtime generation,
-room/resource generation and validated root/checkout identity, plus agent/session
-identity where applicable. Reads and diffs SHALL respect current provider limits
-and project-root confinement. Dispatch and result publication SHALL reject retired
-bindings; access SHALL NOT silently broaden to arbitrary filesystem scope.
+### Requirement: Real workbench in the common World frame
 
-#### Scenario: Colliding room names on different hosts
-- **WHEN** two connections expose projects or terminals with the same display name
-- **THEN** Code reads only through the explicitly admitted connection and root
+Code SHALL project the same qualified hosts, rooms, projects, agent occurrences
+and terminals as other World views. Its center SHALL display the selected installed
+IDE's actual web workbench after feasibility admission; World SHALL NOT substitute
+a custom editor or save protocol. The IDE SHALL own editing, Git, extensions,
+profiles and Workspace Trust. World SHALL retain host/room/agent/PR context.
+Opening a project SHALL preserve the exact connection, runtime generation,
+workspace and admitted checkout; ambiguous roots SHALL require explicit selection.
+Selecting an agent terminal SHALL NOT silently change the checkout or branch.
 
-#### Scenario: Traversal or symlink escape
-- **WHEN** a project request resolves outside the admitted root
-- **THEN** the service refuses it without retrying under a broader file scope
+#### Scenario: Open a room and an agent checkout
 
-#### Scenario: Late reply or changed root
-- **WHEN** a selection retires or its checkout/generation changes while a read is pending
-- **THEN** the old reply cannot populate the new selection or grant it authority
+- **WHEN** the owner opens a qualified room in Code and explicitly selects an agent's linked checkout
+- **THEN** the real workbench opens that checkout on its owning host and the World frame keeps the same room and agents without creating replacements
 
-#### Scenario: Unsupported file or provider
-- **WHEN** a file exceeds current preview limits or its provider cannot serve that operation
-- **THEN** Code shows the specific read-only/unsupported state and retains other supported operations
+#### Scenario: Project evidence disappears
 
-### Requirement: Existing terminals retain ownership and lifecycle
+- **WHEN** the selected checkout is unavailable or the captured generation/session retires
+- **THEN** World revokes actionable project attachment and labels retained context stale without guessing a directory or redirecting to another host
 
-Code SHALL display existing Herdr TUI or herdr-core terminals through their World
-consumer and input-admission rules. Targets SHALL remain connection-, generation-
-and occurrence-qualified. Only the admitted focused terminal SHALL receive input.
-Closing, hiding or switching Code's terminal consumer SHALL release its input
-authority without terminating the underlying agent or replaying buffered keys.
+### Requirement: Embedding feasibility and full authority admission
 
-#### Scenario: Observe and type
-- **WHEN** a user opens an agent terminal beside source
-- **THEN** it starts observing and accepts input only through explicit current control admission
-- **AND** typing in source, search or review fields sends no terminal input
+An embedded provider SHALL remain unavailable until its distribution terms,
+owner licence acceptance, same-origin behavior and explicit full shell/file-write
+trust pass admission. World SHALL call installed servers only and SHALL NOT claim
+that nonbundling alone grants embedding rights. The owner SHALL be told that an
+IDE is not confined to the selected project and same-origin workbench/extension
+code shares World's browser authority. Failed licence, frame, webview, worker,
+secure-context or origin compatibility SHALL block embedding with a concrete
+reason and an explicit desktop handoff option. World SHALL NOT silently relax
+its global origin/CSP policy, rewrite restricted product assets or assert desktop
+extension parity based only on Marketplace availability.
 
-#### Scenario: Another surface already owns a terminal
-- **WHEN** Code requests the same target as an Inspector or Spaces consumer
-- **THEN** the existing ownership transfer rules prevent duplicate input ownership
+#### Scenario: Official webviews require another origin
 
-#### Scenario: Terminal is replaced or view is hidden
-- **WHEN** the target occurrence/generation changes or Code stops displaying its consumer
-- **THEN** control and unsent keys are released and no replacement is attached by display name
-- **AND** the existing runtime process is not killed by the view transition
+- **WHEN** an installed Microsoft provider requires a CDN webview origin incompatible with World's current policy
+- **THEN** embedding remains blocked with the compatibility reason and explicit handoff; no automatic CSP exception or Open VSX substitution occurs
 
-### Requirement: One origin and existing authentication
+#### Scenario: First enable grants broad authority
 
-The browser SHALL obtain Code assets, project reads and terminal streams only
-through the World origin and its existing authenticated admission. The service
-SHALL own local/SSH file access and runtime transports. Code SHALL NOT add a remote
-browser bridge, IDE listener, external account requirement or executable project
-content on open. File and terminal content SHALL NOT enter new persistent browser caches.
+- **WHEN** the owner enables a compatible installed server
+- **THEN** World discloses host-user shell/write and same-origin extension authority, requires explicit consent and upstream licence acceptance, and preserves the IDE's own Workspace Trust prompts
 
-#### Scenario: SSH project opened on a phone
-- **WHEN** a logged-in user opens an SSH room in Code
-- **THEN** the service uses its saved OpenSSH policy and the phone contacts only World
-- **AND** no SSH secrets or remote IDE credentials are sent to the browser
+### Requirement: Authenticated private transport and revocation
 
-#### Scenario: Authentication expires
-- **WHEN** the World session ends or request admission is lost
-- **THEN** consumers stop and in-memory project/terminal content is cleared without automatic input replay
+All embedded browser HTTP/WebSocket traffic SHALL use World-owned same-origin
+routes authorized by the current owner session and bound to a fixed admitted
+server instance. Upstreams SHALL be private local endpoints or private forwards
+through the captured service-owned OpenSSH connection. Browser-supplied arbitrary
+upstream destinations SHALL be refused. Server tokens SHALL NOT enter browser
+URLs, history, logs or persistent browser storage. Cookies, redirects and worker
+scope SHALL NOT overwrite World authentication or intercept World/PWA resources.
+Logout, disablement and connection retirement SHALL revoke proxy authority and
+close attached streams; unsupported platforms SHALL be explained without fallback.
 
-### Requirement: Changes and PRs retain evidence and freshness
+#### Scenario: SSH project opens
 
-Code SHALL scope file changes to the selected checkout and associate PRs only using
-validated repository/branch/work evidence. It SHALL distinguish agent activity
-from proven authorship and expose stale or unavailable provider data. PR navigation
-SHALL use validated existing provider URLs. This capability SHALL NOT add Git
-mutation or PR approval/merge operations.
+- **WHEN** the owner explicitly starts/opens an enabled installed IDE for an SSH project
+- **THEN** the server runs on that host beside its files and World carries HTTP/WS through its qualified private SSH transport without exposing a remote listener to the browser
 
-#### Scenario: Agent change and reported PR
-- **WHEN** the selected checkout changes and a validated linked PR is available
-- **THEN** Code offers that checkout's comparison and the PR's branch/check/review context
-- **AND** a terminal's activity alone does not attribute every changed line to that agent
+#### Scenario: Logout during a workbench connection
 
-#### Scenario: Missing or stale PR evidence
-- **WHEN** PR association, credentials or fresh checks are unavailable
-- **THEN** Code states that absence or staleness without inventing a PR or passing checks
+- **WHEN** the owner logs out or disables that integration while an IDE WebSocket is open
+- **THEN** World closes its streams, rejects subsequent requests and revokes paired World capabilities without replaying input or redirecting to another server
 
-### Requirement: Phone navigation and disconnection preserve context
+#### Scenario: Foreign route or worker scope
 
-Compact Code SHALL expose named keyboard/assistive controls and touch targets of at
-least 44 by 44 CSS pixels for file, code, agent and review navigation. Panel changes
-SHALL retain their qualified selection. Disconnected cached content SHALL be visibly
-stale and non-actionable; fresh actions SHALL require exact target revalidation.
+- **WHEN** a request names another session's upstream or an IDE response asks for root service-worker authority
+- **THEN** World refuses the request/provider behavior before it can cross its admitted route or intercept World resources
 
-#### Scenario: Navigate on a phone
-- **WHEN** a user moves from a file to an agent terminal and then a diff
-- **THEN** the same project's context remains visible and the previous file selection is retained
+### Requirement: Existing runtime terminals through a World extension
 
-#### Scenario: Host disconnects and reconnects
-- **WHEN** the selected host disconnects and later becomes reachable
-- **THEN** cached content is marked stale and input is refused until its exact target is revalidated
-- **AND** reconnection does not automatically send keys or restore terminal control
+A small optional World extension SHALL provide named terminal profiles attaching
+existing connection/runtime-generation/session-qualified Herdr panes and core
+terminals. Profile discovery/attachment SHALL NOT launch replacement agents.
+The extension SHALL use a separately paired, narrow, expiring and revocable
+capability rather than the owner's login token. TUI attachment SHALL disclose
+that attaching/resizing changes pane dimensions for every viewer before attachment;
+existing control/resize ownership SHALL be respected. Core SHALL use a verified
+screen-watch/typing/resize adapter and SHALL NOT be treated as a raw PTY.
+Unsupported runtime adapters SHALL refuse with a reason. Editor keystrokes SHALL
+NOT become terminal input. Hide/close/retirement SHALL release World attachment
+and input demand without ending agents; uncertain input SHALL NOT be replayed.
+
+#### Scenario: Attach a TUI profile with shared viewers
+
+- **WHEN** the owner selects an existing Herdr TUI profile in VS Code
+- **THEN** World warns before attach that pane dimensions affect every viewer and uses the current ownership/control path for that exact pane
+
+#### Scenario: Core adapter lacks fidelity
+
+- **WHEN** a core terminal cannot be faithfully represented by the installed extension adapter
+- **THEN** that profile is unavailable with a concrete reason and the native World terminal remains available without substituting a TUI pane
+
+#### Scenario: Close or disconnect an attached profile
+
+- **WHEN** the owner closes the profile, leaves Code or loses the captured connection
+- **THEN** World detaches the consumer, releases input/resize authority and keeps the existing agent running with no queued keys sent after reconnect
+
+### Requirement: Settings and extension capability evidence
+
+World SHALL use the selected installed IDE's supported settings, profile, extension
+and update mechanisms. It SHALL distinguish project configuration, browser state,
+server/workspace extensions and desktop user state rather than promise shared
+live directories. Microsoft Marketplace/Settings Sync and Open VSX capabilities
+SHALL be identified per provider. Version changes SHALL trigger compatibility
+revalidation. Copilot, Pylance, Remote and C# Dev Kit SHALL be explicit compatibility
+cases with licence, entitlement and web/remote-host limitations recorded.
+
+#### Scenario: Desktop user opens a new server
+
+- **WHEN** the owner's existing desktop profile is not present in the server/web client
+- **THEN** World explains the separate state and supported Sync/import path without copying secrets or promising all desktop extensions are already installed
+
+### Requirement: Desktop handoff and native phone workflows
+
+World SHALL offer explicit project-qualified desktop IDE handoff through enabled
+provider adapters, preserving the exact host and checkout. It SHALL distinguish
+host detection from browser-device client availability, validate/encode provider
+URIs and omit World credentials. Unavailable clients SHALL receive supported setup
+or copyable connection instructions; World SHALL NOT execute a GUI on the service
+host or mistake a remote path for browser-local files. Native World phone agent,
+Files and Changes workflows SHALL remain primary without a custom mobile editor
+or promise of full phone VS Code parity.
+
+#### Scenario: Open remote project in Gateway or VS Code desktop
+
+- **WHEN** the owner selects a desktop handoff for an SSH project
+- **THEN** the chosen adapter supplies a supported remote connection/project handoff for that exact host, with no local-folder substitution, owner-token leakage or silent app launch
+
+#### Scenario: Phone opens a project
+
+- **WHEN** the owner opens Code context on a phone
+- **THEN** native World agent/file/change access and the qualified project remain available with desktop IDE limitations explained
+
+### Requirement: Agent activity and pull requests
+
+World SHALL show current agent activity and PR evidence qualified by repository,
+checkout, connection and freshness alongside the real workbench. Working-tree
+changes SHALL remain the IDE's Source Control responsibility. A linked PR/diff
+request SHALL resolve to its verified checkout; branch/name coincidence SHALL NOT
+prove association or line authorship. Missing/stale evidence SHALL be explicit and
+non-actionable. This view SHALL NOT add World commit/push/approve/merge authority.
+
+#### Scenario: Review an agent's reported change
+
+- **WHEN** the owner selects a verified linked PR from an agent's Code context
+- **THEN** the frame shows its qualified branch/check/review evidence and requests the matching native comparison without reassigning all changes to that agent
+
+### Requirement: Bounded server lifecycle and resource ownership
+
+Servers SHALL start only on explicit admitted demand, reuse only compatible proven
+host/user/provider/profile instances and use measured active-server/window limits.
+World SHALL distinguish external from World-started processes and expose stop/idle
+behavior. Closing Code SHALL detach clients without killing Herdr agents or an
+externally owned IDE server. Uncertain starts SHALL be reconciled against the
+captured instance before retry; retiring a connection SHALL NOT restart it elsewhere.
+
+#### Scenario: Close a project using an external server
+
+- **WHEN** the owner closes Code while its installed server was started outside World
+- **THEN** World releases its own attachments/transport demand without stopping the server, deleting IDE state or ending agents
+
+#### Scenario: Start reply lost
+
+- **WHEN** a start may have succeeded but its result is unknown
+- **THEN** World reports uncertainty and reconciles that captured instance before any retry instead of launching duplicate servers or switching hosts

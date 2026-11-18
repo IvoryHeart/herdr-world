@@ -1,117 +1,146 @@
-# A Code view for World
+# Real IDEs inside World
 
-**Decision proposal, 18 November 2026 · issue #981.** The delivered interaction
-study uses synthetic data. No editor, file-write API, IDE server or runtime
-integration is shipped by this change. Start with the [design and walkthrough](design.md)
-and the [OpenSpec proposal](../../../openspec/changes/world-code-view/proposal.md).
+**Research and decision proposal · 18 November 2026 · #981 / #988.**
+The owner has selected real VS Code and IDE integrations. This revision replaces
+the earlier custom CodeMirror/read-only-editor recommendation. This PR delivers
+research, a [clickable design study](design.md) and an
+[OpenSpec proposal](../../../openspec/changes/world-code-view/proposal.md), with no
+live IDE, installer, proxy, extension or changes to Herdr/herdr-core.
 
 ## Recommendation
 
-Build Code as another projection in World's React shell. Use the existing
-CodeMirror editor family, file/Git services and runtime-specific terminal views.
-Put a selected project's explorer, editor and its agents' existing terminals
-in a familiar IDE arrangement. Keep Town, Board, Desk, Hosts and Needs you as
-World concepts, with the same entity identities and navigation.
+Make **Code** another World projection whose center contains the user's installed
+VS Code web workbench. Recommend Microsoft's **`code serve-web`** as the first
+provider to investigate because the Microsoft Marketplace, Settings Sync and
+existing VS Code community are central to the request. World calls the installed
+CLI/server on the project's host; it never bundles, forks or replaces the IDE.
+VS Code owns files, editing, Git, debugging, extensions and its own trust prompts.
+World keeps hosts, rooms, agent identity, attention and project selection.
 
-Recommend read/review and terminal access first; the mock also explores future
-editable buffers. Live saves need an explicit owner decision about concurrent
-external writers before they become implementation scope. This gives World a
-VS Code–style working surface on desktop and a focused file, agent and review
-flow on phones. It does **not** give World the VS Code extension
-ecosystem, debugger or language-server suite. If those are essential, choose a
-full workbench deliberately; that changes installation, trust and maintenance.
-Monaco is a viable desktop editor alternative, but its upstream
-[FAQ explicitly excludes mobile browsers](https://github.com/microsoft/monaco-editor#faq).
-[CodeMirror advertises native phone selection and editing](https://github.com/codemirror/website/blob/main/site/index.html),
-and World already loads it for code previews. Reusing it avoids maintaining two
-editor engines before a demonstrated need.
+Treat **IDEs as integrations**, detected and enabled per host, opened per project.
+Offer desktop handoffs to VS Code, Cursor, JetBrains Gateway, Zed and further
+providers through that seam. Preserve native World phone views. Do not build a
+parallel editor or promise every desktop extension works in a browser.
 
-## Evidence and comparison
+This is a **gated recommendation**, not proof that embedding is deployable.
+Microsoft's [server licence](https://code.visualstudio.com/license/server) permits
+use with licensed VS Code and restricts hosting/sharing and combining it with
+applications for others. Calling an owner-installed server avoids redistribution;
+it does **not** settle whether this particular integration is permitted. Confirm
+the intended personal/local-first use with the licensor or appropriate review
+before enabling this provider. If terms or same-origin compatibility cannot be
+satisfied, keep that embed unavailable, explain why, and offer an explicit desktop
+handoff. Do not silently replace it with an Open VSX fork or loosen World's CSP.
 
-Primary sources below were checked on the date above. Sizes are deliberately
-different measurements: a package's unpacked bytes, a server download and a
-browser's transferred JavaScript are **not comparable payloads**. No contender
-was installed or benchmarked against a real project. Browser startup, idle RAM,
-language services, keyboard/IME behavior and extension compatibility remain
-implementation-spike evidence, not conclusions of this study. Maintenance and
-phone assessments below are architectural judgments unless linked to upstream
-documentation. Licences describe the named project; bundled components and
-extensions keep their own terms.
+## Options and prior art
 
-| Option | Licence and size evidence | World single-origin security and placement | Phone experience | Maintenance and fit |
-| --- | --- | --- | --- | --- |
-| **World shell + CodeMirror** (recommended) | [MIT](https://github.com/codemirror/view/blob/main/LICENSE). Already in `web/package.json`; no additional editor engine. Incremental production bundle cost unmeasured. | Editor runs in the browser; only World serves assets and authorizes qualified file/terminal operations. No extension host or new listener. Escape source as text. | Upstream explicitly supports mobile editing; still needs iOS/Android IME, selection and keyboard tests. One panel at a time. | Lowest integration/deployment burden. World must own project navigation, guarded saves and review UX; no VS Code extension compatibility. |
-| **World shell + Monaco** | [MIT and FAQ](https://github.com/microsoft/monaco-editor). [npm metadata](https://registry.npmjs.org/monaco-editor/0.57.0): 0.57.0, **101,674,083 unpacked bytes**, not a browser bundle. | Browser editor and same-origin workers, with files and terminals mediated by World. Monaco supplies neither filesystem nor full VS Code workbench. Workers must fit World's CSP. | Upstream says mobile is unsupported. Would require a separate phone editing surface or read-only review, increasing parity work. | Medium. Familiar desktop completion/diff APIs; own navigation, saves, language-service deployment and worker upgrades. VS Code extensions do not run in Monaco. |
-| **code-server** | [MIT](https://github.com/coder/code-server/blob/main/LICENSE). [4.145.2 Linux amd64 archive](https://github.com/coder/code-server/releases/tag/v4.145.2): **236,495,502 bytes**. Upstream recommends [1 GB RAM and 2 CPU cores](https://coder.com/docs/code-server/requirements). | Separate workbench server near each project's files; World would proxy HTTP/WebSocket under a qualified route and enforce its login on every request. [Subpath proxying is documented](https://coder.com/docs/code-server/guide). Same-origin workbench/extensions inherit substantial World authority; a path is no sandbox. | [iPad guidance](https://coder.com/docs/code-server/ipad) covers PWA/keyboard limitations. Tablet usability is not phone validation; desktop density still needs adaptation. | High. Per-host installation, versioning, process cleanup, proxy/cookie/worker handling and an extension to attach existing agents. Its ordinary terminals would otherwise start different processes. |
-| **OpenVSCode Server** | [MIT](https://github.com/gitpod-io/openvscode-server/blob/main/LICENSE.txt). [1.109.5 Linux x64 archive](https://github.com/gitpod-io/openvscode-server/releases/tag/openvscode-server-v1.109.5): **76,686,959 bytes**. No runtime resource measurement. | A full server by the files. [Upstream documents unauthenticated access unless configured](https://github.com/gitpod-io/openvscode-server#securing-access-to-your-ide), including its tokenless Docker default. World must protect proxy and private upstream; do not pass long-lived tokens in browser URLs. | Browser access is available; no phone-specific usability guarantee established here. Same dense workbench/editor concerns as Monaco. | High. Small upstream patch surface, but World still owns supervised lifecycle, per-connection isolation, auth integration and Herdr terminal extension. |
-| **Eclipse Theia** | [EPL-2.0](https://theia-ide.org/docs/faq/), with distribution/source obligations for modified covered code; extension licences vary. Modular frontend/backend product, no single representative artifact size measured. | [Browser frontend + Node backend](https://theia-ide.org/docs/architecture/). A World product would need a backend per file host or a remote filesystem provider, private transport, authentication and extension trust policy. It adds another application platform to the Bun service. | Responsive widgets could be designed, but its Monaco-based editor is not evidence of supported phone editing. Phone adaptation remains ours. | Highest custom-platform commitment. Strong workbench customization and partial VS Code API compatibility; DI modules, plugins, backend and World semantics all need upkeep. |
-| **A World extension in existing VS Code** | World-owned extension could remain MIT; installed VS Code and each extension have separate terms. No new World web bundle, but requires an installed desktop/web workbench; extension package size unmeasured. | Extension talks to World using a new narrow credential/pairing contract. Do not copy the owner's World session/token into workspace settings. Remote extension host and selected World connection can differ; explicit identity checks are essential. | Desktop extension alone does not solve the phone goal. A [web extension](https://code.visualstudio.com/api/extension-guides/web-extensions) runs in a worker without Node/process APIs and needs browser-reachable World. | Medium/high, separate release and auth lifecycle. Useful optional companion later; it puts World inside an IDE and does not deliver this request's World view. |
-| **Microsoft VS Code Remote SSH / Tunnels** | Code OSS source is MIT; Microsoft's distributed [VS Code Server has separate terms](https://code.visualstudio.com/license/server), including restrictions on hosting/combining it for others. CLI/server/client/extension artifacts vary; no single bundle size measured. | [Remote development](https://code.visualstudio.com/docs/remote/remote-overview) places tools near files. [Tunnels](https://code.visualstudio.com/docs/remote/tunnels) use GitHub/Microsoft authentication and outbound Azure connections, then a `vscode.dev` client: a separate origin and identity flow. Reuse the placement principle, not a tunnel inside World. | Browser client can reach the host; it does not supply World's phone navigation or prove phone editor support. | Low custom IDE work if simply linking out, but substantial external-product/account dependency. Does not meet the same-origin, same-World-view contract as an embed. |
+Primary sources were checked on the date above. Size figures below are named
+**compressed Linux server archives**, not browser transfer or resident memory.
+No IDE was installed or benchmarked in this research. World packages **zero IDE
+bytes** for every external-server/handoff option. Maintenance and phone judgments
+are design assessments. Source licences do not cover every distributed extension.
 
-Archive sizes above come from each release's GitHub API `assets[].size`, selected
-by the exact named Linux archive, accessed 18 November 2026; npm size is
-`dist.unpackedSize`. These are observations, not installation targets or dependency
-recommendations. Before any full-workbench choice, audit the chosen release,
-extension registry and redistribution terms; MIT Code OSS does not grant use of
-Microsoft's marketplace or proprietary extensions. Theia's
-[FAQ distinguishes a custom platform from a VS Code extension](https://theia-ide.org/docs/faq/).
+| Option | Licence, size and updates | Ecosystem and configuration | Origin, phone and maintenance |
+| --- | --- | --- | --- |
+| **Microsoft `code serve-web`** — preferred candidate | Distributed VS Code/server uses [Microsoft terms](https://code.visualstudio.com/license/server); Code OSS source is MIT. [Official CLI implementation](https://github.com/microsoft/vscode/blob/main/cli/src/commands/serve_web.rs) downloads/caches a separate server and checks releases. CLI size alone omits that payload; installed/cache size and RAM unmeasured. User accepts terms; World must not add the acceptance flag silently. Upstream owns updates; World records and retests observed version/commit. | Microsoft Marketplace and built-in Settings Sync are the closest match to the owner's desktop ecosystem. Web/runtime eligibility and extension licences still apply. Desktop installation does not imply the server shares its user-data, profile or extensions directories. | Loopback server, authenticated World HTTP/WS proxy and compatible base path required. Default CDN webviews, workers and browser auth need a feasibility gate. Desktop workbench is poor on a phone; retain World phone views. Medium/high adapter cost; no custom editor maintenance. |
+| **OpenVSCode Server** — explicit alternative | [MIT](https://github.com/gitpod-io/openvscode-server/blob/main/LICENSE.txt). [1.109.5 Linux x64 archive](https://github.com/gitpod-io/openvscode-server/releases/tag/openvscode-server-v1.109.5): 76,686,959 bytes. User installs/updates its distribution; World probes compatibility after updates. | Open VSX, not Microsoft's Marketplace. Separate server settings/extensions; no promise of Microsoft Settings Sync or shared desktop profiles. VSIX only where its licence permits. | [Token protection must be configured](https://github.com/gitpod-io/openvscode-server#securing-access-to-your-ide); unauthenticated defaults are unacceptable for World. Base-path/webview behavior needs version-specific proof. Same dense phone workbench; high integration lifecycle/security cost. |
+| **code-server** — explicit alternative | [MIT](https://github.com/coder/code-server/blob/main/LICENSE). [4.145.2 Linux amd64 archive](https://github.com/coder/code-server/releases/tag/v4.145.2): 236,495,502 bytes. User owns package updates. [Minimum recommendation](https://coder.com/docs/code-server/requirements): 1 GB RAM and 2 cores, not a measured World budget. | Open VSX; its [FAQ](https://coder.com/docs/code-server/FAQ) documents separate data/extensions locations and Microsoft Marketplace restrictions. Import/copy selected settings deliberately; do not point two products at one live data directory. Built-in Microsoft Sync is not promised. | [Subpath reverse proxy](https://coder.com/docs/code-server/guide) and self-contained webviews make same-origin hosting more tractable. Still a full shell/write trust boundary. [iPad support](https://coder.com/docs/code-server/ipad) does not establish phone usability. More downstream patches, auth and update surface to maintain. |
+| **Desktop IDE handoff** — VS Code, Cursor, JetBrains Gateway, Zed | Each installed product keeps its own licence/update channel; no IDE browser payload. [VS Code CLI/URLs](https://code.visualstudio.com/docs/configure/command-line), [Cursor SSH](https://cursor.com/docs/remote-development/ssh), [Gateway SSH](https://www.jetbrains.com/help/idea/remote-development-starting-page.html), [Zed remote development](https://zed.dev/docs/remote-development). | Best continuity with that client’s actual profiles, installed UI extensions and keybindings. Remote workspace extensions may still be separate. Gateway/Zed provision their own remote backend under their rules. | Browser confirms a client-side handoff; host-side detection cannot prove an IDE is installed on the browsing device. No iframe/CSP problem. No desktop app on most phones. Low/medium launch-adapter cost; preserve exact host/path, do not launch a service-host GUI by accident. |
+| **VS Code Remote-SSH / Tunnels** — placement precedent | Microsoft's [remote FAQ](https://code.visualstudio.com/docs/remote/faq) and [Tunnels](https://code.visualstudio.com/docs/remote/tunnels) describe separately installed servers, updates and authenticated channels. No single artifact size; client/server/extensions vary. | Real VS Code with remote workspace extension hosts; not automatic reuse of all local extensions. Tunnels add Microsoft/GitHub identity and a `vscode.dev` client. | Remote-SSH places tools beside files and carries transport through SSH: copy that placement principle. A `vscode.dev` tunnel URL is a different origin, not the World embed; offer only as a separately explained handoff if later selected. Dense browser UI remains poor on phones. |
+| **World extension in VS Code** — companion, not editor replacement | Small World-owned extension could use MIT; package size unmeasured. Installed IDE and extensions retain separate terms. Independent compatibility/release testing needed. | Adds World terminal profiles/agent context to the real workbench. It does not recreate an editor. Workspace extension host is preferred where process APIs are needed. | Narrow paired credentials; never reuse World's owner login. Web-only extensions run in workers without Node process APIs. Does not itself solve embedding or phone interaction. Medium adapter/credential cost. |
+| **Monaco / CodeMirror in World** — rejected as the Code view | [Monaco MIT](https://github.com/microsoft/monaco-editor), [CodeMirror MIT](https://github.com/codemirror/view/blob/main/LICENSE). Monaco 0.57.0 [npm unpacked size](https://registry.npmjs.org/monaco-editor/0.57.0) was 101,674,083 bytes, not bundle transfer; CodeMirror already exists for previews, incremental editor bundle unmeasured. | Neither runs the full VS Code workbench or its extensions. World would own editor, language services, saves and configuration. Existing preview components can stay in current World views. | Straightforward same-origin code, but fails the selected ecosystem requirement. Monaco explicitly excludes supported mobile browsing; CodeMirror phone support cannot substitute for real VS Code. Large ongoing custom-product cost. |
+| **Eclipse Theia** — rejected for this request | [EPL-2.0](https://theia-ide.org/docs/faq/) platform; frontend/backend and extension sizes depend on the assembled product, unmeasured. | [Separate application framework](https://theia-ide.org/docs/architecture/) with VS Code API compatibility and Open VSX, not the user's actual Microsoft VS Code. | Adds backend, authentication and customization maintenance. Monaco-based workbench has no demonstrated phone advantage. Highest custom-platform cost; contradicts lift-and-shift intent. |
 
-## How the terminals fit
+Archive bytes were rechecked from each named release's GitHub API `assets[].size`.
+They are dated comparison evidence, not install pins or cross-product benchmarks.
 
-| Integration | What appears | Consequence for World |
+## Extension availability: marketplace access is necessary, not sufficient
+
+| Extension family | Official VS Code web with workspace server | OpenVSCode / code-server |
 | --- | --- | --- |
-| [Shell terminal profile](https://code.visualstudio.com/docs/terminal/profiles) | A command such as `herdr` launched in the IDE's integrated terminal. | It can run the Herdr TUI, but does not automatically attach one existing World agent. Starting `herdr` or a shell must not be mistaken for observing the selected terminal. It can also duplicate runtime lifecycle. |
-| [Profile provider + pseudoterminal](https://code.visualstudio.com/api/references/vscode-api#Pseudoterminal) | A named terminal such as **World: Scout · Orchard**, backed by an extension forwarding output, input and dimensions to World. | Best full-workbench integration. A profile is discoverability; the pseudoterminal is the transport adapter. Must bind connection, generation and terminal/session, handle reconnect and resize, revoke control, and make terminal close detach rather than kill. Core screen-watch semantics require an adapter; do not assume raw PTY parity. |
-| **World's terminal components** | Herdr TUI's terminal view or herdr-core's screen watch and composer, docked below code; agent tabs select existing terminals. | Recommended. Preserve current runtime-specific ownership, control, phone keys, lease/typing and detach behavior. An editor buffer never forwards ordinary keystrokes to the terminal. No changes to Herdr or herdr-core. |
+| Copilot / Copilot Chat | Microsoft distribution is the supported route to the Marketplace package, account sign-in and service entitlement. Test chat/completions and auth in the embedded web client. | Do not promise Microsoft Marketplace access. [Copilot Chat source is now MIT](https://github.com/microsoft/vscode-copilot-chat/blob/main/LICENSE.txt): saying all Copilot code is proprietary or permanently unavailable outside Microsoft is too broad. A source build/other listing is not proof of supported service access or API compatibility. |
+| Pylance | Marketplace package and its [distribution terms](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance) must allow the selected Microsoft runtime; test the remote Python environment. | Do not bypass restrictions by changing gallery URLs or copying a proprietary VSIX. [Pyright](https://github.com/microsoft/pyright) is an alternative, not Pylance parity. |
+| Remote-SSH / Remote extensions | Microsoft-product-only distribution/use restrictions apply. Browser access to a server is not desktop Remote-SSH inside a browser: World establishes the SSH transport itself. | Microsoft's Remote suite is not promised. These servers already run by the files; they do not need a nested Remote-SSH extension to reach that same host. |
+| C# Dev Kit | Microsoft Marketplace and separate [Dev Kit licence/entitlement](https://code.visualstudio.com/docs/csharp/cs-dev-kit-faq), remote .NET SDK and web-client compatibility must all pass. | No promised Dev Kit availability. Open-source C# components are a different offering, not an entitlement workaround. |
 
-## Current code that anchors the proposal
+The owner's named Marketplace-only examples are therefore **compatibility acceptance
+cases**, not a claim that every version of every extension has identical licensing.
+Pure UI/native desktop extensions and browser-shortcut limitations remain even on
+Microsoft's web client. Test exact package versions, extension-host location, sign-in
+and functionality; listing an extension in the gallery is not a passing test.
 
-- [`FilePreviewContent`](../../../web/src/components/FilePreviewContent.tsx) and
-  [`CodePreview`](../../../web/src/components/CodePreview.tsx) already use CodeMirror.
-  A preview is not yet the proposed versioned editor-save contract.
-- [`WorkspaceInspectorRequest`](../../../web/src/workspaceResource.ts) qualifies
-  workspace selection by connection and generations. The aggregate snapshot is
-  observation, not permission to perform a downstream operation.
-- [`file.*`](../../../server/src/rpc/files.ts) and
-  [`git.*`](../../../server/src/rpc/git.ts) use a selected connection's file service.
-  [`coreHostMethods`](../../../shared/coreHostMethods.ts) includes file/Git methods
-  on core. Preserve [`agent checkout selection`](../../../server/src/workspace/agent-worktree-files.test.ts)
-  so an agent's linked worktree is not confused with a room's launch checkout.
-- [`CoreTerminalWatch`](../../../web/src/world/CoreTerminalWatch.tsx) consumes a
-  qualified core address, generation, screen watch and typing path. It is not
-  interchangeable with a newly spawned xterm shell.
-- [`Filesystem browsing evidence`](../../../server/src/workspace/filesystem-browsing.test.ts)
-  distinguishes confined workspace paths from explicitly requested filesystem
-  scope. Code's proposed write roots stay confined; no implicit promotion from
-  browsing permission to arbitrary filesystem writes.
+## Settings, extensions, profiles and updates
 
-## Trade-offs and owner decisions
+Use the owner's installed distribution and supported configuration mechanisms.
+The same `.vscode/settings.json`, tasks and launch files follow the actual project;
+the IDE's Workspace Trust still governs activation. Personal settings, profiles,
+secrets and extensions are different state. [Settings Sync](https://code.visualstudio.com/docs/configure/settings-sync)
+can synchronize supported preferences/profiles between Microsoft clients after
+user sign-in, but [remote extensions are not automatically synchronized](https://code.visualstudio.com/docs/configure/settings#_settings-sync).
+Some web settings/state live in browser storage; server/workspace extensions live
+on the file host. A new World origin/profile or a different host can therefore
+require setup. Verify the chosen `serve-web` release's sync and profile flows;
+do not promise bit-for-bit desktop sharing, auto-copy secrets, or share a live
+user-data directory between processes. Forks require their own supported import
+mechanism and compatible extension installs.
 
-The recommendation prioritizes the same World and phone workflow over full VS Code
-API compatibility. Editing would add a save responsibility to World. Agent edits
-require visible conflicts; a generic file write layered over current reads could
-lose work. A content-hash check followed by atomic replacement still races with
-external writers. World-only locks cannot serialize arbitrary agent/editor writes.
-Start read-only; decide whether to accept that optimistic-write risk or require a
-cooperating writer protocol before adding live saves. Remote durability and platform
-support also need provider evidence, rather than being solved by an editor widget.
+A provider descriptor records product, executable/server version, capability
+status and owner-selected data/profile policy per host. `serve-web` can fetch a
+new server independently of desktop VS Code: observe actual CLI **and server**
+commit, rerun compatibility probes after change, and disable unsupported embeds.
+World updates its adapter/extension, never silently updates or replaces a user's
+IDE or rolls back their profile. Desktop handoff simply uses the installed client.
 
-Only the owner can settle these product priorities; the proposed contract assumes
-the recommended answers for review, and no answer is required during this research run:
+## Concrete hurdles and resolution gates
 
-1. **VS Code feel or full VS Code extensions/debugging?** Recommend the former
-   first. Requiring extensions selects a substantially different server/trust model
-   and requires revising this proposal before implementation.
-2. **Can Code save files in its first release?** Recommend read/review first.
-   If editing is required, decide whether optimistic-write races with external
-   agents are acceptable, then revise the contract and verify providers. Use
-   explicit saves and visible conflicts; silent autosave is not recommended.
-3. **What must work on a phone?** Recommend file reading, small edits, agent
-   terminal access and PR/diff review with 44 px targets; no full desktop panel grid.
-4. **Is an optional external IDE handoff valuable later?** Recommend deferring
-   extension pairing and tunnels. They can complement World, but cannot stand in
-   for this view or silently introduce a third-party account requirement.
+| Hurdle | Proposed solution or blocking condition |
+| --- | --- |
+| Single origin, base path and HTTP/WS | The browser loads only a World-owned opaque IDE route. The Bun service proxies to an admitted loopback/socket upstream; for SSH, to a private local forward. The [official CLI arguments](https://github.com/microsoft/vscode/blob/main/cli/src/commands/args.rs) include `--server-base-path`, token-file and server-data-dir. Verify actual release redirects, asset URLs, WS upgrades/reconnect, cookie names/paths, folder URLs and auth callbacks under that prefix. A base-path flag alone is not proof. Reject arbitrary upstream URLs, cross-host redirects and generic port proxying. |
+| Service workers and webviews | VS Code webviews use workers/service workers and by default Microsoft CDN content; [upstream web-client CSP](https://github.com/microsoft/vscode/blob/main/src/vs/server/node/webClientServer.ts) permits `*.vscode-cdn.net` frames and [Coder's comparison](https://coder.com/docs/user-guides/workspace-access/code-server/) distinguishes self-contained webviews. Test worker scope constrained below the IDE prefix, no root `Service-Worker-Allowed`, no collision with World’s PWA, and secure contexts (HTTPS except browser-trusted loopback). A phone/LAN HTTP preview is not evidence of a functioning IDE. Self-host only through a distribution-supported, licence-permitted mechanism. If official webviews need cross-origin frames, embedding is blocked under today's rule; owner must decide a separately reviewed origin-policy change or desktop handoff. Never blanket-allow CDN origins or rewrite signed product assets. |
+| Same-origin trust | An iframe/path is not a security boundary. A fully functional same-origin IDE/extension can act with browser World authority; HttpOnly cookies do not prevent authenticated requests. Accept only with explicit owner trust in the installed IDE and its extensions. A genuinely isolated IDE origin would require a separate policy decision. Restrictive iframe sandboxing that breaks VS Code is not a solution. |
+| Full shell/write authentication | Require World's authenticated owner session on every proxy request/WS upgrade; revoke streams on logout, disable and connection retirement. Keep upstream token in protected service/host storage, never URLs/history/logs/localStorage. Inject auth only into the fixed admitted upstream; strip browser-supplied upstream credentials and scope/mediate upstream cookies. Pair a separate short-lived, revocable World-extension capability for the exact host/runtime/terminal; never expose owner token to a workspace extension. VS Code retains responsibility for extension/Workspace Trust. |
+| SSH hosts | Detect installed IDE servers through the exact saved host connection; never start one during discovery. Owner enables and explicitly starts the selected installed server (installation assistance would need its own explicit consent and reviewed host installer). Bind remotely to loopback or a private socket, forward through the service user's OpenSSH configuration and connection lifecycle, then proxy same-origin. Remote files, Git, terminals, toolchains and extension hosts run there. No browser-to-host socket, public server port, SSH password storage or automatic Microsoft tunnel. Unsupported platform/version stays unavailable. |
+| Herdr terminals inside VS Code | A small World extension registers terminal profiles via [`TerminalProfileProvider` / `Pseudoterminal`](https://code.visualstudio.com/api/references/vscode-api#TerminalProfileProvider). Profiles attach existing qualified Herdr panes/core terminals rather than spawning a replacement agent. TUI raw stream and core screen-watch/typing need separate adapters. **Herdr attach resizes the pane for every viewer**: warn before attach/control and use existing ownership policy; do not claim independent per-client dimensions. Core requires screen-to-terminal translation and typing/resize admission, not an invented raw PTY. Close detaches only. Unproven core fidelity blocks that profile, not a fallback to TUI. |
+| Phones | Default to native World Town/Board/Desk, agent terminals, Files and Changes. Keep project/agent context; desktop handoff is optional when a client exists. A clearly labelled Try IDE anyway can be offered later, but no promise of touch/IME parity or a second World editor. |
+| Resource cost | A server has extension hosts, language servers, watchers, PTYs, browser workers and disk caches beyond the CLI. Reuse one compatible server per host/user/provider/data-profile identity when isolation permits; multiple project windows may still multiply extension hosts. On-demand start, bounded active-server slots, visible resource status, explicit stop and idle policy. Never stop an externally owned server or kill Herdr agents on tab close. Benchmark cold/warm start, incremental browser bytes, idle/active RSS, CPU, disk and cleanup across local/SSH Windows/Unix before setting defaults; no fabricated measurements. |
 
-The [architecture](../../../openspec/changes/world-code-view/design.md) defines
-placement, identity, authentication, write races, failure behavior and the evidence
-needed after that decision. This PR authorizes no editor implementation.
+The upstream web-client CSP also uses `unsafe-eval`, blob workers and broad
+HTTPS/WebSocket connections. Marketplace, Settings Sync and extension account
+flows can add external requests/popups beyond webviews. The spike must enumerate
+these actual origins and required directives for the installed release, compare
+them with World's current policy, and reject incompatible behavior. Proxying the
+initial HTML under a path does not itself bring its dependencies onto one origin.
+
+## Where this fits the existing system
+
+The [per-harness integration direction](../../../openspec/changes/world-harness-integration/proposal.md)
+and [current harness guide](../../harness-integrations.md) supply install/status/remove
+and user-owned configuration precedents. Settings already has per-host Herdr rows;
+[`agentIntegrations`](../../../web/src/agentIntegrations.ts) parses those.
+[`world.integration.*`](../../../server/src/rpc/integration.ts) currently manages
+skills **on the service host only**. It is not a generic remote IDE launcher.
+Extend the integration model with an IDE kind and host-qualified adapters in a
+future implementation, preserving harness behavior rather than overloading harness
+names or pretending SSH IDE support exists. See the [architecture](../../../openspec/changes/world-code-view/design.md)
+for proposed identities, transport, ownership and acceptance evidence.
+
+## Decisions only the owner can settle
+
+Real VS Code, no custom editor and IDE integrations are settled direction.
+The remaining decisions do not require an answer during this research run:
+
+1. If Microsoft embedding terms cannot be cleared, is explicit desktop handoff
+   sufficient, or is an explicitly selected Open VSX provider acceptable despite
+   missing ecosystem parity? Recommend handoff; never change provider silently.
+2. If official webviews require their CDN origin, may a future separately reviewed
+   policy permit an isolated IDE origin/external webview, or must embed remain
+   unavailable? Recommend preserving the current single-origin rule for now.
+3. Will the owner trust installed IDEs/extensions with the same browser authority
+   as World? Recommend explicit opt-in; isolation needs a different origin design.
+4. Should a later implementation offer host installation assistance, and which
+   IDE/extension/platform matrix is release-blocking? Recommend installed-server
+   discovery first, explicit start, and all four named extension families tested
+   on the chosen Microsoft version. Resource defaults follow measurements.
+
+These gates are part of the proposal; no conditional implementation is authorized
+by this PR and no owner decision is inferred from the mock.
