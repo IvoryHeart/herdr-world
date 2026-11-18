@@ -379,6 +379,13 @@ export default function WorldFoundationApp() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [activeArrangementControl]);
 
+  const hostsControl = {
+    connections: hosts,
+    ids: hostsFilter.ids,
+    explanation: hostsFilter.explanation,
+    onChange: hostsFilter.setIds,
+  };
+
   return (
     <div
       className="world-foundation-shell"
@@ -408,6 +415,8 @@ export default function WorldFoundationApp() {
               mobile={mobile}
               onSelect={setView}
               onExitZen={exitZen}
+              // The top bar's own filter, so both show one selection.
+              hosts={hostsControl}
               extra={
                 view === "spaces" ? null : (
                   <NeedsYouCounter world={topbarWorld} />
@@ -432,14 +441,7 @@ export default function WorldFoundationApp() {
             view,
             setView,
           )}
-          connectionControl={
-            <HostsControl
-              connections={hosts}
-              ids={hostsFilter.ids}
-              explanation={hostsFilter.explanation}
-              onChange={hostsFilter.setIds}
-            />
-          }
+          connectionControl={<HostsControl {...hostsControl} />}
           workspaceNavigator={(onSelectionAdmitted) => (
             <WorldNavigator
               world={topbarWorld}

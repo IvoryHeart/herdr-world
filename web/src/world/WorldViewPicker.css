@@ -131,6 +131,35 @@
   border-top: 1px solid var(--border);
 }
 
+.world-view-picker-detail {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Hosts, the top bar's filter, in place of the menu. */
+.world-view-picker-hosts {
+  width: min(300px, calc(100vw - 24px));
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.world-view-picker-hosts label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.world-view-picker-hosts p {
+  margin: 6px 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 /* Typing owns the bottom edge, as it does for the bottom navigation. */
 .keyboard-open .world-view-picker-phone {
   display: none;
