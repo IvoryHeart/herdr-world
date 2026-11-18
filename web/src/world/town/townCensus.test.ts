@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { askingKeysForWorld } from "../worldAskTargets";
 import { townCensus, townCensusItem } from "./townCensus";
 import { profiles, town } from "./townCensus.fixture";
 
@@ -57,6 +58,22 @@ test("waiting also lights whoever asked an open question", async () => {
   )!.agent;
   const census = townCensus(office, summary, new Set([busy.key]), null);
   expect(townCensusItem(census, "waiting")!.keys).toContain(busy.key);
+});
+
+test("an agent blocked on a question is one agent waiting, its question named beside it", async () => {
+  const { world, office, summary } = await town(["blocked"]);
+  // The board's attention total counts the blocked call and its question.
+  expect(summary.counts.needsYou).toBe(2);
+  const census = townCensus(
+    office,
+    summary,
+    askingKeysForWorld(summary.asks, world),
+    null,
+  );
+  const waiting = townCensusItem(census, "waiting")!;
+  expect(waiting.keys).toHaveLength(1);
+  expect(waiting.count).toBe(1);
+  expect(waiting.showing).toBe("1 waiting on you · 1 open question");
 });
 
 test("skills: each harness, plain shells, and the skills of launched agents' profiles", async () => {

@@ -6,7 +6,7 @@
  * search ends it, and the camera returns as after a search.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ProfilesDocument } from "../agentProfiles";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type { WorldObject } from "../worldObject";
@@ -18,12 +18,18 @@ import {
   type TownCensusItem,
 } from "./townCensus";
 import type { TownSummary } from "./townSummary";
-import type { TownCanvasSearch } from "./useTownCanvasSearch";
+import { nextTownLightSeq, type TownCanvasSearch } from "./useTownCanvasSearch";
 
 export type TownCensusControl = {
   census: TownCensus;
   /** The lit count as it is now; null when none is. */
   lit: TownCensusItem | null;
+  /**
+   * When the lit count was chosen, from the light's shared sequence; new on
+   * each choice, so Town's search knows to hand over the light. Null when
+   * no count is lit.
+   */
+  litAt: number | null;
   /** Light a count, or end it when it is the lit one. */
   show(id: string): void;
   clear(): void;
@@ -61,11 +67,13 @@ export function useTownCensus({
       ),
     [office, summary, world, profiles],
   );
-  const [litId, setLitId] = useState<string | null>(null);
+  const [lighting, setLighting] = useState<{ id: string; at: number } | null>(
+    null,
+  );
+  const litId = lighting?.id ?? null;
   const [chosen, setChosen] = useState<{ key: string; seq: number } | null>(
     null,
   );
-  const seq = useRef(0);
   const [offscreen, setOffscreen] = useState(0);
   const lit = litId === null ? null : townCensusItem(census, litId);
   const keys = lit?.keys ?? null;
@@ -75,7 +83,7 @@ export function useTownCensus({
     [keys, shownKey],
   );
   const clear = () => {
-    setLitId(null);
+    setLighting(null);
     setChosen(null);
   };
 
@@ -87,7 +95,7 @@ export function useTownCensus({
       if (target && target !== document.body && !target.closest(ESCAPE_SCOPE))
         return;
       event.preventDefault();
-      setLitId(null);
+      setLighting(null);
       setChosen(null);
     };
     window.addEventListener("keydown", keydown);
@@ -97,16 +105,20 @@ export function useTownCensus({
   return {
     census,
     lit,
+    litAt: lit ? (lighting?.at ?? null) : null,
     show: (id) => {
+      const at = nextTownLightSeq();
       setChosen(null);
-      setLitId((current) => (current === id ? null : id));
+      setLighting((current) => (current?.id === id ? null : { id, at }));
     },
     clear,
     next: () => {
       if (!keys?.length) return;
       const at = shownKey ? keys.indexOf(shownKey.key) : -1;
-      seq.current += 1;
-      setChosen({ key: keys[(at + 1) % keys.length]!, seq: seq.current });
+      setChosen({
+        key: keys[(at + 1) % keys.length]!,
+        seq: nextTownLightSeq(),
+      });
     },
     offscreen,
     setOffscreen,

@@ -160,6 +160,7 @@ const census = {
 const censusControl: TownCensusControl = {
   census,
   lit: census.skills[4]!,
+  litAt: 1,
   show() {},
   clear() {},
   next() {},

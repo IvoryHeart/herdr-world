@@ -77,9 +77,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     board says what is lit ("Showing 2 waiting on you · 1 off-screen");
     **Next** flies the camera to its places one at a time and pulses each
     (unless calm), and choosing the number again, **✕**, Escape or typing a
-    search ends it, the camera returning as after a search. Waiting lights
-    the blocked agents and whoever asked an open question; a count of
-    nothing is disabled. Only a waiting count above zero
+    search ends it, the camera returning as after a search; choosing a
+    number while a search is open ends the search, so the map shows the
+    number. Waiting counts and lights each agent that is blocked or asked an
+    open question once, and names the questions beside it ("1 waiting on you
+    · 1 open question"); the board's attention total, which counts every
+    question too, can be higher. A count of nothing is disabled. Only a waiting count above zero
     takes the attention colour. On a phone the census is the first section of
     the **Town summary** (open it from the summary chip): a tap there closes
     the window, lights the map, and the "Showing …" line with **Next** and

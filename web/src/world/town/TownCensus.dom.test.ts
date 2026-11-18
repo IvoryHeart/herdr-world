@@ -107,10 +107,7 @@ if (process.env.TOWN_CENSUS_DOM !== "1") {
         host.querySelector(".town-census-chip button") as HTMLButtonElement
       ).click(),
     );
-    expect(seen.search!.canvas.search!.chosen).toEqual({
-      key: blocked.key,
-      seq: 1,
-    });
+    expect(seen.search!.canvas.search!.chosen?.key).toBe(blocked.key);
     await click(/^Stop showing 1 waiting on you/);
     expect(seen.search!.canvas.search).toBeNull();
     expect(host.querySelector(".town-census-chip")).toBeNull();
@@ -144,6 +141,45 @@ if (process.env.TOWN_CENSUS_DOM !== "1") {
     expect(seen.search!.canvas.census!.lit).toBeNull();
     await act(async () => seen.search!.toolbar.onQueryChange(""));
     expect(seen.search!.canvas.search).toBeNull();
+    await act(async () => root.unmount());
+    host.remove();
+  });
+
+  test("choosing a count takes the light from a search, and its Next moves the camera", async () => {
+    const { office, host, root, seen, click } = await mount();
+    const rooms = new Set(office.roomRoster.map((room) => room.key));
+    await act(async () => seen.search!.toolbar.onQueryChange("alpha"));
+    expect(seen.search!.canvas.search!.keys.length).toBeGreaterThan(0);
+    await click(/^Show 3 rooms/);
+    // The search ends, so the map shows the count, not the search.
+    expect(seen.search!.toolbar.query).toBe("");
+    expect(new Set(seen.search!.canvas.search!.keys)).toEqual(rooms);
+    await act(async () =>
+      (
+        host.querySelector(".town-census-chip button") as HTMLButtonElement
+      ).click(),
+    );
+    expect(rooms.has(seen.search!.canvas.search!.chosen!.key)).toBe(true);
+    await act(async () => root.unmount());
+    host.remove();
+  });
+
+  test("a census Next after a search result is a new request for the camera", async () => {
+    const { host, root, seen, click } = await mount();
+    await act(async () => seen.search!.toolbar.onQueryChange("alpha"));
+    const result = seen.search!.results.results[0]!;
+    await act(async () => void seen.search!.results.onChoose(result));
+    const searched = seen.search!.canvas.search!.chosen!.seq;
+    await act(async () => seen.search!.toolbar.onClear());
+    await click(/^Show 3 rooms/);
+    await act(async () =>
+      (
+        host.querySelector(".town-census-chip button") as HTMLButtonElement
+      ).click(),
+    );
+    // Search and census share one request sequence, so the canvas and
+    // camera, which show each request once, never take this for the last.
+    expect(seen.search!.canvas.search!.chosen!.seq).toBeGreaterThan(searched);
     await act(async () => root.unmount());
     host.remove();
   });

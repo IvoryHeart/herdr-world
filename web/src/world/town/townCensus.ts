@@ -62,10 +62,13 @@ function item(
 }
 
 /**
- * The census of a town. The population's busy, waiting, done and quiet
- * counts are the Town board's (townSummary.ts), so the board and the census
- * never disagree; waiting lights the blocked agents and whoever asked an
- * open question (`askingKeys`, World leaf IDs).
+ * The census of a town. The population's busy, done and quiet counts are
+ * the Town board's (townSummary.ts), so the board and the census never
+ * disagree. Waiting counts and lights each agent that waits on you once:
+ * the blocked agents and whoever asked an open question (`askingKeys`,
+ * World leaf IDs). The board's attention total counts every question as
+ * well, so an agent blocked on one question is one agent waiting, and its
+ * question is named beside it ("1 waiting on you · 1 open question").
  */
 export function townCensus(
   office: HerdrOfficeProjection,
@@ -140,10 +143,13 @@ export function townCensus(
         "waiting",
         "Waiting",
         [...waiting],
-        `${counts.needsYou} waiting on you`,
-        counts.needsYou,
+        `${waiting.size} waiting on you${
+          summary.asks.length
+            ? ` · ${plural(summary.asks.length, "open question", "open questions")}`
+            : ""
+        }`,
       ),
-      attention: counts.needsYou > 0,
+      attention: waiting.size > 0,
     },
     item(
       "done",

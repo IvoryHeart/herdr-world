@@ -11,6 +11,7 @@ import {
 } from "../officeObservability";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject } from "../worldObject";
+import type { WorldAsk } from "../worldAsks";
 import { townCalls } from "./TownRail";
 import { townSummary } from "./townSummary";
 
@@ -82,8 +83,9 @@ const codex = (status: string): Table => ({ status, agent: "codex" });
 /**
  * Two buildings: the studio has a busy Claude, a blocked Claude and a plain
  * shell in alpha; the lab has two quiet Codex agents in beta and gamma.
+ * `asking` names the statuses whose agents each asked one open question.
  */
-export async function town() {
+export async function town(asking: readonly string[] = []) {
   const world = buildWorldObject(
     [
       host("studio", {
@@ -106,7 +108,28 @@ export async function town() {
     (key) => office.roster.find(({ agent }) => agent.key === key),
     500,
   );
-  return { world, office, summary: townSummary(office, calls, NO_METRICS) };
+  const asks: WorldAsk[] = world.leaves
+    .filter((leaf) => asking.includes(leaf.pane.agent_status ?? ""))
+    .map((leaf, index) => ({
+      id: `ask-${index}`,
+      at: 1_000,
+      actor: {
+        label: leaf.pane.agent ?? "agent",
+        verified: true,
+        connection_id: leaf.connectionId,
+        pane_id: leaf.pane.pane_id,
+        terminal_id: leaf.terminalId,
+        connection_generation: leaf.generation,
+      },
+      question: "Proceed?",
+      options: ["Yes", "No"],
+      owner_only: false,
+    }));
+  return {
+    world,
+    office,
+    summary: townSummary(office, calls, NO_METRICS, undefined, asks),
+  };
 }
 
 export const profiles = (
