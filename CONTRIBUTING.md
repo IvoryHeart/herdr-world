@@ -422,13 +422,22 @@ optional; do not push again solely to add one after the PR opens.
 
 After a merge, CI runs the full check again on main. Merges that land while a
 main check is running are checked together, once, at the newest of them. If a
-check fails, the Main gate workflow opens one `main-red` issue. It names the
-merge commit and its PR and prepares a revert PR, which it never merges; when the
-check covered several merges, it lists them all and prepares no revert. Nothing
-is rerun automatically: a failing test is fixed at its cause, not retried. Merge
-the revert, revert the merge that broke it, or land a fix; rerun only after a
-GitHub service failure. Later red commits are added to the open issue, not to new ones, and the next
-green main run at or after the red commit closes the issue and its revert PR.
+check fails, the Main gate first checks whether only GitHub infrastructure failed.
+On attempt one, it reruns failed jobs once without opening an issue or revert PR
+when every substantive failure is a cancellation or timeout with no failed step,
+or fails only in checkout, cache, setup-bun, setup-node or artifact upload/download
+actions (including their cleanup steps). Step names come from workflow action
+declarations. A failed `Delivery checks` or `Require…` aggregate is discounted only
+when there are substantive failures and all qualify. Missing job evidence, a
+failed test or any other code step, and attempt two or later all alert as usual.
+
+An alert opens one `main-red` issue. It names the merge commit and its PR and
+prepares a revert PR, which it never merges; when the check covered several
+merges, it lists them all and prepares no revert. Fix a failing test at its cause.
+Merge the revert, revert the merge that broke it, or land a fix; further manual
+reruns are appropriate only after a GitHub service failure. Later red commits are
+added to the open issue, and the next green main run at or after the red commit
+(including the automatic rerun) closes the issue and its revert PR.
 
 The **Web asset headroom** status on a PR projects its web asset delta onto
 current main and fails if together they would exceed the bundle budgets in

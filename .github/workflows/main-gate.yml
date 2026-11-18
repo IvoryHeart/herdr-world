@@ -1,8 +1,8 @@
 name: Main gate
 
-# CI runs on every push to main. When such a run fails, open one issue naming
-# the merge commit and its PR, and prepare (never merge) a revert PR. A later
-# green run closes them.
+# CI runs on every push to main. Retry an infrastructure-only failure once;
+# otherwise open an issue and prepare (never merge) a revert PR. A later green
+# run closes them.
 on:
   workflow_run:
     workflows: [CI]
@@ -10,7 +10,7 @@ on:
     branches: [main]
 
 permissions:
-  # Dispatches CI on the prepared revert branch (gh workflow run).
+  # Reruns failed CI jobs and dispatches CI on the prepared revert branch.
   actions: write
   contents: write
   issues: write
@@ -34,12 +34,14 @@ jobs:
         with:
           bun-version: "1.4.4"
           no-cache: true
-      - name: Open the issue and the revert PR
+      - name: Retry infrastructure failures or update the main alert
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
