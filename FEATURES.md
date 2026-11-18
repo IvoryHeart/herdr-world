@@ -9,6 +9,15 @@ herdr-core is primary for new agents when installed and connected. Choose a
 Herdr TUI room to launch there instead. Both appear in **Hosts** and
 **Manage connections**, with separate connections.
 
+`herdr-world connections add`, `remove` and `set-default` also apply to a
+running managed service without restarting it. The service serializes those
+changes with **Manage connections**, so concurrent Settings edits are retained.
+Auto-connect additions connect immediately; removal retires only that host's
+runtime and open contexts. Other connections and browser sessions stay open.
+The default connection cannot be removed until another is chosen, and explicit
+service Herdr settings still pin the process default. With no running service,
+the CLI saves changes for the next start. `--restart` remains optional.
+
 ✓ means supported. **partial** links to a limit; **not yet** means World has
 no control for it. Platform and harness limits apply across the table.
 

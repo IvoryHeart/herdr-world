@@ -612,6 +612,30 @@ Profiles are stored atomically in `~/.config/herdr-world/connections.json` on Un
 `HERDR_WORLD_CONNECTIONS_PATH`. The containing directory and file use owner-only
 permissions on Unix, and symlinked registry paths are rejected.
 
+The CLI edits the same catalogue:
+
+```bash
+herdr-world connections add workbox --ssh workbox --auto-connect
+herdr-world connections set-default workbox
+herdr-world connections remove old-box
+```
+
+When the managed service is running, it admits and saves each change itself,
+in the same queue as **Manage connections**. Auto-connect additions connect
+immediately; removing a profile disconnects only its runtime and invalidates its
+open browser contexts. Other hosts, terminals and browser sessions stay open.
+Choose another default before removing the current one. Explicit Herdr socket,
+SSH or session settings in the service configuration still pin its default.
+`--restart` optionally restarts the service after admission; it is no longer
+required. With no service running, the CLI saves the catalogue for the next start.
+
+Live admission uses the service configuration's listener, the data directory's
+local CLI token and an exact registry-path check. A refused or failed live request
+never falls back to writing the file; after a lost reply, check the catalogue
+before retrying. An older service must be upgraded before it accepts live edits.
+The CLI only checks the configured listener: stop any foreground World process
+on another port that shares the registry before editing offline.
+
 The command-line default remains useful for a single connection:
 
 ```bash

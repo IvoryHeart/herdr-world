@@ -1,4 +1,8 @@
 import { handleCoreFileHttpRequest } from "./core-files-http";
+import {
+  CONNECTIONS_CLI_PATH,
+  handleConnectionsCliEndpoint,
+} from "../http/connections-cli";
 import type { Server, ServerWebSocket } from "bun";
 import { runInSshLane } from "../bridge/ssh-sessions";
 import { isHtmlPath } from "../../../shared/filePreview";
@@ -75,6 +79,10 @@ export type ListenerDeps = {
   handleRpc(ws: ServerWebSocket<unknown>, raw: string): Promise<unknown>;
   webPush: ReturnType<typeof createWebPushService>;
   worldCli: ReturnType<typeof createWorldCliService>;
+  connectionCli: Pick<
+    Parameters<typeof handleConnectionsCliEndpoint>[2],
+    "profiles" | "registryPath"
+  >;
   settings: GuiSettingsStore;
   update: ReturnType<typeof createUpdateHandlers>;
   herdrSetup: ReturnType<typeof createHerdrSetupHandlers>;
@@ -321,6 +329,14 @@ export function listen(deps: ListenerDeps) {
       return response;
     }
 
+    if (url.pathname === CONNECTIONS_CLI_PATH) {
+      server.timeout(req, 70);
+      return handleConnectionsCliEndpoint(req, server.requestIP(req), {
+        ...deps.connectionCli,
+        serverPort: server.port ?? config.port,
+        bearerAuth,
+      });
+    }
     if (url.pathname === WORLD_CLI_PATH) {
       // `ask --wait` holds a call for up to 20 s; Bun's default idle
       // timeout (10 s) would cut it.
