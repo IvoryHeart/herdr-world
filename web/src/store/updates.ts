@@ -1,6 +1,7 @@
 import { bridge } from "../api";
 import { createUpdateNotificationHistory } from "../updateNotifications";
 import { worldLocalStorage, worldSessionStorage } from "../browserStorage";
+import { restoreTaskPush } from "../taskPush";
 import {
   set,
   wait,
@@ -415,12 +416,36 @@ function handlePreferenceStorageChange(key: string | null) {
       taskNotificationsEnabled: storedTaskNotificationsEnabled(),
       taskNotificationPreferences: storedTaskNotificationPreferences(),
     });
+    // Restore records one retry instead of touching worker APIs in hidden tabs.
     void store.restoreTaskNotifications();
   }
   if (key === AUTOMATIC_UPDATE_CHECKS_KEY || key === null) {
     const enabled = storedAutomaticUpdateChecksEnabled();
     if (enabled !== state.automaticUpdateChecksEnabled)
       applyAutomaticUpdateChecksEnabled(enabled);
+  }
+}
+
+export async function restoreTaskNotifications(isCurrent: () => boolean) {
+  set({ taskNotificationBusy: true });
+  try {
+    const transport = await restoreTaskPush(
+      state.taskNotificationsEnabled,
+      state.taskNotificationPreferences,
+      store.restoreTaskNotifications,
+    );
+    if (transport === null || !isCurrent()) return;
+    worldLocalStorage.setItem("taskNotificationTransport", transport);
+    set({ taskNotificationTransport: transport });
+  } catch (error) {
+    if (isCurrent())
+      store.notify({
+        kind: "error",
+        message: "Background notification sync failed",
+        detail: (error as Error).message,
+      });
+  } finally {
+    if (isCurrent()) set({ taskNotificationBusy: false });
   }
 }
 

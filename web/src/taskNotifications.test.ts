@@ -11,6 +11,12 @@ import {
 import { __storeTesting, emptyServerSessionState, store } from "./store";
 import { bridge, type ConnectionClient } from "./api";
 import { notifyWorldAsk } from "./store/notifications";
+import { handlePreferenceStorageChange } from "./store/updates";
+import { worldLocalStorage } from "./browserStorage";
+import {
+  TASK_NOTIFICATIONS_KEY,
+  TASK_NOTIFICATION_PREFERENCES_KEY,
+} from "./store/notifications";
 
 const origin = "https://herdr-world.example";
 const target = {
@@ -85,6 +91,208 @@ function registration() {
     showNotification: mock(async () => {}),
   };
 }
+
+describe("background notification restore", () => {
+  async function restoring(
+    run: (f: {
+      document: EventTarget & { visibilityState: string };
+      window: EventTarget;
+      getRegistration: ReturnType<typeof mock>;
+      getSubscription: ReturnType<typeof mock>;
+      fetch: ReturnType<typeof mock>;
+      resume: (target: EventTarget, event: string) => Promise<void>;
+    }) => Promise<void>,
+  ) {
+    const document = Object.assign(new EventTarget(), {
+      visibilityState: "visible",
+    });
+    const window = Object.assign(new EventTarget(), {
+      location: new URL(origin),
+      PushManager: {},
+    });
+    const getSubscription = mock(async () => null);
+    const getRegistration = mock(async () => ({
+      ...registration(),
+      pushManager: { getSubscription },
+    }));
+    const fetch = mock(async () => Response.json({ available: false }));
+    const stored = new Map<string, string>();
+    await withBrowser(
+      {
+        document,
+        window,
+        fetch,
+        navigator: { serviceWorker: { getRegistration } },
+        localStorage: {
+          getItem: (key: string) => stored.get(key) ?? null,
+          setItem: (key: string, value: string) => stored.set(key, value),
+        },
+      },
+      async () => {
+        __storeTesting.replaceState({
+          ...store.get(),
+          taskNotificationsEnabled: true,
+          taskNotificationBusy: false,
+          notice: null,
+        });
+        try {
+          await run({
+            document,
+            window,
+            getRegistration,
+            getSubscription,
+            fetch,
+            async resume(target, event) {
+              const done = Promise.withResolvers<void>();
+              const unsubscribe = store.subscribe(() => {
+                if (!store.get().taskNotificationBusy) done.resolve();
+              });
+              try {
+                target.dispatchEvent(new Event(event));
+                await done.promise;
+              } finally {
+                unsubscribe();
+              }
+            },
+          });
+        } finally {
+          // Drain any pending lifecycle retry before restoring the globals.
+          document.visibilityState = "visible";
+          await store.restoreTaskNotifications();
+        }
+      },
+    );
+  }
+
+  test.each(["visibilitychange", "pageshow", "resume"])(
+    "InvalidStateError stays quiet and retries once on visible %s",
+    async (event) => {
+      await restoring(async (f) => {
+        f.getRegistration.mockRejectedValueOnce(
+          new DOMException("Document is not active", "InvalidStateError"),
+        );
+        await store.restoreTaskNotifications();
+        expect(store.get().notice).toBeNull();
+        expect(store.get().taskNotificationBusy).toBe(false);
+        expect(f.getRegistration).toHaveBeenCalledTimes(1);
+        f.document.visibilityState = "hidden";
+        f.document.dispatchEvent(new Event("visibilitychange"));
+        f.window.dispatchEvent(new Event("pageshow"));
+        f.document.dispatchEvent(new Event("resume"));
+        expect(f.getRegistration).toHaveBeenCalledTimes(1);
+        f.document.visibilityState = "visible";
+        await f.resume(event === "pageshow" ? f.window : f.document, event);
+        expect(store.get().notice).toBeNull();
+        expect(f.getRegistration).toHaveBeenCalledTimes(2);
+        f.document.dispatchEvent(new Event("visibilitychange"));
+        f.window.dispatchEvent(new Event("pageshow"));
+        f.document.dispatchEvent(new Event("resume"));
+        expect(f.getRegistration).toHaveBeenCalledTimes(2);
+      });
+    },
+  );
+
+  test.each([
+    new Error("Worker blocked"),
+    new DOMException("Notification permission revoked", "NotAllowedError"),
+  ])(
+    "other errors still show the background sync notice: %s",
+    async (error) => {
+      await restoring(async (f) => {
+        f.getRegistration.mockRejectedValueOnce(error);
+        await store.restoreTaskNotifications();
+        expect(store.get().notice).toMatchObject({
+          kind: "error",
+          message: "Background notification sync failed",
+          detail: error.message,
+        });
+      });
+    },
+  );
+
+  test("push API InvalidStateError defers revocation and retries on resume", async () => {
+    await restoring(async (f) => {
+      __storeTesting.replaceState({
+        ...store.get(),
+        taskNotificationsEnabled: false,
+      });
+      f.getSubscription.mockRejectedValueOnce(
+        new DOMException("Document is not active", "InvalidStateError"),
+      );
+      await store.restoreTaskNotifications();
+      expect(store.get().notice).toBeNull();
+      expect(f.getSubscription).toHaveBeenCalledTimes(1);
+      await f.resume(f.document, "resume");
+      expect(f.getSubscription).toHaveBeenCalledTimes(2);
+      expect(store.get().notice).toBeNull();
+    });
+  });
+
+  test("passive restore still prepares local alerts without Web Push support", async () => {
+    const getRegistration = mock(async () => registration());
+    await withBrowser(
+      { navigator: { serviceWorker: { getRegistration } } },
+      async () => {
+        __storeTesting.replaceState({
+          ...store.get(),
+          taskNotificationsEnabled: true,
+          notice: null,
+        });
+        await store.restoreTaskNotifications();
+        expect(getRegistration).toHaveBeenCalledTimes(1);
+        expect(store.get().taskNotificationTransport).toBe("local");
+        expect(store.get().notice).toBeNull();
+      },
+    );
+  });
+
+  test.each(["offline", "refused"])(
+    "%s push sync still reports its failure",
+    async (failure) => {
+      await restoring(async (f) => {
+        if (failure === "offline")
+          f.fetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+        else f.fetch.mockResolvedValueOnce(new Response(null, { status: 503 }));
+        await store.restoreTaskNotifications();
+        expect(store.get().notice).toMatchObject({
+          kind: "error",
+          message: "Background notification sync failed",
+        });
+        expect(store.get().taskNotificationBusy).toBe(false);
+      });
+    },
+  );
+
+  test.each([TASK_NOTIFICATIONS_KEY, TASK_NOTIFICATION_PREFERENCES_KEY, null])(
+    "storage change %s coalesces restores until the tab is visible",
+    async (key) => {
+      await restoring(async (f) => {
+        f.document.visibilityState = "hidden";
+        handlePreferenceStorageChange(key);
+        worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "true");
+        worldLocalStorage.setItem(
+          TASK_NOTIFICATION_PREFERENCES_KEY,
+          JSON.stringify({ completed: false, blocked: true }),
+        );
+        handlePreferenceStorageChange(key);
+        await store.restoreTaskNotifications();
+        expect(f.getRegistration).not.toHaveBeenCalled();
+        expect(store.get().notice).toBeNull();
+        expect(store.get().taskNotificationsEnabled).toBe(true);
+        expect(store.get().taskNotificationPreferences).toEqual({
+          completed: false,
+          blocked: true,
+        });
+        f.document.visibilityState = "visible";
+        await f.resume(f.document, "visibilitychange");
+        expect(f.getRegistration).toHaveBeenCalledTimes(1);
+        expect(store.get().taskNotificationBusy).toBe(false);
+        f.window.dispatchEvent(new Event("pageshow"));
+        expect(f.getRegistration).toHaveBeenCalledTimes(1);
+      });
+    },
+  );
+});
 
 describe("task notification transport", () => {
   test("a ledger ask raises its local OS notice even when Web Push is selected", async () => {

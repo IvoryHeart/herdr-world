@@ -66,6 +66,7 @@ import {
   reloadWhenUpdatedServerIsReady,
   consumePendingHerdrUpgrade,
   handlePreferenceStorageChange,
+  restoreTaskNotifications,
   redirectToLogin,
   stopPolling,
   checkForUpdate,
@@ -2164,31 +2165,11 @@ export const store = {
     set({ notice });
   },
 
-  async restoreTaskNotifications() {
+  restoreTaskNotifications() {
     const version = ++taskNotificationPreferenceVersion;
-    set({ taskNotificationBusy: true });
-    try {
-      if (state.taskNotificationsEnabled) await prepareTaskNotifications();
-      const transport = await syncTaskPush(
-        state.taskNotificationsEnabled,
-        state.taskNotificationPreferences,
-      );
-      if (version !== taskNotificationPreferenceVersion) return;
-      worldLocalStorage.setItem("taskNotificationTransport", transport);
-      set({ taskNotificationTransport: transport });
-    } catch (error) {
-      if (version === taskNotificationPreferenceVersion)
-        set({
-          notice: {
-            kind: "error",
-            message: "Background notification sync failed",
-            detail: (error as Error).message,
-          },
-        });
-    } finally {
-      if (version === taskNotificationPreferenceVersion)
-        set({ taskNotificationBusy: false });
-    }
+    return restoreTaskNotifications(
+      () => version === taskNotificationPreferenceVersion,
+    );
   },
 
   async setTaskNotificationPreference(
