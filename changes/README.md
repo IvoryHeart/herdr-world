@@ -3,7 +3,8 @@
 Each pull request with a user-facing change adds one file here instead of
 editing `CHANGELOG.md`. Name it after the PR number or a short slug, such as
 `changes/262.md` or `changes/town-peek-chat.md` (lower-case letters, digits and
-hyphens).
+hyphens). Include it in the implementation commit before the first push; do not
+amend or push solely to rename it after a PR number is assigned.
 
 A fragment has one or more headings, each followed by `- ` bullets. Indent
 continuation lines by two spaces:
