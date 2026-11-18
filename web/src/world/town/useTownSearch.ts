@@ -5,11 +5,13 @@
  * once. Clearing the search ends it.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import { officePresentationKey } from "../officeSelection";
 import type { WorldObject } from "../worldObject";
 import { worldSearchResults, type WorldSearchResult } from "../worldSearch";
+import type { TownCensusControl } from "./useTownCensus";
+import { nextTownLightSeq } from "./useTownCanvasSearch";
 
 /**
  * A search result's Town key: rooms, tables, agents and buildings are keyed
@@ -38,6 +40,8 @@ export function useTownSearch(
   world: WorldObject,
   office: HerdrOfficeProjection,
   onSelect: (id: string) => unknown,
+  /** The census: a lit count shows through the search light (#980). */
+  census?: TownCensusControl,
 ) {
   const [query, setQuery] = useState("");
   const results = useMemo(
@@ -54,7 +58,6 @@ export function useTownSearch(
     key: string;
     seq: number;
   } | null>(null);
-  const chosenSeq = useRef(0);
   const [offscreen, setOffscreen] = useState(0);
 
   const open = query.trim() !== "";
@@ -90,13 +93,12 @@ export function useTownSearch(
       void onSelect(result.nodeId);
       return true;
     }
-    chosenSeq.current += 1;
     setChosenResult({
       query,
       id: result.id,
       nodeId: result.nodeId,
       key: townSearchKey(office, result),
-      seq: chosenSeq.current,
+      seq: nextTownLightSeq(),
     });
     return false;
   };
@@ -107,6 +109,13 @@ export function useTownSearch(
     setActive(null);
     setChosenResult(null);
   };
+
+  // Choosing a census count takes over the light: the search ends, so the
+  // count is what the map shows and its Next moves the camera (#980).
+  const censusLitAt = census?.litAt ?? null;
+  useEffect(() => {
+    if (censusLitAt !== null) clear();
+  }, [censusLitAt]);
 
   // Escape ends the search from its results or the map too, not only from
   // the search box (which handles its own). A key something else took, such
@@ -136,6 +145,8 @@ export function useTownSearch(
       // A new query starts afresh: a result chosen for an earlier one is
       // not chosen again when that query comes back.
       onQueryChange: (next: string) => {
+        // A search takes over the light from a lit census count.
+        if (next.trim()) census?.clear();
         setQuery(next);
         setActive(null);
         setChosenResult(null);
@@ -166,8 +177,12 @@ export function useTownSearch(
     },
     /** TownCanvas's search prop. */
     canvas: {
-      search,
-      onOffscreen: setOffscreen,
+      search: search ?? census?.light ?? null,
+      onOffscreen: (count: number) => {
+        setOffscreen(count);
+        if (!search) census?.setOffscreen(count);
+      },
+      census,
       onUnmapped: (key: string) => {
         // Nothing to show on the map: open it as selecting does.
         if (chosen?.key === key) void onSelect(chosen.nodeId);

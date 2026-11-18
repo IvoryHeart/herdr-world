@@ -1,0 +1,147 @@
+/* Town's census (#980): on the Town board sign (Town's glass, townOverlay.css
+   gives its buttons their inset and the waiting count its colour) and in the
+   Town summary window (World's theme). */
+
+/* The board's four agent columns, as buttons. */
+.town-board-counts .town-census-count {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  padding: 4px 6px;
+  font: inherit;
+  text-align: left;
+}
+
+.town-board-counts .town-census-label {
+  overflow: hidden;
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--town-glass-muted);
+}
+
+.town-board-counts .town-census-count b {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A count with nothing to light still reads as a number, not a dead control. */
+.town-census-count:disabled {
+  cursor: default;
+}
+
+.town-census {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.town-census-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+}
+
+.town-census-line .town-census-count {
+  max-width: 100%;
+  padding: 1px 6px;
+  overflow: hidden;
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.town-census-count b {
+  font-variant-numeric: tabular-nums;
+}
+
+.town-census-count[aria-pressed="true"] {
+  outline: 1px solid currentColor;
+  outline-offset: -1px;
+}
+
+.town-census-title {
+  margin-right: 2px;
+  font: var(--town-glass-label, 700 10px ui-monospace, monospace);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--town-glass-muted, var(--muted, #8a8f98));
+}
+
+.town-census-showing,
+.town-census-chip {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.town-census-showing span,
+.town-census-chip span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.town-census-showing button,
+.town-census-chip button {
+  padding: 1px 8px;
+  font: inherit;
+}
+
+.town-census-chip {
+  display: none;
+}
+
+/* Phones: the board is folded into its chip, so what is lit shows under it. */
+@media (max-width: 640px) {
+  .town-census-chip {
+    position: absolute;
+    left: 12px;
+    top: 90px;
+    display: flex;
+    max-width: calc(100vw - 24px);
+    min-height: 32px;
+    padding: 0 6px 0 10px;
+    font-size: 12px;
+    pointer-events: auto;
+  }
+  .town-census-chip button {
+    min-height: 28px;
+  }
+  /* Under "Since you left", when both show. */
+  .town-recap-chip ~ .town-census-chip {
+    top: 128px;
+  }
+}
+
+/* In the Town summary window: World's theme, not Town's glass. */
+.town-summary .town-census-line .town-census-count {
+  color: inherit;
+  background: none;
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+  border-radius: 999px;
+  cursor: pointer;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.town-summary .town-census-line .town-census-count:hover:enabled {
+  background: var(--hover, rgba(127, 127, 127, 0.12));
+}
+
+.town-summary .town-census-count[data-attention="true"] b {
+  color: var(--warning-text, #ffb547);
+}
+
+.town-summary .town-census-empty {
+  color: var(--muted, #8a8f98);
+  font-size: 12px;
+}

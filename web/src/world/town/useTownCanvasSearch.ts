@@ -9,6 +9,7 @@ import type { TownSceneCamera } from "./scene/townSceneCamera";
 import type { TownLayout } from "./townLayout";
 import type { TownModel } from "./townModel";
 import type { TownRendererHandle } from "./townRenderer";
+import type { TownCensusControl } from "./useTownCensus";
 import {
   townRectOnScreen,
   townSearchLight,
@@ -21,6 +22,17 @@ import {
  * chosen one to show and pulse (a new `seq` asks again). Null when no search
  * is open; ending one returns the camera it moved.
  */
+/**
+ * The next request number for Town's search light. Search and the census
+ * (#980) both drive the one light and its camera, which show a chosen match
+ * once per number, so both take their numbers from this one sequence.
+ */
+let lightSeq = 0;
+export function nextTownLightSeq() {
+  lightSeq += 1;
+  return lightSeq;
+}
+
 export type TownCanvasSearch = {
   keys: readonly string[];
   chosen: { key: string; seq: number } | null;
@@ -33,6 +45,8 @@ export type TownCanvasSearchProps = {
   onOffscreen?: (count: number) => void;
   /** A chosen match Town does not draw, so it cannot be shown. */
   onUnmapped?: (key: string) => void;
+  /** Town's census, for the board sign: its counts light their places. */
+  census?: TownCensusControl;
 };
 
 export function useTownCanvasSearch(

@@ -64,9 +64,29 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     columns: **Busy** (working) agents, **Waiting** (items needing
     you: blocked agents and open questions, matching the reception tray and
     **Needs you**; a blocked agent with an open question contributes two
-    items), **Done** (finished) and **Quiet** agents. A line under the counts
-    gives every agent in the town and its buildings (and any of unknown
-    status). It shows spend when a metrics provider
+    items), **Done** (finished) and **Quiet** agents. Under them the town's
+    census, as a city game shows it: its **Buildings** (hosts; **Offline**
+    ones too, when any are), **Rooms**, **Tables** and **Agents** (with **Out
+    of fuel** and **Unknown** when any are), then **Skills**: agents per
+    harness (**Claude**, **Codex**, **Pi**, **Other agents**), **Plain
+    shells**, and each skill of the profiles World launched agents from, the
+    most held first. Every number, the four columns included, is a button:
+    choosing it lights what it counts on the map as a search does (the rest
+    of Town dims a little, nothing moves) and stays live, so an agent that
+    starts, stops or stops waiting joins or leaves the light. A line on the
+    board says what is lit ("Showing 2 waiting on you · 1 off-screen");
+    **Next** flies the camera to its places one at a time and pulses each
+    (unless calm), and choosing the number again, **✕**, Escape or typing a
+    search ends it, the camera returning as after a search; choosing a
+    number while a search is open ends the search, so the map shows the
+    number. Waiting counts and lights each agent that is blocked or asked an
+    open question once, and names the questions beside it ("1 waiting on you
+    · 1 open question"); the board's attention total, which counts every
+    question too, can be higher. A count of nothing is disabled. Only a waiting count above zero
+    takes the attention colour. On a phone the census is the first section of
+    the **Town summary** (open it from the summary chip): a tap there closes
+    the window, lights the map, and the "Showing …" line with **Next** and
+    **✕** sits under the chip. It shows spend when a metrics provider
     is configured. Under **FUEL**, a gauge per harness with subscription-limit
     data (Codex from its session logs, Claude from its status line) shows a short bar per window
     (`5 h`, `week`) with the percent left; under 15 % left it turns amber and

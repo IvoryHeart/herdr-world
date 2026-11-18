@@ -973,6 +973,7 @@ export function TownCanvas({
       <TownLensBoard lens={lens} hover={hover} selected={selectedKey}>
         <TownBoard
           counts={summary.counts}
+          census={search?.census}
           onOpenSummary={onOpenSummary}
           sinceYouLeft={sinceYouLeft}
         />

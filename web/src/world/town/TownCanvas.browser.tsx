@@ -1934,9 +1934,20 @@ async function run() {
         ? "a phone shows the Town board chip, not the board"
         : "a wide screen shows the Town board, not its chip",
     );
-    const signNeeds = Number(
-      board.querySelectorAll("dd")[1]?.textContent ?? "NaN",
-    );
+    // The sign's census counts agents waiting on you and names the open
+    // questions beside them (townCensus.ts); the other counts add the two.
+    const signWaiting = () => {
+      const label =
+        board
+          .querySelector('[data-status="blocked"]')
+          ?.getAttribute("aria-label") ?? "";
+      const match =
+        /^Show (\d+) waiting on you(?: · (\d+) open questions?)?/.exec(label);
+      return match
+        ? { agents: Number(match[1]), questions: Number(match[2] ?? 0) }
+        : { agents: Number.NaN, questions: Number.NaN };
+    };
+    const sign = signWaiting();
     const chipNeeds = Number(
       chip.querySelector('[data-status="blocked"]')?.textContent?.slice(1),
     );
@@ -1955,10 +1966,12 @@ async function run() {
     );
     const counted = counterNeeds();
     check(
-      windowNeeds === signNeeds &&
-        windowNeeds === chipNeeds &&
-        windowNeeds === counted,
-      `needs-you counts differ: summary ${windowNeeds}, sign ${signNeeds}, chip ${chipNeeds}, Needs you ${counted}`,
+      windowNeeds === chipNeeds &&
+        windowNeeds === counted &&
+        sign.questions === ledger.asks.length &&
+        sign.agents > 0 &&
+        sign.agents <= windowNeeds,
+      `needs-you counts differ: summary ${windowNeeds}, chip ${chipNeeds}, Needs you ${counted}, sign ${sign.agents} agents and ${sign.questions} questions of ${ledger.asks.length}`,
     );
     check(
       ledger.asks.length > 0 &&
@@ -1978,7 +1991,7 @@ async function run() {
       );
       check(
         sections.join("|") ===
-          "Needs you|Outbox|Done, not reviewed|Hosts and rooms|Pods|Spend",
+          "Census|Needs you|Outbox|Done, not reviewed|Hosts and rooms|Pods|Spend",
         `summary sections out of order (${state} Outbox): ${sections.join(", ")}`,
       );
     };
@@ -2049,11 +2062,13 @@ async function run() {
     await waitFor(() => {
       const counts = [
         panelBody.querySelector("#town-summary-needs span")?.textContent,
-        board.querySelectorAll("dd")[1]?.textContent,
         chip.querySelector('[data-status="blocked"]')?.textContent?.slice(1),
         String(counterNeeds()),
       ];
-      return counts.every((value) => Number(value) === windowNeeds - 1);
+      return (
+        counts.every((value) => Number(value) === windowNeeds - 1) &&
+        signWaiting().questions === sign.questions - 1
+      );
     }, "answering an ask did not update every needs-you count together");
     check(
       !host.querySelector(".town-reception-question"),
