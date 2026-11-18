@@ -1,6 +1,6 @@
 ## Why
 
-An agent that asks without `--wait` does not receive the owner's answer in its
+An agent that asks without `--wait` does not receive the user's answer in its
 pane. Add delivery of one stored answer to its verified original asker while
 preserving retrieval and honest recovery when submission is uncertain.
 
@@ -22,7 +22,7 @@ preserving retrieval and honest recovery when submission is uncertain.
 ### New Capabilities
 
 - `ask-answer-delivery`: Delivery and recovery of one stored answer to its bound
-  asker, including verified CLI acknowledgements and authorized owner decisions.
+  asker, including verified CLI acknowledgements and authorized user decisions.
 
 ### Modified Capabilities
 

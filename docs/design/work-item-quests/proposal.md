@@ -1,6 +1,6 @@
 # Work-item quests: proposal
 
-**Status: a prototype for owner approval (#510). Nothing here is built.**
+**Status: a prototype for review (#510). Nothing here is built.**
 The [clickable mock](index.html) opens in a browser with no build step and
 uses synthetic data only. The Town drawing is a concept, not Town art.
 
@@ -90,7 +90,9 @@ as tables. Reading the records reuses World's GitHub source
 (`server/src/sources/github.ts`). A build would add issue bodies and labels to
 what it reads.
 
-## Decisions for the owner
+<a id="decisions-for-the-owner"></a>
+
+## Decisions for the user
 
 1. **Who ticks acceptance boxes?** *Recommended:* the reviewer's result lists
    which criteria it confirmed by number, and the dispatcher ticks those boxes

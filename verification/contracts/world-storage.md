@@ -6,7 +6,7 @@ consumer claims. Independent review and the complete applicable delivery gate re
 
 Allowed: atomic domain/declared-outbox commits; post-COMMIT acknowledgement;
 one worker owns the database; explicit uncertainty after interrupted dispatch;
-safe owner-alert retries with bounded backoff; cancelled alerts when asks close;
+safe user-alert retries with bounded backoff; cancelled alerts when asks close;
 pending work surviving history expiry; dispatcher drain before connection/storage
 shutdown; fail-stop after worker failure.
 
@@ -68,7 +68,7 @@ of every possible disk/process/receiver failure.
 Excluded claims: physical power-loss/OS-crash safety, native-memory-fault
 isolation, a latency SLA and downstream execution/read exactly once. The separate
 [answer delivery contract](ask-answer-delivery.md) maps the implemented opaque
-answer verb and its real Chat, CLI-receipt and owner-recovery consumers. It
+answer verb and its real Chat, CLI-receipt and user-recovery consumers. It
 requires its own independent acceptance. Prior draft passes do not establish
 the reviewed repairs.
 

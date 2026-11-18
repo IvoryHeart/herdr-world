@@ -20,8 +20,7 @@ manual status editor described in issue #221.
   independent authoritative copies.
 - Reuse bounded palette/avatar choices and provide reset controls. Uploads and
   upstream Herdr annotation work remain outside this change.
-- Keep workspace icons and status messages outside this change, following the
-  owner's scope decision on issue #221.
+- Keep workspace icons and status messages outside this change, as specified in issue #221.
 
 ## Capabilities
 
@@ -45,7 +44,7 @@ fragment will be updated with implementation. No crew tooling changes are planne
 
 ## Scope Decision
 
-The owner confirmed on issue #221: tab name, colour, status message and per-pane
+Issue #221 specifies: tab name, colour, status message and per-pane
 avatars in the terminal title bar. Workspace icons and status messages are out
 of scope and will be handled separately at workspace level. Existing workspace
 colour and native naming controls retain their current scope.

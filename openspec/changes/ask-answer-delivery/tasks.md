@@ -7,7 +7,7 @@
 
 - [x] 2.1 Capture original binding schemes and answer-occurrence state conditions, version and answering actor policy; verify old/unverified/replaced targets record not sent without losing the answer.
 - [x] 2.2 Commit the reference-only answer intent with the answer, with no historical backfill; verify atomicity and no extra stored message text.
-- [x] 2.3 Implement claim/recheck/dispatching/receipt through the existing guarded Chat path; verify current lease/session/input admission, owner-only policy, version refusal and plain-text formatting.
+- [x] 2.3 Implement claim/recheck/dispatching/receipt through the existing guarded Chat path; verify current lease/session/input admission, user-only policy, version refusal and plain-text formatting.
 - [x] 2.4 Implement opaque recovery and authorized same-recipient resend/close; verify crash schedules and stale attempt/decision rejection with real temporary SQLite.
 
 ## 3. Retrieval coordination and lifecycle

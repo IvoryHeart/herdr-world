@@ -125,7 +125,7 @@ see [location and backups](DEPLOYMENT.md#durable-questions-results-and-backups).
 
 [Answer delivery without `--wait`](ask-answer-delivery.md) is a planned second
 slice. It specifies the original-session binding, Chat send-path reuse, verified
-asker acknowledgement, explicit uncertainty and owner recovery. Its acceptance
+asker acknowledgement, explicit uncertainty and user recovery. Its acceptance
 cases are planned work, not evidence of shipped automatic pane delivery.
 
 | Area | Owner and responsibility | Focused evidence |

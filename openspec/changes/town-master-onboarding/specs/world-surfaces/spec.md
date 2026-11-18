@@ -2,13 +2,13 @@
 
 ### Requirement: Town Master greeting
 
-World SHALL greet the owner once per visit with the Town Master's card while
+World SHALL greet the user once per visit with the Town Master's card while
 **Show this on start** is on, which it SHALL be by default. A visit SHALL be
 World opening, or the World page coming back on screen after being hidden for
 30 minutes or more. The Town Master SHALL be World's own script, with no agent
 behind it.
 
-The card SHALL say hello with the time the owner was last here, show the same
+The card SHALL say hello with the time the user was last here, show the same
 since-you-left lines as the Town board sign, each opening Needs you as the
 board's line does, or one line saying nothing is new, and, when World's
 update check reports a newer release, one line naming it whose control leads
@@ -31,7 +31,7 @@ too; with no last time known, the hello SHALL leave the time out.
 
 #### Scenario: Greeted on return
 
-- **WHEN** the owner opens World after being away
+- **WHEN** the user opens World after being away
 - **THEN** the Town Master's card says when they were last here and lists the
   board sign's since-you-left lines
 - **AND** choosing a line opens Needs you at its item and closes the card
@@ -51,7 +51,7 @@ too; with no last time known, the hello SHALL leave the time out.
 
 #### Scenario: Turned off
 
-- **WHEN** the owner unticks **Show this on start**
+- **WHEN** the user unticks **Show this on start**
 - **THEN** later visits on that browser do not greet
 - **AND** switching the setting back on greets again from the next visit
 

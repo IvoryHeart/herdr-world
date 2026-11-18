@@ -1,6 +1,6 @@
 # Expanded Town room closure captures (#519)
 
-Synthetic captures of the Town browser fixture at the five owner viewports.
+Synthetic captures of the Town browser fixture at the five reference viewports.
 The first Atlas room starts with 44 synthetic tabs, is expanded through the
 room controls, then receives a topology update that closes 36 tabs. Each view
 shows the resulting eight desks in a smaller room that remains expanded, with

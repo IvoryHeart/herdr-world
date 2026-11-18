@@ -1,6 +1,6 @@
 # Upstream adoption policy
 
-The owner sets adoption policy. Integration agents propose a disposition; independent
+Adoption policy is defined here. Integration agents propose a disposition; independent
 reviewers check source coverage, evidence and fidelity. Neither agent may turn a
 new feature deferral into standing policy. Protected human approval accepts new
 or changed deferrals/divergences, including resolving an outstanding item.

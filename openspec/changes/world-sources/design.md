@@ -63,7 +63,7 @@ Ideas only were taken from these Herdr plugins; no code was copied.
   timeout risk without promising GitHub's response time. Per-request time and
   output bounds, refresh cadence and generation fences remain unchanged.
   The window is seven days by default and 1 to 90 days in Sources settings.
-  The owner's existing sign-in is used; World stores no GitHub credentials.
+  the user's existing sign-in is used; World stores no GitHub credentials.
 - **Lanes.** A PR is Merged when merged; Fixing when changes are requested,
   checks fail or it conflicts; In review when a draft or checks run; Ready to
   merge when approved, or when checks pass and the repository requires no
@@ -118,10 +118,10 @@ Ideas only were taken from these Herdr plugins; no code was copied.
   argv and a timeout, one at a time per pull request, on a pull request World
   listed as the user's own and open. Merge reads the pull request again,
   refuses if the head moved or a review is required, and runs `gh pr merge
-  --merge --match-head-commit`; World never passes `--admin` (owner decision).
+  --merge --match-head-commit`; World never passes `--admin` (required policy).
   GitHub's refusal is shown in its words. Each run is recorded as an event
   with its sender (the browser session), in memory. Agents share the service
-  user's `gh` sign-in, so "only the owner acts" is a crew rule, documented,
+  user's `gh` sign-in, so "only the user acts" is a crew rule, documented,
   not enforced.
 
 ## Follow-ups

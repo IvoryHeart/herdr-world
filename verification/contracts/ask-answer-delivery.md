@@ -14,7 +14,7 @@ compare both answer occurrence and observed attempt. Withdrawal can cancel work
 before submission, and never erases possible-send uncertainty.
 
 Forbidden: copied answer text in the intent; historical import/backfill sends;
-self-answering agents or downgraded owner-only policy; guessed/replacement sessions
+self-answering agents or downgraded user-only policy; guessed/replacement sessions
 or another connection; generic queued Chat/terminal input; automatic opaque replay;
 a stale decision/receipt settling a newer attempt; interpreting a queued native
 receipt as agent execution or model reading; using a synthetic receiver's dedupe
@@ -24,7 +24,7 @@ native IDs and session labels are not native runtime continuity proof. An owner
 duplicate decision cannot bypass this rule. Unsent work resolves not-sent,
 possible sends remain uncertain, and manual close retains the actual history.
 
-`answer-transitions.test.ts` covers the finite owner-decision matrix across pending,
+`answer-transitions.test.ts` covers the finite user-decision matrix across pending,
 claimed, dispatching, uncertain, refused, delivered and cancelled states, including
 stale witnesses. Additional real SQLite cases check occurrence immutability,
 claim/dispatch distinction, exact verified CLI receipt, withdrawal and read/send

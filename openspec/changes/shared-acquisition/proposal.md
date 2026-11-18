@@ -15,7 +15,7 @@ seconds and 40 turn receipts every 20 seconds, per browser.
 
 The architecture committee (2026-10-30, stage 2, item 14) asked for two things.
 First, a written contract that keeps every output current without per-client
-polling, approved by the owner once parity tests exist. Then shared
+polling, enabled once parity tests pass. Then shared
 acquisition: the service acquires once and pushes recency, and watches Desk
 screens and turns once per pane with reference counts.
 
@@ -101,7 +101,7 @@ None.
 
 No new dependency.
 
-## Owner decision
+## Acceptance requirement
 
 Committee decision 3: approve this contract. The approval rests on:
 - the contract;
@@ -111,7 +111,7 @@ Committee decision 3: approve this contract. The approval rests on:
 The service half of T2 needs the observer. It is written first in the
 implementation, and must be green before task 3.1 removes the timer.
 
-## Defaults chosen here (the owner may override any)
+## Defaults
 
 1. **The observation period stays 5 seconds,** today's bound for the active
    host.

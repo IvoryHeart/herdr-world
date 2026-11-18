@@ -1,8 +1,8 @@
 ## Why
 
-The owner wants to see their GitHub pull requests and Jira tickets in World,
+The user wants to see their GitHub pull requests and Jira tickets in World,
 beside the agents working on them, without installing a separate Herdr plugin
-for each system. World already runs a Bun service with the owner's sign-ins
+for each system. World already runs a Bun service with the user's sign-ins
 and observes every agent's pane, so it can read these systems of record itself
 and link their items to the agents' desks.
 

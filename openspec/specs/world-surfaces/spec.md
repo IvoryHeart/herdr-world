@@ -1540,16 +1540,18 @@ remain available as visible buttons.
 - **THEN** roofs cover the buildings and each roof shows its host's room and desk
   counts while the reception boards keep showing waiting agents
 
-### Requirement: Durable owner asks from crew panes
+<a id="requirement-durable-owner-asks-from-crew-panes"></a>
 
-The watcher, dispatcher and workers SHALL reach the owner through the existing
+### Requirement: Durable user asks from crew panes
+
+The watcher, dispatcher and workers SHALL reach the user through the existing
 World ask ledger from their own panes. They SHALL NOT substitute custom Herdr
-notifications, owner-seat prompts, shared-runbook/configuration edits or issue
+notifications, user-seat prompts, shared-runbook/configuration edits or issue
 comments for asking. A worker awaiting a decision SHALL use the existing ask
 wait path; the watcher SHALL keep passes nonblocking, record one ask per cause,
-read an owner answer once into its own output/feed and withdraw the ask when
+read a user answer once into its own output/feed and withdraw the ask when
 the cause clears. Scoped passes SHALL leave other PRs' asks alone, and held PRs
-SHALL produce no new owner asks. A producer SHALL retain creation uncertainty
+SHALL produce no new user asks. A producer SHALL retain creation uncertainty
 before dispatch and recover a persisted ask by occupant-scoped cause key before
 retiring a cleared cause, including when its creation reply was lost. A lost
 withdrawal reply SHALL NOT suppress a recurring active cause, including one whose
@@ -1559,7 +1561,7 @@ scope SHALL preserve owner receipts and answer acknowledgements. Superseded lega
 notices without receipts SHALL NOT trigger withdrawal or a new feed entry. A keyed
 withdrawal returning not_found SHALL report no recorded ask, never a successful
 withdrawal. Permanent withdrawal refusal SHALL retire the cleared cause and report once that its question is left
-for the owner to answer; transient failures SHALL remain retryable.
+for the user to answer; transient failures SHALL remain retryable.
 
 The ask command SHALL accept a bounded optional cause key scoped to its verified
 asking occupant, return the same retained ask for repeated causes including
@@ -1597,14 +1599,14 @@ else by that agent name or its pane, mark an unverified asker once, and offer
 Open agent for each placed ask, including every ask from one pane, opening the
 asking agent, or the terminal of an asking pane without one.
 
-The owner SHALL be able to dismiss any open ask in World. Dismissal SHALL close
+The user SHALL be able to dismiss any open ask in World. Dismissal SHALL close
 the question without an answer, release waiting reads with a dismissed state,
 remove it from every open-ask projection and reject later answers. A keyed
 repeat SHALL return the dismissed question, as it returns an answered one,
 until the asker withdraws it, and the watcher SHALL NOT ask again for a
 dismissed cause while that cause holds.
 
-The ask command SHALL alert the owner about each newly recorded question
+The ask command SHALL alert the user about each newly recorded question
 through the asking pane's Herdr with a request-sound notification naming the
 asker, the question and its ID, so the alert reaches Herdr's clients, every
 World connected to that Herdr and Web Push. A repeated cause that returns a
@@ -1617,7 +1619,9 @@ ask reply SHALL state whether the question was recorded and what the alert
 reported, or that no alert was sent for a retained question, and a waiting
 reply SHALL keep that outcome through its answer, closure or timeout.
 
-#### Scenario: An ask alerts the owner through Herdr
+<a id="scenario-an-ask-alerts-the-owner-through-herdr"></a>
+
+#### Scenario: An ask alerts the user through Herdr
 - **WHEN** an agent records a new question and its Herdr shows the alert
 - **THEN** the command succeeds and reports what Herdr showed
 - **AND** repeating the same cause key does not alert again
@@ -1628,11 +1632,11 @@ reply SHALL keep that outcome through its answer, closure or timeout.
 - **THEN** the command exits `not_delivered` with the question ID and does not
   wait for an answer
 
-#### Scenario: A crew cause needs an owner decision
+#### Scenario: A crew cause needs a user decision
 
 - **WHEN** a blocked author, READY PR or stuck dispatch is observed in one pass
-- **THEN** its producer records one durable owner ask from its own verified pane,
-  World shows its question and announcement, and the owner can open and answer it
+- **THEN** its producer records one durable user ask from its own verified pane,
+  World shows its question and announcement, and the user can open and answer it
 
 #### Scenario: A cause clears after its ask was delivered
 
@@ -1640,9 +1644,9 @@ reply SHALL keep that outcome through its answer, closure or timeout.
 - **THEN** the original asker withdraws the ask and all open-question markers clear,
   while any answer recorded first remains on the same ledger question
 
-#### Scenario: The owner dismisses an ask
+#### Scenario: the user dismisses an ask
 
-- **WHEN** the owner dismisses an open ask in World
+- **WHEN** the user dismisses an open ask in World
 - **THEN** every open-question marker clears, the asker's wait ends with dismissed
   and no answer, and its keyed cause is not asked again until it clears
 
@@ -1654,7 +1658,7 @@ reply SHALL keep that outcome through its answer, closure or timeout.
 
 ### Requirement: Town agent locations
 
-Town SHALL seat working and unknown agents at their pane's seat unless they have an open owner ask placed on their terminal. A blocked agent
+Town SHALL seat working and unknown agents at their pane's seat unless they have an open user ask placed on their terminal. A blocked agent
 SHALL move to its host's reception and queue in order of when it became blocked,
 oldest first, within a bounded number of queue positions; further blocked agents
 SHALL stay at their seat with a waiting cue and the reception SHALL show the exact
@@ -1811,7 +1815,7 @@ order, including any hidden pinned or selected tab.
 ### Requirement: Needs you tab
 
 World SHALL present what waits on the user in one Needs you tab, the same in
-Town, Board, Desk and on phones: open owner questions oldest first, then blocked
+Town, Board, Desk and on phones: open user questions oldest first, then blocked
 agents oldest first, then finished work not yet reviewed newest first (done
 agents, and idle agents whose turn the service saw end within Desk's 12-hour
 window). On wide landscape screens the open tab SHALL sit on the left beside the
@@ -1822,7 +1826,7 @@ window opened from it SHALL cover it until that window closes, and focus SHALL
 then return to the list. Whether it is open SHALL persist per device, and while it is closed
 and something waits a handle at the left edge SHALL open it. Each item SHALL be
 a short message from its agent, name its agent, mark an asker World could not
-verify, show why an owner alert may not have arrived, and offer a chat icon,
+verify, show why a user alert may not have arrived, and offer a chat icon,
 which opens that exact agent's Chat; the agent's name SHALL open that same Chat
 on every item whose agent World can place. Every item SHALL have one compact
 anatomy: a header row with the agent's mark, name, place and age and its icon
@@ -1907,7 +1911,7 @@ through the shared window manager. It lists, in this order: open questions using
 cards and answer action, then blocked agents with their reason, waiting age
 and one action; unreviewed finishes with when each was last
 active when Herdr reports activity times, never presented as the finish time; every host with its rooms and their counts (needing
-the user, working, finished, quiet, unknown), where activating a room moves the
+The user, working, finished, quiet, unknown), where activating a room moves the
 Town camera to it, admitting the qualified requested room while preserving the
 selected room. A room request SHALL wait for renderer setup and its admitted
 layout, be consumed once, and retrigger for a later click on the same room.
@@ -2731,7 +2735,7 @@ revision. Every retained event SHALL carry the actual sender claim/basis or
 explicit unknown attribution, with complete member diffs bounded by the 32
 members before plus 32 after an edit. No-op edits SHALL add no events. This
 retained tail SHALL NOT be represented as a complete audit or message ledger.
-Lead/reviewer editing SHALL remain an owner/FirstMate crew rule, not an
+Lead/reviewer editing SHALL remain a user/FirstMate crew rule, not an
 authenticated-principal guarantee; a sender name SHALL NOT grant authority.
 
 #### Scenario: Existing Team survives the schema migration
@@ -2847,7 +2851,7 @@ require a complete explicit terminal-to-address mapping and preserve the Group
 identity. Exclusive-role transfers SHALL require explicit replacement confirmation.
 Deletion SHALL require confirmation and SHALL NOT delete agents. All edits SHALL
 retain actual sender claims and their basis in bounded recent Group history.
-Lead/reviewer edits SHALL be described as an owner/FirstMate crew rule, without
+Lead/reviewer edits SHALL be described as a user/FirstMate crew rule, without
 claiming authenticated caller authorization. PR actions SHALL remain absent from
 the World CLI and its agent guide.
 
@@ -4308,7 +4312,7 @@ World observes, and the newest assignment SHALL win.
 - The claim with the highest revision SHALL win; a tie SHALL go to the greater terminal
   ID.
 - World SHALL clear superseded claims where it holds a current lease.
-- Moving the role away from another live agent SHALL still ask the owner first.
+- Moving the role away from another live agent SHALL still ask the user first.
 
 **Migration.** World SHALL import each existing assignment once, when its connection is
 first observed complete on a ready runtime after this change. It SHALL:
@@ -4318,7 +4322,7 @@ first observed complete on a ready runtime after this change. It SHALL:
   again.
 
 #### Scenario: Two Worlds share one Herdr
-- **WHEN** the owner launches an agent from a profile in one World while another World
+- **WHEN** the user launches an agent from a profile in one World while another World
   observes the same Herdr
 - **THEN** both Worlds show that terminal's assignment, and the second World uses its
   own profile of that ID or, without one, the recorded name with the default look
@@ -4337,13 +4341,13 @@ first observed complete on a ready runtime after this change. It SHALL:
   when the host returns
 
 #### Scenario: The offline holder returns after a newer assignment
-- **WHEN** the owner gives the role to an agent on another host while the previous
+- **WHEN** the user gives the role to an agent on another host while the previous
   holder's host is offline, and that host later returns
 - **THEN** the newer assignment keeps the role, and the returning claim is cleared as
   superseded
 
 #### Scenario: World restarted while the holder was offline
-- **WHEN** World restarts while the holder's host is offline, and the owner then assigns
+- **WHEN** World restarts while the holder's host is offline, and the user then assigns
   the role to another agent before that host returns
 - **THEN** the new assignment wins when the host returns, because its revision is newer
 

@@ -4,8 +4,8 @@
 
 Requirement: [durable task identity](../../openspec/specs/workspace-assistant/spec.md).
 Owners: `server/src/assistant/context.ts`, `task-storage.ts`, `tasks.ts` and
-`durable-storage.ts`; source PR #182. The owner authorized the bounded Ranger
-implementation; its consumer/storage review and acceptance remain separate.
+`durable-storage.ts`; source PR #182. The bounded Ranger
+implementation requires separate consumer/storage review and acceptance.
 
 Committed task/run admission must survive reopening without changing captured
 input, identity or running status. Failed SQLite writes must not leave partial
@@ -66,4 +66,4 @@ SQLite admission. Their uncertainty/dedup/session tests remain necessary.
 One task and admitted run, two runtime generations, one change per durable identity,
 bounded close/reopen/failed-save operations. Three seeds sample 500 paths and replay
 100 per seed, up to 25 transitions; TLC checks finite safety. Run canonical checks
-and real context/task/storage/service suites. Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+and real context/task/storage/service suites. Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.

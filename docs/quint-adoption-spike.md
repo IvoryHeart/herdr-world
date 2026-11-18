@@ -336,7 +336,7 @@ contracts in this branch:
    they check the code. Model generation by an agent does not waive that review.
 
 This policy makes Quint systematic across the repository while keeping the artifact
-and checking strategy appropriate to each behavior. If the owner wants a stricter
+and checking strategy appropriate to each behavior. If the user wants a stricter
 rule requiring Quint for every behavior change, that is also a possible policy.
 Before enforcing it, establish how sequential validation, parsing, rendering and
 external-system integration will be represented and what extra claim each model

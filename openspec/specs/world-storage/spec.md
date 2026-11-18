@@ -30,9 +30,9 @@ Acknowledgement SHALL follow COMMIT. Time and scheduling SHALL be injected.
 An ask/result mutation, ordered change reference and any declared attention
 intent SHALL commit atomically. The outbox SHALL accept the declared recovery
 classes keyed, reconcilable, reattachable, repeatable and opaque without
-granting replay merely by storing a class. One owner-alert intent SHALL exist per ask;
+granting replay merely by storing a class. One user-alert intent SHALL exist per ask;
 retries SHALL be attempts on that row. Result recording SHALL retain its existing
-behavior without introducing owner notifications. A database worker failure SHALL
+behavior without introducing user notifications. A database worker failure SHALL
 reject pending outcomes as unknown and fail-stop the service for restart.
 
 #### Scenario: Crash interrupts COMMIT acknowledgement
@@ -44,17 +44,17 @@ reject pending outcomes as unknown and fail-stop the service for restart.
 ### Requirement: Explicit external-effect recovery
 
 World SHALL persist dispatching before any attention send and turn interrupted
-attempts into visible uncertain outcomes. Owner notifications MAY retry because
+attempts into visible uncertain outcomes. User notifications MAY retry because
 duplicates are harmless. Pane-answer attempts SHALL NOT automatically replay
 after uncertainty. Herdr delivery SHALL NOT be described as deduplicated without
 proven downstream support. Answer text SHALL remain available through ask get.
-An owner alert SHALL use its captured connection's current runtime lease and
+A user alert SHALL use its captured connection's current runtime lease and
 recheck currency; it SHALL never fall back to another connection. A pending alert
 SHALL be cancelled when its ask closes. Definite disabled/no-foreground-client
 refusals SHALL finish without retry; busy/rate-limited or missing-lease outcomes
 SHALL defer with bounded backoff. A worker or process crash during dispatch SHALL
 preserve explicit uncertainty. A failed recording request SHALL retain the
-CLI's existing fallback owner alert and report the recording failure.
+CLI's existing fallback user alert and report the recording failure.
 
 #### Scenario: Effect happens before its receipt is persisted
 - **WHEN** a sender is killed after the effect but before recording its receipt

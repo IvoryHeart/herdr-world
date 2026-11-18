@@ -17,7 +17,7 @@ passing component model cannot authorize a consumer's operation by itself.
 | Shared appearance entity and terminal witness | Actual appearance RPC admission matrix, document/move/migration tests and two-profile Chrome editor | Capture immutable connection and runtime; validate current native target and terminal continuity before field saves/native rename. Revisions suppress older acknowledgements; no shadow name or conflicting occupant inheritance. See [bounded consumer contract](contracts/shared-appearance.md). |
 | Durable endpoint/boot/workspace identity | Ranger SQLite recovery replay plus context/task/SDK storage tests | Obtain a fresh lease only after durable identity comparison; recovered rows still require scheduler and permission admission. |
 | SQLite transaction and exclusive storage lease | Actual task storage rollback/reopen and durable-storage lock-loss tests | Local filesystem and SQLite commit guarantees are assumptions; retain private-file, migration and corruption checks. |
-| World SQLite worker and attention attempt (candidate) | [New recovery contract](contracts/world-storage.md); real source/compiled crash schedules and integrated root tests | Commit dispatch before external send; preserve unknown outcomes; fail-stop on worker loss; stop dispatch before connections/storage. Repeated owner alerts do not authorize repeated pane prompts. Independent acceptance must cover this producer/consumer composition; the planned PR 2 consumer is not covered. |
+| World SQLite worker and attention attempt (candidate) | [New recovery contract](contracts/world-storage.md); real source/compiled crash schedules and integrated root tests | Commit dispatch before external send; preserve unknown outcomes; fail-stop on worker loss; stop dispatch before connections/storage. Repeated user alerts do not authorize repeated pane prompts. Independent acceptance must cover this producer/consumer composition; the planned PR 2 consumer is not covered. |
 
 The protocol integration tests connect real sender, admission, Bridge and World
 store. They demonstrate no partial publication, generation-1 rejection after
@@ -39,5 +39,5 @@ All mappings were independently accepted within their documented bounds in
 [review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164).
 Final implementation and gate acceptance is recorded in
 [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140);
-owner-approved PR #188 merged as `481ca1e8`. The consumer obligations and storage
+accepted PR #188 merged as `481ca1e8`. The consumer obligations and storage
 assumptions above remain binding; acceptance does not extend the documented claims.

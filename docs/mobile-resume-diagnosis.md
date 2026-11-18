@@ -10,7 +10,7 @@ context. A browser transport interruption removes every open World Inspector,
 unmounts its terminals, and recreates remaining terminal instances. Separately,
 the application has an explicit, conditional page reload after failed terminal
 recovery following background suspension. These are confirmed source paths,
-not proof of which path occurred on the owner's device. The initial socket loss
+not proof of which path occurred on the user's device. The initial socket loss
 and any OS discard remain unobserved.
 
 | Hypothesis | Verdict | Principal evidence |
@@ -143,7 +143,7 @@ The terminal contains a concrete automatic reload:
    an error (`web/src/components/TerminalView.tsx:3422–3436`).
 
 This confirms an application-initiated full reload is possible after resume.
-It does not establish that this watchdog fired on the owner's device; a quick
+It does not establish that this watchdog fired on the user's device; a quick
 switch alone does not satisfy its measured hidden-duration condition.
 
 Other explicit navigation paths are failed lazy imports (once per component
@@ -235,5 +235,5 @@ terminal recovery timestamp/reload call; and HTTP 401 or logout code 4001.
 A surviving document with a transient disconnected status already explains the
 confirmed Inspector/terminal loss. A new document requires separating the
 conditional application reload from browser discard or an explicit navigation.
-The source establishes those branches, but does not establish why the owner's
+The source establishes those branches, but does not establish why the user's
 mobile socket stopped or which branch that incident took.

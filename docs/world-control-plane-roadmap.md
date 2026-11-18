@@ -8,7 +8,7 @@ Planning baseline: `origin/main` at `7ac882b6` on 25 September 2026. Recheck mai
 
 World is one Bun service and one same-origin React application derived from Roamgate source. Herdr remains the external runtime. The service owns isolated local and OpenSSH connection runtimes; the browser keeps one selected operational connection while the service observes all managed hosts. `WorldObject` qualifies every host, space, agent and terminal by connection, and Office, Tree, Graph and Spaces present or operate that common reality. A shared Inspector owns each admitted resource conversation and terminal handoff.
 
-The first wave uses these owner decisions:
+The first wave uses these user decisions:
 
 1. **Graph remains a spatial view of Herdr topology.** A task/dependency graph requires a later source and interaction decision. Containment edges must retain their meaning.
 2. **Agent/pane watch records are shared by browsers through the World service.** The first release uses a bounded service-memory registry, not browser preferences; service restart clears it.
@@ -124,7 +124,7 @@ Capture focused desktop and phone screenshots only for new behavior, plus concis
 
 ## Later decisions, not first-wave implementation tasks
 
-**Graph relationship model.** Keep containment (`host → space → agent/terminal`) as the Graph's first-wave edge set. Before adding task or dependency edges, identify an authoritative source with stable IDs, lifecycle, cross-host meaning, permissions, and a user operation served by those edges. Decide whether to layer them over topology or give them a separate graph mode; specify cycles, missing nodes, stale edges and layout bounds. Produce a focused proposal only after that evidence and owner decision.
+**Graph relationship model.** Keep containment (`host → space → agent/terminal`) as the Graph's first-wave edge set. Before adding task or dependency edges, identify an authoritative source with stable IDs, lifecycle, cross-host meaning, permissions, and a user operation served by those edges. Decide whether to layer them over topology or give them a separate graph mode; specify cycles, missing nodes, stale edges and layout bounds. Produce a focused proposal only after that evidence and user decision.
 
 **Agent task and lifecycle control.** First establish Herdr's supported command, target identity, acknowledgement, failure and authorization semantics. A task summary is observation, not a task object or assignment API. Do not put task assignment or start/stop buttons into first-wave Actions based on terminal text injection.
 

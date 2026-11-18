@@ -31,7 +31,7 @@ actor's current ask policy, target binding, preconditions and operation version.
 Unverifiable or changed state SHALL record not sent and preserve ask retrieval.
 
 #### Scenario: Answer recorded during an outage
-- **WHEN** the owner answers a previously bound ask while its original host is offline
+- **WHEN** the user answers a previously bound ask while its original host is offline
 - **THEN** the intent remains pending without expiry
 - **AND** it sends only after that same session is verified on return
 
@@ -77,12 +77,12 @@ not suppress delivery. An already-started pane send cannot be retracted.
 ### Requirement: Owner-visible recovery without reopening the question
 
 World SHALL expose uncertain answer delivery separately from open questions,
-without changing their counts. The owner SHALL be able to explicitly resend to
+without changing their counts. The user SHALL be able to explicitly resend to
 the same reverified recipient or close delivery while preserving the answer.
 Stale decisions/attempt receipts SHALL not finish a later attempt. Dismissals
 SHALL retain retrieval semantics without being sent as invented answers.
 
 #### Scenario: Answered ask has uncertain delivery
 - **WHEN** the question is answered but its pane delivery is uncertain
-- **THEN** a bounded delivery notice remains available with evidence and owner recovery
+- **THEN** a bounded delivery notice remains available with evidence and user recovery
 - **AND** the question is not reopened or counted as unanswered

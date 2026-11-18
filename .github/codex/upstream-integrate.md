@@ -32,4 +32,4 @@ reviewedFor; explain the assessment in the integration report. Deferred/divergen
 entries need a durable follow-up with owner, acceptance and revisit conditions.
 World packaging ownership requires compatible adaptation, not automatic exclusion.
 New/changed deferrals or divergences are proposals requiring human approval; do
-not claim permanent owner acceptance or silently label omitted behavior adopted.
+not claim permanent acceptance or silently label omitted behavior adopted.

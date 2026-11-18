@@ -2,7 +2,8 @@
 
 World's core launcher offers 30 harness kinds. Any of them can be selected
 in a saved profile; installation and authentication stay with the harness on the
-core host. This inventory is data, not a core-version gate.
+core host. See the [runtime support table](../FEATURES.md#runtime-support) for versions
+and platform limits. This inventory is not a core-version gate.
 
 Sources inspected on 2026-11-11:
 
@@ -140,19 +141,15 @@ dimensions and sanity checks for all five standard viewports.
 - `bun scripts/herdr-core-smoke.ts` downloads and verifies the newest official
   release, runs core/launch/delivery/harness-name smoke, installs nothing and
   leaves no processes. Live tests skip without `HERDR_CORE_BIN`; the native
-  harness stand-ins also need a C compiler. Real Windows validation remains
-  the owner's host check.
+  harness stand-ins also need a C compiler. Real Windows validation requires hardware checks; this smoke does not provide them.
 - For a credential-free preview, open `?coreFixture`, choose **Start fixture**,
   then open **reviewer → Chat** in Town. Its synthetic transcript and blocked
   question are readable; **Answer** and keys still use native core delivery.
   Use **Kill fixture** to see stale refusal, and remove the fixture afterward.
   The URL switch removes itself immediately. It starts no vendor harnesses.
 
-A separate cumulative stress experiment reused one scratch core for repeated
-start/kill cycles and timed out on its twentieth launch (World correctly reported
-uncertain); the same harness passed alone. This is not a vendor-harness failure
-or evidence of a supported concurrency limit. The maintained per-harness smoke
-uses isolated cores. The cumulative failure needs a separate core investigation.
+The per-harness smoke uses isolated cores; it does not establish a supported
+concurrency limit or certify vendor harness behavior.
 
 The TUI launcher and its conversation bindings remain independent. Its screen
 readers and integrations are retained for TUI agents; core never calls them to

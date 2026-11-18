@@ -65,7 +65,7 @@ those deliveries
 separately from unanswered questions. A compact Reception row counts only
 unconfirmed and not-sent answers to check; waiting-only deliveries leave the
 rail hidden. Each original host’s reception sign also shows its saved-answer
-letter count. Only the owner can authorize **Send again…**,
+letter count. Only you can authorize **Send again…**,
 with an explicit possible-duplicate confirmation and the same original recipient,
 or **Dismiss** or **Cancel send**, preserving the answer. Old decisions and acknowledgements
 cannot settle a newer attempt. A successful `ask`/`ask get` writes its answer to
@@ -74,7 +74,7 @@ stdout write sends no acknowledgement; a lost acknowledgement can leave a pane
 delivery pending or uncertain, so duplicate output remains possible. Herdr
 provides no operation-key deduplication or atomic expected-session prompt. A
 queued receipt proves submission to that reported session, not agent execution,
-model reading or exactly-once delivery. Owner alerts remain harmless-repeatable
+model reading or exactly-once delivery. Alerts to you remain harmless-repeatable
 and may retry independently.
 
 Both paths now use the same versioned, fenced outbox. Each attempt gets the
@@ -103,7 +103,7 @@ A binary predating SQLite uses the retained JSON and cannot see newer SQLite
 answers. On upgrading again, World merges missing legacy IDs; it never overwrites
 an existing SQLite record. Conflicting edits to the same record require explicit
 reconciliation from the preserved backups. Keep the JSON, content-hash import
-backups, schema snapshots and owner backups private. Remove migration backups
+backups, schema snapshots and your backups private. Remove migration backups
 only after verifying the upgrade and deciding that their rollback/reconciliation
 history is no longer needed.
 
@@ -113,20 +113,20 @@ and tombstones, rather than another copy of question text. Open questions and
 unresolved attention intents survive independently. Finished attention entries
 are removed with their retained domain records.
 
-The service commits a dispatch claim before showing an owner alert on its
+The service commits a dispatch claim before showing an alert for you on its
 captured connection's current runtime. No alternate connection is selected.
 `shown: true` finishes delivery. Definite `disabled`, `no_foreground_client` or
 unknown refusals finish without retry. `busy`, `rate_limited` and a missing
 current lease defer the alert with backoff from 30 seconds to 30 minutes. Each wait is armed for at most 60 seconds
 and rechecks wall time on wake, including after sleep. A removed connection is refused. Closing an ask cancels its pending alert.
-Timeouts and interrupted dispatch become visible `uncertain`; owner alerts may
+Timeouts and interrupted dispatch become visible `uncertain`; alerts for you may
 retry under the same backoff because duplicates are harmless. Reception shows
 failed/uncertain delivery on the saved question; `ask get ID --json` includes its
 evidence. Alert updates refresh that evidence without announcing the question
 again or changing its attention count.
 
 An answer is stored before acknowledgement and remains retrievable with
-`herdr-world ask get ID`; use `--wait` to wait for it. No pane-answer sends are queued by this foundation. Pane delivery without `--wait`, including visible uncertainty and owner
+`herdr-world ask get ID`; use `--wait` to wait for it. No pane-answer sends are queued by this foundation. Pane delivery without `--wait`, including visible uncertainty and your
 resend/close decisions, is the [planned PR 2](ask-answer-delivery.md). An uncertain
 pane-answer attempt must never automatically replay.
 
@@ -218,24 +218,20 @@ previous result and a later scheduled run. Runtime field claims remain in memory
 
 ## Requirements
 
-- A supported Linux, macOS, or Windows release, or Bun 1.4.4+ for a source build.
-- Herdr 0.9.0 / terminal protocol 22 for the current endpoint path. The bridge also
-  recognizes the older protocol range covered by its compatibility tests.
-- OpenSSH on Linux or macOS for saved SSH profiles. Windows supports local profiles.
+- A supported Linux, macOS or Windows release, or Bun 1.4.4+ for a source build.
+- A running **Herdr TUI**, **herdr-core**, or both. See the
+  [runtime support table](../FEATURES.md#runtime-support) for versions and limits.
+- OpenSSH on the World service's Linux/macOS host for SSH connections.
 
-Herdr remains an external runtime. World never bundles or stops a Herdr server when a
-profile is disconnected or removed.
+Runtimes remain external. Disconnecting or removing a profile leaves their
+agents running.
 
 ## Herdr compatibility
 
-The current setup target is Herdr 0.9.5, terminal protocol 22 and endpoint
-generation 1. World also supports Herdr 0.9.0+ on protocol 22. Setup verifies
-the pinned platform checksum before installation. Herdr 0.9.5 is a hotfix release;
-its Codex status now comes from screen detection. Run `herdr integration install
-codex` on that host to refresh an older integration when upgrading Herdr.
-World also retains the verified legacy codecs for protocols 14-20. Protocol 21
-and future protocols are rejected; use a World release explicitly supporting
-the server rather than downgrading a running Herdr server.
+The [runtime table](../FEATURES.md#runtime-versions) names the verified Herdr TUI
+range, legacy protocols and herdr-core baseline. Herdr TUI setup verifies the
+pinned platform checksum before installation. After a TUI upgrade, run
+`herdr integration install codex` on that host to refresh older Codex hooks.
 
 In **Manage connections**, each host has its own running Herdr version and
 protocol check. **Check version again** reads that exact connected host; the
@@ -269,8 +265,12 @@ terminal context still apply; do not treat clipboard delivery as pane isolation.
 
 On Linux or macOS:
 
-A fresh standalone install keeps existing Herdr and installs it only when missing.
-Rerun the installer to upgrade: like `herdr-world update`, it upgrades Herdr,
+A fresh standalone install keeps an installed Herdr TUI or herdr-core. With
+neither installed, it installs herdr-core, starts it now and at login, and saves
+its connection. With only core already installed, run `hc server start` and
+connect through **Hosts → Manage connections → Add herdr-core**.
+
+Rerun the installer to upgrade: like `herdr-world update`, it upgrades the Herdr TUI,
 refreshes its harness integrations and installed World plugin, then restarts the
 running World service using that executable (systemd on Linux, launchd on macOS).
 Output reports updated or current components and whether the service restarted,
@@ -342,7 +342,7 @@ This foundation starts with fresh World state. It uses
 when set) and browser keys under
 `herdr-world:foundation-v2:`. It does not read old Herdr World bridge profiles,
 Roamgate settings, or their browser preferences. Those files remain untouched for
-rollback. These World paths are stable across 0.2.x versions: an upgrade does not
+rollback. These World paths stay the same across upgrades: an upgrade does not
 create a new config directory. The plugin uses a temporary directory only while
 unpacking a release archive, then removes it. Browser storage is tied to the World
 origin, so opening the same service through a different hostname or port shows that
@@ -435,47 +435,38 @@ continues to use the same World profiles, settings, token, and browser namespace
 
 ## Herdr installation and upgrades
 
-**Published 0.2.7:** the downloaded standalone installer runs
-`herdr-world herdr upgrade --install`, including upgrades of an older unmanaged
-Herdr and integration/plugin refresh. Set `HERDR_WORLD_SKIP_HERDR=1` to skip that
-step. Homebrew uses missing-only setup. The 0.3.0 installer behavior is described
-below.
+World keeps an installed herdr-core. It does not upgrade core automatically;
+use [core's official installation/upgrade instructions](https://github.com/herdrdev/herdr-core)
+on that host, then reconnect. The
+[runtime table](../FEATURES.md#runtime-support) covers versions and platform limits.
 
-Each Herdr World release verifies one Herdr release (currently 0.9.5) and pins its
-SHA-256 checksums. Missing-only bootstrap installs the runtime without configuring
-harness integrations or the plugin. Run `herdr-world herdr upgrade` to refresh
-those integrations explicitly; it also upgrades an older unmanaged Herdr to the
-verified release:
+| Command | Effect on the default local runtime |
+| --- | --- |
+| `herdr-world herdr status` | Show the Herdr TUI installation and running server. |
+| `herdr-world herdr setup` | Register login startup and start if down; keep a running server. With no TUI, use/install core. |
+| `herdr-world herdr upgrade` | Upgrade the TUI to World's verified release and refresh its integrations/plugin. |
+| `herdr-world herdr upgrade --install` | Also install core if neither runtime exists. |
 
-```bash
-herdr-world herdr status
-herdr-world herdr setup             # register future startup; start only if down
-herdr-world herdr upgrade           # Herdr, harness integrations and plugin
-herdr-world herdr upgrade --install # no runtime found: install herdr-core
-```
+Core setup uses its official HTTPS releases and checks the archive's SHA-256
+before running it. macOS also verifies the signed app executable. It installs:
 
-With no Herdr and no herdr-core on this computer, `upgrade --install` installs
-herdr-core instead of Herdr (Linux and macOS): core's official release list over
-HTTPS, its archive checked against the published SHA-256 (on macOS the archive
-must carry the signed `Herdr Core.app`, and `codesign` verifies the executable
-before anything downloaded runs), `~/.local/bin/herdr-core` plus an `hc` link
-if free, then core starts now and at login (a systemd user unit
-or a launchd LaunchAgent). An installed core is left as it is, and no Herdr is
-installed beside it; `herdr setup` makes the same choice and also starts an
-installed core now and at login. Windows x64 makes the same choice with core's
-own PowerShell steps: core's release list over HTTPS through System32 `curl.exe`,
-the zip checked against its SHA-256 before System32 `tar.exe` opens it, then
-`%LOCALAPPDATA%\Programs\herdr-core\herdr-core.exe` (`HC_INSTALL_DIR` elsewhere)
-plus an `hc.exe` link if free, added to the user PATH. Core starts now and at
-login through a hidden `Herdr World herdr-core.lnk` shortcut in your Startup
-folder; World rewrites only a shortcut it wrote. World reaches that core over its
-named pipe: on every connect it reads `core.lock` in the session's state directory
-(`%LOCALAPPDATA%\herdr-core\<session>` by default) and opens only the existing
-pipe, after the same owner check as for Windows SSH hosts; it never starts core
-to connect. Windows on Arm has no core build. A remote default connection keeps
-its own Herdr. Connect World to the new core
-with **Hosts → Manage connections → Install herdr-core…** (it starts the
-installed core and connects) or `herdr-world connections add core-local --core`.
+| Host | Location | Login startup |
+| --- | --- | --- |
+| Linux | `~/.local/bin/herdr-core`, with an `hc` link if free | systemd user unit |
+| macOS | `~/.local/bin/herdr-core`, with an `hc` link if free | launchd LaunchAgent |
+| Windows x64 | `%LOCALAPPDATA%\Programs\herdr-core` (`HC_INSTALL_DIR` overrides it), with `hc.exe` if free | Startup-folder shortcut |
+
+An installed core is reused; **Start and connect** never replaces it.
+On Windows, World reads the session's `core.lock` and opens only its existing
+named pipe after checking account access. Start core without elevation so the
+same account can connect.
+
+To install or start core from the browser, open **Hosts → Manage connections →
+Install herdr-core…** (local or saved Unix SSH host), review the version,
+location and login startup, then confirm. On a saved core connection it uses
+that session. Custom state directories and Windows SSH hosts need manual
+setup. To connect an existing core, run `hc server start` there, then choose
+**Add herdr-core**, its location and session. Connection/retry never starts it.
 
 World looks for Herdr in `HERDR_BIN_PATH`, then `PATH`, then Herdr's default
 location: `~/.local/bin/herdr` on Linux and macOS, or
@@ -500,50 +491,19 @@ managed setup. Normal World startup reconnects to Herdr without registering a
 service. World service activation, downstream runtime readiness and browser/PWA
 reopening are separate; this setup behavior does not verify macOS login recovery.
 
-When it runs:
+| Install channel or action | Runtime behavior |
+| --- | --- |
+| Fresh standalone install | Keep either installed runtime; otherwise install/start core and save `core-local` as default. |
+| Homebrew normal launch | Same missing-only setup, outside the keg. Metadata commands and remote/custom endpoints skip it. |
+| Standalone replacement or World update | Refresh the TUI, its detected Codex/Claude/Pi integrations and installed World plugin; keep core unchanged. |
+| npm or Windows archive | No automatic runtime setup. Run `herdr-world herdr upgrade --install`, or use the browser setup. |
 
-- **Fresh standalone install**: checks for herdr-core (`hc`/`herdr-core`) and
-  Herdr. If either is installed it changes nothing. If neither is, it installs
-  herdr-core as above, starts it now and at login, and saves a `core-local`
-  connection as World's default (no Local Herdr profile is saved, so Town
-  shows only the herdr-core building) so World connects when it starts (an older World says to add it
-  under **Hosts → Manage connections** instead). Run `herdr-world herdr upgrade`
-  later to set up Herdr's harness integrations and plugin, or choose
-  **Runtime → Update Herdr integrations**.
-- **Standalone installer replacing World**: finishes the same Herdr upgrade and
-  World service restart as `herdr-world update`, including for a pinned release
-  candidate. Output names each integration's result and gives retry commands
-  for incomplete steps. `HERDR_WORLD_SKIP_HERDR=1` skips Herdr and its
-  integrations/plugin; the World restart still runs. Windows users continue
-  to download a release or upgrade through npm.
-- **`herdr-world update` and the in-app update**: once the new World is in place, the
-  new release runs the Herdr step, even when it keeps the same Herdr version, because
-  the harness integrations and the plugin follow the World release. In the browser it
-  is its own notice after the reload. That notice appears only when something
-  changed, and it reports a failed step as incomplete.
-- **Menu**: **Runtime → Upgrade Herdr** appears when Herdr or its running server is
-  older than the verified release. **Runtime → Update Herdr integrations** appears
-  when only harness integrations or the plugin are behind.
-- **Homebrew**: the launcher checks for a runtime before normal local World startup,
-  using the same `HERDR_BIN_PATH`, `PATH` and default-location lookup for Herdr and
-  `hc`/`herdr-core` on `PATH` or in `~/.local/bin`. It reuses any existing
-  installation, including standalone, version-managed and Homebrew-owned runtimes.
-  If neither is found, it installs herdr-core outside the World keg with the same
-  checksum-verified steps, starts it now and at login and saves the `core-local`
-  connection. Existing
-  runtimes are never automatically upgraded by this bootstrap. Metadata and
-  management commands do not bootstrap; remote/custom endpoints also skip it.
-  A failed check or download prints a warning and World still starts, so SSH
-  profiles and in-app setup remain available; retry with
-  `herdr-world herdr upgrade --install`.
-  A broken symlink or another non-executable entry at Herdr's default path is left
-  intact and reported before downloading; repair that entry before retrying.
-  Set `HERDR_WORLD_SKIP_HERDR=1` to skip the automatic check. An incompatible existing
-  runtime needs an explicit upgrade through its owner (`brew upgrade herdr` for a
-  Homebrew runtime, `herdr update` for Herdr's own installation).
-- **npm and Windows archives**: run `herdr-world herdr upgrade --install` once
-  yourself (herdr-core first when no runtime exists, on Windows x64 too), or use
-  the menu or **Hosts → Manage connections → Install herdr-core…**.
+`HERDR_WORLD_SKIP_HERDR=1` skips runtime setup/upgrades; World can still restart.
+A failed Homebrew bootstrap warns and leaves World available for SSH or browser
+setup. Repair a broken default-path executable before retrying. For managed
+TUI installations, use their package manager; World never replaces a shim or
+downgrades a newer binary. **Menu → Runtime** offers **Upgrade Herdr** or
+**Update Herdr integrations** when the local TUI needs them.
 
 What the upgrade does:
 
@@ -596,14 +556,19 @@ Managed setup and upgrades act on this machine's Herdr. Setup is limited to the
 default local configuration: named sessions, explicit sockets and SSH targets must
 be started by their operator.
 
-**SSH hosts (design, not yet available).** The plan is a per-connection **Upgrade
-Herdr on this host** action that the owner confirms each time. Over the
-connection's OpenSSH command it would read the remote `herdr --version`. Only when
-Herdr's published manifest offers exactly the version and checksum this World
-verified would it run the remote `herdr update --handoff`; Herdr's updater verifies
-the download and refuses package-managed installs. It would then run the same
-harness-integration step remotely and report the outcome. It would never install
-Herdr on a host that lacks it.
+Remote TUI upgrades are not available in World. Upgrade on that host with its
+installation tool, then reconnect.
+
+The Linux installation acceptance test checks real downloads, systemd startup,
+core-only Town topology, TUI preservation and upgrades:
+
+```bash
+bun run test:install-linux
+```
+
+It runs in disposable containers. See the [runbook](development.md#linux-installation-acceptance)
+and [release gate](release.md#linux-systemd-installation-gate) for requirements
+and evidence; macOS and Windows need separate platform checks.
 
 ## Local and SSH connections
 
@@ -614,7 +579,13 @@ Each terminal and Inspector retains its own connection and runtime generation.
 Changing the filter or focusing another host leaves unrelated contexts open and
 does not redirect their operations.
 
-Local profiles name existing Herdr control and render sockets. SSH profiles accept
+For core, use **Add herdr-core**, choose local/Unix SSH/Windows SSH and the
+session (`default` unless you changed `HC_SESSION`). Set a state directory only
+when core uses a custom one. For a core-only computer, this becomes the default
+without an empty TUI profile; with both runtimes, the Local TUI default stays.
+The launcher's core preference is separate from this saved default.
+
+Herdr TUI Local profiles name existing control and render sockets. SSH profiles accept
 only an OpenSSH alias or `user@host`. Leave remote socket fields empty to use the
 default sockets below the remote user's home directory:
 
@@ -714,7 +685,7 @@ HERDR_WORLD_OTEL_PROMETHEUS_URL=http://127.0.0.1:9090 herdr-world
 ```
 
 The saved setting takes precedence over the environment, including an explicit
-Disable choice, and is stored in World's owner-only `settings.json`. URLs with embedded
+Disable choice, and is stored in the user-only `settings.json`. URLs with embedded
 credentials, queries or fragments are rejected. Put authentication and network policy
 outside this credential-free integration if the provider is not local.
 
@@ -1050,7 +1021,10 @@ The Vite URL is <http://localhost:5173>; it proxies the service on port 8787.
 
 ### The default profile cannot connect
 
-Confirm Herdr is running and inspect its sockets:
+For herdr-core, run `hc server start`, then **Hosts → Manage connections →
+Add herdr-core**. A stopped core is never started by retrying a connection.
+
+For the Herdr TUI, confirm it is running and inspect its sockets:
 
 ```bash
 herdr-world herdr status
@@ -1164,7 +1138,7 @@ running Unix-only resource helpers.
 
 From a Linux or macOS World service, select **Windows** as the remote host OS
 when adding an SSH profile. The Windows host needs OpenSSH, Windows PowerShell
-and a running Herdr 0.9.1+ session. Leave the executable and session fields empty
+and a running Herdr TUI 0.9.1+ session. Leave the executable and session fields empty
 for discovery, or supply an absolute Windows `.exe` path and a validated session
 name. SSH authentication and host trust still belong in the service user's
 OpenSSH configuration. Windows profiles do not use Unix remote socket paths.

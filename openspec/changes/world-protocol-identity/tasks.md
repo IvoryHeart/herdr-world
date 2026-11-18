@@ -8,7 +8,7 @@ with the `openspec-sync-specs` skill.
 
 - [x] 1.1 Write the proposal, design, spec deltas and verification plan. Verify with
   `bun run spec:check` and an independent PR review.
-- [ ] 1.2 Owner review of the change and its listed defaults. Record any override in
+- [ ] 1.2 Review the change and its listed defaults. Record any override in
   `proposal.md` and the affected deltas before stage 3 starts.
 
 ## 2. Service incarnation
@@ -193,7 +193,7 @@ No v2 subscriptions or persisted-capture fences are implemented here.
 - [x] 8.2 Check in the recovery-matrix tests, red (committee item 15 exit). Verify that
   every row of the matrix in `design.md` §12 has a named test, including `repeatable`.
 - [x] 8.3 Apply the target rule to the `world.sqlite` outbox: binding fields captured
-  inline, no bare generation, and connection-only targets for owner alerts. Resolution
+  inline, no bare generation, and connection-only targets for user alerts. Resolution
   follows the binding state: attached dispatches, unresolved waits, and ended or
   unconfirmed is "not sent" only before any dispatching. Verify with tests:
   - a restart at the same generation number waits, then dispatches once the binding
@@ -228,7 +228,7 @@ No v2 subscriptions or persisted-capture fences are implemented here.
 - [ ] 9.4 Serve the synthetic source through a v2 query in the conformance run. Verify
   the run covers terminal-less rows, a reset that ends lifetimes, ID reuse as a new
   lifetime and a partial listing that deletes nothing (gate item 3).
-- [ ] 9.5 Check the four gate items. The owner approves the Q12–Q14 and consumer
+- [ ] 9.5 Check the four gate items. Review the Q12–Q14 and consumer
   re-mapping. Verify with the approval recorded in the PR.
 - [ ] 9.6 Move consumers query by query, and retire each refetch channel once its
   consumers have moved. Verify that each moved consumer's parity tests pass, and that a
@@ -240,5 +240,5 @@ No v2 subscriptions or persisted-capture fences are implemented here.
 ## 10. Close the change
 
 - [ ] 10.1 After the last stage, check that every delta is synchronized and archive the
-  change. If v1 ships long before the v2 gate, ask the owner whether to split v2 into
+  change. If v1 ships long before the v2 gate, decide whether to split v2 into
   its own change first. Verify with `bun run spec:check`.

@@ -1,9 +1,8 @@
 # World style guide
 
 **Status: seven design decisions approved; implementation follows separately.**
-The owner approved all seven decisions below in the PR #648 follow-up on
-2026-11-06. Apply those approved directions to new UI and code you touch in
-later implementation PRs. Other detailed proposals remain proposals unless
+Apply the seven design directions below to UI and code you touch.
+Their status is recorded in PR #648. Other detailed proposals remain proposals unless
 explicitly described as shipping facts. Token and component changes come in
 separate PRs. This guide doesn't change product code.
 
@@ -37,9 +36,7 @@ and the product's own Lucide icons, add local styles for the proposed rules,
 and use synthetic names. Specimens are not product screenshots or evidence of
 reusable shipping APIs.
 
-**Owner decision on PR #648:** “I didn't understand any of your things, but
-consider it approved.” This approves all seven directions below for later UI
-work. Start with [World today](#world-today) to orient yourself, then compare
+These seven directions guide later UI work. Start with [World today](#world-today) to orient yourself, then compare
 the linked specimens. The seven decisions match the PR description.
 
 | # | What to check | Approved direction |
@@ -456,7 +453,7 @@ inner highlight.
    - Hidden at 0 and capped at 99+. Its parent must not clip it.
 2. **Inline count in a label** ("Now 32"): 11/600, padding 0 6, 16 px tall,
    radius 999, `color-mix(in srgb, var(--text) 12%, transparent)` fill and
-   `--muted` text. Work waiting on the owner uses `--warning-soft` and
+   `--muted` text. Work waiting on the user uses `--warning-soft` and
    `--warning-text`.
 3. **Status pill or tag** (`.badge`): 11 px, padding 1 7, radius 999, 1 px
    border, tinted by the state map. A neutral tag uses `--border` and `--muted`.
@@ -560,8 +557,8 @@ laptop 1512 × 982, half 1280 × 1440, wide 2560 × 1440 and portrait 1440 × 25
   - Neutral light-theme count digits (`--bg` on `--accent`, `#e1e2e7` on
     `#2e7de9`) reach 3.1062:1. This is a separate gap from accent links on
     `--panel`. An accessible label does not fix the visible digits' contrast.
-  - The owner approved token fixes and an accessible badge foreground/fill
-    pairing in a separate token PR. Until implemented, don't use `--muted` for
+  - Token fixes and an accessible badge foreground/fill
+    pairing require a separate token PR. Until implemented, don't use `--muted` for
     text a person must read to act, or treat the inherited badge pair as
     contrast-compliant.
 - Every control has a visible `:focus-visible` style. Never set

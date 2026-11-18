@@ -15,7 +15,7 @@ required; prior baseline acceptance does not supply them.
 | Producer guarantee | Required consumer evidence | Limit |
 | --- | --- | --- |
 | One worker commits rows and declared effects atomically before acknowledgement | Real temporary SQLite crash/reopen, concurrent opener refusal, final-group drain and integrated root shutdown | Process crashes do not establish power-loss safety |
-| Pending/uncertain owner alerts retry only under their declared policy | Dispatcher tests for final refusals, temporary-failure backoff, closed-ask cancellation, same-connection current leases and own-ask response isolation | Owner alerts can duplicate; native Herdr has no operation-key deduplication |
+| Pending/uncertain user alerts retry only under their declared policy | Dispatcher tests for final refusals, temporary-failure backoff, closed-ask cancellation, same-connection current leases and own-ask response isolation | User alerts can duplicate; native Herdr has no operation-key deduplication |
 | New asks are stored even when the first alert is not confirmed | CLI tests for actual `notified` evidence, `retrying`, retained IDs and fallback when recording fails | A timed-out recording request may have committed and can also produce a fallback alert |
 | Replay and domain state have separate retention | Row/age/service-incarnation cursor tests; pending asks/intents survive, finished effects trim with their records | Change references are not an exact historical record-body snapshot |
 | JSON import is private and idempotent | Exact hash-named backup, unchanged second open, changed-source missing-ID merge, malformed-source recovery and migration/application-ID refusal | Existing SQLite IDs win; conflicting downgrade edits need reconciliation |
@@ -28,7 +28,7 @@ finite alternative evidence; no accepted Quint claim is expanded. Native CI and
 independent mapping/design review remain required. Herdr deduplication, power-loss
 safety and agent read/execution guarantees remain excluded.
 
-This reconciles the remaining baseline entries without treating a component model as a proof of its consumers. Each decision names the required real tests in `coverage.json`; existing accepted-delivery CI is baseline execution evidence. New candidate execution is reported in PR #188 and source-bound manifests. Environment-gated live/OS checks retain their prerequisites and may not be reported as locally executed. All Q01–Q43 mappings and alternatives are independently accepted in review 5516249164 within their stated bounds. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+This reconciles the remaining baseline entries without treating a component model as a proof of its consumers. Each decision names the required real tests in `coverage.json`; existing accepted-delivery CI is baseline execution evidence. New candidate execution is reported in PR #188 and source-bound manifests. Environment-gated live/OS checks retain their prerequisites and may not be reported as locally executed. All Q01–Q43 mappings and alternatives are independently accepted in review 5516249164 within their stated bounds. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 
 ## Shared model consumers
 
@@ -177,7 +177,7 @@ Add binds the Board revision when opened and retains it through confirmation;
 Add/Edit/Roles keep their drafts until a successful write, expose conflicts in
 the form, and accept a refreshed Board revision only through explicit review without retry.
 `GroupsWindow.test.ts` executes the real forms and Board store at desktop/phone
-and owner viewports: another client's Team assignment is preserved by a stale
+and reference viewports: another client's Team assignment is preserved by a stale
 Add, a pre-confirmation edit refuses transfer, and retained drafts save only on
 explicit resubmission. A replacement in the selected terminal cannot retarget a
 Pod address. `groupActions.test.ts` also checks captured generation/session/name
@@ -336,7 +336,7 @@ appropriate alongside the existing Summary and panel tests.
 
 ### Mobile Board Work controls (Q43)
 
-The control policy comes from the owner/PM/design ruling: Work remains first and
+The control policy requires: Work remains first and
 labelled, note strings retain their own action (including zero), and overflow
 removes Notes before Fit and zoom without wrapping. Direct finite tests cover
 every available width from 128 to 800 for phone/desktop and zero/nonzero counts,
@@ -349,14 +349,13 @@ label/order/touch height and hit testing, one-row bounds, Work opening Pull requ
 empty tray and a detached string's distinct tray action. Existing Board tests
 retain Tidy/undo and note reattachment. This is a presentation projection over
 existing callbacks, not a new movement/authority protocol. Five-view screenshots
-and the normal delivery gate remain delivery acceptance. The owner-context gallery
+and the normal delivery gate remain delivery acceptance. The reference-context gallery
 also covers 390×844, 1512×982, 1280×1440, 2560×1440 and 1440×2560; narrow
-phone checks remain at 320/360/430 pixels. The owner's private mobile
-image and authenticated PR-list contents are not public verification fixtures.
+phone checks remain at 320/360/430 pixels. Private mobile images and authenticated PR-list contents are not public verification fixtures.
 
 ## Review and remaining obligations
 
-Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.
+Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.
 
 No temporal progress proof has been added. Successful reachability witnesses show that a tested path occurs; they do not establish eventual completion for all schedules. Scheduler/deadline regressions are bounded implementation evidence with their stated transport/storage assumptions. Additional fairness assumptions need an explicit requirement and review before introducing temporal properties.
 
@@ -431,7 +430,7 @@ replacing a healthy sibling lease. `process-utils.test.ts` checks structured exi
 facts and unchanged messages without serializing captured output. These direct
 fixtures extend the existing classification consumer mapping, not its model or
 generic-error allowlist, and do not establish live SSH availability, version skew
-or an owner's viewport outcome. The closing batch retains full-gate acceptance.
+or a real-device viewport outcome. The closing batch retains full-gate acceptance.
 
 ### Native plugin fixture lifecycle (Q36)
 
@@ -516,8 +515,7 @@ restoration remain outside this evidence.
 The generated World formula has no mandatory Herdr dependency. It installs only
 World and a launcher into its keg. Normal local startup uses the compiled
 runtime's read-only status lookup to preserve any existing Herdr, regardless of
-version or installation owner, and any `hc`/`herdr-core` (owner ruling
-2026-11-16, #926). With neither runtime, a generated Unix bootstrap embeds
+version or installation owner, and any `hc`/`herdr-core` (issue #926). With neither runtime, a generated Unix bootstrap embeds
 `scripts/herdr-core-install.sh`: core's release list over HTTPS, the target
 archive checked against its published SHA-256, `--version` confirmed, then core
 started now and at login and a `core-local` connection saved through
@@ -590,7 +588,7 @@ successful-install state; later checks remain admitted. Persistent-storage denia
 retains only best-effort legacy markers and page-lifetime deduplication, while a
 slow persistent claim fails closed instead of racing a fallback.
 
-## Owner asks extension (#472)
+## User asks extension (#472)
 
 The existing World question ledger remains the system of record. Direct CLI and
 service regressions cover caller-scoped cause keys, withdrawal authority, answer
@@ -629,7 +627,7 @@ explicitly prove absence: actual CLI regressions cover a match plus timeout,
 unavailability, unsupported method or malformed reply in both host orders, a
 malformed sole-local reply, confirmed absence, and exclusion of unknown remote
 hosts. The caller stays unverified and retains the shared allowance and cause-key
-restrictions. Owner dismissal is a closed
+restrictions. User dismissal is a closed
 state beside answer and withdrawal: service, CLI and watcher cases check that
 waits end, answers are refused, a keyed repeat returns it until the asker
 withdraws, and the watcher does not re-ask a dismissed cause. The service asks
@@ -671,7 +669,7 @@ service move, rollback and string remapping checks remain mandatory; these
 consumer checks add no model claim
 about native Herdr execution or arbitrary pointer schedules.
 
-The native-input/CDP production harness also runs the documented owner maximum:
+The native-input/CDP production harness also runs the documented maximum scale:
 three hosts, eight workspaces per host, fifteen tabs per workspace, using its
 existing seventeen-pane tab load. Board and the Town baseline run at 1440 px and
 390 px with the same work-ceiling checks and input acknowledgement measurements.
@@ -865,7 +863,7 @@ that cancellation removes browser load listeners, and stale decode cannot comple
 a retired waiter. `BoardView.test.ts` registers the actual production Town/Board/Desk consumer
 in `testing/captureReadinessBrowser.ts`: held image/font responses, current-dimension
 receipts, valid empty views, missing/blank output, screenshot-time replacement and
-never-ready failure with an empty output directory, then same-owner recovery after
+never-ready failure with an empty output directory, then same-user recovery after
 removing the still-unresolved image.
 The same consumer exhausts the materialization budget after the scene is baked:
 elapsed frame time without deferred buildings cannot invalidate a ready receipt.

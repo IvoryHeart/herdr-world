@@ -28,7 +28,7 @@ An intent SHALL record:
 **Targets.** Targets SHALL be bindings. Where bindings do not exist yet, a target SHALL
 capture the binding's fields inline: adapter, connection ID, entity kind, native ID,
 and the terminal or session evidence. A target SHALL NOT be a bare runtime generation.
-A target with no pane resource, such as an owner alert, SHALL capture only the
+A target with no pane resource, such as a user alert, SHALL capture only the
 connection ID.
 
 **Dispatch.** Each attempt SHALL record its own fences when it is claimed. Dispatch
@@ -74,8 +74,8 @@ change, an intent's targets SHALL be resolved by their binding state:
 - **THEN** the intent is marked uncertain, not "not sent", and is never re-sent
   automatically
 
-#### Scenario: Owner alert after a restart
-- **WHEN** an owner alert's intent is pending when World restarts
+#### Scenario: User alert after a restart
+- **WHEN** a user alert's intent is pending when World restarts
 - **THEN** its retry binds to its connection's current runtime, not to the generation
   it was created under
 
@@ -125,9 +125,9 @@ until it is resolved. World SHALL NOT claim exactly-once delivery for any class.
 - **THEN** after restart the intent is shown as uncertain and is not dispatched again
   without an authorized decision
 
-#### Scenario: Owner alert after a crash
-- **WHEN** World crashes after dispatching an owner alert and before recording it
-- **THEN** after restart the alert is sent again, and the owner may see it twice
+#### Scenario: User alert after a crash
+- **WHEN** World crashes after dispatching a user alert and before recording it
+- **THEN** after restart the alert is sent again, and the user may see it twice
 
 #### Scenario: Reattachable run
 - **WHEN** World crashes after starting an external run whose handle it recorded
@@ -150,7 +150,7 @@ cleanup that is supported and currently authorized, and SHALL NOT claim the effe
 undone.
 
 #### Scenario: Cancel before dispatch
-- **WHEN** the owner cancels an intent whose attempt is claimed but not yet dispatching
+- **WHEN** the user cancels an intent whose attempt is claimed but not yet dispatching
 - **THEN** no effect starts and the intent records its cancellation
 
 #### Scenario: Revoked during a wait
@@ -158,7 +158,7 @@ undone.
 - **THEN** the intent is not dispatched and records the revocation
 
 #### Scenario: Cancel after dispatch
-- **WHEN** the owner cancels an intent whose effect was already dispatched
+- **WHEN** the user cancels an intent whose effect was already dispatched
 - **THEN** World records the effect's actual outcome and offers only supported,
   authorized cleanup
 
@@ -205,14 +205,14 @@ recipient, such as an ask's answer to its asker, MAY be queueable only when it:
 - **THEN** the intent is not sent, and records that its target changed
 
 #### Scenario: An ask's answer after a reconnect
-- **WHEN** the owner answers an ask while the asker's host is offline, and the asker's
+- **WHEN** the user answers an ask while the asker's host is offline, and the asker's
   session is unchanged when the host returns
 - **THEN** the stored answer is delivered once through the guarded send path. If the
   session changed instead, the delivery is recorded as not sent and the answer stays
   readable on the ask
 
 #### Scenario: A Chat message while offline
-- **WHEN** the owner types a Chat message to an agent whose host is offline
+- **WHEN** the user types a Chat message to an agent whose host is offline
 - **THEN** the message is not queued for later delivery
 
 ### Requirement: Durable deadlines and injected time

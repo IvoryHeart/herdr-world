@@ -1,6 +1,6 @@
 # Outstanding upstream work
 
-The owner prioritizes and approves policy changes; the integration agent revisits
+Policy changes require review; the integration agent revisits
 open entries on every source sync and proposes implementation when acceptance is
 satisfied. Independent reviewers verify those claims. Link deferred/divergent ledger
 entries to a stable section here or a repository issue. Preserve completed sections
@@ -10,9 +10,7 @@ with their resolution PR so historical records retain a destination.
 
 Status: completed in [PR #194](https://github.com/IvoryHeart/herdr-world/pull/194),
 merged through [PR #191](https://github.com/IvoryHeart/herdr-world/pull/191).
-Source: Roamgate ffca28f2 (#415), v0.8.4. The owner accepted the migration and
-explicitly waived the counted independent-approval requirement before merge.
-Independent technical follow-up review supported acceptance of revision b949f67c.
+Source: Roamgate ffca28f2 (#415), v0.8.4. Independent technical follow-up review supported acceptance of revision b949f67c.
 [Exact-revision CI](https://github.com/IvoryHeart/herdr-world/actions/runs/38751737664)
 passed Windows installation, both macOS launchd architectures and Delivery checks.
 The combined-stack run also passed after retrying a Windows fixture compilation
@@ -43,10 +41,10 @@ this item no longer carries an outstanding deferral.
 
 ## World workflow controls
 
-Status: intentional divergence, proposed for owner review. Source: Roamgate
+Status: intentional divergence, proposed for review. Source: Roamgate
 75f61e36 (#401), v0.8.3/v0.8.4 source range; also 2388b914 (#454), whose
 Roamgate-only CodeQL workflow has no World counterpart.
-Owner: repository owner and independent delivery reviewer.
+Owner: a maintainer and independent delivery reviewer.
 
 World retains its own workflows and pinned actions; automated source publication
 cannot modify .github or .codex. Revisit every source sync and assess incoming
@@ -60,7 +58,7 @@ rationale here; retain this standing entry while the divergence applies.
 
 Status: addressed by the React 19 migration (#679), pending candidate review.
 Source: Roamgate e030b2e2 (#453), post-v0.8.6 main.
-Owner: repository owner and independent delivery reviewer.
+Owner: a maintainer and independent delivery reviewer.
 
 World now follows Roamgate's `^19.3.1` range for React and React DOM, with 19.x
 types. The original development-build stall was the changed-prop diagnostic walk
@@ -76,32 +74,32 @@ and consumer evidence on dependency updates.
 ## Mobile navigation and History input
 
 Status: deferred to one dedicated mobile PR (firstmate-2 ruling, 5 November 2026),
-proposed for owner review. Source: Roamgate 396d0cb0 (#482), e724e17e (#489) and
+proposed for review. Source: Roamgate 396d0cb0 (#482), e724e17e (#489) and
 22ee302f (#493), in the b84ccd53..2b16e991 range.
-Owner: the mobile PR's author, with the repository owner's phone try.
+Owner: the mobile PR's author, with a phone check before merge.
 
 These changes consolidate mobile tab and pane navigation, keep mobile History input
 in a bottom bar and compact mobile Ranger around a shared Message input. World ports
 them onto its MobileControls and layer Back order in one PR after the Roamgate web
-part. Acceptance: the owner tries that PR on a phone, comparing upstream's bottom
+part. Acceptance: the user tries that PR on a phone, comparing upstream's bottom
 bar with World's in-flow Message input, under the phone rules (tabs one tap away,
 one-tap keyboard, no extra bars). Revisit in that PR, otherwise every source sync.
 
 ## Mobile entry point
 
-Status: intentional divergence, proposed for owner review. Source: Roamgate
+Status: intentional divergence, proposed for review. Source: Roamgate
 52cbea92 (#491).
-Owner: repository owner.
+Owner: a maintainer.
 
 Upstream makes Chat the mobile entry point. World keeps Town as the phone's default
-view, with Chat one tap away. Adopting it needs an owner decision to change the
+view, with Chat one tap away. Adopting it needs a decision to change the
 default view. Revisit every source sync.
 
 ## Agent seen tracking
 
-Status: intentional divergence, proposed for owner review. Source: Roamgate
+Status: intentional divergence, proposed for review. Source: Roamgate
 fd86a13d (#544).
-Owner: repository owner.
+Owner: a maintainer.
 
 Upstream tracks which agents the user has seen, apart from Herdr's focus. World's
 reviewed record and Desk marks are its attention model; a separate seen store would
@@ -111,8 +109,8 @@ owner changes World's attention model.
 ## Recently opened agent sort
 
 Status: intentional divergence (firstmate-2 ruling, 5 November 2026), proposed for
-owner review. Source: Roamgate 10546ef8 (#518).
-Owner: repository owner.
+review. Source: Roamgate 10546ef8 (#518).
+Owner: a maintainer.
 
 Upstream sorts agents by a per-browser history of opens (`agentRecency.v1`). World
 keeps no activity history in the browser: its `agentRecency.ts` is service-backed,
@@ -122,7 +120,7 @@ sync and when such a signal exists.
 
 ## Diff worker dependency update
 
-Status: deferred (firstmate-2 ruling, 5 November 2026), proposed for owner review.
+Status: deferred (firstmate-2 ruling, 5 November 2026), proposed for review.
 Source: Roamgate f4367c30 (#508), `@pierre/diffs` 1.5 to 1.6.
 Owner: the integrator of each source sync.
 
@@ -130,11 +128,11 @@ Pierre 1.6's diff worker bundles both highlighter backends and a second copy of
 World's curated grammars: 56 more asset files and 1.9 MiB more, beyond the 180-file
 limit and the web total budget in [packaging](packaging.md). World stays on 1.5.x,
 and no budget is raised for it. Re-check at every source sync; adopt when the worker
-fits the budgets or the owner changes them.
+fits the budgets or the budgets change.
 
 ## Browser port-forward controls
 
-Status: deferred, proposed for owner review. Source: Roamgate e5b399ce (#546).
+Status: deferred, proposed for review. Source: Roamgate e5b399ce (#546).
 Owner: the author of the next web or mobile integration PR.
 
 World #636 adapted the service side of SSH port forwarding: explicit local and
@@ -168,11 +166,11 @@ The new 2388b914 advances CodeQL to 4.39.0. Official release notes were inspecte
   still pin upload 7.0.1 and download 8.0.1. They remain explicit pending control
   work, not an adopted update or a claim that older pins are security-equivalent.
 
-Owner: repository owner and independent delivery reviewer. Acceptance: a separate
+Owner: a maintainer and independent delivery reviewer. Acceptance: a separate
 trusted control PR updates the applicable artifact pins, checks upstream advisories
 and runs workflow, delivery and platform publication checks. Revisit on the next
 source sync, an artifact-action advisory or a publication throttling failure.
-The release-note assessment is not a universal vulnerability audit or owner approval.
+The release-note assessment is not a universal vulnerability audit or approval.
 
 ## Assessment for source 1a81c5da (20 October 2026)
 
@@ -184,7 +182,7 @@ remains required by World policy: the new History ref types and Files callbacks
 are adapted to 18, and qualified focus/browser regressions remain required.
 The release-only v0.8.7 version and upstream asset-budget bump are adapted to
 World's own release lifecycle and existing enforced budgets. These outstanding
-workflow and React divergences remain proposals for owner approval.
+workflow and React divergences remain proposals for approval.
 
 ## Assessment for source b84ccd53 (22 October 2026)
 
@@ -215,7 +213,7 @@ change, and its new consumers run on 18 (`forwardRef` search input,
 three standing workflow and React divergences are re-reviewed for this source and
 unchanged; their unmet acceptance stays visible.
 
-New proposals for owner review: deferred #482, #489 and #493 (one mobile PR), #508
+New proposals for review: deferred #482, #489 and #493 (one mobile PR), #508
 (diff worker budget) and #546's browser controls; divergent #491 (mobile entry
 point), #504 (workflow controls), #518 (Recently opened) and #544 (seen tracking).
 Source after 2b16e991, including v0.8.14 and v0.8.15, is not part of this record.

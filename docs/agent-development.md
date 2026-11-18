@@ -85,12 +85,12 @@ space fail halfway and leave debris. These rules keep each worktree small:
   `bun test` gets the same treatment through `bunfig.toml`. Runs killed outright
   are swept by the next run once their owner process is gone. Other programs'
   scratch directories, such as a desktop Chrome's, are never touched.
-- Disk capacity is managed by the owner. Checks do not enforce a free-space
+- Manage disk capacity separately. Checks do not enforce a free-space
   floor; `HERDR_WORLD_MIN_FREE_GB` has no effect.
 
 ## Deliver a change
 
-Start from the owner's requested outcome and inspect existing behavior before editing.
+Start from the user's requested outcome and inspect existing behavior before editing.
 Clarify only choices that materially alter scope. Keep one writer for overlapping
 files; use native subagents only for bounded parallel work or independent review.
 
@@ -189,11 +189,13 @@ unrecognised remainder cannot make a resolved fraction confirm readiness.
 PR actions remain in the browser's confirmation flow, outside the World CLI,
 skills and MCP.
 
-### Reach the owner with an ask
+<a id="reach-the-owner-with-an-ask"></a>
 
-To reach the owner, use `herdr-world ask` from your own Herdr pane; no other
+### Reach the user with an ask
+
+To reach the user, use `herdr-world ask` from your own Herdr pane; no other
 channel.
-Do not prompt the owner's seat, send Herdr custom notifications, change shared
+Do not prompt the user's seat, send Herdr custom notifications, change shared
 runbooks or configuration, or post an issue comment as a substitute for asking.
 Record the question, then move on or wait for its answer:
 
@@ -206,7 +208,7 @@ herdr-world ask withdraw --key dispatch:7:stuck --json
 ```
 
 A new question is committed to the instance's `world.sqlite` with its attention
-outbox entry. The service then alerts the owner through the captured Herdr
+outbox entry. The service then alerts the user through the captured Herdr
 connection (`notification.show`, sound `request`): Herdr's toasts, every World
 connected to that Herdr and Web Push. The JSON reply's `recorded` field says
 whether World recorded it and `notified` what Herdr reported (`null` when a
@@ -216,8 +218,8 @@ question but no alert was confirmed yet. `retrying: true` means the service
 will retry a temporary failure with bounded backoff; an eventual alert may still
 arrive. Closing the ask cancels a pending alert. A failure to record retains the
 CLI's fallback through the asking pane's Herdr, names the recording failure and
-exits 1. A lost service reply can therefore produce duplicate owner alerts.
-Report failures once; do not add a caller-side retry loop. Interrupted owner
+exits 1. A lost service reply can therefore produce duplicate user alerts.
+Report failures once; do not add a caller-side retry loop. Interrupted user
 alerts retain `uncertain` evidence and may retry because duplicate alerts are
 harmless. Inspect `ask get ID --json` for the actual evidence. An answer is
 durable before acknowledgement and remains retrievable with `ask get` or
@@ -236,7 +238,7 @@ read/send race can still duplicate output.
 
 A possible pane send is opaque: `uncertain` never automatically replays. Town
 Summary's **Outbox** keeps that answer and its evidence reachable without
-reopening the question. Only the owner can choose **Send again…**, confirm a
+reopening the question. Only the user can choose **Send again…**, confirm a
 possible duplicate to the same original session, or **Dismiss** / **Cancel send**
 while preserving the answer for `ask get`. Sending in progress has no UI
 decision. Reception's compact row counts only unconfirmed/not-sent answers to

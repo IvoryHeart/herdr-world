@@ -5,8 +5,8 @@ description: Operate requested visible Herdr Workflows teams in Herdr World, wit
 
 # Herdr Workflows operations
 
-Use when the owner requests HWF or visible agent collaboration. This skill does
-not authorize starting agents after an owner has stopped them.
+Use when the user requests HWF or visible agent collaboration. This skill does
+not authorize starting agents after the user has stopped them.
 
 Read `docs/agent-development.md`. Use the
 existing `.hwf/workflows/agent-delivery.yaml` and installed `hwf` help; inspect

@@ -1,11 +1,9 @@
 ## Why
 
-The owner hears the same OS sound for every agent and every reason, and the
+The user hears the same OS sound for every agent and every reason, and the
 notification text names neither who nor why. World can vary its sound only by
-playing it itself while a World page is open. The owner asked for a chime of
-FirstMate's own (the Town master), chimes per agent class and per profile, and
-a reason line that always travels with the sound (pm spec, sync
-`pm-chatter-chimes.md` §2, with the owner's answers).
+playing it itself while a World page is open. Chimes must distinguish the Town master, agent classes and profiles, with
+a reason line that travels with each sound.
 
 ## What Changes
 
@@ -14,9 +12,9 @@ a reason line that always travels with the sound (pm spec, sync
   its motif; Herdr custom notifications map by their sound (request is needs
   you, done is finished, none is for you).
 - Eight timbres synthesised with Web Audio; no sound files.
-- The owner's chime settings (class timbres, motif switches) and the one Town
+- The user's chime settings (class timbres, motif switches) and the one Town
   master live in the profiles document, shared by every browser; the profile
-  gets a Chime field and an offer of the Town master role. Only the owner
+  gets a Chime field and an offer of the Town master role. Only the user
   assigns the role.
 - This device's sound (on or off, volume, tests) stays in the browser.
 - The gate: motif switches, already on screen, the viewer's interest (layers),

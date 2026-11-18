@@ -38,7 +38,7 @@ World observes, and the newest assignment SHALL win.
 - The claim with the highest revision SHALL win; a tie SHALL go to the greater terminal
   ID.
 - World SHALL clear superseded claims where it holds a current lease.
-- Moving the role away from another live agent SHALL still ask the owner first.
+- Moving the role away from another live agent SHALL still ask the user first.
 
 **Migration.** World SHALL import each existing assignment once, when its connection is
 first observed complete on a ready runtime after this change. It SHALL:
@@ -48,7 +48,7 @@ first observed complete on a ready runtime after this change. It SHALL:
   again.
 
 #### Scenario: Two Worlds share one Herdr
-- **WHEN** the owner launches an agent from a profile in one World while another World
+- **WHEN** the user launches an agent from a profile in one World while another World
   observes the same Herdr
 - **THEN** both Worlds show that terminal's assignment, and the second World uses its
   own profile of that ID or, without one, the recorded name with the default look
@@ -67,13 +67,13 @@ first observed complete on a ready runtime after this change. It SHALL:
   when the host returns
 
 #### Scenario: The offline holder returns after a newer assignment
-- **WHEN** the owner gives the role to an agent on another host while the previous
+- **WHEN** the user gives the role to an agent on another host while the previous
   holder's host is offline, and that host later returns
 - **THEN** the newer assignment keeps the role, and the returning claim is cleared as
   superseded
 
 #### Scenario: World restarted while the holder was offline
-- **WHEN** World restarts while the holder's host is offline, and the owner then assigns
+- **WHEN** World restarts while the holder's host is offline, and the user then assigns
   the role to another agent before that host returns
 - **THEN** the new assignment wins when the host returns, because its revision is newer
 

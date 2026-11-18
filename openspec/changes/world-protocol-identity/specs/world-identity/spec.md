@@ -32,7 +32,7 @@ SHALL change when World, Herdr or a connection restarts.
   with none of them
 
 #### Scenario: Restored backup
-- **WHEN** the owner restores a stopped World's data folder from an earlier copy and
+- **WHEN** the user restores a stopped World's data folder from an earlier copy and
   World then creates new records
 - **THEN** the new records do not receive IDs that the restored copy's later records
   had been given

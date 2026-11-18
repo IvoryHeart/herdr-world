@@ -1,6 +1,6 @@
 # Durable terminal marks
 
-Owner approval: `briefs/persist-marks.md` changes the former restart-clears rule.
+Requirement: `briefs/persist-marks.md` changes the former restart-clears rule.
 Current contracts: World storage, World identity and World surfaces. Q51 is
 candidate direct evidence; independent review and native CI remain required.
 

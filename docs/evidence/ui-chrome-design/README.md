@@ -100,7 +100,7 @@ VS Code, Warp, Zed and iTerm2's compact theme.
 | Wide Linux | Right dock of 520px with avatar tabs; undock a tab to float it beside the dock | Icon chips; labels at 640px or wider | Left rail |
 | Portrait | Bottom dock at 45% height and full width, with avatar tabs | Town skin, labelled chips | Left rail; camera above the dock |
 
-The dock is the shared `WindowFrame` snapped right (owner decision Q9), so
+The dock is the shared `WindowFrame` snapped right (design requirement Q9), so
 windows can still be undocked, moved and resized.
 
 ### Pixels saved
@@ -195,7 +195,7 @@ retired chat window.
   reusing `MobileSheetHandle`'s drag and settle logic, so there is one code
   path.
 
-## Phase 2 (after owner approval)
+## Phase 2 (after review)
 
 1. One bar in the Inspector (the single window per agent) and the Spaces tab
    window, with the Town and calm skins. It removes bars 2 and 3 and the PR
@@ -204,7 +204,7 @@ retired chat window.
 2. Town shell defaults: no top bar, tab strip or sidebar in Town; HUD bar;
    Workspaces drawer; the phone camera button.
 
-## Owner decisions (2026-10-22)
+## Design decisions (2026-10-22)
 
 - **Q10, Town is full-bleed by default.** That is Zen mode. Town defaults to
   Zen, and Zen works on phones too. In Zen, a small floating view picker
@@ -232,7 +232,7 @@ retired chat window.
   - **Phone header** at 390px: `‹ · avatar · name/status · ⋯`, the same
     bar as the terminal's. There is no selector in the bar: ⋯ lists View
     (Chat, Terminal, Changes, Files), Switch to (the other agents and
-    terminals) and Window. This later owner direction replaces the earlier
+    terminals) and Window. This later design direction replaces the earlier
     four-icon phone selector. Next moves into ⋯,
     because the need-you pill already covers it.
   - **Desktop header:** `‹ · tab avatars · name/location · [💬 ▣ ±2 📁] · Next › · ⋯`.
