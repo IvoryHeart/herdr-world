@@ -782,7 +782,7 @@ by `world.sqlite`. A general signal inbox (dedupe, correlation, early arrival) i
 added with its first consumer, together with its model witnesses. How a consumer waits
 for a signal belongs to the authoring model.
 
-**Queued, state-conditioned intents** (owner rule). Only verbs that declare
+**Queued, state-conditioned intents.** Only verbs that declare
 `queueable` can be queued. Such an intent captures the target state it was made
 against. On reconnect it is dispatched if that state is unchanged, whatever its age. If
 the state has changed, it is recorded as not sent, provided no attempt reached

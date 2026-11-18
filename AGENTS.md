@@ -7,9 +7,9 @@ invent abstractions or process without a concrete need.
 ## Delivery workflow
 
 - Never commit or push directly to `main`. Work on a branch. For PR delivery,
-  stop after opening a ready pull request unless explicitly asked to merge it.
+  stop after opening a ready pull request unless a maintainer explicitly asks you to merge it.
   A local-only handoff does not require a PR.
-- Pull requests require independent review unless explicitly waived.
+- Pull requests require independent review unless a maintainer explicitly waives it.
 - Put worktrees below the primary checkout's `.agents/worktrees/` directory. Create
   one with `bun run agent:worktree -- create <slug> <parent-ref>` after resolving the
   requested parent branch.

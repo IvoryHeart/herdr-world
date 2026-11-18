@@ -279,7 +279,7 @@ A model should not be derived solely from current code, because that can formali
 an implementation bug as the intended behavior.
 
 Our repository already scopes its practices: OpenSpec is required for a genuinely
-new product/API contract or an owner-requested change, while ordinary fixes need
+new product/API contract or a maintainer-requested change, while ordinary fixes need
 not create a proposal. Tests should address cohesive behavior rather than mirror
 every statement. Applying Quint across the board can follow the same principle:
 every relevant change is assessed, and meaningful behavior receives appropriate

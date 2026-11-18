@@ -211,7 +211,7 @@ reuses the pid and argv is refused.
   Desk's quiet agents, agent pickers); a stale host shows its
   last pins and refuses changes; review
   receipts stay World-only; a core agent that finishes after working or
-  starts needing the user pushes from core status events under Herdr's
+  starts needing the user triggers a push from core status events under Herdr's
   attention rule
 
 #### Scenario: Missing agent status

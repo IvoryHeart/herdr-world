@@ -1644,7 +1644,7 @@ reply SHALL keep that outcome through its answer, closure or timeout.
 - **THEN** the original asker withdraws the ask and all open-question markers clear,
   while any answer recorded first remains on the same ledger question
 
-#### Scenario: the user dismisses an ask
+#### Scenario: The user dismisses an ask
 
 - **WHEN** the user dismisses an open ask in World
 - **THEN** every open-question marker clears, the asker's wait ends with dismissed
@@ -1911,7 +1911,7 @@ through the shared window manager. It lists, in this order: open questions using
 cards and answer action, then blocked agents with their reason, waiting age
 and one action; unreviewed finishes with when each was last
 active when Herdr reports activity times, never presented as the finish time; every host with its rooms and their counts (needing
-The user, working, finished, quiet, unknown), where activating a room moves the
+the user, working, finished, quiet, unknown), where activating a room moves the
 Town camera to it, admitting the qualified requested room while preserving the
 selected room. A room request SHALL wait for renderer setup and its admitted
 layout, be consumed once, and retrigger for a later click on the same room.

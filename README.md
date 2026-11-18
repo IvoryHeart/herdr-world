@@ -15,8 +15,8 @@ you choose a Herdr TUI room. Each runtime has its own connection.
 
 - **herdr-core:** install it with the [official instructions](https://github.com/herdrdev/herdr-core)
   or World's setup below. Run `hc server start`, then open **Hosts → Manage
-  connections → Add herdr-core**. Choose **This computer**, **Unix SSH** or
-  **Windows SSH** and connect. Keep session **default** unless you changed
+  connections → Add herdr-core**. Choose **This computer**, **A Unix host over SSH** or
+  **A Windows host over SSH** and connect. Keep session **default** unless you changed
   `HC_SESSION`. Windows core needs Windows x64 and PowerShell; over SSH, install
   and start it on Windows first and use SSH key login.
 - **Herdr TUI:** [install Herdr](https://herdr.dev), then run
