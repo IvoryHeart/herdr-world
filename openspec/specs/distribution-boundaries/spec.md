@@ -12,8 +12,9 @@ and operational details.
 The repository SHALL derive its application foundation from an exact Roamgate synchronization
 point and SHALL retain only Herdr World source, required upstream-derived source and generated legal
 notices. Herdr SHALL remain a separately installed external runtime: no World artifact bundles it.
-World installers, the Homebrew Formula and World updates MAY install or upgrade it to the Herdr
-release that World version verified, in Herdr's own default location.
+World installers and the Homebrew launcher MAY set up a missing herdr-core separately.
+Explicit Herdr TUI updates MAY upgrade the TUI to the release that World version
+verified, in Herdr's own default location; an installed core SHALL stay unchanged.
 
 #### Scenario: Desktop archive
 - **WHEN** a release archive is built
@@ -24,11 +25,14 @@ release that World version verified, in Herdr's own default location.
 #### Scenario: Installation reuses existing Herdr
 - **WHEN** the standalone World installer performs a fresh install, or the Homebrew launcher starts
   the normal local World listener
-- **THEN** an existing Herdr discovered through its explicit binary, PATH or default
-  location retains its version and installation owner
-- **AND** only a missing Herdr is installed from the release World verified, in
-  Herdr's own default location, without starting a Herdr server
-- **AND** a reachable Herdr server is reused without installing a second copy when
+- **THEN** an existing Herdr TUI or herdr-core discovered through its explicit
+  binary, PATH or default location retains its version and installation owner
+- **AND** when no core installation and no installed or reachable Herdr TUI
+  are found, setup installs
+  checksum-verified herdr-core in its own install location, starts it now and
+  registers startup at login, and registers its default auto-connect World
+  connection; a refused connection registration reports how to add it manually
+- **AND** a reachable Herdr TUI server is reused without installing a second copy when
   its executable cannot be discovered
 - **AND** an installed discovery result is admitted only after the selected entry
   is validated as a regular executable file; blocked entries are preserved and
@@ -41,14 +45,21 @@ release that World version verified, in Herdr's own default location.
   opt-out guidance while World starts so remote profiles and in-app setup remain
   available
 
+#### Scenario: Setup is skipped or World only observes
+- **WHEN** `HERDR_WORLD_SKIP_HERDR=1` is set for installation or first launch,
+  or World connects, retries or observes an existing runtime
+- **THEN** that path does not install or start a runtime
+- **AND** the opt-out leaves World available for existing and remote connections
+
 #### Scenario: Explicit update brings Herdr forward
-- **WHEN** an explicit World update, installer replacement or Herdr upgrade runs with an older Herdr
+- **WHEN** an explicit World update, installer replacement or Herdr upgrade runs with an older Herdr TUI
 - **THEN** World upgrades Herdr from the checksum-verified release and keeps a
   replaced binary for rollback
 - **AND** it never downgrades a newer Herdr or Herdr server, replaces a package- or
   version-managed Herdr, or stops a running Herdr server; it hands a running server
   off live only when it can confirm that no service manager runs that server, and
   otherwise reports that a restart is needed
+- **AND** an installed herdr-core remains unchanged
 
 #### Scenario: Installer replacement finishes the World upgrade
 - **WHEN** the standalone installer replaces an existing World executable with a release

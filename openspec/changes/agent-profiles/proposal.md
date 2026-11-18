@@ -1,3 +1,11 @@
+## Delivery state
+
+Profiles, the shared launcher and readiness are delivered. Only tasks 3.1 (profile CLI) and 3.2 (spawned-by provenance) remain; their contract details remain to be specified with those follow-ups.
+
+Delivered requirements are synchronized into [the current contract](../../specs/world-surfaces/spec.md#requirement-agent-profiles).
+No unsynchronized requirement delta remains in this record; unfinished tasks
+and acceptance above keep the change active.
+
 ## Why
 
 The user wants to configure agents (name, brain, skills, tools, a brief and a

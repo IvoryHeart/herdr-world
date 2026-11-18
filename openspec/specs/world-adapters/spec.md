@@ -4,10 +4,14 @@ Let World observe and act on systems of record through declared adapters. Regist
 them statically in the repository and hold every adapter to one conformance suite,
 proven against a synthetic source unlike Herdr, while Herdr remains the only runtime.
 
-The current implementation covers the runtime observation adapter boundary. Legacy
-mutation dispatch and other built-in source migration, including the provider-name
-lint, remain tasks 7.1 and 7.5 of `world-protocol-identity`. The subscription crossing
-below is a future v2 consumer gate, with an explicit pending test.
+The current implementation covers runtime observation descriptors, the adapter
+registry and conformance suite, plus the browser/agent verb registry and
+conservative command evidence in [bridge-access](../bridge-access/spec.md).
+Provider-name lint and moving harness-specific shared code behind adapters
+remain task 7.5 of `world-protocol-identity`; broader resource/assistant verb
+registration and observation-linked command tracking also remain active there.
+The subscription crossing below is a future v2 consumer gate, with an explicit
+pending test.
 
 ## Requirements
 

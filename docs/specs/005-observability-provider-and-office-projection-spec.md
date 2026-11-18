@@ -1,5 +1,7 @@
 # Observability provider and Office projection
 
+> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
+
 - **Spec ID:** `005-observability-provider-and-office-projection`
 - **Status:** Approved
 - **Created:** 2026-08-10

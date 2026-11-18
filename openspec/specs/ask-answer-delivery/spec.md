@@ -1,9 +1,17 @@
+# Ask answer delivery
+
 ## Purpose
 
-Deliver one stored ask answer to its verified original asker without requiring a
-waiting CLI, while preserving retrieval and explicit uncertain-effect recovery.
+Deliver one stored ask answer to its verified original asker while preserving
+retrieval, explicit authority and honest uncertain-effect recovery.
 
-## ADDED Requirements
+Implementation delivered; acceptance evidence still to reconcile: complete
+affected unit/browser/platform and behavioral gates and independent review
+under [task 4.2](../../changes/ask-answer-delivery/tasks.md). These requirements
+record the implemented contract; final acceptance remains pending. No Herdr
+exactly-once delivery or downstream deduplication is claimed.
+
+## Requirements
 
 ### Requirement: A distinct state-conditioned answer verb
 
