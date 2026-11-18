@@ -12,6 +12,7 @@ import { TownBuildingSign } from "./TownBuildingSign";
 import type { TownBuildingSigns } from "./townBuildingSigns";
 import type { TownRoomActions } from "./TownCanvas";
 import { ReceptionEntry, portrait } from "./TownReceptionEntry";
+import { TownReceptionMarquee } from "./TownReceptionMarquee";
 import { townRoomCardMeta } from "./townNameplates";
 import {
   TownRoomOverviewSummary,
@@ -390,118 +391,134 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               }}
               role="group"
               aria-label={`${host?.displayLabel ?? "Host"} reception, ${queue.length} waiting`}
+              // Focus opens the board (#903): Tab reaches the closed marquee,
+              // then the board's controls once it shows.
+              tabIndex={0}
             >
-              <div className="town-reception-title">
-                {hostColor ? (
-                  <ColorSwatchButton
-                    className="town-place-color"
-                    label={`Colour of ${host?.displayLabel ?? "host"}'s building`}
-                    {...hostColor}
+              <TownReceptionMarquee
+                label={(host?.displayLabel ?? "").toUpperCase()}
+                waiting={queue.length}
+                faces={visitors.map((agent) => ({
+                  key: agent.key,
+                  done:
+                    "semanticStatus" in agent &&
+                    agent.semanticStatus === "done" &&
+                    !askingKeys.has(agent.key),
+                }))}
+              />
+              <div className="town-reception-board">
+                <div className="town-reception-title">
+                  {hostColor ? (
+                    <ColorSwatchButton
+                      className="town-place-color"
+                      label={`Colour of ${host?.displayLabel ?? "host"}'s building`}
+                      {...hostColor}
+                    />
+                  ) : null}
+                  <span>
+                    {(host?.displayLabel ?? "").toUpperCase()} RECEPTION
+                  </span>
+                  {queue.length ? <b>{queue.length}</b> : null}
+                  <TownTidyRooms
+                    hostKey={building.hostKey}
+                    hostLabel={host?.displayLabel}
+                    roomActions={roomActions}
+                  />
+                  {host && folded ? (
+                    <TownReceptionExpenses
+                      connectionId={host.connectionId}
+                      hostLabel={host.displayLabel}
+                      roomLabel={roomLabel(building.hostKey)}
+                      folded
+                    />
+                  ) : null}
+                  {host ? (
+                    <TownReceptionSign
+                      connectionId={host.connectionId}
+                      hostLabel={host.displayLabel}
+                    />
+                  ) : null}
+                </div>
+                {host?.stale ? (
+                  <ConnectionRecoveryBanner
+                    connectionId={host.connectionId}
+                    label={host.displayLabel}
+                    state={host.runtimeState}
                   />
                 ) : null}
-                <span>
-                  {(host?.displayLabel ?? "").toUpperCase()} RECEPTION
-                </span>
-                {queue.length ? <b>{queue.length}</b> : null}
-                <TownTidyRooms
-                  hostKey={building.hostKey}
-                  hostLabel={host?.displayLabel}
-                  roomActions={roomActions}
+                {visitors.length ? (
+                  <div className="town-reception-queue">
+                    {shown.map((agent) =>
+                      "semanticStatus" in agent ? (
+                        <ReceptionEntry
+                          key={agent.key}
+                          agent={agent}
+                          room={model.rooms.get(agent.roomKey)?.displayLabel}
+                          desk={
+                            agent.deskKey
+                              ? model.desks.get(agent.deskKey)?.displayLabel
+                              : undefined
+                          }
+                          asking={askingKeys.has(agent.key)}
+                          since={blockedSince.get(agent.key) ?? now}
+                          now={now}
+                          selected={selectedKey === agent.key}
+                          onSelect={onSelect}
+                          onActivate={onActivate}
+                          onHoverEntry={onHoverEntry}
+                        />
+                      ) : (
+                        <button
+                          key={agent.key}
+                          type="button"
+                          className="town-reception-entry"
+                          data-owner-question="true"
+                          data-owner-question-terminal={agent.nodeId}
+                          aria-label={`${agent.displayLabel}, owner question`}
+                          disabled={agent.stale || !agent.canOpenInSpaces}
+                          onClick={() => onActivateAsk?.(agent.nodeId)}
+                        >
+                          <img
+                            src={portrait(agent.key)}
+                            alt=""
+                            width={28}
+                            height={40}
+                          />
+                          <span>{agent.displayLabel}</span>
+                          <small>? Owner wanted</small>
+                        </button>
+                      ),
+                    )}
+                    {visitors.length > shown.length ? (
+                      <span className="town-reception-more">
+                        +{visitors.length - shown.length}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="town-reception-empty">Nobody waiting</div>
+                )}
+                <TownReceptionHeldTag
+                  counts={heldCounts}
+                  onFind={
+                    held.length && onFindHeld
+                      ? (anchor) =>
+                          onFindHeld(
+                            held.map((agent) => agent.key),
+                            anchor,
+                          )
+                      : null
+                  }
                 />
-                {host && folded ? (
+                {host && !folded ? (
                   <TownReceptionExpenses
                     connectionId={host.connectionId}
                     hostLabel={host.displayLabel}
                     roomLabel={roomLabel(building.hostKey)}
-                    folded
-                  />
-                ) : null}
-                {host ? (
-                  <TownReceptionSign
-                    connectionId={host.connectionId}
-                    hostLabel={host.displayLabel}
+                    folded={false}
                   />
                 ) : null}
               </div>
-              {host?.stale ? (
-                <ConnectionRecoveryBanner
-                  connectionId={host.connectionId}
-                  label={host.displayLabel}
-                  state={host.runtimeState}
-                />
-              ) : null}
-              {visitors.length ? (
-                <div className="town-reception-queue">
-                  {shown.map((agent) =>
-                    "semanticStatus" in agent ? (
-                      <ReceptionEntry
-                        key={agent.key}
-                        agent={agent}
-                        room={model.rooms.get(agent.roomKey)?.displayLabel}
-                        desk={
-                          agent.deskKey
-                            ? model.desks.get(agent.deskKey)?.displayLabel
-                            : undefined
-                        }
-                        asking={askingKeys.has(agent.key)}
-                        since={blockedSince.get(agent.key) ?? now}
-                        now={now}
-                        selected={selectedKey === agent.key}
-                        onSelect={onSelect}
-                        onActivate={onActivate}
-                        onHoverEntry={onHoverEntry}
-                      />
-                    ) : (
-                      <button
-                        key={agent.key}
-                        type="button"
-                        className="town-reception-entry"
-                        data-owner-question="true"
-                        data-owner-question-terminal={agent.nodeId}
-                        aria-label={`${agent.displayLabel}, owner question`}
-                        disabled={agent.stale || !agent.canOpenInSpaces}
-                        onClick={() => onActivateAsk?.(agent.nodeId)}
-                      >
-                        <img
-                          src={portrait(agent.key)}
-                          alt=""
-                          width={28}
-                          height={40}
-                        />
-                        <span>{agent.displayLabel}</span>
-                        <small>? Owner wanted</small>
-                      </button>
-                    ),
-                  )}
-                  {visitors.length > shown.length ? (
-                    <span className="town-reception-more">
-                      +{visitors.length - shown.length}
-                    </span>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="town-reception-empty">Nobody waiting</div>
-              )}
-              <TownReceptionHeldTag
-                counts={heldCounts}
-                onFind={
-                  held.length && onFindHeld
-                    ? (anchor) =>
-                        onFindHeld(
-                          held.map((agent) => agent.key),
-                          anchor,
-                        )
-                    : null
-                }
-              />
-              {host && !folded ? (
-                <TownReceptionExpenses
-                  connectionId={host.connectionId}
-                  hostLabel={host.displayLabel}
-                  roomLabel={roomLabel(building.hostKey)}
-                  folded={false}
-                />
-              ) : null}
             </div>
             {building.rooms.map((placed) => {
               const room = model.rooms.get(placed.key);

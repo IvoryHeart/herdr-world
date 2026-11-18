@@ -1,5 +1,6 @@
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installHostsFilterClock";
+import { setTownDaylightMode } from "./town/townDaylight";
 import { runDeskRevealCancellationAcceptance } from "./testing/deskRevealCancellationAcceptance";
 import { runDeskRevealAcceptance } from "./testing/deskRevealAcceptance";
 import { checkTownIdleDraws } from "./town/townIdleDraws.browser";
@@ -94,6 +95,12 @@ const operation =
   new URLSearchParams(location.search).get("operation") ?? "filters";
 const requestedView =
   new URLSearchParams(location.search).get("view") ?? "board";
+// Hold Town's time of day, as the Town golden does: following the clock, a
+// run's cost would follow the runner's clock. At night every frame also
+// multiplies the whole screen by the lightmap, which on software GL doubles
+// a frame's cost; these cases are about drawing and anchors, not light, which
+// the golden captures cover at night.
+setTownDaylightMode("day");
 // Idle Town proves it is drawing through the renderer's frame counters.
 if (operation.startsWith("town-idle"))
   window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";

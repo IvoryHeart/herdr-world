@@ -8,8 +8,13 @@
  */
 
 import { Graphics, Sprite, Texture, type Container } from "pixi.js";
-import type { TownActors } from "./townActors";
+import type { TownActors, TownCrowdMood } from "./townActors";
 import type { TownAmbient } from "./townAmbient";
+import {
+  TOWN_GRUMBLE_TURN,
+  townCalmBubbles,
+  type TownBubbleCandidate,
+} from "./townBubbleCalm";
 import { townAgentChatting, townBubbleKind } from "./townBubbleKind";
 import type { TownCamera, TownLevel } from "./townCamera";
 import { TOWN_AGENT_SCALE, townSeat, type TownCell } from "./townLayout";
@@ -166,6 +171,9 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
     const layoutCells = ctx.layoutCells();
     const scale = Math.min(4, Math.max(2, Math.round(camera.z * 1.5)));
     const wanted = new Set<string>();
+    const candidates: (TownBubbleCandidate & {
+      mood: TownCrowdMood | null;
+    })[] = [];
     if (model && level !== "town")
       for (const actor of actors.actors.values()) {
         const agent = model.agents.get(actor.key);
@@ -234,38 +242,54 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
           if (chatting) ambient.every(3);
         }
         if (!kind) continue;
-        wanted.add(actor.key);
-        let bubble = bubbles.get(actor.key);
-        if (!bubble) {
-          bubble = new Sprite(Texture.EMPTY);
-          bubble.anchor.set(0.5, 1);
-          screenLayer.addChild(bubble);
-          bubbles.set(actor.key, bubble);
-        }
-        bubble.texture = textureOf(sprites.bubble[kind]);
-        const bubbleScale =
-          (kind === "blocked" ||
-            kind === "ask" ||
-            kind === "done" ||
-            kind === "fuel" ||
-            mood !== null) &&
-          !near
-            ? 2
-            : scale;
-        bubble.scale.set(bubbleScale);
-        const bounce =
-          (kind === "blocked" || kind === "curse") &&
-          !camera.reducedMotion &&
-          !state.calm
-            ? Math.abs(Math.sin(clock * 4 + (townHash(actor.key) % 7))) * 3
-            : 0;
-        bubble.position.set(
-          Math.round(point.x),
-          Math.round(point.y - 2 - bounce),
-        );
-        if ((kind === "blocked" || kind === "curse") && ctx.visible(bubble))
-          ambient.continuous();
+        candidates.push({
+          key: actor.key,
+          kind,
+          hostKey: actor.hostKey,
+          x: point.x,
+          y: point.y,
+          mood,
+        });
       }
+    // Calm at scale (#903): grumblers take turns and far bubbles thin out.
+    const animate = !state.calm && !camera.reducedMotion;
+    if (animate && candidates.some((bubble) => bubble.kind === "curse"))
+      ambient.every(1 / TOWN_GRUMBLE_TURN);
+    const shown = townCalmBubbles(
+      candidates,
+      level === "room" || level === "desk",
+      animate ? Math.floor(clock / TOWN_GRUMBLE_TURN) : 0,
+    );
+    for (const { key, kind, mood, x, y } of candidates) {
+      if (!shown.has(key)) continue;
+      const near = level === "room" || level === "desk";
+      wanted.add(key);
+      let bubble = bubbles.get(key);
+      if (!bubble) {
+        bubble = new Sprite(Texture.EMPTY);
+        bubble.anchor.set(0.5, 1);
+        screenLayer.addChild(bubble);
+        bubbles.set(key, bubble);
+      }
+      bubble.texture = textureOf(sprites.bubble[kind]);
+      const bubbleScale =
+        (kind === "blocked" ||
+          kind === "ask" ||
+          kind === "done" ||
+          kind === "fuel" ||
+          mood !== null) &&
+        !near
+          ? 2
+          : scale;
+      bubble.scale.set(bubbleScale);
+      const bounce =
+        (kind === "blocked" || kind === "curse") && animate
+          ? Math.abs(Math.sin(clock * 4 + (townHash(key) % 7))) * 3
+          : 0;
+      bubble.position.set(Math.round(x), Math.round(y - 2 - bounce));
+      if ((kind === "blocked" || kind === "curse") && ctx.visible(bubble))
+        ambient.continuous();
+    }
     for (const [key, bubble] of bubbles)
       if (!wanted.has(key)) {
         bubble.destroy();

@@ -141,6 +141,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     A queued agent without a Herdr name is labelled with its room rather than
     its harness, and its tooltip adds the desk, so the board says where each
     one waits from.
+    A closed reception is a small marquee over the door, so hundreds of
+    agents never bury the town under boards: the building's name, how many
+    need you and the first five faces waiting (amber waiting, green done),
+    with `+N` for the rest. Hover it, Tab to it, or tap it or its lobby, and
+    the full board opens over it with every name, the sign, Tidy rooms and
+    the expenses; it closes when the pointer or focus leaves.
     Finished agents wait there until you open their terminal or mark that
     completion reviewed, then join idle agents at the bar. Movement only
     represents state.
@@ -219,7 +225,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
     the front of the crowd, and the others move up. Under calm motion the
-    crowd stands still, still grumbling or napping. An agent whose state is
+    crowd stands still, still grumbling or napping. The crowd takes turns:
+    one `#@!` bubble per lobby at a time, passing every couple of seconds
+    (under calm motion one grumbler keeps it). Zoomed out to the room cards,
+    bubbles that would stack thin to one per small patch of screen, the most
+    urgent there (blocked, then a question, out of fuel, finished, then the
+    crowd); zoom in to see each one. An agent whose state is
     unknown sits at its desk scratching its head under a purple `??` instead
     of dozing.
   - An agent that stopped because its harness hit a subscription or usage
@@ -450,6 +461,39 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
     **Town calm motion** reduces ambient animation.
+  - Light is Town's status language. The button under **ALL** sets the time
+    of day: it cycles **clock** (follows this device's time), **day**,
+    **dusk** and **night**, and each browser keeps its choice. As the sky
+    darkens, rooms with someone working or waiting on you are lit and quiet
+    rooms stay dark; each desk throws its agent's state colour (blue-white
+    working, amber waiting on you, green done), and street lamps light the
+    roads. A reception whose building has someone waiting on you pulses amber
+    over its lobby by day and by night; under calm motion or reduced motion
+    the pulse holds as a steady mark. An agent or terminal with an open
+    question for you counts as waiting on you whatever its runtime status.
+    A failed host's cached building stays dark. Day leaves the town as
+    painted.
+  - Town's overlays share one style: the Town board (and its phone chips),
+    the zoom and time-of-day buttons, an agent's peek, toasts, and the hover
+    cards of rooms, tables and fuel gauges are the same translucent dark
+    panel, with one border, corner, shadow, type and spacing in World's light
+    and dark themes, readable over a white roof or the night. Their titles,
+    borders, buttons and focus rings are neutral. Amber in them marks only
+    what needs you: a **Waiting** count above zero, a waiting agent's peek,
+    the first answer to an agent's question and a **low** fuel gauge. The
+    time-of-day button keeps one neutral colour at dusk and night.
+  - The time of day also gives the town depth. By day each building casts a
+    sun shadow that swings from left in the morning to right in the evening,
+    short at noon and long toward dawn and dusk, and faint cloud shadows drift
+    east across the land. At night street lamps glow at their heads and
+    fireflies wander over open grass away from buildings. It stays quiet:
+    shadows and clouds lie on the ground under the buildings, so they never
+    shade a room, a desk or a status mark, and the status light and amber
+    waiting pulse stay above it all. Under calm motion or reduced motion
+    nothing drifts: clouds and fireflies hold still. While they drift, Town
+    redraws only as often as they move a screen pixel, at most 12 times a
+    second. Rugs are woven with a bound edge, and room walls shade the floor
+    along their foot.
   - Zoomed into a room or desk, every agent that needs you outside the view
     gets an arrow on the view's edge pointing at it, with its mark (**!**,
     **?** or **✓**); arrows pointing the same way or at one building merge
@@ -482,8 +526,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     focus or a tap; a click on the plate selects the table and a double click
     opens it. On touch screens the first tap on a table opens its card, and a
     second tap (or a double tap) opens the table. Zoomed out to the room
-    cards, a mouse anywhere over a room shows the same room numbers under
-    its card.
+    cards, each room's card is a slim label hanging from its rug's top edge:
+    its name, a waiting badge and a thin bar of working, waiting, done and
+    quiet; hovering or focusing it adds the count line. A mouse anywhere over
+    a room shows the same room numbers under its label.
   - Drag a table onto another room of the same host, or an agent onto another
     table, to move it (hold, then drag on phones; **M** on a focused table or
     agent from the keyboard). Tables lift from the room-summary zoom in, even
@@ -897,6 +943,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Blackboard), **Status colours…** and **Help**. Surface and status choices
     persist in this browser and stay separate from shared card colours;
     **Reset status colours** restores the chosen surface's defaults.
+    Following a dark theme, Board takes Town's night: its ground, its agent
+    state colours (blue working, amber waiting on you, green done) and its
+    sign lettering on host and workspace names, and a workspace waiting on
+    you glows amber as Town's reception does. A light theme or Whiteboard
+    shows the whiteboard; Blackboard keeps its green chalk palette.
   - Drag a pane row or the grip on a single-pane tab onto another tab on the
     same host to move only that pane, or hold the row or grip first on a phone.
     The move keeps its terminal running and its strings attached; cancelling sends nothing. Moving the
@@ -2535,6 +2586,12 @@ load asynchronously; editing the name takes precedence over a late suggestion.
 
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
   automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
+  Notification sync waits while a tab is hidden. If the browser temporarily
+  rejects sync because the document is inactive, World retries quietly when
+  the tab becomes visible or resumes; other sync failures still show an error.
+  Testing only: open `?notificationSync=invalid-state` (removed immediately),
+  switch to another tab, then return to World. The first sync simulates an
+  inactive document; returning retries without a red sync-error notice.
   **Open agent** follows **Agents open** (Chat by default when supported,
   otherwise Terminal), after checking the notification's owning runtime and
   agent session. In Spaces it enters that owning host; a refused notification

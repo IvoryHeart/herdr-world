@@ -6,6 +6,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { DEVTOOLS, type ViewTrace } from "../devtools/flag";
+import "./townOverlay.css";
 import "./townToasts.css";
 
 export type TownToastAction = { label: string; run(): void };

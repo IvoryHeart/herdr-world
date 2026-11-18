@@ -27,6 +27,71 @@ async function pushRequest(method: "GET" | "POST" | "DELETE", body?: unknown) {
 }
 
 let updates: Promise<unknown> = Promise.resolve();
+let pendingRestore: AbortController | undefined;
+let invalidStateTrial = false;
+
+/** Testing only: consume the URL switch before view routing rewrites it. */
+export function taskPushSyncTrial(search: string) {
+  invalidStateTrial =
+    new URLSearchParams(search).get("notificationSync") === "invalid-state";
+  if (!invalidStateTrial || typeof history === "undefined") return;
+  const url = new URL(location.href);
+  url.searchParams.delete("notificationSync");
+  history.replaceState(history.state, "", url);
+}
+if (typeof location !== "undefined") taskPushSyncTrial(location.search);
+
+function deferRestore(retry: () => void) {
+  pendingRestore?.abort();
+  const lifecycle = new AbortController();
+  pendingRestore = lifecycle;
+  const resume = () => {
+    if (document.visibilityState !== "visible") return;
+    lifecycle.abort();
+    pendingRestore = undefined;
+    retry();
+  };
+  document.addEventListener("visibilitychange", resume, {
+    signal: lifecycle.signal,
+  });
+  window.addEventListener("pageshow", resume, { signal: lifecycle.signal });
+  document.addEventListener("resume", resume, { signal: lifecycle.signal });
+}
+
+/** Passive sync waits for a visible, active document; explicit settings still report failures. */
+export async function restoreTaskPush(
+  enabled: boolean,
+  preferences: TaskNotificationPreferences,
+  retry: () => void,
+): Promise<"push" | "local" | null> {
+  if (
+    typeof document !== "undefined" &&
+    document.visibilityState === "hidden"
+  ) {
+    deferRestore(retry);
+    return null;
+  }
+  pendingRestore?.abort();
+  pendingRestore = undefined;
+  try {
+    // Local browser alerts also use the worker on browsers without Web Push.
+    if (enabled && typeof window !== "undefined" && !("PushManager" in window))
+      await prepareTaskNotifications();
+    return await syncTaskPush(enabled, preferences);
+  } catch (error) {
+    if (
+      typeof document !== "undefined" &&
+      error !== null &&
+      typeof error === "object" &&
+      "name" in error &&
+      error.name === "InvalidStateError"
+    ) {
+      deferRestore(retry);
+      return null;
+    }
+    throw error;
+  }
+}
 
 /** Serialize subscription changes so a late enable cannot undo a device revocation. */
 export function syncTaskPush(
@@ -37,6 +102,10 @@ export function syncTaskPush(
   const task = updates
     .catch(() => {})
     .then(async () => {
+      if (invalidStateTrial) {
+        invalidStateTrial = false;
+        throw new DOMException("Document is not active", "InvalidStateError");
+      }
       if (
         typeof navigator === "undefined" ||
         !navigator.serviceWorker ||

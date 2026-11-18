@@ -49,9 +49,13 @@ class RecordingCanvas {
           (_, name: string) =>
           (...args: unknown[]) => {
             log.push(`${name}(${args.map(describe).join(",")})`);
-            return name.startsWith("create")
-              ? { pattern: args.map(describe) }
-              : undefined;
+            if (!name.startsWith("create")) return undefined;
+            // Patterns and gradients; a gradient records its colour stops.
+            return {
+              pattern: args.map(describe),
+              addColorStop: (...stop: unknown[]) =>
+                log.push(`addColorStop(${stop.map(describe).join(",")})`),
+            };
           },
         set: (_, name: string, value: unknown) => {
           log.push(`${name}=${describe(value)}`);

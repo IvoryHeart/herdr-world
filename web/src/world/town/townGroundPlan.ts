@@ -102,12 +102,14 @@ export function townGroundPlan(
     for (let ty = road.y0; ty < road.y1; ty += 1)
       mark("#e8c75a", (road.x + 2) * T + 7, ty * T + 3, 2, 9);
   for (const b of layout.buildings) {
+    // A contact shadow round the walls; the sun's shadow moves with the
+    // hour (townAtmosphere.ts).
     mark(
-      "rgba(0,0,0,.2)",
-      b.x * T + 10,
-      b.y * T - 4,
-      b.w * T,
-      (b.h + TOWN_FACADE) * T + 8,
+      "rgba(0,0,0,.18)",
+      b.x * T - 2,
+      b.y * T - 2,
+      b.w * T + 5,
+      (b.h + TOWN_FACADE) * T + 6,
     );
     mark(
       "rgba(60,40,30,.55)",
