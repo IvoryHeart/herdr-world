@@ -42,6 +42,7 @@
 .town-board,
 .town-board-chip,
 .town-recap-chip,
+.town-census-chip,
 .town-zoom,
 .town-peek,
 .town-toast,
@@ -100,6 +101,9 @@
 
 /* Buttons inside an overlay: a quiet inset that brightens on hover. */
 .town-board-open,
+.town-board .town-census-count,
+.town-census-showing button,
+.town-census-chip button,
 .town-peek button,
 .town-zoom button,
 .town-fuel-gauge > button {
@@ -113,6 +117,9 @@
 }
 
 .town-board-open:hover,
+.town-board .town-census-count:hover:enabled,
+.town-census-showing button:hover:enabled,
+.town-census-chip button:hover:enabled,
 .town-peek button:hover,
 .town-zoom button:hover,
 .town-fuel-gauge > button:hover {
@@ -120,6 +127,9 @@
 }
 
 .town-board-open:focus-visible,
+.town-board .town-census-count:focus-visible,
+.town-census-showing button:focus-visible,
+.town-census-chip button:focus-visible,
 .town-board-chip:focus-visible,
 .town-recap-chip:focus-visible,
 .town-peek button:focus-visible,
@@ -136,6 +146,7 @@
 /* What needs you: a waiting count, a waiting agent's peek and the first
    answer to its question. */
 .town-board-counts [data-status="blocked"][data-attention="true"] dd,
+.town-board [data-status="blocked"][data-attention="true"] b,
 .town-board-chip [data-status="blocked"][data-attention="true"] {
   color: var(--town-attention);
 }
@@ -156,6 +167,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .town-board-open,
+  .town-board .town-census-count,
+  .town-census-showing button,
+  .town-census-chip button,
   .town-peek button,
   .town-zoom button,
   .town-fuel-gauge > button {

@@ -47,6 +47,9 @@ import {
   type TownUsageState,
 } from "./townPlaceUsage";
 import type { UsageLimit } from "../../../../shared/usage";
+import { TownCensusSection } from "./TownCensusView";
+import { useAgentProfiles } from "../agentProfiles";
+import { useTownCensus, type TownCensusControl } from "./useTownCensus";
 import "./townSummaryPanel.css";
 
 /**
@@ -63,8 +66,11 @@ export function TownSummaryPanel({
   groups,
   deliveries,
   usage,
+  census,
 }: {
   summary: TownSummaryModel;
+  /** The census (#980), first: the town's numbers at a glance. */
+  census?: ReactNode;
   now: number;
   /** Harness usage, whose `limits` each host lists; omitted, none show. */
   usage?: TownUsageState;
@@ -78,6 +84,7 @@ export function TownSummaryPanel({
 }) {
   return (
     <div className="town-summary">
+      {census}
       <section aria-labelledby="town-summary-needs">
         <h3 id="town-summary-needs">
           Needs you <span>{summary.counts.needsYou}</span>
@@ -368,6 +375,8 @@ export function useTownSummary({
   window: ReactNode;
   /** "Since you left" after a return, for the board sign and phone chip. */
   sinceYouLeft: { board: ReactNode; chip: ReactNode };
+  /** The census, for the board sign and the canvas light. */
+  census: TownCensusControl;
 } {
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -424,6 +433,8 @@ export function useTownSummary({
       ),
     [world, office, calls, observability, asks],
   );
+  const { document: profiles } = useAgentProfiles();
+  const census = useTownCensus({ world, office, summary, profiles });
   const [isOpen, setOpen] = useState(false);
   const [focusKey, setFocusKey] = useState(0);
   const usage = useTownUsage();
@@ -446,6 +457,7 @@ export function useTownSummary({
   }, []);
   return {
     sinceYouLeft,
+    census,
     summary,
     deliveries,
     deliveryCount,
@@ -465,6 +477,16 @@ export function useTownSummary({
           summary={summary}
           deliveries={deliveries}
           groups={<GroupsSummary />}
+          census={
+            <TownCensusSection
+              control={census}
+              onShow={(id) => {
+                // A phone closes the window first: it covers Town.
+                if (viewportWidth <= 640) setOpen(false);
+                census.show(id);
+              }}
+            />
+          }
           now={now}
           usage={usage}
           onOpenAgent={openAgent}

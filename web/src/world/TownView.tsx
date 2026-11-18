@@ -773,7 +773,7 @@ export default function TownView({
     };
   };
 
-  const search = useTownSearch(world, office, onSelect);
+  const search = useTownSearch(world, office, onSelect, townSummary.census);
   if (!world.hosts.length) return <TownNoHosts />;
 
   const toolbar = <WorldViewToolbar viewLabel="Town" {...search.toolbar} />;

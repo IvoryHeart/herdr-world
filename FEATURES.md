@@ -64,9 +64,29 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     columns: **Busy** (working) agents, **Waiting** (items needing
     you: blocked agents and open questions, matching the reception tray and
     **Needs you**; a blocked agent with an open question contributes two
-    items), **Done** (finished) and **Quiet** agents. A line under the counts
-    gives every agent in the town and its buildings (and any of unknown
-    status). It shows spend when a metrics provider
+    items), **Done** (finished) and **Quiet** agents. Under them the town's
+    census, as a city game shows it: its **Buildings** (hosts; **Offline**
+    ones too, when any are), **Rooms**, **Tables** and **Agents** (with **Out
+    of fuel** and **Unknown** when any are), then **Skills**: agents per
+    harness (**Claude**, **Codex**, **Pi**, **Other agents**), **Plain
+    shells**, and each skill of the profiles World launched agents from, the
+    most held first. Every number, the four columns included, is a button:
+    choosing it lights what it counts on the map as a search does (the rest
+    of Town dims a little, nothing moves) and stays live, so an agent that
+    starts, stops or stops waiting joins or leaves the light. A line on the
+    board says what is lit ("Showing 2 waiting on you · 1 off-screen");
+    **Next** flies the camera to its places one at a time and pulses each
+    (unless calm), and choosing the number again, **✕**, Escape or typing a
+    search ends it, the camera returning as after a search; choosing a
+    number while a search is open ends the search, so the map shows the
+    number. Waiting counts and lights each agent that is blocked or asked an
+    open question once, and names the questions beside it ("1 waiting on you
+    · 1 open question"); the board's attention total, which counts every
+    question too, can be higher. A count of nothing is disabled. Only a waiting count above zero
+    takes the attention colour. On a phone the census is the first section of
+    the **Town summary** (open it from the summary chip): a tap there closes
+    the window, lights the map, and the "Showing …" line with **Next** and
+    **✕** sits under the chip. It shows spend when a metrics provider
     is configured. Under **FUEL**, a gauge per harness with subscription-limit
     data (Codex from its session logs, Claude from its status line) shows a short bar per window
     (`5 h`, `week`) with the percent left; under 15 % left it turns amber and
@@ -278,10 +298,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town master** when nobody holds the role, opened on Chat; a holder not in
     Town says so; with neither set it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
-    **New room** (disabled with the reason when no room can be created). With
+    **New room** (disabled with the reason when no room can be created) and
+    **Add building**. With
     no room open, New room asks for the **Destination host**, herdr-core hosts
     included (`· herdr-core`); a core room takes a name only, since its agents
-    start in core's own folder, and an empty name becomes "Room". Arrow
+    start in core's own folder, and an empty name becomes "Room". **Add
+    building** opens **Hosts → Manage connections** on its first step (Add
+    Local, Add SSH, Add herdr-core). A connection added there joins the Hosts
+    filter when it is not All hosts, its building appears, and Town flies to
+    it once it stands; closing without adding changes nothing. Arrow
     keys, Home and End move around the ring; Escape, a press outside, the
     centre **✕** or **Back** on a phone closes it.
   - **Lenses** colour the whole map by one fact, as strategy games' map
@@ -935,8 +960,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     master**'s Chat (found as the town center finds it) and **⋯** lists
     **New agent**, **Town master**, **Needs you**, **Summary** (which takes
     you to Town with the Town summary open), **Profiles** and **New
-    workspace** (disabled with the reason when no host is ready) in a plain
-    menu. Arrow keys, Home and End move through the menu; Escape, a press
+    workspace** (disabled with the reason when no host is ready) and **Add
+    host** in a plain menu. **Add host** is Town's **Add building**: it opens
+    **Manage connections** on its first step, and Board frames the new host's
+    zone once it shows; closing without adding changes nothing. A host with
+    no workspaces yet shows an empty zone, with its label and **+** (New
+    workspace), where its first card will go. Arrow keys, Home and End move through the menu; Escape, a press
     outside or **Back** on a phone closes it. Board's controls leave the hub
     and bin room on their row, folding into Board's **⋯** menu as needed.
     The bin itself works as before.
@@ -962,6 +991,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Blackboard), **Status colours…** and **Help**. Surface and status choices
     persist in this browser and stay separate from shared card colours;
     **Reset status colours** restores the chosen surface's defaults.
+    Following a dark theme, Board takes Town's night: its ground, its agent
+    state colours (blue working, amber waiting on you, green done) and its
+    sign lettering on host and workspace names, and a workspace waiting on
+    you glows amber as Town's reception does. A light theme or Whiteboard
+    shows the whiteboard; Blackboard keeps its green chalk palette.
   - Drag a pane row or the grip on a single-pane tab onto another tab on the
     same host to move only that pane, or hold the row or grip first on a phone.
     The move keeps its terminal running and its strings attached; cancelling sends nothing. Moving the

@@ -1,7 +1,8 @@
 /**
  * Post-merge gate. CI runs on every push to main; when one of those runs
- * fails, this opens an issue naming the merge commit and its PR, and prepares
- * a revert PR for the owner to merge or close. It never merges anything.
+ * fails only in GitHub infrastructure, retry its failed jobs once. Otherwise
+ * open an issue naming the merge commit and its PR, and prepare a revert PR
+ * for the owner to merge or close. It never merges anything.
  *
  * A batch of merges is tested only at its newest commit (CI supersedes queued
  * main runs), so a red commit names every merge since the last green one and
@@ -13,7 +14,79 @@
  * issue cannot swallow the next break.
  */
 
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
 export const MAIN_RED_LABEL = "main-red";
+
+type MainGateJob = {
+  name: string;
+  conclusion: string | null;
+  steps?: ReadonlyArray<{ name: string; conclusion: string | null }>;
+};
+
+const INFRA_ACTION =
+  /^(actions\/(checkout|cache|upload-artifact|download-artifact|setup-node)|oven-sh\/setup-bun)@/;
+
+/** Match the crew's action-based names, including unnamed and cleanup steps. */
+export function infraSteps(workflows: string[]): Set<string> {
+  const names = new Set(["Set up job", "Complete job"]);
+  for (const workflow of workflows) {
+    let step: { indent: number; name?: string; uses?: string } | undefined;
+    const close = () => {
+      if (step?.uses && INFRA_ACTION.test(step.uses)) {
+        const shown = step.name ?? `Run ${step.uses}`;
+        names.add(shown).add(`Post ${shown}`);
+      }
+    };
+    for (const line of workflow.split("\n")) {
+      const item = /^(\s*)-\s+([\w-]+):\s*(.*)$/.exec(line);
+      if (item) {
+        close();
+        step = { indent: item[1]!.length };
+      }
+      // Action inputs such as `with: name:` do not rename the step.
+      const field = /^(\s*)(-\s+)?(name|uses):\s*(.+?)\s*$/.exec(line);
+      const own =
+        field &&
+        (field[2]
+          ? field[1]!.length === step?.indent
+          : field[1]!.length === (step?.indent ?? -9) + 2);
+      if (step && field && own)
+        step[field[3] as "name" | "uses"] = field[4]!
+          .replace(/\s+#.*$/, "")
+          .replace(/^["']|["']$/g, "");
+    }
+    close();
+  }
+  return names;
+}
+
+/** Aggregates explain a failure only when there is a substantive cause too. */
+export function infrastructureOnly(
+  jobs: readonly MainGateJob[],
+  names: ReadonlySet<string>,
+): boolean {
+  const causes = jobs.filter(
+    (job) =>
+      ["failure", "cancelled", "timed_out"].includes(job.conclusion ?? "") &&
+      job.name !== "Delivery checks" &&
+      !(job.steps ?? []).some(
+        (step) => step.conclusion === "failure" && /^Require\b/.test(step.name),
+      ),
+  );
+  return (
+    causes.length > 0 &&
+    causes.every((job) => {
+      const failed = (job.steps ?? []).filter(
+        (step) => step.conclusion === "failure",
+      );
+      return job.conclusion === "failure"
+        ? failed.length > 0 && failed.every((step) => names.has(step.name))
+        : failed.length === 0;
+    })
+  );
+}
 
 /** Hidden in the issue body: which commit turned main red. */
 export const redShaMarker = (sha: string) => `<!-- main-gate-sha: ${sha} -->`;
@@ -165,6 +238,37 @@ async function run() {
   const repo = Bun.env.GITHUB_REPOSITORY!;
   const sha = Bun.env.HEAD_SHA!;
   const conclusion = Bun.env.CONCLUSION === "success" ? "success" : "failure";
+  if (conclusion === "failure" && Bun.env.RUN_ATTEMPT === "1") {
+    let infra = false;
+    try {
+      const pages = JSON.parse(
+        await gh([
+          "api",
+          `repos/${repo}/actions/runs/${Bun.env.RUN_ID}/attempts/1/jobs?per_page=100`,
+          "--paginate",
+          "--slurp",
+        ]),
+      ) as Array<{ jobs: MainGateJob[] }>;
+      const directory = ".github/workflows";
+      const workflows = readdirSync(directory)
+        .filter((file) => /\.ya?ml$/.test(file))
+        .map((file) => readFileSync(join(directory, file), "utf8"));
+      infra = infrastructureOnly(
+        pages.flatMap((page) => page.jobs),
+        infraSteps(workflows),
+      );
+    } catch (error) {
+      // Missing evidence must not suppress the existing main-red alert.
+      console.warn("Could not classify CI failure; alerting as usual:", error);
+    }
+    if (infra) {
+      console.info(
+        `CI ${Bun.env.RUN_URL}: infrastructure only; rerunning once.`,
+      );
+      await gh(["run", "rerun", Bun.env.RUN_ID!, "--failed"]);
+      return;
+    }
+  }
   const pulls = JSON.parse(
     await gh(["api", `repos/${repo}/commits/${sha}/pulls`]),
   ) as Array<{ number: number; title: string; merge_commit_sha?: string }>;

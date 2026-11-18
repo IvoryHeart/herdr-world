@@ -502,7 +502,7 @@ test("CI checks native plugin compatibility on Windows and both macOS architectu
   ).toBe(true);
 });
 
-test("red main runs open one alert and an unmerged revert; green runs resolve it", async () => {
+test("main retries infrastructure once, alerts on red and resolves on green", async () => {
   const gate = Bun.YAML.parse(
     await Bun.file(
       new URL("../.github/workflows/main-gate.yml", import.meta.url),
@@ -531,14 +531,17 @@ test("red main runs open one alert and an unmerged revert; green runs resolve it
   const script = alert.steps.at(-1)!;
   expect(script.run).toContain("bun scripts/main-gate.ts");
   expect(script.run).not.toContain("gh pr merge");
-  // The gate dispatches CI on the revert it prepares, which needs Actions write.
+  // Retrying CI and dispatching CI on prepared reverts need Actions write.
   const gateSource = await Bun.file(
     new URL("./main-gate.ts", import.meta.url),
   ).text();
   expect(gateSource).toContain('"workflow", "run", "CI"');
   expect(gate.permissions?.actions).toBe("write");
-  // Nothing reruns a red run.
-  expect(gateSource).not.toContain('"run", "rerun"');
+  // The retry bound uses the completed CI attempt, not this gate's attempt.
+  expect(script.env).toMatchObject({
+    RUN_ID: "${{ github.event.workflow_run.id }}",
+    RUN_ATTEMPT: "${{ github.event.workflow_run.run_attempt }}",
+  });
 });
 
 test("the shared plan controls scoped jobs and always preserves protected delivery", () => {

@@ -3,6 +3,7 @@ import { fixtureHost, fixtureWorld, type FixtureSpace } from "./boardFixture";
 import { projectBoard, type BoardModel } from "./boardModel";
 import {
   DEFAULT_SIZE,
+  emptyHostRect,
   emptyLayout,
   overlaps,
   cloneLayout,
@@ -75,6 +76,32 @@ describe("Board placement", () => {
     const layout = placeNew(model, emptyLayout());
     expect(positions(model, layout).size).toBe(3 * 8 + 3 * 8 * 15);
     expect(overlapping(model, layout)).toBe(0);
+  });
+
+  test("a host with no workspaces keeps a zone that later hosts start beyond", () => {
+    const alpha = fixtureHost("alpha", spaces([3, 2]));
+    const empty = fixtureHost("empty", []);
+    const gamma = fixtureHost("gamma", spaces([2, 2]));
+    for (const phone of [false, true]) {
+      const first = placeNew(
+        projectBoard(fixtureWorld([alpha, empty])),
+        emptyLayout(),
+        { phone },
+      );
+      const model = projectBoard(fixtureWorld([alpha, empty, gamma]));
+      const [, host, later] = model.hosts;
+      expect(host!.workspaceKeys).toEqual([]);
+      const layout = placeNew(model, first, { phone });
+      const zone = emptyHostRect(layout.anchors.get(host!.key)!);
+      const next = layout.anchors.get(later!.key)!;
+      expect(phone ? next.y : next.x).toBeGreaterThan(
+        phone ? zone.y1 : zone.x1,
+      );
+      for (const [key, point] of positions(model, layout)) {
+        const kind = model.workspaceByKey.has(key) ? "workspace" : "tab";
+        expect(overlaps(zone, rectAt(DEFAULT_SIZE[kind], point))).toBe(false);
+      }
+    }
   });
 
   test("a new tab takes free space and no existing card moves", () => {

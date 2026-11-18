@@ -1,5 +1,6 @@
 import { useDrawReadiness } from "../useDrawReadiness";
 import "../worldAsks.css";
+import { hostArrivals, useHostArrivalIn } from "../addHost";
 import { TownBoard } from "./TownBoard";
 import {
   TownTeamsLayer,
@@ -856,6 +857,12 @@ export function TownCanvas({
   useEffect(() => {
     if (ready) view.roomFocus(roomFocus, layout);
   }, [view, roomFocus, ready, layout]);
+  // A host Add building added: fly to its building once it stands.
+  const arriving = useHostArrivalIn(projection.hosts, (host) => host.key);
+  useEffect(() => {
+    if (ready && arriving && view.buildingFocus(arriving, layout))
+      hostArrivals.settle(arriving.seq);
+  }, [view, arriving, ready, layout]);
 
   return (
     <div className="town-shell" ref={shellRef} data-calm={calm}>
@@ -977,6 +984,7 @@ export function TownCanvas({
       <TownLensBoard lens={lens} hover={hover} selected={selectedKey}>
         <TownBoard
           counts={summary.counts}
+          census={search?.census}
           onOpenSummary={onOpenSummary}
           sinceYouLeft={sinceYouLeft}
         />

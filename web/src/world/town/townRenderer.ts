@@ -82,6 +82,7 @@ import {
   type TownHostTheme,
 } from "./townPaint";
 import { buildTownSprites, townCharacter, townHash } from "./townSprites";
+import { townStateColorNumber } from "./townStateColors";
 
 export type { TownRendererDiagnostics } from "./townDiagnostics";
 
@@ -134,9 +135,9 @@ export type TownRendererHandle = {
 const TOWN_FILL_RENDER_MS = 100;
 
 const BLOCK_COLORS: Record<string, number> = {
-  working: 0x6fc3ff,
-  blocked: 0xffb547,
-  done: 0x7be08f,
+  working: townStateColorNumber("working"),
+  blocked: townStateColorNumber("blocked"),
+  done: townStateColorNumber("done"),
   shell: 0x7fbf7a,
 };
 

@@ -50,7 +50,8 @@ export async function checkTownCenter(
     () => ring() !== null,
     "a tap on the town center opened no menu",
   );
-  check(actions().length === 7, `the ring has ${actions().length} actions`);
+  // Seven actions and Add building (#968).
+  check(actions().length === 8, `the ring has ${actions().length} actions`);
   check(
     document.activeElement === actions()[0],
     "the ring did not focus its first action",

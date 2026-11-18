@@ -124,6 +124,7 @@ const SURFACES = [
   ".town-board",
   ".town-board-chip",
   ".town-recap-chip",
+  ".town-census-chip",
   ".town-zoom",
   ".town-peek",
   ".town-toast",
@@ -189,7 +190,7 @@ function amberLike(hex: string) {
 
 /** Rules that draw inside the overlays. */
 const OVERLAY_SELECTOR =
-  /\.town-(board|zoom|peek|toast|place-card|place-summary|fuel(?!-mark)|recap|answers|lens-legend|lens-choices|lens-name|pill)/;
+  /\.town-(board|zoom|peek|toast|place-card|place-summary|fuel(?!-mark)|recap|census|answers|lens-legend|lens-choices|lens-name|pill)/;
 
 /** What needs you: waiting, a question, low or used-up fuel. */
 const ATTENTION_SELECTOR =
