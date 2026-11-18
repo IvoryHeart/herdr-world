@@ -28,6 +28,7 @@ if (process.env.WORLD_VIEW_PICKER_TEST !== "1") {
     HTMLButtonElement: dom.HTMLButtonElement,
     HTMLInputElement: dom.HTMLInputElement,
     CustomEvent: dom.CustomEvent,
+    KeyboardEvent: dom.KeyboardEvent,
     Element: dom.Element,
     Node: dom.Node,
     NodeFilter: dom.NodeFilter,
@@ -153,6 +154,38 @@ if (process.env.WORLD_VIEW_PICKER_TEST !== "1") {
     expect($('[role="dialog"][aria-label="Connections"]')).not.toBeNull();
     await click(button("Close", $('[role="dialog"]')!));
     expect($('[role="dialog"]')).toBeNull();
+  });
+
+  test("Tab out of the phone's Hosts panel closes it", async () => {
+    await act(() => root.render(<Harness mobile />));
+    const panel = () => $(".world-view-picker-hosts");
+    const tab = (element: HTMLElement | null | undefined, shiftKey = false) => {
+      if (!element) throw new Error("missing element");
+      element.focus();
+      return act(() => {
+        element.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true }),
+        );
+      });
+    };
+    const openHosts = async () => {
+      await click($(".world-view-picker-fab"));
+      await click(button("Hosts", $('[role="menu"]')!));
+      expect(panel()).not.toBeNull();
+    };
+    await openHosts();
+    // Between its own controls, Tab stays inside.
+    await tab($('input[aria-label="Synthetic alpha"]'));
+    await tab($('input[aria-label="Synthetic beta"]'), true);
+    await tab(button("All hosts", panel()!));
+    expect(panel()).not.toBeNull();
+    // Past the last control, or before the first, it closes.
+    await tab(button("Manage connections", panel()!));
+    expect(panel()).toBeNull();
+    expect($('[role="menu"]')).toBeNull();
+    await openHosts();
+    await tab(button("All hosts", panel()!), true);
+    expect(panel()).toBeNull();
   });
 
   test("the desktop view row stays without Hosts", async () => {

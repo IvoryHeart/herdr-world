@@ -122,7 +122,7 @@ function PhoneViewPicker({
   const CurrentIcon = current?.Icon;
   // A menu takes focus on the current view and moves with the arrow keys,
   // Home and End; Tab leaves it closed, and Escape or Back closes it through
-  // the layer stack.
+  // the layer stack. The Hosts panel takes focus on its first control.
   useEffect(() => {
     if (!panel) return;
     menu.current
@@ -157,6 +157,19 @@ function PhoneViewPicker({
     event.preventDefault();
     items[next]?.focus();
   };
+  // The Hosts panel moves with Tab between its own controls, and Tab past its
+  // last control (or Shift+Tab before its first) leaves it closed, as Tab
+  // leaves the views menu.
+  const onHostsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const controls = Array.from(
+      menu.current?.querySelectorAll<HTMLElement>(
+        "button:not(:disabled), input:not(:disabled)",
+      ) ?? [],
+    );
+    const edge = controls[event.shiftKey ? 0 : controls.length - 1];
+    if (!edge || document.activeElement === edge) setPanel(null);
+  };
   const choose = (action: () => void) => {
     setOpen(false);
     action();
@@ -169,6 +182,7 @@ function PhoneViewPicker({
           className="world-view-picker-menu world-view-picker-hosts"
           role="group"
           aria-label="Hosts filter"
+          onKeyDown={onHostsKeyDown}
         >
           <HostsFilterOptions
             connections={hosts.connections}

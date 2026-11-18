@@ -1670,8 +1670,9 @@ preview**. Chat and its draft stay open.
   hides the top bar and bottom navigation on every root screen, Spaces' list
   included; a corner button opens the views, **Hosts**, **Find or act** and
   **Show the bars**. **Hosts** there opens the top bar's Hosts filter in the
-  menu's place, with **Manage connections**, and changes the same selection.
-  On a short screen the menu scrolls, so every choice stays reachable.
+  menu's place, with **Manage connections**, and changes the same selection;
+  Tab moves between its controls, and Tab out of it closes it, as Tab closes
+  the views menu. On a short screen the menu scrolls, so every choice stays reachable.
   A terminal is a detail screen and keeps its own bar, with Back. Stored in
   this browser.
 
