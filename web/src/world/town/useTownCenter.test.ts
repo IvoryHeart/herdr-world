@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { OfficeAgent } from "../herdrOfficeProjection";
+import { requestAddHost } from "../addHost";
 import { townCenterActions } from "./useTownCenter";
 
 const agent = (key: string, agentName: string, extra = {}) =>
@@ -68,6 +69,7 @@ test("the ring offers a new agent first, then the Town master and the town's err
     "summary",
     "profiles",
     "room",
+    "add-host",
   ]);
   expect(action("launch").primary).toBe(true);
   expect(action("needs-you").count).toBe(3);
@@ -143,4 +145,11 @@ test("New room is shown disabled with the reason it cannot be created", () => {
   open.action("room").run();
   open.action("summary").run();
   expect(open.calls).toEqual([["room", "room-a"], ["summary"]]);
+});
+
+test("Add building opens Manage connections' add flow", () => {
+  const { action } = center();
+  expect(action("add-host").label).toBe("Add building");
+  expect(action("add-host").disabled).toBeUndefined();
+  expect(action("add-host").run).toBe(requestAddHost);
 });

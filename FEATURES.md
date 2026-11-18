@@ -278,10 +278,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town master** when nobody holds the role, opened on Chat; a holder not in
     Town says so; with neither set it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
-    **New room** (disabled with the reason when no room can be created). With
+    **New room** (disabled with the reason when no room can be created) and
+    **Add building**. With
     no room open, New room asks for the **Destination host**, herdr-core hosts
     included (`· herdr-core`); a core room takes a name only, since its agents
-    start in core's own folder, and an empty name becomes "Room". Arrow
+    start in core's own folder, and an empty name becomes "Room". **Add
+    building** opens **Hosts → Manage connections** on its first step (Add
+    Local, Add SSH, Add herdr-core). A connection added there joins the Hosts
+    filter when it is not All hosts, its building appears, and Town flies to
+    it once it stands; closing without adding changes nothing. Arrow
     keys, Home and End move around the ring; Escape, a press outside, the
     centre **✕** or **Back** on a phone closes it.
   - **Lenses** colour the whole map by one fact, as strategy games' map
@@ -916,8 +921,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     master**'s Chat (found as the town center finds it) and **⋯** lists
     **New agent**, **Town master**, **Needs you**, **Summary** (which takes
     you to Town with the Town summary open), **Profiles** and **New
-    workspace** (disabled with the reason when no host is ready) in a plain
-    menu. Arrow keys, Home and End move through the menu; Escape, a press
+    workspace** (disabled with the reason when no host is ready) and **Add
+    host** in a plain menu. **Add host** is Town's **Add building**: it opens
+    **Manage connections** on its first step, and Board frames the new host's
+    zone once it shows; closing without adding changes nothing. A host with
+    no workspaces yet shows an empty zone, with its label and **+** (New
+    workspace), where its first card will go. Arrow keys, Home and End move through the menu; Escape, a press
     outside or **Back** on a phone closes it. Board's controls leave the hub
     and bin room on their row, folding into Board's **⋯** menu as needed.
     The bin itself works as before.

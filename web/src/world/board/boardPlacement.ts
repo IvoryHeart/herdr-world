@@ -66,6 +66,12 @@ export const rectAt = (size: Size, at: Point): Rect => ({
   x1: at.x + size.w / 2,
   y1: at.y + size.h / 2,
 });
+/**
+ * The zone of a host with no workspaces: the place its first workspace card
+ * takes, so the host is visible and can be framed before it has any.
+ */
+export const emptyHostRect = (anchor: Point): Rect =>
+  rectAt(DEFAULT_SIZE.workspace, anchor);
 export const overlaps = (a: Rect, b: Rect, margin = GAP) =>
   a.x0 < b.x1 + margin &&
   a.x1 > b.x0 - margin &&
@@ -316,6 +322,10 @@ function hostExtent(
   for (const host of model.hosts) {
     if (!layout.anchors.has(host.key)) continue;
     placedAny = true;
+    if (!host.workspaceKeys.length) {
+      const box = emptyHostRect(layout.anchors.get(host.key)!);
+      extent = Math.max(extent, phone ? box.y1 : box.x1);
+    }
     for (const key of host.workspaceKeys) {
       const space = model.workspaceByKey.get(key);
       for (const cardKey of [key, ...(space?.tabKeys ?? [])]) {

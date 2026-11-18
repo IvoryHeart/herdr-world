@@ -2,6 +2,7 @@ import { memo, Suspense, useEffect, useMemo, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
+import { AddHostDialogHost } from "./AddHostDialogHost";
 import { ConfirmDialog } from "../components/ModalDialogs";
 import { lazyWithReload } from "../lazyWithReload";
 import { connectionSnapshot, store } from "../store";
@@ -470,6 +471,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
         onOpenTerminal={(id) => void openTerminalById(id)}
         pinned={aggregatePinned}
       />
+      {/* Town's Add building and Board's Add host (addHost.ts). */}
+      <AddHostDialogHost hostsFilter={hostsFilter} />
       <CreateWorkspaceDialog
         open={workspaceCreationOpen}
         initialDestination={workspaceCreationDestination}

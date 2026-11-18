@@ -20,6 +20,7 @@ import { requestAgentLaunch, useAgentProfiles } from "../agentProfiles";
 import { readOfficePreferences } from "../officePreferences";
 import type { TownCenterAction } from "../town/TownCenterMenu";
 import {
+  addHostAction,
   launchAction,
   needsYouAction,
   profilesAction,
@@ -55,7 +56,8 @@ export function boardLaunchSpace(
 
 /**
  * The hub's actions, in the town center's order: New agent, Town master,
- * Needs you, Summary, Profiles and New workspace (Board's word for a room).
+ * Needs you, Summary, Profiles, New workspace (Board's word for a room) and
+ * Add host (Town's Add building).
  * Summary is Town's one summary: Board takes you to Town with it open.
  */
 export function boardHubActions({
@@ -132,6 +134,7 @@ export function boardHubActions({
       detail: hostReady ? undefined : "No host is ready",
       run: onNewWorkspace,
     },
+    addHostAction("Add host"),
   ];
 }
 

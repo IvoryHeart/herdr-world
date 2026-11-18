@@ -429,6 +429,42 @@ test("a room request runs once per seq, when the camera and room are ready", () 
   expect(reasons).toEqual(["room", "fit", "room"]);
 });
 
+test("a new host's building request waits for its building, then runs once", () => {
+  // Add building: the request arrives before the new host's building does.
+  const before = townOf({ a: { desks: working(4) } });
+  const after = townOf({ a: { desks: working(4) }, b: { desks: working(2) } });
+  const { view, layout, viewport, camera, reasons } = setup(
+    WIDE,
+    new Map(),
+    before,
+  );
+  const grown = layoutFor(after, WIDE);
+  const building = grown.buildings.find(
+    (candidate) =>
+      !layout.buildings.some((b) => b.hostKey === candidate.hostKey),
+  )!;
+  const request = { hostKey: building.hostKey, seq: 1 };
+  expect(view.buildingFocus(request, grown)).toBe(false);
+  view.attach(camera, layout, viewport);
+  reasons.length = 0;
+  expect(view.buildingFocus(request, layout)).toBe(false);
+  expect(camera.flying).toBe(false);
+  view.follow(grown, viewport);
+  expect(view.buildingFocus(request, grown)).toBe(true);
+  expect(reasons).toContain("building");
+  settle(camera);
+  const centre = camera.toScreen(
+    (building.x + building.w / 2) * T,
+    (building.y + (building.h + TOWN_FACADE) / 2) * T,
+  );
+  expect(Math.abs(centre.x - camera.viewport.width / 2)).toBeLessThan(80);
+  // The same request never replays.
+  view.fitAll(grown);
+  settle(camera);
+  expect(view.buildingFocus(request, grown)).toBe(false);
+  expect(camera.flying).toBe(false);
+});
+
 test("measured boards re-frame a town at home, never a room flight just begun", () => {
   const { view, layout, viewport, camera } = setup();
   view.attach(camera, layout, viewport);
