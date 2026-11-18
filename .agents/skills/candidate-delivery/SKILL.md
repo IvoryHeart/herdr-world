@@ -35,9 +35,10 @@ behavioral acceptance run in CI under required `Delivery checks`.
 `HERDR_WORLD_PREPUSH=full` explicitly opts into every local lane. A
 Markdown-only follow-up may use
 `bun run check:docs` when this worktree has a successful code gate on an ancestor. CI
-runs the applicable gate on the PR head, and reuses successful full results or scoped results with identical selections on
-the exact PR, base and head for description edits and label changes. Do not run a separate final full check
-immediately before that push. For an explicitly local-only handoff, run one
+tests the proposed merge of the PR base and head. Description edits and label
+changes may reuse successful full or identically selected scoped results only
+for that exact PR, base and head; failed/cancelled results cannot be reused.
+Do not run a separate final full check immediately before that push. For an explicitly local-only handoff, run one
 explicit `bun run check:delivery` instead. If a later repair changes code, begin a new
 candidate cycle.
 
@@ -48,12 +49,9 @@ Do not issue 30-second status loops or separate `ps`/`gh pr checks` probes while
 the blocking command is running. Do not add a Codex lifecycle hook for polling;
 it cannot intercept `write_stdin`.
 
-When delivering a PR, keep its changelog fragment (`changes/<pr-number-or-slug>.md`,
-format in `changes/README.md`) and mention it in the PR description; for a change
-with nothing user-facing, put `Changelog: none — <specific reason>` in the
-description instead. Do not edit `CHANGELOG.md` directly. The PR URL supplies the
-link; do not amend the branch solely to rename the fragment after the PR number
-or require a self-link in the description.
+Use the [changelog fragment policy](../../../changes/README.md) for format,
+timing and exemptions; mention the fragment or the specific no-change reason
+in the PR description.
 Prepare the PR body in a local file after committing the candidate. Run
 `bun run check:pr-body <file>` (append the base ref for a stacked PR), then use
 that same file with `gh pr create --body-file <file>` to open one ready PR.
@@ -63,3 +61,8 @@ requested artifacts
 and one explicit full check; a PR is not required to count the work as delivered.
 Keep later usage and process measurements in workflow output or artifacts
 instead of editing the PR body solely for totals.
+
+Fix review findings in place in one correction pass; do not create re-review
+branches. Split a PR with too many findings before proceeding. Every commit
+changes behavior or docs; keep later verification metadata in the PR/workflow
+evidence rather than a metadata-only commit.

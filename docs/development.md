@@ -1,12 +1,12 @@
 # Development
 
-Herdr World uses Bun 1.4.4, React 19/Vite and a Bun server. Herdr is an external runtime.
+Herdr World uses Bun 1.4.4, React 19/Vite and a Bun server. Herdr TUI and herdr-core are external runtimes.
 
 ```bash
 bun install --frozen-lockfile
 ```
 
-Start a local Herdr server, then run these in separate terminals:
+Start a local Herdr TUI or herdr-core server, then run these in separate terminals:
 
 ```bash
 bun run dev:server
@@ -17,13 +17,9 @@ Open <http://localhost:5173>. Vite proxies API and WebSocket traffic to the Worl
 service at <http://127.0.0.1:8788>. To use explicit Herdr sockets or SSH, pass service
 options after the workspace command or configure a profile in the UI.
 
-A development or preview World next to an installed one needs its own data
-folder: set `HERDR_WORLD_DATA_DIR` for that instance, and copy
-`connections.json` (and `settings.json`) into it once if it should reach the
-same Herdr hosts. A second World on an occupied folder refuses to start. Point
-its agent CLI at it with `HERDR_WORLD_URL` and the same `HERDR_WORLD_DATA_DIR`,
-which locates the CLI token. Tests never use your data folder: the test preload
-sets `HERDR_WORLD_DATA_DIR` under the run's temporary directory, and a test that
+For a second instance, use the isolated preview below rather than the shared
+development ports. Tests never use your data folder: the test preload sets
+`HERDR_WORLD_DATA_DIR` under the run's temporary directory, and a test that
 starts World with its own `HOME` unsets it. To test the service end to end, start
 it in the test's own process with `startTestService`
 ([test services](../server/src/service/testing/services.ts)), which gives it its own
@@ -37,6 +33,44 @@ its existing changed-prop diagnostic width limit. Install with the frozen lockfi
 so the patch applies; retain it during dependency refreshes until the installed
 renderer regression passes without it. See [React 19 measurements and patch
 maintenance](react-19.md).
+
+## Isolated worktree preview
+
+Keep one preview per worktree, on its own unused loopback port and data folder.
+Use a synthetic Herdr TUI session, with demo agents/repositories only, so a
+preview cannot act on real work. The standard `dev:server` script fixes port
+8788; start the source entry directly to use `PORT`, which
+`server/src/config/server-config.ts` already honours. A built frontend needs
+only the World listener, without another Vite server.
+
+From the worktree, build the frontend:
+
+```bash
+bun run build:web
+```
+
+In a separate terminal start the dedicated TUI (replace `preview-example` with a
+unique synthetic session for this worktree):
+
+```bash
+herdr --session preview-example
+```
+
+Then start World from the worktree; choose an unused port other than 8787/8788:
+
+```bash
+PORT=8799 HERDR_WORLD_DATA_DIR="$PWD/.agents/preview-data" \
+  bun server/src/index.ts --host 127.0.0.1 --session preview-example \
+  --public-dir ./server/public
+```
+
+Open the printed login URL in a separate browser profile. Keep only the synthetic
+connection; do not copy installed connection/settings files into this data folder.
+Create demo workspaces and terminals in that TUI, then check Town and its Inspector.
+Rebuild the frontend and reload after edits. Stop your preview before replacing
+it; leave other worktrees' listeners and data alone. For CLI checks, point
+`HERDR_WORLD_URL` at this listener and use the same `HERDR_WORLD_DATA_DIR` so the
+CLI locates its token. Preview data and built assets stay untracked.
 
 ## Development tools
 
