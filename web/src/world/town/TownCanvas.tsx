@@ -20,6 +20,7 @@ import {
   type ReactNode,
 } from "react";
 import type { RoomPins } from "./townModel";
+import { NO_BUILDING_PINS, type BuildingPins } from "./townBuildingPlace";
 import { useTownStepWants, type TownStepStore } from "./useTownStepWants";
 import { useTownRoomMoves } from "./townRoomPins";
 import { TOWN_GESTURES } from "./townGesture";
@@ -139,6 +140,7 @@ export function TownCanvas({
   deskPins = NO_PINS,
   joinSeats = sharedTownJoinSeats(),
   roomPins = NO_ROOM_PINS,
+  buildingPins = NO_BUILDING_PINS,
   chrome = NO_CHROME,
   trace = NO_TRACE,
   centerActions,
@@ -218,6 +220,7 @@ export function TownCanvas({
   joinSeats?: TownJoinSeats;
   /** Where the user put rooms (useRoomPins); other rooms stack. */
   roomPins?: RoomPins;
+  buildingPins?: BuildingPins;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const traceRef = useRef(trace);
@@ -268,6 +271,7 @@ export function TownCanvas({
     terminalColors,
     deskPins,
     roomPins,
+    buildingPins,
     relations,
     sources,
     shape,
@@ -687,6 +691,11 @@ export function TownCanvas({
               actions.onPlaceRooms?.(command.roomKey, command.placement) ??
               Promise.resolve("returned")
             );
+          case "building":
+            return (
+              actions.onPlaceBuildings?.(command.hostKey, command.order) ??
+              Promise.resolve("returned")
+            );
         }
       },
       ghost: {
@@ -713,7 +722,7 @@ export function TownCanvas({
         return aimAtBin({ x: rect.left + at.x, y: rect.top + at.y });
       },
       bin: (drag) =>
-        drag.kind === "room"
+        drag.kind === "room" || drag.kind === "building"
           ? undefined
           : latest.current.roomActions.onBinDrop?.(drag.kind, drag.key),
       // Town's targets are live hits and drags: trace a summary of each.
@@ -771,8 +780,8 @@ export function TownCanvas({
         event.preventDefault();
     };
     // A room card sits above the canvas: its presses join the town's gesture
-    // with the card's room as the tap target. Capturing the pointer on the
-    // host keeps the rest of the gesture (moves, lift, drop) on the canvas.
+    // with the card's room (a sign's host) as the tap target. Capturing the
+    // pointer on the host keeps the rest of the gesture on the canvas.
     roomCardPress.current = (event, roomKey, press) => {
       if (
         !rendererRef.current ||
@@ -785,14 +794,16 @@ export function TownCanvas({
       } catch {
         return false;
       }
+      const sign = press === "building-sign";
       interaction.down({
         id: event.pointerId,
         at: local(event),
         primary: event.isPrimary,
         pointerType: event.pointerType,
         ...(press === "card" || press === "card-name" ? { card: roomKey } : {}),
-        ...(press === "card" ? {} : { roomName: roomKey }),
+        ...(press === "card" || sign ? {} : { roomName: roomKey }),
         ...(press === "plaque-move" ? { handle: true } : {}),
+        ...(sign ? { building: roomKey } : {}),
       });
       return true;
     };

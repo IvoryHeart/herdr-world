@@ -278,3 +278,41 @@
     min-height: 40px;
   }
 }
+
+/* A building's name is its handle: drag it (a touch hold) to another lot. */
+.town-building-sign strong.is-movable {
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* A building's Move before and after, on its sign. */
+.town-building-moves {
+  display: flex;
+  gap: 6px;
+}
+
+.town-building-sign .town-building-move {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: #fff7e0;
+  background: rgba(14, 17, 24, 0.9);
+  border: 2px solid #ffd166;
+  border-radius: 6px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.town-building-sign .town-building-move:is(:hover, :focus-visible) {
+  color: #ffd166;
+}
+
+@media (max-width: 640px) {
+  .town-building-sign .town-building-move {
+    width: 40px;
+    height: 40px;
+  }
+}

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openWorldWriter } from "./world-writer";
 import { migrateWorldDatabase, worldMigrations } from "./world-schema";
-import type { BoardOperation } from "./world-board";
+import { worldBuildingPinsMigration, type BoardOperation } from "./world-board";
 import { BoardStore } from "../world/board-store";
 const roots: string[] = [];
 afterEach(() => {
@@ -410,6 +410,59 @@ test("Town room spots are saved in their own rows, after an upgrade from the sch
   try {
     expect(
       db.query("SELECT count(*) AS count FROM board_room_pins").get(),
+    ).toEqual({ count: 2 });
+  } finally {
+    db.close();
+  }
+});
+test("Town building lots are saved in their own rows, after an upgrade from the schema before them", () => {
+  const p = fresh();
+  const old = new Database(p.database);
+  try {
+    migrateWorldDatabase(
+      old,
+      p.database,
+      worldMigrations.slice(
+        0,
+        worldMigrations.indexOf(worldBuildingPinsMigration),
+      ),
+    );
+  } finally {
+    old.close();
+  }
+  const writer = open(p);
+  let after;
+  try {
+    const [result] = writer.batch(
+      [
+        {
+          ticket: 0,
+          request: {
+            type: "board" as const,
+            operation: {
+              ops: [{ op: "building.place", order: ["studio", "lab"] }],
+            },
+          },
+        },
+      ],
+      1000,
+    );
+    expect(result!.error).toBeUndefined();
+    after = writer.read().board!;
+    expect(after.layout.building_pins).toEqual({ studio: 0, lab: 1 });
+  } finally {
+    writer.close();
+  }
+  const reopened = open(p);
+  try {
+    expect(reopened.read().board).toEqual(after);
+  } finally {
+    reopened.close();
+  }
+  const db = new Database(p.database, { readonly: true });
+  try {
+    expect(
+      db.query("SELECT count(*) AS count FROM board_building_pins").get(),
     ).toEqual({ count: 2 });
   } finally {
     db.close();

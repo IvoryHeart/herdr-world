@@ -12,6 +12,7 @@ import {
 } from "../board/boardDocument";
 import type { TownRoomActions } from "./TownCanvas";
 import { townRoomDrag } from "./townDrag";
+import { townBuildingNeighbor, townBuildingSwap } from "./townBuildingPlace";
 import type { TownLayout } from "./townLayout";
 import type { RoomPins, TownModel } from "./townModel";
 import type { TownRendererHandle } from "./townRenderer";
@@ -93,6 +94,32 @@ export function useTownRoomMoves(
   );
 }
 
+/**
+ * Building moves from the town shown: Move before or after swaps a building
+ * with its neighbour in reading order, when the town has two or more.
+ */
+function townBuildingMoves(
+  roomActions: TownRoomActions,
+  model: TownModel,
+  layout: TownLayout,
+): TownRoomActions {
+  const { onPlaceBuildings } = roomActions;
+  if (!onPlaceBuildings) return roomActions;
+  return {
+    ...roomActions,
+    buildingMoveNeighbor: (hostKey, step) => {
+      const other = townBuildingNeighbor(layout, hostKey, step);
+      return other
+        ? { label: model.hosts.get(other)?.displayLabel ?? "building" }
+        : null;
+    },
+    onMoveBuilding: (hostKey, step) => {
+      const order = townBuildingSwap(layout, hostKey, step);
+      if (order) void onPlaceBuildings(hostKey, order);
+    },
+  };
+}
+
 /** useTownRoomMoves' actions for one town shown. */
 export function townRoomMoves(
   roomActions: TownRoomActions,
@@ -101,8 +128,9 @@ export function townRoomMoves(
   latest: TownRoomMovesLatest,
   renderer?: { readonly current: TownRendererHandle | null },
 ): TownRoomActions {
-  const { onPlaceRooms, canMoveRoom } = roomActions;
-  if (!onPlaceRooms) return roomActions;
+  const withBuildings = townBuildingMoves(roomActions, model, layout);
+  const { onPlaceRooms, canMoveRoom } = withBuildings;
+  if (!onPlaceRooms) return withBuildings;
   const movable = (roomKey: string) =>
     (canMoveRoom?.(roomKey) ?? true) && townRoomDrag(roomKey, model) !== null;
   // Tidy rooms needs only a room its host can change: unlike a drag, a lone
@@ -131,7 +159,7 @@ export function townRoomMoves(
     return result;
   };
   return {
-    ...roomActions,
+    ...withBuildings,
     canMoveRoom: movable,
     roomMoveNeighbor: (roomKey, step) => {
       const other = movable(roomKey)

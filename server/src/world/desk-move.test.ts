@@ -202,6 +202,7 @@ describe("desk moves", () => {
         colors: {},
         desk_pins: {},
         room_pins: {},
+        building_pins: {},
         interest: {},
       },
       relations: { spawns: [], groups: [] },

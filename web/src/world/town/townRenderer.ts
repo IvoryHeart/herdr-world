@@ -26,6 +26,8 @@ import {
 } from "../worldFrameScheduler";
 import { registerTownFrames } from "./townFrameLifecycle";
 import { createTownDragEffects } from "./townRendererDrag";
+import type { TownBuildingPlacement } from "./townBuildingPlace";
+import type { TownDrag } from "./townDrag";
 import { createTownActorViews } from "./townRendererActors";
 import { textureOf } from "./townRendererScene";
 import { createTownTopology } from "./townRendererTopology";
@@ -104,13 +106,8 @@ export type TownRendererHandle = {
   buildingMotion(
     hostKey: string,
   ): { x: number; y: number; alpha: number } | null;
-  /** Lift a desk, agent or room under the pointer for a drag. */
-  beginDrag(
-    kind: "desk" | "agent" | "room",
-    key: string,
-    x: number,
-    y: number,
-  ): void;
+  /** Lift a desk, agent, room or building under the pointer for a drag. */
+  beginDrag(kind: TownDrag["kind"], key: string, x: number, y: number): void;
   /** Follow the pointer (world point) and show where it would land. */
   /** `snap`: the target is a desk the carried desk groups with. */
   moveDrag(
@@ -120,6 +117,8 @@ export type TownRendererHandle = {
     snap?: boolean,
     /** A carried room: where every room would stand if it landed here. */
     room?: TownRoomPlacement | null,
+    /** A carried building: where every building would stand. */
+    building?: TownBuildingPlacement | null,
   ): void;
   /** Spring back to its spot, or wait at the target while Herdr moves it. */
   endDrag(mode: "cancel" | "park"): void;

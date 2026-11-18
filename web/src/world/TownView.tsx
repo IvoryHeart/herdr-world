@@ -153,6 +153,7 @@ export default function TownView({
     office: observedOffice,
     deskPins,
     roomPins,
+    buildingPins,
     toggleRoomFold,
     foldRevision,
     roomFocus,
@@ -578,8 +579,7 @@ export default function TownView({
       setChooser(key);
       return;
     }
-    // An agent opens as every view opens it (openAgent); a pane without an
-    // agent opens its terminal.
+    // An agent opens as every view opens it (openAgent); a bare pane, its terminal.
     const mobile = isMobileLayout();
     const agentKey = agentByKey.has(key)
       ? key
@@ -775,7 +775,6 @@ export default function TownView({
   };
 
   const search = useTownSearch(world, office, onSelect);
-
   if (!world.hosts.length) return <TownNoHosts />;
 
   const toolbar = <WorldViewToolbar viewLabel="Town" {...search.toolbar} />;
@@ -898,6 +897,7 @@ export default function TownView({
             terminalColors={terminalColors}
             deskPins={deskPins}
             roomPins={roomPins}
+            buildingPins={buildingPins}
             foldRevision={foldRevision}
             selectedKey={peek?.key ?? selectedKey}
             completionSeenKeys={completionSeenKeys}

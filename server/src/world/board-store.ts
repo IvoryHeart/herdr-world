@@ -185,6 +185,7 @@ export function emptyBoardDocument(): BoardDocument {
       colors: {},
       desk_pins: {},
       room_pins: {},
+      building_pins: {},
       interest: {},
       group_interest: {},
     },
@@ -295,6 +296,45 @@ function roomPins(value: unknown): Record<string, RoomSpot> {
     out[key] = roomSpot(entry);
   }
   return out;
+}
+
+/** At most this many Town buildings keep a saved lot. */
+const BUILDING_PINS_MAX = 1_000;
+function buildingPins(value: unknown): Record<string, number> {
+  if (value === undefined) return {};
+  if (!isObject(value)) fail("building_pins must be an object");
+  const out: Record<string, number> = {};
+  for (const [key, rank] of Object.entries(value)) {
+    text(key, "building_pins key", BOARD_LIMITS.key);
+    if (
+      !Number.isSafeInteger(rank) ||
+      (rank as number) < 0 ||
+      (rank as number) >= BUILDING_PINS_MAX
+    )
+      fail("building rank");
+    out[key] = rank as number;
+  }
+  return out;
+}
+
+/**
+ * The saved building ranks after `order` (connection IDs) is placed: the
+ * named buildings take, in that order, the places they held among the saved
+ * ones (a building not saved yet joins at the end), and every other building
+ * keeps its place. Ranks are renumbered from 0.
+ */
+export function placeBuildings(
+  saved: Readonly<Record<string, number>>,
+  order: readonly string[],
+): Record<string, number> {
+  const named = new Set(order);
+  const line = Object.keys(saved).sort(
+    (a, b) => saved[a]! - saved[b]! || a.localeCompare(b),
+  );
+  for (const key of order) if (!(key in saved)) line.push(key);
+  let next = 0;
+  const placed = line.map((key) => (named.has(key) ? order[next++]! : key));
+  return Object.fromEntries(placed.map((key, rank) => [key, rank]));
 }
 
 function anchor(value: unknown): BoardAnchor {
@@ -412,6 +452,8 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       desk_pins: deskPins(layout.desk_pins),
       // Boards saved before room moves have none: every room is stacked.
       room_pins: roomPins(layout.room_pins),
+      // Boards saved before building moves have none: host order stands.
+      building_pins: buildingPins(layout.building_pins),
       // Boards saved before interest have none: every agent is watched.
       interest: interests(layout.interest, BOARD_LIMITS.key),
       group_interest: groupInterests(layout.group_interest, BOARD_LIMITS.key),
@@ -444,6 +486,7 @@ function checkBounds(document: BoardDocument) {
     Object.keys(layout.colors).length +
     Object.keys(layout.desk_pins).length +
     Object.keys(layout.room_pins).length +
+    Object.keys(layout.building_pins).length +
     Object.keys(layout.interest).length +
     Object.keys(layout.group_interest ?? {}).length;
   if (entries > BOARD_LIMITS.layoutEntries)
@@ -762,6 +805,18 @@ function applyOp(
       for (const key of Object.keys(next.layout.room_pins))
         if (key.startsWith(prefix)) delete next.layout.room_pins[key];
       Object.assign(next.layout.room_pins, spots);
+      return;
+    }
+    case "building.place": {
+      if (!Array.isArray(op.order) || op.order.length > BUILDING_PINS_MAX)
+        fail("building order");
+      const order = op.order.map((key) =>
+        text(key, "building key", BOARD_LIMITS.key),
+      );
+      if (new Set(order).size !== order.length) fail("duplicate buildings");
+      next.layout.building_pins = buildingPins(
+        placeBuildings(next.layout.building_pins, order),
+      );
       return;
     }
     case "interest.set":

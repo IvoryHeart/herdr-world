@@ -351,6 +351,7 @@ describe("the saved link a Send relies on", () => {
       colors: {},
       desk_pins: {},
       room_pins: {},
+      building_pins: {},
       interest: {},
     },
     relations: { spawns: [], groups: [] },

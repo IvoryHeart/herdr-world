@@ -18,19 +18,26 @@ const maps = [
   "interest",
   "group_interest",
   "room_pins",
+  "building_pins",
 ] as const;
 /** The families the first Board schema created; later ones add their own. */
 const firstBoardTables = [
   "notes",
   "strings",
   "appearance",
-  ...maps.filter((family) => family !== "room_pins"),
+  ...maps.filter(
+    (family) => family !== "room_pins" && family !== "building_pins",
+  ),
   "folded",
   "spawns",
   "groups",
   "group_changes",
 ] as const;
-export const boardTables = [...firstBoardTables, "room_pins"] as const;
+export const boardTables = [
+  ...firstBoardTables,
+  "room_pins",
+  "building_pins",
+] as const;
 type Family = (typeof boardTables)[number];
 type Row = {
   key: string;
@@ -50,6 +57,8 @@ ${firstBoardTables.map(boardTable).join("\n")}
 `;
 /** Town room spots (board-types.ts `room_pins`), added after the first schema. */
 export const worldRoomPinsMigration = boardTable("room_pins");
+/** Town building lots (board-types.ts `building_pins`), added after room pins. */
+export const worldBuildingPinsMigration = boardTable("building_pins");
 export function readBoard(db: Database): BoardDocument | null {
   const meta = db.query("SELECT * FROM board_meta WHERE singleton=1").get() as {
     revision: number;

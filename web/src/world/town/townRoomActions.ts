@@ -111,6 +111,26 @@ export type TownRoomActions = {
    * (TownCanvas fills this in).
    */
   onTidyRooms?(hostKey: string): void;
+  /**
+   * A building moved to another lot (dropped, or a Move before/after): save
+   * the order the buildings shown stand in, by host key. Resolves how the
+   * move ended; without it a building cannot move.
+   */
+  onPlaceBuildings?(
+    hostKey: string,
+    order: readonly string[],
+  ): Promise<TownMoveResult>;
+  /**
+   * Filled in by TownCanvas from the town it shows: the building a Move
+   * before (-1) or after (1) changes lots with, its neighbour in reading
+   * order. Null at either end, or when buildings cannot move.
+   */
+  buildingMoveNeighbor?(
+    hostKey: string,
+    step: -1 | 1,
+  ): { label: string } | null;
+  /** Change lots with that neighbour (TownCanvas fills this in). */
+  onMoveBuilding?(hostKey: string, step: -1 | 1): void;
   /** Reveal the next group of desks, or fold the room back to 24. */
   onToggleFold?(roomKey: string, nextLimit?: number): void;
   /** A desk dragged onto another desk: join its team (townTeams.ts). */

@@ -34,6 +34,12 @@ import {
 import type { TownJoinSeats } from "../townJoinSeats";
 import { NO_ROOM_SPOTS, townRoomsMoved } from "../townRoomPlace";
 import {
+  NO_BUILDING_PINS,
+  townBuildingsReordered,
+  townOrderHosts,
+  type BuildingPins,
+} from "../townBuildingPlace";
+import {
   keepPlaceColors,
   NO_PLACE_COLORS,
   townDeskColors,
@@ -66,6 +72,8 @@ export type TownSemanticInputs = {
   deskPins: DeskPins;
   /** Where the user put rooms (useRoomPins); other rooms stack. */
   roomPins?: RoomPins;
+  /** Which lot each building stands on (useBuildingPins); others follow. */
+  buildingPins?: BuildingPins;
   /** Which terminals know each other (world/relations.ts). */
   relations: {
     relations: readonly Relation[];
@@ -217,6 +225,14 @@ export class TownScene {
     },
   );
 
+  // The buildings in their saved order: the same pins keep the same input.
+  private readonly ordered = memo(
+    (model: TownModel, pins: BuildingPins): TownModel => {
+      const input = townOrderHosts(model.input, model.hosts, pins);
+      return input === model.input ? model : { ...model, input };
+    },
+  );
+
   // The pinned desks' places: the same pins keep the same map.
   private readonly pinnedDesks = memo(
     (pins: TownModel["deskPins"]): TownPinned =>
@@ -263,14 +279,17 @@ export class TownScene {
   derive(inputs: TownSemanticInputs): TownSemantics {
     const { projection, shape, foldRevision } = inputs;
     const deskBadges = this.deriveBadges(projection, inputs.sources);
-    const model = this.pinned(
-      this.coloured(
-        this.topology(projection),
+    const model = this.ordered(
+      this.pinned(
+        this.coloured(
+          this.topology(projection),
+          projection,
+          inputs.terminalColors,
+        ),
         projection,
-        inputs.terminalColors,
+        inputs.deskPins,
       ),
-      projection,
-      inputs.deskPins,
+      inputs.buildingPins ?? NO_BUILDING_PINS,
     );
     const shapeKey = townShapeKey(shape);
     const joinCells =
@@ -293,13 +312,16 @@ export class TownScene {
     // or buildings waits until they pause (then the camera follows the room in
     // view). Explicit Fold/Expand applies immediately; its admission and
     // revision arrive together. So does a room moved in its building (its
-    // saved spot, or the workspace order): the user put it there. A held
+    // saved spot, or the workspace order), and a building moved to another
+    // lot: the user put it there. A held
     // layout must still name only valid desks.
     const held = this.shown;
     const explicit =
       (this.appliedFoldRevision !== null &&
         foldRevision !== this.appliedFoldRevision) ||
-      (held !== null && held !== placed && townRoomsMoved(held, placed));
+      (held !== null &&
+        held !== placed &&
+        (townRoomsMoved(held, placed) || townBuildingsReordered(held, placed)));
     this.appliedFoldRevision = foldRevision;
     const holding =
       !explicit &&

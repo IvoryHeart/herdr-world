@@ -69,6 +69,7 @@ describe("Recording a string's agent", () => {
       colors: {},
       desk_pins: {},
       room_pins: {},
+      building_pins: {},
       interest: {},
     },
     relations: { spawns: [], groups: [] },
