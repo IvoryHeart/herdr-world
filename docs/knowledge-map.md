@@ -4,6 +4,15 @@ World's views are Town, Board, Desk and Spaces. Office, Tree and Graph were
 retired; their addresses redirect to Town and Board, and their source and tests
 were removed.
 
+Code view (#981) is a proposal, not a shipping view. Read its
+[research and recommendation](design/code-view/research.md),
+[design and preview walkthrough](design/code-view/design.md) and
+[OpenSpec proposal](../openspec/changes/world-code-view/proposal.md).
+The synthetic preview at `/code-view-prototype.html` is owned by
+[`web/public/code-view-prototype/`](../web/public/code-view-prototype/), with
+[interaction evidence](../web/src/testing/codeViewPrototype.test.ts); it never
+connects to a runtime or writes project files.
+
 Use this map to locate ownership, then read the relevant contract, source and focused
 test. For end-to-end module and data-flow navigation, use the
 [foundation source guide](foundation-guide.md); for visual and terminal tasks,

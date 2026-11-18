@@ -1767,6 +1767,22 @@ to search.
   activation preserves a freshly verified OSC 8 target only at the same cells
   and frame.
 
+## Code view design preview
+
+Code is a proposed IDE-style projection of the same World rooms, projects, agents
+and terminals. It is not a shipping view. The
+[research and recommendation](docs/design/code-view/research.md) compare editor
+options; the [design walkthrough](docs/design/code-view/design.md) explains the
+preview at **`/code-view-prototype.html`** on your World/preview origin.
+
+The standalone **DESIGN STUDY / 981** fixture opens synthetic projects with files,
+agent terminals, Changes and a PR card. On phones use **Files / Code / Agents /
+Changes**. **Agent changes file** and **Disconnect host (mock)** expose conflict
+and stale-host scenarios without real agents. Edits, Save example and Send example
+use memory only: no file is saved, command executed or PR changed. Reset study
+clears the fixture. The proposed first implementation is read/review plus existing
+terminals; live saves and full VS Code extensions are not delivered by this study.
+
 ## Workspace Inspector
 
 Open Files, Changes, or Chat with the TabBar Inspector button,
