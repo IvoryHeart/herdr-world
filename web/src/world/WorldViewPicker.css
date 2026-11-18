@@ -131,6 +131,41 @@
   border-top: 1px solid var(--border);
 }
 
+.world-view-picker-detail {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Hosts opens in the menu's place, with the topbar menu's rows sized for a thumb. */
+.world-view-picker-hosts {
+  width: min(320px, calc(100vw - 24px));
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.world-view-picker-hosts label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.world-view-picker-hosts input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.world-view-picker-hosts p {
+  margin: 4px 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 /* Typing owns the bottom edge, as it does for the bottom navigation. */
 .keyboard-open .world-view-picker-phone {
   display: none;
