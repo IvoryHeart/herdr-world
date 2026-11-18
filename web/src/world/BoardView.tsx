@@ -110,6 +110,7 @@ import {
   DEFAULT_SIZE,
   emptyLayout,
   makeShelfRoom,
+  emptyHostRect,
   type Point,
   placeNew,
   positions,
@@ -1261,14 +1262,17 @@ export default function BoardView({
     }
     return out;
   };
-  /** Frame every shown card, or only the keys in `only`; false if none. */
-  function fit(instant: boolean, only?: ReadonlySet<string>) {
+  /**
+   * Frame every shown card, or only the keys in `only`, plus `box` when
+   * given; false if there is nothing to frame.
+   */
+  function fit(instant: boolean, only?: ReadonlySet<string>, box?: Rect) {
     const el = boardRef.current;
     if (!el) return false;
-    let x0 = Infinity,
-      y0 = Infinity,
-      x1 = -Infinity,
-      y1 = -Infinity;
+    let x0 = box?.x0 ?? Infinity,
+      y0 = box?.y0 ?? Infinity,
+      x1 = box?.x1 ?? -Infinity,
+      y1 = box?.y1 ?? -Infinity;
     for (const [key, card] of visibleCards()) {
       if (only && !only.has(key)) continue;
       const shown = farRef.current ? shownSize(key) : undefined;
@@ -1303,10 +1307,17 @@ export default function BoardView({
     invalidate("change");
     return true;
   }
-  /** Frame a host's zone (World's host ID), once it has cards; false before. */
+  /**
+   * Frame a host's zone (World's host ID) once it is placed: its cards, or
+   * the empty zone of a host with no workspaces. False before.
+   */
   const fitHost = (hostId: string) => {
     const m = latest.current.model;
     const host = m.hosts.find((candidate) => candidate.id === hostId);
+    if (host && !host.workspaceKeys.length) {
+      const anchor = layout.current.anchors.get(host.key);
+      return !!anchor && fit(false, new Set(), emptyHostRect(anchor));
+    }
     const keys = new Set(
       host?.workspaceKeys.flatMap((key) => [
         key,
@@ -1704,6 +1715,10 @@ export default function BoardView({
           y1 = Math.max(y1, card.y + h / 2);
         }
       }
+      // A host with no workspaces keeps a zone where its first card goes.
+      const anchor = layout.current.anchors.get(host.key);
+      if (!host.workspaceKeys.length && anchor)
+        ({ x0, y0, x1, y1 } = emptyHostRect(anchor));
       zones.push([zone, x0, y0, x1, y1]);
     }
     const pad = farRef.current ? 70 : 46;

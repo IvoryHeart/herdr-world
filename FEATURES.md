@@ -924,7 +924,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     workspace** (disabled with the reason when no host is ready) and **Add
     host** in a plain menu. **Add host** is Town's **Add building**: it opens
     **Manage connections** on its first step, and Board frames the new host's
-    cards once they show; closing without adding changes nothing. Arrow keys, Home and End move through the menu; Escape, a press
+    zone once it shows; closing without adding changes nothing. A host with
+    no workspaces yet shows an empty zone, with its label and **+** (New
+    workspace), where its first card will go. Arrow keys, Home and End move through the menu; Escape, a press
     outside or **Back** on a phone closes it. Board's controls leave the hub
     and bin room on their row, folding into Board's **⋯** menu as needed.
     The bin itself works as before.
