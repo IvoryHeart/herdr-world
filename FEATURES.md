@@ -76,6 +76,10 @@ no control for it. Platform and harness limits apply across the table.
   their startup files are not loaded. Startup files that replace the shell
   with another shell or tmux can prevent launch or time out the catalog probe.
   Windows keeps native launching.
+- **Core launch arguments:** choose a room whose launcher says **Starts in
+  herdr-core**; a room's name alone does not identify its runtime. World gives
+  core the executable and arguments directly, including long Claude settings
+  and multiline prompts. It does not type a launch command into a terminal.
 - **Codex status on Linux core:** working/idle comes from Codex's native
   OSC 7501 reports, just as on macOS. If core publishes no status, World
   shows **unknown** even when Chat and Terminal work. World cannot recover

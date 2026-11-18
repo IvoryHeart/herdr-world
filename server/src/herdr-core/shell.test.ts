@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { coreShellArgv } from "./shell";
 import { harnessOfArgv } from "./harness";
 import { coreHarnessReadiness, resolveCoreExecutable } from "./host";
+import { claudeTapArgs } from "../usage/claude-tap";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -66,6 +67,24 @@ function fixture(platform: "Linux" | "Darwin", shellProgram?: string) {
 }
 
 describe("the core agent's shell environment", () => {
+  for (const platform of ["Linux", "Darwin"] as const)
+    test(`${platform}: Claude starts with the real long status-line tap and multiline arguments`, async () => {
+      const host = fixture(platform);
+      const args = [
+        "--append-system-prompt",
+        "Review 'quoted' and \"nested\" text.\n$(exit 92); `exit 93`",
+        ...claudeTapArgs({ kind: "node", path: "/usr/bin/node" }),
+      ];
+      expect(args.at(-1)!.length).toBeGreaterThan(4096);
+      const result = await host.run(
+        coreShellArgv([join(host.tools, "claude"), ...args]),
+      );
+      expect(result).toEqual({
+        code: 0,
+        stdout: `shell-bun\n${args.map((arg) => `<${arg}>\n`).join("")}`,
+      });
+    });
+
   for (const platform of ["Linux", "Darwin"] as const) {
     for (const shell of ["csh", "tcsh", "nu", "xonsh", "elvish"])
       test(`${platform} ${shell}: unsupported shells preserve direct discovery and launch`, async () => {

@@ -45,6 +45,13 @@ files do not supply additional tools. Startup files that replace the shell with
 another shell or tmux can prevent launch or time out the catalog probe. No change
 to the user's shell configuration is required.
 
+New agent identifies this path with **Starts in herdr-core**; a room named
+"core" on a Herdr TUI connection still uses the TUI launcher. Core launches
+receive an argv, including long Claude status-line settings and multiline
+profile arguments, rather than a command typed into a shell. The account shell
+receives those arguments as positional parameters, without interpolating them
+into its command string.
+
 | Harness kind | Executable | Core profile / status / delivery | Chat transcript |
 | --- | --- | --- | --- |
 | amp | amp | Yes / native / native | No TUI reader; native input remains available |
