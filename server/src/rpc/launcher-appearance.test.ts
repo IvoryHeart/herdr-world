@@ -1,6 +1,6 @@
 import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BoardStore } from "../world/board-store";
@@ -8,6 +8,7 @@ import { handleLauncherRpc } from "./launcher";
 import type { ConnectionRpcContext } from "./context";
 import { STARTER_PROFILES } from "../../../shared/agentProfile";
 import { claudeTapArgs } from "../usage/claude-tap";
+import { runProcessWithCodeTimeout } from "../utils/process-utils";
 import { appearanceColors, appearanceFor } from "../../../shared/appearance";
 const roots: string[] = [];
 afterEach(() => {
@@ -89,6 +90,10 @@ for (const mode of ["ready", "retired", "refused-settings"])
       connection: {
         ...herdrRuntimeFixture({ call }),
         sshHost: () => undefined,
+        runProcessWithCodeTimeout: (argv: string[], timeoutMs: number) =>
+          runProcessWithCodeTimeout(argv, timeoutMs, {
+            env: { ...process.env, HOME: root },
+          }),
       },
       sendReply: (reply: Record<string, unknown>) => {
         result = reply.result;
@@ -115,9 +120,11 @@ for (const mode of ["ready", "retired", "refused-settings"])
     // A Claude launch adds the per-launch status line tap after the profile's own arguments.
     expect(profile.harness).toBe("claude");
     // On World's own host the tap runs on World's executable.
-    expect((args as string[]).slice(-2)).toEqual(
-      claudeTapArgs({ kind: "bun", path: process.execPath }),
-    );
+    const [flag, settings] = (args as string[]).slice(-2);
+    expect(flag).toBe("--settings");
+    expect(
+      process.platform === "win32" ? settings : readFileSync(settings!, "utf8"),
+    ).toBe(claudeTapArgs({ kind: "bun", path: process.execPath })[1]!);
     expect(args as string[]).toContain("--agent");
     expect(result).toMatchObject({
       status: mode === "refused-settings" ? "failed" : "started",

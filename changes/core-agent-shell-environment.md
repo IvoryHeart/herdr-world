@@ -4,6 +4,8 @@
   shell-added tools such as bun and nvm, with login startup on macOS.
 - Preserve direct core discovery and launching for unsupported account shells,
   including csh, tcsh, nu, xonsh and elvish.
+- Start Claude from New agent in Unix Herdr TUI rooms without truncating the
+  status-line tap at the shell's terminal input limit.
 
 ### Known issues
 

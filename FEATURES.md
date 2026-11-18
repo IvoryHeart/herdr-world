@@ -80,6 +80,14 @@ no control for it. Platform and harness limits apply across the table.
   herdr-core**; a room's name alone does not identify its runtime. World gives
   core the executable and arguments directly, including long Claude settings
   and multiline prompts. It does not type a launch command into a terminal.
+- **Claude in Herdr TUI rooms (Unix):** Quick start and profile launches give
+  Claude a short settings-file path, so the full status-line tap cannot be cut
+  off by a terminal's input-line limit and leave the shell at a `> ` prompt.
+  World prepares the file on the selected host, outside terminal input, in
+  `~/.cache/herdr-world/claude-launch/`. Files contain only World's tap settings,
+  are private to the user and reused for identical tap content; user settings
+  stay untouched. If preparation fails, New agent reports an error before
+  creating a tab or starting an agent. Windows keeps inline settings.
 - **Codex status on Linux core:** working/idle comes from Codex's native
   OSC 7501 reports, just as on macOS. If core publishes no status, World
   shows **unknown** even when Chat and Terminal work. World cannot recover
