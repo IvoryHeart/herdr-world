@@ -1,0 +1,71 @@
+# Agent runtime moves
+
+## Intended behavior and evidence choice
+
+The [current requirement](../../openspec/specs/world-surfaces/spec.md#requirement-quit-before-resume-agent-moves)
+and issue #977 require at most one running conversation during a handoff. The
+owner explicitly forbids destination-first resume. Preflight must precede source
+quit; verified destination readiness precedes source terminal closure; confirmed
+destination closure precedes rollback in the original tab. Busy/dialog/tool and
+background-work evidence must refuse before quit. Saved metadata must follow the
+chosen occupant, while another occupant never inherits it through ID reuse.
+
+The unchanged runtime-leases and herdr-core fences establish connection/occupant
+currency. A direct finite fault matrix drives the production handoff controller:
+4 quit outcomes × 4 resume outcomes × 3 destination-stop outcomes × 3 rollback
+outcomes × 2 metadata outcomes × 2 old-terminal-close outcomes = 576 cases.
+Each boundary checks that source plus destination live counts never exceed one;
+rollback needs confirmed destination closure. Separate preflight/recheck failures
+check that source execution is retained. This evidence exercises actual control
+flow and lost acknowledgements directly rather than introducing a second model
+that omits the native terminal and transcript consumers.
+
+## Consumer mapping
+
+- `server/src/agent/move/handoff.test.ts`: phase ordering, pre-quit refusals,
+  failed/uncertain destination shutdown, rollback and the complete fault matrix.
+- `server/src/agent/move/processes.test.ts`: foreground wrapper identity,
+  descendant tools, separate process groups, Node background servers and unknown
+  evidence. Process names alone never establish an idle harness descendant.
+- `server/src/agent/move/session.test.ts`: exact session admission, busy/dialog/
+  pending-tool/message refusals, forged key and reading-only-link refusal, preflight staging, final
+  transcript installation and divergent destination protection.
+- `server/src/agent/move/runtime.test.ts`: real framed core provider and layout
+  store, native shell preparation in the original tab, source closure without
+  losing that tab, shared favourite labels and generation refusal. Successful
+  native kills can invalidate their own publication fence; current observed
+  absence/finished state, never the exception alone, establishes closure.
+- `server/src/world/agent-rehome.test.ts`: actual persistent Board store reopened
+  after transfer; pins, colours, independent appearance, strings and parent/child
+  claims, shared desk retention, replacement refusal, server-only admission and
+  old native-stamp suppression. `agent-reattach.test.ts` exercises explicit CLI
+  flags, saved choices, current destination and old-live-terminal refusal.
+- `web/src/world/agentMove.test.ts` and `AgentMove.browser.test.ts`: current
+  destination/generation selection, exact source witness, no repeat click during
+  a move, phone bounds and a plain background-work refusal. `?agentMoveBusy` is
+  a testing-only refusal; it never quits an agent.
+
+## Limits and checks
+
+The matrix is exhaustive over its listed fault axes, not arbitrary external
+process schedules. Native Herdr/core commands cannot atomically compare all
+process/status evidence with another client's input. External user actions,
+independent Worlds, OS signals, real harness startup/login, OpenSSH and host
+outages retain platform/integration boundaries. A host disconnect or service
+crash can prevent rollback confirmation: no competing resume is issued to hide
+that uncertainty. The prepared original tab remains available for inspection.
+No cross-host transaction or process-survival guarantee during host failure is
+claimed. Windows moves, compressed-only/unreadable transcripts and transcripts
+over 32 MiB are refused. Project files and raw scrollback are not migrated.
+
+Address transfer is explicit because observing the same conversation file alone
+cannot prove a runtime occupant moved. It preserves existing witness admission
+and the one colour authority. A live recovery-shell witness protects metadata
+through source exit cleanup; final transfer reads current saved edits. The last
+64 superseded native parent addresses are retained per claim. Existing stored
+metadata can be re-attached; already deleted historical data cannot be rebuilt.
+
+Run the maintained affected tests, browser consumer and full required verification
+through Delivery checks. Existing runtime, core, Board, relation, verb policy and
+appearance consumers remain mandatory. These added consumer mappings await the
+PR's independent review; existing model acceptance is not expanded by this change.

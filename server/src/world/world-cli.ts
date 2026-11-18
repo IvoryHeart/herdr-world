@@ -1,3 +1,4 @@
+import { reattachFromCli } from "./agent-reattach";
 import { planBoardPatch } from "./board-plan";
 import { StorageOutcomeUnknown } from "../storage/world-protocol";
 import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
@@ -103,6 +104,7 @@ export type WorldCliDeps = {
   hosts(): CliHost[];
   /** herdr-core connections, for callers inside core terminals (P4). */
   core?(): import("./world-cli-actor").CoreCallerSource | null;
+  runtimeCurrent?(connectionId: string, generation: number): boolean;
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
@@ -118,6 +120,7 @@ export type WorldCliDeps = {
 /** The commands the endpoint accepts, as the CLI spells them. */
 export const WORLD_CLI_COMMANDS = [
   ...GROUP_CLI_COMMANDS,
+  "agent reattach",
   "whoami",
   "ls",
   "history",
@@ -669,6 +672,11 @@ export function createWorldCli(deps: WorldCliDeps) {
         );
       });
     switch (command) {
+      case "agent reattach": {
+        const result = await reattachFromCli(deps, params);
+        await record(actor, command, result.message, null);
+        return result;
+      }
       case "whoami":
         return actor;
       case "ls": {

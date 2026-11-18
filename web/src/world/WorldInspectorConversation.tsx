@@ -1,3 +1,4 @@
+import { AgentInspectorActions } from "./AgentMoveControl";
 import { watchConversation } from "../conversationWatch";
 import { harnessLabel } from "./agentProfiles";
 import { WorldLoader } from "./WorldLoader";
@@ -36,7 +37,6 @@ import type { ActiveFilePreviewSelection } from "../components/FilePreviewConten
 import { lazyWithReload } from "../lazyWithReload";
 import { InspectorLoadingShell } from "../components/InspectorLoadingShell";
 import { ThemeScope } from "../themeScope";
-import { AgentProfileLink } from "./AgentProfileLink";
 import { InspectorPaneMap } from "../components/InspectorPaneMap";
 import {
   OperationalContext,
@@ -888,9 +888,10 @@ function InspectorResources({
                       disabled={presentationStale}
                     >
                       {conversation.context.kind === "agent" ? (
-                        <AgentProfileLink
-                          connectionId={conversation.connectionId}
-                          terminalId={conversation.terminalId}
+                        <AgentInspectorActions
+                          conversation={conversation}
+                          workspaceIds={workspaces.map((w) => w.workspace_id)}
+                          disabled={presentationStale}
                         />
                       ) : null}
                     </TerminalAppearanceEditor>

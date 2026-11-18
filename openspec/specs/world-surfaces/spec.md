@@ -4372,3 +4372,49 @@ first observed complete on a ready runtime after this change. It SHALL:
   the runtime retires during it
 - **THEN** World shows the failure, does not show the setting as saved, and leaves the
   previous setting in place
+
+### Requirement: Quit-before-resume agent moves
+
+World SHALL offer Move to another connected runtime/room for an idle Claude or
+Codex agent with an exact readable conversation ID. It SHALL preflight the
+current generations, shell terminals, harness executables and login, working
+folders and transcript storage before quitting. A reading-only conversation link
+SHALL NOT authorize a move without matching native resume evidence. Busy/dialog states, pending
+messages/tools and background-process evidence SHALL refuse. A destination
+folder MAY be chosen explicitly. Shell environment comes from the destination
+user's shell; project files, shell state and terminal scrollback are excluded.
+
+World SHALL quit the source before resuming the same conversation at the
+destination, and SHALL close the source terminal only after verifying the
+new agent's readiness and conversation identity. World SHALL confirm the
+destination terminal stopped before rollback into a prepared shell in the
+original tab. Lost replies SHALL be inspected without automatic launch replay.
+Unconfirmable host/transport failures SHALL report uncertainty and SHALL NOT
+start another copy. Native runtime actions remain generation/occupant-qualified.
+
+#### Scenario: Idle agent moves
+
+- **WHEN** preflight succeeds and the source exits
+- **THEN** the destination resumes the exact conversation inside a shell, keeps
+  the tab's label in the chosen room and receives the Board/desk pins, colours,
+  appearance, Board strings and World spawned-by claims
+- **AND** any other source desk occupants keep their desk choices
+
+#### Scenario: Destination fails after quit
+
+- **WHEN** destination readiness or identity cannot be verified
+- **THEN** World confirms destination closure before resuming the source
+  conversation in its original tab and reports the move failure
+- **AND** if either host prevents safe confirmation, World reports interruption
+  without issuing a competing resume
+
+#### Scenario: Manual move is re-attached
+
+- **WHEN** an explicit CLI request names an old desk/terminal and a current
+  Claude/Codex pane elsewhere, and no current observation shows the old terminal
+- **THEN** World transfers remaining saved desk details without starting a process
+- **AND** replaced source witnesses and stale destinations refuse
+
+Ordinary observations SHALL NOT infer agent relocation from conversation IDs.
+Only the admitted handoff or explicit re-attach transfers saved addresses.
+Native spawn claims superseded by that move SHALL NOT overwrite its new parent.

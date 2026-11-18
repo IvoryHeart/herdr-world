@@ -913,3 +913,11 @@ Long transcripts keep World's existing bounded projections and lazy older-histor
 pages. SSH reads reuse verified cached bytes and retrieve appended text; file
 replacement, changed prefixes or compression require a fresh read. This changes
 transfer behavior without changing the browser's history/frame limits.
+
+## Continue on another runtime
+
+Use the agent window’s **Agent settings → Move to…** to continue an idle Claude
+or Codex conversation in another connected runtime and room. Wait for the move
+result, then open its destination desk. The conversation remains in Chat; raw
+terminal scrollback stays behind. Busy agents and background work refuse the
+move. See [move requirements, recovery and manual re-attach](../FEATURES.md#move-an-agent-between-runtimes).

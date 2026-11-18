@@ -1,3 +1,4 @@
+import { handleAgentMoveRpc } from "./agent-move";
 import { planBoardPatch } from "../world/board-plan";
 import { parseObservationBase } from "../world/observation-v1";
 import { pruneSnapshotAppearance } from "../world/appearance-prune";
@@ -69,6 +70,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     }
     return;
   }
+  if (method === "world.agent.move") return handleAgentMoveRpc(rpc);
   if (method === "world.presence.seen") {
     sendReply({ id, result: ownerPresence.seen() }, method);
     return;
@@ -138,7 +140,11 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         logger,
         rpc.services.clock.now(),
         (id, generation) => {
-          const lease = tuiLease(id);
+          const lease =
+            tuiLease(id) ??
+            (rpc.services.coreControl?.manager.has(id)
+              ? rpc.services.coreControl.manager.readyRuntimeLease(id)
+              : null);
           return Boolean(
             lease && lease.generation === generation && lease.isCurrent(),
           );

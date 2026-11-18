@@ -52,6 +52,13 @@ const cli = (
   );
 
 export const cliVerbs = [
+  cli("agent reattach", {
+    from_connection: text,
+    from_tab: text,
+    from_terminal: optionalText,
+    to_connection: text,
+    to_pane: text,
+  }),
   cli("whoami", {}, "read"),
   cli("ls", {}, "read"),
   cli("history", {}, "read"),

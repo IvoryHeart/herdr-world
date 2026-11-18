@@ -294,6 +294,37 @@ export function createWorldCliService(deps: {
       const core = deps.core?.();
       return core && "hosts" in core ? core : null;
     },
+    runtimeCurrent: (id, generation) => {
+      if (stopped.signal.aborted) return false;
+      const core = deps.core?.();
+      try {
+        if (
+          core &&
+          "list" in core &&
+          core.list().some((host) => host.id === id)
+        ) {
+          const lease = core.readyRuntimeLease(id);
+          return Boolean(
+            lease && lease.generation === generation && lease.isCurrent(),
+          );
+        }
+        if (core && "hosts" in core && core.has(id))
+          return core
+            .hosts()
+            .some(
+              (host) =>
+                host.connection_id === id &&
+                host.generation === generation &&
+                host.isCurrent(),
+            );
+        const lease = deps.connections().readyRuntimeLease(id);
+        return Boolean(
+          lease && lease.generation === generation && lease.isCurrent(),
+        );
+      } catch {
+        return false;
+      }
+    },
     defaultConnectionId: () => deps.connections().defaultId(),
     snapshot: async () => {
       const snapshots = deps.snapshots();

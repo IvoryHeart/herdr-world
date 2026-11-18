@@ -295,6 +295,35 @@ export function parseWorldArgs(
       : {}),
   });
   switch (word) {
+    case "agent": {
+      if (sub !== "reattach")
+        throw new UsageError(
+          "agent reattach --from-connection ID --from-tab ID --from-terminal ID --to-connection ID --to-pane ID",
+        );
+      const { values } = parsed(
+        rest,
+        Object.fromEntries(
+          [
+            "from-connection",
+            "from-tab",
+            "from-terminal",
+            "from-pane",
+            "to-connection",
+            "to-pane",
+          ].map((key) => [key, { type: "string" as const }]),
+        ),
+        0,
+      );
+      return {
+        command: "agent reattach",
+        params: Object.fromEntries(
+          Object.entries(values)
+            .filter(([key]) => key !== "json")
+            .map(([key, value]) => [key.replaceAll("-", "_"), value]),
+        ),
+        json: values.json as boolean,
+      };
+    }
     case "whoami":
     case "ls": {
       const { values } = parsed(args, {}, 0);
@@ -746,6 +775,11 @@ export async function runWorldCommand(
 }
 
 const WORDS: { name: string; summary: string; actions?: string[] }[] = [
+  {
+    name: "agent",
+    summary: "re-attach an old desk to an agent resumed elsewhere",
+    actions: ["reattach"],
+  },
   {
     name: "group",
     summary: "list Groups and edit World-owned Teams and Pods",

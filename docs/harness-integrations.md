@@ -18,7 +18,8 @@ without automatic integration support print that limitation.
 `herdr-world integration install <harness>` manually installs the release's
 `herdr-world --skill` guide as `herdr-world/SKILL.md` in that harness's user
 skill folder. It teaches `ask`, `result`, `task-summary` and `stamp` to an agent
-that has never used World. Start a new harness session after installing.
+that has never used World. Version 3 also documents `agent reattach` for desk
+choices after a manual runtime move. Start a new harness session after installing.
 Installation needs no running World or Herdr service. Nothing installs at startup.
 `herdr-world integration sync` reruns the automatic discovery and refresh step.
 
@@ -39,7 +40,7 @@ explicitly installing any one reenables the group. Preferences live in
 there is no need to edit these files. Uninstalling an already absent integration
 also records the preference.
 
-Status prints `<harness>: <state> (<path or reason>)`: `current (v2)`,
+Status prints `<harness>: <state> (<path or reason>)`: `current (v3)`,
 `outdated (v1)`, `not installed` or `unsupported`. A missing or invalid marker
 is `outdated` without a version. A valid marker at or above this release's
 version is current. Install and uninstall refuse an existing skill without a

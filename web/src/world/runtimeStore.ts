@@ -1,3 +1,4 @@
+import { moveBusyPreview } from "./agentMove";
 import {
   decodeObservationHost,
   MissingObservationBase,
@@ -23,6 +24,8 @@ import {
 import { worldObjectForHosts } from "./worldFilters";
 import { DEVTOOLS } from "./devtools/flag";
 import { countWorldWork } from "./devtools/renderer";
+
+moveBusyPreview();
 
 const INVALIDATION_DEBOUNCE_MS = 80;
 const FALLBACK_REFRESH_MS = 15_000;
