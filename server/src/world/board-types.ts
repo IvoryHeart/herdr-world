@@ -75,6 +75,18 @@ export type BoardLayoutDocument = {
    * key: tiles from the building's corner. A room without one is stacked.
    */
   room_pins: Record<string, RoomSpot>;
+  /**
+   * Which street lot each Town building stands on, by its host's connection
+   * ID: its rank in the town's reading order (lowest first). A building
+   * without one stands after every placed building, in host order.
+   */
+  building_pins: Record<string, number>;
+  /**
+   * Lots per street of a wide Town, saved with the first building move and
+   * kept from then on, so a new host's building takes the next free lot and
+   * moves none of the placed ones. Absent before any move.
+   */
+  building_columns?: number;
   /** Terminal key (shared/interest.ts) to the viewer's muted or focused. */
   interest: Record<string, StoredInterest>;
   /** Viewer intent by immutable stored Group ID, separate from membership. */
@@ -162,6 +174,20 @@ export type BoardOp =
       op: "room.place";
       connection_id: string;
       spots: Record<string, RoomSpot>;
+    }
+  /**
+   * The order Town's buildings stand in, by connection ID: those named take
+   * the lots they hold among the saved ones, in this order; the others keep
+   * theirs (a host the viewer's filter hides stays where it stood). `hosts`
+   * is every host the viewer knows, in host order: those not saved yet are
+   * placed where they stood, after the saved ones. `columns` is the lots per
+   * street, kept only if none is saved yet.
+   */
+  | {
+      op: "building.place";
+      order: string[];
+      hosts: string[];
+      columns: number;
     }
   /** Mute or focus an agent's terminal, or return it to watching with null. */
   | { op: "interest.set"; key: string; interest: StoredInterest | null }

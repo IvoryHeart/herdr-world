@@ -23,6 +23,8 @@ import { TownChooser } from "./TownChooser";
 import type { TownToast } from "./TownToasts";
 import { townDeskColorTarget, townRoomColorKey } from "./townModel";
 import { saveRoomSpots } from "./townRoomPins";
+import { saveBuildingOrder } from "./townBuildingPins";
+import { townFirstLotsPerStreet } from "./townLots";
 import type { TownRoomPlacement } from "./townRoomPlace";
 import { townMoveMenu, type TownMoveFlow } from "./townMoveMenu";
 import { townPinnedReorder, townRoomPinnedSeats } from "./townPinOrder";
@@ -54,6 +56,7 @@ export function townMoveActions({
   moveConfirm,
   setMoveConfirm,
   world,
+  aggregate = world,
   office,
   deskPins,
   relations,
@@ -73,6 +76,8 @@ export function townMoveActions({
   moveConfirm: TownMoveConfirm | null;
   setMoveConfirm(confirm: TownMoveConfirm | null): void;
   world: WorldObject;
+  /** Every host, the ones the Hosts filter hides too (TownView). */
+  aggregate?: WorldObject;
   office: HerdrOfficeProjection;
   deskPins: DeskPins;
   relations: readonly Relation[];
@@ -336,6 +341,41 @@ export function townMoveActions({
       setMovingKey(null);
     }
   };
+  /**
+   * Save the order the buildings stand in (World keeps it, so a reload and
+   * every device show it). `order` is the buildings shown, by host key;
+   * hosts not shown keep their lots: the first move places every host,
+   * hidden ones too, where it stood.
+   */
+  const runBuildingPlace = async (
+    hostKey: string,
+    order: readonly string[],
+  ): Promise<TownMoveResult> => {
+    const hostOf = (key: string) => office.hosts.find((h) => h.key === key);
+    const label = hostOf(hostKey)?.displayLabel ?? "The building";
+    const hosts = order.map(hostOf);
+    if (hosts.some((host) => !host)) {
+      toast("error", `${label} not moved: the town changed.`);
+      return "returned";
+    }
+    try {
+      const conflict = await saveBuildingOrder(
+        hosts.map((host) => host!.connectionId),
+        aggregate.hosts.map((host) => host.connectionId),
+        townFirstLotsPerStreet(aggregate.hosts.length),
+      );
+      if (DEVTOOLS)
+        trace.record("move", { label, status: conflict ?? "moved" });
+      if (conflict) {
+        toast("error", `${label} not moved: ${conflict}`);
+        return "returned";
+      }
+      return "moved";
+    } catch (cause) {
+      toast("error", `${label} may not have moved: ${String(cause)}`);
+      return "uncertain";
+    }
+  };
   /** The choices for each step of a move (townMoveMenu.ts). */
   const moveChooser = (flow: NonNullable<typeof moveFlow>) =>
     townMoveMenu(flow, {
@@ -382,6 +422,7 @@ export function townMoveActions({
     /** Town's room move actions (TownRoomActions). */
     roomMoves: {
       onPlaceRooms: runRoomPlace,
+      onPlaceBuildings: runBuildingPlace,
       canMoveRoom,
       onRoomsTidied: (
         hostLabel: string,

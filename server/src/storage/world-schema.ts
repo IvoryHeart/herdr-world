@@ -14,7 +14,12 @@ import {
 import { dirname, join } from "node:path";
 import { newWorldId } from "./world-identifiers";
 import { worldIdsMigration } from "./world-ids";
-import { worldBoardMigration, worldRoomPinsMigration } from "./world-board";
+import {
+  worldBoardMigration,
+  worldBuildingColumnsMigration,
+  worldBuildingPinsMigration,
+  worldRoomPinsMigration,
+} from "./world-board";
 import { runtimeStatusMigration } from "./runtime-status";
 import { coreTopologyMigration } from "./core-topology";
 import { worldProfilesMigration } from "./world-profiles";
@@ -99,6 +104,8 @@ export const worldMigrations = [
   migrateLegacyCompletionReviews,
   worldRoomPinsMigration,
   coreTopologyMigration,
+  worldBuildingPinsMigration,
+  worldBuildingColumnsMigration,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */

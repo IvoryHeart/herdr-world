@@ -18,19 +18,26 @@ const maps = [
   "interest",
   "group_interest",
   "room_pins",
+  "building_pins",
 ] as const;
 /** The families the first Board schema created; later ones add their own. */
 const firstBoardTables = [
   "notes",
   "strings",
   "appearance",
-  ...maps.filter((family) => family !== "room_pins"),
+  ...maps.filter(
+    (family) => family !== "room_pins" && family !== "building_pins",
+  ),
   "folded",
   "spawns",
   "groups",
   "group_changes",
 ] as const;
-export const boardTables = [...firstBoardTables, "room_pins"] as const;
+export const boardTables = [
+  ...firstBoardTables,
+  "room_pins",
+  "building_pins",
+] as const;
 type Family = (typeof boardTables)[number];
 type Row = {
   key: string;
@@ -50,12 +57,18 @@ ${firstBoardTables.map(boardTable).join("\n")}
 `;
 /** Town room spots (board-types.ts `room_pins`), added after the first schema. */
 export const worldRoomPinsMigration = boardTable("room_pins");
+/** Town building lots (board-types.ts `building_pins`), added after room pins. */
+export const worldBuildingPinsMigration = boardTable("building_pins");
+/** A wide Town's saved lots per street (board-types.ts `building_columns`). */
+export const worldBuildingColumnsMigration =
+  "ALTER TABLE board_meta ADD COLUMN building_columns INTEGER NOT NULL DEFAULT 0 CHECK(building_columns>=0);";
 export function readBoard(db: Database): BoardDocument | null {
   const meta = db.query("SELECT * FROM board_meta WHERE singleton=1").get() as {
     revision: number;
     appearance: number;
     group_interest: number;
     group_changes: number;
+    building_columns: number;
   } | null;
   if (!meta) return null;
   const rows = (family: Family) =>
@@ -71,6 +84,8 @@ export function readBoard(db: Database): BoardDocument | null {
   for (const family of maps)
     (doc.layout as any)[family] = Object.fromEntries(rows(family));
   if (!meta.group_interest) delete doc.layout.group_interest;
+  if (meta.building_columns)
+    doc.layout.building_columns = meta.building_columns;
   doc.layout.folded = rows("folded").map(([key]) => key);
   doc.relations.spawns = rows("spawns").map(([, body]) => body);
   doc.relations.groups = rows("groups").map(([, body]) => body);
@@ -225,12 +240,13 @@ export function writeBoard(
     ]),
   );
   db.query(
-    `INSERT INTO board_meta VALUES(1,?,?,?,?) ON CONFLICT(singleton) DO UPDATE SET revision=excluded.revision,appearance=excluded.appearance,group_interest=excluded.group_interest,group_changes=excluded.group_changes`,
+    `INSERT INTO board_meta(singleton,revision,appearance,group_interest,group_changes,building_columns) VALUES(1,?,?,?,?,?) ON CONFLICT(singleton) DO UPDATE SET revision=excluded.revision,appearance=excluded.appearance,group_interest=excluded.group_interest,group_changes=excluded.group_changes,building_columns=excluded.building_columns`,
   ).run(
     next.revision,
     Number(next.appearance !== undefined),
     Number(next.layout.group_interest !== undefined),
     Number(next.relations.group_changes !== undefined),
+    next.layout.building_columns ?? 0,
   );
 }
 export type BoardOperation = { ops: readonly BoardOp[]; revision?: number };

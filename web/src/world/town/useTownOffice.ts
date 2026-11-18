@@ -7,6 +7,7 @@ import {
 } from "../herdrOfficeProjection";
 import { useDeskPins } from "../useDeskPins";
 import { useRoomPins } from "./townRoomPins";
+import { useBuildingPins } from "./townBuildingPins";
 import { DEVTOOLS } from "../devtools/flag";
 import { countWorldWork } from "../devtools/renderer";
 import type { WorldObject } from "../worldObject";
@@ -20,6 +21,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
   );
   const deskPins = useDeskPins();
   const roomPins = useRoomPins();
+  const buildingPins = useBuildingPins();
   // Preserve the pin-key identity; pinned tabs are admitted first in folded rooms.
   const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
   const pinnedTabs = useMemo(
@@ -114,6 +116,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
     office: observedOffice,
     deskPins,
     roomPins,
+    buildingPins,
     toggleRoomFold,
     foldRevision,
     roomFocus,

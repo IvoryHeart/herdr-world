@@ -21,6 +21,7 @@ import {
   type ReactNode,
 } from "react";
 import type { RoomPins } from "./townModel";
+import { NO_BUILDING_PINS, type BuildingPins } from "./townBuildingPlace";
 import { useTownStepWants, type TownStepStore } from "./useTownStepWants";
 import { useTownRoomMoves } from "./townRoomPins";
 import { TOWN_GESTURES } from "./townGesture";
@@ -94,7 +95,7 @@ import { TownLensBoard, TownLensLayer, useTownLenses } from "./TownLenses";
 import type { OfficeAgent } from "../officeProjectionTypes";
 
 export type { PlaceColorChoice, TownRoomActions } from "./townRoomActions";
-import type { TownRoomActions } from "./townRoomActions";
+import { runTownMove, type TownRoomActions } from "./townRoomActions";
 
 /** Camera kept across Office visits within one page session. */
 const savedCameras = new Map<string, { x: number; y: number; z: number }>();
@@ -140,6 +141,7 @@ export function TownCanvas({
   deskPins = NO_PINS,
   joinSeats = sharedTownJoinSeats(),
   roomPins = NO_ROOM_PINS,
+  buildingPins = NO_BUILDING_PINS,
   chrome = NO_CHROME,
   trace = NO_TRACE,
   centerActions,
@@ -219,6 +221,7 @@ export function TownCanvas({
   joinSeats?: TownJoinSeats;
   /** Where the user put rooms (useRoomPins); other rooms stack. */
   roomPins?: RoomPins;
+  buildingPins?: BuildingPins;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const traceRef = useRef(trace);
@@ -269,6 +272,7 @@ export function TownCanvas({
     terminalColors,
     deskPins,
     roomPins,
+    buildingPins,
     relations,
     sources,
     shape,
@@ -670,26 +674,7 @@ export function TownCanvas({
       activateRoom: (key) => latest.current.onActivateRoom(key),
       openReception: setOpenReception,
       openCenter: ring.openRing,
-      move: (command) => {
-        const actions = latest.current.roomActions;
-        switch (command.kind) {
-          case "agent":
-            return actions.onDropAgent(command.agentKey, command.deskKey);
-          case "group":
-            return actions.onGroupDesk(command.deskKey, command.targetDeskKey);
-          case "ungroup":
-            return actions.onUngroupDesk(command.deskKey);
-          case "reorder":
-            return actions.onReorderDesk(command.deskKey, command.ontoDeskKey);
-          case "desk":
-            return actions.onDropDesk(command.deskKey, command.roomKey);
-          case "room":
-            return (
-              actions.onPlaceRooms?.(command.roomKey, command.placement) ??
-              Promise.resolve("returned")
-            );
-        }
-      },
+      move: (command) => runTownMove(latest.current.roomActions, command),
       ghost: {
         lift(label, at) {
           ghost.textContent = label;
@@ -714,7 +699,7 @@ export function TownCanvas({
         return aimAtBin({ x: rect.left + at.x, y: rect.top + at.y });
       },
       bin: (drag) =>
-        drag.kind === "room"
+        drag.kind === "room" || drag.kind === "building"
           ? undefined
           : latest.current.roomActions.onBinDrop?.(drag.kind, drag.key),
       // Town's targets are live hits and drags: trace a summary of each.
@@ -772,8 +757,8 @@ export function TownCanvas({
         event.preventDefault();
     };
     // A room card sits above the canvas: its presses join the town's gesture
-    // with the card's room as the tap target. Capturing the pointer on the
-    // host keeps the rest of the gesture (moves, lift, drop) on the canvas.
+    // with the card's room (a sign's host) as the tap target. Capturing the
+    // pointer on the host keeps the rest of the gesture on the canvas.
     roomCardPress.current = (event, roomKey, press) => {
       if (
         !rendererRef.current ||
@@ -786,14 +771,16 @@ export function TownCanvas({
       } catch {
         return false;
       }
+      const sign = press === "building-sign";
       interaction.down({
         id: event.pointerId,
         at: local(event),
         primary: event.isPrimary,
         pointerType: event.pointerType,
         ...(press === "card" || press === "card-name" ? { card: roomKey } : {}),
-        ...(press === "card" ? {} : { roomName: roomKey }),
+        ...(press === "card" || sign ? {} : { roomName: roomKey }),
         ...(press === "plaque-move" ? { handle: true } : {}),
+        ...(sign ? { building: roomKey } : {}),
       });
       return true;
     };

@@ -16,6 +16,7 @@ import {
   BoardStore,
   clientBoardOps,
   parseBoardDocument,
+  placeBuildings,
   moveFollowOps,
   reconcileOps,
   tabClosedOps,
@@ -711,6 +712,71 @@ describe("Board store", () => {
     const old = store.get() as unknown as { layout: Record<string, unknown> };
     delete old.layout.room_pins;
     expect(parseBoardDocument(old).layout.room_pins).toEqual({});
+  });
+
+  test("building lots: a move reorders the named buildings in the places they held", () => {
+    const store = new BoardStore(path);
+    const place = (order: string[], hosts: string[], columns = 4) =>
+      store.patch([{ op: "building.place", order, hosts, columns }]);
+    // Before any move, a viewer whose filter hides beta moves gamma before
+    // alpha: every host is placed where it stood, so beta keeps its lot.
+    place(["gamma", "alpha"], ["alpha", "beta", "gamma"]);
+    expect(store.get().layout.building_pins).toEqual({
+      gamma: 0,
+      beta: 1,
+      alpha: 2,
+    });
+    expect(store.get().layout.building_columns).toBe(4);
+    // The lots per street stay as first saved; a host never placed joins at
+    // the end, and a host this viewer does not know keeps its lot.
+    place(["alpha", "gamma", "delta"], ["gamma", "alpha", "delta"], 3);
+    expect(store.get().layout.building_pins).toEqual({
+      alpha: 0,
+      beta: 1,
+      gamma: 2,
+      delta: 3,
+    });
+    expect(store.get().layout.building_columns).toBe(4);
+    for (const order of [["alpha", "alpha"], [""], "alpha", [7]])
+      expect(() => place(order as unknown as string[], [])).toThrow();
+    for (const hosts of [["beta", "beta"], "beta", undefined])
+      expect(() => place(["alpha"], hosts as unknown as string[])).toThrow();
+    for (const columns of [0, 1.5, -1, "4"])
+      expect(() => place(["alpha"], [], columns as number)).toThrow();
+    // Lots survive a reload, and a board saved before them loads with none.
+    expect(new BoardStore(path).get().layout).toEqual(store.get().layout);
+    const old = store.get() as unknown as { layout: Record<string, unknown> };
+    delete old.layout.building_pins;
+    delete old.layout.building_columns;
+    const parsed = parseBoardDocument(old).layout;
+    expect(parsed.building_pins).toEqual({});
+    expect("building_columns" in parsed).toBe(false);
+    old.layout.building_pins = { alpha: -1 };
+    expect(() => parseBoardDocument(old)).toThrow("building rank");
+    old.layout.building_pins = {};
+    old.layout.building_columns = 0;
+    expect(() => parseBoardDocument(old)).toThrow("building columns");
+  });
+
+  test("placeBuildings keeps unnamed buildings in place", () => {
+    expect(placeBuildings({}, ["a", "b"])).toEqual({ a: 0, b: 1 });
+    expect(placeBuildings({ a: 0, b: 5, c: 9 }, ["c", "a"])).toEqual({
+      c: 0,
+      b: 1,
+      a: 2,
+    });
+    expect(placeBuildings({ a: 0, b: 1 }, [])).toEqual({ a: 0, b: 1 });
+    // Hosts not saved yet stand after the saved ones, in host order.
+    expect(placeBuildings({}, ["c", "a"], ["a", "b", "c"])).toEqual({
+      c: 0,
+      b: 1,
+      a: 2,
+    });
+    expect(placeBuildings({ b: 0 }, ["c", "b"], ["a", "b", "c"])).toEqual({
+      c: 0,
+      a: 1,
+      b: 2,
+    });
   });
 
   test("a pinned desk moved to another workspace stays pinned, placed afresh", () => {

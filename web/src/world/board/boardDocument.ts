@@ -104,6 +104,10 @@ export type BoardDocument = {
     desk_pins?: Record<string, DeskPin>;
     /** Town rooms the user placed, by workspace card key; absent before. */
     room_pins?: Record<string, RoomSpot>;
+    /** Town buildings' lot ranks by connection ID; absent before. */
+    building_pins?: Record<string, number>;
+    /** Lots per street of a wide Town, from the first building move. */
+    building_columns?: number;
     /** Terminal key to muted or focused; absent from older services. */
     interest?: Record<string, StoredInterest>;
     group_interest?: Record<string, GroupInterest>;
@@ -147,6 +151,12 @@ export type BoardOp =
   | { op: "desk.place"; key: string; cell: DeskCell }
   | { op: "desk.rank"; key: string; rank: number; create?: boolean }
   | { op: "room.place"; connection_id: string; spots: Record<string, RoomSpot> }
+  | {
+      op: "building.place";
+      order: string[];
+      hosts: string[];
+      columns: number;
+    }
   | { op: "interest.set"; key: string; interest: StoredInterest | null }
   | { op: "group.interest"; id: string; interest: GroupInterest | null }
   | {

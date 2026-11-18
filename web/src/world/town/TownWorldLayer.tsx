@@ -1,3 +1,4 @@
+import { TownBuildingMove, TownBuildingName } from "./TownBuildingMove";
 import { AnswerDeliverySign } from "./AnswerDeliverySign";
 import { Fragment, memo, useMemo, useRef } from "react";
 import { ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
@@ -71,7 +72,9 @@ export type TownRoomPress =
   | "card"
   | "card-name"
   | "plaque-name"
-  | "plaque-move";
+  | "plaque-move"
+  /** A building's name on its sign; the key is then the host key. */
+  | "building-sign";
 
 /** A room card's or name's press, passed to the town beneath it. */
 export type TownRoomCardPress = (
@@ -343,7 +346,21 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               left={(building.x + building.w / 2) * T}
               top={(building.y + building.h * 0.38) * T}
             >
-              <strong>{host?.displayLabel ?? building.hostKey}</strong>
+              <TownBuildingName
+                hostKey={building.hostKey}
+                label={host?.displayLabel ?? building.hostKey}
+                roomActions={roomActions}
+                onPress={
+                  onRoomCardPress
+                    ? (event) =>
+                        onRoomCardPress(
+                          event,
+                          building.hostKey,
+                          "building-sign",
+                        )
+                    : undefined
+                }
+              />
               {host?.stale ? (
                 <ConnectionRecoveryBanner
                   connectionId={host.connectionId}
@@ -358,6 +375,11 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                 hostLabel={host?.displayLabel}
                 roomActions={roomActions}
                 named
+              />
+              <TownBuildingMove
+                hostKey={building.hostKey}
+                label={host?.displayLabel ?? building.hostKey}
+                roomActions={roomActions}
               />
               <div className="town-reception-tags">
                 {queue.length ? (

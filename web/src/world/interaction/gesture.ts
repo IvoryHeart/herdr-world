@@ -36,6 +36,11 @@ export type GestureConfig<T> = {
   key(target: T): string;
   /** Touch hold before a draggable target lifts; null drags on movement. */
   holdMs: number | null;
+  /**
+   * Whether a mouse must hold still on this draggable target too before it
+   * lifts, so a mouse drag across it pans (Town's roofs).
+   */
+  mouseHolds?(target: T): boolean;
   dragThreshold: number;
   doubleTap: {
     ms: number;
@@ -136,7 +141,10 @@ export const initialGesture = <T>(): GestureState<T> => ({
   lastTap: null,
 });
 
-/** Whether a press on this target waits for a hold (touch on a drag target). */
+/**
+ * Whether a press on this target waits for a hold: touch on a drag target,
+ * or a mouse on one the view says a mouse holds too.
+ */
 export function waitsForHold<T>(
   config: GestureConfig<T>,
   target: T,
@@ -144,8 +152,8 @@ export function waitsForHold<T>(
 ) {
   return (
     config.holdMs !== null &&
-    pointerType !== "mouse" &&
-    config.role(target) === "drag"
+    config.role(target) === "drag" &&
+    (pointerType !== "mouse" || (config.mouseHolds?.(target) ?? false))
   );
 }
 

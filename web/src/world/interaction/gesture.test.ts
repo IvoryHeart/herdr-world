@@ -127,6 +127,13 @@ describe("Shared gestures, as Town uses them", () => {
     expect(types).not.toContain("dropCard");
   });
 
+  test("a mouse holds a roof to lift its building, not a desk", () => {
+    const roof = { ...desk, roof: true } as TownGestureTarget;
+    expect(waitsForHold(TOWN_GESTURES, roof, "mouse")).toBe(true);
+    expect(waitsForHold(TOWN_GESTURES, roof, "touch")).toBe(true);
+    expect(waitsForHold(TOWN_GESTURES, desk, "mouse")).toBe(false);
+  });
+
   test("a mouse drags a desk after 6 px, without a hold", () => {
     expect(waitsForHold(TOWN_GESTURES, desk, "mouse")).toBe(false);
     expect(run([down(1, 0, 0, desk, "mouse"), move(1, 4, 0)]).types).toEqual(

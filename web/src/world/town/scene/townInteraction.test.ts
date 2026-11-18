@@ -19,7 +19,7 @@ import {
   type TownMoveCommand,
   type TownStage,
 } from "./townInteraction";
-import { manualClock, office, working } from "./townScene.fixture";
+import { manualClock, office, town, working } from "./townScene.fixture";
 import { TownSceneCamera, townViewport } from "./townSceneCamera";
 
 const WIDE = { width: 1440, height: 900 };
@@ -57,13 +57,17 @@ function setup(
     teams?: TownTeams;
     /** Tables have cards (TownCanvas: drawn with their nameplates). */
     cards?: boolean;
+    /** Several hosts, so buildings can change lots. */
+    hosts?: Parameters<typeof town>[0];
   } = {},
 ) {
-  const projection = office({
-    alpha: working(3),
-    beta: working(2),
-    gamma: working(2),
-  });
+  const projection = options.hosts
+    ? town(options.hosts)
+    : office({
+        alpha: working(3),
+        beta: working(2),
+        gamma: working(2),
+      });
   const model = townModelFromProjection(projection);
   const layout = layoutTown(
     model.input,
@@ -1369,4 +1373,122 @@ test("Escape puts a carried room back, and letting go then does nothing", () => 
   expect(t.moves).toEqual([]);
   // Nothing carried: Escape is left to whatever else uses it.
   expect(t.interaction.cancelCarry()).toBe(false);
+});
+
+const HOSTS = {
+  studio: { alpha: working(3), beta: working(1) },
+  annex: { gamma: working(2) },
+  depot: { delta: working(4) },
+};
+
+/** A town of three buildings seen whole, roofs on. */
+function townOfThree() {
+  const t = setup({ hosts: HOSTS, level: "overview", zoom: 0.3 });
+  t.setRoofs(1);
+  const [a, b, c] = t.layout.buildings;
+  /** A building's middle on screen, or the middle of a lot like it. */
+  const middle = (lot: { x: number; y: number; w: number; h: number }) =>
+    t.screen({ x: (lot.x + lot.w / 2) * T, y: (lot.y + lot.h / 2) * T });
+  return { t, a: a!, b: b!, c: c!, middle };
+}
+
+test("a roof held with a mouse lifts its building; a mouse drag there pans", () => {
+  const { t, a } = townOfThree();
+  const roof = t.screen({ x: (a.x + a.w / 2) * T, y: (a.y + 1) * T });
+  const pan = t.press(roof);
+  t.moveTo(pan, offset(roof, 40));
+  t.lift(pan, offset(roof, 40));
+  expect(t.log.some(([kind]) => kind === "begin")).toBe(false);
+  expect(t.reasons).toContain("pan");
+  t.time.advance(1000);
+  t.press(roof);
+  t.time.advance(TOWN_HOLD_MS + 10);
+  expect(t.log.find(([kind]) => kind === "begin")?.slice(0, 3)).toEqual([
+    "begin",
+    "building",
+    a.hostKey,
+  ]);
+});
+
+test("a building carried by its sign to another lot moves there; the others shift", async () => {
+  const { t, a, b, c, middle } = townOfThree();
+  const sign = middle(a);
+  const pointer = 900;
+  t.interaction.down({
+    id: pointer,
+    at: sign,
+    primary: true,
+    pointerType: "mouse",
+    building: a.hostKey,
+  });
+  // Dropped back on its own lot, nothing moves.
+  t.moveTo(pointer, offset(sign, 30));
+  t.moveTo(pointer, offset(sign, 34));
+  expect(last(t.ghost)?.slice(1, 3)).toEqual([
+    "Move studio: drag it to another lot",
+    false,
+  ]);
+  t.lift(pointer, offset(sign, 34));
+  expect(t.moves).toEqual([]);
+  expect(t.log).toContainEqual(["end", "cancel"]);
+  // Carried onto the last building's lot, it takes that lot.
+  t.time.advance(1000);
+  t.interaction.down({
+    id: pointer + 1,
+    at: sign,
+    primary: true,
+    pointerType: "mouse",
+    building: a.hostKey,
+  });
+  t.moveTo(pointer + 1, offset(sign, 30));
+  t.moveTo(pointer + 1, middle(c));
+  expect(last(t.ghost)?.[2]).toBe(true);
+  const aim = last(t.log.filter(([kind]) => kind === "aim"))!;
+  expect(aim[3]).toBe(a.hostKey);
+  t.lift(pointer + 1, middle(c));
+  expect(t.moves).toEqual([
+    {
+      kind: "building",
+      hostKey: a.hostKey,
+      order: [b.hostKey, c.hostKey, a.hostKey],
+    },
+  ]);
+  await Promise.resolve();
+});
+
+test("Escape puts a carried building back, and letting go then does nothing", () => {
+  const { t, a, c, middle } = townOfThree();
+  const sign = middle(a);
+  t.interaction.down({
+    id: 950,
+    at: sign,
+    primary: true,
+    pointerType: "mouse",
+    building: a.hostKey,
+  });
+  t.moveTo(950, offset(sign, 30));
+  t.moveTo(950, middle(c));
+  expect(t.interaction.cancelCarry()).toBe(true);
+  t.lift(950, middle(c));
+  expect(t.moves).toEqual([]);
+});
+
+test("a town of one building has nothing to move it to", () => {
+  const t = setup({ level: "overview", zoom: 0.3 });
+  const building = t.layout.buildings[0]!;
+  const at = t.screen({
+    x: (building.x + building.w / 2) * T,
+    y: (building.y + building.h / 2) * T,
+  });
+  t.interaction.down({
+    id: 990,
+    at,
+    primary: true,
+    pointerType: "mouse",
+    building: building.hostKey,
+  });
+  t.moveTo(990, offset(at, 60));
+  t.lift(990, offset(at, 60));
+  expect(t.log.some(([kind]) => kind === "begin")).toBe(false);
+  expect(t.moves).toEqual([]);
 });

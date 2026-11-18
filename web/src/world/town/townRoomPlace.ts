@@ -234,7 +234,7 @@ export function townRoomPlacement(
       ? townFloor(spans, width, layout.shape)
       : { w: b.w, h: b.floorH },
   );
-  const lots = townPlaceLots(floors, layout.shape).buildings;
+  const lots = townPlaceLots(floors, layout.shape, layout.perStreet).buildings;
   const rooms = new Map<
     string,
     { x: number; y: number; w: number; h: number }

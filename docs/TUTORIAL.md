@@ -224,6 +224,8 @@ Core rooms keep their own World layout; Herdr’s app layout stays separate.
   says **Group with …**.
 - **Move a room:** drag it by its name or wall. **Tidy rooms** (the sparkles
   on a building's sign) puts a building back in order, with **Undo**.
+- **Move a building:** drag it by the name on its sign; it snaps to the
+  nearest lot and the others make way.
 - **Keep a table in place:** in its agent's window, choose
   **⋯ → Pin desk in Town**.
 - **Rename or colour a tab:** click the icon beside a terminal's name for

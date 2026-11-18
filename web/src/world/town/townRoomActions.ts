@@ -5,6 +5,7 @@
 
 import type { TownMoveResult } from "./townMoves";
 import type { TownRoomPlacement } from "./townRoomPlace";
+import type { TownMoveCommand } from "./scene/townInteraction";
 
 /** A place's colour in the shared picker (ColorSwatch.tsx). */
 export type PlaceColorChoice = {
@@ -111,6 +112,26 @@ export type TownRoomActions = {
    * (TownCanvas fills this in).
    */
   onTidyRooms?(hostKey: string): void;
+  /**
+   * A building moved to another lot (dropped, or a Move before/after): save
+   * the order the buildings shown stand in, by host key. Resolves how the
+   * move ended; without it a building cannot move.
+   */
+  onPlaceBuildings?(
+    hostKey: string,
+    order: readonly string[],
+  ): Promise<TownMoveResult>;
+  /**
+   * Filled in by TownCanvas from the town it shows: the building a Move
+   * before (-1) or after (1) changes lots with, its neighbour in reading
+   * order. Null at either end, or when buildings cannot move.
+   */
+  buildingMoveNeighbor?(
+    hostKey: string,
+    step: -1 | 1,
+  ): { label: string } | null;
+  /** Change lots with that neighbour (TownCanvas fills this in). */
+  onMoveBuilding?(hostKey: string, step: -1 | 1): void;
   /** Reveal the next group of desks, or fold the room back to 24. */
   onToggleFold?(roomKey: string, nextLimit?: number): void;
   /** A desk dragged onto another desk: join its team (townTeams.ts). */
@@ -120,3 +141,32 @@ export type TownRoomActions = {
   /** An agent, or a desk's agents, dropped on the bin or a bus stop. */
   onBinDrop?(kind: "agent" | "desk", key: string): void;
 };
+
+/** Carries out a finished Town drag through the view's actions. */
+export function runTownMove(
+  actions: TownRoomActions,
+  command: TownMoveCommand,
+): Promise<TownMoveResult> {
+  switch (command.kind) {
+    case "agent":
+      return actions.onDropAgent(command.agentKey, command.deskKey);
+    case "group":
+      return actions.onGroupDesk(command.deskKey, command.targetDeskKey);
+    case "ungroup":
+      return actions.onUngroupDesk(command.deskKey);
+    case "reorder":
+      return actions.onReorderDesk(command.deskKey, command.ontoDeskKey);
+    case "desk":
+      return actions.onDropDesk(command.deskKey, command.roomKey);
+    case "room":
+      return (
+        actions.onPlaceRooms?.(command.roomKey, command.placement) ??
+        Promise.resolve("returned")
+      );
+    case "building":
+      return (
+        actions.onPlaceBuildings?.(command.hostKey, command.order) ??
+        Promise.resolve("returned")
+      );
+  }
+}

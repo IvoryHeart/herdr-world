@@ -8,9 +8,9 @@ import {
   type TownRoomPlacement,
 } from "./townRoomPlace";
 
-/** A desk, agent or room being dragged, and where it would land. */
+/** A desk, agent, room or building being dragged, and where it would land. */
 export type TownDrag = {
-  kind: "desk" | "agent" | "room";
+  kind: "desk" | "agent" | "room" | "building";
   key: string;
   hostKey: string;
   /**
@@ -59,6 +59,29 @@ export function townRoomDrag(
     hostKey: room.hostKey,
     from: room.key,
     label: `Move ${room.displayLabel}`,
+  };
+}
+
+/**
+ * A building picked up by its roof or its sign: it moves to another lot of
+ * the town. A town of one building has nowhere to move it.
+ */
+export function townBuildingDrag(
+  hostKey: string,
+  model: TownModel,
+  layout: TownLayout,
+): TownDrag | null {
+  if (
+    layout.buildings.length < 2 ||
+    !layout.buildings.some((b) => b.hostKey === hostKey)
+  )
+    return null;
+  return {
+    kind: "building",
+    key: hostKey,
+    hostKey,
+    from: hostKey,
+    label: `Move ${model.hosts.get(hostKey)?.displayLabel ?? "building"}`,
   };
 }
 
@@ -166,8 +189,9 @@ export function townDropTarget(
   /** Desks in a manual group: only these can leave one. */
   groupedDesks: ReadonlySet<string> = new Set(),
 ): TownDropTarget {
-  // A carried room is aimed by where it is, not what it is over.
-  if (drag.kind === "room") return { key: null, label: drag.label };
+  // A carried room or building is aimed by where it is, not what it is over.
+  if (drag.kind === "room" || drag.kind === "building")
+    return { key: null, label: drag.label };
   if (drag.kind === "desk") {
     const pinned = model.deskPins.has(drag.key);
     const mate = magnet ? model.desks.get(magnet) : undefined;
