@@ -1,4 +1,16 @@
-## ADDED Requirements
+# World usage
+
+## Purpose
+
+Collect private numeric harness usage, limits and context with explicit
+attribution, freshness, retention and pricing boundaries for every World view.
+
+Collection currently serves supported Herdr TUI connections, local or over SSH.
+Herdr-core usage/fuel collection remains unsupported; runtime support is recorded
+in the [support table](../../../FEATURES.md#runtime-support). The
+[usage guide](../../../docs/usage.md) owns source formats and operational limits.
+
+## Requirements
 
 ### Requirement: Numeric usage entities from host connectors
 
@@ -98,7 +110,7 @@ Tokens SHALL remain visible independently of pricing. USD cost SHALL be labelled
 
 ### Requirement: Subscription limit observations
 
-The usage read SHALL report, per qualified host, the newest subscription-limit observation each supported harness persists on that host: each window's length, percent used and reset time, and the observation time. It SHALL carry no account IDs, plan names, credit balances, credentials, prompts, paths or raw provider errors. An observation older than a few hours or past any window's reset SHALL be stale; a host with no observation SHALL be missing; a harness that persists no usable limits record SHALL be unsupported with a fixed reason. None of these SHALL be presented as zero or full.
+The usage read SHALL report, per qualified host, the newest subscription-limit observation each supported harness persists on that host: each window's length, percent used and reset time, and the observation time. It SHALL carry no account IDs, plan names, credit balances, credentials, prompts, paths or raw provider errors. An observation older than three hours or past any window's reset SHALL be stale; a host with no observation SHALL be missing; a harness that persists no usable limits record SHALL be unsupported with a fixed reason. None of these SHALL be presented as zero or full.
 
 #### Scenario: Codex reports limit windows
 - **WHEN** a Codex rollout on a host records token counts with primary and secondary rate-limit windows
@@ -120,3 +132,22 @@ The usage read SHALL report, per qualified host, the newest subscription-limit o
 - **WHEN** the newest observation passes a window's reset, grows old, cannot be refreshed, or its logs are removed
 - **THEN** it is reported stale, or missing once a successful read finds none, and Town shows stale or no gauge rather than a level
 
+
+### Requirement: Fresh uniquely attributed context fill
+
+World SHALL report a pane's newest main-thread prompt size only for the one
+session uniquely bound to it on a fresh qualified observation. Context size
+SHALL include applicable cache input and exclude output, sidechains, API errors,
+synthetic messages and future-dated records. The window SHALL come from the
+harness's report or an explicit model-name table; an unknown model or unresolved
+window SHALL remain unknown. Only numeric sizes, model names, timestamps and
+opaque digests SHALL leave the transcript host.
+
+#### Scenario: Ambiguous or stale context
+- **WHEN** a session has duplicate pane claims, its host is stale, or its runtime
+  generation retires during collection
+- **THEN** no fresh pane context entry is published and missing context is not zero
+
+#### Scenario: Unknown context window
+- **WHEN** a fresh uniquely bound session reports a prompt size without a known window
+- **THEN** the prompt size remains available without an invented window or fill percentage

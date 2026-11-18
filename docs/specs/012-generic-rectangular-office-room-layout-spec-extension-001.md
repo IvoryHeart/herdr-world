@@ -1,5 +1,7 @@
 # Generic rectangular Office room layout — responsive-ready foundation
 
+> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
+
 - **Parent spec:** [`012-generic-rectangular-office-room-layout-spec.md`](012-generic-rectangular-office-room-layout-spec.md)
 - **Spec ID:** `012-generic-rectangular-office-room-layout-extension-001`
 - **Status:** Approved

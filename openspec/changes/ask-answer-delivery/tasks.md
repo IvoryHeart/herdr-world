@@ -1,3 +1,11 @@
+## Delivery state
+
+Implementation delivered; acceptance evidence still to reconcile: task 4.2 complete affected unit/browser/platform and behavioral gates plus independent review.
+
+Delivered requirements are synchronized into [the current contract](../../specs/ask-answer-delivery/spec.md).
+No unsynchronized requirement delta remains in this record; unfinished tasks
+and acceptance above keep the change active.
+
 ## 1. Contract and interaction
 
 - [x] 1.1 Confirm the proposal incorporates #549's explicit verb wording and all five architect-protocol conditions; verify the decision record and strict OpenSpec validation.

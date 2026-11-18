@@ -169,18 +169,18 @@ No v2 subscriptions or persisted-capture fences are implemented here.
 - [ ] 7.5 Add the provider-name lint for shared code, then move harness specifics
   behind harness adapters. Verify that the lint is clean, with the composition root and
   registry exempt.
-- [ ] 7.6 Sync the `bridge-access` and `world-adapters` requirements, and add the verb
+- [x] 7.6 Sync the `bridge-access` and `world-adapters` requirements, and add the verb
   and adapter areas to `verification/coverage.json`. Verify with `bun run check:docs`.
 
 - [x] 7.6a Sync the implemented runtime-observation adapter requirements into
   `world-adapters`, document the admission boundary and add Q44 adapter conformance
-  to `verification/coverage.json`. The bridge-access/verb migration in 7.6 and
-  provider-name lint in 7.5 remain separate. The spec-required synthetic v2 crossing
+  to `verification/coverage.json`. The bridge-access/verb synchronization is delivered in 7.6b;
+  provider-name lint in 7.5 remains separate. The spec-required synthetic v2 crossing
   is a named pending test until v2 exists.
 
 - [x] 7.6b Sync the implemented browser/agent registry and conservative staged
   evidence into `bridge-access`; document the preserved policy and browser
-  confirmation gap in `docs/world-verbs.md`; add Q45/P4 and its pending independent
+  confirmation gap in `docs/world-verbs.md`; add Q46/P4 and its pending independent
   acceptance. The broader resource/assistant registration and observation-linked
   scenarios stay in the delta until those integrations ship.
 
