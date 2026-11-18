@@ -6,10 +6,11 @@
  * core connection go live, stale and back without installing core. The page
  * drops the parameter at once; the box stays until the page reloads.
  * `?coreFixture=alphabet` puts the reviewer at terminal 20 (`t1b`).
+ * `?coreFixture=first-run` also checks automatic core-only discovery in scratch state.
  */
 const PARAM = "coreFixture";
 let enabled: boolean | undefined;
-let scenario: "default" | "alphabet" = "default";
+let scenario: "default" | "alphabet" | "first-run" = "default";
 
 /** The switch, read once per page load; the parameter is removed. */
 export function coreFixtureEnabled(): boolean {
@@ -19,14 +20,15 @@ export function coreFixtureEnabled(): boolean {
   const url = new URL(location.href);
   if (!url.searchParams.has(PARAM)) return enabled;
   enabled = true;
+  const selected = url.searchParams.get(PARAM);
   scenario =
-    url.searchParams.get(PARAM) === "alphabet" ? "alphabet" : "default";
+    selected === "alphabet" || selected === "first-run" ? selected : "default";
   url.searchParams.delete(PARAM);
   history.replaceState(history.state, "", url);
   return enabled;
 }
 
-export function coreFixtureScenario(): "default" | "alphabet" {
+export function coreFixtureScenario(): "default" | "alphabet" | "first-run" {
   coreFixtureEnabled();
   return scenario;
 }

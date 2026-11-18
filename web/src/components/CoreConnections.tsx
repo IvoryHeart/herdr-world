@@ -466,7 +466,9 @@ export function CoreFixturePanel({
           <span>
             {coreFixtureScenario() === "alphabet"
               ? "Alphabet scenario: reviewer is t1b, after t19. "
-              : ""}
+              : coreFixtureScenario() === "first-run"
+                ? "First-run scenario: checks that a fresh World discovers only core and saves it as the default. "
+                : ""}
             A stand-in herdr-core inside this World service with four synthetic
             agents and a shell. Nothing is installed and no program runs. Its
             placed agents have a desktop-app pane at 96×28; the reviewer's pane
@@ -478,7 +480,14 @@ export function CoreFixturePanel({
         <button
           type="button"
           disabled={!!pending}
-          onClick={() => run("start", "Fixture core is running.")}
+          onClick={() =>
+            run(
+              "start",
+              coreFixtureScenario() === "first-run"
+                ? "Core-only first run discovered and saved core-local. Fixture core is running."
+                : "Fixture core is running.",
+            )
+          }
         >
           Start fixture core
         </button>
