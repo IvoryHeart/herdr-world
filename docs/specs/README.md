@@ -1,5 +1,7 @@
 # Historical specifications
 
+> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
+
 Current contracts live in [openspec/specs](../../openspec/specs).
 Start with the [knowledge map](../knowledge-map.md) for source ownership and historical links.
 

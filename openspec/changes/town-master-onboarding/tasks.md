@@ -1,3 +1,11 @@
+## Delivery state
+
+The greeting is delivered. Only the path, lessons, question marks, highlight and Guidebook in tasks 2.1–2.2 remain; they have no delivered requirement yet.
+
+Delivered requirements are synchronized into [the current contract](../../specs/world-surfaces/spec.md#requirement-town-master-greeting).
+No unsynchronized requirement delta remains in this record; unfinished tasks
+and acceptance above keep the change active.
+
 ## 1. Greeting (first slice of O1)
 
 - [x] 1.1 Visits, the once-per-visit rule, stepping aside for windows and sheets, and the last time here in `web/src/world/townMasterGreeting.ts`; verify with a fake clock in unit tests.

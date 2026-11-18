@@ -1,3 +1,12 @@
+## Delivery state
+
+Local slices 1 and 2 are delivered and synchronized into
+[World harness integration](../../specs/world-harness-integration/spec.md).
+Local automatic installer/update discovery and persistent removal preferences
+also ship. Only qualified SSH Settings management and the remaining SSH/Herdr
+upgrade refresh in slice 3 stay in this delta. The design below records the
+original choices; current paths and local update policy are in the current spec.
+
 ## Design choices
 
 Each item has a recommendation. The design follows these recommendations.
@@ -93,15 +102,13 @@ an explicit command, and reports its status.
 
 ### Modified Capabilities
 
-None now. When slice 2 is built, the `harness-usage` limit source text gains
-the installed tap beside the per-launch tap.
+The delivered installed Claude tap and per-launch tap are synchronized into
+[World usage](../../specs/world-usage/spec.md).
 
 ## Impact
 
-Design only. This change's PR adds no code, installs nothing and changes no
-harness configuration. When built: a self-contained installer run on the host
-(locally, or through the host's qualified OpenSSH connection), a CLI command,
-two RPC verbs mirroring `integration.list` and `integration.install`, World rows
-in the existing Agent integrations settings, an extension of `herdr-world
---skill`, and updates to `docs/usage.md`, `FEATURES.md`, `docs/TUTORIAL.md` and
-the knowledge map. Herdr's integrations and the harnesses are unchanged.
+Local CLI, skill installation, Claude limits tap and operator-only Settings/RPC
+rows are implemented. Current requirements describe their local discovery,
+configuration preservation and removal preferences. Remaining impact: extend
+management and refresh through each SSH host's qualified connection; preserve
+host isolation and do not install a previously absent remote integration.

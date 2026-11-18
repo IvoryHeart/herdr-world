@@ -35,6 +35,8 @@ One Bun service and same-origin React Web/PWA; Herdr TUI and herdr-core are exte
 
 Find the area in the [knowledge map](docs/knowledge-map.md); contracts in `openspec/specs/`; `docs/specs/` is history. Read relevant source/tests before editing. OpenSpec is for requested or new product/API decisions, not ordinary fixes; update one coherent change as direction changes.
 
+Synchronize delivered contract changes and their consumer mappings in the same change; unfinished requirements stay in active deltas.
+
 ## Work loop
 
 Install: `bun install --frozen-lockfile`; hooks: `bun run install-hooks` once per clone.

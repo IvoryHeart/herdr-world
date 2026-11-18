@@ -1,5 +1,7 @@
 # Specification authoring
 
+> Historical record, does not govern current work. See the [current contracts](../../openspec/specs/) and [knowledge map](../knowledge-map.md).
+
 The immutable numbered-spec template is retired. Use
 [OpenSpec](../../openspec/config.yaml) and the [knowledge map](../knowledge-map.md).
 
