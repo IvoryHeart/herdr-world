@@ -90,11 +90,27 @@
   background: var(--accent-soft);
 }
 
+/* The menu sits 72px above the bottom edge (corner gap + button + gap). On a
+   short phone it scrolls instead of pushing its first views off the top. */
 .world-view-picker-menu {
   position: absolute;
   left: 0;
   bottom: 60px;
   width: 210px;
+  max-height: calc(
+    100vh -
+    84px -
+    env(safe-area-inset-top, 0px) -
+    env(safe-area-inset-bottom, 0px)
+  );
+  max-height: calc(
+    100dvh -
+    84px -
+    env(safe-area-inset-top, 0px) -
+    env(safe-area-inset-bottom, 0px)
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   padding: 6px;
@@ -102,6 +118,10 @@
   border-radius: 14px;
   background: var(--panel);
   box-shadow: var(--shadow-lg);
+}
+
+.world-view-picker-menu > * {
+  flex: none;
 }
 
 .world-view-picker-menu button {
@@ -140,8 +160,6 @@
 /* Hosts opens in the menu's place, with the topbar menu's rows sized for a thumb. */
 .world-view-picker-hosts {
   width: min(320px, calc(100vw - 24px));
-  max-height: 70vh;
-  overflow: auto;
 }
 
 .world-view-picker-hosts label {

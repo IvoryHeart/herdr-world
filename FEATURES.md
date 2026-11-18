@@ -1649,6 +1649,7 @@ preview**. Chat and its draft stay open.
   included; a corner button opens the views, **Hosts**, **Find or act** and
   **Show the bars**. **Hosts** there opens the top bar's Hosts filter in the
   menu's place, with **Manage connections**, and changes the same selection.
+  On a short screen the menu scrolls, so every choice stays reachable.
   A terminal is a detail screen and keeps its own bar, with Back. Stored in
   this browser.
 
