@@ -9,6 +9,39 @@ prepared.
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-11-18
+
+### Added
+
+- Use herdr-core as World's runtime, beside or instead of the Herdr TUI: locally, over Unix or Windows SSH, or on the same Windows computer.
+- Install herdr-core from the installer, Homebrew's first launch or **Manage connections** when no runtime is present; it starts now and at login.
+- See core agents in Town, Board, Desk and Needs you, and start, chat with, answer and stop them as you do Herdr agents.
+- Open core agents in the same Inspector with Chat, Terminal, Files and Changes; watching never resizes a terminal.
+- Share the pin and seen state with Herdr's apps for core agents.
+- Open a core room's shared shell from its agent's peek.
+- Warn when a Linux core host stops its programs at logout, with the command that fixes it.
+- Give Town a time of day: rooms with work are lit, idle rooms are dark and a reception waiting on you glows amber.
+- Add sun and cloud shadows, street lamps and fireflies to Town; nothing moves under reduced motion.
+- Open every pull request from the post office in Board's Work lens.
+
+### Changed
+
+- Colour is quiet identity; status is the only loud colour, and amber marks only what needs you.
+- Town stays readable with hundreds of agents: compact receptions, slim room labels and thinner bubbles when zoomed out.
+- Town's panels, peeks and toasts share one style, and Board matches Town's night look on a dark theme.
+- On a phone, Town shows rooms three to a row.
+- Pinned agents come first in Town, Board and pickers; reorder pinned desks by dragging.
+- On a computer with only herdr-core, Town shows just the herdr-core building.
+
+### Fixed
+
+- Harness title spinners no longer refresh Chat or mark hosts stale.
+- Hidden World tabs no longer show a notification sync error after an update.
+- The Town board's gauges stay inside its border, and every junction has a bus stop drawn at street level.
+- herdr-core installs retry a dropped connection, and core hosts appear in the Hosts menu and New room.
+- Many core terminal, Chat and answer fixes from testing on real hosts.
+- Update dependencies to fix security advisories.
+
 ## [0.3.0] - 2026-11-09
 
 ### Added
