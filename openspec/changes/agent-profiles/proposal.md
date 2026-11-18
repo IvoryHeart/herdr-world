@@ -1,6 +1,6 @@
 ## Why
 
-The owner wants to configure agents (name, brain, skills, tools, a brief and a
+The user wants to configure agents (name, brain, skills, tools, a brief and a
 Town look) and launch them from World, and starting a chosen agent from World
 was broken: a new tab stayed a plain shell (#219). Herdr refused `agent.start`
 until the new shell reached its prompt, and Board gave Herdr agent names it

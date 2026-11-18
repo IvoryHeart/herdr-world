@@ -5,7 +5,9 @@ and service ownership. This file routes visual and terminal tasks to the small s
 browser owners and focused tests. Search the **symbols** below inside large files;
 line numbers and CSS ranges change as components move.
 
-## Application startup and owner questions
+<a id="application-startup-and-owner-questions"></a>
+
+## Application startup and user questions
 
 The asks read model in [worldAsks.ts](worldAsks.ts) takes an announcement callback
 installed by the notification-policy module during application initialization.

@@ -20,8 +20,8 @@ remain the source for exact scope, verification and merge state.
   observation, task summaries, the qualified watchlist, agent source-control
   context and visual-route Actions in two dependent branch stacks. All five
   merged on 25 September after their repair and integration heads passed CI,
-  the latest reviews reported no remaining findings, and the owner explicitly
-  waived the independent-review requirement.
+  the latest reviews reported no remaining findings, and the independent-review
+  requirement was explicitly waived.
 - [#109](https://github.com/IvoryHeart/herdr-world/pull/109) records usage and
   process changes. The related [#100](https://github.com/IvoryHeart/herdr-world/pull/100)
   visual action-parity PR remains open and is outside the B–F measurements.
@@ -212,8 +212,8 @@ within-deadline invalidation and pane-only identity gaps. Green full checks
 had not exercised all of these combinations. The latest reviews report these
 findings resolved, but the initial session and time figures exclude most
 repair work. The review comments came from the PR author's account; they do
-not constitute the repository's required independent approval. The owner
-explicitly waived that requirement for #104–#108 before merge.
+not constitute the repository's required independent approval. That requirement
+was explicitly waived for #104–#108 before merge.
 
 The #105 cleanup review repair gives a first measurement of that additional
 cost: 14 model responses used 2,768,108 tokens, including 2,765,061 input.

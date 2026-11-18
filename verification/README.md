@@ -8,13 +8,12 @@ An accepted source PR establishes delivery history, not a proof of every propert
 in the area. No model does not mean untested; examples do not enumerate every
 schedule. Live/platform-dependent tests retain their actual prerequisites.
 
-The repository owner accepted the spike at `5d73319b` in PR #188. The owner then
-authorized implementation in the same PR, with functional commits, bounded review
-checkpoints and a new final review. This does not carry spike acceptance forward
+PR #188 contains the spike at `5d73319b` and its implementation, with
+functional commits, bounded review checkpoints and a new final review. This does not carry spike acceptance forward
 as approval of expanded models, changed assumptions or activation of the policy.
 
 The baseline references executed CI on the accepted spike. The inventory now has a concrete model, shared-model consumer or justified
-alternative for all 43 areas; their bounded contracts and individual mappings are accepted in [review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+alternative for all 43 areas; their bounded contracts and individual mappings are accepted in [review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 [Consumer decisions](consumer-evidence.md) record the rationale and limits. Existing
 delivered product changes are not reopened solely to add a formal-model label.
 
@@ -177,7 +176,7 @@ Rerunning `bun quint/run.ts --case <model>` rebuilds excluded fault
 bundles from the tracked sources and locked tools.
 
 [Promotion decisions](promotion-review.md) record independently accepted bounds,
-mandatory consumers and excluded claims; Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+mandatory consumers and excluded claims; Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 The [observation progress assessment](contracts/observation-progress.md) separates
 controlled scheduler/deadline evidence from model reachability witnesses and states
 the required event-loop, slot-availability and transport-settlement assumptions.
@@ -229,7 +228,7 @@ The first complete constrained local run measured 1,149,575,168 bytes of aggrega
 peak memory (approximately 1.07 GiB), with zero OOM kills under the hard 4 GiB limit.
 The actual 64 MiB memory control and cancellation/descendant control also passed.
 CI repeats the full envelope and controls; future model growth must remain within
-those bounds or justify a reviewed envelope change. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+those bounds or justify a reviewed envelope change. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 
 Resource acceptance rechecks cancellation after accounting, service drain and the
 final diagnostic write. Successful child exit is not successful wrapper execution.
@@ -272,4 +271,4 @@ whole bounded graph; three seeds replay through the production browser
 (`CoreSeenSharer`) and service (`seenToShare`) rules; five model faults must
 violate safety and diverge and four production faults must be rejected by a
 valid trace. Core's missing compare-and-set (upstream Q7) is the declared
-residual. Coverage stays pending independent review and owner device step B.
+residual. Coverage stays pending independent review and real-device step B.

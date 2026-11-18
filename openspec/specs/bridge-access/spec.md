@@ -22,7 +22,7 @@ resolved target owner and retain existing preview and witness checks.
 
 The service SHALL recheck current socket/command authority and captured runtime
 currency before dispatch. Native browser forwarding SHALL recheck immediately
-before sending. The actors SHALL distinguish the owner's browser, verified and
+before sending. The actors SHALL distinguish the user's browser, verified and
 unverified agent CLI, assistant, reconcilers and automation; this registry SHALL
 NOT create an automation grant or widen internal assistant authority.
 Revocation SHALL prevent a new effect but SHALL NOT discard the outcome record
@@ -44,7 +44,7 @@ revision. Uncertain writes SHALL NOT trigger rollback.
 #### Scenario: Browser-only forge action
 - **WHEN** either CLI actor requests PR merge, close or ready
 - **THEN** World refuses it before contacting the forge
-- **AND** the owner's browser retains its existing confirmation flow
+- **AND** the user's browser retains its existing confirmation flow
 
 #### Scenario: Authorization changes before native dispatch
 - **WHEN** the browser socket loses authority or its captured runtime retires
@@ -187,7 +187,7 @@ The World service SHALL accept agent CLI calls at `/api/world/cli` only from a
 loopback peer without an Origin header, authenticated with a bearer token
 derived from the session signing secret that no other route accepts; failed
 bearer attempts SHALL receive the login cooldown, counted apart from logins so
-they never block the owner's login. The service SHALL attribute a call to the
+they never block the user's login. The service SHALL attribute a call to the
 Herdr pane it names only when the calling process, found from its connection,
 or one of its ancestors is that pane's shell or foreground process on a local
 Herdr; otherwise it SHALL label the call unverified, as a terminal with no

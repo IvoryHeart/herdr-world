@@ -3,7 +3,7 @@
 - [x] Research Herdr's integration paradigm (source, docs, `herdr integration status`) and Roamgate; adopt Herdr's shape.
 - [x] Per-harness table for all Herdr harnesses: Herdr's file, World skill file, World limits.
 - [x] Define the skill, the Claude limits tap, status, Settings, updates, the migration of #727's tap and slices.
-- [x] Owner decisions in `proposal.md` answered (owner approved PR #740 and its recommendations on 2026-11-08).
+- [x] Design choices in `proposal.md` resolved in PR #740.
 
 ## Slice 1: the World skill for every harness, local host
 

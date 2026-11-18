@@ -1,6 +1,6 @@
 # World usage projection evidence
 
-Requirement authority: issue #213 owner direction and the approved
+Requirement authority: issue #213 and the approved
 [World usage delta](../../openspec/changes/harness-usage/specs/world-usage/spec.md).
 This extends Q38's read-only numeric observation consumer; accepted runtime lease
 and verb-policy models continue to supply operation authority.

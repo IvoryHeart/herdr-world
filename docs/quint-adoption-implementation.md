@@ -1,9 +1,8 @@
 # Accepted Quint adoption implementation
 
 PR #188 remains the implementation PR built on the independently reviewed spike
-at `5d73319b`. The owner authorized repository-wide assessment and maintained
-models wherever useful ordering, ownership, authority or recovery exploration
-warrants them. Spike acceptance does not approve this expanded implementation.
+at `5d73319b`. Repository-wide assessment requires maintained models wherever useful
+ordering, ownership, authority or recovery exploration warrants them. Spike acceptance does not approve this expanded implementation.
 
 ## Delivered evidence
 
@@ -101,7 +100,7 @@ Ranger storage/recovery assumptions and controlled observation progress. The
 [promotion record](../verification/promotion-review.md) retains each mandatory
 consumer and excluded claim. Tasks 3.4, 4.3, 5.1 and 5.3 are closed on that basis.
 
-Gate integration, resource limits and subsequent cancellation repairs are independently accepted in reviews 5517392425 and 5517420140, with exact-head CI evidence and owner approval recorded below.
+Gate integration, resource limits and subsequent cancellation repairs are independently accepted in reviews 5517392425 and 5517420140, with exact-head CI evidence recorded below.
 Existing integration, browser, scheduler, persistence and platform checks remain
 required. The earlier unexplained browser timing failures remain documented in
 PR #188; no limits were weakened. Final expanded approval and merge were separately authorized; archival was subsequently authorized explicitly.
@@ -133,6 +132,6 @@ acceptance of the repaired gate remains separate.
 
 ## Accepted delivery and archive
 
-[PR #188](https://github.com/IvoryHeart/herdr-world/pull/188) merged as `481ca1e817bb1fefb7ea1e24fe4adc2a8021333e` after final independent reviews [5517392425](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517392425) and [5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140), owner approval and an explicit merge waiver. [Full CI on reviewed head `4e664ec2`](https://github.com/IvoryHeart/herdr-world/actions/runs/38557803713) passed; its eleven-model/180-command aggregate and retained failure trace were independently validated.
+[PR #188](https://github.com/IvoryHeart/herdr-world/pull/188) merged as `481ca1e817bb1fefb7ea1e24fe4adc2a8021333e` after final independent reviews [5517392425](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517392425) and [5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140) and a merge waiver. [Full CI on reviewed head `4e664ec2`](https://github.com/IvoryHeart/herdr-world/actions/runs/38557803713) passed; its eleven-model/180-command aggregate and retained failure trace were independently validated.
 
-The owner separately authorized [archival](../openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/tasks.md#accepted-completion-and-archival). All rollout tasks are complete. Spec synchronization is a no-op under the approved `skip_specs: true` marker: product capability requirements are unchanged. Earlier checkpoint/repair descriptions document the delivery history, not pending adoption work. Finite bounds, mandatory real consumer/platform tests, storage/crash and conditional-progress assumptions remain binding. Historical unexplained browser timing failures remain documented; passing subsequent runs do not diagnose their cause. Future behavioral/tooling changes require fresh applicable evidence and review.
+All rollout tasks are complete; see the [archival record](../openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/tasks.md#accepted-completion-and-archival). Spec synchronization is a no-op under the approved `skip_specs: true` marker: product capability requirements are unchanged. Earlier checkpoint/repair descriptions document the delivery history, not pending adoption work. Finite bounds, mandatory real consumer/platform tests, storage/crash and conditional-progress assumptions remain binding. Historical unexplained browser timing failures remain documented; passing subsequent runs do not diagnose their cause. Future behavioral/tooling changes require fresh applicable evidence and review.

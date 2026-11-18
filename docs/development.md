@@ -629,7 +629,7 @@ Pod, preserving reviewer and other roles. All operations in a Board patch,
 including these transfers and their attribution, save together or not at all.
 Existing revision-conditional writes remain available through `patchIf`.
 
-Lead/reviewer edits are reserved to the owner or FirstMate by **crew rule**.
+Lead/reviewer edits are reserved to the user or FirstMate by **crew rule**.
 World's trusted single-user service does not authenticate that distinction or
 prevent self-promotion. A sender name is attribution, not authorization. An
 optional sender claim is `{label, basis: "reported" | "inferred", via?}`; missing
@@ -688,7 +688,7 @@ uniquely; explicit addresses preserve away Pod members. Teams require a current
 terminal on their connection. Promotion preserves identity and requires an
 explicit complete terminal-to-address mapping. An exclusive-role transfer needs
 `--replace --yes`; deleting needs `--yes` and never deletes agents.
-Lead/reviewer edits follow the owner/FirstMate crew rule across every verb.
+Lead/reviewer edits follow the user/FirstMate crew rule across every verb.
 There is no caller identity allowlist or authenticated role gate. The actual
 CLI actor supplies the reported/inferred sender claim, or unknown when absent.
 Group changes use bounded `relations.group_changes`, outside Board CLI undo.
@@ -782,12 +782,12 @@ service (`server/src/http/world-cli-endpoint.ts`): loopback only, no browser
 Origin, and a bearer token derived from the session signing secret
 (`worldCliToken`), so it rotates with the login credential and cannot log a
 browser in. Wrong tokens get the login throttle, counted apart from logins so
-they never lock the owner out. One call holds at most 20 s for `ask --wait`.
+they never lock the user out. One call holds at most 20 s for `ask --wait`.
 World's pages fetch only the open questions (`world.asks.get`), and only when
 a ledger notice says a question changed. `ask --key CAUSE` deduplicates a cause
 for the verified asking occupant, even after an answer; `ask withdraw ID`
 closes that cause and allows recurrence. Only the verified original connection,
-runtime, terminal and session may withdraw it. The owner may dismiss any open
+runtime, terminal and session may withdraw it. The user may dismiss any open
 question in World (`world.ask.dismiss`): it closes without an answer, and a
 keyed repeat returns it, as it returns an answered one, until the asker
 withdraws. A waiting CLI returns on answer, dismissal or withdrawal. Closed

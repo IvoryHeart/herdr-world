@@ -74,7 +74,7 @@ These checks supplement, rather than replace, the real macOS launchd lifecycle,
 installer fault/rollback tests, release archive checks and npm/Homebrew package tests.
 They do not claim every historical upgrade, real Herdr plugin registration, OS service
 upgrade/reboot, npm/Homebrew channel upgrade or manual browser interaction. Test the
-published RC on the owner's existing installation before promoting a stable release.
+published RC on an existing installation before promoting a stable release.
 
 ## Linux systemd installation gate
 
@@ -101,7 +101,7 @@ This adds real checksum-verified runtime downloads, a real systemd user manager,
 core login startup after reboot, core-only defaults/topology, TUI preservation,
 RPC install/start and latest-stable World upgrade preservation. Network or runtime
 release failures are failures, not skipped acceptance. macOS and Windows remain
-outside this suite; the owner still checks real macOS installation by hand.
+outside this suite; before release, check real macOS installation by hand.
 
 ## Pre-merge platform previews
 

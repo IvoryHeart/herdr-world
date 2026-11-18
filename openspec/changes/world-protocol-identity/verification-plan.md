@@ -255,7 +255,7 @@ required in the canonical gate, alongside the opaque-replay model control.
 
 ## Coverage re-mapping
 
-The owner approves the stage 7 re-mapping, as committee stage 7 requires. Stage 3
+The stage 7 re-mapping requires review, as committee stage 7 specifies. Stage 3
 changes are additive.
 
 | Area | Today | Stage 3 (v1) | Stage 7 (v2) |
@@ -271,7 +271,7 @@ changes are additive.
 | Q32 File search and drafts | `browser-preparation`, `runtime-leases` | unchanged | M2 |
 | Q04 Herdr subscriptions | `runtime-leases`, `runtime-drain` | adds direct tests for today's baseline: reads before the ACK; a reconcile after every ACK; dirty reads published and then re-read; loss invalidating without retirement; payloads never applied | unchanged |
 | Q10, Q11 Aggregate observation and scheduling | direct scheduler tests | adds direct tests: token stability and the confirmation rule | adds P2's delivery-path equivalence |
-| Q24 Desk receipts and marks | direct tests | unchanged | unchanged, unless the owner approves durable marks |
+| Q24 Desk receipts and marks | direct tests | unchanged | unchanged, unless durable marks are specified |
 
 **New areas**, added by the PR that implements each one:
 

@@ -219,8 +219,7 @@ Several claims SHALL coexist for one field.
 
 Each kind of World record SHALL declare what happens when its binding ends: archive,
 clear, keep unresolved, or move to "Needs a home". Durable identity alone SHALL NOT
-extend a record's lifetime. The owner-approved terminal-mark persistence changes
-Desk marks/recent opens and watchlist to the following lifetimes:
+extend a record's lifetime. Desk marks/recent opens and the watchlist have these lifetimes:
 
 - Watchlist follows its witnessed terminal on its original source, including a
   uniquely observed terminal move. Complete current absence clears it.

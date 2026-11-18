@@ -42,7 +42,7 @@ assets required by server typechecks and process tests.
 | Completed candidate | Stage intended files, run `bun run format:staged` once, restage and inspect the diff. The command rejects staged files with unstaged edits; docs-only candidates are a safe no-op. |
 | Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus affected non-browser unit tests. Browser suites and behavioral verification run in CI, where required `Delivery checks` blocks merges. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`; a push that only merges `origin/main` runs `bun run check:static`. CI runs the applicable gate on the PR head; every main push runs the full matrix. |
 | Full local gate | `bun run check:delivery` runs every check, in parallel lanes; `HERDR_WORLD_PREPUSH=full git push` makes the hook run it. |
-| Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); disk management belongs to the owner and never blocks a check. |
+| Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); manage disk capacity separately; it never blocks a check. |
 
 Tests launched with `bun run test`, the local gates and CI receive a fresh
 HOME, XDG config/cache/data/state/runtime directories and World data directory
@@ -295,7 +295,7 @@ when a change touches verification inputs or a contract owner, and leaves the
 rest to CI; `bun run check:delivery` runs everything locally. Linux CI additionally enforces the aggregate resource envelope described
 in [behavioral evidence](verification/README.md#candidate-commands-and-promotion).
 Independent acceptance is recorded in [promotion decisions](verification/promotion-review.md);
-Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 
 For an unmodeled critical change, record and execute the proposed model or justified
 alternative before review. For a mechanical change, explain why contracts and
@@ -390,7 +390,7 @@ to regenerate `site/assets/herdr-world-film-poster.jpg`, the video poster and so
 card. `film/?t=<seconds>` opens the live film at a frame, and `?render` drops the page
 chrome for 1920×1080 captures.
 
-`YOUTUBE_ID` in `site/film/index.html` is empty. If the owner uploads the film, setting
+`YOUTUBE_ID` in `site/film/index.html` is empty. After uploading the film, setting
 it replaces the video with a click-to-load YouTube facade: no request reaches
 `youtube-nocookie.com` until the viewer clicks, and the page's Content Security Policy
 allows only that frame origin.

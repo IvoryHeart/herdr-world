@@ -29,11 +29,11 @@ rule for every primitive.
 | --------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | Coordinate through state, not messages  | Earlier `herdr agent prompt` relays were chatty; the watcher reads GitHub state instead   | Workflows read and write shared state; agents don't message by default    |
 | Done is a result, not an exit           | An old watcher killed a reviewer that had already posted; the fix counts the posted RESULT | Every skill declares a result contract; a run is done when it exists      |
-| Observability and control               | Headless runs vanished while the owner read them; interactive panes fixed it               | Every run is visible, can be talked to and can be reopened                |
+| Observability and control               | Headless runs vanished while the user read them; interactive panes fixed it               | Every run is visible, can be talked to and can be reopened                |
 | Lifecycle follows the work item         | A PR's round tabs close when it merges or closes                                           | A pod lives exactly as long as its work item                              |
 | Fresh context, deliberately             | Each round starts new reviewers on the current head                                        | A workflow declares what context each role starts with                    |
 | Act once                                | Keyed, recorded actions survived dozens of watcher restarts                                | Every action has a stable key; a restart never acts twice                 |
-| Escalate, don't kill                    | Overdue runs and stuck checks become notices                                               | Loops carry watchdogs and budgets, and their last step is the owner       |
+| Escalate, don't kill                    | Overdue runs and stuck checks become notices                                               | Loops carry watchdogs and budgets, and their last step is the user       |
 | Actions have side effects               | A PR-body edit started a CI run; a job rerun cancelled another run                         | Actions declare what they touch                                           |
 | Side effects behind one seam            | `Deps` let the crew tests run passes without Herdr or GitHub                               | The runtime reaches Herdr, harnesses and forges through adapters          |
 
@@ -90,7 +90,7 @@ runtime when those definitions meet a real work item.
 | Pod            | One workflow running for one work item, with its rounds, runs and tabs                             | Round tabs `#443 … · rN`        |
 | Role binding   | Which persona fills which role at this place                                                       | Roster, authors and leads       |
 | Run            | One persona using one skill for one action: visible, reopenable, with a session, result and cost   | The crew store's run rows       |
-| Notice         | Something the owner must see, delivered to reception                                               | READY and NEEDS-OWNER           |
+| Notice         | Something the user must see, delivered to reception                                               | READY and NEEDS-OWNER           |
 | Usage record   | Tokens, cost, context size, time and outcome for one run, tagged with its place                    | Per-run tokens from session files |
 
 Skills and workflows both carry scripts but stay separate: a skill is one agent
@@ -127,9 +127,9 @@ variant: World keeps no per-model variants.
 ## Agents as authors
 
 An agent may author primitives in its own realm and below; anything wider, or
-any widened budget or permission, needs the owner's approval.
+any widened budget or permission, needs the user's approval.
 
-| Author          | Realm    | Authors directly                                                  | Needs owner approval                   |
+| Author          | Realm    | Authors directly                                                  | Needs user approval                   |
 | --------------- | -------- | ----------------------------------------------------------------- | -------------------------------------- |
 | Owner           | World    | Anything                                                          | Nothing                                |
 | Town master     | Town     | Goals and loops for rooms, role bindings                          | New workflows or templates, wider budgets |
@@ -177,7 +177,7 @@ A limit set at a level is a ceiling for every level below; a locked skill,
 persona or workflow cannot be replaced below the level that locked it. Policies
 cover budgets (tokens, cost, runs at once, time), allowed models and harnesses,
 the permission ceiling and never-prompt seats, which providers may be written
-to, and what needs the owner's approval.
+to, and what needs the user's approval.
 
 | Precedent                                                                                                                       | Rule                                                                         | Taken                                       |
 | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
@@ -211,7 +211,7 @@ World launches every agent, so it can tag the place through
 harness cannot be tagged, World joins usage by session ID. World never depends
 on OTel alone: session files are the baseline source. Seat and session IDs stay
 on events, not metric labels. Totals add up from agent to table, pod, room,
-building and World; a level over budget notifies the owner and nothing is
+building and World; a level over budget notifies the user and nothing is
 killed.
 
 Fat versus thin agents is measured, not assumed. The evidence favours thin by
@@ -238,7 +238,7 @@ here's how" when a prerequisite is missing.
 | Metrics       | Usage and cost                          | OTel and OTLP, Prometheus, FOCUS for export                                                                                                    | A Prometheus provider                    |
 | Memory        | What persists between sessions          | No standard; a `/memories` folder of files, as in [Anthropic's memory tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool) | Each harness's own memory                |
 | Board         | Shared state agents coordinate through  | Forge issues and PRs, with [MCP Tasks](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/tasks) and [A2A](https://a2a-protocol.org/latest/topics/life-of-a-task/) status words | The PR and its RESULT lines              |
-| Notifications | Letters to the owner                    | None; internal                                                                                                                                 | Herdr notifications and crew notices     |
+| Notifications | Letters to the user                    | None; internal                                                                                                                                 | Herdr notifications and crew notices     |
 
 To keep this from growing complex: add a seam only when a second real provider
 needs it; workflows ask seams (`work_item.checks`), never providers; adapters
@@ -270,7 +270,7 @@ One reconcile cycle runs every workflow:
 
 1. The loop ticks (every 300 s in the pilot) under its watchdog and budgets.
 2. The workflow reads the work item's state and checks the goal.
-3. It plans keyed actions: prompt the author, start reviewer runs, notify the owner.
+3. It plans keyed actions: prompt the author, start reviewer runs, notify the user.
 4. Runs, each a persona using a skill in a visible seat, post their results to
    the work item.
 5. Notices reach reception; the next tick starts again from current state.
@@ -295,7 +295,7 @@ loop:
   host: world
   every: 300s
   stall: 30m # a check running longer goes to the author
-  run_timeout: 90m # an overdue run goes to the owner, not killed
+  run_timeout: 90m # an overdue run goes to the user, not killed
 budgets: { runs_at_once: 3, reruns: 1 }
 touches: [github.pr.comments, github.actions.rerun, herdr.tabs]
 pod:

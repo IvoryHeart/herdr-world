@@ -51,7 +51,7 @@ are not counted. The original source is restored after each control run.
 Allowed: reattachment after World restarts when the original evidence is still
 present; World-witnessed moves; appearance following a unique terminal in a
 complete listing; Board strings remaining unresolved after outside moves; only
-kind-declared absence ending a binding; explicit owner decisions; weak empty
+kind-declared absence ending a binding; explicit user decisions; weak empty
 workspace/tab anchors remaining non-sendable; native-key layout inheritance.
 Forbidden: guessing by labels/cwd/agent kind, attaching reused IDs without their
 witness, attaching or ending from ambiguous observations, changing saved identity

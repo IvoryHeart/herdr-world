@@ -13,7 +13,7 @@ recovery class. Each verb SHALL declare:
 - a recovery class.
 
 The actors SHALL be:
-- the owner's browser;
+- The user's browser;
 - the agent CLI with a verified pane;
 - the agent CLI unverified;
 - the assistant;
@@ -23,7 +23,7 @@ The actors SHALL be:
 Each policy SHALL be one of:
 - **allow**;
 - **acknowledge:** the caller passes an explicit flag that names the effect;
-- **confirm:** a fresh confirmation by the owner in a browser;
+- **confirm:** a fresh confirmation by the user in a browser;
 - **deny**.
 
 The recovery class SHALL be one of:
@@ -47,7 +47,7 @@ Admission and checks:
 #### Scenario: An agent asks to merge a pull request
 - **WHEN** the agent CLI, verified or not, requests a pull request merge, close or ready
 - **THEN** the service refuses it before contacting the forge, and the same verb from
-  the owner's browser runs only after the owner's confirmation
+  the user's browser runs only after the user's confirmation
 
 #### Scenario: A layout change without its flag
 - **WHEN** the agent CLI requests a desk move without `--herdr`
@@ -59,7 +59,7 @@ Admission and checks:
 - **THEN** the service refuses it without forwarding it to Herdr or any adapter
 
 #### Scenario: Authorization changes before dispatch
-- **WHEN** the owner revokes a grant after a verb was accepted but before it was
+- **WHEN** the user revokes a grant after a verb was accepted but before it was
   dispatched
 - **THEN** the verb is not dispatched and the refusal names the revoked authorization
 
@@ -69,7 +69,7 @@ Admission and checks:
   - the CLI's `--herdr` flag for Herdr layout changes stays an acknowledgement;
   - `--replace --yes` for exclusive role transfers and `--yes` for one-time imports
     stay acknowledgements;
-  - pull request merge, close and ready keep the owner's browser confirmation;
+  - pull request merge, close and ready keep the user's browser confirmation;
   - merges and deletions from the CLI stay refused
 
 ### Requirement: Staged command evidence

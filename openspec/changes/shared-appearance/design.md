@@ -1,6 +1,6 @@
 ## Context
 
-See proposal.md for motivation and the owner's tab-only scope decision.
+See proposal.md for motivation and the tab-only scope.
 World already persists colour in the shared Board document. Its revision/event
 stream is consumed across browsers, while native tab names remain Herdr-owned.
 Existing colours have no terminal continuity witness. Agent profiles already

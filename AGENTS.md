@@ -7,16 +7,16 @@ invent abstractions or process without a concrete need.
 ## Delivery workflow
 
 - Never commit or push directly to `main`. Work on a branch. For PR delivery,
-  stop after opening a ready pull request unless the repository owner explicitly
-  asks you to merge it. A local-only handoff does not require a PR.
-- Pull requests require independent review unless the owner explicitly waives it.
+  stop after opening a ready pull request unless a maintainer explicitly asks you to merge it.
+  A local-only handoff does not require a PR.
+- Pull requests require independent review unless a maintainer explicitly waives it.
 - Put worktrees below the primary checkout's `.agents/worktrees/` directory. Create
   one with `bun run agent:worktree -- create <slug> <parent-ref>` after resolving the
   requested parent branch.
 - Treat existing changes as the user's work. Preserve unrelated edits and never move
   or clean another agent's worktree.
 - Specifications are decision aids, not a gate for ordinary fixes. Use an OpenSpec
-  change when the owner asks for one or when a genuinely new product/API contract
+  change when requested or when a genuinely new product/API contract
   needs a decision. Update one coherent change when direction changes rather than
   creating a document per implementation tranche.
 
@@ -60,7 +60,7 @@ changes; focused `--case` checks do not replace it. Bounded contracts and consum
 mappings have independent promotion acceptance. Pre-push runs `check:changed`
 (the full verification gate when verification inputs or contract owners change);
 behavioral verification is a required protected `Delivery checks` dependency.
-Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 See `verification/README.md` and CONTRIBUTING.md for current boundaries.
 
 ## Product shape

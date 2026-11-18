@@ -142,17 +142,10 @@
           </div>
           <h2>Run a crew of agents. <span>Know who needs you next.</span></h2>
           <p class="hero-lede">
-            <a
-              href="https://herdr.dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              >Herdr</a
-            >
-            keeps your coding agents alive in real terminals. Herdr.World puts
-            every local and SSH host into one shared view: a town where working
-            agents sit at their desks and show what they are doing, while
-            questions and finished work wait at reception. Every agent is one
-            click from its chat, terminal, files and changes.
+            The Herdr TUI and herdr-core keep your coding agents in real
+            terminals. World brings local and SSH hosts into one shared view:
+            a Town with agents at desks and questions and finished work at reception.
+            Open an agent for Chat, Terminal, Files and Changes.
           </p>
           <div class="hero-actions">
             <a class="button button-primary" href="#install">
@@ -178,14 +171,9 @@
             <span>PWA</span>
           </div>
           <p class="hero-requirement">
-            Requires a running
-            <a
-              href="https://herdr.dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              >Herdr</a
-            >
-            server.
+            Works with the Herdr TUI, herdr-core, or both. Core is primary when
+            connected. See the
+            <a href="https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md#runtime-support">runtime support table</a>.
           </p>
         </div>
 
@@ -659,7 +647,7 @@
               Choose one installer, then run <code>herdr-world</code> and open the
               URL it prints. Homebrew covers macOS and Linux; npm also covers
               Windows with Node.js 22.14+. The standalone script works on macOS
-              and Linux, keeps the Herdr or herdr-core you have, and installs and
+              and Linux, keeps the Herdr TUI or herdr-core you have, and installs and
               starts herdr-core when neither is there; set
               <code>HERDR_WORLD_SKIP_HERDR=1</code> to skip this. Homebrew does the
               same on first launch. With npm, run
@@ -748,8 +736,8 @@
             <h2>Running in three steps.</h2>
           </div>
           <p>
-            Herdr.World connects your browser to the Herdr runtime you already use.
-            Your agents still live in real terminal sessions owned by Herdr.
+            World connects your browser to the Herdr TUI or herdr-core.
+            Your agents stay in their terminal sessions when you close the browser.
           </p>
         </div>
 

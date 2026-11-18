@@ -279,7 +279,7 @@ A model should not be derived solely from current code, because that can formali
 an implementation bug as the intended behavior.
 
 Our repository already scopes its practices: OpenSpec is required for a genuinely
-new product/API contract or an owner-requested change, while ordinary fixes need
+new product/API contract or a maintainer-requested change, while ordinary fixes need
 not create a proposal. Tests should address cohesive behavior rather than mirror
 every statement. Applying Quint across the board can follow the same principle:
 every relevant change is assessed, and meaningful behavior receives appropriate
@@ -336,7 +336,7 @@ contracts in this branch:
    they check the code. Model generation by an agent does not waive that review.
 
 This policy makes Quint systematic across the repository while keeping the artifact
-and checking strategy appropriate to each behavior. If the owner wants a stricter
+and checking strategy appropriate to each behavior. If the user wants a stricter
 rule requiring Quint for every behavior change, that is also a possible policy.
 Before enforcing it, establish how sequential validation, parsing, rendering and
 external-system integration will be represented and what extra claim each model

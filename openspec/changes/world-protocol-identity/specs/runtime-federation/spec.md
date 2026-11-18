@@ -123,7 +123,7 @@ Preparation rules:
   and relations, and switching to Board prepares Board topology before Board is presented
 
 #### Scenario: A profile's Town look is edited
-- **WHEN** the owner edits a profile's look and no observation changes
+- **WHEN** the user edits a profile's look and no observation changes
 - **THEN** every room showing an agent with that profile is prepared again with the new
   look, and no other room is prepared
 

@@ -111,7 +111,7 @@ that root; stat metadata cannot redirect the read to a different transcript.
 - Adds the shared pull request card below an agent message that announces a
   known PR with **READY** or **opened**, or names a PR on its current work
   claim. An ambiguous bare number gets no card. **Details** shows current CI,
-  reviews and the owner's actions. When this conversation owns the claim,
+  reviews and your actions. When this conversation owns the claim,
   **Ask the author to fix** sends a `↳ #N` message through Chat; it keeps any
   unsent draft. A retired host, runtime or agent session cannot supply a claim.
 - Shows what is happening now. The Now bar shows Herdr's status as a 14px
@@ -246,8 +246,8 @@ that root; stat metadata cannot redirect the read to a different transcript.
   ([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)), so
   neither a selection key nor subsequent text can be made conditional on the prompt. If the prompt or session
   changes in the instant between the last check and the key, the key reaches
-  the new prompt. The card says so under its options. The owner accepted this
-  risk until Herdr can close it; it is tracked as a known issue in
+  the new prompt. The card says so under its options. This
+  risk remains until Herdr can close it; track it in
   [#284](https://github.com/IvoryHeart/herdr-world/issues/284). Closing the
   gap needs an input Herdr applies only while the prompt is unchanged.
 - Chat replaces the card with what it sent. "You answered 2 · …" needs

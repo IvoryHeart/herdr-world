@@ -5,8 +5,8 @@ Every client also acquires its own data. World-owned records have no durable ide
 so annotations keyed by Herdr runtime IDs go stale when Herdr restarts. Planned work
 (shared acquisition, `world.sqlite`, the workflow substrate, adapters) needs agreed
 contracts before it is built. The architecture committee (2026-10-30, item 6) asked for
-this design. The owner approved the plan with two corrections: Herdr is the only runtime,
-and the workflow authoring model stays undecided.
+this design. The workflow authoring model remains undecided. Runtime support follows the
+[current runtime contract](../../specs/herdr-core-runtime/spec.md).
 
 ## What Changes
 
@@ -50,7 +50,7 @@ and the workflow authoring model stays undecided.
   - Desk marks, the watchlist and "seen" can later persist against these bindings.
 - **Verbs with actor policy.** One static registry of typed verbs with required
   capabilities and a policy per actor: allow, acknowledge (the caller's explicit flag),
-  confirm (the owner, in a browser) or deny. Each verb also has preconditions, a
+  confirm (the user, in a browser) or deny. Each verb also has preconditions, a
   recovery class and staged result evidence. Migration keeps today's policy exactly.
 - **Adapters.** Descriptors (capabilities, kinds, verbs, configuration, limits), a static
   in-repo registry, and a shared conformance suite run against a synthetic test source
@@ -64,7 +64,7 @@ and the workflow authoring model stays undecided.
   - intents and effects through a transactional outbox;
   - fenced attempts;
   - the recovery matrix, including a `repeatable` class for harmless duplicates such as
-    owner alerts;
+    user alerts;
   - operation-version pinning;
   - the rule for intents made before bindings exist;
   - clock and scheduler ports.
@@ -117,7 +117,7 @@ No new dependency is required:
 - Property tests use seeded generators. Adding `fast-check` would be a separate
   dependency decision.
 
-## Decisions already made by the owner
+## Design decisions
 
 - Proceed with the architecture committee's plan (its 2026-10-30 report), adjusted:
   - Herdr is the only runtime. Where the plan names a second, non-Herdr source, a
@@ -126,7 +126,7 @@ No new dependency is required:
 - Per-terminal settings (profile assignment, Town master) live in Herdr pane metadata.
 - Look and feel stay identical; features are not cut.
 
-## Defaults chosen here (the owner may override any)
+## Defaults
 
 1. **v1 is a based pull, not a push.** `world_invalidated` stays the trigger, so Q14's
    one-in-flight refresh model survives v1 unchanged in shape. v1 is negotiated through
@@ -138,16 +138,16 @@ No new dependency is required:
    previous process.
 4. **World IDs are short and store-issued:** a kind prefix and 8 random base32
    characters, checked against existing IDs. They are never UUIDs or source IDs,
-   following the owner's identity direction. Counters are not used, because restoring a
-   backup would issue them again. A global name, when needed, uses the owner's agent URI
+   following the identity contract. Counters are not used, because restoring a
+   backup would issue them again. A global name, when needed, uses the agent URI
    scheme.
 5. **Lifetimes don't change.** The watchlist, Desk marks and completion "seen" keep their
-   current lifetimes until the owner approves persisting them.
+   current lifetimes until persistence is specified.
 6. **Change history retention:** observation changes live in a bounded memory ring.
    World-owned change rows are kept for at most 24 hours and at most 10,000 revisions,
    whichever limit is reached first. Pending domain state is kept until it is resolved,
    whatever its age.
-7. **Offline intents are state-conditioned, never time-expired** (owner, 2026-10-21).
+7. **Offline intents are state-conditioned, never time-expired** (requirement dated 2026-10-21).
    Only verbs that declare themselves queueable can be queued. Generic terminal input
    and Chat sends never are, so there is no second send queue.
 
@@ -177,12 +177,12 @@ No new dependency is required:
     - **Consumer evidence:** the consumer inventory mapped to queries, plus the
       substrate's ask, notice, intent and receipt queries;
     - **Synthetic source:** a conformance run that crosses a v2 subscription;
-    - **Verification:** passing resume and composition checks, and the owner-approved
+    - **Verification:** passing resume and composition checks, and the accepted
       Q12–Q14 re-mapping.
 12. **Event payloads are not applied.** Herdr events only invalidate. Patching from
     payloads is an open question to revisit with measurements.
 
-## Owner questions
+## User questions
 
 None blocking. Each item above has a default. One optional decision is not needed for
 any stage: should Board strings follow pane moves made outside World, for example in

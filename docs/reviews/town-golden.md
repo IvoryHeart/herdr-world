@@ -128,7 +128,7 @@ wide and portrait viewports. The restored child exited 0 with zero differences
 at every viewport. Source SHA-256 and all reference PNG hashes were unchanged.
 The batched mutant/restored check took 9.03 seconds.
 
-The owner's smaller acceptance control supersedes that broad recolour: the
+The smaller acceptance control supersedes that broad recolour: the
 current procedure changes only the production zoom control's right offset from
 16px to 17px at DPR 1 and 100% UI scale. Its mutation patch and structured
 one-pixel delta are retained with the CI mutant/restored reports.

@@ -1,24 +1,29 @@
 # Packaging
 
-Release archives contain one compiled `herdr-world` executable with embedded web
-assets plus version, lineage and licence material. They do not contain Herdr, a second
-Roamgate application or the retired Rust bridge. Instead the executable pins one
-verified Herdr release (`server/src/herdr/release.ts`: version, per-platform package
-checksums and the checksum of Herdr's Windows `install.ps1`). When neither herdr-core
-nor Herdr is installed, the standalone installer and each Homebrew launch install
-herdr-core with its official checksum-verified steps (`scripts/herdr-core-install.sh`,
-embedded in both) and start it now and at login; an installed runtime is kept. Replacing an
-existing World executable uses the CLI update finalization to upgrade Herdr and
-its integrations, then restart the matching running managed World service. The
-Herdr opt-out still permits the World restart. Every standalone installer run and
-World update separately discovers configured harnesses and refreshes World's own
-skills and Claude limits tap through `integration sync`, using the new executable
-after replacement. `HERDR_WORLD_SKIP_INTEGRATIONS=1` skips this step independently
-of the Herdr opt-out; explicit integration removals stay removed. The Homebrew Formula has no mandatory Herdr formula
-dependency and never exports a second Herdr executable. Its launcher reuses an
-existing Herdr, or installs the verified prebuilt release on first normal startup
-when missing, outside the keg. This avoids source builds on Intel Macs. See
-[Herdr installation and upgrades](DEPLOYMENT.md#herdr-installation-and-upgrades).
+Release archives contain one compiled `herdr-world` executable, embedded web
+assets, version, lineage and licence material. Runtimes are separate. See the
+[runtime support table](../FEATURES.md#runtime-support).
+
+The executable pins a verified **Herdr TUI** release and its platform/Windows
+installer checksums in `server/src/herdr/release.ts`. Fresh standalone installs
+and Homebrew's first normal launch keep either installed runtime. With neither,
+they install **herdr-core** using its checksum-verified official steps
+(`scripts/herdr-core-install.sh` and its Windows PowerShell twin), start it now
+and at login, and save its connection. Homebrew has no mandatory Herdr formula
+dependency and installs core outside its keg, without an Intel source build.
+
+Standalone replacements and World updates refresh the TUI and its integrations,
+then restart the matching managed World service. Installed core is left unchanged;
+upgrade it with core's own tools. `HERDR_WORLD_SKIP_HERDR=1` skips runtime changes
+while allowing World's restart. World's harness skills and Claude limits tap
+refresh separately; `HERDR_WORLD_SKIP_INTEGRATIONS=1` skips those. Explicitly
+removed World integrations stay removed. See
+[setup and upgrades](DEPLOYMENT.md#herdr-installation-and-upgrades).
+
+`bun run test:install-linux` verifies real runtime downloads, systemd login/reboot
+startup, core-only connections, TUI preservation and stable World upgrades in
+disposable containers. The [runbook](development.md#linux-installation-acceptance)
+and [release gate](release.md#linux-systemd-installation-gate) define acceptance.
 
 The executable also embeds the SQLite writer worker. Every compile target lists
 `server/src/storage/world-worker.ts` as an additional entry point; no adjacent

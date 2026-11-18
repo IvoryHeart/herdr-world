@@ -21,6 +21,6 @@ Watch overrides Group Focus and Default restores inheritance. Additional
 320/360/430-pixel phone cases exercise the same behavior.
 
 These are Groups consumer proofs. New Town/Board spatial frames and gestures
-remain held for owner/design decisions in issue #356; these images do not claim
+remain held for design decisions in issue #356; these images do not claim
 that interaction is delivered. External Herdr behavior and the full protected CI
 matrix retain their separate acceptance boundaries.

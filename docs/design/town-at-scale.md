@@ -1,6 +1,6 @@
 # Town at scale
 
-Town is judged at the owner's maximum scale: 3 hosts, 8 rooms per host, 11–15
+Town is judged at the target maximum scale: 3 hosts, 8 rooms per host, 11–15
 desks per room and several panes per desk. This report records how that scale
 looks and reads at each zoom on a laptop and a phone, how long it takes to find
 who needs you and where, and the frame time while panning. It ends with a ranked
@@ -244,5 +244,5 @@ Ranked by legibility gained per line changed:
    software rendering. Measure on an integrated GPU first.
 10. **Proposal (layout):** let the laptop home view use the empty lower third,
     for example by fitting the height when the buildings fit the width with room
-    to spare. This does not change the owner's layout rules (reception at the
+    to spare. This does not change the layout rules (reception at the
     top, the bar at the bottom, roads).

@@ -79,7 +79,7 @@ as unresolved and keep delivery pending until it can be checked. An outage alone
 cannot establish that the session changed. A confirmed ended/changed or never-
 verified binding records not sent, leaving the answer available through `ask get`.
 
-When the owner or an authorized other agent answers, one transaction commits:
+When the user or an authorized other agent answers, one transaction commits:
 
 1. The immutable answer and its occurrence/revision.
 2. One `world.ask.deliver-answer` outbox entry keyed by kind and ask ID, carrying the captured
@@ -155,7 +155,7 @@ time on wake, including after sleep.
 
 ### Coordinate with `ask get` and `--wait`
 
-Only the original verified asker can settle delivery by reading; an owner's
+Only the original verified asker can settle delivery by reading; a user's
 inspection or another agent's `ask get` must not cancel the asker's notification.
 Match the captured occupant/session, not merely the pane or connection ID.
 
@@ -178,7 +178,9 @@ delivery claim is made across these two paths. Lost acknowledgements and races
 are explicit test cases. `ask get` always remains available, including after an
 uncertain send, closed delivery, or a failed acknowledgement request.
 
-### Visible uncertainty and owner decisions
+<a id="visible-uncertainty-and-owner-decisions"></a>
+
+### Visible uncertainty and user decisions
 
 Answered asks leave the open-question list, so `world.asks.get` alone cannot
 expose delivery recovery. Add a bounded delivery-notice query/subscription for
@@ -187,7 +189,7 @@ count is separate from unanswered questions. Do not resurrect a question or
 change Town/Desk attention counts just to display a delivery problem.
 
 Reception must expose the question, answer, captured recipient, latest evidence
-and two explicit owner decisions: **Resend** and **Close delivery**. Opus owns
+and two explicit user decisions: **Resend** and **Close delivery**. Opus owns
 their final placement and interaction design within the existing Reception look.
 `ask get ID --json` also returns the delivery state/reason. No text or session
 identifier is copied into browser storage solely for delivery recovery.
@@ -195,7 +197,7 @@ identifier is copied into browser storage solely for delivery recovery.
 Resend confirms possible duplication, keeps the same outbox row and immutable
 recipient, increments the attempt and revalidates current authority and identity
 before sending. It cannot silently authorize a replacement agent. Close delivery
-records cancellation without removing the answer. Only the owner may make these
+records cancellation without removing the answer. Only the user may make these
 decisions; an old browser response or a stale attempt cannot override them.
 Recovery controls are delivery operations, not a workflow authoring model.
 
@@ -212,7 +214,7 @@ dispatcher and Chat adapter, plus real temporary SQLite/source/compiled tests.
 | Identity | Unverified, missing, guessed or wrong-scheme fingerprints never send; replacement/reused pane and restart generation collisions never retarget |
 | Existing Chat policy | Blocked/unsettled/unsupported hosts remain unsent; command-like answer text stays plain text |
 | Crash windows | Before/after claim, after submission, and before/after receipt commit; uncertain attempts never replay automatically |
-| Owner recovery | Explicit resend rechecks original recipient; close preserves answer; stale decisions/receipts cannot finish another attempt |
+| User recovery | Explicit resend rechecks original recipient; close preserves answer; stale decisions/receipts cannot finish another attempt |
 | Lifecycle | Close cancels scheduled wakes, drains started dispatch before connections/storage stop; reopen preserves unresolved evidence |
 | UI | Answered uncertain delivery stays visible without re-opening the question or double-counting attention; trusted recovery controls are independently reviewed |
 

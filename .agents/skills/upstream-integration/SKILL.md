@@ -12,7 +12,7 @@ The prepared merge retains upstream ancestry. Resolve conflicts explicitly, keep
 World's connection/generation qualification, one-origin service architecture,
 identity, storage isolation, packaging and existing browser evidence.
 
-UPSTREAM.md records deliberate exclusions. Preserve them unless the owner has
+UPSTREAM.md records deliberate exclusions. Preserve them unless a maintainer has
 authorized a different decision; a conflict-free upstream change can still violate
 them. Retain World's React 19 development diagnostic fix (see
 [patch maintenance](../../../docs/react-19.md)), browser tests and downstream service
@@ -55,4 +55,4 @@ reviewedFor; explain the assessment in the integration report. Deferred/divergen
 entries need a durable follow-up with owner, acceptance and revisit conditions.
 World packaging ownership requires compatible adaptation, not automatic exclusion.
 New/changed deferrals or divergences are proposals requiring human approval; do
-not claim permanent owner acceptance or silently label omitted behavior adopted.
+not claim permanent acceptance or silently label omitted behavior adopted.

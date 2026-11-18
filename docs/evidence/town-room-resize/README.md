@@ -1,6 +1,6 @@
 # Town room sizing captures (#497)
 
-Synthetic captures of the Town browser fixture at the five owner viewports.
+Synthetic captures of the Town browser fixture at the five reference viewports.
 They use invented hosts, workspaces and agents. The phone, laptop, half-width
 and portrait views focus on the fixture's 26-desk folded room; the wide view
 shows the full Atlas building and part of the neighboring Lab building. The

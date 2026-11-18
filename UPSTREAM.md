@@ -42,8 +42,8 @@ CLI configuration and service inspection use World-owned state only.
 
 The v0.8.5 refresh adds a searchable desktop shortcut cheat sheet, readable
 asynchronous workspace/worktree name suggestions and corrected IME positioning
-when terminal cursors are hidden. The owner approved the 8-character password
-minimum; startup retains the recommendation for 15+ characters. The handoff demo
+when terminal cursors are hidden. The password minimum is 8 characters; startup
+recommends 15+ characters. The handoff demo
 is attributed as upstream UI, alongside World screenshots. Documentation and local
 checks retain World contracts, navigation, formatting and behavioral verification.
 
@@ -101,7 +101,7 @@ voices by default; PR badges cached per connection and stale until checked; PDF.
 only where a browser has no PDF viewer (web total budget 15.25 MiB); a black
 background; and warm streams and composer clipboard routing per runtime. World
 does not reload a page by itself for a new frontend; StaleBuildToast stays the
-manual offer. Deferred for owner review: the mobile navigation and History input
+manual offer. Deferred for review: the mobile navigation and History input
 changes (#482, #489, #493) for one mobile PR, `@pierre/diffs` 1.6 (#508) for its
 asset cost and #546's browser forwarding controls. Divergent: Chat as the mobile
 entry point (#491), a per-browser Recently opened history (#518) and separate seen
@@ -155,7 +155,7 @@ model reasoning, selection-preserving output focus and clearer Composer mode/sho
 controls. Waiting questions retain their selected World runtime generation; a
 replacement holds the queue instead of retargeting. Compatible typebox, xterm,
 Radix and lint updates are adopted. The Roamgate-only CodeQL workflow remains
-excluded under World policy and requires owner review. The later React migration
+excluded under World policy and requires review. The later React migration
 is recorded above.
 
 The v0.8.7 and following main refresh adds History Chat/Timeline views with a

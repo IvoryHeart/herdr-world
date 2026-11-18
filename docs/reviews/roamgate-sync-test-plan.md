@@ -1,7 +1,7 @@
 # Roamgate integration acceptance plan
 
 Frozen source target: `2b16e991eeb2e90f55c948e249acaef1497d5254`.
-The three scoped parts target `agent/roamgate-integration`; the owner merges them.
+The three scoped parts target `agent/roamgate-integration`; the user merges them.
 Only the final ancestry part updates `UPSTREAM.md` and the cumulative disposition
 ledger. The final integration-to-main PR requires an independent whole-system review.
 No scoped unit result below implies complete synchronization or final acceptance.
@@ -16,7 +16,7 @@ No scoped unit result below implies complete synchronization or final acceptance
    native reports to pass on the same candidate. Scoped checks never substitute.
 3. Request a preview port from steward-main. Serve only the isolated integration
    build, without changing the installed release or main's service/configuration.
-   The owner uses it for an agreed observation period and reports acceptance.
+   the user uses it for an agreed observation period and reports acceptance.
 4. Capture five viewports using the maintained screenshot recipe, plus interaction
    traces/smoothness evidence for changed UI. Use synthetic host labels and content;
    retain receipts privately and publish only reviewed, redacted evidence.

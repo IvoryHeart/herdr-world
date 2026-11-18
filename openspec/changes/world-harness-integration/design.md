@@ -11,9 +11,8 @@ only through its harness:
   status line command. #727 taps it per launch (`--settings`) in the Claude
   sessions World starts, and nowhere else.
 
-The owner asked for World's own integration per harness (2026-11-07). On
-2026-11-08 the owner asked that it cover every harness, stay minimal and take
-the shape of Herdr's integrations. The first draft of this change used
+World's integration must cover every harness, stay minimal and follow
+Herdr's integration shape. The first draft of this change used
 harness plugin marketplaces, a manifest, a data spool and a heartbeat. This
 revision drops all four and follows Herdr.
 

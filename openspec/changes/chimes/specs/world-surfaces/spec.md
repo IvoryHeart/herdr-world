@@ -3,7 +3,7 @@
 ### Requirement: Chimes
 
 While a World page is open, World SHALL play its own chime for a change that
-needs the owner: a timbre for who it came from, played as a motif for why. The
+needs the user: a timbre for who it came from, played as a motif for why. The
 timbre SHALL be the Town master's for the agent holding that role, else the
 agent's profile chime, else the crew's; a change with no known sender SHALL
 use the crew's. The motif SHALL be needs you (blocked, or a Herdr custom
@@ -27,14 +27,14 @@ Queued escalations SHALL recheck the current sound and interest policy before
 playing. Intentionally suppressed page notifications SHALL stay silent when
 Web Audio is unavailable.
 
-The owner's class timbres and motif switches and each profile's chime SHALL
+The user's class timbres and motif switches and each profile's chime SHALL
 be kept by each World service and shared by its browsers. The Town master
 role SHALL live with the terminal in Herdr metadata, shared by every World
 on that Herdr and ending with the terminal. The newest claim SHALL win,
 with revision ties broken by the greater terminal ID, as specified by
 Per-terminal settings live with the terminal in the current world-surfaces
 spec. The Town master's timbre SHALL NOT be given to the crew or a profile. Exactly one
-agent MAY hold the Town master role; only the owner SHALL assign it, and moving
+agent MAY hold the Town master role; only the user SHALL assign it, and moving
 it from another live agent SHALL ask first. A terminal launched from a profile
 that offers the role SHALL be suggested, never assigned. Whether this device
 plays chimes, and how loud, SHALL be the device's own setting.
@@ -50,7 +50,9 @@ override another page's current silence policy; otherwise the OS sound SHALL pla
 - **WHEN** another agent is focused and the Town master becomes blocked
 - **THEN** World plays the needs-you motif in the Town master's timbre and shows its reason line
 
-#### Scenario: A message for the owner
+<a id="scenario-a-message-for-the-owner"></a>
+
+#### Scenario: A message for the user
 
 - **WHEN** an agent runs `herdr notification show "Review ready"` with no sound
 - **THEN** World plays the for-you motif in the crew's timbre with the reason "For you · sender unknown: Review ready"
@@ -62,5 +64,5 @@ override another page's current silence policy; otherwise the OS sound SHALL pla
 
 #### Scenario: Two Town masters
 
-- **WHEN** the owner makes a second agent Town master while the first is open
+- **WHEN** the user makes a second agent Town master while the first is open
 - **THEN** World asks before moving the role

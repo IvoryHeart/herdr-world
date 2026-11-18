@@ -20,7 +20,7 @@ room: the folded state shows 24 desks and **» +2** beside the dashed new-seat
 state shows all 26 and **« Fold**, with both hidden-attention icons cleared. The plaque stays **5/26**
 in both states: 5 active agents, 26 total agent reports.
 
-Each image is a full viewport capture at the owner's exact dimensions. The
+Each image is a full viewport capture at the reference dimensions. The
 synthetic question was answered through its normal UI to clear the phone tray,
 and the ordinary camera keyboard controls frame the room actions. No UI was
 composited or restyled for capture. The phone views show the bottom-right action

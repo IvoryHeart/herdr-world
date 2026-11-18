@@ -35,12 +35,12 @@ Your browser or phone
       |
 Herdr World   (the app you see)
       |
-Herdr or herdr-core (runs your terminals)
+Herdr TUI or herdr-core (runs your terminals)
       |
 Your shells and agents
 ```
 
-- **Herdr or herdr-core** runs the terminals. They keep running when you close
+- **Herdr TUI or herdr-core** runs the terminals. They keep running when you close
   the browser, but stop if the computer sleeps or shuts down.
 - **World** shows them in your browser and lets you act on them.
 - **Agents** stay ordinary command-line tools. World does not provide models
@@ -49,7 +49,7 @@ Your shells and agents
 ### Install and open World
 
 1. Install World by following
-   [Install a release](./DEPLOYMENT.md#install-a-release). If neither Herdr
+   [Install a release](./DEPLOYMENT.md#install-a-release). If neither the Herdr TUI
    nor herdr-core is installed, the standalone installer installs herdr-core
    and starts it; otherwise it keeps what you have.
 2. Start World and leave it running:
@@ -67,32 +67,26 @@ Your shells and agents
 4. World opens on **Town**. If no runtime is running, Town offers **Set up
    herdr-core** (or **Use the Herdr TUI instead**); nothing is installed until
    you confirm.
-5. Open **Spaces** from the view picker at the top. Choose **+** (New
-   workspace) beside the workspace list, set **Working directory** to your
-   project's folder, and choose **Create**.
-6. Select the new workspace and its shell pane, and type `pwd`
-   (`Get-Location` in PowerShell).
+5. With **herdr-core**, use the connection steps below, then choose **New
+   agent → Terminal**. In the shell, change to your project's folder with
+   `cd` (`Set-Location` in PowerShell).
+6. With the **Herdr TUI**, open **Spaces → +** (New workspace), set
+   **Working directory** to your project, and choose **Create**. Select its
+   shell. Run `pwd` (`Get-Location` in PowerShell) to check your folder.
 
-**You are done when:** the terminal shows your project's folder. Get this
-working before you set up remote access.
+**You are done when:** the terminal shows your project's folder.
 
 ### Use an existing herdr-core
 
-Already using herdr-core with Herdr’s apps? Use these steps instead of steps 4–6
-above; you can keep the TUI connected too.
+1. Run `hc server start` on its computer. In World, open **Hosts → Manage
+   connections → Add herdr-core**, choose **This computer**, **A Unix host over SSH**
+   or **A Windows host over SSH**,
+   keep session **default** unless you changed it, then connect.
+2. Return to Town. **New agent** says **Starts in herdr-core**. You can keep
+   a Herdr TUI connection too; choose its room for a TUI launch.
 
-1. Start core separately. In World, open **Hosts → Manage connections → Add
-   herdr-core**, choose where it runs, and keep session **default** unless you
-   changed it. Save and connect; its card shows the version and live terminals.
-2. Return to **Town** and choose **New agent**. The launcher says **Starts in
-   herdr-core**. Choose your harness, then start it. The
-   agent also appears in Herdr’s apps. Choose a TUI room for a TUI launch.
-3. Tap the agent’s desk. Its window opens with **Chat**, **Terminal**, **Files**
-   and **Changes**, like a Herdr agent’s. On **Terminal**, type to control it;
-   the text fits the window. Close the window to give the size back.
-4. Finish a turn, then look at its Town peek. Done clears in Herdr’s apps too.
-   Pin it from its peek: it is pinned in Herdr’s apps too. Continue with either
-   runtime below.
+See the [runtime support table](../FEATURES.md#runtime-support) for versions
+and limits. Continue from your project shell above.
 
 ![Spaces showing synthetic workspaces, recognized agent states, and a live terminal](./images/herdr-world-desktop-spaces.png)
 
@@ -135,12 +129,14 @@ prompt instead of a character.
    building, room and desk; **ALL** shows the whole town.
 2. Tap a room to zoom in. Hover its nameplate for its card: how many agents
    are working, waiting or done, and what the room cost today.
-3. Look at the working agents. Each has a thought bubble showing what it is
-   doing: editing, running tests, reading code, thinking.
-4. Zoom to a desk to read the step in words, such as
-   **Run the login tests · tests 3m**. A step that runs long turns amber.
+3. For Herdr TUI agents, zoom to a desk to read its current step, such as
+   **Run the login tests · tests 3m**. Core agents show their reported status.
+4. Press the time-of-day button below **ALL** to cycle **clock**, **day**,
+   **dusk** and **night**. Lit rooms have activity; amber reception light
+   means someone needs you. Your browser remembers the choice.
 
-On a phone the buildings stack vertically; tap wherever this guide says hover.
+On a phone, buildings stack vertically; tap wherever this guide says hover.
+Use **Town calm motion** or your device's reduced-motion setting for still light.
 
 ![Town zoomed in to the desks, with thought bubbles naming each working agent's step](./images/herdr-world-desktop-town-steps.png)
 
@@ -327,9 +323,8 @@ skills, a first brief and a look in Town.
 5. World creates the tab, starts the agent and sends the brief. In Town, the
    new agent walks in and sits down at its desk.
 
-If the agent's CLI is logged out on that computer, the launcher says so and
-shows the login command, such as `claude auth login`. **Open its tab**, run
-the command, then choose **Check again**.
+Sign in to the harness on its computer first. For the Herdr TUI, the
+launcher can open a login tab; core sign-in uses a terminal.
 
 **You are done when:** your new agent answers in its own tab, dressed the way
 you chose.
@@ -478,8 +473,8 @@ Desk lists the same agents by what they need from you, not by where they are.
 
 ### Give the agent a small task
 
-1. In **Spaces**, open your practice project and create a tab.
-2. Start your agent CLI in it.
+1. Open the project shell you made in chapter 1.
+2. Run your agent CLI there, such as `claude` or `codex`.
 3. Paste this prompt, read it, and send it. Model usage may cost money.
 
    ```text
@@ -553,10 +548,10 @@ permissions.
 Panes in the same folder edit the same files. For two tasks at once, give each
 its own worktree: a separate checkout and branch of the same repository.
 
-1. Right-click the workspace and choose **Worktree Lifecycle**, or search for
-   `worktree lifecycle` with **Ctrl+K**.
-2. Create and open a worktree. It starts from the latest `origin/main`, without
-   your uncommitted changes.
+1. For the Herdr TUI, choose **Worktree Lifecycle** on the workspace.
+   For core, open the room's **Worktrees… → Create**.
+2. Create and open a worktree. It starts from origin's default branch,
+   without your uncommitted changes.
 3. In its terminal, run `pwd` and `git status` to confirm the folder and
    branch before you start an agent there.
 
@@ -697,17 +692,17 @@ sleeping. For a lasting setup, run World as a
 
 <a id="ssh"></a>
 
-### SSH: reach Herdr on another computer
+### SSH: reach a runtime on another computer
 
-#### Option A: your local World, remote Herdr
+#### Option A: your local World, remote runtime
 
-World runs on your computer (Linux or macOS) and controls Herdr on another.
+World runs on your computer (Linux or macOS) and controls a runtime on another.
 
 1. Check that plain `ssh workbox` works, where `workbox` is an alias in your
    `~/.ssh/config`. Keep ports, jump hosts and keys there.
-2. Check that Herdr is already running on that computer.
-3. In World, open **Manage connections**, add an SSH profile with Destination
-   `workbox`, and connect.
+2. Start the Herdr TUI or run `hc server start` on that computer.
+3. Open **Hosts → Manage connections**. Add an **SSH** profile for the TUI,
+   or **Add herdr-core → Unix SSH / Windows SSH** for core; connect to `workbox`.
 4. Open the remote project and run `pwd` to confirm the folder.
 
 **You are done when:** your browser controls the remote terminal and files.

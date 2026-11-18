@@ -1,7 +1,6 @@
-## Decisions for the owner
+## Design choices
 
-Each item has a recommendation. The design follows the recommendation until the
-owner decides otherwise.
+Each item has a recommendation. The design follows these recommendations.
 
 1. **Follow Herdr's integration paradigm.** World uses Herdr's command shape,
    `herdr-world integration install|uninstall|status <harness>`, with Herdr's
@@ -26,9 +25,7 @@ owner decides otherwise.
    value in a World-owned file, and the script runs that previous command with
    the same input and returns its output unchanged. Uninstall restores the
    previous value exactly. This is Herdr's own pattern for Claude: a managed
-   file in `~/.claude/hooks/` plus one owned entry in `settings.json`. The
-   owner's 2026-11-07 objection was to a hand edit for one feature. This is the
-   product's own integration, installed only on request and removed exactly.
+   file in `~/.claude/hooks/` plus one owned entry in `settings.json`. This is the product's own integration, installed only on request and removed exactly.
    **Recommend:** yes. The alternatives are a Claude Code plugin mod (the
    earlier design: Claude Code 2.1.290 or later, a local marketplace and
    `claude plugin` commands, and it leaves `statusLine` alone) or no tap outside
@@ -65,8 +62,7 @@ reach agents only through the harness:
   terminal, an IDE, Herdr's own CLI) leave the gauge empty or showing only
   refusals.
 
-The owner asked for World's own integration for every harness (2026-11-07). On
-2026-11-08 the owner asked that it cover every harness, stay minimal, and take
+World's integration must cover every harness, stay minimal, and take
 Herdr's shape: Herdr already installs one small, versioned file per harness, on
 an explicit command, and reports its status.
 

@@ -2,7 +2,7 @@
 
 World's existing `world.sqlite` outbox owns durable effects. Recording the domain
 change and its intent is one SQLite transaction. The service registry marks only
-three private effect verbs queueable: `notification.show` for owner alerts,
+three private effect verbs queueable: `notification.show` for user alerts,
 `world.ask.deliver-answer` for one saved answer and its original recipient, and
 `world.bin.close` for one pane whose agent left on Town's bus.
 Interactive terminal input and Chat sends stay nonqueueable. This substrate
@@ -74,7 +74,7 @@ receipts or uncertainty. Permanent refusals keep their reasons and stop automati
 attempts. Closing an ask stops its alerts; an earlier possible alert remains
 recorded without claiming it was undone.
 
-An explicit owner decision may retry an eligible uncertain intent or close its tracking.
+An explicit user decision may retry an eligible uncertain intent or close its tracking.
 Closing preserves the actual attempt outcome, receipt, handle and possible-send
 evidence; it does not report that an earlier effect was undone. The internal close
 decision allows normal history retention only after that explicit resolution.

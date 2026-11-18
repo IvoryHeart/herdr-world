@@ -1,10 +1,8 @@
 ## Why
 
-The owner decided the onboarding plan on 5 November (decision 4): the Town
-Master greets you on every visit, with a **Show this on start** checkbox that
+The Town Master greets the user on every visit, with a **Show this on start** checkbox that
 is on by default, and the greeting carries "since you left" and announces
-software updates. The owner returns after long absences and asks most often
-what happened meanwhile; the recap already exists, but only as small lines on
+software updates. After a long absence, the user needs to see what happened; the recap already exists, but only as small lines on
 the Town board sign. The greeting turns the return into a moment without a
 second inbox. This change records the Town Master's onboarding; later slices
 (the path, lessons, ? marks and the highlight) extend it.

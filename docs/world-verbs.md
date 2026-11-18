@@ -13,9 +13,9 @@ validate domain payloads, current terminal witnesses, paths, capabilities and
 target state. Native selector fields remain optional where Herdr accepts an implicit
 selection. Interactive RPC and CLI declarations remain nonqueueable. Two private effect
 declarations, described in [World effects](world-effects.md), back the existing
-owner-alert and saved-answer outbox; they grant no new public actor permissions.
+user-alert and saved-answer outbox; they grant no new public actor permissions.
 
-The actors are the owner's authenticated browser, verified and unverified agent
+The actors are the user's authenticated browser, verified and unverified agent
 CLI callers, Ranger, reconcilers and automation. At these migrated public entries,
 browser verbs allow only the browser; CLI verbs allow only the appropriate CLI
 actors. Ranger and reconcilers retain their existing internal entry points, and
@@ -32,14 +32,14 @@ exposed by this migration.
 | CLI exclusive role replacement | Acknowledge with `--replace --yes` |
 | CLI one-time Pod import and World group deletion | Acknowledge with `--yes` |
 | Herdr move that would close a room | Existing move planner requires `--allow-close-room` |
-| Browser PR merge, close, ready | Owner's browser confirmation |
+| Browser PR merge, close, ready | The user's browser confirmation |
 | CLI forge actions and Herdr deletions | Refused |
 
 The browser still performs its existing PR confirmation flow. The service has no
 fresh, single-use confirmation challenge from the browser, so the authenticated
 action request remains the existing confirmation boundary. Adding such a challenge
 needs a browser change; this backend migration does not invent one or change the
-owner's workflow.
+user's workflow.
 
 RPC admission checks registry membership, schema and socket authority before
 resolving a runtime, then rechecks the captured runtime before dispatch. Native

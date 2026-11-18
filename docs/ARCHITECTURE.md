@@ -1,8 +1,9 @@
 # Architecture
 
 This document describes Herdr World's current system contracts. See
-[FEATURES.md](../FEATURES.md) for behavior and shortcuts and
-[DEPLOYMENT.md](./DEPLOYMENT.md) for supported configurations.
+[runtime support table](../FEATURES.md#runtime-support) and
+[deployment guide](./DEPLOYMENT.md) for supported configurations;
+[FEATURES.md](../FEATURES.md) covers controls and shortcuts.
 
 ## Runtimes: Herdr TUI and herdr-core
 
@@ -108,12 +109,17 @@ Ownership:
   and occupant (`herdr-core/fence.ts`, `herdr-core/occupant.ts`), and the fence
   is rechecked before each dispatch. Nothing falls back to another connection
   or runtime.
-- **World starts core only when a person confirms it.** Connects and
+- **Core startup is separate from connection and retry.** Connects and
   reconnects read `core.lock` and open only an endpoint that already exists
   (`herdr-core/stream.ts`). A core that is not running stays unavailable until
   someone starts it. Only the installers, or a confirmed **Install
   herdr-core…** (`connections.core_install`, `herdr-core/install.ts`), install
   and start core, on the chosen host.
+
+Installation uses the shared checksum-verified core setup scripts; existing
+core upgrades remain external. The [Linux acceptance harness](development.md#linux-installation-acceptance)
+(`bun run test:install-linux`) exercises systemd startup, core-only topology and
+TUI preservation. See [packaging](packaging.md) for distribution details.
 
 The [archived herdr-core design](../openspec/changes/archive/2026-11-17-herdr-core-runtime/design.md) and
 [requirements](../openspec/specs/herdr-core-runtime/spec.md)
@@ -947,8 +953,8 @@ upstream lineage, dependency/source notices, and asset licences.
 
 Herdr World is a trusted single-user administration tool, not a sandbox or multi-user
 permission system. Authenticated browsers can control terminals, change files,
-manage shared profiles, and execute trusted repository hooks. It provides neither
-TLS termination nor rate limiting; see [SECURITY.md](../SECURITY.md).
+manage shared profiles, and execute trusted repository hooks. It supports native
+HTTPS and bounded login cooldowns; see [SECURITY.md](../SECURITY.md).
 
 The service automatically admits privileged browser HTTP and WebSocket traffic only
 when its Origin authority equals the request Host authority; loopback listeners

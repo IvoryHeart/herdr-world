@@ -252,7 +252,7 @@ which v1 and shared acquisition already remove. Payload patching would add a sec
 model-update path, with drift checks and per-class permissions, for no measured
 payoff. Revisit it with a measurement after v1 and shared acquisition (Open
 Questions). Upstream requests A (snapshot boundary and resumable observation) and B
-(output revisions) from the inventory remain drafts for the owner.
+(output revisions) from the inventory remain drafts for review.
 
 ### 5. World subscriptions (v2)
 
@@ -395,8 +395,8 @@ v2 until all four of these hold:
    - ID reuse as a new lifetime;
    - a partial listing that emits no deletes.
 4. **Verification.** The resume model, the page credits and the composition properties
-   (M2, M3, P1) pass against the implementation. The owner approves the Q12–Q14 and
-   consumer re-mapping (`verification-plan.md`).
+   (M2, M3, P1) pass against the implementation. The Q12–Q14 and
+   consumer re-mapping require review (`verification-plan.md`).
 
 ### 7. Durable identity and bindings
 
@@ -408,7 +408,7 @@ IDs before inserting it.
   different ask.
 - Records from the JSON stores keep the IDs they already have.
 - World IDs are not UUIDs and carry no source identity, label or path.
-- A global name, when one is needed, is an `agent+local` URI under the owner's agent URI
+- A global name, when one is needed, is an `agent+local` URI under the agent URI
   draft, composed of the instance and the local ID. It is not built here.
 
 **A binding** links a World record that claims identity with a source entity to that
@@ -485,17 +485,17 @@ the explicit unknown identity bind to the terminal instead.
 | Layout preference (Board card position, pin and fold; workspace and host colour) | **not a binding**: connection profile and native ID only, with no evidence | none; inherited when an ID is reused | none | kept (current contract) |
 
 Whether Board strings should also follow moves made outside World, through C1, is an
-optional owner decision. It would be a MODIFIED Board requirement; this change keeps
+optional design decision. It would be a MODIFIED Board requirement; this change keeps
 today's rule.
 
-**What later persistence would bind to** (owner approval required):
+**What later persistence would bind to** (review required):
 - a watch → a terminal binding;
 - a Desk review mark → an agent-session binding plus the observed stop identity, or a
   terminal binding when the session is unknown;
 - completion "seen" → an agent-session binding plus the completion identity.
 
 **Rejected alternatives.**
-- UUIDs: contrary to the owner's identity direction.
+- UUIDs: contrary to the identity contract.
 - Counters: a restored backup issues them again.
 - Keying World records by runtime IDs: this is today's stale-on-restart defect.
 - One general continuity and absence rule for every kind: it contradicts Board's and
@@ -548,7 +548,7 @@ registered, including reads, which have the `read` class. An unregistered method
 refused before any acquisition or dispatch.
 
 **Actors.**
-- the owner's browser;
+- The user's browser;
 - the agent CLI with a verified pane;
 - the agent CLI unverified;
 - the assistant (Ranger, with its own permission policy);
@@ -562,7 +562,7 @@ refused before any acquisition or dispatch.
 |---|---|---|
 | `allow` | runs | reads; Board edits from the browser |
 | `acknowledge` | runs only when the caller passes an explicit flag that names the effect | CLI `--herdr` for Herdr layout changes (desk moves, room and desk adds); `--replace --yes` for exclusive role transfers; `--yes` for a one-time pod import; `--allow-close-room` |
-| `confirm` | runs only after a fresh confirmation by the owner in a browser | PR merge, close and ready |
+| `confirm` | runs only after a fresh confirmation by the user in a browser | PR merge, close and ready |
 | `deny` | refused | merges and Herdr deletions from the CLI |
 
 **Recovery classes.**
@@ -573,7 +573,7 @@ refused before any acquisition or dispatch.
 | `keyed` | the receiver honours a stable idempotency key |
 | `reconcilable` | a decisive read tells whether the effect happened |
 | `reattachable` | an external run handle can be found and observed |
-| `repeatable` | a duplicate is harmless, so a retry is allowed, as for owner alerts (`notification.show`). Never used for terminal input, Chat sends or pane answers |
+| `repeatable` | a duplicate is harmless, so a retry is allowed, as for user alerts (`notification.show`). Never used for terminal input, Chat sends or pane answers |
 | `opaque` | none of these |
 
 These feed the recovery matrix (§12).
@@ -724,7 +724,7 @@ name and a revision.
 **Intent.**
 `{ id, verb, params, targets, actor, authorization evidence, idempotency_key,
 operation_version, preconditions, created_at, origin }`. `origin` is an opaque reference
-from the creator (owner, CLI, a future workflow) and has no semantics here.
+from the creator (the user, CLI, a future workflow) and has no semantics here.
 
 **Targets.** An intent's targets are bindings. Until bindings exist (stage 4), and for
 the first outbox in `world.sqlite`:
@@ -732,7 +732,7 @@ the first outbox in `world.sqlite`:
   ID, and the terminal or session evidence. It never captures a bare runtime
   generation as its target.
 - Each attempt records its own fences when it is claimed and checks them at dispatch.
-- A target with no pane resource, such as an owner alert, captures only the connection
+- A target with no pane resource, such as a user alert, captures only the connection
   ID. Each retry binds to that connection's current runtime lease.
 
 **Resolution.** Before every dispatch, including the first after an incarnation change,
@@ -782,7 +782,7 @@ by `world.sqlite`. A general signal inbox (dedupe, correlation, early arrival) i
 added with its first consumer, together with its model witnesses. How a consumer waits
 for a signal belongs to the authoring model.
 
-**Queued, state-conditioned intents** (owner rule). Only verbs that declare
+**Queued, state-conditioned intents.** Only verbs that declare
 `queueable` can be queued. Such an intent captures the target state it was made
 against. On reconnect it is dispatched if that state is unchanged, whatever its age. If
 the state has changed, it is recorded as not sent, provided no attempt reached
@@ -853,7 +853,7 @@ This PR changes no current contract, so it changes no evidence.
 - [Opaque effects block a workflow] → intended: honest non-progress and an owner
   decision, never a blind retry.
 - [One long-lived change spans stages 3–7] → each stage syncs its own deltas when it
-  ships. If v1 ships long before the v2 gate, the owner may split v2 into its own change.
+  ships. If v1 ships long before the v2 gate, the user may split v2 into its own change.
 - [New Quint models lengthen the gate] → each is sized like the existing models. The
   plan names domains and measures them against the 15-minute deadline.
 
@@ -888,4 +888,4 @@ These are deferrable; none changes the specs or the task breakdown.
 - Whether completion identity can use Herdr's completion sequence (`TerminalState` has
   `last_agent_completion_seq`, but the API inventory doesn't list it). Decide in the
   "seen" change.
-- Filing upstream drafts A and B: firstmate-2 and the owner decide.
+- Filing upstream drafts A and B: requires a separate decision.

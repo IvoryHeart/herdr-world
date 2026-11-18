@@ -58,10 +58,26 @@ Codex, Pi and Kimi share one file whose marker ID is `shared`: status for all
 three agrees even if only one harness is configured. Uninstalling any one
 names the other two that also lose the file.
 
+## Runtime differences
+
+World's skills work for **Herdr TUI** and **herdr-core** agents. `ask`,
+`result`, `task-summary` and `stamp` use the caller's runtime. Core verifies
+local callers by process ancestry; remote/unverified asks retrieve answers
+with `ask get` or `--wait`. On a core-only setup, manage skills with the CLI
+commands above; Herdr integration rows belong to a TUI connection.
+
+Herdr TUI integrations provide its session/status evidence. Core reads status
+from core alone: World does not install TUI status hooks or infer core status
+from the screen. Chat reuses the same transcript readers where available;
+missing transcripts do not prevent native core input. The Claude limits tap
+can be installed with either runtime, but World's usage/fuel collector currently
+reads TUI connections only. See the [runtime support table](../FEATURES.md#runtime-support)
+and [harness inventory](core-harnesses.md).
+
 ## Herdr integration upgrades
 
 Rerunning the standalone World installer over an existing installation, or running
-`herdr-world update`, upgrades Herdr and refreshes its integrations for detected
+`herdr-world update`, upgrades the Herdr TUI and refreshes its integrations for detected
 Codex, Claude Code and Pi harnesses, plus the installed World plugin. Output names
 what changed, what is current and any failures. Put `HERDR_WORLD_SKIP_HERDR=1`
 before `sh` in the installer command to skip these changes; World still restarts
@@ -150,7 +166,7 @@ Use a throwaway HOME and XDG directories when testing installs or launches.
 Remove inherited harness-root overrides as well; a fake HOME alone does not
 override `CODEX_HOME`, for example. If running any Herdr command, also pass
 `herdr --session <unique-test-name>`; HOME alone does not isolate Herdr.
-Do not launch World or connect tests to an owner's running services.
+Do not launch World or connect tests to your running services.
 
 From a checkout with dependencies installed, run this safe installer exercise:
 
@@ -158,27 +174,9 @@ From a checkout with dependencies installed, run this safe installer exercise:
 bun run test scripts/install-herdr-world.test.ts
 ```
 
-Look for **throwaway HOME: installer discovers Claude/Codex/Pi, refreshes skills
-and update preserves uninstall**. It performs these steps automatically, without
-requiring file edits or a running service:
-
-1. Create a throwaway HOME with fake Claude, Codex and Pi configuration folders
-   and a synthetic Claude status line. Ignore inherited harness-root overrides.
-2. Run the installer against a local fake release archive that delegates to the
-   real integration CLI. Check that it reports **installed** for all three and
-   writes Claude's skill and tap plus the shared Codex/Pi skill.
-3. Make the fixture's skills outdated, rerun the installer, and check **updated**
-   reports for all three and refreshed skill markers.
-4. Run `integration uninstall claude` and `integration uninstall codex`, then
-   `update --finish-install`. Check **skipped (previously uninstalled)** for all
-   three, absent skills and exact restoration of the synthetic status line.
-
-The fixture disables service commands and skips Herdr. Separate tests in the same
-command check the installer delegation with each opt-out setting. The exercise
-deletes its temporary HOME on completion. For a browser inspection after an
-automatic install on a disposable host, open **Menu → Configuration → Integrations**
-and select World's local connection: the installed **World skill** rows show
-**Current**, and **Uninstall** uses the same persistent removal preference.
+The **throwaway HOME** case uses a fake release and harness folders. It checks
+fresh installs, refreshes, persistent removal preferences and exact status-line
+restoration without running services. The fixture cleans up afterwards.
 
 ## Settings
 

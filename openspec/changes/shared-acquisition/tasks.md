@@ -3,7 +3,7 @@
 - [x] 1.1 Write the contract: each output of the 5 s timer with its source, freshness and repair; shared acquisition with reference-counted interest; Desk watches; the capability.
 - [x] 1.2 Add the browser half of T2 (`web/src/store/pollReplacement.test.ts`): two ready hosts, a simulated World service that follows declarations, a manual clock and completion signals. New behaviour is checked in as expected failures, and unchanged behaviour as guards. A guard covers the capability fallback after a service restart.
 - [x] 1.3 Measure on a disposable `herdr --session`: which list fields change with output alone, and whether `pane.layout` is current once `layout.updated` arrives (design, "Measured").
-- [x] 1.4 Owner approval of the contract (committee decision 3).
+- [x] 1.4 Contract acceptance (committee decision 3).
 
 ## 2. Service
 
@@ -20,7 +20,7 @@ The service half of T2 is written first and must be green before task 3.1.
 - [x] 2.4 Advertise `world_shared_acquisition`. Send `world_connections_changed` on profile changes, connection state or generation changes, and socket open or close.
 
 The observer, recency, Desk and timer-removal parts implement the complete
-capability. Owner approval (1.4) is recorded in the implementation brief for
+capability. Contract acceptance (1.4) is recorded in the implementation brief for
 merged #551. Every original T2 case is a normal passing test; Inspector interest,
 failed bootstrap, read retries and catalogue coalescing add direct consumers.
 

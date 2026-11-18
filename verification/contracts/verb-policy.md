@@ -9,7 +9,7 @@ resource and assistant catalogs and observation-linked command tracking. This
 contract does not claim those later integrations.
 
 Allowed scenarios: ordinary CLI edits from either CLI actor; a verified answer
-from another agent; native layout edits with their existing flags; the owner's
+from another agent; native layout edits with their existing flags; the user's
 browser-confirmed PR action. Forbidden scenarios: unknown native forwarding;
 CLI forge mutations/Herdr deletions; missing effect flags; unverified answers and
 spawn claims; a retired runtime sending; memory-only success labelled stored.

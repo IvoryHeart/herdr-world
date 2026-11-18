@@ -158,11 +158,11 @@ the queued-send replacement window belongs to core (Q3), not World's pre-send ch
 
 - **WHEN** the foreground was missing at binding or is missing or different
   before dispatch, including an agent that exited into its wrapping shell
-- **THEN** World refuses and types nothing until the owner opens a fresh binding
+- **THEN** World refuses and types nothing until the user opens a fresh binding
 
 #### Scenario: Saved core ask answer
 
-- **WHEN** a verified local core asker receives an owner answer
+- **WHEN** a verified local core asker receives a user answer
 - **THEN** the durable dispatcher uses the same native send and original binding;
   a replaced occupant or retired runtime refuses while the stored answer remains
   retrievable, and an unanswered possible write stays uncertain without replay
@@ -211,7 +211,7 @@ reuses the pid and argv is refused.
   Desk's quiet agents, agent pickers); a stale host shows its
   last pins and refuses changes; review
   receipts stay World-only; a core agent that finishes after working or
-  starts needing World's owner pushes from core status events under Herdr's
+  starts needing the user triggers a push from core status events under Herdr's
   attention rule
 
 #### Scenario: Missing agent status
@@ -424,19 +424,15 @@ terminal's identity and distinguish it from an uncertain launch.
 
 ## Known limits
 
-The integration was delivered to main in [PR #933](https://github.com/IvoryHeart/herdr-world/pull/933)
-as `917c6c8aa` on 2026-11-17. The owner authorized archive in issue #943.
-The archived [handover](../../changes/archive/2026-11-17-herdr-core-runtime/delivery.md)
-retains the original acceptance plan and recorded owner results; its pre-merge
-acceptance language is historical. These limits are not unfinished archive tasks:
+See World's [runtime support table and limits](../../../FEATURES.md#runtime-support)
+for the user-facing contract. Windows local core and Windows SSH remain
+untested on real hardware. Fake-host and PowerShell-on-Linux checks do not
+establish native ACL, named-pipe or key behavior.
 
-- Windows local core and Windows SSH have not been tested on real hardware.
-  Fake-host and PowerShell-on-Linux checks do not establish real Windows ACL,
-  named-pipe or native key behavior. Owner A–D checks passed with the Windows
-  repeat excluded, as recorded in the handover.
-- Unreleased upstream core changes after 0.1.21 wait for the next core release,
-  per the owner's release decision. This does not pin supported versions or
-  gate read-write support; the newest-release smoke flags drift.
+Unreleased core changes after 0.1.21 wait for the next core release. This does
+not pin supported versions or gate read-write support; the newest-release
+smoke flags drift. Historical acceptance evidence stays in the archived
+[handover](../../changes/archive/2026-11-17-herdr-core-runtime/delivery.md).
 
 ### Upstream questions Q1–Q11
 
@@ -470,8 +466,8 @@ that duplicates core's responsibilities.
    An unseen concurrent write, or unread returning a label to the value World
    decided on, can be overwritten despite World's best-effort seen fences.
 8. **Q8 — Placement:** app space/tab-name labels (app #43) and phone Inbox
-   placement remain upstream questions. The recorded owner result shows an
-   unplaced World shell under app Spaces, rather than Inbox; World and app
+   placement remain upstream questions. An
+   unplaced World shell can appear under app Spaces, rather than Inbox; World and app
    layouts retain independent ownership.
 9. **Q9 — Environment:** stripping inherited `HERDR_*` markers from other
    runtimes remains an upstream question. Markers alone grant no World caller

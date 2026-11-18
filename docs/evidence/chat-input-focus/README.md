@@ -13,7 +13,7 @@ ring and text. They contain no real hosts, sessions or repository contents.
 | 2560 × 1440 | [Wide desktop](2560x1440.png) |
 | 1440 × 2560 | [Portrait wide desktop](1440x2560.png) |
 
-These five captures cover the owner's reference contexts. Earlier supplemental
+These five captures cover the reference contexts. Earlier supplemental
 captures remain available at [320 × 740](320x740.png), [768 × 1024](768x1024.png),
 [1440 × 900](1440x900.png) and [1920 × 1080](1920x1080.png).
 
