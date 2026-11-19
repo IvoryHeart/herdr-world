@@ -2349,13 +2349,42 @@ async function run() {
       method,
     ),
   ).length;
-  const arrangedMaximize =
-    builderArrangedWindow.querySelector<HTMLButtonElement>(
-      '[aria-label="Maximize Inspector window"]',
+  const inspectorWindowAction = async (
+    frame: HTMLElement,
+    action: "Maximize" | "Restore",
+  ) => {
+    await settleWindowLayout();
+    const inline = frame.querySelector<HTMLButtonElement>(
+      `[aria-label="${action} Inspector window"]`,
     );
-  if (!arrangedMaximize)
-    throw new Error("arranged Inspector maximize control missing");
-  arrangedMaximize.click();
+    if (inline) {
+      inline.click();
+      return;
+    }
+    // The IDE handoff adds a header control. At this tile width the existing
+    // responsive header can move maximize/restore into its window menu.
+    const more = frame.querySelector<HTMLButtonElement>(
+      '[aria-label="More actions for Inspector window"]',
+    );
+    if (!more) throw new Error("arranged Inspector window menu missing");
+    more.click();
+    await until(
+      () => document.querySelector('[aria-label="Window actions"]'),
+      "arranged Inspector window menu",
+    );
+    const item = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Window actions"] [role="menuitem"]',
+      ),
+    ].find((item) => item.textContent?.trim() === action);
+    if (!item) throw new Error(`arranged Inspector ${action} action missing`);
+    item.click();
+    await until(
+      () => !document.querySelector('[aria-label="Window actions"]'),
+      "arranged Inspector window menu dismissed",
+    );
+  };
+  await inspectorWindowAction(builderArrangedWindow, "Maximize");
   await until(() => {
     const bounds = builderArrangedWindow.getBoundingClientRect();
     const stage = document
@@ -2365,13 +2394,7 @@ async function run() {
       bounds.width >= stage.width - 18 && bounds.height >= stage.height - 18
     );
   }, "arranged Inspector maximized over the visual stage");
-  const arrangedRestore =
-    builderArrangedWindow.querySelector<HTMLButtonElement>(
-      '[aria-label="Restore Inspector window"]',
-    );
-  if (!arrangedRestore)
-    throw new Error("arranged Inspector restore control missing");
-  arrangedRestore.click();
+  await inspectorWindowAction(builderArrangedWindow, "Restore");
   await until(() => {
     const bounds = builderArrangedWindow.getBoundingClientRect();
     return (
@@ -2869,20 +2892,12 @@ async function run() {
     '[aria-label="Reviewer Inspector"]',
   )!;
   const snappedBounds = focusedDock.getBoundingClientRect();
-  focusedDock
-    .querySelector<HTMLButtonElement>(
-      '[aria-label="Maximize Inspector window"]',
-    )!
-    .click();
+  await inspectorWindowAction(focusedDock, "Maximize");
   await until(
     () => focusedDock.querySelector('[aria-label="Restore Inspector window"]'),
     "snapped Inspector maximizes",
   );
-  focusedDock
-    .querySelector<HTMLButtonElement>(
-      '[aria-label="Restore Inspector window"]',
-    )!
-    .click();
+  await inspectorWindowAction(focusedDock, "Restore");
   await until(
     () =>
       Math.abs(

@@ -201,6 +201,8 @@ window.confirm = (message) => {
 let worldIntegrationLists = 0;
 const bridgeCall = bridge.call.bind(bridge);
 bridge.call = ((method: string, ...rest: unknown[]) => {
+  if (method === "world.ide.list")
+    return Promise.resolve({ default_id: null, ides: [] });
   if (method === "world.integration.list") worldIntegrationLists++;
   return method.startsWith("world.integration.")
     ? Promise.resolve({ integrations: [] })
@@ -1020,6 +1022,16 @@ async function run() {
   await waitFor(
     () => document.querySelectorAll(".agent-integrations-list li").length === 4,
   );
+  await waitFor(
+    () =>
+      document.querySelector<HTMLSelectElement>(
+        '[aria-label="Default desktop IDE"]',
+      )?.disabled === false,
+  );
+  check(
+    !document.querySelector('.desktop-ide-settings [role="alert"]'),
+    "desktop IDE discovery failed alongside agent integration settings",
+  );
   check(
     document
       .querySelector(".agent-integrations-settings")!
@@ -1142,13 +1154,16 @@ async function run() {
   );
   integrationSaveFailure = true;
   click("Uninstall Pi integration");
-  await waitFor(() => !!document.querySelector('[role="alert"]'));
+  await waitFor(
+    () =>
+      !!document.querySelector('.agent-integrations-settings [role="alert"]'),
+  );
   check(
     document
-      .querySelector('[role="alert"]')!
+      .querySelector('.agent-integrations-settings [role="alert"]')!
       .textContent!.includes("Configuration is not writable") &&
       !document
-        .querySelector('[role="alert"]')!
+        .querySelector('.agent-integrations-settings [role="alert"]')!
         .textContent!.includes("update Herdr"),
     "integration mutation error was hidden or blamed Herdr's version",
   );
@@ -1164,11 +1179,14 @@ async function run() {
   );
   integrationLoadFailure = true;
   click("Refresh integrations");
-  await waitFor(() => !!document.querySelector('[role="alert"]'));
+  await waitFor(
+    () =>
+      !!document.querySelector('.agent-integrations-settings [role="alert"]'),
+  );
   check(
     document.querySelectorAll(".agent-integrations-list li").length === 0 &&
       document
-        .querySelector('[role="alert"]')!
+        .querySelector('.agent-integrations-settings [role="alert"]')!
         .textContent!.includes("update Herdr"),
     "unsupported server retained actionable stale integrations",
   );
@@ -1178,7 +1196,7 @@ async function run() {
   await waitFor(
     () =>
       !!document
-        .querySelector('[role="alert"]')
+        .querySelector('.agent-integrations-settings [role="alert"]')
         ?.textContent?.includes("Invalid integration list"),
   );
   malformedIntegrations = false;
@@ -1301,7 +1319,7 @@ async function run() {
       '[aria-label="Uninstall Antigravity CLI integration"]',
     ) &&
       !!document
-        .querySelector('[role="alert"]')
+        .querySelector('.agent-integrations-settings [role="alert"]')
         ?.textContent?.includes("Mutation failed after dialog remount") &&
       integrationLists() === listsBeforeDialogRemount + 1,
     "reopened Configuration lost the failed mutation or did not reload status",
@@ -1313,7 +1331,7 @@ async function run() {
   );
   check(
     mutationCount() === beforeDialogRemount + 1 &&
-      !document.querySelector('[role="alert"]'),
+      !document.querySelector('.agent-integrations-settings [role="alert"]'),
     "refresh repeated the failed mutation or retained its error",
   );
   click("Uninstall Antigravity CLI integration");
@@ -1386,7 +1404,7 @@ async function run() {
     );
     check(
       !!document
-        .querySelector('[role="alert"]')
+        .querySelector('.agent-integrations-settings [role="alert"]')
         ?.textContent?.includes("Mutation failed while unmounted") &&
         mutationCount() === writes,
       "settled failure was lost when reopening integrations",
@@ -1399,7 +1417,8 @@ async function run() {
         "false",
     );
     check(
-      !document.querySelector('[role="alert"]') && mutationCount() === writes,
+      !document.querySelector('.agent-integrations-settings [role="alert"]') &&
+        mutationCount() === writes,
       "consumed failure was replayed or refresh repeated the mutation",
     );
   }
@@ -1489,7 +1508,7 @@ async function run() {
   restart("connected", false);
   await settle();
   check(
-    !document.querySelector('[role="alert"]') &&
+    !document.querySelector('.agent-integrations-settings [role="alert"]') &&
       !!document
         .querySelector('[role="status"].agent-integrations-status')
         ?.textContent?.includes("Reconnecting to World"),
@@ -1503,7 +1522,7 @@ async function run() {
       button("Refresh integrations").getAttribute("aria-disabled") === "false",
   );
   check(
-    !document.querySelector('[role="alert"]') &&
+    !document.querySelector('.agent-integrations-settings [role="alert"]') &&
       integrationLists("alpha") > restartLists &&
       worldIntegrationLists > restartWorldLists,
     "integrations did not reload by themselves after a World restart",
@@ -1512,8 +1531,13 @@ async function run() {
   runtimeLeaseReady = false;
   restart("disconnected", false);
   restart("connected", true);
-  await waitFor(() => !!document.querySelector('[role="alert"]'));
-  const stale = document.querySelector('[role="alert"]')!;
+  await waitFor(
+    () =>
+      !!document.querySelector('.agent-integrations-settings [role="alert"]'),
+  );
+  const stale = document.querySelector(
+    '.agent-integrations-settings [role="alert"]',
+  )!;
   check(
     !!stale.querySelector("button")?.textContent?.includes("Reload") &&
       !/Reconnect it|update Herdr/.test(stale.textContent!),
@@ -1524,7 +1548,7 @@ async function run() {
   await waitFor(
     () =>
       document.querySelectorAll(".agent-integrations-list li").length === 4 &&
-      !document.querySelector('[role="alert"]'),
+      !document.querySelector('.agent-integrations-settings [role="alert"]'),
   );
   await key(button("Refresh integrations"), "Escape");
   await settle();
@@ -1554,7 +1578,7 @@ async function run() {
           "false",
     );
     check(
-      !document.querySelector('[role="alert"]') &&
+      !document.querySelector('.agent-integrations-settings [role="alert"]') &&
         !/Waiting for Herdr|Reconnecting/.test(
           document.querySelector(".agent-integrations-settings")!.textContent!,
         ) &&

@@ -206,6 +206,16 @@ function Fixture() {
       target={target}
       floating
       terminalActive={false}
+      windowControls={{
+        compact: innerWidth < 600,
+        maximized: false,
+        onMinimize() {},
+        onMaximize() {},
+        onClose() {},
+        onSnap() {},
+        onFit() {},
+        onFloat() {},
+      }}
       onChange={(change) =>
         setConversation((current) => ({ ...current, ...change }))
       }

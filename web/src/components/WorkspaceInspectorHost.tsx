@@ -1,4 +1,5 @@
 import { OpenInIdeButton } from "./DesktopIdeDialog";
+import { openInDesktopIde } from "../desktopIdes";
 import {
   WorkspaceInspectorViewSelect,
   WorkspaceInspectorSecondaryControls,
@@ -374,6 +375,14 @@ export function WorkspaceInspectorHost({
   const changeCount = agentWorktree ? 0 : changedCount(workspace);
   const availableViews = normalizeInspectorViews(state.availableViews);
   const filesAvailable = availableViews.includes("files");
+  const ideTarget =
+    workspace && filesAvailable
+      ? {
+          client: connectionClient,
+          workspaceId: workspace.workspace_id,
+          label: workspace.label,
+        }
+      : null;
   const changesAvailable = availableViews.includes("changes");
   const historyAvailable =
     availableViews.includes("history") && paneHasAgentHistory(historyPane);
@@ -635,14 +644,8 @@ export function WorkspaceInspectorHost({
               : null}
           </div>
         )}
-        {workspace && filesAvailable ? (
-          <OpenInIdeButton
-            target={{
-              client: connectionClient,
-              workspaceId: workspace.workspace_id,
-              label: workspace.label,
-            }}
-          />
+        {ideTarget && !viewsInMenu ? (
+          <OpenInIdeButton target={ideTarget} />
         ) : null}
         {mobile && windowControls ? (
           <WorkspaceInspectorViewSelect
@@ -795,6 +798,9 @@ export function WorkspaceInspectorHost({
               viewsInMenu || mobile
                 ? {
                     ...windowControls,
+                    onOpenInIde: ideTarget
+                      ? () => openInDesktopIde(ideTarget)
+                      : undefined,
                     narrow: !windowControls.compact,
                     attention:
                       mobile || viewsInMenu ? interestChoice : undefined,

@@ -233,11 +233,28 @@ export async function runDesktopIdeChecks(
       "SSH refusal",
     );
     await close();
-    target
-      .querySelector<HTMLButtonElement>(
-        ".workspace-inspector-head > .desktop-ide-trigger",
-      )
-      ?.click();
+    const headerHandoff = target.querySelector<HTMLButtonElement>(
+      ".workspace-inspector-head > .desktop-ide-trigger",
+    );
+    if (headerHandoff) headerHandoff.click();
+    else {
+      target
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="More actions for Inspector window"]',
+        )!
+        .click();
+      await observed(
+        () => !!document.querySelector('[aria-label="Window actions"]'),
+        "Inspector window menu",
+      );
+      const handoff = [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '[aria-label="Window actions"] [role="menuitem"]',
+        ),
+      ].find((item) => item.textContent?.trim() === "Open in…");
+      check(handoff, "Narrow Inspector window menu must offer Open in");
+      handoff?.click();
+    }
     await observed(
       () => !!dialog()?.querySelector(".desktop-ide-list button"),
       "agent project picker",

@@ -77,6 +77,11 @@
   flex-shrink: 0;
   min-height: 32px;
 }
+@container workspace-inspector (max-width: 899px) {
+  .workspace-inspector-head > .desktop-ide-trigger span {
+    display: none;
+  }
+}
 @media (max-width: 600px) {
   .desktop-ide-trigger {
     min-width: 36px;

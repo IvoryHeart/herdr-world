@@ -48,6 +48,8 @@ export type ManagedWindowControls = {
   back?: { label: string };
   /** A narrow window: maximize joins ⋯ so the bar still fits. */
   narrow?: boolean;
+  /** Project handoff when the Inspector header has no room for its button. */
+  onOpenInIde?: () => void;
   /** On a phone, the window's views live in ⋯ instead of the bar. */
   views?: readonly {
     id: string;
@@ -141,6 +143,9 @@ export function WindowControls({
     : [];
   const items: MenuItem[] = [
     ...(controls.compact ? pinItems : []),
+    ...(controls.onOpenInIde
+      ? [{ label: "Open in…", run: controls.onOpenInIde }]
+      : []),
     ...(controls.views ?? []).map((view, index) => ({
       key: `view:${view.id}`,
       label: view.label,
