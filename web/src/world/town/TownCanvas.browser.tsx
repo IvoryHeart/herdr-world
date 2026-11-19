@@ -10,7 +10,11 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
-import { buildWorldObject, type WorldObject } from "../worldObject";
+import {
+  buildWorldObject,
+  CORE_VIEW_ONLY_REASON,
+  type WorldObject,
+} from "../worldObject";
 import TownView from "../TownView";
 import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
@@ -278,12 +282,19 @@ function topology(seed: number): Topology {
           : null;
       for (let d = 0; d < deskCount; d += 1) {
         const tabId = `${workspaceId}-tab-${d}`;
-        // One crowded desk has more panes than drawn seats.
+        // One crowded desk has more panes than drawn seats, and none focused:
+        // a tap has nothing to go by, so it lists them.
+        const crowded =
+          !foldStatuses &&
+          !plateStatuses &&
+          host === HOSTS[0] &&
+          roomIndex === 0 &&
+          d === 0;
         const paneCount = foldStatuses
           ? 1
           : plateStatuses
             ? plateStatuses.length + 2
-            : host === HOSTS[0] && roomIndex === 0 && d === 0
+            : crowded
               ? 6
               : scale === "max"
                 ? 3 + Math.floor(r() * 2)
@@ -310,7 +321,7 @@ function topology(seed: number): Topology {
             terminal_id: `${tabId}-terminal-${p}`,
             workspace_id: workspaceId,
             tab_id: tabId,
-            focused: p === 0,
+            focused: p === 0 && !crowded,
             agent: isAgent ? AGENTS[Math.floor(r() * AGENTS.length)]! : "",
             agent_status: isAgent
               ? foldStatuses
@@ -1012,6 +1023,163 @@ async function groupTwoDesks(
   );
 }
 
+/** The core scale's one herdr-core host, at local core addresses. */
+function coreTopology(): WorldRuntimeConnection {
+  const workspace_id = "core-room";
+  const desks = [
+    ["core-shell", [["t1", ""]]],
+    ["core-agent", [["t2", "claude"]]],
+    [
+      "core-pair",
+      [
+        ["t3", ""],
+        ["t4", ""],
+      ],
+    ],
+  ] as const;
+  const tabs: Tab[] = desks.map(([tab_id, panes], index) => ({
+    tab_id,
+    workspace_id,
+    number: index + 1,
+    label: ["shell", "agent", "pair"][index]!,
+    focused: index === 0,
+    pane_count: panes.length,
+    agent_status: "unknown",
+  }));
+  const panes: Pane[] = desks.flatMap(([tab_id, desk]) =>
+    desk.map(
+      ([address, agent]): Pane => ({
+        pane_id: address,
+        terminal_id: address,
+        workspace_id,
+        tab_id,
+        // Of the pair, the second pane holds focus: a tap opens it.
+        focused: address === "t4",
+        agent,
+        agent_status: agent ? "working" : "",
+        task_summary: agent ? "Juno on core" : undefined,
+        runtime: "herdr-core",
+        revision: 1,
+      }),
+    ),
+  );
+  return {
+    connectionId: "core",
+    label: "Core host",
+    source: "saved-profile",
+    runtime: "herdr-core",
+    isDefault: false,
+    state: "ready",
+    generation: 5,
+    snapshotGeneration: 5,
+    stale: false,
+    actionable: true,
+    snapshot: {
+      workspaces: [
+        {
+          workspace_id,
+          number: 1,
+          label: "Core room",
+          focused: true,
+          pane_count: panes.length,
+          tab_count: tabs.length,
+          active_tab_id: "core-shell",
+          agent_status: "working",
+        } as Workspace,
+      ],
+      tabs,
+      panes,
+      agents: [],
+    },
+  };
+}
+
+/**
+ * Tapping a live herdr-core desk opens it as a Herdr desk opens (#1006): a
+ * shell desk its terminal, an agent desk its agent, a two-pane desk its
+ * focused pane, with no "can't" toast. One tap does it, on a phone too.
+ */
+async function checkCoreDesks(
+  host: HTMLElement,
+  world: WorldObject,
+  opened: string[],
+  inspected: [string, string][],
+) {
+  const canvasHost = host.querySelector(".town-canvas-host canvas")!
+    .parentElement!;
+  const leafId = (address: string) =>
+    world.leaves.find(
+      (leaf) => leaf.connectionId === "core" && leaf.pane.pane_id === address,
+    )?.id;
+  const desk = (tabId: string) =>
+    [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].find((target) => JSON.parse(target.dataset.targetKey!)[2] === tabId);
+  const tap = (target: HTMLElement, id: number) => {
+    const box = target.getBoundingClientRect();
+    const at = {
+      bubbles: true,
+      pointerId: id,
+      pointerType: phone ? "touch" : "mouse",
+      button: 0,
+      clientX: box.left + box.width / 2,
+      clientY: box.top + box.height / 2,
+    };
+    canvasHost.dispatchEvent(
+      new PointerEvent("pointerdown", { ...at, buttons: 1 }),
+    );
+    canvasHost.dispatchEvent(
+      new PointerEvent("pointerup", { ...at, buttons: 0 }),
+    );
+    canvasHost.dispatchEvent(new MouseEvent("click", at));
+  };
+  const openedIds = () => [...opened, ...inspected.map(([id]) => id)];
+  // At desk level, where each table wears its nameplate: there a touch tap
+  // on a table with nothing to open at once opens its card first.
+  const rendered = window.__HERDR_TOWN_RENDERER__!;
+  for (let into = 0; into < 6 && rendered.level !== "desk"; into += 1) {
+    const before = rendered.frames;
+    host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
+    await waitFor(
+      () => rendered.frames > before && !rendered.flying,
+      "zooming in to the core desks did not finish",
+    );
+  }
+  await waitFor(
+    () => host.querySelectorAll(".town-desk-title").length >= 3,
+    `the core desks wear no nameplates (level ${rendered.level})`,
+  );
+  let pointer = 60;
+  for (const [tabId, address] of [
+    ["core-shell", "t1"],
+    ["core-agent", "t2"],
+    ["core-pair", "t4"],
+  ] as const) {
+    await waitFor(() => Boolean(desk(tabId)), `no core desk ${tabId}`);
+    const target = desk(tabId)!;
+    opened.length = 0;
+    inspected.length = 0;
+    // One tap opens it, on a phone too: a desk with a pane to open has no
+    // summary card first (townDeskOpensAtOnce).
+    tap(target, pointer++);
+    await waitFor(
+      () => openedIds().length > 0,
+      `one tap on the core ${tabId} desk opened nothing`,
+    );
+    check(
+      openedIds().every((id) => id === leafId(address)),
+      `the core ${tabId} desk opened ${JSON.stringify(openedIds())}, not ${address}`,
+    );
+    const toasts = host.querySelector(".town-toasts")?.textContent ?? "";
+    check(
+      !toasts.includes(CORE_VIEW_ONLY_REASON) && !/can.t/i.test(toasts),
+      `tapping the core ${tabId} desk showed "${toasts}"`,
+    );
+  }
+}
+
 function worldFor(connections: WorldRuntimeConnection[]) {
   const world = buildWorldObject(connections, "local");
   // The merged service names every stopped agent, including its first read.
@@ -1061,6 +1229,9 @@ async function run() {
   layoutShell.append(host);
   document.body.append(layoutShell);
   const base = topology(7);
+  // A herdr-core host alone: a shell desk, an agent desk and a two-pane desk
+  // whose second pane is focused (#1006).
+  if (scale === "core") base.connections = [coreTopology()];
   // The service saves a claim for each spawn stamp it sees.
   boardDocument.relations = {
     groups: boardDocument.relations?.groups ?? [],
@@ -1309,13 +1480,20 @@ async function run() {
     return;
   }
   if (scale === "navigation") {
+    // The status chip opens the board; its Summary button the window.
     const summaryButton = () =>
-      window.innerWidth <= 640
-        ? host.querySelector<HTMLButtonElement>(".town-board-chip")
-        : host.querySelector<HTMLButtonElement>(".town-board-open");
+      host.querySelector<HTMLButtonElement>(".town-board-open");
     await waitFor(
-      () => summaryButton() !== null,
+      () =>
+        summaryButton() !== null &&
+        host.querySelector(".town-board-chip") !== null,
       "Summary launcher is missing before renderer setup",
+    );
+    host.querySelector<HTMLButtonElement>(".town-board-chip")!.click();
+    await waitFor(
+      () =>
+        host.querySelector(".town-board")?.getAttribute("data-open") === "true",
+      "the status chip did not open the Town board",
     );
     summaryButton()!.click();
     await waitFor(
@@ -1420,6 +1598,12 @@ async function run() {
     "town targets did not finish progressive admission",
   );
 
+  if (scale === "core" && mode === "test") {
+    await checkCoreDesks(host, worldFor(base.connections), opened, inspected);
+    root.unmount();
+    await settle();
+    return;
+  }
   if (scale === "typical" && mode === "test")
     await checkTownCenter(host, check, waitFor);
   if (scale === "plates" && mode === "test") {
@@ -1919,31 +2103,28 @@ async function run() {
         : host.querySelectorAll(".town-room").length === totalRooms,
     "the town's rooms were never drawn",
   );
-  // Phones show the Town board as a compact chip, wider screens the board and
-  // its Summary button; either opens the Town summary window, whose
-  // needs-you count is the sign's, the chip's and the rail's.
+  // Every width shows one compact status chip; tapping it opens the Town
+  // board, whose Summary button opens the Town summary window. Its
+  // needs-you count is the sign's, the chip's and the rail's (#1006).
   {
     const chip = host.querySelector<HTMLButtonElement>(".town-board-chip")!;
     const board = host.querySelector<HTMLElement>(".town-board")!;
     const shown = (element: HTMLElement) =>
       getComputedStyle(element).display !== "none";
-    const phone = window.innerWidth <= 640;
     check(
-      phone ? shown(chip) && !shown(board) : !shown(chip) && shown(board),
-      phone
-        ? "a phone shows the Town board chip, not the board"
-        : "a wide screen shows the Town board, not its chip",
+      shown(chip) && !shown(board),
+      "the Town shows its status chip with the board closed",
     );
+    chip.click();
+    await waitFor(() => shown(board), "the status chip did not open the board");
     const signNeeds = Number(
       board.querySelectorAll("dd")[1]?.textContent ?? "NaN",
     );
     const chipNeeds = Number(
-      chip.querySelector('[data-status="blocked"]')?.textContent?.slice(1),
+      chip.querySelector('[data-status="blocked"]')?.textContent?.slice(1) ??
+        "0",
     );
-    (phone
-      ? chip
-      : board.querySelector<HTMLButtonElement>(".town-board-open")!
-    ).click();
+    board.querySelector<HTMLButtonElement>(".town-board-open")!.click();
     await waitFor(
       () =>
         panelEntries.some((entry) => entry.id === "panel:town-summary") &&

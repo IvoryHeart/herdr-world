@@ -21,6 +21,8 @@ import {
 } from "./worldObject";
 import { viewOnlyMessage } from "./viewOnly";
 import { projectAgent } from "./officeAgent";
+import { projectWorldOffice } from "./herdrOfficeProjection";
+import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import {
   worldInspectorContext,
   worldIntentViews,
@@ -397,6 +399,30 @@ describe("core agents in World's views", () => {
     expect(
       projectAgent(asAgent(gone), "room", "host", new Map()).coreChat,
     ).toBe(undefined);
+  });
+
+  test("Town opens a live core desk, shell pane and agent; a stale one opens nothing", async () => {
+    for (const coreStale of [false, true]) {
+      const office = projectWorldOffice(await worldOf(coreStale), 0);
+      const core = (key: string) => key.includes("box-core");
+      const shell = office.paneRoster.find(
+        ({ device }) => core(device.key) && !device.agentKey,
+      )!.device;
+      const agent = office.roster.find(({ agent }) => core(agent.key))!.agent;
+      const desk = office.deskRoster.find(({ desk }) => core(desk.key))!.desk;
+      // World cannot mark core work reviewed, which is no reason to refuse
+      // an open (#1006).
+      expect(shell.canOpenInSpaces).toBe(false);
+      expect(shell.coreOpen).toBe(coreStale ? undefined : true);
+      expect(desk.coreOpen).toBe(coreStale ? undefined : true);
+      for (const key of [shell.key, agent.key, desk.key])
+        expect(townTargetActionable(office, key)).toBe(!coreStale);
+      const opened: string[] = [];
+      await inspectTownTerminal(office, shell.key, (id) => {
+        opened.push(id);
+      });
+      expect(opened).toEqual(coreStale ? [] : [shell.nodeId]);
+    }
   });
 
   test("a core agent opened on Chat finds its pane while it waits to read the conversation", async () => {

@@ -198,6 +198,7 @@ function folderOf(
   for (const room of doc.rooms) {
     if (coreRoomWorkspaceId(room) !== workspaceId) continue;
     if (room.checkout) return room.checkout.path;
+    if (room.folder) return room.folder;
     for (const tab of room.tabs)
       for (const address of tab.terminals) {
         const record = terminals.find((t) => t.address === address);
@@ -659,6 +660,8 @@ export async function createCoreRoom(
   lease: Lease,
   topology: CoreTopologyPort,
   label: string,
+  /** A folder on the core's host the caller already resolved. */
+  folder?: string,
 ): Promise<{ workspace_id: string; label: string }> {
   const coreId = coreIdOf(lease);
   const name = label.trim().slice(0, CORE_TOPOLOGY_LIMITS.label) || "Room";
@@ -668,7 +671,12 @@ export async function createCoreRoom(
     const next = pruned(current, live);
     if (next.rooms.length >= CORE_TOPOLOGY_LIMITS.rooms)
       throw new CoreOperationRefused("This host has too many rooms.");
-    next.rooms.push({ id, label: name, tabs: [] });
+    next.rooms.push({
+      id,
+      label: name,
+      ...(folder ? { folder } : {}),
+      tabs: [],
+    });
     return next;
   });
   lease.runtime.layoutChanged();

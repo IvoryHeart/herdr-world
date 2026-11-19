@@ -81,6 +81,17 @@ export const hostFilterCases: {
     "arrangement-retirement",
     "close-all",
   ].map((operation) => ({ width: 1440, operation, view: "board" })),
+  // Hosts in a phone's corner view menu, upright and on a short landscape
+  // phone, where the menu scrolls. Headless Chrome's page is shorter than its
+  // window (640×350 leaves about 263 px), stricter than a landscape phone.
+  ...[
+    { width: 390, height: 844 },
+    { width: 640, height: 350 },
+  ].map((viewport) => ({
+    ...viewport,
+    operation: "phone-hosts-menu",
+    view: "town",
+  })),
   { width: 1440, operation: "town-walk-anchor", view: "town" },
   { width: 1440, operation: "cold-master", view: "town" },
   { width: 1440, operation: "cold-master-connect", view: "town" },

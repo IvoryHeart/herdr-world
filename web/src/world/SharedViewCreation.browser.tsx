@@ -134,6 +134,11 @@ let conversationBarrier: Promise<void> | null = null;
 const conversationControls = new Set<Parameters<typeof bridge.onControl>[0]>();
 // One agent starts without a session, so Town initially opens Terminal.
 runtime.get("beta")!.panes[0]!.agent = "claude";
+// Beta's folders: the agent's is the most recent, the room's own the next
+// (#1006: a new room offers both, the first as its default).
+runtime.get("beta")!.panes[0]!.cwd = "/srv/example/site";
+runtime.get("beta")!.panes[0]!.last_activity_at = 2_000;
+runtime.get("beta")!.workspaces[0]!.cwd = "/srv/example/docs";
 function workspaces(host: string) {
   const r = runtime.get(host)!;
   return r.workspaces.map((workspace) => ({
@@ -264,6 +269,17 @@ for (const host of hosts) {
             ]),
           ),
         };
+      if (method === "workspace.path") {
+        // The host resolves ~ and lists the folders inside.
+        const path = String(params.path).replace(/^~(?=\/|$)/, "/home/example");
+        const folder = path.replace(/\/+$/, "") || "/";
+        return {
+          path: folder,
+          error: null,
+          directories:
+            folder === "/srv/example/docs" ? [`${folder}/guide`] : [],
+        };
+      }
       if (method === "tab.list") return { tabs: r.tabs };
       if (method === "pane.list") return { panes: r.panes };
       if (method === "file.list")
@@ -995,6 +1011,37 @@ async function run() {
       )?.value === "beta",
     "Add room keeps its building's host",
   );
+  // A recent folder is the second tap: Add room, then the folder.
+  const folderInput = () =>
+    document.querySelector<HTMLInputElement>(
+      '[role="dialog"][aria-label="Create workspace"] input[placeholder^="e.g."]',
+    );
+  await until(
+    () => folderInput()?.value === "/srv/example/site",
+    "a new room defaults to its host's most recent folder",
+  );
+  const recentFolder = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '[aria-label="Recent folders"] button',
+    ),
+  ];
+  check(
+    recentFolder.map((button) => button.title).join() ===
+      "/srv/example/site,/srv/example/docs",
+    `recent folders: ${recentFolder.map((button) => button.title).join()}`,
+  );
+  recentFolder[1]!.click();
+  await until(
+    () =>
+      folderInput()?.value === "/srv/example/docs" &&
+      document.querySelector(
+        '[aria-label="Folders to browse"] [title="/srv/example/docs/guide"]',
+      ) &&
+      document.querySelector(
+        '[aria-label="Folders to browse"] [title="/srv/example"]',
+      ),
+    "a recent folder chose itself and listed its folders to browse",
+  );
   await submitWorkspace();
   await createdInspector(3);
   const roomCreate = [...calls]
@@ -1005,6 +1052,10 @@ async function run() {
       (roomCreate.params.browser_source as { workspace_id: string })
         .workspace_id === "a",
     "Add room used another host or source workspace",
+  );
+  check(
+    roomCreate.params.cwd === "/srv/example/docs",
+    `Add room created in ${String(roomCreate.params.cwd)}, not the chosen folder`,
   );
   for (const name of ["town", "desk", "board"]) {
     view(name);
