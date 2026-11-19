@@ -25,11 +25,16 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // New room's dialog reads each connection's recent folders, which splits the
 // World runtime store into a lazy chunk of its own (190 files with #981, no new
 // bytes or initial load, on 2026-11-19).
-const maxFileCount = 190;
+// The #1035 Settings preview (one registry and one search) loads as two lazy
+// chunks and a stylesheet; its catalog shares small stores with Town, chat and
+// the command box, which split into chunks of their own (196 files and about
+// 35 KiB, with no initial load, on 2026-11-19).
+const maxFileCount = 200;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
-const maxTotalBytes = 15.25 * 1024 * 1024;
+// The lazy #1035 Settings preview adds about 35 KiB (15.3 MiB on 2026-11-19).
+const maxTotalBytes = 15.3 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
