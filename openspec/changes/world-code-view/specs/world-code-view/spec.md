@@ -82,7 +82,8 @@ upstream destinations SHALL be refused. Server tokens SHALL NOT enter browser
 URLs, history, logs or persistent browser storage. Cookies, redirects and worker
 scope SHALL NOT overwrite World authentication or intercept World/PWA resources.
 Logout, disablement and connection retirement SHALL revoke proxy authority and
-close attached streams; unsupported platforms SHALL be explained without fallback.
+close attached streams; retirement SHALL NOT stop the server itself.
+Unsupported platforms SHALL be explained without fallback.
 
 #### Scenario: SSH project opens
 
@@ -175,15 +176,59 @@ non-actionable. This view SHALL NOT add World commit/push/approve/merge authorit
 
 Servers SHALL start only on explicit admitted demand, reuse only compatible proven
 host/user/provider/profile instances and use measured active-server/window limits.
-World SHALL distinguish external from World-started processes and expose stop/idle
-behavior. Closing Code SHALL detach clients without killing Herdr agents or an
-externally owned IDE server. Uncertain starts SHALL be reconciled against the
-captured instance before retry; retiring a connection SHALL NOT restart it elsewhere.
+World SHALL distinguish external from World-started processes. Closing Code SHALL
+detach clients without killing Herdr agents or an externally owned IDE server.
+Uncertain starts SHALL be reconciled against the captured instance before retry;
+retiring a connection SHALL NOT restart it elsewhere.
+
+Going away SHALL NOT stop a World-started server: closing Code or the browser,
+World stopping, restarting or updating, a connection reconnecting or changing
+destination, the SSH link dropping and the host being unreachable SHALL leave the
+server and every process under it running on its host, with no idle timeout. Such
+a server SHALL NOT be tied to World's process or to the transport that started it.
+It SHALL carry an identity on its host (World, connection, provider, folder and its
+own token) that a later World verifies before reattaching; World SHALL reattach
+only to its own server for the same provider and folder, under the connection's
+current generation, and a concurrent second start for the same folder SHALL find
+the first instead of starting another.
+
+Only an explicit person action SHALL stop a World-started server: Stop, disabling
+its provider or removing its connection, each after saying that everything
+running in it ends. Stopping SHALL end the server's whole process tree on its
+host, including descendants re-parented out of it. A stop that cannot reach the
+host SHALL leave the server listed with the reason. Every World-started server
+that still runs SHALL be listed per host and folder with since-when and Stop,
+including servers found after a restart.
 
 #### Scenario: Close a project using an external server
 
 - **WHEN** the owner closes Code while its installed server was started outside World
 - **THEN** World releases its own attachments/transport demand without stopping the server, deleting IDE state or ending agents
+
+#### Scenario: World restarts while an IDE server runs
+
+- **WHEN** World stops, restarts or updates while a World-started IDE server runs a long task
+- **THEN** the server and the task keep running, the restarted World lists the server with since-when and Stop, and reattaches to it without starting another
+
+#### Scenario: SSH link drops
+
+- **WHEN** the SSH forward to a World-started IDE server drops or its connection reconnects
+- **THEN** World closes the route and its streams, the server keeps running on the host, and Open reattaches to the same server
+
+#### Scenario: Two starts for one folder
+
+- **WHEN** two starts for the same World, provider and folder race on one host
+- **THEN** exactly one server starts and the other start reattaches to it
+
+#### Scenario: Stop races a reattach
+
+- **WHEN** the owner stops a server while World is reattaching to it or opening it again
+- **THEN** every process of the old server has ended before any new start for that folder
+
+#### Scenario: Stop a server with a re-parented terminal
+
+- **WHEN** the owner confirms Stop and a terminal in its own session has lost its parent inside the server
+- **THEN** World ends that terminal with the rest of the server's tree on its host, local or SSH
 
 #### Scenario: Start reply lost
 

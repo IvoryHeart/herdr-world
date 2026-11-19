@@ -12,11 +12,15 @@
   extension panels) stay blank inside World. Each IDE is an integration (also
   in Settings → Integrations): detected when installed, with a download link
   and program path when not, and a trust and licence dialog before first
-  enable. World starts a server only when you click Open, reuses it per
-  project folder, and stops it on Stop, disable, shutdown, or when its
-  connection reconnects or changes, ending its whole process tree (server,
-  extension hosts, terminal shells) on World's computer or the SSH host.
-  code-server's port proxies are off.
+  enable. World starts a server only when you click Open and reuses it per
+  project folder. A server keeps running, with its terminals and tasks,
+  when you close the view, World restarts or updates, or the SSH link
+  drops; World finds it again and reattaches. Code and Settings →
+  Integrations list every running IDE server with since-when and Stop. Only
+  Stop, disabling the IDE or removing its connection stops one, after a
+  warning, and that ends its whole process tree on World's computer or the
+  SSH host, terminals that left the tree included. code-server's port
+  proxies are off.
 
 ### Removed
 

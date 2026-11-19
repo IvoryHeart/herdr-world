@@ -190,10 +190,23 @@ evidence is unavailable; stale PR badges remain labelled and non-actionable.
 Resource ownership distinguishes externally started servers from World-started
 children. Start on demand, reuse only a compatible host/user/provider/profile
 instance, enforce measured server/window limits, and show active/open state.
-Window close detaches clients; it is not stop-server. Idle shutdown applies only
-to World-owned instances after no clients/terminal demand and explicit idle policy;
-external instances are detached, never killed. Explicit stop explains affected IDE
-sessions and never ends Herdr agents. Partial start/reply loss is uncertain:
+Window close detaches clients; it is not stop-server. Going away is not stopping
+either: World shutdown, restart or update, a reconnect, a changed destination, a
+dropped SSH link and an unreachable host only detach World from a World-started
+server; it keeps running with whatever runs in it, and there is no idle timeout.
+Each server lives in its own folder on its host (World's data folder locally,
+`$XDG_STATE_HOME/herdr-world/ide` over SSH) holding a record (World ID, connection,
+provider, folder, start time and an ownership nonce), its token and its socket. A
+supervisor detached from World and from the SSH channel waits on it. The folder ID
+is derived from World, connection, host, provider and folder, so a second start
+for the folder finds the first (an atomic `mkdir` claim) and a later World
+rediscovers and verifies it before reattaching. Every process the server starts
+inherits the nonce in its environment, so Stop and the supervisor end the whole
+tree, including terminals re-parented out of it. Only Stop, disable and removing
+the connection stop a server, each after warning that its running tasks end;
+external instances are detached, never killed. Every World-started server that
+still runs is listed with since-when and Stop. Explicit stop never ends Herdr
+agents. Partial start/reply loss is uncertain:
 reconcile the captured instance before retry, avoid duplicate server processes.
 No automatic restart across a retired connection or silently open ports on LAN.
 

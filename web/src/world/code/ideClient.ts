@@ -6,8 +6,10 @@
  * Testing switch: open World with `?ideFixture=<state>` and the Code view
  * shows that state from synthetic data instead of the service's:
  * `missing` (no IDE installed), `detected` (installed, not enabled),
- * `ssh` (starting on an SSH host), `downloading` (first start) or
- * `failed` (the server exited). Nothing is detected, started or stored.
+ * `ssh` (starting on an SSH host), `downloading` (first start), `failed`
+ * (the server exited) or `restored` (World restarted and found two IDE
+ * servers it had started, one here and one on an SSH host, still running).
+ * Nothing is detected, started or stored.
  * The page drops the parameter at once; the switch lasts until a reload.
  */
 import { bridge } from "../../api";
@@ -53,11 +55,18 @@ export type IdeInstance = {
   provider: IdeProviderId;
   connectionId: string;
   folder: string;
-  state: "starting" | "ready" | "failed";
+  /**
+   * `detached`: it runs on its host, World isn't attached to it (after a
+   * restart, a reconnect or a dropped SSH link). Only `failed` ones no
+   * longer run.
+   */
+  state: "starting" | "ready" | "detached" | "failed";
   url: string;
   startedAt: string;
   reason?: string;
   downloading?: boolean;
+  /** Set while World is stopping it. */
+  stopping?: boolean;
   /** Set when the IDE runs on the project's SSH host. */
   sshDestination?: string;
 };
@@ -105,7 +114,12 @@ export type IdeClient = {
 };
 
 const PROVIDERS = new Set<string>(["vscode", "code-server", "openvscode"]);
-const INSTANCE_STATES = new Set<string>(["starting", "ready", "failed"]);
+const INSTANCE_STATES = new Set<string>([
+  "starting",
+  "ready",
+  "detached",
+  "failed",
+]);
 const REFUSALS = new Set<string>([
   "windows",
   "stale",
@@ -195,6 +209,7 @@ export function parseIdeInstance(value: unknown): IdeInstance | null {
     startedAt: text(value.startedAt) ? value.startedAt : "",
     ...(text(value.reason) ? { reason: value.reason } : {}),
     ...(value.downloading === true ? { downloading: true } : {}),
+    ...(value.stopping === true ? { stopping: true } : {}),
     ...(text(value.sshDestination)
       ? { sshDestination: value.sshDestination }
       : {}),
@@ -279,13 +294,15 @@ export type IdeFixture =
   | "detected"
   | "ssh"
   | "downloading"
-  | "failed";
+  | "failed"
+  | "restored";
 const FIXTURES = new Set<string>([
   "missing",
   "detected",
   "ssh",
   "downloading",
   "failed",
+  "restored",
 ]);
 const PARAM = "ideFixture";
 let fixture: IdeFixture | false | undefined;
@@ -403,7 +420,7 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
     kind === "missing" ? "missing" : "detected",
     enabled,
   );
-  let instances: IdeInstance[] = [];
+  let instances: IdeInstance[] = kind === "restored" ? RESTORED() : [];
   // Unknown to the switch: the view then prefers no host over another.
   const status = (): IdeStatus => ({
     providers,
@@ -431,7 +448,9 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
         kind === "missing" ? "missing" : "detected",
         false,
       );
-      instances = [];
+      instances = instances.filter(
+        (instance) => instance.provider !== "code-server",
+      );
       changed();
       return status();
     },
@@ -445,6 +464,24 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
             message: "Enable an IDE in the Code view first.",
           },
         };
+      const known = instances.find(
+        (entry) =>
+          entry.connectionId === request.connectionId &&
+          entry.folder === request.folder,
+      );
+      if (known) {
+        // Reattaching: there is no server to reach, so it stays starting.
+        const instance: IdeInstance = {
+          ...known,
+          state: "starting",
+          reason: undefined,
+        };
+        instances = instances.map((entry) =>
+          entry.id === known.id ? instance : entry,
+        );
+        changed();
+        return { ok: true, instance };
+      }
       const instance: IdeInstance = {
         id: "fixtureFixtureFixture0",
         provider: request.provider ?? "code-server",
@@ -464,12 +501,12 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
               ? { sshDestination: "devbox.example" }
               : {}),
       };
-      instances = [instance];
+      instances = [...instances, instance];
       changed();
       return { ok: true, instance };
     },
-    stop: async () => {
-      instances = [];
+    stop: async (instanceId) => {
+      instances = instances.filter((instance) => instance.id !== instanceId);
       changed();
       return status();
     },
@@ -479,6 +516,38 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
     },
   };
 }
+
+/**
+ * What a restarted World finds: servers it started earlier, still running
+ * and not yet attached. Synthetic folders and host.
+ */
+const RESTORED = (): IdeInstance[] => {
+  const earlier = (hours: number) =>
+    new Date(Date.now() - hours * 3_600_000).toISOString();
+  return [
+    {
+      id: "fixtureRestoredLocal00",
+      provider: "code-server",
+      connectionId: "fixture-local",
+      folder: "/srv/example/web-app",
+      state: "detached",
+      url: "/ide/fixtureRestoredLocal00/",
+      startedAt: earlier(3),
+    },
+    {
+      id: "fixtureRestoredRemote0",
+      provider: "code-server",
+      connectionId: "fixture-ssh",
+      folder: "/srv/example/api",
+      state: "detached",
+      url: "/ide/fixtureRestoredRemote0/",
+      startedAt: earlier(26),
+      sshDestination: "devbox.example",
+      reason:
+        "SSH to devbox.example dropped; the IDE still runs there. Open it to reconnect.",
+    },
+  ];
+};
 
 let pageClient: IdeClient | undefined;
 

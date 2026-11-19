@@ -72,6 +72,9 @@ import type { createWorldCliService } from "../world/world-cli-service";
 import type { BrowserClients } from "./clients";
 import type { Clock } from "./ports";
 
+/** Why World closed a browser's IDE socket; the server may run on. */
+const IDE_SOCKET_CLOSED = "World disconnected from the IDE server";
+
 /** What the HTTP and WebSocket listener uses from its service. */
 export type ListenerDeps = {
   serviceIncarnation: string;
@@ -161,11 +164,12 @@ export function listen(deps: ListenerDeps) {
     ws: ServerWebSocket<ListenerSocketData>,
   ): ws is ServerWebSocket<IdeSocketData> =>
     (ws.data as IdeSocketData).kind === "ide";
-  // A stopped, disabled or stale IDE loses its open sockets at once.
+  // A stopped IDE, or one World let go of (a reconnect, a change of host),
+  // loses its open sockets at once; a server World let go of runs on.
   deps.ide?.onRevoked((instanceId) => {
     for (const [socket, bridge] of ideBridges)
       if (socket.data.instanceId === instanceId)
-        bridge.close(1000, "The IDE server stopped");
+        bridge.close(1000, IDE_SOCKET_CLOSED);
   });
 
   function handleIdeRequest(
@@ -539,7 +543,7 @@ export function listen(deps: ListenerDeps) {
           ideBridges.set(ws, bridge);
           // Revoked between the upgrade and now: close, don't connect.
           if (deps.ide?.upstream(ws.data.instanceId)) bridge.open();
-          else bridge.close(1000, "The IDE server stopped");
+          else bridge.close(1000, IDE_SOCKET_CLOSED);
           return;
         }
         clients.add(ws);

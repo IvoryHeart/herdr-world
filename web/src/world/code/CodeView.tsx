@@ -7,12 +7,13 @@ import {
   Loader2,
   PanelRightClose,
   PanelRightOpen,
+  Server,
   Square,
   SquareTerminal,
 } from "lucide-react";
 import { worldLocalStorage } from "../../browserStorage";
 import { AgentIcon } from "../../components/AgentIcon";
-import { ConfirmDialog } from "../../components/ModalDialogs";
+import { CloseButton } from "../../components/CloseButton";
 import type { WorldLeafObject, WorldObject } from "../worldObject";
 import {
   type CodeProject,
@@ -28,6 +29,14 @@ import {
   pageIdeClient,
 } from "./ideClient";
 import { IdeProviderList } from "./IdeProviders";
+import {
+  IdeServerList,
+  IdeStopDialog,
+  ideProviderLabel,
+  ideServerHost,
+  ideSince,
+  runningIdeServers,
+} from "./IdeServers";
 import { useIdeStatus } from "./useIdeStatus";
 import "./CodeView.css";
 
@@ -136,6 +145,8 @@ export default function CodeView({
   const [opening, setOpening] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
   const [stopping, setStopping] = useState<IdeInstance | null>(null);
+  const [serversOpen, setServersOpen] = useState(false);
+  const running = runningIdeServers(ide.status);
   // Ready workbenches shown this visit stay loaded while another project
   // is in front, so switching back does not reload VS Code.
   const [visited, setVisited] = useState<string[]>([]);
@@ -208,6 +219,17 @@ export default function CodeView({
       setOpenError(cause instanceof Error ? cause.message : String(cause));
     }
   };
+
+  // The host as the project picker names it, else its SSH destination.
+  const hostLabel = (entry: IdeInstance) =>
+    projects.find((candidate) => candidate.connectionId === entry.connectionId)
+      ?.hostLabel ?? ideServerHost(entry);
+  const projectOf = (entry: IdeInstance) =>
+    projects.find(
+      (candidate) =>
+        candidate.connectionId === entry.connectionId &&
+        candidate.folder === entry.folder,
+    );
 
   const readyVisited = instances.filter(
     (entry) => entry.state === "ready" && visited.includes(entry.id),
@@ -283,10 +305,24 @@ export default function CodeView({
           <button
             type="button"
             className="code-view-bar-action"
+            disabled={instance.stopping}
             onClick={() => setStopping(instance)}
           >
             <Square size={13} aria-hidden />
             <span>Stop</span>
+          </button>
+        ) : null}
+        {running.length ? (
+          <button
+            type="button"
+            className="code-view-bar-action"
+            aria-expanded={serversOpen}
+            title="IDE servers World started that still run"
+            onClick={() => setServersOpen(!serversOpen)}
+          >
+            <Server size={13} aria-hidden />
+            <span>Servers</span>
+            <span className="code-view-rail-count">{running.length}</span>
           </button>
         ) : null}
         {project ? (
@@ -320,6 +356,28 @@ export default function CodeView({
         ) : null}
       </header>
       <div className="code-view-body">
+        {serversOpen && ide.status && running.length ? (
+          <section className="code-view-servers" aria-label="IDE servers">
+            <div className="code-view-servers-head">
+              <h2>Running IDE servers</h2>
+              <CloseButton onClick={() => setServersOpen(false)} />
+            </div>
+            <p className="code-view-muted">
+              They keep running when you leave Code, close the browser or World
+              restarts, until you stop them.
+            </p>
+            <IdeServerList
+              status={ide.status}
+              hostLabel={hostLabel}
+              onStop={stop}
+              onShow={(entry) => {
+                const target = projectOf(entry);
+                if (target) choose(target.key);
+                setServersOpen(false);
+              }}
+            />
+          </section>
+        ) : null}
         <section className="code-view-stage" aria-label="IDE">
           {readyVisited.map((entry) => (
             <iframe
@@ -344,24 +402,18 @@ export default function CodeView({
           />
         ) : null}
       </div>
-      <ConfirmDialog
-        open={stopping !== null}
-        title="Stop VS Code"
-        message={`Stop ${stopping ? providerLabel(stopping) : "the IDE"} for ${stopping ? displayFolder(stopping.folder) : "this project"}? Its windows close; agents and terminals keep running. Open it again any time.`}
-        confirmLabel="Stop"
+      <IdeStopDialog
+        instance={stopping}
+        providers={providers}
+        hostLabel={hostLabel}
         onClose={() => setStopping(null)}
-        onConfirm={() => {
-          if (stopping) void stop(stopping);
-        }}
+        onStop={stop}
       />
     </div>
   );
 
   function providerLabel(entry: IdeInstance) {
-    return (
-      providers.find((candidate) => candidate.id === entry.provider)?.label ??
-      "IDE"
-    );
+    return ideProviderLabel(providers, entry);
   }
 
   function stageState() {
@@ -438,6 +490,58 @@ export default function CodeView({
           </p>
         </div>
       );
+    if (instance?.state === "detached") {
+      const since = ideSince(instance.startedAt);
+      const using =
+        providers.find((entry) => entry.id === instance.provider) ?? provider;
+      return (
+        <div className="code-view-detached">
+          <h2>
+            {providerLabel(instance)} still runs on {hostLabel(instance)}
+          </h2>
+          <p>
+            {since ? `Running since ${since}. ` : ""}World isn't attached to it
+            right now; whatever runs in it keeps running.
+          </p>
+          {instance.reason ? (
+            <p className="code-view-muted">{instance.reason}</p>
+          ) : null}
+          {project.stale ? (
+            <p role="alert">
+              This project's connection is stale. Reconnect it to open the IDE
+              again.
+            </p>
+          ) : null}
+          <div className="code-view-detached-actions">
+            <button
+              type="button"
+              className="primary"
+              disabled={opening !== null || project.stale || instance.stopping}
+              onClick={() => void open(project, using)}
+            >
+              {opening === project.key ? (
+                <Loader2 size={14} className="code-view-spin" aria-hidden />
+              ) : (
+                <Code2 size={14} aria-hidden />
+              )}
+              Open
+            </button>
+            <button
+              type="button"
+              disabled={instance.stopping}
+              onClick={() => setStopping(instance)}
+            >
+              <Square size={13} aria-hidden /> Stop…
+            </button>
+          </div>
+          {openError ? (
+            <p className="code-view-error" role="alert">
+              {openError}
+            </p>
+          ) : null}
+        </div>
+      );
+    }
     if (instance?.state === "failed")
       return (
         <div className="code-view-failed">

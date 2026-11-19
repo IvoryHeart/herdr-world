@@ -171,6 +171,8 @@ function fakeClient() {
     },
     disable: async () => {
       state.enabled = false;
+      // As the service: disabling stops its servers completely.
+      state.instances = [];
       return status();
     },
     configure: async () => status(),
@@ -466,6 +468,12 @@ async function run() {
   );
   button("Stop")?.click();
   await until(() => Boolean($(".modal[role=dialog]")), "Stop asks first");
+  check(
+    $(".modal[role=dialog]")?.textContent?.includes(
+      "Everything running in it ends with it: its terminals, tasks",
+    ) === true,
+    "Stop says what ends with the server",
+  );
   const actions = [
     ...document.querySelectorAll<HTMLButtonElement>(".modal-actions button"),
   ];
@@ -478,6 +486,70 @@ async function run() {
   await until(
     () => !$(`.code-view-frame[src="/ide/${INSTANCE_ID}/"]`),
     "a stopped server's frame goes away",
+  );
+
+  // The SSH link drops: World lets go, the server runs on and is listed.
+  const startedAt = new Date(Date.now() - 2 * 60_000).toISOString();
+  fake.state.instances = fake.state.instances.map((entry) => ({
+    ...entry,
+    state: "detached",
+    startedAt,
+    reason:
+      "SSH to devbox dropped; the IDE still runs there. Open it to reconnect.",
+  }));
+  fake.changed();
+  const serversButton = () =>
+    [...document.querySelectorAll<HTMLButtonElement>("button")].find((entry) =>
+      entry.textContent?.startsWith("Servers"),
+    );
+  await until(
+    () =>
+      serversButton()?.querySelector(".code-view-rail-count")?.textContent ===
+      "1",
+    "the bar counts the IDE servers that still run",
+  );
+  serversButton()?.click();
+  await until(
+    () => Boolean($('[aria-label="Running IDE servers"] .ide-server')),
+    "Servers lists every IDE server World started that still runs",
+  );
+  const listed =
+    $('[aria-label="Running IDE servers"] .ide-server') ?? document.body;
+  check(
+    listed.textContent?.includes("/srv/example/docs") === true &&
+      listed.textContent.includes("code-server on devbox") &&
+      listed.textContent.includes("since ") &&
+      listed.textContent.includes("Running, not attached"),
+    `a listed server names its folder, host, since-when and state: ${listed.textContent}`,
+  );
+  check(
+    Boolean(button("Stop the IDE for /srv/example/docs", listed)),
+    "a listed server offers Stop",
+  );
+  button("Show", listed)?.click();
+  await until(
+    () =>
+      $(".code-view-detached")?.textContent?.includes(
+        "code-server still runs on devbox",
+      ) === true,
+    "a detached server's project says it still runs there",
+  );
+  check(
+    !$(".code-view-servers") &&
+      $(".code-view-detached")?.textContent?.includes(
+        "Open it to reconnect",
+      ) === true,
+    "Show brings its project to the front with the reason",
+  );
+  button("Open", $(".code-view-detached")!)?.click();
+  await until(
+    () => fake.state.opens.length === 3,
+    "Open on a detached server asks World to reattach",
+  );
+  check(
+    fake.state.opens[2]?.connectionId === "ssh-1" &&
+      fake.state.opens[2].folder === "/srv/example/docs",
+    "reattaching names the same connection and folder",
   );
   flushSync(() => root.unmount());
 
@@ -492,6 +564,35 @@ async function run() {
         '[aria-label="IDE integrations"] [data-provider="code-server"] .ide-provider-badge',
       )?.textContent?.startsWith("Enabled") === true,
     "Settings lists the enabled IDE",
+  );
+  check(
+    $('[aria-label="Running IDE servers"]')?.textContent?.includes(
+      "/srv/example/docs",
+    ) === true,
+    "Settings lists the IDE servers that still run",
+  );
+  // Disable stops them: it says so before it does.
+  button(
+    "Disable",
+    $('[aria-label="IDE integrations"] [data-provider="code-server"]')!,
+  )?.click();
+  await until(
+    () =>
+      $(".modal[role=dialog]")?.textContent?.includes(
+        "Disabling code-server stops its IDE server.",
+      ) === true,
+    "Disable warns that it stops the running server",
+  );
+  const disableActions = [
+    ...document.querySelectorAll<HTMLButtonElement>(".modal-actions button"),
+  ];
+  disableActions[disableActions.length - 1]?.click();
+  await until(
+    () =>
+      !fake.state.enabled &&
+      $(".ide-servers")?.textContent?.includes("No IDE servers are running") ===
+        true,
+    "confirming Disable stops its servers",
   );
   flushSync(() => settings.unmount());
 }

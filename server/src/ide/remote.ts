@@ -1,49 +1,22 @@
 import { isAbsolute } from "node:path";
-import {
-  SSH_NONINTERACTIVE_ARGS,
-  validateSshDestination,
-} from "../bridge/ssh-command";
 import { shQuote } from "../utils/process-utils";
+import { REMOTE_PATH } from "./host";
 import {
   IDE_PROVIDERS,
   type IdeDetection,
   type IdeProviderId,
-  ideServerArgs,
   parseIdeVersion,
 } from "./providers";
 
 /**
- * The IDE of the host a project is on, for projects over SSH (#1009). World
- * runs the host's own installed VS Code (or code-server / OpenVSCode Server)
- * there, through the connection's OpenSSH destination, and reaches it the
- * same way as a local one: a private Unix socket World proxies under
- * `/ide/<instance>/` on its one origin. OpenSSH forwards that socket
- * (`-L local.sock:remote.sock`); nothing listens on a TCP port on either
- * side and no other origin is involved.
- *
- * On the host the server's socket and token sit in a folder World creates
- * with mode 0700 under /tmp, named with the instance's random ID; `mkdir`
- * without `-p` refuses a folder someone else made first. The token travels
- * on stdin, never on a command line other users could read. World keeps
- * stdin open: when its ssh ends for any reason, the host sees end of input
- * and stops the server, and the folder is removed.
- *
- * Stopping ends everything the launch started, not only the program it ran:
- * `code serve-web` starts a separate server, which starts extension hosts
- * and terminal shells (in sessions of their own). The program starts in a
- * process group of its own where the host can (`setsid`, else Perl's
- * `setpgrp`); on stop the script walks the process table for that group
- * and every descendant, keeps each process it has seen, sends SIGTERM,
- * waits up to REMOTE_STOP_GRACE_MS, then SIGKILL and a last sweep. The
- * same cleanup runs when the program exits on its own.
+ * Detection of the IDE on the host a project is on, for projects over SSH
+ * (#1009): read-only, through the connection's OpenSSH destination. World
+ * then runs the host's own installed VS Code (or code-server / OpenVSCode
+ * Server) there with the host scripts (host.ts) and reaches it the same way
+ * as a local one: a private Unix socket World proxies under `/ide/<id>/` on
+ * its one origin, which OpenSSH forwards (`-L local.sock:remote.sock`).
+ * Nothing listens on a TCP port on either side.
  */
-
-/**
- * Common install places a non-login `sh` on the host may not have on PATH:
- * the standalone CLI and code-server's installer use ~/.local/bin, Homebrew
- * /opt/homebrew/bin.
- */
-const REMOTE_PATH = `PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"`;
 
 /**
  * Prints the program to run and its version line, or exits 3. Read-only:
@@ -124,167 +97,4 @@ export function parseRemoteDetection(
     reason: `World couldn't look for ${IDE_PROVIDERS[provider].label} on ${hostLabel} over SSH (exit ${result.code}). Check the connection, then try again.`,
     configured: false,
   };
-}
-
-/** Exit codes of the launch script, for a plain reason. */
-export const REMOTE_EXIT = {
-  dir: 90,
-  token: 91,
-  folder: 92,
-} as const;
-
-export type SshIdeLaunch = {
-  destination: string;
-  provider: IdeProviderId;
-  /** The program found on the host. */
-  binary: string;
-  basePath: string;
-  folder: string;
-  /** World's private socket that OpenSSH forwards. */
-  localSocket: string;
-  /** Random, URL-safe: the host folder's name. */
-  remoteId: string;
-  /** Written on stdin; null for providers without a connection token. */
-  token: string | null;
-};
-
-/** How long the host lets the server's processes stop after SIGTERM. */
-export const REMOTE_STOP_GRACE_MS = 5_000;
-
-/**
- * Prints the running (not exited) processes among the PIDs in $1, the
- * members of process group $2 (if set) and all their descendants.
- */
-const OWNED_FUNCTION = [
-  "owned() {",
-  '  ps -A -o pid= -o ppid= -o pgid= -o stat= 2>/dev/null | awk -v roots="$1" -v group="$2" \'',
-  "    { pid[NR] = $1; parent[NR] = $2; grp[NR] = $3; dead[NR] = ($4 ~ /^Z/); n = NR }",
-  "    END {",
-  '      k = split(roots, r, " "); for (i = 1; i <= k; i++) want[r[i]] = 1',
-  '      for (i = 1; i <= n; i++) if (group != "" && grp[i] == group) want[pid[i]] = 1',
-  "      do { more = 0",
-  "        for (i = 1; i <= n; i++) if (!(pid[i] in want) && (parent[i] in want)) { want[pid[i]] = 1; more = 1 }",
-  "      } while (more)",
-  '      for (i = 1; i <= n; i++) if ((pid[i] in want) && !dead[i] && pid[i] > 1) printf "%s ", pid[i]',
-  "    }'",
-  "}",
-].join("\n");
-
-/** The launch script the host runs under `sh`. */
-export function remoteLaunchScript(
-  launch: SshIdeLaunch,
-  /** Tests shorten the host's SIGTERM grace. */
-  stopGraceMs = REMOTE_STOP_GRACE_MS,
-) {
-  const dir = remoteRuntimeDir(launch.remoteId);
-  const { args } = ideServerArgs(launch.provider, {
-    basePath: launch.basePath,
-    socketPath: `${dir}/ide.sock`,
-    tokenFile: `${dir}/token`,
-    folder: launch.folder,
-  });
-  const command = [launch.binary, ...args].map(shQuote).join(" ");
-  const rounds = Math.max(1, Math.ceil(stopGraceMs / 200));
-  return [
-    "umask 077",
-    REMOTE_PATH,
-    `d=${shQuote(dir)}`,
-    `mkdir "$d" || exit ${REMOTE_EXIT.dir}`,
-    `trap 'rm -rf "$d"' EXIT`,
-    "trap 'exit 143' HUP INT TERM",
-    ...(launch.token
-      ? [
-          `IFS= read -r t || exit ${REMOTE_EXIT.token}`,
-          `printf '%s' "$t" > "$d/token" || exit ${REMOTE_EXIT.token}`,
-          "t=",
-        ]
-      : []),
-    `cd ${shQuote(launch.folder)} || exit ${REMOTE_EXIT.folder}`,
-    OWNED_FUNCTION,
-    "nap() { sleep 0.2 2>/dev/null || sleep 1; }",
-    // Everything the launch owns: TERM, a bounded wait, KILL, a last sweep.
-    // `s` keeps every process seen, so re-parented shells stay in it.
-    "stop() {",
-    "  trap '' HUP INT TERM",
-    '  s=$(owned "$p $w" "$g")',
-    '  [ -n "$s" ] && kill -TERM $s 2>/dev/null',
-    "  i=0",
-    `  while [ -n "$s" ] && [ $i -lt ${rounds} ]; do nap; i=$((i + 1)); s=$(owned "$s" "$g"); done`,
-    '  if [ -n "$s" ]; then kill -KILL $s 2>/dev/null; nap; s=$(owned "$s" "$g"); [ -n "$s" ] && kill -KILL $s 2>/dev/null; fi',
-    '  wait "$p" 2>/dev/null',
-    "}",
-    // Background lists read /dev/null unless told otherwise: keep World's
-    // stdin on fd 3 for the watcher, which stops the server once it ends.
-    "exec 3<&0",
-    "g= w=",
-    // A process group of its own, so its descendants stay findable after
-    // the program exits. `setsid` doesn't fork here: a background job is
-    // never a group leader.
-    "if command -v setsid >/dev/null 2>&1; then set -- setsid",
-    "elif command -v perl >/dev/null 2>&1; then set -- perl -e 'setpgrp(0, 0); exec { $ARGV[0] } @ARGV or exit 127'",
-    "else set --; fi",
-    `"$@" ${command} 3<&- </dev/null 1>&2 &`,
-    "p=$!",
-    "[ $# -gt 0 ] && g=$p",
-    "trap 'stop; exit 143' HUP INT TERM",
-    // End of World's input tells the script itself to stop. No output: the
-    // watcher must not hold the session open after the script exits.
-    `(cat <&3; kill -TERM $$) >/dev/null 2>&1 &`,
-    "w=$!",
-    "exec 3<&-",
-    'wait "$p"',
-    "c=$?",
-    "stop",
-    'exit "$c"',
-  ].join("\n");
-}
-
-export function remoteRuntimeDir(remoteId: string) {
-  if (!/^[A-Za-z0-9_-]{16,64}$/.test(remoteId))
-    throw new Error("invalid remote IDE folder ID");
-  return `/tmp/hw-ide-${remoteId}`;
-}
-
-/**
- * One long-lived ssh per IDE: its own connection (like the Windows
- * bridges, it never takes one of the destination's multiplexed session
- * slots), a single Unix socket forward, and the launch script. The local
- * socket only World's user can open; ssh exits if it cannot bind it.
- */
-export function sshIdeArgv(launch: SshIdeLaunch): {
-  argv: string[];
-  stdin: string;
-} {
-  const remoteSocket = `${remoteRuntimeDir(launch.remoteId)}/ide.sock`;
-  return {
-    argv: [
-      "ssh",
-      ...SSH_NONINTERACTIVE_ARGS,
-      "-o",
-      "ExitOnForwardFailure=yes",
-      "-o",
-      "StreamLocalBindUnlink=yes",
-      "-o",
-      "StreamLocalBindMask=0177",
-      "-L",
-      `${launch.localSocket}:${remoteSocket}`,
-      "--",
-      validateSshDestination(launch.destination),
-      `sh -c ${shQuote(remoteLaunchScript(launch))}`,
-    ],
-    stdin: launch.token ? `${launch.token}\n` : "",
-  };
-}
-
-/** A plain reason for an ssh-launched server that exited. */
-export function remoteExitReason(code: number | null, hostLabel: string) {
-  if (code === REMOTE_EXIT.dir)
-    return `World couldn't make its private folder on ${hostLabel}.`;
-  if (code === REMOTE_EXIT.token)
-    return `World couldn't hand the IDE its access token on ${hostLabel}.`;
-  if (code === REMOTE_EXIT.folder)
-    return `The project folder doesn't exist on ${hostLabel}.`;
-  if (code === 255)
-    return `SSH to ${hostLabel} failed or dropped. Check the connection, then try again.`;
-  return null;
 }

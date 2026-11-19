@@ -20,11 +20,13 @@ type ConnectionEntry = {
   generation: number;
   ssh_destination?: string;
   remote_platform?: string;
+  state?: string;
 };
 
 /**
  * World's IDE service for the Code view: settings beside World's data,
- * connections from the profile catalogue. Servers start only on an open.
+ * connections from the profile catalogue. Servers start only on an open
+ * and run on their host until Stop; World attaches to them.
  */
 export function createWorldIde(deps: {
   root: string;
@@ -52,6 +54,11 @@ export function createWorldIde(deps: {
   ];
   return new IdeService({
     settings: fileIdeSettingsStore(join(deps.root, "ide.json")),
+    localRoot: join(deps.root, "ide"),
+    instanceOptions: {
+      // World runs as a systemd unit: its servers leave World's cgroup.
+      systemdScope: Boolean(process.env.INVOCATION_ID),
+    },
     environment: deps.environment ?? systemDetectEnvironment(),
     connection: (connectionId) => {
       const entry = connections().find((item) => item.id === connectionId);
@@ -87,6 +94,9 @@ export function ideConnection(
     ...(sshDestination ? { sshDestination } : {}),
     ...(entry.remote_platform === "windows"
       ? { remotePlatform: "windows" as const }
+      : {}),
+    ...(entry.state !== undefined && entry.state !== "ready"
+      ? { ready: false }
       : {}),
   };
 }

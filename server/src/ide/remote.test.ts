@@ -1,38 +1,22 @@
 import { afterEach, expect, test } from "bun:test";
 import {
   chmodSync,
-  existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  parseRemoteDetection,
-  REMOTE_EXIT,
-  remoteDetectScript,
-  remoteLaunchScript,
-  remoteRuntimeDir,
-  sshIdeArgv,
-} from "./remote";
-import {
-  type ProcessTreeStandIn,
-  processTreeStandIn,
-} from "./testing/process-tree-stand-in";
+import { parseRemoteDetection, remoteDetectScript } from "./remote";
 
 /**
- * The scripts an SSH host runs for the Code view, run here under the local
- * `sh` with fake IDE programs: what the host does is the same, only the
- * transport (ssh) is left out.
+ * Detection on an SSH host, run here under the local `sh` with fake IDE
+ * programs: what the host does is the same, only the transport (ssh) is
+ * left out.
  */
 const dirs: string[] = [];
-const standIns: ProcessTreeStandIn[] = [];
 afterEach(() => {
-  for (const standIn of standIns.splice(0)) standIn.cleanup();
   for (const dir of dirs.splice(0))
     rmSync(dir, { recursive: true, force: true });
 });
@@ -109,181 +93,4 @@ test("a host without the IDE says so by name", async () => {
     parseRemoteDetection("code-server", "devbox", { code: 255, stdout: "" })
       .state,
   ).toBe("missing");
-});
-
-test("the launch keeps its token off the command line and stops when World's input ends", async () => {
-  const top = scratch();
-  const folder = join(top, "project");
-  mkdirSync(folder);
-  const record = join(top, "record");
-  // A fake serve-web: records its arguments, folder and token, then waits.
-  const binary = join(top, "bin/code");
-  program(
-    binary,
-    [
-      `printf '%s\\n' "$@" > '${record}.args'`,
-      `pwd > '${record}.cwd'`,
-      'while [ "$1" != "--connection-token-file" ]; do shift; done',
-      `cat "$2" > '${record}.token'`,
-      `touch '${record}.ready'`,
-      "exec sleep 30",
-    ].join("\n"),
-  );
-  const remoteId = `test${crypto.randomUUID().replaceAll("-", "")}`;
-  const launch = {
-    destination: "dev@devbox.example",
-    provider: "vscode" as const,
-    binary,
-    basePath: "/ide/AAAAAAAAAAAAAAAAAAAAAA",
-    folder,
-    localSocket: join(top, "ide.sock"),
-    remoteId,
-    token: "secret-token-value",
-  };
-  const { argv, stdin } = sshIdeArgv(launch);
-  expect(argv.join(" ")).not.toContain("secret-token-value");
-  expect(argv).toContain(
-    `${launch.localSocket}:${remoteRuntimeDir(remoteId)}/ide.sock`,
-  );
-
-  const child = Bun.spawn(["sh", "-c", remoteLaunchScript(launch)], {
-    env: { PATH: "/usr/bin:/bin", HOME: top },
-    stdin: "pipe",
-    stdout: "ignore",
-    stderr: "ignore",
-  });
-  child.stdin.write(stdin);
-  await child.stdin.flush();
-  const dir = remoteRuntimeDir(remoteId);
-  for (let i = 0; i < 200 && !existsSync(`${record}.ready`); i++)
-    await Bun.sleep(10);
-  expect(readFileSync(`${record}.token`, "utf8")).toBe("secret-token-value");
-  expect(readFileSync(`${record}.cwd`, "utf8").trim()).toBe(folder);
-  expect(readFileSync(`${record}.args`, "utf8").split("\n")).toContain(
-    `${dir}/ide.sock`,
-  );
-  expect(statSync(dir).mode & 0o777).toBe(0o700);
-
-  // World's ssh ends: the host sees end of input and stops the server.
-  child.stdin.end();
-  const code = await Promise.race([
-    child.exited,
-    Bun.sleep(5_000).then(() => "hung"),
-  ]);
-  expect(code).not.toBe("hung");
-  expect(existsSync(dir)).toBe(false);
-});
-
-test("a missing project folder exits with its own code", async () => {
-  const top = scratch();
-  const remoteId = `test${crypto.randomUUID().replaceAll("-", "")}`;
-  const child = Bun.spawn(
-    [
-      "sh",
-      "-c",
-      remoteLaunchScript({
-        destination: "devbox",
-        provider: "code-server",
-        binary: "/bin/true",
-        basePath: "/ide/AAAAAAAAAAAAAAAAAAAAAA",
-        folder: join(top, "missing"),
-        localSocket: join(top, "ide.sock"),
-        remoteId,
-        token: null,
-      }),
-    ],
-    { stdin: "pipe", stdout: "ignore", stderr: "ignore" },
-  );
-  expect(await child.exited).toBe(REMOTE_EXIT.folder);
-  expect(existsSync(remoteRuntimeDir(remoteId))).toBe(false);
-});
-
-test("a folder someone else made first is refused", async () => {
-  const remoteId = `test${crypto.randomUUID().replaceAll("-", "")}`;
-  const dir = remoteRuntimeDir(remoteId);
-  mkdirSync(dir);
-  try {
-    const child = Bun.spawn(
-      [
-        "sh",
-        "-c",
-        remoteLaunchScript({
-          destination: "devbox",
-          provider: "code-server",
-          binary: "/bin/true",
-          basePath: "/ide/AAAAAAAAAAAAAAAAAAAAAA",
-          folder: "/",
-          localSocket: "/nonexistent/ide.sock",
-          remoteId,
-          token: null,
-        }),
-      ],
-      { stdin: "pipe", stdout: "ignore", stderr: "ignore" },
-    );
-    expect(await child.exited).toBe(REMOTE_EXIT.dir);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-/** Runs the launch script with a VS Code-shaped process tree as the IDE. */
-async function launchStandIn(options: { launcherExits?: boolean } = {}) {
-  const top = scratch();
-  const standIn = processTreeStandIn(top, options);
-  standIns.push(standIn);
-  const remoteId = `test${crypto.randomUUID().replaceAll("-", "")}`;
-  const child = Bun.spawn(
-    [
-      "sh",
-      "-c",
-      remoteLaunchScript(
-        {
-          destination: "devbox",
-          provider: "code-server",
-          binary: standIn.launcher,
-          basePath: "/ide/AAAAAAAAAAAAAAAAAAAAAA",
-          folder: top,
-          localSocket: join(top, "ide.sock"),
-          remoteId,
-          token: null,
-        },
-        600,
-      ),
-    ],
-    {
-      env: { PATH: "/usr/bin:/bin", HOME: top },
-      stdin: "pipe",
-      stdout: "ignore",
-      stderr: "ignore",
-    },
-  );
-  return { child, standIn, dir: remoteRuntimeDir(remoteId) };
-}
-
-const within = (exited: Promise<number>, ms: number) =>
-  Promise.race([exited, Bun.sleep(ms).then(() => "hung" as const)]);
-
-for (const how of ["end of input", "a signal"] as const)
-  test(`on ${how} the host ends the server's whole process tree, escalating to SIGKILL`, async () => {
-    const { child, standIn, dir } = await launchStandIn();
-    const pids = await standIn.started();
-    expect(new Set(Object.values(pids)).size).toBe(3);
-    expect(standIn.survivors()).toHaveLength(3);
-
-    if (how === "end of input") child.stdin.end();
-    else child.kill("SIGTERM");
-    // 600 ms of SIGTERM grace, then SIGKILL and a sweep.
-    const code = await within(child.exited, 5_000);
-    expect(code).not.toBe("hung");
-    expect(standIn.survivors()).toEqual([]);
-    expect(existsSync(dir)).toBe(false);
-  });
-
-test("a server left behind by a launcher that exited on its own is ended too", async () => {
-  const { child, standIn, dir } = await launchStandIn({ launcherExits: true });
-  await standIn.started();
-  const code = await within(child.exited, 5_000);
-  expect(code).not.toBe("hung");
-  expect(standIn.survivors()).toEqual([]);
-  expect(existsSync(dir)).toBe(false);
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { IdeClient, IdeStatus } from "./ideClient";
+import { type IdeClient, type IdeStatus, pageIdeClient } from "./ideClient";
 
 /**
  * The service's IDE status, reloaded whenever it announces a change (a
@@ -50,4 +50,39 @@ export function useIdeStatus(client: IdeClient) {
   }, [client, reload]);
 
   return { status, error, reload, apply };
+}
+
+/**
+ * How many IDE servers World started on one connection still run, read
+ * once when asked (null while unknown or not asked): removing the
+ * connection stops them, and its confirmation says so first.
+ */
+export function useIdeServersOn(
+  connectionId: string | null,
+  client: IdeClient = pageIdeClient(),
+) {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    setCount(null);
+    if (!connectionId) return;
+    let live = true;
+    client.status().then(
+      (status) => {
+        if (live)
+          setCount(
+            status.instances.filter(
+              (instance) =>
+                instance.connectionId === connectionId &&
+                instance.state !== "failed",
+            ).length,
+          );
+      },
+      // Unknown: the confirmation goes without the IDE note.
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [client, connectionId]);
+  return count;
 }

@@ -186,8 +186,9 @@ async function compose(
   let worldIde: IdeService | null = null;
   function publishConnectionsChanged() {
     if (stopping) return;
-    // A reconnect, change or removal ends IDEs admitted under the old one.
-    void worldIde?.retireStale();
+    // A reconnect or change detaches IDEs attached under the old one (they
+    // run on), and reattaches to those whose connection is back.
+    void worldIde?.reconcile();
     broadcast(
       JSON.stringify({
         control: {
@@ -971,7 +972,8 @@ async function compose(
       // also fails the Herdr calls still waiting. Startup then settles
       // fenced, and so does every request, within a bound.
       await forwards.stop();
-      await ide.stopAll();
+      // IDE servers run on their hosts; World only lets go of them.
+      ide.closeAll();
       await disposeAssistant();
       await connectionManager.stopAll();
       await core.stop();

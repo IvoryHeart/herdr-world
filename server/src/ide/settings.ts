@@ -7,8 +7,9 @@ import { type IdeProviderId, isIdeProviderId } from "./providers";
  * The owner's IDE choices for this World's own computer (`ide.json` in the
  * data folder): which installed provider is enabled, when its terms and the
  * full-access trust were accepted, and an optional program path per
- * provider. Nothing here is a secret; tokens live only in the private
- * runtime folder of a running server.
+ * provider, and this World's random ID, which marks the IDE servers it
+ * started on each host. Nothing here is a secret; tokens live only in the
+ * private folder of a running server.
  */
 export type IdeProviderSetting = {
   /** Enabled for opening projects. */
@@ -24,7 +25,11 @@ export type IdeProviderSetting = {
 export type IdeSettings = {
   version: 1;
   providers: Partial<Record<IdeProviderId, IdeProviderSetting>>;
+  /** Set when World first starts an IDE server; never changes after. */
+  world_id?: string;
 };
+
+const WORLD_ID = /^[A-Za-z0-9_-]{16,64}$/;
 
 const EMPTY: IdeSettings = { version: 1, providers: {} };
 const MAX_PATH = 4096;
@@ -67,7 +72,13 @@ export function parseIdeSettings(text: string): IdeSettings {
       const setting = parseSetting(entry);
       if (setting) providers[id] = setting;
     }
-    return { version: 1, providers };
+    return {
+      version: 1,
+      providers,
+      ...(typeof value.world_id === "string" && WORLD_ID.test(value.world_id)
+        ? { world_id: value.world_id }
+        : {}),
+    };
   } catch {
     return structuredClone(EMPTY);
   }

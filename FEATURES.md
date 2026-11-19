@@ -1864,7 +1864,7 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   localhost. **Enable** stays off until the trust box (and any licence box the
   IDE has) is ticked. Nothing starts on enable.
 - **Layout.** One thin bar holds the project picker, its host and folder, the
-  IDE, **New tab**, **Stop** and the rail toggle; the workbench fills the rest
+  IDE, **New tab**, **Stop**, **Servers** and the rail toggle; the workbench fills the rest
   of the view edge to edge. The rail of the project's agents (status, Needs
   you first in colour) and terminals folds away with the toggle, which shows
   their count while folded; an agent opens on its Chat, a terminal in the
@@ -1875,41 +1875,67 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   same folder on two connections is two projects. The picker groups them by
   host and remembers the choice.
 - **Open.** **Open in …** starts one server for that project folder on the
-  project's host; the next visit reuses it. On World's computer it listens on
-  a private Unix socket. For an SSH host World uses that connection's OpenSSH
-  destination (so your OpenSSH config applies): one `ssh` per server runs the
-  host's IDE in a private folder under the host's `/tmp` (mode 0700) and
-  forwards its Unix socket to a private socket on World's computer; no TCP
-  port opens on either side. The access token travels on the SSH session's
-  input, never on a command line, and the server stops when that `ssh` ends.
-  Either way the workbench is framed from `/ide/<id>/` on World's own origin,
-  behind World's sign-in; World's own Content Security Policy is unchanged and
-  the IDE keeps its own, with World's frame rule added (frames only from
-  World's own address). code-server's port proxies (`/proxy/<port>`,
-  `/absproxy/<port>`) are off and World refuses them (403) for pages and
-  WebSockets. **New tab** opens the same address; **Stop** (after a
-  confirmation) ends that server. Switching projects keeps a loaded workbench
-  in memory, hidden. The first VS Code start on a host downloads VS Code's
-  web server there, about a minute.
-- **Limits and refusals.** At most four servers run at once; a fifth is
-  refused (**Too many IDEs are running**). A start that does not answer within
-  three minutes fails; a server that exits shows its last error line (or, for
-  SSH, whether SSH failed, the folder is missing on the host or World couldn't
-  make its private folder there). An IDE not installed on the project's host
-  is refused by name. These offer **Try again**. Looking for the IDE on an SSH
-  host gives up after 20 seconds. A stale connection must reconnect first.
-  Windows hosts and folders that are gone are refused. Servers stop with
-  World, on disable, and when their connection reconnects, changes SSH
-  destination or is removed: the route and its open WebSockets close, and
-  **Open** starts a new server. Stopping ends everything that server started,
-  on World's computer or the SSH host: VS Code's launcher, its separate
-  server, extension hosts and terminal shells (even ones in their own
-  session). They get SIGTERM, then SIGKILL after a few seconds; for SSH the
-  host does this itself when the session's input ends, and also when the
-  server exits on its own. Other IDE servers and Herdr agents are untouched.
+  project's host; the next visit, and every World after a restart, reuses it.
+  It listens on a private Unix socket in a private folder (mode 0700) on its
+  host: World's data folder on World's computer, `~/.local/state/herdr-world/ide`
+  (or `$XDG_STATE_HOME`) on an SSH host. For an SSH host World uses that
+  connection's OpenSSH destination (so your OpenSSH config applies): a short
+  `ssh` command starts the host's IDE, and an OpenSSH socket forward connects
+  it to a private socket on World's computer; no TCP port opens on either side.
+  The access token travels on the SSH session's input, never on a command line,
+  and stays in the server's folder (mode 0600). Either way the workbench is
+  framed from `/ide/<id>/` on World's own origin, behind World's sign-in;
+  World's own Content Security Policy is unchanged and the IDE keeps its own,
+  with World's frame rule added (frames only from World's own address).
+  code-server's port proxies (`/proxy/<port>`, `/absproxy/<port>`) are off and
+  World refuses them (403) for pages and WebSockets. **New tab** opens the same
+  address. Switching projects keeps a loaded workbench in memory, hidden. The
+  first VS Code start on a host downloads VS Code's web server there, about a
+  minute.
+- **Lifetime.** An IDE server runs until you stop it, so builds, terminals,
+  tasks and extensions in it keep going. Leaving Code, closing the browser,
+  World stopping, restarting or updating, the SSH link dropping and the host
+  being out of reach for a while all leave it running; there is no idle
+  timeout. World then lets go: the route and its open WebSockets close, and the
+  project shows **<IDE> still runs on <host>** with since-when, **Open** and
+  **Stop…**. **Open** reattaches to the same server without starting another;
+  World also reattaches on its own once the connection is back. A server's
+  folder records which World, connection, IDE and project folder it is for;
+  World reuses only its own servers for the same IDE and folder, and two starts
+  for the same folder at once start one.
+- **Stop.** Only **Stop**, disabling the IDE and removing the connection stop
+  servers, and each says first that everything running in them ends: terminals,
+  tasks, debug sessions and extensions. Stopping ends everything that server
+  started, on World's computer or the SSH host: VS Code's launcher, its separate
+  server, extension hosts and terminal shells, even ones in their own session
+  whose parent already exited. They get SIGTERM, then SIGKILL after five
+  seconds. If the host can't be reached, the server stays listed with why and
+  **Stop** can be tried again. A server that exits on its own has what it
+  started ended the same way. Other IDE servers and Herdr agents are untouched.
+- **Nothing runs unseen.** **Servers** in Code's bar (with their count) and
+  Settings → Integrations → **Running IDE servers** list every IDE server World
+  started that still runs, per host and folder, with since-when, state and
+  **Stop…**; after a restart World finds them on its own computer and on each
+  SSH host once that connection is ready. **Show** brings that project to the
+  front.
+- **Limits and refusals.** At most four servers run or wait to be reattached at
+  once; a fifth is refused (**Too many IDEs are running**): stop one first. A
+  start that does not answer within three minutes is left running and shown as
+  not attached (**Open** tries again, **Stop** ends it); a server that exits
+  shows its last error line (or, for SSH, whether SSH failed, the folder is
+  missing on the host or World couldn't make its private folder there). An IDE
+  not installed on the project's host is refused by name. These offer **Try
+  again**. Looking for the IDE on an SSH host gives up after 20 seconds. A
+  stale connection must reconnect first. Windows hosts and folders that are
+  gone are refused. A process that clears its environment and leaves the
+  server's process tree is out of World's reach, and on an SSH host whose login
+  manager ends a user's processes at logout (systemd-logind
+  `KillUserProcesses=yes`, not the usual default), servers end with the SSH
+  session.
 - **Preview states.** For trying the screens without an IDE, add
   `?ideFixture=missing`, `detected`, `ssh` (starting on an SSH host),
-  `downloading` or `failed` to a World address; World removes it at once and
+  `downloading`, `failed` or `restored` (two servers found running after a
+  restart, one on an SSH host) to a World address; World removes it at once and
   shows synthetic integration state until the next reload.
 
 ## Workspace Inspector

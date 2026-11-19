@@ -1,31 +1,55 @@
-import { randomBytes } from "node:crypto";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { createHash, randomBytes } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import {
+  HOST_EXIT,
+  HOST_STOP_GRACE_MS,
+  hostAttachScript,
+  hostListScript,
+  hostStartScript,
+  hostStopScript,
+  type IdeHostRoot,
+  parseHostLines,
+  parseHostList,
+} from "./host";
+import {
+  type IdeForward,
+  type IdeForwardChild,
+  type IdeHostRun,
+  type IdeHostTarget,
+  systemForward,
+  systemHostRun,
+} from "./hosts";
 import {
   type IdeProviderId,
   ideServerArgs,
   ideUsesConnectionToken,
 } from "./providers";
-import { listProcesses, ownedProcesses, signalProcesses } from "./process-tree";
-import { remoteExitReason, sshIdeArgv } from "./remote";
 import { IDE_TOKEN_COOKIE, type IdeUpstream, ideBasePath } from "./proxy";
 
 /**
- * World-owned IDE servers: at most one per (connection, provider, folder),
- * each on a private Unix socket in its own 0700 runtime folder with its own
- * random connection token. For a project over SSH the server runs on that
- * host and the socket is OpenSSH's forward of the host's own (remote.ts). World starts them only on an explicit open and
- * stops them on Stop, on disable, when their connection goes away and when
- * World stops.
+ * The IDE servers World started (#1009): at most one per (connection, host,
+ * provider, folder). Each lives on its host, detached from World (host.ts):
+ * World attaches to it (a private Unix socket, for SSH through one `ssh -N`
+ * forward) and detaches again when the Code view's connection reconnects,
+ * SSH drops or World stops, without stopping it. After a restart World
+ * lists the servers on each host, checks they are its own, and reattaches.
+ * Only Stop, disabling the provider or removing the connection ends one.
  */
-export type IdeInstanceState = "starting" | "ready" | "failed";
+export type IdeInstanceState =
+  /** Attaching, or waiting for the server to answer. */
+  | "starting"
+  | "ready"
+  /** Runs on its host; World isn't attached (Open attaches again). */
+  | "detached"
+  /** Exited on its own, or never started. */
+  | "failed";
 
 export type IdeInstanceView = {
   id: string;
   provider: IdeProviderId;
   connectionId: string;
-  /** The connection's runtime generation World admitted it under. */
+  /** The connection's runtime generation World is attached under; -1 when not attached. */
   generation: number;
   /** The SSH destination it runs on; absent on World's own computer. */
   sshDestination?: string;
@@ -33,158 +57,72 @@ export type IdeInstanceView = {
   state: IdeInstanceState;
   /** The same-origin address the Code view frames. */
   url: string;
+  /** When it started on its host. */
   startedAt: string;
-  /** Why it failed, in plain words. */
+  /** Why it failed or is detached, in plain words. */
   reason?: string;
   /** True while the first start downloads the provider's web server. */
   downloading?: boolean;
+  /** True while Stop is ending it. */
+  stopping?: boolean;
 };
 
 type Instance = IdeInstanceView & {
-  upstream: IdeUpstream;
-  runtimeDir: string;
-  child: IdeChild | null;
-  stopping: boolean;
-  ready: Promise<void>;
-  lastOutput: string[];
+  key: string;
+  hostLabel: string;
+  upstream: IdeUpstream | null;
+  forward: IdeForwardChild | null;
+  /** Bumped on every attach, detach and stop: a stale wait gives up. */
+  epoch: number;
+  /** The generation World last tried to reattach under on its own. */
+  autoAttached?: number;
 };
-
-export type IdeChild = {
-  pid: number;
-  exited: Promise<number | null>;
-  /**
-   * Signal everything it owns: its process group and every process
-   * descended from it, including ones that left the group or whose parent
-   * already exited.
-   */
-  kill(signal: NodeJS.Signals): void;
-  /** How many of the processes it owns still run; absent means none past `exited`. */
-  running?(): number;
-  /**
-   * End its stdin. An ssh-launched server then stops its whole tree on the
-   * host, with its own escalation, and ssh exits once that is done.
-   */
-  endInput?(): void;
-};
-
-export type IdeSpawn = (options: {
-  command: string[];
-  cwd: string;
-  /** Written to stdin, which then stays open for the child's life. */
-  stdin?: string;
-  onOutput(line: string): void;
-}) => IdeChild;
 
 /** Asks the upstream for its base page; resolves to the HTTP status or null. */
 export type IdeProbe = (upstream: IdeUpstream) => Promise<number | null>;
 
 export type IdeInstanceOptions = {
-  spawn?: IdeSpawn;
+  /** World's private folder: servers on this computer and SSH forward sockets. */
+  localRoot: string;
+  /** This World's identity on every host. */
+  worldId: () => string;
+  run?: IdeHostRun;
+  forward?: IdeForward;
   probe?: IdeProbe;
-  /** Folder that holds every runtime folder; defaults to the system temp. */
-  runtimeRoot?: string;
   now?: () => Date;
   /** Waits between readiness probes. */
   sleep?: (ms: number) => Promise<void>;
   /** Whole start budget, including the first-start download. */
   startTimeoutMs?: number;
-  /** Running servers at once; not measured, a conservative guard. */
+  /** Servers at once, running anywhere; not measured, a conservative guard. */
   maxInstances?: number;
+  /** Local servers leave World's systemd cgroup (World runs as a unit). */
+  systemdScope?: boolean;
+  /** The host's SIGTERM grace before SIGKILL; tests shorten it. */
+  stopGraceMs?: number;
   onChange?: () => void;
 };
+
+export type IdeOpenRequest = {
+  provider: IdeProviderId;
+  binary: string;
+  connectionId: string;
+  generation: number;
+  folder: string;
+  /** It runs on this SSH host instead of World's computer. */
+  ssh?: { destination: string; hostLabel: string };
+};
+
+export type IdeStopResult = { ok: true } | { ok: false; reason: string };
 
 export class IdeLimitError extends Error {}
 
 const DEFAULT_START_TIMEOUT_MS = 180_000;
 const DEFAULT_MAX_INSTANCES = 4;
-const KILL_GRACE_MS = 3_000;
-/** After SIGKILL: how long to keep sweeping for stragglers. */
-const KILL_SWEEP_MS = 1_000;
-/**
- * The host's own stop: REMOTE_STOP_GRACE_MS for SIGTERM, then SIGKILL,
- * plus the time for ssh to see the session end.
- */
-const REMOTE_STOP_WAIT_MS = 9_000;
-const MAX_OUTPUT_LINES = 20;
-
-export function systemIdeSpawn(environment = process.env): IdeSpawn {
-  return ({ command, cwd, stdin, onOutput }) => {
-    const child = Bun.spawn(command, {
-      cwd,
-      env: environment,
-      stdin: stdin === undefined ? "ignore" : "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-      // Its own process group, so Stop also ends the server it starts.
-      detached: true,
-    } as Parameters<typeof Bun.spawn>[1]);
-    for (const stream of [child.stdout, child.stderr])
-      void readLines(stream as ReadableStream<Uint8Array>, onOutput);
-    const sink =
-      stdin === undefined ? null : (child.stdin as import("bun").FileSink);
-    if (sink) {
-      // Kept open: an ssh-launched server stops when its input ends.
-      sink.write(stdin ?? "");
-      void sink.flush();
-    }
-    // Every process seen in its tree, kept until it is gone: a shell whose
-    // parent exited is re-parented and no longer looks like a descendant.
-    let owned: number[] = [child.pid];
-    const collect = () => {
-      const rows = listProcesses();
-      if (rows) owned = ownedProcesses(rows, [child.pid, ...owned], child.pid);
-      return owned;
-    };
-    return {
-      pid: child.pid,
-      exited: child.exited.then(
-        () => child.exitCode,
-        () => null,
-      ),
-      kill(signal) {
-        const pids = collect();
-        try {
-          process.kill(-child.pid, signal);
-        } catch {
-          try {
-            child.kill(signal);
-          } catch {
-            // Already gone.
-          }
-        }
-        signalProcesses(pids, signal);
-      },
-      running: () => collect().length,
-      endInput() {
-        try {
-          void sink?.end();
-        } catch {
-          // Already closed.
-        }
-      },
-    };
-  };
-}
-
-async function readLines(
-  stream: ReadableStream<Uint8Array>,
-  onLine: (line: string) => void,
-) {
-  const decoder = new TextDecoder();
-  let buffered = "";
-  try {
-    for await (const chunk of stream) {
-      buffered += decoder.decode(chunk, { stream: true });
-      const lines = buffered.split(/\r?\n/);
-      buffered = lines.pop() ?? "";
-      for (const line of lines) if (line.trim()) onLine(line);
-      if (buffered.length > 4096) buffered = buffered.slice(-4096);
-    }
-  } catch {
-    // The child closed its output.
-  }
-  if (buffered.trim()) onLine(buffered);
-}
+/** A host script: ssh connect plus a few file and process checks. */
+const HOST_RUN_TIMEOUT_MS = 30_000;
+/** While waiting to answer, look on the host this often for an early exit. */
+const HOST_CHECK_MS = 3_000;
 
 export const systemIdeProbe: IdeProbe = async (upstream) => {
   try {
@@ -206,11 +144,19 @@ export const systemIdeProbe: IdeProbe = async (upstream) => {
   }
 };
 
-function instanceKey(connectionId: string, provider: string, folder: string) {
-  return `${connectionId}\u0000${provider}\u0000${folder}`;
+const hostOf = (ssh?: { destination: string }) =>
+  ssh ? `ssh:${ssh.destination}` : "local";
+
+function instanceKey(
+  connectionId: string,
+  host: string,
+  provider: string,
+  folder: string,
+) {
+  return [connectionId, host, provider, folder].join("\u0000");
 }
 
-function plainReason(lines: string[], code: number | null) {
+export function plainExitReason(lines: string[], code: number | null) {
   const last = [...lines]
     .reverse()
     .find((line) => /error|fail|denied|unable|not /i.test(line));
@@ -218,28 +164,82 @@ function plainReason(lines: string[], code: number | null) {
   return `The IDE server stopped${code === null ? "" : ` (exit ${code})`}${suffix}`;
 }
 
+function hostFailure(code: number | null, hostLabel: string, remote: boolean) {
+  if (code === HOST_EXIT.dir)
+    return `World couldn't use its private folder on ${hostLabel}.`;
+  if (code === HOST_EXIT.token)
+    return `World couldn't hand the IDE its access token on ${hostLabel}.`;
+  if (code === HOST_EXIT.folder)
+    return `The project folder doesn't exist on ${hostLabel}.`;
+  if (remote && (code === 255 || code === null))
+    return `World couldn't reach ${hostLabel} over SSH. Check the connection, then try again.`;
+  return `World couldn't run its IDE helper on ${hostLabel}${code === null ? "" : ` (exit ${code})`}.`;
+}
+
 export class IdeInstances {
   private readonly byId = new Map<string, Instance>();
-  private readonly byKey = new Map<string, string>();
-  private readonly spawn: IdeSpawn;
+  private readonly run: IdeHostRun;
+  private readonly forward: IdeForward;
   private readonly probe: IdeProbe;
-  private readonly runtimeRoot: string;
   private readonly now: () => Date;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly startTimeoutMs: number;
   private readonly maxInstances: number;
+  private readonly stopGraceMs: number;
   private readonly onChange: () => void;
   private readonly revoked = new Set<(instanceId: string) => void>();
+  /** One operation at a time per server: open, reattach and stop queue. */
+  private readonly queues = new Map<string, Promise<unknown>>();
 
-  constructor(options: IdeInstanceOptions = {}) {
-    this.spawn = options.spawn ?? systemIdeSpawn();
+  constructor(private readonly options: IdeInstanceOptions) {
+    this.run = options.run ?? systemHostRun();
+    this.forward = options.forward ?? systemForward();
     this.probe = options.probe ?? systemIdeProbe;
-    this.runtimeRoot = options.runtimeRoot ?? tmpdir();
     this.now = options.now ?? (() => new Date());
     this.sleep = options.sleep ?? ((ms) => Bun.sleep(ms));
     this.startTimeoutMs = options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS;
     this.maxInstances = options.maxInstances ?? DEFAULT_MAX_INSTANCES;
+    this.stopGraceMs = options.stopGraceMs ?? HOST_STOP_GRACE_MS;
     this.onChange = options.onChange ?? (() => {});
+  }
+
+  private get localHostRoot(): IdeHostRoot {
+    return { path: join(this.options.localRoot, "servers") };
+  }
+
+  private rootFor(instance: { sshDestination?: string }): IdeHostRoot {
+    return instance.sshDestination ? { remote: true } : this.localHostRoot;
+  }
+
+  private target(instance: { sshDestination?: string }): IdeHostTarget {
+    return instance.sshDestination
+      ? { kind: "ssh", destination: instance.sshDestination }
+      : { kind: "local" };
+  }
+
+  /** Deterministic per World, connection, host, provider and folder. */
+  idFor(request: {
+    connectionId: string;
+    provider: IdeProviderId;
+    folder: string;
+    sshDestination?: string;
+  }) {
+    return createHash("sha256")
+      .update(
+        [
+          this.options.worldId(),
+          request.connectionId,
+          hostOf(
+            request.sshDestination
+              ? { destination: request.sshDestination }
+              : undefined,
+          ),
+          request.provider,
+          request.folder,
+        ].join("\u0000"),
+      )
+      .digest("base64url")
+      .slice(0, 22);
   }
 
   list(): IdeInstanceView[] {
@@ -251,7 +251,7 @@ export class IdeInstances {
     return instance ? view(instance) : null;
   }
 
-  /** The proxy target, only while the server is ready and not stopping. */
+  /** The proxy target, only while World is attached and it answers. */
   upstream(id: string): IdeUpstream | null {
     const instance = this.byId.get(id);
     return instance?.state === "ready" && !instance.stopping
@@ -260,161 +260,367 @@ export class IdeInstances {
   }
 
   /**
-   * Called with an instance's ID as soon as it starts to stop, for any
-   * reason, so its open streams close before the server has exited.
+   * Called with an instance's ID as soon as World detaches from it or
+   * starts to stop it, so its open streams close.
    */
   onRevoked(listener: (instanceId: string) => void) {
     this.revoked.add(listener);
     return () => this.revoked.delete(listener);
   }
 
+  private serial<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.queues.get(key) ?? Promise.resolve();
+    const next = previous.then(operation, operation);
+    const settled = next.then(
+      () => {},
+      () => {},
+    );
+    this.queues.set(key, settled);
+    void settled.then(() => {
+      if (this.queues.get(key) === settled) this.queues.delete(key);
+    });
+    return next;
+  }
+
+  private busy(key: string) {
+    return this.queues.has(key);
+  }
+
+  private live() {
+    return [...this.byId.values()].filter((entry) => entry.state !== "failed");
+  }
+
   /**
-   * Start or reuse the server for this folder. Resolves once it is ready or
-   * failed; a caller may also return early and read `get()` later.
+   * Attach to this folder's server, or start it. Resolves once World is
+   * attaching (state `starting`), or with why not; readiness follows.
    */
-  open(request: {
-    provider: IdeProviderId;
-    binary: string;
-    connectionId: string;
-    generation: number;
-    folder: string;
-    /** Run it on this SSH host instead of World's computer. */
-    ssh?: { destination: string; hostLabel: string };
-  }): { instance: IdeInstanceView; ready: Promise<IdeInstanceView> } {
+  open(request: IdeOpenRequest): Promise<IdeInstanceView> {
     const key = instanceKey(
       request.connectionId,
+      hostOf(request.ssh),
       request.provider,
       request.folder,
     );
-    const existingId = this.byKey.get(key);
-    const existing = existingId ? this.byId.get(existingId) : undefined;
-    if (
-      existing &&
-      existing.state !== "failed" &&
-      !existing.stopping &&
-      existing.generation === request.generation &&
-      existing.sshDestination === request.ssh?.destination
-    )
-      return {
-        instance: view(existing),
-        ready: existing.ready.then(() => view(existing)),
-      };
-    // A failed one is gone already; one from an older generation or
-    // another transport stops.
-    if (existing?.state === "failed") this.discard(existing);
-    else if (existing && !existing.stopping) void this.stopInstance(existing);
-    const running = [...this.byId.values()].filter(
-      (entry) => entry.state !== "failed" && !entry.stopping,
-    ).length;
-    if (running >= this.maxInstances)
-      throw new IdeLimitError(
-        `World runs at most ${this.maxInstances} IDE servers at once. Stop one in the Code view first.`,
-      );
-
-    const id = randomBytes(16).toString("base64url");
-    const runtimeDir = mkdtempSync(join(this.runtimeRoot, "hw-ide-"));
-    const socketPath = join(runtimeDir, "ide.sock");
-    const tokenFile = join(runtimeDir, "token");
-    const usesToken = ideUsesConnectionToken(request.provider);
-    const token = usesToken ? randomBytes(24).toString("base64url") : null;
-    const basePath = ideBasePath(id);
-    const { args, stripsBasePath } = ideServerArgs(request.provider, {
-      basePath,
-      socketPath,
-      tokenFile,
-      folder: request.folder,
-    });
-    let launch: { command: string[]; cwd: string; stdin?: string };
-    if (request.ssh) {
-      const remote = sshIdeArgv({
-        destination: request.ssh.destination,
-        provider: request.provider,
-        binary: request.binary,
-        basePath,
-        folder: request.folder,
-        localSocket: socketPath,
-        remoteId: randomBytes(16).toString("base64url"),
-        token,
+    return this.serial(key, async () => {
+      const id = this.idFor({
+        ...request,
+        sshDestination: request.ssh?.destination,
       });
-      launch = { command: remote.argv, cwd: runtimeDir, stdin: remote.stdin };
-    } else {
-      if (token) writeFileSync(tokenFile, token, { mode: 0o600 });
-      launch = { command: [request.binary, ...args], cwd: request.folder };
-    }
-    const instance: Instance = {
-      id,
-      provider: request.provider,
-      connectionId: request.connectionId,
-      generation: request.generation,
-      ...(request.ssh ? { sshDestination: request.ssh.destination } : {}),
-      folder: request.folder,
-      state: "starting",
-      url: `${basePath}/`,
-      startedAt: this.now().toISOString(),
-      upstream: {
-        instanceId: id,
-        provider: request.provider,
-        socketPath,
-        token,
-        stripsBasePath,
-      },
-      runtimeDir,
-      child: null,
-      stopping: false,
-      ready: Promise.resolve(),
-      lastOutput: [],
-    };
-    this.byId.set(id, instance);
-    this.byKey.set(key, id);
-    try {
-      instance.child = this.spawn({
-        ...launch,
-        onOutput: (line) => {
-          instance.lastOutput.push(line);
-          if (instance.lastOutput.length > MAX_OUTPUT_LINES)
-            instance.lastOutput.shift();
-        },
-      });
-    } catch (error) {
-      this.fail(
-        instance,
-        `World couldn't start the IDE server: ${(error as Error).message}`,
-      );
-      return {
-        instance: view(instance),
-        ready: Promise.resolve(view(instance)),
-      };
-    }
-    const child = instance.child;
-    void child.exited.then((code) => {
-      if (instance.stopping || !this.byId.has(instance.id)) return;
-      this.fail(
-        instance,
-        (request.ssh && remoteExitReason(code, request.ssh.hostLabel)) ||
-          plainReason(instance.lastOutput, code),
-      );
-      instance.child = null;
+      let instance = this.byId.get(id);
+      if (
+        instance &&
+        !instance.stopping &&
+        (instance.state === "ready" || instance.state === "starting") &&
+        instance.generation === request.generation
+      )
+        return view(instance);
+      if (!instance || instance.state === "failed") {
+        const running = this.live().filter((entry) => entry.id !== id).length;
+        if (running >= this.maxInstances)
+          throw new IdeLimitError(
+            `World runs at most ${this.maxInstances} IDE servers at once. Stop one first.`,
+          );
+      }
+      if (!instance) {
+        instance = {
+          id,
+          key,
+          provider: request.provider,
+          connectionId: request.connectionId,
+          generation: request.generation,
+          ...(request.ssh ? { sshDestination: request.ssh.destination } : {}),
+          hostLabel: request.ssh?.hostLabel ?? "this computer",
+          folder: request.folder,
+          state: "starting",
+          url: `${ideBasePath(id)}/`,
+          startedAt: this.now().toISOString(),
+          upstream: null,
+          forward: null,
+          epoch: 0,
+          autoAttached: request.generation,
+        };
+        this.byId.set(id, instance);
+        this.onChange();
+        await this.start(instance, request);
+        return view(instance);
+      }
+      if (request.ssh) instance.hostLabel = request.ssh.hostLabel;
+      instance.autoAttached = request.generation;
+      const known = instance.state;
+      instance.generation = request.generation;
+      this.setState(instance, "starting");
+      if (known === "failed") await this.start(instance, request);
+      else if ((await this.attach(instance, request.generation)) === "gone")
+        // Gone from its host meanwhile: start it afresh.
+        await this.start(instance, request);
+      return view(instance);
     });
-    instance.ready = this.waitReady(instance);
-    this.onChange();
-    return {
-      instance: view(instance),
-      ready: instance.ready.then(() => view(instance)),
-    };
   }
 
-  private async waitReady(instance: Instance) {
+  /**
+   * Reattach under a new generation without a click: after a restart or
+   * reconnect, once per generation. Starts nothing; one that is gone from
+   * its host is forgotten.
+   */
+  reattach(id: string, generation: number, hostLabel?: string) {
+    const instance = this.byId.get(id);
+    if (
+      !instance ||
+      instance.state !== "detached" ||
+      instance.stopping ||
+      instance.autoAttached === generation
+    )
+      return Promise.resolve();
+    instance.autoAttached = generation;
+    return this.serial(instance.key, async () => {
+      if (
+        this.byId.get(id) !== instance ||
+        instance.state !== "detached" ||
+        instance.stopping
+      )
+        return;
+      if (hostLabel) instance.hostLabel = hostLabel;
+      instance.generation = generation;
+      this.setState(instance, "starting");
+      if ((await this.attach(instance, generation)) === "gone") {
+        this.release(instance);
+        if (this.byId.get(id) === instance) this.byId.delete(id);
+        this.onChange();
+      }
+    });
+  }
+
+  private setState(
+    instance: Instance,
+    state: IdeInstanceState,
+    reason?: string,
+  ) {
+    instance.state = state;
+    instance.reason = reason;
+    if (state !== "starting") instance.downloading = undefined;
+    if (state !== "ready" && state !== "starting") instance.generation = -1;
+    this.onChange();
+  }
+
+  /**
+   * Whether World still wants this attach: nothing detached, stopped or
+   * replaced it while a host script ran.
+   */
+  private wanted(instance: Instance, epoch: number) {
+    return (
+      instance.epoch === epoch &&
+      !instance.stopping &&
+      instance.state === "starting" &&
+      this.byId.get(instance.id) === instance
+    );
+  }
+
+  /** Launches it on its host; on success World attaches with its token. */
+  private async start(instance: Instance, request: IdeOpenRequest) {
+    const token = ideUsesConnectionToken(request.provider)
+      ? randomBytes(24).toString("base64url")
+      : null;
+    const startedAt = this.now().toISOString();
+    let script: string;
+    try {
+      script = hostStartScript({
+        root: this.rootFor(instance),
+        id: instance.id,
+        worldId: this.options.worldId(),
+        connectionId: request.connectionId,
+        provider: request.provider,
+        binary: request.binary,
+        basePath: ideBasePath(instance.id),
+        folder: request.folder,
+        startedAt,
+        nonce: randomBytes(16).toString("base64url"),
+        token: token !== null,
+        systemdScope: !request.ssh && this.options.systemdScope === true,
+        stopGraceMs: this.stopGraceMs,
+      });
+    } catch (error) {
+      this.fail(instance, (error as Error).message);
+      return;
+    }
+    const epoch = instance.epoch;
+    const result = await this.run(this.target(instance), script, {
+      stdin: token ? `${token}\n` : undefined,
+      timeoutMs: HOST_RUN_TIMEOUT_MS,
+    });
+    const { values } = parseHostLines(result.stdout);
+    const outcome = values.get("result");
+    if (outcome === "started") instance.startedAt = startedAt;
+    // Detached or stopping meanwhile: what started runs on, listed.
+    if (!this.wanted(instance, epoch)) return;
+    if (result.code === null && request.ssh) {
+      // It may have started before SSH gave up: keep it listed.
+      this.setState(
+        instance,
+        "detached",
+        hostFailure(result.code, instance.hostLabel, true),
+      );
+      return;
+    }
+    if (result.code !== 0 || !outcome) {
+      this.fail(
+        instance,
+        hostFailure(result.code, instance.hostLabel, Boolean(request.ssh)),
+      );
+      return;
+    }
+    if (outcome === "running") {
+      // Already there (another World's start, or not yet listed here).
+      if ((await this.attach(instance, request.generation)) === "gone")
+        this.fail(instance, "The IDE server no longer runs.");
+      return;
+    }
+    this.connect(instance, values.get("root") ?? "", token, request.generation);
+  }
+
+  /**
+   * Checks the server on its host is this World's and still runs, then
+   * attaches. `gone` when nothing is there; `done` otherwise (attached,
+   * or detached or failed with why).
+   */
+  private async attach(
+    instance: Instance,
+    generation: number,
+  ): Promise<"done" | "gone"> {
+    const epoch = instance.epoch;
+    const result = await this.run(
+      this.target(instance),
+      hostAttachScript({
+        root: this.rootFor(instance),
+        id: instance.id,
+        worldId: this.options.worldId(),
+        provider: instance.provider,
+        folder: instance.folder,
+        stopGraceMs: this.stopGraceMs,
+      }),
+      { timeoutMs: HOST_RUN_TIMEOUT_MS },
+    );
+    if (!this.wanted(instance, epoch)) return "done";
+    const { values, log } = parseHostLines(result.stdout);
+    const state = values.get("state");
+    if (result.code !== 0 || !state) {
+      this.setState(
+        instance,
+        "detached",
+        hostFailure(
+          result.code,
+          instance.hostLabel,
+          Boolean(instance.sshDestination),
+        ),
+      );
+      return "done";
+    }
+    if (state === "gone") return "gone";
+    const started = values.get("started");
+    if (started) instance.startedAt = started;
+    if (state === "running") {
+      const token = values.get("token") ?? null;
+      if (ideUsesConnectionToken(instance.provider) && !token) {
+        this.setState(
+          instance,
+          "detached",
+          `World couldn't read its access token on ${instance.hostLabel}.`,
+        );
+        return "done";
+      }
+      this.connect(instance, values.get("root") ?? "", token, generation);
+      return "done";
+    }
+    if (state === "starting") {
+      this.setState(
+        instance,
+        "detached",
+        `It is still starting on ${instance.hostLabel}. Open it again in a moment.`,
+      );
+      return "done";
+    }
+    if (state === "foreign") {
+      this.fail(
+        instance,
+        `Another IDE server holds this folder's place on ${instance.hostLabel}.`,
+      );
+      return "done";
+    }
+    const code = values.get("exit");
+    this.fail(
+      instance,
+      plainExitReason(log, code && /^\d+$/.test(code) ? Number(code) : null),
+    );
+    return "done";
+  }
+
+  private connect(
+    instance: Instance,
+    hostRoot: string,
+    token: string | null,
+    generation: number,
+  ) {
+    this.release(instance);
+    const epoch = ++instance.epoch;
+    instance.generation = generation;
+    const remoteSocket = `${hostRoot}/${instance.id}/ide.sock`;
+    let socketPath = remoteSocket;
+    if (instance.sshDestination) {
+      const forwards = join(this.options.localRoot, "forwards");
+      mkdirSync(forwards, { recursive: true, mode: 0o700 });
+      chmodSync(forwards, 0o700);
+      socketPath = join(forwards, `${instance.id}.sock`);
+      const forward = this.forward(
+        instance.sshDestination,
+        remoteSocket,
+        socketPath,
+      );
+      instance.forward = forward;
+      void forward.exited.then(() => {
+        if (instance.epoch !== epoch || instance.forward !== forward) return;
+        instance.forward = null;
+        this.detach(
+          instance,
+          `SSH to ${instance.hostLabel} dropped; the IDE still runs there. Open it to reconnect.`,
+        );
+      });
+    }
+    instance.upstream = {
+      instanceId: instance.id,
+      provider: instance.provider,
+      socketPath,
+      token,
+      stripsBasePath: ideServerArgs(instance.provider, {
+        basePath: "",
+        socketPath: "",
+        tokenFile: "",
+        folder: instance.folder,
+      }).stripsBasePath,
+    };
+    this.setState(instance, "starting");
+    void this.waitReady(instance, epoch);
+  }
+
+  private async waitReady(instance: Instance, epoch: number) {
+    const current = () =>
+      instance.epoch === epoch &&
+      instance.state === "starting" &&
+      this.byId.get(instance.id) === instance;
     const deadline = this.now().getTime() + this.startTimeoutMs;
     let delay = 100;
-    while (instance.state === "starting") {
+    let nextCheck = this.now().getTime() + HOST_CHECK_MS;
+    while (current()) {
+      const upstream = instance.upstream;
+      if (!upstream) return;
       if (this.now().getTime() > deadline) {
-        this.fail(instance, "The IDE server didn't become ready in time.");
-        await this.stopInstance(instance, false);
+        this.detach(
+          instance,
+          `It didn't answer in time and still runs on ${instance.hostLabel}. Open it to try again, or Stop it.`,
+        );
         return;
       }
-      if (existsSync(instance.upstream.socketPath)) {
-        const status = await this.probe(instance.upstream);
-        if (instance.state !== "starting") return;
+      if (existsSync(upstream.socketPath)) {
+        const status = await this.probe(upstream);
+        if (!current()) return;
         if (status === 202) {
           // VS Code's CLI is still downloading its web server.
           if (!instance.downloading) {
@@ -422,105 +628,238 @@ export class IdeInstances {
             this.onChange();
           }
         } else if (status !== null && status < 500) {
-          instance.state = "ready";
-          instance.downloading = undefined;
-          this.onChange();
+          this.setState(instance, "ready");
           return;
         }
+      }
+      if (this.now().getTime() >= nextCheck) {
+        nextCheck = this.now().getTime() + HOST_CHECK_MS;
+        if (!(await this.stillRuns(instance, epoch))) return;
       }
       await this.sleep(delay);
       delay = Math.min(delay * 2, 1_000);
     }
   }
 
-  private fail(instance: Instance, reason: string) {
-    if (instance.state === "failed") return;
-    instance.state = "failed";
-    instance.reason = reason;
-    instance.downloading = undefined;
-    this.onChange();
-  }
-
-  private discard(instance: Instance) {
-    this.byId.delete(instance.id);
-    const key = instanceKey(
-      instance.connectionId,
-      instance.provider,
-      instance.folder,
+  /** While it starts: has it exited on its own? Then failed, with why. */
+  private async stillRuns(instance: Instance, epoch: number) {
+    const result = await this.run(
+      this.target(instance),
+      hostAttachScript({
+        root: this.rootFor(instance),
+        id: instance.id,
+        worldId: this.options.worldId(),
+        provider: instance.provider,
+        folder: instance.folder,
+        stopGraceMs: this.stopGraceMs,
+      }),
+      { timeoutMs: HOST_RUN_TIMEOUT_MS },
     );
-    if (this.byKey.get(key) === instance.id) this.byKey.delete(key);
-    rmSync(instance.runtimeDir, { recursive: true, force: true });
-  }
-
-  private async stopInstance(instance: Instance, notify = true) {
-    if (!instance.stopping)
-      for (const listener of this.revoked) listener(instance.id);
-    instance.stopping = true;
-    const child = instance.child;
-    instance.child = null;
-    if (child) await terminate(child, Boolean(instance.sshDestination));
-    this.discard(instance);
-    if (notify) this.onChange();
-  }
-
-  async stop(id: string): Promise<boolean> {
-    const instance = this.byId.get(id);
-    if (!instance) return false;
-    await this.stopInstance(instance);
+    if (instance.epoch !== epoch || instance.state !== "starting") return false;
+    if (result.code !== 0) return true;
+    const { values, log } = parseHostLines(result.stdout);
+    const state = values.get("state");
+    if (state === "exited" || state === "gone") {
+      const code = values.get("exit");
+      this.release(instance);
+      this.fail(
+        instance,
+        plainExitReason(log, code && /^\d+$/.test(code) ? Number(code) : null),
+      );
+      return false;
+    }
     return true;
   }
 
-  /** Stop what matches; used for disable, connection removal and shutdown. */
+  /** Ends World's attachment: its streams and forward. The server runs on. */
+  private release(instance: Instance) {
+    instance.epoch++;
+    // Streams only exist through an upstream; say so once per attachment.
+    if (instance.upstream)
+      for (const listener of this.revoked) listener(instance.id);
+    const forward = instance.forward;
+    instance.forward = null;
+    forward?.kill();
+    instance.upstream = null;
+  }
+
+  private detach(instance: Instance, reason?: string) {
+    this.release(instance);
+    if (instance.state === "failed") return;
+    instance.generation = -1;
+    this.setState(instance, "detached", reason);
+  }
+
+  private fail(instance: Instance, reason: string) {
+    if (instance.state === "failed" && instance.reason === reason) return;
+    this.release(instance);
+    this.setState(instance, "failed", reason);
+  }
+
+  /**
+   * Detach from those that match, without stopping them: a reconnect, a
+   * change of host or a lost admission. Returns how many.
+   */
+  detachWhere(match: (instance: IdeInstanceView) => boolean, reason?: string) {
+    let count = 0;
+    for (const instance of this.byId.values())
+      if (
+        !instance.stopping &&
+        (instance.state === "ready" || instance.state === "starting") &&
+        match(view(instance))
+      ) {
+        this.detach(instance, reason);
+        count++;
+      }
+    return count;
+  }
+
+  /** Stop one completely on its host: every process it started. */
+  stop(id: string): Promise<IdeStopResult> {
+    const instance = this.byId.get(id);
+    if (!instance) return Promise.resolve({ ok: true });
+    instance.stopping = true;
+    this.release(instance);
+    this.onChange();
+    return this.serial(instance.key, async () => {
+      if (this.byId.get(id) !== instance) return { ok: true } as const;
+      const result = await this.run(
+        this.target(instance),
+        hostStopScript(
+          this.rootFor(instance),
+          instance.id,
+          this.options.worldId(),
+          this.stopGraceMs,
+        ),
+        { timeoutMs: HOST_RUN_TIMEOUT_MS + this.stopGraceMs },
+      );
+      const outcome = parseHostLines(result.stdout).values.get("result");
+      instance.stopping = undefined;
+      if (
+        (result.code === 0 && (outcome === "stopped" || outcome === "gone")) ||
+        // It had already exited: only its record is left on the host.
+        (instance.state === "failed" && outcome !== "foreign")
+      ) {
+        this.byId.delete(id);
+        this.onChange();
+        return { ok: true } as const;
+      }
+      const reason =
+        outcome === "foreign"
+          ? `The server on ${instance.hostLabel} isn't this World's; World left it alone.`
+          : `World couldn't stop it: ${hostFailure(result.code, instance.hostLabel, Boolean(instance.sshDestination))} It still runs there.`;
+      this.setState(
+        instance,
+        instance.state === "failed" ? "failed" : "detached",
+        reason,
+      );
+      return { ok: false, reason } as const;
+    });
+  }
+
+  /** Stop every one that matches: disable and connection removal. */
   async stopWhere(match: (instance: IdeInstanceView) => boolean) {
-    const matching = [...this.byId.values()].filter((entry) => match(entry));
-    await Promise.all(matching.map((entry) => this.stopInstance(entry, false)));
-    if (matching.length) this.onChange();
-    return matching.length;
+    const matching = [...this.byId.values()].filter((entry) =>
+      match(view(entry)),
+    );
+    const results = await Promise.all(
+      matching.map((entry) => this.stop(entry.id)),
+    );
+    return results.filter(
+      (result): result is { ok: false; reason: string } => !result.ok,
+    );
   }
 
-  stopAll() {
-    return this.stopWhere(() => true);
+  /**
+   * Lists this World's servers on one host and merges them: new ones show
+   * as detached (or failed when they exited), known ones that exited fail,
+   * known detached ones that are gone are forgotten. Each keeps the
+   * connection it was started for, even one since removed, so nothing
+   * World started runs unseen.
+   */
+  async discover(host: { ssh?: { destination: string; hostLabel: string } }) {
+    const sshDestination = host.ssh?.destination;
+    const before = new Map(
+      [...this.byId.values()].map((entry) => [entry.id, entry.epoch]),
+    );
+    const result = await this.run(
+      this.target({ sshDestination }),
+      hostListScript(
+        this.rootFor({ sshDestination }),
+        this.options.worldId(),
+        this.stopGraceMs,
+      ),
+      { timeoutMs: HOST_RUN_TIMEOUT_MS },
+    );
+    if (result.code !== 0) return false;
+    const records = parseHostList(result.stdout);
+    const seen = new Set(records.map((record) => record.id));
+    let changed = false;
+    for (const record of records) {
+      const known = this.byId.get(record.id);
+      if (known) {
+        if (
+          record.state === "exited" &&
+          known.state !== "failed" &&
+          !known.stopping &&
+          !this.busy(known.key) &&
+          before.get(known.id) === known.epoch
+        ) {
+          this.fail(known, plainExitReason([], record.exitCode ?? null));
+          changed = true;
+        }
+        continue;
+      }
+      const connectionId = record.connectionId;
+      const key = instanceKey(
+        connectionId,
+        hostOf(host.ssh),
+        record.provider,
+        record.folder,
+      );
+      if (this.busy(key)) continue;
+      this.byId.set(record.id, {
+        id: record.id,
+        key,
+        provider: record.provider,
+        connectionId,
+        generation: -1,
+        ...(sshDestination ? { sshDestination } : {}),
+        hostLabel: host.ssh?.hostLabel ?? "this computer",
+        folder: record.folder,
+        state: record.state === "exited" ? "failed" : "detached",
+        ...(record.state === "exited"
+          ? { reason: plainExitReason([], record.exitCode ?? null) }
+          : {}),
+        url: `${ideBasePath(record.id)}/`,
+        startedAt: record.startedAt,
+        upstream: null,
+        forward: null,
+        epoch: 0,
+      });
+      changed = true;
+    }
+    for (const instance of [...this.byId.values()])
+      if (
+        instance.sshDestination === sshDestination &&
+        !seen.has(instance.id) &&
+        instance.state === "detached" &&
+        !instance.stopping &&
+        !this.busy(instance.key) &&
+        before.get(instance.id) === instance.epoch
+      ) {
+        // Gone from its host (stopped elsewhere, or the host restarted).
+        this.byId.delete(instance.id);
+        changed = true;
+      }
+    if (changed) this.onChange();
+    return true;
   }
-}
 
-const delay = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-/**
- * Waits up to `ms` for the child to exit and every process it owns to be
- * gone. Real time: stopping must not depend on an injected clock.
- */
-async function settled(child: IdeChild, ms: number) {
-  let exited = false;
-  void child.exited.then(() => {
-    exited = true;
-  });
-  const end = Date.now() + ms;
-  for (;;) {
-    await Promise.race([child.exited, delay(100)]);
-    if (exited && !(child.running?.() ?? 0)) return true;
-    if (Date.now() >= end) return false;
-    if (exited) await delay(100);
+  /** World stops: end its attachments. Every server keeps running. */
+  closeAll() {
+    for (const instance of this.byId.values()) this.release(instance);
   }
-}
-
-/**
- * Stops everything a server World started owns, with bounded escalation.
- * One over SSH first gets end of input, so the host stops the server's
- * whole tree itself (remote.ts); World only signals its ssh if the host
- * doesn't finish in time, and the host still cleans up when ssh ends.
- */
-async function terminate(child: IdeChild, remote: boolean) {
-  if (remote && child.endInput) {
-    child.endInput();
-    if (await settled(child, REMOTE_STOP_WAIT_MS)) return;
-  }
-  child.kill("SIGTERM");
-  if (await settled(child, KILL_GRACE_MS)) return;
-  child.kill("SIGKILL");
-  if (await settled(child, KILL_SWEEP_MS)) return;
-  child.kill("SIGKILL");
-  await child.exited;
 }
 
 function view(instance: Instance): IdeInstanceView {
@@ -538,5 +877,6 @@ function view(instance: Instance): IdeInstanceView {
     startedAt: instance.startedAt,
     ...(instance.reason ? { reason: instance.reason } : {}),
     ...(instance.downloading ? { downloading: true } : {}),
+    ...(instance.stopping ? { stopping: true } : {}),
   };
 }

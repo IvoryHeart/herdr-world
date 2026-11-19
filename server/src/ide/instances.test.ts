@@ -1,111 +1,338 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type IdeChild, IdeInstances, systemIdeSpawn } from "./instances";
-import { ownedProcesses, parseProcessRows } from "./process-tree";
+import { parseHostLines } from "./host";
+import { type IdeForward, type IdeHostRun, systemHostRun } from "./hosts";
+import { IdeInstances, type IdeOpenRequest } from "./instances";
 import {
+  hasSetsid,
   type ProcessTreeStandIn,
+  parentOf,
   processTreeStandIn,
 } from "./testing/process-tree-stand-in";
 
+/**
+ * World's side of an IDE server's lifetime (#1009), with the real host
+ * scripts under the local `sh` and a stand-in IDE. SSH runs the same
+ * scripts with HOME pointed at a scratch "host"; its forward is a double.
+ * Each case is one of the lifetime's ordering and ownership questions:
+ * reattach after a restart, two opens for one folder, Stop racing a
+ * reattach or an open, and Stop reaching a re-parented terminal.
+ */
 const dirs: string[] = [];
 const standIns: ProcessTreeStandIn[] = [];
-afterEach(() => {
+const worlds: IdeInstances[] = [];
+afterEach(async () => {
+  for (const world of worlds.splice(0))
+    await world.stopWhere(() => true).catch(() => {});
   for (const standIn of standIns.splice(0)) standIn.cleanup();
   for (const dir of dirs.splice(0))
     rmSync(dir, { recursive: true, force: true });
 });
 
-test("the owned set follows the group and descendants, never World or its parents", () => {
-  const rows = parseProcessRows(
-    [
-      "  1     0     1 Ss",
-      " 10     1    10 S",
-      " 20    10    20 S", // World
-      " 30    20    30 Ss", // the IDE, its own group
-      " 31    30    30 S", // its server
-      " 32    31    32 Ss", // a terminal shell, its own session
-      " 33     1    30 S", // re-parented, still in the group
-      " 34    31    30 Z", // exited, not yet reaped
-      " 40     1    40 S", // unrelated
-    ].join("\n"),
-  );
-  expect(ownedProcesses(rows, [30], 30, 20)).toEqual([30, 31, 32, 33]);
-  // A shell seen before its parent exited stays owned.
-  expect(ownedProcesses(rows, [32], undefined, 20)).toEqual([32]);
-  // Never World or anything above it, even when named.
-  expect(ownedProcesses(rows, [10], 10, 20)).toEqual([30, 31, 32]);
-});
+const WORLD = "world-aaaaaaaaaaaaaaaa";
 
-test("Stop ends the local server's whole process tree, escalating to SIGKILL", async () => {
-  const top = mkdtempSync(join(tmpdir(), "hw-ide-instances-"));
+function alive(pid: number) {
+  const stat = Bun.spawnSync(["ps", "-o", "stat=", "-p", String(pid)])
+    .stdout.toString()
+    .trim();
+  return stat !== "" && !stat.startsWith("Z");
+}
+
+async function until(done: () => boolean, what: string, ms = 10_000) {
+  const deadline = Date.now() + ms;
+  while (!done()) {
+    if (Date.now() > deadline) throw new Error(`timed out: ${what}`);
+    await Bun.sleep(10);
+  }
+}
+
+function setup() {
+  const top = mkdtempSync(join(tmpdir(), "hw-ide-inst-"));
   dirs.push(top);
-  const folder = join(top, "project");
-  mkdirSync(folder);
+  const project = join(top, "project");
+  const host = join(top, "host-home");
+  mkdirSync(project, { recursive: true });
+  mkdirSync(host, { recursive: true });
   const standIn = processTreeStandIn(top);
   standIns.push(standIn);
-  const instances = new IdeInstances({
-    runtimeRoot: top,
-    spawn: systemIdeSpawn({ PATH: "/usr/bin:/bin", HOME: top }),
-    probe: async () => 200,
-  });
-  const { instance, ready } = instances.open({
-    provider: "code-server",
-    binary: standIn.launcher,
-    connectionId: "local",
-    generation: 1,
-    folder,
-  });
-  expect((await ready).state).toBe("ready");
-  const pids = await standIn.started();
-  expect(standIn.survivors()).toHaveLength(3);
-  expect(Object.values(pids)).not.toContain(process.pid);
-
-  // The launcher ends on SIGTERM; its server and the shell ignore it.
-  expect(await instances.stop(instance.id)).toBe(true);
-  expect(standIn.survivors()).toEqual([]);
-  expect(instances.list()).toEqual([]);
-}, 15_000);
-
-test("Stop over SSH ends input first and lets the host clean up before signalling ssh", async () => {
-  const top = mkdtempSync(join(tmpdir(), "hw-ide-instances-"));
-  dirs.push(top);
-  const events: string[] = [];
-  const instances = new IdeInstances({
-    runtimeRoot: top,
-    sleep: async () => {},
-    probe: async () => 200,
-    spawn: ({ command }) => {
-      writeFileSync(command[command.indexOf("-L") + 1].split(":")[0], "");
-      let exit: (code: number | null) => void = () => {};
-      const child: IdeChild = {
-        pid: 4242,
-        exited: new Promise((resolve) => {
-          exit = resolve;
-        }),
-        kill: (signal) => {
-          events.push(signal);
-          exit(null);
-        },
-        endInput: () => {
-          events.push("end of input");
-          // The host stops its tree, then the session ends.
-          setTimeout(() => exit(143), 50);
-        },
-      };
-      return child;
-    },
-  });
-  const { instance, ready } = instances.open({
+  const local = systemHostRun({ PATH: "/usr/bin:/bin", HOME: top });
+  const remote = systemHostRun({ PATH: "/usr/bin:/bin", HOME: host });
+  const outcomes: string[] = [];
+  // "SSH" runs the same script with the host's HOME; nothing else differs.
+  const run: IdeHostRun = async (target, script, options) => {
+    const result = await (target.kind === "ssh" ? remote : local)(
+      { kind: "local" },
+      script,
+      options,
+    );
+    const outcome = parseHostLines(result.stdout).values.get("result");
+    if (outcome) outcomes.push(outcome);
+    return result;
+  };
+  const forwards: { remote: string; local: string; drop(): void }[] = [];
+  const forward: IdeForward = (_destination, remoteSocket, localSocket) => {
+    let drop = () => {};
+    const exited = new Promise((resolve) => {
+      drop = () => resolve(null);
+    });
+    writeFileSync(localSocket, "");
+    forwards.push({ remote: remoteSocket, local: localSocket, drop });
+    return { exited, kill: drop };
+  };
+  const world = (name = "data") => {
+    const instances = new IdeInstances({
+      localRoot: join(top, name),
+      worldId: () => WORLD,
+      run,
+      forward,
+      // The stand-in answers once it has made its socket.
+      probe: async (upstream) => (existsSync(upstream.socketPath) ? 200 : null),
+      sleep: (ms) => Bun.sleep(Math.min(ms, 20)),
+      stopGraceMs: 300,
+    });
+    worlds.push(instances);
+    return instances;
+  };
+  const request = (
+    overrides: Partial<IdeOpenRequest> = {},
+  ): IdeOpenRequest => ({
     provider: "vscode",
-    binary: "/opt/code/bin/code",
-    connectionId: "devbox",
+    binary: standIn.launcher,
+    connectionId: "local-a",
     generation: 1,
-    folder: "/srv/project",
-    ssh: { destination: "dev@devbox.example", hostLabel: "devbox" },
+    folder: project,
+    ...overrides,
   });
-  expect((await ready).state).toBe("ready");
-  expect(await instances.stop(instance.id)).toBe(true);
-  expect(events).toEqual(["end of input"]);
+  return { top, host, standIn, outcomes, forwards, world, request };
+}
+
+test.if(hasSetsid())(
+  "World stopping leaves the server running; the next World finds it, checks it, and reattaches with its token",
+  async () => {
+    const h = setup();
+    const first = h.world();
+    const opened = await first.open(h.request());
+    await until(() => first.get(opened.id)?.state === "ready", "ready");
+    const token = first.upstream(opened.id)?.token;
+    expect(token).toBeTruthy();
+    const pids = await h.standIn.started();
+
+    first.closeAll();
+    expect(first.upstream(opened.id)).toBeNull();
+    await Bun.sleep(100);
+    expect(h.standIn.survivors().sort()).toEqual(
+      [pids.launcher, pids.server, pids.shell].sort(),
+    );
+
+    // A restarted World: same data folder and World ID, nothing in memory.
+    const second = h.world();
+    expect(second.list()).toEqual([]);
+    await second.discover({});
+    expect(second.list()).toEqual([
+      expect.objectContaining({
+        id: opened.id,
+        connectionId: "local-a",
+        folder: opened.folder,
+        state: "detached",
+        startedAt: opened.startedAt,
+      }),
+    ]);
+    await second.reattach(opened.id, 2);
+    await until(() => second.get(opened.id)?.state === "ready", "reattached");
+    expect(second.upstream(opened.id)?.token).toBe(token);
+    expect(second.get(opened.id)?.generation).toBe(2);
+    // Once per generation: a detach doesn't loop back on its own.
+    second.detachWhere(() => true);
+    await second.reattach(opened.id, 2);
+    expect(second.get(opened.id)?.state).toBe("detached");
+    // Nothing new was launched.
+    expect(h.outcomes).toEqual(["started"]);
+
+    expect(await second.stop(opened.id)).toEqual({ ok: true });
+    expect(second.list()).toEqual([]);
+    expect([pids.launcher, pids.server, pids.shell].filter(alive)).toEqual([]);
+  },
+  30_000,
+);
+
+test.if(hasSetsid())(
+  "two opens for one folder start one server, also across two Worlds sharing a host",
+  async () => {
+    const h = setup();
+    const world = h.world();
+    const [a, b] = await Promise.all([
+      world.open(h.request()),
+      world.open(h.request()),
+    ]);
+    expect(a.id).toBe(b.id);
+    expect(world.list()).toHaveLength(1);
+    await until(() => world.get(a.id)?.state === "ready", "ready");
+    expect(h.outcomes).toEqual(["started"]);
+    expect(await world.stop(a.id)).toEqual({ ok: true });
+
+    // A restarted World racing the old one's start on the same host.
+    h.outcomes.length = 0;
+    const one = h.world();
+    const two = h.world();
+    const [x, y] = await Promise.all([
+      one.open(h.request()),
+      two.open(h.request()),
+    ]);
+    expect(x.id).toBe(y.id);
+    expect(h.outcomes.sort()).toEqual(["running", "started"]);
+    await until(
+      () =>
+        one.get(x.id)?.state === "ready" && two.get(x.id)?.state === "ready",
+      "both attached",
+    );
+    expect(one.upstream(x.id)?.token).toBe(two.upstream(x.id)?.token);
+    const pids = await h.standIn.started();
+    expect(await one.stop(x.id)).toEqual({ ok: true });
+    expect([pids.launcher, pids.server, pids.shell].filter(alive)).toEqual([]);
+  },
+  30_000,
+);
+
+test.if(hasSetsid())(
+  "Stop racing a reattach and an open ends the old server completely before a new one starts",
+  async () => {
+    const h = setup();
+    const first = h.world();
+    const opened = await first.open(h.request());
+    await until(() => first.get(opened.id)?.state === "ready", "ready");
+    const old = await h.standIn.started();
+    first.closeAll();
+
+    const world = h.world();
+    await world.discover({});
+    h.standIn.forget();
+    // Reattach, Stop and Open, all at once, in that order.
+    const reattach = world.reattach(opened.id, 2);
+    const stop = world.stop(opened.id);
+    const open = world.open(h.request({ generation: 2 }));
+    expect(world.get(opened.id)?.stopping).toBe(true);
+    expect(world.upstream(opened.id)).toBeNull();
+    await reattach;
+    expect(await stop).toEqual({ ok: true });
+    // Every process of the old launch is gone before the new one starts.
+    expect([old.launcher, old.server, old.shell].filter(alive)).toEqual([]);
+    const reopened = await open;
+    expect(reopened.id).toBe(opened.id);
+    const fresh = await h.standIn.started();
+    expect(fresh.server).not.toBe(old.server);
+    await until(() => world.get(opened.id)?.state === "ready", "reopened");
+    expect(await world.stop(opened.id)).toEqual({ ok: true });
+    expect([fresh.launcher, fresh.server, fresh.shell].filter(alive)).toEqual(
+      [],
+    );
+  },
+  30_000,
+);
+
+test.if(hasSetsid())(
+  "over SSH a dropped forward detaches without stopping; Stop on the host ends a re-parented terminal",
+  async () => {
+    const h = setup();
+    const world = h.world();
+    const ssh = { destination: "dev@devbox.example.test", hostLabel: "devbox" };
+    const opened = await world.open(h.request({ connectionId: "box", ssh }));
+    await until(() => world.get(opened.id)?.state === "ready", "ready");
+    expect(opened.sshDestination).toBe(ssh.destination);
+    // World's socket is the forward's local end, under its own folder.
+    expect(h.forwards[0].local).toBe(
+      join(h.top, "data", "forwards", `${opened.id}.sock`),
+    );
+    expect(h.forwards[0].remote).toBe(
+      join(h.host, ".local/state/herdr-world/ide", opened.id, "ide.sock"),
+    );
+    const pids = await h.standIn.started();
+    expect(parentOf(pids.shell)).not.toBe(pids.server);
+
+    const revoked: string[] = [];
+    world.onRevoked((id) => revoked.push(id));
+    h.forwards[0].drop();
+    await until(() => world.get(opened.id)?.state === "detached", "detached");
+    expect(world.get(opened.id)?.reason).toContain("still runs there");
+    expect(revoked).toContain(opened.id);
+    await Bun.sleep(100);
+    expect(h.standIn.survivors()).toHaveLength(3);
+
+    // Open attaches again through a new forward; nothing new starts.
+    await world.open(h.request({ connectionId: "box", ssh, generation: 2 }));
+    await until(() => world.get(opened.id)?.state === "ready", "reattached");
+    expect(h.forwards).toHaveLength(2);
+    expect(h.outcomes).toEqual(["started"]);
+
+    expect(await world.stop(opened.id)).toEqual({ ok: true });
+    expect([pids.launcher, pids.server, pids.shell].filter(alive)).toEqual([]);
+  },
+  30_000,
+);
+
+test("a server that doesn't answer in time is detached, not stopped", async () => {
+  const h = setup();
+  let now = 0;
+  const world = new IdeInstances({
+    localRoot: join(h.top, "data"),
+    worldId: () => WORLD,
+    run: async () => ({
+      code: 0,
+      stdout: "root=/x\nresult=started\n",
+      stderr: "",
+    }),
+    probe: async () => null,
+    now: () => new Date(now),
+    sleep: async () => {
+      now += 30_000;
+    },
+    startTimeoutMs: 60_000,
+  });
+  const opened = await world.open(h.request());
+  await until(() => world.get(opened.id)?.state === "detached", "detached");
+  expect(world.get(opened.id)?.reason).toContain("still runs on this computer");
+});
+
+test("Stop that can't reach the host keeps the server listed with why", async () => {
+  const h = setup();
+  let reachable = true;
+  const world = new IdeInstances({
+    localRoot: join(h.top, "data"),
+    worldId: () => WORLD,
+    run: async () =>
+      reachable
+        ? { code: 0, stdout: "root=/x\nresult=started\n", stderr: "" }
+        : { code: 255, stdout: "", stderr: "" },
+    forward: () => ({ exited: new Promise(() => {}), kill() {} }),
+    probe: async () => 200,
+    sleep: async () => {},
+  });
+  const ssh = { destination: "dev@devbox.example.test", hostLabel: "devbox" };
+  const opened = await world.open(h.request({ connectionId: "box", ssh }));
+  reachable = false;
+  const result = await world.stop(opened.id);
+  expect(result.ok).toBe(false);
+  expect(world.get(opened.id)).toMatchObject({
+    state: "detached",
+    reason: expect.stringContaining("It still runs there"),
+  });
+  // Unreachable on the first start: nothing runs; Stop just forgets it.
+  const failing = new IdeInstances({
+    localRoot: join(h.top, "data2"),
+    worldId: () => WORLD,
+    run: async () => ({ code: 255, stdout: "", stderr: "" }),
+  });
+  expect(await failing.discover({ ssh })).toBe(false);
+  const failed = await failing.open(h.request({ connectionId: "box", ssh }));
+  expect(failed.state).toBe("failed");
+  expect(failed.reason).toContain("couldn't reach devbox");
+  expect(await failing.stop(failed.id)).toEqual({ ok: true });
+  expect(failing.list()).toEqual([]);
 });

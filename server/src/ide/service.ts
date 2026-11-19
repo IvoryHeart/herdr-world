@@ -1,6 +1,13 @@
+import { randomBytes } from "node:crypto";
 import { statSync } from "node:fs";
 import { isAbsolute, normalize } from "node:path";
-import { IdeInstances, type IdeInstanceView, IdeLimitError } from "./instances";
+import {
+  type IdeInstanceOptions,
+  IdeInstances,
+  type IdeInstanceView,
+  IdeLimitError,
+  type IdeStopResult,
+} from "./instances";
 import {
   detectIdeProvider,
   IDE_PROVIDER_IDS,
@@ -22,6 +29,8 @@ export type IdeConnection = {
   generation: number;
   sshDestination?: string;
   remotePlatform?: "windows";
+  /** False while World isn't connected to it; absent means connected. */
+  ready?: boolean;
 };
 
 export type IdeProviderStatus = IdeProviderInfo & {
@@ -64,7 +73,13 @@ export type IdeServiceDeps = {
   connection(connectionId: string): IdeConnection | null;
   /** Every connection ID, current; local ones are listed in status. */
   connectionIds?(): string[];
-  instances?: IdeInstances;
+  /** World's private folder for IDE servers and SSH forward sockets. */
+  localRoot: string;
+  /** Test doubles for host scripts, forwards and probes. */
+  instanceOptions?: Omit<
+    Partial<IdeInstanceOptions>,
+    "localRoot" | "worldId" | "onChange"
+  >;
   now?: () => Date;
   /** Detection is a few `--version` calls; repeat at most this often. */
   detectionTtlMs?: number;
@@ -82,6 +97,8 @@ export type IdeServiceDeps = {
 };
 
 const DETECTION_TTL_MS = 30_000;
+/** Looking for this World's servers on its own computer: a few file reads. */
+const LOCAL_DISCOVERY_TTL_MS = 10_000;
 
 export class IdeService {
   readonly instances: IdeInstances;
@@ -97,11 +114,37 @@ export class IdeService {
     { at: number; detection: Promise<IdeDetection> }
   >();
 
+  private worldIdValue: string | null = null;
+  private localDiscovery: Promise<unknown> | null = null;
+  private localDiscoveredAt = Number.NEGATIVE_INFINITY;
+  /** SSH hosts already listed, per connection generation and destination. */
+  private sshDiscovered = new Set<string>();
+
   constructor(private readonly deps: IdeServiceDeps) {
     this.now = deps.now ?? (() => new Date());
     this.ttl = deps.detectionTtlMs ?? DETECTION_TTL_MS;
-    this.instances =
-      deps.instances ?? new IdeInstances({ onChange: deps.onChange });
+    this.instances = new IdeInstances({
+      ...deps.instanceOptions,
+      localRoot: deps.localRoot,
+      worldId: () => this.worldId(),
+      onChange: deps.onChange,
+    });
+  }
+
+  /** This World's ID on every host; made when it first starts a server. */
+  private worldId() {
+    if (this.worldIdValue) return this.worldIdValue;
+    const existing = this.deps.settings.read().world_id;
+    this.worldIdValue =
+      existing ??
+      this.deps.settings.update((current) =>
+        current.world_id
+          ? current
+          : { ...current, world_id: randomBytes(16).toString("base64url") },
+      ).world_id ??
+      null;
+    if (!this.worldIdValue) throw new Error("World couldn't keep its ID.");
+    return this.worldIdValue;
   }
 
   private async detect(
@@ -129,7 +172,7 @@ export class IdeService {
   }
 
   async status(options: { refresh?: boolean } = {}): Promise<IdeStatus> {
-    void this.retireStale();
+    await this.reconcile(options.refresh === true);
     const settings = this.deps.settings.read();
     const providers = await Promise.all(
       IDE_PROVIDER_IDS.map(async (id) => {
@@ -190,7 +233,10 @@ export class IdeService {
     this.deps.onChange?.();
   }
 
-  /** Disable and stop its servers; the recorded consent stays for re-enable. */
+  /**
+   * Disable and stop its servers completely; the recorded consent stays
+   * for re-enable.
+   */
   async disable(provider: unknown) {
     if (!isIdeProviderId(provider)) throw new Error("unknown IDE provider");
     this.deps.settings.update((current) => {
@@ -216,7 +262,7 @@ export class IdeService {
       current.providers[provider] = next;
       return current;
     });
-    await this.instances.stopWhere((entry) => entry.provider === provider);
+    // Running servers keep the program they started with until Stop.
     await this.detect(provider, true);
     this.deps.onChange?.();
   }
@@ -281,9 +327,9 @@ export class IdeService {
     if (detection.state !== "detected")
       return refuse("missing", detection.reason);
     // Detection awaited: the connection may have reconnected, changed host
-    // or gone, or the provider been disabled, and retireStale() has already
-    // run. Re-check admission now, synchronously before the spawn, so no
-    // stale server starts after its retirement.
+    // or gone, or the provider been disabled, and reconcile() has already
+    // run. Re-check admission now, synchronously before the open is queued;
+    // a change during the host start detaches it (it runs on, listed).
     const admission = {
       provider,
       connectionId: connection.id,
@@ -298,7 +344,7 @@ export class IdeService {
           )
         : refuse("disabled", "Enable an IDE in the Code view first.");
     try {
-      const { instance } = this.instances.open({
+      const instance = await this.instances.open({
         provider,
         binary: detection.path,
         connectionId: connection.id,
@@ -350,9 +396,24 @@ export class IdeService {
     return detection;
   }
 
-  stop(instanceId: unknown) {
-    if (typeof instanceId !== "string") return Promise.resolve(false);
+  /** Stop one completely: the server and every process it started. */
+  stop(instanceId: unknown): Promise<IdeStopResult> {
+    if (typeof instanceId !== "string")
+      return Promise.resolve({ ok: false, reason: "Choose a server." });
     return this.instances.stop(instanceId);
+  }
+
+  /** A connection was removed: stop the servers started for it. */
+  connectionRemoved(connectionId: unknown) {
+    if (typeof connectionId !== "string") return Promise.resolve([]);
+    this.sshDiscovered = new Set(
+      [...this.sshDiscovered].filter(
+        (key) => !key.startsWith(`${connectionId}\u0000`),
+      ),
+    );
+    return this.instances.stopWhere(
+      (entry) => entry.connectionId === connectionId,
+    );
   }
 
   private enabled(provider: IdeProviderId) {
@@ -360,10 +421,11 @@ export class IdeService {
   }
 
   /**
-   * Whether an instance's admission still holds: its provider is enabled
-   * and its connection is the same runtime generation, on the same machine
-   * (World's own, or the same SSH destination), it was opened under. A
-   * reconnect, a change of host or transport, or removal ends it.
+   * Whether an attachment still holds: its provider is enabled and its
+   * connection is the same runtime generation, on the same machine (World's
+   * own, or the same SSH destination), it was attached under. A reconnect,
+   * a change of host or transport, or removal detaches it; the server runs
+   * on.
    */
   private admitted(
     instance: Pick<
@@ -386,32 +448,106 @@ export class IdeService {
 
   /**
    * The proxy target for one route: only while the server is ready and its
-   * admission still holds; a stale one is stopped.
+   * admission still holds; a stale one is detached.
    */
   upstream(instanceId: string): IdeUpstream | null {
     const instance = this.instances.get(instanceId);
     if (!instance) return null;
     if (!this.admitted(instance)) {
-      void this.instances.stop(instanceId);
+      this.instances.detachWhere((entry) => entry.id === instanceId);
       return null;
     }
     return this.instances.upstream(instanceId);
   }
 
   /**
-   * Stop servers whose admission no longer holds, revoking their streams.
-   * World calls this whenever a connection changes.
+   * Bring World's view of its IDE servers up to date, without starting or
+   * stopping any: detach from those whose connection changed; list this
+   * World's servers on its own computer and on each connected SSH host
+   * (once per connection generation); reattach to the ones whose
+   * connection is back. World calls this whenever a connection changes.
    */
-  retireStale() {
-    return this.instances.stopWhere((entry) => !this.admitted(entry));
+  async reconcile(refresh = false) {
+    this.instances.detachWhere(
+      (entry) => !this.admitted(entry),
+      "World's connection to its host changed; it still runs there.",
+    );
+    // No ID yet: this World never started a server.
+    if (this.deps.settings.read().world_id) {
+      for (const connection of this.sshConnections()) {
+        const key = `${connection.id}\u0000${connection.generation}\u0000${connection.sshDestination}`;
+        if (!refresh && this.sshDiscovered.has(key)) continue;
+        this.sshDiscovered.add(key);
+        void this.instances
+          .discover({
+            ssh: {
+              destination: connection.sshDestination ?? "",
+              hostLabel: connection.label,
+            },
+          })
+          .then((listed) => {
+            // Not reached: ask again on the next change or status.
+            if (!listed) this.sshDiscovered.delete(key);
+            else this.reattachAdmitted();
+          });
+      }
+      const at = this.now().getTime();
+      if (
+        !this.localDiscovery &&
+        (refresh || at - this.localDiscoveredAt >= LOCAL_DISCOVERY_TTL_MS)
+      ) {
+        this.localDiscoveredAt = at;
+        this.localDiscovery = this.instances.discover({}).finally(() => {
+          this.localDiscovery = null;
+        });
+      }
+      await this.localDiscovery;
+    }
+    this.reattachAdmitted();
   }
 
-  /** Called as an instance starts to stop, so its sockets can close. */
+  private sshConnections() {
+    return (this.deps.connectionIds?.() ?? [])
+      .map((id) => this.deps.connection(id))
+      .filter(
+        (connection): connection is IdeConnection =>
+          connection?.type === "ssh" &&
+          Boolean(connection.sshDestination) &&
+          connection.ready !== false &&
+          connection.remotePlatform !== "windows",
+      );
+  }
+
+  /** Reattach, once per generation, to detached servers whose connection is back. */
+  private reattachAdmitted() {
+    for (const entry of this.instances.list()) {
+      if (entry.state !== "detached" || entry.stopping) continue;
+      const connection = this.deps.connection(entry.connectionId);
+      if (
+        !connection ||
+        connection.ready === false ||
+        connection.remotePlatform === "windows" ||
+        !this.enabled(entry.provider)
+      )
+        continue;
+      const destination =
+        connection.type === "ssh" ? (connection.sshDestination ?? null) : null;
+      if (destination !== (entry.sshDestination ?? null)) continue;
+      void this.instances.reattach(
+        entry.id,
+        connection.generation,
+        connection.label,
+      );
+    }
+  }
+
+  /** Called as World detaches from or stops an instance, so its sockets close. */
   onRevoked(listener: (instanceId: string) => void) {
     return this.instances.onRevoked(listener);
   }
 
-  stopAll() {
-    return this.instances.stopAll();
+  /** World stops: close its attachments. Every server runs on. */
+  closeAll() {
+    this.instances.closeAll();
   }
 }

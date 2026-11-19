@@ -62,6 +62,17 @@ async function startService(root: string) {
   return started;
 }
 
+/** World's stop leaves its IDE servers running: Stop them as a person would. */
+async function stopIdes(base: string) {
+  const browser = await browserSocket(base, await login(base, PASSWORD));
+  try {
+    for (const instance of (await browser.call("world.ide.status")).instances)
+      await browser.call("world.ide.stop", { instanceId: instance.id });
+  } finally {
+    browser.close();
+  }
+}
+
 async function until<T>(read: () => Promise<T>, done: (value: T) => boolean) {
   const deadline = Date.now() + 15_000;
   for (;;) {
@@ -261,6 +272,7 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
     browser2.close();
     browser.close();
   } finally {
+    await stopIdes(started.base).catch(() => {});
     await started.service.stop();
     rmSync(top, { recursive: true, force: true });
   }
@@ -300,13 +312,15 @@ test("a failing IDE says why, and disable stops running servers", async () => {
       "the fake IDE was told to fail",
     );
 
-    // Reopening after a failure starts afresh with the fixed program.
+    // Reopening after a failure starts afresh with the fixed program, under
+    // the same identity on the host.
     await browser.call("world.ide.configure", {
       provider: "code-server",
       binary: fakeIde(join(top, "good")),
     });
     const reopened = await browser.call("world.ide.open", open);
-    expect(reopened.instance.id).not.toBe(failed.instances[0].id);
+    expect(reopened.instance.id).toBe(failed.instances[0].id);
+    expect(reopened.instance.state).toBe("starting");
     await until(
       () => browser.call("world.ide.status"),
       (value) => value.instances[0]?.state === "ready",
@@ -322,6 +336,7 @@ test("a failing IDE says why, and disable stops running servers", async () => {
     expect(existsSync(join(root, "ide.json"))).toBe(true);
     browser.close();
   } finally {
+    await stopIdes(started.base).catch(() => {});
     await started.service.stop();
     rmSync(top, { recursive: true, force: true });
   }
@@ -370,13 +385,27 @@ test("a connection change closes the IDE's open sockets and its route", async ()
       ws.onclose = (event) => resolve(event.reason);
     });
 
-    // Disconnecting retires that runtime generation: World revokes the IDE.
+    // Disconnecting retires that runtime generation: World lets go of the
+    // IDE (its sockets and route) and the server runs on, listed with Stop.
     await browser.call("connections.disconnect", { id: connection.id });
-    expect(await closed).toBe("The IDE server stopped");
+    expect(await closed).toBe("World disconnected from the IDE server");
     expect((await fetch(url, { headers: { cookie } })).status).toBe(404);
+    const after = await browser.call("world.ide.status");
+    expect(after.instances).toEqual([
+      expect.objectContaining({
+        id: status.instances[0].id,
+        state: "detached",
+        startedAt: status.instances[0].startedAt,
+      }),
+    ]);
+    // Only Stop ends it.
+    await browser.call("world.ide.stop", {
+      instanceId: status.instances[0].id,
+    });
     expect((await browser.call("world.ide.status")).instances).toEqual([]);
     browser.close();
   } finally {
+    await stopIdes(started.base).catch(() => {});
     await started.service.stop();
     rmSync(top, { recursive: true, force: true });
   }

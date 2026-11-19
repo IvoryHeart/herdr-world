@@ -1,12 +1,14 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { CloseButton } from "../../components/CloseButton";
 import { focusDialogElement } from "../../components/dialogFocus";
+import { ConfirmDialog } from "../../components/ModalDialogs";
 import type {
   IdeClient,
   IdeProviderId,
   IdeProviderStatus,
   IdeStatus,
 } from "./ideClient";
+import { ideStopEnds, runningIdeServers } from "./IdeServers";
 import "./IdeProviders.css";
 
 const errorText = (cause: unknown) =>
@@ -43,6 +45,7 @@ export function IdeProviderList({
   only?: IdeProviderId;
 }) {
   const [gate, setGate] = useState<IdeProviderStatus | null>(null);
+  const [disabling, setDisabling] = useState<IdeProviderStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const run = async (key: string, action: () => Promise<IdeStatus>) => {
@@ -61,6 +64,13 @@ export function IdeProviderList({
   const providers = only
     ? status.providers.filter((provider) => provider.id === only)
     : status.providers;
+  const serversOf = (provider: IdeProviderId) =>
+    runningIdeServers(status).filter(
+      (instance) => instance.provider === provider,
+    ).length;
+  const disable = (provider: IdeProviderStatus) =>
+    void run(`disable:${provider.id}`, () => client.disable(provider.id));
+  const disablingCount = disabling ? serversOf(disabling.id) : 0;
   return (
     <div className="ide-providers">
       <ul className="ide-provider-list" aria-label="IDE integrations">
@@ -71,9 +81,10 @@ export function IdeProviderList({
             busy={busy !== null}
             onEnable={() => setGate(provider)}
             onDisable={() =>
-              void run(`disable:${provider.id}`, () =>
-                client.disable(provider.id),
-              )
+              // Disabling stops its servers: say so first when any run.
+              serversOf(provider.id)
+                ? setDisabling(provider)
+                : disable(provider)
             }
             onConfigure={(binary) =>
               run(`configure:${provider.id}`, () =>
@@ -88,6 +99,21 @@ export function IdeProviderList({
           {error}
         </p>
       ) : null}
+      <ConfirmDialog
+        open={disabling !== null}
+        title={`Disable ${disabling?.label ?? "the IDE"}`}
+        message={
+          disabling
+            ? `Disabling ${disabling.label} stops ${disablingCount === 1 ? "its IDE server" : `its ${disablingCount} IDE servers`}. ${ideStopEnds(disablingCount)}`
+            : ""
+        }
+        confirmLabel="Disable and stop"
+        danger
+        onClose={() => setDisabling(null)}
+        onConfirm={() => {
+          if (disabling) disable(disabling);
+        }}
+      />
       {gate ? (
         <IdeEnableDialog
           provider={gate}

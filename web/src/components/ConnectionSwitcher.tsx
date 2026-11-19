@@ -51,6 +51,7 @@ import {
   isActuallyTabbable,
 } from "./dialogFocus";
 import { ConfirmDialog } from "./ModalDialogs";
+import { useRemoveConnectionMessage } from "./useRemoveConnectionMessage";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import "./ConnectionSwitcher.css";
 
@@ -406,6 +407,7 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
   > | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const removeMessage = useRemoveConnectionMessage(removeTarget);
   const requestToken = useRef(0);
   const mounted = useRef(false);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -933,11 +935,7 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
         <ConfirmDialog
           open={!!removeTarget}
           title="Remove Connection"
-          message={
-            removeTarget
-              ? `Remove connection "${removeTarget.label}"? This disconnects Herdr World but does not stop the Herdr server.`
-              : "Remove this connection?"
-          }
+          message={removeMessage}
           confirmLabel="Remove"
           danger
           onClose={() => setRemoveTarget(null)}

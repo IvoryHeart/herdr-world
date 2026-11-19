@@ -44,6 +44,24 @@ function publish() {
   );
 }
 bridge.call = async (method, params) => {
+  // The Remove confirmation reads the IDE servers World started there.
+  if (method === "world.ide.status")
+    return {
+      providers: [],
+      instances: [
+        {
+          id: "fixtureRemoteServer000",
+          provider: "code-server",
+          connectionId: "remote",
+          folder: "/srv/example/api",
+          state: "detached",
+          url: "/ide/fixtureRemoteServer000/",
+          startedAt: new Date(0).toISOString(),
+          sshDestination: "devbox.example",
+        },
+      ],
+      localConnections: ["local"],
+    };
   calls.push(method);
   if (method === "connections.set_default") {
     connections = connections.map((item) => ({
@@ -241,6 +259,22 @@ async function run() {
     click(button("Remove", card("Failed SSH")));
     await waitFor(
       () => !!document.querySelector('[aria-label="Remove Connection"]'),
+    );
+    await waitFor(
+      () =>
+        !!document
+          .querySelector('[aria-label="Remove Connection"]')
+          ?.textContent?.includes(
+            "It stops the IDE server World started on it",
+          ),
+    );
+    check(
+      Boolean(
+        document
+          .querySelector('[aria-label="Remove Connection"]')
+          ?.textContent?.includes("its terminals, tasks"),
+      ),
+      `${theme}: removal didn't say what ends with the IDE server`,
     );
     click(
       button(
