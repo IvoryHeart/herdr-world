@@ -1,29 +1,23 @@
 {
-  "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/41083467325",
+  "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/44585023715",
   "units": "seconds; per-model ci-shard manifest elapsedMs divided by 1000",
   "seconds": {
-    "binding-resolution": 10.679,
-    "browser-preparation": 72.123,
-    "browser-refresh": 62.829,
-    "chunk-assembly": 32.621,
-    "chunk-credits": 62.998,
-    "creation-flow": 16.107,
-    "ranger-authority": 10.58,
-    "ranger-recovery": 20.574,
-    "runtime-control": 37.172,
-    "runtime-drain": 37.882,
-    "runtime-leases": 46.514,
-    "space-admission": 225.083,
-    "observation-base": 60.119497273,
-    "herdr-core-runtime": 431.46,
-    "effect-recovery": 199.5,
-    "herdr-core-seen": 11.732
+    "herdr-core-runtime": 497.034,
+    "herdr-core-seen": 39.718,
+    "space-admission": 274.809,
+    "chunk-credits": 58.901,
+    "observation-base": 155.285,
+    "runtime-drain": 41.27,
+    "chunk-assembly": 30.492,
+    "creation-flow": 21.781,
+    "binding-resolution": 30.276,
+    "effect-recovery": 60.504,
+    "browser-preparation": 78.825,
+    "browser-refresh": 52.492,
+    "runtime-leases": 55.91,
+    "runtime-control": 32.408,
+    "ranger-recovery": 19.894,
+    "ranger-authority": 24.514
   },
-  "localSources": {
-    "herdr-core-runtime": "Complete focused maintained run with the M7 kill fence, P4 worktree removal, launch briefs, the observe family and the typing family: sum of command elapsedMs, bounded exhaustive quotient with sends and kills checked in separate authority families (789,010 distinct states, 65 s), three seeds, twenty-nine invariant/replay controls, thirteen production controls and larger-bound sensitivity, on a machine running other model runs alongside (2026-11-11).",
-    "binding-resolution": "Focused maintained run: sum of command elapsedMs, including private TLC startup, three seeds (500 replay traces each), model fault and six code controls (2026-10-31).",
-    "observation-base": "Development exhaustive TLC with the pinned checker; 60.119497273 seconds including private checker startup. Existing entries retain their sourceRun.",
-    "effect-recovery": "Complete local verification gate, all 13 canonical models; effect-recovery case 199.5 seconds including real SQLite replay and controls. Existing entries retain their sourceRun.",
-    "herdr-core-seen": "Complete focused maintained run: sum of command elapsedMs, exhaustive TLC (3339 distinct states), three seeds (500 replay traces each), five model fault controls and larger-bound sensitivity (2026-11-11)."
-  }
+  "note": "Measured on the preceding PR candidate; core retains its dedicated two-CPU shard. Checker reuse reduces core setup; weights are observations, not a claimed new CI result."
 }

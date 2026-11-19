@@ -25,11 +25,16 @@ export function verificationShard(index: number): string[] {
     Number.isInteger(index) && index >= 1 && index <= CI_VERIFICATION_SHARDS,
     "Invalid verification shard",
   );
-  return balanceShards(
-    verificationModels,
-    timings.seconds,
-    CI_VERIFICATION_SHARDS,
-  )[index - 1]!;
+  // The core control pool owns two CPUs. Keep its isolation structural even
+  // after a faster timing refresh; balance all remaining models over two groups.
+  return [
+    ["herdr-core-runtime"],
+    ...balanceShards(
+      verificationModels.filter((model) => model !== "herdr-core-runtime"),
+      timings.seconds,
+      CI_VERIFICATION_SHARDS - 1,
+    ),
+  ][index - 1]!;
 }
 
 type Case = {
@@ -105,6 +110,11 @@ export async function runVerificationShard(
   signal: AbortSignal,
 ) {
   const models = verificationShard(index);
+  const core = models.includes("herdr-core-runtime");
+  assert(
+    !core || models.length === 1,
+    "Parallel core controls require a dedicated shard",
+  );
   const identity = await source(root, signal);
   const output = resolve(
     root,
@@ -136,6 +146,10 @@ export async function runVerificationShard(
             signal: workerSignal,
             timeoutMs: execution.workerTimeoutMs,
             graceMs: execution.workerGraceMs,
+            env: {
+              ...process.env,
+              HERDR_CORE_CONTROL_WORKERS: core ? "2" : "1",
+            },
           },
         );
         assert.equal(

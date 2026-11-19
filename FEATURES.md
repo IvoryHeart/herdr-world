@@ -223,8 +223,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     it for the full text).
     Chat and quests refresh usage stops after local transcript rewrites, including
     same-size writes whose file timestamps stay unchanged.
-    On a phone the compact chip adds the lowest percent left (or **reached**), with the same age when that reading is over 15 minutes old. Its **Summary** button, or on a phone the compact chip under
-    the search bar, opens the **Town summary** window: blocked agents and
+    The board stays folded into a compact status chip at the top left: one
+    icon, **!N** in amber while N items need you, and the lowest fuel percent
+    (or **reached**) only when a gauge is low or reached. Hover the chip with a
+    mouse, or tap, click or focus and press Enter, to open the board below it as
+    a popover. A click or tap keeps it open; Escape, a tap outside or another
+    tap on the chip closes it. Opened by hover alone, it closes shortly after
+    the mouse leaves the chip and board. The board's **Summary** button
+    opens the **Town summary** window: blocked agents and
     questions you can answer in place,
     unreviewed finishes and when each was last active, every host and room
     with its counts (tap a room to go there) and its subscription limits
@@ -418,8 +424,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
     **New room** (disabled with the reason when no room can be created). With
     no room open, New room asks for the **Destination host**, herdr-core hosts
-    included (`· herdr-core`); a core room takes a name only, since its agents
-    start in core's own folder, and an empty name becomes "Room". Arrow
+    included (`· herdr-core`); an empty core room name becomes "Room". Arrow
     keys, Home and End move around the ring; Escape, a press outside, the
     centre **✕** or **Back** on a phone closes it.
   - **Lenses** colour the whole map by one fact, as strategy games' map
@@ -544,8 +549,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     changes, without polling.
   - Tapping an agent or its table brings the agent back: from reception or the
     bar it walks to its desk and stays there until its status changes. A
-    table stands for an agent that needs you (waiting, then finished) before
-    the one seated there. **Menu → Agents open** chooses whether that tap opens
+    table opens its one pane, else the focused pane, else an agent there
+    that needs you (waiting, then finished), else the most recently active
+    pane. Only a table with more panes than seats and none focused lists
+    them to choose. Herdr TUI and herdr-core
+    tables open alike: a live core shell opens its terminal and a core agent
+    its Chat or terminal, never a refusal; "World can't mark core work
+    reviewed yet" shows only on review controls. **Menu → Agents open** chooses whether that tap opens
     the chat (the default) or the terminal, in Town, Board and Desk alike; either way the tap does not mark
     finished work reviewed. **Open terminal** in the peek does, as before.
   - A seated agent with a quest (its own todo list, plan, Codex goal or loop)
@@ -662,8 +672,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     targets. A
     table, or its nameplate, opens the same card for that table on hover,
     focus or a tap; a click on the plate selects the table and a double click
-    opens it. On touch screens the first tap on a table opens its card, and a
-    second tap (or a double tap) opens the table. Zoomed out to the room
+    opens it. On touch screens one tap opens a live table's default pane; on
+    a table with nothing to open at once (a cached host's, or a crowded one)
+    the first tap opens its card and a second tap (or a double tap) does what
+    a tap does. Zoomed out to the room
     cards, each room's card is a slim label hanging from its rug's top edge:
     its name, a waiting badge and a thin bar of working, waiting, done and
     quiet; hovering or focusing it adds the count line. A mouse anywhere over
@@ -1218,8 +1230,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
 - **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.
-  **Hosts** defaults to All hosts and persists an explicit host set independently
-  of **Manage connections**. It lists every connection of either runtime,
+  **Hosts** (in the top bar; on a phone in Zen, in the corner view menu too)
+  defaults to All hosts and persists an explicit host set independently
+  of **Manage connections**; both places show and change one filter per
+  browser. It lists every connection of either runtime,
   Herdr's first; a herdr-core connection reads `<name> · herdr-core · <state>`
   and is counted, selected and remembered like a Herdr host (profiles of one
   runtime endpoint count once). Filtering preserves open resources and terminals;
@@ -1730,8 +1744,13 @@ preview**. Chat and its draft stay open.
   settings menu's **Zen mode** switch turns it off or back on. While Zen is on,
   a view picker beside Exit Zen switches between the views. On a phone, Zen
   hides the top bar and bottom navigation on every root screen, Spaces' list
-  included; a corner button opens the views and **Show the bars**. A terminal is
-  a detail screen and keeps its own bar, with Back. Stored in this browser.
+  included; a corner button opens the views, **Hosts**, **Find or act** and
+  **Show the bars**. **Hosts** there opens the top bar's Hosts filter in the
+  menu's place, with **Manage connections**, and changes the same selection;
+  Tab moves between its controls, and Tab out of it closes it, as Tab closes
+  the views menu. On a short screen the menu scrolls, so every choice stays reachable.
+  A terminal is a detail screen and keeps its own bar, with Back. Stored in
+  this browser.
 
 Herdr 0.9.0 uses **Local navigation** per browser/connection; legacy connections
 use **Shared navigation**. Reconnect preserves live selections; reload starts
@@ -2272,6 +2291,22 @@ rows. Customize assignments in Configuration.
 
 New workspace and worktree dialogs suggest readable two-word names. Suggestions
 load asynchronously; editing the name takes precedence over a late suggestion.
+
+New room (New workspace) picks its **Folder** on the chosen host, Herdr TUI
+and herdr-core alike:
+
+- **Recent folders** are up to six buttons, by name with the full path as a
+  tooltip: the folders that host's panes and rooms work in, the focused pane's
+  first, then the most recently active. The folder defaults to the most recent
+  one, else `~` (home); one tap on another recent folder, then **Create**,
+  makes the room there.
+- The folder is checked on the host as you type: it shows the resolved path,
+  **Up to <parent>** and its subfolders to browse, or the error. **Tab**
+  completes a typed path to the shared start of the matching folders. Create
+  waits for the check of a typed folder; the default folder does not.
+- A herdr-core room keeps its folder: core checks it on its host, refuses a
+  missing one, and starts the room's shells and agents there. App spaces and
+  worktree rooms keep their own folders.
 
 ## Remote, Multi-Client, and Operations
 
