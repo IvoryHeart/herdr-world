@@ -34,6 +34,12 @@ export type CoreTopologyRoom = {
   label: string;
   app_space?: string;
   checkout?: CoreRoomCheckout;
+  /**
+   * The folder a plain room was created in: its Files and new terminals
+   * use it, as a Herdr workspace's working directory (#1006). A worktree
+   * room's folder is its checkout instead.
+   */
+  folder?: string;
   tabs: CoreTopologyTab[];
 };
 export type CoreTopologyDocument = {

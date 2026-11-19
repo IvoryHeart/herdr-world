@@ -5,21 +5,83 @@ import type {
 
 /**
  * Cached entities may be inspected as history, never opened as live
- * endpoints. With `inspector`, a live herdr-core agent counts too: it opens
- * in World's Inspector, though Town's Herdr-only replies still refuse it.
+ * endpoints. A live herdr-core pane, desk or agent opens too, in World's
+ * Inspector (its terminal, or an agent's Chat): World only cannot mark its
+ * work reviewed, and that restriction belongs on review controls, never on
+ * opening it.
  */
 export function townTargetActionable(
   office: HerdrOfficeProjection,
   key: string,
-  inspector = false,
 ) {
   const target =
     office.paneRoster.find((x) => x.device.key === key)?.device ??
     office.roster.find((x) => x.agent.key === key)?.agent ??
     office.deskRoster.find((x) => x.desk.key === key)?.desk;
   if (!target || target.stale) return false;
-  const core = inspector && "coreChat" in target && Boolean(target.coreChat);
-  return target.canOpenInSpaces || core;
+  return (
+    target.canOpenInSpaces ||
+    ("coreChat" in target && Boolean(target.coreChat)) ||
+    ("coreOpen" in target && Boolean(target.coreOpen))
+  );
+}
+
+/**
+ * What tapping a desk opens: its one pane, else the pane Herdr reports
+ * focused, else an agent there that needs you (waiting, then finished),
+ * else the pane most recently active. A desk with more panes than seats and
+ * none of those to go by returns null: the chooser lists them. Otherwise the
+ * seated agent, else the first pane. The key is an agent's when the pane
+ * holds one, else the pane's. The same for Herdr TUI and herdr-core desks.
+ */
+export function townDeskOpenKey(
+  office: Pick<HerdrOfficeProjection, "deskRoster" | "roster" | "paneRoster">,
+  deskKey: string,
+): string | null {
+  const desk = office.deskRoster.find((x) => x.desk.key === deskKey)?.desk;
+  if (!desk) return null;
+  const panes = office.paneRoster
+    .filter(({ device }) => device.deskKey === deskKey && !device.stale)
+    .map(({ device }) => device)
+    .sort((a, b) => a.order - b.order);
+  const keyOf = (device: (typeof panes)[number]) =>
+    device.agentKey ?? device.key;
+  if (panes.length === 1 && desk.observedPaneCount <= 1)
+    return keyOf(panes[0]!);
+  const focused = panes.find((device) => device.focused);
+  if (focused) return keyOf(focused);
+  const calling = townDeskAgentKey(office, deskKey);
+  const callingAgent = calling
+    ? office.roster.find((x) => x.agent.key === calling)?.agent
+    : undefined;
+  if (
+    callingAgent &&
+    (callingAgent.semanticStatus === "blocked" ||
+      callingAgent.semanticStatus === "done")
+  )
+    return callingAgent.key;
+  let latest: (typeof panes)[number] | undefined;
+  for (const device of panes)
+    if (
+      typeof device.lastActivityAt === "number" &&
+      (!latest || device.lastActivityAt > (latest.lastActivityAt ?? 0))
+    )
+      latest = device;
+  if (latest) return keyOf(latest);
+  if (desk.observedPaneCount > desk.paneDevices.length) return null;
+  return calling ?? (panes[0] ? keyOf(panes[0]) : null);
+}
+
+/**
+ * Whether a tap on the desk opens something at once (townDeskOpenKey), so a
+ * touch tap opens it rather than the desk's summary card first.
+ */
+export function townDeskOpensAtOnce(
+  office: HerdrOfficeProjection,
+  deskKey: string,
+) {
+  const key = townDeskOpenKey(office, deskKey);
+  return key !== null && townTargetActionable(office, key);
 }
 
 export async function inspectTownTerminal(
@@ -28,7 +90,7 @@ export async function inspectTownTerminal(
   open: (nodeId: string) => unknown,
   reviewed?: (agent: OfficeAgent) => void,
 ) {
-  if (!townTargetActionable(office, key, true)) return;
+  if (!townTargetActionable(office, key)) return;
   const device = office.paneRoster.find((x) => x.device.key === key)?.device;
   if (device) {
     await open(device.nodeId);
