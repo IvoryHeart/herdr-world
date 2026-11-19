@@ -31,9 +31,9 @@ const MAX_TITLE = 300;
 const MAX_STATUS = 80;
 
 export const JIRA_NOT_CONFIGURED =
-  "Add your Jira Cloud site, account email and an API token in Sources settings.";
+  "Add your Jira Cloud site, account email and an API token in Settings → Integrations.";
 const JIRA_REJECTED =
-  "Jira rejected the email or API token. Create a new token and save it in Sources settings.";
+  "Jira rejected the email or API token. Create a new token and save it in Settings → Integrations.";
 const JIRA_BAD_QUERY =
   "Jira rejected the JQL filter. Check it in Jira's issue search, then save it here.";
 const JIRA_FAILED =
