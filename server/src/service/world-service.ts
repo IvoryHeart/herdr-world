@@ -51,14 +51,12 @@ import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
 import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
-import {
-  createSourcesHttpHandler,
-  storedSourceSettings,
-  withSourceSettings,
-} from "../sources/http";
-import { CheckoutResolver } from "../sources/links";
-import { readSourceSecrets, writeSourceSecrets } from "../sources/secrets";
-import { SourcesService } from "../sources/service";
+import { createSourcesHttpHandler } from "../sources/http";
+import { composeSources, runSourceProcess } from "../sources/composition";
+import { ShipyardService } from "../shipyard/service";
+import { ShipyardInstances } from "../shipyard/instances";
+import { shipyardInstanceIdentity } from "../shipyard/identity";
+import { createShipyardHttp } from "../shipyard/http";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
@@ -688,40 +686,10 @@ async function compose(
     },
   });
 
-  // Built-in sources (GitHub, Jira). On by default; each runs only while a
-  // browser asks and keeps its credentials in private service storage.
-  const runSourceProcess = async (argv: string[], timeoutMs: number) => {
-    try {
-      return await runProcessWithCodeTimeout(argv, timeoutMs, {
-        env: {
-          ...process.env,
-          GH_PROMPT_DISABLED: "1",
-          GIT_TERMINAL_PROMPT: "0",
-          NO_COLOR: "1",
-        },
-      });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT")
-        return { code: 127, stdout: "", stderr: "" };
-      throw error;
-    }
-  };
-  const worldSources = new SourcesService({
-    settings: await settings
-      .read()
-      .then(storedSourceSettings)
-      .catch(() => ({})),
-    persistSettings: async (sources) => {
-      await settings.update((current) => withSourceSettings(current, sources));
-    },
-    secrets: {
-      read: () => readSourceSecrets(paths.sourceSecrets),
-      write: (secrets) => {
-        if (!storageOpen) throw new Error("World storage is closed");
-        writeSourceSecrets(secrets, paths.sourceSecrets);
-      },
-    },
-    run: runSourceProcess,
+  const worldSources = await composeSources({
+    settings,
+    paths,
+    storageOpen: () => storageOpen,
     topology: async () =>
       worldSnapshots ? (await worldSnapshots.snapshot()).connections : [],
     runtimeOwners: () =>
@@ -732,7 +700,7 @@ async function compose(
             ? [{ connection_id: id, generation }]
             : [],
         ),
-    resolver: new CheckoutResolver(runSourceProcess, (connectionId) => {
+    hostOf: (connectionId) => {
       if (connectionId === STARTUP_DEFAULT_CONNECTION_ID && config.sshHost)
         return { kind: "ssh", destination: config.sshHost };
       const profile = connectionProfiles
@@ -742,10 +710,28 @@ async function compose(
       if (profile?.type === "ssh" && profile.remote_platform !== "windows")
         return { kind: "ssh", destination: profile.ssh_destination };
       return null;
-    }),
+    },
     now: () => clock.now(),
   });
   const handleWorldSources = createSourcesHttpHandler(worldSources);
+  const shipyardInstances = new ShipyardInstances(
+    paths.instanceRegistry,
+    paths.root,
+    () => clock.now(),
+    scheduler,
+  );
+  const shipyardIdentity = await shipyardInstanceIdentity(
+    serviceIncarnation,
+    config.appVersion,
+    clock.now(),
+  );
+  const shipyard = new ShipyardService({
+    run: runSourceProcess,
+    source: () => worldSources.shipyardSource(),
+    instances: () => shipyardInstances.read(),
+    now: () => clock.now(),
+  });
+  const shipyardHttp = createShipyardHttp(shipyard);
 
   worldUsage = new WorldUsageService({
     incarnation: serviceIncarnation,
@@ -889,6 +875,7 @@ async function compose(
             herdrSetup,
             officeObservability: handleOfficeObservability,
             sources: handleWorldSources,
+            shipyard: { service: shipyard, http: shipyardHttp },
             track,
             stopping: () => stopping,
           }),
@@ -902,6 +889,12 @@ async function compose(
           });
         },
       });
+      shipyardInstances.start(
+        shipyardIdentity,
+        server.port ?? config.port,
+        config.host,
+        !!config.tls,
+      );
       worldCli.start();
       forwards.listeningOn(server.port ?? config.port);
       return {
@@ -959,6 +952,8 @@ async function compose(
     // Admit nothing new: requests get 503 while the port stays bound, and no
     // reconnect, push, Ranger start or wait for an answer begins.
     stopping = true;
+    shipyard.close();
+    shipyardInstances.stop();
     const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
     deskWatches.stop();

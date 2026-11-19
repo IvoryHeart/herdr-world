@@ -3,6 +3,26 @@
 A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
 [Install it](./README.md#quick-start) or follow the [tutorial](./docs/TUTORIAL.md).
 
+## Shipyard data
+
+- `herdr-world shipyard list|show` and the same-origin
+  [Shipyard API](docs/shipyard-api.md) read GitHub releases, tags, workflow health
+  on the observed main commit and merged changes waiting after the release
+  baseline. All authors count; membership follows the commit graph, not dates.
+- Channels are stable or prerelease. Drafts and bare tags do not count as shipped.
+  Missing, stale, diverged or shortened data stays explicit; it never means
+  “nothing waiting” or permission to release. The existing GitHub Sources switch
+  and service user's `gh` sign-in apply. Reads share a bounded cache and deadline.
+- Running World listeners report their versions, ports and known source branches
+  in a private local registry. Isolated previews can opt into one shared registry;
+  expired reports are stale and have no open action. Only fresh loopback reports
+  provide navigation URLs, usable from the service machine. No remote host or
+  port discovery runs, and agent runtimes are not treated as World deployments.
+- V1 provides navigation links only: no release/tag creation or deployment
+  changes. `herdr-world shipyard demo --scenario stale|limited --json` exercises
+  synthetic rare states without a service or credentials. Town/Board visuals
+  follow separately; this capability adds no screens or buildings.
+
 ## Runtime support
 
 herdr-core is primary for new agents when installed and connected. Choose a
