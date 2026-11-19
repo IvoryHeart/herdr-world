@@ -51,12 +51,12 @@ import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
 import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
-import { createSourcesHttpHandler } from "../sources/http";
 import { composeSources, runSourceProcess } from "../sources/composition";
 import { ShipyardService } from "../shipyard/service";
 import { ShipyardInstances } from "../shipyard/instances";
 import { shipyardInstanceIdentity } from "../shipyard/identity";
 import { createShipyardHttp } from "../shipyard/http";
+import { withIntegrations } from "../integrations/http";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
@@ -713,7 +713,12 @@ async function compose(
     },
     now: () => clock.now(),
   });
-  const handleWorldSources = createSourcesHttpHandler(worldSources);
+  const handleWorldSources = withIntegrations(worldSources, {
+    profiles: connectionProfiles,
+    metrics: officeObservability,
+    vaultPath: paths.sourceSecrets,
+    now: () => clock.now(),
+  });
   const shipyardInstances = new ShipyardInstances(
     paths.instanceRegistry,
     paths.root,

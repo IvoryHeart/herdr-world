@@ -1,49 +1,10 @@
 /* Shared visual-view stage, canvas callouts, semantic targets and room
-   actions (used by Town), and the optional cost metrics dialog. */
+   actions (used by Town). */
 .world-office-shell {
   min-width: min-content;
   width: max(100%, 980px);
   max-width: 1680px;
   margin: 0 auto;
-}
-.world-observability-dialog {
-  width: min(520px, 100%);
-}
-.world-observability-help {
-  margin: 0;
-  color: var(--muted, #9da7b4);
-  font-size: 12px;
-  line-height: 1.55;
-}
-.world-observability-field-help {
-  margin: 6px 0 0;
-  color: var(--muted, #9da7b4);
-  font-size: 11px;
-  line-height: 1.45;
-}
-.world-observability-health {
-  min-height: 38px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-  padding: 8px 10px;
-  border: 1px solid var(--border, #343942);
-  border-radius: 7px;
-  color: var(--muted, #9da7b4);
-  background: rgb(255 255 255 / 3%);
-  font-size: 12px;
-}
-.world-observability-health[data-status="available"] {
-  border-color: color-mix(in srgb, #54c88b 45%, var(--border, #343942));
-  color: #83d9aa;
-}
-.world-observability-health[data-status="degraded"] {
-  border-color: color-mix(in srgb, #ef9b85 45%, var(--border, #343942));
-  color: #efad9c;
-}
-.world-observability-actions {
-  justify-content: space-between;
 }
 .world-view-loading,
 .world-view-failure {
@@ -232,61 +193,4 @@
 }
 .world-renderer-fallback strong {
   color: var(--text, #edf2f7);
-}
-/* Sources settings (GitHub, Jira). */
-.world-sources-dialog {
-  width: min(560px, 100%);
-  max-height: min(88vh, 900px);
-  overflow-y: auto;
-}
-.world-source {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border, #343942);
-}
-.world-source-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.world-source-head h3 {
-  margin: 0;
-  font-size: 14px;
-}
-.world-source-switch {
-  position: relative;
-  width: 36px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 10px;
-  background: var(--border, #343942);
-  cursor: pointer;
-}
-.world-source-switch > span {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--fg, #e6e9ef);
-  transition: transform 0.15s;
-}
-.world-source-switch[aria-checked="true"] {
-  background: var(--accent, #4f8cff);
-}
-.world-source-switch[aria-checked="true"] > span {
-  transform: translateX(16px);
-}
-.world-source-fields {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-}
-.world-source-fields textarea {
-  width: 100%;
-  font-family: var(--mono, ui-monospace, monospace);
-  font-size: 12px;
 }

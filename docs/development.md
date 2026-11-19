@@ -28,6 +28,21 @@ exit codes, the lock between processes, a home folder of its own, or fakes on
 `PATH`. A test that saves source settings should switch the GitHub source off
 first, because `gh` keeps its own state in the process's home folder.
 
+Database tests should exercise behavior without measuring disk sync speed.
+Use an isolated in-memory backing for store logic (see
+[`memoryBacking`](../server/src/testing/memory-backing.ts)), or SQLite
+`:memory:` when the code accepts a connection. For real file/worker tests,
+seed large histories and capacity boundaries in a few transactions, then run
+the operation under test through its normal path. Keep real disk sync for
+persistence, crash recovery and durability checks; never change the product's
+FULL-sync mode, extend timeouts, retry or skip a slow test. Logical model replay
+can use [`openWithoutSqliteSync`](../server/src/testing/sqlite-no-sync.ts) around
+synchronous fixture construction; it retains real SQL transactions and reopen
+checks while the separate process-kill fixtures keep FULL sync. Concurrent-reader
+tests should acknowledge observed commits rather than rely on many writes to
+create a scheduling window. Check churn tests alongside a bounded write/fsync
+load when changing their fixtures.
+
 React DOM's development renderer has a version-scoped Bun patch that enforces
 its existing changed-prop diagnostic width limit. Install with the frozen lockfile
 so the patch applies; retain it during dependency refreshes until the installed

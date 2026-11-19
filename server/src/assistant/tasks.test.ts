@@ -253,24 +253,56 @@ test("scope changes isolate notification history and event deduplication while a
 
 test("notification history retains the latest 100 events independently of pruned runs", async () => {
   jest.useFakeTimers({ now: Date.parse("2026-10-04T00:00:00Z") });
-  const f = fixture();
+  let f = fixture();
   const task = await f.manager.create(prepared(), randomUUID());
   await f.manager.resume();
-  for (let index = 0; index < 101; index++) {
-    const run = await startRun(f, task.id);
-    await f.manager.notifyRun(
-      task.id,
-      run.run.id,
-      customNotification(`work-${index}`),
-    );
-    run.complete();
-    await flush();
+  const first = await startRun(f, task.id);
+  await f.manager.notifyRun(
+    task.id,
+    first.run.id,
+    customNotification("work-0"),
+  );
+  first.complete();
+  await flush();
+  await f.manager.dispose();
+
+  // Seed the retention boundary in one save instead of 100 full run lifecycles.
+  const storage = openTaskStorage(f.directory, validateSavedTasks);
+  try {
+    const saved = storage.load(),
+      entry = saved.tasks[0]!;
+    const run = entry.runs[0]!,
+      receipt = entry.notifications![0]!;
+    const ids = Array.from({ length: 100 }, () => randomUUID());
+    entry.runs = ids.slice(-20).map((id) => ({ ...structuredClone(run), id }));
+    entry.notifications = ids.map((run_id, index) => ({
+      ...structuredClone(receipt),
+      run_id,
+      event_key: `work-${index}`,
+    }));
+    storage.save(saved);
+  } finally {
+    storage.close();
   }
+  f = fixture(f.directory);
+  await f.manager.resume();
+  expect(f.manager.notificationHistory(task.id)).toHaveLength(100);
+  const run = await startRun(f, task.id);
+  await f.manager.notifyRun(
+    task.id,
+    run.run.id,
+    customNotification("work-100"),
+  );
+  run.complete();
+  await flush();
   expect(f.manager.detail(task.id).runs).toHaveLength(20);
   const history = f.manager.notificationHistory(task.id);
   expect(history).toHaveLength(100);
   expect(history[0]!.event_key).toBe("work-1");
   expect(history.at(-1)!.event_key).toBe("work-100");
+  expect(
+    f.manager.detail(task.id).runs.some((run) => run.id === history[0]!.run_id),
+  ).toBe(false);
   await f.manager.dispose();
   expect(fixture(f.directory).manager.notificationHistory(task.id)).toEqual(
     history,

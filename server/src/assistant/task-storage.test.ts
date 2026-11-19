@@ -489,8 +489,11 @@ test("a separate SQLite process can read while the writer saves", async () => {
     import { Database } from "bun:sqlite";
     let reading = true;
     let reads = 0;
-    process.stdin.on("data", () => { reading = false; });
-    console.log("ready");
+    let requested = "";
+    process.stdin.on("data", chunk => {
+      requested = chunk.toString().trim();
+      if (requested === "stop") reading = false;
+    });
     while (reading) {
       const db = new Database(process.argv[1], { readonly: true });
       try {
@@ -502,6 +505,11 @@ test("a separate SQLite process can read while the writer saves", async () => {
             rows.runs.some(run => run.task_id !== rows.tasks[0].id))
           throw new Error("Inconsistent task receipt");
         reads++;
+        if (reads === 1) console.log("ready");
+        if (requested && rows.tasks[0].status === requested) {
+          console.log("seen " + requested);
+          requested = "";
+        }
       } finally {
         db.close();
       }
@@ -514,12 +522,29 @@ test("a separate SQLite process can read while the writer saves", async () => {
     { stdin: "pipe", stdout: "pipe", stderr: "pipe", timeout: 5_000 },
   );
   const stdout = observed.stdout.getReader();
+  let buffered = "";
+  const line = async () => {
+    while (!buffered.includes("\n")) {
+      const next = await stdout.read();
+      if (next.done)
+        throw new Error("SQLite reader exited before acknowledging the save");
+      buffered += new TextDecoder().decode(next.value);
+    }
+    const end = buffered.indexOf("\n"),
+      result = buffered.slice(0, end);
+    buffered = buffered.slice(end + 1);
+    return result;
+  };
   try {
-    const ready = await stdout.read();
-    expect(new TextDecoder().decode(ready.value)).toBe("ready\n");
-    for (let index = 0; index < 200; index++) {
-      saved.tasks[0]!.task.status = index % 2 ? "active" : "paused";
+    expect(await line()).toBe("ready");
+    // Require a real independent read after each commit, rather than hoping a
+    // reader runs during hundreds of sync-bound writes.
+    for (let index = 0; index < 8; index++) {
+      const status = index % 2 ? "active" : "paused";
+      saved.tasks[0]!.task.status = status;
       storage.save(saved);
+      observed.stdin.write(status + "\n");
+      expect(await line()).toBe("seen " + status);
     }
     observed.stdin.write("stop\n");
     observed.stdin.end();
@@ -527,7 +552,7 @@ test("a separate SQLite process can read while the writer saves", async () => {
       observed.exited,
       new Response(observed.stderr).text(),
       (async () => {
-        let remaining = "";
+        let remaining = buffered;
         for (;;) {
           const next = await stdout.read();
           if (next.done) return remaining;
