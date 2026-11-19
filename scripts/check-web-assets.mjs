@@ -29,7 +29,10 @@ const maxFileCount = 190;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
-const maxTotalBytes = 15.25 * 1024 * 1024;
+// Apartments (#1011: the resident search/history dialog, its store and Town's
+// apartment building) add about 18.7 KB to lazy chunks with main at 15.24 MiB,
+// so the total rose to 15.3 MiB on 2026-11-19; startup budgets are unchanged.
+const maxTotalBytes = 15.3 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
