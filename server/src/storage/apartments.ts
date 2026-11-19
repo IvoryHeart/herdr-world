@@ -11,8 +11,9 @@ import { StorageWriteRejected, type StorageRequest } from "./world-protocol";
 
 /**
  * Durable apartment residents (shared/apartments.ts). Each row is one
- * finished agent; writes add one resident or evict some, and every write
- * applies retention (age, then capacity) in the same transaction.
+ * finished agent; writes add one resident, add the last report it left
+ * (read after it moved in), or evict some, and every write applies
+ * retention (age, then capacity) in the same transaction.
  */
 export const apartmentsMigration = `CREATE TABLE apartment_residents (
  id TEXT PRIMARY KEY NOT NULL CHECK(length(id)>0),
@@ -25,6 +26,7 @@ export type ApartmentMoveIn = Omit<ApartmentResident, "id">;
 
 export type ApartmentOperation =
   | { type: "move-in"; resident: ApartmentMoveIn }
+  | { type: "report"; id: string; last_report: string }
   | { type: "evict"; ids: string[] };
 
 export type ApartmentWriteResult = {
@@ -35,6 +37,8 @@ export type ApartmentsPort = {
   list(): ApartmentResident[];
   get(id: string): ApartmentResident | undefined;
   moveIn(resident: ApartmentMoveIn): Promise<ApartmentResident>;
+  /** Adds the last report a resident left; a resident gone since is skipped. */
+  report(id: string, lastReport: string): Promise<void>;
   evict(ids: readonly string[]): Promise<void>;
   close(): void;
 };
@@ -168,6 +172,23 @@ export function writeApartments(
       resident.moved_out_at,
       JSON.stringify(resident),
     );
+  } else if (operation.type === "report") {
+    const row =
+      typeof operation.id === "string"
+        ? (db
+            .query("SELECT body FROM apartment_residents WHERE id=?")
+            .get(operation.id) as { body: string } | null)
+        : null;
+    if (row) {
+      const resident = parseApartmentMoveIn({
+        ...JSON.parse(row.body),
+        last_report: operation.last_report,
+      });
+      db.query("UPDATE apartment_residents SET body=? WHERE id=?").run(
+        JSON.stringify(resident),
+        operation.id,
+      );
+    }
   } else if (operation.type === "evict") {
     if (!Array.isArray(operation.ids) || operation.ids.length > 1000)
       throw new Error("invalid apartment eviction");
@@ -221,6 +242,9 @@ export function createApartmentsPort(
       if (!added) throw new Error("The resident moved out at once");
       return structuredClone(added);
     },
+    async report(id, lastReport) {
+      await write({ type: "report", id, last_report: lastReport });
+    },
     async evict(ids) {
       await write({ type: "evict", ids: [...ids] });
     },
@@ -244,6 +268,18 @@ export function memoryApartmentsPort(
     if (operation.type === "move-in") {
       const resident = parseApartmentMoveIn(operation.resident);
       rows.push({ ...resident, id: `r-memory${next++}` });
+    } else if (operation.type === "report") {
+      rows = rows.map((row) =>
+        row.id === operation.id
+          ? {
+              ...parseApartmentMoveIn({
+                ...row,
+                last_report: operation.last_report,
+              }),
+              id: row.id,
+            }
+          : row,
+      );
     } else {
       const evicted = new Set(operation.ids);
       rows = rows.filter((row) => !evicted.has(row.id));

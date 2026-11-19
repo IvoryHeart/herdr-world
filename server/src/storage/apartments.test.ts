@@ -124,6 +124,35 @@ describe("apartment residents live in World's SQLite", () => {
     }
   });
 
+  test("a report read after the move-in is added to that resident only", () => {
+    const db = database();
+    try {
+      const at = 10 * DAY;
+      const { residents } = writeApartments(
+        db,
+        { type: "move-in", resident: resident("ada", at) },
+        at,
+      );
+      const id = residents[0]!.id;
+      const after = writeApartments(
+        db,
+        { type: "report", id, last_report: "Opened PR #42" },
+        at,
+      ).residents;
+      expect(after).toEqual([
+        { ...residents[0]!, last_report: "Opened PR #42" },
+      ]);
+      // A resident evicted meanwhile is not brought back.
+      writeApartments(db, { type: "evict", ids: [id] }, at);
+      expect(
+        writeApartments(db, { type: "report", id, last_report: "late" }, at)
+          .residents,
+      ).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("malformed residents are refused and text is bounded", () => {
     expect(() =>
       parseApartmentMoveIn({ ...resident("x", DAY), runtime: "other" }),
@@ -150,6 +179,8 @@ describe("apartment residents live in World's SQLite", () => {
     await port.moveIn(resident("a", 49 * DAY));
     const b = await port.moveIn(resident("b", 50 * DAY));
     expect(port.list().map((row) => row.name)).toEqual(["b"]);
+    await port.report(b.id, "Opened PR #42");
+    expect(port.get(b.id)?.last_report).toBe("Opened PR #42");
     await port.evict([b.id]);
     expect(port.list()).toEqual([]);
   });
@@ -158,7 +189,10 @@ describe("apartment residents live in World's SQLite", () => {
     const paths = resolveDataPaths({ HERDR_WORLD_DATA_DIR: folder() });
     const options = { clock: systemClock, scheduler: systemScheduler };
     const first = await openStorage(paths, options);
-    const saved = await first.apartments!.moveIn(resident("grace", Date.now()));
+    const moved = await first.apartments!.moveIn(resident("grace", Date.now()));
+    await first.apartments!.report(moved.id, "Opened PR #42");
+    const saved = first.apartments!.get(moved.id)!;
+    expect(saved.last_report).toBe("Opened PR #42");
     await first.close();
     const second = await openStorage(paths, options);
     stores.push(second);

@@ -26,8 +26,20 @@ export type ApartmentTenant = {
   tab: string | null;
   summary: string | null;
   session_id: string | null;
+  /** Which program the runtime read `session_id` for (core), when it did. */
+  session_holder: string | null;
   first_seen_at: number;
   last_seen_at: number;
+};
+
+/**
+ * What a runtime knows of a live agent's session now: its ID, or none, and
+ * which program in the terminal it was read for. No evidence at all (the
+ * host is not ready, a read failed) is null.
+ */
+export type ApartmentSessionEvidence = {
+  id: string | null;
+  holder: string | null;
 };
 
 /** The labels a fresh observation carries beside its panes. */
@@ -72,6 +84,10 @@ function summaryOf(pane: Row, agent: Row | null): string | null {
  * resident). A host that disconnects or restarts witnesses nothing: its
  * agents are forgotten, never recorded, because their end was not seen.
  * Agents the bin's bus took are recorded as retired.
+ *
+ * A resident is written as soon as its end is seen; its last report, an
+ * optional transcript read, is added to the written record afterwards, so a
+ * restart during a slow read loses only that report.
  */
 export class WorldApartments {
   private revision = 0;
@@ -81,7 +97,11 @@ export class WorldApartments {
   >();
   /** connection:generation:terminal of agents the bus has taken. */
   private readonly retiring = new Set<string>();
-  private queue: Promise<unknown> = Promise.resolve();
+  /** Move-ins and report reads still running. */
+  private readonly pending = new Set<Promise<unknown>>();
+  /** Session reads still running, by connection:generation:terminal. */
+  private readonly probing = new Map<string, Promise<unknown>>();
+  private stopped = false;
 
   constructor(
     private readonly deps: {
@@ -94,12 +114,19 @@ export class WorldApartments {
       };
       /** Pull requests and issues linked to the agent, when sources know. */
       links?(tenant: ApartmentTenant): ApartmentLink[];
-      /** The harness session of a live agent whose rows carry none (core). */
+      /**
+       * The harness session of a live agent whose rows carry none (core),
+       * asked on every observation: the runtime bounds its own reads.
+       */
       session?(
         connectionId: string,
         terminalId: string,
         harness: string,
-      ): string | null | undefined;
+      ):
+        | Promise<ApartmentSessionEvidence | null>
+        | ApartmentSessionEvidence
+        | null
+        | undefined;
       /** The agent's last report (herdr-world result), when it left one. */
       lastReport?(
         tenant: ApartmentTenant,
@@ -155,7 +182,8 @@ export class WorldApartments {
       // Another program in the same terminal is another agent.
       const same = before && before.harness === harness;
       if (!same && host.tenants.size >= MAX_TENANTS_PER_HOST) continue;
-      const tenant: ApartmentTenant = {
+      const reported = sessionId(pane, agent);
+      const seen: ApartmentTenant = {
         connection_id: connectionId,
         generation,
         terminal_id: terminal,
@@ -171,16 +199,17 @@ export class WorldApartments {
         room: rooms.get(pane.workspace_id) ?? (same ? before.room : null),
         tab: tabs.get(pane.tab_id) ?? (same ? before.tab : null),
         summary: summaryOf(pane, agent) ?? (same ? before.summary : null),
-        session_id:
-          sessionId(pane, agent) ??
-          (same ? before.session_id : null) ??
-          safeSession(() =>
-            this.deps.session?.(connectionId, terminal, harness),
-          ),
+        // Kept from before until the runtime's current answer replaces it.
+        session_id: reported ?? (same ? before.session_id : null),
+        session_holder: reported ? null : same ? before.session_holder : null,
         first_seen_at: same ? before.first_seen_at : observedAt,
         last_seen_at: observedAt,
       };
+      // The same agent stays one object, so a session read still running
+      // when it leaves lands on the record it leaves.
+      const tenant = same ? Object.assign(before, seen) : seen;
       host.tenants.set(terminal, tenant);
+      if (!reported) this.probe(tenant);
     }
   }
 
@@ -232,9 +261,56 @@ export class WorldApartments {
     return this.list();
   }
 
-  /** Waits for every move-in so far (tests). */
-  settled() {
-    return this.queue;
+  /** Waits for every move-in and report read so far. */
+  async settled() {
+    while (this.pending.size) await Promise.allSettled([...this.pending]);
+  }
+
+  /**
+   * Before World's storage closes: ends seen so far are written; a report
+   * still being read is dropped, and nothing more is written.
+   */
+  async stop() {
+    this.stopped = true;
+    await this.settled();
+  }
+
+  /**
+   * Asks the runtime which session the agent in `terminal` has now. Its
+   * answer replaces the remembered one; an answer of no session clears it
+   * only when another program holds the terminal (a failed read of the
+   * same program is no evidence).
+   */
+  private probe(tenant: ApartmentTenant) {
+    const read = this.deps.session;
+    const harness = tenant.harness;
+    if (!read || !harness) return;
+    const key = tenantKey(tenant);
+    if (this.probing.has(key)) return;
+    const apply = (evidence: unknown) => {
+      if (!evidence || typeof evidence !== "object") return;
+      const { id, holder } = evidence as Row;
+      const found = validSession(id);
+      const by = typeof holder === "string" ? holder : null;
+      if (found) {
+        tenant.session_id = found;
+        tenant.session_holder = by;
+      } else if (by !== tenant.session_holder) {
+        tenant.session_id = null;
+        tenant.session_holder = by;
+      }
+    };
+    let answer: unknown;
+    try {
+      answer = read(tenant.connection_id, tenant.terminal_id, harness);
+    } catch {
+      return;
+    }
+    if (!(answer instanceof Promise)) return apply(answer);
+    const task = answer
+      .then(apply, () => undefined)
+      .finally(() => this.probing.delete(key));
+    this.probing.set(key, task);
   }
 
   private host(connectionId: string, generation: number) {
@@ -248,9 +324,10 @@ export class WorldApartments {
 
   private moveOut(tenant: ApartmentTenant) {
     const port = this.deps.port;
-    if (!port) return;
-    const key = `${tenant.connection_id}\0${tenant.generation}\0${tenant.terminal_id}`;
+    if (!port || this.stopped) return;
+    const key = tenantKey(tenant);
     const retired = this.retiring.delete(key);
+    const reading = this.probing.get(key);
     const host = this.deps.host(tenant.connection_id);
     const resident: ApartmentMoveIn = {
       name: tenant.name,
@@ -270,20 +347,36 @@ export class WorldApartments {
       links: safe(() => this.deps.links?.(tenant) ?? [], []),
       session_id: tenant.session_id,
     };
-    const run = async () => {
+    const task = (async () => {
+      let saved: ApartmentResident;
       try {
-        resident.last_report = await report(() =>
-          this.deps.lastReport?.(tenant),
-        );
-        await port.moveIn(resident);
+        // A session read that started while the agent lived still counts.
+        if (reading) {
+          await within(reading, SESSION_WAIT_MS);
+          resident.session_id = tenant.session_id;
+        }
+        saved = await port.moveIn(resident);
         this.changed();
       } catch (error) {
         this.deps.log?.(
           `Apartments could not record ${tenant.name}: ${(error as Error).message}`,
         );
+        return;
       }
-    };
-    this.queue = this.queue.then(run, run);
+      if (this.stopped || !this.deps.lastReport) return;
+      const lastReport = await report(() => this.deps.lastReport?.(tenant));
+      if (!lastReport || this.stopped) return;
+      try {
+        await port.report(saved.id, lastReport);
+        this.changed();
+      } catch (error) {
+        this.deps.log?.(
+          `Apartments could not add ${tenant.name}'s last report: ${(error as Error).message}`,
+        );
+      }
+    })();
+    this.pending.add(task);
+    void task.finally(() => this.pending.delete(task));
   }
 
   private changed() {
@@ -293,6 +386,22 @@ export class WorldApartments {
 }
 
 const REPORT_WAIT_MS = 10_000;
+const SESSION_WAIT_MS = 5_000;
+
+const tenantKey = (tenant: ApartmentTenant) =>
+  `${tenant.connection_id}\0${tenant.generation}\0${tenant.terminal_id}`;
+
+/** Waits for `task`, for at most `ms`. */
+async function within(task: Promise<unknown>, ms: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    task,
+    new Promise((resolve) => {
+      timer = setTimeout(resolve, ms);
+    }),
+  ]);
+  clearTimeout(timer);
+}
 
 /** The last report, or null when it fails or takes too long. */
 async function report(
@@ -314,8 +423,7 @@ async function report(
   }
 }
 
-function safeSession(read: () => string | null | undefined): string | null {
-  const id = safe(read, null);
+function validSession(id: unknown): string | null {
   return typeof id === "string" &&
     /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(id)
     ? id

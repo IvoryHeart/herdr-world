@@ -1,7 +1,6 @@
 import type { ApartmentLink } from "../../../shared/apartments";
 import type { WorldSourcesSnapshot } from "../../../shared/worldSources";
 import type { AgentSessionFileAccess } from "../agent/session-file-access";
-import { argvSession } from "../herdr-core/history";
 import type { ApartmentsPort } from "../storage/apartments";
 import { readApartmentHistory } from "../world/apartment-history";
 import { type ApartmentTenant, WorldApartments } from "../world/apartments";
@@ -14,8 +13,16 @@ type Manager<Lease> = {
   readyRuntimeLease(id: string): Lease | null | undefined;
 };
 type TuiLease = { runtime: { agentSessionFiles: AgentSessionFileAccess } };
-type CoreLease = {
-  runtime: { core: { terminal(address: string): unknown } };
+type CoreLease = object;
+type CoreHost = {
+  agentSessionFiles: AgentSessionFileAccess;
+  /** Chat's sessions for this host (herdr-core/agent-sessions.ts). */
+  agentSessions(): {
+    knownSession(
+      address: string,
+      agent: string,
+    ): Promise<{ id: string | null; holder: string } | null>;
+  };
 };
 
 /**
@@ -29,7 +36,7 @@ export function createApartmentsService<Core extends CoreLease>(deps: {
   tui(): Manager<TuiLease>;
   core(): {
     manager: Manager<Core>;
-    hostRuntime(lease: Core): { agentSessionFiles: AgentSessionFileAccess };
+    hostRuntime(lease: Core): CoreHost;
   } | null;
   sources?(): WorldSourcesSnapshot | null;
   publish(revision: number): void;
@@ -94,15 +101,16 @@ export function createApartmentsService<Core extends CoreLease>(deps: {
         runtime: "herdr-core",
       };
     },
-    session: (connectionId, terminalId, harness) => {
-      const record = coreLease(connectionId)?.lease?.runtime.core.terminal(
-        terminalId,
-      ) as { argv?: unknown; foreground?: { argv?: unknown } } | undefined;
-      if (!record) return null;
-      const found =
-        argvSession(harness, record.foreground?.argv) ??
-        argvSession(harness, record.argv);
-      return found?.kind === "id" ? found.value : null;
+    // The session Chat knows for a live core agent: a linked Codex session,
+    // Claude's process record or the launch arguments. Herdr (TUI) rows
+    // carry their own.
+    session: async (connectionId, terminalId, harness) => {
+      const found = coreLease(connectionId);
+      if (!found?.lease) return null;
+      return found.core
+        .hostRuntime(found.lease)
+        .agentSessions()
+        .knownSession(terminalId, harness);
     },
     links,
     lastReport: async (tenant) => {

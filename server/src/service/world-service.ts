@@ -972,6 +972,8 @@ async function compose(
       await drained();
     } finally {
       try {
+        // Finished agents seen so far are written before storage closes.
+        await apartments.apartments.stop();
         await closeTerminalMarks();
         storageOpen = false;
         await storage.close();

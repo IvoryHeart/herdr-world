@@ -1478,8 +1478,11 @@ When an agent's terminal ends, or the bus takes it from the bin, the agent
 moves into **Apartments** instead of vanishing. Each resident keeps its name,
 harness, project folder, room and tab, host, when it ran, its last task summary,
 its last report (the closing message of its transcript, when the host answers
-within ten seconds), the pull requests and issues the Sources linked to it, and
-its harness session.
+within ten seconds; added just after the move-in, and lost if World stops
+first), the pull requests and issues the Sources linked to it, and its harness
+session (the one its Chat reads: Herdr's report, or for herdr-core a linked
+Codex session, Claude's process record or the launch command, read again while
+the agent runs).
 
 - Open it from the green **APARTMENTS** sign on the sandstone block in Town's
   park beside the town center (left of the plaza, or right when there is no
