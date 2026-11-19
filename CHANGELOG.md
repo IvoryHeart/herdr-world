@@ -9,6 +9,8 @@ prepared.
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-11-19
+
 ### Added
 
 - On a phone, the corner view menu offers **Hosts**: the same Hosts filter
