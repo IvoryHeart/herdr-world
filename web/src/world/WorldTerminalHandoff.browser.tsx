@@ -7,6 +7,7 @@ const resumeGallery = new URLSearchParams(location.search).has(
   "resume-gallery",
 );
 import { TerminalAttachFrameWatchdog } from "../terminalResize";
+import { inspectorHeaderResizeAcceptance } from "./testing/inspectorHeaderResizeAcceptance";
 import { windowMinimizeAcceptance } from "./testing/windowMinimizeAcceptance";
 import { requestTerminalComposer } from "./terminalComposerRequest";
 import {
@@ -2883,6 +2884,7 @@ async function run() {
     );
   };
   checkBarFits("Builder");
+  await inspectorHeaderResizeAcceptance(builderHead, check);
   await selectSnap("Builder", "Left half");
   checkBarFits("Builder");
   const focusedDock = document.querySelector<HTMLElement>(

@@ -5,4 +5,4 @@
 ### Fixed
 
 - Launch desktop IDEs outside World's service lifetime using a separate Linux user scope or macOS LaunchServices, so restarting World does not close the editor.
-- Keep agent names readable beside the IDE handoff control in narrow Inspector windows.
+- Keep agent names readable beside the IDE handoff control in narrow Inspector windows, including when controls grow after the window opens.

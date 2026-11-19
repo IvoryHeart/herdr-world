@@ -461,7 +461,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     retain a requested source line. The picker keeps the current page open, shows
     missing launchers and reports dispatch or a launch error. In narrow Inspector
     headers, the handoff uses an icon or moves into the window’s **⋯** menu as
-    **Open in…**, leaving room for the agent name and window controls.
+    **Open in…**, leaving room for the agent name and window controls, including
+    when fonts or control sizes change after the window opens.
     **Configuration → Integrations → Desktop IDEs** detects VS Code, Cursor, Zed,
     IntelliJ IDEA, WebStorm, PyCharm, PhpStorm, GoLand, CLion and Rider on the World
     host; select a default to put it first in the picker, or **Always choose**.

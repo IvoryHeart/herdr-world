@@ -1,4 +1,5 @@
 import { OpenInIdeButton } from "./DesktopIdeDialog";
+import { observeInspectorHeaderLayout } from "./inspectorHeaderLayout";
 import { openInDesktopIde } from "../desktopIdes";
 import {
   WorkspaceInspectorViewSelect,
@@ -491,53 +492,12 @@ export function WorkspaceInspectorHost({
     windowControls &&
       (windowControls.compact || (hostWidth > 0 && hostWidth < barNeeds)),
   );
-  // While the views are inline, measure what the bar needs: everything but
-  // the name, plus 120px so the name stays readable. The Town skin's larger
-  // targets need more than 360px. It is a property of the bar's content, so
-  // a passing overflow (a zoom, a font still loading) does not stick.
+  // Observe controls too: fonts and lazy styles can grow them at a fixed width.
   useLayoutEffect(() => {
     const head = headRef.current;
     if (!windowControls || viewsInMenu || !head || hostWidth <= 0) return;
-    const identity = head.querySelector<HTMLElement>(
-      ".workspace-inspector-agent-identity, .workspace-inspector-identity",
-    );
-    if (!identity) return;
-    // The bar needs its other controls, the gaps and padding, and 120px for
-    // the name. View labels show only at 640px and wider, so they are left
-    // out; otherwise a window that narrows keeps a wide need.
-    const style = getComputedStyle(head);
-    const shown = [...head.children].filter(
-      (child): child is HTMLElement =>
-        child instanceof HTMLElement && child.offsetWidth > 0,
-    );
-    const labels = [
-      ...head.querySelectorAll<HTMLElement>(".workspace-inspector-tab-label"),
-    ].reduce(
-      (width, label) =>
-        width +
-        label.offsetWidth +
-        (label.offsetWidth
-          ? parseFloat(getComputedStyle(label.parentElement!).columnGap) || 0
-          : 0),
-      0,
-    );
-    const needs = Math.max(
-      360,
-      Math.ceil(
-        shown.reduce(
-          (width, child) =>
-            child === identity ? width : width + child.offsetWidth,
-          0,
-        ) -
-          labels +
-          120 +
-          (parseFloat(style.columnGap) || 0) * (shown.length - 1) +
-          parseFloat(style.paddingLeft) +
-          parseFloat(style.paddingRight),
-      ),
-    );
-    if (Math.abs(needs - barNeeds) > 1) setBarNeeds(needs);
-  }, [windowControls, viewsInMenu, hostWidth, barNeeds, state.view]);
+    return observeInspectorHeaderLayout(head, setBarNeeds);
+  }, [windowControls, viewsInMenu, hostWidth, state.view]);
 
   // The line under the name says where this is; it opens the repository's
   // branch and PR status, so the bar needs no separate button or card.
