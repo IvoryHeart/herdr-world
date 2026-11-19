@@ -14,3 +14,7 @@
   after signed-in model replies.
 - Check the release walk's global runtime default through the browser connection
   catalogue and keep its core socket paths within the macOS limit.
+- Verify listing against the requested rooms and observed pane/terminal IDs,
+  and release the explicit session pin before testing a saved default upgrade.
+  Hold Windows installer fixture locks until the installer exits so slow binary
+  copies cannot expire the simulated lock before cleanup.

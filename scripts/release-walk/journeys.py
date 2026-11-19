@@ -163,7 +163,7 @@ def launch(world, fixture, connection, runtime, kind, workspace, quick=False):
                            start, reason='real harness never displayed its first screen')
     assert result.get('terminal_id'), 'World did not identify the launched terminal'
     pane = pane_for(world, connection, result)
-    return dict(result=result, invocation=invocation, pane=pane, connection=connection,
+    return dict(result=result, workspace_id=workspace, invocation=invocation, pane=pane, connection=connection,
                 runtime=runtime, kind=kind, marker=marker)
 
 
@@ -193,13 +193,22 @@ def listing(world, agents):
     entries = cli.get('result') if isinstance(cli, dict) else cli
     assert isinstance(entries, list), 'herdr-world ls did not return runtime listings'
     for agent in agents:
-        connection = next(row for row in rows if row['connection_id'] == agent['connection']['connection_id'])
+        connection = next((row for row in rows if row['connection_id'] == agent['connection']['connection_id']), None)
+        assert connection, 'aggregate omitted a connected runtime'
+        assert connection['generation'] == agent['connection']['generation'], 'aggregate runtime generation changed'
         assert not connection['stale'] and connection['snapshot'], 'aggregate returned stale runtime topology'
-        assert any(item['workspace_id'] == agent['result']['workspace_id'] for item in connection['snapshot']['workspaces']), 'aggregate omitted a runtime room'
-        assert any(item['terminal_id'] == agent['result']['terminal_id'] for item in connection['snapshot']['agents']), 'aggregate omitted a runtime agent'
+        snapshot = connection['snapshot']
+        # TUI launch returns pane/terminal IDs, not a workspace ID. Keep the
+        # requested room and verify its binding through the actual topology.
+        assert any(item['workspace_id'] == agent['workspace_id'] for item in snapshot['workspaces']), 'aggregate omitted a runtime room'
+        assert any(item['pane_id'] == agent['result']['pane_id'] and
+                   item['terminal_id'] == agent['result']['terminal_id'] and
+                   item['workspace_id'] == agent['workspace_id'] and
+                   item.get('agent') == agent['kind'] for item in snapshot['panes']), 'aggregate omitted the launched agent from its runtime room'
+        assert any(item['pane_id'] == agent['result']['pane_id'] for item in snapshot['agents']), 'aggregate omitted a runtime agent'
         entry = next((item for item in entries if item['connection_id'] == connection['connection_id']), None)
         assert entry and entry['current'], 'herdr-world ls omitted a connected runtime'
-        workspace = next((item for item in entry['workspaces'] if item['workspace_id'] == agent['result']['workspace_id']), None)
+        workspace = next((item for item in entry['workspaces'] if item['workspace_id'] == agent['workspace_id']), None)
         assert workspace, 'herdr-world ls omitted a runtime room'
         panes = [pane for tab in workspace['tabs'] for pane in tab['panes']]
         found = next((pane for pane in panes if pane['pane_id'] == agent['result']['pane_id']), None)
@@ -243,11 +252,19 @@ def upgrade(walk, candidate, baseline, fixture):
     with fixture.world(binary) as world:
         world.ready('herdr')
         fixture.connect_core(world)
+        cookie = world.cookie
+    # Saving core also persists the isolated TUI's socket paths. Restart the
+    # baseline using those profiles: HERDR_SESSION deliberately pins a process
+    # default and would refuse changing it through the connection selector.
+    env = {key: value for key, value in fixture.env.items() if key != 'HERDR_SESSION'}
+    with World(binary, fixture.root, env, cookie) as world:
+        world.ready('herdr')
+        world.ready('herdr-core')
         world.rpc('connections.set_default', {'id': 'walk-core'})
         cookie = world.cookie
         saved = json.loads((settings.parent / 'connections.json').read_text())
     shutil.copy2(candidate, binary)
-    with fixture.world(binary, cookie) as world:
+    with World(binary, fixture.root, env, cookie) as world:
         assert world.request('/api/login', {'password': 'wrong-synthetic-password'}).status in (401, 403), 'upgrade accepted the wrong sign-in password'
         invalid_cookie = world.cookie.split('=', 1)[0] + '=invalid-synthetic-session'
         assert world.request('/', cookie=invalid_cookie).status in (401, 403), 'upgrade accepted an invalid browser session'

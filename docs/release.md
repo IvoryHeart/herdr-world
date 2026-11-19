@@ -33,6 +33,10 @@ journey checks the global default ID from the browser connection catalogue,
 preserves the TUI default and adds core through the same connection API
 as the selector. Upgrade checks keep saved connection profiles and the default,
 settings, password login, anonymous refusal and the existing signed-in session.
+It first saves the isolated runtime profiles, then restarts the previous binary
+without `HERDR_SESSION` before changing the saved default: an explicit session
+intentionally pins the process default. Listing checks the requested rooms and
+the observed pane/terminal identities, since TUI launch replies omit room IDs.
 The older pre-0.2.4 cookie migration remains covered by installer acceptance below.
 
 The walk installs pinned, real `claude` and `codex` executables, signed out.

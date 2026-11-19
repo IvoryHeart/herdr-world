@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { isReleaseWalkInput } from "./validation-scope";
 
-test("release walk receipts reject omissions, skipped journeys and different release bytes", () => {
+test("release walk fixture, recorder and receipt regressions pass", () => {
   const result = Bun.spawnSync(
     [
       "python3",
@@ -19,7 +19,7 @@ test("release walk receipts reject omissions, skipped journeys and different rel
       stderr: "pipe",
     },
   );
-  expect(result.stderr.toString()).toContain("Ran 11 tests");
+  expect(result.stderr.toString()).toContain("Ran 15 tests");
   expect(result.exitCode).toBe(0);
 });
 
