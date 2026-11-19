@@ -1,23 +1,23 @@
 {
-  "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/44566174217",
+  "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/44585023715",
   "units": "seconds; per-model ci-shard manifest elapsedMs divided by 1000",
   "seconds": {
-    "herdr-core-runtime": 593.199,
-    "herdr-core-seen": 32.272,
-    "space-admission": 259.231,
-    "chunk-credits": 60.409,
-    "observation-base": 229.557,
-    "runtime-drain": 41.957,
-    "chunk-assembly": 33.422,
-    "creation-flow": 34.275,
-    "binding-resolution": 29.161,
-    "effect-recovery": 146.042,
-    "browser-preparation": 65.948,
-    "browser-refresh": 48.419,
-    "runtime-leases": 34.633,
-    "runtime-control": 37.556,
-    "ranger-recovery": 29.124,
-    "ranger-authority": 12.565
+    "herdr-core-runtime": 497.034,
+    "herdr-core-seen": 39.718,
+    "space-admission": 274.809,
+    "chunk-credits": 58.901,
+    "observation-base": 155.285,
+    "runtime-drain": 41.27,
+    "chunk-assembly": 30.492,
+    "creation-flow": 21.781,
+    "binding-resolution": 30.276,
+    "effect-recovery": 60.504,
+    "browser-preparation": 78.825,
+    "browser-refresh": 52.492,
+    "runtime-leases": 55.91,
+    "runtime-control": 32.408,
+    "ranger-recovery": 19.894,
+    "ranger-authority": 24.514
   },
-  "note": "Measured sequential core controls; CI runs two independent controls at a time on its dedicated shard. Keep this conservative weight until fresh CI manifests replace it."
+  "note": "Measured on the preceding PR candidate; core retains its dedicated two-CPU shard. Checker reuse reduces core setup; weights are observations, not a claimed new CI result."
 }

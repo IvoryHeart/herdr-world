@@ -49,6 +49,8 @@ assets required by server typechecks and process tests.
 | Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); manage disk capacity separately; it never blocks a check. |
 
 `test:quick` excludes only `{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,ThemedSelect.browser,HerdrSetupCard}.test.ts`; it includes other browser and integration tests.
+CI shares native launchd acceptance with the Darwin installer jobs; the two protected macOS names report those results from Ubuntu. Main retains the full platform matrix.
+
 Tests sit beside their source. `bun scripts/affected.ts origin/main` lists branch impact.
 
 Tests launched with `bun run test`, the local gates and CI receive a fresh

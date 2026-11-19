@@ -283,7 +283,7 @@ test("build-version changes select native jobs because the module is compiled in
 });
 
 const nativeJobTests = [
-  ["ci.yml", ["plugin-windows", "launchd"]],
+  ["ci.yml", ["plugin-windows"]],
   ["installer-upgrade.yml", ["upgrade"]],
 ] as const;
 const namedNativeTests = new Set<string>();

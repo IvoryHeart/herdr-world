@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BoardStore } from "./board-store";
+import { BoardStore, type BoardBacking } from "./board-store";
 import { afterHerdrClose } from "./board-closing";
 import {
   pruneSnapshotAppearance,
@@ -196,7 +196,17 @@ test("a close read cannot prune records saved after its observation admission", 
   expect(Object.keys(board.get().appearance ?? {})).toHaveLength(3);
 });
 test("long-lived close churn does not exhaust the bounded appearance store", async () => {
-  const board = fixture();
+  // Exercise all 1,030 real capacity/prune cycles through the production store.
+  // Disk durability has separate tests; per-cycle fsyncs make this capacity
+  // regression depend on host disk contention instead of close semantics.
+  let saved = fixture().get();
+  const backing: BoardBacking = {
+    read: () => saved,
+    commit: (next) => {
+      saved = structuredClone(next);
+    },
+  };
+  const board = new BoardStore(backing);
   for (let index = 0; index < 1030; index++) {
     const witness = [`terminal-${index}`];
     board.patch([
@@ -229,6 +239,9 @@ test("long-lived close churn does not exhaust the bounded appearance store", asy
     );
   }
   expect(Object.keys(board.get().appearance ?? {})).toHaveLength(0);
+  expect(
+    Object.keys(new BoardStore(backing).get().appearance ?? {}),
+  ).toHaveLength(0);
 }, 30000);
 
 test("a complete snapshot can reclaim a full legacy store in one bounded operation", () => {

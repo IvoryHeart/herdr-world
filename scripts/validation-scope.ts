@@ -72,7 +72,7 @@ const WORLD_RUNTIME =
 // Derive these paths so adding a native test cannot leave scoped PR CI skipping it.
 const nativeTestConsumers = new Set<string>();
 for (const [file, jobs] of [
-  ["ci.yml", ["plugin-windows", "launchd"]],
+  ["ci.yml", ["plugin-windows"]],
   ["installer-upgrade.yml", ["upgrade"]],
 ] as const) {
   const workflow = Bun.YAML.parse(

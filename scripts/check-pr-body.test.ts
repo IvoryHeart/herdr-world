@@ -4,7 +4,27 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { pushPolicyBody } from "./check-push-policy";
+import { pushPolicyBody, pushPolicyContext } from "./check-push-policy";
+
+test("push policy uses the PR's immutable stacked base and fails closed on invalid identity", () => {
+  expect(
+    pushPolicyContext(undefined, () => ({
+      body: "Stacked PR",
+      baseRefOid: "a".repeat(40),
+    })),
+  ).toEqual({ body: "Stacked PR", base: "a".repeat(40) });
+  expect(
+    pushPolicyContext(undefined, () => {
+      throw new Error("First push");
+    }),
+  ).toEqual({ body: "", base: "origin/main" });
+  expect(() =>
+    pushPolicyContext(undefined, () => ({
+      body: "",
+      baseRefOid: "feature/example",
+    })),
+  ).toThrow("immutable base");
+});
 
 test("push policy reads the intended description or existing PR, and never invents an exemption", () => {
   expect(pushPolicyBody(undefined, () => "Existing PR")).toBe("Existing PR");

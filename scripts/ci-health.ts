@@ -92,7 +92,7 @@ export function healthReport(data: HealthData, since: Date, now: Date): string {
     `PR CI n=${prs.length}: pass ${count("success")} (${percent(count("success"), prs.length)}), fail ${count("failure")} (${percent(count("failure"), prs.length)}), cancel ${count("cancelled")} (${percent(count("cancelled"), prs.length)}), other/active ${prs.length - count("success") - count("failure") - count("cancelled")}`,
     `Push/event → green p50/p90 ${pair(green)}, max ${minutes(percentile(green, 1))} (queue + dependencies + execution; n=${green.length})`,
     `Push/event → pass or fail p50/p90 ${pair(completed)} (n=${completed.length}; cancellations excluded)`,
-    `Unchanged successful-commit rerun attempts: ${attempts.filter((run) => run.conclusion === "success").length}/${attempts.length} green; 49/50 target ${attempts.length < 50 ? "unproven (<50 observations)" : percent(attempts.filter((run) => run.conclusion === "success").length, attempts.length)}`,
+    `Unchanged-commit rerun attempts: ${attempts.filter((run) => run.conclusion === "success").length}/${attempts.length} green; 49/50 target ${attempts.length < 50 ? "unproven (<50 observations)" : percent(attempts.filter((run) => run.conclusion === "success").length, attempts.length)}`,
     `Active jobs/run median ${percentile(jobCounts, 0.5) ?? "n/a"}; installer selected ${platformRuns.size}/${ciSamples} sampled PRs, ${greenPlatformRuns.size}/${data.jobs.filter(({ run }) => run.name === "CI" && run.event === "pull_request" && run.conclusion === "success").length} green`,
     ...slow.map(
       ([name, values]) =>

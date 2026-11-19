@@ -121,6 +121,9 @@ jobs:
             world: ${{ steps.scope.outputs.world }}
             verification: ${{ steps.scope.outputs.verification }}
             packaging: ${{ steps.scope.outputs.packaging }}
+            installer_tag: ${{ steps.installer-plan.outputs.baseline_tag }}
+            installer_sha: ${{ steps.installer-plan.outputs.baseline_sha }}
+            installer_version: ${{ steps.installer-plan.outputs.candidate_version }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -147,6 +150,12 @@ jobs:
                   REQUIRED_JOB_NAME: Delivery checks
                   REQUIRED_FULL_STEP: Run full repository check
               run: bun scripts/ci-reuse-full-check.ts
+            - name: Freeze latest stable installer baseline
+              id: installer-plan
+              if: steps.scope.outputs.packaging == 'true'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: bun scripts/installer-upgrade.ts plan
 
     static:
         name: Static checks
@@ -278,82 +287,38 @@ jobs:
                   LAUNCHD_RESULT: ${{ needs.launchd.result }}
               run: bun scripts/ci-delivery-result.ts
 
-    # Packaging jobs run for full validation only: docs mode admits only
-    # Markdown that no package contains, and exact-head reuse already passed them.
+    # Native inputs select packaging; main still runs the complete matrix.
     installer-upgrade:
         needs: validation-scope
         if: needs.validation-scope.outputs.packaging == 'true'
         uses: ./.github/workflows/installer-upgrade.yml
+        with:
+            baseline_tag: ${{ needs.validation-scope.outputs.installer_tag }}
+            baseline_sha: ${{ needs.validation-scope.outputs.installer_sha }}
+            candidate_version: ${{ needs.validation-scope.outputs.installer_version }}
 
     launchd:
         name: macOS launchd plugin lifecycle (${{ matrix.arch }})
-        needs: validation-scope
-        # Short paths only publish protected reports; native checks keep macOS.
-        runs-on: ${{ needs.validation-scope.outputs.packaging == 'true' && matrix.runner || 'ubuntu-latest' }}
-        timeout-minutes: 20
+        needs: [validation-scope, installer-upgrade]
+        if: always()
+        # Keep the two protected names. Native work shares each Darwin installer
+        # runner, so the installer cannot queue behind our own launchd job.
+        runs-on: ubuntu-latest
         strategy:
             fail-fast: false
             matrix:
-                include:
-                    - arch: arm64
-                      runner: macos-15
-                    - arch: x86_64
-                      runner: macos-15-intel
+                arch: [arm64, x86_64]
         steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              with:
-                  persist-credentials: false
-            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-              with:
-                  bun-version: "1.4.4"
-                  no-cache: true
-            - run: bun install --frozen-lockfile
-              if: needs.validation-scope.outputs.packaging == 'true'
-            - name: Build the native World service
-              if: needs.validation-scope.outputs.packaging == 'true'
-              run: bun run build
-            - name: Compile the standalone plugin launcher
-              if: needs.validation-scope.outputs.packaging == 'true'
-              run: bun scripts/world-plugin.ts compile-launcher
-            - name: Verify Bun-free installation and prepare the native compatibility launcher
-              if: needs.validation-scope.outputs.packaging == 'true'
+            - name: Require the applicable native lifecycle results
+              env:
+                  SCOPE_RESULT: ${{ needs.validation-scope.result }}
+                  PACKAGING: ${{ needs.validation-scope.outputs.packaging }}
+                  INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
               run: |
-                  bun run test scripts/install-plugin.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts
-                  cp server/herdr-world server/herdr-world-plugin.exe
-            - name: Exercise the real plugin-managed launchd lifecycle
-              if: needs.validation-scope.outputs.packaging == 'true'
-              shell: bash
-              run: |
-                  set -euo pipefail
-                  plugin_launcher="$PWD/server/herdr-world-plugin.exe"
-
-                  cleanup() {
-                    PATH=/usr/bin:/bin "$plugin_launcher" uninstall >/dev/null 2>&1 || true
-                  }
-                  wait_until_ready() {
-                    for _ in {1..80}; do
-                      if curl --fail --silent --show-error \
-                        http://127.0.0.1:8787/healthz >/dev/null; then
-                        return 0
-                      fi
-                      sleep 0.25
-                    done
-                    echo "Herdr World did not become ready" >&2
-                    tail -n 100 "$HOME/Library/Logs/herdr-world.stderr.log" >&2 || true
-                    return 1
-                  }
-
-                  trap cleanup EXIT
-                  cleanup
-                  PATH=/usr/bin:/bin "$plugin_launcher" start
-                  wait_until_ready
-                  PATH=/usr/bin:/bin "$plugin_launcher" status
-                  PATH=/usr/bin:/bin "$plugin_launcher" restart
-                  wait_until_ready
-                  PATH=/usr/bin:/bin "$plugin_launcher" status
-                  PATH=/usr/bin:/bin "$plugin_launcher" uninstall
-                  test ! -e "$HOME/Library/LaunchAgents/dev.herdr-world.plist"
-                  trap - EXIT
+                  test "$SCOPE_RESULT" = success
+                  expected=skipped
+                  if [ "$PACKAGING" = true ]; then expected=success; fi
+                  test "$INSTALLER_RESULT" = "$expected"
 
     plugin-windows:
         name: Windows Bun-free plugin installation

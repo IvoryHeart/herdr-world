@@ -71,12 +71,17 @@ model-backed contract owners still require behavioral verification, even when
 their edits are Markdown. Contributor instructions and skill Markdown receive
 documentation checks or their named consumer tests. Packaged notices, OpenSpec,
 verification and executable workflow policy do not qualify for this shortcut. macOS jobs
-still report both protected architecture names in short runs. When native
-packaging is not selected, those reports run on Ubuntu with native build and
-lifecycle steps skipped, so metadata reuse does not wait for a macOS runner.
-When packaging is selected, each report runs its complete native checks on
-its declared macOS architecture. Their aggregate must succeed in every mode;
-cancellation and missing reports still fail delivery.
+still report both protected architecture names on Ubuntu. Native launchd checks
+run inside the two existing Darwin installer jobs, after release packaging,
+using that architecture’s compiled service. Each architecture therefore requests
+one macOS runner instead of separate installer and launchd runners. The protected
+reports require the installer workflow to succeed when packaging is selected, or
+to be skipped otherwise; a failed scope, cancellation or missing result fails
+closed. Main retains both native architectures and every lifecycle assertion.
+The installer baseline is frozen once in Validation scope; the platform matrix
+then starts alongside the other suites. Standalone installer dispatches keep
+their resolver job. This removes one runner allocation from native PR plans
+without resolving different releases on different platforms.
 
 Native packaging also runs `test:install-linux` in the existing Linux x64
 installer-upgrade matrix job. The shared selection explicitly includes installation
@@ -169,8 +174,25 @@ current source/tool identity, and verifies every group's retained accounting.
 It publishes one canonical manifest including the three resource records. The
 single-machine canonical gate is unchanged and still rejects filters.
 The long core runtime model owns a dedicated shard. Its independent fault controls
-run two at a time within that shard's existing resource envelope; every model
-fault, trace replay, production control, seed and sensitivity check remains.
+run two at a time within that shard's existing resource envelope. Each worker
+reuses its owned checker sequentially, avoiding a JVM startup for each fault.
+Each command retains its 240-second deadline; the session shares the existing
+outer worker deadline, memory cap and cancellation/drain. A checker failure
+ends the worker instead of relaunching a failed check. Every model fault, trace
+replay, production control, positive seed and sensitivity check remains. After
+exhaustive rejection of the publication-foreground fault, replay materialization
+samples its six existing model actions instead of searching unrelated families;
+the generated trace still must diverge against the real implementation. Positive
+sampling and exhaustive successor sets are unchanged. SQLite replay fixtures
+commit their initial schema/settings together; replayed writes still use FULL
+durability and the original transaction/crash boundaries. The appearance capacity
+regression keeps all 1,030 close/prune cycles through the production BoardStore
+with its memory backing seam; file persistence and crash durability retain their
+separate real-storage tests. Ranger replay initializes the current empty schema
+through production storage once per process and copies that closed fixture into
+each trace’s private directory. Every trace still runs real SQLite save, rollback,
+close and reopen with FULL durability; constructor mutants keep cold initialization.
+No replay result is cached and all sampled traces still execute.
 Local model pools retain sequential controls by default. Progress snapshots are
 serialized and cancellation drains all admitted controls. The verified checker
 cache is keyed by its committed lock and revalidated by setup; it contains no run
@@ -205,7 +227,8 @@ a stale stack is checked as that merge, rather than silently integrating main.
 Draft PR descriptions should pass `check:pr-body` before creation, using the same
 policy functions as Validation scope.
 Pre-push also checks those policies against the complete PR diff and the existing
-PR body, or the intended body named by `HERDR_WORLD_PR_BODY`. A first push without
+PR body, or the intended body named by `HERDR_WORLD_PR_BODY`. Existing PRs use
+their immutable base commit, including stacked PRs. A first push without
 a body must carry the fragment/knowledge-map changes needed to pass on their own.
 
 Main pushes keep a running check and retain only the newest pending run. Main
@@ -231,9 +254,10 @@ Job execution and queue waits use the sampled latest job attempts: queue is job
 creation to runner start, excluding dependency time. Failing-step counts take the
 first failure in each leaf job, omitting named aggregate propagation steps and
 later upload errors; inspect that leaf's log before assigning cause.
-The unchanged-commit observation uses earlier attempts of successful rerun events,
-not successive branch pushes. It is a biased diagnostic sample, not a claim of
-98% reliability; fewer than fifty observations cannot establish the 49/50 target.
+The unchanged-commit observation samples rerun events including red final
+attempts and their preceding attempts, rather than successive branch pushes.
+Reruns are self-selected and can rerun only failed jobs: this diagnostic sample
+is not a claim of 98% reliability; fewer than fifty observations cannot establish the 49/50 target.
 
 Delivery frequency counts merged main PRs and published stable releases per day.
 Lead time starts at the first PR commit's recorded commit date, with PR-open time

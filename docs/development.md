@@ -237,7 +237,8 @@ The [pipeline guide](ci-pipelines.md#health-and-delivery-measures) defines the
 request caps, sampling and missing incident links. Save an intended PR description
 before the first push when it contains policy exemptions:
 `HERDR_WORLD_PR_BODY=/tmp/pr-body.md git push`. The hook checks the complete PR diff
-against that body before running the delivery gate; `check:pr-body` remains the
+against that body and the existing PR’s immutable base (including stacks) before
+running the delivery gate; `check:pr-body` remains the
 explicit check before opening the PR.
 
 The runner creates HOME and every XDG directory before launching Bun (a preload

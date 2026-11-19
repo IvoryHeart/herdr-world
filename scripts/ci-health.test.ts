@@ -44,6 +44,30 @@ const data = (): HealthData => ({
   limits: [],
 });
 
+test("rerun sampling includes commits whose final attempt is red", () => {
+  const red = { ...run(1, "failure"), run_attempt: 2 };
+  const api: Github = (args) => {
+    const path = args[0]!;
+    if (path === "graphql")
+      return {
+        data: {
+          search: { issueCount: 0, nodes: [] },
+          repository: {
+            releases: { nodes: [], pageInfo: { hasNextPage: false } },
+          },
+        },
+      };
+    if (path.includes("/jobs?")) return { jobs: [], total_count: 0 };
+    if (path.endsWith("/attempts/1")) return run(1, "failure");
+    return { workflow_runs: [red] };
+  };
+  const result = collectHealth("example/project", since, api);
+  expect(result.attempts.map((item) => item.conclusion)).toEqual([
+    "failure",
+    "failure",
+  ]);
+});
+
 test("health separates cancellation from failure, includes queue time and reports sparse evidence honestly", () => {
   const input = data();
   input.runs = [run(1), run(2, "failure"), run(3, "cancelled")];

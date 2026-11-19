@@ -21,6 +21,7 @@ type WorkflowJob = {
   "runs-on"?: string;
   needs?: string | string[];
   if?: string;
+  with?: Record<string, string>;
   "continue-on-error"?: boolean;
   strategy?: {
     "fail-fast"?: boolean;
@@ -29,6 +30,7 @@ type WorkflowJob = {
       include?: Array<{ arch?: string; runner?: string }>;
       platform?: string[];
       shard?: number[] | string;
+      arch?: string[];
       suite?: string[];
       suites?: string[];
       order?: string[];
@@ -358,54 +360,76 @@ test("labeled release PRs offer six downloadable previews without publishing", (
   ).toBe(true);
 });
 
-test("CI exercises the real plugin-managed launchd lifecycle on both protected architectures", () => {
+test("protected launchd reports require native work on the existing installer runners", async () => {
   const launchd = workflow.jobs.launchd;
-  const lifecycle = launchd?.steps.find(
-    (step) =>
-      step.name === "Exercise the real plugin-managed launchd lifecycle",
-  )?.run;
-
-  expect(launchd?.name).toBe(
+  expect(launchd.name).toBe(
     "macOS launchd plugin lifecycle (${{ matrix.arch }})",
   );
-  expect(launchd?.strategy?.matrix?.include).toEqual([
-    { arch: "arm64", runner: "macos-15" },
-    { arch: "x86_64", runner: "macos-15-intel" },
-  ]);
+  expect(launchd["runs-on"]).toBe("ubuntu-latest");
+  expect(launchd.needs).toEqual(["validation-scope", "installer-upgrade"]);
+  expect(launchd.if).toBe("always()");
+  expect(launchd.strategy?.matrix?.arch).toEqual(["arm64", "x86_64"]);
+  const report = launchd.steps[0]!;
+  expect(report.run).toContain('test "$SCOPE_RESULT" = success');
+  expect(report.run).toContain(
+    'if [ "$PACKAGING" = true ]; then expected=success; fi',
+  );
+  expect(report.run).toContain('test "$INSTALLER_RESULT" = "$expected"');
+  expect(report.env?.INSTALLER_RESULT).toBe(
+    "${{ needs.installer-upgrade.result }}",
+  );
+  const installer = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../.github/workflows/installer-upgrade.yml", import.meta.url),
+    ).text(),
+  ) as { jobs: Record<string, WorkflowJob> };
+  const upgrade = installer.jobs.upgrade!;
+  expect(installer.jobs.baseline.if).toBe("inputs.baseline_sha == ''");
+  expect(upgrade.if).toBe(
+    "always() && (needs.baseline.result == 'success' || (needs.baseline.result == 'skipped' && inputs.baseline_sha != ''))",
+  );
+  expect(upgrade.needs).toBe("baseline");
+  const freeze = workflow.jobs["validation-scope"].steps.find(
+    (step) => step.name === "Freeze latest stable installer baseline",
+  )!;
+  expect(freeze.if).toBe("steps.scope.outputs.packaging == 'true'");
+  expect(freeze.run).toBe("bun scripts/installer-upgrade.ts plan");
+  expect(workflow.jobs["installer-upgrade"].with).toEqual({
+    baseline_tag: "${{ needs.validation-scope.outputs.installer_tag }}",
+    baseline_sha: "${{ needs.validation-scope.outputs.installer_sha }}",
+    candidate_version:
+      "${{ needs.validation-scope.outputs.installer_version }}",
+  });
   expect(
-    launchd?.steps.some(
+    upgrade.strategy?.matrix?.include?.filter((row) =>
+      row.runner?.startsWith("macos-"),
+    ),
+  ).toHaveLength(2);
+  const lifecycle = upgrade.steps.find(
+    (step) =>
+      step.name === "Exercise the real plugin-managed launchd lifecycle",
+  )!;
+  expect(lifecycle.if).toBe("runner.os == 'macOS'");
+  for (const action of ["start", "status", "restart", "uninstall"])
+    expect(lifecycle.run).toContain(
+      `PATH=/usr/bin:/bin "$plugin_launcher" ${action}`,
+    );
+  expect(lifecycle.run).toContain("http://127.0.0.1:8787/healthz");
+  expect(lifecycle.run).toContain("trap cleanup EXIT");
+  expect(
+    upgrade.steps.find(
       (step) => step.run === "bun scripts/world-plugin.ts compile-launcher",
-    ),
-  ).toBe(true);
-  expect(lifecycle).toContain('PATH=/usr/bin:/bin "$plugin_launcher" start');
-  expect(lifecycle).toContain('PATH=/usr/bin:/bin "$plugin_launcher" status');
-  expect(lifecycle).toContain('PATH=/usr/bin:/bin "$plugin_launcher" restart');
-  expect(lifecycle).toContain(
-    'PATH=/usr/bin:/bin "$plugin_launcher" uninstall',
-  );
-  expect(lifecycle).toContain("http://127.0.0.1:8787/healthz");
-  expect(lifecycle).toContain("trap cleanup EXIT");
-  expect(
-    launchd?.steps.find(
-      (step) =>
-        step.name === "Exercise the real plugin-managed launchd lifecycle",
     )?.if,
-  ).toBe("needs.validation-scope.outputs.packaging == 'true'");
-  expect(launchd?.["runs-on"]).toBe(
-    "${{ needs.validation-scope.outputs.packaging == 'true' && matrix.runner || 'ubuntu-latest' }}",
+  ).toBe("runner.os == 'macOS'");
+  const native = upgrade.steps.find(
+    (step) =>
+      step.name ===
+      "Verify Bun-free installation and prepare the native compatibility launcher",
+  )!;
+  expect(native.if).toBe("runner.os == 'macOS'");
+  expect(native.run).toContain(
+    "scripts/install-plugin.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts",
   );
-  for (const step of launchd?.steps ?? []) {
-    if (step.run)
-      expect(step.if).toBe(
-        "needs.validation-scope.outputs.packaging == 'true'",
-      );
-  }
-  expect(launchd?.needs).toBe("validation-scope");
-  expect(
-    launchd?.steps.some(
-      (step) => step.run === "bun scripts/ci-reuse-full-check.ts",
-    ),
-  ).toBe(false);
   for (const step of workflow.jobs.delivery.steps.filter(
     (step) => step.run === "bun scripts/ci-delivery-result.ts",
   ))
@@ -507,11 +531,6 @@ test("CI checks native plugin compatibility on Windows and both macOS architectu
       step.run?.includes(
         "scripts/install-plugin.windows.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts",
       ),
-    ),
-  ).toBe(true);
-  expect(
-    workflow.jobs.launchd.steps.some((step) =>
-      step.run?.includes("cp server/herdr-world server/herdr-world-plugin.exe"),
     ),
   ).toBe(true);
 });

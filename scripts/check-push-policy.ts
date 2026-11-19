@@ -17,15 +17,35 @@ export function pushPolicyBody(
   }
 }
 
+/** Resolve the existing PR once, even with an intended replacement body.
+ * Immutable base identity makes stacked policy checks agree with CI. */
+export function pushPolicyContext(
+  file: string | undefined,
+  existing: () => { body: string; baseRefOid: string },
+) {
+  let pull: ReturnType<typeof existing> | undefined;
+  try {
+    pull = existing();
+  } catch {}
+  if (pull && !/^[0-9a-f]{40}$/.test(pull.baseRefOid))
+    throw new Error("Existing PR has no valid immutable base");
+  return {
+    body: pushPolicyBody(file, () => pull?.body ?? ""),
+    base: pull?.baseRefOid ?? "origin/main",
+  };
+}
+
 if (import.meta.main) {
-  const body = pushPolicyBody(process.env.HERDR_WORLD_PR_BODY, () =>
-    execFileSync("gh", ["pr", "view", "--json", "body", "--jq", ".body"], {
-      encoding: "utf8",
-      timeout: 15_000,
-      stdio: ["ignore", "pipe", "pipe"],
-    }),
+  const policy = pushPolicyContext(process.env.HERDR_WORLD_PR_BODY, () =>
+    JSON.parse(
+      execFileSync("gh", ["pr", "view", "--json", "body,baseRefOid"], {
+        encoding: "utf8",
+        timeout: 15_000,
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
+    ),
   );
-  const problems = checkPrBodyText(body);
+  const problems = checkPrBodyText(policy.body, process.cwd(), policy.base);
   if (problems.length) {
     console.error(problems.join("\n"));
     console.error(

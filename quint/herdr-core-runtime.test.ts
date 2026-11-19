@@ -12,6 +12,22 @@ import {
   validateCoreTrace,
 } from "./herdr-core-runtime";
 import { expectObservationMismatch } from "./observations";
+import { coreReplayWitness } from "./herdr-core-verification";
+
+test("only publication replay materialization narrows actions; exhaustive source and other faults stay intact", () => {
+  const source = "module synthetic { action step = any { connect, replace } }";
+  expect(coreReplayWitness(source, "stale-session")).toEqual({
+    source,
+    step: "step",
+  });
+  const witness = coreReplayWitness(source, "publication-foreground");
+  expect(witness.step).toBe("publicationReplay");
+  expect(witness.source).toContain("action step = any { connect, replace }");
+  expect(witness.source).toContain(
+    "action publicationReplay = any { connect, baseline, capture, dispatch, loseForeground, complete }",
+  );
+  expect(source).not.toContain("publicationReplay");
+});
 
 function trace(actions: (string | [string, number])[], child = false) {
   const fake = new CoreProtocolFake();

@@ -141,9 +141,7 @@ export function collectHealth(
     );
   // A rerun uses the same event/merge SHA. Ordinary pushes on the same branch
   // are not unchanged-commit experiments. Keep failed attempts in the denominator.
-  const reruns = ci.filter(
-    (run) => run.run_attempt > 1 && run.conclusion === "success",
-  );
+  const reruns = ci.filter((run) => run.run_attempt > 1);
   for (const run of spread(reruns, 4)) {
     data.attempts.push(run);
     for (

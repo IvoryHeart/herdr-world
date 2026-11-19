@@ -82,6 +82,9 @@ export async function privateCheckerPort(
 }
 
 type CheckerOptions = {
+  /** A worker session uses the existing outer worker deadline; each command
+   * still has its own 240-second bound. Ordinary checkers retain that bound. */
+  sessionTimeoutMs?: number;
   launch?: (port: number, temporary: string) => string[];
   readiness?: (port: number, pid: number, signal: AbortSignal) => Promise<void>;
   ports?: CheckerPortChoice & { start?: number };
@@ -194,7 +197,7 @@ async function runPrivateChecker<T>(
         readyResolve();
       },
       cwd: temporary,
-      timeoutMs: 240_000,
+      timeoutMs: options.sessionTimeoutMs ?? 240_000,
       signal: combined,
       env: {
         ...process.env,
