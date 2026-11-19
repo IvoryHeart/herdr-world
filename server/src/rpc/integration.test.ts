@@ -1,3 +1,4 @@
+import { WORLD_SKILL_VERSION } from "../cli/integration";
 import { afterEach, expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import { existsSync, mkdirSync } from "node:fs";
@@ -63,14 +64,14 @@ test("Settings list, install and uninstall run the CLI's installer and match its
     harness: "omp",
     state: "unsupported",
     reason: "no documented skill folder",
-    available_version: 2,
+    available_version: WORLD_SKILL_VERSION,
     shared_with: [],
   });
   expect(integrations.find((row: any) => row.harness === "codex")).toEqual({
     harness: "codex",
     state: "not_installed",
     path: "~/.agents/skills/herdr-world/SKILL.md",
-    available_version: 2,
+    available_version: WORLD_SKILL_VERSION,
     shared_with: ["pi", "kimi"],
   });
   expect(await cliStatus("codex")).toBe(
@@ -87,10 +88,10 @@ test("Settings list, install and uninstall run the CLI's installer and match its
   expect(installed.integration).toMatchObject({
     harness: "codex",
     state: "current",
-    version: 2,
+    version: WORLD_SKILL_VERSION,
   });
   expect(await cliStatus("codex")).toBe(
-    "codex: current (v2) (~/.agents/skills/herdr-world/SKILL.md)",
+    `codex: current (v${WORLD_SKILL_VERSION}) (~/.agents/skills/herdr-world/SKILL.md)`,
   );
   // The shared file serves Pi and Kimi too.
   expect(
