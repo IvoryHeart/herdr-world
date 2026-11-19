@@ -1387,11 +1387,27 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 ### Integrations
 
 **Menu → Integrations** lists everything World reads from or works through,
-in one screen: **Runtimes** (this computer's Herdr or herdr-core and each SSH
-host), **Sources** (GitHub, Jira and Usage metrics), **Agents** (World's skill
-for each harness, per host) and the **Vault**. Each row says what it gives
-World (terminals, agents, files, pull requests, tickets or usage) and its
-state:
+in one screen with one tab per kind: **Runtimes** (this computer's Herdr or
+herdr-core and each SSH host), **Sources** (GitHub, Jira and Usage metrics),
+**Agents** (World's skill for each harness, per host) and **Editors** once
+one is listed. The tabs come from the registry's kinds, so a new kind gets
+its own tab; a kind with nothing in it has no tab, except Runtimes and
+Agents. Each tab shows how many rows it has and a warning mark when one is
+failing; the tabs stay on one row and scroll sideways on a phone. The screen
+reopens on the tab you last used, or on the row an element's **Connect**
+asked for. The **Vault** sits below the tabs.
+
+**Search** narrows every tab at once by name, status (`error`, `needs
+connect`), transport (`ssh`) or what a row gives (`tickets`); the counts
+become match counts, and a tab with no match names the tabs that have some
+(**Runtimes (1)**) and offers **Clear search**. On Agents it narrows the
+host's agent list. To try the screen with dozens of rows, open World with
+`?integrationsFixture`: the page drops the parameter and the screen adds 40
+sample rows (hosts, trackers and an **Editors** tab) in every state until the
+page reloads. Sample rows have no action and give World nothing.
+
+Each row says what it gives World (terminals, agents, files, pull requests,
+tickets or usage) and its state:
 
 - **Connected**: in use now.
 - **Available**: ready to use; **Connect** switches it on at once.

@@ -696,7 +696,7 @@ export function ConfigurationDialog({
               {tab === "Integrations" ? (
                 <IntegrationsSettings
                   focus={integrationsFocus}
-                  agents={
+                  agents={(query) => (
                     <AgentIntegrationsSettings
                       key={connectionClientScopeKey(
                         connectionClient,
@@ -704,8 +704,9 @@ export function ConfigurationDialog({
                       )}
                       connectionLabel={s.connectionLabel}
                       sshDestination={s.sshDestination}
+                      query={query}
                     />
-                  }
+                  )}
                 />
               ) : null}
             </section>

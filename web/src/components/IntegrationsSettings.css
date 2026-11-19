@@ -1,4 +1,4 @@
-/* Configuration → Integrations: one list per kind, one row per integration. */
+/* Configuration → Integrations: one tab per kind, one row per integration. */
 .integrations-settings {
   display: grid;
   gap: 18px;
@@ -17,6 +17,105 @@
   gap: 8px;
 }
 
+.integrations-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.integrations-search > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+
+.integrations-search:focus-within {
+  border-color: var(--accent);
+}
+
+/* Kinds sit on one row that scrolls sideways, so more kinds never push the
+   list down or wrap into a second bar on a phone. */
+.integrations-tabs {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 8px;
+}
+
+.integrations-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.integrations-tabs > button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.integrations-tabs > button[aria-selected="true"] {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+}
+
+.integrations-tab-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--border-soft);
+  font-size: 11px;
+  text-align: center;
+}
+
+.integrations-tab-alert {
+  color: #efad9c;
+}
+
+.integrations-empty {
+  display: grid;
+  gap: 8px;
+}
+
+.integrations-empty > p {
+  margin: 0;
+}
+
+.integrations-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.integrations-vault {
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.integrations-vault > h3,
 .integrations-group > h3 {
   display: flex;
   align-items: center;
@@ -26,7 +125,8 @@
   color: var(--text-strong);
 }
 
-.integrations-group > .settings-helper {
+.integrations-group > .settings-helper,
+.integrations-vault > .settings-helper {
   margin: 0;
 }
 

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bridge } from "./api";
 import {
+  INTEGRATION_KIND_LABELS,
   INTEGRATION_KINDS,
+  INTEGRATION_PROVISION_LABELS,
   INTEGRATION_PROVISIONS,
+  INTEGRATION_STATE_LABELS,
   INTEGRATION_STATES,
   type IntegrationEntry,
   type IntegrationSetting,
@@ -245,4 +248,41 @@ export function useIntegrations(enabled = true): {
     };
   }, [enabled, refresh]);
   return { snapshot, error, refresh };
+}
+
+/** The lower-case words of a search box; none when it is blank. */
+export function searchTerms(query: string): string[] {
+  return query.toLowerCase().split(/\s+/u).filter(Boolean);
+}
+
+/** Every search word appears somewhere in the texts; no words match all. */
+export function matchesTerms(
+  terms: readonly string[],
+  texts: readonly (string | undefined)[],
+): boolean {
+  if (!terms.length) return true;
+  const haystack = texts.join(" ").toLowerCase();
+  return terms.every((term) => haystack.includes(term));
+}
+
+/**
+ * The Integrations search: a row matches on its name, type, kind, status,
+ * detail, transport and what it gives World, so "error", "ssh" or "tickets"
+ * narrow a long list as well as a name does.
+ */
+export function integrationMatches(
+  entry: IntegrationEntry,
+  terms: readonly string[],
+): boolean {
+  return matchesTerms(terms, [
+    entry.label,
+    entry.type,
+    entry.detail,
+    INTEGRATION_KIND_LABELS[entry.kind],
+    INTEGRATION_STATE_LABELS[entry.state],
+    entry.connection?.transport,
+    ...entry.provides.map(
+      (provision) => INTEGRATION_PROVISION_LABELS[provision],
+    ),
+  ]);
 }

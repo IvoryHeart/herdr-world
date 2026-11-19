@@ -364,7 +364,7 @@ results, and ask you questions.
    ```
 
    Use `codex` or `pi` for those agents, or use
-   **Menu → Configuration → Integrations**.
+   **Menu → Configuration → Integrations → Agents**.
 
 2. Start a new agent session. It can now ask you something:
 
@@ -422,7 +422,7 @@ target before you press **Send**.
 4. Open a pull request for its checks and reviews. **Merge…**, **Close…** and
    **Mark ready…** ask first and say exactly what will happen.
 
-Nothing shows? Open **Menu → Integrations**. Sign in to GitHub with
+Nothing shows? Open **Menu → Integrations → Sources**. Sign in to GitHub with
 `gh auth login` as the user that runs World, or add your Jira site and an API
 token.
 

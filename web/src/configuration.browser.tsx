@@ -10,6 +10,10 @@ import type { AgentIntegration } from "./components/AgentIntegrationsSettings";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { __storeTesting, OperationalContext, store } from "./store";
 import { worldSourcesStore } from "./world/worldSources";
+import {
+  integrationsFixtureEnabled,
+  resetIntegrationsFixture,
+} from "./integrationsFixture";
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -489,26 +493,63 @@ const selectConnection = (id: string) => {
 };
 const integrationRow = (id: string) =>
   document.querySelector<HTMLElement>(`[data-integration="${id}"]`);
-// One screen lists every runtime and source with its state and one action,
-// and the vault by names only.
-async function integrationsScreen(dialog: Element) {
-  await waitFor(() => !!integrationRow("source:metrics"));
-  const states = Object.fromEntries(
-    Array.from(
-      document.querySelectorAll<HTMLElement>(".integration-row"),
-      (row) => [row.dataset.integration, row.dataset.state],
+const kindTab = (kind: string) =>
+  document.querySelector<HTMLButtonElement>(
+    `.integrations-tabs [role="tab"][data-kind="${kind}"]`,
+  );
+const kindTabs = () =>
+  Array.from(
+    document.querySelectorAll<HTMLElement>('.integrations-tabs [role="tab"]'),
+    (tab) => tab.dataset.kind,
+  ).join(",");
+const tabCount = (kind: string) =>
+  kindTab(kind)?.querySelector(".integrations-tab-count")?.textContent;
+const openKind = (kind: string) => {
+  const tab = kindTab(kind);
+  if (!tab) throw new Error(`Missing Integrations tab: ${kind}`);
+  flushSync(() => tab.click());
+};
+const rowStates = () =>
+  JSON.stringify(
+    Object.fromEntries(
+      Array.from(
+        document.querySelectorAll<HTMLElement>(".integration-row"),
+        (row) => [row.dataset.integration, row.dataset.state],
+      ),
     ),
   );
+const searchIntegrations = (value: string) => {
+  const input = document.querySelector<HTMLInputElement>(
+    'input[aria-label="Search integrations"]',
+  )!;
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!.call(input, value);
+  flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
+};
+// One screen, one tab per kind the registry reports, lists every runtime and
+// source with its state and one action, and the vault by names only.
+async function integrationsScreen(dialog: Element) {
+  await waitFor(() => !!integrationRow("runtime:alpha"));
   check(
-    JSON.stringify(states) ===
+    kindTabs() === "runtime,source,harness",
+    `Integrations tabs are not the registry's kinds: ${kindTabs()}`,
+  );
+  check(
+    kindTab("runtime")!.getAttribute("aria-selected") === "true" &&
+      tabCount("runtime") === "2" &&
+      tabCount("source") === "3" &&
+      tabCount("harness") === undefined,
+    "the first kind is not open or tabs do not count their rows",
+  );
+  check(
+    rowStates() ===
       JSON.stringify({
         "runtime:alpha": "connected",
         "runtime:beta": "available",
-        "source:github": "connected",
-        "source:jira": "needs_connect",
-        "source:metrics": "needs_connect",
       }),
-    `Integrations rows or states are wrong: ${JSON.stringify(states)}`,
+    `Runtimes tab rows or states are wrong: ${rowStates()}`,
   );
   check(
     integrationRow("runtime:alpha")!.textContent!.includes(
@@ -549,6 +590,16 @@ async function integrationsScreen(dialog: Element) {
   );
 
   // Sources switch off at once; one that needs settings opens them instead.
+  openKind("source");
+  check(
+    rowStates() ===
+      JSON.stringify({
+        "source:github": "connected",
+        "source:jira": "needs_connect",
+        "source:metrics": "needs_connect",
+      }),
+    `Sources tab rows or states are wrong: ${rowStates()}`,
+  );
   await waitFor(() => !button("Disconnect GitHub").disabled);
   click("Disconnect GitHub");
   await waitFor(() => sourceRequests.length === 1);
@@ -619,6 +670,97 @@ async function integrationsScreen(dialog: Element) {
     registryReads === reads,
     "a source refresh needed another registry read to reach the screen",
   );
+
+  // Search narrows every tab at once; each tab counts its matches, and an
+  // empty tab points at the tabs that have some.
+  searchIntegrations("jira");
+  check(
+    rowStates() === JSON.stringify({ "source:jira": "needs_connect" }) &&
+      tabCount("source") === "1" &&
+      tabCount("runtime") === "0",
+    `search did not narrow the open tab or its counts: ${rowStates()}`,
+  );
+  searchIntegrations("ssh");
+  const empty = dialog.querySelector(".integrations-empty");
+  check(
+    !!empty?.textContent?.includes("No sources match “ssh”.") &&
+      !dialog.querySelector(".integration-row"),
+    "an empty search did not say so",
+  );
+  click("Runtimes (1)");
+  check(
+    kindTab("runtime")!.getAttribute("aria-selected") === "true" &&
+      rowStates() === JSON.stringify({ "runtime:beta": "available" }),
+    `a match in another tab could not be reached: ${rowStates()}`,
+  );
+  searchIntegrations("");
+
+  // Dozens of rows and a new kind (the preview fixture): the kind gets its
+  // own tab, the tabs scroll on one row, and search still narrows.
+  history.replaceState(history.state, "", "?integrationsFixture");
+  resetIntegrationsFixture();
+  check(
+    integrationsFixtureEnabled() && !location.search.includes("integrations"),
+    "the integrations fixture switch was not consumed at once",
+  );
+  searchIntegrations("sample");
+  check(
+    kindTabs() === "runtime,source,harness,ide" &&
+      tabCount("runtime") === "14" &&
+      tabCount("source") === "18" &&
+      tabCount("ide") === "8",
+    `a new kind did not get its own counted tab: ${kindTabs()}`,
+  );
+  const tabs = dialog.querySelector<HTMLElement>(".integrations-tabs")!;
+  check(
+    dialog.scrollWidth <= dialog.clientWidth + 1 &&
+      new Set(
+        Array.from(tabs.children, (tab) =>
+          Math.round(tab.getBoundingClientRect().top),
+        ),
+      ).size === 1,
+    "many kinds overflow the screen or wrap the tabs",
+  );
+  openKind("ide");
+  searchIntegrations("sample error");
+  check(
+    rowStates() ===
+      JSON.stringify({
+        "ide:sample-04": "error",
+        "ide:sample-08": "error",
+      }) && !dialog.querySelector(".integration-row button"),
+    `search by status failed or sample rows can act: ${rowStates()}`,
+  );
+  resetIntegrationsFixture();
+  history.replaceState(history.state, "", location.pathname);
+  searchIntegrations("");
+  check(
+    kindTabs() === "runtime,source,harness" &&
+      kindTab("runtime")!.getAttribute("aria-selected") === "true",
+    "a kind that left kept its tab open",
+  );
+
+  // Agents keep their per-host list; the same search narrows it.
+  openKind("harness");
+  await waitFor(
+    () => document.querySelectorAll(".agent-integrations-list li").length === 4,
+  );
+  searchIntegrations("pi");
+  check(
+    document.querySelectorAll(".agent-integrations-list li").length === 1 &&
+      document
+        .querySelector(".agent-integrations-list li")!
+        .textContent!.includes("Pi"),
+    "search did not narrow the agent list",
+  );
+  searchIntegrations("nothing like this");
+  check(
+    !!dialog
+      .querySelector(".agent-integrations-settings")
+      ?.textContent?.includes("No agent matches"),
+    "an agent search with no match did not say so",
+  );
+  searchIntegrations("");
 }
 async function run() {
   const viewportSmoke = new URLSearchParams(location.search).has(
@@ -1297,6 +1439,7 @@ async function run() {
     "integrations were fetched before opening their tab",
   );
   click("Integrations");
+  await integrationsScreen(dialog);
   await waitFor(
     () => document.querySelectorAll(".agent-integrations-list li").length === 4,
   );
@@ -1310,7 +1453,6 @@ async function run() {
     dialog.scrollWidth <= dialog.clientWidth + 1,
     "integrations overflow the scaled viewport",
   );
-  await integrationsScreen(dialog);
   const mutationCount = () =>
     calls.filter(
       (call) =>
