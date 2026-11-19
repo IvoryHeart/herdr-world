@@ -1,7 +1,8 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, win32 } from "node:path";
 import { validateSshDestination } from "../bridge/ssh-command";
+import { cgroupLeaf } from "../herdr/supervision";
 
 // One entry per product. Launch syntax is shared by family, never browser input.
 export const IDE_REGISTRY = [
@@ -212,17 +213,65 @@ export function desktopIdeArgs(
 }
 
 /** A successful request acknowledges dispatch, not that a GUI has rendered. */
-export async function launchDesktopIde(executable: string, args: string[]) {
-  let child: ReturnType<typeof Bun.spawn>;
+export async function launchDesktopIde(
+  executable: string,
+  args: string[],
+  {
+    application,
+    platform = process.platform,
+    readCgroup = () => readFileSync("/proc/self/cgroup", "utf8"),
+    realpath = realpathSync,
+    spawn = (command: string[]) =>
+      Bun.spawn(command, {
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "ignore",
+      }),
+  }: {
+    /** Fixed registry application name, never supplied by the browser. */
+    application?: string;
+    platform?: NodeJS.Platform;
+    readCgroup?: () => string;
+    realpath?: (path: string) => string;
+    spawn?: (
+      command: string[],
+    ) => Pick<ReturnType<typeof Bun.spawn>, "exited" | "unref">;
+  } = {},
+) {
+  let child: Pick<ReturnType<typeof Bun.spawn>, "exited" | "unref">;
   try {
-    child = Bun.spawn([executable, ...args], {
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-    });
+    let command = [executable, ...args];
+    if (platform === "linux") {
+      const cgroup = readCgroup();
+      const leaf = cgroupLeaf(cgroup);
+      // unref/setsid cannot escape a service's KillMode=control-group. A user
+      // scope moves the launcher (and its descendants) before it executes,
+      // retaining the caller's desktop environment without tying IDE lifetime
+      // to World. Unknown/non-v2 groups also require this safe dispatch path.
+      if (!leaf?.endsWith(".scope") && cgroup.trim() !== "0::/")
+        command = [
+          "systemd-run",
+          "--user",
+          "--scope",
+          "--collect",
+          "--quiet",
+          "--",
+          ...command,
+        ];
+    } else if (platform === "darwin") {
+      // Resolve PATH symlinks to preserve the detected bundle. Toolbox/wrapper
+      // scripts outside a bundle use the product's fixed LaunchServices name.
+      const bundle = /^(.*\.app)\/Contents\//.exec(realpath(executable))?.[1];
+      const target = bundle ?? application;
+      if (!target) throw new Error("Desktop application unavailable");
+      // A new activation delivers --args even when an instance already exists;
+      // IDE single-instance routing handles forwarding to the existing window.
+      command = ["/usr/bin/open", "-n", "-a", target, "--args", ...args];
+    }
+    child = spawn(command);
   } catch {
     throw new Error(
-      "Could not start the desktop IDE on the World host. Check its desktop session and launcher.",
+      "Could not start the desktop IDE on the World host. Check its desktop session and launcher; Linux services need a working systemd user session.",
     );
   }
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -235,7 +284,7 @@ export async function launchDesktopIde(executable: string, args: string[]) {
     ]);
     if (code !== null && code !== 0)
       throw new Error(
-        "The desktop IDE launcher failed. Check its desktop session and remote-development setup.",
+        "The desktop IDE launcher failed. Check its desktop session, systemd user session (Linux services) and remote-development setup.",
       );
   } finally {
     clearTimeout(timeout);

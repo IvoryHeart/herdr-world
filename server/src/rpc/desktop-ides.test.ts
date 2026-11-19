@@ -31,6 +31,7 @@ async function harness(core = false) {
   let destination: string | undefined;
   let beforeResolve: (() => Promise<void>) | undefined;
   const launches: string[][] = [];
+  const applications: (string | undefined)[] = [];
   const reads: unknown[] = [];
   let selected: unknown;
   const resources = {
@@ -112,7 +113,12 @@ async function harness(core = false) {
           executable: "/usr/bin/idea",
         },
       ],
-      launch: async (executable: string, args: string[]) => {
+      launch: async (
+        executable: string,
+        args: string[],
+        options?: { application?: string },
+      ) => {
+        applications.push(options?.application);
         launches.push([executable, ...args]);
       },
     },
@@ -148,6 +154,7 @@ async function harness(core = false) {
     project,
     agent,
     launches,
+    applications,
     reads,
     call,
     open,
@@ -185,6 +192,10 @@ for (const core of [false, true])
     expect(h.launches).toEqual([
       ["/usr/bin/code", h.project],
       ["/usr/bin/code", "--goto", `${h.project}/hello.ts:5`],
+    ]);
+    expect(h.applications).toEqual([
+      "Visual Studio Code",
+      "Visual Studio Code",
     ]);
     h.setSelected({ candidateId: "agent" });
     await h.open({

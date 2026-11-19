@@ -473,7 +473,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     are refused without another host or path. Deleted Changes files must be opened
     through an existing parent folder. No IDE is installed, no browser command
     string is executed, and no credentials enter a handoff. A dispatch receipt
-    cannot confirm that a desktop window became visible.
+    cannot confirm that a desktop window became visible. Linux service launches
+    use a separate systemd user scope; macOS launches use LaunchServices, so a
+    World restart does not close the IDE. If safe activation fails (including an
+    unavailable systemd user session), World reports an error without falling back
+    to a service-owned IDE process.
     Testing-only `?ideFixture=1` is removed from the URL immediately and supplies
     synthetic IDE choices for that page: VS Code demonstrates dispatch, Cursor a
     launch failure, IntelliJ an SSH refusal, and Zed a missing launcher. It neither

@@ -52,8 +52,11 @@ NOT fall back to another connection or an ambiguous agent worktree.
 
 Only authenticated browser operators SHALL invoke desktop handoff verbs. World
 SHALL accept fixed provider IDs and target fields, never browser command strings,
-executables, arbitrary options or credentials. The service SHALL launch a locally
-detected executable with argument arrays. Local projects SHALL open locally.
+executables, arbitrary options or credentials. The service SHALL dispatch a locally
+detected IDE with argument arrays, independently of the World service lifetime.
+Linux service launches SHALL use a separate systemd user scope; macOS SHALL use
+LaunchServices. Failed isolation or activation SHALL refuse without falling back
+to a service-owned IDE process. Local projects SHALL open locally.
 VS Code and Cursor SSH handoffs SHALL use the exact stored OpenSSH destination
 and explicit file/folder forms; Zed SHALL use an encoded SSH URL. Existing OpenSSH
 configuration and IDE remote support remain prerequisites. JetBrains SSH requests
@@ -71,3 +74,13 @@ SHALL acknowledge dispatch, without claiming a visible desktop window.
 
 - **WHEN** the detected executable cannot start or exits unsuccessfully during launch admission
 - **THEN** the picker shows a desktop-session or launcher error and permits an explicit retry without automatic replay
+
+#### Scenario: World service restarts after handoff
+
+- **WHEN** an IDE that was not running opens through World installed as a Linux user service, and World later restarts
+- **THEN** the IDE and its terminals remain outside World's service cgroup and continue running
+
+#### Scenario: Desktop activation cannot isolate the IDE
+
+- **WHEN** the systemd user scope or macOS LaunchServices activation fails
+- **THEN** World reports a launcher error without retrying as a direct service child

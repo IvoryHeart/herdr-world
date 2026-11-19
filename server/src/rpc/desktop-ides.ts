@@ -147,7 +147,9 @@ export async function handleDesktopIdeRpc(
       throw new Error(
         "This project host changed before handoff. Refresh and try again.",
       );
-    await runtime.launch(detected.executable, args);
+    await runtime.launch(detected.executable, args, {
+      application: selected.mac,
+    });
     sendReply(
       {
         id,
