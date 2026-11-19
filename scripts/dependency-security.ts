@@ -8,7 +8,7 @@ type Dependencies = {
   peerDependencies?: Record<string, string>;
 };
 export type AppLock = {
-  workspaces: Record<string, Dependencies>;
+  workspaces: Record<string, Dependencies & { name?: string }>;
   packages: Record<string, [string, string, Dependencies, ...unknown[]]>;
 };
 export type Package = { name: string; version: string; shipped: boolean };
@@ -49,7 +49,8 @@ export function dependencyInventory(lock: AppLock): Package[] {
     while (context) {
       const key = `${context}/${name}`;
       if (lock.packages[key]) return key;
-      context = context.slice(0, Math.max(0, context.lastIndexOf("/")));
+      // A scoped package is one ancestry segment, not an intermediate scope.
+      context = context.replace(/(?:^|\/)(?:@[^/]+\/)?[^/]+$/, "");
     }
     return lock.packages[name] ? name : undefined;
   };
@@ -77,7 +78,10 @@ export function dependencyInventory(lock: AppLock): Package[] {
     }
   };
   // Include root runtime dependencies too, should the workspace acquire any.
-  for (const workspace of Object.values(lock.workspaces)) visit(workspace, "");
+  // Bun nests workspace-specific resolutions under the package name, not the
+  // workspace directory. Start there before falling back to hoisted packages.
+  for (const workspace of Object.values(lock.workspaces))
+    visit(workspace, workspace.name ?? "");
   const byId = new Map<string, Package>();
   for (const [key, entry] of Object.entries(lock.packages)) {
     if (entry[0].includes("@workspace:")) continue;

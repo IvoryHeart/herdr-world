@@ -2,7 +2,7 @@
 
 - Block releases and site publication on fixable high or critical vulnerabilities
   in potentially shipped dependencies, and queue new shipped security findings
-  for prompt maintenance.
+  for prompt maintenance, including workspace-specific dependency versions.
 
 ### Changed
 

@@ -145,3 +145,19 @@ test("a changed runtime resolution needs a fragment even when all versions alrea
   head.workspaces.web!.dependencies!.app = "2";
   expect(shippedGraphChanged(base, head)).toBe(true);
 });
+
+test("a workspace-specific runtime update requires a shipped dependency fragment", () => {
+  const base: AppLock = {
+    workspaces: {
+      web: { name: "herdr-world-web", dependencies: { app: "1" } },
+      server: { dependencies: { app: "2" } },
+    },
+    packages: {
+      app: ["app@2.0.0", "", {}],
+      "herdr-world-web/app": ["app@1.0.0", "", {}],
+    },
+  };
+  const head = structuredClone(base);
+  head.packages["herdr-world-web/app"]![0] = "app@1.0.1";
+  expect(shippedGraphChanged(base, head)).toBe(true);
+});

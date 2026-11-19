@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { missingSecurityIssues } from "./dependency-security-issues";
 import {
   auditDependencies,
   blocksRelease,
@@ -93,6 +94,77 @@ test("known vulnerable shipped version blocks and names advisory and available f
   expect(
     await auditDependencies([{ ...pkg, version: "4.17.21" }], [], registry),
   ).toEqual([]);
+});
+
+for (const [workspace, name] of [
+  ["web", "herdr-world-web"],
+  ["server", "herdr-world-server"],
+  ["web", "@site/web"],
+] as const) {
+  test(`workspace-specific runtime ${name}/lodash blocks release and queues an alert`, async () => {
+    const lock: AppLock = {
+      workspaces: {
+        "": { dependencies: { lodash: "4.17.21" } },
+        web: {},
+        server: {},
+        [workspace]: { name, dependencies: { lodash: "4.17.15" } },
+      },
+      packages: {
+        lodash: ["lodash@4.17.21", "", {}],
+        [`${name}/lodash`]: [
+          "lodash@4.17.15",
+          "",
+          { dependencies: { leaf: "1" } },
+        ],
+        [`${name}/leaf`]: ["leaf@1.0.0", "", {}],
+        [`${name}/tool`]: ["tool@1.0.0", "", {}],
+      },
+    };
+    const inventory = dependencyInventory(lock);
+    expect(inventory).toContainEqual({
+      name: "leaf",
+      version: "1.0.0",
+      shipped: true,
+    });
+    expect(inventory).toContainEqual({
+      name: "tool",
+      version: "1.0.0",
+      shipped: false,
+    });
+    const findings = await auditDependencies(inventory, [], registry);
+    expect(findings).toEqual([{ ...pkg, ...advisory, fix: "4.17.21" }]);
+    expect(findings.some(blocksRelease)).toBe(true);
+    const issues = missingSecurityIssues(findings, []);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]!.labels).toContain("crew:ready");
+    expect(issues[0]!.body).toContain("Priority: high");
+    expect(issues[0]!.body).toContain(advisory.url);
+  });
+}
+
+test("scoped package ancestry skips incomplete scopes when resolving hoisted dependencies", () => {
+  const lock: AppLock = {
+    workspaces: {
+      web: { name: "herdr-world-web", dependencies: { "@vendor/ui": "1" } },
+      server: {},
+    },
+    packages: {
+      "herdr-world-web/@vendor/ui": [
+        "@vendor/ui@1.0.0",
+        "",
+        { dependencies: { lodash: "4.17.15" } },
+      ],
+      "herdr-world-web/lodash": ["lodash@4.17.15", "", {}],
+      "herdr-world-web/@vendor/lodash": ["@vendor/lodash@4.17.21", "", {}],
+      lodash: ["lodash@4.17.21", "", {}],
+    },
+  };
+  expect(dependencyInventory(lock)).toContainEqual(pkg);
+  expect(dependencyInventory(lock)).toContainEqual({
+    name: "@vendor/lodash",
+    version: "4.17.21",
+    shipped: false,
+  });
 });
 
 test("only exact, reasoned, unexpired exceptions can unblock a finding", async () => {
