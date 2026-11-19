@@ -73,25 +73,31 @@ export function effectFixture(
   };
   const store = createEffectStore(request, () => {});
   const source = new Database(join(root, "receiver.sqlite"), { strict: true });
-  source.exec(
-    "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS applied(id INTEGER PRIMARY KEY AUTOINCREMENT,key TEXT NOT NULL,handle TEXT,status TEXT NOT NULL)",
-  );
-  for (const [key, value] of Object.entries({
-    authorized: "1",
-    authorizations: "0",
-    precondition: "1",
-    binding: "attached",
-    terminal: "terminal-one",
-    generation: "1",
-    calls: "0",
-    probes: "0",
-    finds: "0",
-    attaches: "0",
-    permanent: "0",
-  }))
-    source
-      .query("INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO NOTHING")
-      .run(key, value);
+  source.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;");
+  // Initial fixture state is one durable commit, before any tested operation.
+  // Thousands of replay traces must not pay a separate fsync for every seed
+  // setting. All runtime writes retain FULL durability and their real boundaries.
+  source.transaction(() => {
+    source.exec(
+      "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS applied(id INTEGER PRIMARY KEY AUTOINCREMENT,key TEXT NOT NULL,handle TEXT,status TEXT NOT NULL)",
+    );
+    for (const [key, value] of Object.entries({
+      authorized: "1",
+      authorizations: "0",
+      precondition: "1",
+      binding: "attached",
+      terminal: "terminal-one",
+      generation: "1",
+      calls: "0",
+      probes: "0",
+      finds: "0",
+      attaches: "0",
+      permanent: "0",
+    }))
+      source
+        .query("INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO NOTHING")
+        .run(key, value);
+  })();
   const read = (key: string) =>
     (
       source.query("SELECT value FROM settings WHERE key=?").get(key) as {

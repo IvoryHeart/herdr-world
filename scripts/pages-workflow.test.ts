@@ -3,7 +3,13 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-type Step = { name?: string; run?: string; uses?: string };
+type Step = {
+  name?: string;
+  run?: string;
+  uses?: string;
+  if?: string;
+  with?: { key?: string; path?: string; "restore-keys"?: string };
+};
 const workflow = Bun.YAML.parse(
   await Bun.file(
     new URL("../.github/workflows/pages.yml", import.meta.url),
@@ -21,6 +27,28 @@ const gateIndex = steps.findIndex(
 );
 const gate = steps[gateIndex]?.run ?? "";
 const roots: string[] = [];
+
+test("Pages reuses media only when all render inputs match, and always builds the current site", () => {
+  const cache = steps.find(
+    (step) => step.name === "Restore exact film render",
+  )!;
+  expect(cache.with?.path).toBe(".pages-dist/film/media");
+  expect(cache.with?.["restore-keys"]).toBeUndefined();
+  for (const input of [
+    "site/film/**",
+    "web/src/**",
+    "shared/**",
+    "scripts/film-render.ts",
+    "bun.lock",
+  ])
+    expect(cache.with?.key).toContain(input);
+  expect(steps.find((step) => step.run === "bun run film:render")?.if).toBe(
+    "steps.film.outputs.cache-hit != 'true'",
+  );
+  expect(
+    steps.find((step) => step.run === "bun run build:site")?.if,
+  ).toBeUndefined();
+});
 
 afterEach(() => {
   for (const root of roots.splice(0)) {

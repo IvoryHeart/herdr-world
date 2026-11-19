@@ -119,6 +119,7 @@ test("CI and release jobs install once from the workspace root", () => {
             "validation",
             "delivery",
             "plugin-windows",
+            "launchd",
           ].includes(name)) ||
         (file === "world-browser.yml" &&
           ["web-browser", "world-latency"].includes(name)) ||

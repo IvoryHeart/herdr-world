@@ -247,6 +247,42 @@ const fakeChecker = async (root: string, body: string) => {
 };
 
 (process.platform === "win32" ? test.skip : test)(
+  "parallel controls in one process choose different checker ports before binding",
+  async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "synthetic-parallel-checkers-"),
+    );
+    const ports: number[] = [];
+    const admitted = Promise.withResolvers<void>();
+    try {
+      const server = await fakeChecker(root, "setInterval(()=>{},1000)");
+      await Promise.all(
+        [1, 2].map((index) =>
+          withPrivateChecker(
+            resolve(root, String(index)),
+            new AbortController().signal,
+            async (port) => {
+              ports.push(port);
+              if (ports.length === 2) admitted.resolve();
+              await admitted.promise;
+            },
+            undefined,
+            {
+              ports: { free: always },
+              launch: () => [process.execPath, server],
+              readiness: async () => {},
+            },
+          ),
+        ),
+      );
+      expect(new Set(ports).size).toBe(2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
+
+(process.platform === "win32" ? test.skip : test)(
   "a checker whose port was taken while readiness was pending starts on the next port and says so",
   async () => {
     const root = await mkdtemp(resolve(tmpdir(), "synthetic-checker-taken-"));

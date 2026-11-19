@@ -82,6 +82,9 @@ export async function privateCheckerPort(
 }
 
 type CheckerOptions = {
+  /** A worker session uses the existing outer worker deadline; each command
+   * still has its own 240-second bound. Ordinary checkers retain that bound. */
+  sessionTimeoutMs?: number;
   launch?: (port: number, temporary: string) => string[];
   readiness?: (port: number, pid: number, signal: AbortSignal) => Promise<void>;
   ports?: CheckerPortChoice & { start?: number };
@@ -95,6 +98,7 @@ export class CheckerPortTaken extends Error {
 }
 
 const CHECKER_PORT_ATTEMPTS = 3;
+let checkerSequence = 0;
 
 function untilAborted<T>(operation: Promise<T>, signal: AbortSignal) {
   return Promise.race([
@@ -120,7 +124,12 @@ export async function withPrivateChecker<T>(
   diagnostic?: (text: string) => void,
   options: CheckerOptions = {},
 ) {
-  let port = await privateCheckerPort(options.ports);
+  // Several controls can share one process. Give each a different search
+  // origin before the asynchronous probe; pid alone selects the same port.
+  let port = await privateCheckerPort({
+    start: (process.pid + checkerSequence++) * 7919,
+    ...options.ports,
+  });
   for (let attempt = 1; ; attempt++) {
     try {
       return await runPrivateChecker(
@@ -188,7 +197,7 @@ async function runPrivateChecker<T>(
         readyResolve();
       },
       cwd: temporary,
-      timeoutMs: 240_000,
+      timeoutMs: options.sessionTimeoutMs ?? 240_000,
       signal: combined,
       env: {
         ...process.env,

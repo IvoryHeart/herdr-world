@@ -58,7 +58,7 @@ export type ValidationSelection = {
 };
 
 const NATIVE =
-  /^(?:server\/|shared\/|scripts\/(?:install|installer|package|release|prepare-release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
+  /^(?:scripts\/(?:install|installer|package|release|prepare-release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
 /** Native acceptance also owns browser request builders for launch/connection setup. */
 export function isReleaseWalkInput(path: string): boolean {
   return /^(?:scripts\/release-walk(?:\/|\.|-)|web\/src\/(?:.*(?:[Cc]onnection|[Ll]aunch)[^/]*\.[jt]sx?|creationRequests\.ts|api\.ts|world\/(?:agentProfiles\.ts|coreControl\.ts|town\/useTownRoomActions\.tsx))$)/.test(
@@ -78,7 +78,7 @@ const WORLD_RUNTIME =
 // Derive these paths so adding a native test cannot leave scoped PR CI skipping it.
 const nativeTestConsumers = new Set<string>();
 for (const [file, jobs] of [
-  ["ci.yml", ["plugin-windows", "launchd"]],
+  ["ci.yml", ["plugin-windows"]],
   ["installer-upgrade.yml", ["upgrade"]],
 ] as const) {
   const workflow = Bun.YAML.parse(
@@ -103,6 +103,26 @@ export function ordinaryDocumentation(
     !paths.some(isToolingPath) &&
     !paths.some(owns)
   );
+}
+
+/** The compiled entry points and explicitly native assertions own this lane.
+ * A shared browser-only module is not a native binary input merely because
+ * it lives in shared/. Follow imports in the same conservative graph as units.
+ */
+function nativeInputs(graph: Graph): Set<string> {
+  const seen = new Set([
+    "server/src/index.ts",
+    "scripts/world-plugin.ts",
+    ...nativeTestConsumers,
+  ]);
+  const queue = [...seen];
+  for (let index = 0; index < queue.length; index++)
+    for (const dependency of graph.deps.get(queue[index]!) ?? [])
+      if (!seen.has(dependency)) {
+        seen.add(dependency);
+        queue.push(dependency);
+      }
+  return seen;
 }
 
 /** Whole-PR policy; optional incremental paths narrow tests only. */
@@ -201,6 +221,7 @@ export function selectValidation(
       affectedWorld.includes(path) ||
       (runtime && worldRuntimeSuites.includes(path)),
   );
+  const binaryInputs = nativeInputs(graph);
   return {
     full,
     tooling,
@@ -232,6 +253,11 @@ export function selectValidation(
             isInstallationInput(path) ||
             isReleaseWalkInput(path) ||
             nativeTestConsumers.has(path) ||
+            (!browserPlanOnly && binaryInputs.has(path)) ||
+            // Incomplete graphs cannot establish absence from a binary.
+            (!graph.files.has("server/src/index.ts") &&
+              /^(?:server|shared)\//.test(path) &&
+              !TEST.test(path)) ||
             (NATIVE.test(path) && !TEST.test(path)),
         ) ||
         (!browserPlanOnly &&
