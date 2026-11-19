@@ -14,6 +14,7 @@ import {
   WorldIntegrationRow,
 } from "./WorldIntegrationRow";
 import { worldHarnessFor, type WorldIntegration } from "../worldIntegrations";
+import { matchesTerms, searchTerms } from "../integrations";
 import "./AgentIntegrationsSettings.css";
 
 import {
@@ -45,12 +46,24 @@ const INTEGRATION_DESCRIPTION =
   "The bridge or SSH account must use the same agent configuration as the Herdr server. Unavailable version information stays unknown. " +
   "Available versions are bundled with that server, not checked online.";
 
+/**
+ * How many agents the list shows (`listed`: detected or carrying World's
+ * skill) and whether anything, even an undetected agent, matches the search.
+ */
+export type AgentMatches = { listed: number; any: boolean };
+
 export function AgentIntegrationsSettings({
   connectionLabel,
   sshDestination,
+  query = "",
+  onMatches,
 }: {
   connectionLabel: string;
   sshDestination?: string;
+  /** Integrations search: only agents whose name or state match are listed. */
+  query?: string;
+  /** What the list shows for the search; null while it is loading. */
+  onMatches?: (matches: AgentMatches | null) => void;
 }) {
   const client = useConnectionClient();
   const scope = connectionClientScopeKey(
@@ -239,13 +252,23 @@ export function AgentIntegrationsSettings({
   };
 
   const disabled = loading || busy !== null || !client.isCurrent();
-  const visible = (items ?? [])
+  const terms = searchTerms(query);
+  const matching = (items ?? []).filter((item) =>
+    matchesTerms(terms, [
+      item.label,
+      item.target,
+      item.available || item.state !== "not_installed"
+        ? stateLabels[item.state]
+        : "Agent not detected",
+    ]),
+  );
+  const visible = matching
     .filter((item) => item.available || item.state !== "not_installed")
     .sort((a, b) => {
       const rank = { outdated: 0, current: 1, not_installed: 2 };
       return rank[a.state] - rank[b.state];
     });
-  const unavailable = (items ?? []).filter(
+  const unavailable = matching.filter(
     (item) => !item.available && item.state === "not_installed",
   );
   const worldDisabled = world.busy !== null || !ready;
@@ -263,8 +286,16 @@ export function AgentIntegrationsSettings({
     ? []
     : (world.items ?? []).filter(
         (row) =>
-          !items?.some((item) => worldHarnessFor(item.target) === row.harness),
+          !items?.some(
+            (item) => worldHarnessFor(item.target) === row.harness,
+          ) && matchesTerms(terms, [row.harness]),
       );
+  const matchesListed = visible.length + worldOnly.length;
+  const matchesAny = matchesListed + unavailable.length > 0;
+  const known = !loading && items !== null;
+  useEffect(() => {
+    onMatches?.(known ? { listed: matchesListed, any: matchesAny } : null);
+  }, [onMatches, known, matchesListed, matchesAny]);
   const renderList = (list: AgentIntegration[]) => (
     <ul className="agent-integrations-list">
       {list.map((item) => (
@@ -446,6 +477,16 @@ export function AgentIntegrationsSettings({
       {items?.length === 0 ? (
         <p className="configuration-scope">
           No agent integrations reported by Herdr.
+        </p>
+      ) : null}
+      {terms.length &&
+      !loading &&
+      items?.length &&
+      !visible.length &&
+      !unavailable.length &&
+      !worldOnly.length ? (
+        <p className="configuration-scope">
+          No agent matches “{query.trim()}”.
         </p>
       ) : null}
       {visible.length > 0 ? renderList(visible) : null}

@@ -53,6 +53,7 @@ import {
   useConnectionClient,
 } from "../useConnectionClient";
 import { AgentIntegrationsSettings } from "./AgentIntegrationsSettings";
+import { IntegrationsSettings } from "./IntegrationsSettings";
 import { AutoSyncRepositoriesDialog } from "./AutoSyncRepositoriesDialog";
 import { CloseButton } from "./CloseButton";
 import { TerminalTransportSettings } from "./TerminalTransportSettings";
@@ -122,10 +123,13 @@ type Detail = "terminal" | "layout" | "keyboard" | "mobile" | "sync";
 export function ConfigurationDialog({
   onClose,
   initialTab = "Appearance",
+  integrationsFocus,
   ...props
 }: ConfigurationProps & {
   onClose: () => void;
   initialTab?: ConfigurationTab;
+  /** The Integrations row to show first, e.g. `source:github`. */
+  integrationsFocus?: string;
 }) {
   const { theme, accentColor, uiScale } = props;
   const s = useStoreSelector(
@@ -690,13 +694,20 @@ export function ConfigurationDialog({
               hidden={tab !== "Integrations"}
             >
               {tab === "Integrations" ? (
-                <AgentIntegrationsSettings
-                  key={connectionClientScopeKey(
-                    connectionClient,
-                    connectionClient.serverRuntimeGeneration,
+                <IntegrationsSettings
+                  focus={integrationsFocus}
+                  agents={(query, onMatches) => (
+                    <AgentIntegrationsSettings
+                      key={connectionClientScopeKey(
+                        connectionClient,
+                        connectionClient.serverRuntimeGeneration,
+                      )}
+                      connectionLabel={s.connectionLabel}
+                      sshDestination={s.sshDestination}
+                      query={query}
+                      onMatches={onMatches}
+                    />
                   )}
-                  connectionLabel={s.connectionLabel}
-                  sshDestination={s.sshDestination}
                 />
               ) : null}
             </section>
@@ -704,7 +715,7 @@ export function ConfigurationDialog({
           <div className="modal-actions">
             <span className="muted">
               {tab === "Integrations"
-                ? "Changes require confirmation."
+                ? "Connect and Disconnect apply at once."
                 : tab === "Instance"
                   ? "Use Save to apply instance settings."
                   : "Changes are saved automatically."}

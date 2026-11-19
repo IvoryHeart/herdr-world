@@ -4,7 +4,6 @@ import "./world.css";
 import "./windows/WorldLayout.css";
 
 import {
-  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -12,7 +11,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import { ArrowLeft, View } from "lucide-react";
 import { useLayoutPreferences } from "../layoutPreferences";
 import App, { type WorkspaceSurfaceSelection } from "../App";
@@ -23,14 +21,10 @@ import {
 } from "../components/WindowArrangementMenu";
 import type { CommandExtension } from "../components/CommandCombobox";
 import { shortcutMatches } from "../shortcutPreferences";
-import { lazyWithReload } from "../lazyWithReload";
 import { store, useStoreSelector } from "../store";
 import {
   type InspectorView,
   resourceScopeForWorkspace,
-  WORLD_OBSERVABILITY_SETTINGS_EVENT,
-  WORLD_OBSERVABILITY_UPDATED_EVENT,
-  WORLD_SOURCES_SETTINGS_EVENT,
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
   writeInspectorPreferences,
 } from "../workspaceResource";
@@ -83,20 +77,6 @@ import {
 } from "./windows/WorldPanel";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
 
-export const OfficeObservabilityDialog = lazyWithReload(
-  "world-observability",
-  () =>
-    import("./OfficeObservabilityDialog").then((module) => ({
-      default: module.OfficeObservabilityDialog,
-    })),
-);
-
-export const SourcesDialog = lazyWithReload("world-sources", () =>
-  import("./SourcesDialog").then((module) => ({
-    default: module.SourcesDialog,
-  })),
-);
-
 export default function WorldFoundationApp() {
   useWorldAsks();
   const [view, setViewState] = useState<WorldView>(initialView);
@@ -137,8 +117,6 @@ export default function WorldFoundationApp() {
   const [inspectorTerminalPortals, setInspectorTerminalPortals] = useState<
     Record<string, HTMLDivElement | null>
   >({});
-  const [officeMetricsOpen, setOfficeMetricsOpen] = useState(false);
-  const [sourcesOpen, setSourcesOpen] = useState(false);
   const workspaceSurfaceSelectionRef = useRef<
     ((selection: WorkspaceSurfaceSelection) => Promise<boolean>) | null
   >(null);
@@ -254,19 +232,6 @@ export default function WorldFoundationApp() {
       offFloat();
       worldRuntimeStore.stop();
     };
-  }, []);
-
-  useEffect(() => {
-    const open = () => setSourcesOpen(true);
-    window.addEventListener(WORLD_SOURCES_SETTINGS_EVENT, open);
-    return () => window.removeEventListener(WORLD_SOURCES_SETTINGS_EVENT, open);
-  }, []);
-
-  useEffect(() => {
-    const open = () => setOfficeMetricsOpen(true);
-    window.addEventListener(WORLD_OBSERVABILITY_SETTINGS_EVENT, open);
-    return () =>
-      window.removeEventListener(WORLD_OBSERVABILITY_SETTINGS_EVENT, open);
   }, []);
 
   useEffect(() => {
@@ -674,29 +639,6 @@ export default function WorldFoundationApp() {
       {mobile && view !== "spaces" && !canReturnToView && !zenActive ? (
         <WorldMobileNav view={view} onSelect={setView} />
       ) : null}
-      {sourcesOpen
-        ? createPortal(
-            <Suspense fallback={null}>
-              <SourcesDialog onClose={() => setSourcesOpen(false)} />
-            </Suspense>,
-            document.body,
-          )
-        : null}
-      {officeMetricsOpen
-        ? createPortal(
-            <Suspense fallback={null}>
-              <OfficeObservabilityDialog
-                onClose={() => setOfficeMetricsOpen(false)}
-                onSaved={() =>
-                  window.dispatchEvent(
-                    new Event(WORLD_OBSERVABILITY_UPDATED_EVENT),
-                  )
-                }
-              />
-            </Suspense>,
-            document.body,
-          )
-        : null}
     </div>
   );
 }
