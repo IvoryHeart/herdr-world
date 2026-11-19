@@ -4,7 +4,6 @@ import { createCoreInstall } from "../herdr-core/install";
 import { createSharedTerminalMarks } from "./terminal-mark-service";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
-import { join } from "node:path";
 import type { Server, ServerWebSocket } from "bun";
 import { createProfileServices } from "../agent/profile-service";
 import { createRuntimeAssistantContext } from "./assistant-context";
@@ -44,9 +43,7 @@ import { createSshProfileRuntimeConfig } from "../connections/ssh-profile-runtim
 import { bindListenerBeforeConnectionStart } from "../connections/startup";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
 import { createAuthHandlers } from "../http/auth";
-import { systemDetectEnvironment } from "../ide/providers";
-import { IdeService } from "../ide/service";
-import { fileIdeSettingsStore } from "../ide/settings";
+import { createWorldIde } from "../ide/world-ide";
 import {
   createHerdrSetupHandlers,
   herdrSetupGuardForProfile,
@@ -62,6 +59,7 @@ import {
 } from "../sources/http";
 import { CheckoutResolver } from "../sources/links";
 import { readSourceSecrets, writeSourceSecrets } from "../sources/secrets";
+import { runSourceProcess } from "../sources/process";
 import { SourcesService } from "../sources/service";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
@@ -694,22 +692,6 @@ async function compose(
 
   // Built-in sources (GitHub, Jira). On by default; each runs only while a
   // browser asks and keeps its credentials in private service storage.
-  const runSourceProcess = async (argv: string[], timeoutMs: number) => {
-    try {
-      return await runProcessWithCodeTimeout(argv, timeoutMs, {
-        env: {
-          ...process.env,
-          GH_PROMPT_DISABLED: "1",
-          GIT_TERMINAL_PROMPT: "0",
-          NO_COLOR: "1",
-        },
-      });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT")
-        return { code: 127, stdout: "", stderr: "" };
-      throw error;
-    }
-  };
   const worldSources = new SourcesService({
     settings: await settings
       .read()
@@ -760,42 +742,11 @@ async function compose(
     now: () => clock.now(),
     scheduler,
   });
-  // Installed web IDEs for the Code view; servers start only on an open.
-  let ideRevision = 0;
-  const ide = new IdeService({
-    settings: fileIdeSettingsStore(join(paths.root, "ide.json")),
-    environment: systemDetectEnvironment(),
-    connection: (connectionId) => {
-      const entry =
-        connectionProfiles.list().find((item) => item.id === connectionId) ??
-        connectionProfiles.coreList().find((item) => item.id === connectionId);
-      if (!entry) return null;
-      const sshDestination =
-        connectionId === STARTUP_DEFAULT_CONNECTION_ID && config.sshHost
-          ? config.sshHost
-          : entry.type === "ssh"
-            ? entry.ssh_destination
-            : undefined;
-      return {
-        id: entry.id,
-        label: entry.label,
-        type: sshDestination ? "ssh" : "local",
-        generation: entry.generation,
-        ...(sshDestination ? { sshDestination } : {}),
-        ...("remote_platform" in entry && entry.remote_platform === "windows"
-          ? { remotePlatform: "windows" as const }
-          : {}),
-      };
-    },
-    onChange: () => {
-      if (stopping) return;
-      broadcast(
-        JSON.stringify({
-          control: { type: "world_ide_changed", revision: ++ideRevision },
-        }),
-        "world-ide-changed",
-      );
-    },
+  const ide = createWorldIde({
+    root: paths.root,
+    sshHost: config.sshHost,
+    profiles: connectionProfiles,
+    notify: (message) => stopping || broadcast(message, "world-ide-changed"),
   });
   const rpcServices: RpcServices = {
     clock,

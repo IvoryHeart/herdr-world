@@ -36,6 +36,8 @@ export type IdeProviderStatus = IdeProviderInfo & {
 export type IdeStatus = {
   providers: IdeProviderStatus[];
   instances: IdeInstanceView[];
+  /** Connections on World's own computer: the ones Code can open here. */
+  localConnections: string[];
 };
 
 /** Why World won't start a server for this project, with the way forward. */
@@ -62,6 +64,8 @@ export type IdeServiceDeps = {
   environment: IdeDetectEnvironment;
   /** The current record of one connection, or null when it is gone. */
   connection(connectionId: string): IdeConnection | null;
+  /** Every connection ID, current; local ones are listed in status. */
+  connectionIds?(): string[];
   instances?: IdeInstances;
   now?: () => Date;
   /** Detection is a few `--version` calls; repeat at most this often. */
@@ -152,7 +156,16 @@ export class IdeService {
         };
       }),
     );
-    return { providers, instances: this.instances.list() };
+    const localConnections = (this.deps.connectionIds?.() ?? []).filter(
+      (id) => {
+        const connection = this.deps.connection(id);
+        return (
+          connection?.type === "local" &&
+          connection.remotePlatform !== "windows"
+        );
+      },
+    );
+    return { providers, instances: this.instances.list(), localConnections };
   }
 
   /**

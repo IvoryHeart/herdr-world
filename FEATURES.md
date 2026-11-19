@@ -1814,29 +1814,54 @@ to search.
   activation preserves a freshly verified OSC 8 target only at the same cells
   and frame.
 
-## Code view design preview
+## Code view
 
-Code is a proposal to show the user's installed real VS Code web workbench inside
-World, projecting the same hosts, rooms, projects, agents and terminals. IDEs fit
-the existing integrations direction: detect and enable per host, open per project,
-with desktop handoffs to VS Code, Cursor, JetBrains Gateway and Zed. The
-[research and recommendation](docs/design/code-view/research.md) compare Microsoft
-`code serve-web`, OpenVSCode and code-server, marketplace/settings differences,
-licence, origin/authentication, SSH, terminal and resource hurdles. The
-[design walkthrough](docs/design/code-view/design.md) gives exact preview clicks.
-No live editor, server, extension, installer, proxy or navigation is delivered.
+**Code** (`/code`, beside Town, Board and Desk) shows your own installed VS Code
+for one project, inside World, with that project's agents and terminals beside
+it. World runs the IDE you already have, so your extensions, settings and
+profile apply; it never installs or updates one.
 
-Open **`/code-view-prototype.html`** on your World/preview origin. The standalone
-**DESIGN STUDY / 981** uses a clearly labelled VS Code **stand-in**, an IDE picker
-and an **Open in desktop IDE** handoff preview. All data/actions are synthetic;
-nothing installs, connects, saves, executes or launches an app. **Block embedding
-(mock)**, **Disconnect host (mock)** and the SSH host's missing-provider fixture
-expose failure states; **Mark installed (mock)** only changes fixture state.
-**Attach profile (mock)** demonstrates existing agent terminals; Herdr TUI requires
-acknowledging that attach resizes the pane for every viewer. The mock presents
-the desktop workbench in World's frame. **Reset study** clears memory-only state.
-Real embedding remains gated on upstream terms, same-origin/worker/webview compatibility and
-explicit trust in full shell/write and same-origin extension authority.
+- **Integrations.** World looks for Visual Studio Code (`code serve-web`, via
+  the `code-tunnel` program or the standalone `code` CLI), code-server and
+  OpenVSCode Server on its own computer. Each row says **Installed**, **Not
+  installed**, **Not found** (a set path that is gone) or **Can't run**. A
+  missing one offers **Connect: get …** (its download page) and **Use a program
+  path…** (an absolute path to an executable). The same rows are in Settings →
+  Integrations, where the refresh button looks again.
+- **Enable gate.** **Enable…** opens a dialog that says the IDE and its
+  extensions get full access to this computer and to World (it runs on World's
+  page and address), where content comes from (Microsoft's servers for VS Code:
+  webviews from vscode-cdn.net, the Marketplace, Settings Sync and sign-in;
+  Open VSX otherwise), and, on a plain HTTP LAN address, that webviews, previews
+  and the clipboard need HTTPS or localhost. **Enable** stays off until the
+  trust box and, for VS Code, the box accepting its server licence terms and
+  privacy statement are both ticked. Nothing starts on enable.
+- **Projects.** A project is a room's folder (its checkout, else its working
+  directory) or the folder of an agent outside every room, per connection; the
+  same folder on two connections is two projects. The picker groups them by
+  host and remembers the choice. The rail lists the project's agents (status,
+  Needs you first in colour) and terminals: an agent opens on its Chat, a
+  terminal in the Inspector.
+- **Open.** **Open in Visual Studio Code** starts one server for that project
+  folder; the next visit reuses it. The first VS Code start downloads its web
+  server (about a minute, shown). The workbench is framed from
+  `/ide/<id>/` on World's own origin, behind World's sign-in; World's own
+  Content Security Policy is unchanged and the IDE keeps its own. **New tab**
+  opens the same address; **Stop** (after a confirmation) ends that server.
+  Switching projects keeps a loaded workbench in memory, hidden.
+- **Limits and refusals.** At most four servers run at once; a fifth is
+  refused (**Too many IDEs are running**). A start that does not answer within
+  three minutes fails; a server that exits shows its last error line. Both
+  offer **Try again**. A
+  stale connection must reconnect first. Projects over SSH are not run in the
+  browser: **Open in desktop VS Code…** gives a `code --remote ssh-remote+…`
+  command to copy and a `vscode://` link for desktop VS Code with Remote - SSH.
+  Windows hosts and folders that are gone are refused. Servers stop with World,
+  on disable, and when their connection is removed.
+- **Preview states.** For trying the screens without an IDE, add
+  `?ideFixture=missing`, `detected`, `ssh`, `downloading` or `failed` to a
+  World address; World removes it at once and shows synthetic integration state
+  until the next reload.
 
 ## Workspace Inspector
 

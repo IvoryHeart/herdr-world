@@ -64,6 +64,12 @@ import { MobileSheetHandle } from "./MobileSheetHandle";
 import "./ConfigMenu.css";
 import "./ConfigurationDialog.css";
 
+// The IDE rows share the Code view's chunk: one lazy load, no extra files.
+const IdeIntegrationsSettings = lazyWithReload("ide-settings", () =>
+  import("../world/code/CodeView").then((module) => ({
+    default: module.IdeIntegrationsSettings,
+  })),
+);
 const ShortcutLookupDialog = lazyWithReload("keyboard-shortcuts", () =>
   import("./ShortcutLookupDialog").then((module) => ({
     default: module.ShortcutLookupDialog,
@@ -698,6 +704,11 @@ export function ConfigurationDialog({
                   connectionLabel={s.connectionLabel}
                   sshDestination={s.sshDestination}
                 />
+              ) : null}
+              {tab === "Integrations" ? (
+                <Suspense fallback={null}>
+                  <IdeIntegrationsSettings />
+                </Suspense>
               ) : null}
             </section>
           </div>

@@ -92,6 +92,18 @@ re-list. [Catalogue acquisition](../store/catalogue.ts) coalesces global notices
 and retries failed reads without a standing successful timer. Hidden pages keep
 Herdr event refreshes; return-to-page observes every held owner.
 
+## Code
+
+[CodeView.tsx](code/CodeView.tsx) follows the Hosts filter. Projects come from
+[codeProjects.ts](code/codeProjects.ts): rooms' reported folders and agents'
+folders, keyed by connection and folder, never a scan. Opening sends the
+project's connection ID and runtime generation; the service refuses a stale
+generation rather than choosing another connection. Only `/ide/<id>/`
+addresses from [ideClient.ts](code/ideClient.ts) are framed. The integration
+rows and enable gate ([IdeProviders.tsx](code/IdeProviders.tsx)) are shared
+with Settings and load in the Code chunk. `?ideFixture=` swaps in the synthetic
+client. Test: [CodeView.browser.test.ts](code/CodeView.browser.test.ts).
+
 ## Desk
 
 Desk follows the aggregate host filter. Receipt and screen reads capture each leaf's

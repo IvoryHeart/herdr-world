@@ -126,6 +126,8 @@ export default defineConfig(({ mode }) => {
         "/api": { target: "http://127.0.0.1:8788" },
         // Installation metadata is instance-specific, including in development.
         "/manifest.json": { target: "http://127.0.0.1:8788" },
+        // Code view: installed IDEs World proxies under /ide/<instance>/.
+        "/ide/": { target: "http://127.0.0.1:8788", ws: true },
         // Let an unauthenticated dev client reach the bridge login page instead
         // of repeatedly loading the Vite SPA at /login and redirecting again.
         "/login": { target: "http://127.0.0.1:8788" },

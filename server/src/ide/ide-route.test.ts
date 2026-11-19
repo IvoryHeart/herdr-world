@@ -79,6 +79,8 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
       version: "1.99.0",
     });
     expect(vscode.enabled).toBe(false);
+    // The local connection is one Code can open on this computer.
+    expect(status.localConnections).toEqual([connection.id]);
 
     const open = {
       provider: "vscode",
