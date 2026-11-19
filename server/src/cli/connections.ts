@@ -11,6 +11,10 @@ import {
   type PersistedConnectionRegistry,
   validateConnectionProfile,
 } from "../connections/profiles";
+import {
+  applyLiveConnectionChange,
+  supportsLiveConnectionChanges,
+} from "./connection-service";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
 import { HerdrClient } from "../bridge/herdr-client";
 import { detectHerdrSetup } from "../herdr/bootstrap";
@@ -40,6 +44,7 @@ import {
 export interface ConnectionsDependencies {
   probe?: ListenerProbe;
   test?: typeof testConnectionProfile;
+  apply?: typeof applyLiveConnectionChange;
   /** Whether this computer has the Herdr TUI; `herdr status`'s detection. */
   herdrInstalled?: (implicit: StartupLocalProfile) => Promise<boolean>;
 }
@@ -60,9 +65,9 @@ Usage:
 
 Common add options:
   --label <text>     display name (default: the id)
-  --auto-connect     connect when Herdr World starts
+  --auto-connect     connect at startup and at once on a running World
   --default          make it the default connection
-  --restart          see below
+  --restart          also restart the managed service after applying the change
 
 SSH add options:
   --remote-control-socket <path>, --remote-client-socket <path>
@@ -79,13 +84,16 @@ herdr-core add options:
                      as the default; without the Herdr TUI, core is the
                      default and no Local profile is saved.
 
-The profiles are the same ones the connection selector edits. A running
-Herdr World keeps its own copy and would overwrite a change made here, so edits
-are refused while it serves; with --restart a running managed service is
-restarted to load the change. Only the address in the service config is
-checked: stop any other herdr-world process that shares this registry, such as
-a foreground run on another port, before editing here. SSH tests need a
-running remote Herdr and non-interactive SSH authentication.
+The profiles are the same ones the connection selector edits. While World serves,
+it admits these changes live: auto-connect profiles connect, removed profiles
+disconnect, and the default changes without restarting other connections or
+browser sessions. On loopback, --restart remains available but is no longer needed.
+A service bound to one non-loopback address needs --restart to save and restart;
+stop a foreground process on that address before editing.
+With no listener answering, edits are saved for the next start. Only the address
+in the service config is checked: stop any other herdr-world process sharing
+this registry on another port before editing here. SSH tests need a running
+remote Herdr and non-interactive SSH authentication.
 `;
 }
 
@@ -146,39 +154,25 @@ function describe(profile: ManagedConnectionProfile): string {
   return `ssh    ${profile.ssh_destination}${remote}`;
 }
 
-/** Refuse to write while a Herdr World listener holds its own copy of the registry. */
-async function guardRunningServer(
+function finishEdit(
   context: CliContext,
-  setup: ServiceSetup,
+  action: string,
+  id: string,
   restart: boolean,
-  probe: ListenerProbe,
-): Promise<"write" | "write-and-restart" | number> {
-  if (!(await probe(readServiceAccess(setup)))) return "write";
-  let active = false;
-  try {
-    active = serviceStatus(context).active;
-  } catch {
-    // Unsupported platform: only a foreground process can be serving.
+): number {
+  context.log(
+    action === "add"
+      ? `Added connection ${id}.`
+      : action === "remove"
+        ? `Removed connection ${id}.`
+        : `Default connection is now ${id}.`,
+  );
+  if (restart) {
+    const code = restartRunningService(context);
+    if (code === 0) context.log("Restarted the service.");
+    return code ?? EXIT_OK;
   }
-  if (!active) {
-    context.error(
-      "herdr-world connections: a herdr-world process is serving and would overwrite this change.",
-    );
-    context.error(
-      "Use the connection selector in the web UI, or stop that process first.",
-    );
-    return EXIT_FAILURE;
-  }
-  if (!restart) {
-    context.error(
-      "herdr-world connections: the running service keeps its own copy of the profiles and would overwrite this change.",
-    );
-    context.error(
-      "Use the connection selector in the web UI, or rerun with --restart to restart the service.",
-    );
-    return EXIT_FAILURE;
-  }
-  return "write-and-restart";
+  return EXIT_OK;
 }
 
 function profileFromFlags(
@@ -299,6 +293,80 @@ export function createConnectionsCommand(
       const store = new ConnectionProfileStore({
         path: connectionRegistryPath(context.runtime, setup.env),
       });
+      let edit:
+        | {
+            id: string;
+            values: Record<string, string | boolean | undefined>;
+            profile?: ConnectionProfile;
+          }
+        | undefined;
+      let restartAfterSave = false;
+      if (action === "add" || action === "remove" || action === "set-default") {
+        const { values, positionals } =
+          action === "add"
+            ? parseCommandArgs(rest, ADD_OPTIONS, 1)
+            : parseCommandArgs(rest, { restart: { type: "boolean" } }, 1);
+        const id = positionals[0];
+        if (!id)
+          throw new UsageError(`connections ${action} needs a connection id`);
+        let profile: ConnectionProfile | undefined;
+        if (action === "add") {
+          try {
+            profile = profileFromFlags(id, values);
+          } catch (error) {
+            if (error instanceof UsageError) throw error;
+            throw new UsageError((error as Error).message, { cause: error });
+          }
+        }
+        edit = { id, values, profile };
+        // Do not load, validate against, or save a CLI snapshot while the service
+        // owns the registry. Settings and CLI mutations share its admission queue.
+        const serving = await probe(readServiceAccess(setup));
+        if (serving && supportsLiveConnectionChanges(setup)) {
+          try {
+            const reply = await (
+              dependencies.apply ?? applyLiveConnectionChange
+            )(context, setup, action, {
+              registry_path: store.path,
+              id,
+              profile,
+              default: edit.values.default === true,
+            });
+            if (!reply.ok) {
+              if (reply.code === "usage")
+                throw new UsageError(
+                  reply.error ?? "connection change refused",
+                );
+              throw new Error(reply.error ?? "connection change refused");
+            }
+          } catch (error) {
+            if (error instanceof UsageError) throw error;
+            context.error(
+              `herdr-world connections: ${(error as Error).message}. No offline write was attempted; check the live catalogue before retrying.`,
+            );
+            return EXIT_FAILURE;
+          }
+          return finishEdit(context, action, id, values.restart === true);
+        }
+        if (serving) {
+          // Native live admission is loopback-only. Preserve the existing
+          // save-and-restart path for a managed, specifically bound listener.
+          let managed = false;
+          try {
+            const status = serviceStatus(context);
+            managed = status.installed && status.active;
+          } catch {
+            /* foreground-only platform */
+          }
+          if (!managed || values.restart !== true) {
+            context.error(
+              "herdr-world connections: live edits need loopback. Use --restart for a running managed service, or stop the foreground process first; the registry was not changed.",
+            );
+            return EXIT_FAILURE;
+          }
+          restartAfterSave = true;
+        }
+      }
       const registry = store.load();
       // Copy: the explicit default is listed but must never reach a save.
       const profiles: ManagedConnectionProfile[] = registry
@@ -396,27 +464,10 @@ export function createConnectionsCommand(
       }
 
       if (action === "add" || action === "remove" || action === "set-default") {
-        const { values, positionals } =
-          action === "add"
-            ? parseCommandArgs(rest, ADD_OPTIONS, 1)
-            : parseCommandArgs(rest, { restart: { type: "boolean" } }, 1);
-        const id = positionals[0];
-        if (!id)
-          throw new UsageError(`connections ${action} needs a connection id`);
-        const flagValues = values as Record<
-          string,
-          string | boolean | undefined
-        >;
-
+        const { id, values: flagValues } = edit!;
         let next: PersistedConnectionRegistry | null;
         if (action === "add") {
-          let profile: ConnectionProfile;
-          try {
-            profile = profileFromFlags(id, flagValues);
-          } catch (error) {
-            if (error instanceof UsageError) throw error;
-            throw new UsageError((error as Error).message, { cause: error });
-          }
+          const profile = edit!.profile!;
           if (profiles.some((entry) => entry.id === id))
             throw new UsageError(`connection already exists: ${id}`);
           if (registry) {
@@ -514,28 +565,9 @@ export function createConnectionsCommand(
           }
         }
 
-        const decision = await guardRunningServer(
-          context,
-          setup,
-          flagValues.restart === true,
-          probe,
-        );
-        if (typeof decision === "number") return decision;
         if (next) await store.save(next);
         else await store.clear();
-        context.log(
-          action === "add"
-            ? `Added connection ${id}.`
-            : action === "remove"
-              ? `Removed connection ${id}.`
-              : `Default connection is now ${id}.`,
-        );
-        if (decision === "write-and-restart") {
-          const code = restartRunningService(context);
-          if (code === 0) context.log("Restarted the service.");
-          return code ?? EXIT_OK;
-        }
-        return EXIT_OK;
+        return finishEdit(context, action, id, restartAfterSave);
       }
 
       throw new UsageError(`unknown connections action: ${action}`);

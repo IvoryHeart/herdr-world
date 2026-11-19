@@ -25,6 +25,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Agent bin and scheduled close | [Contract](../openspec/specs/world-effects/spec.md) | [Source](../shared/bin.ts) | [Tests](../server/src/world/bin.test.ts) |
 | Runtime adapter registry | [Contract](../openspec/specs/world-adapters/spec.md) | [Source](../server/src/adapters/registry.ts) | [Tests](../server/src/adapters/conformance.test.ts) |
 | Connection profiles and leases | [Contract](../openspec/specs/runtime-federation/spec.md) | [Source](../server/src/connections/manager.ts) | [Tests](../server/src/connections/manager.test.ts) |
+| Live connection CLI | [Contract](../openspec/specs/runtime-federation/spec.md#scenario-cli-edits-connections-while-world-serves) | [Source](../server/src/cli/connections.ts) | [Tests](../server/src/service/connections-cli.test.ts) |
 | Browser access and HTTP resources | [Contract](../openspec/specs/bridge-access/spec.md) | [Source](../server/src/index.ts) | [Tests](../server/src/service/world-service.test.ts) |
 | Verb admission and actor policy | [Contract](../openspec/specs/bridge-access/spec.md) | [Source](../server/src/verbs/registry.ts) | [Tests](../server/src/verbs/policy.test.ts) |
 | Protocol/identity planning | [Contract](../openspec/changes/world-protocol-identity/design.md) | [Source](../server/src/world/snapshot.ts) | [Tests](../server/src/service/observation-v1.test.ts) |

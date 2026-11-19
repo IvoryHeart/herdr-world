@@ -18,10 +18,6 @@ Saved connections and their chosen default stay as they are. When the TUI is
 installed, first run keeps its existing local discovery; add core in **Manage
 connections** if wanted.
 
-CLI connection edits (`connections add`, `remove` and `set-default`) need
-`--restart` while the managed World service runs. World saves the change and
-restarts that service to load it. Stop a foreground World process before editing
-its registry, or use **Manage connections** for changes while World stays open.
 `service uninstall` removes current and legacy World user services on macOS and
 Linux when their definitions identify them as World-owned. It preserves settings,
 tokens, unrelated services and herdr-core's login item.
@@ -2192,6 +2188,18 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   exists, otherwise on the service's default; phones still open on Town.
   Disconnect does not stop Herdr/workspaces. A Linux/macOS World service can reach Unix or Windows SSH hosts;
   a Windows World service supports local profiles. See [connection setup](docs/DEPLOYMENT.md#local-and-ssh-connections).
+- **CLI connection changes apply immediately.** `herdr-world connections add`,
+  `remove` and `set-default` apply through the running service on loopback, in
+  the same queue as **Manage connections**, retaining concurrent Settings edits.
+  Auto-connect additions connect at once; removal retires only that host's
+  runtime and open contexts. Other connections and browser sessions stay open.
+  Choose another default before removing the current one; explicit service
+  Herdr settings still pin the process default. `--restart` remains optional
+  on loopback. A managed service bound to one non-loopback address still needs
+  `--restart` to save and restart; stop a foreground process there before editing.
+  With no listener answering, edits are saved for the next start, including when
+  a managed service is starting or unreachable. Validation errors exit 2;
+  persistence and service failures exit 1, without an offline retry of a live edit.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
 - **herdr-core connections.** Open **Hosts → Manage connections → Add

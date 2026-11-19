@@ -75,6 +75,15 @@ async function command(method: string, params: any): Promise<unknown> {
       value: page,
     });
     globalThis.WebSocket = class extends NativeSocket {
+      constructor(url: string | URL, protocols?: string | string[]) {
+        // Bun's native socket accepts handshake headers for authenticated fixtures.
+        super(
+          url,
+          params.cookie
+            ? ({ headers: { cookie: params.cookie } } as unknown as string[])
+            : protocols,
+        );
+      }
       override send(data: Parameters<WebSocket["send"]>[0]) {
         if (typeof data === "string") requests.push(JSON.parse(data));
         super.send(data);
@@ -85,7 +94,9 @@ async function command(method: string, params: any): Promise<unknown> {
       // Update discovery is outside this contract and must not contact a registry.
       if (url.pathname === "/api/update/check")
         return Promise.resolve(Response.json({ update_available: false }));
-      return nativeFetch(url, init);
+      const headers = new Headers(init?.headers);
+      if (params.cookie) headers.set("cookie", params.cookie);
+      return nativeFetch(url, { ...init, headers });
     }) as typeof fetch;
     clock.install();
     store.init();
