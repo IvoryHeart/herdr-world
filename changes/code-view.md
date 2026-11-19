@@ -14,7 +14,9 @@
   and program path when not, and a trust and licence dialog before first
   enable. World starts a server only when you click Open, reuses it per
   project folder, and stops it on Stop, disable, shutdown, or when its
-  connection reconnects or changes. code-server's port proxies are off.
+  connection reconnects or changes, ending its whole process tree (server,
+  extension hosts, terminal shells) on World's computer or the SSH host.
+  code-server's port proxies are off.
 
 ### Removed
 

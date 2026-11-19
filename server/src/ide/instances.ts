@@ -7,6 +7,7 @@ import {
   ideServerArgs,
   ideUsesConnectionToken,
 } from "./providers";
+import { listProcesses, ownedProcesses, signalProcesses } from "./process-tree";
 import { remoteExitReason, sshIdeArgv } from "./remote";
 import { IDE_TOKEN_COOKIE, type IdeUpstream, ideBasePath } from "./proxy";
 
@@ -51,8 +52,19 @@ type Instance = IdeInstanceView & {
 export type IdeChild = {
   pid: number;
   exited: Promise<number | null>;
-  /** Signal the whole process group. */
+  /**
+   * Signal everything it owns: its process group and every process
+   * descended from it, including ones that left the group or whose parent
+   * already exited.
+   */
   kill(signal: NodeJS.Signals): void;
+  /** How many of the processes it owns still run; absent means none past `exited`. */
+  running?(): number;
+  /**
+   * End its stdin. An ssh-launched server then stops its whole tree on the
+   * host, with its own escalation, and ssh exits once that is done.
+   */
+  endInput?(): void;
 };
 
 export type IdeSpawn = (options: {
@@ -86,6 +98,13 @@ export class IdeLimitError extends Error {}
 const DEFAULT_START_TIMEOUT_MS = 180_000;
 const DEFAULT_MAX_INSTANCES = 4;
 const KILL_GRACE_MS = 3_000;
+/** After SIGKILL: how long to keep sweeping for stragglers. */
+const KILL_SWEEP_MS = 1_000;
+/**
+ * The host's own stop: REMOTE_STOP_GRACE_MS for SIGTERM, then SIGKILL,
+ * plus the time for ssh to see the session end.
+ */
+const REMOTE_STOP_WAIT_MS = 9_000;
 const MAX_OUTPUT_LINES = 20;
 
 export function systemIdeSpawn(environment = process.env): IdeSpawn {
@@ -101,12 +120,21 @@ export function systemIdeSpawn(environment = process.env): IdeSpawn {
     } as Parameters<typeof Bun.spawn>[1]);
     for (const stream of [child.stdout, child.stderr])
       void readLines(stream as ReadableStream<Uint8Array>, onOutput);
-    if (stdin !== undefined) {
+    const sink =
+      stdin === undefined ? null : (child.stdin as import("bun").FileSink);
+    if (sink) {
       // Kept open: an ssh-launched server stops when its input ends.
-      const sink = child.stdin as import("bun").FileSink;
-      sink.write(stdin);
+      sink.write(stdin ?? "");
       void sink.flush();
     }
+    // Every process seen in its tree, kept until it is gone: a shell whose
+    // parent exited is re-parented and no longer looks like a descendant.
+    let owned: number[] = [child.pid];
+    const collect = () => {
+      const rows = listProcesses();
+      if (rows) owned = ownedProcesses(rows, [child.pid, ...owned], child.pid);
+      return owned;
+    };
     return {
       pid: child.pid,
       exited: child.exited.then(
@@ -114,6 +142,7 @@ export function systemIdeSpawn(environment = process.env): IdeSpawn {
         () => null,
       ),
       kill(signal) {
+        const pids = collect();
         try {
           process.kill(-child.pid, signal);
         } catch {
@@ -122,6 +151,15 @@ export function systemIdeSpawn(environment = process.env): IdeSpawn {
           } catch {
             // Already gone.
           }
+        }
+        signalProcesses(pids, signal);
+      },
+      running: () => collect().length,
+      endInput() {
+        try {
+          void sink?.end();
+        } catch {
+          // Already closed.
         }
       },
     };
@@ -420,12 +458,7 @@ export class IdeInstances {
     instance.stopping = true;
     const child = instance.child;
     instance.child = null;
-    if (child) {
-      child.kill("SIGTERM");
-      const timer = setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS);
-      await child.exited;
-      clearTimeout(timer);
-    }
+    if (child) await terminate(child, Boolean(instance.sshDestination));
     this.discard(instance);
     if (notify) this.onChange();
   }
@@ -448,6 +481,46 @@ export class IdeInstances {
   stopAll() {
     return this.stopWhere(() => true);
   }
+}
+
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Waits up to `ms` for the child to exit and every process it owns to be
+ * gone. Real time: stopping must not depend on an injected clock.
+ */
+async function settled(child: IdeChild, ms: number) {
+  let exited = false;
+  void child.exited.then(() => {
+    exited = true;
+  });
+  const end = Date.now() + ms;
+  for (;;) {
+    await Promise.race([child.exited, delay(100)]);
+    if (exited && !(child.running?.() ?? 0)) return true;
+    if (Date.now() >= end) return false;
+    if (exited) await delay(100);
+  }
+}
+
+/**
+ * Stops everything a server World started owns, with bounded escalation.
+ * One over SSH first gets end of input, so the host stops the server's
+ * whole tree itself (remote.ts); World only signals its ssh if the host
+ * doesn't finish in time, and the host still cleans up when ssh ends.
+ */
+async function terminate(child: IdeChild, remote: boolean) {
+  if (remote && child.endInput) {
+    child.endInput();
+    if (await settled(child, REMOTE_STOP_WAIT_MS)) return;
+  }
+  child.kill("SIGTERM");
+  if (await settled(child, KILL_GRACE_MS)) return;
+  child.kill("SIGKILL");
+  if (await settled(child, KILL_SWEEP_MS)) return;
+  child.kill("SIGKILL");
+  await child.exited;
 }
 
 function view(instance: Instance): IdeInstanceView {

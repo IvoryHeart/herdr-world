@@ -19,6 +19,10 @@ import {
   remoteRuntimeDir,
   sshIdeArgv,
 } from "./remote";
+import {
+  type ProcessTreeStandIn,
+  processTreeStandIn,
+} from "./testing/process-tree-stand-in";
 
 /**
  * The scripts an SSH host runs for the Code view, run here under the local
@@ -26,7 +30,9 @@ import {
  * transport (ssh) is left out.
  */
 const dirs: string[] = [];
+const standIns: ProcessTreeStandIn[] = [];
 afterEach(() => {
+  for (const standIn of standIns.splice(0)) standIn.cleanup();
   for (const dir of dirs.splice(0))
     rmSync(dir, { recursive: true, force: true });
 });
@@ -218,4 +224,66 @@ test("a folder someone else made first is refused", async () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+/** Runs the launch script with a VS Code-shaped process tree as the IDE. */
+async function launchStandIn(options: { launcherExits?: boolean } = {}) {
+  const top = scratch();
+  const standIn = processTreeStandIn(top, options);
+  standIns.push(standIn);
+  const remoteId = `test${crypto.randomUUID().replaceAll("-", "")}`;
+  const child = Bun.spawn(
+    [
+      "sh",
+      "-c",
+      remoteLaunchScript(
+        {
+          destination: "devbox",
+          provider: "code-server",
+          binary: standIn.launcher,
+          basePath: "/ide/AAAAAAAAAAAAAAAAAAAAAA",
+          folder: top,
+          localSocket: join(top, "ide.sock"),
+          remoteId,
+          token: null,
+        },
+        600,
+      ),
+    ],
+    {
+      env: { PATH: "/usr/bin:/bin", HOME: top },
+      stdin: "pipe",
+      stdout: "ignore",
+      stderr: "ignore",
+    },
+  );
+  return { child, standIn, dir: remoteRuntimeDir(remoteId) };
+}
+
+const within = (exited: Promise<number>, ms: number) =>
+  Promise.race([exited, Bun.sleep(ms).then(() => "hung" as const)]);
+
+for (const how of ["end of input", "a signal"] as const)
+  test(`on ${how} the host ends the server's whole process tree, escalating to SIGKILL`, async () => {
+    const { child, standIn, dir } = await launchStandIn();
+    const pids = await standIn.started();
+    expect(new Set(Object.values(pids)).size).toBe(3);
+    expect(standIn.survivors()).toHaveLength(3);
+
+    if (how === "end of input") child.stdin.end();
+    else child.kill("SIGTERM");
+    // 600 ms of SIGTERM grace, then SIGKILL and a sweep.
+    const code = await within(child.exited, 5_000);
+    expect(code).not.toBe("hung");
+    expect(standIn.survivors()).toEqual([]);
+    expect(existsSync(dir)).toBe(false);
+  });
+
+test("a server left behind by a launcher that exited on its own is ended too", async () => {
+  const { child, standIn, dir } = await launchStandIn({ launcherExits: true });
+  await standIn.started();
+  const code = await within(child.exited, 5_000);
+  expect(code).not.toBe("hung");
+  expect(standIn.survivors()).toEqual([]);
+  expect(existsSync(dir)).toBe(false);
 });

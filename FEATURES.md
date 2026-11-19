@@ -1901,7 +1901,12 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   Windows hosts and folders that are gone are refused. Servers stop with
   World, on disable, and when their connection reconnects, changes SSH
   destination or is removed: the route and its open WebSockets close, and
-  **Open** starts a new server.
+  **Open** starts a new server. Stopping ends everything that server started,
+  on World's computer or the SSH host: VS Code's launcher, its separate
+  server, extension hosts and terminal shells (even ones in their own
+  session). They get SIGTERM, then SIGKILL after a few seconds; for SSH the
+  host does this itself when the session's input ends, and also when the
+  server exits on its own. Other IDE servers and Herdr agents are untouched.
 - **Preview states.** For trying the screens without an IDE, add
   `?ideFixture=missing`, `detected`, `ssh` (starting on an SSH host),
   `downloading` or `failed` to a World address; World removes it at once and

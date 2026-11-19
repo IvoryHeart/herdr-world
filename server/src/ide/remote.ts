@@ -27,6 +27,15 @@ import {
  * on stdin, never on a command line other users could read. World keeps
  * stdin open: when its ssh ends for any reason, the host sees end of input
  * and stops the server, and the folder is removed.
+ *
+ * Stopping ends everything the launch started, not only the program it ran:
+ * `code serve-web` starts a separate server, which starts extension hosts
+ * and terminal shells (in sessions of their own). The program starts in a
+ * process group of its own where the host can (`setsid`, else Perl's
+ * `setpgrp`); on stop the script walks the process table for that group
+ * and every descendant, keeps each process it has seen, sends SIGTERM,
+ * waits up to REMOTE_STOP_GRACE_MS, then SIGKILL and a last sweep. The
+ * same cleanup runs when the program exits on its own.
  */
 
 /**
@@ -139,8 +148,34 @@ export type SshIdeLaunch = {
   token: string | null;
 };
 
+/** How long the host lets the server's processes stop after SIGTERM. */
+export const REMOTE_STOP_GRACE_MS = 5_000;
+
+/**
+ * Prints the running (not exited) processes among the PIDs in $1, the
+ * members of process group $2 (if set) and all their descendants.
+ */
+const OWNED_FUNCTION = [
+  "owned() {",
+  '  ps -A -o pid= -o ppid= -o pgid= -o stat= 2>/dev/null | awk -v roots="$1" -v group="$2" \'',
+  "    { pid[NR] = $1; parent[NR] = $2; grp[NR] = $3; dead[NR] = ($4 ~ /^Z/); n = NR }",
+  "    END {",
+  '      k = split(roots, r, " "); for (i = 1; i <= k; i++) want[r[i]] = 1',
+  '      for (i = 1; i <= n; i++) if (group != "" && grp[i] == group) want[pid[i]] = 1',
+  "      do { more = 0",
+  "        for (i = 1; i <= n; i++) if (!(pid[i] in want) && (parent[i] in want)) { want[pid[i]] = 1; more = 1 }",
+  "      } while (more)",
+  '      for (i = 1; i <= n; i++) if ((pid[i] in want) && !dead[i] && pid[i] > 1) printf "%s ", pid[i]',
+  "    }'",
+  "}",
+].join("\n");
+
 /** The launch script the host runs under `sh`. */
-export function remoteLaunchScript(launch: SshIdeLaunch) {
+export function remoteLaunchScript(
+  launch: SshIdeLaunch,
+  /** Tests shorten the host's SIGTERM grace. */
+  stopGraceMs = REMOTE_STOP_GRACE_MS,
+) {
   const dir = remoteRuntimeDir(launch.remoteId);
   const { args } = ideServerArgs(launch.provider, {
     basePath: launch.basePath,
@@ -149,6 +184,7 @@ export function remoteLaunchScript(launch: SshIdeLaunch) {
     folder: launch.folder,
   });
   const command = [launch.binary, ...args].map(shQuote).join(" ");
+  const rounds = Math.max(1, Math.ceil(stopGraceMs / 200));
   return [
     "umask 077",
     REMOTE_PATH,
@@ -164,14 +200,42 @@ export function remoteLaunchScript(launch: SshIdeLaunch) {
         ]
       : []),
     `cd ${shQuote(launch.folder)} || exit ${REMOTE_EXIT.folder}`,
+    OWNED_FUNCTION,
+    "nap() { sleep 0.2 2>/dev/null || sleep 1; }",
+    // Everything the launch owns: TERM, a bounded wait, KILL, a last sweep.
+    // `s` keeps every process seen, so re-parented shells stay in it.
+    "stop() {",
+    "  trap '' HUP INT TERM",
+    '  s=$(owned "$p $w" "$g")',
+    '  [ -n "$s" ] && kill -TERM $s 2>/dev/null',
+    "  i=0",
+    `  while [ -n "$s" ] && [ $i -lt ${rounds} ]; do nap; i=$((i + 1)); s=$(owned "$s" "$g"); done`,
+    '  if [ -n "$s" ]; then kill -KILL $s 2>/dev/null; nap; s=$(owned "$s" "$g"); [ -n "$s" ] && kill -KILL $s 2>/dev/null; fi',
+    '  wait "$p" 2>/dev/null',
+    "}",
     // Background lists read /dev/null unless told otherwise: keep World's
     // stdin on fd 3 for the watcher, which stops the server once it ends.
     "exec 3<&0",
-    `${command} </dev/null 1>&2 &`,
+    "g= w=",
+    // A process group of its own, so its descendants stay findable after
+    // the program exits. `setsid` doesn't fork here: a background job is
+    // never a group leader.
+    "if command -v setsid >/dev/null 2>&1; then set -- setsid",
+    "elif command -v perl >/dev/null 2>&1; then set -- perl -e 'setpgrp(0, 0); exec { $ARGV[0] } @ARGV or exit 127'",
+    "else set --; fi",
+    `"$@" ${command} 3<&- </dev/null 1>&2 &`,
     "p=$!",
-    "trap 'kill \"$p\" 2>/dev/null; exit 143' HUP INT TERM",
-    `(cat <&3 >/dev/null; kill "$p" 2>/dev/null) &`,
+    "[ $# -gt 0 ] && g=$p",
+    "trap 'stop; exit 143' HUP INT TERM",
+    // End of World's input tells the script itself to stop. No output: the
+    // watcher must not hold the session open after the script exits.
+    `(cat <&3; kill -TERM $$) >/dev/null 2>&1 &`,
+    "w=$!",
+    "exec 3<&-",
     'wait "$p"',
+    "c=$?",
+    "stop",
+    'exit "$c"',
   ].join("\n");
 }
 
