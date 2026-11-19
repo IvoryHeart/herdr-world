@@ -487,6 +487,39 @@ export const rpcVerbs = [
   rpc("world.desk.open", "reconcilable", "world"),
   rpc("world.desk.review", "reconcilable", "world"),
   rpc("world.focused.observe", "reconcilable", "world"),
+  rpc(
+    "world.ide.list",
+    "read",
+    "world",
+    Type.Object({}, { additionalProperties: false }),
+  ),
+  rpc(
+    "world.ide.default",
+    "reconcilable",
+    "world",
+    Type.Object(
+      { ide: Type.Union([Type.String(), Type.Null()]) },
+      { additionalProperties: false },
+    ),
+  ),
+  rpc(
+    "world.ide.open",
+    "opaque",
+    "world",
+    Type.Object(
+      {
+        ide: Type.Optional(Type.String()),
+        connection_id: text,
+        connection_generation: Type.Integer({ minimum: 0 }),
+        workspace_id: text,
+        path: Type.Optional(Type.String({ maxLength: 4096 })),
+        scope: Type.Optional(Type.Literal("filesystem")),
+        line: Type.Optional(Type.Integer({ minimum: 1, maximum: 10_000_000 })),
+        agent_worktree: Type.Optional(Type.Unknown()),
+      },
+      { additionalProperties: false },
+    ),
+  ),
   // World's skill per harness on the service's host; browser (operator) only.
   rpc(
     "world.integration.install",

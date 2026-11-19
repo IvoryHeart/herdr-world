@@ -37,6 +37,11 @@ export type RpcServices = {
   clock: import("../service/ports").Clock;
   bindings?: import("../storage/world-bindings").WorldBindings;
   serviceIncarnation?: string;
+  /** Test seam: read-only discovery and desktop launch on the World host. */
+  desktopIdeRuntime?: {
+    detect: typeof import("../integrations/desktop-ides").detectDesktopIdes;
+    launch: typeof import("../integrations/desktop-ides").launchDesktopIde;
+  };
   /** Test seam: the environment World's harness skills resolve against. */
   worldIntegrationRuntime?: () => import("../cli/command").CliRuntime;
   bindBoardRecipients(

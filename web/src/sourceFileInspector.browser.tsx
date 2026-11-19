@@ -1,3 +1,4 @@
+import { runDesktopIdeChecks } from "./testing/desktopIdeAcceptance";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "./api";
@@ -280,6 +281,7 @@ async function run() {
     document.querySelectorAll(".workspace-inspector").length === 1,
     "Source navigation must reuse the existing Inspector",
   );
+  await runDesktopIdeChecks(target, check);
   changeView("history");
   await settle();
   const before = reads.length;

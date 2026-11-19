@@ -9,6 +9,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 
 | Area | Contract | Owning source | Focused tests |
 | --- | --- | --- | --- |
+| Desktop IDE handoff | [Contract](../openspec/specs/world-desktop-ide/spec.md) | [Registry](../server/src/integrations/desktop-ides.ts), [qualified RPC](../server/src/rpc/desktop-ides.ts), [picker](../web/src/components/DesktopIdeDialog.tsx) | [Admission](../server/src/rpc/desktop-ides.test.ts), [desktop/phone Inspector](../web/src/sourceFileInspector.test.ts); `?ideFixture=1` for synthetic choices without launching |
 | Code view research/proposal and IDE integration study (not shipping) | [Research, provider comparison and gates](design/code-view/research.md), [OpenSpec proposal](../openspec/changes/world-code-view/proposal.md) | [Synthetic mock](../web/public/code-view-prototype.html), [interaction code](../web/public/code-view-prototype/mock.js); no live IDE adapter | [Exact preview clicks](design/code-view/design.md), [fixture tests](../web/src/testing/codeViewPrototype.test.ts); `/code-view-prototype.html` |
 | Runtime support | [Contract](../FEATURES.md#runtime-support) | [Source](../shared/herdrIdentity.ts) | [Tests](../shared/herdrIdentity.test.ts) |
 | First-run discovery | [Contract](../README.md#quick-start) | [Source](../server/src/connections/first-run.ts) | [Tests](../server/src/connections/first-run.test.ts) |

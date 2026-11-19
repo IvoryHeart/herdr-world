@@ -1,3 +1,5 @@
+import { bridge } from "../../api";
+import { openInDesktopIde } from "../../desktopIdes";
 /**
  * Town's room and seat actions: whether a seat or room can be created here
  * and why not, and creating, renaming and closing rooms through their
@@ -279,6 +281,18 @@ export function useTownRoomActions({
       if (!room) return undefined;
       const capabilities = officeRoomActionCapabilities(world, room);
       return capabilities.manageReason ?? capabilities.viewOnly;
+    },
+    onOpenIde: (roomKey) => {
+      const room = roomForKey(roomKey);
+      if (room)
+        openInDesktopIde({
+          client: bridge.connection(
+            room.workspaceRef.connectionId,
+            room.observedGeneration,
+          ),
+          workspaceId: room.workspaceRef.nativeId,
+          label: room.displayLabel,
+        });
     },
     canRenameRoom: (roomKey) => canManageRoom(roomKey, "rename"),
     onRenameRoom: (roomKey) => {

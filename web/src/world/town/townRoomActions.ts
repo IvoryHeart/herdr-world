@@ -43,6 +43,7 @@ export type TownRoomActions = {
   onAddRoom(hostKey: string, selectedRoomKey: string | null): void;
   /** Why a room's actions are disabled: World only watches herdr-core. */
   roomViewOnly?(roomKey: string): string | undefined;
+  onOpenIde?(roomKey: string): void;
   canRenameRoom(roomKey: string): boolean;
   onRenameRoom(roomKey: string): void;
   canCloseRoom(roomKey: string): boolean;

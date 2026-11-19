@@ -7,6 +7,11 @@ research, a [clickable design study](design.md) and an
 [OpenSpec proposal](../../../openspec/changes/world-code-view/proposal.md), with no
 live IDE, installer, proxy, extension or changes to Herdr/herdr-core.
 
+Desktop handoff v1 now ships separately under #1010: it detects and launches
+IDEs on the World host’s desktop, including when controlled from a phone. See
+the [current contract](../../../openspec/specs/world-desktop-ide/spec.md). This
+study’s embedded workbench, proxy and terminal extension remain proposals.
+
 ## Recommendation
 
 Make **Code** another World projection whose center contains the user's installed

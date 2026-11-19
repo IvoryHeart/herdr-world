@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   ArrowRight,
   GitBranch,
+  ExternalLink,
   Move,
   Pencil,
   Trash2,
@@ -246,6 +247,17 @@ export function TownRoomPlaque({
           >
             <Pencil size={14} aria-hidden="true" />
           </button>
+          {actions.onOpenIde ? (
+            <button
+              className="world-room-overlay-action town-plaque-action"
+              type="button"
+              aria-label={`Open room ${label} in desktop IDE`}
+              title="Open in…"
+              onClick={() => actions.onOpenIde?.(room.key)}
+            >
+              <ExternalLink size={14} aria-hidden="true" />
+            </button>
+          ) : null}
           {actions.canManageWorktrees?.(room.key) ? (
             <button
               className="world-room-overlay-action town-plaque-action"

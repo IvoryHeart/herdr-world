@@ -4,7 +4,9 @@ The owner wants the real VS Code ecosystem inside World's project view, with
 other IDEs available as integrations. A custom editor would duplicate the IDE
 and lose extensions, settings and community features the request depends on.
 
-**Decision proposal only.** #981/#988 delivers research and a synthetic clickable
+**Embedded workbench decision proposal.** Desktop handoff v1 is now delivered by
+#1010 on the World host; see the [current contract](../../specs/world-desktop-ide/spec.md).
+The remaining #981/#988 work is research and a synthetic clickable
 mock, not an installed server, proxy, extension, live navigation or runtime change.
 The owner's real-IDE direction supersedes the earlier native-editor proposal.
 
@@ -55,6 +57,7 @@ RPCs do not already provide that remote IDE contract. Enabling a full IDE change
 the security boundary from bounded World file reads to trusted full host-user
 shell/write access; current file/Git APIs are not repurposed into a new editor.
 
-Implementation tasks remain unchecked and gated. No Herdr/herdr-core changes,
+Embedded workbench and terminal-extension tasks remain unchecked and gated.
+The separately authorized desktop task records its delivered scope and limits. No Herdr/herdr-core changes,
 custom editor, World save protocol, arbitrary port proxy, public IDE hosting,
 new authentication scheme or promise of unrestricted desktop parity is proposed.

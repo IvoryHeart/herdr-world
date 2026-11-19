@@ -1,8 +1,9 @@
 # Proposed future tasks
 
-All tasks remain unchecked: this PR is research, mock and proposal only.
-The real-IDE direction is selected; unresolved release gates stay explicit.
-No implementation or install is authorized by these planning artifacts.
+The embedded workbench remains research, mock and proposal. The desktop handoff
+slice was separately authorized by #1010 and is implemented under the
+[current desktop contract](../../specs/world-desktop-ide/spec.md). Unresolved
+embedding gates remain explicit; this does not authorize IDE installation.
 
 ## 1. Settle release gates and prove the installed provider
 
@@ -22,7 +23,8 @@ No implementation or install is authorized by these planning artifacts.
 ## 3. Compose real IDE and native terminal integrations
 
 - [ ] 3.1 Add Code/common navigation and qualified Open in Code from rooms, keeping World attention/agent/PR context around the native workbench; test history, host filter, explicit checkout and blocked embed.
-- [ ] 3.2 Add validated desktop provider handoffs for VS Code, Cursor, Gateway and Zed; test browser-device availability unknown, local/remote path encoding, exact connection and no credentials/command injection.
+- [x] 3.2 Add World-host desktop handoffs for VS Code, Cursor, local JetBrains IDEs and Zed; detect local launchers, persist a default and test exact connection/worktree, local/SSH argument fidelity, browser phone/desktop controls, missing/failed launchers and unsupported SSH refusals (#1010).
+- [ ] 3.2a Extend desktop handoff to configured Gateway backend links or the browsing device if separately authorized; do not infer browser-device installation from World-host discovery.
 - [ ] 3.3 Package/pair the narrow World extension and terminal profiles; test capability scope/expiry, SSH callback transport, TUI shared-resize acknowledgment and core screen/typing fidelity with no runtime changes.
 - [ ] 3.4 Test profile attach/control, focus isolation, hide/close/detach, replacement, disconnect and no key replay across VS Code and existing World viewers; refuse unsupported core adapters without substituting TUI.
 

@@ -52,6 +52,7 @@ import {
   connectionClientScopeKey,
   useConnectionClient,
 } from "../useConnectionClient";
+import { DesktopIdeSettings } from "./DesktopIdeSettings";
 import { AgentIntegrationsSettings } from "./AgentIntegrationsSettings";
 import { AutoSyncRepositoriesDialog } from "./AutoSyncRepositoriesDialog";
 import { CloseButton } from "./CloseButton";
@@ -689,6 +690,7 @@ export function ConfigurationDialog({
               aria-labelledby="configuration-tab-Integrations"
               hidden={tab !== "Integrations"}
             >
+              {tab === "Integrations" ? <DesktopIdeSettings /> : null}
               {tab === "Integrations" ? (
                 <AgentIntegrationsSettings
                   key={connectionClientScopeKey(

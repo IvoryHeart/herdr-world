@@ -1,3 +1,5 @@
+import { consumeDesktopIdeFixture } from "./desktopIdes";
+import { DesktopIdeHost } from "./components/DesktopIdeDialog";
 import { coreFixtureEnabled } from "./coreFixture";
 import { coreInstallFake } from "./coreInstall";
 import { initializeLayoutPreferences } from "./layoutPreferences";
@@ -55,6 +57,7 @@ initializeLayoutPreferences();
 initializeShortcutPreferences();
 // Testing switches: read `?coreFixture` and `?coreInstall` before any view
 // rewrites the URL; each drops its parameter at once.
+consumeDesktopIdeFixture();
 coreFixtureEnabled();
 coreInstallFake();
 const stopInstanceNameSync = titleSpinnerFixture
@@ -68,6 +71,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.Suspense fallback={null}>
         {titleSpinnerFixture ? <TitleSpinnerFixture /> : <WorldFoundationApp />}
       </React.Suspense>
+      <DesktopIdeHost />
       <OverlayScrollbarLayer />
     </ErrorBoundary>
   </React.StrictMode>,

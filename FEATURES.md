@@ -454,6 +454,30 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the last lens for `L` and **Lenses**. With `?scene=town-scale` every lens
     has synthetic data.
     Board offers the same lenses over its cards (see Board below).
+  - **Open in…** hands a project or file to a desktop IDE on the computer running
+    World, including when World is viewed from a phone. Use the agent Inspector
+    header from Desk, Town, Board or Spaces, Town room plaques, Board room actions,
+    the Files toolbar or a file/folder menu in Files or Changes. File previews
+    retain a requested source line. The picker keeps the current page open, shows
+    missing launchers and reports dispatch or a launch error.
+    **Configuration → Integrations → Desktop IDEs** detects VS Code, Cursor, Zed,
+    IntelliJ IDEA, WebStorm, PyCharm, PhpStorm, GoLand, CLion and Rider on the World
+    host; select a default to put it first in the picker, or **Always choose**.
+    Detection only checks PATH, standard macOS/Windows app locations and Linux
+    Toolbox scripts. Enable the IDE’s command-line launcher and refresh if absent.
+    Local projects open locally. SSH projects use VS Code/Cursor remote arguments
+    or Zed’s SSH URL with the connection’s existing OpenSSH alias or `user@host`;
+    install/configure the IDE’s remote support separately. JetBrains SSH needs a
+    Gateway backend link and is refused in v1; Windows SSH Files are also refused.
+    Offline/replaced hosts, unavailable files and stale/ambiguous agent worktrees
+    are refused without another host or path. Deleted Changes files must be opened
+    through an existing parent folder. No IDE is installed, no browser command
+    string is executed, and no credentials enter a handoff. A dispatch receipt
+    cannot confirm that a desktop window became visible.
+    Testing-only `?ideFixture=1` is removed from the URL immediately and supplies
+    synthetic IDE choices for that page: VS Code demonstrates dispatch, Cursor a
+    launch failure, IntelliJ an SSH refusal, and Zed a missing launcher. It neither
+    launches applications nor saves preferences; reload to return to real detection.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).
     On phones, a header dropdown shows Chat, Terminal, Files and Changes;

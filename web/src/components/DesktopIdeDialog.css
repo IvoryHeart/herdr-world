@@ -1,0 +1,88 @@
+.desktop-ide-dialog {
+  width: min(460px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.desktop-ide-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.desktop-ide-heading h2,
+.desktop-ide-heading h3 {
+  margin: 0;
+}
+.desktop-ide-dialog p,
+.desktop-ide-settings p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.desktop-ide-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.desktop-ide-list {
+  display: grid;
+  gap: 6px;
+}
+.desktop-ide-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  text-align: left;
+}
+.desktop-ide-list button span {
+  min-width: 0;
+}
+.desktop-ide-list small,
+.desktop-ide-settings small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  margin-top: 3px;
+}
+.desktop-ide-dialog [role="alert"],
+.desktop-ide-settings [role="alert"] {
+  color: var(--danger-text);
+}
+.desktop-ide-settings {
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 16px;
+}
+.desktop-ide-settings ul {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+}
+.desktop-ide-settings select {
+  max-width: 100%;
+  margin-left: 8px;
+}
+
+.desktop-ide-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  min-height: 32px;
+}
+@media (max-width: 600px) {
+  .desktop-ide-trigger {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .desktop-ide-trigger span {
+    display: none;
+  }
+}

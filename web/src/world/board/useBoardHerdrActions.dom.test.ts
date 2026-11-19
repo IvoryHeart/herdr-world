@@ -1,3 +1,4 @@
+import { desktopIdeTarget, openInDesktopIde } from "../../desktopIdes";
 import { expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import { boardBarPane, swappedRoomSpots } from "./useBoardHerdrActions";
@@ -250,6 +251,7 @@ if (process.env.BOARD_HERDR_DOM_TEST !== "1") {
 
     // A room: Town's rename and close, and its place in Herdr's order.
     expect(buttons(alpha)).toEqual([
+      "Open in…",
       "Rename…",
       "Close…",
       "‹ Earlier (off)",
@@ -264,6 +266,11 @@ if (process.env.BOARD_HERDR_DOM_TEST !== "1") {
         .find((button) => button.textContent === "Cancel")
         ?.click(),
     );
+    await press(alpha, "Open in…");
+    expect(desktopIdeTarget.get()?.workspaceId).toBe("w1");
+    expect(desktopIdeTarget.get()?.client.connectionId).toBe("local");
+    expect(desktopIdeTarget.get()?.client.serverRuntimeGeneration).toBe(1);
+    openInDesktopIde(null);
     await press(alpha, "Rename…");
     expect(document.querySelector<HTMLInputElement>("input")?.value).toBe(
       "Alpha",

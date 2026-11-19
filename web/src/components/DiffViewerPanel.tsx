@@ -1,3 +1,17 @@
+import { connectionStorageKey } from "../connectionStorage";
+import {
+  comparisonBranchStorageKey,
+  comparisonResourceKey,
+  comparisonBranchLabel,
+  diffScopeStorageKey,
+  loadDiffScope,
+} from "./diffViewerPreferences";
+export {
+  comparisonBranchStorageKey,
+  comparisonResourceKey,
+  comparisonBranchLabel,
+} from "./diffViewerPreferences";
+import { openInDesktopIde } from "../desktopIdes";
 import { store } from "../store";
 import { createDiffLoadQueue } from "./diffLoadQueue";
 import { worldLocalStorage } from "../browserStorage";
@@ -30,7 +44,6 @@ import {
   connectionClientScopeKey,
   useConnectionClient,
 } from "../useConnectionClient";
-import { connectionStorageKey } from "../connectionStorage";
 import { gitDiffCode, gitDiffCodeLabel } from "../gitDiffStatus";
 import {
   lastStepCompletionKey,
@@ -150,51 +163,6 @@ const MAX_CACHED_DIFF_FILES = 24;
 const MAX_CACHED_DIFF_BYTES = 8 * 1024 * 1024;
 const MAX_DIFF_CACHE_CONTEXTS = 8;
 const MAX_TOTAL_CACHED_DIFF_BYTES = 24 * 1024 * 1024;
-const DIFF_SCOPE_KEY = "diffViewerScope";
-
-export function comparisonBranchStorageKey(
-  connectionId: string,
-  resourceKey: string,
-) {
-  return connectionStorageKey(connectionId, `diffViewerBase:${resourceKey}`);
-}
-
-export function comparisonResourceKey(
-  resourceKey: string | undefined,
-  baseBranch: string,
-) {
-  return baseBranch
-    ? JSON.stringify(["diff-comparison", resourceKey, baseBranch])
-    : resourceKey;
-}
-
-export function comparisonBranchLabel(ref: string) {
-  return ref.replace(/^refs\/(heads|remotes)\//, "");
-}
-
-function diffScopeStorageKey(connectionId: string, resourceKey?: string) {
-  return connectionStorageKey(
-    connectionId,
-    resourceKey ? `${DIFF_SCOPE_KEY}:${resourceKey}` : DIFF_SCOPE_KEY,
-  );
-}
-
-function loadDiffScope(
-  connectionId = "startup-default",
-  resourceKey?: string,
-): DiffScope {
-  const scoped = worldLocalStorage.getItem(
-    diffScopeStorageKey(connectionId, resourceKey),
-  );
-  const value =
-    scoped ??
-    (resourceKey
-      ? worldLocalStorage.getItem(diffScopeStorageKey(connectionId))
-      : null);
-  if (value === "branch-main") return "branch-main";
-  if (value === "last-step") return "last-step";
-  return "working";
-}
 
 function diffEntryKey(entry: GitDiffEntry) {
   return `${entry.kind}:${entry.path}`;
@@ -2196,6 +2164,18 @@ export const DiffViewerPanel = forwardRef<
                       },
                     ]
                   : []),
+                {
+                  key: "open-ide",
+                  label: "Open in…",
+                  action: () => {
+                    if (workspace)
+                      openInDesktopIde({
+                        client: connectionClient,
+                        workspaceId: workspace.workspace_id,
+                        path: contextMenu.path,
+                      });
+                  },
+                },
                 {
                   key: "copy-relative",
                   label: "Copy relative path",

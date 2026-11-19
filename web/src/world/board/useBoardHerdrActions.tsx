@@ -1,3 +1,5 @@
+import { bridge } from "../../api";
+import { OpenInIdeButton } from "../../components/DesktopIdeDialog";
 /**
  * Town's actions on Board: rename and close a room (workspace) with Town's
  * dialogs, change Herdr's room and tab order (so Town and Spaces follow),
@@ -366,6 +368,13 @@ export function useBoardHerdrActions({
       if (!can.rename && !can.close && !can.worktrees) return null;
       return (
         <>
+          <OpenInIdeButton
+            target={{
+              client: bridge.connection(space.connectionId, space.generation),
+              workspaceId: space.nativeId,
+              label: space.label,
+            }}
+          />
           {can.worktrees ? (
             <button
               type="button"

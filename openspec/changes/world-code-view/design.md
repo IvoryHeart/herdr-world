@@ -23,7 +23,7 @@ host/room/agent context, IDE integration selection and per-project desktop hando
 VS Code retains its native editing, Source Control, extensions, profiles and trust
 prompts.
 
-No implementation in this PR. No custom save API/editor, fork/bundled IDE,
+The embedded workbench remains proposed. Desktop handoff v1 was authorized separately in #1010 and is defined in the [current desktop contract](../../specs/world-desktop-ide/spec.md). No custom save API/editor, fork/bundled IDE,
 Herdr/core API changes, multi-user hosting, generic remote-port forwarding,
 World-managed Microsoft accounts, silent extension installation or promise that
 all desktop extensions run on the web. Desktop handoff is an IDE integration,
@@ -71,17 +71,22 @@ Workspace Trust and extension prompts rather than claiming World confines it to
 that folder. Concurrent changes/conflicts are the real IDE's behavior, not a
 universal World compare-and-swap guarantee.
 
-Desktop handoff retains that exact host and checkout and is a separate user click.
-For a local-to-browser project, an allowlisted VS Code/Cursor URL adapter can open
-it; a service-local path on a different browsing device is **not** client-local.
-Remote projects need the provider's supported SSH/Gateway/remote URI or guided
-copyable host/project instructions. [VS Code remote CLI](https://code.visualstudio.com/docs/remote/ssh#_opening-a-terminal-on-a-remote-host),
-[Gateway](https://www.jetbrains.com/help/idea/remote-development-starting-page.html)
-and [Zed SSH](https://zed.dev/docs/remote-development) have distinct protocols;
-never invent a universal `vscode://file` URL for remote roots. Validate authority,
-encode paths, never include World credentials, and do not execute a GUI on the
-World service host. Browser client availability can be unknown despite host
-server detection. Refusal leaves the project selected; no fallback host or path.
+Desktop handoff v1 retains the exact project connection, generation and selected
+agent worktree. #1010 explicitly chooses launch on the **World host’s desktop**,
+including from a phone; it does not detect or launch a browsing device’s IDE.
+`world.ide.list/default/open` uses a fixed provider registry and existing UI
+preferences. Read-only local launcher detection starts nothing. Open resolves
+canonical targets through existing bounded Files admission for both runtimes,
+then rechecks the captured lease before passing fixed argument arrays to the
+installed local launcher. No new editor/save transport is introduced.
+
+VS Code/Cursor use `--remote ssh-remote+<destination>` for SSH, with explicit file
+and folder forms; Zed uses an encoded SSH URL. JetBrains local launch works,
+while SSH refuses with the missing Gateway backend-link reason. Windows SSH
+remains refused alongside Files. These limits and current controls live in the
+[current desktop contract](../../specs/world-desktop-ide/spec.md); browser-device
+handoff and configured Gateway links remain future work. No credentials enter
+arguments or URLs, and a successful receipt confirms dispatch, not a visible GUI.
 
 ### Same-origin workbench transport: feasibility first
 

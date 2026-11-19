@@ -1,3 +1,4 @@
+import { OpenInIdeButton } from "./DesktopIdeDialog";
 import {
   WorkspaceInspectorViewSelect,
   WorkspaceInspectorSecondaryControls,
@@ -634,6 +635,15 @@ export function WorkspaceInspectorHost({
               : null}
           </div>
         )}
+        {workspace && filesAvailable ? (
+          <OpenInIdeButton
+            target={{
+              client: connectionClient,
+              workspaceId: workspace.workspace_id,
+              label: workspace.label,
+            }}
+          />
+        ) : null}
         {mobile && windowControls ? (
           <WorkspaceInspectorViewSelect
             value={state.view}

@@ -1,3 +1,5 @@
+import { isMarkdownPath, isMermaidPath, isPdfPath } from "./filePreviewFormats";
+import { OpenInIdeButton } from "./DesktopIdeDialog";
 import {
   FilePreviewBoundary,
   type FilePreviewContentProps,
@@ -131,25 +133,6 @@ function loadCodeMirrorPreviewDeps() {
 function openPreviewSearch(view: CodeMirrorEditorView | null) {
   if (!view) return;
   void loadCodeMirrorPreviewDeps().then((deps) => deps.openSearchPanel(view));
-}
-
-function isMarkdownPath(path: string) {
-  const lower = path.toLowerCase();
-  return (
-    lower.endsWith(".md") ||
-    lower.endsWith(".markdown") ||
-    lower.endsWith(".mdown") ||
-    lower.endsWith(".mkdn")
-  );
-}
-
-function isMermaidPath(path: string) {
-  const lower = path.toLowerCase();
-  return lower.endsWith(".mmd") || lower.endsWith(".mermaid");
-}
-
-function isPdfPath(path: string) {
-  return path.toLowerCase().endsWith(".pdf");
 }
 
 export function FilePreviewContent(props: FilePreviewContentProps) {
@@ -499,6 +482,16 @@ function FilePreviewBody({
             {entry?.name ?? "Preview"}
           </div>
           <div className="file-preview-head-actions">
+            {entry && preview?.workspace_id ? (
+              <OpenInIdeButton
+                target={{
+                  client: connectionClient,
+                  workspaceId: preview.workspace_id,
+                  path: entry.path,
+                  line,
+                }}
+              />
+            ) : null}
             {!showingChanges && showDirectoryWorkspaceAction ? (
               <button
                 type="button"
