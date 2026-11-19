@@ -13,21 +13,22 @@ const errorText = (cause: unknown) =>
   cause instanceof Error ? cause.message : String(cause);
 
 export function ideStateLabel(provider: IdeProviderStatus) {
-  if (provider.enabled && provider.detection.state === "detected")
-    return "Enabled";
-  if (provider.detection.state === "detected")
-    return provider.oneOrigin ? "Installed" : "Desktop only";
+  if (provider.enabled) return "Enabled";
+  if (provider.detection.state === "detected") return "Installed";
   if (provider.detection.state === "unsupported") return "Can't run";
   return provider.detection.configured ? "Not found" : "Not installed";
 }
 
+/** Enable is offered unless the IDE can't run at all. */
+const canEnable = (provider: IdeProviderStatus) =>
+  !provider.enabled && provider.detection.state !== "unsupported";
+
 /**
- * The installed IDEs on World's computer, as integration rows: detected
- * ones offer Enable (behind the trust and licence gate), missing ones
- * Connect (where to get it, or the program's path). An IDE that loads its
- * extension views from another origin is desktop only: no Enable, and the
- * Code view hands projects to its desktop app. The Code view and Settings
- * show the same rows.
+ * The IDE integrations, as rows: each offers Enable (behind the trust and
+ * licence gate) and, when it isn't installed on World's computer, Connect
+ * (where to get it, or the program's path). Detection here is for World's
+ * computer; a project on an SSH host uses the IDE installed there, looked
+ * for when it opens. The Code view and Settings show the same rows.
  */
 export function IdeProviderList({
   status,
@@ -145,17 +146,21 @@ function IdeProviderRow({
       ) : (
         <p className="ide-provider-reason">{detection.reason}</p>
       )}
-      {detection.state === "detected" && !provider.oneOrigin ? (
+      {detection.state === "missing" ? (
         <p className="ide-provider-reason">
-          Its extension views, such as Markdown preview, load from another site
-          (vscode-cdn.net). World keeps Code on its own address, so it opens
-          projects in the desktop app instead.
+          Projects on an SSH host use the {provider.label} installed there:
+          World looks for it when you open one.
+        </p>
+      ) : null}
+      {!provider.webviewsInWorld ? (
+        <p className="ide-provider-reason">
+          Its webviews, such as Markdown preview and some extension panels, load
+          from another site, so they stay blank inside World. Editing,
+          terminals, Git and debugging work.
         </p>
       ) : null}
       <div className="ide-provider-actions">
-        {detection.state === "detected" &&
-        provider.oneOrigin &&
-        !provider.enabled ? (
+        {canEnable(provider) ? (
           <button
             type="button"
             className="primary"
@@ -302,13 +307,14 @@ export function IdeEnableDialog({
             {detection.state === "detected" && detection.version
               ? ` ${detection.version}`
               : ""}{" "}
-            as a web server on this computer, one per project you open, and
-            shows it in Code. Your own settings, extensions and profile apply.
-            World never installs or updates it.
+            as a web server on the computer each project is on, this one or the
+            project's SSH host, one per project you open, and shows it in Code.
+            Your own settings, extensions and profile there apply. World never
+            installs or updates it.
           </p>
           <ul>
             <li>
-              <strong>Full access to this computer.</strong> {provider.label}{" "}
+              <strong>Full access to those computers.</strong> {provider.label}{" "}
               and its extensions run as your user: they can run any command and
               change any file, not only the project's.
             </li>
@@ -345,7 +351,7 @@ export function IdeEnableDialog({
             />
             <span>
               I trust {provider.label} and its extensions with full access to
-              this computer and to World.
+              the computers my projects are on and to World.
             </span>
           </label>
           {provider.terms.length ? (

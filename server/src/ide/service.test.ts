@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type IdeChild, IdeInstances } from "./instances";
 import type { IdeDetectEnvironment } from "./providers";
-import { type IdeConnection, IdeService } from "./service";
+import { type IdeConnection, IdeService, type IdeServiceDeps } from "./service";
 import { memoryIdeSettingsStore } from "./settings";
 
 /**
@@ -18,8 +18,12 @@ afterEach(() => {
 });
 
 const PROGRAM = "/opt/example/code-server/bin/code-server";
+const VSCODE = "/opt/example/vscode/bin/code-tunnel";
 
-function harness(version: () => Promise<string> = async () => "4.0.0") {
+function harness(
+  version: () => Promise<string> = async () => "4.0.0",
+  remoteDetect?: IdeServiceDeps["remoteDetect"],
+) {
   const top = mkdtempSync(join(tmpdir(), "hw-ide-service-"));
   dirs.push(top);
   const project = join(top, "project");
@@ -31,16 +35,24 @@ function harness(version: () => Promise<string> = async () => "4.0.0") {
     generation: 1,
   };
   const killed: number[] = [];
+  const launches: { command: string[]; stdin?: string }[] = [];
   let spawned = 0;
   let pid = 100;
   const instances = new IdeInstances({
     runtimeRoot: top,
     sleep: async () => {},
     probe: async () => 200,
-    spawn: ({ command }) => {
+    spawn: ({ command, stdin }) => {
       spawned++;
-      // code-server's `--socket <path>`: the fake server is the file.
-      writeFileSync(command[command.indexOf("--socket") + 1], "");
+      launches.push({ command, stdin });
+      // The fake server is the socket file: code-server's `--socket`,
+      // VS Code's `--socket-path`, or the local end of ssh's `-L`.
+      const flag = ["--socket", "--socket-path", "-L"].find((name) =>
+        command.includes(name),
+      );
+      if (!flag) throw new Error("no socket in the launch");
+      const value = command[command.indexOf(flag) + 1];
+      writeFileSync(flag === "-L" ? value.split(":")[0] : value, "");
       let exit: (code: number | null) => void = () => {};
       const child: IdeChild = {
         pid: ++pid,
@@ -60,7 +72,7 @@ function harness(version: () => Promise<string> = async () => "4.0.0") {
     which: () => null,
     exists: () => true,
     realpath: (path) => path,
-    isExecutableFile: (path) => path === PROGRAM,
+    isExecutableFile: (path) => path === PROGRAM || path === VSCODE,
     version,
     homeDir: "",
   };
@@ -69,12 +81,19 @@ function harness(version: () => Promise<string> = async () => "4.0.0") {
       version: 1,
       providers: {
         "code-server": { enabled: true, trusted_at: "x", binary: PROGRAM },
+        vscode: {
+          enabled: true,
+          trusted_at: "x",
+          terms_accepted_at: "x",
+          binary: VSCODE,
+        },
       },
     }),
     environment,
     connection: (id) => (connection?.id === id ? connection : null),
     connectionIds: () => (connection ? [connection.id] : []),
     instances,
+    remoteDetect,
   });
   const revoked: string[] = [];
   service.onRevoked((id) => revoked.push(id));
@@ -98,6 +117,7 @@ function harness(version: () => Promise<string> = async () => "4.0.0") {
     open,
     revoked,
     killed,
+    launches,
     spawned: () => spawned,
     set(next: IdeConnection | null) {
       connection = next;
@@ -186,21 +206,89 @@ test("a change to SSH or removal revokes the server and its streams", async () =
   expect(h.service.instances.list()).toEqual([]);
 });
 
-test("stock VS Code is refused with a desktop handoff, never started", async () => {
+test("stock VS Code runs serve-web on World's computer and is embedded", async () => {
   const h = harness();
   const result = await h.service.open({
     provider: "vscode",
     connectionId: "local-a",
     generation: 1,
-    folder: "/",
+    folder: h.project,
+  });
+  expect(result.ok).toBe(true);
+  expect(h.launches[0].command.slice(0, 2)).toEqual([VSCODE, "serve-web"]);
+  if (result.ok)
+    expect(result.instance.url).toBe(`/ide/${result.instance.id}/`);
+});
+
+const SSH_CONNECTION: IdeConnection = {
+  id: "ssh-b",
+  label: "devbox",
+  type: "ssh",
+  generation: 4,
+  sshDestination: "dev@devbox.example",
+};
+
+test("an SSH project runs the host's own VS Code through an OpenSSH socket forward", async () => {
+  const asked: string[] = [];
+  const h = harness(undefined, async (destination, provider) => {
+    asked.push(`${destination} ${provider}`);
+    return {
+      provider,
+      state: "detected",
+      path: "/home/dev/.local/bin/code",
+      version: "1.147.0",
+      configured: false,
+    };
+  });
+  h.set(SSH_CONNECTION);
+  const result = await h.service.open({
+    provider: "vscode",
+    connectionId: "ssh-b",
+    generation: 4,
+    // A folder on the host: World's computer does not have it.
+    folder: "/srv/example/project",
+  });
+  if (!result.ok) throw new Error(result.refusal.message);
+  expect(asked).toEqual(["dev@devbox.example vscode"]);
+  const launch = h.launches[0];
+  expect(launch.command[0]).toBe("ssh");
+  const forward = launch.command[launch.command.indexOf("-L") + 1];
+  expect(forward).toMatch(
+    /\/ide\.sock:\/tmp\/hw-ide-[A-Za-z0-9_-]{16,}\/ide\.sock$/,
+  );
+  expect(launch.command).toContain("dev@devbox.example");
+  // The token goes on stdin, never on a command line.
+  expect(launch.stdin).toMatch(/^[A-Za-z0-9_-]{20,}\n$/);
+  expect(launch.command.join(" ")).not.toContain(launch.stdin?.trim() ?? "");
+  expect(result.instance.sshDestination).toBe("dev@devbox.example");
+  for (let i = 0; i < 50 && !h.service.upstream(result.instance.id); i++)
+    await Bun.sleep(1);
+  expect(h.service.upstream(result.instance.id)).not.toBeNull();
+
+  // The same connection now pointing at another host: the old IDE ends.
+  h.set({ ...SSH_CONNECTION, sshDestination: "dev@other.example" });
+  expect(h.service.upstream(result.instance.id)).toBeNull();
+  await h.service.retireStale();
+  expect(h.revoked).toEqual([result.instance.id]);
+});
+
+test("an SSH host without the IDE is refused with the host's name", async () => {
+  const h = harness(undefined, async (_destination, provider, hostLabel) => ({
+    provider,
+    state: "missing",
+    reason: `Visual Studio Code isn't installed on ${hostLabel}.`,
+    configured: false,
+  }));
+  h.set(SSH_CONNECTION);
+  const result = await h.service.open({
+    provider: "vscode",
+    connectionId: "ssh-b",
+    generation: 4,
+    folder: "/srv/example/project",
   });
   expect(result).toMatchObject({
     ok: false,
-    refusal: {
-      code: "origin",
-      handoff: { command: "code '/'", url: "vscode://file/" },
-    },
+    refusal: { code: "missing", message: expect.stringContaining("devbox") },
   });
-  expect(h.killed).toEqual([]);
-  expect(h.service.instances.list()).toEqual([]);
+  expect(h.spawned()).toBe(0);
 });

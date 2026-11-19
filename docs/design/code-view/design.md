@@ -3,9 +3,10 @@
 **Design study.** Code's first version shipped from it (#1009); the current
 behaviour, limits and refusals are in [FEATURES.md](../../../FEATURES.md#code-view).
 The study's standalone mock was retired when Code shipped. What follows is the
-proposal it tested; the parts not yet built (the World terminal-profile
-extension, PR review handoff, desktop handoff for local projects, SSH
-servers) stay open in the
+proposal it tested. SSH hosts shipped: Code runs the host's own IDE over
+the connection's OpenSSH destination. Desktop handoff was dropped: nothing
+in Code opens an IDE on a desktop. The parts not yet built (the World
+terminal-profile extension, PR review handoff) stay open in the
 [OpenSpec change](../../../openspec/changes/world-code-view/tasks.md).
 The [research](research.md) and [architecture](../../../openspec/changes/world-code-view/design.md)
 explain the licence, single-origin and full-shell trust gates.

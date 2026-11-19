@@ -25,19 +25,15 @@ export type IdeProviderInfo = {
   /** Where to install it when it is missing. */
   setupUrl: string;
   /**
-   * The one-origin gate (#988): whether its webviews (Markdown preview,
-   * extension panels) load from the IDE's own route. Stock VS Code and
+   * Whether its webviews (Markdown preview, extension panels) load inside
+   * World. code-server serves them under its own route. Stock VS Code and
    * OpenVSCode Server frame them from `*.vscode-cdn.net`, the template in
-   * their product.json, so World keeps them desktop-only rather than
-   * embed another origin. code-server serves them under its own path.
+   * their product.json; World's frame policy keeps those frames out, since
+   * the Code view never admits another origin and World never rewrites the
+   * product's own files (#988). The rest of the workbench works.
    */
-  oneOrigin: boolean;
+  webviewsInWorld: boolean;
 };
-
-/** Why a provider that fails the one-origin gate opens on the desktop. */
-export function ideDesktopOnlyReason(provider: IdeProviderInfo) {
-  return `${provider.label} loads extension views, such as Markdown preview, from Microsoft's vscode-cdn.net, another origin. World keeps the Code view on its own origin, so it opens this IDE on the desktop instead.`;
-}
 
 export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
   vscode: {
@@ -55,7 +51,7 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
       },
     ],
     setupUrl: "https://code.visualstudio.com/download",
-    oneOrigin: false,
+    webviewsInWorld: false,
   },
   "code-server": {
     id: "code-server",
@@ -63,7 +59,7 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     marketplace: "Open VSX",
     terms: [],
     setupUrl: "https://coder.com/docs/code-server/install",
-    oneOrigin: true,
+    webviewsInWorld: true,
   },
   openvscode: {
     id: "openvscode",
@@ -71,7 +67,7 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     marketplace: "Open VSX",
     terms: [],
     setupUrl: "https://github.com/gitpod-io/openvscode-server#getting-started",
-    oneOrigin: false,
+    webviewsInWorld: false,
   },
 };
 

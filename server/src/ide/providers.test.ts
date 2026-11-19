@@ -140,9 +140,10 @@ test("fixed argument lists per provider", () => {
   });
 });
 
-test("only providers whose webviews stay on their own route can be embedded", () => {
-  // Stock VS Code and OpenVSCode Server frame webviews from vscode-cdn.net.
-  expect(IDE_PROVIDERS.vscode.oneOrigin).toBe(false);
-  expect(IDE_PROVIDERS.openvscode.oneOrigin).toBe(false);
-  expect(IDE_PROVIDERS["code-server"].oneOrigin).toBe(true);
+test("only code-server serves webviews inside World", () => {
+  // Stock VS Code and OpenVSCode Server frame them from vscode-cdn.net,
+  // which World's frame policy keeps out; the workbench is still embedded.
+  expect(IDE_PROVIDERS.vscode.webviewsInWorld).toBe(false);
+  expect(IDE_PROVIDERS.openvscode.webviewsInWorld).toBe(false);
+  expect(IDE_PROVIDERS["code-server"].webviewsInWorld).toBe(true);
 });

@@ -6,7 +6,7 @@
  * Testing switch: open World with `?ideFixture=<state>` and the Code view
  * shows that state from synthetic data instead of the service's:
  * `missing` (no IDE installed), `detected` (installed, not enabled),
- * `ssh` (the project is on an SSH host), `downloading` (first start) or
+ * `ssh` (starting on an SSH host), `downloading` (first start) or
  * `failed` (the server exited). Nothing is detected, started or stored.
  * The page drops the parameter at once; the switch lasts until a reload.
  */
@@ -37,11 +37,11 @@ export type IdeProviderStatus = {
   setupUrl: string;
   detection: IdeDetection;
   /**
-   * False for IDEs whose extension views load from another origin (stock
-   * VS Code's vscode-cdn.net): World never embeds those, it hands them off
-   * to the desktop app.
+   * False for IDEs whose webviews (Markdown preview, some extension
+   * panels) load from another origin, such as stock VS Code's
+   * vscode-cdn.net: the workbench works in World, those panels stay blank.
    */
-  oneOrigin: boolean;
+  webviewsInWorld: boolean;
   enabled: boolean;
   trustedAt: string | null;
   termsAcceptedAt: string | null;
@@ -58,27 +58,27 @@ export type IdeInstance = {
   startedAt: string;
   reason?: string;
   downloading?: boolean;
+  /** Set when the IDE runs on the project's SSH host. */
+  sshDestination?: string;
 };
 
 export type IdeStatus = {
   providers: IdeProviderStatus[];
   instances: IdeInstance[];
-  /** Connections on World's own computer; others get the SSH handoff. */
+  /** Connections on World's own computer; others run on their SSH host. */
   localConnections: string[];
 };
 
 export type IdeRefusal = {
   code:
-    | "remote"
     | "windows"
     | "stale"
     | "unknown-connection"
     | "folder"
     | "disabled"
-    | "limit"
-    | "origin";
+    | "missing"
+    | "limit";
   message: string;
-  handoff?: { command: string; url: string };
 };
 
 export type IdeOpenResult =
@@ -107,14 +107,13 @@ export type IdeClient = {
 const PROVIDERS = new Set<string>(["vscode", "code-server", "openvscode"]);
 const INSTANCE_STATES = new Set<string>(["starting", "ready", "failed"]);
 const REFUSALS = new Set<string>([
-  "remote",
   "windows",
   "stale",
   "unknown-connection",
   "folder",
   "disabled",
+  "missing",
   "limit",
-  "origin",
 ]);
 
 const text = (value: unknown): value is string => typeof value === "string";
@@ -164,7 +163,7 @@ function parseProvider(value: unknown): IdeProviderStatus | null {
         ? value.setupUrl
         : "",
     detection: parseDetection(value.detection),
-    oneOrigin: value.oneOrigin === true,
+    webviewsInWorld: value.webviewsInWorld === true,
     enabled: value.enabled === true,
     trustedAt: text(value.trustedAt) ? value.trustedAt : null,
     termsAcceptedAt: text(value.termsAcceptedAt) ? value.termsAcceptedAt : null,
@@ -196,6 +195,9 @@ export function parseIdeInstance(value: unknown): IdeInstance | null {
     startedAt: text(value.startedAt) ? value.startedAt : "",
     ...(text(value.reason) ? { reason: value.reason } : {}),
     ...(value.downloading === true ? { downloading: true } : {}),
+    ...(text(value.sshDestination)
+      ? { sshDestination: value.sshDestination }
+      : {}),
   };
 }
 
@@ -227,14 +229,6 @@ export function parseIdeOpenResult(value: unknown): IdeOpenResult {
   }
   const refusal =
     record(value) && record(value.refusal) ? value.refusal : undefined;
-  const handoff =
-    refusal &&
-    record(refusal.handoff) &&
-    text(refusal.handoff.command) &&
-    text(refusal.handoff.url) &&
-    refusal.handoff.url.startsWith("vscode://")
-      ? { command: refusal.handoff.command, url: refusal.handoff.url }
-      : undefined;
   return {
     ok: false,
     refusal: {
@@ -246,7 +240,6 @@ export function parseIdeOpenResult(value: unknown): IdeOpenResult {
         refusal && text(refusal.message)
           ? refusal.message
           : "World couldn't open this project.",
-      ...(handoff ? { handoff } : {}),
     },
   };
 }
@@ -320,7 +313,6 @@ const FIXTURE_PROVIDERS = (
   state: "missing" | "detected",
   enabled: boolean,
 ): IdeProviderStatus[] => [
-  // Installed in every state but missing: shown as desktop only.
   {
     id: "vscode",
     label: "Visual Studio Code",
@@ -349,7 +341,7 @@ const FIXTURE_PROVIDERS = (
             reason: "VS Code isn't installed on this computer.",
             configured: false,
           },
-    oneOrigin: false,
+    webviewsInWorld: false,
     enabled: false,
     trustedAt: null,
     termsAcceptedAt: null,
@@ -374,7 +366,7 @@ const FIXTURE_PROVIDERS = (
             reason: "code-server isn't installed on this computer.",
             configured: false,
           },
-    oneOrigin: true,
+    webviewsInWorld: true,
     enabled,
     trustedAt: enabled ? new Date(0).toISOString() : null,
     termsAcceptedAt: enabled ? new Date(0).toISOString() : null,
@@ -391,7 +383,7 @@ const FIXTURE_PROVIDERS = (
       reason: "OpenVSCode Server isn't installed on this computer.",
       configured: false,
     },
-    oneOrigin: false,
+    webviewsInWorld: false,
     enabled: false,
     trustedAt: null,
     termsAcceptedAt: null,
@@ -424,9 +416,12 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
   return {
     status: async () => status(),
     enable: async () => {
-      if (kind === "missing") throw new Error("code-server isn't installed.");
+      // As the service: enabling doesn't need it on World's computer.
       enabled = true;
-      providers = FIXTURE_PROVIDERS("detected", true);
+      providers = FIXTURE_PROVIDERS(
+        kind === "missing" ? "missing" : "detected",
+        true,
+      );
       changed();
       return status();
     },
@@ -442,38 +437,12 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
     },
     configure: async () => status(),
     open: async (request) => {
-      if (request.provider === "vscode" || request.provider === "openvscode")
-        return {
-          ok: false,
-          refusal: {
-            code: "origin",
-            message:
-              "Visual Studio Code loads extension views, such as Markdown preview, from Microsoft's vscode-cdn.net, another origin. World keeps the Code view on its own origin, so it opens this IDE on the desktop instead.",
-            handoff: {
-              command: `code '${request.folder}'`,
-              url: `vscode://file${request.folder}`,
-            },
-          },
-        };
       if (!enabled)
         return {
           ok: false,
           refusal: {
             code: "disabled",
             message: "Enable an IDE in the Code view first.",
-          },
-        };
-      if (kind === "ssh")
-        return {
-          ok: false,
-          refusal: {
-            code: "remote",
-            message:
-              "This project is on devbox, over SSH. World runs an IDE in the browser only for projects on its own computer for now: open it in desktop VS Code with Remote-SSH.",
-            handoff: {
-              command: `code --remote ssh-remote+devbox.example '${request.folder}'`,
-              url: `vscode://vscode-remote/ssh-remote+devbox.example${request.folder}`,
-            },
           },
         };
       const instance: IdeInstance = {
@@ -491,7 +460,9 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
             }
           : kind === "downloading"
             ? { downloading: true }
-            : {}),
+            : kind === "ssh"
+              ? { sshDestination: "devbox.example" }
+              : {}),
       };
       instances = [instance];
       changed();

@@ -1835,59 +1835,77 @@ to search.
 
 ## Code view
 
-**Code** (`/code`, beside Town, Board and Desk) shows your own installed IDE
-(code-server today) for one project, inside World, with that project's agents and terminals beside
-it. World runs the IDE you already have, so your extensions, settings and
-profile apply; it never installs or updates one.
+**Code** (`/code`, beside Town, Board and Desk in the view switcher on desktop
+and phone) shows the complete VS Code of the host a project is on, World's own
+computer or an SSH host, inside World. World runs the IDE already installed
+there, so your extensions, settings and profile on that host apply; it never
+installs or updates one, and nothing in Code opens an IDE on a desktop.
 
-- **Integrations.** World looks for Visual Studio Code (`code serve-web`, via
-  the `code-tunnel` program or the standalone `code` CLI), code-server and
-  OpenVSCode Server on its own computer. Each row says **Installed**, **Desktop
-  only**, **Not installed**, **Not found** (a set path that is gone) or **Can't
-  run**. Stock VS Code and OpenVSCode Server load extension views (Markdown
-  preview, for example) from Microsoft's vscode-cdn.net, another origin, so
-  World never embeds them: they read **Desktop only**, offer no Enable, and a
-  setting enabled earlier no longer counts. With no embeddable IDE enabled, the
-  Code view offers **Open … in desktop Visual Studio Code**, which gives a
-  `code '<folder>'` command and a `vscode://file…` link for World's computer. A
-  missing one offers **Connect: get …** (its download page) and **Use a program
-  path…** (an absolute path to an executable). The same rows are in Settings →
+- **Integrations.** Visual Studio Code (`code serve-web`, via the desktop
+  app's `code-tunnel` program or the standalone `code` CLI), code-server and
+  OpenVSCode Server. Each row says **Enabled**, **Installed**, **Not
+  installed**, **Not found** (a set path that is gone) or **Can't run**, for
+  World's own computer. Any of them can be enabled even when it isn't
+  installed here: a project on an SSH host uses the one installed on that
+  host, looked for when the project opens. A missing one offers **Connect: get
+  …** (its download page) and **Use a program path…** (an absolute path to an
+  executable on World's computer). The same rows are in Settings →
   Integrations, where the refresh button looks again.
-- **Enable gate.** **Enable…** opens a dialog that says the IDE and its
-  extensions get full access to this computer and to World (it runs on World's
-  page and address), where extensions come from (Open VSX), and, on a plain
+- **Webviews.** Stock VS Code and OpenVSCode Server load webviews (Markdown
+  preview and some extension panels) from another site, vscode-cdn.net. World
+  keeps one origin and never rewrites the IDE's files, so those panels stay
+  blank inside World; the row says so. Editing, terminals, Git, search and
+  debugging work. code-server serves its webviews itself, so they work.
+- **Enable gate.** **Enable…** opens a dialog that says the IDE runs on the
+  computer each project is on, that it and its extensions get full access to
+  those computers and to World (it runs on World's page and address), where
+  extensions come from (Microsoft's Marketplace or Open VSX), and, on a plain
   HTTP LAN address, that webviews, previews and the clipboard need HTTPS or
   localhost. **Enable** stays off until the trust box (and any licence box the
   IDE has) is ticked. Nothing starts on enable.
+- **Layout.** One thin bar holds the project picker, its host and folder, the
+  IDE, **New tab**, **Stop** and the rail toggle; the workbench fills the rest
+  of the view edge to edge. The rail of the project's agents (status, Needs
+  you first in colour) and terminals folds away with the toggle, which shows
+  their count while folded; an agent opens on its Chat, a terminal in the
+  Inspector. The rail starts folded on windows narrower than 1100 px and then
+  remembers your choice; on a phone it opens below the workbench.
 - **Projects.** A project is a room's folder (its checkout, else its working
   directory) or the folder of an agent outside every room, per connection; the
   same folder on two connections is two projects. The picker groups them by
-  host and remembers the choice. The rail lists the project's agents (status,
-  Needs you first in colour) and terminals: an agent opens on its Chat, a
-  terminal in the Inspector.
-- **Open.** **Open in code-server** starts one server for that project
-  folder; the next visit reuses it. The workbench is framed from
-  `/ide/<id>/` on World's own origin, behind World's sign-in; World's own
-  Content Security Policy is unchanged and the IDE keeps its own, with World's
-  frame rule added (frames only from World's own address). code-server's port
-  proxies (`/proxy/<port>`, `/absproxy/<port>`) are off and World refuses them
-  (403) for pages and WebSockets. **New tab**
-  opens the same address; **Stop** (after a confirmation) ends that server.
-  Switching projects keeps a loaded workbench in memory, hidden.
+  host and remembers the choice.
+- **Open.** **Open in …** starts one server for that project folder on the
+  project's host; the next visit reuses it. On World's computer it listens on
+  a private Unix socket. For an SSH host World uses that connection's OpenSSH
+  destination (so your OpenSSH config applies): one `ssh` per server runs the
+  host's IDE in a private folder under the host's `/tmp` (mode 0700) and
+  forwards its Unix socket to a private socket on World's computer; no TCP
+  port opens on either side. The access token travels on the SSH session's
+  input, never on a command line, and the server stops when that `ssh` ends.
+  Either way the workbench is framed from `/ide/<id>/` on World's own origin,
+  behind World's sign-in; World's own Content Security Policy is unchanged and
+  the IDE keeps its own, with World's frame rule added (frames only from
+  World's own address). code-server's port proxies (`/proxy/<port>`,
+  `/absproxy/<port>`) are off and World refuses them (403) for pages and
+  WebSockets. **New tab** opens the same address; **Stop** (after a
+  confirmation) ends that server. Switching projects keeps a loaded workbench
+  in memory, hidden. The first VS Code start on a host downloads VS Code's
+  web server there, about a minute.
 - **Limits and refusals.** At most four servers run at once; a fifth is
   refused (**Too many IDEs are running**). A start that does not answer within
-  three minutes fails; a server that exits shows its last error line. Both
-  offer **Try again**. A
-  stale connection must reconnect first. Projects over SSH are not run in the
-  browser: **Open in desktop VS Code…** gives a `code --remote ssh-remote+…`
-  command to copy and a `vscode://` link for desktop VS Code with Remote - SSH.
-  Windows hosts and folders that are gone are refused. Servers stop with World,
-  on disable, and when their connection reconnects, becomes SSH or is removed:
-  the route and its open WebSockets close, and **Open** starts a new server.
+  three minutes fails; a server that exits shows its last error line (or, for
+  SSH, whether SSH failed, the folder is missing on the host or World couldn't
+  make its private folder there). An IDE not installed on the project's host
+  is refused by name. These offer **Try again**. Looking for the IDE on an SSH
+  host gives up after 20 seconds. A stale connection must reconnect first.
+  Windows hosts and folders that are gone are refused. Servers stop with
+  World, on disable, and when their connection reconnects, changes SSH
+  destination or is removed: the route and its open WebSockets close, and
+  **Open** starts a new server.
 - **Preview states.** For trying the screens without an IDE, add
-  `?ideFixture=missing`, `detected`, `ssh`, `downloading` or `failed` to a
-  World address; World removes it at once and shows synthetic integration state
-  until the next reload.
+  `?ideFixture=missing`, `detected`, `ssh` (starting on an SSH host),
+  `downloading` or `failed` to a World address; World removes it at once and
+  shows synthetic integration state until the next reload.
 
 ## Workspace Inspector
 

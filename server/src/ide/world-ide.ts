@@ -1,9 +1,14 @@
 import { join } from "node:path";
+import { sshReadCommandArgv } from "../bridge/ssh-command";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
+import { runProcessWithCodeTimeout } from "../utils/process-utils";
 import {
   type IdeDetectEnvironment,
+  type IdeDetection,
+  type IdeProviderId,
   systemDetectEnvironment,
 } from "./providers";
+import { parseRemoteDetection, remoteDetectCommand } from "./remote";
 import { type IdeConnection, IdeService } from "./service";
 import { fileIdeSettingsStore } from "./settings";
 
@@ -33,7 +38,13 @@ export function createWorldIde(deps: {
   /** Sends a control message to every browser. */
   notify(message: string): void;
   environment?: IdeDetectEnvironment;
+  /** Runs a read-only host command; defaults to ssh with a timeout. */
+  runRemote?: (
+    argv: string[],
+    timeoutMs: number,
+  ) => Promise<{ code: number; stdout: string }>;
 }): IdeService {
+  const runRemote = deps.runRemote ?? runProcessWithCodeTimeout;
   let revision = 0;
   const connections = () => [
     ...deps.profiles.list(),
@@ -47,6 +58,8 @@ export function createWorldIde(deps: {
       return entry ? ideConnection(entry, deps.sshHost) : null;
     },
     connectionIds: () => [...new Set(connections().map((item) => item.id))],
+    remoteDetect: async (destination, provider, hostLabel) =>
+      detectOnHost(runRemote, destination, provider, hostLabel),
     onChange: () =>
       deps.notify(
         JSON.stringify({
@@ -76,4 +89,28 @@ export function ideConnection(
       ? { remotePlatform: "windows" as const }
       : {}),
   };
+}
+
+/** Remote detection is a few file checks and `--version`, over SSH. */
+const REMOTE_DETECT_TIMEOUT_MS = 20_000;
+
+export async function detectOnHost(
+  runRemote: (
+    argv: string[],
+    timeoutMs: number,
+  ) => Promise<{ code: number; stdout: string }>,
+  destination: string,
+  provider: IdeProviderId,
+  hostLabel: string,
+): Promise<IdeDetection> {
+  const result = await runRemote(
+    sshReadCommandArgv(
+      destination,
+      remoteDetectCommand(provider),
+      [],
+      "ide-detect",
+    ),
+    REMOTE_DETECT_TIMEOUT_MS,
+  );
+  return parseRemoteDetection(provider, hostLabel, result);
 }

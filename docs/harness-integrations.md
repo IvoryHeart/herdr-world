@@ -62,14 +62,13 @@ names the other two that also lose the file.
 
 The [Code view](../FEATURES.md#code-view) adds a distinct IDE kind beside these
 harness integrations: Visual Studio Code (`code serve-web`), code-server and
-OpenVSCode Server installed on World's own computer. Each is detected
-read-only, enabled once behind the trust and licence gate, and started per
-project folder only when **Open** is clicked. They are not harness names or
-commands, and `world.integration.*` does not manage them; their RPCs are
-`world.ide.*`. Projects over SSH get a desktop VS Code Remote - SSH handoff
-rather than a server. The [study](design/code-view/research.md) covers the
-remaining proposals (desktop handoffs to other editors, a World extension for
-agent terminals).
+OpenVSCode Server, installed on the host each project is on. Each is enabled
+once behind the trust and licence gate, detected read-only (on World's
+computer, or over the connection's OpenSSH destination for an SSH host) and
+started per project folder only when **Open** is clicked. They are not harness
+names or commands, and `world.integration.*` does not manage them; their RPCs
+are `world.ide.*`. The [study](design/code-view/research.md) covers the
+remaining proposal (a World extension for agent terminals).
 
 ## Runtime differences
 

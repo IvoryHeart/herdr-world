@@ -68,12 +68,12 @@ describe("parseIdeStatus", () => {
       version: null,
     });
     expect(status.instances).toHaveLength(1);
-    // Embedding is opt-in per provider: unknown means desktop only.
-    expect(status.providers[0]!.oneOrigin).toBe(false);
+    // Webviews in World are opt-in per provider: unknown means blank panels.
+    expect(status.providers[0]!.webviewsInWorld).toBe(false);
     expect(
       parseIdeStatus({
-        providers: [{ id: "code-server", oneOrigin: true }],
-      }).providers[0]!.oneOrigin,
+        providers: [{ id: "code-server", webviewsInWorld: true }],
+      }).providers[0]!.webviewsInWorld,
     ).toBe(true);
   });
 
@@ -87,26 +87,37 @@ describe("parseIdeStatus", () => {
 });
 
 describe("parseIdeOpenResult", () => {
-  test("a handoff keeps only a vscode:// link", () => {
-    const refusal = (url: string) =>
-      parseIdeOpenResult({
-        ok: false,
-        refusal: {
-          code: "remote",
-          message: "Over SSH.",
-          handoff: {
-            command: "code --remote ssh-remote+devbox.example /srv",
-            url,
-          },
-        },
-      });
-    const good = refusal(
-      "vscode://vscode-remote/ssh-remote+devbox.example/srv",
+  test("a refusal keeps only known codes and drops anything else", () => {
+    const result = parseIdeOpenResult({
+      ok: false,
+      refusal: {
+        code: "missing",
+        message: "Visual Studio Code isn't installed on devbox.",
+        handoff: { command: "code /srv", url: "vscode://file/srv" },
+      },
+    });
+    expect(result).toEqual({
+      ok: false,
+      refusal: {
+        code: "missing",
+        message: "Visual Studio Code isn't installed on devbox.",
+      },
+    });
+    const unknown = parseIdeOpenResult({
+      ok: false,
+      refusal: { code: "origin", message: "Another origin." },
+    });
+    expect(!unknown.ok && unknown.refusal.code).toBe("unknown-connection");
+  });
+
+  test("an instance keeps its SSH destination", () => {
+    const result = parseIdeOpenResult({
+      ok: true,
+      instance: { ...instance, sshDestination: "dev@devbox.example" },
+    });
+    expect(result.ok && result.instance.sshDestination).toBe(
+      "dev@devbox.example",
     );
-    expect(good.ok).toBe(false);
-    if (!good.ok) expect(good.refusal.handoff?.url).toStartWith("vscode://");
-    const bad = refusal("https://example.com/");
-    if (!bad.ok) expect(bad.refusal.handoff).toBeUndefined();
   });
 
   test("an ok result with a bad instance is a refusal, never a frame", () => {
@@ -119,18 +130,22 @@ describe("parseIdeOpenResult", () => {
 });
 
 describe("fixtureIdeClient", () => {
-  test("ssh refuses with a Remote-SSH handoff for the folder", async () => {
+  test("ssh starts the IDE on the SSH host", async () => {
     const client = fixtureIdeClient("ssh");
     const result = await client.open({
+      provider: "vscode",
       connectionId: "c1",
       generation: 1,
       folder: "/srv/example/api",
     });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.refusal.code).toBe("remote");
-      expect(result.refusal.handoff?.command).toContain("/srv/example/api");
-    }
+    expect(result).toMatchObject({
+      ok: true,
+      instance: {
+        provider: "vscode",
+        state: "starting",
+        sshDestination: "devbox.example",
+      },
+    });
   });
 
   test("detected starts disabled; enabling then opening starts a server", async () => {
@@ -140,7 +155,10 @@ describe("fixtureIdeClient", () => {
     const embeddable = (await client.status()).providers.find(
       (entry) => entry.id === "code-server",
     );
-    expect(embeddable).toMatchObject({ oneOrigin: true, enabled: false });
+    expect(embeddable).toMatchObject({
+      webviewsInWorld: true,
+      enabled: false,
+    });
     await client.enable("code-server");
     const result = await client.open({
       connectionId: "c1",
@@ -151,37 +169,16 @@ describe("fixtureIdeClient", () => {
     expect(changes).toBe(2);
   });
 
-  test("stock VS Code is desktop only, with a local handoff", async () => {
-    const client = fixtureIdeClient("detected");
-    const vscode = (await client.status()).providers.find(
-      (entry) => entry.id === "vscode",
-    );
-    expect(vscode).toMatchObject({ oneOrigin: false, enabled: false });
+  test("stock VS Code can be enabled and opened, even when missing here", async () => {
+    const client = fixtureIdeClient("missing");
+    await client.enable("vscode");
     const result = await client.open({
       provider: "vscode",
       connectionId: "c1",
       generation: 1,
       folder: "/srv/example/api",
     });
-    expect(result).toMatchObject({
-      ok: false,
-      refusal: {
-        code: "origin",
-        handoff: { url: "vscode://file/srv/example/api" },
-      },
-    });
-  });
-
-  test("an origin refusal survives parsing", () => {
-    const result = parseIdeOpenResult({
-      ok: false,
-      refusal: {
-        code: "origin",
-        message: "Another origin.",
-        handoff: { command: "code '/srv'", url: "vscode://file/srv" },
-      },
-    });
-    expect(!result.ok && result.refusal.code).toBe("origin");
+    expect(result.ok && result.instance.provider).toBe("vscode");
   });
 
   test("failed shows its reason", async () => {

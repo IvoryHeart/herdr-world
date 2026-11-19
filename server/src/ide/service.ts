@@ -3,7 +3,6 @@ import { isAbsolute, normalize } from "node:path";
 import { IdeInstances, type IdeInstanceView, IdeLimitError } from "./instances";
 import {
   detectIdeProvider,
-  ideDesktopOnlyReason,
   IDE_PROVIDER_IDS,
   IDE_PROVIDERS,
   type IdeDetectEnvironment,
@@ -37,24 +36,21 @@ export type IdeProviderStatus = IdeProviderInfo & {
 export type IdeStatus = {
   providers: IdeProviderStatus[];
   instances: IdeInstanceView[];
-  /** Connections on World's own computer: the ones Code can open here. */
+  /** Connections on World's own computer; the rest run the IDE on their SSH host. */
   localConnections: string[];
 };
 
 /** Why World won't start a server for this project, with the way forward. */
 export type IdeRefusal = {
   code:
-    | "remote"
     | "windows"
     | "stale"
     | "unknown-connection"
     | "folder"
     | "disabled"
-    | "limit"
-    | "origin";
+    | "missing"
+    | "limit";
   message: string;
-  /** Open the same host and folder in desktop VS Code instead. */
-  handoff?: { command: string; url: string };
 };
 
 export type IdeOpenResult =
@@ -74,46 +70,18 @@ export type IdeServiceDeps = {
   detectionTtlMs?: number;
   /** Called when status or instances change. */
   onChange?: () => void;
+  /**
+   * Looks for a provider on an SSH host (read-only, over the connection's
+   * OpenSSH destination). Without it, SSH projects are refused.
+   */
+  remoteDetect?(
+    destination: string,
+    provider: IdeProviderId,
+    hostLabel: string,
+  ): Promise<IdeDetection>;
 };
 
 const DETECTION_TTL_MS = 30_000;
-/** OpenSSH alias or user@host, as connection profiles already accept. */
-const SSH_DESTINATION = /^[A-Za-z0-9._-]+(@[A-Za-z0-9._:-]+)?$/;
-
-/**
- * VS Code's own SSH handoff for a remote folder: its documented
- * `--remote ssh-remote+<host>` CLI form and `vscode-remote` link. World
- * never runs a desktop program on the service host.
- */
-export function vscodeRemoteHandoff(
-  destination: string,
-  folder: string,
-): IdeRefusal["handoff"] | undefined {
-  if (!SSH_DESTINATION.test(destination) || !isAbsolute(folder))
-    return undefined;
-  const quoted = `'${folder.replaceAll("'", "'\\''")}'`;
-  const encodedPath = folder
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-  return {
-    command: `code --remote ssh-remote+${destination} ${quoted}`,
-    url: `vscode://vscode-remote/ssh-remote+${destination}${encodedPath}`,
-  };
-}
-
-/** Desktop VS Code's link and command for a folder on this computer. */
-export function vscodeLocalHandoff(
-  folder: string,
-): IdeRefusal["handoff"] | undefined {
-  if (!isAbsolute(folder)) return undefined;
-  const quoted = `'${folder.replaceAll("'", "'\\''")}'`;
-  const encodedPath = folder
-    .split("/")
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-  return { command: `code ${quoted}`, url: `vscode://file${encodedPath}` };
-}
 
 export class IdeService {
   readonly instances: IdeInstances;
@@ -122,6 +90,11 @@ export class IdeService {
   private detected = new Map<
     IdeProviderId,
     { at: number; binary: string | null; detection: IdeDetection }
+  >();
+  /** Per SSH host: connection, generation and provider. */
+  private remoteDetected = new Map<
+    string,
+    { at: number; detection: Promise<IdeDetection> }
   >();
 
   constructor(private readonly deps: IdeServiceDeps) {
@@ -164,7 +137,7 @@ export class IdeService {
         return {
           ...IDE_PROVIDERS[id],
           detection: await this.detect(id, options.refresh),
-          enabled: setting?.enabled === true && IDE_PROVIDERS[id].oneOrigin,
+          enabled: setting?.enabled === true,
           trustedAt: setting?.trusted_at ?? null,
           termsAcceptedAt: setting?.terms_accepted_at ?? null,
           binary: setting?.binary ?? null,
@@ -192,16 +165,15 @@ export class IdeService {
     consent: { trust?: unknown; acceptTerms?: unknown },
   ) {
     if (!isIdeProviderId(provider)) throw new Error("unknown IDE provider");
-    if (!IDE_PROVIDERS[provider].oneOrigin)
-      throw new Error(ideDesktopOnlyReason(IDE_PROVIDERS[provider]));
     if (consent.trust !== true)
       throw new Error("Enabling needs the full-access trust confirmation.");
     if (IDE_PROVIDERS[provider].terms.length && consent.acceptTerms !== true)
       throw new Error(
         `Enabling needs acceptance of the ${IDE_PROVIDERS[provider].label} terms.`,
       );
+    // Not installed here is fine: SSH hosts are checked as projects open.
     const detection = await this.detect(provider, true);
-    if (detection.state !== "detected") throw new Error(detection.reason);
+    if (detection.state === "unsupported") throw new Error(detection.reason);
     const at = this.now().toISOString();
     this.deps.settings.update((current) => {
       const previous = current.providers[provider] ?? { enabled: false };
@@ -259,11 +231,7 @@ export class IdeService {
     const refuse = (
       code: IdeRefusal["code"],
       message: string,
-      handoff?: IdeRefusal["handoff"],
-    ): IdeOpenResult => ({
-      ok: false,
-      refusal: { code, message, ...(handoff ? { handoff } : {}) },
-    });
+    ): IdeOpenResult => ({ ok: false, refusal: { code, message } });
     if (typeof request.connectionId !== "string")
       return refuse("unknown-connection", "Choose a project first.");
     const connection = this.deps.connection(request.connectionId);
@@ -280,48 +248,47 @@ export class IdeService {
     if (connection.remotePlatform === "windows")
       return refuse(
         "windows",
-        "World can't run a web IDE server on a Windows host. Open the folder in desktop VS Code with Remote-SSH.",
+        `World can't run a web IDE server on ${connection.label}, a Windows host, yet.`,
       );
-    if (connection.type === "ssh")
+    const remote =
+      connection.type === "ssh" && connection.sshDestination
+        ? connection.sshDestination
+        : null;
+    if (connection.type === "ssh" && !remote)
       return refuse(
-        "remote",
-        `This project is on ${connection.label}, over SSH. World runs VS Code in the browser only for projects on its own computer for now: open it in desktop VS Code with Remote-SSH.`,
-        connection.sshDestination
-          ? vscodeRemoteHandoff(connection.sshDestination, folder)
-          : undefined,
+        "unknown-connection",
+        `World doesn't know the SSH destination of ${connection.label}.`,
       );
-    try {
-      if (!statSync(folder).isDirectory())
-        return refuse("folder", "The project folder isn't a folder.");
-    } catch {
-      return refuse(
-        "folder",
-        "The project folder doesn't exist on this computer.",
-      );
+    if (!remote) {
+      try {
+        if (!statSync(folder).isDirectory())
+          return refuse("folder", "The project folder isn't a folder.");
+      } catch {
+        return refuse(
+          "folder",
+          "The project folder doesn't exist on this computer.",
+        );
+      }
     }
-    const settings = this.deps.settings.read();
     const provider = isIdeProviderId(request.provider)
       ? request.provider
       : IDE_PROVIDER_IDS.find((id) => this.enabled(id));
-    if (provider && !IDE_PROVIDERS[provider].oneOrigin)
-      return refuse(
-        "origin",
-        ideDesktopOnlyReason(IDE_PROVIDERS[provider]),
-        vscodeLocalHandoff(normalize(folder)),
-      );
-    if (!provider || !settings.providers[provider]?.enabled)
+    if (!provider || !this.enabled(provider))
       return refuse("disabled", "Enable an IDE in the Code view first.");
-    const detection = await this.detect(provider);
+    const detection = remote
+      ? await this.detectRemote(connection, remote, provider)
+      : await this.detect(provider);
     if (detection.state !== "detected")
-      return refuse("disabled", detection.reason);
-    // Detection awaited: the connection may have reconnected, turned to SSH or
-    // gone, or the provider been disabled, and retireStale() has already run.
-    // Re-check admission now, synchronously before the spawn, so no stale
-    // server starts after its retirement.
+      return refuse("missing", detection.reason);
+    // Detection awaited: the connection may have reconnected, changed host
+    // or gone, or the provider been disabled, and retireStale() has already
+    // run. Re-check admission now, synchronously before the spawn, so no
+    // stale server starts after its retirement.
     const admission = {
       provider,
       connectionId: connection.id,
       generation: connection.generation,
+      ...(remote ? { sshDestination: remote } : {}),
     };
     if (!this.admitted(admission))
       return this.enabled(provider)
@@ -337,6 +304,9 @@ export class IdeService {
         connectionId: connection.id,
         generation: connection.generation,
         folder: normalize(folder),
+        ...(remote
+          ? { ssh: { destination: remote, hostLabel: connection.label } }
+          : {}),
       });
       return { ok: true, instance };
     } catch (error) {
@@ -345,34 +315,73 @@ export class IdeService {
     }
   }
 
+  /** One provider on one SSH host, cached like local detection. */
+  private detectRemote(
+    connection: IdeConnection,
+    destination: string,
+    provider: IdeProviderId,
+  ): Promise<IdeDetection> {
+    if (!this.deps.remoteDetect)
+      return Promise.resolve({
+        provider,
+        state: "unsupported",
+        reason: "This World can't run IDEs on SSH hosts.",
+        configured: false,
+      });
+    const key = `${connection.id}\u0000${connection.generation}\u0000${destination}\u0000${provider}`;
+    const at = this.now().getTime();
+    const cached = this.remoteDetected.get(key);
+    if (cached && at - cached.at < this.ttl) return cached.detection;
+    const detection = this.deps
+      .remoteDetect(destination, provider, connection.label)
+      .catch(
+        (error): IdeDetection => ({
+          provider,
+          state: "missing",
+          reason: `World couldn't look for ${IDE_PROVIDERS[provider].label} on ${connection.label}: ${(error as Error).message}`,
+          configured: false,
+        }),
+      );
+    this.remoteDetected.set(key, { at, detection });
+    // A failed look is not remembered: the next open asks again.
+    void detection.then((result) => {
+      if (result.state !== "detected") this.remoteDetected.delete(key);
+    });
+    return detection;
+  }
+
   stop(instanceId: unknown) {
     if (typeof instanceId !== "string") return Promise.resolve(false);
     return this.instances.stop(instanceId);
   }
 
   private enabled(provider: IdeProviderId) {
-    return (
-      IDE_PROVIDERS[provider].oneOrigin &&
-      this.deps.settings.read().providers[provider]?.enabled === true
-    );
+    return this.deps.settings.read().providers[provider]?.enabled === true;
   }
 
   /**
    * Whether an instance's admission still holds: its provider is enabled
-   * and its connection is the same local runtime generation it was opened
-   * under. A reconnect, a change to SSH or removal ends it.
+   * and its connection is the same runtime generation, on the same machine
+   * (World's own, or the same SSH destination), it was opened under. A
+   * reconnect, a change of host or transport, or removal ends it.
    */
   private admitted(
-    instance: Pick<IdeInstanceView, "provider" | "connectionId" | "generation">,
+    instance: Pick<
+      IdeInstanceView,
+      "provider" | "connectionId" | "generation" | "sshDestination"
+    >,
   ) {
     const connection = this.deps.connection(instance.connectionId);
-    return (
-      connection !== null &&
-      connection.generation === instance.generation &&
-      connection.type === "local" &&
-      connection.remotePlatform !== "windows" &&
-      this.enabled(instance.provider)
-    );
+    if (
+      connection === null ||
+      connection.generation !== instance.generation ||
+      connection.remotePlatform === "windows" ||
+      !this.enabled(instance.provider)
+    )
+      return false;
+    const destination =
+      connection.type === "ssh" ? (connection.sshDestination ?? null) : null;
+    return destination === (instance.sshDestination ?? null);
   }
 
   /**

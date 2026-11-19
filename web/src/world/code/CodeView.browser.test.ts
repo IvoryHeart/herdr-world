@@ -17,7 +17,7 @@ const chrome =
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
 test.skipIf(!chrome)(
-  "Code view: gate, open, same-origin frame, SSH handoff and rail",
+  "Code view: gate, full-bleed frame, folding rail and SSH host IDE",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "code-view-test-"));
     const { promise, resolve } = Promise.withResolvers<unknown>();

@@ -104,10 +104,11 @@ const world = {
 } as unknown as WorldObject;
 
 const INSTANCE_ID = "browserFixture0001";
+const SSH_INSTANCE_ID = "browserFixture0002";
 function fakeClient() {
   const listeners = new Set<() => void>();
-  // Stock VS Code is installed but desktop only; code-server embeds.
-  const desktop: IdeProviderStatus = {
+  // Stock VS Code: installed, not enabled; its webviews stay blank in World.
+  const vscode: IdeProviderStatus = {
     id: "vscode",
     label: "Visual Studio Code",
     marketplace: "Microsoft Marketplace",
@@ -115,11 +116,11 @@ function fakeClient() {
     setupUrl: "https://example.com/download",
     detection: {
       state: "detected",
-      path: "/opt/example/bin/code",
+      path: "/opt/example/bin/code-tunnel",
       version: "1.99.0",
       configured: false,
     },
-    oneOrigin: false,
+    webviewsInWorld: false,
     enabled: false,
     trustedAt: null,
     termsAcceptedAt: null,
@@ -140,7 +141,7 @@ function fakeClient() {
       version: "4.99.0",
       configured: false,
     },
-    oneOrigin: true,
+    webviewsInWorld: true,
     enabled,
     trustedAt: null,
     termsAcceptedAt: null,
@@ -154,7 +155,7 @@ function fakeClient() {
     stops: [] as string[],
   };
   const status = (): IdeStatus => ({
-    providers: [desktop, provider(state.enabled)],
+    providers: [vscode, provider(state.enabled)],
     instances: state.instances,
     localConnections: ["local"],
   });
@@ -175,46 +176,30 @@ function fakeClient() {
     configure: async () => status(),
     open: async (request) => {
       state.opens.push(request);
-      if (request.provider === "vscode")
-        return {
-          ok: false,
-          refusal: {
-            code: "origin",
-            message: "VS Code loads extension views from another origin.",
-            handoff: {
-              command: `code '${request.folder}'`,
-              url: `vscode://file${request.folder}`,
-            },
-          },
-        };
-      if (request.connectionId !== "local")
-        return {
-          ok: false,
-          refusal: {
-            code: "remote",
-            message: "This project is on devbox, over SSH.",
-            handoff: {
-              command: `code --remote ssh-remote+devbox.example '${request.folder}'`,
-              url: `vscode://vscode-remote/ssh-remote+devbox.example${request.folder}`,
-            },
-          },
-        };
+      // An SSH project runs on its host; the frame is still World's /ide/.
+      const ssh = request.connectionId !== "local";
+      const id = ssh ? SSH_INSTANCE_ID : INSTANCE_ID;
       const instance: IdeInstance = {
-        id: INSTANCE_ID,
+        id,
         provider: "code-server",
         connectionId: request.connectionId,
         folder: request.folder,
         state: "starting",
-        url: `/ide/${INSTANCE_ID}/`,
+        url: `/ide/${id}/`,
         startedAt: new Date().toISOString(),
-        downloading: true,
+        ...(ssh
+          ? { sshDestination: "dev@devbox.example" }
+          : { downloading: true }),
       };
-      state.instances = [instance];
+      state.instances = [
+        ...state.instances.filter((entry) => entry.id !== id),
+        instance,
+      ];
       return { ok: true, instance };
     },
     stop: async (id) => {
       state.stops.push(id);
-      state.instances = [];
+      state.instances = state.instances.filter((entry) => entry.id !== id);
       return status();
     },
     subscribe: (listener) => {
@@ -224,6 +209,9 @@ function fakeClient() {
   };
   return { client, state, changed };
 }
+
+const box = (selector: string) => $(selector)?.getBoundingClientRect();
+const near = (a: number, b: number) => Math.abs(a - b) < 1;
 
 async function run() {
   localStorage.clear();
@@ -244,36 +232,51 @@ async function run() {
     ),
   );
   await until(
-    () => Boolean(button("Enable…")),
-    "a detected, disabled code-server offers Enable… in the Code view",
+    () => Boolean($('.ide-provider[data-provider="code-server"] button')),
+    "the Code view lists the IDE integrations",
   );
-  // Stock VS Code: desktop only, with a handoff and no Enable.
+  // Stock VS Code can be enabled; its blank webviews are said up front.
   const vscodeRow = $('.ide-provider[data-provider="vscode"]')!;
   check(
     vscodeRow.querySelector(".ide-provider-badge")?.textContent ===
-      "Desktop only · 1.99.0" && !button("Enable…", vscodeRow),
-    "stock VS Code reads Desktop only and offers no Enable",
-  );
-  const desktopOpen = [
-    ...document.querySelectorAll<HTMLButtonElement>(
-      ".code-view-desktop button",
-    ),
-  ].find((entry) => entry.textContent?.includes("desktop Visual Studio Code"));
-  check(Boolean(desktopOpen), "the Code view offers desktop VS Code");
-  desktopOpen?.click();
-  await until(
-    () => Boolean($(".code-view-refusal[data-code=origin]")),
-    "desktop VS Code answers with a handoff",
+      "Installed · 1.99.0" && Boolean(button("Enable…", vscodeRow)),
+    "stock VS Code reads Installed and offers Enable",
   );
   check(
-    $<HTMLAnchorElement>(".code-view-handoff a")?.getAttribute("href") ===
-      "vscode://file/srv/example/api" &&
-      fake.state.opens.shift()?.provider === "vscode",
-    "the handoff opens the project in desktop VS Code",
+    vscodeRow.textContent?.includes("stay blank inside World") === true,
+    "stock VS Code says its webviews stay blank in World",
+  );
+  check(
+    !/desktop/i.test($(".code-view")?.textContent ?? "") &&
+      !document.querySelector('a[href^="vscode:"]'),
+    "nothing in the Code view opens a desktop IDE",
   );
   check(
     $(".code-view-where")?.textContent?.includes("/srv/example/api") === true,
     "the first live project on this computer is chosen",
+  );
+
+  // The rail starts folded on a window narrower than 1100 px.
+  const toggle = button("Agents and terminals")!;
+  check(
+    Boolean(toggle) &&
+      toggle.getAttribute("aria-expanded") === "false" &&
+      !$(".code-view-context"),
+    "the rail starts collapsed on a narrow window",
+  );
+  check(
+    toggle?.querySelector(".code-view-rail-count")?.textContent === "2",
+    "the folded rail shows how many agents and terminals it holds",
+  );
+  toggle?.click();
+  await until(
+    () => Boolean($(".code-view-context")),
+    "the toggle opens the rail",
+  );
+  check(
+    toggle?.getAttribute("aria-expanded") === "true" &&
+      $(".code-view-context")?.id === toggle.getAttribute("aria-controls"),
+    "the toggle says the rail is open and which element it controls",
   );
   // The rail: the project's agent and terminal, not the other host's.
   const rail = $(".code-view-context")!;
@@ -299,15 +302,17 @@ async function run() {
   );
 
   // The gate: Enable stays off until both boxes are ticked.
-  button("Enable…")!.click();
+  const serverRow = $('.ide-provider[data-provider="code-server"]')!;
+  button("Enable…", serverRow)!.click();
   await until(() => Boolean($(".ide-gate")), "Enable… opens the gate");
   const gate = $(".ide-gate")!;
   const enable = button("Enable", gate)!;
   check(
-    gate.textContent?.includes("Full access to this computer") === true &&
+    gate.textContent?.includes("SSH host") === true &&
+      gate.textContent.includes("Full access to those computers") &&
       gate.textContent.includes("Full access to World") &&
       gate.textContent.includes("Open VSX"),
-    "the gate discloses machine and World authority and the marketplace",
+    "the gate discloses host and World authority and the marketplace",
   );
   check(
     gate.querySelector('a[href="https://example.com/terms"]') !== null,
@@ -348,9 +353,11 @@ async function run() {
       request.folder === "/srv/example/api",
     "open is qualified by connection, generation and folder",
   );
-  fake.state.instances = [
-    { ...fake.state.instances[0]!, state: "ready", downloading: undefined },
-  ];
+  fake.state.instances = fake.state.instances.map((entry) => ({
+    ...entry,
+    state: "ready",
+    downloading: undefined,
+  }));
   fake.changed();
   const framed = await until(
     () => Boolean($<HTMLIFrameElement>(".code-view-frame:not([hidden])")),
@@ -374,10 +381,30 @@ async function run() {
       )?.getAttribute("href") === `/ide/${INSTANCE_ID}/`,
       "New tab opens the same address",
     );
+    // Edge to edge: only a thin bar above; the rail beside it folds away.
+    const view = box(".code-view")!;
+    const bar = box(".code-view-bar")!;
+    const withRail = frame.getBoundingClientRect();
+    check(
+      bar.height <= 36 &&
+        near(withRail.left, view.left) &&
+        near(withRail.bottom, view.bottom) &&
+        near(withRail.top, bar.bottom),
+      `the workbench fills the view under a thin bar (bar ${bar.height}px)`,
+    );
+    button("Agents and terminals")!.click();
+    await until(() => !$(".code-view-context"), "the toggle folds the rail");
+    const folded = frame.getBoundingClientRect();
+    check(
+      near(folded.width, view.width) && folded.width > withRail.width,
+      "with the rail folded the workbench takes the full width",
+    );
+    button("Agents and terminals")!.click();
+    await until(() => Boolean($(".code-view-context")), "the rail opens again");
   }
 
-  // Switching to the SSH project: a refusal with the Remote-SSH handoff,
-  // and the loaded frame stays mounted (hidden) for coming back.
+  // Switching to the SSH project: VS Code runs on that host and shows
+  // here; the loaded frame stays mounted (hidden) for coming back.
   const select = $<HTMLSelectElement>(".code-view-project select")!;
   const docs = [...select.options].find((option) =>
     option.textContent?.includes("docs"),
@@ -394,23 +421,34 @@ async function run() {
     "the other project's frame is hidden, not reloaded",
   );
   check(
-    Boolean(button("Open in desktop VS Code…")),
-    "an SSH project says up front it opens in desktop VS Code",
+    $(".code-view-closed")?.textContent?.includes(
+      "On devbox, over SSH: World starts code-server there",
+    ) === true,
+    "an SSH project says its IDE runs on that host",
   );
-  button("Open in desktop VS Code…")?.click();
+  button("Open in code-server")?.click();
   await until(
-    () => Boolean($(".code-view-refusal[data-code=remote]")),
-    "an SSH project is refused with a handoff",
+    () =>
+      $(".code-view-starting")?.textContent?.includes("on devbox, over SSH") ===
+      true,
+    "an SSH project starts its IDE on the host",
   );
   check(
-    $(".code-view-command code")?.textContent ===
-      "code --remote ssh-remote+devbox.example '/srv/example/docs'",
-    "the handoff names the folder and SSH destination",
+    fake.state.opens[1]?.connectionId === "ssh-1" &&
+      fake.state.opens[1].folder === "/srv/example/docs",
+    "the SSH open names that connection and folder",
   );
-  check(
-    $<HTMLAnchorElement>(".code-view-handoff a")?.getAttribute("href") ===
-      "vscode://vscode-remote/ssh-remote+devbox.example/srv/example/docs",
-    "the handoff link opens desktop VS Code",
+  fake.state.instances = fake.state.instances.map((entry) => ({
+    ...entry,
+    state: "ready",
+  }));
+  fake.changed();
+  await until(
+    () =>
+      $<HTMLIFrameElement>(".code-view-frame:not([hidden])")?.getAttribute(
+        "src",
+      ) === `/ide/${SSH_INSTANCE_ID}/`,
+    "the SSH host's IDE shows in a frame on World's origin",
   );
   check(localStorage.length > 0, "the chosen project is remembered");
 
@@ -421,7 +459,9 @@ async function run() {
   select.dispatchEvent(new Event("change", { bubbles: true }));
   await settle();
   check(
-    $(".code-view-frame")?.hasAttribute("hidden") === false,
+    $<HTMLIFrameElement>(".code-view-frame:not([hidden])")?.getAttribute(
+      "src",
+    ) === `/ide/${INSTANCE_ID}/`,
     "coming back shows the same loaded frame",
   );
   button("Stop")?.click();
@@ -436,7 +476,7 @@ async function run() {
     "Stop stops this server",
   );
   await until(
-    () => !$(".code-view-frame"),
+    () => !$(`.code-view-frame[src="/ide/${INSTANCE_ID}/"]`),
     "a stopped server's frame goes away",
   );
   flushSync(() => root.unmount());

@@ -2,10 +2,11 @@ import { useEffect, useId, useMemo, useState } from "react";
 import {
   Bot,
   Code2,
-  Copy,
   ExternalLink,
   FolderOpen,
   Loader2,
+  PanelRightClose,
+  PanelRightOpen,
   Square,
   SquareTerminal,
 } from "lucide-react";
@@ -33,6 +34,9 @@ import "./CodeView.css";
 export { IdeIntegrationsSettings } from "./IdeIntegrationsSettings";
 
 const PROJECT_KEY = "code.project";
+const RAIL_KEY = "code.rail";
+/** Below this width the rail starts collapsed, leaving VS Code the room. */
+const RAIL_OPEN_MIN_WIDTH = 1100;
 
 const STATUS_LABELS: Record<WorldLeafObject["status"], string> = {
   working: "Working",
@@ -58,20 +62,39 @@ function writeProjectKey(key: string) {
   }
 }
 
-const usable = (provider: IdeProviderStatus) =>
-  provider.enabled &&
-  provider.oneOrigin &&
-  provider.detection.state === "detected";
+/** The owner's last choice, else open only on a wide window. */
+function readRailOpen() {
+  try {
+    const saved = worldLocalStorage.getItem(RAIL_KEY);
+    if (saved === "open") return true;
+    if (saved === "closed") return false;
+  } catch {
+    // Storage off: fall back to the width.
+  }
+  return window.innerWidth >= RAIL_OPEN_MIN_WIDTH;
+}
 
-/** Installed, but its extension views need another origin: desktop only. */
-const desktopOnly = (provider: IdeProviderStatus) =>
-  !provider.oneOrigin && provider.detection.state === "detected";
+function writeRailOpen(open: boolean) {
+  try {
+    worldLocalStorage.setItem(RAIL_KEY, open ? "open" : "closed");
+  } catch {
+    // Storage off: the choice lasts for this page.
+  }
+}
 
 /**
- * Code: the owner's installed VS Code (or code-server / OpenVSCode Server)
- * for one project, on World's own origin, with that project's agents and
- * terminals beside it. World starts a server only when asked, reuses it
- * per project folder, and leaves editing, Git and extensions to the IDE.
+ * Enabled is enough: whether it is installed is checked on the project's
+ * own host (World's computer or the SSH host) when it opens.
+ */
+const usable = (provider: IdeProviderStatus) => provider.enabled;
+
+/**
+ * Code: the complete VS Code (or code-server / OpenVSCode Server) of the
+ * host a project is on, World's own computer or an SSH host, filling the
+ * view on World's own origin. A thin bar picks the project; the rail of
+ * the project's agents and terminals folds away. World starts a server
+ * only when asked, reuses it per project folder, and leaves editing, Git
+ * and extensions to the IDE. Nothing here opens a desktop app.
  */
 export default function CodeView({
   world,
@@ -107,6 +130,8 @@ export default function CodeView({
   // Known only when the service lists this computer's connections.
   const remote =
     project !== null && local.size > 0 && !local.has(project.connectionId);
+  const [railOpen, setRailOpen] = useState(readRailOpen);
+  const railId = useId();
   const [refusals, setRefusals] = useState<Record<string, IdeRefusal>>({});
   const [opening, setOpening] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
@@ -118,7 +143,6 @@ export default function CodeView({
 
   const providers = ide.status?.providers ?? [];
   const enabledProviders = providers.filter(usable);
-  const desktop = providers.find(desktopOnly) ?? null;
   const [providerChoice, setProviderChoice] = useState<string | null>(null);
   const provider =
     enabledProviders.find((entry) => entry.id === providerChoice) ??
@@ -131,9 +155,7 @@ export default function CodeView({
           entry.folder === project.folder,
       )
     : undefined;
-  const stored = project ? refusals[project.key] : undefined;
-  // A desktop handoff answers "nothing to embed"; an enabled IDE replaces it.
-  const refusal = provider && stored?.code === "origin" ? undefined : stored;
+  const refusal = project ? refusals[project.key] : undefined;
 
   useEffect(() => {
     if (instance?.state !== "ready") return;
@@ -193,7 +215,11 @@ export default function CodeView({
   const showingFrame = instance?.state === "ready";
 
   return (
-    <div className="code-view" data-state={stageState()}>
+    <div
+      className="code-view"
+      data-state={stageState()}
+      data-rail={project && railOpen ? "open" : "closed"}
+    >
       <header className="code-view-bar">
         <Code2 size={16} aria-hidden className="code-view-mark" />
         {projects.length ? (
@@ -263,6 +289,35 @@ export default function CodeView({
             <span>Stop</span>
           </button>
         ) : null}
+        {project ? (
+          <button
+            type="button"
+            className="code-view-bar-action code-view-rail-toggle"
+            aria-label="Agents and terminals"
+            aria-expanded={railOpen}
+            aria-controls={railId}
+            title={
+              railOpen
+                ? "Hide the project's agents and terminals"
+                : "Show the project's agents and terminals"
+            }
+            onClick={() => {
+              setRailOpen(!railOpen);
+              writeRailOpen(!railOpen);
+            }}
+          >
+            {railOpen ? (
+              <PanelRightClose size={14} aria-hidden />
+            ) : (
+              <PanelRightOpen size={14} aria-hidden />
+            )}
+            {!railOpen && project.leaves.length ? (
+              <span className="code-view-rail-count">
+                {project.leaves.length}
+              </span>
+            ) : null}
+          </button>
+        ) : null}
       </header>
       <div className="code-view-body">
         <section className="code-view-stage" aria-label="IDE">
@@ -280,8 +335,9 @@ export default function CodeView({
             <div className="code-view-panel">{panel()}</div>
           )}
         </section>
-        {project ? (
+        {project && railOpen ? (
           <ProjectContext
+            id={railId}
             project={project}
             onOpenAgent={onOpenAgent}
             onOpenTerminal={onOpenTerminal}
@@ -334,25 +390,15 @@ export default function CodeView({
     if (!provider)
       return (
         <div className="code-view-integration">
-          <h2>Your own IDE, inside World</h2>
+          <h2>Your own VS Code, inside World</h2>
           <p>
-            Code opens the IDE already installed on this computer for a project,
-            with your extensions, settings and profile, and keeps the project's
-            agents and terminals beside it. Enable one to start.
+            Code opens the VS Code installed on the computer a project is on,
+            this one or an SSH host, with your extensions, settings and profile,
+            right here in World. The project's agents and terminals stay one
+            click away. Enable one to start.
           </p>
           {refusal && project ? (
             <Refusal refusal={refusal} onRetry={() => void open(project)} />
-          ) : desktop && project ? (
-            <div className="code-view-desktop">
-              <button
-                type="button"
-                disabled={opening !== null || project.stale}
-                onClick={() => void open(project, desktop)}
-              >
-                <ExternalLink size={14} aria-hidden /> Open{" "}
-                {displayFolder(project.folder)} in desktop {desktop.label}
-              </button>
-            </div>
           ) : null}
           {openError ? (
             <p className="code-view-error" role="alert">
@@ -387,8 +433,8 @@ export default function CodeView({
           </h2>
           <p>
             {instance.downloading
-              ? "The first start on this computer downloads VS Code's web server, about a minute. Later starts are quick."
-              : `For ${displayFolder(project.folder)} on ${project.hostLabel}.`}
+              ? `The first start on ${project.hostLabel} downloads VS Code's web server, about a minute. Later starts are quick.`
+              : `For ${displayFolder(project.folder)} on ${project.hostLabel}${instance.sshDestination ? ", over SSH" : ""}.`}
           </p>
         </div>
       );
@@ -417,8 +463,8 @@ export default function CodeView({
         </p>
         {remote && !project.stale ? (
           <p className="code-view-muted">
-            On {project.hostLabel}, over SSH: World gives you the command and
-            link to open it in desktop VS Code with Remote - SSH.
+            On {project.hostLabel}, over SSH: World starts {provider.label}{" "}
+            there and shows it here.
           </p>
         ) : null}
         {project.stale ? (
@@ -438,7 +484,7 @@ export default function CodeView({
           ) : (
             <Code2 size={14} aria-hidden />
           )}
-          {remote ? "Open in desktop VS Code…" : `Open in ${provider.label}`}
+          Open in {provider.label}
         </button>
         {!window.isSecureContext ? (
           <p className="code-view-note">
@@ -474,50 +520,19 @@ function Refusal({
   refusal: IdeRefusal;
   onRetry: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  const handoff = refusal.handoff;
   return (
     <div className="code-view-refusal" data-code={refusal.code}>
       <h2>
-        {refusal.code === "remote" || refusal.code === "origin"
-          ? "Open this project in desktop VS Code"
-          : refusal.code === "limit"
-            ? "Too many IDEs are running"
+        {refusal.code === "limit"
+          ? "Too many IDEs are running"
+          : refusal.code === "missing"
+            ? "The IDE isn't installed there"
             : "World can't open this project here"}
       </h2>
       <p role="alert">{refusal.message}</p>
-      {handoff ? (
-        <div className="code-view-handoff">
-          <a className="primary" href={handoff.url}>
-            <ExternalLink size={14} aria-hidden /> Open in VS Code
-          </a>
-          <div className="code-view-command">
-            <code>{handoff.command}</code>
-            <button
-              type="button"
-              aria-label="Copy the command"
-              title="Copy the command"
-              onClick={() =>
-                void navigator.clipboard
-                  ?.writeText(handoff.command)
-                  .then(() => setCopied(true))
-                  .catch(() => undefined)
-              }
-            >
-              <Copy size={14} aria-hidden />
-            </button>
-          </div>
-          <p className="code-view-muted">
-            {refusal.code === "origin"
-              ? copied
-                ? "Copied. Run it in a terminal on World's computer."
-                : "The link and command open desktop VS Code on World's computer, so use them there."
-              : copied
-                ? "Copied. Run it on your own computer, where desktop VS Code with Remote - SSH is installed."
-                : "The link and command need desktop VS Code with the Remote - SSH extension on your own computer."}
-          </p>
-        </div>
-      ) : refusal.code === "stale" || refusal.code === "limit" ? (
+      {refusal.code === "stale" ||
+      refusal.code === "limit" ||
+      refusal.code === "missing" ? (
         <button type="button" onClick={onRetry}>
           Try again
         </button>
@@ -527,10 +542,12 @@ function Refusal({
 }
 
 function ProjectContext({
+  id,
   project,
   onOpenAgent,
   onOpenTerminal,
 }: {
+  id: string;
   project: CodeProject;
   onOpenAgent: (id: string) => unknown;
   onOpenTerminal: (id: string) => unknown;
@@ -539,6 +556,7 @@ function ProjectContext({
   const terminals = project.leaves.filter((leaf) => leaf.kind !== "agent");
   return (
     <aside
+      id={id}
       className="code-view-context"
       aria-label="Project agents and terminals"
     >

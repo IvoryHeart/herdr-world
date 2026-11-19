@@ -7,12 +7,14 @@ import {
   ideServerArgs,
   ideUsesConnectionToken,
 } from "./providers";
+import { remoteExitReason, sshIdeArgv } from "./remote";
 import { IDE_TOKEN_COOKIE, type IdeUpstream, ideBasePath } from "./proxy";
 
 /**
  * World-owned IDE servers: at most one per (connection, provider, folder),
  * each on a private Unix socket in its own 0700 runtime folder with its own
- * random connection token. World starts them only on an explicit open and
+ * random connection token. For a project over SSH the server runs on that
+ * host and the socket is OpenSSH's forward of the host's own (remote.ts). World starts them only on an explicit open and
  * stops them on Stop, on disable, when their connection goes away and when
  * World stops.
  */
@@ -24,6 +26,8 @@ export type IdeInstanceView = {
   connectionId: string;
   /** The connection's runtime generation World admitted it under. */
   generation: number;
+  /** The SSH destination it runs on; absent on World's own computer. */
+  sshDestination?: string;
   folder: string;
   state: IdeInstanceState;
   /** The same-origin address the Code view frames. */
@@ -54,6 +58,8 @@ export type IdeChild = {
 export type IdeSpawn = (options: {
   command: string[];
   cwd: string;
+  /** Written to stdin, which then stays open for the child's life. */
+  stdin?: string;
   onOutput(line: string): void;
 }) => IdeChild;
 
@@ -83,11 +89,11 @@ const KILL_GRACE_MS = 3_000;
 const MAX_OUTPUT_LINES = 20;
 
 export function systemIdeSpawn(environment = process.env): IdeSpawn {
-  return ({ command, cwd, onOutput }) => {
+  return ({ command, cwd, stdin, onOutput }) => {
     const child = Bun.spawn(command, {
       cwd,
       env: environment,
-      stdin: "ignore",
+      stdin: stdin === undefined ? "ignore" : "pipe",
       stdout: "pipe",
       stderr: "pipe",
       // Its own process group, so Stop also ends the server it starts.
@@ -95,6 +101,12 @@ export function systemIdeSpawn(environment = process.env): IdeSpawn {
     } as Parameters<typeof Bun.spawn>[1]);
     for (const stream of [child.stdout, child.stderr])
       void readLines(stream as ReadableStream<Uint8Array>, onOutput);
+    if (stdin !== undefined) {
+      // Kept open: an ssh-launched server stops when its input ends.
+      const sink = child.stdin as import("bun").FileSink;
+      sink.write(stdin);
+      void sink.flush();
+    }
     return {
       pid: child.pid,
       exited: child.exited.then(
@@ -228,6 +240,8 @@ export class IdeInstances {
     connectionId: string;
     generation: number;
     folder: string;
+    /** Run it on this SSH host instead of World's computer. */
+    ssh?: { destination: string; hostLabel: string };
   }): { instance: IdeInstanceView; ready: Promise<IdeInstanceView> } {
     const key = instanceKey(
       request.connectionId,
@@ -240,13 +254,15 @@ export class IdeInstances {
       existing &&
       existing.state !== "failed" &&
       !existing.stopping &&
-      existing.generation === request.generation
+      existing.generation === request.generation &&
+      existing.sshDestination === request.ssh?.destination
     )
       return {
         instance: view(existing),
         ready: existing.ready.then(() => view(existing)),
       };
-    // A failed one is gone already; one from an older generation stops.
+    // A failed one is gone already; one from an older generation or
+    // another transport stops.
     if (existing?.state === "failed") this.discard(existing);
     else if (existing && !existing.stopping) void this.stopInstance(existing);
     const running = [...this.byId.values()].filter(
@@ -263,7 +279,6 @@ export class IdeInstances {
     const tokenFile = join(runtimeDir, "token");
     const usesToken = ideUsesConnectionToken(request.provider);
     const token = usesToken ? randomBytes(24).toString("base64url") : null;
-    if (token) writeFileSync(tokenFile, token, { mode: 0o600 });
     const basePath = ideBasePath(id);
     const { args, stripsBasePath } = ideServerArgs(request.provider, {
       basePath,
@@ -271,11 +286,29 @@ export class IdeInstances {
       tokenFile,
       folder: request.folder,
     });
+    let launch: { command: string[]; cwd: string; stdin?: string };
+    if (request.ssh) {
+      const remote = sshIdeArgv({
+        destination: request.ssh.destination,
+        provider: request.provider,
+        binary: request.binary,
+        basePath,
+        folder: request.folder,
+        localSocket: socketPath,
+        remoteId: randomBytes(16).toString("base64url"),
+        token,
+      });
+      launch = { command: remote.argv, cwd: runtimeDir, stdin: remote.stdin };
+    } else {
+      if (token) writeFileSync(tokenFile, token, { mode: 0o600 });
+      launch = { command: [request.binary, ...args], cwd: request.folder };
+    }
     const instance: Instance = {
       id,
       provider: request.provider,
       connectionId: request.connectionId,
       generation: request.generation,
+      ...(request.ssh ? { sshDestination: request.ssh.destination } : {}),
       folder: request.folder,
       state: "starting",
       url: `${basePath}/`,
@@ -297,8 +330,7 @@ export class IdeInstances {
     this.byKey.set(key, id);
     try {
       instance.child = this.spawn({
-        command: [request.binary, ...args],
-        cwd: request.folder,
+        ...launch,
         onOutput: (line) => {
           instance.lastOutput.push(line);
           if (instance.lastOutput.length > MAX_OUTPUT_LINES)
@@ -318,7 +350,11 @@ export class IdeInstances {
     const child = instance.child;
     void child.exited.then((code) => {
       if (instance.stopping || !this.byId.has(instance.id)) return;
-      this.fail(instance, plainReason(instance.lastOutput, code));
+      this.fail(
+        instance,
+        (request.ssh && remoteExitReason(code, request.ssh.hostLabel)) ||
+          plainReason(instance.lastOutput, code),
+      );
       instance.child = null;
     });
     instance.ready = this.waitReady(instance);
@@ -420,6 +456,9 @@ function view(instance: Instance): IdeInstanceView {
     provider: instance.provider,
     connectionId: instance.connectionId,
     generation: instance.generation,
+    ...(instance.sshDestination
+      ? { sshDestination: instance.sshDestination }
+      : {}),
     folder: instance.folder,
     state: instance.state,
     url: instance.url,

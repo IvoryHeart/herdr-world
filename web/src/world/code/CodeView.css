@@ -10,24 +10,28 @@
   color: var(--text);
   background: var(--bg);
 }
+/* One thin line: VS Code gets the rest of the view, edge to edge. */
 .code-view-bar {
   flex: none;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  padding: 7px 12px;
+  gap: 6px;
+  min-height: 30px;
+  padding: 2px 6px 2px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
-  font-size: 13px;
+  font-size: 12.5px;
+}
+.code-view-bar > * {
+  flex: none;
 }
 .code-view-mark {
   color: var(--accent);
 }
 .code-view-project select,
 .code-view-provider select {
-  max-width: min(320px, 60vw);
-  padding: 4px 8px;
+  max-width: min(280px, 45vw);
+  padding: 2px 6px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--input-bg, var(--panel-2));
@@ -36,6 +40,7 @@
   font-weight: 650;
 }
 .code-view-where {
+  flex: 0 1 auto;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -57,7 +62,8 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 9px;
+  min-height: 24px;
+  padding: 2px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel-2);
@@ -68,10 +74,26 @@
 .code-view-bar-action:hover {
   border-color: var(--accent);
 }
+.code-view-rail-toggle[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.code-view-rail-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: center;
+}
 .code-view-body {
   flex: 1;
   min-height: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.code-view[data-rail="open"] .code-view-body {
   grid-template-columns: minmax(0, 1fr) 240px;
 }
 .code-view-stage {
@@ -125,13 +147,6 @@
   text-align: left !important;
   width: min(560px, 100%);
 }
-.code-view-desktop button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  padding-inline: 14px;
-}
 .code-view-muted {
   margin: 0;
   color: var(--muted);
@@ -164,39 +179,6 @@
   .code-view-spin {
     animation: none;
   }
-}
-.code-view-handoff {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  width: 100%;
-}
-.code-view-handoff a.primary {
-  padding: 6px 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  text-decoration: none;
-}
-.code-view-command {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 6px 6px 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.code-view-command code {
-  min-width: 0;
-  overflow-x: auto;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.code-view-command button {
-  flex: none;
-  display: inline-flex;
-  padding: 4px;
 }
 .code-view-context {
   min-height: 0;
@@ -270,17 +252,17 @@
   font-size: 11.5px;
 }
 @media (max-width: 760px) {
-  .code-view-body {
+  .code-view[data-rail="open"] .code-view-body {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
   }
   .code-view-context {
-    max-height: 32vh;
+    max-height: 40vh;
     border-top: 1px solid var(--border);
     border-left: 0;
   }
-  .code-view-where {
-    flex-basis: 100%;
-    order: 9;
+  .code-view-mark,
+  .code-view-bar-action > span:not(.code-view-rail-count) {
+    display: none;
   }
 }

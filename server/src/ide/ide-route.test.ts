@@ -21,7 +21,7 @@ import { configureServerLogger } from "../utils/logger";
  * The Code view's IDE route through World's real listener: sign-in, the
  * enable gate, a World-owned server per folder, header and cookie rules,
  * the WebSocket pipe, logout and Stop. The IDE is a fake `serve-web` and
- * code-server; stock VS Code fails the one-origin gate and hands off.
+ * code-server.
  */
 beforeAll(() => configureServerLogger("error"));
 afterAll(() => configureServerLogger("info"));
@@ -101,27 +101,25 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
       version: "1.99.0",
     });
     expect(vscode.enabled).toBe(false);
-    expect(vscode.oneOrigin).toBe(false);
+    expect(vscode.webviewsInWorld).toBe(false);
     // The local connection is one Code can open on this computer.
     expect(status.localConnections).toEqual([connection.id]);
 
-    // Stock VS Code frames webviews from vscode-cdn.net: never embedded,
-    // offered on the desktop instead.
+    // Stock VS Code is embedded too, behind the same gate; its CDN webview
+    // frames stay out by World's frame policy.
     await expect(
-      browser.call("world.ide.enable", {
-        provider: "vscode",
-        trust: true,
-        acceptTerms: true,
-      }),
-    ).rejects.toThrow(/vscode-cdn\.net/);
-    const desktop = await browser.call("world.ide.open", {
+      browser.call("world.ide.enable", { provider: "vscode", trust: true }),
+    ).rejects.toThrow(/terms/);
+    await browser.call("world.ide.enable", {
       provider: "vscode",
-      connectionId: connection.id,
-      generation: connection.generation,
-      folder: project,
+      trust: true,
+      acceptTerms: true,
     });
-    expect(desktop.refusal.code).toBe("origin");
-    expect(desktop.refusal.handoff.url).toBe(`vscode://file${project}`);
+    status = await browser.call("world.ide.status");
+    expect(
+      status.providers.find((entry: { id: string }) => entry.id === "vscode")
+        .enabled,
+    ).toBe(true);
 
     await browser.call("world.ide.configure", {
       provider: "code-server",
