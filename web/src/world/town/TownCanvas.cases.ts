@@ -41,5 +41,7 @@ export const townCanvasCases = {
     [390, 844, "protected", 0],
     [390, 844, "navigation", 0],
     [1440, 900, "navigation", 0],
+    [412, 915, "core", 0],
+    [1440, 900, "core", 0],
   ],
 } satisfies Record<string, TownCanvasCase[]>;

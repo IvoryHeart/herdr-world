@@ -10,7 +10,11 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
-import { buildWorldObject, type WorldObject } from "../worldObject";
+import {
+  buildWorldObject,
+  CORE_VIEW_ONLY_REASON,
+  type WorldObject,
+} from "../worldObject";
 import TownView from "../TownView";
 import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
@@ -1019,6 +1023,151 @@ async function groupTwoDesks(
   );
 }
 
+/** The core scale's one herdr-core host, at local core addresses. */
+function coreTopology(): WorldRuntimeConnection {
+  const workspace_id = "core-room";
+  const desks = [
+    ["core-shell", [["t1", ""]]],
+    ["core-agent", [["t2", "claude"]]],
+    [
+      "core-pair",
+      [
+        ["t3", ""],
+        ["t4", ""],
+      ],
+    ],
+  ] as const;
+  const tabs: Tab[] = desks.map(([tab_id, panes], index) => ({
+    tab_id,
+    workspace_id,
+    number: index + 1,
+    label: ["shell", "agent", "pair"][index]!,
+    focused: index === 0,
+    pane_count: panes.length,
+    agent_status: "unknown",
+  }));
+  const panes: Pane[] = desks.flatMap(([tab_id, desk]) =>
+    desk.map(
+      ([address, agent]): Pane => ({
+        pane_id: address,
+        terminal_id: address,
+        workspace_id,
+        tab_id,
+        // Of the pair, the second pane holds focus: a tap opens it.
+        focused: address === "t4",
+        agent,
+        agent_status: agent ? "working" : "",
+        task_summary: agent ? "Juno on core" : undefined,
+        runtime: "herdr-core",
+        revision: 1,
+      }),
+    ),
+  );
+  return {
+    connectionId: "core",
+    label: "Core host",
+    source: "saved-profile",
+    runtime: "herdr-core",
+    isDefault: false,
+    state: "ready",
+    generation: 5,
+    snapshotGeneration: 5,
+    stale: false,
+    actionable: true,
+    snapshot: {
+      workspaces: [
+        {
+          workspace_id,
+          number: 1,
+          label: "Core room",
+          focused: true,
+          pane_count: panes.length,
+          tab_count: tabs.length,
+          active_tab_id: "core-shell",
+          agent_status: "working",
+        } as Workspace,
+      ],
+      tabs,
+      panes,
+      agents: [],
+    },
+  };
+}
+
+/**
+ * Tapping a live herdr-core desk opens it as a Herdr desk opens (#1006): a
+ * shell desk its terminal, an agent desk its agent, a two-pane desk its
+ * focused pane, with no "can't" toast. A touch tap first opens the table's
+ * card, so the phone taps twice.
+ */
+async function checkCoreDesks(
+  host: HTMLElement,
+  world: WorldObject,
+  opened: string[],
+  inspected: [string, string][],
+) {
+  const canvasHost = host.querySelector(".town-canvas-host canvas")!
+    .parentElement!;
+  const leafId = (address: string) =>
+    world.leaves.find(
+      (leaf) => leaf.connectionId === "core" && leaf.pane.pane_id === address,
+    )?.id;
+  const desk = (tabId: string) =>
+    [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].find((target) => JSON.parse(target.dataset.targetKey!)[2] === tabId);
+  const tap = (target: HTMLElement, id: number) => {
+    const box = target.getBoundingClientRect();
+    const at = {
+      bubbles: true,
+      pointerId: id,
+      pointerType: phone ? "touch" : "mouse",
+      button: 0,
+      clientX: box.left + box.width / 2,
+      clientY: box.top + box.height / 2,
+    };
+    canvasHost.dispatchEvent(
+      new PointerEvent("pointerdown", { ...at, buttons: 1 }),
+    );
+    canvasHost.dispatchEvent(
+      new PointerEvent("pointerup", { ...at, buttons: 0 }),
+    );
+    canvasHost.dispatchEvent(new MouseEvent("click", at));
+  };
+  const openedIds = () => [...opened, ...inspected.map(([id]) => id)];
+  let pointer = 60;
+  for (const [tabId, address] of [
+    ["core-shell", "t1"],
+    ["core-agent", "t2"],
+    ["core-pair", "t4"],
+  ] as const) {
+    await waitFor(() => Boolean(desk(tabId)), `no core desk ${tabId}`);
+    const target = desk(tabId)!;
+    opened.length = 0;
+    inspected.length = 0;
+    tap(target, pointer++);
+    if (phone) {
+      await settle();
+      if (!openedIds().length) tap(target, pointer++);
+    }
+    await waitFor(
+      () => openedIds().length > 0,
+      `tapping the core ${tabId} desk opened nothing`,
+    );
+    check(
+      openedIds().every((id) => id === leafId(address)),
+      `the core ${tabId} desk opened ${JSON.stringify(openedIds())}, not ${address}`,
+    );
+    const toasts = host.querySelector(".town-toasts")?.textContent ?? "";
+    check(
+      !toasts.includes(CORE_VIEW_ONLY_REASON) && !/can.t/i.test(toasts),
+      `tapping the core ${tabId} desk showed "${toasts}"`,
+    );
+  }
+}
+
 function worldFor(connections: WorldRuntimeConnection[]) {
   const world = buildWorldObject(connections, "local");
   // The merged service names every stopped agent, including its first read.
@@ -1068,6 +1217,9 @@ async function run() {
   layoutShell.append(host);
   document.body.append(layoutShell);
   const base = topology(7);
+  // A herdr-core host alone: a shell desk, an agent desk and a two-pane desk
+  // whose second pane is focused (#1006).
+  if (scale === "core") base.connections = [coreTopology()];
   // The service saves a claim for each spawn stamp it sees.
   boardDocument.relations = {
     groups: boardDocument.relations?.groups ?? [],
@@ -1434,6 +1586,12 @@ async function run() {
     "town targets did not finish progressive admission",
   );
 
+  if (scale === "core" && mode === "test") {
+    await checkCoreDesks(host, worldFor(base.connections), opened, inspected);
+    root.unmount();
+    await settle();
+    return;
+  }
   if (scale === "typical" && mode === "test")
     await checkTownCenter(host, check, waitFor);
   if (scale === "plates" && mode === "test") {
