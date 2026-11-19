@@ -39,7 +39,7 @@ if (process.env.HERDR_LAUNCH_TARGET_DOM_TEST !== "1") {
     useAgentProfiles: () => ({ document: { profiles: [] } }),
     launcherCatalog: async (target: LaunchTarget) => {
       catalogs.push(target);
-      return { kinds: ["claude", "codex"], readiness: [], skills: [] };
+      return { kinds: [], readiness: [], skills: [] };
     },
   }));
   const coreControl = await import("./coreControl");
@@ -256,47 +256,6 @@ if (process.env.HERDR_LAUNCH_TARGET_DOM_TEST !== "1") {
         },
       ]);
       expect(closed).toBe(1);
-      // Quick start must use the same core route as Terminal, rather than
-      // TUI agent.start (which injects a launch command into a shell).
-      for (const kind of ["claude", "codex"]) {
-        coreLaunches.length = 0;
-        await act(async () =>
-          root.render(
-            h(AgentLauncherDialog, {
-              key: `quick-${kind}`,
-              world: { spaces: [tui, core] } as WorldObject,
-              initial: {},
-              onOpen() {
-                throw new Error("core agents arrive in Town");
-              },
-              onEditProfiles() {},
-              onClose() {},
-            }),
-          ),
-        );
-        const quick = [
-          ...host.querySelectorAll<HTMLButtonElement>(".agent-launcher-kind"),
-        ].find((button) => button.textContent?.trim().toLowerCase() === kind)!;
-        expect(quick).toBeDefined();
-        await act(async () => quick.click());
-        expect(coreLaunches).toEqual([
-          {
-            target: {
-              connectionId: "box-core",
-              generation: 5,
-              workspaceId: "hc:unplaced",
-              workspaceLabel: "box",
-              runtime: "herdr-core",
-            },
-            choice: {
-              profileId: undefined,
-              kind,
-              label: kind === "claude" ? "Claude" : "Codex",
-              text: "",
-            },
-          },
-        ]);
-      }
       // The TUI stays a per-launch choice: an asked-for TUI room is kept.
       await act(async () =>
         root.render(

@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { withClaudeLimitsTap } from "../agent/profile-launch";
-import { claudeTapArgs } from "../usage/claude-tap";
+import { rmSync } from "node:fs";
 import { type CoreKillConfirmation } from "./kill-plan";
 import {
   CoreOperationRefused,
@@ -58,85 +55,6 @@ const REPORTING = [
 
 describe("World's writes to a real herdr-core", () => {
   live(
-    "Claude starts through core with the real long tap and literal multiline arguments",
-    async () => {
-      const core = new ScratchCore(bin!);
-      scratch.push(core);
-      core.env.SHELL = "/bin/bash";
-      const executable = join(core.root, "claude");
-      const received = join(core.root, "received.json");
-      writeFileSync(
-        join(core.env.HOME!, ".bashrc"),
-        "export WORLD_SHELL_LOADED=yes\n",
-      );
-      writeFileSync(
-        executable,
-        `#!${process.execPath}
-import { writeFileSync } from 'node:fs';
-writeFileSync(${JSON.stringify(received)}, JSON.stringify({ args: process.argv.slice(2), shell: process.env.WORLD_SHELL_LOADED }));
-process.stdout.write('\\x1b]7501;state=working:app=claude-code\\x1b\\\\');
-setTimeout(() => {}, 60000);
-`,
-      );
-      chmodSync(executable, 0o755);
-      await core.start();
-      const w = await connected(core.stateDir);
-      const room = await createCoreRoom(w.lease(), w.topology, "Review");
-      const prompt =
-        "Review 'quoted' and \"nested\" text.\n$(exit 92); `exit 93`";
-      const runtime = { kind: "node" as const, path: "/usr/bin/node" };
-      const launch = withClaudeLimitsTap(
-        {
-          kind: "claude",
-          label: "Reviewer",
-          text: "",
-          args: ["--append-system-prompt", prompt],
-        },
-        runtime,
-      );
-      const outcome = await launchCore(
-        w.lease(),
-        {
-          workspaceId: room.workspace_id,
-          ...launch,
-        },
-        { topology: w.topology, resolveExecutable: async () => executable },
-      );
-      expect(outcome.status).toBe("started");
-      if (outcome.status !== "started") throw new Error("launch failed");
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          stop();
-          reject(new Error("Claude harness never reported working"));
-        }, 5000);
-        const check = () => {
-          if (
-            (w.record(outcome.terminal_id)?.status as { state?: string })
-              ?.state === "working"
-          ) {
-            clearTimeout(timer);
-            stop();
-            resolve();
-          }
-        };
-        const stop = w.lease().runtime.watch(check);
-        check();
-      });
-      expect(JSON.parse(readFileSync(received, "utf8"))).toEqual({
-        args: [
-          "--append-system-prompt",
-          prompt,
-          ...claudeTapArgs(runtime),
-          "--session-id",
-          expect.any(String),
-        ],
-        shell: "yes",
-      });
-    },
-    30_000,
-  );
-
-  live(
     "a launch is accepted with explicit parameters, placed, kept and reporting",
     async () => {
       const scratchCore = new ScratchCore(bin!);
@@ -170,14 +88,7 @@ setTimeout(() => {}, 60000);
         state: "live",
         name: "reviewer",
         keep: true,
-        argv: [
-          "/bin/sh",
-          "-c",
-          expect.stringContaining('exec "$@"'),
-          "world-agent",
-          "/bin/sh",
-          ...REPORTING,
-        ],
+        argv: ["/bin/sh", ...REPORTING],
       });
       expect(record.parent ?? null).toBeNull();
       expect(record.labels).toMatchObject({

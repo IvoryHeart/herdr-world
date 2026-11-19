@@ -141,7 +141,7 @@ describe("launching in herdr-core (M2, M3)", () => {
     const [run] = runs(w);
     const params = run!.params as Record<string, unknown>;
     // Exactly what core receives: no caller, no parent, no notes, keep set,
-    // an absolute shell wrapper and the first message as a literal argument.
+    // an absolute executable and the first message as its argument.
     expect(Object.keys(params).sort()).toEqual(
       [
         "argv",
@@ -156,10 +156,6 @@ describe("launching in herdr-core (M2, M3)", () => {
     );
     expect(params).toMatchObject({
       argv: [
-        "/bin/sh",
-        "-c",
-        expect.stringContaining('exec "$@"'),
-        "world-agent",
         "/opt/example/bin/claude",
         "--agent",
         "reviewer",
@@ -228,9 +224,7 @@ describe("launching in herdr-core (M2, M3)", () => {
     ]);
     await launch("claude", ["-c"]);
     await launch("pi", ["--session=/srv/example/s.jsonl"]);
-    const argv = runs(w).map((run) =>
-      (run.params as { argv: string[] }).argv.slice(4),
-    );
+    const argv = runs(w).map((run) => (run.params as { argv: string[] }).argv);
     expect(argv[0]).toEqual([
       "/opt/example/bin/claude",
       "--session-id",

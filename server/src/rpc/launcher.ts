@@ -8,7 +8,6 @@ import { profileLaunch, withClaudeLimitsTap } from "../agent/profile-launch";
 import type { ConnectionRpcContext } from "./context";
 import { probeLauncher } from "./launcher-probe";
 import { claudeTapRuntime } from "../usage/claude-tap";
-import { claudeLaunchTapArgs } from "../usage/claude-launch-settings";
 
 /** The launcher on one connection: harness readiness, login, catalog and start (launcher.*). */
 export function handleLauncherRpc(
@@ -119,28 +118,19 @@ async function dispatchLauncherRpc(
         text: String(p.text ?? "").slice(0, 16_000),
       });
       const host = sshHost();
-      const windows = host
-        ? connection.remotePlatform === "windows"
-        : process.platform === "win32";
       const tapRuntime =
         launch.kind === "claude"
           ? await claudeTapRuntime({
               host,
-              windows,
+              windows: host
+                ? connection.remotePlatform === "windows"
+                : process.platform === "win32",
               run: connection.runProcessWithCodeTimeout,
             })
           : null;
-      const tapArgs = tapRuntime
-        ? await claudeLaunchTapArgs({
-            runtime: tapRuntime,
-            host,
-            windows,
-            run: connection.runProcessWithCodeTimeout,
-          })
-        : undefined;
       let result = await launchAgent(call, {
         workspace_id: String(p.workspace_id ?? ""),
-        ...withClaudeLimitsTap(launch, tapRuntime, tapArgs),
+        ...withClaudeLimitsTap(launch, tapRuntime),
         isCurrent: requestIsCurrent,
       });
       if (

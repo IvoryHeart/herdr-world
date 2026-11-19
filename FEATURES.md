@@ -83,35 +83,6 @@ no control for it. Platform and harness limits apply across the table.
   its core rooms separately from Herdr apps and cannot rename or close an
   app-created room. Linked-machine core terminals are observations, not
   directly controllable desks.
-- **Core agent environment (Unix):** New agent finds and starts the harness
-  through the core host's `$SHELL` (`/bin/sh` when unset): interactive on Linux,
-  login and interactive on macOS. Supported shells are sh, bash, zsh, dash,
-  ksh, mksh and fish. Their startup files can add tools such as nvm and bun.
-  World receives the executable path, without collecting,
-  copying or saving the shell environment. Other shells (including csh, tcsh,
-  nu, xonsh and elvish) keep direct launching with the inherited environment;
-  their startup files are not loaded. Startup files that replace the shell
-  with another shell or tmux can prevent launch or time out the catalog probe.
-  Windows keeps native launching.
-- **Core launch arguments:** choose a room whose launcher says **Starts in
-  herdr-core**; a room's name alone does not identify its runtime. World gives
-  core the executable and arguments directly, including long Claude settings
-  and multiline prompts. It does not type a launch command into a terminal.
-- **Claude in Herdr TUI rooms (Unix):** Quick start and profile launches give
-  Claude a short settings-file path, so the full status-line tap cannot be cut
-  off by a terminal's input-line limit and leave the shell at a `> ` prompt.
-  World prepares the file on the selected host, outside terminal input, in
-  `~/.cache/herdr-world/claude-launch/`. Files contain only World's tap settings,
-  are private to the user and reused for identical tap content; user settings
-  stay untouched. If preparation fails, New agent reports an error before
-  creating a tab or starting an agent. Windows keeps inline settings.
-- **Codex status on Linux core:** working/idle comes from Codex's native
-  OSC 7501 reports, just as on macOS. If core publishes no status, World
-  shows **unknown** even when Chat and Terminal work. World cannot recover
-  missing core/harness reports from the screen or transcript; that reporting
-  limitation needs a fix in the runtime or harness. Linux core **0.1.21** with
-  Codex **0.167.0** can publish idle/working; the missing-report case is not
-  a general Linux status-mapping restriction in World.
 - **Terminal size:** watching never sends a resize. An open core Terminal tab
   also holds an interactive viewer: it fits the terminal only when no Herdr
   app pane holds it. Typing takes the size by core's rule; using an app pane

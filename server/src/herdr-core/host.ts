@@ -1,14 +1,9 @@
 import { sshReadCommandArgv } from "../bridge/ssh-command";
 import { powershellCommand } from "../bridge/ssh-windows";
-import {
-  harnessReadiness,
-  harnessSpec,
-  resolveExecutable,
-} from "../agent/harness-readiness";
+import { harnessSpec, resolveExecutable } from "../agent/harness-readiness";
 import type { CoreConnectionProfile } from "../connections/profiles";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { windowsCoreCommand } from "./windows";
-import { coreShellArgv } from "./shell";
 
 /**
  * Where a core runs, locally or over the profile's SSH, and how World runs
@@ -59,24 +54,6 @@ export function coreHostForProfile(
   };
 }
 
-/** The launcher inventory uses the same shell environment as its launches. */
-export function coreHarnessReadiness(host: CoreHost, kinds: string[]) {
-  return harnessReadiness({
-    kinds,
-    windows: host.windows,
-    shQuote,
-    run: async (argv, timeoutMs) => ({
-      ...(await host.run(
-        coreShellArgv(["/bin/sh", ...argv.slice(1)])
-          .map(shQuote)
-          .join(" "),
-        timeoutMs,
-      )),
-      stderr: "",
-    }),
-  });
-}
-
 /** The Windows resolver's one line of output: the path, after this marker. */
 export const WINDOWS_EXECUTABLE_MARKER = "herdr-core-executable:";
 const BINARY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -105,9 +82,9 @@ export function windowsExecutableScript(binary: string): string {
 
 /**
  * The absolute path of a harness's executable on the core's host: found on
- * the shell's PATH, else in its usual install places. Unix probes enter the
- * same interactive shell as the agent, returning only the executable path.
- * Core never receives a bare name, which it would look up as a template.
+ * the PATH, else in its usual install places (on Unix the same probe as the
+ * launcher's readiness). Core receives this path, never a bare name, which
+ * core would first look up as a template.
  */
 export async function resolveCoreExecutable(
   host: CoreHost,
@@ -138,10 +115,7 @@ export async function resolveCoreExecutable(
     'case "$b" in /*) [ -x "$b" ] && [ ! -d "$b" ] && printf "%s\\n" "$b" ;; esac',
     "exit 0",
   ].join("\n");
-  const result = await host.run(
-    coreShellArgv(["/bin/sh", "-c", script]).map(shQuote).join(" "),
-    15_000,
-  );
+  const result = await host.run(script, 15_000);
   const path = result.stdout.trim().split("\n").pop() ?? "";
   if (result.code !== 0 || !/^\/[^\0\r\n]*$/.test(path) || path.length > 4096)
     throw new Error(`no ${spec.binary} executable was found`);
