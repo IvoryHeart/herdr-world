@@ -66,6 +66,15 @@ export type OfficePaneDevice = {
   order: number;
   stale: boolean;
   canOpenInSpaces: boolean;
+  /**
+   * A live herdr-core pane: Town opens it in World's Inspector (its
+   * terminal, or an agent's Chat) though World cannot mark its work reviewed.
+   */
+  coreOpen?: true;
+  /** Herdr reports this pane focused in its tab. */
+  focused?: true;
+  /** When the pane's agent last did something (epoch ms), if known. */
+  lastActivityAt?: number;
   agentKey?: string;
   agentSessionFingerprint?: string;
 };
@@ -90,6 +99,8 @@ export type OfficeDesk = {
   order: number;
   stale: boolean;
   canOpenInSpaces: boolean;
+  /** Any of its panes is a live herdr-core pane Town opens (coreOpen). */
+  coreOpen?: true;
   occupantAgentKey?: string;
   completionAgentKeys: string[];
   paneDevices: OfficePaneDevice[];

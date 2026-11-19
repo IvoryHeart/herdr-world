@@ -1,5 +1,9 @@
 import { HerdrClient } from "../bridge/herdr-client";
 import {
+  connectionIdentityForProfile,
+  localMigrationSeed,
+} from "./profile-creation";
+import {
   assertSupportedHerdrProtocol,
   HerdrCompatibilityError,
 } from "../bridge/protocol-compat";
@@ -30,10 +34,10 @@ import {
   validateConnectionProfile,
 } from "./profiles";
 import { createSshProfileRuntimeConfig } from "./ssh-profile-runtime";
-import {
-  type ConnectionIdentity,
-  STARTUP_DEFAULT_CONNECTION_ID,
-} from "./types";
+import { ProfileInputError, validateProfileInput } from "./profile-validation";
+import { STARTUP_DEFAULT_CONNECTION_ID } from "./types";
+
+export { connectionIdentityForProfile } from "./profile-creation";
 
 export type StartupLocalProfile = LocalConnectionProfile & {
   id: typeof STARTUP_DEFAULT_CONNECTION_ID;
@@ -90,21 +94,6 @@ export function loadConnectionProfileBootstrap(args: {
     explicitStartupOverride: false,
     persistedRegistry: null,
     registrations: [{ profile: args.startupProfile, readOnly: true }],
-  };
-}
-
-export function connectionIdentityForProfile(
-  profile: ManagedConnectionProfile,
-): ConnectionIdentity {
-  return {
-    id: profile.id,
-    label: profile.label,
-    source:
-      profile.id === STARTUP_DEFAULT_CONNECTION_ID
-        ? "startup-config"
-        : profile.type === "ssh"
-          ? "ssh-profile"
-          : "local-profile",
   };
 }
 
@@ -425,12 +414,17 @@ export class ConnectionProfileService<
 
   create(
     value: unknown,
+    options: { makeDefault?: boolean; keepLocalDefault?: boolean } = {},
   ): Promise<ConnectionProfileListItem | CoreConnectionListItem> {
     return this.mutate(async () => {
       this.requireWritableRegistryState();
-      const profile = validateConnectionProfile(value);
+      if (options.makeDefault && this.args.bootstrap.explicitStartupOverride)
+        throw new ProfileInputError(
+          "explicit CLI/environment connection remains the process default",
+        );
+      const profile = validateProfileInput(value);
       if (this.profiles.has(profile.id) || this.hasRuntime(profile.id)) {
-        throw new Error(`connection already exists: ${profile.id}`);
+        throw new ProfileInputError(`connection already exists: ${profile.id}`);
       }
       const previousRegistry = this.registry;
       const migration =
@@ -442,15 +436,26 @@ export class ConnectionProfileService<
       const coreOnly =
         migration && isCoreProfile(profile) && this.args.noHerdrTui?.();
       const migrationSeed =
-        migration && !coreOnly ? this.localMigrationSeed(profile.id) : null;
-      const keepDefault = isCoreProfile(profile) && migration && !coreOnly;
+        migration && !coreOnly
+          ? localMigrationSeed(this.args.bootstrap, profile.id)
+          : null;
+      const keepDefault =
+        (isCoreProfile(profile) || options.keepLocalDefault) &&
+        migration &&
+        !coreOnly &&
+        !options.makeDefault;
       const defaultId = keepDefault ? migrationSeed?.id : profile.id;
       if (!defaultId)
-        throw new Error("add a Herdr connection before a herdr-core one");
+        throw new ProfileInputError(
+          "add a Herdr connection before a herdr-core one",
+        );
       const nextRegistry: PersistedConnectionRegistry = previousRegistry
         ? {
             ...previousRegistry,
             version: CONNECTION_PROFILE_FILE_VERSION,
+            default_connection_id: options.makeDefault
+              ? profile.id
+              : previousRegistry.default_connection_id,
             profiles: [...previousRegistry.profiles, profile],
           }
         : {
@@ -489,8 +494,11 @@ export class ConnectionProfileService<
       }
       this.profiles.set(profile.id, { profile, readOnly: false });
       this.registry = nextRegistry;
+      if (migration || options.makeDefault)
+        this.args.manager.setDefault(defaultId, {
+          external: isCoreProfile(profile) && defaultId === profile.id,
+        });
       if (migration) {
-        this.args.manager.setDefault(defaultId, { external: coreOnly });
         this.disableRetry(STARTUP_DEFAULT_CONNECTION_ID);
         await this.args.manager.unregister(STARTUP_DEFAULT_CONNECTION_ID);
         this.profiles.delete(STARTUP_DEFAULT_CONNECTION_ID);
@@ -506,29 +514,6 @@ export class ConnectionProfileService<
       }
       return this.item(profile.id);
     });
-  }
-
-  private localMigrationSeed(
-    newProfileId: string,
-  ): LocalConnectionProfile | null {
-    const startupProfile = this.args.bootstrap.registrations.find(
-      (registration) =>
-        registration.profile.id === STARTUP_DEFAULT_CONNECTION_ID,
-    )?.profile;
-    if (
-      !startupProfile ||
-      startupProfile.type !== "local" ||
-      isCoreProfile(startupProfile)
-    )
-      return null;
-    return {
-      id: newProfileId === "local" ? "localhost" : "local",
-      label: "Local",
-      type: "local",
-      control_socket_path: startupProfile.control_socket_path,
-      client_socket_path: startupProfile.client_socket_path,
-      auto_connect: true,
-    };
   }
 
   update(
@@ -638,10 +623,10 @@ export class ConnectionProfileService<
     return this.mutate(async () => {
       this.requireWritableRegistryState();
       if (typeof connectionId !== "string")
-        throw new Error("connection id is required");
+        throw new ProfileInputError("connection id is required");
       const current = this.requireWritableProfile(connectionId);
       if (this.args.manager.defaultId() === connectionId) {
-        throw new Error("cannot remove the default connection");
+        throw new ProfileInputError("cannot remove the default connection");
       }
       const registry = this.requireRegistry();
       const nextProfiles = registry.profiles.filter(
@@ -653,10 +638,16 @@ export class ConnectionProfileService<
               ...registry,
               version: CONNECTION_PROFILE_FILE_VERSION,
               profiles: nextProfiles,
+              default_connection_id:
+                registry.default_connection_id === connectionId
+                  ? nextProfiles[0].id
+                  : registry.default_connection_id,
             }
           : null;
       if (!nextRegistry && !this.args.bootstrap.explicitStartupOverride) {
-        throw new Error("cannot remove the last persisted connection");
+        throw new ProfileInputError(
+          "cannot remove the last persisted connection",
+        );
       }
       const previousState =
         this.managerOf(connectionId).status(connectionId).state;
@@ -705,9 +696,9 @@ export class ConnectionProfileService<
     return this.mutate(async () => {
       this.requireWritableRegistryState();
       if (typeof connectionId !== "string")
-        throw new Error("connection id is required");
+        throw new ProfileInputError("connection id is required");
       if (this.args.bootstrap.explicitStartupOverride) {
-        throw new Error(
+        throw new ProfileInputError(
           "explicit CLI/environment connection remains the process default",
         );
       }
@@ -959,13 +950,15 @@ export class ConnectionProfileService<
 
   private requireProfile(connectionId: string) {
     const entry = this.profiles.get(connectionId);
-    if (!entry) throw new Error(`unknown connection: ${connectionId}`);
+    if (!entry)
+      throw new ProfileInputError(`unknown connection: ${connectionId}`);
     return entry;
   }
 
   private requireWritableProfile(connectionId: string): ConnectionProfile {
     const entry = this.requireProfile(connectionId);
-    if (entry.readOnly) throw new Error("connection profile is read-only");
+    if (entry.readOnly)
+      throw new ProfileInputError("connection profile is read-only");
     return entry.profile as ConnectionProfile;
   }
 

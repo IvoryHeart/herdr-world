@@ -102,7 +102,7 @@ const requestedView =
 // the golden captures cover at night.
 setTownDaylightMode("day");
 // Idle Town proves it is drawing through the renderer's frame counters.
-if (operation.startsWith("town-idle"))
+if (operation.startsWith("town-idle") || operation === "phone-hosts-menu")
   window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 const coldMaster = operation === "cold-master";
 const coldHost =
@@ -469,6 +469,121 @@ async function float(id: string) {
     `The ${id} Inspector did not open`,
   );
   await frame();
+}
+/**
+ * Whether a menu's item can be reached: scrolled into its menu's view, it
+ * lies on screen and nothing covers its centre.
+ */
+function reachable(item: HTMLElement) {
+  item.scrollIntoView({ block: "nearest" });
+  const rect = item.getBoundingClientRect();
+  const x = rect.left + rect.width / 2,
+    y = rect.top + rect.height / 2;
+  const hit = document.elementFromPoint(x, y);
+  return (
+    rect.height > 0 &&
+    rect.top >= 0 &&
+    rect.bottom <= window.innerHeight &&
+    rect.left >= 0 &&
+    rect.right <= window.innerWidth &&
+    !!hit &&
+    item.contains(hit)
+  );
+}
+/** Hosts in the phone's corner view menu, with the topbar's one filter. */
+async function phoneHostsMenuScenario() {
+  const town = () => window.__HERDR_TOWN_RENDERER__;
+  const townHosts = () => town()?.layout?.buildings ?? 0;
+  await clock.until(
+    () => town()?.ready === true && townHosts() > 0,
+    "Town never laid out its hosts",
+  );
+  const shown = townHosts();
+  const fab = document.querySelector<HTMLButtonElement>(
+    ".world-view-picker-fab",
+  );
+  if (!fab) throw new Error("The phone's Zen Town has no corner view menu");
+  check(reachable(fab), "The corner view button is off screen or covered");
+  fab.click();
+  await frame();
+  const menu = document.querySelector<HTMLElement>(
+    '.world-view-picker-menu[role="menu"]',
+  );
+  if (!menu) throw new Error("The corner view menu did not open");
+  const items = [...menu.querySelectorAll<HTMLElement>('[role^="menuitem"]')];
+  check(items.length >= 6, `The corner menu shows ${items.length} items`);
+  for (const item of items)
+    check(
+      reachable(item),
+      `The corner menu item "${item.textContent}" cannot be reached at ${innerWidth}×${innerHeight}`,
+    );
+  const hostsItem = items.find((item) => item.textContent?.startsWith("Hosts"));
+  if (!hostsItem) throw new Error("The corner menu omits Hosts");
+  check(
+    hostsItem.textContent === "HostsAll hosts",
+    `The corner Hosts item reads "${hostsItem.textContent}"`,
+  );
+  hostsItem.click();
+  await frame();
+  const panel = () =>
+    document.querySelector<HTMLElement>(".world-view-picker-hosts");
+  if (!panel()) throw new Error("Hosts did not open in the corner menu");
+  for (const control of panel()!.querySelectorAll<HTMLElement>("button, label"))
+    check(
+      reachable(control),
+      `The corner Hosts control "${control.textContent}" cannot be reached at ${innerWidth}×${innerHeight}`,
+    );
+  const beta = panel()!.querySelector<HTMLInputElement>(
+    'input[aria-label="Synthetic beta"]',
+  );
+  if (!beta?.checked)
+    throw new Error("The corner Hosts panel lacks a ticked beta host");
+  beta.click();
+  await waitFor(
+    () => townHosts() === shown - 1,
+    `Unticking beta in the corner menu left Town with ${townHosts()} of ${shown} hosts`,
+  );
+  // The topbar's Hosts shows the same selection.
+  check(
+    document.querySelector(".topbar .connection-switcher-label")
+      ?.textContent === "2 hosts",
+    "The topbar Hosts label does not follow the corner menu's filter",
+  );
+  namedButton("Hosts")!.click();
+  await frame();
+  const topbarBox = (id: string) =>
+    document.querySelector<HTMLInputElement>(
+      `.world-hosts-menu input[aria-label="Synthetic ${id}"]`,
+    );
+  check(
+    topbarBox("alpha")?.checked === true &&
+      topbarBox("beta")?.checked === false &&
+      topbarBox("offline")?.checked === true,
+    "The topbar Hosts menu does not show the corner menu's selection",
+  );
+  namedButton("Hosts")!.click();
+  await frame();
+  // Ticked again, beta returns to Town.
+  fab.click();
+  await frame();
+  if (panel()) throw new Error("The corner button left Hosts open");
+  fab.click();
+  await frame();
+  [
+    ...document.querySelectorAll<HTMLElement>(
+      '.world-view-picker-menu [role="menuitem"]',
+    ),
+  ]
+    .find((item) => item.textContent?.startsWith("Hosts"))!
+    .click();
+  await frame();
+  panel()!
+    .querySelector<HTMLInputElement>('input[aria-label="Synthetic beta"]')!
+    .click();
+  await waitFor(
+    () => townHosts() === shown,
+    "Ticking beta again did not return it to Town",
+  );
 }
 async function operationalScenario(unmount: () => void) {
   if (operation === "desk-reveal") {
@@ -1382,6 +1497,10 @@ async function operationalScenario(unmount: () => void) {
         "true",
       "An explicit Spaces tab command failed to resume its own arrangement",
     );
+    return;
+  }
+  if (operation === "phone-hosts-menu") {
+    await phoneHostsMenuScenario();
     return;
   }
   if (operation === "nonempty-filter") {

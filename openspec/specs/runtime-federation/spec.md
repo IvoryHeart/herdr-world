@@ -43,6 +43,29 @@ with that World service rather than connecting to independently deployed bridges
 - **THEN** World stops only its runtime and transport without stopping that Herdr server, session,
   workspace or agent
 
+#### Scenario: CLI edits connections while World serves
+- **WHEN** a local caller runs `connections add`, `remove` or `set-default` against
+  the running service
+- **THEN** the service admits and persists the edit through the same serialized
+  profile mutations as Settings, retaining concurrent Settings changes
+- **AND** auto-connect additions connect, removal retires only the named runtime
+  and its browser contexts, and the default changes without a service restart
+- **AND** unrelated connections and browser sessions remain usable; refused or
+  unconfirmed live admission never falls back to a CLI registry write
+- **AND** invalid input, including duplicate or unknown IDs, exits 2; persistence,
+  I/O and other service failures exit 1
+- **AND** offline edits retain their existing behavior and `--restart` remains
+  available as an optional restart after admission
+
+#### Scenario: CLI requests a restart for a non-loopback listener
+- **WHEN** the configured listener answers on one specific non-loopback address
+- **THEN** `--restart` retains save-and-restart for an active managed service
+- **AND** the CLI refuses offline writes while a foreground process serves there
+
+#### Scenario: No configured listener answers a CLI edit
+- **WHEN** no listener answers, including while a managed service is starting or unreachable
+- **THEN** the CLI retains its existing offline save behavior without restarting the service
+
 #### Scenario: A second bridge targets the same runtime
 - **WHEN** another managed profile or World process attempts to own the same Herdr client socket
 - **THEN** it is rejected before the runtimes can compete for terminal attachment ownership

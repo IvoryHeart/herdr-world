@@ -85,10 +85,6 @@ Saved connections and their chosen default stay as they are. When the TUI is
 installed, first run keeps its existing local discovery; add core in **Manage
 connections** if wanted.
 
-CLI connection edits (`connections add`, `remove` and `set-default`) need
-`--restart` while the managed World service runs. World saves the change and
-restarts that service to load it. Stop a foreground World process before editing
-its registry, or use **Manage connections** for changes while World stays open.
 `service uninstall` removes current and legacy World user services on macOS and
 Linux when their definitions identify them as World-owned. It preserves settings,
 tokens, unrelated services and herdr-core's login item.
@@ -151,6 +147,35 @@ no control for it. Platform and harness limits apply across the table.
   its core rooms separately from Herdr apps and cannot rename or close an
   app-created room. Linked-machine core terminals are observations, not
   directly controllable desks.
+- **Core agent environment (Unix):** New agent finds and starts the harness
+  through the core host's `$SHELL` (`/bin/sh` when unset): interactive on Linux,
+  login and interactive on macOS. Supported shells are sh, bash, zsh, dash,
+  ksh, mksh and fish. Their startup files can add tools such as nvm and bun.
+  World receives the executable path, without collecting,
+  copying or saving the shell environment. Other shells (including csh, tcsh,
+  nu, xonsh and elvish) keep direct launching with the inherited environment;
+  their startup files are not loaded. Startup files that replace the shell
+  with another shell or tmux can prevent launch or time out the catalog probe.
+  Windows keeps native launching.
+- **Core launch arguments:** choose a room whose launcher says **Starts in
+  herdr-core**; a room's name alone does not identify its runtime. World gives
+  core the executable and arguments directly, including long Claude settings
+  and multiline prompts. It does not type a launch command into a terminal.
+- **Claude in Herdr TUI rooms (Unix):** Quick start and profile launches give
+  Claude a short settings-file path, so the full status-line tap cannot be cut
+  off by a terminal's input-line limit and leave the shell at a `> ` prompt.
+  World prepares the file on the selected host, outside terminal input, in
+  `~/.cache/herdr-world/claude-launch/`. Files contain only World's tap settings,
+  are private to the user and reused for identical tap content; user settings
+  stay untouched. If preparation fails, New agent reports an error before
+  creating a tab or starting an agent. Windows keeps inline settings.
+- **Codex status on Linux core:** working/idle comes from Codex's native
+  OSC 7501 reports, just as on macOS. If core publishes no status, World
+  shows **unknown** even when Chat and Terminal work. World cannot recover
+  missing core/harness reports from the screen or transcript; that reporting
+  limitation needs a fix in the runtime or harness. Linux core **0.1.21** with
+  Codex **0.167.0** can publish idle/working; the missing-report case is not
+  a general Linux status-mapping restriction in World.
 - **Terminal size:** watching never sends a resize. An open core Terminal tab
   also holds an interactive viewer: it fits the terminal only when no Herdr
   app pane holds it. Typing takes the size by core's rule; using an app pane
@@ -266,8 +291,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     it for the full text).
     Chat and quests refresh usage stops after local transcript rewrites, including
     same-size writes whose file timestamps stay unchanged.
-    On a phone the compact chip adds the lowest percent left (or **reached**), with the same age when that reading is over 15 minutes old. Its **Summary** button, or on a phone the compact chip under
-    the search bar, opens the **Town summary** window: blocked agents and
+    The board stays folded into a compact status chip at the top left: one
+    icon, **!N** in amber while N items need you, and the lowest fuel percent
+    (or **reached**) only when a gauge is low or reached. Hover the chip with a
+    mouse, or tap, click or focus and press Enter, to open the board below it as
+    a popover. A click or tap keeps it open; Escape, a tap outside or another
+    tap on the chip closes it. Opened by hover alone, it closes shortly after
+    the mouse leaves the chip and board. The board's **Summary** button
+    opens the **Town summary** window: blocked agents and
     questions you can answer in place,
     unreviewed finishes and when each was last active, every host and room
     with its counts (tap a room to go there) and its subscription limits
@@ -461,8 +492,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
     **New room** (disabled with the reason when no room can be created). With
     no room open, New room asks for the **Destination host**, herdr-core hosts
-    included (`· herdr-core`); a core room takes a name only, since its agents
-    start in core's own folder, and an empty name becomes "Room". Arrow
+    included (`· herdr-core`); an empty core room name becomes "Room". Arrow
     keys, Home and End move around the ring; Escape, a press outside, the
     centre **✕** or **Back** on a phone closes it.
   - **Lenses** colour the whole map by one fact, as strategy games' map
@@ -587,8 +617,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     changes, without polling.
   - Tapping an agent or its table brings the agent back: from reception or the
     bar it walks to its desk and stays there until its status changes. A
-    table stands for an agent that needs you (waiting, then finished) before
-    the one seated there. **Menu → Agents open** chooses whether that tap opens
+    table opens its one pane, else the focused pane, else an agent there
+    that needs you (waiting, then finished), else the most recently active
+    pane. Only a table with more panes than seats and none focused lists
+    them to choose. Herdr TUI and herdr-core
+    tables open alike: a live core shell opens its terminal and a core agent
+    its Chat or terminal, never a refusal; "World can't mark core work
+    reviewed yet" shows only on review controls. **Menu → Agents open** chooses whether that tap opens
     the chat (the default) or the terminal, in Town, Board and Desk alike; either way the tap does not mark
     finished work reviewed. **Open terminal** in the peek does, as before.
   - A seated agent with a quest (its own todo list, plan, Codex goal or loop)
@@ -705,8 +740,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     targets. A
     table, or its nameplate, opens the same card for that table on hover,
     focus or a tap; a click on the plate selects the table and a double click
-    opens it. On touch screens the first tap on a table opens its card, and a
-    second tap (or a double tap) opens the table. Zoomed out to the room
+    opens it. On touch screens one tap opens a live table's default pane; on
+    a table with nothing to open at once (a cached host's, or a crowded one)
+    the first tap opens its card and a second tap (or a double tap) does what
+    a tap does. Zoomed out to the room
     cards, each room's card is a slim label hanging from its rug's top edge:
     its name, a waiting badge and a thin bar of working, waiting, done and
     quiet; hovering or focusing it adds the count line. A mouse anywhere over
@@ -1260,8 +1297,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
 - **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.
-  **Hosts** defaults to All hosts and persists an explicit host set independently
-  of **Manage connections**. It lists every connection of either runtime,
+  **Hosts** (in the top bar; on a phone in Zen, in the corner view menu too)
+  defaults to All hosts and persists an explicit host set independently
+  of **Manage connections**; both places show and change one filter per
+  browser. It lists every connection of either runtime,
   Herdr's first; a herdr-core connection reads `<name> · herdr-core · <state>`
   and is counted, selected and remembered like a Herdr host (profiles of one
   runtime endpoint count once). Filtering preserves open resources and terminals;
@@ -1734,8 +1773,13 @@ preview**. Chat and its draft stay open.
   settings menu's **Zen mode** switch turns it off or back on. While Zen is on,
   a view picker beside Exit Zen switches between the views. On a phone, Zen
   hides the top bar and bottom navigation on every root screen, Spaces' list
-  included; a corner button opens the views and **Show the bars**. A terminal is
-  a detail screen and keeps its own bar, with Back. Stored in this browser.
+  included; a corner button opens the views, **Hosts**, **Find or act** and
+  **Show the bars**. **Hosts** there opens the top bar's Hosts filter in the
+  menu's place, with **Manage connections**, and changes the same selection;
+  Tab moves between its controls, and Tab out of it closes it, as Tab closes
+  the views menu. On a short screen the menu scrolls, so every choice stays reachable.
+  A terminal is a detail screen and keeps its own bar, with Back. Stored in
+  this browser.
 
 Herdr 0.9.0 uses **Local navigation** per browser/connection; legacy connections
 use **Shared navigation**. Reconnect preserves live selections; reload starts
@@ -1856,6 +1900,30 @@ to search.
   on adjacent hard rows does not expire an unchanged URL. Repeated window
   activation preserves a freshly verified OSC 8 target only at the same cells
   and frame.
+
+## Code view design preview
+
+Code is a proposal to show the user's installed real VS Code web workbench inside
+World, projecting the same hosts, rooms, projects, agents and terminals. IDEs fit
+the existing integrations direction: detect and enable per host, open per project,
+with desktop handoffs to VS Code, Cursor, JetBrains Gateway and Zed. The
+[research and recommendation](docs/design/code-view/research.md) compare Microsoft
+`code serve-web`, OpenVSCode and code-server, marketplace/settings differences,
+licence, origin/authentication, SSH, terminal and resource hurdles. The
+[design walkthrough](docs/design/code-view/design.md) gives exact preview clicks.
+No live editor, server, extension, installer, proxy or navigation is delivered.
+
+Open **`/code-view-prototype.html`** on your World/preview origin. The standalone
+**DESIGN STUDY / 981** uses a clearly labelled VS Code **stand-in**, an IDE picker
+and an **Open in desktop IDE** handoff preview. All data/actions are synthetic;
+nothing installs, connects, saves, executes or launches an app. **Block embedding
+(mock)**, **Disconnect host (mock)** and the SSH host's missing-provider fixture
+expose failure states; **Mark installed (mock)** only changes fixture state.
+**Attach profile (mock)** demonstrates existing agent terminals; Herdr TUI requires
+acknowledging that attach resizes the pane for every viewer. The mock presents
+the desktop workbench in World's frame. **Reset study** clears memory-only state.
+Real embedding remains gated on upstream terms, same-origin/worker/webview compatibility and
+explicit trust in full shell/write and same-origin extension authority.
 
 ## Workspace Inspector
 
@@ -2253,6 +2321,22 @@ rows. Customize assignments in Configuration.
 New workspace and worktree dialogs suggest readable two-word names. Suggestions
 load asynchronously; editing the name takes precedence over a late suggestion.
 
+New room (New workspace) picks its **Folder** on the chosen host, Herdr TUI
+and herdr-core alike:
+
+- **Recent folders** are up to six buttons, by name with the full path as a
+  tooltip: the folders that host's panes and rooms work in, the focused pane's
+  first, then the most recently active. The folder defaults to the most recent
+  one, else `~` (home); one tap on another recent folder, then **Create**,
+  makes the room there.
+- The folder is checked on the host as you type: it shows the resolved path,
+  **Up to <parent>** and its subfolders to browse, or the error. **Tab**
+  completes a typed path to the shared start of the matching folders. Create
+  waits for the check of a typed folder; the default folder does not.
+- A herdr-core room keeps its folder: core checks it on its host, refuses a
+  missing one, and starts the room's shells and agents there. App spaces and
+  worktree rooms keep their own folders.
+
 ## Remote, Multi-Client, and Operations
 
 - Manage shared local/SSH profiles with independent browser selection. A
@@ -2260,6 +2344,18 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   exists, otherwise on the service's default; phones still open on Town.
   Disconnect does not stop Herdr/workspaces. A Linux/macOS World service can reach Unix or Windows SSH hosts;
   a Windows World service supports local profiles. See [connection setup](docs/DEPLOYMENT.md#local-and-ssh-connections).
+- **CLI connection changes apply immediately.** `herdr-world connections add`,
+  `remove` and `set-default` apply through the running service on loopback, in
+  the same queue as **Manage connections**, retaining concurrent Settings edits.
+  Auto-connect additions connect at once; removal retires only that host's
+  runtime and open contexts. Other connections and browser sessions stay open.
+  Choose another default before removing the current one; explicit service
+  Herdr settings still pin the process default. `--restart` remains optional
+  on loopback. A managed service bound to one non-loopback address still needs
+  `--restart` to save and restart; stop a foreground process there before editing.
+  With no listener answering, edits are saved for the next start, including when
+  a managed service is starting or unreachable. Validation errors exit 2;
+  persistence and service failures exit 1, without an offline retry of a live edit.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
 - **herdr-core connections.** Open **Hosts → Manage connections → Add
