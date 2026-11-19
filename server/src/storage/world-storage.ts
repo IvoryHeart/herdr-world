@@ -3,6 +3,7 @@ import { createEffectStore } from "./effect-client";
 import { createBoardPort } from "./board-port";
 import { createRuntimeStatusPort } from "./runtime-status";
 import { createCoreTopologyPort } from "./core-topology";
+import { createApartmentsPort } from "./apartments";
 import { createProfilePort } from "./profile-port";
 import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
 import type { WorldIds } from "./world-ids";
@@ -103,6 +104,15 @@ export async function openWorldLedger(
         );
       return client.request<T>(request);
     },
+  );
+  const apartments = createApartmentsPort(
+    client.snapshot.apartments ?? [],
+    <T>(request: StorageRequest) =>
+      closing
+        ? Promise.reject<T>(
+            new StorageWriteRejected("World storage is closing"),
+          )
+        : client.request<T>(request),
   );
   const coreTopology = createCoreTopologyPort(
     client.snapshot.coreTopology ?? [],
@@ -295,6 +305,7 @@ export async function openWorldLedger(
     ),
     runtimeStatus,
     coreTopology,
+    apartments,
     profiles,
     ids,
     bindings: {
@@ -450,6 +461,7 @@ export async function openWorldLedger(
       board.close();
       runtimeStatus.close();
       coreTopology.close();
+      apartments.close();
       closed = Promise.allSettled([tail, bindingTail, board.settled()]).then(
         () => client.close(),
       );

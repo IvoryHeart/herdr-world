@@ -24,6 +24,7 @@ import { readBoard, executeBoardOperation } from "./world-board";
 import { importRuntimeStatus } from "./runtime-status-import";
 import { readRuntimeStatus, writeRuntimeStatus } from "./runtime-status";
 import { readCoreTopologies, writeCoreTopology } from "./core-topology";
+import { readApartments, writeApartments } from "./apartments";
 import { importLegacyProfiles } from "./profile-import";
 import { randomBytes } from "node:crypto";
 import { createWorldIds } from "./world-ids";
@@ -210,6 +211,7 @@ export function openWorldWriter(
       ...(board ? { board } : {}),
       ...(runtimeStatus ? { runtimeStatus } : {}),
       coreTopology,
+      apartments: readApartments(db),
       attention: (
         db.query("SELECT * FROM outbox ORDER BY rowid").all() as Record<
           string,
@@ -494,6 +496,8 @@ export function openWorldWriter(
         return ids.issue(request.kind);
       case "core-topology":
         return writeCoreTopology(db, request.expected, request.document);
+      case "apartments":
+        return writeApartments(db, request.operation, at);
       case "board":
         return executeBoardOperation(db, request.operation, bindings, at);
       case "runtime-status":
