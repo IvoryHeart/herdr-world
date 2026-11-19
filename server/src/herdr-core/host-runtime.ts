@@ -349,19 +349,20 @@ export function createCoreHostRuntime(args: {
   );
   // Chat, History and Details: the same handlers a Herdr connection uses.
   let agentSessions: ReturnType<typeof createCoreAgentSessions> | null = null;
+  const agentSessionFiles =
+    args.agentSessionFiles ??
+    createAgentSessionFileAccess({
+      sshHost: destination,
+      runBinaryProcessWithTimeout,
+      shQuote,
+    });
   const sessions = () => {
     current();
     agentSessions ??= createCoreAgentSessions({
       lease,
       operations,
       remotePlatform,
-      files:
-        args.agentSessionFiles ??
-        createAgentSessionFileAccess({
-          sshHost: destination,
-          runBinaryProcessWithTimeout,
-          shQuote,
-        }),
+      files: agentSessionFiles,
     });
     return agentSessions;
   };
@@ -386,6 +387,8 @@ export function createCoreHostRuntime(args: {
     agentWorktree,
     /** Agents' conversations, built on first use for this generation. */
     agentSessions: sessions,
+    /** Agents' transcript files on this host (Apartments' history). */
+    agentSessionFiles,
     worktreeHooks,
     worktreeGit,
     /** No Git status badges are kept for core rooms: nothing to refresh. */

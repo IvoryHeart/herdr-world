@@ -64,6 +64,7 @@ import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
+import { createApartmentsService } from "./apartments-service";
 import { createBinService } from "./bin-service";
 import type { createMoveQueue } from "../world/desk-move";
 import { reconcileReadyInterest } from "../world/interest-prune";
@@ -308,8 +309,19 @@ async function compose(
     connections: () => connectionManager,
     publish: revisionPublisher("world_bin_changed", "world-bin"),
     log: (message) => logger.warn(message),
+    retiring: (entries) => apartments.apartments.retire(entries),
   });
   void bin.start();
+  /** Apartments: the records finished agents leave (shared/apartments.ts). */
+  const apartments = createApartmentsService({
+    port: storage.apartments,
+    now: () => clock.now(),
+    tui: () => connectionManager,
+    core: () => coreRpc,
+    sources: () => worldSources.current(),
+    publish: revisionPublisher("world_apartments_changed", "world-apartments"),
+    log: (message) => logger.warn(message),
+  });
 
   const {
     observe: observeHost,
@@ -363,6 +375,7 @@ async function compose(
         !["error", "disconnected"].includes(status.state),
       );
       bin.connectionStatus(status);
+      apartments.apartments.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -461,6 +474,11 @@ async function compose(
     send: (socket, control) =>
       safeSend(socket, JSON.stringify({ control }), "world-desk-reads"),
   });
+  const observeTuiHost = ownedBy(connectionManager, observeHost);
+  const observeTuiSettings = ownedBy(
+    connectionManager,
+    observeTerminalSettings,
+  );
   worldSnapshots = new WorldSnapshotService(
     observedConnections,
     () => clock.now(),
@@ -468,8 +486,21 @@ async function compose(
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    ownedBy(connectionManager, observeHost),
-    ownedBy(connectionManager, observeTerminalSettings),
+    (connectionId, generation, panes, observedAt, agents, topology) => {
+      observeTuiHost(connectionId, generation, panes, observedAt, agents);
+      apartments.apartments.fresh(
+        connectionId,
+        generation,
+        panes,
+        observedAt,
+        agents,
+        topology,
+      );
+    },
+    (connectionId, generation, panes) => {
+      observeTuiSettings(connectionId, generation, panes);
+      apartments.apartments.complete(connectionId, generation, panes);
+    },
     serviceIncarnation,
   );
 
@@ -793,6 +824,7 @@ async function compose(
     }),
     ...terminalMarks,
     bin,
+    apartments,
     worldCli,
     worldSnapshots,
     worldUsage,

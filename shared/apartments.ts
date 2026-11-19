@@ -90,11 +90,18 @@ const SESSION = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 export function apartmentResumeCommand(
   resident: Pick<ApartmentResident, "harness" | "session_id">,
 ): string | null {
+  const args = apartmentResumeArgs(resident);
+  return args ? [resident.harness, ...args].join(" ") : null;
+}
+
+/** The harness arguments that resume a resident's session, or null. */
+export function apartmentResumeArgs(
+  resident: Pick<ApartmentResident, "harness" | "session_id">,
+): string[] | null {
   const session = resident.session_id;
   if (!session || !SESSION.test(session)) return null;
-  const harness = (resident.harness ?? "").toLowerCase();
-  if (harness === "claude") return `claude --resume ${session}`;
-  if (harness === "codex") return `codex resume ${session}`;
+  if (resident.harness === "claude") return ["--resume", session];
+  if (resident.harness === "codex") return ["resume", session];
   return null;
 }
 
@@ -160,3 +167,23 @@ export function searchApartments(
     return words.every((word) => text.includes(word));
   });
 }
+
+/** At most this many of a resident's last messages are returned. */
+export const APARTMENT_HISTORY_MESSAGES = 200;
+
+/** A resident's conversation, read from its harness transcript. */
+export type ApartmentHistory = {
+  /** ok: read. unavailable: World cannot read it now; detail says why. */
+  status: "ok" | "unavailable";
+  detail: string;
+  messages: {
+    id: string;
+    role: "user" | "assistant";
+    text: string;
+    sent_at: string;
+  }[];
+  /** Earlier messages were left out. */
+  truncated: boolean;
+  /** The agent's closing report from its last turn. */
+  report: string | null;
+};
