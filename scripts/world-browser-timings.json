@@ -6,7 +6,8 @@
     "CoreSharedState.browser": "2026-11-11 local focused run: 4.39 s testcase duration, one end-to-end fixture with nine checks plus three dwell waits, bun run test web/src/world/CoreSharedState.browser.test.ts.",
     "CoreTerminalWatch.browser": "2026-11-11 local focused run: 1.02 s file duration, one fixture across the standard viewports, bun run test web/src/world/CoreTerminalWatch.browser.test.ts.",
     "CoreViewOnly.browser": "2026-11-11 local focused run: 0.74 s testcase duration, one fixture with eight checks, bun run test web/src/world/CoreViewOnly.browser.test.ts.",
-    "NeedsYouCard.browser": "2026-11-02 local focused run: 0.83273 s testcase duration, seven assertions, bun run test web/src/world/NeedsYouCard.browser.test.ts."
+    "NeedsYouCard.browser": "2026-11-02 local focused run: 0.83273 s testcase duration, seven assertions, bun run test web/src/world/NeedsYouCard.browser.test.ts.",
+    "code/CodeView.browser": "2026-11-19 local focused run: 5.04 s file duration, one fixture across the IDE states, bun run test web/src/world/code/CodeView.browser.test.ts."
   },
   "seconds": {
     "AnswerDeliveries.browser": 10,
@@ -36,6 +37,7 @@
     "WorldNavigatorWorktree": 3,
     "WorldTerminalHandoff": 112.624,
     "WorldViewErrorBoundary": 0.434,
+    "code/CodeView.browser": 5.04,
     "groups/GroupsWindow": 7.594,
     "town/TownCanvas": 84.195,
     "town/TownCanvas.extended": 77.432,

@@ -314,6 +314,22 @@ export class IdeService {
     const detection = await this.detect(provider);
     if (detection.state !== "detected")
       return refuse("disabled", detection.reason);
+    // Detection awaited: the connection may have reconnected, turned to SSH or
+    // gone, or the provider been disabled, and retireStale() has already run.
+    // Re-check admission now, synchronously before the spawn, so no stale
+    // server starts after its retirement.
+    const admission = {
+      provider,
+      connectionId: connection.id,
+      generation: connection.generation,
+    };
+    if (!this.admitted(admission))
+      return this.enabled(provider)
+        ? refuse(
+            "stale",
+            "The connection changed while the IDE was starting. Choose the project again.",
+          )
+        : refuse("disabled", "Enable an IDE in the Code view first.");
     try {
       const { instance } = this.instances.open({
         provider,
@@ -346,7 +362,9 @@ export class IdeService {
    * and its connection is the same local runtime generation it was opened
    * under. A reconnect, a change to SSH or removal ends it.
    */
-  private admitted(instance: IdeInstanceView) {
+  private admitted(
+    instance: Pick<IdeInstanceView, "provider" | "connectionId" | "generation">,
+  ) {
     const connection = this.deps.connection(instance.connectionId);
     return (
       connection !== null &&

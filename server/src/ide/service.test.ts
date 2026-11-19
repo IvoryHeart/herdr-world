@@ -19,7 +19,7 @@ afterEach(() => {
 
 const PROGRAM = "/opt/example/code-server/bin/code-server";
 
-function harness() {
+function harness(version: () => Promise<string> = async () => "4.0.0") {
   const top = mkdtempSync(join(tmpdir(), "hw-ide-service-"));
   dirs.push(top);
   const project = join(top, "project");
@@ -31,12 +31,14 @@ function harness() {
     generation: 1,
   };
   const killed: number[] = [];
+  let spawned = 0;
   let pid = 100;
   const instances = new IdeInstances({
     runtimeRoot: top,
     sleep: async () => {},
     probe: async () => 200,
     spawn: ({ command }) => {
+      spawned++;
       // code-server's `--socket <path>`: the fake server is the file.
       writeFileSync(command[command.indexOf("--socket") + 1], "");
       let exit: (code: number | null) => void = () => {};
@@ -59,7 +61,7 @@ function harness() {
     exists: () => true,
     realpath: (path) => path,
     isExecutableFile: (path) => path === PROGRAM,
-    version: async () => "4.0.0",
+    version,
     homeDir: "",
   };
   const service = new IdeService({
@@ -92,9 +94,11 @@ function harness() {
   };
   return {
     service,
+    project,
     open,
     revoked,
     killed,
+    spawned: () => spawned,
     set(next: IdeConnection | null) {
       connection = next;
     },
@@ -121,6 +125,37 @@ test("a reconnect ends the IDE opened under the old generation", async () => {
   const again = await h.open();
   expect(again.id).not.toBe(instance.id);
   expect(again.generation).toBe(2);
+});
+
+test("a connection change while detection is pending starts no server", async () => {
+  let detected!: (value: string) => void;
+  const h = harness(
+    () =>
+      new Promise((resolve) => {
+        detected = resolve;
+      }),
+  );
+  const opening = h.service.open({
+    provider: "code-server",
+    connectionId: "local-a",
+    generation: 1,
+    folder: h.project,
+  });
+  for (let i = 0; i < 50 && !detected; i++) await Bun.sleep(1);
+  h.set({
+    id: "local-a",
+    label: "devbox",
+    type: "ssh",
+    generation: 2,
+    sshDestination: "devbox.example",
+  });
+  await h.service.retireStale();
+  detected("4.0.0");
+  const result = await opening;
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.refusal.code).toBe("stale");
+  expect(h.spawned()).toBe(0);
+  expect(h.service.instances.list()).toEqual([]);
 });
 
 test("a change to SSH or removal revokes the server and its streams", async () => {
