@@ -5,10 +5,16 @@ import {
   useRef,
   useState,
 } from "react";
-import { Command, Maximize2 } from "lucide-react";
+import { Command, Maximize2, Server } from "lucide-react";
 import { openCommandBox } from "../commandBoxKey";
 import { shortcutTitle, useShortcutPreferences } from "../shortcutPreferences";
 import { useLayer } from "../layerStack";
+import {
+  HostsFilterOptions,
+  type HostsControlProps,
+  hostsSelectionLabel,
+  useConnectionManager,
+} from "./HostsControl";
 import type { WorldView } from "./worldViewRouting";
 import { WORLD_VIEW_DESTINATIONS, worldViewLabel } from "./WorldMobileNav";
 import "./WorldViewPicker.css";
@@ -16,7 +22,9 @@ import "./WorldViewPicker.css";
 /**
  * Zen hides the topbar and the phone's bottom navigation, so the views stay
  * one choice away here: a row beside Exit Zen on desktop, and a corner button
- * with a short menu on a phone, where the thumb rests.
+ * with a short menu on a phone, where the thumb rests. The phone's menu also
+ * holds Hosts, which a desktop reaches from the topbar that slides back over
+ * Exit Zen.
  */
 export function WorldViewPicker({
   view,
@@ -25,6 +33,7 @@ export function WorldViewPicker({
   onExitZen,
   extra,
   search,
+  hosts,
 }: {
   view: WorldView;
   mobile: boolean;
@@ -37,6 +46,8 @@ export function WorldViewPicker({
    * views on desktop, and in the bottom corner opposite the views on a phone.
    */
   search?: ReactNode;
+  /** The topbar's Hosts filter, offered in the phone's corner menu. */
+  hosts?: HostsControlProps;
 }) {
   const searchSlot = search ? (
     <div className={`world-zen-search${mobile ? " is-phone" : ""}`}>
@@ -72,7 +83,12 @@ export function WorldViewPicker({
     <>
       {searchSlot}
       {extra ? <div className="world-view-picker-extra">{extra}</div> : null}
-      <PhoneViewPicker view={view} onSelect={onSelect} onExitZen={onExitZen} />
+      <PhoneViewPicker
+        view={view}
+        onSelect={onSelect}
+        onExitZen={onExitZen}
+        hosts={hosts}
+      />
     </>
   );
 }
@@ -81,15 +97,22 @@ function PhoneViewPicker({
   view,
   onSelect,
   onExitZen,
+  hosts,
 }: {
   view: WorldView;
   onSelect: (view: WorldView) => void;
   onExitZen: () => void;
+  hosts?: HostsControlProps;
 }) {
-  const [open, setOpen] = useState(false);
+  // The views menu, or the Hosts filter it opens in the same corner: one
+  // layer, so Escape, Back or a press outside closes either.
+  const [panel, setPanel] = useState<"views" | "hosts" | null>(null);
+  const open = panel !== null;
+  const setOpen = (value: boolean) => setPanel(value ? "views" : null);
+  const manager = useConnectionManager();
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
-  useLayer(open, () => setOpen(false), {
+  useLayer(open, () => setPanel(null), {
     element: () => menu.current,
     anchors: () => [trigger.current],
   });
@@ -99,15 +122,17 @@ function PhoneViewPicker({
   const CurrentIcon = current?.Icon;
   // A menu takes focus on the current view and moves with the arrow keys,
   // Home and End; Tab leaves it closed, and Escape or Back closes it through
-  // the layer stack.
+  // the layer stack. The Hosts panel takes focus on its first control.
   useEffect(() => {
-    if (!open) return;
+    if (!panel) return;
     menu.current
-      ?.querySelector<HTMLButtonElement>(
-        '[aria-checked="true"], [role^="menuitem"]',
+      ?.querySelector<HTMLElement>(
+        panel === "hosts"
+          ? "button, input"
+          : '[aria-checked="true"], [role^="menuitem"]',
       )
       ?.focus();
-  }, [open]);
+  }, [panel]);
   const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Tab") {
       setOpen(false);
@@ -132,13 +157,42 @@ function PhoneViewPicker({
     event.preventDefault();
     items[next]?.focus();
   };
+  // The Hosts panel moves with Tab between its own controls, and Tab past its
+  // last control (or Shift+Tab before its first) leaves it closed, as Tab
+  // leaves the views menu.
+  const onHostsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const controls = Array.from(
+      menu.current?.querySelectorAll<HTMLElement>(
+        "button:not(:disabled), input:not(:disabled)",
+      ) ?? [],
+    );
+    const edge = controls[event.shiftKey ? 0 : controls.length - 1];
+    if (!edge || document.activeElement === edge) setPanel(null);
+  };
   const choose = (action: () => void) => {
     setOpen(false);
     action();
   };
   return (
     <div className="world-view-picker-phone">
-      {open ? (
+      {panel === "hosts" && hosts ? (
+        <div
+          ref={menu}
+          className="world-view-picker-menu world-view-picker-hosts"
+          role="group"
+          aria-label="Hosts filter"
+          onKeyDown={onHostsKeyDown}
+        >
+          <HostsFilterOptions
+            connections={hosts.connections}
+            ids={hosts.ids}
+            onChange={hosts.onChange}
+            onManage={() => choose(manager.open)}
+          />
+          {hosts.explanation ? <p role="status">{hosts.explanation}</p> : null}
+        </div>
+      ) : open ? (
         <div
           ref={menu}
           className="world-view-picker-menu"
@@ -163,6 +217,20 @@ function PhoneViewPicker({
             </button>
           ))}
           <hr />
+          {hosts ? (
+            <button
+              type="button"
+              role="menuitem"
+              aria-haspopup="true"
+              onClick={() => setPanel("hosts")}
+            >
+              <Server size={18} aria-hidden />
+              Hosts
+              <span className="world-view-picker-detail">
+                {hostsSelectionLabel(hosts.connections, hosts.ids)}
+              </span>
+            </button>
+          ) : null}
           <button
             type="button"
             role="menuitem"
@@ -189,10 +257,11 @@ function PhoneViewPicker({
         aria-label={`Switch view, now ${worldViewLabel(view)}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(!open)}
       >
         {CurrentIcon ? <CurrentIcon size={22} aria-hidden /> : null}
       </button>
+      {manager.dialog}
     </div>
   );
 }
