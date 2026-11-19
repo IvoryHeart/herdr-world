@@ -1,4 +1,6 @@
 import { planBoardPatch } from "./board-plan";
+import { MEMORY_ACTIONS, type MemoryAction } from "../../../shared/memory";
+import { runMemoryCli } from "./world-cli-memory";
 import { StorageOutcomeUnknown } from "../storage/world-protocol";
 import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
 import { commandEvidence } from "../verbs/evidence";
@@ -75,6 +77,11 @@ import {
  */
 
 export type WorldCliDeps = {
+  memory?(
+    action: MemoryAction,
+    params: Record<string, unknown>,
+    recheck: () => void,
+  ): Promise<unknown>;
   board: Pick<BoardStorePort, "get" | "patch" | "patchIf">;
   ledger: LedgerStore;
   /** Only a durable committed store may issue this receipt. */
@@ -117,6 +124,7 @@ export type WorldCliDeps = {
 
 /** The commands the endpoint accepts, as the CLI spells them. */
 export const WORLD_CLI_COMMANDS = [
+  ...MEMORY_ACTIONS.map((action) => `memory ${action}` as const),
   ...GROUP_CLI_COMMANDS,
   "whoami",
   "ls",
@@ -631,6 +639,8 @@ export function createWorldCli(deps: WorldCliDeps) {
     host: CliHost | undefined,
     recheck: () => void,
   ): Promise<unknown> {
+    if (command.startsWith("memory "))
+      return runMemoryCli(deps.memory, command, params, recheck);
     const record = recordWithDeps.bind(null, completion);
     const patchBoard = patchBoardWithDeps.bind(null, deps);
     const changeBoard = changeBoardWithDeps.bind(null, deps);
@@ -675,6 +685,7 @@ export function createWorldCli(deps: WorldCliDeps) {
         const snapshot = await deps.snapshot();
         return snapshot.connections.map((connection) => ({
           connection_id: connection.connection_id,
+          connection_generation: connection.generation,
           label: connection.label,
           current: connection.actionable && !connection.stale,
           workspaces: (connection.snapshot?.workspaces ?? []).map((ws) => ({

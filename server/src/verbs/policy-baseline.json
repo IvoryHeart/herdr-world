@@ -253,5 +253,17 @@
   "effect:notification.show": "allow allow allow deny deny deny",
   "effect:world.ask.deliver-answer": "allow allow deny deny deny deny",
   "effect:world.bin.close": "allow deny deny deny deny deny",
-  "effect:world.bin.close_core": "allow deny deny deny deny deny"
+  "effect:world.bin.close_core": "allow deny deny deny deny deny",
+  "rpc:world.memory.list": "allow deny deny deny deny deny",
+  "cli:memory list": "deny allow allow deny deny deny",
+  "rpc:world.memory.search": "allow deny deny deny deny deny",
+  "cli:memory search": "deny allow allow deny deny deny",
+  "rpc:world.memory.read": "allow deny deny deny deny deny",
+  "cli:memory read": "deny allow allow deny deny deny",
+  "rpc:world.memory.create": "acknowledge deny deny deny deny deny",
+  "cli:memory create": "deny acknowledge acknowledge deny deny deny",
+  "rpc:world.memory.update": "acknowledge deny deny deny deny deny",
+  "cli:memory update": "deny acknowledge acknowledge deny deny deny",
+  "rpc:world.memory.delete": "acknowledge deny deny deny deny deny",
+  "cli:memory delete": "deny acknowledge acknowledge deny deny deny"
 }

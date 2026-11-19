@@ -17,6 +17,8 @@ import {
 } from "./service-context";
 import { WORLD_SKILL } from "./world-skill";
 import { GROUP_ACTIONS, groupHuman, parseGroupArgs } from "./world-groups";
+import { MEMORY_ACTIONS } from "../../../shared/memory";
+import { MEMORY_HELP, parseMemoryArgs } from "./memory";
 import { renderGroupMarkdown } from "../../../shared/groupMarkdown";
 import type { GroupView } from "../../../shared/groupViews";
 import { readFileSync } from "node:fs";
@@ -274,6 +276,7 @@ export function parseWorldArgs(
 ): { command: string; params: Record<string, unknown>; json?: boolean } {
   if (word === "group" || word === "pod" || word === "team")
     return parseGroupArgs(word, args);
+  if (word === "memory") return parseMemoryArgs(args);
   const need = (value: string | undefined, what: string) => {
     if (!value) throw new UsageError(`missing ${what}`);
     return value;
@@ -589,7 +592,14 @@ export async function runWorldCommand(
   alert: OwnerAlert = herdrAlert(context),
 ): Promise<number> {
   if (wantsHelp(args)) {
-    context.log(WORLD_SKILL);
+    context.log(word === "memory" ? MEMORY_HELP : WORLD_SKILL);
+    return EXIT_OK;
+  }
+  if (word === "memory" && args[0] === "demo") {
+    parseCommandArgs(args.slice(1), { json: { type: "boolean" } }, 0);
+    context.log(
+      JSON.stringify(await (await import("../memory/demo")).memoryDemo()),
+    );
     return EXIT_OK;
   }
   const { command, params, json } = parseWorldArgs(word, args);
@@ -747,6 +757,11 @@ export async function runWorldCommand(
 
 const WORDS: { name: string; summary: string; actions?: string[] }[] = [
   {
+    name: "memory",
+    summary: "inspect and explicitly manage harness memory on one connection",
+    actions: [...MEMORY_ACTIONS, "demo"],
+  },
+  {
     name: "group",
     summary: "list Groups and edit World-owned Teams and Pods",
     actions: GROUP_ACTIONS,
@@ -794,8 +809,24 @@ export function worldCommands(): CliCommand[] {
     name,
     summary,
     actions,
-    flags: ["--json", "--connection"],
-    help: () => WORLD_SKILL,
+    flags:
+      name === "memory"
+        ? [
+            "--json",
+            "--connection",
+            "--generation",
+            "--workspace",
+            "--agent",
+            "--harness",
+            "--source",
+            "--path",
+            "--file",
+            "--revision",
+            "--user-action",
+            "--yes",
+          ]
+        : ["--json", "--connection"],
+    help: () => (name === "memory" ? MEMORY_HELP : WORLD_SKILL),
     run: (args, context) => runWorldCommand(name, args, context),
   }));
 }
