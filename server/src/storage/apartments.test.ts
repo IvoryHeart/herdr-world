@@ -7,6 +7,7 @@ import { resolveDataPaths } from "../config/data-paths";
 import { openStorage, type WorldStorage } from "../service/storage";
 import { systemClock, systemScheduler } from "../service/ports";
 import {
+  createApartmentsPort,
   memoryApartmentsPort,
   parseApartmentMoveIn,
   readApartments,
@@ -14,6 +15,7 @@ import {
   type ApartmentMoveIn,
 } from "./apartments";
 import { migrateWorldDatabase, worldMigrations } from "./world-schema";
+import type { StorageRequest } from "./world-protocol";
 
 const roots: string[] = [];
 const stores: WorldStorage[] = [];
@@ -148,6 +150,43 @@ describe("apartment residents live in World's SQLite", () => {
         writeApartments(db, { type: "report", id, last_report: "late" }, at)
           .residents,
       ).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("concurrent move-ins each get their own resident, so reports land on the right one", async () => {
+    const db = database();
+    try {
+      let at = 10 * DAY;
+      const port = createApartmentsPort([], async <T>(op: StorageRequest) => {
+        if (op.type !== "apartments") throw new Error("unexpected request");
+        at += 1;
+        return writeApartments(db, op.operation, at) as T;
+      });
+      // Both start before either write: a list diff would hand Bob Alice's row.
+      const [alice, bob] = await Promise.all([
+        port.moveIn(resident("alice", at + 1)),
+        port.moveIn(resident("bob", at + 2)),
+      ]);
+      expect([alice.name, bob.name]).toEqual(["alice", "bob"]);
+      expect(alice.id).not.toBe(bob.id);
+      await Promise.all([
+        port.report(alice.id, "Report for alice"),
+        port.report(bob.id, "Report for bob"),
+      ]);
+      expect(
+        readApartments(db).map(({ name, last_report }) => [name, last_report]),
+      ).toEqual([
+        ["alice", "Report for alice"],
+        ["bob", "Report for bob"],
+      ]);
+      const memory = memoryApartmentsPort([], () => at);
+      const both = await Promise.all([
+        memory.moveIn(resident("carol", at)),
+        memory.moveIn(resident("dan", at)),
+      ]);
+      expect(both.map((item) => item.name)).toEqual(["carol", "dan"]);
     } finally {
       db.close();
     }

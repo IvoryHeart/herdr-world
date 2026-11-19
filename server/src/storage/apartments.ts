@@ -31,6 +31,8 @@ export type ApartmentOperation =
 
 export type ApartmentWriteResult = {
   residents: ApartmentResident[];
+  /** A move-in's new resident ID, so concurrent move-ins keep their own. */
+  id?: string;
 };
 
 export type ApartmentsPort = {
@@ -158,6 +160,7 @@ export function writeApartments(
   at: number,
   bounds: { capacity?: number; retention_ms?: number } = {},
 ): ApartmentWriteResult {
+  let added: string | undefined;
   if (operation.type === "move-in") {
     const resident = parseApartmentMoveIn(operation.resident);
     const id = newWorldId(
@@ -172,6 +175,7 @@ export function writeApartments(
       resident.moved_out_at,
       JSON.stringify(resident),
     );
+    added = id;
   } else if (operation.type === "report") {
     const row =
       typeof operation.id === "string"
@@ -204,7 +208,7 @@ export function writeApartments(
     bounds.capacity ?? APARTMENT_CAPACITY,
     bounds.retention_ms ?? APARTMENT_RETENTION_MS,
   );
-  return { residents: readApartments(db) };
+  return { residents: readApartments(db), ...(added ? { id: added } : {}) };
 }
 
 /** The cached port the service reads; every write returns the whole list. */
@@ -236,9 +240,12 @@ export function createApartmentsPort(
       return found && structuredClone(found);
     },
     async moveIn(resident) {
-      const before = new Set(residents.map((item) => item.id));
+      // The writer names the row it added: a list diff taken before the
+      // queued write would also see a concurrent move-in's row.
       const result = await write({ type: "move-in", resident });
-      const added = result.residents.find((item) => !before.has(item.id));
+      const added = result.id
+        ? result.residents.find((item) => item.id === result.id)
+        : undefined;
       if (!added) throw new Error("The resident moved out at once");
       return structuredClone(added);
     },
@@ -265,9 +272,11 @@ export function memoryApartmentsPort(
   return createApartmentsPort(initial, async <T>(op: StorageRequest) => {
     if (op.type !== "apartments") throw new Error("unexpected request");
     const operation = op.operation;
+    let added: string | undefined;
     if (operation.type === "move-in") {
       const resident = parseApartmentMoveIn(operation.resident);
-      rows.push({ ...resident, id: `r-memory${next++}` });
+      added = `r-memory${next++}`;
+      rows.push({ ...resident, id: added });
     } else if (operation.type === "report") {
       rows = rows.map((row) =>
         row.id === operation.id
@@ -296,6 +305,9 @@ export function memoryApartmentsPort(
       )
       .slice(0, bounds.capacity ?? APARTMENT_CAPACITY)
       .reverse();
-    return { residents: structuredClone(rows) } as T;
+    return {
+      residents: structuredClone(rows),
+      ...(added ? { id: added } : {}),
+    } as T;
   });
 }

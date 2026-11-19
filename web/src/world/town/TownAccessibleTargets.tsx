@@ -6,12 +6,17 @@ import {
   useRef,
   useState,
 } from "react";
-import { yieldWorldTask } from "../worldObject";
+import { yieldWorldAdmissionTask } from "../worldObject";
 import type { TownTarget } from "./townTargets";
 
 const TARGET_BATCH = 16;
 
-/** Accessible targets, admitted in batches so dense scenes keep input responsive. */
+/**
+ * Accessible targets, admitted in batches so dense scenes keep input
+ * responsive. Batches take ordinary (user-visible) turns: Town paints
+ * continuously, and background turns starved there, leaving a large town
+ * without its controls for seconds on slow machines.
+ */
 export function TownTargets({
   targets,
   selectedKey,
@@ -55,7 +60,7 @@ export function TownTargets({
   useEffect(() => {
     if (!pending) return;
     let current = true;
-    void yieldWorldTask().then(() => {
+    void yieldWorldAdmissionTask().then(() => {
       if (current) setProgress({ identity, limit: limit + TARGET_BATCH });
     });
     return () => {
