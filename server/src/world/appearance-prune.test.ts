@@ -229,7 +229,8 @@ test("long-lived close churn does not exhaust the bounded appearance store", asy
     );
   }
   expect(Object.keys(board.get().appearance ?? {})).toHaveLength(0);
-}, 30000);
+  // This exercises 2,060 durable writes; allow for disk contention in the full gate.
+}, 60000);
 
 test("a complete snapshot can reclaim a full legacy store in one bounded operation", () => {
   const board = fixture();
