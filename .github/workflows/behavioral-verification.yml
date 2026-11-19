@@ -42,6 +42,10 @@ jobs:
           java-version: ${{ env.VERIFICATION_JAVA_VERSION }}
           architecture: x64
       - run: bun install --frozen-lockfile
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/herdr-world/verification/checker
+          key: verification-checker-${{ runner.os }}-${{ hashFiles('tools/quint/checker.json') }}
       - name: Install locked development tooling and verified checker
         run: bun run verification:setup
       - name: Validate maintained types and tooling notices
@@ -62,7 +66,9 @@ jobs:
             .agents/verification/diagnostics/**
             .agents/verification/resources/**/resources.json
           include-hidden-files: true
-          if-no-files-found: error
+          # Setup failures have no manifest yet. Keep the primary error; the
+          # aggregate still rejects missing or incomplete evidence.
+          if-no-files-found: warn
           retention-days: 14
 
   candidate:

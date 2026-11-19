@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { replayRangerRecovery, type RecoveryState } from "./ranger-recovery";
 import { parseTrace } from "./traces";
+import { openTaskStorage } from "../server/src/assistant/task-storage";
 function trace(replacement?: string) {
   let recovery: RecoveryState = {
     captured: false,
@@ -67,4 +68,12 @@ test("invalid ranger-recovery ordering fails before replay", () => {
       JSON.stringify({ states: [states[0], { ...states[1], op: "recover" }] }),
     ),
   ).toThrow("invalid recovery action precondition");
+});
+
+test("copied empty initialization matches cold storage and isolates repeated trace writes", async () => {
+  const cold = await replayRangerRecovery(trace(), (directory, validate) =>
+    openTaskStorage(directory, validate),
+  );
+  for (let i = 0; i < 2; i++)
+    expect(await replayRangerRecovery(trace())).toEqual(cold);
 });

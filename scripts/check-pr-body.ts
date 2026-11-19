@@ -13,12 +13,19 @@ export function checkPrBody(
   cwd = process.cwd(),
   baseRef = "origin/main",
 ): string[] {
+  return checkPrBodyText(readFileSync(file, "utf8"), cwd, baseRef);
+}
+
+export function checkPrBodyText(
+  body: string,
+  cwd = process.cwd(),
+  baseRef = "origin/main",
+): string[] {
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
   const base = git("rev-parse", "--verify", `${baseRef}^{commit}`);
   const head = git("rev-parse", "--verify", "HEAD");
   const paths = changedPathsBetween(cwd, base, head);
-  const body = readFileSync(file, "utf8");
   readFragments(cwd);
   const knowledge = assessKnowledgeMapImpact(paths, body);
   const changelog = assessPullRequest(
