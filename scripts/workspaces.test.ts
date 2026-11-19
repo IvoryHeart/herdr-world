@@ -69,6 +69,7 @@ test("CI and release jobs install once from the workspace root", () => {
     "world-browser.yml",
     "behavioral-verification.yml",
     "installer-upgrade.yml",
+    "release-walk.yml",
   ]) {
     const workflow = Bun.YAML.parse(
       readFileSync(new URL(`.github/workflows/${file}`, root), "utf8"),
@@ -87,6 +88,7 @@ test("CI and release jobs install once from the workspace root", () => {
           "./.github/workflows/world-browser.yml",
           "./.github/workflows/behavioral-verification.yml",
           "./.github/workflows/installer-upgrade.yml",
+          "./.github/workflows/release-walk.yml",
         ]).toContain(job.uses);
         expect(job.steps).toBeUndefined();
         continue;
@@ -108,7 +110,8 @@ test("CI and release jobs install once from the workspace root", () => {
       }
       // Native Windows installer/compatibility tests use only Bun and Node builtins.
       const noBunInstall =
-        (file === "installer-upgrade.yml" && name === "baseline") ||
+        (["installer-upgrade.yml", "release-walk.yml"].includes(file) &&
+          name === "baseline") ||
         (file === "ci.yml" &&
           [
             "homebrew-preview",

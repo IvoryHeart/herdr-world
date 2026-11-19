@@ -8,6 +8,9 @@ permissions:
   contents: read
 
 jobs:
+  release-walk:
+    uses: ./.github/workflows/release-walk.yml
+
   baseline:
     name: Freeze latest stable installer baseline
     runs-on: ubuntu-latest

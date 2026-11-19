@@ -1,14 +1,18 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
   # Allows the Publish Release workflow (or a maintainer) to dispatch a run
   # on an existing tag ref.
   workflow_dispatch:
+    inputs:
+      publish_run_id:
+        description: Publish Release run that authorized this tag before its creation
+        required: true
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: release-publication
@@ -20,6 +24,7 @@ jobs:
     name: Validate release
     outputs:
       selection: ${{ steps.scope.outputs.selection }}
+      walk_run_id: ${{ steps.walk.outputs.walk_run_id }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -31,6 +36,12 @@ jobs:
           bun-version: "1.4.4"
           no-cache: true
       - run: bun install --frozen-lockfile
+      - name: Require pre-tag release walk authorization
+        id: walk
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_RUN_ID: ${{ inputs.publish_run_id }}
+        run: bun scripts/release-walk-gate.ts publication "$GITHUB_SHA" "${GITHUB_REF_NAME#v}" "$PUBLISH_RUN_ID"
       - name: Select the complete release suite inventory
         id: scope
         run: bun scripts/ci-reuse-full-check.ts
@@ -102,7 +113,16 @@ jobs:
           bun-version: "1.4.4"
           no-cache: true
       - run: bun install --frozen-lockfile
+      - name: Download the exact Unix package that passed the pre-tag walk
+        if: ${{ !startsWith(matrix.platform, 'windows-') }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.validate.outputs.walk_run_id }}
+          name: release-walk-package-${{ matrix.platform }}
+          path: dist
       - name: Build release package
+        if: startsWith(matrix.platform, 'windows-')
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"

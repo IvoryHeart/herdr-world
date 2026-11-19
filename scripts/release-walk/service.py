@@ -1,0 +1,58 @@
+"""Real native lifecycle, restricted to an explicitly disposable OS account."""
+import os
+from pathlib import Path
+import platform
+from processes import run
+from world import PASSWORD
+
+
+def service_guard(home, disposable):
+    assert disposable, 'Service install and uninstall: requires --disposable-host in a disposable OS account or VM'
+    paths = [home / '.config/herdr-world/herdr-world.env',
+             home / '.config/systemd/user/herdr-world.service',
+             home / 'Library/LaunchAgents/dev.herdr-world.plist']
+    assert not any(path.exists() for path in paths), 'Service install and uninstall: disposable account already has a World service or service configuration'
+
+
+def services(walk, candidate, baseline, root, disposable):
+    home = Path.home()
+    service_guard(home, disposable)
+    linux = platform.system() == 'Linux'
+    config = home / '.config/herdr-world/herdr-world.env'
+    definition = (home / '.config/systemd/user/herdr-world.service' if linux
+                  else home / 'Library/LaunchAgents/dev.herdr-world.plist')
+    env = {key: value for key, value in os.environ.items()
+           if key in ('HOME', 'PATH', 'USER', 'LOGNAME', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS')}
+    env['HERDR_WORLD_DATA_DIR'] = str(root / 'world-service')
+    manager = (['systemctl', '--user'] if linux else ['launchctl'])
+    query = ([*manager, 'is-active', 'herdr-world.service'] if linux
+             else [*manager, 'print', f'gui/{os.getuid()}/dev.herdr-world'])
+    # HOME isolation cannot isolate these labels. Refuse an already loaded unit.
+    if linux:
+        state = run([*manager, 'show', 'herdr-world.service', '--property=LoadState', '--value'], env).stdout.strip()
+        assert state == 'not-found', 'Service install and uninstall: disposable account already has a loaded World service'
+    else:
+        assert run(query, env, check=False).returncode == 113, 'Service install and uninstall: disposable account already has a loaded World service or lacks a GUI user manager'
+    config.parent.mkdir(parents=True, exist_ok=True)
+    text = (f'HOST=127.0.0.1\nPORT=0\nOPEN_BROWSER=0\nHERDR_WORLD_PASSWORD={PASSWORD}\n'
+            f'HERDR_WORLD_DATA_DIR={root / "world-service"}\n'
+            f'HERDR_SOCKET_PATH={root / "absent-control.sock"}\n'
+            f'HERDR_CLIENT_SOCKET_PATH={root / "absent-render.sock"}\n')
+    config.write_text(text)
+    config.chmod(0o600)
+    try:
+        for name, binary in [('Service install and uninstall', candidate),
+                             ('Previous release service uninstall', baseline)]:
+            with walk.journey(name):
+                run([binary, 'service', 'install'], env)
+                assert definition.is_file(), 'service install did not create its native definition'
+                assert run(query, env, check=False).returncode == 0, 'native service did not start'
+                run([candidate, 'service', 'uninstall'], env)
+                assert not definition.exists(), 'service uninstall left the native definition'
+                assert run(query, env, check=False).returncode != 0, 'service uninstall left the native service running'
+                assert config.read_text() == text, 'service uninstall deleted or changed the saved configuration'
+    finally:
+        try:
+            run([candidate, 'service', 'uninstall'], env)
+        finally:
+            config.unlink(missing_ok=True)
