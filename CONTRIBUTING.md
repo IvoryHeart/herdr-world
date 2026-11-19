@@ -45,6 +45,7 @@ assets required by server typechecks and process tests.
 | Completed candidate | Follow the [candidate-delivery procedure](.agents/skills/candidate-delivery/SKILL.md). |
 | Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus affected non-browser unit tests. Browser suites and behavioral verification run in CI, where required `Delivery checks` blocks merges. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`; a push that only merges `origin/main` runs `bun run check:static`. CI tests the proposed merge of the PR base and head; every main push runs the full matrix. |
 | Full local gate | `bun run check:delivery` runs all local lanes; `HERDR_WORLD_PREPUSH=full git push` makes the hook run it. Native platform acceptance and enforced CI resource accounting remain separate. |
+| CI and delivery numbers | `bun run ci:health --days 3` reads GitHub without writing files; see [definitions and limits](docs/ci-pipelines.md#health-and-delivery-measures). |
 | Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); manage disk capacity separately; it never blocks a check. |
 
 `test:quick` excludes only `{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,ThemedSelect.browser,HerdrSetupCard}.test.ts`; it includes other browser and integration tests.
@@ -93,7 +94,12 @@ push. Native platform lanes remain responsible for their OS-specific behavior.
 
 Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook checks formatting and lint without
-writing files, and its `pre-push` hook runs the applicable check. Use focused checks
+writing files, and its `pre-push` hook runs the applicable check. Before that gate,
+the hook checks the complete PR's fragment and knowledge-map policy. It reads an
+existing PR description, or `HERDR_WORLD_PR_BODY=<file>` for the intended description
+before a first push. Without a description, the fragment and knowledge-map update
+must satisfy the rules themselves. API errors cannot supply an exemption.
+Use focused checks
 only for a specific question while developing. For a code push, the hook runs
 `bun run check:changed` against the remote branch (or `origin/main` for a new
 branch). It always runs notices, changelog validation, the size ratchet, formatting,
@@ -145,7 +151,7 @@ full unit inventory locally and full CI gate, even when that input is absent fro
 | Behavioral verification | Model/tooling/OpenSpec inputs or model-backed coverage owners; model-free owners run the cheap coverage inventory check | All accepted models, across three CI groups balanced by measured work |
 | World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
-| Native installation | Install/plugin/package inputs, server/shared binary sources, build-version metadata or affected installation consumers | Installer upgrades, Windows plugin and both macOS architectures |
+| Native installation | Install/plugin/package inputs, imports of the compiled entry points or native test consumers, and build-version metadata | Installer upgrades, Windows plugin and both macOS architectures |
 
 The agent-tooling exception from #484 still covers `scripts/agent/**` (the worktree
 helper), the agent development guide and `changes/<slug>.md`: static checks and affected

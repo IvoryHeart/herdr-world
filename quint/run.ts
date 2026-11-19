@@ -394,6 +394,7 @@ function replayTracesPerSeed(name: Model) {
     : 100;
 }
 const commands: CommandResult[] = [];
+let commandPublication = Promise.resolve();
 let activeLabel = "setup";
 
 const implementationMutation = (
@@ -405,6 +406,7 @@ async function command(
   label: string,
   args: string[],
   expectedViolation = false,
+  signal = cancellation.signal,
 ) {
   activeLabel = label;
   const started = performance.now();
@@ -417,7 +419,7 @@ async function command(
   await mkdir(temporary, { recursive: true });
   let partialLog = "";
   let checkerLog = "";
-  const invoke = (commandArgs: string[], signal = cancellation.signal) =>
+  const invoke = (commandArgs: string[], workerSignal = signal) =>
     runVerificationProcess(
       ["node", "--max-old-space-size=512", cli, ...commandArgs],
       {
@@ -436,13 +438,13 @@ async function command(
         onOutput: (text) => {
           partialLog += text.replaceAll(root, "<checkout>");
         },
-        signal,
+        signal: workerSignal,
       },
     );
   const { stdout, stderr, code } = await (args[0] === "verify"
     ? withPrivateChecker(
         temporary,
-        cancellation.signal,
+        signal,
         (port, signal) =>
           invoke(
             [
@@ -488,10 +490,14 @@ async function command(
     args,
   };
   commands.push(result);
-  await writeFile(
-    resolve(output, "commands.json"),
-    JSON.stringify(commands, null, 2),
+  // Independent controls may finish together; serialize the progress snapshot.
+  commandPublication = commandPublication.then(() =>
+    writeFile(
+      resolve(output, "commands.json"),
+      JSON.stringify(commands, null, 2),
+    ),
   );
+  await commandPublication;
   if (expectedViolation) {
     assert.notEqual(code, 0, `${label}: faulty model unexpectedly passed`);
     assert.match(
@@ -689,6 +695,8 @@ export async function runReviewedQuintModels(
           output,
           artifacts,
           command,
+          signal: cancellation.signal,
+          controlWorkers: Number(process.env.HERDR_CORE_CONTROL_WORKERS || 1),
           mutate: (fault) =>
             implementationMutation("herdr-core-runtime", fault),
         });

@@ -113,7 +113,8 @@ unavailable baseline retain the model gate. World browser suites
 are the nearest consumers; web suites come from their maintained inventory.
 World runtime changes also select the dense end-to-end World suites
 (`worldRuntimeSuites`: production and concurrent contexts, terminal handoff).
-Native checks cover install/plugin/package inputs, server/shared binary sources,
+Native checks cover install/plugin/package inputs and the import closure of the
+compiled service/plugin entry points and explicitly native test consumers,
 compiled `scripts/build-version.ts` metadata and installation consumers. Changes
 to tests explicitly named by the installer upgrade, Windows plugin and native
 launchd jobs also select packaging, including when incremental unit scope narrows.
@@ -123,10 +124,13 @@ existing scoped selection. The agent-tooling exception remains explicit. The nat
 command includes every maintained storage `*-crash.test.ts`; the installer
 workflow regression derives that inventory from the suites rather than keeping
 a second list.
+Browser-only shared modules no longer select native runners by directory alone.
+Unknown inputs still select the full gate; main's complete plan is unchanged.
 
 Main and non-PR dispatches force the full plan. Code receives all static checks;
 ordinary docs receive `check:docs`. Non-browser tests and web suites are partitioned
-into two disjoint inventories. Six World shards use longest-first assignment
+into two disjoint inventories. Unit shards start alongside static checks, and
+Repository validation still requires both. Six World shards use longest-first assignment
 from `scripts/world-browser-timings.json`; only relevant shards/suites run.
 TownCanvas retains all 22 parameter cases across five files sharing one harness.
 Each case pins its exact CSS viewport through Chrome device metrics, with focus
@@ -164,6 +168,23 @@ artifacts, selects each newest attempt, requires complete model coverage and
 current source/tool identity, and verifies every group's retained accounting.
 It publishes one canonical manifest including the three resource records. The
 single-machine canonical gate is unchanged and still rejects filters.
+The long core runtime model owns a dedicated shard. Its independent fault controls
+run two at a time within that shard's existing resource envelope; every model
+fault, trace replay, production control, seed and sensitivity check remains.
+Local model pools retain sequential controls by default. Progress snapshots are
+serialized and cancellation drains all admitted controls. The verified checker
+cache is keyed by its committed lock and revalidated by setup; it contains no run
+evidence. A failure before execution can have no manifest: upload warns in that
+case, while the primary step stays red and aggregation still refuses missing evidence.
+
+HostsFilter's Town frame cases run serially on each browser shard so simultaneous
+software GL renderers do not starve their clocks. DOM cases retain concurrency;
+the Town cases retain every viewport/assertion and the original 45-second hang guard.
+Pages reuses film media only with an exact render-input cache key, with no fallback
+prefix. A cache miss still renders the full film. Main latency measurements retain
+all four suites, paired over two quiet runners with a fresh quiet check before
+each suite. This reduces that workflow from five jobs to three; queue delays
+remain visible in health reports.
 
 `Repository validation`, `Web browser tests`, `Behavioral
 verification`, `Delivery checks` and both macOS report names remain. Leaf jobs
@@ -183,11 +204,53 @@ of the main policy baseline. CI passes the event's exact base SHA, so a merge in
 a stale stack is checked as that merge, rather than silently integrating main.
 Draft PR descriptions should pass `check:pr-body` before creation, using the same
 policy functions as Validation scope.
+Pre-push also checks those policies against the complete PR diff and the existing
+PR body, or the intended body named by `HERDR_WORLD_PR_BODY`. A first push without
+a body must carry the fragment/knowledge-map changes needed to pass on their own.
 
 Main pushes keep a running check and retain only the newest pending run. Main
 gate accounts for the intervening merges when attributing a later failure.
 Avoid a second scheduler or independent platform scope decisions around this
 shared policy.
+
+## Health and delivery measures
+
+`bun run ci:health --days 3` uses authenticated `gh` reads and prints one report;
+it writes no files and never retries. Days are a rolling UTC window, 1–30.
+The fixed budget is 100 GitHub API requests: at most ten 100-run pages, fifty PR
+job pages spread evenly across the window, six other workflow job pages, eight
+earlier rerun attempts, one delivery query and twenty immutable release comparisons.
+Caps and incomplete inventories are printed. Required inventory/query errors fail
+the command. Unavailable optional job, attempt or ancestry reads are named in the
+limits and omitted from those measurements, without retrying or fabricating data.
+
+Pass/fail/cancel rates use all inventoried PR CI runs, including active/other in
+the stated denominator. Time to green spans event creation to the successful
+workflow's last update, including runner queues, dependencies and any rerun delay.
+Job execution and queue waits use the sampled latest job attempts: queue is job
+creation to runner start, excluding dependency time. Failing-step counts take the
+first failure in each leaf job, omitting named aggregate propagation steps and
+later upload errors; inspect that leaf's log before assigning cause.
+The unchanged-commit observation uses earlier attempts of successful rerun events,
+not successive branch pushes. It is a biased diagnostic sample, not a claim of
+98% reliability; fewer than fifty observations cannot establish the 49/50 target.
+
+Delivery frequency counts merged main PRs and published stable releases per day.
+Lead time starts at the first PR commit's recorded commit date, with PR-open time
+reported separately. Release containment compares immutable commit SHAs and
+requires complete ancestry (the 250-commit API bound is checked); absent ancestry
+is unknown. Squash/rebase metadata and capped history limit these measurements.
+Merged fixes newer than the latest publication are shown as awaiting release.
+
+A fix title/label alone does not identify a failed deployment. For attributable
+change failure and recovery numbers, put `Regression-of: #123` and/or
+`Affected-release: v0.3.5` on separate lines in the correcting PR body. These are
+optional evidence links, not merge requirements. The report counts affected
+in-window merges/releases, then measures recovery from the affected release's
+publication to the first release containing the correcting merge SHA. Linked
+unreleased incidents retain their current age. Unlinked fixes are counted
+separately and make failure rates incomplete; an absent link is never evidence
+of zero failures. Production incident discovery is not inferred from a red CI run.
 
 ## Diagnose a red run
 

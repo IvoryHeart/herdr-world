@@ -131,6 +131,24 @@ test("browser Chat selects nearby consumers without verification, runtime suites
   });
 });
 
+test("shared browser-only inputs do not schedule native platforms; compiled imports still do", () => {
+  const ui = "shared/browserColors.ts";
+  const binary = "shared/runtimeProtocol.ts";
+  const entry = "server/src/index.ts";
+  const known: Graph = {
+    ...graph,
+    files: new Set([...graph.files, ui, binary, entry]),
+    deps: new Map([
+      ...graph.deps,
+      [unit, new Set([ui, binary])],
+      [entry, new Set([binary])],
+    ]),
+  };
+  expect(selectValidation(known, [ui]).packaging).toBe(false);
+  expect(selectValidation(known, [binary]).packaging).toBe(true);
+  expect(selectValidation(known, []).packaging).toBe(true);
+});
+
 test("owners and World runtime paths independently require their maintained suites", () => {
   expect(
     selectValidation(graph, [scene], (path) => path === scene),

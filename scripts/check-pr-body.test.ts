@@ -4,6 +4,19 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { pushPolicyBody } from "./check-push-policy";
+
+test("push policy reads the intended description or existing PR, and never invents an exemption", () => {
+  expect(pushPolicyBody(undefined, () => "Existing PR")).toBe("Existing PR");
+  expect(
+    pushPolicyBody(undefined, () => {
+      throw new Error("No PR yet");
+    }),
+  ).toBe("");
+  expect(() =>
+    pushPolicyBody("/missing/synthetic-pr-body", () => "fallback"),
+  ).toThrow();
+});
 
 const cli = fileURLToPath(new URL("./check-pr-body.ts", import.meta.url));
 test("draft descriptions enforce the same knowledge-map and changelog rules before PR creation", () => {

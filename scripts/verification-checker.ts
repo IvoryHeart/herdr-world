@@ -95,6 +95,7 @@ export class CheckerPortTaken extends Error {
 }
 
 const CHECKER_PORT_ATTEMPTS = 3;
+let checkerSequence = 0;
 
 function untilAborted<T>(operation: Promise<T>, signal: AbortSignal) {
   return Promise.race([
@@ -120,7 +121,12 @@ export async function withPrivateChecker<T>(
   diagnostic?: (text: string) => void,
   options: CheckerOptions = {},
 ) {
-  let port = await privateCheckerPort(options.ports);
+  // Several controls can share one process. Give each a different search
+  // origin before the asynchronous probe; pid alone selects the same port.
+  let port = await privateCheckerPort({
+    start: (process.pid + checkerSequence++) * 7919,
+    ...options.ports,
+  });
   for (let attempt = 1; ; attempt++) {
     try {
       return await runPrivateChecker(

@@ -30,6 +30,7 @@ type WorkflowJob = {
       platform?: string[];
       shard?: number[] | string;
       suite?: string[];
+      suites?: string[];
       order?: string[];
     };
   };
@@ -163,6 +164,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   ).toBe("needs.validation-scope.outputs.mode == 'docs'");
   expect(workflow.jobs["unit-tests"].strategy?.matrix?.shard).toEqual([1, 2]);
   expect(workflow.jobs["unit-tests"].strategy?.["fail-fast"]).toBe(false);
+  expect(workflow.jobs["unit-tests"].needs).toBe("validation-scope");
   const scope = workflow.jobs["validation-scope"];
   expect(
     scope?.steps.find((step) => step.name === "Determine validation scope"),
@@ -229,16 +231,22 @@ test("the latency trend measures the trend suites on quiet runners and reports w
   expect(trend.permissions).toEqual({ contents: "read", actions: "read" });
   const measure = trend.jobs.measure!;
   expect(
-    (measure.strategy?.matrix?.suite ?? []).map(
-      (suite) => `web/src/world/${suite}.test.ts`,
-    ),
-  ).toEqual(worldLatencyTrendSuites);
+    (measure.strategy?.matrix?.suites ?? [])
+      .flatMap((pair) => pair.split(" "))
+      .map((suite) => `web/src/world/${suite}.test.ts`)
+      .sort(),
+  ).toEqual([...worldLatencyTrendSuites].sort());
+  expect(measure.strategy?.matrix?.suites).toHaveLength(2);
   const runs = measure.steps.flatMap((step) => (step.run ? [step.run] : []));
-  const quiet = runs.indexOf("bun scripts/wait-for-quiet.ts");
-  expect(quiet).toBeGreaterThan(
-    runs.indexOf('bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"'),
+  const measured = runs.find((run) =>
+    run.includes("for suite in $WORLD_LATENCY_SUITES"),
+  )!;
+  expect(measured).toContain("bun scripts/wait-for-quiet.ts");
+  expect(measured.indexOf("bun scripts/wait-for-quiet.ts")).toBeLessThan(
+    measured.indexOf("bun scripts/run-world-tests.ts"),
   );
-  expect(runs[quiet + 1]).toContain("--parallel=1 --max-concurrency=1");
+  expect(measured).toContain("--parallel=1 --max-concurrency=1");
+  expect(measured).toContain("latency/$suite.jsonl");
   expect(JSON.stringify(trend)).not.toContain("--retry");
   // Nothing required waits on it.
   expect(JSON.stringify(workflow)).not.toContain("world-latency-trend");
@@ -447,6 +455,12 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
     (step) => step.name === "Retain source-bound evidence manifests",
   )!;
   expect(artifact.if).toBe("always()");
+  expect(
+    (artifact.with as { "if-no-files-found"?: string })["if-no-files-found"],
+  ).toBe("warn");
+  expect(
+    job.steps.some((step) => step.uses?.startsWith("actions/cache@")),
+  ).toBe(true);
   expect((artifact.with as { path?: string }).path).toContain(
     ".agents/verification/diagnostics/**",
   );

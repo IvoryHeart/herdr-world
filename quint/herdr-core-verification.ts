@@ -3,6 +3,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { decodeItf } from "./replay";
 import { expectObservationMismatch } from "./observations";
+import { runVerificationPool } from "../scripts/verification-pool";
 import {
   coreFaults,
   coreWitnesses,
@@ -37,7 +38,10 @@ type Harness = {
     label: string,
     args: string[],
     expectedViolation?: boolean,
+    signal?: AbortSignal,
   ): Promise<string>;
+  signal: AbortSignal;
+  controlWorkers?: number;
 };
 export async function runCoreVerification(h: Harness) {
   const model = "quint/herdr-core-runtime.qnt";
@@ -132,70 +136,79 @@ export async function runCoreVerification(h: Harness) {
       );
     replayWitnessesBySeed[seed] = counts;
   }
-  const controls = [];
-  for (const fault of coreFaults) {
-    const mutant = `${h.artifacts}/core-${fault}.qnt`;
-    const counterexample = `${h.artifacts}/core-${fault}.itf.json`;
-    await writeFile(
-      resolve(h.root, mutant),
-      materialize(
-        (observeFaults.has(fault) ? observeSource : source).replace(
-          'FAULT = "none"',
-          `FAULT = "${fault}"`,
+  // Each fault owns its model, checker and trace. CI gives this model a whole
+  // shard, so two controls can use its two CPUs without another model competing
+  // for the enforced 4 GiB budget. Local model pools retain one control at a time.
+  const controls = await runVerificationPool(
+    coreFaults,
+    h.controlWorkers ?? 1,
+    h.signal,
+    async (fault, signal) => {
+      const mutant = `${h.artifacts}/core-${fault}.qnt`;
+      const counterexample = `${h.artifacts}/core-${fault}.itf.json`;
+      await writeFile(
+        resolve(h.root, mutant),
+        materialize(
+          (observeFaults.has(fault) ? observeSource : source).replace(
+            'FAULT = "none"',
+            `FAULT = "${fault}"`,
+          ),
         ),
-      ),
-    );
-    await h.command(
-      `core-${fault}-control`,
-      [
-        "verify",
-        mutant,
-        "--main",
-        "herdr_core_runtime",
-        "--backend",
-        "tlc",
-        "--invariant",
-        "safety",
-        "--verbosity",
-        "1",
-        "--out-itf",
-        counterexample,
-      ],
-      true,
-    );
-    // TLC establishes the violation exhaustively; its backend emits no ITF.
-    // Collect a concrete replay witness separately through the simulator.
-    await h.command(
-      `core-${fault}-trace`,
-      [
-        "run",
-        mutant,
-        "--main",
-        "herdr_core_runtime",
-        "--backend",
-        "typescript",
-        "--seed",
-        "42",
-        "--max-samples",
-        "200000",
-        "--max-steps",
-        "25",
-        "--invariant",
-        "safety",
-        "--verbosity",
-        "1",
-        "--out-itf",
-        counterexample,
-      ],
-      true,
-    );
-    const states = await load(resolve(h.root, counterexample));
-    const mismatch = await expectObservationMismatch(
-      () => replayCore(states),
-      ["core.state"],
-    );
-    controls.push({ fault, observation: mismatch.observation });
-  }
+      );
+      await h.command(
+        `core-${fault}-control`,
+        [
+          "verify",
+          mutant,
+          "--main",
+          "herdr_core_runtime",
+          "--backend",
+          "tlc",
+          "--invariant",
+          "safety",
+          "--verbosity",
+          "1",
+          "--out-itf",
+          counterexample,
+        ],
+        true,
+        signal,
+      );
+      // TLC establishes the violation exhaustively; its backend emits no ITF.
+      // Collect a concrete replay witness separately through the simulator.
+      await h.command(
+        `core-${fault}-trace`,
+        [
+          "run",
+          mutant,
+          "--main",
+          "herdr_core_runtime",
+          "--backend",
+          "typescript",
+          "--seed",
+          "42",
+          "--max-samples",
+          "200000",
+          "--max-steps",
+          "25",
+          "--invariant",
+          "safety",
+          "--verbosity",
+          "1",
+          "--out-itf",
+          counterexample,
+        ],
+        true,
+        signal,
+      );
+      const states = await load(resolve(h.root, counterexample));
+      const mismatch = await expectObservationMismatch(
+        () => replayCore(states),
+        ["core.state"],
+      );
+      return { fault, observation: mismatch.observation };
+    },
+  );
   const sensitivityModel = `${h.artifacts}/core-larger.qnt`;
   await writeFile(
     resolve(h.root, sensitivityModel),

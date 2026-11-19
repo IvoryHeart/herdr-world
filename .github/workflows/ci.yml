@@ -176,7 +176,7 @@ jobs:
 
     unit-tests:
         name: Non-browser tests (${{ matrix.shard }}/2)
-        needs: [validation-scope, static]
+        needs: validation-scope
         if: needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'docs'
         runs-on: ubuntu-latest
         timeout-minutes: 20
