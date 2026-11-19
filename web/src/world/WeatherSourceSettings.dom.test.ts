@@ -26,7 +26,10 @@ if (process.env.HERDR_WEATHER_DOM !== "1") {
 } else {
   const { act, createElement } = await import("react");
   const { createRoot } = await import("react-dom/client");
-  const { SourcesDialog } = await import("./SourcesDialog");
+  const { IntegrationsSettings } = await import(
+    "../components/IntegrationsSettings"
+  );
+  const { sourceEntry } = await import("../../../shared/integrations");
   const { worldSourcesStore, parseWorldSources } = await import(
     "./worldSources"
   );
@@ -61,6 +64,7 @@ if (process.env.HERDR_WEATHER_DOM !== "1") {
     const requests: Record<string, unknown>[] = [];
     const snapshot = () =>
       parseWorldSources({
+        observedAt: 1,
         sources: [
           {
             id: "weather",
@@ -81,17 +85,46 @@ if (process.env.HERDR_WEATHER_DOM !== "1") {
       }
       return Response.json(snapshot());
     });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      async () =>
+        Response.json({
+          observedAt: 1,
+          integrations: snapshot().sources.map(sourceEntry),
+          vault: {
+            backend: "file",
+            label: "Vault",
+            detail: "No tokens",
+            secrets: [],
+          },
+        }),
+      { preconnect: originalFetch.preconnect },
+    );
     worldSourcesStore.publishSettled(snapshot());
     const host = document.body.appendChild(document.createElement("div"));
     const root = createRoot(host);
     try {
       await act(async () =>
-        root.render(createElement(SourcesDialog, { onClose() {} })),
+        root.render(
+          createElement(IntegrationsSettings, { agents: () => null }),
+        ),
       );
       expect(permissions).toBe(0);
       expect(host.textContent).toContain("Only turning Weather on");
       expect(host.textContent).toContain("geocoding service");
       expect(host.textContent).toContain("city-level coordinates");
+      const row = () =>
+        host.querySelector('[data-integration="source:weather"]')!;
+      const connect = row().querySelector('[aria-label="Connect Weather"]')!;
+      expect(connect.getAttribute("aria-describedby")).toBe("weather-consent");
+      expect(row().textContent).toContain("Gives World weather.");
+      await act(async () =>
+        (
+          row().querySelector(
+            '[aria-label="Weather settings"]',
+          ) as HTMLButtonElement
+        ).click(),
+      );
       const button = () =>
         [...host.querySelectorAll("button")].find(
           (b) => b.textContent === "Use browser location",
@@ -102,10 +135,14 @@ if (process.env.HERDR_WEATHER_DOM !== "1") {
         { browserLocation: { latitude: 1.2, longitude: 2.3 } },
       ]);
       await act(async () =>
-        (host.querySelector('[role="switch"]') as HTMLButtonElement).click(),
+        (
+          row().querySelector(
+            '[aria-label="Connect Weather"]',
+          ) as HTMLButtonElement
+        ).click(),
       );
       expect(requests[requests.length - 1]).toEqual({ enabled: true });
-      const input = host.querySelector("input") as HTMLInputElement;
+      const input = row().querySelector("input") as HTMLInputElement;
       await act(async () => {
         Object.getOwnPropertyDescriptor(
           window.HTMLInputElement.prototype,
@@ -127,13 +164,23 @@ if (process.env.HERDR_WEATHER_DOM !== "1") {
       });
       await act(async () => worldSourcesStore.publishSettled(snapshot()));
       expect(button().disabled).toBe(true);
-      expect((host.querySelector("input") as HTMLInputElement).value).toBe(
+      expect((row().querySelector("input") as HTMLInputElement).value).toBe(
         "Example City",
       );
       expect(permissions).toBe(1);
+      await act(async () =>
+        (
+          row().querySelector(
+            '[aria-label="Disconnect Weather"]',
+          ) as HTMLButtonElement
+        ).click(),
+      );
+      expect(requests[requests.length - 1]).toEqual({ enabled: false });
+      expect(row().getAttribute("data-state")).toBe("available");
     } finally {
       await act(async () => root.unmount());
       host.remove();
+      globalThis.fetch = originalFetch;
     }
   });
   test("permission refusal is plain guidance with no raw browser error", async () => {

@@ -6,7 +6,7 @@ Supply one explicitly enabled, coarse-location weather observation to World cons
 
 ### Requirement: Explicit weather opt-in and single location
 
-World SHALL list Weather in Sources, disabled by default. Only enabling Weather SHALL authorize provider requests, including place lookup. Its switch SHALL explain that Open-Meteo receives a typed place for geocoding and coarse coordinates for weather. World SHALL store one manual place/coordinate setting and an optional one-shot browser fallback with the other service settings. A nonempty manual setting SHALL always take precedence. Coordinates SHALL be rounded to 0.1 degrees before storage or transmission. Browser permission SHALL be requested once only after the user presses Use browser location, with no watch or automatic prompt.
+World SHALL list Weather in Integrations → Sources, disabled by default. Only enabling Weather SHALL authorize provider requests, including place lookup. Its Connect control SHALL explain that Open-Meteo receives a typed place for geocoding and coarse coordinates for weather. World SHALL store one manual place/coordinate setting and an optional one-shot browser fallback with the other service settings. A nonempty manual setting SHALL always take precedence. Coordinates SHALL be rounded to 0.1 degrees before storage or transmission. Browser permission SHALL be requested once only after the user presses Use browser location, with no watch or automatic prompt.
 
 #### Scenario: Configure while off
 - **WHEN** the user saves a city or browser coordinates while Weather is off

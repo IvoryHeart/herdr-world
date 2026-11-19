@@ -11,7 +11,20 @@ type Run = (
   label: string,
   task: () => Promise<unknown>,
   done: string,
-) => Promise<void>;
+) => Promise<unknown>;
+export function WeatherConsent() {
+  return (
+    <p className="integration-field-help" id="weather-consent">
+      Off by default. Only turning Weather on lets the World service contact
+      Open-Meteo: your typed place name goes to its geocoding service, and
+      city-level coordinates go to its weather service. No account or key; the
+      free API is for non-commercial use. Browser location is requested once,
+      only when you press Use browser location in Weather settings; a typed
+      location always wins.
+    </p>
+  );
+}
+
 export function WeatherSourceSettings({
   settings,
   weather,
@@ -27,19 +40,12 @@ export function WeatherSourceSettings({
   useEffect(() => setLocation(settings.location), [settings.location]);
   return (
     <>
-      <p className="world-observability-field-help" id="weather-consent">
-        Off by default. Only turning Weather on lets the World service contact
-        Open-Meteo: your typed place name goes to its geocoding service, and
-        city-level coordinates go to its weather service. No account or key.
-        Browser location is requested once, only when you press the button
-        below; a typed location always wins.
-      </p>
       <form
-        className="world-source-fields"
+        className="integration-fields"
         onSubmit={(event) => {
           event.preventDefault();
           void run(
-            "weather",
+            "source:weather",
             () =>
               updateWorldSource("weather", {
                 location: normalizeWeatherSettings({ location }).location,
@@ -59,7 +65,7 @@ export function WeatherSourceSettings({
             onChange={(event) => setLocation(event.currentTarget.value)}
           />
         </label>
-        <p className="world-observability-field-help">
+        <p className="integration-field-help">
           Coordinates are rounded to 0.1° before storage and sending. Clear and
           save the typed location to use the browser location
           {settings.browserLocation
@@ -68,14 +74,14 @@ export function WeatherSourceSettings({
           . On a remote World service, this uses your browser's location, not
           the service's.
         </p>
-        <div className="modal-actions world-observability-actions">
+        <div className="modal-actions">
           <button
             type="button"
             className="ghost"
             disabled={busy || !!location.trim() || !!settings.location}
             onClick={() =>
               void run(
-                "weather",
+                "source:weather",
                 async () => {
                   const browserLocation = await browserWeatherLocation();
                   await updateWorldSource("weather", { browserLocation });
@@ -97,7 +103,7 @@ export function WeatherSourceSettings({
             disabled={busy}
             onClick={() =>
               void run(
-                "weather",
+                "source:weather",
                 () => updateWorldSource("weather", { browserLocation: null }),
                 "Browser location removed.",
               )
@@ -108,12 +114,12 @@ export function WeatherSourceSettings({
         ) : null}
       </form>
       {weather?.current ? (
-        <p className="world-observability-field-help" role="status">
+        <p className="integration-field-help" role="status">
           Read {new Date(weather.readAt!).toLocaleString()}.{" "}
           {weather.nextHours.length} upcoming hours available.
         </p>
       ) : null}
-      <p className="world-observability-field-help">
+      <p className="integration-field-help">
         Weather data by{" "}
         <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
           Open-Meteo

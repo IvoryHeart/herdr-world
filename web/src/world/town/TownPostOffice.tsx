@@ -6,7 +6,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "../../components/ui/popover";
-import { WORLD_SOURCES_SETTINGS_EVENT } from "../../workspaceResource";
+import { openIntegrations } from "../../integrations";
 import { PullRequestCard } from "../PullRequestCard";
 import { BadgePopover } from "./DeskWorkBadge";
 import type { TownCenterLot } from "./townCenter";
@@ -33,8 +33,7 @@ import "./townPost.css";
 /** How long a parcel takes to leave the yard (townPost.css). */
 export const TOWN_POST_LEAVE_MS = 1_400;
 
-const openSourcesSettings = () =>
-  window.dispatchEvent(new Event(WORLD_SOURCES_SETTINGS_EVENT));
+const openSourcesSettings = () => openIntegrations("source:github");
 
 /** A parcel leaving the yard: carried off when merged, else just gone. */
 type Leaving = {
@@ -566,7 +565,7 @@ function FoldedSign({
                 openSourcesSettings();
               }}
             >
-              Set up GitHub in Sources
+              Connect GitHub
             </button>
           </>
         )}

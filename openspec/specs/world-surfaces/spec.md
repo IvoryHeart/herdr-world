@@ -4599,7 +4599,7 @@ generation, detail expiry and exact-head admission before dispatching a merge.
   agent's Town desk shows its number and check state
 
 #### Scenario: Jira token saved
-- **WHEN** the user saves a Jira API token in Sources settings
+- **WHEN** the user saves a Jira API token in Settings → Integrations
 - **THEN** the service keeps it in private storage and every later response
   reports only that a token is set
 
@@ -4611,7 +4611,7 @@ generation, detail expiry and exact-head admission before dispatching a merge.
 
 #### Scenario: A busy merged window
 - **WHEN** more than a hundred pull requests the user authored were merged
-  in the merged window (seven days unless changed in Sources settings)
+  in the merged window (seven days unless changed in Settings → Integrations)
 - **THEN** the Work lens shows every one, grouped by the day it merged with
   only the newest day open, when at most 400 fit within the shared one-minute
   refresh deadline; due action details for the user's own open pull requests
@@ -4622,7 +4622,7 @@ generation, detail expiry and exact-head admission before dispatching a merge.
   continues beyond eight pages of fifty, or the history exhausts the shared
   one-minute refresh deadline
 - **THEN** the source reports that history was shortened, keeps its last
-  complete list and asks the user to shorten the window in Settings → Sources
+  complete list and asks the user to shorten the window in Settings → Integrations
 - **AND** a count over 400 stops immediately after the first merged page;
   the message names the oldest valid merge date actually observed, or states
   that no merge date could be confirmed, without claiming continuous coverage

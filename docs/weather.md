@@ -1,6 +1,7 @@
 # Weather source
 
-Open **Settings → Sources → Weather**. Weather is off by default. Turning it on
+Open **Settings → Integrations → Sources → Weather → Settings**. Weather is off
+by default; **Connect** turns it on and **Disconnect** turns it off. Turning it on
 is the only action that permits the World service to contact
 [Open-Meteo](https://open-meteo.com/en/docs), which needs no account/key for its
 [free non-commercial API](https://open-meteo.com/en/terms).
@@ -27,7 +28,8 @@ fallback removes both saved locations.
 
 The service requests current model-based conditions and up to six upcoming hours.
 It caches the result in memory and refreshes on demand at most every 15 minutes
-per configuration, including **Refresh now**. Multiple browsers share one flight.
+per configuration, including **Refresh Sources**. Multiple browsers share one
+flight.
 There is no background timer when nobody reads weather. The total request budget
 is six seconds, each response is limited to 32 KiB, redirects are refused and the
 provider host cannot be customized. No automatic retry runs. At the next due read,
@@ -68,6 +70,8 @@ admission, not browser location permission or a runtime connection.
 `GET /api/world/weather` returns immediately. The same value is
 `GET /api/world/sources` → `weather` and
 `useWorldSources().weather` / `worldSourcesStore.snapshot().weather` in the browser.
+The Integrations registry lists `source:weather` with kind `source` and
+`provides: ["weather"]`; its controls use the same source settings endpoint.
 Old services missing the field decode as unavailable. Screens should draw weather
 only when `state === "available"`, `current` exists and `expiresAt` is still in
 the future. No work cards are created.
@@ -106,8 +110,9 @@ service read. The adapter is isolated in `server/src/weather/provider.ts`.
 
 In a development preview (or built preview using
 `HERDR_WORLD_BUILD_DEVTOOLS=1 bun run build:web`), open `/town?weatherPreview=unavailable`, then
-**Settings → Sources → Weather**. The parameter is removed immediately, and the
-status says **Weather preview: unavailable (testing only)** for this page lifetime.
+**Settings → Integrations → Sources → Weather → Settings**. The parameter is
+removed immediately, and the status says **Weather preview: unavailable (testing
+only)** for this page lifetime.
 Navigate around World to check that it still works. Reload to leave the fixture.
 This is a display fixture; it makes no settings changes and production builds
 ignore it. Actual provider offline/deadline/late-response recovery is covered by
