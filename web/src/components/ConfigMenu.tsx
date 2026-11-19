@@ -1,15 +1,7 @@
 import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import { lazyWithReload } from "../lazyWithReload";
-import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import {
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   Menu as MenuIcon,
   ChevronDown,
@@ -35,8 +27,6 @@ import {
   Volume2,
   Hand,
   Inbox,
-  Search,
-  HelpCircle,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { isStaleBuild, useBuildFreshness } from "../buildFreshness";
@@ -74,11 +64,9 @@ import { DEVTOOLS } from "../world/devtools/flag";
 import { WORLD_OPEN_UPDATE_MENU_EVENT } from "../world/townMasterGreeting";
 import { requestTrace, traceRemembered } from "../world/devtools/trace";
 import { openCommandBox } from "../commandBoxKey";
-import { detectShortcutPlatform } from "../shortcutBindings";
-import type { AccentColor } from "../appearance";
-import { settingsPrototypeOn, takeSettingsLink } from "../settings/flag";
-import { publishSettingsHost, SETTINGS_OPEN_EVENT } from "../settings/host";
-import type { SettingsHost } from "../settings/registry";
+import { ShortMenu } from "../settings/ShortMenu";
+import { useSettingsPrototype } from "../settings/useSettingsPrototype";
+import { ConfigMenuItem } from "./ConfigMenuItem";
 
 const ConfigurationDialog = lazyWithReload("configuration", () =>
   import("./ConfigurationDialog").then((module) => ({
@@ -189,113 +177,28 @@ export function ConfigMenu({
   }, []);
 
   // The Settings prototype (#1035): `?settings=next` for this tab.
-  const [prototype] = useState(settingsPrototypeOn);
-  // Settings open, at an entry or category when a link or Cmd+K named one.
-  const [settingsAt, setSettingsAt] = useState<{
-    target: string | null;
-  } | null>(() => {
-    if (!prototype) return null;
-    const link = takeSettingsLink();
-    return link ? { target: link } : null;
-  });
-  const closeSettings = useCallback(() => {
-    setSettingsAt(null);
-    window.requestAnimationFrame(() => triggerRef.current?.focus());
-  }, []);
-  const [authRequired, setAuthRequired] = useState(false);
-  useEffect(() => {
-    if (!prototype) return;
-    let cancelled = false;
-    fetch("/api/health", { credentials: "same-origin", cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null)
-      .then((info) => {
-        if (!cancelled) setAuthRequired(!!info?.auth_required);
-      });
-    const onOpenSettings = (event: Event) => {
-      setOpen(false);
-      setSettingsAt({
-        target: (event as CustomEvent<string | undefined>).detail ?? null,
-      });
-    };
-    window.addEventListener(SETTINGS_OPEN_EVENT, onOpenSettings);
-    return () => {
-      cancelled = true;
-      window.removeEventListener(SETTINGS_OPEN_EVENT, onOpenSettings);
-    };
-  }, [prototype]);
   const {
-    theme,
-    onThemeChange,
-    accentColor,
-    onAccentColorChange,
-    blackBackground,
-    onBlackBackgroundChange,
-    uiScale,
-    onUiScaleChange,
-    terminalFontScale,
-    onTerminalFontScaleChange,
-  } = configuration;
-  const settingsHost = useMemo<SettingsHost | null>(
-    () =>
-      prototype
-        ? {
-            appearance: {
-              theme,
-              setTheme: onThemeChange,
-              accentColor,
-              setAccentColor: (accent) =>
-                onAccentColorChange(accent as AccentColor),
-              blackBackground,
-              setBlackBackground: onBlackBackgroundChange,
-              uiScale,
-              setUiScale: onUiScaleChange,
-              terminalFontScale,
-              setTerminalFontScale: onTerminalFontScaleChange,
-            },
-            zen: { on: zenMode, available: zenAvailable, set: onZenModeChange },
-            openConfiguration: (tab) =>
-              setConfigurationTab(tab as ConfigurationTab),
-            openPanel: (panel) => {
-              if (panel === "shortcuts") onShowShortcuts();
-              else if (panel === "agent-profiles") onOpenAgentProfiles?.();
-              else if (panel === "sounds") openSounds();
-              else if (panel === "sources") onOpenSources?.();
-              else onOpenOfficeMetrics?.();
-            },
-            mobile: layout.mobile,
-            mac: detectShortcutPlatform() === "mac",
-            signedIn: authRequired,
-          }
-        : null,
-    [
-      prototype,
-      theme,
-      onThemeChange,
-      accentColor,
-      onAccentColorChange,
-      blackBackground,
-      onBlackBackgroundChange,
-      uiScale,
-      onUiScaleChange,
-      terminalFontScale,
-      onTerminalFontScaleChange,
-      zenMode,
-      zenAvailable,
-      onZenModeChange,
-      onShowShortcuts,
-      onOpenAgentProfiles,
-      onOpenSources,
-      onOpenOfficeMetrics,
-      layout.mobile,
-      authRequired,
-    ],
-  );
-  // The command box reads the same host for settings it changes.
-  useEffect(() => {
-    publishSettingsHost(settingsHost);
-  }, [settingsHost]);
-  useEffect(() => () => publishSettingsHost(null), []);
+    prototype,
+    settingsAt,
+    setSettingsAt,
+    closeSettings,
+    host,
+    signedIn,
+  } = useSettingsPrototype({
+    configuration,
+    zen: { on: zenMode, available: zenAvailable, set: onZenModeChange },
+    mobile: layout.mobile,
+    openConfiguration: setConfigurationTab,
+    panels: {
+      shortcuts: onShowShortcuts,
+      "agent-profiles": onOpenAgentProfiles,
+      sounds: openSounds,
+      sources: onOpenSources,
+      metrics: onOpenOfficeMetrics,
+    },
+    onOpen: () => setOpen(false),
+    triggerRef,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -460,7 +363,7 @@ export function ConfigMenu({
                         "Automatic installation is unavailable. Use this installation's update channel.")
                       : null
                   }
-                  signedIn={authRequired}
+                  signedIn={signedIn}
                   loggingOut={loggingOut}
                   logoutError={logoutError}
                   onSettings={(target) => {
@@ -1059,11 +962,11 @@ export function ConfigMenu({
             document.body,
           )
         : null}
-      {settingsAt && settingsHost ? (
+      {settingsAt && host ? (
         <OperationalContext.Provider value={null}>
           <Suspense fallback={null}>
             <SettingsHome
-              host={settingsHost}
+              host={host}
               initial={settingsAt.target}
               onClose={closeSettings}
             />
@@ -1074,162 +977,6 @@ export function ConfigMenu({
   );
 }
 
-/**
- * The short Menu of the Settings prototype (#1035): the few things people do
- * every day. Everything else is in Settings and its search.
- */
-function ShortMenu({
-  zenMode,
-  zenAvailable,
-  mobile,
-  updateLabel,
-  updateDisabled,
-  updateNote,
-  signedIn,
-  loggingOut,
-  logoutError,
-  onSettings,
-  onFind,
-  onZen,
-  onUpdate,
-  onLogOut,
-}: {
-  zenMode: boolean;
-  zenAvailable: boolean;
-  mobile: boolean;
-  updateLabel: string | null;
-  updateDisabled: boolean;
-  updateNote: string | null;
-  signedIn: boolean;
-  loggingOut: boolean;
-  logoutError: string;
-  onSettings: (target: string | null) => void;
-  onFind: () => void;
-  onZen: () => void;
-  onUpdate: () => void;
-  onLogOut: () => void;
-}) {
-  return (
-    <div className="config-section config-short-menu">
-      <ConfigMenuItem
-        icon={<Settings size={15} />}
-        label="Settings"
-        description="Every setting and command, with search"
-        className="config-menu-item-row"
-        onClick={() => onSettings(null)}
-      />
-      <ConfigMenuItem
-        icon={<Search size={15} />}
-        label="Find or act"
-        description={
-          mobile
-            ? "Search World, settings and commands"
-            : `Search World, settings and commands · ${shortcutLabel("command.menu")}`
-        }
-        className="config-menu-item-row"
-        onClick={onFind}
-      />
-      {zenAvailable ? (
-        <div className="config-preference-row">
-          <span className="config-item-icon">
-            <Focus size={15} />
-          </span>
-          <div className="config-item-copy">
-            <strong>Zen mode</strong>
-            <span>
-              {zenMode ? "Enabled" : "Disabled"}
-              {mobile ? "" : ` · ${shortcutLabel("zen.toggle")}`}
-            </span>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-label="Zen mode"
-            aria-checked={zenMode}
-            className={"settings-switch" + (zenMode ? " is-on" : "")}
-            onClick={onZen}
-          >
-            <span />
-          </button>
-        </div>
-      ) : null}
-      {updateLabel ? (
-        <ConfigMenuItem
-          icon={<Download size={15} />}
-          className="config-update-item config-menu-item-row"
-          label={updateLabel}
-          description={updateDisabled ? undefined : "Install and restart"}
-          primary={!updateDisabled}
-          disabled={updateDisabled}
-          onClick={onUpdate}
-        />
-      ) : null}
-      {updateNote ? (
-        <p className="config-update-reason" role="note">
-          {updateNote}
-        </p>
-      ) : null}
-      <ConfigMenuItem
-        icon={<HelpCircle size={15} />}
-        label="Help"
-        description="Tutorial, features, troubleshooting and changes"
-        className="config-menu-item-row"
-        onClick={() => onSettings("help")}
-      />
-      {signedIn ? (
-        <>
-          <ConfigMenuItem
-            icon={<LogOut size={15} />}
-            label={loggingOut ? "Logging out..." : "Log out"}
-            description="End this browser session only"
-            className="config-menu-item-row"
-            disabled={loggingOut}
-            onClick={onLogOut}
-          />
-          {logoutError ? (
-            <p className="config-logout-error" role="alert">
-              {logoutError}
-            </p>
-          ) : null}
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-function ConfigMenuItem({
-  icon,
-  label,
-  description,
-  onClick,
-  disabled = false,
-  primary = false,
-  className,
-}: {
-  icon: ReactNode;
-  label: string;
-  description?: string;
-  onClick: () => void;
-  disabled?: boolean;
-  primary?: boolean;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      className={`config-menu-item${primary ? " is-primary" : ""}${className ? ` ${className}` : ""}`}
-      onClick={onClick}
-      disabled={disabled}
-    >
-      <span className="config-item-icon">{icon}</span>
-      <span className="config-item-copy">
-        <strong>{label}</strong>
-        {description ? <span>{description}</span> : null}
-      </span>
-      <ChevronRight size={15} />
-    </button>
-  );
-}
 function ConfigRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="config-row">
