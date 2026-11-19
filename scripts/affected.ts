@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { dirname, join, normalize } from "node:path";
+import { dirname, extname, join, normalize } from "node:path";
 import { readCoverageScope } from "./coverage-scope";
 
 /**
@@ -103,9 +103,11 @@ export function references(
     const values = text.replace(/^\s*(?:export\s+)?type\s[^;]*;/gm, "");
     for (const match of values.matchAll(/["'`]([\w./@-]+)["'`]/g)) {
       const literal = match[1]!;
-      // A bare name ("HostsFilter", "terminalLinks") is a fixture to bundle,
-      // never a module.
-      const bare = /^[A-Za-z][\w.]*(?:\/[A-Za-z][\w.]*)*$/.test(literal);
+      // Extension-less names ("HostsFilter", "town/TownCanvas") are fixtures
+      // to bundle. File paths must resolve before the basename fallback.
+      const bare =
+        !extname(literal) &&
+        /^[A-Za-z][\w.]*(?:\/[A-Za-z][\w.]*)*$/.test(literal);
       if (!bare && (add(join(dir, literal)) || add(literal))) continue;
       if (bare) {
         if (
