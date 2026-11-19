@@ -109,6 +109,14 @@ export function parseCoreTopology(value: unknown): CoreTopologyDocument {
           : {}),
       };
     }
+    if (
+      room.folder !== undefined &&
+      (typeof room.folder !== "string" ||
+        !HOST_PATH.test(room.folder) ||
+        room.app_space !== undefined ||
+        room.checkout !== undefined)
+    )
+      fail("folder");
     if (!Array.isArray(room.tabs)) fail("tabs");
     return {
       id: room.id as string,
@@ -117,6 +125,7 @@ export function parseCoreTopology(value: unknown): CoreTopologyDocument {
         ? { app_space: room.app_space as string }
         : {}),
       ...(checkout ? { checkout } : {}),
+      ...(room.folder !== undefined ? { folder: room.folder as string } : {}),
       tabs: (room.tabs as unknown[]).map((value) => {
         if (!value || typeof value !== "object" || Array.isArray(value))
           fail("tab");

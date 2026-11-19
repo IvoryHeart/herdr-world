@@ -250,6 +250,29 @@ describe("launching in herdr-core (M2, M3)", () => {
     ]);
   });
 
+  test("a room created in a folder starts its terminals there and shows it", async () => {
+    const w = await world();
+    const room = await createCoreRoom(
+      w.lease(),
+      w.topology,
+      "Site",
+      "/srv/example/site",
+    );
+    await launchCore(
+      w.lease(),
+      { workspaceId: room.workspace_id, kind: null, label: "", text: "" },
+      { topology: w.topology, resolveExecutable },
+    );
+    expect(runs(w)[0]!.params).toMatchObject({ cwd: "/srv/example/site" });
+    await w.settle();
+    expect((await w.rows()).workspaces).toContainEqual(
+      expect.objectContaining({
+        workspace_id: room.workspace_id,
+        cwd: "/srv/example/site",
+      }),
+    );
+  });
+
   test("a plain shell starts unplaced in the app, but in World's room", async () => {
     const w = await world();
     const room = await createCoreRoom(w.lease(), w.topology, "Ops");
