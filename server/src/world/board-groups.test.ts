@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BoardStore, parseBoardDocument } from "./board-store";
+import {
+  BoardStore,
+  emptyBoardDocument,
+  parseBoardDocument,
+} from "./board-store";
+import { memoryBacking } from "../testing/memory-backing";
 
 let root: string;
 let path: string;
@@ -218,7 +223,8 @@ describe("stored Groups", () => {
   });
 
   test("retains only recent attribution, suppresses no-op events and never invents a sender", () => {
-    const store = new BoardStore(path);
+    const backing = memoryBacking(emptyBoardDocument());
+    const store = new BoardStore(backing);
     store.patch([{ op: "group.create", id: "pod", kind: "pod", name: "A" }]);
     for (let i = 0; i < 135; i++)
       store.patch([{ op: "group.set_attrs", id: "pod", name: `Pod ${i}` }]);
@@ -232,7 +238,9 @@ describe("stored Groups", () => {
     ).toBe(true);
     store.patch([{ op: "group.set_attrs", id: "pod", name: "Pod 134" }]);
     expect(store.get().relations.group_changes).toEqual(changes);
-    expect(new BoardStore(path).get().relations.group_changes).toEqual(changes);
+    expect(new BoardStore(backing).get().relations.group_changes).toEqual(
+      changes,
+    );
   });
 
   test("enforces caps on the final state and refuses stale revisions without changing attribution", () => {

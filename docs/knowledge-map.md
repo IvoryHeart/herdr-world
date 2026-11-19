@@ -18,6 +18,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Core runtime ordering and authority | [Contract](../openspec/specs/herdr-core-runtime/spec.md) | [Source](../server/src/herdr-core/) | [Tests](../server/src/herdr-core/connections.test.ts) |
 | Core Files, Git, asks and Ranger | [Contract](../openspec/specs/herdr-core-runtime/spec.md) | [Source](../server/src/herdr-core/host-runtime.ts) | [Tests](../server/src/herdr-core/host-runtime.test.ts) |
 | Harness usage and estimates | [Contract](../openspec/specs/world-usage/spec.md) | [Source](../server/src/usage/projection.ts) | [Tests](../server/src/usage/projection.test.ts) |
+| Integrations registry, screen and vault | [Contract](../FEATURES.md#integrations) | [Registry](../server/src/integrations/registry.ts), [vault](../server/src/integrations/vault.ts), [screen](../web/src/components/IntegrationsSettings.tsx) | [Tests](../server/src/integrations/registry.test.ts), [browser](../web/src/configuration.browser.tsx) |
 | Harness integrations | [Contract](../openspec/specs/world-harness-integration/spec.md) | [Source](../server/src/cli/integration.ts) | [Tests](../server/src/cli/integration.test.ts) |
 | World IDs and bindings | [Contract](../openspec/specs/world-identity/spec.md) | [Source](../server/src/storage/world-ids.ts) | [Tests](../server/src/world/binding-resolution.test.ts) |
 | Durable asks/results and attention | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/storage/world-storage.ts) | [Tests](../server/src/storage/world-storage-crash.test.ts) |
@@ -94,6 +95,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Upstream integration | [Contract](upstream-automation.md) | [Source](../scripts/upstream-sync.ts) | [Tests](../scripts/upstream-sync.test.ts) |
 | File-size ratchet | [Contract](../CONTRIBUTING.md#validation) | [Source](../scripts/file-size-ratchet.ts) | [Tests](../scripts/file-size-ratchet.test.ts) |
 | CI pipelines and reuse | [Contract](ci-pipelines.md) | [Source](../scripts/ci-validation-proof.ts) | [Tests](../scripts/ci-validation-proof.test.ts) |
+| CI and delivery health | [Definitions and limits](ci-pipelines.md#health-and-delivery-measures) | [Source](../scripts/ci-health.ts) | [Tests](../scripts/ci-health.test.ts) |
 | Behavioural verification | [Contract](../verification/README.md) | [Source](../quint/models.ts) | [Tests](../scripts/verification-coverage.test.ts) |
 | SSH forwarding | [Contract](foundation-guide.md#rpc-paths) | [Source](../server/src/service/forward-service.ts) | [Tests](../server/src/bridge/forward-owner.test.ts) |
 | Agent workflow and asks | [Contract](agent-development.md) | [Source](../server/src/cli/world.ts) | [Tests](../server/src/cli/world.test.ts) |

@@ -48,9 +48,7 @@ if (process.env.TOWN_POST_DOM !== "1") {
   const { createRoot } = await import("react-dom/client");
   const { fixturePullRequest } = await import("../testing/pullRequestFixture");
   const { worldSourcesStore } = await import("../worldSources");
-  const { WORLD_SOURCES_SETTINGS_EVENT } = await import(
-    "../../workspaceResource"
-  );
+  const { WORLD_INTEGRATIONS_EVENT } = await import("../../integrations");
   const { layoutTown, TOWN_SHAPES } = await import("./townLayout");
   const { TownPostOffice, TOWN_POST_LEAVE_MS } = await import(
     "./TownPostOffice"
@@ -145,16 +143,16 @@ if (process.env.TOWN_POST_DOM !== "1") {
     const office = await mount();
     const sign = office.sign()!;
     expect(sign.getAttribute("aria-label")).toBe(
-      "Post office: Closed · connect GitHub in Sources",
+      "Post office: Closed · connect GitHub in Integrations",
     );
     expect(sign.title).toBe("Sign in with gh auth login.");
     expect(sign.textContent).not.toMatch(/\d/);
     expect(office.parcels()).toEqual([]);
     let opened = 0;
     const onSettings = () => (opened += 1);
-    window.addEventListener(WORLD_SOURCES_SETTINGS_EVENT, onSettings);
+    window.addEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
     await act(async () => sign.click());
-    window.removeEventListener(WORLD_SOURCES_SETTINGS_EVENT, onSettings);
+    window.removeEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
     expect(opened).toBe(1);
     await publish([fixturePullRequest(9)], "disabled");
     expect(office.sign()!.textContent).toContain("GitHub source is off");
@@ -302,19 +300,19 @@ if (process.env.TOWN_POST_DOM !== "1") {
     expect(opened).toBe(3);
     await folded.close();
 
-    // Without GitHub, the sign still says how to connect and opens Sources.
+    // Without GitHub, the sign still says how to connect and opens Integrations.
     await publish([], "not_connected", "Sign in with gh auth login.");
     const closed = await mount(false, work);
     let settings = 0;
     const onSettings = () => {
       settings += 1;
     };
-    window.addEventListener(WORLD_SOURCES_SETTINGS_EVENT, onSettings);
+    window.addEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
     expect(closed.sign()!.getAttribute("aria-label")).toBe(
-      "Post office: Closed · connect GitHub in Sources",
+      "Post office: Closed · connect GitHub in Integrations",
     );
     await act(async () => closed.sign()!.click());
-    window.removeEventListener(WORLD_SOURCES_SETTINGS_EVENT, onSettings);
+    window.removeEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
     expect([settings, opened]).toEqual([1, 3]);
     await closed.close();
   });

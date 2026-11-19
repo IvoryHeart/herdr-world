@@ -51,7 +51,7 @@ multi-user authorization or sandboxing.
 
 Built-in sources act with the service user's own access: GitHub through that
 user's `gh` sign-in, and Jira with the account email and API token saved in
-**Settings → Sources**. The token is kept in a separate owner-only file in
+**Settings → Integrations**. The token is kept in a separate owner-only file in
 private World storage, never in `settings.json`, and is never returned to the
 browser. Changing the Jira site or email removes the saved token, so it is
 only ever sent to the site it was entered for. Anyone who can sign in to World

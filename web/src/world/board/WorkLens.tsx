@@ -8,7 +8,7 @@ import type {
 } from "../../../../shared/worldSources";
 import { useLayer } from "../../layerStack";
 import { workBadgeText } from "../../../../shared/worldSources";
-import { WORLD_SOURCES_SETTINGS_EVENT } from "../../workspaceResource";
+import { openIntegrations } from "../../integrations";
 import { leafPinnedBy, useDeskPins } from "../useDeskPins";
 import type { WorldObject } from "../worldObject";
 import type { BoardDocumentStore } from "./boardDocument";
@@ -23,8 +23,8 @@ import {
   type WorkLensGroup,
 } from "./workLensModel";
 
-const openSourcesSettings = () =>
-  window.dispatchEvent(new Event(WORLD_SOURCES_SETTINGS_EVENT));
+const openSourcesSettings = (source?: WorldSourceStatus) =>
+  openIntegrations(source ? `source:${source.id}` : "source:github");
 
 /**
  * A source the user never set up is a quiet hint, not a problem: it has never
@@ -136,8 +136,8 @@ export function WorkLens({
         <button
           type="button"
           className="work-lens-icon"
-          aria-label="Sources settings"
-          onClick={openSourcesSettings}
+          aria-label="Integrations"
+          onClick={() => openSourcesSettings()}
         >
           <Settings2 size={16} aria-hidden="true" />
         </button>
@@ -164,9 +164,9 @@ export function WorkLens({
               key={source.id}
               type="button"
               className="work-lens-setup"
-              onClick={openSourcesSettings}
+              onClick={() => openSourcesSettings(source)}
             >
-              Set up {source.label}
+              Connect {source.label}
             </button>
           ))}
         </p>
@@ -179,7 +179,7 @@ export function WorkLens({
               ? group === "pull_requests"
                 ? "No open pull requests for you."
                 : "No tickets or assigned issues."
-              : "No source is connected yet. Open Sources settings to connect GitHub or Jira."}
+              : "No source is connected yet. Open Integrations to connect GitHub or Jira."}
         </p>
       ) : null}
       <div className="work-lens-columns">
