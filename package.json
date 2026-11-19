@@ -94,7 +94,8 @@
     "check:static": "bun scripts/check-delivery.ts --static",
     "verification:gate": "bun run verification:setup && bun run verification:typecheck && bun run verification:notices:check && bun run verification:check && bun run verification:diagnostic-control",
     "verification:resources": "bun scripts/verification-resources.ts",
-    "ci:health": "bun scripts/ci-health.ts"
+    "ci:health": "bun scripts/ci-health.ts",
+    "security:check": "bun scripts/dependency-security.ts"
   },
   "devDependencies": {
     "@babel/parser": "^8.0.8",

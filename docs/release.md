@@ -3,6 +3,27 @@
 Releases are prepared and reviewed through pull requests. Never commit or push a
 release change directly to `main`.
 
+## Dependency security gate
+
+Maintainers own the dependency alert queue. Shipped high/critical advisories must
+be fixed or excepted with a reviewed reason and expiry before the next release;
+development-only alerts must be resolved or explicitly mitigated/tracked within
+one week. See [the dependency security policy](../SECURITY.md#dependency-alerts-and-ownership).
+
+Run `bun run security:check` before preparing a release. Protected Delivery checks
+audit PRs, a daily main workflow queues shipped high/critical findings as
+`crew:ready` issues with `Priority: high`, and Release validation reruns the audit
+before any GitHub/npm/Homebrew publication. Pages also audits before deployment.
+This live registry check cannot be replaced by a previously green CI result.
+Fixable high/critical findings in the potentially shipped server/web runtime
+closure block publication. Tooling-only findings are reported without blocking
+the release, and no-fix findings still receive queue ownership. Output names each
+package, advisory and first published newer unaffected stable version.
+
+Exceptions in `security/dependency-exceptions.json` bind one exact package/version
+and GHSA URL to a reason and UTC expiry date; expired entries fail closed.
+Registry failures also fail closed. Do not disable the gate to publish.
+
 ## Pre-merge installer upgrades
 
 Every CI run with code changes calls `.github/workflows/installer-upgrade.yml`, and

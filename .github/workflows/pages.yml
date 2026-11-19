@@ -10,6 +10,12 @@ on:
             - web/src/world/town/**
             - web/src/world/terminalColor.ts
             - shared/terminalColor.ts
+            - bun.lock
+            - package.json
+            - web/package.json
+            - server/package.json
+            - security/**
+            - scripts/dependency-security.ts
             - scripts/build-pages.ts
             - scripts/film-render.ts
             - scripts/pages-content.ts
@@ -38,6 +44,8 @@ jobs:
               with:
                   bun-version: "1.4.4"
                   no-cache: true
+            - name: Refuse fixable high or critical shipped vulnerabilities
+              run: bun run security:check
             - name: Install dependencies
               run: bun install --frozen-lockfile
             - name: Verify live Herdr World installer

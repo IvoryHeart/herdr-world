@@ -3,8 +3,11 @@ import { resolve } from "node:path";
 import checker from "../tools/quint/checker.json";
 import { verificationRoot } from "./verification-setup";
 
-export async function verificationNotices(check = false) {
-  const base = resolve(verificationRoot, "tools/quint");
+export async function verificationNotices(
+  check = false,
+  root = verificationRoot,
+) {
+  const base = resolve(root, "tools/quint");
   const lock = JSON.parse(
     await readFile(resolve(base, "package-lock.json"), "utf8"),
   ) as {

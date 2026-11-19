@@ -1,3 +1,4 @@
+import { lockedQuintVersion } from "./verification-setup";
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
@@ -125,7 +126,7 @@ async function fixture(
           sourceRevision: git("rev-parse", "HEAD"),
           sourceInputs,
           tools: {
-            quint: "0.33.0",
+            quint: lockedQuintVersion,
             checker: "0.62.1",
             jarSha256: "b".repeat(64),
             node: "synthetic",

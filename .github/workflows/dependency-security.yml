@@ -1,0 +1,80 @@
+name: Dependency security
+
+on:
+  push:
+    branches: [main]
+    paths: ['**/package.json', '**/*lock*', 'security/**', 'scripts/dependency-security*', '.github/workflows/dependency-security.yml']
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+    inputs:
+      demo_vulnerable:
+        description: 'Testing only: demonstrate rejection of synthetic shipped lodash@4.17.15'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Shipped dependency security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.4'
+          no-cache: true
+      # Audit reads committed locks, with no install or dependency lifecycle code.
+      - name: Audit every locked version and gate potentially shipped dependencies
+        env:
+          DEMO_VULNERABLE: ${{ inputs.demo_vulnerable || false }}
+        run: |
+          if [ "$DEMO_VULNERABLE" = true ]; then
+            bun run security:check --demo-vulnerable --report dependency-security.json
+          else
+            bun run security:check --report dependency-security.json
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: dependency-security
+          path: dependency-security.json
+          if-no-files-found: error
+          retention-days: 7
+
+  queue:
+    name: Queue shipped security alerts
+    needs: audit
+    if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.audit.result != 'cancelled' && !inputs.demo_vulnerable
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.4'
+          no-cache: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: dependency-security
+      - name: Ensure the security queue label exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh label create dependency-security --color B60205 --description "Advisories in potentially shipped dependencies" --force
+      - name: Create deduplicated Priority high crew issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/dependency-security-issues.ts dependency-security.json
