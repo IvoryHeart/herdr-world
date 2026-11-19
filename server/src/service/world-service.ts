@@ -66,6 +66,7 @@ import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
 import { createApartmentsService } from "./apartments-service";
 import { createBinService } from "./bin-service";
+import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
@@ -99,9 +100,6 @@ export type WorldServiceDeps = {
 };
 
 export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
-
-/** How long stop waits for requests that were running when it began. */
-const DRAIN_TIMEOUT_MS = 2_000;
 
 /**
  * Claim the data folder, open storage and build one World service. Nothing
@@ -474,11 +472,6 @@ async function compose(
     send: (socket, control) =>
       safeSend(socket, JSON.stringify({ control }), "world-desk-reads"),
   });
-  const observeTuiHost = ownedBy(connectionManager, observeHost);
-  const observeTuiSettings = ownedBy(
-    connectionManager,
-    observeTerminalSettings,
-  );
   worldSnapshots = new WorldSnapshotService(
     observedConnections,
     () => clock.now(),
@@ -486,21 +479,8 @@ async function compose(
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    (connectionId, generation, panes, observedAt, agents, topology) => {
-      observeTuiHost(connectionId, generation, panes, observedAt, agents);
-      apartments.apartments.fresh(
-        connectionId,
-        generation,
-        panes,
-        observedAt,
-        agents,
-        topology,
-      );
-    },
-    (connectionId, generation, panes) => {
-      observeTuiSettings(connectionId, generation, panes);
-      apartments.apartments.complete(connectionId, generation, panes);
-    },
+    apartments.fresh(ownedBy(connectionManager, observeHost)),
+    apartments.complete(ownedBy(connectionManager, observeTerminalSettings)),
     serviceIncarnation,
   );
 
@@ -831,31 +811,9 @@ async function compose(
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
-  // Requests and socket messages still running; stop waits for them.
-  const inFlight = new Set<Promise<unknown>>();
-  function track<T>(work: Promise<T>): Promise<T> {
-    inFlight.add(work);
-    void work.then(
-      () => inFlight.delete(work),
-      () => inFlight.delete(work),
-    );
-    return work;
-  }
-  function drained(): Promise<void> {
-    if (!inFlight.size) return Promise.resolve();
-    return new Promise((resolve) => {
-      const timer = scheduler.schedule(() => {
-        logger.warn("World stopped with requests still running", {
-          requests: inFlight.size,
-        });
-        resolve();
-      }, DRAIN_TIMEOUT_MS);
-      void Promise.allSettled([...inFlight]).then(() => {
-        timer.cancel();
-        resolve();
-      });
-    });
-  }
+  const { track, drained } = inFlightWork(scheduler, (requests) =>
+    logger.warn("World stopped with requests still running", { requests }),
+  );
 
   /** Dispose Ranger if it was started; stopping keeps a new one from starting. */
   async function disposeAssistant() {

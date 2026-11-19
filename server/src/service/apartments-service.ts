@@ -5,6 +5,7 @@ import { argvSession } from "../herdr-core/history";
 import type { ApartmentsPort } from "../storage/apartments";
 import { readApartmentHistory } from "../world/apartment-history";
 import { type ApartmentTenant, WorldApartments } from "../world/apartments";
+import type { Complete, Fresh } from "../world/snapshot-observers";
 
 type Status = { id: string; label: string };
 type Manager<Lease> = {
@@ -124,6 +125,20 @@ export function createApartmentsService<Core extends CoreLease>(deps: {
 
   return {
     apartments,
+    /** A snapshot's fresh observer that also tells Apartments who is at a desk. */
+    fresh(observer: Fresh): Fresh {
+      return (...args) => {
+        observer(...args);
+        apartments.fresh(...args);
+      };
+    },
+    /** A complete pane list's observer that also moves ended agents out. */
+    complete(observer: Complete): Complete {
+      return (...args) => {
+        observer(...args);
+        apartments.complete(...args);
+      };
+    },
     /** A resident's conversation, read from its host while it is connected. */
     async history(id: string) {
       const resident = apartments.get(id);
