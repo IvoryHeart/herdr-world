@@ -1495,8 +1495,20 @@ async function run() {
   // and is raised by the window manager (#346).
   const summaryWindow = () =>
     document.querySelector<HTMLElement>('[aria-label="Town summary window"]');
+  // The status chip opens the Town board; its Summary button opens the
+  // summary window (#1006).
   document
-    .querySelector<HTMLElement>('[aria-label^="Town summary: "]')!
+    .querySelector<HTMLElement>('.town-board-chip[aria-label^="Town board: "]')!
+    .click();
+  await until(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        '#town-board[data-open="true"] .town-board-open',
+      ),
+    "the status chip opens the Town board",
+  );
+  document
+    .querySelector<HTMLButtonElement>("#town-board .town-board-open")!
     .click();
   await until(() => summaryWindow(), "Town summary opens as a panel window");
   summaryWindow()!
