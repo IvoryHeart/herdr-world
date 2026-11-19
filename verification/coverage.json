@@ -50,7 +50,7 @@
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
       },
-      "evidenceDecision": "Shared appearance consumes captured ready leases and revalidates currency after native reads; its direct admission matrix supplements the unchanged manager model/replay and does not expand that model’s domain."
+      "evidenceDecision": "Shared appearance consumes captured ready leases and revalidates currency after native reads; its direct admission matrix supplements the unchanged manager model/replay and does not expand that model\u2019s domain."
     },
     {
       "id": "Q02",
@@ -411,7 +411,14 @@
         "web/src/useTerminalComposerDraftScopes.test.ts",
         "web/src/terminalOptionKey.test.ts",
         "web/src/components/chat/chatKeys.test.ts",
-        "web/src/chatMenus.test.ts"
+        "web/src/chatMenus.test.ts",
+        "web/src/terminalSubmitKey.test.ts",
+        "web/src/components/AgentHistoryDrawer.paneChat.test.tsx",
+        "web/src/components/AgentHistoryDrawer.paneChatFocus.test.tsx",
+        "web/src/agentChatMetadata.test.tsx",
+        "web/src/components/ComposerVimEditor.test.tsx",
+        "web/src/components/chatOutbox.test.ts",
+        "web/src/components/promptKeys.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -419,7 +426,7 @@
       "status": "alternative-evidence",
       "remaining": "No abstract shell semantics or automatic command execution is claimed; terminal dispatch authority is covered separately.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Pure command resolution/catalogue and qualified draft tests cover aliases, key normalization and owner identity. The shared Chat composer DOM consumer covers native editing/completion, IME-safe Ctrl/Cmd+Enter send, multiline Enter, overflow command browsing, isolated drafts and transactional refusal restoration; source race tests cover native queued admission and unchecked slash-command receipts. History input and the mobile shell launcher share the single-submission lock and runtime-qualified draft. Composer DOM tests cover busy-agent confirmation, IME and touch release; the real History browser consumer checks runtime versus transport identity and retired-send draft restoration. Launcher DOM and TerminalView consumers check connection/pane replacement, empty-draft admission, explicit command selection and failed-send recovery. These are concrete editing/native-input contracts, so direct consumer evidence remains more useful than abstract shell semantics. Chat's ⋮ key controls reuse the configured Terminal shortcuts: the pure key-map test checks every Terminal control maps to a Herdr key name or is disabled, and the menu browser consumer checks the controls send only to the session Chat shows. Roamgate web sync through 2b16e991 (PR3): an isolated DOM consumer keeps unsent drafts across a same-destination reconnect, on the same pane and terminal, without writing browser storage; composer tests cover image-path sends that wait for the attachment, and the Option-as-Alt choice has direct storage evidence.",
+      "evidenceDecision": "Pure command resolution/catalogue and qualified draft tests cover aliases, key normalization and owner identity. The shared Chat composer DOM consumer covers native editing/completion, IME-safe Ctrl/Cmd+Enter send, multiline Enter, overflow command browsing, isolated drafts and transactional refusal restoration; source race tests cover native queued admission and unchecked slash-command receipts. History input and the mobile shell launcher share the single-submission lock and runtime-qualified draft. Composer DOM tests cover busy-agent confirmation, IME and touch release; the real History browser consumer checks runtime versus transport identity and retired-send draft restoration. Launcher DOM and TerminalView consumers check connection/pane replacement, empty-draft admission, explicit command selection and failed-send recovery. These are concrete editing/native-input contracts, so direct consumer evidence remains more useful than abstract shell semantics. Chat's \u22ee key controls reuse the configured Terminal shortcuts: the pure key-map test checks every Terminal control maps to a Herdr key name or is disabled, and the menu browser consumer checks the controls send only to the session Chat shows. Roamgate web sync through 2b16e991 (PR3): an isolated DOM consumer keeps unsent drafts across a same-destination reconnect, on the same pane and terminal, without writing browser storage; composer tests cover image-path sends that wait for the attachment, and the Option-as-Alt choice has direct storage evidence. Roamgate sync through bf3879f93: concrete isolated-DOM consumers cover pane-chat focus and questions, captured metadata scope and Vim editing; pure send/lock regressions cover every modified key and typed-text failure without restoration. The existing exhaustive dispatch/retirement checks cover runtime authority; no abstract shell semantics are added.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -439,7 +446,14 @@
           "web/src/useTerminalComposerDraftScopes.test.ts",
           "web/src/terminalOptionKey.test.ts",
           "web/src/components/chat/chatKeys.test.ts",
-          "web/src/chatMenus.test.ts"
+          "web/src/chatMenus.test.ts",
+          "web/src/terminalSubmitKey.test.ts",
+          "web/src/components/AgentHistoryDrawer.paneChat.test.tsx",
+          "web/src/components/AgentHistoryDrawer.paneChatFocus.test.tsx",
+          "web/src/agentChatMetadata.test.tsx",
+          "web/src/components/ComposerVimEditor.test.tsx",
+          "web/src/components/chatOutbox.test.ts",
+          "web/src/components/promptKeys.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -817,7 +831,7 @@
         ],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "useWorldCreatedTerminal.test.ts replaces the WorldTerminalHandoff browser policy checks for overlapping created-seat focus, transient retry and the admission deadline/late completion, and SharedViewCreation stale-observation admission. It mounts the production creation hook and the Inspector controller’s extracted selection-lease effect, drives real coordinateCreation and admitCreatedTerminal with controlled time, and supplies deferred opener outcomes. Stale observations preserve intent while disconnect, replacement and removal retire it. Browser consumers still cover launcher wiring, actual opener cancellation, focus, layout, rendering and terminal ownership; no Q39/Q43 input or latency claim moves. v0.8.5: Asynchronous naming remains a presentation input to qualified creation. DOM schedules exercise editing before suggestion, close/reopen, obsolete results and rejected loading; existing creation models and consumer gates remain mandatory.",
+      "evidenceDecision": "useWorldCreatedTerminal.test.ts replaces the WorldTerminalHandoff browser policy checks for overlapping created-seat focus, transient retry and the admission deadline/late completion, and SharedViewCreation stale-observation admission. It mounts the production creation hook and the Inspector controller\u2019s extracted selection-lease effect, drives real coordinateCreation and admitCreatedTerminal with controlled time, and supplies deferred opener outcomes. Stale observations preserve intent while disconnect, replacement and removal retire it. Browser consumers still cover launcher wiring, actual opener cancellation, focus, layout, rendering and terminal ownership; no Q39/Q43 input or latency claim moves. v0.8.5: Asynchronous naming remains a presentation input to qualified creation. DOM schedules exercise editing before suggestion, close/reopen, obsolete results and rejected loading; existing creation models and consumer gates remain mandatory.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -998,7 +1012,9 @@
         "web/src/store.test.ts",
         "web/src/tabStripScroll.test.ts",
         "web/src/world/board/boardPaneMove.test.ts",
-        "web/src/world/BoardView.test.ts"
+        "web/src/world/BoardView.test.ts",
+        "server/src/connections/tab-auto-rename.test.ts",
+        "server/src/connections/agent-tab-title.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1006,7 +1022,7 @@
       "status": "alternative-evidence",
       "remaining": "All tab cardinalities and asynchronous native layout responses are not exhausted; captured generation checks retain their implementation regressions.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Direct pure layout/pin/reorder tests plus queued visible-layout retirement tests cover owner-keyed state; Q21 adds bounded window reducer exploration.",
+      "evidenceDecision": "Direct pure layout/pin/reorder tests plus queued visible-layout retirement tests cover owner-keyed state; Q21 adds bounded window reducer exploration. Roamgate sync through bf3879f93 adds per-runtime tab naming. Direct tab-auto-rename and bound-title tests enumerate default/custom ownership, late disk/SSH reads, settings cancellation, disposal, replaced occupants and manual names; no cross-runtime allocation is introduced.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -1017,7 +1033,9 @@
           "web/src/tabReorder.test.ts",
           "web/src/components/PaneMoveMenu.test.ts",
           "web/src/store.test.ts",
-          "web/src/tabStripScroll.test.ts"
+          "web/src/tabStripScroll.test.ts",
+          "server/src/connections/tab-auto-rename.test.ts",
+          "server/src/connections/agent-tab-title.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -1240,7 +1258,8 @@
         "server/src/agent/conversation-send-menu.test.ts",
         "server/src/agent/conversation-send-boundaries.test.ts",
         "server/src/agent/conversation-send-repair.test.ts",
-        "web/src/components/chat/pendingSends.test.ts"
+        "web/src/components/chat/pendingSends.test.ts",
+        "server/src/rpc/agent-metadata.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
       "technique": "alternative",
@@ -1286,7 +1305,8 @@
           "server/src/agent/conversation-send-menu.test.ts",
           "server/src/agent/conversation-send-boundaries.test.ts",
           "server/src/agent/conversation-send-repair.test.ts",
-          "web/src/components/chat/pendingSends.test.ts"
+          "web/src/components/chat/pendingSends.test.ts",
+          "server/src/rpc/agent-metadata.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -1312,7 +1332,8 @@
         "server/src/assistant/claude-mcp.test.ts",
         "server/src/assistant/ranger-driver.test.ts",
         "web/src/assistant.test.ts",
-        "web/src/world/WorldTerminalHandoff.test.ts"
+        "web/src/world/WorldTerminalHandoff.test.ts",
+        "server/src/assistant/task-scope-recovery.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
       "technique": "ranger-authority",
@@ -1335,7 +1356,8 @@
           "server/src/assistant/claude-mcp.test.ts",
           "server/src/assistant/ranger-driver.test.ts",
           "web/src/assistant.test.ts",
-          "web/src/world/WorldTerminalHandoff.test.ts"
+          "web/src/world/WorldTerminalHandoff.test.ts",
+          "server/src/assistant/task-scope-recovery.test.ts"
         ],
         "checks": [
           "bun run verification:check",
@@ -1348,7 +1370,7 @@
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
       },
-      "evidenceDecision": " Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required."
+      "evidenceDecision": " Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required. Roamgate sync through bf3879f93: service/context consumers now cover chat-created workspace extension, retained leases/mention guards, closed fixed-task membership, original workspace reidentification after server restart and omission notices. Task-run and task-recovery helpers retain the existing Ranger-authority model and full canonical replay; explicit consumer permutations cover missing/recreated IDs and mixed old/new boot identities beyond the model boundary."
     },
     {
       "id": "Q27",
@@ -1360,7 +1382,8 @@
         "server/src/assistant/tasks.test.ts",
         "server/src/assistant/task-schedule.test.ts",
         "web/src/components/AssistantTasks.test.ts",
-        "server/src/assistant/task-storage.test.ts"
+        "server/src/assistant/task-storage.test.ts",
+        "server/src/assistant/task-scope-recovery.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "ranger-authority",
@@ -1379,7 +1402,8 @@
           "server/src/assistant/tasks.test.ts",
           "server/src/assistant/task-schedule.test.ts",
           "web/src/components/AssistantTasks.test.ts",
-          "server/src/assistant/task-storage.test.ts"
+          "server/src/assistant/task-storage.test.ts",
+          "server/src/assistant/task-scope-recovery.test.ts"
         ],
         "checks": [
           "bun run verification:check",
@@ -1392,7 +1416,7 @@
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
       },
-      "evidenceDecision": " Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required. Real SQLite v1-v3 migration and reopen controls preserve dynamic membership intent and completed omission notices; model-tool creation/edit proposals confirm through storage, and restart admission follows only current explicit workspace grants."
+      "evidenceDecision": " Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required. Real SQLite v1-v3 migration and reopen controls preserve dynamic membership intent and completed omission notices; model-tool creation/edit proposals confirm through storage, and restart admission follows only current explicit workspace grants. Roamgate sync through bf3879f93: service/context consumers now cover chat-created workspace extension, retained leases/mention guards, closed fixed-task membership, original workspace reidentification after server restart and omission notices. Task-run and task-recovery helpers retain the existing Ranger-authority model and full canonical replay; explicit consumer permutations cover missing/recreated IDs and mixed old/new boot identities beyond the model boundary. The fresh-run helper is exhaustively checked over restart \u00d7 endpoint replacement \u00d7 workspace replacement \u00d7 missing target \u00d7 host order (32 combinations). This finite data-validation boundary adds no new concurrent scheduler states; service cases retain revocation, draining and persisted admission evidence."
     },
     {
       "id": "Q28",
@@ -1621,7 +1645,7 @@
       "status": "alternative-evidence",
       "remaining": "No new abstract authentication model replaces protocol/security tests; trusted-single-user and supported deployment assumptions remain unchanged.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real HTTP tests exercise authentication, PIN/rate budgets, cookies and browser admission; real request/response semantics are the security boundary. v0.8.5: Configured passwords accept 8–1024 Unicode characters with a recommendation warning below 15. Direct boundary tests cover ASCII/Unicode and CLI/environment ingestion; session, Origin and throttling evidence remains mandatory. Agent CLI (FM-WORLDCLI): the `/api/world/cli` bearer path is tested directly for loopback-only, no-Origin admission, a derived CLI token that the login credential cannot replace, wrong and missing tokens, and a throttle that never blocks the owner's login. Pane attribution is a pure check of the caller's process ancestry against Herdr's pane process info, tested with spoofed panes, a second connection on the same port from another loopback address, ambiguous rows, shared sockets, IPv6, unknown processes and remote hosts. End to end in a throwaway Herdr session, an in-pane call was verified and the same pane ID from another process was not; the port-collision case is covered only by the synthetic /proc tests. No ordering or recovery protocol is added, so a model would restate these checks. Owner ask withdrawal (#472) compares the verified original connection, runtime, terminal and agent-session digest. Service regressions cover cause-key deduplication, foreign/unverified refusal, idempotent withdrawal, answer preservation and rejection of later answers; the existing endpoint/process ownership fixtures remain mandatory.",
+      "evidenceDecision": "Real HTTP tests exercise authentication, PIN/rate budgets, cookies and browser admission; real request/response semantics are the security boundary. v0.8.5: Configured passwords accept 8\u20131024 Unicode characters with a recommendation warning below 15. Direct boundary tests cover ASCII/Unicode and CLI/environment ingestion; session, Origin and throttling evidence remains mandatory. Agent CLI (FM-WORLDCLI): the `/api/world/cli` bearer path is tested directly for loopback-only, no-Origin admission, a derived CLI token that the login credential cannot replace, wrong and missing tokens, and a throttle that never blocks the owner's login. Pane attribution is a pure check of the caller's process ancestry against Herdr's pane process info, tested with spoofed panes, a second connection on the same port from another loopback address, ambiguous rows, shared sockets, IPv6, unknown processes and remote hosts. End to end in a throwaway Herdr session, an in-pane call was verified and the same pane ID from another process was not; the port-collision case is covered only by the synthetic /proc tests. No ordering or recovery protocol is added, so a model would restate these checks. Owner ask withdrawal (#472) compares the verified original connection, runtime, terminal and agent-session digest. Service regressions cover cause-key deduplication, foreign/unverified refusal, idempotent withdrawal, answer preservation and rejection of later answers; the existing endpoint/process ownership fixtures remain mandatory.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -2693,7 +2717,7 @@
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
       "technique": "direct-exhaustive-policy",
-      "assessment": "Finite verb × actor baseline, all existing CLI commands through both actor paths against pre-registry outcomes, browser call inventory and actual service/dispatcher controls",
+      "assessment": "Finite verb \u00d7 actor baseline, all existing CLI commands through both actor paths against pre-registry outcomes, browser call inventory and actual service/dispatcher controls",
       "status": "alternative-evidence",
       "remaining": "Separate resource and assistant action catalogs retain their current owners. Fresh service-issued browser confirmation challenges and observation-linked command tracking require later browser/effect integration; no grant API, retry queue or new workflow authoring is introduced.",
       "requiredChecks": [
@@ -3014,7 +3038,6 @@
         "server/src/herdr-core/agent-sessions.test.ts",
         "web/src/world/coreControl.test.ts",
         "server/src/herdr-core/worktrees.test.ts",
-        "server/src/herdr-core/delivery.test.ts",
         "server/src/herdr-core/ask-caller.test.ts",
         "server/src/assistant/context.core.test.ts",
         "server/src/herdr-core/host-runtime.test.ts",
@@ -3035,13 +3058,14 @@
         "web/src/coreFixture.test.ts",
         "server/src/herdr-core/history.test.ts",
         "server/src/herdr-core/harnesses.live.test.ts",
-        "server/src/herdr-core/launch-brief.test.ts"
+        "server/src/herdr-core/launch-brief.test.ts",
+        "server/src/rpc/agent-metadata.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
       "technique": "composed-design-model",
       "assessment": "Bounded composed model. Replay drives the production CoreMirror for every mirror, cursor and readiness transition and the production read model for World's views, with five production negative controls (gap, heartbeat, stale, missed cut, view of a retired mirror); plan/kill and the worktree teardown replay the production coreKillPlan and coreKillRefusal with two production controls (pid-only confirmation, unconfirmed terminal passed); the checkout removal step is a design seam mapped to removeCoreWorktree's lease guard by its Bun and live-release suites; the observe family replays World's production watch attach/reply rules and page grid adoption with three more controls (typing attach, unconfirmed reply accepted, paint before its grid); the typing family drives the production CoreTypingSession and seat with three more (first key replayed, a seat that resizes, a swap that detaches before the new seat attaches); dispatch also drives the production recipient comparison with a missing-foreground action/control; capture/dispatch/deliver still use the design seam because the model checks the source occupant at dispatch while World can check only its observation. Foundation delivery history is not acceptance of this contract. Issue #874 maps transcript completion to capture/dispatch/complete with the publication-foreground model fault; exhaustive shared TUI format and harness matrix tests cover data mapping. The launchBrief action and brief-without-idle mutant map automatic brief readiness to the production native-parameter builder; source-side idle comparison remains a core-owned seam verified by native live and queued fake tests. Vendor harness credentials and Windows transcript reading are excluded. Native address grammar uses executed official-source vectors and in-process allocation across t19 to t1b, with RPC/schema, durable placement, labels, verified claims, Terminal/Files and browser-watch consumers; replacement and generation refusal also run at terminal 20. This adds no state transition to the ordering model; source grammar is checked directly rather than modeled.",
       "status": "pending",
-      "remaining": "Independent design/model review; a model split of observed versus actual occupant before the production fence can replace the authority seam; harness, browser/app and owner real-Windows relay acceptance in P2–P6. The Windows relay realizes the same existing-only connect (a probe reads core.lock, then one relay per generation opens exactly that pipe); it adds no ordering rule, so the model is unchanged and its evidence is the fake-pipe and real-PowerShell tests.",
+      "remaining": "Independent design/model review; a model split of observed versus actual occupant before the production fence can replace the authority seam; harness, browser/app and owner real-Windows relay acceptance in P2\u2013P6. The Windows relay realizes the same existing-only connect (a probe reads core.lock, then one relay per generation opens exactly that pipe); it adds no ordering rule, so the model is unchanged and its evidence is the fake-pipe and real-PowerShell tests.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": [
@@ -3088,7 +3112,8 @@
           "web/src/coreFixture.test.ts",
           "server/src/herdr-core/history.test.ts",
           "server/src/herdr-core/launch-brief.test.ts",
-          "server/src/herdr-core/harnesses.live.test.ts"
+          "server/src/herdr-core/harnesses.live.test.ts",
+          "server/src/rpc/agent-metadata.test.ts"
         ],
         "checks": [
           "bun quint/run.ts --case herdr-core-runtime",

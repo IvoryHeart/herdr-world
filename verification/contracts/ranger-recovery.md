@@ -67,3 +67,12 @@ One task and admitted run, two runtime generations, one change per durable ident
 bounded close/reopen/failed-save operations. Three seeds sample 500 paths and replay
 100 per seed, up to 25 transitions; TLC checks finite safety. Run canonical checks
 and real context/task/storage/service suites. Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+
+## Typed restart refusal
+
+The source refresh through bf3879f93 exposes a typed, user-readable
+`AssistantServerRestartedError`. The production replay recognizes that exact
+class only when its controlled boot identity changed, and checks the captured
+connection label. Endpoint/workspace rejection retains its strict error match.
+This updates the consumer mapping without changing the model's safety property,
+accepted recovery cases, witnesses or fault controls; unexpected errors still fail.

@@ -217,3 +217,31 @@ New proposals for review: deferred #482, #489 and #493 (one mobile PR), #508
 (diff worker budget) and #546's browser controls; divergent #491 (mobile entry
 point), #504 (workflow controls), #518 (Recently opened) and #544 (seen tracking).
 Source after 2b16e991, including v0.8.14 and v0.8.15, is not part of this record.
+
+## Assessment for source bf3879f93 (19 November 2026)
+
+The 22 commits after `2b16e991` were reconsidered together with all eleven carried
+exceptions. World still owns workflow controls: `bf3879f93` updates only Roamgate's
+CodeQL init/analyze pins from 4.39.1 to 4.39.3; World has no CodeQL job to update.
+The existing maintainer-owned control review remains the acceptance path.
+
+The dedicated mobile-navigation/History-input work remains deferred. Pane chat is
+adapted to World's existing in-flow input, managed-window navigation and visible
+top bar; it does not adopt upstream's chat zen/topbar removal. Town remains the
+phone entry. No new independent seen store or browser open-history signal exists,
+so the seen and Recently opened divergences retain their acceptance conditions.
+
+The 1.6 diff worker remains deferred under its existing packaging acceptance;
+this source supplies no reduced worker. Its `@pierre/highlights` update has no
+consumer in World's 1.5 worker. Shiki 4.6 is adopted. The new pane-chat/Vim features
+initially exceeded the asset budget; pruning unused dependency theme registrations
+restores headroom while preserving every diff appearance World offers. No asset
+budget is raised. Browser forwarding controls remain the separately tracked web
+follow-up: this range adds no controls that satisfy their loopback and qualification
+acceptance. Existing service forwarding stays intact.
+
+React remains 19.3.1 with World's diagnostic patch; this range changes neither
+React nor its patch target. The completed Bun-free installation decision has no
+new installer or service changes to assess. No standing exception is silently
+closed, and no upstream feature is labelled adopted solely because it is a merge
+ancestor. The PR supplies conflict ownership and an exact re-merge reconstruction.

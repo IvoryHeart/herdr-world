@@ -65,3 +65,19 @@ test("enumeration and clearing affect only current World foundation keys", () =>
   expect(storage.length).toBe(0);
   expect(raw.getItem("roamgate:theme")).toBe("upstream");
 });
+
+test("keys enumerates World names once without exposing upstream keys", () => {
+  const raw = memoryStorage({
+    [`${prefix}theme`]: "dark",
+    [`${prefix}scale`]: "1",
+    "roamgate:theme": "foreign",
+  });
+  let reads = 0;
+  const key = raw.key.bind(raw);
+  raw.key = (index) => {
+    reads++;
+    return key(index);
+  };
+  expect(worldStorage(raw).keys()).toEqual(["theme", "scale"]);
+  expect(reads).toBe(raw.length);
+});

@@ -7,6 +7,7 @@ import {
   GitBranch,
   Keyboard,
   LayoutDashboard,
+  MessageSquare,
   Minus,
   MessageSquareText,
   Moon,
@@ -33,6 +34,8 @@ import {
 } from "../appearance";
 import { setChatTextScale, useChatTextScale } from "../textScales";
 import { lazyWithReload } from "../lazyWithReload";
+import { setDefaultPaneView, useDefaultPaneView } from "../paneView";
+import { setComposerVimKeys, useComposerVimKeys } from "../composerVim";
 import {
   mobileTerminalShortcutCount,
   type MobileTerminalShortcutRows,
@@ -53,6 +56,7 @@ import {
   useConnectionClient,
 } from "../useConnectionClient";
 import { AgentIntegrationsSettings } from "./AgentIntegrationsSettings";
+import { AgentAutoRenameSettings } from "./AgentAutoRenameSettings";
 import { IntegrationsSettings } from "./IntegrationsSettings";
 import { AutoSyncRepositoriesDialog } from "./AutoSyncRepositoriesDialog";
 import { CloseButton } from "./CloseButton";
@@ -153,6 +157,8 @@ export function ConfigurationDialog({
   const applePlatform = detectShortcutPlatform() === "mac";
   const connectionClient = useConnectionClient();
   const [tab, setTab] = useState<ConfigurationTab>(initialTab);
+  const defaultPaneView = useDefaultPaneView();
+  const composerVim = useComposerVimKeys();
   const [detail, setDetail] = useState<Detail | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const detailTrigger = useRef<HTMLButtonElement | null>(null);
@@ -518,6 +524,59 @@ export function ConfigurationDialog({
               </div>
               <div className="config-preference-row">
                 <span className="config-item-icon">
+                  <MessageSquare size={15} />
+                </span>
+                <div className="config-item-copy">
+                  <strong>Open agents as a chat</strong>
+                  <span>
+                    {defaultPaneView === "chat"
+                      ? "An agent pane shows its chat once the agent starts"
+                      : "An agent pane shows its terminal"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Open agents as a chat"
+                  aria-checked={defaultPaneView === "chat"}
+                  className={
+                    "settings-switch" +
+                    (defaultPaneView === "chat" ? " is-on" : "")
+                  }
+                  onClick={() =>
+                    setDefaultPaneView(
+                      defaultPaneView === "chat" ? "terminal" : "chat",
+                    )
+                  }
+                >
+                  <span />
+                </button>
+              </div>
+              <div className="config-preference-row">
+                <span className="config-item-icon">
+                  <Keyboard size={15} />
+                </span>
+                <div className="config-item-copy">
+                  <strong>Vim keys in agent chats</strong>
+                  <span>
+                    {composerVim
+                      ? "Message boxes start in insert mode; :w sends"
+                      : "Message boxes are plain text boxes"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Vim keys in agent chats"
+                  aria-checked={composerVim}
+                  className={"settings-switch" + (composerVim ? " is-on" : "")}
+                  onClick={() => setComposerVimKeys(!composerVim)}
+                >
+                  <span />
+                </button>
+              </div>
+              <div className="config-preference-row">
+                <span className="config-item-icon">
                   <Bell size={15} />
                 </span>
                 <div className="config-item-copy">
@@ -663,12 +722,17 @@ export function ConfigurationDialog({
                 Connection: <strong>{s.connectionLabel}</strong>
               </p>
               {tab === "Connection" ? (
-                <TerminalTransportSettings
-                  key={connectionClientScopeKey(
-                    connectionClient,
-                    connectionClient.serverRuntimeGeneration,
-                  )}
-                />
+                <>
+                  <AgentAutoRenameSettings
+                    key={`auto-rename-${connectionClientScopeKey(connectionClient, connectionClient.serverRuntimeGeneration)}`}
+                  />
+                  <TerminalTransportSettings
+                    key={connectionClientScopeKey(
+                      connectionClient,
+                      connectionClient.serverRuntimeGeneration,
+                    )}
+                  />
+                </>
               ) : null}
               <button
                 type="button"

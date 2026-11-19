@@ -2649,3 +2649,36 @@ independent. Background reads leave command slots available for interactive work
 Git status refreshes in the background, and large untracked-file lists avoid a
 command per file. Stalled sessions end through keepalives. See
 [SSH setup and operator controls](docs/DEPLOYMENT.md#ssh-command-sharing-and-port-forwards).
+
+## Pane chat and input
+
+In Spaces, **Show as a chat** on an agent pane displays its conversation while the
+terminal keeps running. **Show the terminal** restores the live terminal; Ctrl+Alt+M
+switches the active pane. The terminal remains the default; Settings → Behavior
+can choose Chat for new agent panes. Town remains World's phone entry point and
+the shared top app bar stays reachable. History retains its bounded window and
+original Codex linking and transcript controls.
+
+Pane chat shows screen-derived questions and working activity. Choice buttons type
+only into that pane's captured connection/runtime; a hidden terminal cannot take
+keyboard focus. Before a transcript exists the message box remains available;
+a failed send stays marked for explicit retry or discard. Busy or unknown agents
+still require confirmation. Drafts stay in memory and are shared with that pane's
+terminal input. Switching or replacing the runtime never redirects a send.
+
+Claude sessions expose their recorded slash commands and published artifact links.
+Images recorded with recent messages load on demand within bounded per-session
+budgets and open in a dismissible lightbox; host paths use World's qualified,
+same-origin file endpoint. Optional Vim keys are configured with the chat appearance
+controls. Settings → Integrations offers a submit key per agent (Enter, Shift/Alt/Ctrl or
+Cmd/Super+Enter). If the text arrives but the modified submit key fails, the draft
+is not restored or automatically sent again.
+
+Automatic agent tab naming is enabled by default and can be disabled in Settings.
+The control is under Settings → Connection. It names default tabs from the active
+bound session or terminal title; custom names
+and manual renames retain ownership. Ranger can continue in a workspace it created
+in that chat without widening global task grants. Fixed-scope tasks skip closed
+original workspaces with a notice, refuse replaced identities, and re-check the
+original workspace before a fresh run after Herdr restarts. An interrupted run
+never resumes against a replacement server. World keeps its schema-v4 task store.

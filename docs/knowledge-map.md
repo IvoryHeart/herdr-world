@@ -99,3 +99,6 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Behavioural verification | [Contract](../verification/README.md) | [Source](../quint/models.ts) | [Tests](../scripts/verification-coverage.test.ts) |
 | SSH forwarding | [Contract](foundation-guide.md#rpc-paths) | [Source](../server/src/service/forward-service.ts) | [Tests](../server/src/bridge/forward-owner.test.ts) |
 | Agent workflow and asks | [Contract](agent-development.md) | [Source](../server/src/cli/world.ts) | [Tests](../server/src/cli/world.test.ts) |
+
+| Pane chat, questions and metadata | [Surface contract](../openspec/specs/world-surfaces/spec.md) | [Pane lifecycle](../web/src/components/usePaneChat.tsx), [screen state](../web/src/components/terminalViewState.ts), [metadata routing](../server/src/rpc/agent.ts) | [Focus](../web/src/components/AgentHistoryDrawer.paneChatFocus.test.tsx), [metadata](../web/src/agentChatMetadata.test.tsx) |
+| Ranger scope extension and fresh task recovery | [Ranger contract](../openspec/specs/workspace-assistant/spec.md) | [Scope](../server/src/assistant/scope-extension.ts), [task context](../server/src/assistant/task-run-context.ts), [recovery](../server/src/assistant/task-scope-recovery.ts) | [Context](../server/src/assistant/context.test.ts), [service](../server/src/assistant/service.test.ts) |

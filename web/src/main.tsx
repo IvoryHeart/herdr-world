@@ -14,6 +14,12 @@ import TitleSpinnerFixture from "./testing/TitleSpinnerFixture";
 
 // Testing-only preview: consume the switch before view routing rewrites the URL.
 const previewUrl = new URL(location.href);
+const paneChatFixture = previewUrl.searchParams.has("paneChatFixture");
+if (paneChatFixture) {
+  previewUrl.searchParams.delete("paneChatFixture");
+  history.replaceState(history.state, "", previewUrl);
+}
+const PaneChatFixture = React.lazy(() => import("./testing/PaneChatFixture"));
 const titleSpinnerFixture = previewUrl.searchParams.has("titleSpinnerFixture");
 if (titleSpinnerFixture) {
   previewUrl.searchParams.delete("titleSpinnerFixture");
@@ -60,16 +66,21 @@ initializeShortcutPreferences();
 coreFixtureEnabled();
 coreInstallFake();
 integrationsFixtureEnabled();
-const stopInstanceNameSync = titleSpinnerFixture
-  ? () => {}
-  : initializeInstanceName();
+const stopInstanceNameSync =
+  titleSpinnerFixture || paneChatFixture ? () => {} : initializeInstanceName();
 if (import.meta.hot) import.meta.hot.dispose(stopInstanceNameSync);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <React.Suspense fallback={null}>
-        {titleSpinnerFixture ? <TitleSpinnerFixture /> : <WorldFoundationApp />}
+        {paneChatFixture ? (
+          <PaneChatFixture />
+        ) : titleSpinnerFixture ? (
+          <TitleSpinnerFixture />
+        ) : (
+          <WorldFoundationApp />
+        )}
       </React.Suspense>
       <OverlayScrollbarLayer />
     </ErrorBoundary>

@@ -55,6 +55,11 @@ const descriptions: [ShortcutId, string, string][] = [
     "Fit the active window to the left edge",
     "Window arrangements",
   ],
+  [
+    "pane.chat",
+    "Show the active agent pane as a chat or as its terminal",
+    "Tabs & panes",
+  ],
   ...SHORTCUT_NUMBERS.map((n): [ShortcutId, string, string] => [
     `tab.${n}`,
     `Switch to tab ${n}`,

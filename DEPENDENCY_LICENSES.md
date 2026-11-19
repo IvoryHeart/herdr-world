@@ -1231,7 +1231,7 @@ Sources:
 
 Sources:
 
-- `@biomejs/biome@2.6.2` — `LICENSE-MIT`
+- `@biomejs/biome@2.6.4` — `LICENSE-MIT`
 
     MIT License
 
@@ -1863,7 +1863,7 @@ Sources:
 
 Sources:
 
-- `@biomejs/biome@2.6.2` — `LICENSE-APACHE`
+- `@biomejs/biome@2.6.4` — `LICENSE-APACHE`
 
                                   Apache License
                             Version 2.0, January 2004
@@ -2426,7 +2426,7 @@ Sources:
 
 Sources:
 
-- `@xterm/xterm@6.1.0-beta.315` — `LICENSE`
+- `@xterm/xterm@6.1.0-beta.336` — `LICENSE`
 
     Copyright (c) 2017-2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
     Copyright (c) 2014-2016, SourceLair Private Company (https://www.sourcelair.com)
@@ -4216,7 +4216,7 @@ Sources:
 Sources:
 
 - `@oxc-project/types@0.156.0` — `LICENSE`
-- `oxlint@1.89.0` — `LICENSE`
+- `oxlint@1.90.0` — `LICENSE`
 
     MIT License
 
@@ -6821,6 +6821,35 @@ Sources:
     OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+### ae87e2932711741e
+
+Sources:
+
+- `@replit/codemirror-vim-core@0.1.0` — `LICENSE`
+- `@replit/codemirror-vim@6.4.0` — `LICENSE`
+
+    MIT License
+
+    Copyright (C) 2018-2021 by Marijn Haverbeke <marijnh@gmail.com> and others
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+
 ### af456c6455a9739f
 
 Sources:
@@ -8967,6 +8996,7 @@ Sources:
 Sources:
 
 - `@shikijs/vscode-textmate@10.0.2` — `LICENSE.md`
+- `@shikijs/vscode-textmate@10.1.0` — `LICENSE.md`
 
     The MIT License (MIT)
 
@@ -9226,7 +9256,7 @@ Sources:
 
 Sources:
 
-- `@xterm/addon-fit@0.12.0-beta.311` — `LICENSE`
+- `@xterm/addon-fit@0.12.0-beta.332` — `LICENSE`
 
     Copyright (c) 2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
 
@@ -10940,7 +10970,7 @@ Sources:
 Sources:
 
 - `typebox@1.3.27` — `license`
-- `typebox@1.3.37` — `license`
+- `typebox@1.4.4` — `license`
 
     TypeBox
 
@@ -10999,6 +11029,7 @@ Sources:
 Sources:
 
 - `hast-util-to-html@9.0.5` — `license`
+- `hast-util-to-html@9.0.7` — `license`
 - `micromark-util-character@2.1.1` — `license`
 - `micromark-util-encode@2.0.1` — `license`
 - `micromark-util-sanitize-uri@2.0.1` — `license`
@@ -11782,17 +11813,17 @@ Sources:
 Sources:
 
 - `@shikijs/core@4.4.3` — `LICENSE`
-- `@shikijs/core@4.5.0` — `LICENSE`
-- `@shikijs/engine-javascript@4.5.0` — `LICENSE`
-- `@shikijs/engine-oniguruma@4.5.0` — `LICENSE`
-- `@shikijs/langs@4.5.0` — `LICENSE`
+- `@shikijs/core@4.6.0` — `LICENSE`
+- `@shikijs/engine-javascript@4.6.0` — `LICENSE`
+- `@shikijs/engine-oniguruma@4.6.0` — `LICENSE`
+- `@shikijs/langs@4.6.0` — `LICENSE`
 - `@shikijs/primitive@4.4.3` — `LICENSE`
-- `@shikijs/primitive@4.5.0` — `LICENSE`
-- `@shikijs/themes@4.5.0` — `LICENSE`
+- `@shikijs/primitive@4.6.0` — `LICENSE`
+- `@shikijs/themes@4.6.0` — `LICENSE`
 - `@shikijs/transformers@4.4.3` — `LICENSE`
 - `@shikijs/types@4.4.3` — `LICENSE`
-- `@shikijs/types@4.5.0` — `LICENSE`
-- `shiki@4.5.0` — `LICENSE`
+- `@shikijs/types@4.6.0` — `LICENSE`
+- `shiki@4.6.0` — `LICENSE`
 
     MIT License
 

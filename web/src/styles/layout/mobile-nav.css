@@ -420,3 +420,9 @@
     display: none;
   }
 }
+
+@media (max-width: 767px) {
+  .terminal-chat-layer .agent-history-drawer-head {
+    padding-top: calc(4px + env(safe-area-inset-top, 0px));
+  }
+}
