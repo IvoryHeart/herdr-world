@@ -77,3 +77,44 @@ test("a folder goes up one level and completes to the shared start of its sugges
   ).toBe(null);
   expect(completeFolder("/srv/example", [])).toBe(null);
 });
+
+test("Windows hosts' drive and UNC folders are offered, browsed up and completed", () => {
+  expect(
+    recentFolders({
+      panes: [
+        { workspace_id: "w", cwd: "C:\\Projects\\site\\", focused: true },
+        {
+          workspace_id: "w",
+          cwd: "\\\\fileserver.example\\share\\docs",
+          last_activity_at: 5,
+        },
+        { workspace_id: "w", cwd: "D:\\", last_activity_at: 4 },
+        { workspace_id: "w", cwd: "C:relative", last_activity_at: 3 },
+        {
+          workspace_id: "w",
+          cwd: "\\\\fileserver.example",
+          last_activity_at: 2,
+        },
+      ],
+    }),
+  ).toEqual([
+    "C:\\Projects\\site",
+    "\\\\fileserver.example\\share\\docs",
+    "D:\\",
+  ]);
+  expect(parentFolder("C:\\Projects\\site")).toBe("C:\\Projects");
+  expect(parentFolder("C:\\Projects\\")).toBe("C:\\");
+  expect(parentFolder("C:/Projects/site")).toBe("C:/Projects");
+  expect(parentFolder("C:\\")).toBe(null);
+  expect(parentFolder("\\\\fileserver.example\\share\\docs")).toBe(
+    "\\\\fileserver.example\\share",
+  );
+  expect(parentFolder("\\\\fileserver.example\\share")).toBe(null);
+  expect(parentFolder("~\\notes")).toBe("~");
+  // A Unix name may hold a backslash: only slashes separate there.
+  expect(parentFolder("/srv/odd\\name")).toBe("/srv");
+
+  expect(completeFolder("C:\\Projects\\si", ["C:\\Projects\\site"])).toBe(
+    "C:\\Projects\\site/",
+  );
+});

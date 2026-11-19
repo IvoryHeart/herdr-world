@@ -1326,11 +1326,12 @@ A table's nameplate SHALL open the same kind of card for that table on hover,
 focus or a touch, from the same summary read model and the usage of its
 exactly qualified Herdr tab. The card SHALL read usage only once opened. Hovering the table itself
 on the canvas SHALL open that card without covering the table; on a touch
-screen, a tap on a table whose card is closed SHALL open the card instead of
-the table, and a second tap SHALL open the table as a tap does. Opening a
-table SHALL open its default pane: an agent there that needs the user, else its
-only pane, else its focused pane, else its most recently active pane; only a
-table with more panes than drawn seats and none focused SHALL open the chooser.
+screen, one tap on a table with a live default pane SHALL open that pane; on
+any other table, a tap whose card is closed SHALL open the card instead, and a
+second tap SHALL do what a tap does. Opening a table SHALL open its default
+pane: its only pane, else its focused pane, else an agent there that needs the
+user, else its most recently active pane; only a table with more panes than
+drawn seats and none focused SHALL open the chooser.
 Live Herdr TUI and herdr-core tables and panes SHALL open alike, by the Agents
 open preference; a view-only reason SHALL appear only on the review controls it
 limits, never as a refusal to open. At the

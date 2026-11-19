@@ -724,9 +724,9 @@ export default function TownView({
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   /**
    * Tapping an agent opens it (openAgent). Tapping a desk opens its default
-   * pane (openReply, townDeskOpenKey): an agent there that needs you even
-   * while it is away at reception or in the lounge, else its one, focused or
-   * latest active pane, which opens its agent if it holds one.
+   * pane (openReply, townDeskOpenKey): its one or focused pane, else an
+   * agent there that needs you even while it is away at reception or in the
+   * lounge, else its latest active pane; a pane opens its agent if it has one.
    */
   const tapTown = (key: string) => {
     if (agentByKey.has(key)) {

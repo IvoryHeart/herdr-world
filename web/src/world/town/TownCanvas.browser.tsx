@@ -1097,8 +1097,7 @@ function coreTopology(): WorldRuntimeConnection {
 /**
  * Tapping a live herdr-core desk opens it as a Herdr desk opens (#1006): a
  * shell desk its terminal, an agent desk its agent, a two-pane desk its
- * focused pane, with no "can't" toast. A touch tap first opens the table's
- * card, so the phone taps twice.
+ * focused pane, with no "can't" toast. One tap does it, on a phone too.
  */
 async function checkCoreDesks(
   host: HTMLElement,
@@ -1137,6 +1136,21 @@ async function checkCoreDesks(
     canvasHost.dispatchEvent(new MouseEvent("click", at));
   };
   const openedIds = () => [...opened, ...inspected.map(([id]) => id)];
+  // At desk level, where each table wears its nameplate: there a touch tap
+  // on a table with nothing to open at once opens its card first.
+  const rendered = window.__HERDR_TOWN_RENDERER__!;
+  for (let into = 0; into < 6 && rendered.level !== "desk"; into += 1) {
+    const before = rendered.frames;
+    host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
+    await waitFor(
+      () => rendered.frames > before && !rendered.flying,
+      "zooming in to the core desks did not finish",
+    );
+  }
+  await waitFor(
+    () => host.querySelectorAll(".town-desk-title").length >= 3,
+    `the core desks wear no nameplates (level ${rendered.level})`,
+  );
   let pointer = 60;
   for (const [tabId, address] of [
     ["core-shell", "t1"],
@@ -1147,14 +1161,12 @@ async function checkCoreDesks(
     const target = desk(tabId)!;
     opened.length = 0;
     inspected.length = 0;
+    // One tap opens it, on a phone too: a desk with a pane to open has no
+    // summary card first (townDeskOpensAtOnce).
     tap(target, pointer++);
-    if (phone) {
-      await settle();
-      if (!openedIds().length) tap(target, pointer++);
-    }
     await waitFor(
       () => openedIds().length > 0,
-      `tapping the core ${tabId} desk opened nothing`,
+      `one tap on the core ${tabId} desk opened nothing`,
     );
     check(
       openedIds().every((id) => id === leafId(address)),

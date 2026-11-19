@@ -524,10 +524,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     changes, without polling.
   - Tapping an agent or its table brings the agent back: from reception or the
     bar it walks to its desk and stays there until its status changes. A
-    table stands for an agent that needs you (waiting, then finished) before
-    the one seated there; otherwise it opens its one pane, else the focused
-    pane, else the most recently active one. Only a table with more panes
-    than seats and none focused lists them to choose. Herdr TUI and herdr-core
+    table opens its one pane, else the focused pane, else an agent there
+    that needs you (waiting, then finished), else the most recently active
+    pane. Only a table with more panes than seats and none focused lists
+    them to choose. Herdr TUI and herdr-core
     tables open alike: a live core shell opens its terminal and a core agent
     its Chat or terminal, never a refusal; "World can't mark core work
     reviewed yet" shows only on review controls. **Menu → Agents open** chooses whether that tap opens
@@ -647,8 +647,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     targets. A
     table, or its nameplate, opens the same card for that table on hover,
     focus or a tap; a click on the plate selects the table and a double click
-    opens it. On touch screens the first tap on a table opens its card, and a
-    second tap (or a double tap) opens the table. Zoomed out to the room
+    opens it. On touch screens one tap opens a live table's default pane; on
+    a table with nothing to open at once (a cached host's, or a crowded one)
+    the first tap opens its card and a second tap (or a double tap) does what
+    a tap does. Zoomed out to the room
     cards, each room's card is a slim label hanging from its rug's top edge:
     its name, a waiting badge and a thin bar of working, waiting, done and
     quiet; hovering or focusing it adds the count line. A mouse anywhere over

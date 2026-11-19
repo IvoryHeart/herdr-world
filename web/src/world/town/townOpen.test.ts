@@ -9,6 +9,7 @@ import { townModelFromProjection, townAttention } from "./townModel";
 import {
   inspectTownTerminal,
   townDeskOpenKey,
+  townDeskOpensAtOnce,
   townTargetActionable,
 } from "./townOpen";
 
@@ -41,6 +42,8 @@ test("cached agents, panes and desks cannot dispatch a live terminal action", as
       });
     }
     expect(calls).toHaveLength(stale ? 0 : 3);
+    // A live desk opens on the first touch; a cached one shows its card.
+    expect(townDeskOpensAtOnce(projection, keys[2]!)).toBe(!stale);
   }
 });
 
@@ -127,15 +130,24 @@ test("a desk opens its one pane, else the focused, else the latest active one", 
   expect(townDeskOpenKey(two, twoDesk)).toBe(first!.key);
 });
 
-test("an agent that needs you wins a desk tap; a crowded desk with nothing focused asks", () => {
-  const mixed = deskOffice([
-    ["unknown", false],
-    ["blocked", true],
-  ]);
-  const deskKey = mixed.deskRoster[0]!.desk.key;
-  const shell = mixed.paneRoster.find(({ device }) => !device.agentKey)!;
-  withPane(mixed, mixed.paneRoster.indexOf(shell), { focused: true });
-  expect(townDeskOpenKey(mixed, deskKey)).toBe(mixed.roster[0]!.agent.key);
+test("the focused pane wins a desk tap, then an agent that needs you; a crowded desk with nothing focused asks", () => {
+  for (const status of ["blocked", "done"] as const) {
+    const mixed = deskOffice([
+      ["unknown", false],
+      [status, true],
+    ]);
+    const deskKey = mixed.deskRoster[0]!.desk.key;
+    const shellIndex = mixed.paneRoster.findIndex(
+      ({ device }) => !device.agentKey,
+    );
+    // Nothing focused: the agent that needs you, though the shell was
+    // active last.
+    const shell = withPane(mixed, shellIndex, { lastActivityAt: 9 });
+    expect(townDeskOpenKey(mixed, deskKey)).toBe(mixed.roster[0]!.agent.key);
+    // The focused shell wins over the unfocused agent.
+    withPane(mixed, shellIndex, { focused: true });
+    expect(townDeskOpenKey(mixed, deskKey)).toBe(shell.key);
+  }
 
   const crowded = deskOffice([
     ["unknown", false],

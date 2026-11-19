@@ -27,10 +27,10 @@ export function townTargetActionable(
 }
 
 /**
- * What tapping a desk opens: an agent there that needs you (waiting, then
- * finished), else its one pane, else the pane Herdr reports focused, else
- * the one most recently active. A desk with more panes than seats and none
- * of those to go by returns null: the chooser lists them. Otherwise the
+ * What tapping a desk opens: its one pane, else the pane Herdr reports
+ * focused, else an agent there that needs you (waiting, then finished),
+ * else the pane most recently active. A desk with more panes than seats and
+ * none of those to go by returns null: the chooser lists them. Otherwise the
  * seated agent, else the first pane. The key is an agent's when the pane
  * holds one, else the pane's. The same for Herdr TUI and herdr-core desks.
  */
@@ -40,16 +40,6 @@ export function townDeskOpenKey(
 ): string | null {
   const desk = office.deskRoster.find((x) => x.desk.key === deskKey)?.desk;
   if (!desk) return null;
-  const calling = townDeskAgentKey(office, deskKey);
-  const callingAgent = calling
-    ? office.roster.find((x) => x.agent.key === calling)?.agent
-    : undefined;
-  if (
-    callingAgent &&
-    (callingAgent.semanticStatus === "blocked" ||
-      callingAgent.semanticStatus === "done")
-  )
-    return callingAgent.key;
   const panes = office.paneRoster
     .filter(({ device }) => device.deskKey === deskKey && !device.stale)
     .map(({ device }) => device)
@@ -60,6 +50,16 @@ export function townDeskOpenKey(
     return keyOf(panes[0]!);
   const focused = panes.find((device) => device.focused);
   if (focused) return keyOf(focused);
+  const calling = townDeskAgentKey(office, deskKey);
+  const callingAgent = calling
+    ? office.roster.find((x) => x.agent.key === calling)?.agent
+    : undefined;
+  if (
+    callingAgent &&
+    (callingAgent.semanticStatus === "blocked" ||
+      callingAgent.semanticStatus === "done")
+  )
+    return callingAgent.key;
   let latest: (typeof panes)[number] | undefined;
   for (const device of panes)
     if (
@@ -70,6 +70,18 @@ export function townDeskOpenKey(
   if (latest) return keyOf(latest);
   if (desk.observedPaneCount > desk.paneDevices.length) return null;
   return calling ?? (panes[0] ? keyOf(panes[0]) : null);
+}
+
+/**
+ * Whether a tap on the desk opens something at once (townDeskOpenKey), so a
+ * touch tap opens it rather than the desk's summary card first.
+ */
+export function townDeskOpensAtOnce(
+  office: HerdrOfficeProjection,
+  deskKey: string,
+) {
+  const key = townDeskOpenKey(office, deskKey);
+  return key !== null && townTargetActionable(office, key);
 }
 
 export async function inspectTownTerminal(

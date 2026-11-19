@@ -96,12 +96,21 @@ describe("World's layout of a core lives in its SQLite (M1)", () => {
     const placed = doc(0) as ReturnType<typeof doc> & {
       rooms: Array<Record<string, unknown>>;
     };
-    placed.rooms[1]!.folder = "/srv/example/site";
-    expect(parseCoreTopology(placed).rooms[1]).toMatchObject({
-      folder: "/srv/example/site",
-    });
+    // A Unix host's path, or a Windows host's drive or UNC path.
+    for (const folder of [
+      "/srv/example/site",
+      "C:\\Projects\\site",
+      "C:/Projects/site",
+      "D:\\",
+      "\\\\fileserver.example\\share\\site",
+    ]) {
+      placed.rooms[1]!.folder = folder;
+      expect(parseCoreTopology(placed).rooms[1]).toMatchObject({ folder });
+    }
     for (const [index, folder] of [
       [1, "relative/site"],
+      [1, "C:relative"],
+      [1, "~/site"],
       [1, ""],
       [2, "/srv/example/site"],
     ] as const) {

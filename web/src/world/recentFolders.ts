@@ -4,13 +4,39 @@ import { worldRuntimeStore } from "./runtimeStore";
 
 const RECENT_FOLDERS = 6;
 
-/** A folder as World offers it again: absolute or ~/, no trailing slash. */
+/**
+ * Where an absolute host path starts: / on Unix, a drive (C:\) or UNC share
+ * (\\server\share) on Windows, or ~. Null when it is relative.
+ */
+function rootOf(path: string): string | null {
+  return (
+    /^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+|\/|~(?=[/\\]|$))/.exec(
+      path,
+    )?.[0] ?? null
+  );
+}
+
+/** A path's separator: a backslash on a Windows host, else a slash. */
+function separatorOf(path: string): "/" | "\\" {
+  return /^(?:[A-Za-z]:|\\\\|~\\)/.test(path) ? "\\" : "/";
+}
+
+/** Trailing separators; a Unix name may end in a backslash. */
+function trailing(path: string) {
+  return separatorOf(path) === "\\" ? /[\\/]+$/ : /\/+$/;
+}
+
+/**
+ * A folder as World offers it again: absolute on its host (Unix, a Windows
+ * drive or UNC path) or under ~, without a trailing separator.
+ */
 function folderOf(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const folder = value.trim();
   if (!folder || /[\x00-\x1f\x7f]/.test(folder)) return null;
-  if (!folder.startsWith("/") && !/^~(?:\/|$)/.test(folder)) return null;
-  return folder.length > 1 ? folder.replace(/\/+$/, "") || "/" : folder;
+  const root = rootOf(folder);
+  if (!root) return null;
+  return root + folder.slice(root.length).replace(trailing(folder), "");
 }
 
 /**
@@ -80,13 +106,21 @@ export function useRecentFolders(connectionId: string | null): string[] {
   return useMemo(() => recentFolders(snapshot), [snapshot]);
 }
 
-/** The folder one level up, keeping ~/ spelling; null at the top. */
+/**
+ * The folder one level up, keeping ~ spelling and the host's separators
+ * (a Windows path splits on either); null at the top.
+ */
 export function parentFolder(path: string): string | null {
-  const folder = path.replace(/\/+$/, "");
-  if (!folder || folder === "~") return null;
-  const cut = folder.lastIndexOf("/");
-  if (cut < 0) return null;
-  return cut === 0 ? "/" : folder.slice(0, cut);
+  const folder = folderOf(path);
+  const root = folder && rootOf(folder);
+  if (!folder || !root) return null;
+  const rest = folder.slice(root.length);
+  if (!rest) return null;
+  const cut =
+    separatorOf(folder) === "\\"
+      ? Math.max(rest.lastIndexOf("\\"), rest.lastIndexOf("/"))
+      : rest.lastIndexOf("/");
+  return cut <= 0 ? root : root + rest.slice(0, cut);
 }
 
 /**
@@ -111,6 +145,7 @@ export function completeFolder(
       index += 1;
     shared = shared.slice(0, index);
   }
+  // A slash lists what the folder holds; a Windows host takes it too.
   const completed = directories.length === 1 ? `${shared}/` : shared;
   return completed.length > resolved.length ? completed : null;
 }
