@@ -38,6 +38,7 @@ import {
   quintCli,
 } from "../scripts/verification-setup";
 import checker from "../tools/quint/checker.json";
+import { createCheckerSessions } from "../scripts/verification-checker-session";
 import { publishVerificationEvidence } from "../scripts/verification-publication";
 import {
   runVerificationProcess,
@@ -394,7 +395,10 @@ function replayTracesPerSeed(name: Model) {
     : 100;
 }
 const commands: CommandResult[] = [];
+let commandPublication = Promise.resolve();
 let activeLabel = "setup";
+let failedLabel: string | undefined;
+const checkerSessions = createCheckerSessions(root, output);
 
 const implementationMutation = (
   name: Model,
@@ -405,6 +409,7 @@ async function command(
   label: string,
   args: string[],
   expectedViolation = false,
+  signal = cancellation.signal,
 ) {
   activeLabel = label;
   const started = performance.now();
@@ -417,7 +422,7 @@ async function command(
   await mkdir(temporary, { recursive: true });
   let partialLog = "";
   let checkerLog = "";
-  const invoke = (commandArgs: string[], signal = cancellation.signal) =>
+  const invoke = (commandArgs: string[], workerSignal = signal) =>
     runVerificationProcess(
       ["node", "--max-old-space-size=512", cli, ...commandArgs],
       {
@@ -436,33 +441,33 @@ async function command(
         onOutput: (text) => {
           partialLog += text.replaceAll(root, "<checkout>");
         },
-        signal,
+        signal: workerSignal,
       },
     );
+  const verify = (port: number, signal: AbortSignal) =>
+    invoke(
+      [
+        ...executionArgs,
+        "--apalache-version",
+        checker.version,
+        "--server-endpoint",
+        `127.0.0.1:${port}`,
+        "--tlc-config",
+        resolve(root, "tools/quint/tlc.json"),
+      ],
+      signal,
+    );
+  const session = checkerSessions.current();
   const { stdout, stderr, code } = await (args[0] === "verify"
-    ? withPrivateChecker(
-        temporary,
-        cancellation.signal,
-        (port, signal) =>
-          invoke(
-            [
-              ...executionArgs,
-              "--apalache-version",
-              checker.version,
-              "--server-endpoint",
-              `127.0.0.1:${port}`,
-              "--tlc-config",
-              resolve(root, "tools/quint/tlc.json"),
-            ],
-            signal,
-          ),
-        (text) => {
+    ? session
+      ? verify(session.port, AbortSignal.any([signal, session.signal]))
+      : withPrivateChecker(temporary, signal, verify, (text) => {
           checkerLog += text.replaceAll(root, "<checkout>");
-        },
-      )
+        })
     : invoke(executionArgs)
   )
     .catch(async (error) => {
+      failedLabel ??= label;
       await writeFile(resolve(output, `${label}.log`), partialLog);
       await writeFile(
         resolve(output, `${label}.failure.json`),
@@ -488,21 +493,30 @@ async function command(
     args,
   };
   commands.push(result);
-  await writeFile(
-    resolve(output, "commands.json"),
-    JSON.stringify(commands, null, 2),
+  // Independent controls may finish together; serialize the progress snapshot.
+  commandPublication = commandPublication.then(() =>
+    writeFile(
+      resolve(output, "commands.json"),
+      JSON.stringify(commands, null, 2),
+    ),
   );
-  if (expectedViolation) {
-    assert.notEqual(code, 0, `${label}: faulty model unexpectedly passed`);
-    assert.match(
-      log,
-      args[0] === "verify"
-        ? /Invariant violated|invariant.*violat|\[violation\] Found an issue/i
-        : /Invariant violated|invariant.*violat/i,
-      `${label}: failed without invariant counterexample`,
-    );
-  } else {
-    assert.equal(code, 0, `${label} failed; see ${result.log}`);
+  await commandPublication;
+  try {
+    if (expectedViolation) {
+      assert.notEqual(code, 0, `${label}: faulty model unexpectedly passed`);
+      assert.match(
+        log,
+        args[0] === "verify"
+          ? /Invariant violated|invariant.*violat|\[violation\] Found an issue/i
+          : /Invariant violated|invariant.*violat/i,
+        `${label}: failed without invariant counterexample`,
+      );
+    } else {
+      assert.equal(code, 0, `${label} failed; see ${result.log}`);
+    }
+  } catch (error) {
+    failedLabel ??= label;
+    throw error;
   }
   return log;
 }
@@ -689,6 +703,9 @@ export async function runReviewedQuintModels(
           output,
           artifacts,
           command,
+          signal: cancellation.signal,
+          controlWorkers: Number(process.env.HERDR_CORE_CONTROL_WORKERS || 1),
+          withControlWorker: checkerSessions.withWorker,
           mutate: (fault) =>
             implementationMutation("herdr-core-runtime", fault),
         });
@@ -1262,10 +1279,12 @@ export async function runReviewedQuintModels(
     console.log(`Evidence: ${artifacts}`);
   } catch (error) {
     await mkdir(output, { recursive: true });
+    const label = failedLabel ?? activeLabel;
     const failure = {
-      label: activeLabel,
+      label,
       model:
-        cases.find((item) => activeLabel.startsWith(item.name))?.name ?? null,
+        cases.find((item) => label.startsWith(item.name))?.name ??
+        (label.startsWith("core-") ? "herdr-core-runtime" : null),
       reason: sanitizeDiagnostic(
         error instanceof Error ? error.message : "Unknown verification failure",
         root,

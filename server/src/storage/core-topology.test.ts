@@ -92,6 +92,34 @@ describe("World's layout of a core lives in its SQLite (M1)", () => {
     expect(() => parseCoreTopology(space)).toThrow("app space");
   });
 
+  test("a plain room keeps an absolute folder; app spaces and checkouts take none", () => {
+    const placed = doc(0) as ReturnType<typeof doc> & {
+      rooms: Array<Record<string, unknown>>;
+    };
+    // A Unix host's path, or a Windows host's drive or UNC path.
+    for (const folder of [
+      "/srv/example/site",
+      "C:\\Projects\\site",
+      "C:/Projects/site",
+      "D:\\",
+      "\\\\fileserver.example\\share\\site",
+    ]) {
+      placed.rooms[1]!.folder = folder;
+      expect(parseCoreTopology(placed).rooms[1]).toMatchObject({ folder });
+    }
+    for (const [index, folder] of [
+      [1, "relative/site"],
+      [1, "C:relative"],
+      [1, "~/site"],
+      [1, ""],
+      [2, "/srv/example/site"],
+    ] as const) {
+      const bad = doc(0) as typeof placed;
+      bad.rooms[index]!.folder = folder;
+      expect(() => parseCoreTopology(bad)).toThrow("folder");
+    }
+  });
+
   test("the port applies one change per core at a time", async () => {
     const port = memoryCoreTopologyPort();
     const core = "c0ffee0000000001";

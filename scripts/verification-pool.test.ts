@@ -1,6 +1,45 @@
 import { expect, test } from "bun:test";
 import { runVerificationPool } from "./verification-pool";
 
+test("worker resources span multiple cases, retire before success, and fail closed on cleanup", async () => {
+  let opened = 0;
+  let retired = 0;
+  const resources = new Map<number, number>();
+  const result = await runVerificationPool(
+    [0, 1, 2, 3],
+    2,
+    new AbortController().signal,
+    async (item) => {
+      resources.set(item, opened);
+      return item;
+    },
+    async (work) => {
+      opened++;
+      try {
+        await work();
+      } finally {
+        retired++;
+      }
+    },
+  );
+  expect(result).toEqual([0, 1, 2, 3]);
+  expect(opened).toBe(2);
+  expect(retired).toBe(2);
+  expect(resources.size).toBe(4);
+  await expect(
+    runVerificationPool(
+      [0],
+      1,
+      new AbortController().signal,
+      async () => 1,
+      async (work) => {
+        await work();
+        throw new Error("Synthetic retirement failure");
+      },
+    ),
+  ).rejects.toThrow("Synthetic retirement failure");
+});
+
 test("bounded workers overlap cases, retain result order and execute every case once", async () => {
   const gates = [Promise.withResolvers<void>(), Promise.withResolvers<void>()];
   let active = 0;
@@ -52,6 +91,48 @@ test("a worker failure cancels and drains peers without starting queued cases", 
   await expect(pending).rejects.toThrow("Synthetic model failure");
   expect(started).toEqual([0, 1]);
   expect(drained).toBe(true);
+});
+
+test("failure stops admission while a worker resource is still retiring", async () => {
+  const gate = Promise.withResolvers<void>();
+  const retirement = Promise.withResolvers<void>();
+  const started: number[] = [];
+  let aborted = false;
+  const pending = runVerificationPool(
+    [0, 1, 2],
+    2,
+    new AbortController().signal,
+    async (item, signal) => {
+      started.push(item);
+      if (item === 0) {
+        await gate.promise;
+        throw new Error("Synthetic command failure");
+      }
+      await new Promise<void>((resolve) =>
+        signal.addEventListener(
+          "abort",
+          () => {
+            aborted = true;
+            retirement.resolve();
+            resolve();
+          },
+          { once: true },
+        ),
+      );
+      signal.throwIfAborted();
+    },
+    async (work) => {
+      try {
+        await work();
+      } finally {
+        await retirement.promise;
+      }
+    },
+  );
+  gate.resolve();
+  await expect(pending).rejects.toThrow("Synthetic command failure");
+  expect(aborted).toBe(true);
+  expect(started).toEqual([0, 1]);
 });
 test("external cancellation cannot complete a partial verification pool", async () => {
   const control = new AbortController();

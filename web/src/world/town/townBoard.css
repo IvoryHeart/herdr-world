@@ -1,9 +1,10 @@
-/* The Town board in the square, and its compact chip on phones. Surfaces,
-   labels, buttons and the waiting colour: townOverlay.css. */
+/* The Town status indicator and its board: one compact chip in the corner,
+   the board a popover under it (hover on desktop, tap on touch; #1006).
+   Surfaces, labels, buttons and the waiting colour: townOverlay.css. */
 .town-board {
   position: absolute;
   left: 16px;
-  top: 16px;
+  top: 56px;
   transform: none;
   display: grid;
   /* One column exactly as wide as the board: a long line (a caveat, a fuel
@@ -89,33 +90,35 @@
 }
 
 .town-board-chip {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.town-board[data-open="false"] {
   display: none;
 }
 
-/* Phones: a compact chip under the search bar opens the full board. */
+/* Phones: the chip sits under the search bar. */
 @media (max-width: 640px) {
   .town-board-chip {
-    position: absolute;
     left: 12px;
     top: 52px;
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-    min-height: 32px;
-    padding: 0 10px;
-    font-size: 12px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    pointer-events: auto;
-    cursor: pointer;
   }
   .town-board {
     top: 92px;
     left: 12px;
     width: min(240px, calc(100vw - 24px));
-  }
-  .town-board[data-open="false"] {
-    display: none;
   }
 }
 
@@ -173,10 +176,6 @@
   cursor: pointer;
 }
 
-.town-recap-chip {
-  display: none;
-}
-
 @keyframes town-recap-in {
   from {
     opacity: 0;
@@ -188,27 +187,36 @@
   }
 }
 
-/* Phones: the recap is one line under the summary chip. */
+/* The recap is one line under the status chip. */
+.town-recap-chip {
+  position: absolute;
+  left: 16px;
+  top: 54px;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  max-width: calc(100vw - 32px);
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  pointer-events: auto;
+  cursor: pointer;
+  animation: town-recap-in 0.3s ease-out;
+}
+.town-recap-chip span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.town-recap-chip ~ .town-board {
+  top: 92px;
+}
+
 @media (max-width: 640px) {
   .town-recap-chip {
-    position: absolute;
     left: 12px;
     top: 90px;
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
     max-width: calc(100vw - 24px);
-    min-height: 30px;
-    padding: 0 10px;
-    font-size: 12px;
-    pointer-events: auto;
-    cursor: pointer;
-    animation: town-recap-in 0.3s ease-out;
-  }
-  .town-recap-chip span:first-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .town-recap-chip ~ .town-board {
     top: 128px;

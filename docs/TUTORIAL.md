@@ -71,8 +71,8 @@ Your shells and agents
    agent → Terminal**. In the shell, change to your project's folder with
    `cd` (`Set-Location` in PowerShell).
 6. With the **Herdr TUI**, open **Spaces → +** (New workspace), set
-   **Working directory** to your project, and choose **Create**. Select its
-   shell. Run `pwd` (`Get-Location` in PowerShell) to check your folder.
+   **Folder** to your project (tap a recent folder or type a path), and choose
+   **Create**. Select its shell. Run `pwd` (`Get-Location` in PowerShell) to check your folder.
 
 **You are done when:** the terminal shows your project's folder.
 
@@ -194,9 +194,10 @@ Tap the domed **town center** at the top of the town for a ring of actions:
 
 Around it you will find:
 
-- **The Town board.** It counts every agent. Its **FUEL** gauges show how much
-  of each Claude and Codex subscription window is left. **Summary** lists who
-  needs you, unreviewed work, each host and spend.
+- **The Town board.** Tap the status chip at the top left to open it; Escape
+  or a tap outside closes it. It counts every agent. Its **FUEL** gauges show
+  how much of each Claude and Codex subscription window is left. **Summary**
+  lists who needs you, unreviewed work, each host and spend.
 - **The City expenses billboard.** Estimated cost for today and the last 7
   days. Each building's reception board shows its own share. Costs need a
   price table; see [harness usage](./usage.md).
