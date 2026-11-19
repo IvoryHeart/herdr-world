@@ -19,7 +19,7 @@ test("release walk receipts reject omissions, skipped journeys and different rel
       stderr: "pipe",
     },
   );
-  expect(result.stderr.toString()).toContain("Ran 7 tests");
+  expect(result.stderr.toString()).toContain("Ran 8 tests");
   expect(result.exitCode).toBe(0);
 });
 

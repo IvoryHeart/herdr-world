@@ -1,4 +1,4 @@
-"""Transparent PTY recorder. The child is always the installed vendor executable.
+"""Transparent PTY recorder. The foreground process execs the vendor executable.
 
 It reports observations; it never prints a replacement screen, reports runtime
 agent state, generates a reply, or writes a transcript. A cut shell command
@@ -39,16 +39,36 @@ def main():
             value = args[index + 1]
             settings.append(json.loads(value if value.startswith('{') else Path(value).read_text()))
     emit('invoked', argv=args, settings=settings)
-    child, master = pty.fork()
-    if child == 0:
-        os.execv(real, [real, *args])
+    # Do not pty.fork() the harness: that puts it in another session and leaves
+    # Python as the runtime pane's foreground process. Keep this PID, session,
+    # controlling terminal and foreground group for the real executable. Only
+    # the byte relay is forked; its slave supplies the executable's stdio.
+    harness = os.getpid()
+    master, slave = pty.openpty()
     size = fcntl.ioctl(0, termios.TIOCGWINSZ, struct.pack('HHHH', 40, 120, 0, 0))
     rows, cols, _, _ = struct.unpack('HHHH', size)
     if not rows or not cols:
         size = struct.pack('HHHH', 40, 120, 0, 0)
     fcntl.ioctl(master, termios.TIOCSWINSZ, size)
     saved = termios.tcgetattr(0)
+    termios.tcsetattr(slave, termios.TCSANOW, saved)
     tty.setraw(0)
+    relay = os.fork()
+    if relay:
+        os.close(master)
+        channel.close()
+        for fd in (0, 1, 2):
+            os.dup2(slave, fd)
+        if slave > 2:
+            os.close(slave)
+        os.execv(real, [real, *args])
+    os.close(slave)
+
+    def resize(*_):
+        size = fcntl.ioctl(0, termios.TIOCGWINSZ, struct.pack('HHHH', 0, 0, 0, 0))
+        fcntl.ioctl(master, termios.TIOCSWINSZ, size)
+
+    signal.signal(signal.SIGWINCH, resize)
 
     def end(*_):
         raise SystemExit(128 + signal.SIGTERM)
@@ -79,8 +99,8 @@ def main():
                                  else r'Welcome\s+to\s+Codex|OpenAI\s+Codex|Sign\s+in\s+with\s+ChatGPT')
                     if not ready and re.search(signature, plain, re.I):
                         assert not re.search(r'(?:error:|unknown option|unexpected argument)', plain, re.I), 'harness rejected its arguments'
-                        os.kill(child, 0)
-                        emit('first-screen', pid=child)
+                        os.kill(harness, 0)
+                        emit('first-screen', pid=harness)
                         ready = True
                 else:
                     # Observation is before the unchanged bytes reach the real child.
@@ -88,21 +108,15 @@ def main():
                     received = (received + data.decode(errors='replace'))[-32768:]
                     emit('input', text=received)
     finally:
-        termios.tcsetattr(0, termios.TCSANOW, saved)
         try:
-            os.killpg(child, signal.SIGTERM)
+            termios.tcsetattr(0, termios.TCSANOW, saved)
+        except termios.error:
+            pass  # The runtime may already have closed its terminal.
+        try:
+            os.kill(harness, signal.SIGTERM)
         except ProcessLookupError:
             pass
         os.close(master)
-        def force_exit(*_):
-            try:
-                os.killpg(child, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        signal.signal(signal.SIGALRM, force_exit)
-        signal.alarm(10)
-        os.waitpid(child, 0)
-        signal.alarm(0)
         channel.close()
 
 

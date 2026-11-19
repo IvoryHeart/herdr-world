@@ -11,9 +11,9 @@ releases. Run it in a disposable Linux or macOS OS account or VM with Bun,
 Node/npm, Python with venv, GitHub CLI and a working user service manager. The
 service journey uses the account's real systemd/launchd manager, so a temporary
 HOME alone is insufficient. The walk refuses existing World service definitions
-or configuration. It uses loopback port 0, private World data, a named Herdr
-session and a separate core session/state folder; it never attaches to an owner's
-runtime. There are no browser journeys.
+(including alternate systemd/launchd labels) or configuration. It uses loopback
+port 0, private World data, a named Herdr session and a separate core session/state
+folder; it never attaches to an owner's runtime. There are no browser journeys.
 
 The native walk runs on both Linux architectures and both macOS architectures
 inside the installer-upgrade workflow required by **Delivery checks**. Server,
@@ -33,9 +33,13 @@ settings, password login, anonymous refusal and the existing signed-in session.
 The older pre-0.2.4 cookie migration remains covered by installer acceptance below.
 
 The walk installs pinned, real `claude` and `codex` executables, signed out.
-A transparent PTY recorder forwards their terminal traffic and observes complete
-argv/settings, their own first screen and prompt input; it produces no agent
-state or transcript. World must list each actual agent with a classified status.
+A transparent PTY recorder keeps the real executable in the pane's original
+foreground process group while a helper forwards terminal traffic and observes
+complete argv/settings, their own first screen and prompt input; it produces no
+agent state or transcript. World must list each actual agent with an explicit
+status. Signed-out onboarding may show the documented **unknown** status before
+any activity report; the signed-in prompt/reply journey requires a classified
+idle, working, blocked or done status.
 The TUI shell uses canonical input so command truncation is observable. CI sends
 synthetic prompt text through World's terminal input API and requires it to reach
 the real harness. It does not require model credentials. Pins live in
@@ -66,8 +70,8 @@ bun run test:release-walk --disposable-host \
 Use the checkout at that exact release commit and the baseline tag in its CI
 receipt. This runs every signed-out journey plus a signed-in launch, Chat send
 and readable assistant reply for both harnesses on both runtimes. It prints
-`Release walk signed-in receipt: DIGEST`. Add that line and the run/platform
-details to the merged release PR body, retaining the JSON receipt locally.
+`Release walk signed-in receipt: DIGEST`. Edit the merged release PR body to add
+that line and the run/platform details, retaining the JSON receipt locally.
 The receipt contains synthetic evidence and digests, never credentials or chat
 transcripts. Never upload the dedicated credential home.
 

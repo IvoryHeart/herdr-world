@@ -112,17 +112,23 @@ def complete_arguments(invocation, kind, value, quick):
                        item['statusLine']['command'] for item in settings), 'Claude received incomplete status-line settings'
 
 
-def pane_for(world, connection, launched):
+def pane_for(world, connection, launched, require_classified=False):
+    classified = ('idle', 'working', 'blocked', 'done')
     def find(rows):
         current = next((row for row in rows if row['connection_id'] == connection['connection_id']), None)
         assert current and current['generation'] == connection['generation'], 'launch runtime generation changed'
         if current.get('stale') or not current.get('snapshot'):
             return None
         return next((pane for pane in current['snapshot']['panes']
-                     if pane['terminal_id'] == launched['terminal_id'] and pane.get('agent')), None)
-    rows = world.observe(world.snapshot, lambda rows: bool(find(rows)), 'World never showed the launched agent')
+                     if pane['terminal_id'] == launched['terminal_id'] and pane.get('agent') and
+                     (not require_classified or pane.get('agent_status') in classified)), None)
+    reason = ('World never showed a classified agent status' if require_classified
+              else 'World never showed the launched agent')
+    rows = world.observe(world.snapshot, lambda rows: bool(find(rows)), reason)
     pane = find(rows)
-    assert pane.get('agent_status') in ('idle', 'working', 'blocked', 'done'), 'World showed the agent without a status'
+    # Signed-out onboarding has emitted no activity reports. The documented
+    # read-model status is unknown, not a fabricated idle or blocked state.
+    assert pane.get('agent_status') in (*classified, 'unknown'), 'World showed the agent without a status'
     return pane
 
 
@@ -215,6 +221,7 @@ def chat_reply(world, fixture, agent):
                                            for message in item.get('messages', [])),
                           'model reply never became readable in Chat', timeout=180)
     assert any(message['role'] == 'user' and token in message['text'] for message in reply['messages']), 'Chat lost the sent prompt'
+    pane_for(world, connection, agent['result'], require_classified=True)
 
 
 def upgrade(walk, candidate, baseline, fixture):
