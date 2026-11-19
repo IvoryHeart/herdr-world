@@ -1,3 +1,4 @@
+import { createWeatherCommand } from "./weather";
 import { serverOptionsHelp } from "../config/server-config";
 import {
   runServiceCommand,
@@ -96,6 +97,7 @@ export function cliCommands(): CliCommand[] {
     configCommand,
     authCommand,
     createConnectionsCommand(),
+    createWeatherCommand(),
     createPushCommand(),
     createUpdateCommand(),
     rollbackCommand,

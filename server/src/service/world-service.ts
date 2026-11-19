@@ -1,3 +1,4 @@
+import { weatherCliHandler } from "../weather/cli";
 import { findHerdrBinary } from "../herdr/bootstrap";
 import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
 import { createCoreInstall } from "../herdr-core/install";
@@ -889,6 +890,7 @@ async function compose(
             herdrSetup,
             officeObservability: handleOfficeObservability,
             sources: handleWorldSources,
+            weatherCli: weatherCliHandler(worldSources),
             track,
             stopping: () => stopping,
           }),
@@ -959,6 +961,7 @@ async function compose(
     // Admit nothing new: requests get 503 while the port stays bound, and no
     // reconnect, push, Ranger start or wait for an answer begins.
     stopping = true;
+    worldSources.weather.close();
     const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
     deskWatches.stop();

@@ -1,3 +1,9 @@
+import {
+  normalizeWeatherSettings,
+  type WeatherSettings,
+} from "../../../shared/weather";
+import { WeatherService } from "../weather/service";
+import { openMeteoProvider } from "../weather/provider";
 import { LinkClaims } from "./link-claims";
 import type { PullRequestAction } from "../../../shared/pullRequests";
 import {
@@ -39,7 +45,7 @@ import { runPullRequestVerb, type PullRequestVerbRequest } from "./actions";
 import type { CachedDetail } from "./pullRequestDetail";
 
 /**
- * World's built-in sources. Each is on by default and can be switched off;
+ * World's work sources. GitHub/Jira are on by default and can be switched off;
  * one without its prerequisites reports `not_connected` with what to do.
  * Refreshes run only while a browser asks, at most once per interval, one at
  * a time per source; a failed refresh keeps the last items. A request waits
@@ -56,7 +62,10 @@ function safe<T>(read: () => T, fallback: T) {
   }
 }
 
+type WorkSourceId = Exclude<WorldSourceId, "weather">;
+
 export type StoredSourceSettings = {
+  weather?: WeatherSettings;
   github?: { enabled?: boolean; mergedDays?: number };
   jira?: {
     enabled?: boolean;
@@ -139,7 +148,9 @@ export class SourcesService {
   #refreshMs: number;
   #linkMs: number;
   #waitMs: number;
-  #sources: Record<WorldSourceId, SourceRuntime>;
+  #sources: Record<WorkSourceId, SourceRuntime>;
+  readonly weather: WeatherService;
+  #saving: Promise<void> = Promise.resolve();
   #links: WorkLink[] = [];
   #linkClaims = new LinkClaims();
   #linkedAt = 0;
@@ -154,6 +165,11 @@ export class SourcesService {
   constructor(options: SourcesServiceOptions) {
     this.#options = options;
     this.#settings = options.settings;
+    this.weather = new WeatherService({
+      settings: options.settings.weather,
+      now: options.now,
+      provider: openMeteoProvider(options.fetchImpl),
+    });
     this.#now = options.now ?? Date.now;
     this.#refreshMs = options.refreshMs ?? DEFAULT_REFRESH_MS;
     this.#linkMs = options.linkMs ?? DEFAULT_LINK_MS;
@@ -177,7 +193,9 @@ export class SourcesService {
   }
 
   enabled(id: WorldSourceId) {
-    return this.#settings[id]?.enabled !== false;
+    return id === "weather"
+      ? this.weather.settings().enabled
+      : this.#settings[id]?.enabled !== false;
   }
 
   /** Days of merged pull requests to show. */
@@ -198,34 +216,37 @@ export class SourcesService {
   }
 
   statuses(): WorldSourceStatus[] {
-    return (["github", "jira"] as const).map((id) => {
-      const source = this.#sources[id];
-      const enabled = this.enabled(id);
-      const jira = this.jiraConfig();
-      return {
-        id,
-        label: source.label,
-        enabled,
-        state: enabled ? source.state : "disabled",
-        detail: enabled ? source.detail : `${source.label} is switched off.`,
-        checkedAt: source.checkedAt,
-        lastSuccessAt: source.lastSuccessAt,
-        itemCount: enabled ? source.items.length : 0,
-        config:
-          id === "github"
-            ? { kind: "github", mergedDays: this.mergedDays() }
-            : {
-                kind: "jira",
-                site: jira.site,
-                email: jira.email,
-                jql: jira.jql,
-                tokenSet: Boolean(this.#jiraToken()),
-              },
-      };
-    });
+    return (["github", "jira"] as const)
+      .map((id): WorldSourceStatus => {
+        const source = this.#sources[id];
+        const enabled = this.enabled(id);
+        const jira = this.jiraConfig();
+        return {
+          id,
+          label: source.label,
+          enabled,
+          state: enabled ? source.state : "disabled",
+          detail: enabled ? source.detail : `${source.label} is switched off.`,
+          checkedAt: source.checkedAt,
+          lastSuccessAt: source.lastSuccessAt,
+          itemCount: enabled ? source.items.length : 0,
+          config:
+            id === "github"
+              ? { kind: "github", mergedDays: this.mergedDays() }
+              : {
+                  kind: "jira",
+                  site: jira.site,
+                  email: jira.email,
+                  jql: jira.jql,
+                  tokenSet: Boolean(this.#jiraToken()),
+                },
+        };
+      })
+      .concat(this.weather.status());
   }
 
   async snapshot(force = false): Promise<WorldSourcesSnapshot> {
+    this.weather.refresh();
     const cycle = this.#cycle(force);
     let timer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
@@ -245,8 +266,9 @@ export class SourcesService {
     const items = this.#items();
     const keys = new Set(items.map((item) => item.key));
     return {
+      weather: this.weather.current(),
       observedAt: this.#now(),
-      refreshing: this.#cycling !== null,
+      refreshing: this.#cycling !== null || this.weather.refreshing(),
       sources: this.statuses(),
       items,
       links: this.#links.filter((link) => keys.has(link.itemKey)),
@@ -361,10 +383,10 @@ export class SourcesService {
         throw new SourceSettingsError((cause as Error).message);
       }
     const wasEnabled = this.enabled("github");
-    await this.#save({
-      ...this.#settings,
-      github: { ...this.#settings.github, ...patch },
-    });
+    await this.#save((current) => ({
+      ...current,
+      github: { ...current.github, ...patch },
+    }));
     // While it stays on, a new merged window is the same account: keep the
     // current items until the new read completes, and keep them if it fails.
     this.#reset("github", wasEnabled && this.enabled("github"));
@@ -408,18 +430,41 @@ export class SourcesService {
         jiraToken: token ?? undefined,
       });
     }
-    await this.#save({ ...this.#settings, jira: next });
+    await this.#save((current) => ({ ...current, jira: next }));
     this.#reset("jira");
     return this.snapshot(true);
   }
 
-  async #save(settings: StoredSourceSettings) {
-    await this.#options.persistSettings(settings);
-    this.#settings = settings;
+  async configureWeather(patch: unknown) {
+    await this.#save((current) => {
+      let weather: WeatherSettings;
+      try {
+        weather = normalizeWeatherSettings({
+          ...(current.weather ?? this.weather.settings()),
+          ...Object(patch),
+        });
+      } catch (cause) {
+        throw new SourceSettingsError((cause as Error).message);
+      }
+      return { ...current, weather };
+    });
+    this.weather.configure(this.#settings.weather!);
+    this.weather.refresh();
+    return this.current();
+  }
+
+  async #save(update: (current: StoredSourceSettings) => StoredSourceSettings) {
+    const save = this.#saving.then(async () => {
+      const settings = update(this.#settings);
+      await this.#options.persistSettings(settings);
+      this.#settings = settings;
+    });
+    this.#saving = save.catch(() => {});
+    await save;
   }
 
   /** Invalidate in-flight reads; unless `keepItems`, forget what was read. */
-  #reset(id: WorldSourceId, keepItems = false) {
+  #reset(id: WorkSourceId, keepItems = false) {
     this.#epoch += 1;
     this.#cycling = null;
     const source = this.#sources[id];
@@ -438,7 +483,7 @@ export class SourcesService {
     source.lastSuccessAt = null;
   }
 
-  async #refresh(id: WorldSourceId, force: boolean) {
+  async #refresh(id: WorkSourceId, force: boolean) {
     if (!this.enabled(id)) return;
     const source = this.#sources[id];
     if (source.refreshing) return source.refreshing;
@@ -475,7 +520,7 @@ export class SourcesService {
     return task;
   }
 
-  #fetch(id: WorldSourceId, now: number): Promise<SourceRefresh> {
+  #fetch(id: WorkSourceId, now: number): Promise<SourceRefresh> {
     if (id === "github")
       return refreshGitHub(
         this.#options.run,

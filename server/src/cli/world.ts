@@ -193,7 +193,10 @@ function serviceEndpoint(context: CliContext) {
   return { url: `${base}/api/world/cli`, token, secretPath };
 }
 
-export function httpTransport(context: CliContext): WorldCliTransport {
+export function httpTransport(
+  context: CliContext,
+  path = "/api/world/cli",
+): WorldCliTransport {
   return async (command, params) => {
     let endpoint: ReturnType<typeof serviceEndpoint>;
     try {
@@ -212,7 +215,7 @@ export function httpTransport(context: CliContext): WorldCliTransport {
     const paneId = context.runtime.env.HERDR_PANE_ID;
     let response: Response;
     try {
-      response = await fetch(url, {
+      response = await fetch(new URL(path, url), {
         method: "POST",
         headers: {
           authorization: `Bearer ${token}`,

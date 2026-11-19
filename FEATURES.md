@@ -1401,8 +1401,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 ### Sources: GitHub and Jira
 
 World reads your pull requests and tickets itself; there is nothing else to
-install, and every source is on by default. Open **Settings → Sources** to see
-each source's state, switch it off or configure it.
+install. These two work sources are on by default. Open **Settings → Sources**
+to see each source's state, switch it off or configure it. The separate
+[Weather source](#weather-source) is off by default.
 
 - **GitHub** uses the GitHub CLI signed in as the user that runs World (`gh
   auth login`): open pull requests you opened, were asked to review or are
@@ -2595,3 +2596,30 @@ independent. Background reads leave command slots available for interactive work
 Git status refreshes in the background, and large untracked-file lists avoid a
 command per file. Stalled sessions end through keepalives. See
 [SSH setup and operator controls](docs/DEPLOYMENT.md#ssh-command-sharing-and-port-forwards).
+
+## Weather source
+
+- **Optional and shared:** Settings → Sources → Weather is off by default. Only
+  turning it on permits Open-Meteo requests. A typed place name goes to its
+  geocoding service; city-level coordinates go to its weather service. No account
+  or key; the free API is for non-commercial use.
+- **One location:** type a city/country or latitude, longitude. Typed input always
+  wins over the optional browser fallback. **Use browser location** requests
+  permission once only when pressed; no automatic prompt, tracking or watch.
+  Coordinates are rounded to 0.1° before storage/sending. Settings are service-owned
+  and shared across devices, including a remote browser.
+- **Bounded observations:** current model conditions and at most six upcoming
+  hours, cached in memory. Demand-driven refresh at most every 15 minutes per
+  configuration, including Refresh now; six-second total deadline, 32 KiB per
+  response. Reads never wait. Failure clears weather; cached conditions expire
+  after 30 minutes. World keeps running with weather unavailable.
+- **Limits/refusals:** one place, first geocoding match, no long forecasts, custom
+  provider hosts, keys, multiple locations or Town drawings. Invalid coordinates,
+  over-120-character/control-character text and unknown settings refuse before
+  saving. Disabling aborts pending reads; their late results cannot return.
+- **API/CLI:** a small normalized value (condition, relative intensity, Celsius,
+  local day/night, valid/read time or unavailable) is in the Sources store and
+  `GET /api/world/weather`. `herdr-world weather [--json]`, `weather location
+  "City"`, `weather on|off` share settings; CLI reads alone may wait six seconds.
+  [Weather guide](docs/weather.md) describes fields, attribution, precision,
+  cache/outage behavior and a development-only unavailable fixture.

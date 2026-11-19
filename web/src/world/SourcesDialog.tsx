@@ -1,3 +1,4 @@
+import { WeatherSourceSettings } from "./WeatherSourceSettings";
 import { CircleCheck, CircleOff, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { WorldSourceStatus } from "../../../shared/worldSources";
@@ -121,6 +122,9 @@ export function SourcesDialog({ onClose }: { onClose(): void }) {
                 role="switch"
                 aria-checked={source.enabled}
                 aria-label={`${source.label} source`}
+                aria-describedby={
+                  source.id === "weather" ? "weather-consent" : undefined
+                }
                 className="world-source-switch"
                 disabled={busy !== null}
                 onClick={() => toggle(source)}
@@ -148,6 +152,14 @@ export function SourcesDialog({ onClose }: { onClose(): void }) {
               )}
               <span>{source.detail}</span>
             </div>
+            {source.config.kind === "weather" ? (
+              <WeatherSourceSettings
+                settings={source.config}
+                weather={snapshot.weather}
+                busy={busy !== null}
+                run={run}
+              />
+            ) : null}
             {source.id === "github" &&
             source.enabled &&
             source.config.kind === "github" ? (

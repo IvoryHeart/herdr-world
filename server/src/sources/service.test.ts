@@ -154,6 +154,7 @@ describe("World sources service", () => {
       [
         ["github", "connected"],
         ["jira", "not_connected"],
+        ["weather", "disabled"],
       ],
     );
     expect(snapshot.items.map((item) => [item.ref, item.lane])).toEqual([

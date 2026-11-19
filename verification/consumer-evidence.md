@@ -1000,3 +1000,25 @@ selection and terminal identity checks. These DOM/animation-frame consumers add
 evidence beyond the maintained window-ordering model, whose membership and
 restore rules do not encode Radix focus dismissal. No new authority or arbitrary
 browser-scheduling claim is introduced.
+
+## Weather cache candidate (issue #1040)
+
+The [weather contract](../openspec/specs/world-weather/spec.md) uses direct finite
+schedules and real consumer tests as alternative evidence. It owns no runtime
+connection or mutation authority and introduces no durable effects/recovery queue.
+A new Quint model would duplicate the isolated generation/cache state without
+adding evidence about HTTP parsing, permission or settings persistence. The Q37 service owner is touched to register local CLI admission and cancel the
+weather flight on stop, so the complete `verification:gate` is required alongside
+consumer checks. No inventory or model/adapter mapping is changed.
+
+`server/src/weather/weather.test.ts` enumerates lookup/read completion crossed
+with disable/location replacement/close, plus new-before-old completion, deadline
+and cache-expiry/failure cases. `http.test.ts` covers queued settings saves, failed
+persistence, API and production loopback/token/no-Origin admission. Provider
+fixtures cover all documented WMO codes, malformed/missing fields and response
+size bounds. The actual Sources dialog DOM test checks no permission on mount,
+one-shot permission, coordinate reduction and manual precedence; source store
+tests check unavailable on service failure. The CLI tests cover parsing and output.
+These checks do not establish live Open-Meteo availability, geocoding accuracy,
+OS permission UI, or future Town visuals. Existing delivery checks and independent
+review remain required.

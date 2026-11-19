@@ -1,0 +1,39 @@
+{
+  "latitude": 51.5,
+  "longitude": -0.1,
+  "generationtime_ms": 0.1,
+  "utc_offset_seconds": 0,
+  "timezone": "GMT",
+  "current_units": {
+    "time": "unixtime",
+    "temperature_2m": "\u00b0C",
+    "weather_code": "wmo code",
+    "is_day": "",
+    "wind_speed_10m": "km/h"
+  },
+  "current": {
+    "time": 1795089600,
+    "interval": 900,
+    "temperature_2m": 8.5,
+    "weather_code": 63,
+    "is_day": 1,
+    "wind_speed_10m": 15
+  },
+  "hourly_units": {
+    "time": "unixtime",
+    "temperature_2m": "\u00b0C",
+    "weather_code": "wmo code",
+    "is_day": "",
+    "wind_speed_10m": "km/h"
+  },
+  "hourly": {
+    "time": [
+      1795089600, 1795093200, 1795096800, 1795100400, 1795104000, 1795107600,
+      1795111200
+    ],
+    "temperature_2m": [8.5, 9, 10, 9, 8, 7, 6],
+    "weather_code": [63, 61, 3, 0, 45, 71, 95],
+    "is_day": [1, 1, 1, 1, 0, 0, 0],
+    "wind_speed_10m": [15, 10, 9, 8, 8, 9, 12]
+  }
+}
