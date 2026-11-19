@@ -1,4 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
 type Dependencies = {
@@ -146,6 +147,27 @@ export function fixedVersion(
   );
 }
 
+function affectedVersion(version: string, range: string) {
+  // Load only during an audit: bot metadata generation imports the lock graph
+  // helpers in trusted jobs that deliberately do not install dependencies.
+  const semver = createRequire(import.meta.url)("semver") as {
+    validRange(
+      range: string,
+      options: { includePrerelease: boolean },
+    ): string | null;
+    satisfies(
+      version: string,
+      range: string,
+      options: { includePrerelease: boolean },
+    ): boolean;
+  };
+  // Security ranges must include affected beta releases as well as stable ones.
+  const options = { includePrerelease: true };
+  if (semver.validRange(range, options) === null)
+    throw new Error(`Malformed advisory range: ${range}`);
+  return semver.satisfies(version, range, options);
+}
+
 type JsonRequest = (url: string, init?: RequestInit) => Promise<unknown>;
 export async function registryJson(
   url: string,
@@ -203,17 +225,15 @@ export async function auditDependencies(
     const metadata = (await request(
       `https://registry.npmjs.org/${encodeURIComponent(name)}`,
     )) as { versions?: Record<string, unknown> };
-    if (!metadata.versions || typeof metadata.versions !== "object")
+    if (
+      !metadata.versions ||
+      typeof metadata.versions !== "object" ||
+      Array.isArray(metadata.versions)
+    )
       throw new Error(`Missing fix-version inventory for ${name}`);
     for (const pkg of packages.filter((pkg) => pkg.name === name)) {
       for (const advisory of advisories) {
-        if (
-          !Bun.semver.satisfies(pkg.version, advisory.vulnerable_versions) &&
-          !Bun.semver.satisfies(
-            pkg.version.replace(/-.*/, ""),
-            advisory.vulnerable_versions,
-          )
-        )
+        if (!affectedVersion(pkg.version, advisory.vulnerable_versions))
           continue;
         const exception = exceptions.find(
           (entry) =>

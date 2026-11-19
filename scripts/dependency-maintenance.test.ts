@@ -127,3 +127,21 @@ test("publishing advances only the expected bot head, emits only docs and explic
     })),
   ).rejects.toThrow("identity/revision changed");
 });
+
+test("a changed runtime resolution needs a fragment even when all versions already ship elsewhere", () => {
+  const base: AppLock = {
+    workspaces: {
+      web: { dependencies: { app: "1" } },
+      server: { dependencies: { old: "1", next: "2" } },
+    },
+    packages: {
+      app: ["app@1.0.0", "", {}],
+      old: ["app@1.0.0", "", {}],
+      next: ["app@2.0.0", "", {}],
+    },
+  };
+  const head = structuredClone(base);
+  head.packages.app![0] = "app@2.0.0";
+  head.workspaces.web!.dependencies!.app = "2";
+  expect(shippedGraphChanged(base, head)).toBe(true);
+});

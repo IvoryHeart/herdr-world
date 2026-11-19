@@ -15,7 +15,8 @@ dependency check blocks publication and must not be bypassed for a release.
 Run `bun run security:check` to audit the committed Bun and Quint locks against
 the [public npm advisory service](https://docs.npmjs.com/cli/v11/commands/npm-audit/#bulk-advisory-endpoint).
 It reports package/version, GHSA advisory, severity, the first published newer
-stable version outside the affected range, and any exception. The release gate
+stable version outside the affected range, and any exception. Advisory range
+matching includes prereleases, using the locked npm semver policy library. The release gate
 fails for fixable high/critical advisories in the runtime dependency closure.
 All server/web runtime, optional and peer dependencies across target platforms
 are potentially shipped: the executable embeds the service and web assets, npm

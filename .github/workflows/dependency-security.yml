@@ -33,7 +33,8 @@ jobs:
         with:
           bun-version: '1.4.4'
           no-cache: true
-      # Audit reads committed locks, with no install or dependency lifecycle code.
+      # Install the locked policy library without executing dependency lifecycle code.
+      - run: bun install --frozen-lockfile --ignore-scripts
       - name: Audit every locked version and gate potentially shipped dependencies
         env:
           DEMO_VULNERABLE: ${{ inputs.demo_vulnerable || false }}

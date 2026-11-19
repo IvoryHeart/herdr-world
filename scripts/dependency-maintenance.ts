@@ -52,11 +52,30 @@ export function acceptsDependencyPR(pr: DependencyPR, paths: string[]) {
 }
 
 export function shippedGraphChanged(base: AppLock, head: AppLock) {
-  const shipped = (lock: AppLock) =>
-    dependencyInventory(lock)
-      .filter((pkg) => pkg.shipped)
-      .map((pkg) => `${pkg.name}@${pkg.version}`)
-      .join("\n");
+  const runtime = (deps: AppLock["workspaces"][string]) =>
+    ["dependencies", "optionalDependencies", "peerDependencies"].map((kind) => [
+      kind,
+      Object.entries(deps[kind as keyof typeof deps] ?? {}).sort(),
+    ]);
+  const shipped = (lock: AppLock) => {
+    const ids = new Set(
+      dependencyInventory(lock)
+        .filter((pkg) => pkg.shipped)
+        .map((pkg) => `${pkg.name}@${pkg.version}`),
+    );
+    // Include roots and resolution paths, not just the set of versions. A
+    // runtime can move to a version already shipped by another consumer.
+    // Conservatively include every resolution of a potentially shipped ID.
+    return JSON.stringify({
+      roots: Object.entries(lock.workspaces)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, deps]) => [name, runtime(deps)]),
+      resolutions: Object.entries(lock.packages)
+        .filter(([, entry]) => ids.has(entry[0]))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([path, entry]) => [path, entry[0], runtime(entry[2]), entry[3]]),
+    });
+  };
   return shipped(base) !== shipped(head);
 }
 

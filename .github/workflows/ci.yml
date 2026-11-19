@@ -169,6 +169,7 @@ jobs:
               with:
                   bun-version: "1.4.4"
                   no-cache: true
+            - run: bun install --frozen-lockfile --ignore-scripts
             - run: bun run security:check
 
     static:

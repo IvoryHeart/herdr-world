@@ -146,3 +146,72 @@ test("registry outages and malformed responses fail closed", async () => {
       auditDependencies([pkg], [], async () => response),
     ).rejects.toThrow();
 });
+
+test("advisory ranges include affected prereleases immediately below a fixed release", async () => {
+  const [finding] = await auditDependencies(
+    [{ ...pkg, version: "4.17.21-beta.1" }],
+    [],
+    registry,
+  );
+  expect(finding?.version).toBe("4.17.21-beta.1");
+  expect(blocksRelease(finding!)).toBe(true);
+  for (const range of [
+    "<4.17.21",
+    ">=4.17.0 <4.17.21",
+    "4.0.0 - 4.17.21",
+    "^4.17.0",
+    "~4.17.0",
+    ">=5 || <4.17.21",
+  ]) {
+    const results = await auditDependencies(
+      [{ ...pkg, version: "4.17.21-beta.1" }],
+      [],
+      async (url) =>
+        url.endsWith("/bulk")
+          ? { lodash: [{ ...advisory, vulnerable_versions: range }] }
+          : { versions: { "4.18.0": {} } },
+    );
+    expect(results).toHaveLength(1);
+  }
+  expect(
+    await auditDependencies(
+      [{ ...pkg, version: "4.17.22-beta.1" }],
+      [],
+      registry,
+    ),
+  ).toEqual([]);
+});
+
+test("invalid fix-version inventories fail closed instead of being treated as no available fix", async () => {
+  await expect(
+    auditDependencies([pkg], [], async (url) =>
+      url.endsWith("/bulk") ? { lodash: [advisory] } : { versions: [] },
+    ),
+  ).rejects.toThrow("fix-version inventory");
+});
+
+test("prerelease matching follows npm semantics for hyphen, wildcard and shortened comparator ranges", async () => {
+  for (const [version, range] of [
+    ["1.0.0-beta.1", "1.0.0 - 2.0.0"],
+    ["1.0.0-beta.1", "1.x"],
+    ["1.2.0-beta.1", "1.2.x"],
+    ["2.0.0-beta.1", ">=2 || <1.2.3"],
+  ]) {
+    const results = await auditDependencies(
+      [{ ...pkg, version: version! }],
+      [],
+      async (url) =>
+        url.endsWith("/bulk")
+          ? { lodash: [{ ...advisory, vulnerable_versions: range }] }
+          : { versions: { "4.18.0": {} } },
+    );
+    expect(results).toHaveLength(1);
+  }
+  await expect(
+    auditDependencies([pkg], [], async (url) =>
+      url.endsWith("/bulk")
+        ? { lodash: [{ ...advisory, vulnerable_versions: "invalid-range" }] }
+        : { versions: { "4.18.0": {} } },
+    ),
+  ).rejects.toThrow("Malformed advisory range");
+});
