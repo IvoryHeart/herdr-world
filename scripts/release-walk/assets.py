@@ -85,6 +85,10 @@ def environment(root, tools_dir, session, tui, telemetry, signed_home=None, core
     root.mkdir(parents=True, exist_ok=True)
     state = root / 'state'
     state.mkdir(mode=0o700, exist_ok=True)
+    # Core's fallback repeats HC_SESSION under state, exceeding macOS's
+    # socket-path limit. Keep even holder sockets short and private here.
+    runtime = root / 'run'
+    runtime.mkdir(mode=0o700, exist_ok=True)
     shell_rc = root / 'shell-rc'
     shell_rc.write_text('set +o emacs 2>/dev/null; set +o vi 2>/dev/null\nstty icanon\n'
                         "PS1='WALK_READY>'; PS2='WALK_CONTINUATION>'; export PS1 PS2\n")
@@ -96,6 +100,7 @@ def environment(root, tools_dir, session, tui, telemetry, signed_home=None, core
     (config / 'herdr-core/config.toml').write_text('notes = false\nshell = ["/bin/sh"]\n')
     # Allowlist: never inherit owner sockets, sessions, credentials or config roots.
     env = dict(HOME=str(root), XDG_CONFIG_HOME=str(config), XDG_STATE_HOME=str(state),
+               XDG_RUNTIME_DIR=str(runtime),
                XDG_CACHE_HOME=str(root / 'cache'), TMPDIR=str(root), SHELL='/bin/sh',
                ENV=str(shell_rc), TERM='xterm-256color', LANG='en_US.UTF-8',
                PATH=os.pathsep.join([str(tools_dir / 'bin'),

@@ -72,6 +72,15 @@ def check_signed_out(fixture):
             assert result.returncode != 0 and 'not logged in' in (result.stdout + result.stderr).lower(), 'Codex is signed in during the signed-out launch walk'
 
 
+def default_connection(world, runtime):
+    connection = world.ready(runtime)
+    # Core's observation manager has no default of its own. The browser
+    # catalogue names the global selection across both runtime managers.
+    catalogue = world.rpc('connections.list')
+    assert catalogue.get('default_connection_id') == connection['connection_id'], 'World did not select the expected default runtime'
+    return connection
+
+
 def room(world, connection, runtime):
     if runtime == 'herdr-core':
         return world.rpc('world.core.room.create', dict(connection_id=connection['connection_id'],
@@ -242,7 +251,7 @@ def upgrade(walk, candidate, baseline, fixture):
         assert world.request('/api/login', {'password': 'wrong-synthetic-password'}).status in (401, 403), 'upgrade accepted the wrong sign-in password'
         invalid_cookie = world.cookie.split('=', 1)[0] + '=invalid-synthetic-session'
         assert world.request('/', cookie=invalid_cookie).status in (401, 403), 'upgrade accepted an invalid browser session'
-        assert world.ready('herdr-core')['is_default'], 'upgrade lost the default core connection'
+        default_connection(world, 'herdr-core')
         world.ready('herdr')
         assert json.loads((settings.parent / 'connections.json').read_text()) == saved, 'upgrade changed the saved connection profiles'
         kept = json.loads(settings.read_text())

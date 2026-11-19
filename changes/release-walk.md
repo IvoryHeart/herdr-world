@@ -12,3 +12,5 @@
   World services installed under alternate labels before service journeys.
   Check signed-out onboarding's explicit status and require classified status
   after signed-in model replies.
+- Check the release walk's global runtime default through the browser connection
+  catalogue and keep its core socket paths within the macOS limit.

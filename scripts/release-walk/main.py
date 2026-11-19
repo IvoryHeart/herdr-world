@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 from assets import executable, published, tools
 from contract import PAIRS, Walk, digest, validate_receipt
-from journeys import Fixture, check_signed_out, room, launch, input_reaches, listing, chat_reply, upgrade
+from journeys import Fixture, check_signed_out, default_connection, room, launch, input_reaches, listing, chat_reply, upgrade
 from processes import Telemetry, run
 from service import services, service_guard
 from validate import receipt_digest
@@ -58,14 +58,12 @@ def main(config):
                 with walk.journey(name), Fixture(root / runtime, tool_dir, telemetry, tui, core) as fixture:
                     check_signed_out(fixture)
                     with fixture.world(candidate) as world:
-                        connection = world.ready(runtime)
-                        assert connection['is_default'], 'fresh installation did not select its installed runtime by default'
+                        default_connection(world, runtime)
                         assert len(world.snapshot()) == 1, 'fresh installation added an absent runtime'
             with Fixture(root / 'both', tool_dir, telemetry) as fixture, fixture.world(candidate) as world:
                 with walk.journey('Fresh World: both'):
                     check_signed_out(fixture)
-                    tui = world.ready('herdr')
-                    assert tui['is_default'], 'having core present displaced the existing TUI default'
+                    tui = default_connection(world, 'herdr')
                     core = fixture.connect_core(world)
                 connections = {'herdr': tui, 'herdr-core': core}
                 rooms = {runtime: room(world, connection, runtime) for runtime, connection in connections.items()}

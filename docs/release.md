@@ -13,7 +13,9 @@ service journey uses the account's real systemd/launchd manager, so a temporary
 HOME alone is insufficient. The walk refuses existing World service definitions
 (including alternate systemd/launchd labels) or configuration. It uses loopback
 port 0, private World data, a named Herdr session and a separate core session/state
-folder; it never attaches to an owner's runtime. There are no browser journeys.
+folder with a short private runtime directory so macOS holder sockets fit the
+native path limit; it never attaches to an owner's runtime. There are no browser
+journeys.
 
 The native walk runs on both Linux architectures and both macOS architectures
 inside the installer-upgrade workflow required by **Delivery checks**. Server,
@@ -27,7 +29,8 @@ The printed journeys cover fresh core-only discovery/defaults, TUI-only startup,
 both runtimes, profile launches of Claude and Codex in both kinds of room, quick
 Claude launch, prompt delivery, aggregate/CLI listing, previous stable upgrade
 preservation and fresh/previous-version native service uninstall. The both-runtime
-journey preserves the TUI default and adds core through the same connection API
+journey checks the global default ID from the browser connection catalogue,
+preserves the TUI default and adds core through the same connection API
 as the selector. Upgrade checks keep saved connection profiles and the default,
 settings, password login, anonymous refusal and the existing signed-in session.
 The older pre-0.2.4 cookie migration remains covered by installer acceptance below.
