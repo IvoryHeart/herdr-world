@@ -41,6 +41,14 @@ import { handleInstanceSettings } from "../http/instance-settings";
 import { parseRpcMeta } from "../http/rpc-meta";
 import { serveStatic } from "../http/static-files";
 import {
+  IdeSocketBridge,
+  type IdeSocketData,
+  ideSocketTarget,
+  parseIdeRoute,
+  proxyIdeHttp,
+} from "../ide/proxy";
+import type { IdeService } from "../ide/service";
+import {
   TERMINAL_UPLOAD_TIMEOUT_MS,
   terminalUploadRequestBodyLimit,
 } from "../http/terminal-upload";
@@ -88,11 +96,16 @@ export type ListenerDeps = {
   herdrSetup: ReturnType<typeof createHerdrSetupHandlers>;
   officeObservability: ReturnType<typeof createOfficeObservabilityHttpHandler>;
   sources: ReturnType<typeof createSourcesHttpHandler>;
+  /** Installed web IDEs proxied under `/ide/<instance>/` (Code view). */
+  ide?: IdeService;
   /** Counts a request or message as in flight until it settles. */
   track<T>(work: Promise<T>): Promise<T>;
   /** True once the service is stopping: nothing new is admitted. */
   stopping(): boolean;
 };
+
+type BrowserSocketData = { sessionToken: string | null; ide?: undefined };
+type ListenerSocketData = BrowserSocketData | IdeSocketData;
 
 /** Bind the service's one origin: login, HTTP routes and the browser socket. */
 export function listen(deps: ListenerDeps) {
@@ -141,6 +154,50 @@ export function listen(deps: ListenerDeps) {
   } = deps.herdrSetup;
   const handleOfficeObservability = deps.officeObservability;
   const handleWorldSources = deps.sources;
+  // Browser IDE sockets, piped to their server; never World RPC clients.
+  const ideBridges = new Map<ServerWebSocket<IdeSocketData>, IdeSocketBridge>();
+  const isIdeSocket = (
+    ws: ServerWebSocket<ListenerSocketData>,
+  ): ws is ServerWebSocket<IdeSocketData> =>
+    (ws.data as IdeSocketData).kind === "ide";
+
+  function handleIdeRequest(
+    req: Request,
+    url: URL,
+    server: Server<ListenerSocketData>,
+  ): Promise<Response> | Response | undefined {
+    const route = parseIdeRoute(url.pathname);
+    const upstream = route ? deps.ide?.upstream(route.instanceId) : null;
+    if (!route || !upstream)
+      return new Response("This IDE isn't running. Open it again from Code.", {
+        status: 404,
+        headers: { "cache-control": "no-store" },
+      });
+    if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
+      const data: IdeSocketData = {
+        kind: "ide",
+        sessionToken: sessionToken(req),
+        instanceId: route.instanceId,
+        ...ideSocketTarget(req, url, upstream),
+      };
+      const protocol = req.headers.get("sec-websocket-protocol");
+      if (
+        server.upgrade(req, {
+          data,
+          ...(protocol
+            ? {
+                headers: {
+                  "sec-websocket-protocol": protocol.split(",")[0].trim(),
+                },
+              }
+            : {}),
+        })
+      )
+        return undefined;
+      return new Response("websocket upgrade failed", { status: 400 });
+    }
+    return proxyIdeHttp(req, url, upstream);
+  }
 
   async function handleConnectionHttpRequest(
     route: ParsedConnectionHttpRoute,
@@ -269,7 +326,7 @@ export function listen(deps: ListenerDeps) {
 
   async function respond(
     req: Request,
-    server: Server<{ sessionToken: string | null }>,
+    server: Server<ListenerSocketData>,
   ): Promise<Response | undefined> {
     const requestPathname = rawRequestPathname(req.url);
     let url: URL;
@@ -325,6 +382,9 @@ export function listen(deps: ListenerDeps) {
           webSocketCleanup.cleanup(client);
           client.close(4001, "Logged out");
         }
+        for (const [socket, bridge] of ideBridges)
+          if (socket.data.sessionToken === token)
+            bridge.close(4001, "Logged out");
       }
       return response;
     }
@@ -364,6 +424,9 @@ export function listen(deps: ListenerDeps) {
       config.publicOrigin,
     );
     if (admissionError) return admissionError;
+
+    if (url.pathname.startsWith("/ide/"))
+      return handleIdeRequest(req, url, server);
 
     if (url.pathname === "/api/notifications/push") {
       return webPush.handle(req, sessionToken(req));
@@ -443,7 +506,7 @@ export function listen(deps: ListenerDeps) {
     );
   }
 
-  return Bun.serve<{ sessionToken: string | null }>({
+  return Bun.serve<ListenerSocketData>({
     port: config.port,
     hostname: config.host,
     tls: config.tls,
@@ -458,6 +521,12 @@ export function listen(deps: ListenerDeps) {
     websocket: {
       perMessageDeflate: WS_PER_MESSAGE_DEFLATE,
       open(ws) {
+        if (isIdeSocket(ws)) {
+          const bridge = new IdeSocketBridge(ws);
+          ideBridges.set(ws, bridge);
+          bridge.open();
+          return;
+        }
         clients.add(ws);
         clientSessions.set(ws, ws.data.sessionToken);
         const label = assignClientId(ws);
@@ -494,6 +563,7 @@ export function listen(deps: ListenerDeps) {
         );
       },
       drain(ws) {
+        if (isIdeSocket(ws)) return;
         browsers.drained(ws);
         // The viewer caught up: send the newest repaint we held back.
         flushCoalescedMessages(ws, {
@@ -507,6 +577,10 @@ export function listen(deps: ListenerDeps) {
         });
       },
       message(ws, message) {
+        if (isIdeSocket(ws)) {
+          ideBridges.get(ws)?.message(message);
+          return;
+        }
         if (!clients.has(ws) || stopping()) return;
         const text = typeof message === "string" ? message : message.toString();
         const { id, method, connectionId, connectionGeneration, lane } =
@@ -569,7 +643,12 @@ export function listen(deps: ListenerDeps) {
             }),
         );
       },
-      close(ws) {
+      close(ws, code, reason) {
+        if (isIdeSocket(ws)) {
+          ideBridges.get(ws)?.close(code, reason);
+          ideBridges.delete(ws);
+          return;
+        }
         snapshotAdmission.retire(ws);
         for (const watcher of conversationWatchers.get(ws) ?? [])
           watcher.unwatch(ws);

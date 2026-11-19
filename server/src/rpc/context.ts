@@ -108,6 +108,8 @@ export type RpcServices = {
   worldCli: ReturnType<typeof createWorldCliService>;
   worldSnapshots: ObservedSnapshots | null;
   worldUsage?: import("../usage/service").WorldUsageService;
+  /** Installed web IDEs and their World-owned servers (world.ide.*). */
+  ide?: import("../ide/service").IdeService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;
