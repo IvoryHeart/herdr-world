@@ -17,6 +17,7 @@ import type { DataPaths } from "../config/data-paths";
 import { acquireInstanceLock } from "../config/instance-lock";
 import type { ServerConfig } from "../config/server-config";
 import { listenerSessionSecret } from "../config/session-secret";
+import { startupConnectionSettings } from "../connections/profile-creation";
 import {
   ConnectionManager,
   type ConnectionRuntimeContext,
@@ -210,20 +211,8 @@ async function compose(
       logger.warn("deprecated request routing", { detail: message }),
   });
 
-  const startupDefaultProfile: StartupLocalProfile = {
-    id: STARTUP_DEFAULT_CONNECTION_ID,
-    label: "Default",
-    type: "local",
-    control_socket_path: config.socketPath,
-    client_socket_path: config.clientSocketPath,
-    auto_connect: true,
-  };
-  const explicitStartupOverride = Boolean(
-    config.hasExplicitSocketPath ||
-      config.hasExplicitClientSocketPath ||
-      config.sshHost ||
-      config.session,
-  );
+  const { startupDefaultProfile, explicitStartupOverride } =
+    startupConnectionSettings(config);
   let connectionBootstrap;
   try {
     connectionBootstrap = await initializeConnectionProfiles({
@@ -891,6 +880,10 @@ async function compose(
             handleRpc,
             webPush,
             worldCli,
+            connectionCli: {
+              profiles: connectionProfiles,
+              registryPath: paths.connections,
+            },
             settings,
             update,
             herdrSetup,
