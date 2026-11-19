@@ -278,12 +278,19 @@ function topology(seed: number): Topology {
           : null;
       for (let d = 0; d < deskCount; d += 1) {
         const tabId = `${workspaceId}-tab-${d}`;
-        // One crowded desk has more panes than drawn seats.
+        // One crowded desk has more panes than drawn seats, and none focused:
+        // a tap has nothing to go by, so it lists them.
+        const crowded =
+          !foldStatuses &&
+          !plateStatuses &&
+          host === HOSTS[0] &&
+          roomIndex === 0 &&
+          d === 0;
         const paneCount = foldStatuses
           ? 1
           : plateStatuses
             ? plateStatuses.length + 2
-            : host === HOSTS[0] && roomIndex === 0 && d === 0
+            : crowded
               ? 6
               : scale === "max"
                 ? 3 + Math.floor(r() * 2)
@@ -310,7 +317,7 @@ function topology(seed: number): Topology {
             terminal_id: `${tabId}-terminal-${p}`,
             workspace_id: workspaceId,
             tab_id: tabId,
-            focused: p === 0,
+            focused: p === 0 && !crowded,
             agent: isAgent ? AGENTS[Math.floor(r() * AGENTS.length)]! : "",
             agent_status: isAgent
               ? foldStatuses
