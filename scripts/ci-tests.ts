@@ -53,7 +53,7 @@ if (import.meta.main) {
           ? "scripts/run-world-tests.ts"
           : "scripts/run-tests.ts",
         ...files,
-        "--parallel=1",
+        `--parallel=${lane === "unit" ? 1 : 2}`,
         "--max-concurrency=2",
         ...(lane === "web"
           ? [

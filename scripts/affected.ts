@@ -27,7 +27,7 @@ const FULL = [
   /^bun\.lockb?$/,
   /^bunfig\.toml$/,
   /^\.github\/workflows\//,
-  /^scripts\/(?:validation-scope|coverage-scope|ci-validation-proof|ci-tests|ci-verification|ci-reuse-full-check|ci-delivery-result|check-pr-body|file-size-ratchet)\.ts$/,
+  /^scripts\/(?:validation-scope|coverage-scope|ci-validation-proof|ci-tests|ci-verification|ci-content-key|ci-model-cache|ci-reuse-full-check|ci-delivery-result|check-pr-body|file-size-ratchet)\.ts$/,
   /(?:^|\/)tsconfig[^/]*\.json$/,
   /^web\/vite\.config\.ts$/,
   /^web\/index\.html$/,
@@ -105,7 +105,7 @@ export function references(
       const literal = match[1]!;
       // A bare name ("HostsFilter", "terminalLinks") is a fixture to bundle,
       // never a module.
-      const bare = /^[A-Za-z][\w.]*$/.test(literal);
+      const bare = /^[A-Za-z][\w.]*(?:\/[A-Za-z][\w.]*)*$/.test(literal);
       if (!bare && (add(join(dir, literal)) || add(literal))) continue;
       if (bare) {
         if (

@@ -36,9 +36,12 @@ function check(condition: unknown, message: string) {
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
 async function until(condition: () => unknown, message: string) {
-  for (let attempt = 0; attempt < 200; attempt++) {
+  const deadline = performance.now() + 8_000;
+  while (performance.now() < deadline) {
     if (condition()) return;
-    await settle();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
   }
   throw new Error(
     `Timed out: ${message}; navigation=${JSON.stringify(store.get().browserNavigation)}; selected=${store.get().selectedPaneId}; notice=${JSON.stringify(store.get().notice)}; body=${document.body.innerText.slice(0, 1400)}; panes=${JSON.stringify([...document.querySelectorAll("[data-pane-id]")].map((e) => [e.getAttribute("data-pane-id"), e.getBoundingClientRect().height, e.closest(".world-terminal-parking") !== null]))}; labels=${JSON.stringify([...document.querySelectorAll(".world-new-seat-canvas-action")].map((e) => e.getAttribute("aria-label")))}`,

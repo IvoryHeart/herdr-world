@@ -81,10 +81,10 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Runtime setup and updates | [Contract](../openspec/specs/bridge-access/spec.md) | [Source](../server/src/herdr/cli.ts) | [Tests](../server/src/http/herdr-setup.test.ts) |
 | Distribution and releases | [Contract](../openspec/specs/distribution-boundaries/spec.md) | [Source](../scripts/prepare-release.ts) | [Tests](../scripts/prepare-release.test.ts) |
 | PR evidence capture | [Contract](SCREENSHOTS.md#pr-screenshot-viewports) | [Source](../web/src/world/useDrawReadiness.ts) | [Tests](../web/src/world/drawReadiness.test.ts) |
-| Delivery gate and test selection | [Contract](../CONTRIBUTING.md) | [Source](../.githooks/pre-push) | [Tests](../scripts/affected.test.ts) |
+| Delivery gate and test selection | [Contract](../CONTRIBUTING.md), [content reuse](ci-pipelines.md#content-reuse-and-test-placement) | [Source](../.githooks/pre-push), [model cache](../scripts/ci-model-cache.ts) | [Selection](../scripts/affected.test.ts), [cache provenance](../scripts/ci-model-cache-roundtrip.test.ts) |
 | Reviewed work | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/useReviewedWork.ts) | [Tests](../web/src/world/useReviewedWork.test.ts) |
 | Desk review RPC | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/rpc/desk.ts) | [Tests](../server/src/rpc/desk.test.ts) |
-| Browser startup | [Contract](foundation-guide.md#browser-startup-and-test-isolation) | [Source](../web/src/main.tsx) | [Tests](../web/src/appStartup.browser.test.ts) |
+| Browser startup | [Contract](foundation-guide.md#browser-startup-and-test-isolation) | [Source](../web/src/main.tsx) | [Development entry](../web/src/appStartup.browser.test.ts), [production boot/resume](../web/src/productionBoot.browser.test.ts) |
 | Test isolation and portability | [Contract](../CONTRIBUTING.md#validation) | [Source](../scripts/run-tests.ts) | [Tests](../scripts/test-isolation.test.ts) |
 | Mobile resume | [Contract](foundation-guide.md#mobile-resume-design-and-evidence) | [Source](../web/src/terminalRenderer.ts) | [Tests](../web/src/world/WorldTerminalHandoff.test.ts) |
 | Shortcuts and suggested names | [Contract](../FEATURES.md#keyboard-shortcuts) | [Source](../web/src/shortcutCheatSheet.ts) | [Tests](../web/src/shortcutCheatSheet.test.ts) |

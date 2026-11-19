@@ -149,6 +149,20 @@ test("shared browser-only inputs do not schedule native platforms; compiled impo
   expect(selectValidation(known, []).packaging).toBe(true);
 });
 
+test("a production web edit always reaches the built-entry boot journey across the Vite boundary", () => {
+  const source = "web/src/startupPreference.ts";
+  const boot = "web/src/productionBoot.browser.test.ts";
+  const known: Graph = {
+    ...graph,
+    files: new Set([...graph.files, source, boot]),
+    deps: new Map([...graph.deps, [unit, new Set([source])]]),
+  };
+  const selection = selectValidation(known, [source]);
+  expect(selection.full).toBe(false);
+  expect(selection.web).toContain(boot);
+  expect(selection.packaging).toBe(false);
+});
+
 test("owners and World runtime paths independently require their maintained suites", () => {
   expect(
     selectValidation(graph, [scene], (path) => path === scene),
@@ -282,10 +296,7 @@ test("build-version changes select native jobs because the module is compiled in
   expect(selection.packaging).toBe(true);
 });
 
-const nativeJobTests = [
-  ["ci.yml", ["plugin-windows"]],
-  ["installer-upgrade.yml", ["upgrade"]],
-] as const;
+const nativeJobTests = [["installer-upgrade.yml", ["upgrade"]]] as const;
 const namedNativeTests = new Set<string>();
 for (const [file, jobs] of nativeJobTests) {
   const workflow = Bun.YAML.parse(

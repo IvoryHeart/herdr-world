@@ -1,0 +1,8 @@
+### Changed
+
+- Run native plugin assertions with their platform installer jobs, reuse verified
+  content-matched CI evidence and builds on pull requests, and schedule nightly
+  installation, visual and latency checks while main keeps its full fresh matrix.
+- Exercise release-built browser startup with an older profile, background/resume
+  and worker activation; retain recorded protocol vectors and rebalance browser
+  shards using measured file durations with two independent files per runner.
