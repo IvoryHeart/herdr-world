@@ -147,8 +147,75 @@ function checkInside(board: HTMLElement, label: string) {
   }
 }
 
+/**
+ * The status chip is one compact indicator: the waiting count only, the
+ * board a popover that a tap or click pins open, a mouse over the chip
+ * shows, and Escape or a tap outside closes (#1006).
+ */
+async function checkPopover() {
+  await waitFor(
+    () => host.querySelector(".town-board-chip") !== null,
+    "the status chip never rendered",
+  );
+  const chip = host.querySelector<HTMLButtonElement>(".town-board-chip")!;
+  const board = host.querySelector<HTMLElement>(".town-board")!;
+  const shown = () => getComputedStyle(board).display !== "none";
+  const expect = async (open: boolean, message: string) => {
+    try {
+      await waitFor(
+        () =>
+          shown() === open &&
+          chip.getAttribute("aria-expanded") === String(open),
+        message,
+      );
+    } catch (error) {
+      failures.push(String(error));
+    }
+  };
+  if (chip.textContent?.trim() !== "!1")
+    failures.push(
+      `the chip shows more than the waiting count: ${chip.textContent}`,
+    );
+  if (!chip.getAttribute("aria-label")?.includes("1 need you"))
+    failures.push(
+      `the chip's label lacks the breakdown: ${chip.getAttribute("aria-label")}`,
+    );
+  await expect(false, "the board starts open");
+  chip.click();
+  await expect(true, "a tap on the chip did not open the board");
+  document.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  await expect(false, "Escape did not close the board");
+  chip.click();
+  await expect(true, "a second tap on the chip did not open the board");
+  document.body.dispatchEvent(
+    new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }),
+  );
+  await expect(false, "a tap outside did not close the board");
+  chip.dispatchEvent(
+    new PointerEvent("pointerover", {
+      bubbles: true,
+      pointerType: "mouse",
+      relatedTarget: document.body,
+    }),
+  );
+  await expect(true, "hovering the chip did not show the board");
+  chip.dispatchEvent(
+    new PointerEvent("pointerout", {
+      bubbles: true,
+      pointerType: "mouse",
+      relatedTarget: document.body,
+    }),
+  );
+  await expect(false, "leaving the chip did not hide the board");
+  chip.click();
+  await expect(true, "the board did not reopen for the layout checks");
+}
+
 async function run() {
   const boards = () => document.querySelectorAll<HTMLElement>(".town-board");
+  await checkPopover();
   await waitFor(
     () =>
       boards().length === 2 &&

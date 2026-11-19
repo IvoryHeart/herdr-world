@@ -1316,13 +1316,20 @@ async function run() {
     return;
   }
   if (scale === "navigation") {
+    // The status chip opens the board; its Summary button the window.
     const summaryButton = () =>
-      window.innerWidth <= 640
-        ? host.querySelector<HTMLButtonElement>(".town-board-chip")
-        : host.querySelector<HTMLButtonElement>(".town-board-open");
+      host.querySelector<HTMLButtonElement>(".town-board-open");
     await waitFor(
-      () => summaryButton() !== null,
+      () =>
+        summaryButton() !== null &&
+        host.querySelector(".town-board-chip") !== null,
       "Summary launcher is missing before renderer setup",
+    );
+    host.querySelector<HTMLButtonElement>(".town-board-chip")!.click();
+    await waitFor(
+      () =>
+        host.querySelector(".town-board")?.getAttribute("data-open") === "true",
+      "the status chip did not open the Town board",
     );
     summaryButton()!.click();
     await waitFor(
@@ -1926,31 +1933,28 @@ async function run() {
         : host.querySelectorAll(".town-room").length === totalRooms,
     "the town's rooms were never drawn",
   );
-  // Phones show the Town board as a compact chip, wider screens the board and
-  // its Summary button; either opens the Town summary window, whose
-  // needs-you count is the sign's, the chip's and the rail's.
+  // Every width shows one compact status chip; tapping it opens the Town
+  // board, whose Summary button opens the Town summary window. Its
+  // needs-you count is the sign's, the chip's and the rail's (#1006).
   {
     const chip = host.querySelector<HTMLButtonElement>(".town-board-chip")!;
     const board = host.querySelector<HTMLElement>(".town-board")!;
     const shown = (element: HTMLElement) =>
       getComputedStyle(element).display !== "none";
-    const phone = window.innerWidth <= 640;
     check(
-      phone ? shown(chip) && !shown(board) : !shown(chip) && shown(board),
-      phone
-        ? "a phone shows the Town board chip, not the board"
-        : "a wide screen shows the Town board, not its chip",
+      shown(chip) && !shown(board),
+      "the Town shows its status chip with the board closed",
     );
+    chip.click();
+    await waitFor(() => shown(board), "the status chip did not open the board");
     const signNeeds = Number(
       board.querySelectorAll("dd")[1]?.textContent ?? "NaN",
     );
     const chipNeeds = Number(
-      chip.querySelector('[data-status="blocked"]')?.textContent?.slice(1),
+      chip.querySelector('[data-status="blocked"]')?.textContent?.slice(1) ??
+        "0",
     );
-    (phone
-      ? chip
-      : board.querySelector<HTMLButtonElement>(".town-board-open")!
-    ).click();
+    board.querySelector<HTMLButtonElement>(".town-board-open")!.click();
     await waitFor(
       () =>
         panelEntries.some((entry) => entry.id === "panel:town-summary") &&
