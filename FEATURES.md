@@ -18,10 +18,6 @@ Saved connections and their chosen default stay as they are. When the TUI is
 installed, first run keeps its existing local discovery; add core in **Manage
 connections** if wanted.
 
-CLI connection edits (`connections add`, `remove` and `set-default`) need
-`--restart` while the managed World service runs. World saves the change and
-restarts that service to load it. Stop a foreground World process before editing
-its registry, or use **Manage connections** for changes while World stays open.
 `service uninstall` removes current and legacy World user services on macOS and
 Linux when their definitions identify them as World-owned. It preserves settings,
 tokens, unrelated services and herdr-core's login item.
@@ -1233,8 +1229,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
 - **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.
-  **Hosts** defaults to All hosts and persists an explicit host set independently
-  of **Manage connections**. It lists every connection of either runtime,
+  **Hosts** (in the top bar; on a phone in Zen, in the corner view menu too)
+  defaults to All hosts and persists an explicit host set independently
+  of **Manage connections**; both places show and change one filter per
+  browser. It lists every connection of either runtime,
   Herdr's first; a herdr-core connection reads `<name> · herdr-core · <state>`
   and is counted, selected and remembered like a Herdr host (profiles of one
   runtime endpoint count once). Filtering preserves open resources and terminals;
@@ -1707,8 +1705,13 @@ preview**. Chat and its draft stay open.
   settings menu's **Zen mode** switch turns it off or back on. While Zen is on,
   a view picker beside Exit Zen switches between the views. On a phone, Zen
   hides the top bar and bottom navigation on every root screen, Spaces' list
-  included; a corner button opens the views and **Show the bars**. A terminal is
-  a detail screen and keeps its own bar, with Back. Stored in this browser.
+  included; a corner button opens the views, **Hosts**, **Find or act** and
+  **Show the bars**. **Hosts** there opens the top bar's Hosts filter in the
+  menu's place, with **Manage connections**, and changes the same selection;
+  Tab moves between its controls, and Tab out of it closes it, as Tab closes
+  the views menu. On a short screen the menu scrolls, so every choice stays reachable.
+  A terminal is a detail screen and keeps its own bar, with Back. Stored in
+  this browser.
 
 Herdr 0.9.0 uses **Local navigation** per browser/connection; legacy connections
 use **Shared navigation**. Reconnect preserves live selections; reload starts
@@ -2273,6 +2276,18 @@ and herdr-core alike:
   exists, otherwise on the service's default; phones still open on Town.
   Disconnect does not stop Herdr/workspaces. A Linux/macOS World service can reach Unix or Windows SSH hosts;
   a Windows World service supports local profiles. See [connection setup](docs/DEPLOYMENT.md#local-and-ssh-connections).
+- **CLI connection changes apply immediately.** `herdr-world connections add`,
+  `remove` and `set-default` apply through the running service on loopback, in
+  the same queue as **Manage connections**, retaining concurrent Settings edits.
+  Auto-connect additions connect at once; removal retires only that host's
+  runtime and open contexts. Other connections and browser sessions stay open.
+  Choose another default before removing the current one; explicit service
+  Herdr settings still pin the process default. `--restart` remains optional
+  on loopback. A managed service bound to one non-loopback address still needs
+  `--restart` to save and restart; stop a foreground process there before editing.
+  With no listener answering, edits are saved for the next start, including when
+  a managed service is starting or unreachable. Validation errors exit 2;
+  persistence and service failures exit 1, without an offline retry of a live edit.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
 - **herdr-core connections.** Open **Hosts → Manage connections → Add

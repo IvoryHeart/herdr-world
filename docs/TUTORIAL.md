@@ -102,7 +102,8 @@ and limits. Continue from your project shell above.
 Switch views with the view picker at the top edge (on a phone, the corner
 button). Views open full-screen; choose **Exit Zen** to show the menu bars.
 
-**Hosts** starts at **All hosts**. Choose fewer to narrow what you see; this
+**Hosts** sits in the top bar; on a phone, it is also in the corner button's
+menu. It starts at **All hosts**. Choose fewer to narrow what you see; this
 never disconnects anything. **Manage connections** adds a computer over SSH or
 reconnects one. A disconnected host stays visible, marked
 **Disconnected · Reconnect**.

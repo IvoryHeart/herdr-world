@@ -69,10 +69,16 @@ export class SocketBrowser {
     match(value: Record<string, any>): boolean;
     resolve(value: any): void;
   }>();
-  constructor(base: string) {
+  constructor(base: string, cookie?: string) {
     const hello = Promise.withResolvers<any>();
     this.hello = guard(hello.promise, "second browser hello");
-    this.ws = new WebSocket(`${base.replace("http:", "ws:")}/ws`);
+    const Socket = WebSocket as unknown as new (
+      url: string,
+      options: Bun.WebSocketOptions,
+    ) => WebSocket;
+    this.ws = new Socket(`${base.replace("http:", "ws:")}/ws`, {
+      headers: cookie ? { cookie } : {},
+    });
     this.ws.onmessage = (event) => {
       const message = JSON.parse(String(event.data));
       if (message.hello) hello.resolve(message);

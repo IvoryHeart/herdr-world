@@ -137,6 +137,74 @@ function runtimeFactory(created: Map<string, FakeRuntime[]>) {
     };
 }
 
+test("CLI creation keeps the local default and rejects pinned --default before saving", async () => {
+  for (const explicitStartupOverride of [false, true]) {
+    const store = new ConnectionProfileStore({ path: tempPath() });
+    const bootstrap = loadConnectionProfileBootstrap({
+      store,
+      startupProfile: legacy,
+      explicitStartupOverride,
+    });
+    const manager = new ConnectionManager<FakeRuntime>(
+      bootstrap.defaultConnectionId,
+    );
+    const service = new ConnectionProfileService({
+      manager,
+      store,
+      bootstrap,
+      createRuntime: runtimeFactory(new Map()),
+    });
+    if (explicitStartupOverride) {
+      await expect(
+        service.create(local("alpha"), {
+          makeDefault: true,
+          keepLocalDefault: true,
+        }),
+      ).rejects.toThrow("remains the process default");
+      expect(store.load()).toBeNull();
+      expect(manager.has("alpha")).toBe(false);
+    } else {
+      await service.create(local("alpha", false), { keepLocalDefault: true });
+      expect(manager.defaultId()).toBe("local");
+      expect(store.load()?.default_connection_id).toBe("local");
+      expect(manager.status("alpha").state).toBe("disconnected");
+    }
+    service.stopSupervision();
+    await manager.stopAll();
+  }
+});
+
+test("removing a saved default under an explicit override preserves a valid remaining registry", async () => {
+  const store = new ConnectionProfileStore({ path: tempPath() });
+  await store.save({
+    version: 2,
+    default_connection_id: "alpha",
+    profiles: [local("alpha"), local("beta")],
+  });
+  const bootstrap = loadConnectionProfileBootstrap({
+    store,
+    startupProfile: legacy,
+    explicitStartupOverride: true,
+  });
+  const manager = new ConnectionManager<FakeRuntime>(
+    bootstrap.defaultConnectionId,
+  );
+  const service = new ConnectionProfileService({
+    manager,
+    store,
+    bootstrap,
+    createRuntime: runtimeFactory(new Map()),
+  });
+  await service.remove("alpha");
+  expect(manager.defaultId()).toBe("startup-default");
+  expect(store.load()).toMatchObject({
+    default_connection_id: "beta",
+    profiles: [local("beta")],
+  });
+  service.stopSupervision();
+  await manager.stopAll();
+});
+
 async function startProbeServers(
   id: string,
   renderMode: "valid" | "malformed" = "valid",
