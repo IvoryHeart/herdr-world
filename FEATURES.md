@@ -1386,21 +1386,24 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 ### Integrations
 
-**Menu → Integrations** lists everything World reads from or works through,
-in one screen with one tab per kind: **Runtimes** (this computer's Herdr or
-herdr-core and each SSH host), **Sources** (GitHub, Jira and Usage metrics),
-**Agents** (World's skill for each harness, per host) and **Editors** once
-one is listed. The tabs come from the registry's kinds, so a new kind gets
+**Menu → Integrations** lists everything World reads from or works through.
+**All** opens first and lists every kind under its heading; then one tab per
+kind: **Runtimes** (this computer's Herdr or herdr-core and each SSH host),
+**Sources** (GitHub, Jira and Usage metrics), **Agents** (World's skill for
+each harness, per host) and **Editors** once one is listed; last, the
+**Vault**. The kind tabs come from the registry's kinds, so a new kind gets
 its own tab; a kind with nothing in it has no tab, except Runtimes and
 Agents. Each tab shows how many rows it has and a warning mark when one is
 failing; the tabs stay on one row and scroll sideways on a phone. The screen
 reopens on the tab you last used, or on the row an element's **Connect**
-asked for. The **Vault** sits below the tabs.
+asked for.
 
-**Search** narrows every tab at once by name, status (`error`, `needs
-connect`), transport (`ssh`) or what a row gives (`tickets`); the counts
-become match counts, and a tab with no match names the tabs that have some
-(**Runtimes (1)**) and offers **Clear search**. On Agents it narrows the
+**Search** always searches every integration and the vault, by name, status
+(`error`, `needs connect`), transport (`ssh`), what a row gives (`tickets`)
+or a token's name: typing opens **All** with every match under its kind, and
+the counts become match counts. Picking a tab then narrows the results to
+that kind; a tab with no match names the tabs that have some
+(**Runtimes (1)**) and offers **Clear search**. Agents match within the
 host's agent list. To try the screen with dozens of rows, open World with
 `?integrationsFixture`: the page drops the parameter and the screen adds 40
 sample rows (hosts, trackers and an **Editors** tab) in every state until the
@@ -1427,10 +1430,11 @@ service, never from the browser. A World element missing what it needs (the
 closed post office, Work's empty lens, Town with no hosts) offers **Connect**,
 which opens this screen at that row.
 
-The **Vault** holds tokens World needs (today only the Jira API token) in an
-owner-only file in World's data directory. It lists names, never values; a
-token is write-only from the browser, and links, symlinks or unreadable files
-are refused. There is no OS keychain backend yet. The registry is read-only
+The **Vault** tab shows where World keeps the tokens integrations need
+(today only the Jira API token): an owner-only file in World's data
+directory. It lists each token by name with the integration that uses it,
+never its value. A token is entered in its integration's settings and is
+write-only from the browser; links, symlinks or unreadable files are refused. There is no OS keychain backend yet. The registry is read-only
 at `GET /api/world/integrations`; editors join it as they land.
 
 ### Sources: GitHub and Jira

@@ -46,15 +46,24 @@ const INTEGRATION_DESCRIPTION =
   "The bridge or SSH account must use the same agent configuration as the Herdr server. Unavailable version information stays unknown. " +
   "Available versions are bundled with that server, not checked online.";
 
+/**
+ * How many agents the list shows (`listed`: detected or carrying World's
+ * skill) and whether anything, even an undetected agent, matches the search.
+ */
+export type AgentMatches = { listed: number; any: boolean };
+
 export function AgentIntegrationsSettings({
   connectionLabel,
   sshDestination,
   query = "",
+  onMatches,
 }: {
   connectionLabel: string;
   sshDestination?: string;
   /** Integrations search: only agents whose name or state match are listed. */
   query?: string;
+  /** What the list shows for the search; null while it is loading. */
+  onMatches?: (matches: AgentMatches | null) => void;
 }) {
   const client = useConnectionClient();
   const scope = connectionClientScopeKey(
@@ -281,6 +290,12 @@ export function AgentIntegrationsSettings({
             (item) => worldHarnessFor(item.target) === row.harness,
           ) && matchesTerms(terms, [row.harness]),
       );
+  const matchesListed = visible.length + worldOnly.length;
+  const matchesAny = matchesListed + unavailable.length > 0;
+  const known = !loading && items !== null;
+  useEffect(() => {
+    onMatches?.(known ? { listed: matchesListed, any: matchesAny } : null);
+  }, [onMatches, known, matchesListed, matchesAny]);
   const renderList = (list: AgentIntegration[]) => (
     <ul className="agent-integrations-list">
       {list.map((item) => (

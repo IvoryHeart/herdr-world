@@ -108,28 +108,37 @@
   gap: 4px;
 }
 
-.integrations-vault {
-  display: grid;
-  gap: 6px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-soft);
+.integrations-settings [hidden] {
+  display: none;
 }
 
-.integrations-vault > h3,
-.integrations-group > h3 {
+/* All: one block per kind, each under its heading with a count. */
+.integrations-kind {
+  display: grid;
+  gap: 8px;
+}
+
+.integrations-kind + .integrations-kind {
+  padding-top: 10px;
+}
+
+.integrations-kind > h3 {
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-strong);
 }
 
 .integrations-group > .settings-helper,
-.integrations-vault > .settings-helper {
+.integrations-kind > .settings-helper {
   margin: 0;
 }
 
+.integrations-kind > button,
 .integrations-group > button {
   justify-self: start;
 }
@@ -171,6 +180,10 @@
   overflow-wrap: anywhere;
 }
 
+.integration-row-title > svg {
+  color: var(--muted);
+}
+
 .integration-row-title > strong {
   color: var(--text-strong);
 }
@@ -209,8 +222,7 @@
 
 .integration-row-detail,
 .integration-row-provides,
-.integrations-empty,
-.integrations-vault-secrets {
+.integrations-empty {
   margin: 0;
   color: var(--muted);
   overflow-wrap: anywhere;

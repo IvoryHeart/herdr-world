@@ -26,6 +26,7 @@ import {
   type IntegrationKind,
   integrationMatches,
   integrationsChanged,
+  matchesTerms,
   searchTerms,
   useIntegrations,
 } from "../integrations";
@@ -44,6 +45,7 @@ import {
   useWorldSources,
   worldSourcesStore,
 } from "../world/worldSources";
+import type { AgentMatches } from "./AgentIntegrationsSettings";
 import { ConnectionManagerDialog } from "./ConnectionSwitcher";
 import "./IntegrationsSettings.css";
 
@@ -158,10 +160,26 @@ const PANELS: Partial<
   ide: { help: "Editors World opens files and folders in." },
 };
 
-/** The tab a focused row sits in: `source:github` is in Sources. */
-/** The tab last opened on this page: Integrations reopens where it was. */
-let lastKind: IntegrationKind | null = null;
+/**
+ * The screen's tabs: All first, then one per kind, then the Vault, which
+ * holds tokens for integrations rather than being one.
+ */
+type Tab = "all" | IntegrationKind | "vault";
 
+const TAB_LABELS: Record<"all" | "vault", string> = {
+  all: "All",
+  vault: "Vault",
+};
+
+const tabLabel = (tab: Tab) =>
+  tab === "all" || tab === "vault"
+    ? TAB_LABELS[tab]
+    : INTEGRATION_KIND_LABELS[tab];
+
+/** The tab last opened on this page: Integrations reopens where it was. */
+let lastTab: Tab | null = null;
+
+/** The tab a focused row sits in: `source:github` is in Sources. */
 function kindOf(focus: string | undefined): IntegrationKind | null {
   const prefix = focus?.split(":", 1)[0];
   return INTEGRATION_KINDS.find((kind) => kind === prefix) ?? null;
@@ -187,9 +205,11 @@ function runtimeAction(entry: IntegrationEntry): Action | null {
 
 /**
  * Configuration → Integrations: every runtime, source and agent World can
- * use, one tab per kind, with its status and one Connect or Disconnect. The
- * search box narrows every tab at once and each tab counts its matches, so a
- * list of dozens stays usable on a phone. Each row acts through
+ * use, with its status and one Connect or Disconnect. All lists every kind
+ * under its heading, each kind has its own tab, and the Vault tab names the
+ * tokens World keeps. The search box always searches everything: typing
+ * opens All, and each tab counts its matches, so a list of dozens stays
+ * usable on a phone. Each row acts through
  * the owner that already holds it (connection verbs, source settings, the
  * metrics connector, World's skill installer); this screen holds no state of
  * its own beyond what is open. `agents` is the harness section, which keeps
@@ -200,8 +220,14 @@ export function IntegrationsSettings({
   agents,
 }: {
   focus?: string;
-  /** The Agents tab; `query` is the search box, for its own list. */
-  agents: (query: string) => ReactNode;
+  /**
+   * The Agents list, on its tab and in All; `query` is the search box, for
+   * its own list, which reports how many agents it lists and matches.
+   */
+  agents: (
+    query: string,
+    onMatches: (matches: AgentMatches | null) => void,
+  ) => ReactNode;
 }) {
   const { snapshot, error: listError, refresh } = useIntegrations();
   const sources = useWorldSources();
@@ -213,9 +239,8 @@ export function IntegrationsSettings({
   );
   const [hostsOpen, setHostsOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<IntegrationKind>(
-    () => kindOf(focus) ?? lastKind ?? INTEGRATION_KINDS[0],
-  );
+  const [agentMatches, setAgentMatches] = useState<AgentMatches | null>(null);
+  const [tab, setTab] = useState<Tab>(() => kindOf(focus) ?? lastTab ?? "all");
   const root = useRef<HTMLDivElement>(null);
   const focused = useRef(false);
 
@@ -342,45 +367,88 @@ export function IntegrationsSettings({
 
   const rows = snapshot ? withIntegrationsFixture(snapshot.integrations) : [];
   const terms = searchTerms(query);
+  // Search always covers every integration and the vault; a tab only
+  // narrows what is listed.
   const matching = rows.filter((entry) => integrationMatches(entry, terms));
+  const vault = snapshot?.vault;
+  const vaultMatches = vault
+    ? matchesTerms(terms, [
+        TAB_LABELS.vault,
+        "tokens secrets",
+        vault.label,
+        vault.detail,
+        ...vault.secrets.map((secret) => secret.label),
+      ])
+    : false;
+  const secrets = vault
+    ? vaultMatches
+      ? vault.secrets
+      : vault.secrets.filter((secret) => matchesTerms(terms, [secret.label]))
+    : [];
   const kinds = INTEGRATION_KINDS.filter(
     (kind) => PANELS[kind]?.always || rows.some((entry) => entry.kind === kind),
   );
-  const active = kinds.includes(kind) ? kind : kinds[0];
-  const panel = PANELS[active] ?? {};
-  const listed = matching.filter((entry) => entry.kind === active);
-  const count = (of: IntegrationKind) =>
-    PANELS[of]?.custom
-      ? null
-      : matching.filter((entry) => entry.kind === of).length;
-  const elsewhere = kinds.filter(
-    (other) => other !== active && terms.length && count(other),
+  const tabs: Tab[] = ["all", ...kinds, "vault"];
+  const active = tabs.includes(tab) ? tab : "all";
+  const ofKind = (kind: IntegrationKind) =>
+    matching.filter((entry) => entry.kind === kind);
+  // Agents list their own rows (per host); the registry's harness rows are
+  // not shown twice.
+  const agentCount = agentMatches?.listed ?? 0;
+  const count = (of: Tab): number | null =>
+    of === "all"
+      ? matching.filter((entry) => !PANELS[entry.kind]?.custom).length +
+        agentCount
+      : of === "vault"
+        ? vault
+          ? secrets.length
+          : null
+        : PANELS[of]?.custom
+          ? (agentMatches?.listed ?? null)
+          : ofKind(of).length;
+  const vaultListed = !!vault && (vaultMatches || secrets.length > 0);
+  const agentsListed = !terms.length || agentMatches?.any !== false;
+  const found = (other: Tab) =>
+    other === "vault"
+      ? vaultListed
+      : other === "harness"
+        ? !!agentMatches?.any
+        : !!count(other);
+  const elsewhere = tabs.filter(
+    (other) => other !== active && terms.length && found(other),
   );
-  const select = (next: IntegrationKind, focusTab = false) => {
-    setKind(next);
-    lastKind = next;
-    const tab = root.current?.querySelector<HTMLElement>(
+  const select = (next: Tab, focusTab = false) => {
+    setTab(next);
+    lastTab = next;
+    const button = root.current?.querySelector<HTMLElement>(
       `[role="tab"][data-kind="${next}"]`,
     );
-    tab?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-    if (focusTab) tab?.focus();
+    button?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    if (focusTab) button?.focus();
+  };
+  const search = (value: string) => {
+    // Typing a search opens All, so it finds every integration; picking a
+    // tab afterwards narrows the results to that kind.
+    if (!terms.length && searchTerms(value).length && active !== "all")
+      select("all");
+    setQuery(value);
   };
 
   const rowFor = (entry: IntegrationEntry) => {
     const settingsFor = entry.kind === "source" && entry.control !== "none";
+    const action: Action | null =
+      entry.kind === "runtime"
+        ? runtimeAction(entry)
+        : settingsFor
+          ? sourceAction(entry)
+          : null;
     return (
       <IntegrationRow
         key={entry.id}
         entry={entry}
-        action={
-          entry.kind === "runtime"
-            ? runtimeAction(entry)
-            : settingsFor
-              ? sourceAction(entry)
-              : null
-        }
+        action={action}
         busy={busy !== null}
-        onAction={(action) => act(entry, action)}
+        onAction={(next) => act(entry, next)}
         expanded={settingsFor && open.has(entry.id)}
         onToggleSettings={settingsFor ? () => toggle(entry.id) : undefined}
       >
@@ -389,45 +457,197 @@ export function IntegrationsSettings({
     );
   };
 
-  const kindLabel = INTEGRATION_KIND_LABELS[active];
-  let body: ReactNode;
-  if (active === "harness") body = agents(query);
+  const kindExtras = (kind: IntegrationKind) =>
+    kind === "runtime" ? (
+      <button
+        type="button"
+        className="ghost integrations-hosts"
+        onClick={() => setHostsOpen(true)}
+      >
+        Add or edit hosts…
+      </button>
+    ) : kind === "source" && snapshot ? (
+      <button
+        type="button"
+        className="ghost"
+        disabled={busy !== null}
+        onClick={() =>
+          void run(
+            "refresh",
+            () => worldSourcesStore.refresh(true),
+            "Sources refreshed.",
+          )
+        }
+      >
+        <RefreshCw size={14} aria-hidden="true" /> Refresh Sources
+      </button>
+    ) : null;
+
+  const vaultBody = vault ? (
+    <>
+      <p className="settings-helper">
+        {vault.label}. {vault.detail} Each token is entered in its integration's
+        settings; World never shows one back.
+      </p>
+      {secrets.length ? (
+        <ul className="integrations-list" aria-label="Tokens in the vault">
+          {secrets.map((secret) => (
+            <li
+              key={secret.name}
+              className="integration-row"
+              data-secret={secret.name}
+            >
+              <div className="integration-row-head">
+                <span className="integration-row-title">
+                  <KeyRound size={14} aria-hidden="true" />
+                  <strong>{secret.label}</strong>
+                </span>
+              </div>
+              <p className="integration-row-detail">
+                Used by{" "}
+                {rows.find((entry) => entry.id === secret.usedBy)?.label ??
+                  secret.usedBy}
+                .
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="integrations-empty">
+          {vault.secrets.length
+            ? `No token matches “${query.trim()}”.`
+            : "Holds no tokens."}
+        </p>
+      )}
+    </>
+  ) : null;
+
+  const noMatch = (label: string) => (
+    <div className="integrations-empty" role="status">
+      <p>
+        {label} “{query.trim()}”.
+        {elsewhere.length ? " Found in:" : ""}
+      </p>
+      <span className="integrations-empty-actions">
+        {elsewhere.map((other) => (
+          <button
+            key={other}
+            type="button"
+            className="ghost"
+            onClick={() => select(other)}
+          >
+            {tabLabel(other)}
+            {count(other) === null ? "" : ` (${count(other)})`}
+          </button>
+        ))}
+        <button type="button" className="ghost" onClick={() => search("")}>
+          Clear search
+        </button>
+      </span>
+    </div>
+  );
+
+  const heading = (kind: IntegrationKind) => (
+    <h3>
+      {INTEGRATION_KIND_LABELS[kind]}
+      {count(kind) === null ? null : (
+        <span className="integrations-tab-count">{count(kind)}</span>
+      )}
+    </h3>
+  );
+  const group = (kind: IntegrationKind) => (
+    <section
+      key={kind}
+      className="integrations-kind"
+      data-kind={kind}
+      aria-label={INTEGRATION_KIND_LABELS[kind]}
+    >
+      {heading(kind)}
+      {ofKind(kind).length ? (
+        <ul className="integrations-list">{ofKind(kind).map(rowFor)}</ul>
+      ) : (
+        <p className="integrations-empty">{PANELS[kind]?.empty}</p>
+      )}
+      {terms.length ? null : kindExtras(kind)}
+    </section>
+  );
+
+  // The Agents list keeps one place in the panel on every tab (hidden where
+  // it is not shown), so it keeps its counts current for the search and
+  // moving between tabs never reloads it.
+  const agentsKind = kinds.find((kind) => PANELS[kind]?.custom);
+  let agentsShown: "tab" | "group" | "hidden" = "hidden";
+  let before: ReactNode = null;
+  let after: ReactNode = null;
+  if (active === "harness") agentsShown = "tab";
   else if (!snapshot)
-    body = listError ? null : (
+    before = listError ? null : (
       <p className="settings-helper">Checking integrations…</p>
     );
-  else if (listed.length)
-    body = <ul className="integrations-list">{listed.map(rowFor)}</ul>;
-  else if (terms.length)
-    body = (
-      <div className="integrations-empty" role="status">
-        <p>
-          No {kindLabel.toLowerCase()} match “{query.trim()}”.
-          {elsewhere.length ? " Found in:" : ""}
-        </p>
-        <span className="integrations-empty-actions">
-          {elsewhere.map((other) => (
-            <button
-              key={other}
-              type="button"
-              className="ghost"
-              onClick={() => select(other)}
-            >
-              {INTEGRATION_KIND_LABELS[other]} ({count(other)})
-            </button>
-          ))}
-          <button type="button" className="ghost" onClick={() => setQuery("")}>
-            Clear search
-          </button>
-        </span>
-      </div>
+  else if (active === "vault") before = vaultBody;
+  else if (active === "all") {
+    // A kind that is always shown keeps its place (and its empty text) in
+    // All until a search leaves it with nothing.
+    const groups = kinds.filter(
+      (kind) =>
+        !PANELS[kind]?.custom &&
+        (ofKind(kind).length > 0 || (!terms.length && PANELS[kind]?.always)),
     );
-  else
-    body = (
+    const split = agentsKind ? kinds.indexOf(agentsKind) : kinds.length;
+    if (agentsKind && agentsListed) agentsShown = "group";
+    before = groups.filter((kind) => kinds.indexOf(kind) < split).map(group);
+    after = (
+      <>
+        {groups.filter((kind) => kinds.indexOf(kind) > split).map(group)}
+        {vaultListed ? (
+          <section
+            className="integrations-kind"
+            data-kind="vault"
+            aria-label={TAB_LABELS.vault}
+          >
+            <h3>
+              <KeyRound size={14} aria-hidden="true" /> {TAB_LABELS.vault}
+            </h3>
+            {vaultBody}
+          </section>
+        ) : null}
+        {groups.length || agentsShown === "group" || vaultListed
+          ? null
+          : noMatch("Nothing matches")}
+      </>
+    );
+  } else {
+    const listed = ofKind(active);
+    const kindLabel = INTEGRATION_KIND_LABELS[active];
+    before = listed.length ? (
+      <ul className="integrations-list">{listed.map(rowFor)}</ul>
+    ) : terms.length ? (
+      noMatch(`No ${kindLabel.toLowerCase()} match`)
+    ) : (
       <p className="integrations-empty">
-        {panel.empty ?? `No ${kindLabel.toLowerCase()} yet.`}
+        {PANELS[active]?.empty ?? `No ${kindLabel.toLowerCase()} yet.`}
       </p>
     );
+  }
+  const agentsBlock = agentsKind ? (
+    <section
+      className={
+        agentsShown === "group" ? "integrations-kind" : "integrations-agents"
+      }
+      data-kind={agentsShown === "group" ? agentsKind : undefined}
+      aria-label={
+        agentsShown === "group"
+          ? INTEGRATION_KIND_LABELS[agentsKind]
+          : undefined
+      }
+      hidden={agentsShown === "hidden"}
+    >
+      {agentsShown === "group" ? heading(agentsKind) : null}
+      {agents(query, setAgentMatches)}
+    </section>
+  ) : null;
+  const help =
+    active === "all" || active === "vault" ? undefined : PANELS[active]?.help;
 
   return (
     <div ref={root} className="integrations-settings">
@@ -450,7 +670,7 @@ export function IntegrationsSettings({
           placeholder="Search by name, status or what it gives"
           autoComplete="off"
           spellCheck={false}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => search(event.target.value)}
         />
       </label>
       <div
@@ -458,12 +678,16 @@ export function IntegrationsSettings({
         role="tablist"
         aria-label="Kinds of integration"
       >
-        {kinds.map((each, index) => {
+        {tabs.map((each, index) => {
           const n = count(each);
-          const failing = rows.some(
-            (entry) => entry.kind === each && entry.state === "error",
-          );
-          const label = INTEGRATION_KIND_LABELS[each];
+          const failing =
+            each !== "vault" &&
+            rows.some(
+              (entry) =>
+                (each === "all" || entry.kind === each) &&
+                entry.state === "error",
+            );
+          const label = tabLabel(each);
           return (
             <button
               key={each}
@@ -483,19 +707,22 @@ export function IntegrationsSettings({
               onKeyDown={(event) => {
                 const next =
                   event.key === "ArrowRight"
-                    ? (index + 1) % kinds.length
+                    ? (index + 1) % tabs.length
                     : event.key === "ArrowLeft"
-                      ? (index + kinds.length - 1) % kinds.length
+                      ? (index + tabs.length - 1) % tabs.length
                       : event.key === "Home"
                         ? 0
                         : event.key === "End"
-                          ? kinds.length - 1
+                          ? tabs.length - 1
                           : null;
                 if (next === null) return;
                 event.preventDefault();
-                select(kinds[next], true);
+                select(tabs[next], true);
               }}
             >
+              {each === "vault" ? (
+                <KeyRound size={12} aria-hidden="true" />
+              ) : null}
               {label}
               {n === null ? null : (
                 <span className="integrations-tab-count" aria-hidden="true">
@@ -520,33 +747,11 @@ export function IntegrationsSettings({
         aria-labelledby={`integrations-tab-${active}`}
         data-kind={active}
       >
-        {panel.help ? <p className="settings-helper">{panel.help}</p> : null}
-        {body}
-        {active === "runtime" ? (
-          <button
-            type="button"
-            className="ghost integrations-hosts"
-            onClick={() => setHostsOpen(true)}
-          >
-            Add or edit hosts…
-          </button>
-        ) : null}
-        {active === "source" && snapshot ? (
-          <button
-            type="button"
-            className="ghost"
-            disabled={busy !== null}
-            onClick={() =>
-              void run(
-                "refresh",
-                () => worldSourcesStore.refresh(true),
-                "Sources refreshed.",
-              )
-            }
-          >
-            <RefreshCw size={14} aria-hidden="true" /> Refresh Sources
-          </button>
-        ) : null}
+        {help ? <p className="settings-helper">{help}</p> : null}
+        {before}
+        {agentsBlock}
+        {after}
+        {active !== "all" && active !== "vault" ? kindExtras(active) : null}
       </section>
 
       {error ? (
@@ -558,22 +763,6 @@ export function IntegrationsSettings({
         <p className="modal-message" role="status">
           {message}
         </p>
-      ) : null}
-
-      {snapshot ? (
-        <section className="integrations-vault" aria-label="Vault">
-          <h3>
-            <KeyRound size={14} aria-hidden="true" /> Vault
-          </h3>
-          <p className="settings-helper">
-            {snapshot.vault.label}. {snapshot.vault.detail}
-          </p>
-          <p className="integrations-vault-secrets">
-            {snapshot.vault.secrets.length
-              ? `Holds: ${snapshot.vault.secrets.map((secret) => secret.label).join(", ")}.`
-              : "Holds no tokens."}
-          </p>
-        </section>
       ) : null}
 
       {hostsOpen

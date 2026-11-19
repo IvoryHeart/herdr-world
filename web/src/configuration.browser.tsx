@@ -509,6 +509,11 @@ const openKind = (kind: string) => {
   if (!tab) throw new Error(`Missing Integrations tab: ${kind}`);
   flushSync(() => tab.click());
 };
+const kindGroups = () =>
+  Array.from(
+    document.querySelectorAll<HTMLElement>(".integrations-kind:not([hidden])"),
+    (group) => group.dataset.kind,
+  ).join(",");
 const rowStates = () =>
   JSON.stringify(
     Object.fromEntries(
@@ -533,16 +538,32 @@ const searchIntegrations = (value: string) => {
 async function integrationsScreen(dialog: Element) {
   await waitFor(() => !!integrationRow("runtime:alpha"));
   check(
-    kindTabs() === "runtime,source,harness",
-    `Integrations tabs are not the registry's kinds: ${kindTabs()}`,
+    kindTabs() === "all,runtime,source,harness,vault",
+    `Integrations tabs are not All, the registry's kinds and Vault: ${kindTabs()}`,
+  );
+  // All opens first and lists every kind under its heading; the Agents list
+  // counts the agents it shows on its host.
+  // Pi, Claude Code and Antigravity CLI; Future Agent is not detected.
+  await waitFor(() => tabCount("harness") !== undefined);
+  check(
+    tabCount("harness") === "3",
+    `the Agents tab does not count its listed agents: ${tabCount("harness")}`,
   );
   check(
-    kindTab("runtime")!.getAttribute("aria-selected") === "true" &&
+    kindTab("all")!.getAttribute("aria-selected") === "true" &&
+      tabCount("all") === "8" &&
       tabCount("runtime") === "2" &&
       tabCount("source") === "3" &&
-      tabCount("harness") === undefined,
-    "the first kind is not open or tabs do not count their rows",
+      tabCount("vault") === "1",
+    `All is not open or tabs do not count their rows: ${tabCount("all")}`,
   );
+  check(
+    kindGroups() === "runtime,source,harness,vault" &&
+      document.querySelectorAll(".agent-integrations-list li").length === 4 &&
+      !integrationRow("harness:claude"),
+    `All does not list every kind once: ${kindGroups()}`,
+  );
+  openKind("runtime");
   check(
     rowStates() ===
       JSON.stringify({
@@ -557,11 +578,16 @@ async function integrationsScreen(dialog: Element) {
     ),
     "a runtime row does not say what it provides",
   );
-  const vault = dialog.querySelector('[aria-label="Vault"]')!;
+  // The vault is its own tab: the tokens it holds by name and who uses them.
+  openKind("vault");
+  const token = dialog.querySelector('[data-secret="jira.token"]');
   check(
-    vault.textContent!.includes("Holds: Jira API token."),
-    "the vault does not name what it holds",
+    !dialog.querySelector(".integration-row[data-integration]") &&
+      !!token?.textContent?.includes("Jira API token") &&
+      token.textContent.includes("Used by Jira."),
+    "the Vault tab does not name what it holds",
   );
+  openKind("runtime");
   check(
     dialog.scrollWidth <= dialog.clientWidth + 1,
     "the Integrations screen overflows the viewport",
@@ -671,16 +697,35 @@ async function integrationsScreen(dialog: Element) {
     "a source refresh needed another registry read to reach the screen",
   );
 
-  // Search narrows every tab at once; each tab counts its matches, and an
-  // empty tab points at the tabs that have some.
-  searchIntegrations("jira");
+  // Search always covers everything: typing opens All with every match,
+  // the vault's tokens too, and each tab counts its matches.
   check(
-    rowStates() === JSON.stringify({ "source:jira": "needs_connect" }) &&
-      tabCount("source") === "1" &&
-      tabCount("runtime") === "0",
-    `search did not narrow the open tab or its counts: ${rowStates()}`,
+    kindTab("source")!.getAttribute("aria-selected") === "true",
+    "the Sources tab is not open before searching",
   );
+  searchIntegrations("jira");
+  await waitFor(() => tabCount("harness") === "0");
+  check(
+    kindTab("all")!.getAttribute("aria-selected") === "true" &&
+      kindGroups() === "source,vault" &&
+      rowStates() === JSON.stringify({ "source:jira": "needs_connect" }) &&
+      !!dialog.querySelector('[data-secret="jira.token"]') &&
+      tabCount("all") === "1" &&
+      tabCount("source") === "1" &&
+      tabCount("runtime") === "0" &&
+      tabCount("vault") === "1",
+    `search did not cover every integration: ${kindGroups()} ${rowStates()}`,
+  );
+  searchIntegrations("pi");
+  await waitFor(() => tabCount("harness") === "1");
+  check(
+    kindGroups().split(",").includes("harness") &&
+      document.querySelectorAll(".agent-integrations-list li").length === 1,
+    `All search did not find an agent: ${kindGroups()}`,
+  );
+  // A tab narrows the results; an empty one points at the tabs that match.
   searchIntegrations("ssh");
+  openKind("source");
   const empty = dialog.querySelector(".integrations-empty");
   check(
     !!empty?.textContent?.includes("No sources match “ssh”.") &&
@@ -694,6 +739,17 @@ async function integrationsScreen(dialog: Element) {
     `a match in another tab could not be reached: ${rowStates()}`,
   );
   searchIntegrations("");
+  openKind("all");
+  searchIntegrations("nothing like this");
+  await waitFor(() => tabCount("harness") === "0");
+  check(
+    kindGroups() === "" &&
+      !!dialog
+        .querySelector(".integrations-empty")
+        ?.textContent?.includes("Nothing matches “nothing like this”."),
+    `a search with no match anywhere did not say so: ${kindGroups()}`,
+  );
+  searchIntegrations("");
 
   // Dozens of rows and a new kind (the preview fixture): the kind gets its
   // own tab, the tabs scroll on one row, and search still narrows.
@@ -705,7 +761,8 @@ async function integrationsScreen(dialog: Element) {
   );
   searchIntegrations("sample");
   check(
-    kindTabs() === "runtime,source,harness,ide" &&
+    kindTabs() === "all,runtime,source,harness,ide,vault" &&
+      kindTab("all")!.getAttribute("aria-selected") === "true" &&
       tabCount("runtime") === "14" &&
       tabCount("source") === "18" &&
       tabCount("ide") === "8",
@@ -735,8 +792,8 @@ async function integrationsScreen(dialog: Element) {
   history.replaceState(history.state, "", location.pathname);
   searchIntegrations("");
   check(
-    kindTabs() === "runtime,source,harness" &&
-      kindTab("runtime")!.getAttribute("aria-selected") === "true",
+    kindTabs() === "all,runtime,source,harness,vault" &&
+      kindTab("all")!.getAttribute("aria-selected") === "true",
     "a kind that left kept its tab open",
   );
 
@@ -746,6 +803,7 @@ async function integrationsScreen(dialog: Element) {
     () => document.querySelectorAll(".agent-integrations-list li").length === 4,
   );
   searchIntegrations("pi");
+  openKind("harness");
   check(
     document.querySelectorAll(".agent-integrations-list li").length === 1 &&
       document

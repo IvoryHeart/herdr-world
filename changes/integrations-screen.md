@@ -3,8 +3,9 @@
 - One **Integrations** screen (Menu → Integrations) lists runtimes, GitHub,
   Jira, usage metrics, agent skills and the vault, each with what it gives
   World, its state (connected, available, needs connect, error) and one
-  Connect or Disconnect. One tab per kind, with counts, and one search across
-  them keep it usable at dozens of integrations; `?integrationsFixture`
+  Connect or Disconnect. **All**, one tab per kind and a **Vault** tab, with
+  counts, and one search that always covers everything keep it usable at
+  dozens of integrations; `?integrationsFixture`
   previews that size. Elements missing a source offer **Connect**, which
   opens it at that row. The registry is read-only at
   `GET /api/world/integrations`.
