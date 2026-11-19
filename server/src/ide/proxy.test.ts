@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
+import { ideBlockedPath } from "./providers";
 import {
+  IDE_FRAME_POLICY,
+  type IdeUpstream,
   ideResponseHeaders,
   parseIdeRoute,
   scopeIdeCookie,
@@ -9,13 +12,19 @@ import {
 } from "./proxy";
 
 const ID = "AbCdEfGhIjKlMnOpQrStUv";
-const vscode = {
+const vscode: IdeUpstream = {
   instanceId: ID,
+  provider: "vscode",
   socketPath: "/tmp/ide.sock",
   token: "secret-token",
   stripsBasePath: false,
 };
-const codeServer = { ...vscode, token: null, stripsBasePath: true };
+const codeServer: IdeUpstream = {
+  ...vscode,
+  provider: "code-server",
+  token: null,
+  stripsBasePath: true,
+};
 const page = new URL(`http://world.example:8080/ide/${ID}/`);
 
 test("only well-formed instance routes parse", () => {
@@ -102,6 +111,19 @@ test("responses lose service-worker widening and get a private cache policy", ()
     `vscode-secret-key-path=k; Path=/ide/${ID}`,
   ]);
   expect(headers.get("cache-control")).toBe("private, no-cache");
+  expect(headers.get("content-security-policy")).toBe(IDE_FRAME_POLICY);
+  // The IDE's own policy stays; World's frame policy is a second one, and
+  // the browser enforces both.
+  const framed = ideResponseHeaders(
+    new Headers({
+      "content-security-policy": "frame-src 'self' https://*.vscode-cdn.net",
+    }),
+    vscode,
+    page,
+  )!;
+  expect(framed.get("content-security-policy")).toBe(
+    `frame-src 'self' https://*.vscode-cdn.net, ${IDE_FRAME_POLICY}`,
+  );
   expect(
     ideResponseHeaders(
       new Headers({ location: "https://elsewhere.example/" }),
@@ -109,4 +131,22 @@ test("responses lose service-worker widening and get a private cache policy", ()
       page,
     ),
   ).toBeNull();
+});
+
+test("code-server's port proxies are never forwarded, however the path is spelled", () => {
+  for (const rest of [
+    "/proxy/3000/",
+    "/absproxy/3000/x",
+    "/proxy",
+    "/PROXY/3000",
+    "//proxy/3000",
+    "/%70roxy/3000",
+    "/%2Fabsproxy/3000",
+    "/%E0%A4%A",
+  ])
+    expect(ideBlockedPath("code-server", rest)).toBe(true);
+  for (const rest of ["/", "/static/proxy/x", "/proxyish", ""])
+    expect(ideBlockedPath("code-server", rest)).toBe(false);
+  // VS Code's own server has no port proxy; its paths pass as they are.
+  expect(ideBlockedPath("vscode", "/proxy/3000/")).toBe(false);
 });

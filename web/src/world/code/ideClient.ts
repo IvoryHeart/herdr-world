@@ -36,6 +36,12 @@ export type IdeProviderStatus = {
   terms: IdeTerm[];
   setupUrl: string;
   detection: IdeDetection;
+  /**
+   * False for IDEs whose extension views load from another origin (stock
+   * VS Code's vscode-cdn.net): World never embeds those, it hands them off
+   * to the desktop app.
+   */
+  oneOrigin: boolean;
   enabled: boolean;
   trustedAt: string | null;
   termsAcceptedAt: string | null;
@@ -69,7 +75,8 @@ export type IdeRefusal = {
     | "unknown-connection"
     | "folder"
     | "disabled"
-    | "limit";
+    | "limit"
+    | "origin";
   message: string;
   handoff?: { command: string; url: string };
 };
@@ -107,6 +114,7 @@ const REFUSALS = new Set<string>([
   "folder",
   "disabled",
   "limit",
+  "origin",
 ]);
 
 const text = (value: unknown): value is string => typeof value === "string";
@@ -156,6 +164,7 @@ function parseProvider(value: unknown): IdeProviderStatus | null {
         ? value.setupUrl
         : "",
     detection: parseDetection(value.detection),
+    oneOrigin: value.oneOrigin === true,
     enabled: value.enabled === true,
     trustedAt: text(value.trustedAt) ? value.trustedAt : null,
     termsAcceptedAt: text(value.termsAcceptedAt) ? value.termsAcceptedAt : null,
@@ -311,6 +320,7 @@ const FIXTURE_PROVIDERS = (
   state: "missing" | "detected",
   enabled: boolean,
 ): IdeProviderStatus[] => [
+  // Installed in every state but missing: shown as desktop only.
   {
     id: "vscode",
     label: "Visual Studio Code",
@@ -339,9 +349,10 @@ const FIXTURE_PROVIDERS = (
             reason: "VS Code isn't installed on this computer.",
             configured: false,
           },
-    enabled,
-    trustedAt: enabled ? new Date(0).toISOString() : null,
-    termsAcceptedAt: enabled ? new Date(0).toISOString() : null,
+    oneOrigin: false,
+    enabled: false,
+    trustedAt: null,
+    termsAcceptedAt: null,
     binary: null,
   },
   {
@@ -350,14 +361,23 @@ const FIXTURE_PROVIDERS = (
     marketplace: "Open VSX",
     terms: [],
     setupUrl: "https://coder.com/docs/code-server/install",
-    detection: {
-      state: "missing",
-      reason: "code-server isn't installed on this computer.",
-      configured: false,
-    },
-    enabled: false,
-    trustedAt: null,
-    termsAcceptedAt: null,
+    detection:
+      state === "detected"
+        ? {
+            state: "detected",
+            path: "/opt/example/code-server/bin/code-server",
+            version: "4.99.0",
+            configured: false,
+          }
+        : {
+            state: "missing",
+            reason: "code-server isn't installed on this computer.",
+            configured: false,
+          },
+    oneOrigin: true,
+    enabled,
+    trustedAt: enabled ? new Date(0).toISOString() : null,
+    termsAcceptedAt: enabled ? new Date(0).toISOString() : null,
     binary: null,
   },
   {
@@ -371,6 +391,7 @@ const FIXTURE_PROVIDERS = (
       reason: "OpenVSCode Server isn't installed on this computer.",
       configured: false,
     },
+    oneOrigin: false,
     enabled: false,
     trustedAt: null,
     termsAcceptedAt: null,
@@ -403,7 +424,7 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
   return {
     status: async () => status(),
     enable: async () => {
-      if (kind === "missing") throw new Error("VS Code isn't installed.");
+      if (kind === "missing") throw new Error("code-server isn't installed.");
       enabled = true;
       providers = FIXTURE_PROVIDERS("detected", true);
       changed();
@@ -421,6 +442,19 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
     },
     configure: async () => status(),
     open: async (request) => {
+      if (request.provider === "vscode" || request.provider === "openvscode")
+        return {
+          ok: false,
+          refusal: {
+            code: "origin",
+            message:
+              "Visual Studio Code loads extension views, such as Markdown preview, from Microsoft's vscode-cdn.net, another origin. World keeps the Code view on its own origin, so it opens this IDE on the desktop instead.",
+            handoff: {
+              command: `code '${request.folder}'`,
+              url: `vscode://file${request.folder}`,
+            },
+          },
+        };
       if (!enabled)
         return {
           ok: false,
@@ -435,7 +469,7 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
           refusal: {
             code: "remote",
             message:
-              "This project is on devbox, over SSH. World runs VS Code in the browser only for projects on its own computer for now: open it in desktop VS Code with Remote-SSH.",
+              "This project is on devbox, over SSH. World runs an IDE in the browser only for projects on its own computer for now: open it in desktop VS Code with Remote-SSH.",
             handoff: {
               command: `code --remote ssh-remote+devbox.example '${request.folder}'`,
               url: `vscode://vscode-remote/ssh-remote+devbox.example${request.folder}`,
@@ -444,7 +478,7 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
         };
       const instance: IdeInstance = {
         id: "fixtureFixtureFixture0",
-        provider: "vscode",
+        provider: request.provider ?? "code-server",
         connectionId: request.connectionId,
         folder: request.folder,
         state: kind === "failed" ? "failed" : "starting",
@@ -453,7 +487,7 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
         ...(kind === "failed"
           ? {
               reason:
-                "VS Code stopped: error: the server could not bind its socket",
+                "code-server stopped: error: the server could not bind its socket",
             }
           : kind === "downloading"
             ? { downloading: true }

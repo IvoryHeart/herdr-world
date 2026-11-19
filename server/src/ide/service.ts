@@ -3,6 +3,7 @@ import { isAbsolute, normalize } from "node:path";
 import { IdeInstances, type IdeInstanceView, IdeLimitError } from "./instances";
 import {
   detectIdeProvider,
+  ideDesktopOnlyReason,
   IDE_PROVIDER_IDS,
   IDE_PROVIDERS,
   type IdeDetectEnvironment,
@@ -49,9 +50,10 @@ export type IdeRefusal = {
     | "unknown-connection"
     | "folder"
     | "disabled"
-    | "limit";
+    | "limit"
+    | "origin";
   message: string;
-  /** For SSH projects: open the same host and folder in desktop VS Code. */
+  /** Open the same host and folder in desktop VS Code instead. */
   handoff?: { command: string; url: string };
 };
 
@@ -100,6 +102,19 @@ export function vscodeRemoteHandoff(
   };
 }
 
+/** Desktop VS Code's link and command for a folder on this computer. */
+export function vscodeLocalHandoff(
+  folder: string,
+): IdeRefusal["handoff"] | undefined {
+  if (!isAbsolute(folder)) return undefined;
+  const quoted = `'${folder.replaceAll("'", "'\\''")}'`;
+  const encodedPath = folder
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return { command: `code ${quoted}`, url: `vscode://file${encodedPath}` };
+}
+
 export class IdeService {
   readonly instances: IdeInstances;
   private readonly now: () => Date;
@@ -141,7 +156,7 @@ export class IdeService {
   }
 
   async status(options: { refresh?: boolean } = {}): Promise<IdeStatus> {
-    this.retireOrphans();
+    void this.retireStale();
     const settings = this.deps.settings.read();
     const providers = await Promise.all(
       IDE_PROVIDER_IDS.map(async (id) => {
@@ -149,7 +164,7 @@ export class IdeService {
         return {
           ...IDE_PROVIDERS[id],
           detection: await this.detect(id, options.refresh),
-          enabled: setting?.enabled === true,
+          enabled: setting?.enabled === true && IDE_PROVIDERS[id].oneOrigin,
           trustedAt: setting?.trusted_at ?? null,
           termsAcceptedAt: setting?.terms_accepted_at ?? null,
           binary: setting?.binary ?? null,
@@ -177,6 +192,8 @@ export class IdeService {
     consent: { trust?: unknown; acceptTerms?: unknown },
   ) {
     if (!isIdeProviderId(provider)) throw new Error("unknown IDE provider");
+    if (!IDE_PROVIDERS[provider].oneOrigin)
+      throw new Error(ideDesktopOnlyReason(IDE_PROVIDERS[provider]));
     if (consent.trust !== true)
       throw new Error("Enabling needs the full-access trust confirmation.");
     if (IDE_PROVIDERS[provider].terms.length && consent.acceptTerms !== true)
@@ -285,7 +302,13 @@ export class IdeService {
     const settings = this.deps.settings.read();
     const provider = isIdeProviderId(request.provider)
       ? request.provider
-      : IDE_PROVIDER_IDS.find((id) => settings.providers[id]?.enabled);
+      : IDE_PROVIDER_IDS.find((id) => this.enabled(id));
+    if (provider && !IDE_PROVIDERS[provider].oneOrigin)
+      return refuse(
+        "origin",
+        ideDesktopOnlyReason(IDE_PROVIDERS[provider]),
+        vscodeLocalHandoff(normalize(folder)),
+      );
     if (!provider || !settings.providers[provider]?.enabled)
       return refuse("disabled", "Enable an IDE in the Code view first.");
     const detection = await this.detect(provider);
@@ -296,6 +319,7 @@ export class IdeService {
         provider,
         binary: detection.path,
         connectionId: connection.id,
+        generation: connection.generation,
         folder: normalize(folder),
       });
       return { ok: true, instance };
@@ -310,27 +334,54 @@ export class IdeService {
     return this.instances.stop(instanceId);
   }
 
+  private enabled(provider: IdeProviderId) {
+    return (
+      IDE_PROVIDERS[provider].oneOrigin &&
+      this.deps.settings.read().providers[provider]?.enabled === true
+    );
+  }
+
   /**
-   * The proxy target for one route: only while the server is ready, its
-   * provider is still enabled and its connection still exists.
+   * Whether an instance's admission still holds: its provider is enabled
+   * and its connection is the same local runtime generation it was opened
+   * under. A reconnect, a change to SSH or removal ends it.
+   */
+  private admitted(instance: IdeInstanceView) {
+    const connection = this.deps.connection(instance.connectionId);
+    return (
+      connection !== null &&
+      connection.generation === instance.generation &&
+      connection.type === "local" &&
+      connection.remotePlatform !== "windows" &&
+      this.enabled(instance.provider)
+    );
+  }
+
+  /**
+   * The proxy target for one route: only while the server is ready and its
+   * admission still holds; a stale one is stopped.
    */
   upstream(instanceId: string): IdeUpstream | null {
     const instance = this.instances.get(instanceId);
     if (!instance) return null;
-    if (!this.deps.connection(instance.connectionId)) {
+    if (!this.admitted(instance)) {
       void this.instances.stop(instanceId);
       return null;
     }
-    if (!this.deps.settings.read().providers[instance.provider]?.enabled)
-      return null;
     return this.instances.upstream(instanceId);
   }
 
-  /** Stop servers whose connection was removed. */
-  private retireOrphans() {
-    void this.instances.stopWhere(
-      (entry) => this.deps.connection(entry.connectionId) === null,
-    );
+  /**
+   * Stop servers whose admission no longer holds, revoking their streams.
+   * World calls this whenever a connection changes.
+   */
+  retireStale() {
+    return this.instances.stopWhere((entry) => !this.admitted(entry));
+  }
+
+  /** Called as an instance starts to stop, so its sockets can close. */
+  onRevoked(listener: (instanceId: string) => void) {
+    return this.instances.onRevoked(listener);
   }
 
   stopAll() {

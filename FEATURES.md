@@ -1816,37 +1816,43 @@ to search.
 
 ## Code view
 
-**Code** (`/code`, beside Town, Board and Desk) shows your own installed VS Code
-for one project, inside World, with that project's agents and terminals beside
+**Code** (`/code`, beside Town, Board and Desk) shows your own installed IDE
+(code-server today) for one project, inside World, with that project's agents and terminals beside
 it. World runs the IDE you already have, so your extensions, settings and
 profile apply; it never installs or updates one.
 
 - **Integrations.** World looks for Visual Studio Code (`code serve-web`, via
   the `code-tunnel` program or the standalone `code` CLI), code-server and
-  OpenVSCode Server on its own computer. Each row says **Installed**, **Not
-  installed**, **Not found** (a set path that is gone) or **Can't run**. A
+  OpenVSCode Server on its own computer. Each row says **Installed**, **Desktop
+  only**, **Not installed**, **Not found** (a set path that is gone) or **Can't
+  run**. Stock VS Code and OpenVSCode Server load extension views (Markdown
+  preview, for example) from Microsoft's vscode-cdn.net, another origin, so
+  World never embeds them: they read **Desktop only**, offer no Enable, and a
+  setting enabled earlier no longer counts. With no embeddable IDE enabled, the
+  Code view offers **Open … in desktop Visual Studio Code**, which gives a
+  `code '<folder>'` command and a `vscode://file…` link for World's computer. A
   missing one offers **Connect: get …** (its download page) and **Use a program
   path…** (an absolute path to an executable). The same rows are in Settings →
   Integrations, where the refresh button looks again.
 - **Enable gate.** **Enable…** opens a dialog that says the IDE and its
   extensions get full access to this computer and to World (it runs on World's
-  page and address), where content comes from (Microsoft's servers for VS Code:
-  webviews from vscode-cdn.net, the Marketplace, Settings Sync and sign-in;
-  Open VSX otherwise), and, on a plain HTTP LAN address, that webviews, previews
-  and the clipboard need HTTPS or localhost. **Enable** stays off until the
-  trust box and, for VS Code, the box accepting its server licence terms and
-  privacy statement are both ticked. Nothing starts on enable.
+  page and address), where extensions come from (Open VSX), and, on a plain
+  HTTP LAN address, that webviews, previews and the clipboard need HTTPS or
+  localhost. **Enable** stays off until the trust box (and any licence box the
+  IDE has) is ticked. Nothing starts on enable.
 - **Projects.** A project is a room's folder (its checkout, else its working
   directory) or the folder of an agent outside every room, per connection; the
   same folder on two connections is two projects. The picker groups them by
   host and remembers the choice. The rail lists the project's agents (status,
   Needs you first in colour) and terminals: an agent opens on its Chat, a
   terminal in the Inspector.
-- **Open.** **Open in Visual Studio Code** starts one server for that project
-  folder; the next visit reuses it. The first VS Code start downloads its web
-  server (about a minute, shown). The workbench is framed from
+- **Open.** **Open in code-server** starts one server for that project
+  folder; the next visit reuses it. The workbench is framed from
   `/ide/<id>/` on World's own origin, behind World's sign-in; World's own
-  Content Security Policy is unchanged and the IDE keeps its own. **New tab**
+  Content Security Policy is unchanged and the IDE keeps its own, with World's
+  frame rule added (frames only from World's own address). code-server's port
+  proxies (`/proxy/<port>`, `/absproxy/<port>`) are off and World refuses them
+  (403) for pages and WebSockets. **New tab**
   opens the same address; **Stop** (after a confirmation) ends that server.
   Switching projects keeps a loaded workbench in memory, hidden.
 - **Limits and refusals.** At most four servers run at once; a fifth is
@@ -1857,7 +1863,8 @@ profile apply; it never installs or updates one.
   browser: **Open in desktop VS Code…** gives a `code --remote ssh-remote+…`
   command to copy and a `vscode://` link for desktop VS Code with Remote - SSH.
   Windows hosts and folders that are gone are refused. Servers stop with World,
-  on disable, and when their connection is removed.
+  on disable, and when their connection reconnects, becomes SSH or is removed:
+  the route and its open WebSockets close, and **Open** starts a new server.
 - **Preview states.** For trying the screens without an IDE, add
   `?ideFixture=missing`, `detected`, `ssh`, `downloading` or `failed` to a
   World address; World removes it at once and shows synthetic integration state

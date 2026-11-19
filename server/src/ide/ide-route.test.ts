@@ -14,12 +14,14 @@ import {
   login,
   startTestService,
 } from "../service/testing/services";
+import { AcquisitionHost } from "../service/testing/shared-acquisition-runtime";
 import { configureServerLogger } from "../utils/logger";
 
 /**
  * The Code view's IDE route through World's real listener: sign-in, the
  * enable gate, a World-owned server per folder, header and cookie rules,
- * the WebSocket pipe, logout and Stop. The IDE is a fake `serve-web`.
+ * the WebSocket pipe, logout and Stop. The IDE is a fake `serve-web` and
+ * code-server; stock VS Code fails the one-origin gate and hands off.
  */
 beforeAll(() => configureServerLogger("error"));
 afterAll(() => configureServerLogger("info"));
@@ -40,6 +42,26 @@ function fakeIde(top: string, env: Record<string, string> = {}) {
   return path;
 }
 
+/**
+ * A service whose startup connection is a steady synthetic Herdr: an IDE
+ * lives only as long as the connection generation it was opened under.
+ */
+async function startService(root: string) {
+  const host = new AcquisitionHost("ide");
+  const started = await startTestService(
+    root,
+    {},
+    {},
+    {
+      adapters: {
+        herdr: { createRuntime: (options) => host.runtime(options) },
+      },
+    },
+  );
+  await started.connected;
+  return started;
+}
+
 async function until<T>(read: () => Promise<T>, done: (value: T) => boolean) {
   const deadline = Date.now() + 15_000;
   for (;;) {
@@ -57,7 +79,7 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
   const project = join(top, "project");
   mkdirSync(project, { recursive: true });
   const program = fakeIde(top, { FAKE_IDE_DOWNLOADS: "2" });
-  const started = await startTestService(root);
+  const started = await startService(root);
   try {
     const cookie = await login(started.base, PASSWORD);
     const browser = await browserSocket(started.base, cookie);
@@ -79,11 +101,34 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
       version: "1.99.0",
     });
     expect(vscode.enabled).toBe(false);
+    expect(vscode.oneOrigin).toBe(false);
     // The local connection is one Code can open on this computer.
     expect(status.localConnections).toEqual([connection.id]);
 
-    const open = {
+    // Stock VS Code frames webviews from vscode-cdn.net: never embedded,
+    // offered on the desktop instead.
+    await expect(
+      browser.call("world.ide.enable", {
+        provider: "vscode",
+        trust: true,
+        acceptTerms: true,
+      }),
+    ).rejects.toThrow(/vscode-cdn\.net/);
+    const desktop = await browser.call("world.ide.open", {
       provider: "vscode",
+      connectionId: connection.id,
+      generation: connection.generation,
+      folder: project,
+    });
+    expect(desktop.refusal.code).toBe("origin");
+    expect(desktop.refusal.handoff.url).toBe(`vscode://file${project}`);
+
+    await browser.call("world.ide.configure", {
+      provider: "code-server",
+      binary: program,
+    });
+    const open = {
+      provider: "code-server",
       connectionId: connection.id,
       generation: connection.generation,
       folder: project,
@@ -92,12 +137,11 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
       "disabled",
     );
     await expect(
-      browser.call("world.ide.enable", { provider: "vscode", trust: true }),
-    ).rejects.toThrow(/terms/);
+      browser.call("world.ide.enable", { provider: "code-server" }),
+    ).rejects.toThrow(/trust/);
     await browser.call("world.ide.enable", {
-      provider: "vscode",
+      provider: "code-server",
       trust: true,
-      acceptTerms: true,
     });
 
     expect(
@@ -138,13 +182,21 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
     });
     expect(page.status).toBe(200);
     const seen = await page.json();
-    expect(seen.cookies).toEqual(["vscode-tkn"]);
+    // code-server is served at its root, without World's or forged cookies.
+    expect(seen.path).toBe("/");
+    expect(seen.cookies).toEqual([]);
     expect(seen.authorization).toBeNull();
     expect(seen.host).toBe(new URL(started.base).host);
     expect(page.headers.get("service-worker-allowed")).toBeNull();
     expect(page.headers.getSetCookie()).toEqual([
-      `vscode-secret-key-path=${status.instances[0].url.slice(0, -1)}/mint; Path=${status.instances[0].url.slice(0, -1)}`,
+      `vscode-secret-key-path=/mint; Path=${status.instances[0].url.slice(0, -1)}`,
     ]);
+
+    // Its port proxies never reach another local service, HTTP or socket.
+    for (const path of ["proxy/3000/", "absproxy/3000/x", "%70roxy/3000/"])
+      expect(
+        (await fetch(`${url}${path}`, { headers: { cookie } })).status,
+      ).toBe(403);
 
     const away = await fetch(url.replace(/\/$/, "/away"), {
       headers: { cookie },
@@ -181,6 +233,16 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
     });
     ws.onopen = () => ws.send("hello");
     expect(await echoed).toBe("echo:hello");
+    const proxied = new Socket(
+      url.replace("http:", "ws:").replace(/\/$/, "/proxy/3000/"),
+      { headers: { cookie } },
+    );
+    expect(
+      await new Promise<string>((resolve) => {
+        proxied.onopen = () => resolve("opened");
+        proxied.onerror = () => resolve("refused");
+      }),
+    ).toBe("refused");
     const logout = await fetch(`${started.base}/api/logout`, {
       method: "POST",
       headers: { cookie, "x-herdr-world-logout": "1" },
@@ -211,26 +273,25 @@ test("a failing IDE says why, and disable stops running servers", async () => {
   const root = join(top, "data");
   const project = join(top, "project");
   mkdirSync(project, { recursive: true });
-  const started = await startTestService(root);
+  const started = await startService(root);
   try {
     const cookie = await login(started.base, PASSWORD);
     const browser = await browserSocket(started.base, cookie);
     const [connection] = (await browser.call("connections.list")).connections;
     const open = {
-      provider: "vscode",
+      provider: "code-server",
       connectionId: connection.id,
       generation: connection.generation,
       folder: project,
     };
 
     await browser.call("world.ide.configure", {
-      provider: "vscode",
+      provider: "code-server",
       binary: fakeIde(top, { FAKE_IDE_FAIL: "1" }),
     });
     await browser.call("world.ide.enable", {
-      provider: "vscode",
+      provider: "code-server",
       trust: true,
-      acceptTerms: true,
     });
     await browser.call("world.ide.open", open);
     const failed = await until(
@@ -243,7 +304,7 @@ test("a failing IDE says why, and disable stops running servers", async () => {
 
     // Reopening after a failure starts afresh with the fixed program.
     await browser.call("world.ide.configure", {
-      provider: "vscode",
+      provider: "code-server",
       binary: fakeIde(join(top, "good")),
     });
     const reopened = await browser.call("world.ide.open", open);
@@ -252,14 +313,70 @@ test("a failing IDE says why, and disable stops running servers", async () => {
       () => browser.call("world.ide.status"),
       (value) => value.instances[0]?.state === "ready",
     );
-    await browser.call("world.ide.disable", { provider: "vscode" });
+    await browser.call("world.ide.disable", { provider: "code-server" });
     const after = await browser.call("world.ide.status");
     expect(after.instances).toEqual([]);
     expect(
-      after.providers.find((entry: { id: string }) => entry.id === "vscode")
-        .enabled,
+      after.providers.find(
+        (entry: { id: string }) => entry.id === "code-server",
+      ).enabled,
     ).toBe(false);
     expect(existsSync(join(root, "ide.json"))).toBe(true);
+    browser.close();
+  } finally {
+    await started.service.stop();
+    rmSync(top, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("a connection change closes the IDE's open sockets and its route", async () => {
+  const top = mkdtempSync(join(tmpdir(), "hw-ide-route-"));
+  const root = join(top, "data");
+  const project = join(top, "project");
+  mkdirSync(project, { recursive: true });
+  const started = await startService(root);
+  try {
+    const cookie = await login(started.base, PASSWORD);
+    const browser = await browserSocket(started.base, cookie);
+    const [connection] = (await browser.call("connections.list")).connections;
+    await browser.call("world.ide.configure", {
+      provider: "code-server",
+      binary: fakeIde(top),
+    });
+    await browser.call("world.ide.enable", {
+      provider: "code-server",
+      trust: true,
+    });
+    await browser.call("world.ide.open", {
+      provider: "code-server",
+      connectionId: connection.id,
+      generation: connection.generation,
+      folder: project,
+    });
+    const status = await until(
+      () => browser.call("world.ide.status"),
+      (value) => value.instances[0]?.state === "ready",
+    );
+    const url = `${started.base}${status.instances[0].url}`;
+    const Socket = WebSocket as unknown as new (
+      url: string,
+      options: Bun.WebSocketOptions,
+    ) => WebSocket;
+    const ws = new Socket(url.replace("http:", "ws:").replace(/\/$/, "/ws"), {
+      headers: { cookie },
+    });
+    await new Promise((resolve) => {
+      ws.onopen = resolve;
+    });
+    const closed = new Promise<string>((resolve) => {
+      ws.onclose = (event) => resolve(event.reason);
+    });
+
+    // Disconnecting retires that runtime generation: World revokes the IDE.
+    await browser.call("connections.disconnect", { id: connection.id });
+    expect(await closed).toBe("The IDE server stopped");
+    expect((await fetch(url, { headers: { cookie } })).status).toBe(404);
+    expect((await browser.call("world.ide.status")).instances).toEqual([]);
     browser.close();
   } finally {
     await started.service.stop();

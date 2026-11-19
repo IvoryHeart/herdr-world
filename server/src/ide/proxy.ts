@@ -13,7 +13,12 @@
  *   World's.
  * - A response may not widen a service worker's scope, and a redirect may
  *   not leave the instance's route.
+ * - Every response also carries World's frame policy: browsers enforce
+ *   both policies, so the IDE can frame only its own origin whatever its
+ *   own policy allows.
  */
+
+import type { IdeProviderId } from "./providers";
 
 export const IDE_ROUTE_PREFIX = "/ide/";
 const INSTANCE_ID = /^[A-Za-z0-9_-]{16,64}$/;
@@ -55,6 +60,8 @@ const DROPPED_RESPONSE_HEADERS = new Set([
 /** Cookies an IDE sets for itself; anything else in the jar is World's. */
 const IDE_COOKIE = /^(vscode-|code-server-)/;
 export const IDE_TOKEN_COOKIE = "vscode-tkn";
+/** Added beside the IDE's own policy; the stricter of the two wins. */
+export const IDE_FRAME_POLICY = "frame-src 'self' blob: data:";
 
 export function parseIdeRoute(
   pathname: string,
@@ -73,6 +80,7 @@ export function ideBasePath(instanceId: string) {
 
 export type IdeUpstream = {
   instanceId: string;
+  provider: IdeProviderId;
   socketPath: string;
   /** Present for providers that check a connection token. */
   token: string | null;
@@ -186,6 +194,7 @@ export function ideResponseHeaders(
     if (scoped === null) return null;
     headers.set("location", scoped);
   }
+  headers.append("content-security-policy", IDE_FRAME_POLICY);
   // Authenticated IDE pages are never for a shared cache.
   if (!headers.has("cache-control"))
     headers.set("cache-control", "private, no-cache");

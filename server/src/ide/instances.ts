@@ -22,6 +22,8 @@ export type IdeInstanceView = {
   id: string;
   provider: IdeProviderId;
   connectionId: string;
+  /** The connection's runtime generation World admitted it under. */
+  generation: number;
   folder: string;
   state: IdeInstanceState;
   /** The same-origin address the Code view frames. */
@@ -177,6 +179,7 @@ export class IdeInstances {
   private readonly startTimeoutMs: number;
   private readonly maxInstances: number;
   private readonly onChange: () => void;
+  private readonly revoked = new Set<(instanceId: string) => void>();
 
   constructor(options: IdeInstanceOptions = {}) {
     this.spawn = options.spawn ?? systemIdeSpawn();
@@ -198,10 +201,21 @@ export class IdeInstances {
     return instance ? view(instance) : null;
   }
 
-  /** The proxy target, only while the server is ready. */
+  /** The proxy target, only while the server is ready and not stopping. */
   upstream(id: string): IdeUpstream | null {
     const instance = this.byId.get(id);
-    return instance?.state === "ready" ? instance.upstream : null;
+    return instance?.state === "ready" && !instance.stopping
+      ? instance.upstream
+      : null;
+  }
+
+  /**
+   * Called with an instance's ID as soon as it starts to stop, for any
+   * reason, so its open streams close before the server has exited.
+   */
+  onRevoked(listener: (instanceId: string) => void) {
+    this.revoked.add(listener);
+    return () => this.revoked.delete(listener);
   }
 
   /**
@@ -212,6 +226,7 @@ export class IdeInstances {
     provider: IdeProviderId;
     binary: string;
     connectionId: string;
+    generation: number;
     folder: string;
   }): { instance: IdeInstanceView; ready: Promise<IdeInstanceView> } {
     const key = instanceKey(
@@ -221,14 +236,21 @@ export class IdeInstances {
     );
     const existingId = this.byKey.get(key);
     const existing = existingId ? this.byId.get(existingId) : undefined;
-    if (existing && existing.state !== "failed")
+    if (
+      existing &&
+      existing.state !== "failed" &&
+      !existing.stopping &&
+      existing.generation === request.generation
+    )
       return {
         instance: view(existing),
         ready: existing.ready.then(() => view(existing)),
       };
-    if (existing) this.discard(existing);
+    // A failed one is gone already; one from an older generation stops.
+    if (existing?.state === "failed") this.discard(existing);
+    else if (existing && !existing.stopping) void this.stopInstance(existing);
     const running = [...this.byId.values()].filter(
-      (entry) => entry.state !== "failed",
+      (entry) => entry.state !== "failed" && !entry.stopping,
     ).length;
     if (running >= this.maxInstances)
       throw new IdeLimitError(
@@ -253,11 +275,18 @@ export class IdeInstances {
       id,
       provider: request.provider,
       connectionId: request.connectionId,
+      generation: request.generation,
       folder: request.folder,
       state: "starting",
       url: `${basePath}/`,
       startedAt: this.now().toISOString(),
-      upstream: { instanceId: id, socketPath, token, stripsBasePath },
+      upstream: {
+        instanceId: id,
+        provider: request.provider,
+        socketPath,
+        token,
+        stripsBasePath,
+      },
       runtimeDir,
       child: null,
       stopping: false,
@@ -350,6 +379,8 @@ export class IdeInstances {
   }
 
   private async stopInstance(instance: Instance, notify = true) {
+    if (!instance.stopping)
+      for (const listener of this.revoked) listener(instance.id);
     instance.stopping = true;
     const child = instance.child;
     instance.child = null;
@@ -388,6 +419,7 @@ function view(instance: Instance): IdeInstanceView {
     id: instance.id,
     provider: instance.provider,
     connectionId: instance.connectionId,
+    generation: instance.generation,
     folder: instance.folder,
     state: instance.state,
     url: instance.url,

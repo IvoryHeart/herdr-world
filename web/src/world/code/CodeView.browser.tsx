@@ -106,14 +106,12 @@ const world = {
 const INSTANCE_ID = "browserFixture0001";
 function fakeClient() {
   const listeners = new Set<() => void>();
-  const provider = (enabled: boolean): IdeProviderStatus => ({
+  // Stock VS Code is installed but desktop only; code-server embeds.
+  const desktop: IdeProviderStatus = {
     id: "vscode",
     label: "Visual Studio Code",
     marketplace: "Microsoft Marketplace",
-    terms: [
-      { label: "Server Terms", url: "https://example.com/terms" },
-      { label: "Privacy", url: "https://example.com/privacy" },
-    ],
+    terms: [],
     setupUrl: "https://example.com/download",
     detection: {
       state: "detected",
@@ -121,6 +119,28 @@ function fakeClient() {
       version: "1.99.0",
       configured: false,
     },
+    oneOrigin: false,
+    enabled: false,
+    trustedAt: null,
+    termsAcceptedAt: null,
+    binary: null,
+  };
+  const provider = (enabled: boolean): IdeProviderStatus => ({
+    id: "code-server",
+    label: "code-server",
+    marketplace: "Open VSX",
+    terms: [
+      { label: "Server Terms", url: "https://example.com/terms" },
+      { label: "Privacy", url: "https://example.com/privacy" },
+    ],
+    setupUrl: "https://example.com/download",
+    detection: {
+      state: "detected",
+      path: "/opt/example/bin/code-server",
+      version: "4.99.0",
+      configured: false,
+    },
+    oneOrigin: true,
     enabled,
     trustedAt: null,
     termsAcceptedAt: null,
@@ -134,7 +154,7 @@ function fakeClient() {
     stops: [] as string[],
   };
   const status = (): IdeStatus => ({
-    providers: [provider(state.enabled)],
+    providers: [desktop, provider(state.enabled)],
     instances: state.instances,
     localConnections: ["local"],
   });
@@ -155,6 +175,18 @@ function fakeClient() {
     configure: async () => status(),
     open: async (request) => {
       state.opens.push(request);
+      if (request.provider === "vscode")
+        return {
+          ok: false,
+          refusal: {
+            code: "origin",
+            message: "VS Code loads extension views from another origin.",
+            handoff: {
+              command: `code '${request.folder}'`,
+              url: `vscode://file${request.folder}`,
+            },
+          },
+        };
       if (request.connectionId !== "local")
         return {
           ok: false,
@@ -169,7 +201,7 @@ function fakeClient() {
         };
       const instance: IdeInstance = {
         id: INSTANCE_ID,
-        provider: "vscode",
+        provider: "code-server",
         connectionId: request.connectionId,
         folder: request.folder,
         state: "starting",
@@ -213,7 +245,31 @@ async function run() {
   );
   await until(
     () => Boolean(button("Enable…")),
-    "a detected, disabled VS Code offers Enable… in the Code view",
+    "a detected, disabled code-server offers Enable… in the Code view",
+  );
+  // Stock VS Code: desktop only, with a handoff and no Enable.
+  const vscodeRow = $('.ide-provider[data-provider="vscode"]')!;
+  check(
+    vscodeRow.querySelector(".ide-provider-badge")?.textContent ===
+      "Desktop only · 1.99.0" && !button("Enable…", vscodeRow),
+    "stock VS Code reads Desktop only and offers no Enable",
+  );
+  const desktopOpen = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      ".code-view-desktop button",
+    ),
+  ].find((entry) => entry.textContent?.includes("desktop Visual Studio Code"));
+  check(Boolean(desktopOpen), "the Code view offers desktop VS Code");
+  desktopOpen?.click();
+  await until(
+    () => Boolean($(".code-view-refusal[data-code=origin]")),
+    "desktop VS Code answers with a handoff",
+  );
+  check(
+    $<HTMLAnchorElement>(".code-view-handoff a")?.getAttribute("href") ===
+      "vscode://file/srv/example/api" &&
+      fake.state.opens.shift()?.provider === "vscode",
+    "the handoff opens the project in desktop VS Code",
   );
   check(
     $(".code-view-where")?.textContent?.includes("/srv/example/api") === true,
@@ -250,8 +306,8 @@ async function run() {
   check(
     gate.textContent?.includes("Full access to this computer") === true &&
       gate.textContent.includes("Full access to World") &&
-      gate.textContent.includes("vscode-cdn.net"),
-    "the gate discloses machine and World authority and Microsoft's CDN",
+      gate.textContent.includes("Open VSX"),
+    "the gate discloses machine and World authority and the marketplace",
   );
   check(
     gate.querySelector('a[href="https://example.com/terms"]') !== null,
@@ -274,10 +330,10 @@ async function run() {
 
   // Open: starting (first download), then ready in a same-origin frame.
   const openButton = await until(
-    () => Boolean(button("Open in Visual Studio Code")),
+    () => Boolean(button("Open in code-server")),
     "an enabled IDE offers Open for the project",
   );
-  if (openButton) button("Open in Visual Studio Code")!.click();
+  if (openButton) button("Open in code-server")!.click();
   await until(
     () =>
       $(".code-view-starting")?.textContent?.includes(
@@ -393,7 +449,7 @@ async function run() {
   await until(
     () =>
       $(
-        '[aria-label="IDE integrations"] .ide-provider-badge',
+        '[aria-label="IDE integrations"] [data-provider="code-server"] .ide-provider-badge',
       )?.textContent?.startsWith("Enabled") === true,
     "Settings lists the enabled IDE",
   );

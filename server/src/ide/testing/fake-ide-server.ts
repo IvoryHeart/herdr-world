@@ -3,6 +3,11 @@
  * connection-token cookie check, upstream cookies on `Path=/` and an echo
  * WebSocket. `FAKE_IDE_DOWNLOADS=<n>` answers 202 to the first n requests,
  * as VS Code's CLI does while it downloads its web server.
+ *
+ * Given code-server's `--socket` instead, it serves at its root with no
+ * token, and answers `/proxy/<port>` and `/absproxy/<port>` (HTTP and
+ * WebSocket) as code-server's port proxies would, whatever its flags, so a
+ * test proves World itself never forwards them.
  */
 import { readFileSync } from "node:fs";
 
@@ -15,10 +20,11 @@ const flag = (name: string) => {
   const index = args.indexOf(name);
   return index === -1 ? undefined : args[index + 1];
 };
-const socketPath = flag("--socket-path");
+const codeServer = flag("--socket") !== undefined;
+const socketPath = flag("--socket-path") ?? flag("--socket");
 const tokenFile = flag("--connection-token-file");
 const base = flag("--server-base-path") ?? "";
-if (!socketPath || !tokenFile) {
+if (!socketPath || (!tokenFile && !codeServer)) {
   console.error("error: missing --socket-path or --connection-token-file");
   process.exit(2);
 }
@@ -26,7 +32,7 @@ if (process.env.FAKE_IDE_FAIL) {
   console.error("error: the fake IDE was told to fail");
   process.exit(3);
 }
-const token = readFileSync(tokenFile, "utf8").trim();
+const token = tokenFile ? readFileSync(tokenFile, "utf8").trim() : null;
 let downloads = Number(process.env.FAKE_IDE_DOWNLOADS ?? 0);
 
 function cookies(req: Request) {
@@ -49,9 +55,13 @@ Bun.serve({
       return new Response("downloading", { status: 202 });
     }
     const jar = cookies(req);
-    if (jar["vscode-tkn"] !== token)
+    if (token && jar["vscode-tkn"] !== token)
       return new Response("forbidden", { status: 403 });
     const rest = url.pathname.slice(base.length);
+    if (codeServer && /^\/(abs)?proxy\//.test(rest)) {
+      if (server.upgrade(req, { data: undefined })) return undefined;
+      return new Response("proxied to another local service");
+    }
     if (rest === "/ws") {
       if (server.upgrade(req, { data: undefined })) return undefined;
       return new Response("upgrade failed", { status: 400 });
@@ -67,10 +77,11 @@ Bun.serve({
         headers: { location: `${base}/` },
       });
     const headers = new Headers({ "content-type": "application/json" });
-    headers.append(
-      "set-cookie",
-      `vscode-tkn=${token}; Path=/; SameSite=Strict`,
-    );
+    if (token)
+      headers.append(
+        "set-cookie",
+        `vscode-tkn=${token}; Path=/; SameSite=Strict`,
+      );
     headers.append("set-cookie", `vscode-secret-key-path=${base}/mint; Path=/`);
     headers.append("set-cookie", "world_session=shadow; Path=/");
     headers.set("service-worker-allowed", "/");

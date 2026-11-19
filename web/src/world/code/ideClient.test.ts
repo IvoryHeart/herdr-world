@@ -68,6 +68,13 @@ describe("parseIdeStatus", () => {
       version: null,
     });
     expect(status.instances).toHaveLength(1);
+    // Embedding is opt-in per provider: unknown means desktop only.
+    expect(status.providers[0]!.oneOrigin).toBe(false);
+    expect(
+      parseIdeStatus({
+        providers: [{ id: "code-server", oneOrigin: true }],
+      }).providers[0]!.oneOrigin,
+    ).toBe(true);
   });
 
   test("anything else is an empty status", () => {
@@ -130,8 +137,11 @@ describe("fixtureIdeClient", () => {
     const client = fixtureIdeClient("detected");
     let changes = 0;
     client.subscribe(() => changes++);
-    expect((await client.status()).providers[0]!.enabled).toBe(false);
-    await client.enable("vscode");
+    const embeddable = (await client.status()).providers.find(
+      (entry) => entry.id === "code-server",
+    );
+    expect(embeddable).toMatchObject({ oneOrigin: true, enabled: false });
+    await client.enable("code-server");
     const result = await client.open({
       connectionId: "c1",
       generation: 1,
@@ -139,6 +149,39 @@ describe("fixtureIdeClient", () => {
     });
     expect(result.ok && result.instance.state).toBe("starting");
     expect(changes).toBe(2);
+  });
+
+  test("stock VS Code is desktop only, with a local handoff", async () => {
+    const client = fixtureIdeClient("detected");
+    const vscode = (await client.status()).providers.find(
+      (entry) => entry.id === "vscode",
+    );
+    expect(vscode).toMatchObject({ oneOrigin: false, enabled: false });
+    const result = await client.open({
+      provider: "vscode",
+      connectionId: "c1",
+      generation: 1,
+      folder: "/srv/example/api",
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: {
+        code: "origin",
+        handoff: { url: "vscode://file/srv/example/api" },
+      },
+    });
+  });
+
+  test("an origin refusal survives parsing", () => {
+    const result = parseIdeOpenResult({
+      ok: false,
+      refusal: {
+        code: "origin",
+        message: "Another origin.",
+        handoff: { command: "code '/srv'", url: "vscode://file/srv" },
+      },
+    });
+    expect(!result.ok && result.refusal.code).toBe("origin");
   });
 
   test("failed shows its reason", async () => {

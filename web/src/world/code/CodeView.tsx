@@ -59,7 +59,13 @@ function writeProjectKey(key: string) {
 }
 
 const usable = (provider: IdeProviderStatus) =>
-  provider.enabled && provider.detection.state === "detected";
+  provider.enabled &&
+  provider.oneOrigin &&
+  provider.detection.state === "detected";
+
+/** Installed, but its extension views need another origin: desktop only. */
+const desktopOnly = (provider: IdeProviderStatus) =>
+  !provider.oneOrigin && provider.detection.state === "detected";
 
 /**
  * Code: the owner's installed VS Code (or code-server / OpenVSCode Server)
@@ -112,6 +118,7 @@ export default function CodeView({
 
   const providers = ide.status?.providers ?? [];
   const enabledProviders = providers.filter(usable);
+  const desktop = providers.find(desktopOnly) ?? null;
   const [providerChoice, setProviderChoice] = useState<string | null>(null);
   const provider =
     enabledProviders.find((entry) => entry.id === providerChoice) ??
@@ -124,7 +131,9 @@ export default function CodeView({
           entry.folder === project.folder,
       )
     : undefined;
-  const refusal = project ? refusals[project.key] : undefined;
+  const stored = project ? refusals[project.key] : undefined;
+  // A desktop handoff answers "nothing to embed"; an enabled IDE replaces it.
+  const refusal = provider && stored?.code === "origin" ? undefined : stored;
 
   useEffect(() => {
     if (instance?.state !== "ready") return;
@@ -139,13 +148,13 @@ export default function CodeView({
     setOpenError(null);
   };
 
-  const open = async (target: CodeProject) => {
-    if (!provider) return;
+  const open = async (target: CodeProject, using = provider) => {
+    if (!using) return;
     setOpening(target.key);
     setOpenError(null);
     try {
       const result = await client.open({
-        provider: provider.id,
+        provider: using.id,
         connectionId: target.connectionId,
         generation: target.generation,
         folder: target.folder,
@@ -302,7 +311,7 @@ export default function CodeView({
   function stageState() {
     if (!ide.status) return "loading";
     if (!project) return "no-project";
-    if (!provider) return "integration";
+    if (!provider) return refusal ? "refused" : "integration";
     if (instance) return instance.state;
     if (refusal) return "refused";
     return "closed";
@@ -325,12 +334,31 @@ export default function CodeView({
     if (!provider)
       return (
         <div className="code-view-integration">
-          <h2>Your own VS Code, inside World</h2>
+          <h2>Your own IDE, inside World</h2>
           <p>
             Code opens the IDE already installed on this computer for a project,
             with your extensions, settings and profile, and keeps the project's
             agents and terminals beside it. Enable one to start.
           </p>
+          {refusal && project ? (
+            <Refusal refusal={refusal} onRetry={() => void open(project)} />
+          ) : desktop && project ? (
+            <div className="code-view-desktop">
+              <button
+                type="button"
+                disabled={opening !== null || project.stale}
+                onClick={() => void open(project, desktop)}
+              >
+                <ExternalLink size={14} aria-hidden /> Open{" "}
+                {displayFolder(project.folder)} in desktop {desktop.label}
+              </button>
+            </div>
+          ) : null}
+          {openError ? (
+            <p className="code-view-error" role="alert">
+              {openError}
+            </p>
+          ) : null}
           <IdeProviderList
             status={ide.status}
             client={client}
@@ -451,7 +479,7 @@ function Refusal({
   return (
     <div className="code-view-refusal" data-code={refusal.code}>
       <h2>
-        {refusal.code === "remote"
+        {refusal.code === "remote" || refusal.code === "origin"
           ? "Open this project in desktop VS Code"
           : refusal.code === "limit"
             ? "Too many IDEs are running"
@@ -480,9 +508,13 @@ function Refusal({
             </button>
           </div>
           <p className="code-view-muted">
-            {copied
-              ? "Copied. Run it on your own computer, where desktop VS Code with Remote - SSH is installed."
-              : "The link and command need desktop VS Code with the Remote - SSH extension on your own computer."}
+            {refusal.code === "origin"
+              ? copied
+                ? "Copied. Run it in a terminal on World's computer."
+                : "The link and command open desktop VS Code on World's computer, so use them there."
+              : copied
+                ? "Copied. Run it on your own computer, where desktop VS Code with Remote - SSH is installed."
+                : "The link and command need desktop VS Code with the Remote - SSH extension on your own computer."}
           </p>
         </div>
       ) : refusal.code === "stale" || refusal.code === "limit" ? (

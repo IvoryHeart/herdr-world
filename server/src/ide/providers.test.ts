@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   detectIdeProvider,
+  IDE_PROVIDERS,
   type IdeDetectEnvironment,
   ideServerArgs,
   parseIdeVersion,
@@ -131,8 +132,17 @@ test("fixed argument lists per provider", () => {
       "--auth",
       "none",
       "--disable-update-check",
+      // No generic port proxies behind World's route.
+      "--disable-proxy",
       "/work/p",
     ],
     stripsBasePath: true,
   });
+});
+
+test("only providers whose webviews stay on their own route can be embedded", () => {
+  // Stock VS Code and OpenVSCode Server frame webviews from vscode-cdn.net.
+  expect(IDE_PROVIDERS.vscode.oneOrigin).toBe(false);
+  expect(IDE_PROVIDERS.openvscode.oneOrigin).toBe(false);
+  expect(IDE_PROVIDERS["code-server"].oneOrigin).toBe(true);
 });

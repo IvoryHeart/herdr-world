@@ -24,7 +24,20 @@ export type IdeProviderInfo = {
   terms: { label: string; url: string }[];
   /** Where to install it when it is missing. */
   setupUrl: string;
+  /**
+   * The one-origin gate (#988): whether its webviews (Markdown preview,
+   * extension panels) load from the IDE's own route. Stock VS Code and
+   * OpenVSCode Server frame them from `*.vscode-cdn.net`, the template in
+   * their product.json, so World keeps them desktop-only rather than
+   * embed another origin. code-server serves them under its own path.
+   */
+  oneOrigin: boolean;
 };
+
+/** Why a provider that fails the one-origin gate opens on the desktop. */
+export function ideDesktopOnlyReason(provider: IdeProviderInfo) {
+  return `${provider.label} loads extension views, such as Markdown preview, from Microsoft's vscode-cdn.net, another origin. World keeps the Code view on its own origin, so it opens this IDE on the desktop instead.`;
+}
 
 export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
   vscode: {
@@ -42,6 +55,7 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
       },
     ],
     setupUrl: "https://code.visualstudio.com/download",
+    oneOrigin: false,
   },
   "code-server": {
     id: "code-server",
@@ -49,6 +63,7 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     marketplace: "Open VSX",
     terms: [],
     setupUrl: "https://coder.com/docs/code-server/install",
+    oneOrigin: true,
   },
   openvscode: {
     id: "openvscode",
@@ -56,6 +71,7 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     marketplace: "Open VSX",
     terms: [],
     setupUrl: "https://github.com/gitpod-io/openvscode-server#getting-started",
+    oneOrigin: false,
   },
 };
 
@@ -306,7 +322,9 @@ export function ideServerArgs(
       stripsBasePath: false,
     };
   // code-server serves relative URLs under any prefix; the socket sits in a
-  // private folder, and World's own sign-in guards every request.
+  // private folder, and World's own sign-in guards every request. Its port
+  // proxies (`/proxy/<port>`, `/absproxy/<port>`) are off: the route
+  // reaches the IDE only, never other local services.
   return {
     args: [
       "--socket",
@@ -316,10 +334,29 @@ export function ideServerArgs(
       "--auth",
       "none",
       "--disable-update-check",
+      "--disable-proxy",
       launch.folder,
     ],
     stripsBasePath: true,
   };
+}
+
+/**
+ * Paths World never forwards for a provider, HTTP or WebSocket, whatever
+ * its flags: code-server's generic port proxies. Express matches routes
+ * case-insensitively and decodes nothing, so compare the decoded, lowered
+ * path with repeated slashes collapsed.
+ */
+export function ideBlockedPath(provider: IdeProviderId, rest: string) {
+  if (provider !== "code-server") return false;
+  let path: string;
+  try {
+    path = decodeURIComponent(rest);
+  } catch {
+    return true;
+  }
+  path = path.replace(/[\\/]+/g, "/").toLowerCase();
+  return /^\/(abs)?proxy(\/|$)/.test(path);
 }
 
 /** Whether the provider expects World's connection-token cookie. */

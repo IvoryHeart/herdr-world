@@ -47,6 +47,7 @@ import {
   parseIdeRoute,
   proxyIdeHttp,
 } from "../ide/proxy";
+import { ideBlockedPath } from "../ide/providers";
 import type { IdeService } from "../ide/service";
 import {
   TERMINAL_UPLOAD_TIMEOUT_MS,
@@ -160,6 +161,12 @@ export function listen(deps: ListenerDeps) {
     ws: ServerWebSocket<ListenerSocketData>,
   ): ws is ServerWebSocket<IdeSocketData> =>
     (ws.data as IdeSocketData).kind === "ide";
+  // A stopped, disabled or stale IDE loses its open sockets at once.
+  deps.ide?.onRevoked((instanceId) => {
+    for (const [socket, bridge] of ideBridges)
+      if (socket.data.instanceId === instanceId)
+        bridge.close(1000, "The IDE server stopped");
+  });
 
   function handleIdeRequest(
     req: Request,
@@ -171,6 +178,12 @@ export function listen(deps: ListenerDeps) {
     if (!route || !upstream)
       return new Response("This IDE isn't running. Open it again from Code.", {
         status: 404,
+        headers: { "cache-control": "no-store" },
+      });
+    // Never another local service through the IDE (code-server's proxies).
+    if (ideBlockedPath(upstream.provider, route.rest))
+      return new Response("World doesn't forward port proxies.", {
+        status: 403,
         headers: { "cache-control": "no-store" },
       });
     if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
@@ -524,7 +537,9 @@ export function listen(deps: ListenerDeps) {
         if (isIdeSocket(ws)) {
           const bridge = new IdeSocketBridge(ws);
           ideBridges.set(ws, bridge);
-          bridge.open();
+          // Revoked between the upgrade and now: close, don't connect.
+          if (deps.ide?.upstream(ws.data.instanceId)) bridge.open();
+          else bridge.close(1000, "The IDE server stopped");
           return;
         }
         clients.add(ws);

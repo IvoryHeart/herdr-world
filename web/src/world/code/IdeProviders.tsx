@@ -15,7 +15,8 @@ const errorText = (cause: unknown) =>
 export function ideStateLabel(provider: IdeProviderStatus) {
   if (provider.enabled && provider.detection.state === "detected")
     return "Enabled";
-  if (provider.detection.state === "detected") return "Installed";
+  if (provider.detection.state === "detected")
+    return provider.oneOrigin ? "Installed" : "Desktop only";
   if (provider.detection.state === "unsupported") return "Can't run";
   return provider.detection.configured ? "Not found" : "Not installed";
 }
@@ -23,8 +24,10 @@ export function ideStateLabel(provider: IdeProviderStatus) {
 /**
  * The installed IDEs on World's computer, as integration rows: detected
  * ones offer Enable (behind the trust and licence gate), missing ones
- * Connect (where to get it, or the program's path). The Code view and
- * Settings show the same rows.
+ * Connect (where to get it, or the program's path). An IDE that loads its
+ * extension views from another origin is desktop only: no Enable, and the
+ * Code view hands projects to its desktop app. The Code view and Settings
+ * show the same rows.
  */
 export function IdeProviderList({
   status,
@@ -142,8 +145,17 @@ function IdeProviderRow({
       ) : (
         <p className="ide-provider-reason">{detection.reason}</p>
       )}
+      {detection.state === "detected" && !provider.oneOrigin ? (
+        <p className="ide-provider-reason">
+          Its extension views, such as Markdown preview, load from another site
+          (vscode-cdn.net). World keeps Code on its own address, so it opens
+          projects in the desktop app instead.
+        </p>
+      ) : null}
       <div className="ide-provider-actions">
-        {detection.state === "detected" && !provider.enabled ? (
+        {detection.state === "detected" &&
+        provider.oneOrigin &&
+        !provider.enabled ? (
           <button
             type="button"
             className="primary"

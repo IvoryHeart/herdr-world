@@ -43,6 +43,7 @@ import { createSshProfileRuntimeConfig } from "../connections/ssh-profile-runtim
 import { bindListenerBeforeConnectionStart } from "../connections/startup";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
 import { createAuthHandlers } from "../http/auth";
+import type { IdeService } from "../ide/service";
 import { createWorldIde } from "../ide/world-ide";
 import {
   createHerdrSetupHandlers,
@@ -182,8 +183,11 @@ async function compose(
     scheduleProcessExit: deps.scheduleProcessExit,
   });
   let connectionRevision = 0;
+  let worldIde: IdeService | null = null;
   function publishConnectionsChanged() {
     if (stopping) return;
+    // A reconnect, change or removal ends IDEs admitted under the old one.
+    void worldIde?.retireStale();
     broadcast(
       JSON.stringify({
         control: {
@@ -742,12 +746,12 @@ async function compose(
     now: () => clock.now(),
     scheduler,
   });
-  const ide = createWorldIde({
+  const ide = (worldIde = createWorldIde({
     root: paths.root,
     sshHost: config.sshHost,
     profiles: connectionProfiles,
     notify: (message) => stopping || broadcast(message, "world-ide-changed"),
-  });
+  }));
   const rpcServices: RpcServices = {
     clock,
     bindings: storage.bindings,
