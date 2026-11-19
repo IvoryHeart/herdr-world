@@ -209,8 +209,25 @@ async function checkPopover() {
     }),
   );
   await expect(false, "leaving the chip did not hide the board");
+  chip.dispatchEvent(
+    new PointerEvent("pointerover", {
+      bubbles: true,
+      pointerType: "mouse",
+      relatedTarget: document.body,
+    }),
+  );
+  await expect(true, "hovering the chip again did not show the board");
+  // A click on a board the mouse opened keeps it open, even after leaving.
   chip.click();
-  await expect(true, "the board did not reopen for the layout checks");
+  chip.dispatchEvent(
+    new PointerEvent("pointerout", {
+      bubbles: true,
+      pointerType: "mouse",
+      relatedTarget: document.body,
+    }),
+  );
+  await new Promise((done) => setTimeout(done, 400));
+  await expect(true, "a click after hovering closed the board");
 }
 
 async function run() {

@@ -130,7 +130,8 @@ export function TownBoard({
         aria-controls="town-board"
         aria-label={`Town board: ${summary}`}
         data-attention={counts.needsYou > 0}
-        onClick={() => (open ? close() : setPinned(true))}
+        // A click pins the board a hover opened; the next one closes it.
+        onClick={() => (pinned ? close() : setPinned(true))}
         onPointerEnter={hoverIn}
         onPointerLeave={hoverOut}
         onKeyDown={closeOnEscape}
