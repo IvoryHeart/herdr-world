@@ -22,7 +22,11 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // The #981 Code view design study adds three standalone, on-demand static
 // assets (HTML, CSS and JS), without adding to the application's eager graph.
 // Account for those files explicitly; byte and startup budgets remain binding.
-const maxFileCount = 189;
+// The one Integrations screen (#1008) in Configuration shares the sources,
+// usage-metrics and connection-manager modules with World's views, so they
+// become their own small chunks (+3 files after removing the two retired
+// dialogs, no new bytes on the initial load).
+const maxFileCount = 192;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.

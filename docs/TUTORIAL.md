@@ -422,7 +422,7 @@ target before you press **Send**.
 4. Open a pull request for its checks and reviews. **Merge…**, **Close…** and
    **Mark ready…** ask first and say exactly what will happen.
 
-Nothing shows? Open **Settings → Sources**. Sign in to GitHub with
+Nothing shows? Open **Menu → Integrations**. Sign in to GitHub with
 `gh auth login` as the user that runs World, or add your Jira site and an API
 token.
 

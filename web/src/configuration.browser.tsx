@@ -119,6 +119,139 @@ const key = async (element: Element, value: string, shiftKey = false) => {
     });
   await settle();
 };
+// The Integrations registry and its owners, as the World service reports them.
+const sourceRequests: Array<{ id: string; body: Record<string, unknown> }> = [];
+const worldSources = [
+  {
+    id: "github",
+    label: "GitHub",
+    enabled: true,
+    state: "connected",
+    detail: "Signed in.",
+    checkedAt: 1,
+    lastSuccessAt: 1,
+    itemCount: 2,
+    config: { kind: "github", mergedDays: 7 },
+  },
+  {
+    id: "jira",
+    label: "Jira",
+    enabled: false,
+    state: "disabled",
+    detail: "Off.",
+    checkedAt: 1,
+    lastSuccessAt: null,
+    itemCount: 0,
+    config: { kind: "jira", site: "", email: "", jql: "", tokenSet: false },
+  },
+];
+const runtimeRow = (
+  id: string,
+  label: string,
+  lifecycle: string,
+  runtimeGeneration: number,
+) => ({
+  id: `runtime:${id}`,
+  kind: "runtime",
+  type: "herdr",
+  label,
+  provides: ["terminals", "agents", "files"],
+  state: lifecycle === "ready" ? "connected" : "available",
+  detail: lifecycle === "ready" ? "Herdr · Ready" : "Herdr · Disconnected",
+  settings: [],
+  control: "connection",
+  connection: {
+    id,
+    generation: runtimeGeneration,
+    transport: id === "alpha" ? "local" : "ssh",
+    lifecycle,
+  },
+});
+let betaRuntimeGeneration = 4;
+const integrationsSnapshot = () => ({
+  observedAt: 1,
+  integrations: [
+    runtimeRow("alpha", "Alpha", "ready", 1),
+    runtimeRow("beta", "Beta", "disconnected", betaRuntimeGeneration),
+    ...worldSources.map((source) => ({
+      id: `source:${source.id}`,
+      kind: "source",
+      type: source.id,
+      label: source.label,
+      provides: [source.id === "github" ? "pull_requests" : "tickets"],
+      state: source.enabled
+        ? "connected"
+        : source.id === "jira"
+          ? "needs_connect"
+          : "available",
+      detail: source.detail,
+      settings: [],
+      control: "source",
+    })),
+    {
+      id: "source:metrics",
+      kind: "source",
+      type: "prometheus",
+      label: "Usage metrics",
+      provides: ["usage"],
+      state: "needs_connect",
+      detail: "Add a Prometheus URL to show usage and cost.",
+      settings: [],
+      control: "metrics",
+    },
+  ],
+  vault: {
+    backend: "file",
+    label: "Private file",
+    detail: "Readable only by the user that runs World.",
+    secrets: [
+      { name: "jira.token", label: "Jira API token", usedBy: "source:jira" },
+    ],
+  },
+});
+const worldFetch = (url: string, init?: RequestInit) => {
+  if (url === "/api/world/integrations")
+    return Response.json(integrationsSnapshot());
+  if (url === "/api/world/sources" || url.startsWith("/api/world/sources?"))
+    return Response.json({
+      observedAt: 1,
+      refreshing: false,
+      sources: worldSources,
+      items: [],
+      links: [],
+      actions: [],
+    });
+  const source = /^\/api\/world\/sources\/(github|jira)$/u.exec(url)?.[1];
+  if (source && init?.method === "PUT") {
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    sourceRequests.push({ id: source, body });
+    const entry = worldSources.find((item) => item.id === source)!;
+    if (typeof body.enabled === "boolean") {
+      entry.enabled = body.enabled;
+      entry.state = body.enabled ? "connected" : "disabled";
+    }
+    return Response.json({
+      observedAt: 2,
+      refreshing: false,
+      sources: worldSources,
+      items: [],
+      links: [],
+      actions: [],
+    });
+  }
+  if (url === "/api/world/observability/configuration")
+    return Response.json({
+      providerId: "prometheus",
+      configured: false,
+      endpoint: null,
+      source: "none",
+      health: "unavailable",
+      healthReason: null,
+      observedAt: 1,
+      lastSuccessAt: null,
+    });
+  return null;
+};
 let authRequired = false;
 let logoutAttempts = 0;
 let pendingLogout: Promise<Response> | null = null;
@@ -134,6 +267,8 @@ Object.defineProperty(window, "fetch", {
       );
       return pendingLogout ?? new Response(null, { status: 500 });
     }
+    const world = worldFetch(url, init);
+    if (world) return world;
     return Response.json({
       version: "0.9.1",
       protocol: 22,
@@ -200,8 +335,16 @@ window.confirm = (message) => {
 // World's own skill rows (world.integration.*) have focused DOM tests.
 let worldIntegrationLists = 0;
 const bridgeCall = bridge.call.bind(bridge);
+const worldConnectionCalls: Array<{ method: string; id: unknown }> = [];
 bridge.call = ((method: string, ...rest: unknown[]) => {
   if (method === "world.integration.list") worldIntegrationLists++;
+  if (method === "connections.connect" || method === "connections.disconnect") {
+    worldConnectionCalls.push({
+      method,
+      id: (rest[0] as { id?: unknown } | undefined)?.id,
+    });
+    return Promise.resolve({});
+  }
   return method.startsWith("world.integration.")
     ? Promise.resolve({ integrations: [] })
     : bridgeCall(method, ...(rest as []));
@@ -340,6 +483,105 @@ const selectConnection = (id: string) => {
   );
   flushSync(render);
 };
+const integrationRow = (id: string) =>
+  document.querySelector<HTMLElement>(`[data-integration="${id}"]`);
+// One screen lists every runtime and source with its state and one action,
+// and the vault by names only.
+async function integrationsScreen(dialog: Element) {
+  await waitFor(() => !!integrationRow("source:metrics"));
+  const states = Object.fromEntries(
+    Array.from(
+      document.querySelectorAll<HTMLElement>(".integration-row"),
+      (row) => [row.dataset.integration, row.dataset.state],
+    ),
+  );
+  check(
+    JSON.stringify(states) ===
+      JSON.stringify({
+        "runtime:alpha": "connected",
+        "runtime:beta": "available",
+        "source:github": "connected",
+        "source:jira": "needs_connect",
+        "source:metrics": "needs_connect",
+      }),
+    `Integrations rows or states are wrong: ${JSON.stringify(states)}`,
+  );
+  check(
+    integrationRow("runtime:alpha")!.textContent!.includes(
+      "Gives World terminals, agents, files.",
+    ),
+    "a runtime row does not say what it provides",
+  );
+  const vault = dialog.querySelector('[aria-label="Vault"]')!;
+  check(
+    vault.textContent!.includes("Holds: Jira API token."),
+    "the vault does not name what it holds",
+  );
+  check(
+    dialog.scrollWidth <= dialog.clientWidth + 1,
+    "the Integrations screen overflows the viewport",
+  );
+
+  // A runtime row acts on the exact connection it showed.
+  click("Connect Beta");
+  await waitFor(() => worldConnectionCalls.length === 1);
+  check(
+    worldConnectionCalls[0].method === "connections.connect" &&
+      worldConnectionCalls[0].id === "beta",
+    "Connect did not connect that runtime",
+  );
+  await waitFor(() => !button("Connect Beta").disabled);
+  betaRuntimeGeneration++;
+  click("Connect Beta");
+  await waitFor(
+    () =>
+      !!dialog
+        .querySelector('[role="alert"]')
+        ?.textContent?.includes("changed since this list was read"),
+  );
+  check(
+    worldConnectionCalls.length === 1,
+    "a replaced runtime was acted on from a stale row",
+  );
+
+  // Sources switch off at once; one that needs settings opens them instead.
+  await waitFor(() => !button("Disconnect GitHub").disabled);
+  click("Disconnect GitHub");
+  await waitFor(() => sourceRequests.length === 1);
+  check(
+    sourceRequests[0].id === "github" &&
+      sourceRequests[0].body.enabled === false,
+    "Disconnect did not switch GitHub off",
+  );
+  await waitFor(
+    () => integrationRow("source:github")?.dataset.state === "available",
+  );
+  click("Connect GitHub");
+  await waitFor(() => sourceRequests.length === 2);
+  check(
+    sourceRequests[1].body.enabled === true,
+    "Connect did not switch GitHub on",
+  );
+  await waitFor(() => !button("Connect Jira").disabled);
+  click("Connect Jira");
+  await waitFor(
+    () => !!dialog.querySelector('form[aria-label="Jira settings"]'),
+  );
+  check(
+    sourceRequests.length === 2,
+    "Connect Jira acted before its settings were filled in",
+  );
+  click("Jira settings");
+  check(
+    !dialog.querySelector('form[aria-label="Jira settings"]'),
+    "Jira settings did not close",
+  );
+  click("Connect Usage metrics");
+  await waitFor(
+    () => !!dialog.querySelector('form[aria-label="Usage metrics settings"]'),
+  );
+  click("Usage metrics settings");
+}
 async function run() {
   const viewportSmoke = new URLSearchParams(location.search).has(
     "viewportSmoke",
@@ -1030,6 +1272,7 @@ async function run() {
     dialog.scrollWidth <= dialog.clientWidth + 1,
     "integrations overflow the scaled viewport",
   );
+  await integrationsScreen(dialog);
   const mutationCount = () =>
     calls.filter(
       (call) =>

@@ -1,0 +1,151 @@
+/* Configuration → Integrations: one list per kind, one row per integration. */
+.integrations-settings {
+  display: grid;
+  gap: 18px;
+  padding: 4px 0;
+}
+
+.integrations-intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.integrations-group {
+  display: grid;
+  gap: 8px;
+}
+
+.integrations-group > h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.integrations-group > .settings-helper {
+  margin: 0;
+}
+
+.integrations-group > button {
+  justify-self: start;
+}
+
+.integrations-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.integration-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  font-size: 12px;
+}
+
+.integration-row + .integration-row {
+  border-top: 1px solid var(--border-soft);
+}
+
+.integration-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.integration-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.integration-row-title > strong {
+  color: var(--text-strong);
+}
+
+.integration-row-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.integration-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.integration-state[data-state="connected"] {
+  border-color: color-mix(in srgb, #54c88b 45%, var(--border-soft));
+  color: #83d9aa;
+}
+
+.integration-state[data-state="error"] {
+  border-color: color-mix(in srgb, #ef9b85 45%, var(--border-soft));
+  color: #efad9c;
+}
+
+.integration-state[data-state="available"] {
+  color: var(--text);
+}
+
+.integration-row-detail,
+.integration-row-provides,
+.integrations-empty,
+.integrations-vault-secrets {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.integration-row-provides {
+  font-size: 11px;
+}
+
+.integration-fields {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.integration-fields textarea {
+  width: 100%;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.integration-field-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.integration-field-actions {
+  justify-content: space-between;
+}
+
+@media (max-width: 560px) {
+  .integration-row-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
