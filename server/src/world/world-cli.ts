@@ -26,6 +26,7 @@ export type { WorldCliRequest, WorldCliResponse } from "./world-cli-protocol";
 import type { GroupWorkSources } from "../../../shared/groupViews";
 export { CliError, type CliErrorCode } from "./world-cli-errors";
 import { randomUUID } from "node:crypto";
+import { UsageQueryError } from "../usage/analytics";
 import { stampSpawn } from "../herdr/spawn-stamp";
 import {
   terminalKey,
@@ -106,6 +107,7 @@ export type WorldCliDeps = {
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
+  usage?(params: Record<string, unknown>): Promise<unknown>;
   groupMove?(request: GroupMoveRequest, recheck?: () => void): Promise<unknown>;
   publishBoard(revision: number): void;
   /** Tell World's pages; `asks` when a question was asked or answered. */
@@ -120,6 +122,7 @@ export const WORLD_CLI_COMMANDS = [
   ...GROUP_CLI_COMMANDS,
   "whoami",
   "ls",
+  "usage",
   "history",
   "undo",
   "board card move",
@@ -669,6 +672,17 @@ export function createWorldCli(deps: WorldCliDeps) {
         );
       });
     switch (command) {
+      case "usage": {
+        if (!deps.usage)
+          throw new CliError("unavailable", "Usage analytics is unavailable");
+        try {
+          return await deps.usage(params);
+        } catch (error) {
+          if (error instanceof UsageQueryError)
+            throw new CliError("usage", error.message);
+          throw new CliError("unavailable", "Usage analytics is unavailable");
+        }
+      }
       case "whoami":
         return actor;
       case "ls": {

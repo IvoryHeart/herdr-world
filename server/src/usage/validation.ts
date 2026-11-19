@@ -53,6 +53,15 @@ export function validateHostUsage(raw: any): HostUsage {
       !r.tokens
     )
       throw new Error("Invalid usage row");
+    if (
+      r.reported_cost_usd !== undefined &&
+      r.reported_cost_usd !== null &&
+      (typeof r.reported_cost_usd !== "number" ||
+        !Number.isFinite(r.reported_cost_usd) ||
+        r.reported_cost_usd < 0 ||
+        r.reported_cost_usd > 1e12)
+    )
+      throw new Error("Invalid reported cost");
     const tokens = {
       input: r.tokens.input,
       cache_read: r.tokens.cache_read,
@@ -78,6 +87,9 @@ export function validateHostUsage(raw: any): HostUsage {
       last_at: r.last_at as number,
       partial: r.partial as boolean,
       tokens,
+      ...(r.reported_cost_usd !== undefined
+        ? { reported_cost_usd: r.reported_cost_usd as number | null }
+        : {}),
     };
   });
   if (

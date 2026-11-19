@@ -7,6 +7,7 @@ export type NumericUsageRow = {
   responses: number;
   first_at: number;
   last_at: number;
+  reported_cost_usd?: number | null;
 };
 /** A harness's own subscription-limit report: numbers and times only. */
 export type LimitObservation = {
@@ -48,7 +49,13 @@ export function createUsageProjection(
   hash = (value: string) => value,
 ) {
   type RecordValue = Record<string, any>;
-  type Event = { id: string; at: number; model: string; tokens: UsageTokens };
+  type Event = {
+    id: string;
+    at: number;
+    model: string;
+    tokens: UsageTokens;
+    cost?: number;
+  };
   const events = new Map<string, Event>();
   const keys = [
     "input",
@@ -169,7 +176,13 @@ export function createUsageProjection(
           : null,
     };
   };
-  const remember = (id: any, at: number, name: any, tokens: UsageTokens) => {
+  const remember = (
+    id: any,
+    at: number,
+    name: any,
+    tokens: UsageTokens,
+    cost?: number,
+  ) => {
     if (
       typeof id !== "string" ||
       !id ||
@@ -196,7 +209,17 @@ export function createUsageProjection(
       for (const k of keys) tokens[k] = Math.max(prior.tokens[k], tokens[k]);
       at = Math.max(prior.at, at);
     }
-    events.set(key, { id: key, at, model: normalized, tokens });
+    events.set(key, {
+      id: key,
+      at,
+      model: normalized,
+      tokens,
+      ...(cost !== undefined
+        ? { cost: Math.max(prior?.cost ?? 0, cost) }
+        : prior?.cost !== undefined
+          ? { cost: prior.cost }
+          : {}),
+    });
   };
   const accept = (raw: unknown) => {
     const r = object(raw),
@@ -309,7 +332,19 @@ export function createUsageProjection(
           reasoning: 0,
         };
         const at = time(m.timestamp ?? r.timestamp);
-        remember(r.id, at, m.model, { ...tokens });
+        const cost = object(u.cost).total;
+        remember(
+          r.id,
+          at,
+          m.model,
+          { ...tokens },
+          typeof cost === "number" &&
+            Number.isFinite(cost) &&
+            cost >= 0 &&
+            cost <= 1e9
+            ? cost
+            : undefined,
+        );
         observeContext(
           at,
           m.model,
@@ -380,6 +415,7 @@ export function createUsageProjection(
     },
     finish(): SessionUsage {
       const rows = new Map<string, NumericUsageRow>();
+      const costs = new Map<string, { total: number; known: number }>();
       for (const e of events.values()) {
         if (e.at < start || e.at >= now) continue;
         const day = new Date(e.at).toISOString().slice(0, 10),
@@ -405,9 +441,21 @@ export function createUsageProjection(
           );
         for (const k of keys) row.tokens[k] += e.tokens[k];
         row.responses++;
+        const cost = costs.get(key) ?? { total: 0, known: 0 };
+        if (e.cost !== undefined) {
+          cost.total += e.cost;
+          cost.known++;
+        }
+        costs.set(key, cost);
         row.first_at = Math.min(row.first_at, e.at);
         row.last_at = Math.max(row.last_at, e.at);
       }
+      for (const [key, cost] of costs)
+        if (cost.known) {
+          const row = rows.get(key)!;
+          row.reported_cost_usd =
+            cost.known === row.responses ? cost.total : null;
+        }
       const current: LimitObservation | null = limits;
       return {
         session,

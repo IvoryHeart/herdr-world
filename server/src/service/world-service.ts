@@ -59,6 +59,7 @@ import {
 import { CheckoutResolver } from "../sources/links";
 import { readSourceSecrets, writeSourceSecrets } from "../sources/secrets";
 import { SourcesService } from "../sources/service";
+import { runSourceProcess } from "../sources/process";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
@@ -68,7 +69,7 @@ import { createBinService } from "./bin-service";
 import type { createMoveQueue } from "../world/desk-move";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
-import { WorldUsageService } from "../usage/service";
+import { composeWorldUsage, type ComposedWorldUsage } from "./usage-analytics";
 import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
@@ -239,7 +240,7 @@ async function compose(
 
   const readyConnectionGenerations = new Map<string, number>();
   let worldSnapshots: ObservedSnapshots | null = null;
-  let worldUsage: WorldUsageService | null = null;
+  let worldUsage: ComposedWorldUsage | null = null;
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
   // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
@@ -279,6 +280,10 @@ async function compose(
     connections: () => connectionManager,
     snapshots: () => worldSnapshots,
     sources: async () => worldSources.current(),
+    usage: async (params) => {
+      if (!worldUsage) throw new Error("Usage analytics is unavailable");
+      return worldUsage.analytics.get(params);
+    },
     townMoveQueues,
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
@@ -334,6 +339,8 @@ async function compose(
     connectionGeneration: number,
     kind?: "late" | "activity",
   ) {
+    if (kind !== "late" && kind !== "activity")
+      worldUsage?.activity.invalidate(connectionId, clock.now());
     const revision = worldSnapshots?.invalidate(connectionId, kind);
     if (revision === undefined) return;
     const line = serializeWorldInvalidation(
@@ -468,7 +475,11 @@ async function compose(
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    ownedBy(connectionManager, observeHost),
+    (id, generation, panes, at, agents) => {
+      if (connectionManager.has(id))
+        observeHost(id, generation, panes, at, agents);
+      worldUsage?.activity.observeFresh(id, generation, panes, at, agents);
+    },
     ownedBy(connectionManager, observeTerminalSettings),
     serviceIncarnation,
   );
@@ -690,22 +701,6 @@ async function compose(
 
   // Built-in sources (GitHub, Jira). On by default; each runs only while a
   // browser asks and keeps its credentials in private service storage.
-  const runSourceProcess = async (argv: string[], timeoutMs: number) => {
-    try {
-      return await runProcessWithCodeTimeout(argv, timeoutMs, {
-        env: {
-          ...process.env,
-          GH_PROMPT_DISABLED: "1",
-          GIT_TERMINAL_PROMPT: "0",
-          NO_COLOR: "1",
-        },
-      });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT")
-        return { code: 127, stdout: "", stderr: "" };
-      throw error;
-    }
-  };
   const worldSources = new SourcesService({
     settings: await settings
       .read()
@@ -747,14 +742,21 @@ async function compose(
   });
   const handleWorldSources = createSourcesHttpHandler(worldSources);
 
-  worldUsage = new WorldUsageService({
-    incarnation: serviceIncarnation,
-    connections: connectionManager,
-    topology: () => worldSnapshots!.snapshot({}),
-    prices: async () => (await settings.read()).custom.world_usage_prices_v1,
-    telemetry: () => officeObservability.snapshot(),
-    now: () => clock.now(),
+  worldUsage = composeWorldUsage({
+    connectionManager,
+    core,
+    coreRpc,
+    connectionProfiles,
+    observedConnections,
+    worldSnapshots,
+    worldSources,
+    settings,
+    officeObservability,
+    clock,
     scheduler,
+    serviceIncarnation,
+    config,
+    dataRoot: paths.root,
   });
   const rpcServices: RpcServices = {
     clock,
@@ -796,6 +798,7 @@ async function compose(
     worldCli,
     worldSnapshots,
     worldUsage,
+    worldUsageAnalytics: worldUsage.analytics,
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 

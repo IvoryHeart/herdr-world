@@ -54,6 +54,7 @@ const cli = (
 export const cliVerbs = [
   cli("whoami", {}, "read"),
   cli("ls", {}, "read"),
+  cli("usage", {}, "read"),
   cli("history", {}, "read"),
   cli("undo", { id: text }),
   cli("board card move", { ...target, x: Type.Number(), y: Type.Number() }),

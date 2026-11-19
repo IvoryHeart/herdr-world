@@ -4,6 +4,29 @@ import { createUsageProjection } from "./projection";
 const at = "2026-10-31T12:00:00Z";
 const now = Date.parse("2026-11-01T12:00:00Z");
 
+test("only an explicit numeric harness cost counts, repeated Pi responses count once", () => {
+  const reader = createUsageProjection("pi", now);
+  const message = {
+    type: "message",
+    id: "response",
+    timestamp: at,
+    message: {
+      role: "assistant",
+      model: "synthetic",
+      usage: { input: 10, output: 2, cost: { total: 0.25 } },
+    },
+  };
+  reader.accept(message);
+  reader.accept(message);
+  expect(reader.finish().rows[0]?.reported_cost_usd).toBe(0.25);
+  const missing = createUsageProjection("pi", now);
+  missing.accept({
+    ...message,
+    message: { ...message.message, usage: { input: 10, output: 2 } },
+  });
+  expect(missing.finish().rows[0]?.reported_cost_usd).toBeUndefined();
+});
+
 test("Claude repeated response blocks count once with disjoint cache tokens", () => {
   const reader = createUsageProjection("claude", now);
   for (const output of [2, 7, 7])

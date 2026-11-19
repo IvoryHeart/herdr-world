@@ -40,7 +40,7 @@ no control for it. Platform and harness limits apply across the table.
 | Ranger | [partial](#runtime-limits) | [partial](#runtime-limits) |
 | Pins | ✓ (World only) | ✓ (shared with Herdr apps) |
 | Notifications and chimes | ✓ | [partial](#runtime-limits) |
-| Usage and fuel | [partial](#runtime-limits) | [not yet](#runtime-limits) |
+| Usage and fuel | [partial](#runtime-limits) | [partial](#runtime-limits) |
 | Harness integrations | [partial](#runtime-limits) | [partial](#runtime-limits) |
 | Herdr phone app pairing in World | [not yet](#runtime-limits) | [not yet](#runtime-limits) |
 | World on your phone (browser/PWA) | ✓ | ✓ |
@@ -130,9 +130,10 @@ no control for it. Platform and harness limits apply across the table.
   status changes. It has no Herdr TUI custom notification stream or its
   “for you” chimes. A core push opens World, without a verified Chat-session
   target. Browser permission and HTTPS requirements apply to both runtimes.
-- **Usage and integrations:** World's usage/fuel collector currently reads
-  Herdr TUI connections only, for Claude Code, Codex, Pi and Gemini. A
-  core-only host has no usage/fuel readings. World's harness skills work with
+- **Usage and integrations:** World's usage/fuel collector reads Unix Herdr TUI
+  and core connections for Claude Code, Codex, Pi and Gemini. Core attribution
+  needs explicit resume/session arguments or a uniquely resolved Codex title;
+  other records remain host-level. World's harness skills work with
   either runtime; core status comes only from core, never TUI hooks or screen
   inference. See [integration differences](./docs/harness-integrations.md#runtime-differences).
 - **Phone pairing:** World has no pairing UI for Herdr's phone app on either
@@ -160,6 +161,20 @@ token records from Claude Code, Codex, Pi and Gemini logs on qualified local or
 SSH hosts, with source health, host/workspace/tab/pane rollups and optional
 versioned price-table estimates. Town's expenses boards and Board's summary,
 host zones and workspace cards read it (below).
+
+The [usage analytics API and CLI](./docs/usage-analytics.md) expose that data by
+agent, Git project, room or UTC day through `world.usage.analytics` and
+`herdr-world usage`. Active and waiting-on-you milliseconds are observed runtime
+status intervals, with explicit partial coverage; idle is never owner wait and
+gaps remain unknown. Numeric daily time history stays in the instance's private
+data folder for seven days; open intervals never resume after restart. Tokens
+come from existing logs, Pi's explicitly recorded cost is separate from optional
+price estimates, and Claude/Codex cost stays unknown without reported numbers.
+PR counts are distinct known authored PRs in the configured work-source catalogue,
+with source creation/merge dates and current session-qualified links for agent
+attribution. Missing sources never imply zero. Reads refuse unqualified pane/room
+filters, unsupported windows and arbitrary paths. `usage --fixture` runs a
+synthetic example offline, including an owner wait and a usage limit.
 
 ## World update notifications
 

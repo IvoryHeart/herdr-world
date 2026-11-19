@@ -33,6 +33,8 @@ export type UsageEntity = UsageTarget & {
   last_at: number;
   observation_span_ms: number;
   estimated_cost_usd: number | null;
+  /** A numeric cost explicitly persisted by the harness, never an invoice. */
+  reported_cost_usd?: number | null;
   price_table_version: string | null;
   state: UsageState;
 };

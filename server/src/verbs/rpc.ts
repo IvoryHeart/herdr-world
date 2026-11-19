@@ -508,6 +508,29 @@ export const rpcVerbs = [
   rpc("world.profiles.save", "reconcilable", "world"),
   rpc("world.snapshot", "read", "world"),
   rpc(
+    "world.usage.analytics",
+    "read",
+    "world",
+    object({
+      window: Type.Optional(
+        Type.Union([Type.Literal("today"), Type.Literal("7d")]),
+      ),
+      group_by: Type.Optional(
+        Type.Union([
+          Type.Literal("agent"),
+          Type.Literal("project"),
+          Type.Literal("room"),
+          Type.Literal("day"),
+        ]),
+      ),
+      connection_id: Type.Optional(text),
+      connection_generation: Type.Optional(Type.Integer({ minimum: 0 })),
+      pane_id: Type.Optional(text),
+      workspace_id: Type.Optional(text),
+      project_id: Type.Optional(text),
+    }),
+  ),
+  rpc(
     "world.usage.get",
     "read",
     "world",

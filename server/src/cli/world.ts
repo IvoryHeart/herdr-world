@@ -20,6 +20,17 @@ import { GROUP_ACTIONS, groupHuman, parseGroupArgs } from "./world-groups";
 import { renderGroupMarkdown } from "../../../shared/groupMarkdown";
 import type { GroupView } from "../../../shared/groupViews";
 import { readFileSync } from "node:fs";
+import { parseAnalyticsQuery } from "../usage/analytics";
+import { usageAnalyticsFixture } from "../usage/fixture";
+import type { WorldUsageAnalytics } from "../../../shared/usageAnalytics";
+
+const USAGE_HELP = `Usage: herdr-world usage [--window today|7d] [--group-by agent|project|room|day]
+  [--connection ID --generation N] [--pane ID] [--room ID] [--project ID] [--json]
+
+Read observed local usage through the running World's authenticated CLI endpoint.
+Missing measurements are unknown. Time means observed runtime status, with gaps.
+--fixture runs a synthetic example offline, including owner wait and a usage limit.
+See docs/usage-analytics.md for the API and coverage contract.`;
 
 /**
  * The agent CLI: `herdr-world board|town|colour|ask|result|spawned-by|whoami|
@@ -295,6 +306,46 @@ export function parseWorldArgs(
       : {}),
   });
   switch (word) {
+    case "usage": {
+      const { values } = parsed(
+        args,
+        {
+          window: { type: "string" },
+          "group-by": { type: "string" },
+          generation: { type: "string" },
+          pane: { type: "string" },
+          room: { type: "string" },
+          project: { type: "string" },
+          fixture: { type: "boolean" },
+        },
+        0,
+      );
+      const params: Record<string, unknown> = {};
+      for (const [flag, key] of [
+        ["window", "window"],
+        ["group-by", "group_by"],
+        ["connection", "connection_id"],
+        ["pane", "pane_id"],
+        ["room", "workspace_id"],
+        ["project", "project_id"],
+      ])
+        if (values[flag!] !== undefined) params[key!] = values[flag!];
+      if (values.generation !== undefined)
+        params.connection_generation = Number(values.generation);
+      try {
+        parseAnalyticsQuery(params);
+      } catch (error) {
+        throw new UsageError((error as Error).message);
+      }
+      return {
+        command: "usage",
+        params: {
+          ...params,
+          ...(values.fixture ? { fixture_output: true } : {}),
+        },
+        json: values.json as boolean,
+      };
+    }
     case "whoami":
     case "ls": {
       const { values } = parsed(args, {}, 0);
@@ -556,6 +607,20 @@ export function parseWorldArgs(
 
 /** One line per result for people; agents should prefer --json. */
 function human(command: string, reply: Reply): string {
+  if (command === "usage") {
+    const usage = reply.result as WorldUsageAnalytics;
+    const number = (v: number | null) => (v === null ? "unknown" : String(v));
+    return [
+      `Usage ${usage.window.kind} by ${usage.group_by} (observed subtotals; gaps remain unknown)`,
+      ...usage.rows.map(
+        (r) =>
+          `${r.dimension ?? "unattributed"}: active ${number(r.active_ms.value)} ms, waiting ${number(r.waiting_on_you_ms.value)} ms, tokens ${number(r.total_tokens.value)}, reported USD ${number(r.reported_cost_usd.value)}, PRs opened ${number(r.prs_opened.value)}, merged ${number(r.prs_merged.value)}`,
+      ),
+      ...(usage.coverage.truncated
+        ? ["Coverage truncated; totals include omitted groups."]
+        : []),
+    ].join("\n");
+  }
   if (command.startsWith("group ")) return groupHuman(reply.result);
   const result = reply.result as Record<string, unknown> | unknown[] | null;
   const who = reply.actor
@@ -589,10 +654,12 @@ export async function runWorldCommand(
   alert: OwnerAlert = herdrAlert(context),
 ): Promise<number> {
   if (wantsHelp(args)) {
-    context.log(WORLD_SKILL);
+    context.log(word === "usage" ? USAGE_HELP : WORLD_SKILL);
     return EXIT_OK;
   }
   const { command, params, json } = parseWorldArgs(word, args);
+  const fixture = params.fixture_output === true;
+  delete params.fixture_output;
   const markdown = params.markdown_output === true;
   delete params.markdown_output;
   if (command === "group import") {
@@ -613,7 +680,9 @@ export async function runWorldCommand(
   delete params.wait;
   delete params.timeout;
   let reply: Reply;
-  if (command === "group add" && params.herdr === true) {
+  if (command === "usage" && fixture) {
+    reply = { ok: true, result: await usageAnalyticsFixture(params) };
+  } else if (command === "group add" && params.herdr === true) {
     reply = await transport(command, { ...params, preview: true });
     if (reply.ok) {
       const plan = reply.result as {
@@ -747,6 +816,10 @@ export async function runWorldCommand(
 
 const WORDS: { name: string; summary: string; actions?: string[] }[] = [
   {
+    name: "usage",
+    summary: "read local effort, token, cost and pull request analytics",
+  },
+  {
     name: "group",
     summary: "list Groups and edit World-owned Teams and Pods",
     actions: GROUP_ACTIONS,
@@ -794,8 +867,21 @@ export function worldCommands(): CliCommand[] {
     name,
     summary,
     actions,
-    flags: ["--json", "--connection"],
-    help: () => WORLD_SKILL,
+    flags:
+      name === "usage"
+        ? [
+            "--json",
+            "--window",
+            "--group-by",
+            "--connection",
+            "--generation",
+            "--pane",
+            "--room",
+            "--project",
+            "--fixture",
+          ]
+        : ["--json", "--connection"],
+    help: () => (name === "usage" ? USAGE_HELP : WORLD_SKILL),
     run: (args, context) => runWorldCommand(name, args, context),
   }));
 }
