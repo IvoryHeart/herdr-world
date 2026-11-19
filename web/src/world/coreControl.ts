@@ -183,6 +183,8 @@ export async function launchInCore(
     /** A plain shell: unplaced in Herdr's apps. */
     shell?: boolean;
     parentPaneId?: string;
+    /** Resume this Apartments resident instead (its harness's own resume). */
+    resumeResident?: string;
   },
 ): Promise<CoreLaunchOutcome> {
   return (await bridge.call(
@@ -196,6 +198,9 @@ export async function launchInCore(
       text: choice.text,
       ...(choice.shell ? { shell: true } : {}),
       ...(choice.parentPaneId ? { parent_pane_id: choice.parentPaneId } : {}),
+      ...(choice.resumeResident
+        ? { resume_resident: choice.resumeResident }
+        : {}),
     },
     // Host resolution + run + foreground observation + native send window.
     150_000,

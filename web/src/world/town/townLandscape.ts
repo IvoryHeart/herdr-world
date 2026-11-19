@@ -19,6 +19,7 @@
  */
 
 import { townBusRoute } from "./townBus";
+import { townApartmentsLot, townApartmentsReserve } from "./townApartmentsLot";
 import { townPostLot } from "./townPost";
 import { townPostReserve } from "./townPostLot";
 import {
@@ -241,6 +242,11 @@ function reservedLand(layout: TownLayout) {
   const post = townPostLot(layout);
   if (post) {
     const lot = townPostReserve(post);
+    reserve(lot.x0, lot.y0, lot.x1, lot.y1);
+  }
+  const apartments = townApartmentsLot(layout);
+  if (apartments) {
+    const lot = townApartmentsReserve(apartments);
     reserve(lot.x0, lot.y0, lot.x1, lot.y1);
   }
   if (layout.roads.length) {

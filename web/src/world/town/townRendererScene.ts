@@ -19,6 +19,8 @@ import {
 } from "./townLayout";
 import { townBusRoute } from "./townBus";
 import { paintTownCenter } from "./townCenterPaint";
+import { townApartmentsLot } from "./townApartmentsLot";
+import { paintTownApartments } from "./townApartmentsPaint";
 import { townPostLot } from "./townPost";
 import { paintTownPostHouse, paintTownPostYard } from "./townPostPaint";
 import {
@@ -212,6 +214,15 @@ export function townOutdoor(
     add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
     add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
   }
+  // The apartment building beside the plaza, where finished agents live on.
+  const apartments = townApartmentsLot(layout);
+  if (apartments)
+    add(
+      paintTownApartments(),
+      apartments.x * T,
+      apartments.y * T,
+      (apartments.y + apartments.h) * T,
+    );
   return outdoorItems;
 }
 

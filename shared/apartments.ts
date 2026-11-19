@@ -110,7 +110,7 @@ export function apartmentProject(
   resident: Pick<ApartmentResident, "cwd" | "room">,
 ): string | null {
   const parts = (resident.cwd ?? "").split(/[\\/]/).filter(Boolean);
-  return parts.at(-1) ?? resident.room ?? null;
+  return parts[parts.length - 1] ?? resident.room ?? null;
 }
 
 function day(at: number) {

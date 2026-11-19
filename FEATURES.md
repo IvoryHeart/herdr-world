@@ -813,7 +813,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     and runtime: a host that restarts keeps its agents, and restarting World
     drops the bin without closing anything. Only Town speaks of the bus:
     elsewhere the bin reads **Cleaning up** and how many, and its tray says
-    when they close.
+    when they close. Closed agents move into
+    [Apartments](#apartments-finished-agents).
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
     reception and Board's host label. When the local connection is failing and
@@ -1470,6 +1471,41 @@ session-qualified description of current work for an exact local or fixed-policy
 Herdr pane. The Inspector shows it only while the current
 agent session matches the report. Herdr owns expiry; the command does not infer work,
 assign tasks, or provide a Clear operation.
+
+### Apartments: finished agents
+
+When an agent's terminal ends, or the bus takes it from the bin, the agent
+moves into **Apartments** instead of vanishing. Each resident keeps its name,
+harness, project folder, room and tab, host, when it ran, its last task summary,
+its last report (the closing message of its transcript, when the host answers
+within ten seconds), the pull requests and issues the Sources linked to it, and
+its harness session.
+
+- Open it from the green **APARTMENTS** sign on the sandstone block in Town's
+  park beside the town center (left of the plaza, or right when there is no
+  room; a town too small for it hides the building), from **Apartments** in
+  the town center ring, or from **Apartments** in Board's hub. All three read
+  the same residents, and the ring and hub show how many live there.
+- Search matches name, harness, project, folder, room, host, summary, report,
+  `#42` or `PR 42`, repository and the day it ran or moved in (`2026-11-19`).
+  Residents list newest first.
+- Opening a resident shows its facts, summary, report and linked work.
+  **Read history** reads its conversation from the harness transcript on its
+  host, the same chat reading Inspector uses (the latest 200 messages); a
+  message opens in full. History needs that host connected.
+- **Resume in room** starts the agent again with its harness's own resume
+  (`claude --resume <session>` or `codex resume <session>`) in a room on the
+  host where it ran: its old room when it still exists, or the one chosen. A
+  Herdr TUI room opens the new terminal; herdr-core says it is back. The
+  command is also shown to run by hand. Resume is refused on another host,
+  for a resident with no session, and for harnesses other than Claude and
+  Codex; the resident stays either way.
+- **Evict…**, then **Evict**, forgets a resident. Its transcript stays on the
+  host. World keeps residents 90 days and at most 500; the oldest go first.
+- Limits: only ends World sees are recorded, while it observes the host. An
+  agent whose host disconnects, restarts or changes runtime generation is not
+  recorded, nor one that ends while World is stopped. Linked work is read at
+  move-out. Records live in World's own store on this computer.
 
 ### Teams and spawn stamps
 

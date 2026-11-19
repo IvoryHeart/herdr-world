@@ -25,6 +25,7 @@ import {
 import { terminalColorKey } from "./terminalColor";
 import { leafPinnedBy, setDeskPinned, useDeskPins } from "./useDeskPins";
 import { putInBin, WorldBin } from "./bin/WorldBin";
+import { ApartmentsHost } from "./apartments/ApartmentsHost";
 import { CoreKillConfirmHost } from "./CoreKillConfirm";
 import { CoreWorktreesHost } from "./CoreWorktrees";
 import { BoardHub } from "./board/BoardHub";
@@ -96,7 +97,7 @@ const ProfileEditor = lazyWithReload("world-profile-editor", () =>
 
 /**
  * The launcher and the profile editor, opened from any view by their events
- * (agentProfiles.ts). They see every host's rooms.
+ * (agentProfiles.ts), and Apartments. They see every host's rooms.
  */
 function AgentDialogs({
   world,
@@ -151,6 +152,7 @@ function AgentDialogs({
   }, []);
   return (
     <Suspense fallback={null}>
+      <ApartmentsHost world={world} onOpen={setPendingOpen} />
       {sounds ? (
         <SoundsDialog
           world={world}

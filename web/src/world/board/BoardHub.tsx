@@ -17,9 +17,11 @@ import { worldLocalStorage } from "../../browserStorage";
 import { useLayer } from "../../layerStack";
 import { store } from "../../store";
 import { requestAgentLaunch, useAgentProfiles } from "../agentProfiles";
+import { useApartments } from "../apartments/useApartments";
 import { readOfficePreferences } from "../officePreferences";
 import type { TownCenterAction } from "../town/TownCenterMenu";
 import {
+  apartmentsAction,
   launchAction,
   needsYouAction,
   profilesAction,
@@ -55,7 +57,8 @@ export function boardLaunchSpace(
 
 /**
  * The hub's actions, in the town center's order: New agent, Town master,
- * Needs you, Summary, Profiles and New workspace (Board's word for a room).
+ * Needs you, Summary, Profiles, Apartments and New workspace (Board's word
+ * for a room).
  * Summary is Town's one summary: Board takes you to Town with it open.
  */
 export function boardHubActions({
@@ -67,6 +70,7 @@ export function boardHubActions({
   onOpenSummary,
   onNewWorkspace,
   toast,
+  residents,
 }: {
   world: Pick<WorldObject, "nodeById" | "leaves" | "hosts">;
   selectedId: string | null;
@@ -79,6 +83,8 @@ export function boardHubActions({
   onOpenSummary(): void;
   onNewWorkspace(): void;
   toast(kind: "ok" | "error", text: string): void;
+  /** Apartments' residents (the same store as Town's). */
+  residents?: number;
 }): TownCenterAction[] {
   const space = boardLaunchSpace(world, selectedId);
   const roster = world.leaves.flatMap((leaf) =>
@@ -124,6 +130,7 @@ export function boardHubActions({
     needsYouAction(),
     summaryAction(onOpenSummary, "in Town"),
     profilesAction(),
+    apartmentsAction(residents),
     {
       id: "workspace",
       label: "New workspace",
@@ -158,7 +165,9 @@ export function BoardHub({
   const holder = useAgentProfiles().document?.town_master ?? null;
   // The Town Master's greeting opens at the hub on wide screens.
   const greetingAnchor = useGreetingAnchor();
+  const residents = useApartments().residents.length;
   const actions = boardHubActions({
+    residents,
     world,
     selectedId,
     holder,
