@@ -73,6 +73,7 @@ test("fresh core-only state selects and saves core with no dead TUI profile", as
 
 test("saved default and disabled auto-connect survive local core discovery", async () => {
   const args = fixture();
+  installTui(args);
   const saved = {
     version: 2 as const,
     default_connection_id: "chosen",
@@ -93,6 +94,7 @@ test("saved default and disabled auto-connect survive local core discovery", asy
 
 test("explicit startup overrides suppress discovery without saving profiles", async () => {
   const args = fixture();
+  installTui(args);
   const bootstrap = await initializeConnectionProfiles({
     ...args,
     explicitStartupOverride: true,
@@ -102,14 +104,47 @@ test("explicit startup overrides suppress discovery without saving profiles", as
   expect(args.store.load()).toBeNull();
 });
 
-test("an installed local TUI keeps the existing first-run behavior", async () => {
-  const args = fixture();
+function installTui(args: ReturnType<typeof fixture>) {
   const bin = join(args.discovery.homeDir, ".local", "bin");
   mkdirSync(bin, { recursive: true });
   writeFileSync(
     join(bin, process.platform === "win32" ? "herdr.exe" : "herdr"),
     "synthetic binary presence",
   );
+}
+
+test("fresh state discovers existing core beside installed TUI without setup", async () => {
+  const args = fixture();
+  installTui(args);
+  const bootstrap = await initializeConnectionProfiles(args);
+  expect(bootstrap.defaultConnectionId).toBe("core-local");
+  expect(bootstrap.registrations.map(({ profile }) => profile)).toEqual([
+    {
+      id: "core-local",
+      label: "herdr-core on this computer",
+      type: "local",
+      runtime: "herdr-core",
+      core_session: "example-session",
+      core_state_dir: "",
+      auto_connect: true,
+    },
+    {
+      ...args.startupProfile,
+      id: "tui-local",
+      label: "Herdr TUI on this computer",
+    },
+  ]);
+  expect(bootstrap.registrations.every(({ readOnly }) => !readOnly)).toBeTrue();
+  expect(args.store.load()?.profiles).toEqual(
+    bootstrap.registrations.map(({ profile }) => profile),
+  );
+  expect(await initializeConnectionProfiles(args)).toEqual(bootstrap);
+});
+
+test("TUI-only installation keeps the existing first-run behavior", async () => {
+  const args = fixture();
+  installTui(args);
+  rmSync(args.discovery.env.XDG_STATE_HOME, { recursive: true });
   const bootstrap = await initializeConnectionProfiles(args);
   expect(bootstrap.registrations).toEqual([
     { profile: args.startupProfile, readOnly: true },

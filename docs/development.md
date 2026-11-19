@@ -72,6 +72,14 @@ it; leave other worktrees' listeners and data alone. For CLI checks, point
 `HERDR_WORLD_URL` at this listener and use the same `HERDR_WORLD_DATA_DIR` so the
 CLI locates its token. Preview data and built assets stay untracked.
 
+For an owner-requested preview using existing local runtimes, keep a separate
+World data folder but omit the synthetic `--session` and socket/SSH overrides.
+Fresh discovery registers local core and any installed TUI separately and
+connects to their existing endpoints without installing or starting either.
+Do not copy installed settings into the preview. Saved preview connections and
+explicit session/socket choices remain authoritative; use **Hosts → Manage
+connections** to add the existing runtime if the preview already has state.
+
 ## Development tools
 
 To check harness title spinners without running agents, open

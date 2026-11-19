@@ -10,13 +10,18 @@ Herdr TUI room to launch there instead. Both appear in **Hosts** and
 **Manage connections**, with separate connections.
 
 With no saved connections or explicit Herdr socket/session/SSH override, first
-run finds an installed local core when the Herdr TUI is absent, saves only
-`core-local` and makes it the default. It uses `HC_SESSION` (otherwise `default`)
+run finds an installed local core, saves `core-local` and makes it the default.
+If the Herdr TUI is also installed, it saves a separate `tui-local` connection
+using the existing local sockets, so both appear in **Hosts** immediately.
+Core uses `HC_SESSION` (otherwise `default`)
 and core's standard state directory, including `XDG_STATE_HOME`. A running core's
 agents appear immediately; discovery never starts core or changes its login item.
-Saved connections and their chosen default stay as they are. When the TUI is
-installed, first run keeps its existing local discovery; add core in **Manage
-connections** if wanted.
+Saved connections and their chosen default stay as they are. With only the TUI,
+first run keeps its existing local discovery. Explicit socket/session/SSH
+choices stay bound to that runtime; an empty preview session never switches to
+another session automatically. Use **Hosts → Manage connections → Add Local**
+or **Add herdr-core** to connect an existing runtime in saved or explicitly
+configured instances. Connecting never installs a runtime or its system service.
 
 CLI connection edits (`connections add`, `remove` and `set-default`) need
 `--restart` while the managed World service runs. World saves the change and
@@ -483,7 +488,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     to a service-owned IDE process.
     Testing-only `?ideFixture=1` is removed from the URL immediately and supplies
     synthetic IDE choices for that page: VS Code demonstrates dispatch, Cursor a
-    launch failure, IntelliJ an SSH refusal, and Zed a missing launcher. It neither
+    launch failure, IntelliJ an SSH refusal, and Zed a missing launcher.
+    **Configuration → Integrations → Desktop IDEs → Try IDE picker** opens the
+    same picker on a demo project without a runtime connection. It neither
     launches applications nor saves preferences; reload to return to real detection.
   - Each agent has one window: World's Inspector, with one top selector
     (**Chat**, **Terminal**, **Files**, **Changes**, then secondary controls such as **Commits**).

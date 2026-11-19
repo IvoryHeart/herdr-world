@@ -140,6 +140,10 @@ export async function runDesktopIdeChecks(
       "Detection must name the computer whose IDEs are listed",
     );
     check(
+      !host.querySelector('[aria-label="Try IDE picker without a runtime"]'),
+      "Runtime-free preview is absent without the testing-only switch",
+    );
+    check(
       host.querySelector<HTMLOptionElement>('option[value="zed"]')?.disabled,
       "Missing IDEs cannot become the default",
     );
@@ -300,8 +304,57 @@ export async function runDesktopIdeChecks(
       "Preview switch supplies bounded synthetic IDE data",
     );
     const count = calls.length;
-    await desktopIdeCall("open", { ide: "vscode" });
+    host.style.display = "";
+    host
+      .querySelector<HTMLButtonElement>(".desktop-ide-heading button")!
+      .click();
+    await observed(
+      () =>
+        !!host.querySelector('[aria-label="Try IDE picker without a runtime"]'),
+      "runtime-free fixture entry in Integrations",
+    );
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Try IDE picker without a runtime"]',
+      )!
+      .click();
+    await observed(
+      () => !!dialog()?.querySelector(".desktop-ide-list button"),
+      "runtime-free preview picker",
+    );
+    check(
+      dialog()?.textContent?.includes("Orchard demo project"),
+      "Runtime-free preview identifies the synthetic project",
+    );
+    clickIde("VS Code");
+    await observed(
+      () =>
+        dialog()?.textContent?.includes(
+          "handoff sent to the World host (preview only)",
+        ) ?? false,
+      "runtime-free simulated dispatch",
+    );
+    clickIde("Cursor");
+    await observed(
+      () => dialog()?.textContent?.includes("desktop launcher failed") ?? false,
+      "runtime-free simulated launch failure",
+    );
+    clickIde("IntelliJ");
+    await observed(
+      () =>
+        dialog()?.textContent?.includes("needs a configured Gateway") ?? false,
+      "runtime-free simulated SSH refusal",
+    );
+    check(
+      [
+        ...dialog()!.querySelectorAll<HTMLButtonElement>(
+          ".desktop-ide-list button",
+        ),
+      ].find((button) => button.textContent?.includes("Zed"))?.disabled,
+      "Runtime-free preview disables the missing IDE",
+    );
     check(calls.length === count, "Preview handoff never reaches the service");
+    await close();
   } finally {
     openInDesktopIde(null);
     bridge.call = original;

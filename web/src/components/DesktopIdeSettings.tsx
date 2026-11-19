@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   desktopIdeCall,
   desktopIdeFixture,
+  openDesktopIdeFixture,
   parseDesktopIdes,
   type DesktopIdes,
 } from "../desktopIdes";
@@ -63,9 +64,19 @@ export function DesktopIdeSettings() {
         SSH support and your existing OpenSSH configuration.
       </p>
       {desktopIdeFixture() ? (
-        <p role="status">
-          Preview fixture — no IDE is launched or preference saved.
-        </p>
+        <div>
+          <p role="status">
+            Preview fixture — no IDE is launched or preference saved. Try the
+            picker with a demo project; no runtime connection is needed.
+          </p>
+          <button
+            type="button"
+            aria-label="Try IDE picker without a runtime"
+            onClick={openDesktopIdeFixture}
+          >
+            Try IDE picker
+          </button>
+        </div>
       ) : null}
       <label>
         Default IDE{" "}

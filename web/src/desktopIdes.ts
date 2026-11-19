@@ -42,6 +42,23 @@ export function consumeDesktopIdeFixture() {
   history.replaceState(history.state, "", url);
 }
 export const desktopIdeFixture = () => preview;
+export function openDesktopIdeFixture() {
+  if (!preview) return;
+  openInDesktopIde({
+    workspaceId: "orchard-demo",
+    label: "Orchard demo project (preview only)",
+    client: {
+      connectionId: "ide-fixture",
+      generation: 1,
+      serverRuntimeGeneration: 1,
+      isCurrent: desktopIdeFixture,
+      acceptsServerGeneration: () => false,
+      call: async () => {
+        throw new Error("The IDE preview never calls a runtime.");
+      },
+    },
+  });
+}
 export async function desktopIdeCall(
   method: "list" | "default" | "open",
   params: Record<string, unknown> = {},

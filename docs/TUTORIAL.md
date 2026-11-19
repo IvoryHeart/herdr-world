@@ -78,11 +78,14 @@ Your shells and agents
 
 ### Use an existing herdr-core
 
-1. Run `hc server start` on its computer. In World, open **Hosts → Manage
+1. If core is not running, run `hc server start` on its computer. Start World:
+   a fresh instance connects to local core automatically, keeping an installed
+   Herdr TUI as a separate host.
+2. With saved connections or an explicit TUI session, open **Hosts → Manage
    connections → Add herdr-core**, choose **This computer**, **A Unix host over SSH**
    or **A Windows host over SSH**,
    keep session **default** unless you changed it, then connect.
-2. Return to Town. **New agent** says **Starts in herdr-core**. You can keep
+3. Return to Town. **New agent** says **Starts in herdr-core**. You can keep
    a Herdr TUI connection too; choose its room for a TUI launch.
 
 See the [runtime support table](../FEATURES.md#runtime-support) for versions

@@ -11,15 +11,12 @@ export type LocalDiscoveryOptions = {
   platform?: string;
 };
 
-/** Presence only: endpoint ownership and liveness are checked by the core transport. */
-export function discoverLocalCoreConnection(
-  options: LocalDiscoveryOptions = {},
-): CoreConnectionProfile | null {
+/** Read-only binary discovery, including installations outside the service PATH. */
+export function hasLocalTui(options: LocalDiscoveryOptions = {}): boolean {
   const env = options.env ?? process.env;
   const home = options.homeDir ?? homedir();
   const platform = options.platform ?? process.platform;
-  // Preserve the existing implicit TUI connection when that runtime is present.
-  if (
+  return Boolean(
     findHerdrBinary({
       platform,
       homeDir: home,
@@ -28,9 +25,17 @@ export function discoverLocalCoreConnection(
       installDir: env.HERDR_INSTALL_DIR,
       appDataDir: env.APPDATA,
       localAppDataDir: env.LOCALAPPDATA,
-    })
-  )
-    return null;
+    }),
+  );
+}
+
+/** Presence only: endpoint ownership and liveness are checked by the core transport. */
+export function discoverLocalCoreConnection(
+  options: LocalDiscoveryOptions = {},
+): CoreConnectionProfile | null {
+  const env = options.env ?? process.env;
+  const home = options.homeDir ?? homedir();
+  const platform = options.platform ?? process.platform;
   const session = env.HC_SESSION || "default";
   if (!/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/.test(session)) return null;
   const state =

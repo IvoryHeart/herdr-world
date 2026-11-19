@@ -14,8 +14,9 @@ World works with the **Herdr TUI**, **herdr-core**, or both on one computer.
 you choose a Herdr TUI room. Each runtime has its own connection.
 
 - **herdr-core:** install it with the [official instructions](https://github.com/herdrdev/herdr-core)
-  or World's setup below. With core already running and no Herdr TUI, World's
-  first run connects to it automatically and makes it the default. For another
+  or World's setup below. With core already running, World's fresh first run
+  connects to it automatically and makes it the default, also keeping a separate
+  local connection when the Herdr TUI is installed. For another
   connection, open **Hosts → Manage connections → Add herdr-core**. Choose **This computer**, **A Unix host over SSH** or
   **A Windows host over SSH** and connect. Keep session **default** unless you changed
   `HC_SESSION`. Windows core needs Windows x64 and PowerShell; over SSH, install

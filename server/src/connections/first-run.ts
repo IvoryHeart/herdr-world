@@ -1,6 +1,7 @@
 import { loadConnectionProfileBootstrap } from "./profile-service";
 import {
   discoverLocalCoreConnection,
+  hasLocalTui,
   type LocalDiscoveryOptions,
 } from "./local-discovery";
 import {
@@ -22,13 +23,29 @@ export async function initializeConnectionProfiles(
   const registry: PersistedConnectionRegistry = {
     version: CONNECTION_PROFILE_FILE_VERSION,
     default_connection_id: profile.id,
-    profiles: [profile],
+    profiles: [
+      profile,
+      // Persist a separate identity so both runtimes remain available after
+      // restart. The implicit startup-default identity cannot be saved.
+      ...(hasLocalTui(args.discovery)
+        ? [
+            {
+              ...args.startupProfile,
+              id: "tui-local",
+              label: "Herdr TUI on this computer",
+            },
+          ]
+        : []),
+    ],
   };
   await args.store.save(registry);
   return {
     defaultConnectionId: profile.id,
     explicitStartupOverride: false,
     persistedRegistry: registry,
-    registrations: [{ profile, readOnly: false }],
+    registrations: registry.profiles.map((profile) => ({
+      profile,
+      readOnly: false,
+    })),
   };
 }
