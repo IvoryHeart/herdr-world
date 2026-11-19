@@ -1,13 +1,16 @@
-import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { expect, test } from "bun:test";
+import { memoryBacking } from "../testing/memory-backing";
 import {
   appearanceFor,
   appearanceKey,
   type AppearanceTarget,
 } from "../../../shared/appearance";
-import { BoardStore, moveFollowOps, type BoardOp } from "./board-store";
+import {
+  BoardStore,
+  emptyBoardDocument,
+  moveFollowOps,
+  type BoardOp,
+} from "./board-store";
 import {
   captureAppearanceChanges,
   trackAppearanceEdits,
@@ -18,12 +21,6 @@ import {
   reconciledAppearanceOps,
 } from "./appearance-move";
 
-const roots: string[] = [];
-afterEach(() =>
-  roots
-    .splice(0)
-    .forEach((path) => rmSync(path, { recursive: true, force: true })),
-);
 const source: AppearanceTarget = {
   connection_id: "connection-a",
   kind: "tab",
@@ -37,9 +34,7 @@ const destination: AppearanceTarget = {
   color_key: "connection-a:destination",
 };
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "appearance-edit-order-"));
-  roots.push(root);
-  const board = new BoardStore(join(root, "board.json"));
+  const board = new BoardStore(memoryBacking(emptyBoardDocument()));
   const edits: AppearanceEdits = new Map();
   const patch = (ops: BoardOp[]) => {
     const next = board.patch(ops);

@@ -216,20 +216,22 @@ test("history expiry preserves pending asks and intents, with no record-body cop
 
 test("row cap and service incarnation reject old and foreign cursors", () => {
   const writer = open();
-  for (let group = 0; group < 314; group++) {
-    const requests = Array.from({ length: 32 }, (_, index) => {
-      const seq = group * 32 + index;
-      const operation = write(`op-${seq}`, seq);
+  // Cross the retention boundary, then advance it again, with two commits.
+  let seq = 0;
+  for (const length of [10016, 32]) {
+    const requests = Array.from({ length }, () => {
+      const current = seq++;
+      const operation = write(`op-${current}`, current);
       operation.changes.put.push({
         id: "c-history",
         at: 1000,
         actor: { label: "Fixture", verified: false },
         command: "fixture",
-        summary: `${seq}`,
+        summary: `${current}`,
         undo: null,
       });
       return {
-        ticket: seq,
+        ticket: current,
         request: { type: "write" as const, write: operation },
       };
     });

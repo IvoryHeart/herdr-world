@@ -6,6 +6,7 @@ import {
 } from "../../../shared/deskState";
 import { deskIdentity } from "../../../web/src/world/useDeskState";
 import { reviewPane, reviewStopFixture } from "./testing/review-stop-fixture";
+import { seedReviewStops, reviewMarkInput } from "./testing/review-stop-seed";
 
 const fixtures: Awaited<ReturnType<typeof reviewStopFixture>>[] = [];
 afterEach(async () => {
@@ -175,7 +176,9 @@ test("a known fingerprint returning after unknown ownership does not recover the
 
 test("550 current stops survive while only the oldest history beyond 500 is evicted", async () => {
   const f = await fixture();
-  f.setPanes(Array.from({ length: 550 }, (_, i) => reviewPane(i)));
+  const panes = Array.from({ length: 550 }, (_, i) => reviewPane(i));
+  await f.seedStore((writer) => seedReviewStops(writer, "alpha", panes, 1001));
+  f.setPanes(panes);
   await f.observe();
   expect(f.failures).toEqual([]);
   expect(f.registries.desk.list().records).toHaveLength(550);
@@ -194,9 +197,26 @@ test("550 current stops survive while only the oldest history beyond 500 is evic
   expect(f.stop()).toBe(stop);
   expect(f.browsers[0]!.get().records[0]?.reviewed_stop).toBe(stop);
   const oldIds = f.storage.terminalMarks.list().map((row) => row.id);
-  f.setPanes(
-    Array.from({ length: 550 }, (_, i) => reviewPane(i, `replacement-${i}`)),
+  const replacements = Array.from({ length: 550 }, (_, i) =>
+    reviewPane(i, `replacement-${i}`),
   );
+  // Exercise the writer's history eviction in two bulk transactions, then
+  // observe the replacement captures through the real worker and both consumers.
+  await f.seedStore((writer) => {
+    const ended = writer.batch(
+      writer.read().terminalMarks!.map((row, ticket) => ({
+        ticket,
+        request: {
+          type: "terminal-mark",
+          operation: { type: "end", id: row.id, revision: row.revision },
+        },
+      })),
+      1002,
+    );
+    expect(ended.every((reply) => !reply.error)).toBe(true);
+    seedReviewStops(writer, "alpha", replacements, 1002);
+  });
+  f.setPanes(replacements);
   await f.observe();
   expect(f.failures).toEqual([]);
   expect(f.registries.desk.list().records).toHaveLength(550);
@@ -210,7 +230,32 @@ test("550 current stops survive while only the oldest history beyond 500 is evic
 
 test("SQLite refuses an over-budget review without evicting any current stop or acknowledging it", async () => {
   const f = await fixture();
-  f.setPanes(Array.from({ length: 100 }, (_, i) => reviewPane(i)));
+  const panes = Array.from({ length: 100 }, (_, i) => reviewPane(i));
+  await f.seedStore((writer) => {
+    seedReviewStops(writer, "alpha", panes, 1001);
+    // Fill to the last accepted review in one transaction. The following RPC
+    // still crosses the real capacity boundary and must refuse atomically.
+    const rows = writer.read().terminalMarks!;
+    const replies = writer.batch(
+      rows.map((row, ticket) => ({
+        ticket,
+        request: {
+          type: "terminal-mark",
+          operation: {
+            type: "put",
+            input: reviewMarkInput(row, {
+              ...row.body,
+              reviewed_stop: "x".repeat(8192),
+            }),
+          },
+        },
+      })),
+      1001,
+    );
+    const refusedAt = replies.findIndex((reply) => reply.error);
+    expect(refusedAt).toBeGreaterThan(0);
+  });
+  f.setPanes(panes);
   await f.observe();
   let refused = false;
   let reason: unknown;

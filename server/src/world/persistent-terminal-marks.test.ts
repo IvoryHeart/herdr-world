@@ -4,6 +4,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openWorldLedger } from "../storage/world-storage";
+import { openWorldWriter } from "../storage/world-writer";
+import { terminalMarkInput } from "../storage/testing/terminal-mark-input";
+import { seedMarkInputs } from "./testing/review-stop-seed";
 import { systemClock, systemScheduler } from "../service/ports";
 import { PersistentTerminalMarks } from "./persistent-terminal-marks";
 import { WorldDeskRegistry } from "./desk-state";
@@ -36,10 +39,26 @@ const pane = (value = "session-a") => ({
   agent_status: "idle",
   state_change_seq: 4,
 });
-async function fixture(root?: string, generation = 1) {
+async function fixture(
+  root?: string,
+  generation = 1,
+  prepare?: (writer: ReturnType<typeof openWorldWriter>) => void,
+) {
   if (!root) {
     root = mkdtempSync(join(tmpdir(), "persistent-marks-"));
     roots.push(root);
+  }
+  if (prepare) {
+    const writer = openWorldWriter(
+      join(root, "world.sqlite"),
+      join(root, "ledger.json"),
+      1000,
+    );
+    try {
+      prepare(writer);
+    } finally {
+      writer.close();
+    }
   }
   const store = await openWorldLedger(
     { database: join(root, "world.sqlite"), ledger: join(root, "ledger.json") },
@@ -812,13 +831,37 @@ test("exact Unpin removes a disconnected saved capture and it cannot return afte
   expect(again.registries.watchlist.list().records).toEqual([]);
 });
 test("unavailable Unpin releases the global watch capacity", async () => {
-  const f = await fixture();
-  for (let index = 0; index < 128; index++)
-    await f.client.call("world.watchlist.pin", {
-      ...f.identity,
-      connection_id: `source-${index}`,
-      label: "Saved watch",
-    });
+  const f = await fixture(undefined, 1, (writer) => {
+    seedMarkInputs(
+      writer,
+      Array.from({ length: 128 }, (_, index) => {
+        const input = terminalMarkInput("watchlist", "terminal-a");
+        const current = { ...input.current, instance: `source-${index}` };
+        return {
+          ...input,
+          current,
+          body: { label: "Saved watch" },
+          target: {
+            ...input.target,
+            instance: current.instance,
+            native_id: "pane-a",
+          },
+          event: {
+            type: "listing",
+            complete: true,
+            fence: current,
+            entities: [{ native_id: "pane-a", terminals: ["terminal-a"] }],
+          },
+        };
+      }),
+      1000,
+    );
+  });
+  expect(
+    f.store.terminalMarks.list().filter((row) => row.kind === "watchlist"),
+  ).toHaveLength(128);
+  // Establish the capture just as the original pin RPCs did, before disconnecting.
+  await f.marks.observe("source-0", 1, [pane()], 1001);
   f.marks.retire("source-0", 1, false);
   await f.client.call("world.watchlist.unpin", {
     ...f.identity,
