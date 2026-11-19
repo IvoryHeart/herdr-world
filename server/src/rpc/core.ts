@@ -1,11 +1,13 @@
 import { isLocalCoreAddress } from "../../../shared/coreAddress";
-import { harnessReadiness } from "../agent/harness-readiness";
 import { profileLaunch } from "../agent/profile-launch";
 import { coreHarnessNames } from "../herdr-core/harness";
-import { shQuote, runProcessWithCodeTimeout } from "../utils/process-utils";
 import type { ConnectionManager } from "../connections/manager";
 import type { CoreHost } from "../herdr-core/host";
-import { coreHostForProfile, resolveCoreExecutable } from "../herdr-core/host";
+import {
+  coreHarnessReadiness,
+  coreHostForProfile,
+  resolveCoreExecutable,
+} from "../herdr-core/host";
 import type { CoreConnectionProfile } from "../connections/profiles";
 import { createCoreConnections } from "../herdr-core/connections";
 import { memoryCoreTopologyPort } from "../storage/core-topology";
@@ -45,8 +47,6 @@ export type CoreRpcServices = {
   hostRuntime(lease: ReadyRuntimeLease<CoreConnectionRuntime>): CoreHostRuntime;
   /** Where the core of a connection runs, for finding executables. */
   host(connectionId: string): CoreHost | null;
-  /** Test seam: how the readiness probe runs. */
-  run?: typeof runProcessWithCodeTimeout;
 };
 
 /**
@@ -151,14 +151,10 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
         // Every harness Herdr integrates, and whether this host has it: the
         // launcher offers the installed ones (core runs any program).
         const host = core.host(connectionId);
+        if (!host)
+          throw new CoreOperationRefused("World cannot reach that host");
         const kinds = coreHarnessNames();
-        const readiness = await harnessReadiness({
-          kinds,
-          ...(host?.destination ? { host: host.destination } : {}),
-          windows: host?.windows ?? false,
-          run: core.run ?? runProcessWithCodeTimeout,
-          shQuote,
-        });
+        const readiness = await coreHarnessReadiness(host, kinds);
         return reply({ kinds, readiness, skills: [] });
       }
       case "world.core.launch": {

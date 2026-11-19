@@ -24,9 +24,33 @@ Sources inspected on 2026-11-11:
 
 Every row has a **launch profile**, **native status** and **native send/answers/keys**.
 Native status means exactly core's records: without OSC 7501 it is **unknown**.
+This applies to Codex on Linux too: a missing core/harness report cannot be
+repaired by mapping it to idle. An isolated Linux core 0.1.21 / Codex 0.167.0
+launch publishes native idle/working through World's provider; the previously
+reported Linux-only absence was not reproduced with those versions.
 World does not copy the TUI's screen-status inference or install status-writing
 hooks for core. Seen and the pin use the existing shared labels. A stopped
 program may return to a kept shell; its old Chat cannot send to that replacement.
+
+On Unix, New agent resolves the executable and launches it through the account's
+interactive `$SHELL` (`/bin/sh` when unset), using login mode on macOS as core's
+plain terminals do. Supported shells are sh, bash, zsh, dash, ksh, mksh and fish;
+they pass the executable, profile arguments and first prompt as separate arguments.
+Shell startup supplies PATH
+and version-manager tools to the agent; World never collects or copies the
+environment. Absolute executables still bypass core templates. Windows keeps
+native launching. Other account shells, including csh, tcsh, nu, xonsh and elvish,
+keep direct discovery and launch with the inherited environment; their startup
+files do not supply additional tools. Startup files that replace the shell with
+another shell or tmux can prevent launch or time out the catalog probe. No change
+to the user's shell configuration is required.
+
+New agent identifies this path with **Starts in herdr-core**; a room named
+"core" on a Herdr TUI connection still uses the TUI launcher. Core launches
+receive an argv, including long Claude status-line settings and multiline
+profile arguments, rather than a command typed into a shell. The account shell
+receives those arguments as positional parameters, without interpolating them
+into its command string.
 
 | Harness kind | Executable | Core profile / status / delivery | Chat transcript |
 | --- | --- | --- | --- |

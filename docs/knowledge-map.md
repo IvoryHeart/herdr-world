@@ -9,6 +9,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 
 | Area | Contract | Owning source | Focused tests |
 | --- | --- | --- | --- |
+| Code view research/proposal and IDE integration study (not shipping) | [Research, provider comparison and gates](design/code-view/research.md), [OpenSpec proposal](../openspec/changes/world-code-view/proposal.md) | [Synthetic mock](../web/public/code-view-prototype.html), [interaction code](../web/public/code-view-prototype/mock.js); no live IDE adapter | [Exact preview clicks](design/code-view/design.md), [fixture tests](../web/src/testing/codeViewPrototype.test.ts); `/code-view-prototype.html` |
 | Runtime support | [Contract](../FEATURES.md#runtime-support) | [Source](../shared/herdrIdentity.ts) | [Tests](../shared/herdrIdentity.test.ts) |
 | First-run discovery | [Contract](../README.md#quick-start) | [Source](../server/src/connections/first-run.ts) | [Tests](../server/src/connections/first-run.test.ts) |
 | Local runtime presence | [Contract](../FEATURES.md#runtime-support) | [Source](../server/src/connections/local-discovery.ts) | [Tests](../server/src/connections/first-run.test.ts) |
@@ -50,7 +51,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Durable runtime status | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/storage/runtime-status.ts) | [Tests](../server/src/service/runtime-status-storage.test.ts) |
 | Durable Board state | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/storage/board-port.ts) | [Tests](../server/src/service/board-storage.test.ts) |
 | Durable profiles and chimes | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/storage/profile-port.ts) | [Tests](../server/src/service/profile-storage.test.ts) |
-| Agent launcher and profiles | [Contract](../openspec/specs/world-surfaces/spec.md#requirement-agent-profiles) | [Source](../shared/agentProfile.ts) | [Tests](../shared/agentProfile.test.ts) |
+| Agent launcher and profiles | [Contract](../openspec/specs/world-surfaces/spec.md#requirement-agent-profiles) | [Profile model](../shared/agentProfile.ts), [TUI Claude tap settings](../server/src/usage/claude-launch-settings.ts) | [Profile tests](../shared/agentProfile.test.ts), [canonical-shell TUI tap launch](../server/src/rpc/launcher-tap.test.ts), [tap settings cache](../server/src/usage/claude-launch-settings.test.ts) |
 | Terminal profile assignments | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../server/src/agent/profile-service.ts) | [Tests](../server/src/agent/terminal-settings.test.ts) |
 | Town Master greeting | [Contract](../openspec/specs/world-surfaces/spec.md#requirement-town-master-greeting) | [Source](../server/src/cli/world.ts) | [Tests](../server/src/cli/world.test.ts) |
 | Chimes | [Contract](../openspec/specs/world-surfaces/spec.md#requirement-chimes) | [Source](../shared/chimes.ts) | [Tests](../shared/chimes.test.ts) |

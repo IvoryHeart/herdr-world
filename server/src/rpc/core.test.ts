@@ -20,7 +20,8 @@ const host = (over: Partial<CoreHost> = {}): CoreHost => ({
   windows: false,
   // `command -v` finds every harness at a synthetic absolute path.
   run: async (script) => {
-    const kind = /command -v '([^']+)'/.exec(script)?.[1] ?? "x";
+    const kind =
+      /command -v '([^']+)'/.exec(script.replaceAll("'\\''", "'"))?.[1] ?? "x";
     return { code: 0, stdout: `/opt/example/bin/${kind}\n` };
   },
   ...over,
@@ -51,12 +52,6 @@ async function call(
         manager: w.core.manager,
         topology: w.topology,
         host: () => options.host ?? host(),
-        run: async () => ({
-          code: 0,
-          stdout: "",
-          stderr: "",
-          timedOut: false,
-        }),
       },
       profiles: () => options.profiles ?? { profile: () => null },
       publishWorldInvalidation: (_id: string, generation: number) => {
@@ -248,6 +243,44 @@ describe("world.core.* answers only the core connection it names", () => {
     expect(value.kinds).toContain("claude");
     expect(value.kinds).toContain("opencode");
     expect(value.readiness.map((r) => r.kind)).toEqual(value.kinds);
+  });
+
+  test("the catalog probes the selected core host through its shell", async () => {
+    const w = await world();
+    const scripts: string[] = [];
+    const result = await call(
+      w,
+      "world.core.catalog",
+      {
+        connection_id: "box",
+        connection_generation: w.lease().generation,
+      },
+      {
+        host: host({
+          destination: "host.example",
+          run: async (script) => {
+            scripts.push(script);
+            return {
+              code: 0,
+              stdout:
+                "@@kind codex\n@@found\nLogged in using ChatGPT\n@@exit 0\n@@end\n",
+            };
+          },
+        }),
+      },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.reply?.result).toMatchObject({
+      readiness: expect.arrayContaining([
+        expect.objectContaining({
+          kind: "codex",
+          installed: true,
+          logged_in: true,
+        }),
+      ]),
+    });
+    expect(scripts).toHaveLength(1);
+    expect(scripts[0]).toContain("shell=${SHELL:-/bin/sh}");
   });
 
   test.each([1, 20])(
