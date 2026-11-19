@@ -11,6 +11,8 @@
  * still works, and each row says what it would add.
  */
 
+import type { WorldSourceStatus } from "./worldSources";
+
 /** What an integration is. Kinds share status and UI, not an operation contract. */
 export const INTEGRATION_KINDS = [
   "runtime",
@@ -186,4 +188,71 @@ export function connectFor(
     if (found) return found;
   }
   return null;
+}
+
+const SOURCE_PROVIDES = {
+  github: ["pull_requests"],
+  jira: ["tickets"],
+} as const;
+
+/**
+ * One built-in source as an integration row. The service lists it and the
+ * browser maps each newer source status it sees through the same function,
+ * so an open screen follows a refresh that finishes after it loaded.
+ */
+export function sourceEntry(status: WorldSourceStatus): IntegrationEntry {
+  const settings: IntegrationSetting[] =
+    status.config.kind === "github"
+      ? [
+          {
+            key: "merged_days",
+            label: "Merged pull requests shown for",
+            value: `${status.config.mergedDays} days`,
+          },
+        ]
+      : [
+          { key: "site", label: "Site", value: status.config.site || null },
+          { key: "email", label: "Email", value: status.config.email || null },
+          { key: "jql", label: "Search", value: status.config.jql || null },
+          {
+            key: "token",
+            label: "API token",
+            value: status.config.tokenSet,
+            secret: true,
+          },
+        ];
+  return {
+    id: `source:${status.id}`,
+    kind: "source",
+    type: status.id,
+    label: status.label,
+    provides: [...SOURCE_PROVIDES[status.id]],
+    ...sourceState(status),
+    settings,
+    control: "source",
+  };
+}
+
+function sourceState(status: WorldSourceStatus): {
+  state: IntegrationEntry["state"];
+  detail: string;
+} {
+  if (status.state === "connected")
+    return { state: "connected", detail: status.detail };
+  if (status.state === "error")
+    return { state: "error", detail: status.detail };
+  if (status.state === "disabled") {
+    const ready =
+      status.config.kind === "github" ||
+      Boolean(
+        status.config.site && status.config.email && status.config.tokenSet,
+      );
+    return ready
+      ? { state: "available", detail: "Off. Connect turns it on." }
+      : {
+          state: "needs_connect",
+          detail: "Off. Add your site, email and API token to connect.",
+        };
+  }
+  return { state: "needs_connect", detail: status.detail };
 }

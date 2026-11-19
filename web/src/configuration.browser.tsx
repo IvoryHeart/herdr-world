@@ -9,6 +9,7 @@ import { ConfigMenu } from "./components/ConfigMenu";
 import type { AgentIntegration } from "./components/AgentIntegrationsSettings";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { __storeTesting, OperationalContext, store } from "./store";
+import { worldSourcesStore } from "./world/worldSources";
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -209,9 +210,12 @@ const integrationsSnapshot = () => ({
     ],
   },
 });
+let registryReads = 0;
 const worldFetch = (url: string, init?: RequestInit) => {
-  if (url === "/api/world/integrations")
+  if (url === "/api/world/integrations") {
+    registryReads++;
     return Response.json(integrationsSnapshot());
+  }
   if (url === "/api/world/sources" || url.startsWith("/api/world/sources?"))
     return Response.json({
       observedAt: 1,
@@ -581,6 +585,40 @@ async function integrationsScreen(dialog: Element) {
     () => !!dialog.querySelector('form[aria-label="Usage metrics settings"]'),
   );
   click("Usage metrics settings");
+
+  // The service refreshes sources on its own: a refresh that finishes while
+  // the screen is open moves the row without another registry read, both to
+  // a failure and back to connected.
+  await waitFor(
+    () => integrationRow("source:github")?.dataset.state === "connected",
+  );
+  const github = worldSources.find((item) => item.id === "github")!;
+  // A poll already on its way carries the old answer; the next one is new.
+  const refreshSources = async () => {
+    await worldSourcesStore.refresh();
+    await worldSourcesStore.refresh();
+  };
+  const reads = registryReads;
+  github.state = "error";
+  github.detail = "Sign-in expired.";
+  await refreshSources();
+  await waitFor(
+    () =>
+      integrationRow("source:github")?.dataset.state === "error" &&
+      integrationRow("source:github")!.textContent!.includes(
+        "Sign-in expired.",
+      ),
+  );
+  github.state = "connected";
+  github.detail = "Signed in.";
+  await refreshSources();
+  await waitFor(
+    () => integrationRow("source:github")?.dataset.state === "connected",
+  );
+  check(
+    registryReads === reads,
+    "a source refresh needed another registry read to reach the screen",
+  );
 }
 async function run() {
   const viewportSmoke = new URLSearchParams(location.search).has(

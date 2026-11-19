@@ -1399,6 +1399,9 @@ state:
   email and token, or the Prometheus URL).
 - **Error**: World tried and failed; the row says why.
 
+A source row follows its source while the screen is open: a check that
+finishes or fails after the screen opened changes the row at once.
+
 **Connect** and **Disconnect** apply at once. A runtime row acts on the exact
 connection it showed: if that connection was replaced since the list was
 read, it refuses and asks you to check again rather than acting on the new

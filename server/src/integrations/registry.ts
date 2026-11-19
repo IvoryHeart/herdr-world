@@ -1,8 +1,9 @@
-import type {
-  IntegrationEntry,
-  IntegrationSetting,
-  IntegrationsSnapshot,
-  VaultStatus,
+import {
+  type IntegrationEntry,
+  type IntegrationSetting,
+  type IntegrationsSnapshot,
+  sourceEntry,
+  type VaultStatus,
 } from "../../../shared/integrations";
 import type { WorldSourceStatus } from "../../../shared/worldSources";
 import type { WorldIntegrationStatus } from "../cli/integration";
@@ -44,6 +45,8 @@ export type IntegrationsInputs = {
   vault: () => VaultStatus;
   now: () => number;
 };
+
+export { sourceEntry };
 
 const RUNTIME_LABELS = {
   herdr: "Herdr",
@@ -107,68 +110,6 @@ function runtimeState(input: RuntimeInput): {
     default:
       return { state: "available", detail: "Disconnected." };
   }
-}
-
-const SOURCE_PROVIDES = {
-  github: ["pull_requests"],
-  jira: ["tickets"],
-} as const;
-
-export function sourceEntry(status: WorldSourceStatus): IntegrationEntry {
-  const settings: IntegrationSetting[] =
-    status.config.kind === "github"
-      ? [
-          {
-            key: "merged_days",
-            label: "Merged pull requests shown for",
-            value: `${status.config.mergedDays} days`,
-          },
-        ]
-      : [
-          { key: "site", label: "Site", value: status.config.site || null },
-          { key: "email", label: "Email", value: status.config.email || null },
-          { key: "jql", label: "Search", value: status.config.jql || null },
-          {
-            key: "token",
-            label: "API token",
-            value: status.config.tokenSet,
-            secret: true,
-          },
-        ];
-  return {
-    id: `source:${status.id}`,
-    kind: "source",
-    type: status.id,
-    label: status.label,
-    provides: [...SOURCE_PROVIDES[status.id]],
-    ...sourceState(status),
-    settings,
-    control: "source",
-  };
-}
-
-function sourceState(status: WorldSourceStatus): {
-  state: IntegrationEntry["state"];
-  detail: string;
-} {
-  if (status.state === "connected")
-    return { state: "connected", detail: status.detail };
-  if (status.state === "error")
-    return { state: "error", detail: status.detail };
-  if (status.state === "disabled") {
-    const ready =
-      status.config.kind === "github" ||
-      Boolean(
-        status.config.site && status.config.email && status.config.tokenSet,
-      );
-    return ready
-      ? { state: "available", detail: "Off. Connect turns it on." }
-      : {
-          state: "needs_connect",
-          detail: "Off. Add your site, email and API token to connect.",
-        };
-  }
-  return { state: "needs_connect", detail: status.detail };
 }
 
 export function metricsEntry(

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { bridge } from "./api";
 import {
   INTEGRATION_KINDS,
@@ -7,9 +7,12 @@ import {
   type IntegrationEntry,
   type IntegrationSetting,
   type IntegrationsSnapshot,
+  sourceEntry,
   type VaultStatus,
   WORLD_INTEGRATIONS_PATH,
 } from "../../shared/integrations";
+import type { WorldSourcesSnapshot } from "../../shared/worldSources";
+import { useWorldSources } from "./world/worldSources";
 
 export * from "../../shared/integrations";
 
@@ -171,13 +174,43 @@ export function parseIntegrations(value: unknown): IntegrationsSnapshot {
   };
 }
 
-/** The registry for a view, fetched on mount and after any change here. */
+/**
+ * Source rows follow the shared source snapshot. The service refreshes a
+ * source on its own schedule, so a refresh that finishes (or fails) after the
+ * registry was read reaches the open screen without another registry request.
+ * An unloaded source snapshot (`observedAt` 0) leaves the registry's rows.
+ */
+export function withLiveSources(
+  snapshot: IntegrationsSnapshot,
+  sources: WorldSourcesSnapshot,
+): IntegrationsSnapshot {
+  if (!sources.observedAt || !sources.sources.length) return snapshot;
+  let changed = false;
+  const integrations = snapshot.integrations.map((entry) => {
+    if (entry.kind !== "source" || entry.control !== "source") return entry;
+    const status = sources.sources.find((source) => source.id === entry.type);
+    if (!status) return entry;
+    changed = true;
+    return sourceEntry(status);
+  });
+  return changed ? { ...snapshot, integrations } : snapshot;
+}
+
+/**
+ * The registry for a view, fetched on mount and after any change here; its
+ * source rows track the live source snapshot (see `withLiveSources`).
+ */
 export function useIntegrations(enabled = true): {
   snapshot: IntegrationsSnapshot | null;
   error: string | null;
   refresh(): Promise<void>;
 } {
-  const [snapshot, setSnapshot] = useState<IntegrationsSnapshot | null>(null);
+  const [listed, setSnapshot] = useState<IntegrationsSnapshot | null>(null);
+  const sources = useWorldSources();
+  const snapshot = useMemo(
+    () => (listed ? withLiveSources(listed, sources) : null),
+    [listed, sources],
+  );
   const [error, setError] = useState<string | null>(null);
   const sequence = useRef(0);
   const refresh = useCallback(async () => {
