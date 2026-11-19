@@ -30,7 +30,11 @@ const firstBoardTables = [
   "groups",
   "group_changes",
 ] as const;
-export const boardTables = [...firstBoardTables, "room_pins"] as const;
+export const boardTables = [
+  ...firstBoardTables,
+  "room_pins",
+  "elements",
+] as const;
 type Family = (typeof boardTables)[number];
 type Row = {
   key: string;
@@ -50,6 +54,7 @@ ${firstBoardTables.map(boardTable).join("\n")}
 `;
 /** Town room spots (board-types.ts `room_pins`), added after the first schema. */
 export const worldRoomPinsMigration = boardTable("room_pins");
+export const worldBoardElementsMigration = boardTable("elements");
 export function readBoard(db: Database): BoardDocument | null {
   const meta = db.query("SELECT * FROM board_meta WHERE singleton=1").get() as {
     revision: number;
@@ -66,6 +71,8 @@ export function readBoard(db: Database): BoardDocument | null {
     ).map((row) => [row.key, JSON.parse(row.body)] as const);
   const doc = emptyBoardDocument();
   doc.revision = meta.revision;
+  const elements = rows("elements").map(([, body]) => body);
+  if (elements.length) doc.elements = elements;
   doc.notes = rows("notes").map(([, body]) => body);
   doc.strings = rows("strings").map(([, body]) => body);
   for (const family of maps)
@@ -96,6 +103,7 @@ export function writeBoard(
     "INSERT INTO world_ids(id) SELECT ? WHERE NOT EXISTS(SELECT 1 FROM world_ids WHERE id=?)",
   );
   for (const record of [
+    ...(next.elements ?? []),
     ...next.notes,
     ...next.strings,
     ...next.relations.groups,
@@ -176,9 +184,13 @@ export function writeBoard(
         !binding
       )
         throw new Error("Board binding capture is missing");
-      const record = ["notes", "strings", "groups", "group_interest"].includes(
-        family,
-      )
+      const record = [
+        "notes",
+        "strings",
+        "groups",
+        "group_interest",
+        "elements",
+      ].includes(family)
         ? key
         : (binding?.record_id ?? null);
       put.run(
@@ -191,6 +203,10 @@ export function writeBoard(
       );
     });
   }
+  save(
+    "elements",
+    (next.elements ?? []).map((element) => [element.id, element]),
+  );
   save(
     "notes",
     next.notes.map((note) => [note.id, note]),

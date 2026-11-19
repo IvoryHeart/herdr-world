@@ -1,3 +1,7 @@
+import {
+  BOARD_ELEMENT_CLI_COMMANDS,
+  runBoardElementCommand,
+} from "./world-cli-elements";
 import { planBoardPatch } from "./board-plan";
 import { StorageOutcomeUnknown } from "../storage/world-protocol";
 import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
@@ -106,6 +110,7 @@ export type WorldCliDeps = {
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
+  elements?: import("./board-element-service").BoardElementService;
   groupMove?(request: GroupMoveRequest, recheck?: () => void): Promise<unknown>;
   publishBoard(revision: number): void;
   /** Tell World's pages; `asks` when a question was asked or answered. */
@@ -122,6 +127,7 @@ export const WORLD_CLI_COMMANDS = [
   "ls",
   "history",
   "undo",
+  ...BOARD_ELEMENT_CLI_COMMANDS,
   "board card move",
   "board card pin",
   "board card unpin",
@@ -635,6 +641,8 @@ export function createWorldCli(deps: WorldCliDeps) {
     const patchBoard = patchBoardWithDeps.bind(null, deps);
     const changeBoard = changeBoardWithDeps.bind(null, deps);
     const topologyFor = topologyWithDeps.bind(null, deps);
+    if (command.startsWith("board element "))
+      return runBoardElementCommand(deps.elements, command, params, recheck);
     if (command.startsWith("group "))
       return runGroupCommand(command, params, {
         deps,

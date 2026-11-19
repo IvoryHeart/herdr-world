@@ -1,3 +1,4 @@
+import { composeBoardData } from "./board-element-sources";
 import { findHerdrBinary } from "../herdr/bootstrap";
 import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
 import { createCoreInstall } from "../herdr-core/install";
@@ -60,7 +61,6 @@ import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { afterHerdrClose } from "../world/board-closing";
-import { createBoardRecipientRecorder } from "./board-recipients";
 import { createBinService } from "./bin-service";
 import type { createMoveQueue } from "../world/desk-move";
 import { reconcileReadyInterest } from "../world/interest-prune";
@@ -257,13 +257,14 @@ async function compose(
     "world-board",
   );
 
-  const bindBoardRecipients = createBoardRecipientRecorder(
-    () => connectionManager,
+  const { boardElements, bindBoardRecipients } = composeBoardData({
     board,
-    publishBoardChanged,
-  );
+    publish: publishBoardChanged,
+    sources: () => ({ connectionManager, coreControl: coreRpc }),
+  });
 
   const worldCli = createWorldCliService({
+    elements: boardElements,
     core: () => coreCallers,
     board,
     ledger: () => storage.ledger(),
@@ -798,6 +799,7 @@ async function compose(
     worldCli,
     worldSnapshots,
     worldUsage,
+    boardElements,
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 

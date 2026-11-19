@@ -35,6 +35,7 @@ import type { TownMoveContext } from "./town-move";
 type Lease = AnswerLease;
 
 export function createWorldCliService(deps: {
+  elements?: import("./board-element-service").BoardElementService;
   core?(): CoreAnswerConnections | CoreCallerSource | null;
   ledger(): LedgerStore;
   attention?(): WorldLedgerStorage["outbox"];
@@ -241,6 +242,7 @@ export function createWorldCliService(deps: {
       return { acknowledged: true };
     },
     board,
+    elements: deps.elements,
     get ledger() {
       return ledger();
     },
