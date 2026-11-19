@@ -233,8 +233,6 @@ import {
   type WorkspaceInspectorRequest,
   type WorkspaceInspectorContext,
   type WorkspaceInspectorState,
-  WORLD_OBSERVABILITY_SETTINGS_EVENT,
-  WORLD_SOURCES_SETTINGS_EVENT,
   writeInspectorPreferences,
   writeResourceFileSelection,
 } from "./workspaceResource";
@@ -4211,15 +4209,7 @@ export default function App({
               }
               onTerminalThemeSelectionChange={setTerminalThemeSelection}
               onCustomTerminalThemesChange={setCustomTerminalThemes}
-              onOpenOfficeMetrics={() =>
-                window.dispatchEvent(
-                  new Event(WORLD_OBSERVABILITY_SETTINGS_EVENT),
-                )
-              }
               onOpenAgentProfiles={() => openProfileEditor()}
-              onOpenSources={() =>
-                window.dispatchEvent(new Event(WORLD_SOURCES_SETTINGS_EVENT))
-              }
             />
           </OperationalContext.Provider>
         </div>

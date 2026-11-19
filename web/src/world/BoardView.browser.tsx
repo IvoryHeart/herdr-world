@@ -105,7 +105,8 @@ const sourcesBody = () => ({
       label: "Jira",
       enabled: true,
       state: "not_connected",
-      detail: "Add your Jira site, email and API token in Sources settings.",
+      detail:
+        "Add your Jira site, email and API token in Settings → Integrations.",
       checkedAt: 1,
       lastSuccessAt: null,
       itemCount: 0,
@@ -1008,7 +1009,8 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         "a failing pull request is in Fixing with its checks",
       );
       check(
-        host.querySelector(".work-lens-setup")?.textContent === "Set up Jira" &&
+        host.querySelector(".work-lens-setup")?.textContent ===
+          "Connect Jira" &&
           !host.querySelector('.work-lens-note[role="status"]'),
         "a source never set up is a quiet hint, not a problem",
       );

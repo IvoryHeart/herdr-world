@@ -87,7 +87,7 @@ use the corner view menu. Town's time-of-day button below **ALL** cycles your
 clock, day, dusk and night. Amber light means someone needs you.
 
 GitHub pull requests appear after `gh auth login` for the account running
-World. Add Jira in **Settings → Sources**.
+World. Add Jira in **Settings → Integrations**.
 
 ## Screenshots
 

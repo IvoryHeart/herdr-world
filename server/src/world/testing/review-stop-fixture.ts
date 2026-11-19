@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openWorldLedger } from "../../storage/world-storage";
+import { openWorldWriter } from "../../storage/world-writer";
 import { systemScheduler, type Scheduler } from "../../service/ports";
 import { handleDeskRpc } from "../../rpc/desk";
 import type { BridgeRpcContext } from "../../rpc/context";
@@ -138,6 +139,25 @@ export async function reviewStopFixture(seed?: {
     )[1] as string;
   };
   return {
+    /** Bulk fixture setup only; asserted RPCs and observations use the real worker. */
+    async seedStore(
+      prepare: (writer: ReturnType<typeof openWorldWriter>) => void,
+    ) {
+      await marks.close();
+      await storage.close();
+      const writer = openWorldWriter(paths.database, paths.ledger, time);
+      try {
+        prepare(writer);
+      } finally {
+        writer.close();
+      }
+      storage = await openWorldLedger(paths, {
+        clock,
+        scheduler: systemScheduler,
+      });
+      registries = makeRegistries();
+      marks = makeMarks();
+    },
     client,
     browsers,
     refresh,
