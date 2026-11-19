@@ -614,7 +614,7 @@ async function runTouch() {
         () =>
           dialog
             .querySelector(".workspace-path-hint")
-            ?.textContent?.includes("Folder: /tmp/docs") === true,
+            ?.textContent?.includes("Directory: /tmp/docs") === true,
         "touch workspace directory validation",
       );
       await tap(action("Cancel")!);

@@ -111,16 +111,7 @@ async function registerDomTests() {
     serverRuntimeGeneration: 1,
     isCurrent: () => true,
     acceptsServerGeneration: () => true,
-    call: async (method, params) => {
-      // The new-room folder defaults to home and is checked on the host.
-      if (method === "workspace.path") {
-        const path = (params as { path: string }).path;
-        return {
-          path: path === "~" ? "/home/example" : path,
-          error: null,
-          directories: [],
-        };
-      }
+    call: async (method) => {
       expect(method).toBe("worktree.list");
       listCalls += 1;
       return {
@@ -221,7 +212,7 @@ async function registerDomTests() {
     },
   ];
 
-  test("New room offers a herdr-core host and creates a named core room in a folder there", async () => {
+  test("New room offers a herdr-core host and creates a named core room there", async () => {
     const previous = store.get();
     __storeTesting.replaceState({
       ...previous,
@@ -248,20 +239,6 @@ async function registerDomTests() {
       calls.push([method, args]);
       return { workspace_id: "core-room", label: "Plans" };
     }) as typeof bridge.call);
-    // The core's host resolves the folder (#1006).
-    const paths: unknown[] = [];
-    connection.mockImplementation(((
-      connectionId: string,
-      generation: number,
-    ) => ({
-      connectionId,
-      generation,
-      isCurrent: () => true,
-      call: async (method: string, params: { path: string }) => {
-        paths.push([method, params.path]);
-        return { path: params.path, error: null, directories: [] };
-      },
-    })) as unknown as typeof bridge.connection);
     const create = spyOn(store, "createQualifiedWorkspace");
     const container = document.createElement("div");
     document.body.append(container);
@@ -285,8 +262,12 @@ async function registerDomTests() {
         ),
       ].map((option) => option.textContent);
     try {
-      // A folder was asked for: a core room takes one too.
+      // A folder was asked for: a core room has none, so only Herdr hosts.
       await act(async () => render("/srv/example"));
+      expect(options()).toEqual(["Choose a host", "Test host"]);
+      await act(async () => root!.unmount());
+      root = createRoot(container);
+      await act(async () => render());
       expect(options()).toEqual([
         "Choose a host",
         "Test host",
@@ -299,12 +280,7 @@ async function registerDomTests() {
         select.value = "core-synthetic";
         select.dispatchEvent(new Event("change", { bubbles: true }));
       });
-      expect(
-        container.querySelector<HTMLInputElement>("input[placeholder^='e.g.']")
-          ?.value,
-      ).toBe("/srv/example");
-      await act(() => new Promise((resolve) => setTimeout(resolve, 300)));
-      expect(paths).toContainEqual(["workspace.path", "/srv/example"]);
+      expect(container.textContent).not.toContain("Working directory");
       await act(async () =>
         container
           .querySelector("form")!
@@ -319,7 +295,6 @@ async function registerDomTests() {
             connection_id: "core-synthetic",
             connection_generation: 4,
             label: "Plans",
-            folder: "/srv/example",
           },
         ],
       ]);
@@ -327,7 +302,6 @@ async function registerDomTests() {
       expect(closed).toBe(1);
     } finally {
       call.mockRestore();
-      connection.mockImplementation(() => client);
       create.mockRestore();
       __storeTesting.replaceState(previous);
     }
@@ -452,8 +426,6 @@ async function registerDomTests() {
         expect(input().selectionStart).toBe(0);
         expect(input().selectionEnd).toBe("calm-otter".length);
         if (create) {
-          // The folder defaults to home, checked on the host first.
-          await act(() => new Promise((resolve) => setTimeout(resolve, 250)));
           expect(
             container.querySelector<HTMLButtonElement>('[type="submit"]')!
               .disabled,
@@ -468,7 +440,7 @@ async function registerDomTests() {
           expect(create).toHaveBeenLastCalledWith(
             { connectionId: client.connectionId, runtimeGeneration: 1 },
             "calm-otter",
-            "/home/example",
+            undefined,
             { sourceWorkspaceId: undefined },
           );
         }
@@ -476,8 +448,6 @@ async function registerDomTests() {
         await act(async () => render(false));
         await act(async () => render(true));
         await act(async () => edit("my-branch"));
-        if (create)
-          await act(() => new Promise((resolve) => setTimeout(resolve, 250)));
         expect(
           container.querySelector<HTMLButtonElement>('[type="submit"]')!
             .disabled,
@@ -2491,7 +2461,6 @@ async function registerDomTests() {
         form.querySelector<HTMLButtonElement>('button[type="submit"]')!
           .disabled,
       ).toBe(true);
-      await act(() => new Promise((resolve) => setTimeout(resolve, 250)));
       await act(async () => submit());
       expect(create).toHaveBeenCalledTimes(1);
       await act(async () => finish({ type: "workspace_created" }));
@@ -2544,7 +2513,7 @@ async function registerDomTests() {
           jest.advanceTimersByTime(200);
         });
         const suggestion = container.querySelector<HTMLButtonElement>(
-          '[aria-label="Folders to browse"] button:not([data-folder-up])',
+          '[aria-label="Directory suggestions"] button',
         )!;
         expect(suggestion.textContent).toBe(label);
         await act(async () => suggestion.click());
@@ -2648,7 +2617,7 @@ async function registerDomTests() {
       });
       expect(container.textContent).toContain("/home/test");
       const suggestion = container.querySelector<HTMLButtonElement>(
-        '[aria-label="Folders to browse"] button:not([data-folder-up])',
+        '[aria-label="Directory suggestions"] button',
       )!;
       await act(async () => suggestion.click());
       expect(

@@ -1,6 +1,5 @@
 import { usageStopText } from "../../../../shared/usageStop";
-import { Activity } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   formatOfficeCost,
   formatOfficeModelNames,
@@ -53,57 +52,12 @@ export function TownBoard({
   sinceYouLeft?: { board: ReactNode; chip: ReactNode };
 }) {
   const expenses = townCityExpenses(useTownExpensesUsage(usageStore));
-  // One compact indicator; the board is its popover: a tap or click pins
-  // it open, a mouse over the indicator shows it, and Escape or a tap
-  // outside closes it (#1006).
-  const [pinned, setPinned] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const open = pinned || hovered;
-  const chipRef = useRef<HTMLButtonElement>(null);
-  const boardRef = useRef<HTMLDivElement>(null);
-  const leaveTimer = useRef<number | undefined>(undefined);
-  const close = () => {
-    window.clearTimeout(leaveTimer.current);
-    setPinned(false);
-    setHovered(false);
-  };
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (
-        target &&
-        (chipRef.current?.contains(target) ||
-          boardRef.current?.contains(target))
-      )
-        return;
-      close();
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
-    };
-    document.addEventListener("pointerdown", outside, true);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("pointerdown", outside, true);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [open]);
-  useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
-  const hoverIn = (event: React.PointerEvent) => {
-    if (event.pointerType !== "mouse") return;
-    window.clearTimeout(leaveTimer.current);
-    setHovered(true);
-  };
-  const hoverOut = (event: React.PointerEvent) => {
-    if (event.pointerType !== "mouse") return;
-    window.clearTimeout(leaveTimer.current);
-    leaveTimer.current = window.setTimeout(() => setHovered(false), 240);
-  };
+  // Phones show a compact chip; it opens the full board in place.
+  const [open, setOpen] = useState(false);
   const closeOnEscape = (event: React.KeyboardEvent) => {
     if (open && event.key === "Escape") {
       event.stopPropagation();
-      close();
+      setOpen(false);
     }
   };
   const population = `${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} in ${counts.buildings} ${counts.buildings === 1 ? "building" : "buildings"}`;
@@ -117,44 +71,43 @@ export function TownBoard({
   const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet${
     counts.outOfFuel ? `, ${counts.outOfFuel} out of fuel` : ""
   }; ${population}${lowest ? `; ${townFuelLowestText(lowest, now)}` : ""}`;
-  // Only what needs action shows on the indicator: the waiting count, and
-  // fuel once it runs low.
-  const lowFuel = lowest && (lowest.window.low || lowest.window.reached);
   return (
     <>
       <button
-        ref={chipRef}
         type="button"
         className="town-board-chip"
-        aria-expanded={open}
-        aria-controls="town-board"
-        aria-label={`Town board: ${summary}`}
-        data-attention={counts.needsYou > 0}
-        // A click pins the board a hover opened; the next one closes it.
-        onClick={() => (pinned ? close() : setPinned(true))}
-        onPointerEnter={hoverIn}
-        onPointerLeave={hoverOut}
+        // With a summary to open, the chip opens it; otherwise the board.
+        {...(onOpenSummary
+          ? { "aria-haspopup": "dialog" as const }
+          : { "aria-expanded": open, "aria-controls": "town-board" })}
+        aria-label={`${onOpenSummary ? "Town summary" : "Town board"}: ${summary}`}
+        title={
+          onOpenSummary
+            ? "Open the Town summary"
+            : open
+              ? "Hide the Town board"
+              : "Show the Town board"
+        }
+        onClick={() =>
+          onOpenSummary ? onOpenSummary() : setOpen((value) => !value)
+        }
         onKeyDown={closeOnEscape}
       >
-        <Activity size={14} aria-hidden="true" />
-        {counts.needsYou > 0 ? (
-          <span data-status="blocked" data-attention="true">
-            !{counts.needsYou}
-          </span>
-        ) : null}
-        {lowFuel ? <TownFuelChip lowest={lowest} now={now} /> : null}
+        <span data-status="working">{counts.working}</span>
+        <span data-status="blocked" data-attention={counts.needsYou > 0}>
+          !{counts.needsYou}
+        </span>
+        <span data-status="done">✓{counts.finished}</span>
+        {lowest ? <TownFuelChip lowest={lowest} now={now} /> : null}
       </button>
       {sinceYouLeft?.chip}
       <div
-        ref={boardRef}
         id="town-board"
         className="town-board"
         data-open={open}
         role="group"
         aria-label="Town board"
         onKeyDown={closeOnEscape}
-        onPointerEnter={hoverIn}
-        onPointerLeave={hoverOut}
       >
         <div className="town-board-title">
           TOWN BOARD
@@ -162,10 +115,7 @@ export function TownBoard({
             <button
               type="button"
               className="town-board-open"
-              onClick={() => {
-                close();
-                onOpenSummary();
-              }}
+              onClick={onOpenSummary}
             >
               Summary
             </button>

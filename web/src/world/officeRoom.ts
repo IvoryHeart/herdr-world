@@ -6,11 +6,10 @@ import type {
   OfficePaneDevice,
   OfficeRoom,
 } from "./officeProjectionTypes";
-import {
-  isCoreResourceNode,
-  type WorldAgentStatus,
-  type WorldLeafObject,
-  type WorldSpaceObject,
+import type {
+  WorldAgentStatus,
+  WorldLeafObject,
+  WorldSpaceObject,
 } from "./worldObject";
 
 /**
@@ -83,7 +82,6 @@ export function* constructRoom(
       order: index,
       stale: space.stale,
       canOpenInSpaces: operational,
-      ...(leaves.some(isCoreResourceNode) ? { coreOpen: true as const } : {}),
       completionAgentKeys: [],
       paneDevices: [],
       observedPaneCount: Math.max(tab.pane_count, leaves.length),
@@ -182,11 +180,6 @@ export function projectPaneDevices(
       order,
       stale: leaf.stale,
       canOpenInSpaces: leaf.capabilities.openSpaces,
-      ...(isCoreResourceNode(leaf) ? { coreOpen: true as const } : {}),
-      ...(leaf.focused ? { focused: true as const } : {}),
-      ...(typeof leaf.lastActivityAt === "number"
-        ? { lastActivityAt: leaf.lastActivityAt }
-        : {}),
       ...(leaf.kind === "agent" ? { agentKey: leaf.id } : {}),
       ...(leaf.agentSessionFingerprint
         ? { agentSessionFingerprint: leaf.agentSessionFingerprint }

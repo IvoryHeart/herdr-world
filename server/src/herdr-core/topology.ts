@@ -359,11 +359,7 @@ export function coreTopology(
             ? coreName
             : "Room"),
       focused: false,
-      ...(room.checkout
-        ? coreCheckoutFields(room.checkout)
-        : room.folder
-          ? { cwd: room.folder }
-          : {}),
+      ...coreCheckoutFields(room.checkout),
     });
   }
   const panes: TerminalRow[] = [];

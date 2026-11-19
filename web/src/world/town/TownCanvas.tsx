@@ -26,7 +26,6 @@ import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
 import { TownZoomControls } from "./TownZoomControls";
-import { townDeskOpensAtOnce } from "./townOpen";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type {
   WorldCanvasAnchor,
@@ -336,7 +335,6 @@ export function TownCanvas({
     selectedKey,
     hover,
     tappedDesk,
-    projection,
     completionSeenKeys,
     summonedKeys: deskKeys,
     askingKeys,
@@ -655,15 +653,13 @@ export function TownCanvas({
       },
       select: (key) => latest.current.onSelect(key),
       tapCard: (deskKey) => {
-        const { tappedDesk: open, model: m, projection: p } = latest.current;
+        const { tappedDesk: open, model: m } = latest.current;
         const roomKey = deskKey ? m.desks.get(deskKey)?.roomKey : undefined;
-        // Only a table drawn with its nameplate, and with no pane a tap
-        // opens at once (townDeskOpensAtOnce), has a card; a second tap on
-        // the same table does what a tap always did.
+        // Only a table drawn with its nameplate has a card; a second tap
+        // on the same table does what a tap always did.
         const opens =
           deskKey !== null &&
           deskKey !== open &&
-          !townDeskOpensAtOnce(p, deskKey) &&
           !!roomKey &&
           hud.visible.tagRooms.has(roomKey);
         setTappedDesk(opens ? deskKey : null);

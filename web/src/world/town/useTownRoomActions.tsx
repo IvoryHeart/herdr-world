@@ -25,7 +25,10 @@ import {
   renameRoom,
   RoomRenameCloseDialogs,
 } from "../roomRenameClose";
+import { TextInputDialog } from "../../components/ModalDialogs";
+import { createCoreRoom } from "../coreControl";
 import { openCoreWorktrees } from "../CoreWorktrees";
+import { store } from "../../store";
 import type { WorldObject } from "../worldObject";
 import type { TownRoomActions } from "./TownCanvas";
 
@@ -356,8 +359,34 @@ export function TownRoomDialogs({
 }) {
   return (
     <>
+      <TextInputDialog
+        open={dialog?.mode === "create" && dialog.core === true}
+        title="New room"
+        label="Room name"
+        initialValue=""
+        submitLabel="Create room"
+        onClose={() => setDialog(null)}
+        onSubmit={(label) => {
+          const owner = dialog?.mode === "create" ? dialog.owner : undefined;
+          setDialog(null);
+          if (owner)
+            void createCoreRoom(
+              {
+                connectionId: owner.connectionId,
+                generation: owner.runtimeGeneration,
+              },
+              label,
+            ).catch((cause: unknown) =>
+              store.notify({
+                kind: "error",
+                message: "Room creation failed",
+                detail: cause instanceof Error ? cause.message : String(cause),
+              }),
+            );
+        }}
+      />
       <CreateWorkspaceDialog
-        open={dialog?.mode === "create"}
+        open={dialog?.mode === "create" && dialog.core !== true}
         initialDestination={
           dialog?.owner
             ? {

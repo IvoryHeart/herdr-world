@@ -138,12 +138,10 @@ export async function closeCoreRoom(
 export async function createCoreRoom(
   target: CoreTarget,
   label: string,
-  /** A folder on the core's host; its terminals start there. */
-  folder?: string,
 ): Promise<{ workspace_id: string; label: string }> {
   return (await bridge.call(
     "world.core.room.create",
-    { ...fenced(target), label, ...(folder ? { folder } : {}) },
+    { ...fenced(target), label },
     30_000,
   )) as { workspace_id: string; label: string };
 }

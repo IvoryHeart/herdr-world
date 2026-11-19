@@ -1,7 +1,6 @@
 import { conversationRpc } from "../agent/conversation-rpc";
 import { withCoreRecipient } from "../herdr-core/agent-sessions";
 import type { CoreHostRuntime } from "../herdr-core/host-runtime";
-import { inspectWorkspacePath } from "../workspace/path";
 import {
   answersOnCore,
   coreHostRefusal,
@@ -59,13 +58,6 @@ const CORE_HOST_CALLS = {
       host.agentSessions().link(params),
     ),
   "agent_turn.get": (host) => host.agentSessions().readTurn,
-  // A new room's folder, completed and checked on the core's host.
-  "workspace.path": (host) => (params: Record<string, unknown>) =>
-    inspectWorkspacePath(params.path, {
-      host: host.sshHost(),
-      remotePlatform: host.remotePlatform,
-      runProcessWithCodeTimeout: host.runProcessWithCodeTimeout,
-    }),
 } satisfies Record<
   Exclude<CoreHostMethod, "file.reveal" | ConversationMethod>,
   (

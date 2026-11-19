@@ -13,16 +13,11 @@ import {
   useStoreSelector,
 } from "../store";
 import { useId, useMemo } from "react";
-import { CornerLeftUp, Folder, History } from "lucide-react";
+import { Folder } from "lucide-react";
 import type { WorkspacePathInfo } from "../../../shared/workspacePath";
 import { bridge, type ConnectionClient } from "../api";
 import { hostRuntimeLabel, worldHosts, type WorldHost } from "../worldHosts";
 import { createCoreRoom } from "../world/coreControl";
-import {
-  completeFolder,
-  parentFolder,
-  useRecentFolders,
-} from "../world/recentFolders";
 import { CloseButton } from "./CloseButton";
 import { focusDialogElement } from "./dialogFocus";
 import { useSuggestedName } from "./useSuggestedName";
@@ -30,10 +25,9 @@ import "./CreateWorkspaceDialog.css";
 
 /**
  * New room (a Herdr workspace) on a chosen host. Every host of `worldHosts`
- * can take one: a herdr-core host gets a room of World's layout there. The
- * folder starts at the host's most recent one (else home): its other recent
- * folders are one tap away, the folders inside it a list to browse, and a
- * typed path completes with Tab (#1006).
+ * can take one: a herdr-core host gets a room of World's layout there, by
+ * name (core rooms have no working directory of their own), so it is offered
+ * only when no folder was asked for.
  */
 export function CreateWorkspaceDialog({
   open,
@@ -60,7 +54,11 @@ export function CreateWorkspaceDialog({
     runtimeGeneration: number;
   } | null>(null);
   const hosts = useStoreSelector(worldHosts);
-  const ready = hosts.filter((host) => host.state === "ready");
+  const ready = hosts.filter(
+    (host) =>
+      host.state === "ready" &&
+      (host.runtime === "herdr" || !initialCwd?.trim()),
+  );
   const destinationSource = useRef({ ready, inherited, initialDestination });
   destinationSource.current = { ready, inherited, initialDestination };
   const current: WorldHost | null =
@@ -92,10 +90,6 @@ export function CreateWorkspaceDialog({
     labelRef,
   );
   const [cwd, setCwd] = useState("");
-  // Until the person edits the folder, it follows the host's default.
-  const [cwdTouched, setCwdTouched] = useState(false);
-  const recent = useRecentFolders(current?.id ?? null);
-  const suggestedCwd = initialCwd?.trim() || recent[0] || "~";
   const [submitting, setSubmitting] = useState(false);
   const submissionPending = useRef(false);
   const onCloseEvent = useEffectCallback(onClose);
@@ -118,7 +112,7 @@ export function CreateWorkspaceDialog({
   }, [open]);
   const client = useMemo(
     () =>
-      destination
+      destination && !inCore
         ? bridge.connection(
             destination.connectionId,
             destination.runtimeGeneration,
@@ -127,6 +121,7 @@ export function CreateWorkspaceDialog({
     [
       destination?.connectionId,
       destination?.runtimeGeneration,
+      inCore,
       snapshot.connectionGeneration,
       snapshot.status,
       snapshot.terminalAttachEpoch,
@@ -141,11 +136,10 @@ export function CreateWorkspaceDialog({
   const [createError, setCreateError] = useState("");
   const cwdRef = useRef<HTMLInputElement>(null);
   const pathHintId = useId();
-  const cwdId = useId();
 
   useEffect(() => {
     if (!open) return;
-    setCwdTouched(false);
+    setCwd(initialCwd?.trim() ?? "");
     const cancelFocus = focusDialogElement(labelRef.current, { select: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCloseEvent();
@@ -158,15 +152,11 @@ export function CreateWorkspaceDialog({
   }, [open, initialName, initialCwd, onCloseEvent]);
 
   useEffect(() => {
-    if (open && !cwdTouched) setCwd(suggestedCwd);
-  }, [open, cwdTouched, suggestedCwd]);
-
-  useEffect(() => {
     setCreateError("");
     setPathState(null);
   }, [open, client]);
 
-  const input = cwd.trim();
+  const input = inCore ? "" : cwd.trim();
   useEffect(() => {
     if (!open || !input || !client) return;
     let cancelled = false;
@@ -174,21 +164,7 @@ export function CreateWorkspaceDialog({
       void client.call("workspace.path", { path: input }).then(
         (info: WorkspacePathInfo) => {
           if (!cancelled && client.isCurrent())
-            setPathState(
-              typeof info?.path === "string"
-                ? {
-                    client,
-                    input,
-                    info: {
-                      ...info,
-                      directories: Array.isArray(info.directories)
-                        ? info.directories
-                        : [],
-                    },
-                  }
-                : // An answer without a folder checks nothing.
-                  { client, input },
-            );
+            setPathState({ client, input, info });
         },
         (error: Error) => {
           if (!cancelled && client.isCurrent())
@@ -209,15 +185,7 @@ export function CreateWorkspaceDialog({
       ? pathState
       : null;
   const pathError = checked?.error || checked?.info?.error;
-  const unchecked = !!input && !checked;
-  // World's own default (a folder seen on this host, or home) need not wait
-  // for its check: a quick Create still lands there. A folder the caller
-  // asked for is checked first, as a typed one is.
-  const offered = !cwdTouched && !initialCwd?.trim() && input === suggestedCwd;
-  const checking = unchecked && !offered;
-  const folder = !input
-    ? undefined
-    : (checked?.info?.path ?? (offered && input !== "~" ? input : undefined));
+  const checking = !!input && !checked;
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
@@ -226,7 +194,7 @@ export function CreateWorkspaceDialog({
       createReason ||
       checking ||
       pathError ||
-      ((!inCore || input) && !client?.isCurrent())
+      (!inCore && !client?.isCurrent())
     )
       return;
     if (!destination) return;
@@ -242,7 +210,6 @@ export function CreateWorkspaceDialog({
           },
           // An empty name is the service's "Room": never unnamed.
           label.trim(),
-          folder,
         );
         onClose();
         return;
@@ -250,7 +217,7 @@ export function CreateWorkspaceDialog({
       await store.createQualifiedWorkspace(
         destination,
         label.trim() || undefined,
-        folder,
+        input ? checked?.info?.path : undefined,
         {
           sourceWorkspaceId:
             destination.connectionId === initialDestination?.connectionId &&
@@ -273,18 +240,6 @@ export function CreateWorkspaceDialog({
       setSubmitting(false);
     }
   };
-
-  const chooseFolder = (folder: string) => {
-    setCwdTouched(true);
-    setCwd(folder);
-    setCreateError("");
-    cwdRef.current?.focus();
-  };
-  // Up from an existing folder; from a typed prefix, its folder is listed.
-  const up =
-    checked?.info && !checked.info.error
-      ? parentFolder(checked.info.path)
-      : null;
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
@@ -345,117 +300,88 @@ export function CreateWorkspaceDialog({
           />
         </label>
 
-        <div className="form-field">
-          <label htmlFor={cwdId}>Folder</label>
-          {recent.length ? (
+        {inCore ? (
+          <p className="workspace-path-hint">
+            Agents in a new herdr-core room start in herdr-core&apos;s own
+            folder on that host.
+          </p>
+        ) : (
+          <>
+            <label className="form-field">
+              <span>Working directory</span>
+              <input
+                ref={cwdRef}
+                value={cwd}
+                onChange={(e) => {
+                  setCwd(e.currentTarget.value);
+                  setCreateError("");
+                }}
+                placeholder="Optional, e.g. ~/Developer/project"
+                spellCheck={false}
+                autoComplete="off"
+                disabled={submitting}
+                aria-invalid={!!pathError}
+                aria-describedby={pathHintId}
+              />
+            </label>
             <div
-              className="workspace-recent-folders"
-              role="group"
-              aria-label="Recent folders"
+              id={pathHintId}
+              className="workspace-path-hint"
+              aria-live="polite"
             >
-              <History size={14} aria-hidden="true" />
-              {recent.map((folder) => (
-                <button
-                  key={folder}
-                  type="button"
-                  className="ghost"
-                  aria-pressed={folder === input}
-                  disabled={submitting}
-                  title={folder}
-                  onClick={() => chooseFolder(folder)}
-                >
-                  {folderName(folder)}
-                </button>
-              ))}
+              {checking ? (
+                <p role="status">Checking directory...</p>
+              ) : pathError ? (
+                <p className="modal-error" role="alert">
+                  {pathError}
+                </p>
+              ) : checked?.info ? (
+                <p>
+                  Directory: <code>{checked.info.path}</code>
+                </p>
+              ) : (
+                <p>
+                  Use an absolute path or ~/ on the connected host. Leave blank
+                  to use the default directory.
+                </p>
+              )}
             </div>
-          ) : null}
-          <input
-            id={cwdId}
-            ref={cwdRef}
-            value={cwd}
-            onChange={(e) => {
-              setCwdTouched(true);
-              setCwd(e.currentTarget.value);
-              setCreateError("");
-            }}
-            onKeyDown={(e) => {
-              // Tab completes a typed folder, as a shell does.
-              if (e.key !== "Tab" || e.shiftKey || !checked?.info) return;
-              const completed = completeFolder(
-                checked.info.path,
-                checked.info.directories,
-              );
-              if (!completed) return;
-              e.preventDefault();
-              chooseFolder(completed);
-            }}
-            placeholder="e.g. ~/Developer/project"
-            spellCheck={false}
-            autoComplete="off"
-            disabled={submitting}
-            aria-invalid={!!pathError}
-            aria-describedby={pathHintId}
-          />
-        </div>
-        <div id={pathHintId} className="workspace-path-hint" aria-live="polite">
-          {unchecked ? (
-            <p role="status">Checking folder...</p>
-          ) : pathError ? (
-            <p className="modal-error" role="alert">
-              {pathError}
-            </p>
-          ) : checked?.info ? (
-            <p>
-              Folder: <code>{checked.info.path}</code>
-            </p>
-          ) : (
-            <p>
-              Use an absolute path or ~/ on that host; Tab completes it. Leave
-              blank for the host&apos;s default folder.
-            </p>
-          )}
-        </div>
-        {checked?.info && (up || checked.info.directories.length) ? (
-          <div
-            className="workspace-path-directories"
-            role="list"
-            aria-label="Folders to browse"
-          >
-            {up ? (
-              <div role="listitem">
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={submitting}
-                  title={up}
-                  data-folder-up=""
-                  onClick={() => chooseFolder(up)}
-                >
-                  <CornerLeftUp size={14} aria-hidden="true" />
-                  <span>Up to {folderName(up)}</span>
-                </button>
+            {checked?.info?.directories.length ? (
+              <div
+                className="workspace-path-directories"
+                role="list"
+                aria-label="Directory suggestions"
+              >
+                {checked.info.directories.map((directory) => (
+                  <div key={directory} role="listitem">
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={submitting}
+                      title={directory}
+                      onClick={() => {
+                        setCwd(
+                          directory.endsWith("/") ? directory : `${directory}/`,
+                        );
+                        setCreateError("");
+                        cwdRef.current?.focus();
+                      }}
+                    >
+                      <Folder size={14} aria-hidden="true" />
+                      <span>
+                        {directory
+                          .split(directory.startsWith("/") ? "/" : /[/\\]/)
+                          .filter(Boolean)
+                          .pop()}
+                        /
+                      </span>
+                    </button>
+                  </div>
+                ))}
               </div>
             ) : null}
-            {checked.info.directories.map((directory) => (
-              <div key={directory} role="listitem">
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={submitting}
-                  title={directory}
-                  onClick={() =>
-                    chooseFolder(
-                      directory.endsWith("/") ? directory : `${directory}/`,
-                    )
-                  }
-                >
-                  <Folder size={14} aria-hidden="true" />
-                  <span>{folderName(directory)}/</span>
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
+          </>
+        )}
 
         {createError ? (
           <p className="modal-error" role="alert">
@@ -483,15 +409,5 @@ export function CreateWorkspaceDialog({
         </div>
       </form>
     </div>
-  );
-}
-
-/** A folder's last name, for a button; the full path is its title. */
-function folderName(folder: string) {
-  return (
-    folder
-      .split(folder.startsWith("/") ? "/" : /[/\\]/)
-      .filter(Boolean)
-      .pop() ?? folder
   );
 }

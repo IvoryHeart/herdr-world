@@ -33,13 +33,6 @@ const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const CORE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 /** An absolute path on the core's host, one line, bounded. */
 const HOST_PATH = /^\/[^\0\r\n]{0,4095}$/;
-/**
- * A plain room's folder, absolute on the core's host: a Unix path, or on a
- * Windows host a drive (C:\ or C:/) or UNC path, as the host's
- * workspace.path check resolves it (#1006).
- */
-const ROOM_FOLDER =
-  /^(?:\/|[A-Za-z]:[\\/]|[\\/]{2}[^\\/\0\r\n])[^\0\r\n]{0,4093}$/;
 
 export function emptyCoreTopology(coreId: string): CoreTopologyDocument {
   return { core_id: coreId, revision: 0, rooms: [] };
@@ -116,14 +109,6 @@ export function parseCoreTopology(value: unknown): CoreTopologyDocument {
           : {}),
       };
     }
-    if (
-      room.folder !== undefined &&
-      (typeof room.folder !== "string" ||
-        !ROOM_FOLDER.test(room.folder) ||
-        room.app_space !== undefined ||
-        room.checkout !== undefined)
-    )
-      fail("folder");
     if (!Array.isArray(room.tabs)) fail("tabs");
     return {
       id: room.id as string,
@@ -132,7 +117,6 @@ export function parseCoreTopology(value: unknown): CoreTopologyDocument {
         ? { app_space: room.app_space as string }
         : {}),
       ...(checkout ? { checkout } : {}),
-      ...(room.folder !== undefined ? { folder: room.folder as string } : {}),
       tabs: (room.tabs as unknown[]).map((value) => {
         if (!value || typeof value !== "object" || Array.isArray(value))
           fail("tab");

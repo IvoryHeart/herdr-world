@@ -4,11 +4,7 @@ import { TownStepStore } from "./town/townStepStore";
 import { useTownStepReads } from "./town/useTownStepReads";
 import { townScaleSceneRequested } from "./town/townScaleScene";
 import { askingKeysForWorld } from "./worldAskTargets";
-import {
-  inspectTownTerminal,
-  townDeskOpenKey,
-  townTargetActionable,
-} from "./town/townOpen";
+import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import { questMark, useAgentDeskReads } from "./agentQuests";
 import { useCurrentUsageStops, withTownOutOfFuel } from "./town/townOutOfFuel";
 import { useOutOfFuelTrial } from "./town/townOutOfFuelTrial";
@@ -97,6 +93,7 @@ import {
 import { townMoveActions, type TownMoveConfirm } from "./town/townMoveActions";
 import type { TownMoveFlow } from "./town/townMoveMenu";
 import { useTownReception } from "./town/useTownReception";
+import { townDeskAgentKey } from "./town/townOpen";
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import { useTownSearch } from "./town/useTownSearch";
@@ -567,34 +564,36 @@ export default function TownView({
     toast,
     trace,
   });
-  const openReply = (tapped: string) => {
-    // A desk opens its default pane (townDeskOpenKey); a crowded desk with
-    // nothing to go by lists them all.
-    const isDesk = office.deskRoster.some(({ desk }) => desk.key === tapped);
-    const key = isDesk ? townDeskOpenKey(office, tapped) : tapped;
-    if (key === null) {
-      if (crowdedDesk(tapped) && townTargetActionable(office, tapped)) {
-        window.clearTimeout(peekTimer.current);
-        setPeek(null);
-        setChooser(tapped);
-      }
+  const openReply = (key: string) => {
+    if (!townTargetActionable(office, key)) {
+      const nodeId = deviceByKey.get(key)?.device.nodeId;
+      const viewOnly = nodeId ? world.nodeById.get(nodeId)?.viewOnly : null;
+      if (viewOnly) toast("error", viewOnly);
       return;
     }
-    // A cached target only inspects as history; a live herdr-core one opens
-    // as a Herdr one does (its view-only reason is for review controls).
-    if (!townTargetActionable(office, key)) return;
-    // An agent opens as every view opens it (openAgent).
+    // A desk with more panes than seats lists them all rather than guessing.
+    if (crowdedDesk(key)) {
+      window.clearTimeout(peekTimer.current);
+      setPeek(null);
+      setChooser(key);
+      return;
+    }
+    // An agent opens as every view opens it (openAgent); a pane without an
+    // agent opens its terminal.
     const mobile = isMobileLayout();
     const agentKey = agentByKey.has(key)
       ? key
-      : deviceByKey.get(key)?.device.agentKey;
+      : (deviceByKey.get(key)?.device.agentKey ?? deskAgentKey(key));
     if (agentKey && agentByKey.has(agentKey)) {
       openAgent(agentKey);
       return;
     }
     // Otherwise open the pane's terminal, with its composer on the phone layout.
     const nodeId =
-      deviceByKey.get(key)?.device.nodeId ?? agentByKey.get(key)?.agent.nodeId;
+      deviceByKey.get(key)?.device.nodeId ??
+      agentByKey.get(key)?.agent.nodeId ??
+      office.deskRoster.find(({ desk }) => desk.key === key)?.desk
+        .paneDevices[0]?.nodeId;
     const leaf = townLeaf(world, nodeId);
     window.clearTimeout(peekTimer.current);
     setPeek(null);
@@ -709,7 +708,7 @@ export default function TownView({
   /** Open Chat explicitly; focus false keeps focus outside the agent's pane. */
   const openChat = (agentKey: string, focus = true) => {
     const agent = agentByKey.get(agentKey)?.agent;
-    if (!agent || !townTargetActionable(office, agentKey)) return;
+    if (!agent || !townTargetActionable(office, agentKey, true)) return;
     if (DEVTOOLS) trace.record("peek", { key: agentKey });
     window.clearTimeout(peekTimer.current);
     holdPeek.current = false;
@@ -722,21 +721,22 @@ export default function TownView({
   const center = { selectedRoomKey, townRoomActions, townSummary, openChat };
   const townCenter = useTownCenter(world, office, preferences, center, toast);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
+  const deskAgentKey = (deskKey: string) => townDeskAgentKey(office, deskKey);
   /**
-   * Tapping an agent opens it (openAgent). Tapping a desk opens its default
-   * pane (openReply, townDeskOpenKey): its one or focused pane, else an
-   * agent there that needs you even while it is away at reception or in the
-   * lounge, else its latest active pane; a pane opens its agent if it has one.
+   * Tapping an agent, or its desk even while the agent is away at reception
+   * or in the lounge, opens the agent (openAgent). A desk without an agent
+   * opens its pane.
    */
   const tapTown = (key: string) => {
-    if (agentByKey.has(key)) {
-      openAgent(key);
+    const desk = agentByKey.has(key)
+      ? undefined
+      : office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
+    const agentKey = agentByKey.has(key) ? key : desk && deskAgentKey(desk.key);
+    if (agentKey) {
+      openAgent(agentKey);
       return;
     }
-    if (
-      deviceByKey.has(key) ||
-      office.deskRoster.some(({ desk }) => desk.key === key)
-    ) {
+    if (deviceByKey.has(key) || desk) {
       openReply(key);
       return;
     }

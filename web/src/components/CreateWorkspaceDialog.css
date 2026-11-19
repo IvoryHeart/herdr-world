@@ -29,27 +29,3 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* The host's recent folders: one tap each (#1006). Wraps on a phone. */
-.workspace-recent-folders {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-  color: var(--muted);
-}
-
-.workspace-recent-folders button {
-  min-height: 32px;
-  max-width: 100%;
-  padding: 0 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workspace-recent-folders button[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--text);
-}
