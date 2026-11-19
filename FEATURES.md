@@ -1833,6 +1833,39 @@ to search.
   activation preserves a freshly verified OSC 8 target only at the same cells
   and frame.
 
+## Settings preview
+
+Settings is a preview of one home and one search for every setting and command.
+Turn it on for a browser tab with **`?settings=next`** on any World address
+(`?settings=off` turns it off); World drops the parameter at once. Today's Menu
+and Configuration dialogs stay as they are while the preview is off.
+
+- **Menu** shrinks to **Settings**, **Find or act**, **Zen mode**, **Help**,
+  **Upgrade** (only when one is offered) and **Log out** (only when World asks
+  for a password). Views, Runtime, Reload, Help links and quick settings move
+  into Settings.
+- **Menu → Settings** lists every setting and command under **All** and eight
+  tabs: Appearance, Town & views, Notifications & sounds, Agents, Keyboard,
+  Integrations, This World and Help. Each row names where it applies (this
+  browser, all browsers, one connection) and, for a control that also lives on
+  a view, where (Town's sun button under **ALL**).
+- The search finds a setting by its name, its words and its choices:
+  **lighting** and **night** find Town's time of day, **font size** finds the
+  terminal, interface and chat sizes, **sounds** finds sound on this device.
+  The control in the result changes the setting at once.
+- Appearance, Town & views and Notifications & sounds change in place. The
+  other tabs list every setting; a row whose control has not moved yet has
+  **Open**, which opens today's dialog at that place.
+- **Cmd+K** (`Ctrl+K`) finds the same settings and commands. A choice offers
+  each option (**night** → **Town time of day: Night**), a switch offers
+  **turn on/off** and a size offers **larger/smaller**; Enter applies it.
+- Each row's link button copies an address ending in
+  **`?setting=<id>`** (for example `?setting=town.time-of-day`), or
+  **`?setting=<tab>`** such as `?setting=help`. Opening it turns the preview on
+  and opens Settings at that row, highlighted.
+- On a phone Settings is a full-height sheet; tabs scroll sideways and wide
+  controls take their own line.
+
 ## Code view design preview
 
 Code is a proposal to show the user's installed real VS Code web workbench inside

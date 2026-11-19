@@ -74,6 +74,7 @@ import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
 import { WorktreeLocationDialog } from "./WorktreeLocationDialog";
 import { WorktreeOpenDialog } from "./WorktreeOpenDialog";
 import { worktreeCommandActions } from "./worktreeCommandActions";
+import { useSettingsCommandGroups } from "../settings/commandBoxSettings";
 
 type TextAction =
   | { type: "rename-workspace"; workspace: Workspace }
@@ -976,6 +977,7 @@ function OwnedCommandCombobox({
     });
   }
 
+  const settingsGroups = useSettingsCommandGroups(search);
   const helpActions: ActionDefinition[] = onShowShortcuts
     ? [
         {
@@ -1072,6 +1074,9 @@ function OwnedCommandCombobox({
         ),
       }),
     ),
+    // The Settings prototype (#1035): settings and commands from the one
+    // registry and its search.
+    ...settingsGroups,
     { heading: "Help", actions: helpActions },
   ].filter((group) => group.actions.length > 0);
 

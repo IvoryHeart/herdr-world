@@ -2,7 +2,14 @@ import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import { lazyWithReload } from "../lazyWithReload";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Menu as MenuIcon,
   ChevronDown,
@@ -28,6 +35,8 @@ import {
   Volume2,
   Hand,
   Inbox,
+  Search,
+  HelpCircle,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { isStaleBuild, useBuildFreshness } from "../buildFreshness";
@@ -64,10 +73,22 @@ import { useLayer } from "../layerStack";
 import { DEVTOOLS } from "../world/devtools/flag";
 import { WORLD_OPEN_UPDATE_MENU_EVENT } from "../world/townMasterGreeting";
 import { requestTrace, traceRemembered } from "../world/devtools/trace";
+import { openCommandBox } from "../commandBoxKey";
+import { detectShortcutPlatform } from "../shortcutBindings";
+import type { AccentColor } from "../appearance";
+import { settingsPrototypeOn, takeSettingsLink } from "../settings/flag";
+import { publishSettingsHost, SETTINGS_OPEN_EVENT } from "../settings/host";
+import type { SettingsHost } from "../settings/registry";
 
 const ConfigurationDialog = lazyWithReload("configuration", () =>
   import("./ConfigurationDialog").then((module) => ({
     default: module.ConfigurationDialog,
+  })),
+);
+// The Settings prototype (#1035), loaded only when the flag opens it.
+const SettingsHome = lazyWithReload("settings-home", () =>
+  import("../settings/SettingsHome").then((module) => ({
+    default: module.SettingsHome,
   })),
 );
 const RELEASES_URL = "https://github.com/IvoryHeart/herdr-world/releases";
@@ -166,6 +187,115 @@ export function ConfigMenu({
     setConfigurationTab(null);
     window.requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
+
+  // The Settings prototype (#1035): `?settings=next` for this tab.
+  const [prototype] = useState(settingsPrototypeOn);
+  // Settings open, at an entry or category when a link or Cmd+K named one.
+  const [settingsAt, setSettingsAt] = useState<{
+    target: string | null;
+  } | null>(() => {
+    if (!prototype) return null;
+    const link = takeSettingsLink();
+    return link ? { target: link } : null;
+  });
+  const closeSettings = useCallback(() => {
+    setSettingsAt(null);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  }, []);
+  const [authRequired, setAuthRequired] = useState(false);
+  useEffect(() => {
+    if (!prototype) return;
+    let cancelled = false;
+    fetch("/api/health", { credentials: "same-origin", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then((info) => {
+        if (!cancelled) setAuthRequired(!!info?.auth_required);
+      });
+    const onOpenSettings = (event: Event) => {
+      setOpen(false);
+      setSettingsAt({
+        target: (event as CustomEvent<string | undefined>).detail ?? null,
+      });
+    };
+    window.addEventListener(SETTINGS_OPEN_EVENT, onOpenSettings);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(SETTINGS_OPEN_EVENT, onOpenSettings);
+    };
+  }, [prototype]);
+  const {
+    theme,
+    onThemeChange,
+    accentColor,
+    onAccentColorChange,
+    blackBackground,
+    onBlackBackgroundChange,
+    uiScale,
+    onUiScaleChange,
+    terminalFontScale,
+    onTerminalFontScaleChange,
+  } = configuration;
+  const settingsHost = useMemo<SettingsHost | null>(
+    () =>
+      prototype
+        ? {
+            appearance: {
+              theme,
+              setTheme: onThemeChange,
+              accentColor,
+              setAccentColor: (accent) =>
+                onAccentColorChange(accent as AccentColor),
+              blackBackground,
+              setBlackBackground: onBlackBackgroundChange,
+              uiScale,
+              setUiScale: onUiScaleChange,
+              terminalFontScale,
+              setTerminalFontScale: onTerminalFontScaleChange,
+            },
+            zen: { on: zenMode, available: zenAvailable, set: onZenModeChange },
+            openConfiguration: (tab) =>
+              setConfigurationTab(tab as ConfigurationTab),
+            openPanel: (panel) => {
+              if (panel === "shortcuts") onShowShortcuts();
+              else if (panel === "agent-profiles") onOpenAgentProfiles?.();
+              else if (panel === "sounds") openSounds();
+              else if (panel === "sources") onOpenSources?.();
+              else onOpenOfficeMetrics?.();
+            },
+            mobile: layout.mobile,
+            mac: detectShortcutPlatform() === "mac",
+            signedIn: authRequired,
+          }
+        : null,
+    [
+      prototype,
+      theme,
+      onThemeChange,
+      accentColor,
+      onAccentColorChange,
+      blackBackground,
+      onBlackBackgroundChange,
+      uiScale,
+      onUiScaleChange,
+      terminalFontScale,
+      onTerminalFontScaleChange,
+      zenMode,
+      zenAvailable,
+      onZenModeChange,
+      onShowShortcuts,
+      onOpenAgentProfiles,
+      onOpenSources,
+      onOpenOfficeMetrics,
+      layout.mobile,
+      authRequired,
+    ],
+  );
+  // The command box reads the same host for settings it changes.
+  useEffect(() => {
+    publishSettingsHost(settingsHost);
+  }, [settingsHost]);
+  useEffect(() => () => publishSettingsHost(null), []);
 
   useEffect(() => {
     if (!open) return;
@@ -311,523 +441,596 @@ export function ConfigMenu({
                     : ""}
                 </span>
               </div>
-              <div className="config-section">
-                <ConfigMenuItem
-                  icon={<Settings size={15} />}
-                  label="Configuration"
-                  description="Appearance, behavior, connections, and agent integrations"
-                  className="config-menu-item-row"
-                  onClick={() => {
-                    setOpen(false);
-                    setConfigurationTab("Appearance");
-                  }}
-                />
-                {layout.mobile ? null : (
-                  <ConfigMenuItem
-                    icon={<Keyboard size={15} />}
-                    label="Shortcut cheat sheet"
-                    description={`Read-only overview \u00b7 ${shortcutLabel("shortcuts.show")}`}
-                    className="config-menu-item-row"
-                    onClick={() => {
-                      setOpen(false);
-                      onShowShortcuts();
-                    }}
-                  />
-                )}
-                {zenAvailable ? (
-                  <div className="config-preference-row">
-                    <span className="config-item-icon">
-                      <Focus size={15} />
-                    </span>
-                    <div className="config-item-copy">
-                      <strong>Zen mode</strong>
-                      <span>
-                        {zenMode ? "Enabled" : "Disabled"}
-                        {layout.mobile
-                          ? ""
-                          : ` · ${shortcutLabel("zen.toggle")}`}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-label="Zen mode"
-                      aria-checked={zenMode}
-                      className={"settings-switch" + (zenMode ? " is-on" : "")}
-                      onClick={() => {
-                        onZenModeChange(!zenMode);
-                        setOpen(false);
-                      }}
-                    >
-                      <span />
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-              <div className="config-section config-section-tiles-3">
-                <div className="config-title">Views</div>
-                <label className="config-preference-row">
-                  <span className="config-item-icon">
-                    <Focus size={15} />
-                  </span>
-                  <span className="config-item-copy">
-                    <strong>Inspector opening</strong>
-                    <span>How a newly opened entity's Inspector appears</span>
-                  </span>
-                  <select
-                    className="config-preference-select"
-                    aria-label="Inspector opening"
-                    value={officePreferences.inspectorPresentation}
-                    onChange={(event) =>
-                      updateOfficePreferences({
-                        inspectorPresentation: event.target
-                          .value as OfficePreferences["inspectorPresentation"],
-                      })
-                    }
-                  >
-                    <option value="floating">Floating</option>
-                    <option value="docked">Snap right</option>
-                  </select>
-                </label>
-                <label className="config-preference-row">
-                  <span className="config-item-icon">
-                    <MessageSquare size={15} />
-                  </span>
-                  <span className="config-item-copy">
-                    <strong>Agents open</strong>
-                    <span>
-                      What opening an agent shows: its Chat, or its terminal
-                    </span>
-                  </span>
-                  <select
-                    className="config-preference-select"
-                    aria-label="Agents open"
-                    value={officePreferences.townOpens}
-                    onChange={(event) =>
-                      updateOfficePreferences({
-                        townOpens: event.target
-                          .value as OfficePreferences["townOpens"],
-                      })
-                    }
-                  >
-                    <option value="chat">Chat</option>
-                    <option value="terminal">Terminal</option>
-                  </select>
-                </label>
-                <label className="config-preference-row">
-                  <span className="config-item-icon">
-                    <MessageSquare size={15} />
-                  </span>
-                  <span className="config-item-copy">
-                    <strong>Town master</strong>
-                    <span>
-                      The agent whose chat Town docks from the start; empty
-                      docks none
-                    </span>
-                  </span>
-                  <input
-                    className="config-preference-select"
-                    aria-label="Town master"
-                    defaultValue={officePreferences.townMaster}
-                    maxLength={64}
-                    spellCheck={false}
-                    autoComplete="off"
-                    onBlur={(event) =>
-                      updateOfficePreferences({
-                        townMaster: event.currentTarget.value,
-                      })
-                    }
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") event.currentTarget.blur();
-                    }}
-                  />
-                </label>
-                <div className="config-preference-row">
-                  <span className="config-item-icon">
-                    <Wind size={15} />
-                  </span>
-                  <div className="config-item-copy">
-                    <strong>Town calm motion</strong>
-                    <span>Less ambient motion and shorter camera moves</span>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-label="Town calm motion"
-                    aria-checked={officePreferences.townCalm}
-                    className={
-                      "settings-switch" +
-                      (officePreferences.townCalm ? " is-on" : "")
-                    }
-                    onClick={() =>
-                      updateOfficePreferences({
-                        townCalm: !officePreferences.townCalm,
-                      })
-                    }
-                  >
-                    <span />
-                  </button>
-                </div>
-                <div className="config-preference-row">
-                  <span className="config-item-icon">
-                    <Hand size={15} />
-                  </span>
-                  <div className="config-item-copy">
-                    <strong>Town Master greeting</strong>
-                    <span>
-                      Hello and what changed since you left, on each visit (Show
-                      this on start)
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-label="Town Master greeting"
-                    aria-checked={officePreferences.townGreeting}
-                    className={
-                      "settings-switch" +
-                      (officePreferences.townGreeting ? " is-on" : "")
-                    }
-                    onClick={() =>
-                      updateOfficePreferences({
-                        townGreeting: !officePreferences.townGreeting,
-                      })
-                    }
-                  >
-                    <span />
-                  </button>
-                </div>
-                <div className="config-preference-row">
-                  <span className="config-item-icon">
-                    <Inbox size={15} />
-                  </span>
-                  <div className="config-item-copy">
-                    <strong>Count on tab and app icon</strong>
-                    <span>
-                      The browser tab and installed app show how many things
-                      need you (this browser)
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-label="Count on tab and app icon"
-                    aria-checked={officePreferences.tabBadge}
-                    className={
-                      "settings-switch" +
-                      (officePreferences.tabBadge ? " is-on" : "")
-                    }
-                    onClick={() =>
-                      updateOfficePreferences({
-                        tabBadge: !officePreferences.tabBadge,
-                      })
-                    }
-                  >
-                    <span />
-                  </button>
-                </div>
-                {DEVTOOLS ? (
-                  <div className="config-preference-row">
-                    <span className="config-item-icon">
-                      <Bug size={15} />
-                    </span>
-                    <div className="config-item-copy">
-                      <strong>Town event trace</strong>
-                      <span>Development builds: record Town's input</span>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-label="Town event trace"
-                      aria-checked={townTrace}
-                      className={
-                        "settings-switch" + (townTrace ? " is-on" : "")
-                      }
-                      onClick={() => {
-                        requestTrace("town", !townTrace);
-                        setTownTrace(!townTrace);
-                      }}
-                    >
-                      <span />
-                    </button>
-                  </div>
-                ) : null}
-                {onOpenAgentProfiles ? (
-                  <ConfigMenuItem
-                    icon={<Shirt size={15} />}
-                    label="Agent profiles"
-                    className="config-menu-item-row"
-                    description="Name, brain, skills, brief and look for new agents"
-                    onClick={() => {
-                      setOpen(false);
-                      onOpenAgentProfiles();
-                    }}
-                  />
-                ) : null}
-                {/* Sounds sits with the agents' other settings. */}
-                {onOpenAgentProfiles ? (
-                  <ConfigMenuItem
-                    icon={<Volume2 size={15} />}
-                    label="Sounds"
-                    className="config-menu-item-row"
-                    description="Chimes for agents that need you, and the Town master"
-                    onClick={() => {
-                      setOpen(false);
-                      openSounds();
-                    }}
-                  />
-                ) : null}
-                {onOpenSources ? (
-                  <ConfigMenuItem
-                    icon={<GitPullRequest size={15} />}
-                    label="Sources"
-                    className="config-menu-item-row"
-                    description="GitHub pull requests and Jira tickets beside your agents"
-                    onClick={() => {
-                      setOpen(false);
-                      onOpenSources();
-                    }}
-                  />
-                ) : null}
-                {onOpenOfficeMetrics ? (
-                  <ConfigMenuItem
-                    icon={<Activity size={15} />}
-                    label="OTEL economy metrics"
-                    className="config-menu-item-row"
-                    description="Connect Prometheus to show cost on the Town board"
-                    onClick={() => {
-                      setOpen(false);
-                      onOpenOfficeMetrics();
-                    }}
-                  />
-                ) : null}
-              </div>
-              <div className="config-section">
-                <div className="config-title">Help & updates</div>
-                {[
-                  {
-                    label: "Tutorial",
-                    description: "Learn local work and private remote access",
-                    url: "https://herdr.world/tutorial/",
-                  },
-                  {
-                    label: "Features and shortcuts",
-                    description: "Browse features and keyboard bindings",
-                    url: "https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md",
-                  },
-                  {
-                    label: "Troubleshooting",
-                    description: "Resolve connection and deployment problems",
-                    url: "https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#troubleshooting",
-                  },
-                  {
-                    label: "Report an issue",
-                    description:
-                      "Report bugs or request improvements on GitHub",
-                    url: "https://github.com/IvoryHeart/herdr-world/issues",
-                  },
-                ].map(({ label, description, url }) => (
-                  <ConfigMenuItem
-                    key={label}
-                    icon={<ExternalLink size={15} />}
-                    label={label}
-                    description={description}
-                    onClick={() => {
-                      setOpen(false);
-                      window.open(url, "_blank", "noopener,noreferrer");
-                    }}
-                  />
-                ))}
-                <ConfigMenuItem
-                  icon={<ExternalLink size={15} />}
-                  label="Changelog"
-                  description="Recent changes on GitHub"
-                  onClick={() => {
-                    setOpen(false);
-                    window.open(RELEASES_URL, "_blank", "noopener,noreferrer");
-                  }}
-                />
-                <ConfigMenuItem
-                  icon={<RefreshCw size={15} />}
-                  label="Reload page"
-                  description="Refresh the application"
-                  onClick={() => {
-                    setOpen(false);
-                    reloadApplicationPage();
-                  }}
-                />
-                <ConfigMenuItem
-                  icon={<Download size={15} />}
-                  className="config-update-item"
-                  label={
+              {prototype ? (
+                <ShortMenu
+                  zenMode={zenMode}
+                  zenAvailable={zenAvailable}
+                  mobile={layout.mobile}
+                  updateLabel={
                     updateAvailable
                       ? s.updateInstalling
                         ? "Updating..."
                         : `Upgrade to ${updateVersion}`
-                      : "Check for updates"
+                      : null
                   }
-                  description={
-                    canInstallUpdate
-                      ? "Install and restart"
-                      : updateAvailable
-                        ? undefined
-                        : "Check the release server"
+                  updateDisabled={!!s.updateInstalling || !canInstallUpdate}
+                  updateNote={
+                    updateAvailable && !canInstallUpdate
+                      ? (s.updateInfo?.reason ??
+                        "Automatic installation is unavailable. Use this installation's update channel.")
+                      : null
                   }
-                  primary={canInstallUpdate}
-                  disabled={
-                    s.updateInstalling || (updateAvailable && !canInstallUpdate)
-                  }
-                  onClick={() => {
+                  signedIn={authRequired}
+                  loggingOut={loggingOut}
+                  logoutError={logoutError}
+                  onSettings={(target) => {
+                    setOpen(false);
+                    setSettingsAt({ target });
+                  }}
+                  onFind={() => {
+                    setOpen(false);
+                    openCommandBox();
+                  }}
+                  onZen={() => {
+                    onZenModeChange(!zenMode);
+                    setOpen(false);
+                  }}
+                  onUpdate={() => {
                     setOpen(false);
                     void store.updateOrCheck();
                   }}
+                  onLogOut={async () => {
+                    setLoggingOut(true);
+                    setLogoutError("");
+                    try {
+                      await logoutBrowserSession();
+                    } catch {
+                      setLogoutError(
+                        "Could not log out. Check your connection and try again.",
+                      );
+                      setLoggingOut(false);
+                    }
+                  }}
                 />
-                {updateAvailable ? (
-                  <ConfigMenuItem
-                    icon={<RefreshCw size={15} />}
-                    label="Check for updates"
-                    description="Refresh release availability"
-                    disabled={s.updateInstalling}
-                    onClick={() => {
-                      setOpen(false);
-                      void store.checkForUpdate();
-                    }}
-                  />
-                ) : null}
-                {updateAvailable && !canInstallUpdate ? (
-                  <p className="config-update-reason" role="note">
-                    {s.updateInfo?.reason ??
-                      "Automatic installation is unavailable. Use this installation's update channel."}
-                  </p>
-                ) : null}
-              </div>
-              <div className="config-section">
-                <div className="config-title">Runtime</div>
-                <div className="config-runtime-row">
-                  <span className="config-item-icon">
-                    <Server size={15} />
-                  </span>
-                  <div className="config-item-copy">
-                    <strong>Herdr server</strong>
-                    <span>
-                      {herdrInfo?.version
-                        ? `Version ${herdrInfo.version}`
-                        : herdrUnavailable
-                          ? "Unavailable"
-                          : "Loading server information"}
-                    </span>
-                  </div>
-                  <code>
-                    {typeof herdrInfo?.protocol === "number"
-                      ? `Protocol ${herdrInfo.protocol}`
-                      : "-"}
-                  </code>
-                </div>
-                {herdrUpgrade ? (
-                  <ConfigMenuItem
-                    icon={<Download size={15} />}
-                    label={
-                      s.herdrUpgrading
-                        ? "Updating Herdr..."
-                        : herdrUpgrade.label
-                    }
-                    description={herdrUpgrade.description}
-                    primary
-                    disabled={s.herdrUpgrading}
-                    onClick={() => {
-                      setOpen(false);
-                      void store.upgradeHerdr();
-                    }}
-                  />
-                ) : null}
-                {herdrUnavailable ? (
-                  <HerdrSetupCard
-                    key={connectionClient.connectionId}
-                    enabled={
-                      !s.connectionPaused &&
-                      s.activeConnectionId === s.defaultConnectionId
-                    }
-                    compact
-                  />
-                ) : null}
-                <button
-                  type="button"
-                  className="config-details-toggle"
-                  aria-expanded={connectionDetailsOpen}
-                  onClick={() => setConnectionDetailsOpen((value) => !value)}
-                >
-                  <span className="config-item-icon">
-                    <Wifi size={15} />
-                  </span>
-                  <span>Connection details</span>
-                  {connectionDetailsOpen ? (
-                    <ChevronDown size={15} />
-                  ) : (
-                    <ChevronRight size={15} />
-                  )}
-                </button>
-                {connectionDetailsOpen ? (
-                  <div className="config-details">
-                    <ConfigRow label="URL" value={location.origin} />
-                    <ConfigRow label="Socket" value={health?.socket ?? "-"} />
-                  </div>
-                ) : null}
-              </div>
-              {health?.auth_required ? (
-                <div className="config-section">
-                  <ConfigMenuItem
-                    icon={<LogOut size={15} />}
-                    label={loggingOut ? "Logging out..." : "Log out"}
-                    description="End this browser session only"
-                    className="config-menu-item-row"
-                    disabled={loggingOut}
-                    onClick={async () => {
-                      setLoggingOut(true);
-                      setLogoutError("");
-                      try {
-                        await logoutBrowserSession();
-                      } catch {
-                        setLogoutError(
-                          "Could not log out. Check your connection and try again.",
-                        );
-                        setLoggingOut(false);
-                      }
-                    }}
-                  />
-                  {logoutError ? (
-                    <p className="config-logout-error" role="alert">
-                      {logoutError}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-              {layout.mobile ? (
-                <div className="mobile-sheet-more" aria-hidden={!expanded}>
-                  <div className="mobile-sheet-more-content">
-                    <div className="config-section">
-                      <div className="config-title">Quick settings</div>
-                      {(
-                        [
-                          ["Appearance", Palette],
-                          ["Behavior", SlidersHorizontal],
-                          ["Connection", Server],
-                          ["Integrations", Plug],
-                        ] as const
-                      ).map(([name, Icon]) => (
-                        <ConfigMenuItem
-                          key={name}
-                          icon={<Icon size={15} />}
-                          label={name}
+              ) : (
+                <>
+                  <div className="config-section">
+                    <ConfigMenuItem
+                      icon={<Settings size={15} />}
+                      label="Configuration"
+                      description="Appearance, behavior, connections, and agent integrations"
+                      className="config-menu-item-row"
+                      onClick={() => {
+                        setOpen(false);
+                        setConfigurationTab("Appearance");
+                      }}
+                    />
+                    {layout.mobile ? null : (
+                      <ConfigMenuItem
+                        icon={<Keyboard size={15} />}
+                        label="Shortcut cheat sheet"
+                        description={`Read-only overview \u00b7 ${shortcutLabel("shortcuts.show")}`}
+                        className="config-menu-item-row"
+                        onClick={() => {
+                          setOpen(false);
+                          onShowShortcuts();
+                        }}
+                      />
+                    )}
+                    {zenAvailable ? (
+                      <div className="config-preference-row">
+                        <span className="config-item-icon">
+                          <Focus size={15} />
+                        </span>
+                        <div className="config-item-copy">
+                          <strong>Zen mode</strong>
+                          <span>
+                            {zenMode ? "Enabled" : "Disabled"}
+                            {layout.mobile
+                              ? ""
+                              : ` · ${shortcutLabel("zen.toggle")}`}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-label="Zen mode"
+                          aria-checked={zenMode}
+                          className={
+                            "settings-switch" + (zenMode ? " is-on" : "")
+                          }
                           onClick={() => {
+                            onZenModeChange(!zenMode);
                             setOpen(false);
-                            setConfigurationTab(name);
                           }}
-                        />
-                      ))}
-                    </div>
+                        >
+                          <span />
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
-                </div>
-              ) : null}
+                  <div className="config-section config-section-tiles-3">
+                    <div className="config-title">Views</div>
+                    <label className="config-preference-row">
+                      <span className="config-item-icon">
+                        <Focus size={15} />
+                      </span>
+                      <span className="config-item-copy">
+                        <strong>Inspector opening</strong>
+                        <span>
+                          How a newly opened entity's Inspector appears
+                        </span>
+                      </span>
+                      <select
+                        className="config-preference-select"
+                        aria-label="Inspector opening"
+                        value={officePreferences.inspectorPresentation}
+                        onChange={(event) =>
+                          updateOfficePreferences({
+                            inspectorPresentation: event.target
+                              .value as OfficePreferences["inspectorPresentation"],
+                          })
+                        }
+                      >
+                        <option value="floating">Floating</option>
+                        <option value="docked">Snap right</option>
+                      </select>
+                    </label>
+                    <label className="config-preference-row">
+                      <span className="config-item-icon">
+                        <MessageSquare size={15} />
+                      </span>
+                      <span className="config-item-copy">
+                        <strong>Agents open</strong>
+                        <span>
+                          What opening an agent shows: its Chat, or its terminal
+                        </span>
+                      </span>
+                      <select
+                        className="config-preference-select"
+                        aria-label="Agents open"
+                        value={officePreferences.townOpens}
+                        onChange={(event) =>
+                          updateOfficePreferences({
+                            townOpens: event.target
+                              .value as OfficePreferences["townOpens"],
+                          })
+                        }
+                      >
+                        <option value="chat">Chat</option>
+                        <option value="terminal">Terminal</option>
+                      </select>
+                    </label>
+                    <label className="config-preference-row">
+                      <span className="config-item-icon">
+                        <MessageSquare size={15} />
+                      </span>
+                      <span className="config-item-copy">
+                        <strong>Town master</strong>
+                        <span>
+                          The agent whose chat Town docks from the start; empty
+                          docks none
+                        </span>
+                      </span>
+                      <input
+                        className="config-preference-select"
+                        aria-label="Town master"
+                        defaultValue={officePreferences.townMaster}
+                        maxLength={64}
+                        spellCheck={false}
+                        autoComplete="off"
+                        onBlur={(event) =>
+                          updateOfficePreferences({
+                            townMaster: event.currentTarget.value,
+                          })
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") event.currentTarget.blur();
+                        }}
+                      />
+                    </label>
+                    <div className="config-preference-row">
+                      <span className="config-item-icon">
+                        <Wind size={15} />
+                      </span>
+                      <div className="config-item-copy">
+                        <strong>Town calm motion</strong>
+                        <span>
+                          Less ambient motion and shorter camera moves
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-label="Town calm motion"
+                        aria-checked={officePreferences.townCalm}
+                        className={
+                          "settings-switch" +
+                          (officePreferences.townCalm ? " is-on" : "")
+                        }
+                        onClick={() =>
+                          updateOfficePreferences({
+                            townCalm: !officePreferences.townCalm,
+                          })
+                        }
+                      >
+                        <span />
+                      </button>
+                    </div>
+                    <div className="config-preference-row">
+                      <span className="config-item-icon">
+                        <Hand size={15} />
+                      </span>
+                      <div className="config-item-copy">
+                        <strong>Town Master greeting</strong>
+                        <span>
+                          Hello and what changed since you left, on each visit
+                          (Show this on start)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-label="Town Master greeting"
+                        aria-checked={officePreferences.townGreeting}
+                        className={
+                          "settings-switch" +
+                          (officePreferences.townGreeting ? " is-on" : "")
+                        }
+                        onClick={() =>
+                          updateOfficePreferences({
+                            townGreeting: !officePreferences.townGreeting,
+                          })
+                        }
+                      >
+                        <span />
+                      </button>
+                    </div>
+                    <div className="config-preference-row">
+                      <span className="config-item-icon">
+                        <Inbox size={15} />
+                      </span>
+                      <div className="config-item-copy">
+                        <strong>Count on tab and app icon</strong>
+                        <span>
+                          The browser tab and installed app show how many things
+                          need you (this browser)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-label="Count on tab and app icon"
+                        aria-checked={officePreferences.tabBadge}
+                        className={
+                          "settings-switch" +
+                          (officePreferences.tabBadge ? " is-on" : "")
+                        }
+                        onClick={() =>
+                          updateOfficePreferences({
+                            tabBadge: !officePreferences.tabBadge,
+                          })
+                        }
+                      >
+                        <span />
+                      </button>
+                    </div>
+                    {DEVTOOLS ? (
+                      <div className="config-preference-row">
+                        <span className="config-item-icon">
+                          <Bug size={15} />
+                        </span>
+                        <div className="config-item-copy">
+                          <strong>Town event trace</strong>
+                          <span>Development builds: record Town's input</span>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-label="Town event trace"
+                          aria-checked={townTrace}
+                          className={
+                            "settings-switch" + (townTrace ? " is-on" : "")
+                          }
+                          onClick={() => {
+                            requestTrace("town", !townTrace);
+                            setTownTrace(!townTrace);
+                          }}
+                        >
+                          <span />
+                        </button>
+                      </div>
+                    ) : null}
+                    {onOpenAgentProfiles ? (
+                      <ConfigMenuItem
+                        icon={<Shirt size={15} />}
+                        label="Agent profiles"
+                        className="config-menu-item-row"
+                        description="Name, brain, skills, brief and look for new agents"
+                        onClick={() => {
+                          setOpen(false);
+                          onOpenAgentProfiles();
+                        }}
+                      />
+                    ) : null}
+                    {/* Sounds sits with the agents' other settings. */}
+                    {onOpenAgentProfiles ? (
+                      <ConfigMenuItem
+                        icon={<Volume2 size={15} />}
+                        label="Sounds"
+                        className="config-menu-item-row"
+                        description="Chimes for agents that need you, and the Town master"
+                        onClick={() => {
+                          setOpen(false);
+                          openSounds();
+                        }}
+                      />
+                    ) : null}
+                    {onOpenSources ? (
+                      <ConfigMenuItem
+                        icon={<GitPullRequest size={15} />}
+                        label="Sources"
+                        className="config-menu-item-row"
+                        description="GitHub pull requests and Jira tickets beside your agents"
+                        onClick={() => {
+                          setOpen(false);
+                          onOpenSources();
+                        }}
+                      />
+                    ) : null}
+                    {onOpenOfficeMetrics ? (
+                      <ConfigMenuItem
+                        icon={<Activity size={15} />}
+                        label="OTEL economy metrics"
+                        className="config-menu-item-row"
+                        description="Connect Prometheus to show cost on the Town board"
+                        onClick={() => {
+                          setOpen(false);
+                          onOpenOfficeMetrics();
+                        }}
+                      />
+                    ) : null}
+                  </div>
+                  <div className="config-section">
+                    <div className="config-title">Help & updates</div>
+                    {[
+                      {
+                        label: "Tutorial",
+                        description:
+                          "Learn local work and private remote access",
+                        url: "https://herdr.world/tutorial/",
+                      },
+                      {
+                        label: "Features and shortcuts",
+                        description: "Browse features and keyboard bindings",
+                        url: "https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md",
+                      },
+                      {
+                        label: "Troubleshooting",
+                        description:
+                          "Resolve connection and deployment problems",
+                        url: "https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#troubleshooting",
+                      },
+                      {
+                        label: "Report an issue",
+                        description:
+                          "Report bugs or request improvements on GitHub",
+                        url: "https://github.com/IvoryHeart/herdr-world/issues",
+                      },
+                    ].map(({ label, description, url }) => (
+                      <ConfigMenuItem
+                        key={label}
+                        icon={<ExternalLink size={15} />}
+                        label={label}
+                        description={description}
+                        onClick={() => {
+                          setOpen(false);
+                          window.open(url, "_blank", "noopener,noreferrer");
+                        }}
+                      />
+                    ))}
+                    <ConfigMenuItem
+                      icon={<ExternalLink size={15} />}
+                      label="Changelog"
+                      description="Recent changes on GitHub"
+                      onClick={() => {
+                        setOpen(false);
+                        window.open(
+                          RELEASES_URL,
+                          "_blank",
+                          "noopener,noreferrer",
+                        );
+                      }}
+                    />
+                    <ConfigMenuItem
+                      icon={<RefreshCw size={15} />}
+                      label="Reload page"
+                      description="Refresh the application"
+                      onClick={() => {
+                        setOpen(false);
+                        reloadApplicationPage();
+                      }}
+                    />
+                    <ConfigMenuItem
+                      icon={<Download size={15} />}
+                      className="config-update-item"
+                      label={
+                        updateAvailable
+                          ? s.updateInstalling
+                            ? "Updating..."
+                            : `Upgrade to ${updateVersion}`
+                          : "Check for updates"
+                      }
+                      description={
+                        canInstallUpdate
+                          ? "Install and restart"
+                          : updateAvailable
+                            ? undefined
+                            : "Check the release server"
+                      }
+                      primary={canInstallUpdate}
+                      disabled={
+                        s.updateInstalling ||
+                        (updateAvailable && !canInstallUpdate)
+                      }
+                      onClick={() => {
+                        setOpen(false);
+                        void store.updateOrCheck();
+                      }}
+                    />
+                    {updateAvailable ? (
+                      <ConfigMenuItem
+                        icon={<RefreshCw size={15} />}
+                        label="Check for updates"
+                        description="Refresh release availability"
+                        disabled={s.updateInstalling}
+                        onClick={() => {
+                          setOpen(false);
+                          void store.checkForUpdate();
+                        }}
+                      />
+                    ) : null}
+                    {updateAvailable && !canInstallUpdate ? (
+                      <p className="config-update-reason" role="note">
+                        {s.updateInfo?.reason ??
+                          "Automatic installation is unavailable. Use this installation's update channel."}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="config-section">
+                    <div className="config-title">Runtime</div>
+                    <div className="config-runtime-row">
+                      <span className="config-item-icon">
+                        <Server size={15} />
+                      </span>
+                      <div className="config-item-copy">
+                        <strong>Herdr server</strong>
+                        <span>
+                          {herdrInfo?.version
+                            ? `Version ${herdrInfo.version}`
+                            : herdrUnavailable
+                              ? "Unavailable"
+                              : "Loading server information"}
+                        </span>
+                      </div>
+                      <code>
+                        {typeof herdrInfo?.protocol === "number"
+                          ? `Protocol ${herdrInfo.protocol}`
+                          : "-"}
+                      </code>
+                    </div>
+                    {herdrUpgrade ? (
+                      <ConfigMenuItem
+                        icon={<Download size={15} />}
+                        label={
+                          s.herdrUpgrading
+                            ? "Updating Herdr..."
+                            : herdrUpgrade.label
+                        }
+                        description={herdrUpgrade.description}
+                        primary
+                        disabled={s.herdrUpgrading}
+                        onClick={() => {
+                          setOpen(false);
+                          void store.upgradeHerdr();
+                        }}
+                      />
+                    ) : null}
+                    {herdrUnavailable ? (
+                      <HerdrSetupCard
+                        key={connectionClient.connectionId}
+                        enabled={
+                          !s.connectionPaused &&
+                          s.activeConnectionId === s.defaultConnectionId
+                        }
+                        compact
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      className="config-details-toggle"
+                      aria-expanded={connectionDetailsOpen}
+                      onClick={() =>
+                        setConnectionDetailsOpen((value) => !value)
+                      }
+                    >
+                      <span className="config-item-icon">
+                        <Wifi size={15} />
+                      </span>
+                      <span>Connection details</span>
+                      {connectionDetailsOpen ? (
+                        <ChevronDown size={15} />
+                      ) : (
+                        <ChevronRight size={15} />
+                      )}
+                    </button>
+                    {connectionDetailsOpen ? (
+                      <div className="config-details">
+                        <ConfigRow label="URL" value={location.origin} />
+                        <ConfigRow
+                          label="Socket"
+                          value={health?.socket ?? "-"}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                  {health?.auth_required ? (
+                    <div className="config-section">
+                      <ConfigMenuItem
+                        icon={<LogOut size={15} />}
+                        label={loggingOut ? "Logging out..." : "Log out"}
+                        description="End this browser session only"
+                        className="config-menu-item-row"
+                        disabled={loggingOut}
+                        onClick={async () => {
+                          setLoggingOut(true);
+                          setLogoutError("");
+                          try {
+                            await logoutBrowserSession();
+                          } catch {
+                            setLogoutError(
+                              "Could not log out. Check your connection and try again.",
+                            );
+                            setLoggingOut(false);
+                          }
+                        }}
+                      />
+                      {logoutError ? (
+                        <p className="config-logout-error" role="alert">
+                          {logoutError}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {layout.mobile ? (
+                    <div className="mobile-sheet-more" aria-hidden={!expanded}>
+                      <div className="mobile-sheet-more-content">
+                        <div className="config-section">
+                          <div className="config-title">Quick settings</div>
+                          {(
+                            [
+                              ["Appearance", Palette],
+                              ["Behavior", SlidersHorizontal],
+                              ["Connection", Server],
+                              ["Integrations", Plug],
+                            ] as const
+                          ).map(([name, Icon]) => (
+                            <ConfigMenuItem
+                              key={name}
+                              icon={<Icon size={15} />}
+                              label={name}
+                              onClick={() => {
+                                setOpen(false);
+                                setConfigurationTab(name);
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
             </div>
           </div>
         ) : null}
@@ -856,7 +1059,141 @@ export function ConfigMenu({
             document.body,
           )
         : null}
+      {settingsAt && settingsHost ? (
+        <OperationalContext.Provider value={null}>
+          <Suspense fallback={null}>
+            <SettingsHome
+              host={settingsHost}
+              initial={settingsAt.target}
+              onClose={closeSettings}
+            />
+          </Suspense>
+        </OperationalContext.Provider>
+      ) : null}
     </>
+  );
+}
+
+/**
+ * The short Menu of the Settings prototype (#1035): the few things people do
+ * every day. Everything else is in Settings and its search.
+ */
+function ShortMenu({
+  zenMode,
+  zenAvailable,
+  mobile,
+  updateLabel,
+  updateDisabled,
+  updateNote,
+  signedIn,
+  loggingOut,
+  logoutError,
+  onSettings,
+  onFind,
+  onZen,
+  onUpdate,
+  onLogOut,
+}: {
+  zenMode: boolean;
+  zenAvailable: boolean;
+  mobile: boolean;
+  updateLabel: string | null;
+  updateDisabled: boolean;
+  updateNote: string | null;
+  signedIn: boolean;
+  loggingOut: boolean;
+  logoutError: string;
+  onSettings: (target: string | null) => void;
+  onFind: () => void;
+  onZen: () => void;
+  onUpdate: () => void;
+  onLogOut: () => void;
+}) {
+  return (
+    <div className="config-section config-short-menu">
+      <ConfigMenuItem
+        icon={<Settings size={15} />}
+        label="Settings"
+        description="Every setting and command, with search"
+        className="config-menu-item-row"
+        onClick={() => onSettings(null)}
+      />
+      <ConfigMenuItem
+        icon={<Search size={15} />}
+        label="Find or act"
+        description={
+          mobile
+            ? "Search World, settings and commands"
+            : `Search World, settings and commands · ${shortcutLabel("command.menu")}`
+        }
+        className="config-menu-item-row"
+        onClick={onFind}
+      />
+      {zenAvailable ? (
+        <div className="config-preference-row">
+          <span className="config-item-icon">
+            <Focus size={15} />
+          </span>
+          <div className="config-item-copy">
+            <strong>Zen mode</strong>
+            <span>
+              {zenMode ? "Enabled" : "Disabled"}
+              {mobile ? "" : ` · ${shortcutLabel("zen.toggle")}`}
+            </span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-label="Zen mode"
+            aria-checked={zenMode}
+            className={"settings-switch" + (zenMode ? " is-on" : "")}
+            onClick={onZen}
+          >
+            <span />
+          </button>
+        </div>
+      ) : null}
+      {updateLabel ? (
+        <ConfigMenuItem
+          icon={<Download size={15} />}
+          className="config-update-item config-menu-item-row"
+          label={updateLabel}
+          description={updateDisabled ? undefined : "Install and restart"}
+          primary={!updateDisabled}
+          disabled={updateDisabled}
+          onClick={onUpdate}
+        />
+      ) : null}
+      {updateNote ? (
+        <p className="config-update-reason" role="note">
+          {updateNote}
+        </p>
+      ) : null}
+      <ConfigMenuItem
+        icon={<HelpCircle size={15} />}
+        label="Help"
+        description="Tutorial, features, troubleshooting and changes"
+        className="config-menu-item-row"
+        onClick={() => onSettings("help")}
+      />
+      {signedIn ? (
+        <>
+          <ConfigMenuItem
+            icon={<LogOut size={15} />}
+            label={loggingOut ? "Logging out..." : "Log out"}
+            description="End this browser session only"
+            className="config-menu-item-row"
+            disabled={loggingOut}
+            onClick={onLogOut}
+          />
+          {logoutError ? (
+            <p className="config-logout-error" role="alert">
+              {logoutError}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+    </div>
   );
 }
 
