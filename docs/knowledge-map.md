@@ -9,6 +9,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 
 | Area | Contract | Owning source | Focused tests |
 | --- | --- | --- | --- |
+| Code view research/proposal and IDE integration study (not shipping) | [Research, provider comparison and gates](design/code-view/research.md), [OpenSpec proposal](../openspec/changes/world-code-view/proposal.md) | [Synthetic mock](../web/public/code-view-prototype.html), [interaction code](../web/public/code-view-prototype/mock.js); no live IDE adapter | [Exact preview clicks](design/code-view/design.md), [fixture tests](../web/src/testing/codeViewPrototype.test.ts); `/code-view-prototype.html` |
 | Runtime support | [Contract](../FEATURES.md#runtime-support) | [Source](../shared/herdrIdentity.ts) | [Tests](../shared/herdrIdentity.test.ts) |
 | First-run discovery | [Contract](../README.md#quick-start) | [Source](../server/src/connections/first-run.ts) | [Tests](../server/src/connections/first-run.test.ts) |
 | Local runtime presence | [Contract](../FEATURES.md#runtime-support) | [Source](../server/src/connections/local-discovery.ts) | [Tests](../server/src/connections/first-run.test.ts) |

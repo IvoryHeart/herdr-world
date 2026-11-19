@@ -19,7 +19,10 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // the float shell's lazy chunk, which moves that confirmation and the float
 // shell's read model into one shared chunk and its CSS (185 files, no new
 // bytes, on 2026-11-17).
-const maxFileCount = 186;
+// The #981 Code view design study adds three standalone, on-demand static
+// assets (HTML, CSS and JS), without adding to the application's eager graph.
+// Account for those files explicitly; byte and startup budgets remain binding.
+const maxFileCount = 189;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
