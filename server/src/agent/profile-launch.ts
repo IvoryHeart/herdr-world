@@ -36,6 +36,8 @@ export function withClaudeLimitsTap<
 >(
   launch: T,
   runtime: ClaudeTapRuntime | null,
+  /** TUI Unix launches use a prepared file to keep terminal input short. */
+  tapArgs?: string[],
 ): Omit<T, "args"> & Pick<LaunchRequest, "args"> {
   if (launch.kind !== "claude" || !runtime) return launch;
   const args = launch.args;
@@ -43,7 +45,7 @@ export function withClaudeLimitsTap<
     ...launch,
     args: (name: string) => [
       ...(typeof args === "function" ? args(name) : (args ?? [])),
-      ...claudeTapArgs(runtime),
+      ...(tapArgs ?? claudeTapArgs(runtime)),
     ],
   };
 }
