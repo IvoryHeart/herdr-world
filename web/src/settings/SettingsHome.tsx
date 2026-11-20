@@ -27,12 +27,10 @@ import {
 import { createPortal } from "react-dom";
 import { CloseButton } from "../components/CloseButton";
 import { MobileSheetHandle } from "../components/MobileSheetHandle";
-import { DEVTOOLS } from "../world/devtools/flag";
 import "./catalog";
 import { settingsLink } from "./flag";
 import {
   type ChoiceOption,
-  entryShown,
   type RegistryEntry,
   registryEntries,
   registryEntry,
@@ -44,6 +42,7 @@ import {
   subscribeRegistry,
 } from "./registry";
 import { searchSettings } from "./search";
+import { useShownEntries } from "./useShownEntries";
 import "../components/ConfigMenu.css";
 import "../components/ConfigurationDialog.css";
 import "./SettingsHome.css";
@@ -94,10 +93,7 @@ export function SettingsHome({
   const search = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
 
-  const shown = useMemo(
-    () => entries.filter((entry) => entryShown(entry, host, DEVTOOLS)),
-    [entries, host],
-  );
+  const shown = useShownEntries(entries, host);
   const matches = useMemo(() => searchSettings(shown, query), [shown, query]);
   const searching = query.trim().length > 0;
   const counts = useMemo(() => {
@@ -332,7 +328,11 @@ function SettingsRow({
   const copy = (
     <span className="config-item-copy">
       <strong>{entry.title}</strong>
-      {entry.description ? <span>{entry.description}</span> : null}
+      {entry.kind === "command" && entry.disabledReason?.() ? (
+        <span>{entry.disabledReason()}</span>
+      ) : entry.description ? (
+        <span>{entry.description}</span>
+      ) : null}
       {entry.alsoOn ? (
         <span className="settings-home-also">Also on {entry.alsoOn}</span>
       ) : null}
@@ -383,6 +383,9 @@ function SettingsRow({
         : null
       : () => entry.run(host);
   const shortcut = entry.kind === "command" ? entry.shortcut?.() : null;
+  // The command box's own admission: a command it cannot run now says why.
+  const blocked =
+    entry.kind === "command" ? (entry.disabledReason?.() ?? null) : null;
   return (
     <div className={rowClass} data-setting={entry.id}>
       <span className="config-item-icon">
@@ -401,6 +404,8 @@ function SettingsRow({
             aria-label={
               entry.kind === "panel" ? `Open ${entry.title}` : entry.title
             }
+            disabled={!!blocked}
+            title={blocked ?? undefined}
             onClick={() => {
               onLeave();
               void open();

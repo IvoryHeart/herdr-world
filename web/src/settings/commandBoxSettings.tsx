@@ -23,6 +23,7 @@ import {
   subscribeRegistry,
 } from "./registry";
 import { type SettingsMatch, searchSettings } from "./search";
+import { useShownEntries } from "./useShownEntries";
 
 /** At most this many entries reach the box; the rest are one tap away. */
 const LIMIT = 6;
@@ -48,6 +49,7 @@ export function settingActions(
         detail: entry.description,
         shortcut: entry.shortcut?.() ?? undefined,
         danger: entry.danger,
+        disabledReason: entry.disabledReason?.() ?? null,
         score,
         run: () => void entry.run(host),
       },
@@ -143,17 +145,25 @@ const OPEN_SETTINGS: Omit<ActionDefinition, "score"> = {
   run: () => openSettings(),
 };
 
-/** The groups the box shows for a search; none while the flag is off. */
+/**
+ * The groups the box shows for a search; none while the flag is off.
+ * `shown` is what this host shows (useShownEntries). The box's own commands
+ * are in the registry too, so Settings finds them, but the box lists them
+ * itself with the same search (rankAction), so they are left out here.
+ */
 export function settingsCommandGroups(
-  entries: readonly RegistryEntry[],
+  shown: readonly RegistryEntry[],
   host: SettingsHost | null,
   search: string,
 ): ActionGroupDefinition[] {
   if (!host) return [];
   if (!search.trim())
     return [{ heading: "Settings", actions: [OPEN_SETTINGS] }];
-  const shown = entries.filter((entry) => entryShown(entry, host, DEVTOOLS));
-  const matches = searchSettings(shown, search).slice(0, LIMIT);
+  const own = shown.filter(
+    (entry) =>
+      entry.listedBy !== "command-box" && entryShown(entry, host, DEVTOOLS),
+  );
+  const matches = searchSettings(own, search).slice(0, LIMIT);
   const settings = matches
     .filter((match) => match.entry.kind !== "command")
     .flatMap((match) => settingActions(match, host));
@@ -178,8 +188,9 @@ export function useSettingsCommandGroups(search: string) {
     registryEntries,
   );
   const host = useSettingsHost();
+  const shown = useShownEntries(entries, host);
   return useMemo(
-    () => (on ? settingsCommandGroups(entries, host, search) : []),
-    [on, entries, host, search],
+    () => (on ? settingsCommandGroups(shown, host, search) : []),
+    [on, shown, host, search],
   );
 }

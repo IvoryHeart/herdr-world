@@ -4,8 +4,6 @@ import { createPortal } from "react-dom";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   Menu as MenuIcon,
-  ChevronDown,
-  ChevronRight,
   Download,
   ExternalLink,
   Focus,
@@ -19,7 +17,6 @@ import {
   SlidersHorizontal,
   Server,
   Settings,
-  Wifi,
   MessageSquare,
   Wind,
   Bug,
@@ -56,7 +53,7 @@ import {
   type OfficePreferences,
 } from "../world/officePreferences";
 import { ConfigurationLoadingDialog } from "./ConfigurationLoadingDialog";
-import { HerdrSetupCard } from "./HerdrSetupCard";
+import { ConfigMenuRuntime } from "./ConfigMenuRuntime";
 import { MobileSheetHandle } from "./MobileSheetHandle";
 import "./ConfigMenu.css";
 import { useLayer } from "../layerStack";
@@ -171,6 +168,18 @@ export function ConfigMenu({
     setOpen(false);
     window.requestAnimationFrame(() => triggerRef.current?.focus());
   };
+  // The Settings prototype shows the Runtime section only when Settings asks.
+  const [runtimeShown, setRuntimeShown] = useState(false);
+  const openRuntime = useCallback(() => {
+    setRuntimeShown(true);
+    setExpanded(true);
+    setOpen(true);
+    window.requestAnimationFrame(() =>
+      document
+        .querySelector<HTMLElement>(".config-runtime-section")
+        ?.scrollIntoView?.({ block: "nearest" }),
+    );
+  }, []);
   const closeConfiguration = useCallback(() => {
     setConfigurationTab(null);
     window.requestAnimationFrame(() => triggerRef.current?.focus());
@@ -195,13 +204,17 @@ export function ConfigMenu({
       sounds: openSounds,
       sources: onOpenSources,
       metrics: onOpenOfficeMetrics,
+      runtime: openRuntime,
     },
     onOpen: () => setOpen(false),
     triggerRef,
   });
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setRuntimeShown(false);
+      return;
+    }
     let cancelled = false;
     setHealth(null);
     setHerdrInfo(null);
@@ -281,6 +294,26 @@ export function ConfigMenu({
     );
   };
 
+  const runtimeSection = (
+    <ConfigMenuRuntime
+      herdrInfo={herdrInfo}
+      herdrUnavailable={herdrUnavailable}
+      herdrUpgrade={herdrUpgrade}
+      upgrading={!!s.herdrUpgrading}
+      connectionId={connectionClient.connectionId}
+      setupEnabled={
+        !s.connectionPaused && s.activeConnectionId === s.defaultConnectionId
+      }
+      socket={health?.socket}
+      detailsOpen={connectionDetailsOpen}
+      onToggleDetails={() => setConnectionDetailsOpen((value) => !value)}
+      onUpgrade={() => {
+        setOpen(false);
+        void store.upgradeHerdr();
+      }}
+    />
+  );
+
   return (
     <>
       <div className="config-menu" ref={ref}>
@@ -345,56 +378,59 @@ export function ConfigMenu({
                 </span>
               </div>
               {prototype ? (
-                <ShortMenu
-                  zenMode={zenMode}
-                  zenAvailable={zenAvailable}
-                  mobile={layout.mobile}
-                  updateLabel={
-                    updateAvailable
-                      ? s.updateInstalling
-                        ? "Updating..."
-                        : `Upgrade to ${updateVersion}`
-                      : null
-                  }
-                  updateDisabled={!!s.updateInstalling || !canInstallUpdate}
-                  updateNote={
-                    updateAvailable && !canInstallUpdate
-                      ? (s.updateInfo?.reason ??
-                        "Automatic installation is unavailable. Use this installation's update channel.")
-                      : null
-                  }
-                  signedIn={signedIn}
-                  loggingOut={loggingOut}
-                  logoutError={logoutError}
-                  onSettings={(target) => {
-                    setOpen(false);
-                    setSettingsAt({ target });
-                  }}
-                  onFind={() => {
-                    setOpen(false);
-                    openCommandBox();
-                  }}
-                  onZen={() => {
-                    onZenModeChange(!zenMode);
-                    setOpen(false);
-                  }}
-                  onUpdate={() => {
-                    setOpen(false);
-                    void store.updateOrCheck();
-                  }}
-                  onLogOut={async () => {
-                    setLoggingOut(true);
-                    setLogoutError("");
-                    try {
-                      await logoutBrowserSession();
-                    } catch {
-                      setLogoutError(
-                        "Could not log out. Check your connection and try again.",
-                      );
-                      setLoggingOut(false);
+                <>
+                  <ShortMenu
+                    zenMode={zenMode}
+                    zenAvailable={zenAvailable}
+                    mobile={layout.mobile}
+                    updateLabel={
+                      updateAvailable
+                        ? s.updateInstalling
+                          ? "Updating..."
+                          : `Upgrade to ${updateVersion}`
+                        : null
                     }
-                  }}
-                />
+                    updateDisabled={!!s.updateInstalling || !canInstallUpdate}
+                    updateNote={
+                      updateAvailable && !canInstallUpdate
+                        ? (s.updateInfo?.reason ??
+                          "Automatic installation is unavailable. Use this installation's update channel.")
+                        : null
+                    }
+                    signedIn={signedIn}
+                    loggingOut={loggingOut}
+                    logoutError={logoutError}
+                    onSettings={(target) => {
+                      setOpen(false);
+                      setSettingsAt({ target });
+                    }}
+                    onFind={() => {
+                      setOpen(false);
+                      openCommandBox();
+                    }}
+                    onZen={() => {
+                      onZenModeChange(!zenMode);
+                      setOpen(false);
+                    }}
+                    onUpdate={() => {
+                      setOpen(false);
+                      void store.updateOrCheck();
+                    }}
+                    onLogOut={async () => {
+                      setLoggingOut(true);
+                      setLogoutError("");
+                      try {
+                        await logoutBrowserSession();
+                      } catch {
+                        setLogoutError(
+                          "Could not log out. Check your connection and try again.",
+                        );
+                        setLoggingOut(false);
+                      }
+                    }}
+                  />
+                  {runtimeShown ? runtimeSection : null}
+                </>
               ) : (
                 <>
                   <div className="config-section">
@@ -800,83 +836,7 @@ export function ConfigMenu({
                       </p>
                     ) : null}
                   </div>
-                  <div className="config-section">
-                    <div className="config-title">Runtime</div>
-                    <div className="config-runtime-row">
-                      <span className="config-item-icon">
-                        <Server size={15} />
-                      </span>
-                      <div className="config-item-copy">
-                        <strong>Herdr server</strong>
-                        <span>
-                          {herdrInfo?.version
-                            ? `Version ${herdrInfo.version}`
-                            : herdrUnavailable
-                              ? "Unavailable"
-                              : "Loading server information"}
-                        </span>
-                      </div>
-                      <code>
-                        {typeof herdrInfo?.protocol === "number"
-                          ? `Protocol ${herdrInfo.protocol}`
-                          : "-"}
-                      </code>
-                    </div>
-                    {herdrUpgrade ? (
-                      <ConfigMenuItem
-                        icon={<Download size={15} />}
-                        label={
-                          s.herdrUpgrading
-                            ? "Updating Herdr..."
-                            : herdrUpgrade.label
-                        }
-                        description={herdrUpgrade.description}
-                        primary
-                        disabled={s.herdrUpgrading}
-                        onClick={() => {
-                          setOpen(false);
-                          void store.upgradeHerdr();
-                        }}
-                      />
-                    ) : null}
-                    {herdrUnavailable ? (
-                      <HerdrSetupCard
-                        key={connectionClient.connectionId}
-                        enabled={
-                          !s.connectionPaused &&
-                          s.activeConnectionId === s.defaultConnectionId
-                        }
-                        compact
-                      />
-                    ) : null}
-                    <button
-                      type="button"
-                      className="config-details-toggle"
-                      aria-expanded={connectionDetailsOpen}
-                      onClick={() =>
-                        setConnectionDetailsOpen((value) => !value)
-                      }
-                    >
-                      <span className="config-item-icon">
-                        <Wifi size={15} />
-                      </span>
-                      <span>Connection details</span>
-                      {connectionDetailsOpen ? (
-                        <ChevronDown size={15} />
-                      ) : (
-                        <ChevronRight size={15} />
-                      )}
-                    </button>
-                    {connectionDetailsOpen ? (
-                      <div className="config-details">
-                        <ConfigRow label="URL" value={location.origin} />
-                        <ConfigRow
-                          label="Socket"
-                          value={health?.socket ?? "-"}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
+                  {runtimeSection}
                   {health?.auth_required ? (
                     <div className="config-section">
                       <ConfigMenuItem
@@ -974,14 +934,5 @@ export function ConfigMenu({
         </OperationalContext.Provider>
       ) : null}
     </>
-  );
-}
-
-function ConfigRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="config-row">
-      <span>{label}</span>
-      <code title={value}>{value}</code>
-    </div>
   );
 }

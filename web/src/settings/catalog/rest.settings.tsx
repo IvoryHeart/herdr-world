@@ -38,6 +38,7 @@ import {
   terminalOptionAsMeta,
 } from "../../terminalOptionKey";
 import { defineSettings } from "../registry";
+import { openViewControl } from "../viewControls";
 
 const subscribeStore = (listener: () => void) => store.subscribe(listener);
 
@@ -193,6 +194,7 @@ defineSettings("integrations", [
     icon: <Server size={15} />,
     scope: "connection",
     alsoOn: "The Hosts button in the top bar (phone: the view menu)",
+    open: () => openViewControl(null, "connections.manage"),
   },
   {
     kind: "panel",
@@ -287,11 +289,25 @@ defineSettings("system", [
     id: "system.runtime",
     category: "system",
     title: "Herdr and connection details",
-    description: "Herdr's version, its upgrade and the connection address",
-    words: ["herdr version", "protocol", "socket", "runtime", "upgrade herdr"],
+    description:
+      "Herdr's version and protocol, its upgrade or setup, and the connection address",
+    words: [
+      "herdr version",
+      "protocol",
+      "socket",
+      "runtime",
+      "upgrade herdr",
+      "update herdr",
+      "install herdr",
+      "set up herdr",
+      "connection details",
+      "url",
+    ],
     icon: <TerminalSquare size={15} />,
     scope: "connection",
-    alsoOn: "Today's Menu, under Runtime",
+    // The Menu's Runtime section, opened under the short Menu until it moves
+    // here whole (slice 1).
+    open: (host) => host.openPanel("runtime"),
   },
   {
     kind: "command",

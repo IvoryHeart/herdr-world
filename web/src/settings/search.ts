@@ -101,3 +101,28 @@ export function searchSettings(
     .sort((a, b) => b.match.score - a.match.score || a.index - b.index)
     .map(({ match }) => match);
 }
+
+/**
+ * The same search for a command box action (title, line, keywords), so the
+ * command box ranks its own commands as Settings does: 0 when it does not
+ * match.
+ */
+export function commandMatchScore(
+  action: { title: string; detail?: string; keywords?: readonly string[] },
+  query: string,
+) {
+  return (
+    matchEntry(
+      {
+        kind: "command",
+        id: "",
+        category: "commands",
+        title: action.title,
+        description: action.detail,
+        words: action.keywords,
+        run: () => {},
+      },
+      query,
+    )?.score ?? 0
+  );
+}

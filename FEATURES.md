@@ -1844,11 +1844,21 @@ and Configuration dialogs stay as they are while the preview is off.
   **Upgrade** (only when one is offered) and **Log out** (only when World asks
   for a password). Views, Runtime, Reload, Help links and quick settings move
   into Settings.
-- **Menu → Settings** lists every setting and command under **All** and eight
+- **Menu → Settings** lists every setting and command under **All** and nine
   tabs: Appearance, Town & views, Notifications & sounds, Agents, Keyboard,
-  Integrations, This World and Help. Each row names where it applies (this
-  browser, all browsers, one connection) and, for a control that also lives on
-  a view, where (Town's sun button under **ALL**).
+  Integrations, This World, Commands and Help. Each row names where it applies
+  (this browser, all browsers, one connection) and, for a control that also
+  lives on a view, where (Town's sun button under **ALL**).
+- Controls that stay on a view are rows too: **Board surface**, **Board status
+  colours** and **Board status pulses** switch to Board and open its settings
+  menu or colours; **Town lenses** switches to Town and opens the lens
+  chooser; **Hosts and connections** opens **Manage connections**.
+  **This World → Herdr and connection details** opens the Menu's Runtime
+  section (Herdr version, upgrade or setup, connection address).
+- **Commands** lists what Cmd+K offers for the open workspace, tab and pane
+  (**new workspace** finds **Create workspace**). A command Cmd+K refuses is
+  shown greyed with its reason, and runs only through Cmd+K for the active
+  connection; when Cmd+K cannot act, its commands leave Settings.
 - The search finds a setting by its name, its words and its choices:
   **lighting** and **night** find Town's time of day, **font size** finds the
   terminal, interface and chat sizes, **sounds** finds sound on this device.

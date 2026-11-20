@@ -96,7 +96,7 @@ export function useSettingsPrototype({
     onTerminalFontScaleChange,
   } = configuration;
   const { on: zenOn, available: zenAvailable, set: setZen } = zen;
-  const { shortcuts, sounds, sources, metrics } = panels;
+  const { shortcuts, sounds, sources, metrics, runtime } = panels;
   const profiles = panels["agent-profiles"];
   const host = useMemo<SettingsHost | null>(
     () =>
@@ -125,6 +125,7 @@ export function useSettingsPrototype({
                 sounds,
                 sources,
                 metrics,
+                runtime,
               })[panel]?.(),
             mobile,
             mac: detectShortcutPlatform() === "mac",
@@ -152,6 +153,7 @@ export function useSettingsPrototype({
       sounds,
       sources,
       metrics,
+      runtime,
       mobile,
       signedIn,
     ],

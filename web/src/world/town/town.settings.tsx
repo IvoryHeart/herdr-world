@@ -10,6 +10,7 @@ import {
   Bug,
   Focus,
   Hand,
+  Layers,
   MessageSquare,
   SunMoon,
   UserRound,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { worldLocalStorage } from "../../browserStorage";
 import { defineSettings } from "../../settings/registry";
+import { openViewControl } from "../../settings/viewControls";
 import { requestTrace, traceRemembered } from "../devtools/trace";
 import {
   type OfficePreferences,
@@ -191,6 +193,31 @@ defineSettings("town", [
       get: () => preferences().townGreeting,
       set: (_host, on) => updatePreferences({ townGreeting: on }),
     },
+  },
+  {
+    // Town's lens is chosen on Town and starts in Attention on every visit,
+    // so Settings takes you to the chooser rather than holding a value.
+    kind: "panel",
+    id: "town.lenses",
+    category: "town",
+    title: "Town lenses",
+    description:
+      "Tint Town by idle time, spend, pull requests, quests or harness",
+    words: [
+      "lens",
+      "overlay",
+      "tint",
+      "heat map",
+      "idle time",
+      "spend",
+      "cost",
+      "pull requests",
+      "quests",
+      "harness",
+    ],
+    icon: <Layers size={15} />,
+    alsoOn: "Town: L, or the Lenses action on the ring",
+    open: () => openViewControl("town", "town.lenses"),
   },
   {
     kind: "setting",

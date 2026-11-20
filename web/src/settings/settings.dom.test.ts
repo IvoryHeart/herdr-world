@@ -36,6 +36,7 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     HTMLInputElement: browser.HTMLInputElement,
     KeyboardEvent: browser.KeyboardEvent,
     CustomEvent: browser.CustomEvent,
+    PopStateEvent: browser.PopStateEvent,
     MouseEvent: browser.MouseEvent,
     CSS: { escape: (value: string) => value.replace(/[^\w-]/g, "\\$&") },
     requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
@@ -55,6 +56,10 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
   );
   const { searchSettings } = await import("./search");
   const { settingsCommandGroups } = await import("./commandBoxSettings");
+  const { useCommandBoxRegistry } = await import("./commandBoxRegistry");
+  const { openViewControl, useViewControlRequest } = await import(
+    "./viewControls"
+  );
   const { SettingsHome } = await import("./SettingsHome");
   const {
     __loadSettingsFlagForTests,
@@ -302,5 +307,189 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     expect(calls).toEqual(["panel:sources"]);
     expect(view.closed()).toBe(1);
     await view.unmount();
+  });
+
+  test("Herdr and connection details opens the Menu's Runtime section", async () => {
+    const { host, calls } = makeHost();
+    const view = await render(host);
+    await view.type("upgrade herdr");
+    expect(view.rows()[0]).toBe("system.runtime");
+    const open = view
+      .dialog()
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Open Herdr and connection details"]',
+      )!;
+    await act(async () => open.click());
+    expect(calls).toEqual(["panel:runtime"]);
+    expect(view.closed()).toBe(1);
+    await view.unmount();
+  });
+
+  test("controls that stay on a view are found and opened there", async () => {
+    expect(ids("status pulses")[0]).toBe("board.pulses");
+    expect(ids("whiteboard")[0]).toBe("board.surface");
+    expect(ids("town lens")[0]).toBe("town.lenses");
+    const commands = (query: string) =>
+      settingsCommandGroups(registryEntries(), makeHost().host, query).flatMap(
+        (group) => group.actions.map((action) => action.key),
+      );
+    expect(commands("whiteboard")).toContain("setting:board.surface");
+
+    const opened: string[] = [];
+    function BoardMenu() {
+      useViewControlRequest("board.settings", () => opened.push("board"));
+      return null;
+    }
+    history.replaceState(null, "", "/town");
+    const entry = registryEntry("board.pulses")!;
+    if (entry.kind !== "panel") throw new Error("board.pulses is a panel");
+    entry.open?.(makeHost().host);
+    expect(location.pathname).toBe("/board");
+    // Board mounts after the address changes and answers the request once.
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => root.render(createElement(BoardMenu)));
+    expect(opened).toEqual(["board"]);
+    await act(async () => root.render(createElement("div")));
+    await act(async () => root.render(createElement(BoardMenu)));
+    expect(opened).toEqual(["board"]);
+    // Already on the view: the request is answered at once.
+    openViewControl("board", "board.settings");
+    expect(opened).toEqual(["board", "board"]);
+    await act(async () => root.unmount());
+
+    // Hosts and connections opens Manage connections on whichever view is shown.
+    function Hosts() {
+      useViewControlRequest("connections.manage", () => opened.push("hosts"));
+      return null;
+    }
+    const hostsRoot = createRoot(document.createElement("div"));
+    await act(async () => hostsRoot.render(createElement(Hosts)));
+    const hosts = registryEntry("integrations.hosts")!;
+    if (hosts.kind !== "panel")
+      throw new Error("integrations.hosts is a panel");
+    hosts.open?.(makeHost().host);
+    expect(location.pathname).toBe("/board");
+    expect(opened).toEqual(["board", "board", "hosts"]);
+    await act(async () => hostsRoot.unmount());
+  });
+
+  test("the command box's commands are in Settings, with its admission", async () => {
+    __loadSettingsFlagForTests("http://localhost/?settings=next");
+    const ran: string[] = [];
+    function CommandBox() {
+      useCommandBoxRegistry(
+        [
+          {
+            heading: "Workspaces",
+            actions: [
+              {
+                key: "create-workspace",
+                icon: null,
+                title: "Create workspace",
+                detail: "Open a new Herdr workspace",
+                keywords: ["new workspace", "add workspace"],
+                run: () => ran.push("create-workspace"),
+              },
+              {
+                key: "create-tab",
+                icon: null,
+                title: "Create tab",
+                keywords: ["new tab"],
+                disabledReason: "This connection cannot create tabs",
+                run: () => ran.push("create-tab"),
+              },
+            ],
+          },
+        ],
+        true,
+        (action) => {
+          ran.push("through the box");
+          action();
+        },
+      );
+      return null;
+    }
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => root.render(createElement(CommandBox)));
+    expect(ids("new workspace")[0]).toBe("command.create-workspace");
+    // Cmd+K lists its own commands itself, ranked by the same search.
+    expect(
+      settingsCommandGroups(registryEntries(), makeHost().host, "new workspace")
+        .flatMap((group) => group.actions)
+        .map((action) => action.key),
+    ).not.toContain("setting:command.create-workspace");
+
+    const view = await render(makeHost().host);
+    await view.type("new workspace");
+    expect(view.rows()[0]).toBe("command.create-workspace");
+    const run = view
+      .dialog()
+      .querySelector<HTMLButtonElement>('[aria-label="Create workspace"]')!;
+    await act(async () => run.click());
+    expect(ran).toEqual(["through the box", "create-workspace"]);
+    await view.type("new tab");
+    const tab = view
+      .dialog()
+      .querySelector<HTMLButtonElement>('[aria-label="Create tab"]')!;
+    expect(tab.disabled).toBe(true);
+    expect(view.dialog().textContent).toContain(
+      "This connection cannot create tabs",
+    );
+    await view.unmount();
+
+    // The box goes (another connection): so do its commands.
+    await act(async () => root.unmount());
+    expect(registryEntry("command.create-workspace")).toBeUndefined();
+    __loadSettingsFlagForTests("http://localhost/?settings=off");
+  });
+
+  test("a row that depends on another setting appears as soon as it is on", async () => {
+    let enabled = false;
+    const listeners = new Set<() => void>();
+    const subscribe = (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    };
+    defineSettings("availability-test", [
+      {
+        kind: "setting",
+        id: "test.parent",
+        category: "notifications",
+        title: "Parent switch",
+        scope: "browser",
+        subscribe,
+        control: {
+          type: "toggle",
+          get: () => enabled,
+          set: (_host, on) => {
+            enabled = on;
+            for (const listener of listeners) listener();
+          },
+        },
+      },
+      {
+        kind: "setting",
+        id: "test.child",
+        category: "notifications",
+        title: "Child switch",
+        scope: "browser",
+        subscribe,
+        available: () => enabled,
+        control: { type: "toggle", get: () => false, set: () => {} },
+      },
+    ]);
+    const view = await render(makeHost().host, "notifications");
+    expect(view.rows()).not.toContain("test.child");
+    const parent = view
+      .dialog()
+      .querySelector<HTMLButtonElement>('[aria-label="Parent switch"]')!;
+    await act(async () => parent.click());
+    expect(view.rows()).toContain("test.child");
+    await act(async () => parent.click());
+    expect(view.rows()).not.toContain("test.child");
+    await view.unmount();
+    defineSettings("availability-test", []);
   });
 }

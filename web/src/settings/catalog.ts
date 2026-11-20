@@ -5,5 +5,6 @@
 
 import "./catalog/appearance.settings";
 import "../world/town/town.settings";
+import "../world/board/board.settings";
 import "./catalog/notifications.settings";
 import "./catalog/rest.settings";

@@ -53,6 +53,12 @@ export const SETTINGS_CATEGORIES = [
     label: "This World",
     detail: "Name, connection, updates and session",
   },
+  {
+    id: "commands",
+    label: "Commands",
+    detail:
+      "Workspaces, tabs, panes, agents and windows, as the command box offers them now",
+  },
   { id: "help", label: "Help", detail: "Guides, changes and reporting" },
 ] as const;
 
@@ -104,7 +110,9 @@ export type SettingsPanel =
   | "agent-profiles"
   | "sounds"
   | "sources"
-  | "metrics";
+  | "metrics"
+  /** The Menu's Runtime section: Herdr's version, upgrade or setup, and connection details. */
+  | "runtime";
 
 export type ChoiceOption<T extends string = string> = {
   value: T;
@@ -167,8 +175,13 @@ type EntryBase = {
    * The screen says where, so a person learns both places.
    */
   alsoOn?: string;
-  /** Re-reads the value when something outside changes it. */
+  /** Re-reads the value, and whether it is `available`, when something outside changes it. */
   subscribe?(listener: () => void): () => void;
+  /**
+   * The surface that published the entry and already lists it itself, so it
+   * does not list it twice: "command-box" for the command box's own commands.
+   */
+  listedBy?: "command-box";
 };
 
 export type SettingEntry = EntryBase & {
@@ -197,6 +210,11 @@ export type CommandEntry = EntryBase & {
   menu?: boolean;
   run(host: SettingsHost): void | Promise<unknown>;
   danger?: boolean;
+  /**
+   * Why it cannot run now, read when shown: the command box's own admission
+   * (a creation the active connection refuses, a stale selection).
+   */
+  disabledReason?(): string | null;
 };
 
 export type RegistryEntry = SettingEntry | PanelEntry | CommandEntry;
@@ -258,6 +276,24 @@ export function entryShown(
   if (entry.platform === "desktop" && host.mobile) return false;
   if (entry.platform === "mac" && !host.mac) return false;
   return entry.available ? entry.available(host) : true;
+}
+
+/**
+ * Calls `listener` when anything an entry reads may have changed: each
+ * entry's own `subscribe`, once per distinct source. Lists re-check values
+ * and availability with it, so a row that appears once another setting is on
+ * appears at once.
+ */
+export function subscribeEntries(
+  list: readonly RegistryEntry[],
+  listener: () => void,
+) {
+  const sources = new Set<NonNullable<RegistryEntry["subscribe"]>>();
+  for (const entry of list) if (entry.subscribe) sources.add(entry.subscribe);
+  const stops = [...sources].map((subscribe) => subscribe(listener));
+  return () => {
+    for (const stop of stops) stop();
+  };
 }
 
 export function categoryLabel(id: SettingsCategory) {
