@@ -51,7 +51,11 @@ export function textBox(text: string): { w: number; h: number } {
   };
 }
 
-/** Fewer points along nearly straight runs (Ramer–Douglas–Peucker). */
+/**
+ * Fewer points along nearly straight runs (Ramer–Douglas–Peucker). Points
+ * are measured to the segment between the run's ends, not its infinite line:
+ * a stroke that doubles back keeps the point where it turned.
+ */
 export function simplify(points: readonly Point[], tolerance: number): Point[] {
   if (points.length < 3) return [...points];
   const keep = new Uint8Array(points.length);
@@ -63,16 +67,25 @@ export function simplify(points: readonly Point[], tolerance: number): Point[] {
       b = points[last]!;
     const dx = b.x - a.x,
       dy = b.y - a.y;
-    const length = Math.hypot(dx, dy);
+    const length2 = dx * dx + dy * dy;
     let farthest = -1,
-      distance = tolerance;
+      distance2 = tolerance * tolerance;
     for (let i = first + 1; i < last; i++) {
       const p = points[i]!;
-      const d = length
-        ? Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / length
-        : Math.hypot(p.x - a.x, p.y - a.y);
-      if (d > distance) {
-        distance = d;
+      let px = p.x - a.x,
+        py = p.y - a.y;
+      // Squared distance to the nearest point of the segment a–b.
+      const along = length2 ? (px * dx + py * dy) / length2 : 0;
+      if (along > 1) {
+        px = p.x - b.x;
+        py = p.y - b.y;
+      } else if (along > 0) {
+        px -= along * dx;
+        py -= along * dy;
+      }
+      const d2 = px * px + py * py;
+      if (d2 > distance2) {
+        distance2 = d2;
         farthest = i;
       }
     }
@@ -209,14 +222,24 @@ export function shapeAt(
   return null;
 }
 
-/** Moved by (dx, dy): an arrow that moves leaves what it was attached to. */
-export function moved(shape: ShapeDraft, dx: number, dy: number): ShapeDraft {
-  const next = { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
+/**
+ * Moved by (dx, dy). An arrow that moves leaves what it was attached to,
+ * from where it is drawn now: its attached ends are resolved against their
+ * targets' current places, not the ends saved when it was last drawn.
+ */
+export function moved(
+  shape: ShapeDraft,
+  dx: number,
+  dy: number,
+  resolve: Resolve,
+): ShapeDraft {
   if (shape.kind === "arrow" && shape.from && shape.to) {
-    next.from = { x: round(shape.from.x + dx), y: round(shape.from.y + dy) };
-    next.to = { x: round(shape.to.x + dx), y: round(shape.to.y + dy) };
+    const { a, b } = arrowEnds(shape.from, shape.to, resolve);
+    const from = { x: round(a.x + dx), y: round(a.y + dy) };
+    const to = { x: round(b.x + dx), y: round(b.y + dy) };
+    return { ...shape, ...arrowBox(from, to), from, to };
   }
-  return next;
+  return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
 }
 
 /** Given a new box; a stroke's points scale with it. */

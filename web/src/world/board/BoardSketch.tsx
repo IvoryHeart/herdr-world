@@ -55,6 +55,7 @@ import {
   textBox,
 } from "./boardSketchGeometry";
 import "./boardSketch.css";
+import { COLORS, LABEL_SIZE, lines, TextEditor } from "./boardSketchText";
 
 /**
  * Board drawings (#1015): shapes, arrows, text and pen strokes drawn on
@@ -84,16 +85,6 @@ export type SketchHost = {
   selected(): void;
 };
 
-const COLORS: Record<BoardShapeColor, string> = {
-  ink: "var(--board-ink)",
-  red: "#e5484d",
-  orange: "#f76b15",
-  yellow: "#d49a00",
-  green: "#30a46c",
-  teal: "#12a594",
-  blue: "#3e63dd",
-  purple: "#8e4ec6",
-};
 const TOOLS: readonly [SketchTool, string, typeof Pencil][] = [
   ["select", "Select", MousePointer2],
   ["pen", "Pen", Pencil],
@@ -107,7 +98,6 @@ const TOOLS: readonly [SketchTool, string, typeof Pencil][] = [
 const BOXES: readonly BoardShapeKind[] = ["rect", "ellipse", "diamond"];
 /** A click with a box tool draws one this size. */
 const CLICK_BOX = { w: 160, h: 100 };
-const LABEL_SIZE = 18;
 
 const phoneQuery = () => window.matchMedia("(max-width: 720px)");
 const subscribePhone = (listener: () => void) => {
@@ -123,15 +113,26 @@ const newShapeId = () =>
 const outlineOf = (kind: BoardShapeKind) =>
   kind === "ellipse" ? "ellipse" : kind === "diamond" ? "diamond" : "rect";
 
-/** What the pointer is doing, from press to release. */
+/**
+ * What the pointer is doing, from press to release. A drag that changes a
+ * drawing keeps the revision it began from (`rev`), so a newer version saved
+ * elsewhere meanwhile is a conflict, not silently replaced.
+ */
 type Drag =
-  | { kind: "move"; base: ShapeDraft; from: Point; moved: boolean }
+  | {
+      kind: "move";
+      base: ShapeDraft;
+      rev?: number;
+      from: Point;
+      moved: boolean;
+    }
   | {
       kind: "corner";
       base: ShapeDraft;
+      rev?: number;
       corner: "nw" | "ne" | "sw" | "se";
     }
-  | { kind: "end"; base: ShapeDraft; end: "from" | "to" }
+  | { kind: "end"; base: ShapeDraft; rev?: number; end: "from" | "to" }
   | { kind: "box"; shape: BoardShapeKind; from: Point }
   | { kind: "arrow"; from: BoardShapeEnd }
   | { kind: "pen"; points: Point[] };
@@ -161,9 +162,15 @@ export function useBoardSketch({
     liveRef.current = shape;
     setLiveState(shape);
   };
+  /**
+   * The drawing whose text is being typed, the revision the edit began from
+   * and the text it opens with (typed text kept through a conflict).
+   */
   const [editing, setEditing] = useState<{
     shape: ShapeDraft;
     created: boolean;
+    rev?: number;
+    text: string;
   } | null>(null);
   /** Changes on their way to the service, shown at once. */
   const [overrides, setOverrides] = useState(
@@ -273,11 +280,12 @@ export function useBoardSketch({
     });
   };
   /** Save a user's change and remember it for undo. */
-  const change = (ops: ShapeOp[]) => {
-    if (!ops.length) return;
+  const change = (ops: ShapeOp[]): Promise<boolean> => {
+    if (!ops.length) return Promise.resolve(true);
     const { changes, saved } = commit(ops);
     history.current.redo = [];
     record("undo", changes, saved);
+    return saved;
   };
   const revert = (from: "undo" | "redo") => {
     const entry = history.current[from][history.current[from].length - 1];
@@ -295,15 +303,20 @@ export function useBoardSketch({
     const { changes, saved } = commit(ops);
     record(from === "undo" ? "redo" : "undo", changes, saved);
   };
-  const put = (shape: ShapeDraft): ShapeOp => {
-    const rev = current().find((s) => s.id === shape.id)?.rev;
-    return rev ? { op: "shape.put", shape, rev } : { op: "shape.put", shape };
-  };
-  const remove = (id: string) => {
+  /** A drawing's revision as this browser knows it; 0 when it is new. */
+  const revOf = (id: string) => current().find((s) => s.id === id)?.rev ?? 0;
+  /**
+   * Save `shape` over the revision it was based on: `rev` when the change
+   * began earlier (a drag, a text edit), else the newest known now.
+   */
+  const put = (shape: ShapeDraft, rev = revOf(shape.id)): ShapeOp =>
+    rev ? { op: "shape.put", shape, rev } : { op: "shape.put", shape };
+  /** Delete a drawing, at `rev` when the deletion began from an earlier one. */
+  const remove = (id: string, rev?: number) => {
     const all = current();
     const shape = all.find((s) => s.id === id);
     if (!shape) return;
-    const ops: ShapeOp[] = [{ op: "shape.delete", id, rev: shape.rev }];
+    const ops: ShapeOp[] = [{ op: "shape.delete", id, rev: rev || shape.rev }];
     // Arrows attached to it stay where they point now.
     for (const arrow of all) {
       if (arrow.kind !== "arrow" || !arrow.from || !arrow.to) continue;
@@ -366,7 +379,7 @@ export function useBoardSketch({
         dy = at.y - d.from.y;
       if (!d.moved && Math.hypot(dx, dy) * host.scale() < 3) return;
       d.moved = true;
-      setLive(moved(d.base, dx, dy));
+      setLive(moved(d.base, dx, dy, resolve));
     } else if (d.kind === "corner") {
       setLive(resized(d.base, dragCorner(d.base, d.corner, at)));
     } else if (d.kind === "end") {
@@ -410,7 +423,8 @@ export function useBoardSketch({
     setLive(null);
     const id = newShapeId();
     if (d.kind === "move" || d.kind === "corner" || d.kind === "end") {
-      if (shape && (d.kind !== "move" || d.moved)) change([put(shape)]);
+      if (shape && (d.kind !== "move" || d.moved))
+        change([put(shape, d.rev ?? 0)]);
     } else if (d.kind === "box") {
       const box =
         shape && shape.w * host.scale() > 6 && shape.h * host.scale() > 6
@@ -461,6 +475,7 @@ export function useBoardSketch({
       event.preventDefault();
       setEditing({
         created: true,
+        text: "",
         shape: {
           id: newShapeId(),
           kind: "text",
@@ -490,6 +505,7 @@ export function useBoardSketch({
     begin(event, {
       kind: "move",
       base: shape,
+      rev: revOf(shape.id),
       from: host.toWorld(event.clientX, event.clientY),
       moved: false,
     });
@@ -498,27 +514,49 @@ export function useBoardSketch({
   /* ---------- Text ---------- */
   const finishEdit = (text: string) => {
     if (!editing) return;
-    const { shape, created } = editing;
+    const { shape, created, rev = 0 } = editing;
     setEditing(null);
     const value = text.replace(/\s+$/, "");
+    let saved: Promise<boolean>;
     if (shape.kind === "text") {
       if (!value) {
-        if (!created) remove(shape.id);
+        if (!created) remove(shape.id, rev);
         return;
       }
-      change([put({ ...shape, text: value, ...textBox(value) })]);
       setSelected(shape.id);
-      return;
+      saved = change([put({ ...shape, text: value, ...textBox(value) }, rev)]);
+    } else {
+      if (value === (shape.text ?? "")) return;
+      const rest: ShapeDraft = { ...shape };
+      delete rest.text;
+      saved = change([put(value ? { ...rest, text: value } : rest, rev)]);
     }
-    if (value === (shape.text ?? "")) return;
-    const rest: ShapeDraft = { ...shape };
-    delete rest.text;
-    change([put(value ? { ...rest, text: value } : rest)]);
+    // Changed elsewhere while typing: the newer drawing stays and the editor
+    // opens again on it with the typed text, so nothing typed is lost.
+    void saved.then((ok) => {
+      if (ok) return;
+      const now = store.get().document?.shapes?.find((s) => s.id === shape.id);
+      // Not over another edit begun since.
+      setEditing(
+        (was) =>
+          was ?? {
+            shape: now ? strip(now) : shape,
+            created: !now,
+            ...(now ? { rev: now.rev } : {}),
+            text,
+          },
+      );
+    });
   };
   const editShape = (shape: ShapeDraft) => {
     if (shape.kind === "pen" || shape.kind === "arrow") return;
     setSelected(shape.id);
-    setEditing({ shape, created: false });
+    setEditing({
+      shape,
+      created: false,
+      rev: revOf(shape.id),
+      text: shape.text ?? "",
+    });
   };
 
   /* ---------- Keys and outside presses ---------- */
@@ -735,7 +773,13 @@ export function useBoardSketch({
           handle(
             end,
             at,
-            (event) => begin(event, { kind: "end", base: shape, end }),
+            (event) =>
+              begin(event, {
+                kind: "end",
+                base: shape,
+                rev: revOf(shape.id),
+                end,
+              }),
             true,
           ),
         );
@@ -748,7 +792,13 @@ export function useBoardSketch({
               x: corner.includes("w") ? shape.x : shape.x + shape.w,
               y: corner.includes("n") ? shape.y : shape.y + shape.h,
             },
-            (event) => begin(event, { kind: "corner", base: shape, corner }),
+            (event) =>
+              begin(event, {
+                kind: "corner",
+                base: shape,
+                rev: revOf(shape.id),
+                corner,
+              }),
           ),
         );
     return (
@@ -772,6 +822,7 @@ export function useBoardSketch({
     <TextEditor
       key={editing.shape.id}
       shape={editing.shape}
+      initial={editing.text}
       onDone={finishEdit}
     />
   ) : null;
@@ -900,95 +951,4 @@ export function useBoardSketch({
     </>
   );
   return { layer, tools, repaint };
-}
-
-/** Lines of text, as SVG text, from a corner or around a centre. */
-function lines(
-  text: string,
-  x: number,
-  y: number,
-  size: number,
-  anchor: "start" | "middle",
-) {
-  const rows = text.split("\n");
-  const step = size * 1.3;
-  const top =
-    anchor === "middle" ? y - ((rows.length - 1) * step) / 2 : y + size * 0.8;
-  return (
-    <text
-      className="board-sketch-text"
-      x={x}
-      y={top}
-      textAnchor={anchor}
-      dominantBaseline={anchor === "middle" ? "middle" : "alphabetic"}
-      style={{ fontSize: size }}
-    >
-      {rows.map((row, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: lines have no identity
-        <tspan key={index} x={x} y={top + index * step}>
-          {row || " "}
-        </tspan>
-      ))}
-    </text>
-  );
-}
-
-function TextEditor({
-  shape,
-  onDone,
-}: {
-  shape: ShapeDraft;
-  onDone(text: string): void;
-}) {
-  const [text, setText] = useState(shape.text ?? "");
-  const done = useRef(false);
-  const finish = () => {
-    if (done.current) return;
-    done.current = true;
-    onDone(text);
-  };
-  const box = shape.kind === "text";
-  const size = textBox(text);
-  const style: CSSProperties = box
-    ? {
-        left: shape.x,
-        top: shape.y,
-        width: Math.max(size.w, 120),
-        height: size.h,
-        fontSize: TEXT_SIZE,
-        color: COLORS[shape.color],
-      }
-    : {
-        left: shape.x,
-        top: shape.y,
-        width: Math.max(shape.w, 80),
-        height: Math.max(shape.h, 40),
-        fontSize: LABEL_SIZE,
-        textAlign: "center",
-        color: COLORS[shape.color],
-      };
-  return (
-    <textarea
-      className={`board-sketch-edit board-sketch-live${box ? "" : " board-sketch-edit-label"}`}
-      aria-label={box ? "Drawing text" : "Drawing label"}
-      // biome-ignore lint/a11y/noAutofocus: the text is typed where it was placed
-      autoFocus
-      value={text}
-      style={style}
-      onChange={(event) => setText(event.target.value)}
-      onBlur={finish}
-      onPointerDown={(event) => event.stopPropagation()}
-      onDoubleClick={(event) => event.stopPropagation()}
-      onKeyDown={(event) => {
-        event.stopPropagation();
-        if (
-          event.key === "Escape" ||
-          (event.key === "Enter" && (event.metaKey || event.ctrlKey))
-        ) {
-          event.preventDefault();
-          finish();
-        }
-      }}
-    />
-  );
 }

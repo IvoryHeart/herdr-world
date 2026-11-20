@@ -48,6 +48,23 @@ describe("Board drawing geometry", () => {
     ]);
   });
 
+  test("a stroke that doubles back keeps where it turned", () => {
+    const back = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 10, y: 0 },
+    ];
+    expect(simplify(back, 0.5)).toEqual(back);
+    expect(strokeFrom(back, 0.6)!.points).toEqual([0, 0, 100, 0, 10, 0]);
+    // Beyond both ends of the line between them, either way.
+    const before = [
+      { x: 50, y: 0 },
+      { x: -40, y: 0 },
+      { x: 100, y: 0 },
+    ];
+    expect(simplify(before, 0.5)).toEqual(before);
+  });
+
   test("a stroke is saved relative to its box and always fits the bound", () => {
     const stroke = strokeFrom(
       [
@@ -142,12 +159,33 @@ describe("Board drawing geometry", () => {
       to: { x: 10, y: 10 },
     };
     // A moved arrow lets go of what it was attached to.
-    expect(moved(arrow, 5, 5)).toMatchObject({
+    const unresolved = () => null;
+    expect(moved(arrow, 5, 5, unresolved)).toMatchObject({
       x: 5,
       from: { x: 5, y: 5 },
       to: { x: 15, y: 15 },
     });
-    expect(moved(arrow, 5, 5).from!.attach).toBeUndefined();
+    expect(moved(arrow, 5, 5, unresolved).from!.attach).toBeUndefined();
+    // It lets go from where it is drawn: its target moved since it was saved.
+    const onBox: ShapeDraft = {
+      ...arrow,
+      x: 106,
+      y: 25,
+      w: 94,
+      h: 0,
+      from: { x: 106, y: 25, attach: { shape: "r" } },
+      to: { x: 700, y: 25 },
+    };
+    const target = () => ({
+      box: { ...rect, x: 500 },
+      outline: "rect" as const,
+    });
+    const drawn = arrowEnds(onBox.from!, onBox.to!, target).a;
+    expect(drawn.x).toBe(606);
+    const dragged = moved(onBox, 10, 0, target);
+    expect(dragged.from).toEqual({ x: 616, y: 25 });
+    expect(dragged.to).toEqual({ x: 710, y: 25 });
+    expect(dragged).toMatchObject({ x: 616, y: 25, w: 94, h: 0 });
     const pen: ShapeDraft = {
       ...rect,
       kind: "pen",

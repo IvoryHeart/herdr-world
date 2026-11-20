@@ -1193,7 +1193,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the selection; an arrow attached to it stays where it pointed. Undo
     (Ctrl/⌘+Z) and redo (Ctrl/⌘+Shift+Z or Ctrl+Y) cover drawings made on this
     device since Board opened; a drawing changed elsewhere since is left
-    alone, with a notice. Drawings are saved with the board on the World
+    alone, with a notice. A move, resize or text edit of a drawing someone
+    changed elsewhere meanwhile is refused with the same notice and their
+    version stays; typed text reopens on their version, so nothing typed is
+    lost. Drawings are saved with the board on the World
     service (at most 1,000; a stroke keeps at most 2,000 points, simplified
     as it is drawn) and are visual only: an arrow never sends anything to an
     agent. Issues and pull requests are reached through their agent's tab

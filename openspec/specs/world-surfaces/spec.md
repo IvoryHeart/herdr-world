@@ -3399,7 +3399,12 @@ select, move, resize, recolour, label and delete drawings. Attached arrow ends
 SHALL follow their targets; when a target is gone the end SHALL stay at its last
 saved point. Drawings SHALL be saved with the Board document, each with its own
 revision, beneath strings and cards, and SHALL never send anything to an agent.
-Pan and zoom SHALL be unchanged. Undo and redo SHALL cover this browser's
+Pan and zoom SHALL be unchanged. A move, resize, end drag or text edit SHALL
+be saved against the drawing revision it began from: when the drawing changed
+elsewhere meanwhile, the edit SHALL be refused with a reason and the newer
+drawing kept, and a refused text edit SHALL reopen on the newer drawing with
+the typed text. A moved arrow SHALL let go of its targets from the ends it is
+drawn at. Undo and redo SHALL cover this browser's
 drawing changes and SHALL refuse, with a reason, to revert a drawing someone
 changed since. On a phone, drawings SHALL be shown but not editable, and notes
 keep working.
@@ -3408,6 +3413,11 @@ keep working.
 
 - **WHEN** the user draws a rectangle and an arrow from it to a card, then moves the card
 - **THEN** the arrow end follows the card and both drawings survive a reload
+
+#### Scenario: Text edit after another edit
+
+- **WHEN** the user is typing a drawing's text and another client saves a new text, colour and place for it
+- **THEN** finishing the edit keeps the other client's drawing, says why, and reopens the editor on it with the typed text
 
 #### Scenario: Undo after another edit
 

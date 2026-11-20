@@ -3416,6 +3416,122 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         "and says why",
       );
 
+      // A text edit begun before a change elsewhere does not replace that
+      // change: the editor opens again on the newer drawing, text kept.
+      const typing = () =>
+        host.querySelector<HTMLTextAreaElement>(".board-sketch-edit");
+      const typeInto = (el: HTMLTextAreaElement, value: string) => {
+        Object.getOwnPropertyDescriptor(
+          HTMLTextAreaElement.prototype,
+          "value",
+        )!.set!.call(el, value);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      const text = shape("text")!;
+      host
+        .querySelector(`[data-hit="${text.id}"]`)!
+        .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      await settle();
+      check(typing()?.value === "Ship it?", "double-click edits the text");
+      apply([
+        {
+          op: "shape.put",
+          shape: {
+            ...text,
+            text: "Ship it now",
+            color: "teal",
+            x: text.x + 40,
+          },
+          rev: text.rev,
+        },
+      ]);
+      await store.refresh();
+      await settle();
+      typeInto(typing()!, "Ship it today");
+      typing()!.blur();
+      await waitFor(
+        () =>
+          typing()?.value === "Ship it today" &&
+          shape("text")?.text === "Ship it now",
+        "a text edit that conflicts reopens with what was typed",
+      );
+      check(
+        shape("text")!.color === "teal" && shape("text")!.x === text.x + 40,
+        `the other browser's change is kept (${JSON.stringify(shape("text"))})`,
+      );
+      check(
+        Boolean(
+          host
+            .querySelector(".board-toast")
+            ?.textContent?.includes("changed elsewhere"),
+        ),
+        "and Board says why",
+      );
+      typing()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          key: "Enter",
+          ctrlKey: true,
+        }),
+      );
+      await waitFor(
+        () => shape("text")?.text === "Ship it today",
+        "the typed text saves over the newer drawing",
+      );
+      check(
+        shape("text")!.color === "teal" && shape("text")!.x === text.x + 40,
+        "saving the typed text keeps the other browser's colour and place",
+      );
+
+      // An arrow whose drawing moved elsewhere is dragged from where it is
+      // drawn, not from where it was last saved.
+      const onRect = shape("arrow")!;
+      const box = shape("rect")!;
+      check(
+        JSON.stringify(onRect.from?.attach) ===
+          JSON.stringify({ shape: box.id }),
+        `the arrow starts on the rectangle (${JSON.stringify(onRect.from)})`,
+      );
+      apply([
+        {
+          op: "shape.put",
+          shape: { ...box, x: box.x + 300 },
+          rev: box.rev,
+        },
+      ]);
+      await store.refresh();
+      await settle();
+      const arrowHit = () =>
+        host.querySelector<SVGPathElement>(`[data-hit="${onRect.id}"]`)!;
+      const [ax, ay, bx, by] = arrowHit()
+        .getAttribute("d")!
+        .match(/^M(-?[\d.]+) (-?[\d.]+)L(-?[\d.]+) (-?[\d.]+)/)!
+        .slice(1)
+        .map(Number) as [number, number, number, number];
+      check(
+        ax > box.x + 200,
+        `the arrow follows its moved rectangle (${ax}, rect ${box.x + 300})`,
+      );
+      pointer(arrowHit(), "pointerdown", 400, 400, 44);
+      pointer(arrowHit(), "pointermove", 430, 410, 44);
+      await settle();
+      pointer(arrowHit(), "pointerup", 430, 410, 44);
+      await waitFor(
+        () => !shape("arrow")!.from?.attach,
+        "the dragged arrow is saved, let go of the rectangle",
+      );
+      const dragged = shape("arrow")!;
+      const ddx = dragged.from!.x - ax,
+        ddy = dragged.from!.y - ay;
+      check(
+        Math.hypot(ddx, ddy) > 1 &&
+          Math.abs(dragged.to!.x - bx - ddx) < 0.5 &&
+          Math.abs(dragged.to!.y - by - ddy) < 0.5,
+        `both ends move by the drag from where they were drawn (${JSON.stringify(
+          { ax, ay, bx, by, from: dragged.from, to: dragged.to },
+        )})`,
+      );
+
       // Escape puts the pen down; a reload shows every drawing.
       tool("Pen")!.click();
       await settle();
