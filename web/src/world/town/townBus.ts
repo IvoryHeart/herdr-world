@@ -14,6 +14,7 @@ import {
 } from "./townLayout";
 import type { TownModel } from "./townModel";
 import { TOWN_WALK_SPEED } from "./townActors";
+import { townHarbourLot } from "./townHarbour";
 import type { TownDirection } from "./townSprites";
 
 /** A street is five tiles: pavement, three lanes, pavement. */
@@ -74,14 +75,19 @@ const OFF_MAP = 6;
 /**
  * Every crossing of a street and a side road has a stop, the town's left
  * edge roads included, shared with any crossing on that street fewer than
- * TOWN_STOP_SPACING tiles away. The bus drives every street from one edge of
- * the map to the other, alternating direction, so it passes every crossing
- * whatever the rows' widths; between streets it is off the map.
+ * TOWN_STOP_SPACING tiles away. The bus drives every street from the map's
+ * left edge to its right (a wide town's promenade, where it turns away),
+ * alternating direction, so it passes every crossing whatever the rows'
+ * widths; between streets it is out of sight.
  */
 export function townBusRoute(layout: TownLayout): TownBusRoute {
   const roads = [...new Set(layout.roads)].sort((a, b) => a - b);
+  // A wide town's streets end at the harbour's promenade, where the bus
+  // turns away out of sight (townHarbourLot.ts).
+  const end = townHarbourLot(layout)?.streetEnd;
+  const width = end ?? layout.width;
   const left = -OFF_MAP * T;
-  const right = (layout.width + OFF_MAP) * T;
+  const right = end ? (end - 3) * T + 4.5 * T : (width + OFF_MAP) * T;
   const legs = roads.map((road, index) => ({
     y: lane(road),
     from: index % 2 ? right : left,
@@ -126,7 +132,12 @@ export function townBusRoute(layout: TownLayout): TownBusRoute {
       Math.min(TOWN_QUEUE_ROW, Math.floor(room / TOWN_QUEUE_GAP) + 1),
     );
   }
-  return { legs, length: legs.length * span, stops, width: layout.width * T };
+  return {
+    legs,
+    length: legs.length * span,
+    stops,
+    width: end ? (end - 3) * T : width * T,
+  };
 }
 
 /**

@@ -9,47 +9,54 @@ import {
 import { openIntegrations } from "../../integrations";
 import { PullRequestCard } from "../PullRequestCard";
 import { BadgePopover } from "./DeskWorkBadge";
+import type { TownCenterLot } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
 import {
-  TOWN_POST_SLOTS,
-  TOWN_POST_YARD_ROWS,
-  townPostCountParts,
-  townPostLabel,
-  townPostLot,
-  townPostName,
-  townPostOffice,
-  townPostSignAt,
-  townPostSignText,
-  townPostSlot,
-  type TownPostLot,
-  type TownPostOffice as Office,
-  type TownPostParcel,
-} from "./townPost";
-import { useTownPostSources } from "./townPostFixture";
+  TOWN_WAREHOUSE_SLOTS,
+  TOWN_WAREHOUSE_YARD_ROWS,
+  townWarehouseCountParts,
+  townWarehouseFoldAt,
+  townWarehouseLabel,
+  townWarehouseLot,
+  townWarehouseName,
+  townWarehouse,
+  townWarehouseSignText,
+  townWarehouseSlot,
+  type TownWarehouse as Office,
+  type TownWarehouseParcel,
+} from "./townWarehouseModel";
+import { useTownWarehouseSources } from "./townWarehouseFixture";
 import type { TownRendererHandle } from "./townRenderer";
 import { useOpenTownWork } from "./TownWorkLens";
-import "./townPost.css";
+import { townCrateUrl, type TownCrateState } from "./townHarbourArt";
+import "./townWarehouse.css";
 
-/** How long a parcel takes to leave the yard (townPost.css). */
-export const TOWN_POST_LEAVE_MS = 1_400;
+/** A crate's painted art as a background. */
+const crateArt = (state: TownCrateState) => {
+  const url = townCrateUrl(state);
+  return url ? `url("${url}")` : undefined;
+};
+
+/** How long a parcel takes to leave the yard (townWarehouse.css). */
+export const TOWN_WAREHOUSE_LEAVE_MS = 1_400;
 
 const openSourcesSettings = () => openIntegrations("source:github");
 
 /** A parcel leaving the yard: carried off when merged, else just gone. */
 type Leaving = {
-  parcel: TownPostParcel;
+  parcel: TownWarehouseParcel;
   slot: number;
-  how: "posted" | "gone";
+  how: "loaded" | "gone";
 };
 
 /**
- * Parcels that left since the last read: merged ones are posted, closed or
+ * Parcels that left since the last read: merged ones are loaded for the next release, closed or
  * dropped ones simply go. Only parcels that stood in the yard animate; the
  * first read, and a source that closes, animate nothing.
  */
 function useLeaving(office: Office, snapshot: WorldSourcesSnapshot) {
   const before =
-    useRef<Map<string, { parcel: TownPostParcel; slot: number }>>(null);
+    useRef<Map<string, { parcel: TownWarehouseParcel; slot: number }>>(null);
   const timers = useRef(new Set<number>());
   const [leaving, setLeaving] = useState<Leaving[]>([]);
   useEffect(() => {
@@ -75,14 +82,14 @@ function useLeaving(office: Office, snapshot: WorldSourcesSnapshot) {
       .filter(({ parcel }) => !open.has(parcel.key))
       .map((entry) => ({
         ...entry,
-        how: merged.has(entry.parcel.key) ? "posted" : "gone",
+        how: merged.has(entry.parcel.key) ? "loaded" : "gone",
       }));
     if (!batch.length) return;
     setLeaving((list) => [...list, ...batch]);
     const timer = window.setTimeout(() => {
       timers.current.delete(timer);
       setLeaving((list) => list.filter((entry) => !batch.includes(entry)));
-    }, TOWN_POST_LEAVE_MS);
+    }, TOWN_WAREHOUSE_LEAVE_MS);
     timers.current.add(timer);
   }, [office, snapshot]);
   useEffect(() => {
@@ -96,10 +103,10 @@ function useLeaving(office: Office, snapshot: WorldSourcesSnapshot) {
 
 /** How many parcels stand in the yard; the rest make the "+N" pile. */
 const yardSlots = (count: number) =>
-  count > TOWN_POST_SLOTS ? TOWN_POST_SLOTS - 1 : count;
+  count > TOWN_WAREHOUSE_SLOTS ? TOWN_WAREHOUSE_SLOTS - 1 : count;
 
 /**
- * Re-reads the post office when a parcel's detail expires, so a ready
+ * Re-reads the warehouse when a parcel's detail expires, so a ready
  * parcel never outlives the fresh read that made it ready.
  */
 function useExpiry(snapshot: WorldSourcesSnapshot) {
@@ -121,27 +128,34 @@ function useExpiry(snapshot: WorldSourcesSnapshot) {
   }, [snapshot, tick]);
 }
 
-/** The counts in words, for the sign's name. */
+/** The counts in words, for names and the folded sign. */
 function spoken(office: Office) {
-  if (office.status !== "open" || office.stale) return townPostSignText(office);
-  return townPostCountParts(office.counts)
+  if (office.status !== "open" || office.stale)
+    return townWarehouseSignText(office);
+  return townWarehouseCountParts(office.counts)
     .map((part) =>
       part.state === "ready" ? `${part.count} ready to merge` : part.text,
     )
     .join(", ");
 }
 
+const FOLDED_WAITING = {
+  loading: "…",
+  off: "closed",
+  closed: "closed",
+} as const;
+
 /**
- * Town's post office (#760): your open pull requests as parcels in its
+ * Town's warehouse (#760, moved to the harbour by #1028): your open pull requests as parcels in its
  * sorting yard beside the town center, ready to merge first, each opening the pull
  * request card the desk badge opens. Its sign counts them without hovering.
- * On a wide town its sign, and "All pull requests" in its lists, open
- * Board's Work lens over Town (#887): every pull request as the same kanban.
- * A phone's stacked town stands the same building and yard (#1033); there
- * its sign says what the counts are and opens the parcels as a list, with
- * "All pull requests" at its top, since a phone's parcels are small to tap.
+ * On a narrow (stacked) town it stands on the shore too, right of the
+ * buildings, and a folded sign on the town center opens the same parcels
+ * as a list within a phone's first view. Its sign,
+ * and "All pull requests" in its lists, open Board's Work lens over Town
+ * (#887): every pull request as the same kanban.
  */
-export const TownPostOffice = memo(function TownPostOffice({
+export const TownWarehouse = memo(function TownWarehouse({
   layout,
   renderer,
 }: {
@@ -149,10 +163,10 @@ export const TownPostOffice = memo(function TownPostOffice({
   /** Brings a focused parcel into view. */
   renderer: { readonly current: TownRendererHandle | null };
 }) {
-  const snapshot = useTownPostSources();
+  const snapshot = useTownWarehouseSources();
   // Read at every render: an expiring detail re-renders it (useExpiry).
   useExpiry(snapshot);
-  const office = townPostOffice(snapshot, Date.now());
+  const office = townWarehouse(snapshot, Date.now());
   const openWork = useOpenTownWork();
   const leaving = useLeaving(office, snapshot);
   const [cardKey, setCardKey] = useState<string | null>(null);
@@ -184,8 +198,10 @@ export const TownPostOffice = memo(function TownPostOffice({
       box.bottom < height - margin
     )
       return;
-    const lot = townPostLot(layout);
-    const at = { x: (lot.x + lot.w / 2) * T, y: lot.yardY * T };
+    const lot = townWarehouseLot(layout);
+    const at = target.classList.contains("town-warehouse-fold")
+      ? townWarehouseFoldAt(layout.center)
+      : { x: (lot.x + lot.w / 2) * T, y: lot.yardY * T };
     handle.camera.flyTo(at.x, at.y, handle.camera.z, 0.4);
     handle.invalidate("focus");
   };
@@ -202,8 +218,7 @@ export const TownPostOffice = memo(function TownPostOffice({
           document.body,
         )
       : null;
-  const lot = townPostLot(layout);
-  const listed = layout.formFactor === "narrow";
+  const lot = townWarehouseLot(layout);
   const parcels = office.status === "open" ? office.parcels : [];
   const shown = parcels.slice(0, yardSlots(parcels.length));
   const pile = parcels.slice(shown.length);
@@ -213,64 +228,56 @@ export const TownPostOffice = memo(function TownPostOffice({
   const work = office.status === "open" ? openWork : undefined;
   return (
     <>
-      {listed ? (
-        <ListedSign
-          lot={lot}
-          office={office}
-          onOpen={openCard}
-          onOpenWork={openWork}
-          onFocus={reveal}
-        />
-      ) : (
-        <button
-          type="button"
-          className="town-post-sign"
-          data-quiet={quiet || undefined}
-          style={signStyle(lot)}
-          aria-label={`Post office: ${spoken(office)}${work ? ". Open all pull requests" : ""}`}
-          title={
-            quiet && office.status === "closed" ? office.detail : undefined
-          }
-          onPointerDown={(event) => event.stopPropagation()}
-          onFocus={reveal}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (connect) openSourcesSettings();
-            else if (work) work();
-            else
-              yardRef.current
-                ?.querySelector<HTMLElement>(".town-post-parcel")
-                ?.focus();
-          }}
-        >
-          <span className="town-post-sign-title" aria-hidden="true">
-            POST OFFICE
-          </span>
-          <SignCounts office={office} />
-        </button>
-      )}
+      <button
+        type="button"
+        className="town-warehouse-sign"
+        data-quiet={quiet || undefined}
+        style={{ left: (lot.x + lot.w) * T - 12, top: lot.y * T + 34 }}
+        aria-label={`Warehouse: ${spoken(office)}${work ? ". Open all pull requests" : ""}`}
+        title={quiet && office.status === "closed" ? office.detail : undefined}
+        onPointerDown={(event) => event.stopPropagation()}
+        onFocus={reveal}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (connect) openSourcesSettings();
+          else if (work) work();
+          else
+            yardRef.current
+              ?.querySelector<HTMLElement>(".town-warehouse-parcel")
+              ?.focus();
+        }}
+      >
+        <span className="town-warehouse-sign-title" aria-hidden="true">
+          WAREHOUSE
+        </span>
+        <SignCounts office={office} />
+      </button>
       <div
         ref={yardRef}
-        className="town-post-yard"
+        className="town-warehouse-yard"
         role="group"
-        aria-label="Post office yard"
+        aria-label="Warehouse yard"
         style={{
           left: lot.x * T,
           top: lot.yardY * T,
           width: lot.w * T,
-          height: TOWN_POST_YARD_ROWS * T,
+          height: TOWN_WAREHOUSE_YARD_ROWS * T,
         }}
       >
         {shown.map((parcel, index) => {
-          const at = townPostSlot(index);
+          const at = townWarehouseSlot(index);
           return (
             <button
               key={parcel.key}
               type="button"
-              className="town-post-parcel"
+              className="town-warehouse-parcel"
               data-state={parcel.state}
-              style={{ left: at.x, top: at.y }}
-              aria-label={`${townPostLabel(parcel)}. Open pull request`}
+              style={{
+                left: at.x,
+                top: at.y,
+                backgroundImage: crateArt(parcel.state),
+              }}
+              aria-label={`${townWarehouseLabel(parcel)}. Open pull request`}
               onPointerDown={(event) => event.stopPropagation()}
               onFocus={reveal}
               onClick={(event) => {
@@ -278,8 +285,8 @@ export const TownPostOffice = memo(function TownPostOffice({
                 openCard(parcel.key, event.currentTarget);
               }}
             >
-              <span className="town-post-label" aria-hidden="true">
-                <b>{townPostName(parcel)}</b>
+              <span className="town-warehouse-label" aria-hidden="true">
+                <b>{townWarehouseName(parcel)}</b>
                 <span>
                   {parcel.repo} · {parcel.why}
                 </span>
@@ -290,36 +297,49 @@ export const TownPostOffice = memo(function TownPostOffice({
         {pile.length ? (
           <Pile
             parcels={pile}
-            at={townPostSlot(shown.length)}
+            at={townWarehouseSlot(shown.length)}
             onOpen={openCard}
             onOpenWork={openWork}
             onFocus={reveal}
           />
         ) : null}
         {leaving
-          .filter((entry) => entry.slot < TOWN_POST_SLOTS)
+          .filter((entry) => entry.slot < TOWN_WAREHOUSE_SLOTS)
           .map((entry) => {
-            const at = townPostSlot(entry.slot);
+            const at = townWarehouseSlot(entry.slot);
             return (
               <span
                 key={`left:${entry.parcel.key}`}
-                className="town-post-parcel"
+                className="town-warehouse-parcel"
                 data-state={entry.parcel.state}
                 data-leaving={entry.how}
-                style={{ left: at.x, top: at.y }}
+                style={{
+                  left: at.x,
+                  top: at.y,
+                  backgroundImage: crateArt(entry.parcel.state),
+                }}
                 aria-hidden="true"
               />
             );
           })}
-        <span className="town-post-announce" role="status">
+        <span className="town-warehouse-announce" role="status">
           {leaving
             .map(
               (entry) =>
-                `${townPostName(entry.parcel)} ${entry.how === "posted" ? "merged" : "left the post office"}.`,
+                `${townWarehouseName(entry.parcel)} ${entry.how === "loaded" ? "merged" : "left the warehouse"}.`,
             )
             .join(" ")}
         </span>
       </div>
+      {layout.formFactor === "narrow" ? (
+        <FoldedSign
+          center={layout.center}
+          office={office}
+          onOpen={openCard}
+          onOpenWork={openWork}
+          onFocus={reveal}
+        />
+      ) : null}
       {card}
     </>
   );
@@ -337,13 +357,13 @@ function focusVisible(element: HTMLElement) {
 function SignCounts({ office }: { office: Office }) {
   if (office.status !== "open" || office.stale)
     return (
-      <span className="town-post-sign-counts" aria-hidden="true">
-        {townPostSignText(office)}
+      <span className="town-warehouse-sign-counts" aria-hidden="true">
+        {townWarehouseSignText(office)}
       </span>
     );
   return (
-    <span className="town-post-sign-counts" aria-hidden="true">
-      {townPostCountParts(office.counts).map((part) => (
+    <span className="town-warehouse-sign-counts" aria-hidden="true">
+      {townWarehouseCountParts(office.counts).map((part) => (
         <span key={part.state} data-state={part.state}>
           <i aria-hidden="true" />
           {part.text}
@@ -361,7 +381,7 @@ function Pile({
   onOpenWork,
   onFocus,
 }: {
-  parcels: readonly TownPostParcel[];
+  parcels: readonly TownWarehouseParcel[];
   at: { x: number; y: number };
   onOpen(key: string, anchor: HTMLElement | null): void;
   onOpenWork: (() => void) | null;
@@ -375,7 +395,7 @@ function Pile({
         <button
           ref={trigger}
           type="button"
-          className="town-post-pile"
+          className="town-warehouse-pile"
           style={{ left: at.x, top: at.y }}
           aria-label={`${parcels.length} more pull requests`}
           onPointerDown={(event) => event.stopPropagation()}
@@ -385,7 +405,7 @@ function Pile({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="town-post-popover"
+        className="town-warehouse-popover"
         collisionPadding={8}
         aria-label="More pull requests"
       >
@@ -417,7 +437,7 @@ function AllPullRequests({
   return (
     <button
       type="button"
-      className="town-post-all"
+      className="town-warehouse-all"
       onClick={() => {
         onClose();
         onOpenWork();
@@ -428,31 +448,34 @@ function AllPullRequests({
   );
 }
 
-/** Parcels as rows: a phone sign's and the pile's list. */
+/** Parcels as rows: the folded sign's and the pile's list. */
 function ParcelList({
   parcels,
   onOpen,
 }: {
-  parcels: readonly TownPostParcel[];
+  parcels: readonly TownWarehouseParcel[];
   onOpen(key: string): void;
 }) {
   return (
-    <ul className="town-post-list" aria-label="Pull requests">
+    <ul className="town-warehouse-list" aria-label="Pull requests">
       {parcels.map((parcel) => (
         <li key={parcel.key}>
           <button
             type="button"
-            className="town-post-row"
-            aria-label={`${townPostLabel(parcel)}. Open pull request`}
+            className="town-warehouse-row"
+            aria-label={`${townWarehouseLabel(parcel)}. Open pull request`}
             onClick={() => onOpen(parcel.key)}
           >
             <span
-              className="town-post-icon"
+              className="town-warehouse-icon"
               data-state={parcel.state}
+              style={{ backgroundImage: crateArt(parcel.state) }}
               aria-hidden="true"
             />
-            <span className="town-post-row-name">{townPostName(parcel)}</span>
-            <span className="town-post-row-why">
+            <span className="town-warehouse-row-name">
+              {townWarehouseName(parcel)}
+            </span>
+            <span className="town-warehouse-row-why">
               {parcel.repo} · {parcel.why}
             </span>
           </button>
@@ -462,30 +485,30 @@ function ParcelList({
   );
 }
 
-/** The red pillar box painted by the house door, the list's mark. */
-function PostBox() {
-  return <span className="town-post-box" aria-hidden="true" />;
+/** A crate, as the folded sign's mark. */
+function CrateMark() {
+  return (
+    <span
+      className="town-warehouse-mark"
+      style={{ backgroundImage: crateArt("ready") }}
+      aria-hidden="true"
+    />
+  );
 }
 
-const signStyle = (lot: TownPostLot) => {
-  const at = townPostSignAt(lot);
-  return { left: at.x, top: at.y };
-};
-
 /**
- * A phone's sign, under the house's eave as on a wide town: it names the
- * post office and what its counts are (pull requests), and opens them as a
- * list with "All pull requests", or how to connect GitHub. Closed or signed
- * out, it still reads as the post office, closed.
+ * On a narrow town: a sign on the town center's right wing, inside a phone's
+ * home view (townWarehouseFoldAt), opening the warehouse as a list, or how to
+ * connect GitHub.
  */
-function ListedSign({
-  lot,
+function FoldedSign({
+  center,
   office,
   onOpen,
   onOpenWork,
   onFocus,
 }: {
-  lot: TownPostLot;
+  center: TownCenterLot;
   office: Office;
   onOpen(key: string, anchor: HTMLElement | null): void;
   onOpenWork: (() => void) | null;
@@ -493,40 +516,48 @@ function ListedSign({
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement | null>(null);
-  const quiet = office.status !== "open";
+  const at = townWarehouseFoldAt(center);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           ref={trigger}
           type="button"
-          className="town-post-sign"
-          data-listed="true"
-          data-quiet={quiet || undefined}
-          style={signStyle(lot)}
-          aria-label={`Post office, pull requests: ${spoken(office)}. Open`}
+          className="town-warehouse-fold"
+          style={{ left: at.x, top: at.y }}
+          aria-label={`Warehouse: ${spoken(office)}. Open`}
+          title="Warehouse"
           onPointerDown={(event) => event.stopPropagation()}
           onFocus={onFocus}
         >
-          <span className="town-post-sign-title" aria-hidden="true">
-            POST OFFICE
-          </span>
-          <span className="town-post-sign-what" aria-hidden="true">
-            pull requests
-          </span>
-          <SignCounts office={office} />
+          <CrateMark />
+          {office.status === "open" && !office.stale ? (
+            <span className="town-warehouse-fold-counts">
+              {(["ready", "failing", "waiting"] as const).map((state) => (
+                <b key={state} data-state={state}>
+                  {office.counts[state]}
+                </b>
+              ))}
+            </span>
+          ) : (
+            <span>
+              {office.status === "open" ? "old" : FOLDED_WAITING[office.status]}
+            </span>
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="town-post-popover"
+        className="town-warehouse-popover"
         collisionPadding={8}
-        aria-label="Post office"
+        aria-label="Warehouse"
       >
-        <header className="town-post-popover-title">
-          <PostBox />
-          <span>POST OFFICE</span>
+        <header className="town-warehouse-popover-title">
+          <CrateMark />
+          <span>WAREHOUSE</span>
         </header>
-        <p className="town-post-popover-counts">{townPostSignText(office)}</p>
+        <p className="town-warehouse-popover-counts">
+          {townWarehouseSignText(office)}
+        </p>
         {office.status === "open" ? (
           <AllPullRequests
             onOpenWork={onOpenWork}
@@ -543,16 +574,18 @@ function ListedSign({
               }}
             />
           ) : (
-            <p className="town-post-popover-note">No open pull requests.</p>
+            <p className="town-warehouse-popover-note">
+              No open pull requests.
+            </p>
           )
         ) : office.status === "loading" ? null : (
           <>
             {office.status === "closed" ? (
-              <p className="town-post-popover-note">{office.detail}</p>
+              <p className="town-warehouse-popover-note">{office.detail}</p>
             ) : null}
             <button
               type="button"
-              className="town-post-setup"
+              className="town-warehouse-setup"
               onClick={() => {
                 setOpen(false);
                 openSourcesSettings();

@@ -8,28 +8,28 @@ import type {
 import { useWorldSources } from "../worldSources";
 
 /**
- * A testing-only switch for the post office (#760): open World with
- * `?townPostFixture` and Town's post office shows synthetic pull requests in
+ * A testing-only switch for the warehouse (#760): open World with
+ * `?townWarehouseFixture` and Town's warehouse shows synthetic pull requests in
  * every state instead of the GitHub source's, until the page reloads. The
  * page drops the parameter at once. Ten seconds after it loads, the first
- * ready parcel is merged, to show it leave. `?townPostFixture=many` adds a
- * pile beyond the yard; `?townPostFixture=off` shows a signed-out source.
+ * ready parcel is merged, to show it leave. `?townWarehouseFixture=many` adds a
+ * pile beyond the yard; `?townWarehouseFixture=off` shows a signed-out source.
  *
- * Only the post office and the Work lens it opens read it; Board's Work
+ * Only the warehouse and the Work lens it opens read it; Board's Work
  * lens and every other view keep the real source.
  * Its pull requests are on example.com repositories World never has, so the
  * service refuses any action on them.
  */
 
-export type TownPostFixtureMode = "pile" | "many" | "off";
+export type TownWarehouseFixtureMode = "pile" | "many" | "off";
 
-const PARAM = "townPostFixture";
-let mode: TownPostFixtureMode | null | undefined;
+const PARAM = "townWarehouseFixture";
+let mode: TownWarehouseFixtureMode | null | undefined;
 /** When the page first read the fixture; every reader shares it. */
 let fixtureStart: number | null = null;
 
 /** The switch, read once per page load; the parameter is removed. */
-export function townPostFixtureMode(): TownPostFixtureMode | null {
+export function townWarehouseFixtureMode(): TownWarehouseFixtureMode | null {
   if (mode !== undefined) return mode;
   mode = null;
   if (typeof location === "undefined") return mode;
@@ -43,7 +43,7 @@ export function townPostFixtureMode(): TownPostFixtureMode | null {
 }
 
 /** For tests: forget the switch so the next read sees the URL again. */
-export function resetTownPostFixture() {
+export function resetTownWarehouseFixture() {
   mode = undefined;
   fixtureStart = null;
 }
@@ -128,8 +128,8 @@ function github(
 }
 
 /** The synthetic snapshot for `mode` at `now`. */
-export function townPostFixtureSnapshot(
-  fixture: TownPostFixtureMode,
+export function townWarehouseFixtureSnapshot(
+  fixture: TownWarehouseFixtureMode,
   now: number,
 ): WorldSourcesSnapshot {
   if (fixture === "off")
@@ -224,7 +224,7 @@ export function townPostFixtureSnapshot(
 }
 
 /** The fixture with its first ready pull request merged. */
-export function townPostFixtureMerged(
+export function townWarehouseFixtureMerged(
   snapshot: WorldSourcesSnapshot,
 ): WorldSourcesSnapshot {
   const first = snapshot.items.find(
@@ -242,36 +242,40 @@ export function townPostFixtureMerged(
 }
 
 /** How long after loading the fixture merges its first ready pull request. */
-export const TOWN_POST_FIXTURE_MERGE_MS = 10_000;
+export const TOWN_WAREHOUSE_FIXTURE_MERGE_MS = 10_000;
 
 /**
- * The page's one synthetic snapshot at `now`: the post office and the Work
+ * The page's one synthetic snapshot at `now`: the warehouse and the Work
  * lens it opens (#887) agree on it, merged or not.
  */
-function townPostFixtureAt(fixture: TownPostFixtureMode, now: number) {
+function townWarehouseFixtureAt(
+  fixture: TownWarehouseFixtureMode,
+  now: number,
+) {
   fixtureStart ??= now;
-  const snapshot = townPostFixtureSnapshot(fixture, fixtureStart);
-  return fixture !== "off" && now - fixtureStart >= TOWN_POST_FIXTURE_MERGE_MS
-    ? townPostFixtureMerged(snapshot)
+  const snapshot = townWarehouseFixtureSnapshot(fixture, fixtureStart);
+  return fixture !== "off" &&
+    now - fixtureStart >= TOWN_WAREHOUSE_FIXTURE_MERGE_MS
+    ? townWarehouseFixtureMerged(snapshot)
     : snapshot;
 }
 
 /**
- * The snapshot the post office and its Work lens read: the GitHub source's,
+ * The snapshot the warehouse and its Work lens read: the GitHub source's,
  * or with the testing switch on, the synthetic one.
  */
-export function useTownPostSources(): WorldSourcesSnapshot {
+export function useTownWarehouseSources(): WorldSourcesSnapshot {
   const live = useWorldSources();
-  const [fixture] = useState(townPostFixtureMode);
+  const [fixture] = useState(townWarehouseFixtureMode);
   const [synthetic, setSynthetic] = useState(() =>
-    fixture ? townPostFixtureAt(fixture, Date.now()) : null,
+    fixture ? townWarehouseFixtureAt(fixture, Date.now()) : null,
   );
   useEffect(() => {
     if (!fixture || fixture === "off" || fixtureStart === null) return;
-    const left = fixtureStart + TOWN_POST_FIXTURE_MERGE_MS - Date.now();
+    const left = fixtureStart + TOWN_WAREHOUSE_FIXTURE_MERGE_MS - Date.now();
     if (left <= 0) return;
     const timer = window.setTimeout(
-      () => setSynthetic(townPostFixtureAt(fixture, Date.now())),
+      () => setSynthetic(townWarehouseFixtureAt(fixture, Date.now())),
       left + 20,
     );
     return () => window.clearTimeout(timer);

@@ -16,7 +16,8 @@ import {
   townLibraryLot,
   townLibraryReserve,
 } from "./townLibraryLot";
-import { townPostLot, townPostReserve } from "./townPost";
+import { townHarbourFoldAt } from "./townHarbourLot";
+import { townPostLotBeside, townPostReserve } from "./townPostLot";
 
 const town = (spec: Record<string, number[]>): TownInput => ({
   hosts: Object.keys(spec).map((key, displayOrder) => ({ key, displayOrder })),
@@ -62,7 +63,7 @@ test.each(towns)(
     expect(lot.yardY + TOWN_LIBRARY_YARD_ROWS).toBe(firstStreet);
     for (const b of layout.buildings) expect(b.y).toBeGreaterThan(area.y1);
     // Clear of the post office on the other side.
-    const post = townPostReserve(townPostLot(layout));
+    const post = townPostReserve(townPostLotBeside(layout.center));
     expect(post.x1).toBeLessThanOrEqual(area.x0);
     // No street lamp stands in front of the garden.
     for (const lamp of layout.lamps)
@@ -91,7 +92,7 @@ test("making room for the library moves nothing that stands", () => {
   for (const layout of [one, two]) {
     const lot = townLibraryLot(layout)!;
     expect(lot.x).toBe(layout.center.x + layout.center.w + 2);
-    expect(townPostLot(layout).x).toBeLessThan(layout.center.x);
+    expect(townPostLotBeside(layout.center).x).toBeLessThan(layout.center.x);
   }
 });
 
@@ -135,8 +136,32 @@ test("a narrow town folds the library to a sign on the center's left wing", () =
   // sign (about 100 pixels wide) never hangs over its lot.
   expect(at.x - 50).toBeGreaterThanOrEqual(center.x * T);
   expect(at.x + 50).toBeLessThan((center.x + center.w / 2) * T - 24);
-  expect(townPostReserve(townPostLot(layout)).x1 * T).toBeLessThanOrEqual(
-    at.x - 50,
-  );
+  expect(
+    townPostReserve(townPostLotBeside(layout.center)).x1 * T,
+  ).toBeLessThanOrEqual(at.x - 50);
   expect(at.y).toBeLessThan((center.y + center.h) * T);
+  // Below the Shipyard's signpost on the same wing, the two never touching.
+  const signpost = townHarbourFoldAt(center, T);
+  expect(at.x).toBe(signpost.x);
+  expect(at.y - signpost.y).toBeGreaterThanOrEqual(28 * 1.6);
 });
+
+test.each([
+  ["one single-desk room", town({ a: [1] }), 390, 844],
+  ["three single-desk rooms, small phone", town({ a: [1, 1, 1] }), 360, 640],
+  ["a tall building", town({ a: [6, 4, 3, 2] }), 390, 844],
+] as const)(
+  "the folded library sign stands inside a phone's home view (%s)",
+  (_, input, width, height) => {
+    const { layout } = layoutTown(input, TOWN_SHAPES.phone);
+    const viewport = townViewport(width, height, { left: 0, right: 0 });
+    const camera = new TownCamera();
+    camera.viewport = viewport;
+    new TownSceneCamera(new Map(), () => {}).attach(camera, layout, viewport);
+    const at = townLibraryFoldAt(layout.center, T);
+    const sign = camera.toScreen(at.x, at.y);
+    const { inset } = viewport;
+    expect(sign.x - 50).toBeGreaterThanOrEqual(inset.left);
+    expect(sign.y + 15).toBeLessThanOrEqual(height - inset.bottom);
+  },
+);
