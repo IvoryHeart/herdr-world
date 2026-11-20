@@ -59,9 +59,16 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
   const { worldLocalStorage } = await import("../../browserStorage");
   const { FIXTURE_REPO, shipyardFixtureCatalog, shipyardFixtureSnapshot } =
     await import("../shipyard/shipyardFixture");
-  const { TOWN_PROJECT_COLORS, townHarbourLot, townLanesShown } = await import(
-    "./townHarbour"
-  );
+  const {
+    TOWN_PROJECT_COLORS,
+    townHarbourLot,
+    townLanePierAt,
+    townLanesShown,
+  } = await import("./townHarbour");
+  const { TOWN_HARBOUR_SIGN_ROW } = await import("./townHarbourLot");
+  const { TownCamera } = await import("./townCamera");
+  const T = (await import("./townLayout")).TOWN_TILE;
+  type TownRendererHandle = import("./townRenderer").TownRendererHandle;
   type Mode = import("../shipyard/shipyardFixture").ShipyardFixtureMode;
   type Snapshot = import("../../../../shared/shipyard").ShipyardSnapshot;
 
@@ -110,7 +117,10 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     ).layout;
 
   /** Mounts the harbour; `opened` records the Work lens tabs it opens. */
-  async function mount(narrow = false) {
+  async function mount(
+    narrow = false,
+    renderer: { current: TownRendererHandle | null } = { current: null },
+  ) {
     const opened: (string | undefined)[] = [];
     const host = document.createElement("div");
     host.className = "town-world";
@@ -122,7 +132,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
         createElement(
           TownOpenWorkContext.Provider,
           { value: (tab?: string) => void opened.push(tab) },
-          createElement(TownShipyard, { layout, renderer: { current: null } }),
+          createElement(TownShipyard, { layout, renderer }),
         ),
       ),
     );
@@ -249,7 +259,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     serve("many");
     const harbour = await mount();
     const repos = shipyardFixtureCatalog("many", Date.now()).repositories;
-    const lot = townHarbourLot(harbour.layout)!;
+    const lot = townHarbourLot(harbour.layout);
     const shown = townLanesShown(lot, repos.length);
     expect(harbour.lanes().length).toBe(shown);
     const more = harbour.host.querySelector<HTMLButtonElement>(
@@ -373,21 +383,73 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     await harbour.close();
   });
 
-  test("a narrow town folds it to a sign on the town center", async () => {
+  test("a phone's town has the harbour too, and a signpost that flies there", async () => {
     serve("ready");
-    const harbour = await mount(true);
-    expect(harbour.host.querySelector(".town-harbour")).toBeNull();
+    // A phone's camera, at home on the first building.
+    const camera = new TownCamera();
+    camera.reducedMotion = true;
+    const viewport = {
+      width: 390,
+      height: 760,
+      inset: { top: 12, right: 12, bottom: 12, left: 12 },
+    };
+    const layout = town(true);
+    camera.configure(layout, viewport);
+    const first = layout.buildings[0]!;
+    camera.jumpTo(
+      (first.x + first.w / 2) * T,
+      first.y * T,
+      camera.limits!.home,
+    );
+    const invalidated: (string | undefined)[] = [];
+    const handle = {
+      camera,
+      invalidate: (reason?: string) => void invalidated.push(reason),
+    } as unknown as TownRendererHandle;
+    const harbour = await mount(true, { current: handle });
+    const repos = shipyardFixtureCatalog("ready", Date.now()).repositories;
+    // The harbour itself: its sign and a lane per project, on the sea right
+    // of the stacked buildings.
+    expect(harbour.sign()).not.toBeNull();
+    expect(harbour.lanes().length).toBe(repos.length);
+    expect(harbour.ships().length).toBeGreaterThan(0);
+    const lot = townHarbourLot(harbour.layout);
+    expect(lot.streetEnd).toBeGreaterThan(first.x + first.w);
+    // Off-screen at home: the coast lies right of what the phone shows.
+    const coast = camera.toScreen(lot.coast * T, 0).x;
+    expect(coast).toBeGreaterThan(viewport.width);
     const fold =
       harbour.host.querySelector<HTMLButtonElement>(".town-harbour-fold")!;
-    const repos = shipyardFixtureCatalog("ready", Date.now()).repositories;
-    expect(fold.textContent).toBe(`${repos.length}`);
+    expect(fold.textContent).toContain(`${repos.length}`);
     expect(fold.querySelectorAll(".town-harbour-fold-lanes i").length).toBe(
       repos.length,
     );
     expect(fold.getAttribute("aria-label")).toBe(
-      `Shipyard: ${repos.length} projects. Open releases`,
+      `Shipyard: ${repos.length} projects. Go to the harbour`,
     );
+    // The signpost flies to the sea: the promenade and a whole pier across
+    // the phone, the harbour's sign at the top.
     await act(async () => fold.click());
+    expect(harbour.opened).toEqual([]);
+    expect(invalidated).toEqual(["harbour"]);
+    const pier = townLanePierAt(lot, 0);
+    const from = camera.toScreen(lot.streetEnd * T, TOWN_HARBOUR_SIGN_ROW * T);
+    const to = camera.toScreen(pier.x + pier.w, pier.y);
+    expect(from.x).toBeGreaterThanOrEqual(viewport.inset.left - 1);
+    expect(to.x).toBeLessThanOrEqual(viewport.width - viewport.inset.right + 1);
+    expect(from.y).toBeGreaterThanOrEqual(viewport.inset.top - 1);
+    expect(to.y).toBeLessThan(viewport.height);
+    await harbour.close();
+  });
+
+  test("a town drawn alone: the signpost opens the releases", async () => {
+    serve("ready");
+    const harbour = await mount(true);
+    await act(async () =>
+      harbour.host
+        .querySelector<HTMLButtonElement>(".town-harbour-fold")!
+        .click(),
+    );
     expect(harbour.opened).toEqual(["releases"]);
     await harbour.close();
   });

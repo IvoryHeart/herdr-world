@@ -269,12 +269,12 @@ export const TOWN_WAREHOUSE_INSET = { x: 6, y: 6 } as const;
 
 /**
  * The warehouse's lot: on the harbour shore at the first street's end,
- * outside the building grid (townHarbourLot.ts). A narrow (stacked) town folds
- * it to a sign on the town center instead, as it does the city billboard.
- * The landscape keeps its lot clear.
+ * outside the building grid (townHarbourLot.ts), on every form factor; a
+ * narrow (stacked) town also hangs its folded sign on the town center. The
+ * landscape keeps its lot clear.
  */
-export function townWarehouseLot(layout: TownLayout): TownWarehouseLot | null {
-  return townHarbourLot(layout)?.warehouse ?? null;
+export function townWarehouseLot(layout: TownLayout): TownWarehouseLot {
+  return townHarbourLot(layout).warehouse;
 }
 
 /**

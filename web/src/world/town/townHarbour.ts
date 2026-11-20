@@ -1,5 +1,6 @@
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
 import {
+  TOWN_HARBOUR_SIGN_ROW,
   townHarbourGeometry,
   townLanePier,
   type TownHarbourLot,
@@ -30,9 +31,12 @@ export {
   type TownHarbourLot,
 } from "./townHarbourLot";
 
-/** The harbour of a wide town; a narrow town folds it to a sign. */
-export function townHarbourLot(layout: TownLayout): TownHarbourLot | null {
-  if (layout.formFactor === "narrow") return null;
+/**
+ * The town's harbour, on every form factor: a phone's stacked town has its
+ * shore and sea at the right edge too, reached by panning or zooming, and
+ * its folded sign on the town center flies there (townHarbourView).
+ */
+export function townHarbourLot(layout: TownLayout): TownHarbourLot {
   return townHarbourGeometry(layout.width, layout.height, layout.center);
 }
 
@@ -109,6 +113,23 @@ export function townBerthAt(lot: TownHarbourLot, lane: number, berth: number) {
 export function townLaneSignAt(lot: TownHarbourLot, lane: number) {
   const pier = townLanePierAt(lot, lane);
   return { x: pier.x + PIER_ROOT * T - 4, y: pier.y + 4 };
+}
+
+/**
+ * What the folded sign's flight frames, in world pixels: from the
+ * promenade across a whole pier to past its lighthouse, `top` the view's
+ * top edge just above the harbour's sign, and the zoom that fits that width
+ * into `usable` screen pixels. On a phone: the sign and the first lanes.
+ */
+export function townHarbourView(lot: TownHarbourLot, usable: number) {
+  const pier = townLanePierAt(lot, 0);
+  const left = lot.streetEnd * T;
+  const right = pier.x + pier.w + 2 * T;
+  return {
+    x: (left + right) / 2,
+    top: (TOWN_HARBOUR_SIGN_ROW - 1) * T,
+    z: Math.max(1, usable) / (right - left),
+  };
 }
 
 /** How many lanes show; a last "+N" lane lists the rest. */

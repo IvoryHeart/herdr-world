@@ -40,8 +40,8 @@ export type TownZoomLimits = {
 
 /**
  * Tiles from the town's left edge past the side road of the last host's
- * building or the town center, whichever stands further right; on a wide
- * town, on to the harbour's shore and the water's edge, so home shows the
+ * building or the town center, whichever stands further right, on to the
+ * harbour's shore and the water's edge, so a wide town's home shows the
  * warehouse and the shipping lanes' flags (townHarbour.ts).
  */
 export function townHostsWidth(layout: TownLayout) {
@@ -50,12 +50,11 @@ export function townHostsWidth(layout: TownLayout) {
     layout.center.x + layout.center.w,
     ...layout.buildings.map((b) => b.x + b.w),
   );
-  const harbour = townHarbourLot(layout);
-  // The side road right of the last lot, and a tile of verge; or the
-  // promenade and the lanes' first tiles of sea.
+  // Past the side road right of the last lot: the promenade and the
+  // lanes' first tiles of sea.
   return Math.min(
     layout.width,
-    harbour ? harbour.coast + TOWN_HOME_SEA : right + 6,
+    Math.max(right + 6, townHarbourLot(layout).coast + TOWN_HOME_SEA),
   );
 }
 

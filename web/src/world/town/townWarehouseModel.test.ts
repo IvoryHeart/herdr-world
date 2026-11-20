@@ -298,9 +298,12 @@ test.each([
   },
 );
 
-test("a narrow town folds the warehouse to a sign: no lot", () => {
+test("a narrow town keeps the warehouse on its shore, right of the buildings", () => {
   const { layout } = layoutTown(town({ a: [2] }), TOWN_SHAPES.phone);
-  expect(townWarehouseLot(layout)).toBeNull();
+  const lot = townWarehouseLot(layout);
+  const first = layout.buildings[0]!;
+  expect(lot.x).toBeGreaterThan(first.x + first.w);
+  expect(lot.yardY + TOWN_WAREHOUSE_YARD_ROWS).toBe(layout.center.street);
 });
 
 test.each([

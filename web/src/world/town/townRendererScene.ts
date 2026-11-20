@@ -227,24 +227,17 @@ export function townOutdoor(
   // The harbour at the town's right edge: the warehouse on the shore, its
   // yard on the first street, and a pier for every lane out to sea.
   const harbour = townHarbourLot(layout);
-  if (harbour) {
-    const house = harbour.warehouse;
-    add(paintTownWarehouseHouse(), house.x * T, house.y * T, house.yardY * T);
+  const house = harbour.warehouse;
+  add(paintTownWarehouseHouse(), house.x * T, house.y * T, house.yardY * T);
+  add(paintTownWarehouseYard(), house.x * T, house.yardY * T, house.yardY * T);
+  for (let lane = 0; lane < harbour.lanes; lane += 1) {
+    const pier = townLanePierAt(harbour, lane);
     add(
-      paintTownWarehouseYard(),
-      house.x * T,
-      house.yardY * T,
-      house.yardY * T,
+      paintTownPier(pier.w, TOWN_PIER_SLIPWAY, TOWN_PIER_BOLLARDS),
+      pier.x,
+      pier.y - TOWN_PIER_ART.deck,
+      pier.y,
     );
-    for (let lane = 0; lane < harbour.lanes; lane += 1) {
-      const pier = townLanePierAt(harbour, lane);
-      add(
-        paintTownPier(pier.w, TOWN_PIER_SLIPWAY, TOWN_PIER_BOLLARDS),
-        pier.x,
-        pier.y - TOWN_PIER_ART.deck,
-        pier.y,
-      );
-    }
   }
   return outdoorItems;
 }

@@ -105,13 +105,25 @@ class ShipyardStore {
     } catch {
       // A private window keeps the choice for this page only.
     }
+    // A failed read stays until a read succeeds: the chosen project's kept
+    // answer reads as out of date (its own lane's failure, or the last
+    // read's, which may have been the service's), and the project left
+    // keeps the failure it had as the chosen one.
+    const state = this.#state;
+    const left = state.repo;
+    const laneErrors = { ...state.laneErrors };
+    if (left && left !== repo && state.error) laneErrors[left] = state.error;
+    const error = laneErrors[repo] ?? state.error;
+    delete laneErrors[repo];
     this.#set({
-      ...this.#state,
+      ...state,
       repo,
       snapshot:
-        this.#state.snapshot?.repo === repo
-          ? this.#state.snapshot
-          : (this.#state.snapshots[repo] ?? null),
+        state.snapshot?.repo === repo
+          ? state.snapshot
+          : (state.snapshots[repo] ?? null),
+      laneErrors,
+      error,
     });
     return this.read(false, true);
   }

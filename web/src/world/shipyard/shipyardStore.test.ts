@@ -108,6 +108,49 @@ describe("shipyard store", () => {
     expect(shipyardStore.state().error).toBeTruthy();
   });
 
+  test("choosing a lane whose read failed keeps it out of date until a read succeeds", async () => {
+    service();
+    await shipyardStore.read();
+    const other = shipyardFixtureCatalog("ready", NOW).repositories[1]!;
+    const failing = new Set([other]);
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    shipyardStore.useFetch(async (input) => {
+      const url = new URL(String(input), "http://fixture.invalid");
+      const repo = url.searchParams.get("repo");
+      if (repo === other && !failing.has(other)) await held;
+      if (repo && failing.has(repo))
+        return Response.json({ error: "busy" }, { status: 503 });
+      return Response.json(
+        repo
+          ? shipyardFixtureSnapshot("ready", NOW, repo)
+          : shipyardFixtureCatalog("ready", NOW),
+      );
+    });
+    await shipyardStore.read();
+    expect(shipyardStore.state().laneErrors[other]).toBeTruthy();
+    // Chosen: its kept answer shows at once, with its failure, while the
+    // read of it runs.
+    failing.delete(other);
+    const reading = shipyardStore.choose(other);
+    let state = shipyardStore.state();
+    expect(state.snapshot?.repo).toBe(other);
+    expect(state.error).toBeTruthy();
+    expect(state.laneErrors[other]).toBeUndefined();
+    release();
+    await reading;
+    expect(shipyardStore.state().error).toBeNull();
+    // The chosen project's failure goes with it when another is chosen.
+    failing.add(other);
+    await shipyardStore.read();
+    expect(shipyardStore.state().error).toBeTruthy();
+    void shipyardStore.choose(FIXTURE_REPO);
+    state = shipyardStore.state();
+    expect(state.laneErrors[other]).toBeTruthy();
+  });
+
   test("a chosen repository the catalog no longer suggests keeps its lane", () => {
     const catalog = shipyardFixtureCatalog("ready", NOW);
     expect(shipyardLanes(catalog, FIXTURE_REPO)).toEqual(catalog.repositories);

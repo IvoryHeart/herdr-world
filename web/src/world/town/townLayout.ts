@@ -605,23 +605,23 @@ export function layoutTown(
     draft.h = h;
     return { ...draft, x, y, roadY, topRoadY };
   });
-  // The topmost street runs on past the last crossing for the bus stop. A
-  // wide town ends at its right edge in the harbour (townHarbourLot.ts): the
+  // The topmost street runs on past the last crossing for the bus stop. The
+  // town ends at its right edge in the harbour (townHarbourLot.ts): the
   // warehouse on the first street, a promenade the streets run into, and
-  // the open sea; a narrow one folds the harbour to a sign.
+  // the open sea. A phone's stacked town has it too, right of its buildings,
+  // reached by panning or zooming like the rest of Town.
   const town =
     Math.max(
       lots.width + BUS_STOP_CLEARANCE,
       37,
       center.x + center.w + MARGIN,
     ) + MARGIN;
-  const wide = shape.formFactor !== "narrow";
-  const width = wide ? town + TOWN_HARBOUR_ROOM : town;
+  const width = town + TOWN_HARBOUR_ROOM;
   const lastRoad = roads[roads.length - 1]!;
   const height = lastRoad + ROAD_GAP + PARK_HEIGHT + MARGIN;
-  const harbourLot = wide ? townHarbourGeometry(width, height, center) : null;
-  /** Where the streets end: the promenade, or the map's edge. */
-  const streetEnd = harbourLot?.streetEnd ?? width;
+  const harbourLot = townHarbourGeometry(width, height, center);
+  /** Where the streets end: the promenade. */
+  const streetEnd = harbourLot.streetEnd;
   const ground = new Uint8Array(width * height);
   const set = (tx: number, ty: number, type: number) => {
     if (tx >= 0 && ty >= 0 && tx < width && ty < height)
@@ -659,8 +659,7 @@ export function layoutTown(
   }
   for (const ry of roads) strip(0, ry + 1, streetEnd, ry + 4, TownGround.road);
   // The promenade runs the harbour's length along the water.
-  if (harbourLot)
-    strip(harbourLot.streetEnd, 0, harbourLot.coast, height, TownGround.walk);
+  strip(harbourLot.streetEnd, 0, harbourLot.coast, height, TownGround.walk);
   for (const v of verticalRoads)
     strip(v.x + 1, v.y0, v.x + 4, v.y1, TownGround.road);
 
@@ -792,7 +791,7 @@ export function layoutTown(
         set(tx, ty, TownGround.plaza);
   for (let ty = lastRoad + ROAD_GAP; ty < plaza.y - 4; ty += 1)
     set(plaza.x, ty, TownGround.walk);
-  for (let tx = MARGIN; tx < (harbourLot ? streetEnd : width - MARGIN); tx += 1)
+  for (let tx = MARGIN; tx < streetEnd; tx += 1)
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
 
@@ -814,12 +813,9 @@ export function layoutTown(
         tx <= post.x + post.w;
       if (underPost) continue;
       // So does the harbour's warehouse (townHarbourLot.ts).
-      const house = harbourLot?.warehouse;
+      const house = harbourLot.warehouse;
       const underWarehouse =
-        house &&
-        ry === center.street &&
-        tx >= house.x - 1 &&
-        tx <= house.x + house.w;
+        ry === center.street && tx >= house.x - 1 && tx <= house.x + house.w;
       if (underWarehouse) continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }

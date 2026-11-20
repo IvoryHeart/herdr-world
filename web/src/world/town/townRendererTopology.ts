@@ -218,9 +218,8 @@ export function createTownTopology(ctx: TownTopologyContext) {
   };
   const showWild = (layout: TownLayout) => {
     const land = townLandRect(layout);
-    // A wide town's coast (townHarbourLot.ts): the sea runs on past it.
-    const coast = townHarbourLot(layout)?.coast;
-    const seaX = coast === undefined ? Infinity : coast * T;
+    // The town's coast (townHarbourLot.ts): the sea runs on past it.
+    const seaX = townHarbourLot(layout).coast * T;
     const landKey = `${land.x},${land.y},${land.w},${land.h},${seaX}`;
     if (landKey !== wildLand) {
       dropWild();
