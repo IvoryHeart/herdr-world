@@ -26,6 +26,8 @@ import {
   checkTownRoomPlates,
 } from "./townRoomPlates.browser";
 import { checkTownCenter } from "./townCenter.browser";
+import { checkTownBusTrip } from "./townBusTrip.browser";
+import type { BinState } from "../../../../shared/bin";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
 import {
@@ -661,21 +663,24 @@ const deskKeyOf = (identity: Record<string, unknown>) =>
   ]);
 /** Agents put in the (fake) service's bin, which holds nobody. */
 const binAdds: Record<string, unknown>[] = [];
-const binState = () => ({
-  epoch: "town-fixture",
-  revision: binAdds.length,
-  entries: [],
-  closing: [],
-  outcomes: [],
-  bus: {
-    interval_ms: 240_000,
-    trip_ms: 120_000,
-    next_ms: 60_000,
-    elapsed_ms: null,
-    stopped: false,
-    trip: null,
-  },
-});
+/** A bin a check sets in place of the empty one (townBusTrip.browser.ts). */
+let binShown: BinState | null = null;
+const binState = () =>
+  binShown ?? {
+    epoch: "town-fixture",
+    revision: binAdds.length,
+    entries: [],
+    closing: [],
+    outcomes: [],
+    bus: {
+      interval_ms: 240_000,
+      trip_ms: 120_000,
+      next_ms: 60_000,
+      elapsed_ms: null,
+      stopped: false,
+      trip: null,
+    },
+  };
 worldBridge.call = async (method, params) => {
   if (method.startsWith("world.bin.")) {
     if (method === "world.bin.add") binAdds.push(params ?? {});
@@ -1606,8 +1611,36 @@ async function run() {
     await settle();
     return;
   }
-  if (scale === "typical" && mode === "test")
+  if (scale === "typical" && mode === "test") {
     await checkTownCenter(host, check, waitFor);
+    const [connection] = base.connections;
+    // A blocked agent queues at reception, a few steps from its building's
+    // front door: its walk out is short whatever the frame rate
+    // (townBusTrip.browser.ts).
+    const queued = new Set(
+      base.agentPanes
+        .filter((item) => item.agent_status === "blocked")
+        .map((item) => item.pane_id),
+    );
+    const panes = connection!.snapshot!.panes.filter((item) => item.agent);
+    const pane = panes.find((item) => queued.has(item.pane_id)) ?? panes[0]!;
+    await checkTownBusTrip(
+      host,
+      check,
+      waitFor,
+      (bin) => {
+        binShown = bin;
+      },
+      {
+        connection_id: connection!.connectionId,
+        connection_generation: connection!.generation,
+        workspace_id: pane.workspace_id,
+        tab_id: pane.tab_id,
+        pane_id: pane.pane_id,
+        terminal_id: pane.terminal_id,
+      },
+    );
+  }
   if (scale === "plates" && mode === "test") {
     // A room dragged by its wall goes where it is dropped in its building:
     // World saves every room's spot for that host, Herdr's order follows on

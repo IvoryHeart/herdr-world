@@ -24,6 +24,7 @@ import { readBoard, executeBoardOperation } from "./world-board";
 import { importRuntimeStatus } from "./runtime-status-import";
 import { readRuntimeStatus, writeRuntimeStatus } from "./runtime-status";
 import { readCoreTopologies, writeCoreTopology } from "./core-topology";
+import { readApartments, writeApartments } from "./apartments";
 import { importLegacyProfiles } from "./profile-import";
 import { randomBytes } from "node:crypto";
 import { createWorldIds } from "./world-ids";
@@ -71,6 +72,49 @@ function privateFile(path: string, secure = true) {
 }
 
 /** Called only by the sole worker (and the crash-test executable). */
+/**
+ * One write group in one transaction, each operation in its own savepoint so
+ * a refused operation leaves its neighbours. On some errors (a full disk, an
+ * I/O error, no memory) SQLite rolls the whole transaction back itself: then
+ * nothing in the group was committed and no savepoint or transaction is left,
+ * so the original error is rethrown instead of being hidden behind a failed
+ * ROLLBACK ("cannot rollback - no transaction is active"). The worker then
+ * stops the service, as for any storage failure.
+ */
+export function writeGroup<T, R>(
+  db: Database,
+  operations: readonly T[],
+  run: (operation: T) => R,
+  beforeCommit: () => void = () => {},
+): ({ result: R } | { error: unknown })[] {
+  const outcomes: ({ result: R } | { error: unknown })[] = [];
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const operation of operations) {
+      db.exec("SAVEPOINT operation");
+      try {
+        const result = run(operation);
+        db.exec("RELEASE operation");
+        outcomes.push({ result });
+      } catch (error) {
+        if (!db.inTransaction) throw error;
+        db.exec("ROLLBACK TO operation; RELEASE operation");
+        outcomes.push({ error });
+      }
+    }
+    beforeCommit();
+    db.exec("COMMIT");
+  } catch (error) {
+    try {
+      if (db.inTransaction) db.exec("ROLLBACK");
+    } catch {
+      // The original error says more; the worker closes this connection.
+    }
+    throw error;
+  }
+  return outcomes;
+}
+
 export function openWorldWriter(
   path: string,
   legacy: string,
@@ -210,6 +254,7 @@ export function openWorldWriter(
       ...(board ? { board } : {}),
       ...(runtimeStatus ? { runtimeStatus } : {}),
       coreTopology,
+      apartments: readApartments(db),
       attention: (
         db.query("SELECT * FROM outbox ORDER BY rowid").all() as Record<
           string,
@@ -494,6 +539,8 @@ export function openWorldWriter(
         return ids.issue(request.kind);
       case "core-topology":
         return writeCoreTopology(db, request.expected, request.document);
+      case "apartments":
+        return writeApartments(db, request.operation, at);
       case "board":
         return executeBoardOperation(db, request.operation, bindings, at);
       case "runtime-status":
@@ -770,25 +817,22 @@ export function openWorldWriter(
             return { ticket, error: (error as Error).message };
           }
         });
-      db.exec("BEGIN IMMEDIATE");
-      try {
-        for (const { ticket, request } of requests) {
-          db.exec("SAVEPOINT operation");
-          try {
-            const result = execute(request, at);
-            db.exec("RELEASE operation");
-            results.push({ ticket, result });
-          } catch (error) {
-            db.exec("ROLLBACK TO operation; RELEASE operation");
-            results.push({ ticket, error: (error as Error).message });
-          }
-        }
-        prune(at);
-        fault?.("before-commit");
-        db.exec("COMMIT");
-      } catch (error) {
-        db.exec("ROLLBACK");
-        throw error;
+      const outcomes = writeGroup(
+        db,
+        requests,
+        ({ request }) => execute(request, at),
+        () => {
+          prune(at);
+          fault?.("before-commit");
+        },
+      );
+      for (const [index, outcome] of outcomes.entries()) {
+        const { ticket } = requests[index]!;
+        results.push(
+          "error" in outcome
+            ? { ticket, error: (outcome.error as Error).message }
+            : { ticket, result: outcome.result },
+        );
       }
       fault?.("after-commit");
       return results;

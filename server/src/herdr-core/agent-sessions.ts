@@ -527,8 +527,51 @@ export function createCoreAgentSessions(args: {
     },
   };
 
+  /** The last session read per terminal for Apartments, by program. */
+  const known = new Map<
+    string,
+    { holder: string; at: number; id: string | null }
+  >();
+  /**
+   * The session Chat would read for the program at `address` now (a linked
+   * Codex session, the process record, the launch arguments), and which
+   * program that is (its occupant and process): Apartments keeps it while
+   * the agent lives, because a finished agent's terminal has no record.
+   * Called on every observation, so a process-record read (a file read on
+   * the agent's host) is repeated for the same program at most every
+   * five seconds; another program reads again at once.
+   */
+  const knownSession = async (
+    address: string,
+    agent: string,
+  ): Promise<{ id: string | null; holder: string } | null> => {
+    const record = view.terminal(address) as Row | undefined;
+    if (!record) return null;
+    const pid = (record.foreground as { pid?: unknown } | undefined)?.pid;
+    const holder = JSON.stringify([
+      view.occupancy(address) ?? 0,
+      typeof pid === "number" ? pid : null,
+    ]);
+    const idOf = (session: Row | undefined) =>
+      session?.kind === "id" && typeof session.value === "string"
+        ? session.value
+        : null;
+    const link = idOf(linked(address));
+    if (link) return { id: link, holder };
+    const cached = known.get(address);
+    if (cached?.holder === holder && Date.now() - cached.at < 5000)
+      return { id: cached.id, holder };
+    const id = idOf(
+      await sessionOf(normalizeAgentName(agent), address, record),
+    );
+    if (known.size >= 256) known.clear();
+    known.set(address, { holder, at: Date.now(), id });
+    return { id, holder };
+  };
+
   return {
     ...handlers,
+    knownSession,
     previewLink: linker.preview,
     link: linker.link,
     conversation,

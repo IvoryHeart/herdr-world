@@ -18,9 +18,11 @@ import { useTownMaster } from "../town/useTownMaster";
 import { useLayer } from "../../layerStack";
 import { store } from "../../store";
 import { requestAgentLaunch, useAgentProfiles } from "../agentProfiles";
+import { useApartments } from "../apartments/useApartments";
 import { agentName } from "../deskAgentLabels";
 import type { TownCenterAction } from "../town/TownCenterMenu";
 import {
+  apartmentsAction,
   launchAction,
   libraryAction,
   needsYouAction,
@@ -76,8 +78,8 @@ export function boardLibraryAction(
 
 /**
  * The hub's actions, in the town center's order: New agent, Town master,
- * Needs you, Summary, Profiles, Library and New workspace (Board's word for
- * a room).
+ * Needs you, Summary, Profiles, Apartments, Library and New workspace
+ * (Board's word for a room).
  * Summary is Town's one summary: Board takes you to Town with it open.
  */
 export function boardHubActions({
@@ -88,6 +90,7 @@ export function boardHubActions({
   onOpenSummary,
   onNewWorkspace,
   toast,
+  residents,
 }: {
   world: Pick<WorldObject, "nodeById" | "leaves" | "hosts">;
   selectedId: string | null;
@@ -98,6 +101,8 @@ export function boardHubActions({
   onOpenSummary(): void;
   onNewWorkspace(): void;
   toast(kind: "ok" | "error", text: string): void;
+  /** Apartments' residents (the same store as Town's). */
+  residents?: number;
 }): TownCenterAction[] {
   const space = boardLaunchSpace(world, selectedId);
   const roster = world.leaves.flatMap((leaf) =>
@@ -143,6 +148,7 @@ export function boardHubActions({
     needsYouAction(),
     summaryAction(onOpenSummary, "in Town"),
     profilesAction(),
+    apartmentsAction(residents),
     boardLibraryAction(world, selectedId),
     {
       id: "workspace",
@@ -180,7 +186,9 @@ export function BoardHub({
   useTownMaster(world, holder, mobile, (key) => openChat(key, false));
   // The Town Master's greeting opens at the hub on wide screens.
   const greetingAnchor = useGreetingAnchor();
+  const residents = useApartments().residents.length;
   const actions = boardHubActions({
+    residents,
     world,
     selectedId,
     holder,

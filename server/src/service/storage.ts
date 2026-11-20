@@ -22,6 +22,8 @@ export type WorldStorage = {
   runtimeStatus: import("../storage/runtime-status").RuntimeStatusPort;
   /** World's layout of each herdr-core (M1); absent in older test doubles. */
   coreTopology?: import("../storage/core-topology").CoreTopologyPort;
+  /** Finished agents' resident records; absent in older test doubles. */
+  apartments?: import("../storage/apartments").ApartmentsPort;
   bindings: import("../storage/world-bindings").WorldBindings;
   ids: import("../storage/world-ids").WorldIds;
   settings: GuiSettingsStore;
@@ -77,6 +79,7 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
     terminalMarks: world.terminalMarks,
     runtimeStatus: world.runtimeStatus,
     coreTopology: world.coreTopology,
+    apartments: world.apartments,
     ids: world.ids,
     bindings: world.bindings,
     settings,

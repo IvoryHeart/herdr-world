@@ -1,3 +1,4 @@
+import { apartmentResumeLaunch } from "../world/apartment-resume";
 import { planBoardPatch } from "../world/board-plan";
 import { moveWorkspaceIds } from "../world/move-workspace-ids";
 import { stampLaunchParent } from "../herdr/spawn-stamp";
@@ -111,13 +112,20 @@ async function dispatchLauncherRpc(
         throw new Error("That profile no longer exists.");
       const call = (rpc: string, rpcParams: Record<string, unknown>) =>
         tui.call(rpc, rpcParams, 70_000);
-      const launch = profileLaunch(profile ?? null, {
-        kind: String(p.kind ?? ""),
-        label: String(p.label ?? "")
-          .trim()
-          .slice(0, 64),
-        text: String(p.text ?? "").slice(0, 16_000),
-      });
+      const resume =
+        typeof p.resume_resident === "string" ? p.resume_resident : null;
+      const launch = resume
+        ? apartmentResumeLaunch(
+            rpc.services.apartments?.apartments.get(resume),
+            route.scope === "connection" ? route.connectionId : "",
+          )
+        : profileLaunch(profile ?? null, {
+            kind: String(p.kind ?? ""),
+            label: String(p.label ?? "")
+              .trim()
+              .slice(0, 64),
+            text: String(p.text ?? "").slice(0, 16_000),
+          });
       const host = sshHost();
       const windows = host
         ? connection.remotePlatform === "windows"

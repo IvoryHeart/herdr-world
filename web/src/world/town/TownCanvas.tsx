@@ -899,6 +899,7 @@ export function TownCanvas({
           lookOf={townBin.lookOf}
           framed={busFramed}
           renderer={rendererRef}
+          demo={townBin.demo}
         />
         <TownArrivalLayer
           arrivals={arrivals.arrivals}
