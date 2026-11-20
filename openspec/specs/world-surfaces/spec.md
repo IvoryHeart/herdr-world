@@ -3574,9 +3574,12 @@ revision, beneath strings and cards, and SHALL never send anything to an agent.
 Pan and zoom SHALL be unchanged. A move, resize, end drag or text edit SHALL
 be saved against the drawing revision it began from: when the drawing changed
 elsewhere meanwhile, the edit SHALL be refused with a reason and the newer
-drawing kept, and a refused text edit SHALL reopen on the newer drawing with
-the typed text. A moved arrow SHALL let go of its targets from the ends it is
-drawn at. Undo and redo SHALL cover this browser's
+drawing kept, and a refused text edit SHALL retain the typed text and reopen on
+the newer drawing. If another text editor is already open when the refusal
+arrives, it SHALL keep its current text and the refused draft SHALL wait until
+that editor finishes; multiple refused drafts SHALL each remain available in
+turn, including separate drafts for the same drawing. A moved arrow SHALL let go
+of its targets from the ends it is drawn at. Undo and redo SHALL cover this browser's
 drawing changes and SHALL refuse, with a reason, to revert a drawing someone
 changed since. On a phone, drawings SHALL be shown but not editable, and notes
 keep working.
@@ -3590,6 +3593,13 @@ keep working.
 
 - **WHEN** the user is typing a drawing's text and another client saves a new text, colour and place for it
 - **THEN** finishing the edit keeps the other client's drawing, says why, and reopens the editor on it with the typed text
+
+#### Scenario: Text refusal arrives while editing another drawing
+
+- **WHEN** a user finishes text A, starts typing text B, and A's save is refused because another client changed A
+- **THEN** World explains the refusal and keeps B's editor and typed text unchanged
+- **AND** finishing B reopens A's refused draft with its typed text on the newer drawing
+- **AND** if B is also refused, its draft stays available after A finishes
 
 #### Scenario: Undo after another edit
 
