@@ -1,4 +1,5 @@
 import { CORE_LOCAL_ADDRESS_PATTERN } from "../../../shared/coreAddress";
+import { USAGE_ANALYTICS_GROUPS } from "../../../shared/usageAnalytics";
 import { Type } from "typebox";
 import { declare, object, policies, text } from "./declaration";
 import { rpcInput, rpcOutput } from "./rpc-contracts";
@@ -515,13 +516,10 @@ export const rpcVerbs = [
       window: Type.Optional(
         Type.Union([Type.Literal("today"), Type.Literal("7d")]),
       ),
+      // One list for the API, CLI and screens: a group missing here refuses
+      // every read of it (the Usage screens' `run` read once was).
       group_by: Type.Optional(
-        Type.Union([
-          Type.Literal("agent"),
-          Type.Literal("project"),
-          Type.Literal("room"),
-          Type.Literal("day"),
-        ]),
+        Type.Union(USAGE_ANALYTICS_GROUPS.map((group) => Type.Literal(group))),
       ),
       connection_id: Type.Optional(text),
       connection_generation: Type.Optional(Type.Integer({ minimum: 0 })),
