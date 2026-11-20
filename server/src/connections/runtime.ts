@@ -770,7 +770,6 @@ export function createLegacyConnectionRuntime(args: {
     pollIntervalMs: 30_000,
     log: (message) => logger.debug(message, { connection: identity.id }),
   });
-
   const onHerdrEvent = (event: unknown) => {
     taskEvents.handleHerdrEvent(event);
     lastStepTurns.handleHerdrEvent(event);
@@ -982,6 +981,8 @@ export function createLegacyConnectionRuntime(args: {
     worktreeRemovalRuntime,
     terminalBridge,
     agentSessions,
+    /** Agents' transcript files on this host (Apartments' history). */
+    agentSessionFiles,
     usage,
     agentCheckout,
     agentWorktree,
