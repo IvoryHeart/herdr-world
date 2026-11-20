@@ -45,7 +45,8 @@ function initialize() {
   });
 }
 
-function subscribe(listener: () => void) {
+/** Calls `listener` whenever the choice changes, here or in another tab. */
+export function subscribeTerminalOptionAsMeta(listener: () => void) {
   initialize();
   listeners.add(listener);
   return () => {
@@ -73,7 +74,11 @@ export function terminalOptionAsMeta() {
 }
 
 export function useTerminalOptionAsMeta() {
-  return useSyncExternalStore(subscribe, terminalOptionAsMeta, () => false);
+  return useSyncExternalStore(
+    subscribeTerminalOptionAsMeta,
+    terminalOptionAsMeta,
+    () => false,
+  );
 }
 
 /**

@@ -3,6 +3,7 @@ import { cliVerbs } from "./cli";
 import { effectVerbs } from "./effects";
 import { declare, object, policies, result, text } from "./declaration";
 import { rpcVerbs } from "./rpc";
+import { memoryVerbs } from "./memory";
 import type { Verb } from "./types";
 
 const sourceVerbs = (["merge", "close", "ready"] as const).map((action) =>
@@ -24,6 +25,7 @@ const sourceVerbs = (["merge", "close", "ready"] as const).map((action) =>
 /** Service-owned registry. Adapters never register or override actor policy. */
 export const VERBS: readonly Verb[] = Object.freeze([
   ...rpcVerbs,
+  ...memoryVerbs,
   ...cliVerbs,
   ...sourceVerbs,
   ...effectVerbs,

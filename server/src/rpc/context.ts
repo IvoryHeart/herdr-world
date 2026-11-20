@@ -110,6 +110,7 @@ export type RpcServices = {
   worldUsage?: import("../usage/service").WorldUsageService;
   /** Installed web IDEs and their World-owned servers (world.ide.*). */
   ide?: import("../ide/service").IdeService;
+  worldMemory?: import("../memory/service").MemoryService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;

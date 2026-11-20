@@ -74,6 +74,7 @@ import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
+import { createRuntimeMemoryService } from "../memory/runtime-service";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
 import { AgentActivityCache } from "../world/agent-activity-cache";
@@ -272,6 +273,7 @@ async function compose(
   );
 
   const worldCli = createWorldCliService({
+    memory: () => rpcServices.worldMemory!,
     core: () => coreCallers,
     board,
     ledger: () => storage.ledger(),
@@ -799,6 +801,11 @@ async function compose(
     worldSnapshots,
     worldUsage,
     ide,
+    worldMemory: createRuntimeMemoryService({
+      tui: () => connectionManager,
+      core: coreRpc,
+      now: () => clock.now(),
+    }),
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
