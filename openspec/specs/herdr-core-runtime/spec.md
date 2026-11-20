@@ -17,8 +17,9 @@ certification gating. A newest-release smoke test SHALL flag protocol drift.
 #### Scenario: Core and TUI on the same host
 
 - **WHEN** both runtimes are available
-- **THEN** each retains its own identity and generation, new agents default to
-  core with app placement, and explicitly selected TUI launches still work
+- **THEN** World discovers both under one host; each retains its own connection
+  identity and generation, new agents default to core with app placement, and
+  explicitly selected TUI launches still work
 
 #### Scenario: New release
 

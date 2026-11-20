@@ -11,6 +11,23 @@ import {
 } from "./install-linux";
 import { latestStableRelease } from "./installer-upgrade";
 
+const python = Bun.which("python3") ?? Bun.which("python");
+test.skipIf(!python)(
+  "installer assertions preserve runtime identity and tolerate setup completion ordering",
+  () => {
+    const result = spawnSync(
+      python!,
+      ["scripts/install-linux/test_scenarios.py"],
+      {
+        encoding: "utf8",
+      },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.stdout + result.stderr).toContain("Ran 5 tests");
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+  },
+);
+
 test("containers isolate cgroups and downloads without host ports or privilege", () => {
   const args = dockerArguments("fixture", "image", "/tmp/assets");
   expect(args).toContain("--cgroupns=private");

@@ -376,7 +376,11 @@ export function floatingTerminalForNode(
   );
 }
 
-/** A delayed launcher receipt never retargets a replacement runtime. */
+/**
+ * The terminal a launcher started, once World shows it as a window can open
+ * it: a Herdr terminal or a live herdr-core one (never actionable; World
+ * watches it). A delayed receipt never retargets a replacement runtime.
+ */
 export function launchedWorldLeaf(
   world: Pick<WorldObject, "leaves">,
   target: {
@@ -387,7 +391,7 @@ export function launchedWorldLeaf(
 ) {
   return world.leaves.find(
     (leaf) =>
-      leaf.actionable &&
+      inspectorAdmits(leaf) &&
       leaf.connectionId === target.connectionId &&
       leaf.generation === target.runtimeGeneration &&
       leaf.terminalId === target.terminalId,

@@ -200,6 +200,73 @@ test("an unowned preview saves offline without probing the installed service", a
   expect(fetchSpy).not.toHaveBeenCalled();
 });
 
+test.each(["add", "discover", "remove", "list"])(
+  "host %s uses its registry owner's address and preserves the result",
+  async (action) => {
+    const f = fixture();
+    const host = {
+      host_id: "host-preview",
+      label: "Preview empty host",
+      type: "ssh",
+      state: "empty",
+      discovery: "complete",
+      runtimes: [],
+      installable_runtimes: [],
+    };
+    const expected =
+      action === "add"
+        ? "host-add"
+        : action === "remove"
+          ? "host-remove"
+          : action;
+    fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (
+      input,
+      init,
+    ) => {
+      expect(String(input)).toBe("http://127.0.0.1:19041/api/connections/cli");
+      expect(new Headers(init?.headers).get("authorization")).toBe(
+        `Bearer ${worldCliToken("a".repeat(64))}`,
+      );
+      expect(JSON.parse(String(init?.body))).toMatchObject({
+        command: expected,
+        params: { registry_path: f.path },
+      });
+      return Response.json({
+        ok: true,
+        result: action === "list" ? { hosts: [host], profiles: [] } : { host },
+      });
+    }) as typeof fetch);
+    const args =
+      action === "add"
+        ? ["add", "runtime-fixture.example", "--preview-empty", "--json"]
+        : action === "list"
+          ? ["list", "--json"]
+          : [action, "host-preview", "--json"];
+    expect(await f.command(args)).toBe(EXIT_OK);
+    if (action !== "remove")
+      expect(cli.output.join("\n")).toContain("Preview empty host");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(existsSync(f.path)).toBeFalse();
+  },
+);
+
+test("an unowned preview host addition never probes the installed service", async () => {
+  const f = fixture(null);
+  expect(
+    await f.command(
+      ["add", "runtime-fixture.example", "--preview-empty"],
+      async () => {
+        throw new Error("must not probe another World");
+      },
+    ),
+  ).toBe(EXIT_OK);
+  expect(JSON.parse(readFileSync(f.path, "utf8")).hosts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ preview_fixture: "empty" }),
+    ]),
+  );
+});
+
 test("a preview cannot restart the installed service", async () => {
   const f = fixture();
   fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(

@@ -5,18 +5,49 @@ A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
 
 ## Runtime support
 
-herdr-core is primary for new agents when installed and connected. Choose a
-Herdr TUI room to launch there instead. Both appear in **Hosts** and
-**Manage connections**, with separate connections.
+A host is this computer or one exact OpenSSH alias / `user@host` destination.
+The service and CLI discover herdr-core and the Herdr TUI on each host and connect
+every runtime found. `herdr-world connections add sample@host.example` needs no
+runtime flag. `herdr-world connections discover <host-id>` repeats discovery;
+connecting a host also repeats it. Discovery checks presence and version, never
+starts or installs a runtime. Saved live endpoints remain available even when
+the runtime executable is off PATH. Core uses `HC_SESSION` locally (otherwise `default`)
+and its standard state directory, including `XDG_STATE_HOME`.
 
-With no saved connections or explicit Herdr socket/session/SSH override, first
-run finds an installed local core when the Herdr TUI is absent, saves only
-`core-local` and makes it the default. It uses `HC_SESSION` (otherwise `default`)
-and core's standard state directory, including `XDG_STATE_HOME`. A running core's
-agents appear immediately; discovery never starts core or changes its login item.
-Saved connections and their chosen default stay as they are. When the TUI is
-installed, first run keeps its existing local discovery; add core in **Manage
-connections** if wanted.
+An empty host stays saved and reports **No runtime installed**, with the registered
+runtime choices. Installation always needs a person's action. Once any runtime is
+found, host responses offer no installation suggestions; the Integrations API
+lists additional runtime choices per host. A probe failure is an unavailable or
+degraded host, never evidence that a runtime needs installing. SSH uses fixed,
+bounded, noninteractive probes; passwords, keys and arbitrary SSH options are
+never saved. Set SSH policy in OpenSSH configuration; use `--windows` for a Windows
+SSH host.
+
+Each runtime retains its own immutable connection ID and generation. One failed
+runtime makes the host degraded while reachable siblings remain actionable.
+Retained topology for the failed or removed runtime is stale and non-actionable.
+Rediscovery reuses a removed runtime's ID, with a new generation on reconnect.
+Legacy profiles on this computer or the same exact SSH destination become one host
+without rewriting runtime IDs, room positions, pins, colours or saved Hosts filter
+ticks. Different SSH aliases are not resolved or guessed to be the same machine.
+Explicit startup socket/session/SSH overrides retain their pinned runtime behavior.
+Per-runtime auto-connect settings remain effective after migration; a host's flag
+reflects whether any member enables it. Startup connects the saved default and
+profiles with auto-connect enabled, then discovers eligible hosts. A failed host
+or catalogue write does not prevent other startup targets from connecting.
+Disconnecting one runtime keeps it stopped when a sibling reconnects or its
+per-connection Connect is used. Explicit host Connect or rediscovery connects all
+found runtimes; newly discovered runtimes connect during automatic discovery too.
+
+`herdr-world ls` returns hosts with their runtimes and rooms; `connections` lists
+host/runtime kind, version and state. Existing per-connection API arrays and legacy
+runtime-specific CLI add flags remain available. The current browser Hosts and
+Manage connections screens still present runtime entries; their host grouping is
+a separate screen change. See [host connections](docs/host-connections.md) for the
+API shape and migration rules.
+
+herdr-core is primary for new agents when installed and connected. Choose a
+Herdr TUI room to launch there instead.
 
 `service uninstall` removes current and legacy World user services on macOS and
 Linux when their definitions identify them as World-owned. It preserves settings,
@@ -186,6 +217,35 @@ SSH hosts, with source health, host/workspace/tab/pane rollups and optional
 versioned price-table estimates. Town's expenses boards and Board's summary,
 host zones and workspace cards read it (below).
 
+## Agent and project memory data
+
+The [memory service, API and CLI](./docs/memory-api.md) browse, search, read, add,
+edit and delete harness memory on its owning local or SSH connection. Claude
+instructions, rules and project/subagent memory, Codex instructions and v1/v2
+Markdown memory, and Pi instructions share one model for TUI and core. Sources
+show current project/agent sharing; entries show bytes, modification time, a
+30-day age hint and per-harness default load candidates or shadowing. Unknown
+harnesses and missing/refused sources are explicit. Discovery cannot prove what
+an already running agent loaded; per-process overrides, imports, trust, custom
+fallback names and project settings can change that. Reload in the harness after
+editing; generated Codex memory can be regenerated by the harness.
+
+Every service call requires an immutable connection ID and observed generation
+(`herdr-world ls --json` now includes `connection_generation`). Writes require
+`--user-action`; update/delete need a current read revision, and deletes also
+require `--yes`. Conflicts preserve the current file; an unknown write outcome
+requires a fresh read. Nothing retries a write automatically. Contents stay on
+the owning host and in private responses, without a World content cache, index,
+Board copy or telemetry. No new visual surface is included in this data delivery.
+
+The Unix host needs Python 3; Windows, symlinks, hardlinks, special/binary/non-UTF-8
+files and non-Markdown entries refuse. Discovery stops at 32 projects, 128 agents,
+256 sources and 512 entries, four directory levels, and 256 KiB per file. Search
+is literal and case-insensitive, with a 2 MiB scan budget and 100 results. Partial
+results say `truncated`, skipped reads are counted, and each host request has a
+15-second deadline. `herdr-world memory demo --json` creates and cleans up an
+isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
+
 ## World update notifications
 
 - An available release notifies once per version in each browser profile and World
@@ -295,7 +355,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town's setup card (**Start Herdr** or **Set up herdr-core**) is up, and
     opens once the card is gone. **✕**, Escape, Back or a press outside closes it; tap
     the figure to open it again. Untick **Show this on start** at its foot,
-    or switch **Menu → Town Master greeting**, to stop it on this browser.
+    or switch **Menu → Settings → Town master greeting**, to stop it on this browser.
     Your very first visit is greeted too, without a last time.
   - **Tab and app icon count**: in every view, while anything needs you, the
     browser tab reads `(N) Herdr World`, its icon carries a small yellow
@@ -304,7 +364,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     app badges. N is the **Needs you** count. It keeps updating while the tab
     is in the background and follows answers made on another device; with
     nothing waiting the title and icon are plain again. Switch off
-    **Menu → Count on tab and app icon** to stop it on this browser.
+    **Menu → Settings → Count on tab and app icon** to stop it on this browser.
   - Each building has its reception at the top, under the front door, and a
     bar in its bottom corner. Blocked agents queue at reception oldest first.
     A queued agent without a Herdr name is labelled with its room rather than
@@ -443,8 +503,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the building's lounge and shows the center from its plaque down. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
     opens a ring of actions around its doors: **New agent** (World's launcher,
     preselecting the open room when it can start one there), **Town master**
-    (the role holder from **Menu → Sounds**, else the agent named in **Menu →
-    Town master** when nobody holds the role, opened on Chat; a holder not in
+    (the role holder from **Settings → Chimes and who plays them**, else the
+    agent named in **Settings → Town master** when nobody holds the role, opened on Chat; a holder not in
     Town says so; with neither set it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
     **New room** (disabled with the reason when no room can be created). With
@@ -507,7 +567,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     pick Chat yourself. Chat describes startup
     or a question plainly and offers Open Terminal; integration guidance waits
     while the agent is starting or waiting for you in Terminal. In Town it
-    docks on the right by default (**Menu → Inspector opening**), 520px wide
+    docks on the right by default (**Settings → Inspector opens**), 520px wide
     (at most half the screen) so Town stays in view and lines stay readable.
     Drag its inner edge to resize it; Town remembers the width. It can be
     undocked, and keeps the dock it was left with. On a phone, the Chat view
@@ -561,7 +621,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.
-  - The Town master's chat (**Menu → Town master**, `firstmate` by default,
+  - The Town master's chat (**Settings → Town master**, `firstmate` by default,
     matched against the agent's Herdr name, then its label) opens docked on
     Chat once per visit on wide screens, without moving the pane's focus;
     the town center's **Town master** opens it on demand.
@@ -580,7 +640,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     them to choose. Herdr TUI and herdr-core
     tables open alike: a live core shell opens its terminal and a core agent
     its Chat or terminal, never a refusal; "World can't mark core work
-    reviewed yet" shows only on review controls. **Menu → Agents open** chooses whether that tap opens
+    reviewed yet" shows only on review controls. **Settings → Opening an agent shows** chooses whether that tap opens
     the chat (the default) or the terminal, in Town, Board and Desk alike; either way the tap does not mark
     finished work reviewed. **Open terminal** in the peek does, as before.
   - A seated agent with a quest (its own todo list, plan, Codex goal or loop)
@@ -969,7 +1029,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   most 3 seconds and the walk in at most 2.5; several starts at once arrive
   0.7 seconds apart. Agents already in Town, a reload, a failed or uncertain
   start and returning to Town never play it. With reduced motion the agent is
-  at its desk at once with a still highlight that fades. A confirmed start closes the launcher; an uncertain
+  at its desk at once with a still highlight that fades. A confirmed start closes the launcher and opens
+  the new agent's or terminal's window once World shows it, on Herdr TUI and herdr-core hosts alike, even when Hosts hides that host; an uncertain
   attempt keeps its explanation and disables start choices. Open its existing
   tab or close the launcher before another attempt. A definite failure lets
   you retry, log in or edit profiles.
@@ -982,7 +1043,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     check source/time, **Check again** and existing **Edit profiles** controls;
     only confirmed absence blocks a supported harness. Windows probes remain
     unsupported. See [readiness evidence](./docs/harness-readiness.md).
-  - **Agent profiles** (Menu → Agent profiles, Actions → Agent profiles, or
+  - **Agent profiles** (Settings → Agent profiles, Actions → Agent profiles, or
     Edit profiles in the launcher and Board) set a name, home room, role,
     colour, brain (harness, model, Codex reasoning effort, permission mode),
     skills (the room's and host's `SKILL.md` folders), tools, a starting brief
@@ -1176,6 +1237,30 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     possibly delivered to another agent. Check the pane before sending again.
     A note offers **Start an agent** in a chosen workspace: World starts the
     agent in a new tab and sends the note once it is ready.
+  - Drawing (desktop): the tools on Board's left edge draw beside the live
+    cards, on the same pan and zoom, beneath cards and strings. **Pen** draws
+    freehand (it stays chosen; Escape puts it down); **Rectangle**,
+    **Ellipse** and **Diamond** drag out a shape or, with a click, draw one at
+    a standard size; **Text** places text where you click; **Arrow** drags
+    from one place to another, and an end dropped on a card, a note or a
+    drawing attaches to it and follows it as it moves; **Note** places a
+    note. With **Select**, click a drawing to select it, drag it to move it
+    (a moved arrow lets go of what it was attached to), drag a corner to
+    resize it or an arrow's end to re-attach it, and double-click a shape or text
+    to type its label. The colour dots and **Fill** change the selected
+    drawing, or the next one. Delete or Backspace (or the bin button) deletes
+    the selection; an arrow attached to it stays where it pointed. Undo
+    (Ctrl/⌘+Z) and redo (Ctrl/⌘+Shift+Z or Ctrl+Y) cover drawings made on this
+    device since Board opened; a drawing changed elsewhere since is left
+    alone, with a notice. A move, resize or text edit of a drawing someone
+    changed elsewhere meanwhile is refused with the same notice and their
+    version stays; typed text reopens on their version, so nothing typed is
+    lost. Drawings are saved with the board on the World
+    service (at most 1,000; a stroke keeps at most 2,000 points, simplified
+    as it is drawn) and are visual only: an arrow never sends anything to an
+    agent. Issues and pull requests are reached through their agent's tab
+    card. A phone shows drawings but has no drawing tools; drawings there
+    take no touches, and double-tapping empty board still makes a note.
   - Town's room and agent actions are in a selected card's bar too: a
     workspace offers **Rename…** and **Close…** with Town's dialogs and
     confirmation; workspaces and tabs offer **Herdr order ‹ Earlier / Later
@@ -1429,7 +1514,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 ### Integrations
 
-**Menu → Integrations** lists everything World reads from or works through.
+**Menu → Settings → Integrations** lists everything World reads from or works through.
 **All** opens first and lists every kind under its heading; then one tab per
 kind: **Runtimes** (this computer's Herdr or herdr-core and each SSH host),
 **Sources** (GitHub, Jira and Usage metrics), **Agents** (World's skill for
@@ -1633,7 +1718,7 @@ CLI or Settings install reenables it. Codex, Pi and Kimi share
 the other two, which the command names; their removal preference is also shared.
 OMP, Letta and MastraCode report
 unsupported. See [paths and overrides](./docs/harness-integrations.md).
-**Menu → Configuration → Integrations** shows the same state and path as a
+**Settings → Integrations** shows the same state and path as a
 **World skill** line under each Herdr harness on World's own host, with
 Install, Update and Uninstall buttons that run the CLI's installer; uninstalling
 a shared file confirms which harnesses lose it first.
@@ -1855,7 +1940,7 @@ to search.
   until cleared, then catches up. Drag past pane edges to scroll and copy
   offscreen rows. Release or blur stops scrolling; if output changes, finish
   the selection before scrolling further. Pixel mouse is unsupported.
-- On macOS, **Menu → Configuration → Behavior → Option key as Alt in terminals**
+- On macOS, **Settings → Keyboard → Option key as Alt**
   makes Option send Alt-modified keys instead of typing characters such as @,
   [ and ~. It is off by default and saved in this browser.
 - Paste clipboard images to upload to the Herdr host and insert their paths,
@@ -1878,7 +1963,7 @@ to search.
   composer closed joins the draft when that composer opens again.
 - Drag a file or directory path from the File Explorer into a terminal to
   insert its quoted host path. Terminal font size is adjustable independently
-  of interface scale in **Menu → Appearance**. **Chat text** there sets Chat's
+  of interface scale in **Settings → Appearance**. **Chat text size** there sets Chat's
   text size: it follows the terminal font size until changed, and its value
   button links it back.
 - Show Herdr session popup panes over the active workspace when a plugin opens
@@ -1915,6 +2000,56 @@ to search.
   on adjacent hard rows does not expire an unchanged URL. Repeated window
   activation preserves a freshly verified OSC 8 target only at the same cells
   and frame.
+
+## Settings
+
+**Menu** holds what you do every day; **Settings** holds everything else, with
+one search. Paths in this file such as **Settings → Theme** name a row you can
+also find by typing its name.
+
+- **Menu** lists **Settings**, **Find or act**, **Zen mode**, **Help**,
+  **Upgrade** (only when one is offered) and **Log out** (only when World asks
+  for a password). **Help** opens Settings at its Help tab.
+- **Menu → Settings** lists every setting and command under **All** and nine
+  tabs: Appearance, Town & views, Notifications & sounds, Agents, Keyboard,
+  Integrations, This World, Commands and Help. Each row names where it applies
+  (this browser, all browsers, one connection) and, for a control that also
+  lives on a view, where (Town's sun button under **ALL**). Arrow keys move
+  between tabs; Tab stays inside Settings.
+- Most rows change in place. **Open** shows a page inside Settings (**Read
+  replies aloud**, **World name**, **Worktree command**, **Terminal
+  transport**, **Integrations**, **Herdr and connection details**), where Back
+  or Escape returns to the list, or opens a dialog (**Layout**, **Terminal
+  colours and font**, **Keyboard shortcuts**, **Phone terminal keys**,
+  **Automatic branch updates**) that returns to Settings at its row when
+  closed. **Agent profiles** and **Chimes and who plays them** open their own
+  windows.
+- Controls that stay on a view are rows too: **Board surface**, **Board status
+  colours** and **Board status pulses** switch to Board and open its settings
+  menu or colours; **Town lenses** switches to Town and opens the lens
+  chooser; **Hosts and connections** opens **Manage connections**.
+- **This World** holds **Herdr and connection details** (Herdr version,
+  upgrade or setup, connection address), **World name**, update checks,
+  **Reload page** and **Log out**. **Help** opens the tutorial, this file,
+  troubleshooting, issues and the changelog in a new tab.
+- **Commands** lists what Cmd+K offers for the open workspace, tab and pane
+  (**new workspace** finds **Create workspace**). A command Cmd+K refuses is
+  shown greyed with its reason, and runs only through Cmd+K for the active
+  connection; when Cmd+K cannot act, its commands leave Settings.
+- The search finds a setting by its name, its words and its choices:
+  **lighting** and **night** find Town's time of day, **font size** finds the
+  terminal, interface and chat sizes, **sounds** finds sound on this device.
+  The control in the result changes the setting at once.
+- **Cmd+K** (`Ctrl+K`) finds the same settings and commands. A choice offers
+  each option (**night** → **Town time of day: Night**), a switch offers
+  **turn on/off** and a size offers **larger/smaller**; Enter applies it.
+- Each row's link button copies an address ending in
+  **`?setting=<id>`** (for example `?setting=town.time-of-day`), or
+  **`?setting=<tab>`** such as `?setting=help`. Opening it opens Settings at
+  that row, highlighted. The old `?settings=next` preview switch is ignored.
+- On a phone the Menu and Settings are sheets: swipe the handle down to close.
+  Settings is full height; tabs scroll sideways and wide controls take their
+  own line.
 
 ## Code view design preview
 
@@ -2049,7 +2184,7 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   **Send anyway**. This types into the selected terminal and has no Chat receipt.
   The primary Chat tab keeps its session-binding and permission-answer checks.
 - Details' **Chat** view can read an agent reply aloud with **Speak**. Unless
-  you choose a voice in **Menu → Configuration → Behavior → Speech**, only an
+  you choose a voice in **Settings → Read replies aloud**, only an
   on-device voice is used. A network voice, labelled there, can send the reply
   text to the browser vendor and is used only when chosen. A saved voice that
   disappears falls back to an on-device voice, never a network one, and a
@@ -2112,7 +2247,7 @@ end stays visible.
 
 Each repository can choose where its new worktrees go with **Worktree
 location** (workspace context menu, command menu or Worktree Lifecycle); empty
-keeps Herdr's default. **Menu → Configuration → Instance** sets a **New
+keeps Herdr's default. **Settings → Worktree command** sets a **New
 worktree command** and a **Remove worktree command** that run from the source
 repository on the workspace's host instead of Herdr's own creation and
 removal; after a removal command, Herdr closes the workspace. `{path}`,
@@ -2174,7 +2309,7 @@ unsandboxed code:** review `paseo.json` before creating, opening, or removing.
 
 Fetch `origin/main` and merge into enabled checkouts' current branches every
 10 minutes by default. The UI shows interval and last result. Manage saved
-per-checkout settings in **Menu → Automatic branch updates**, workspace context
+per-checkout settings in **Settings → Automatic branch updates**, workspace context
 menus, or Worktree Lifecycle.
 
 Runs skip dirty or detached checkouts, verify branch/HEAD/worktree stayed unchanged
@@ -2290,7 +2425,7 @@ Tabs and More stay in World's shared top app bar. If an upload finishes after it
 Direct destination retires, World keeps the path in the original Message draft
 and reports the failed insertion instead of sending it to another pane.
 
-- Responsive terminals, Inspector, and viewport/keyboard handling. **Menu →
+- Responsive terminals, Inspector, and viewport/keyboard handling. **Settings →
   Appearance → Layout → Display mode** offers Automatic/Mobile/Desktop.
   Automatic uses **Mobile up to (px)**: 768 by default, adjustable 320–2560 CSS
   pixels. Mobile stays mobile at any width, including after reload.
@@ -2321,7 +2456,7 @@ and reports the failed insertion instead of sending it to another pane.
   asks before discarding them.
 - A bundled glyph-only Nerd Font supplies common terminal icons. Install as a
   PWA in iOS/iPadOS Safari, macOS Safari, Chrome, or Edge to remove browser chrome.
-  It still needs a reachable Herdr World process, not offline access. Use **Menu →
+  It still needs a reachable Herdr World process, not offline access. Use **Settings →
   Reload page** in the browser or PWA.
 
 Mobile shortcuts and appearance stay in this browser, not Herdr configuration.
@@ -2330,8 +2465,8 @@ Mobile shortcuts and appearance stay in this browser, not Herdr configuration.
 
 On desktop, open the searchable, read-only overview of your active shortcut preset
 with Cmd+Shift+K on macOS or Ctrl+Alt+Shift+K on Windows/Linux, the top-bar command
-icon, Actions, or Menu → Shortcut cheat sheet. Numbered actions collapse into 1–9
-rows. Customize assignments in Configuration.
+icon, Actions, or Settings → Shortcut cheat sheet. Numbered actions collapse into 1–9
+rows. Customize assignments in Settings → Keyboard shortcuts.
 
 New workspace and worktree dialogs suggest readable two-word names. Suggestions
 load asynchronously; editing the name takes precedence over a late suggestion.
@@ -2513,8 +2648,9 @@ and herdr-core alike:
   switch disappears, every step says it is simulated, and no host is changed.
   Reload to end install test mode.
 
-- Enable local browser alerts and background Web Push in **Menu → Behavior &
-  automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
+- Enable local browser alerts and background Web Push in **Settings → Notifications &
+  sounds → Task notifications**, which says how alerts arrive (background
+  push or this page only) or why they cannot (browser permission blocked). See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
   Notification sync waits while a tab is hidden. If the browser temporarily
   rejects sync because the document is inactive, World retries quietly when
   the tab becomes visible or resumes; other sync failures still show an error.
@@ -2530,7 +2666,7 @@ and herdr-core alike:
   agent's profile) and a pattern for why (needs you: two rising notes;
   for you: a soft double knock; finished: one falling note). A toast always
   says who and why, or "sender unknown" when Herdr didn't say. Changes within
-  3 seconds share one chime and one "N changes" toast. **Menu → Sounds** sets
+  3 seconds share one chime and one "N changes" toast. **Settings → Notifications & sounds** sets
   this device's chimes and volume (per device), the Town master's and crew's
   sounds and which patterns play (all your browsers), and who the Town master
   is: only you assign it, and its needs-you chime still plays while you focus
@@ -2548,10 +2684,10 @@ and herdr-core alike:
   supplies one; pane-less alerts open World without guessing a target. Older
   Herdr runtimes use agent-status completion alerts.
 - Choose light/dark/system appearance, persistent accents, and terminal themes
-  per appearance mode in **Menu → Appearance → Terminal theme**. Built-ins
+  per appearance mode in **Settings → Appearance → Terminal colours and font**. Built-ins
   include Solarized, Dracula, One Dark, Nord, Tokyo Night, Catppuccin, and GitHub;
   custom themes set base/ANSI colors. Themes apply live to all terminals and save
-  per browser. **Menu → Configuration → Appearance → Black background** uses
+  per browser. **Settings → Appearance → Black background** uses
   pure black instead of blue-grey for the interface and terminals in the dark
   theme, from the first paint. **Text size** scales the UI from 80% to 150%,
   including mobile.
@@ -2560,7 +2696,8 @@ and herdr-core alike:
   `/healthz`. See [services](docs/DEPLOYMENT.md#user-service).
 - Keep Herdr on the version this World release verified: installer replacements and updates
   bring Herdr, the Codex/Claude/Pi harness integrations and the Herdr World plugin up to
-  date, and **Menu → Runtime → Upgrade Herdr** (or **Update Herdr integrations**)
+  date, and **Settings → Herdr and connection details → Upgrade Herdr** (or **Update
+  Herdr integrations**)
   appears when something is behind. A running server keeps its panes through a
   live handoff when World can prove nothing supervises it (Linux); otherwise World says a restart is
   needed. See
@@ -2573,7 +2710,7 @@ or an authenticated HTTPS proxy for encrypted access. World supplies no multi-us
 
 ## Keyboard Shortcuts
 
-Open **Menu → Behavior & automation → Keyboard shortcuts** for the searchable
+Open **Settings → Keyboard → Keyboard shortcuts** for the searchable
 list and preset editor on desktop/mobile. Lists and hints show active bindings.
 See the [desktop](docs/screenshots/keyboard-shortcuts-desktop.png) and
 [mobile](docs/screenshots/keyboard-shortcuts-mobile.png) editors.

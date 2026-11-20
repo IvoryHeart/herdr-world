@@ -103,6 +103,18 @@ def install(baseline=False):
     return output
 
 
+def assert_tui_default(initial, profiles):
+    assert profiles['connections'], 'existing Herdr TUI connection lost'
+    before_id = initial['default_connection_id']
+    after_id = profiles['default_connection_id']
+    # Host persistence retains even the implicit startup runtime's immutable ID.
+    assert after_id == before_id, 'adding core changed the TUI default'
+    before_profile = next(item for item in initial['connections'] if item['id'] == before_id)
+    after_profile = next(item for item in profiles['connections'] if item['id'] == after_id)
+    for field in ('type', 'control_socket_path', 'client_socket_path'):
+        assert before_profile.get(field) == after_profile.get(field), f'TUI default changed {field}'
+
+
 class World:
     def __enter__(self):
         env = {**os.environ, 'HOST': '127.0.0.1', 'PORT': '0',
@@ -199,7 +211,11 @@ class World:
             status = self.rpc('connections.core_install', {**params, 'action': 'status'})
             raise RuntimeError(f'core setup did not connect: {status}')
         status = self.rpc('connections.core_install', {**params, 'action': 'status'})
-        assert status['phase'] == 'done', status
+        # Readiness is emitted before the async job's connect call unwinds.
+        # Prove that the install script finished and the job has not failed;
+        # ready() and unit_ready() verify connection and login setup separately.
+        assert status['phase'] in ('installing', 'done'), status
+        assert 'Connecting World...' in status['lines'], status
         return profiles
 
     def core_only(self):
@@ -307,18 +323,7 @@ def scenario():
                 initial = world.rpc('connections.list')
                 profiles = world.setup()
                 if CASE == 'tui':
-                    assert profiles['connections'], 'existing Herdr TUI connection lost'
-                    before_id = initial['default_connection_id']
-                    after_id = profiles['default_connection_id']
-                    # First persistence names the implicit startup profile "local".
-                    # Its runtime/socket identity, rather than that temporary ID,
-                    # must remain the default when core is added beside the TUI.
-                    expected_id = 'local' if before_id == 'startup-default' else before_id
-                    assert after_id == expected_id, 'adding core changed the TUI default'
-                    before_profile = next(item for item in initial['connections'] if item['id'] == before_id)
-                    after_profile = next(item for item in profiles['connections'] if item['id'] == after_id)
-                    for field in ('type', 'control_socket_path', 'client_socket_path'):
-                        assert before_profile.get(field) == after_profile.get(field), f'TUI default changed {field}'
+                    assert_tui_default(initial, profiles)
                 else:
                     world.core_only()
             unit_ready()
