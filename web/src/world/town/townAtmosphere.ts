@@ -3,9 +3,9 @@
  * and the weather (townWeather.ts). By day each building casts a sun shadow
  * that swings with the hour, and cloud shadows drift across the land, faster
  * in wind; at night street lamps glow at their heads (their pools of light
- * are townLighting.ts's) and fireflies wander over the grass. Rain, snow,
- * gusts, fog and wet or snowy ground are townWeatherArt.ts's, drawn here
- * between the ground and the buildings.
+ * are townLighting.ts's) and fireflies wander over the grass. Fog and wet or
+ * snowy ground are townWeatherArt.ts's, drawn here between the ground and
+ * the buildings; its rain, snow and gusts fall over the whole town.
  *
  * It stays quiet. Shadows and clouds lie on the ground under the buildings,
  * so they never shade a room, a desk or a status mark; fireflies keep to open
@@ -262,13 +262,15 @@ export function createTownAtmosphere(options: {
   ground: Container;
   /** Over the lit world, in world coordinates: what glows by itself. */
   glow: Container;
+  /** Over the scene, in world coordinates: rain, snow and gusts. */
+  air: Container;
 }) {
-  const { ground, glow } = options;
+  const { ground, glow, air } = options;
   const radial = radialTexture();
   const soft = softRectTexture();
   const cloud = cloudTexture();
-  // Wet and snowy ground lie under the sun's shadows; fog and what falls or
-  // blows, over the cloud shadows. All of it stays under the buildings.
+  // Wet and snowy ground lie under the sun's shadows and fog over the cloud
+  // shadows, all under the buildings; what falls or blows is in the air.
   const weatherUnder = ground.addChild(new Container());
   const shadowLayer = ground.addChild(new Container());
   const cloudLayer = ground.addChild(new Container());
@@ -276,6 +278,7 @@ export function createTownAtmosphere(options: {
   const weather = createTownWeatherArt({
     under: weatherUnder,
     over: weatherOver,
+    air,
     radial,
     cloud,
   });

@@ -1,12 +1,14 @@
 /**
- * Town's weather, drawn (the sky it reads is townWeather.ts's). All of it lies
- * on the land between the buildings, under the scene, so no drop, flake, gust
- * or fog bank ever covers a room, a desk, a status mark or the post office:
+ * Town's weather, drawn (the sky it reads is townWeather.ts's), in three
+ * layers:
  *
  * - On the ground, under the sun's shadows: a wet street (a darker, cooler
  *   ground with puddles catching the sky) and snow lying on it.
- * - Over the shadows: fog lying in the streets with slow banks, falling rain
- *   and snow, and pale wind gusts.
+ * - Over the shadows, under the buildings: fog lying in the streets with slow
+ *   banks, so no veil ever dims a room, a desk or the post office.
+ * - In the air over the whole town, buildings and trees included: falling
+ *   rain and snow and pale wind gusts. They are thin and faint, and the
+ *   status light, the amber reception pulse and every mark stay above them.
  *
  * Rain, snow and gusts fall through the screen, not the world, so there are
  * as many at every zoom and never more than the screen holds: each drop is
@@ -34,6 +36,8 @@ const PUDDLES = 36;
 const PUDDLE_SPACING = 23;
 /** The screen area the maxima are for: a laptop's. */
 const FULL_SCREEN = 1512 * 982;
+/** The least share of the maxima a small screen shows. */
+const SMALL_SCREEN = 0.36;
 /** Screen pixels a second. */
 const RAIN_SPEED = 190;
 const SNOW_SPEED = 26;
@@ -41,6 +45,16 @@ const GUST_SPEED = 160;
 const GUST_LENGTH = 48;
 
 const unit = (seed: string) => (townHash(seed) % 10_000) / 10_000;
+
+/**
+ * Where drop `i` starts across and down the screen, as fractions: an even
+ * spread (the R2 sequence) rather than hashed, so any number of drops reaches
+ * every part of a screen, a phone's few included, with no dry patches.
+ */
+export const townFallSpread = (i: number) => ({
+  x: (0.5 + i * 0.7548776662466927) % 1,
+  y: (0.5 + i * 0.5698402909980532) % 1,
+});
 
 /** Puddles on the town's roads and squares: where a wet street shines. */
 export function townPuddles(layout: TownLayout): TownPuddle[] {
@@ -62,7 +76,11 @@ export function townPuddles(layout: TownLayout): TownPuddle[] {
   return puddles;
 }
 
-/** How many of `max` show for a `density` on a `width` × `height` screen. */
+/**
+ * How many of `max` show for a `density` on a `width` × `height` screen: in
+ * proportion to the screen's area, but a small screen keeps at least
+ * SMALL_SCREEN of them, so a phone's weather never looks patchy.
+ */
 export function townFallCount(
   density: number,
   width: number,
@@ -70,7 +88,10 @@ export function townFallCount(
   max: number,
 ) {
   if (density <= 0.02) return 0;
-  const area = Math.min(1, (width * height) / FULL_SCREEN);
+  const area = Math.min(
+    1,
+    Math.max(SMALL_SCREEN, (width * height) / FULL_SCREEN),
+  );
   return Math.min(max, Math.round(max * Math.min(1, density) * area));
 }
 
@@ -87,9 +108,10 @@ export function townRainAt(
 ) {
   const speed = RAIN_SPEED * (0.8 + 0.4 * unit(`rain-v:${i}`));
   const span = height + 40;
-  const fall = (unit(`rain-y:${i}`) * span + drift * speed) % span;
+  const start = townFallSpread(i);
+  const fall = (start.y * span + drift * speed) % span;
   const slant = townRainSlant(wind);
-  const x = unit(`rain-x:${i}`) * width + fall * slant;
+  const x = start.x * width + fall * slant;
   return { x: ((x % width) + width) % width, y: fall - 20 };
 }
 
@@ -107,10 +129,11 @@ export function townSnowAt(
 ) {
   const speed = SNOW_SPEED * (0.7 + 0.6 * unit(`snow-v:${i}`));
   const span = height + 20;
-  const fall = (unit(`snow-y:${i}`) * span + drift * speed) % span;
+  const start = townFallSpread(i);
+  const fall = (start.y * span + drift * speed) % span;
   const phase = unit(`snow-p:${i}`) * Math.PI * 2;
   const x =
-    unit(`snow-x:${i}`) * width +
+    start.x * width +
     Math.sin(drift * 0.9 + phase) * 9 +
     fall * 0.08 * Math.max(0, wind - 1);
   return {
@@ -196,12 +219,14 @@ export function createTownWeatherArt(options: {
   under: Container;
   /** Over the shadows, under the buildings. */
   over: Container;
+  /** Over the whole scene, under the status light: what falls or blows. */
+  air: Container;
   /** A soft round light (townLighting.ts's), for puddles. */
   radial: Texture;
   /** A cloud (townAtmosphere.ts's), for fog banks. */
   cloud: Texture;
 }) {
-  const { under, over, radial, cloud } = options;
+  const { under, over, air, radial, cloud } = options;
   const drop = dropTexture();
   const flake = flakeTexture();
   const gust = gustTexture();
@@ -216,7 +241,7 @@ export function createTownWeatherArt(options: {
   const lying = sheet(under, SNOW_LYING);
   const fog = sheet(over, FOG);
   const bankLayer = over.addChild(new Container());
-  const fall = over.addChild(new Container());
+  const fall = air.addChild(new Container());
   const puddles: Sprite[] = [];
   const banks: { sprite: Sprite; x: number; y: number; speed: number }[] = [];
   /** Pools grow to what a screen has needed and are reused after. */
@@ -348,7 +373,7 @@ export function createTownWeatherArt(options: {
       return rain + snow + gusts > 0;
     },
     destroy() {
-      for (const layer of [under, over])
+      for (const layer of [under, over, air])
         for (const child of layer.removeChildren())
           child.destroy({ children: true });
       drop.destroy(true);

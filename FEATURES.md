@@ -652,15 +652,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Weather follows the same rules. Clouds thicken and dim the sun; rain
     falls at a slant with a wet street and puddles on roads and the plaza;
     snow falls slowly and lies on the ground; fog veils the land in drifting
-    banks; wind speeds the clouds and blows a few streaks across the grass; a
+    banks; wind speeds the clouds and blows streaks across the town; a
     storm adds heavy rain, a dark sky and a soft, rare lightning flash. Light
     real weather still shows clearly, and a held condition shows at moderate
-    strength. All of it lies under the buildings, and
-    dark weather lights rooms, desk colours and lamps as dusk would, so lit
-    rooms, desk colours, the amber reception pulse and the post office read
-    in a storm. Rain, snow and wind streaks keep the same density on screen
-    at every zoom, with a fixed cap, and redraw at most 20 times a second
-    (snow 12). Under calm motion or reduced motion nothing falls or flashes:
+    strength. Rain, snow and wind streaks fall over the whole visible map,
+    buildings and trees included, at every zoom and scroll position; wet and
+    snowy ground and fog lie under the buildings. Status light stays above
+    the weather, and dark weather lights rooms, desk colours and lamps as
+    dusk would, so lit rooms, desk colours, the amber reception pulse and the
+    post office read in a storm. Rain, snow and wind streaks keep the same
+    density on screen at every zoom, with a fixed cap (a phone shows a little
+    more than its share so it never looks patchy), and redraw at most 20
+    times a second (snow 12). Under calm motion or reduced motion nothing falls or flashes:
     the street stays wet, snow lies, fog and cloud hold still, and nothing
     redraws for the weather. With **No weather**, or when real weather is
     off, unavailable or expired, Town looks exactly as it does without

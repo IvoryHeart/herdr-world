@@ -39,7 +39,7 @@ test("as many drops as the screen holds, never more than the cap", () => {
   expect(townFallCount(1, 3840, 2160, TOWN_RAIN_MAX)).toBe(TOWN_RAIN_MAX);
   const phone = townFallCount(1, 390, 844, TOWN_RAIN_MAX);
   expect(phone).toBeGreaterThan(20);
-  expect(phone).toBeLessThan(TOWN_RAIN_MAX / 3);
+  expect(phone).toBeLessThan(TOWN_RAIN_MAX / 2);
   // Lighter weather, fewer; none for a trace.
   expect(townFallCount(0.4, 1512, 982, TOWN_SNOW_MAX)).toBeLessThan(
     TOWN_SNOW_MAX / 2,
@@ -74,4 +74,27 @@ test("rain, snow and gusts stay on the screen and move on", () => {
   expect(townRainSlant(0.6)).toBe(0);
   expect(townRainSlant(2.6)).toBeGreaterThan(0.05);
   expect(townRainSlant(20)).toBeLessThanOrEqual(0.5);
+});
+
+test("rain and snow cover the whole screen, phone and laptop", () => {
+  // Every part of the view gets weather, about 200 screen pixels apart: at
+  // any moment, no cell of a laptop's 4 × 4 grid or a phone's 2 × 4 is dry.
+  for (const [w, h, cols, rows] of [
+    [390, 844, 2, 4],
+    [1512, 982, 4, 4],
+  ] as const)
+    for (let t = 0; t < 600; t += 0.37)
+      for (const [max, at] of [
+        [TOWN_RAIN_MAX, (i: number) => townRainAt(i, t, w, h, 1.5)],
+        [TOWN_SNOW_MAX, (i: number) => townSnowAt(i, t, w, h, 1.5)],
+      ] as const) {
+        const cells = new Set<number>();
+        for (let i = 0; i < townFallCount(1, w, h, max); i += 1) {
+          const p = at(i);
+          const row = Math.floor((p.y / h) * rows);
+          if (row >= 0 && row < rows)
+            cells.add(row * cols + Math.floor((p.x / w) * cols));
+        }
+        expect(cells.size).toBe(cols * rows);
+      }
 });

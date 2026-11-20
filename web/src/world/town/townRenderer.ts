@@ -246,11 +246,15 @@ export async function createTownRenderer(
   const puffLayer = new Graphics();
   // Sun and cloud shadows lie on the ground, under the buildings.
   const atmosphereGround = new Container();
+  // Rain, snow and wind gusts fall over the whole town, buildings and trees
+  // included, under selection marks and the status light (townWeatherArt.ts).
+  const weatherAir = new Container();
   world.addChild(
     landLayer,
     groundLayer,
     atmosphereGround,
     sceneLayer,
+    weatherAir,
     fxLayer,
     dragLayer,
     puffLayer,
@@ -279,6 +283,7 @@ export async function createTownRenderer(
   const atmosphere = createTownAtmosphere({
     ground: atmosphereGround,
     glow: atmosphereGlow,
+    air: weatherAir,
   });
   let atmosphereLayout: TownLayout | null = null;
   // The time of day and the weather (townWeather.ts).
