@@ -5,18 +5,49 @@ A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
 
 ## Runtime support
 
-herdr-core is primary for new agents when installed and connected. Choose a
-Herdr TUI room to launch there instead. Both appear in **Hosts** and
-**Manage connections**, with separate connections.
+A host is this computer or one exact OpenSSH alias / `user@host` destination.
+The service and CLI discover herdr-core and the Herdr TUI on each host and connect
+every runtime found. `herdr-world connections add sample@host.example` needs no
+runtime flag. `herdr-world connections discover <host-id>` repeats discovery;
+connecting a host also repeats it. Discovery checks presence and version, never
+starts or installs a runtime. Saved live endpoints remain available even when
+the runtime executable is off PATH. Core uses `HC_SESSION` locally (otherwise `default`)
+and its standard state directory, including `XDG_STATE_HOME`.
 
-With no saved connections or explicit Herdr socket/session/SSH override, first
-run finds an installed local core when the Herdr TUI is absent, saves only
-`core-local` and makes it the default. It uses `HC_SESSION` (otherwise `default`)
-and core's standard state directory, including `XDG_STATE_HOME`. A running core's
-agents appear immediately; discovery never starts core or changes its login item.
-Saved connections and their chosen default stay as they are. When the TUI is
-installed, first run keeps its existing local discovery; add core in **Manage
-connections** if wanted.
+An empty host stays saved and reports **No runtime installed**, with the registered
+runtime choices. Installation always needs a person's action. Once any runtime is
+found, host responses offer no installation suggestions; the Integrations API
+lists additional runtime choices per host. A probe failure is an unavailable or
+degraded host, never evidence that a runtime needs installing. SSH uses fixed,
+bounded, noninteractive probes; passwords, keys and arbitrary SSH options are
+never saved. Set SSH policy in OpenSSH configuration; use `--windows` for a Windows
+SSH host.
+
+Each runtime retains its own immutable connection ID and generation. One failed
+runtime makes the host degraded while reachable siblings remain actionable.
+Retained topology for the failed or removed runtime is stale and non-actionable.
+Rediscovery reuses a removed runtime's ID, with a new generation on reconnect.
+Legacy profiles on this computer or the same exact SSH destination become one host
+without rewriting runtime IDs, room positions, pins, colours or saved Hosts filter
+ticks. Different SSH aliases are not resolved or guessed to be the same machine.
+Explicit startup socket/session/SSH overrides retain their pinned runtime behavior.
+Per-runtime auto-connect settings remain effective after migration; a host's flag
+reflects whether any member enables it. Startup connects the saved default and
+profiles with auto-connect enabled, then discovers eligible hosts. A failed host
+or catalogue write does not prevent other startup targets from connecting.
+Disconnecting one runtime keeps it stopped when a sibling reconnects or its
+per-connection Connect is used. Explicit host Connect or rediscovery connects all
+found runtimes; newly discovered runtimes connect during automatic discovery too.
+
+`herdr-world ls` returns hosts with their runtimes and rooms; `connections` lists
+host/runtime kind, version and state. Existing per-connection API arrays and legacy
+runtime-specific CLI add flags remain available. The current browser Hosts and
+Manage connections screens still present runtime entries; their host grouping is
+a separate screen change. See [host connections](docs/host-connections.md) for the
+API shape and migration rules.
+
+herdr-core is primary for new agents when installed and connected. Choose a
+Herdr TUI room to launch there instead.
 
 `service uninstall` removes current and legacy World user services on macOS and
 Linux when their definitions identify them as World-owned. It preserves settings,
@@ -940,7 +971,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   most 3 seconds and the walk in at most 2.5; several starts at once arrive
   0.7 seconds apart. Agents already in Town, a reload, a failed or uncertain
   start and returning to Town never play it. With reduced motion the agent is
-  at its desk at once with a still highlight that fades. A confirmed start closes the launcher; an uncertain
+  at its desk at once with a still highlight that fades. A confirmed start closes the launcher and opens
+  the new agent's or terminal's window once World shows it, on Herdr TUI and herdr-core hosts alike, even when Hosts hides that host; an uncertain
   attempt keeps its explanation and disables start choices. Open its existing
   tab or close the launcher before another attempt. A definite failure lets
   you retry, log in or edit profiles.

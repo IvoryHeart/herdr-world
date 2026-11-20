@@ -643,6 +643,81 @@ describe("World view preference", () => {
     });
   });
 
+  test("a started herdr-core terminal is the launched leaf once World shows it (#1075)", () => {
+    // Core leaves are never actionable: World watches them. The launcher's
+    // receipt must still find the new shell, or its window never opens.
+    const core = (stale: boolean) =>
+      buildWorldObject(
+        [
+          {
+            connectionId: "core",
+            label: "Core host",
+            source: "saved-profile",
+            runtime: "herdr-core",
+            isDefault: false,
+            state: "ready",
+            generation: 5,
+            snapshotGeneration: 5,
+            stale,
+            actionable: true,
+            snapshot: {
+              workspaces: [
+                {
+                  workspace_id: "core-room",
+                  number: 1,
+                  label: "Core room",
+                  focused: true,
+                  pane_count: 1,
+                  tab_count: 1,
+                  agent_status: "unknown",
+                },
+              ],
+              tabs: [
+                {
+                  tab_id: "core-tab",
+                  workspace_id: "core-room",
+                  number: 1,
+                  label: "Shell",
+                  focused: true,
+                  pane_count: 1,
+                  agent_status: "unknown",
+                },
+              ],
+              panes: [
+                {
+                  pane_id: "t9",
+                  terminal_id: "t9",
+                  workspace_id: "core-room",
+                  tab_id: "core-tab",
+                  focused: true,
+                  agent_status: "unknown",
+                  runtime: "herdr-core",
+                  revision: 1,
+                },
+              ],
+              agents: [],
+            },
+          },
+        ],
+        "core",
+      );
+    const receipt = {
+      connectionId: "core",
+      runtimeGeneration: 5,
+      terminalId: "t9",
+    };
+    const world = core(false);
+    const shell = world.leaves.find((leaf) => leaf.terminalId === "t9")!;
+    expect(shell.actionable).toBe(false);
+    expect(shell.coreControl).toBe(true);
+    expect(launchedWorldLeaf(world, receipt)).toBe(shell);
+    expect(
+      launchedWorldLeaf(world, { ...receipt, runtimeGeneration: 6 }),
+    ).toBeUndefined();
+    // A stale core snapshot opens nothing.
+    expect(launchedWorldLeaf(core(true), receipt)).toBeUndefined();
+  });
+
   test("defaults intent to Terminal while admitting explicit resource requests", () => {
     const world = buildWorldObject(
       [

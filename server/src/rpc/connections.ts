@@ -23,6 +23,7 @@ async function dispatchConnectionsRpc(
           default_connection_id: connectionManager.defaultId(),
           connections: connectionProfiles.list(),
           core_connections: connectionProfiles.coreList(),
+          hosts: connectionProfiles.hosts.list(),
         },
       },
       "connections-list",
@@ -32,7 +33,20 @@ async function dispatchConnectionsRpc(
   if (method.startsWith("connections.")) {
     try {
       let result: unknown;
-      if (method === "connections.create") {
+      if (method === "connections.add_host") {
+        result = await connectionProfiles.hosts.add(params?.host ?? params);
+      } else if (
+        method === "connections.discover_host" ||
+        method === "connections.connect_host"
+      ) {
+        result = await connectionProfiles.hosts.connect(params?.host_id);
+      } else if (method === "connections.disconnect_host") {
+        result = await connectionProfiles.hosts.disconnect(params?.host_id);
+      } else if (method === "connections.remove_host") {
+        result = await connectionProfiles.hosts.remove(params?.host_id);
+      } else if (method === "connections.host_integrations") {
+        result = connectionProfiles.hosts.integrations();
+      } else if (method === "connections.create") {
         result = await connectionProfiles.create(params?.profile ?? params);
       } else if (method === "connections.update") {
         result = await connectionProfiles.update(
