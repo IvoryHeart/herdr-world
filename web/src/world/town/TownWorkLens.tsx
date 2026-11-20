@@ -9,12 +9,12 @@ import {
 import { WorkLens, type WorkLensTab } from "../board/WorkLens";
 import type { WorldObject } from "../worldObject";
 import { AnswerOutboxContext } from "./answerOutbox";
-import { useTownPostSources } from "./townPostFixture";
+import { useTownWarehouseSources } from "./townWarehouseFixture";
 
 /**
  * Opens Board's Work lens over Town (#887), on its first tab or on `tab`
  * (the harbour opens Releases, #1028). Town provides it; without it (a town
- * drawn alone, as in captures) the post office and the harbour offer no
+ * drawn alone, as in captures) the warehouse and the harbour offer no
  * Work lens.
  */
 export type TownOpenWork = (tab?: WorkLensTab) => void;
@@ -23,7 +23,7 @@ export const useOpenTownWork = () => useContext(TownOpenWorkContext);
 
 /**
  * The Work lens Board shows, over Town: the same model, columns and
- * cards, from the post office's sources. A card's agent opens as Town opens
+ * cards, from the warehouse's sources. A card's agent opens as Town opens
  * it.
  */
 export function TownWorkLens({
@@ -37,7 +37,7 @@ export function TownWorkLens({
   onSelectAgent(id: string): void;
   onClose(): void;
 }) {
-  const sources = useTownPostSources();
+  const sources = useTownWarehouseSources();
   // The sign that opened it lies under the lens: keys carry on in the lens.
   useEffect(() => {
     document
@@ -79,7 +79,7 @@ export function TownContexts({
 }
 
 /**
- * Town's Work lens: the post office's opener and, while open, the lens. An
+ * Town's Work lens: the warehouse's opener and, while open, the lens. An
  * agent picked on a card opens as Town opens it.
  */
 export function useTownWork(

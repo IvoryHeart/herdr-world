@@ -23,6 +23,8 @@ function state(mode: ShipyardFixtureMode): ShipyardState {
     catalog,
     repo,
     snapshot: repo ? shipyardFixtureSnapshot(mode, NOW, repo) : null,
+    snapshots: {},
+    laneErrors: {},
     error: null,
   };
 }
@@ -35,7 +37,14 @@ function open(mode: ShipyardFixtureMode, now = NOW) {
 
 describe("shipyard view", () => {
   test("loading until the service answers, unreachable when it fails", () => {
-    const empty = { catalog: null, repo: null, snapshot: null, error: null };
+    const empty = {
+      catalog: null,
+      repo: null,
+      snapshot: null,
+      snapshots: {},
+      laneErrors: {},
+      error: null,
+    };
     expect(shipyardView(empty).status).toBe("loading");
     const failed = shipyardView({ ...empty, error: "offline" });
     expect(failed).toEqual({ status: "unreachable", detail: "offline" });

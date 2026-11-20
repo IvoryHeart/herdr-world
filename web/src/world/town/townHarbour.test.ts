@@ -1,17 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import {
-  TOWN_HARBOUR_BASIN_ROWS,
   TOWN_HARBOUR_BERTHS,
-  TOWN_HARBOUR_CRATES,
-  TOWN_HARBOUR_QUAY_ROWS,
-  townHarbourBerth,
-  townHarbourCrate,
+  TOWN_HARBOUR_SEA,
+  TOWN_SHIP,
+  townBerthAt,
   townHarbourLot,
   townHarbourReserve,
+  townLanePierAt,
+  townLaneSignAt,
+  townLanesShown,
+  townProjectColor,
+  TOWN_PROJECT_COLORS,
 } from "./townHarbour";
+import { townWarehouseReserve } from "./townHarbourLot";
 import { layoutTown, TOWN_SHAPES, TOWN_TILE as T } from "./townLayout";
-import { townPostLot } from "./townPost";
-import { townPostReserve } from "./townPostLot";
+import { townPostLotBeside, townPostReserve } from "./townPostLot";
 
 function town(shape: keyof typeof TOWN_SHAPES, hosts = 1, rooms = 2) {
   const hostList = Array.from({ length: hosts }, (_, index) => ({
@@ -34,19 +37,20 @@ function town(shape: keyof typeof TOWN_SHAPES, hosts = 1, rooms = 2) {
   ).layout;
 }
 
-const overlaps = (
-  a: { x0: number; y0: number; x1: number; y1: number },
-  b: { x0: number; y0: number; x1: number; y1: number },
-) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+type Box = { x0: number; y0: number; x1: number; y1: number };
+const overlaps = (a: Box, b: Box) =>
+  a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+
+const SIZES = [
+  [1, 1],
+  [2, 4],
+  [4, 6],
+] as const;
 
 describe("town harbour", () => {
   for (const shape of Object.keys(TOWN_SHAPES) as (keyof typeof TOWN_SHAPES)[])
-    test(`${shape}: right of the center, inside the town, clear of all else`, () => {
-      for (const [hosts, rooms] of [
-        [1, 1],
-        [2, 4],
-        [4, 6],
-      ] as const) {
+    test(`${shape}: the right-most edge, on open sea, clear of all else`, () => {
+      for (const [hosts, rooms] of SIZES) {
         const layout = town(shape, hosts, rooms);
         const lot = townHarbourLot(layout);
         if (layout.formFactor === "narrow") {
@@ -54,43 +58,76 @@ describe("town harbour", () => {
           continue;
         }
         if (!lot) throw new Error("no harbour on a wide town");
+        // The sea is the map's last columns and runs off its right edge.
+        expect(lot.right).toBe(layout.width);
+        expect(lot.coast).toBe(layout.width - TOWN_HARBOUR_SEA);
+        expect(lot.top).toBe(0);
+        expect(lot.bottom).toBe(layout.height);
+        // Everything of the town lies left of the shore.
         const { center } = layout;
         expect(lot.x).toBeGreaterThanOrEqual(center.x + center.w);
-        expect(lot.quayY + TOWN_HARBOUR_QUAY_ROWS).toBe(center.street);
-        expect(lot.y).toBe(lot.quayY - TOWN_HARBOUR_BASIN_ROWS);
         const reserve = townHarbourReserve(lot);
-        expect(reserve.x0).toBeGreaterThanOrEqual(0);
-        expect(reserve.y0).toBeGreaterThanOrEqual(0);
-        expect(reserve.x1).toBeLessThanOrEqual(layout.width);
-        const post = townPostLot(layout);
-        if (post) expect(overlaps(reserve, townPostReserve(post))).toBe(false);
-        for (const building of layout.buildings)
-          expect(
-            overlaps(reserve, {
-              x0: building.x,
-              y0: building.y,
-              x1: building.x + building.w,
-              y1: building.y + building.h,
-            }),
-          ).toBe(false);
+        const warehouse = townWarehouseReserve(lot.warehouse);
+        expect(warehouse.x0).toBeGreaterThanOrEqual(0);
+        expect(warehouse.y0).toBeGreaterThanOrEqual(0);
+        expect(warehouse.x1).toBeLessThanOrEqual(lot.streetEnd + 1);
+        // The yard's front edge is the first street's pavement.
+        expect(lot.warehouse.yardY + 4).toBe(center.street);
+        const post = townPostReserve(townPostLotBeside(center));
+        expect(overlaps(warehouse, post)).toBe(false);
+        for (const building of layout.buildings) {
+          const box = {
+            x0: building.x,
+            y0: building.y,
+            x1: building.x + building.w,
+            y1: building.y + building.h,
+          };
+          expect(overlaps(reserve, box)).toBe(false);
+          expect(overlaps(warehouse, box)).toBe(false);
+        }
       }
     });
 
-  test("berths and crates stay on the lot", () => {
-    const width = 16 * T;
-    for (let index = 0; index < TOWN_HARBOUR_BERTHS; index += 1) {
-      const berth = townHarbourBerth(index);
-      expect(berth.x).toBeGreaterThan(0);
-      expect(berth.x + 56).toBeLessThan(width);
-      expect(berth.y + 44).toBeLessThanOrEqual(TOWN_HARBOUR_BASIN_ROWS * T);
+  test("lanes, piers and berths stay on the sea, one below the other", () => {
+    const layout = town("wide", 2, 4);
+    const lot = townHarbourLot(layout);
+    if (!lot) throw new Error("no harbour");
+    expect(lot.lanes).toBeGreaterThanOrEqual(1);
+    let below = -Infinity;
+    for (let lane = 0; lane < lot.lanes; lane += 1) {
+      const pier = townLanePierAt(lot, lane);
+      expect(pier.x).toBe(lot.coast * T);
+      expect(pier.x + pier.w).toBeLessThanOrEqual(lot.right * T);
+      expect(pier.y).toBeLessThan(lot.bottom * T);
+      const sign = townLaneSignAt(lot, lane);
+      expect(sign.x).toBeGreaterThan(pier.x);
+      for (let berth = 0; berth <= TOWN_HARBOUR_BERTHS; berth += 1) {
+        const ship = townBerthAt(lot, lane, berth);
+        expect(ship.x).toBeGreaterThanOrEqual(pier.x);
+        expect(ship.x + TOWN_SHIP.w).toBeLessThanOrEqual(pier.x + pier.w);
+        // Ships lie along the pier's north side, clear of the lane above.
+        expect(ship.y).toBeGreaterThan(below);
+        expect(ship.y + TOWN_SHIP.h).toBeGreaterThan(pier.y);
+        if (berth > 0)
+          expect(ship.x).toBeGreaterThan(townBerthAt(lot, lane, berth - 1).x);
+      }
+      below = pier.y + 8;
     }
-    // The newest release moors by the crane, on the right.
-    expect(townHarbourBerth(0).x).toBeGreaterThan(townHarbourBerth(1).x);
-    for (let index = 0; index < TOWN_HARBOUR_CRATES; index += 1) {
-      const crate = townHarbourCrate(index);
-      expect(crate.x).toBeGreaterThan(0);
-      expect(crate.x + 15).toBeLessThan(112);
-      expect(crate.y + 11).toBeLessThan(TOWN_HARBOUR_QUAY_ROWS * T);
-    }
+  });
+
+  test("many projects: shown lanes leave room for the +N lane", () => {
+    const lot = townHarbourLot(town("wide", 1, 1));
+    if (!lot) throw new Error("no harbour");
+    expect(townLanesShown(lot, 0)).toBe(0);
+    expect(townLanesShown(lot, lot.lanes)).toBe(lot.lanes);
+    expect(townLanesShown(lot, lot.lanes + 3)).toBe(lot.lanes - 1);
+  });
+
+  test("project colours are distinct and cycle", () => {
+    expect(new Set(TOWN_PROJECT_COLORS).size).toBe(TOWN_PROJECT_COLORS.length);
+    expect(townProjectColor(0)).toBe(TOWN_PROJECT_COLORS[0]);
+    expect(townProjectColor(TOWN_PROJECT_COLORS.length)).toBe(
+      TOWN_PROJECT_COLORS[0],
+    );
   });
 });

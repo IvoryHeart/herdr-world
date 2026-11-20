@@ -25,7 +25,7 @@ import { TownFuelMark } from "./TownFuelMark";
 import type { TownStepStore } from "./townStepStore";
 import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
 import { TownShipyard } from "./TownShipyard";
-import { TownPostOffice } from "./TownPostOffice";
+import { TownWarehouse } from "./TownWarehouse";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {
   townPlaceSummary,
@@ -284,7 +284,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
         folded={folded}
         boardRef={boards.cityRef}
       />
-      <TownPostOffice layout={layout} renderer={renderer} />
+      <TownWarehouse layout={layout} renderer={renderer} />
       <TownShipyard layout={layout} renderer={renderer} />
       {layout.buildings.map((building) => {
         if (!visible.hosts.has(building.hostKey)) return null;

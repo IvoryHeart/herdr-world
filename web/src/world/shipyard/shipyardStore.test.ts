@@ -5,7 +5,12 @@ import {
   shipyardFixtureCatalog,
   shipyardFixtureSnapshot,
 } from "./shipyardFixture";
-import { pickRepo, SHIPYARD_REPO_KEY, shipyardStore } from "./shipyardStore";
+import {
+  pickRepo,
+  SHIPYARD_REPO_KEY,
+  shipyardLanes,
+  shipyardStore,
+} from "./shipyardStore";
 
 const NOW = Date.UTC(2026, 10, 20, 12);
 
@@ -55,20 +60,61 @@ afterEach(() => {
 });
 
 describe("shipyard store", () => {
-  test("reads the catalog, then its first suggested repository", async () => {
+  test("reads the catalog, then every suggested repository, the chosen first", async () => {
     const calls = service();
     await shipyardStore.read();
+    const repos = shipyardFixtureCatalog("ready", NOW).repositories;
+    expect(repos[0]).toBe(FIXTURE_REPO);
     expect(calls).toEqual([
       { path: "/api/world/shipyard", method: "GET" },
-      {
-        path: `/api/world/shipyard?repo=${encodeURIComponent(FIXTURE_REPO)}`,
+      ...repos.map((repo) => ({
+        path: `/api/world/shipyard?repo=${encodeURIComponent(repo)}`,
         method: "GET",
-      },
+      })),
     ]);
     const state = shipyardStore.state();
     expect(state.repo).toBe(FIXTURE_REPO);
     expect(state.snapshot?.repo).toBe(FIXTURE_REPO);
+    expect(Object.keys(state.snapshots).sort()).toEqual([...repos].sort());
     expect(state.error).toBeNull();
+  });
+
+  test("a lane whose read fails keeps its last answer; the chosen one decides", async () => {
+    service();
+    await shipyardStore.read();
+    const other = shipyardFixtureCatalog("ready", NOW).repositories[1]!;
+    const before = shipyardStore.state().snapshots[other];
+    expect(before).toBeDefined();
+    let failChosen = false;
+    shipyardStore.useFetch(async (input) => {
+      const url = new URL(String(input), "http://fixture.invalid");
+      const repo = url.searchParams.get("repo");
+      if (repo === other || (failChosen && repo === FIXTURE_REPO))
+        return Response.json({ error: "busy" }, { status: 503 });
+      return Response.json(
+        repo
+          ? shipyardFixtureSnapshot("ready", NOW, repo)
+          : shipyardFixtureCatalog("ready", NOW),
+      );
+    });
+    await shipyardStore.read();
+    expect(shipyardStore.state().error).toBeNull();
+    expect(shipyardStore.state().snapshots[other]).toBe(before!);
+    // Kept, but known to be old (TownShipyard reads it as out of date).
+    expect(shipyardStore.state().laneErrors[other]).toBeTruthy();
+    expect(shipyardStore.state().laneErrors[FIXTURE_REPO]).toBeUndefined();
+    failChosen = true;
+    await shipyardStore.read();
+    expect(shipyardStore.state().error).toBeTruthy();
+  });
+
+  test("a chosen repository the catalog no longer suggests keeps its lane", () => {
+    const catalog = shipyardFixtureCatalog("ready", NOW);
+    expect(shipyardLanes(catalog, FIXTURE_REPO)).toEqual(catalog.repositories);
+    expect(shipyardLanes(catalog, "example-org/other")).toEqual([
+      "example-org/other",
+      ...catalog.repositories,
+    ]);
   });
 
   test("a chosen repository is read and remembered on this browser", async () => {
@@ -77,7 +123,8 @@ describe("shipyard store", () => {
     expect(worldLocalStorage.getItem(SHIPYARD_REPO_KEY)).toBe(
       "example-org/gadgets",
     );
-    expect(calls[calls.length - 1]?.path).toBe(
+    // The chosen repository is read first, after the catalog.
+    expect(calls[1]?.path).toBe(
       "/api/world/shipyard?repo=example-org%2Fgadgets",
     );
     expect(shipyardStore.state().snapshot?.repo).toBe("example-org/gadgets");
@@ -87,10 +134,13 @@ describe("shipyard store", () => {
   test("Read GitHub again asks the service to refresh", async () => {
     const calls = service();
     await shipyardStore.read(true);
-    expect(calls[calls.length - 1]).toEqual({
-      path: `/api/world/shipyard/refresh?repo=${encodeURIComponent(FIXTURE_REPO)}`,
-      method: "POST",
-    });
+    // Only the chosen repository is refreshed; other lanes read as they are.
+    expect(calls.filter((call) => call.method === "POST")).toEqual([
+      {
+        path: `/api/world/shipyard/refresh?repo=${encodeURIComponent(FIXTURE_REPO)}`,
+        method: "POST",
+      },
+    ]);
   });
 
   test("a slower earlier read never overwrites a newer choice", async () => {

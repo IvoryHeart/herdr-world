@@ -9,7 +9,7 @@
  */
 
 import { townCenterForecourt, type TownCenterLot } from "./townCenter";
-import { townHarbourLotBeside } from "./townHarbourLot";
+import { TOWN_HARBOUR_ROOM, townHarbourGeometry } from "./townHarbourLot";
 import { townPostLotBeside } from "./townPostLot";
 import {
   ADD_ROOM_WIDTH,
@@ -606,19 +606,22 @@ export function layoutTown(
     return { ...draft, x, y, roadY, topRoadY };
   });
   // The topmost street runs on past the last crossing for the bus stop. A
-  // wide town keeps lawn right of its center for the harbour
-  // (townHarbourLot.ts); a narrow one folds the harbour to a sign.
-  const harbourLot =
-    shape.formFactor === "narrow" ? null : townHarbourLotBeside(center);
-  const width =
+  // wide town ends at its right edge in the harbour (townHarbourLot.ts): the
+  // warehouse on the first street, a promenade the streets run into, and
+  // the open sea; a narrow one folds the harbour to a sign.
+  const town =
     Math.max(
       lots.width + BUS_STOP_CLEARANCE,
       37,
       center.x + center.w + MARGIN,
-      harbourLot ? harbourLot.x + harbourLot.w + MARGIN : 0,
     ) + MARGIN;
+  const wide = shape.formFactor !== "narrow";
+  const width = wide ? town + TOWN_HARBOUR_ROOM : town;
   const lastRoad = roads[roads.length - 1]!;
   const height = lastRoad + ROAD_GAP + PARK_HEIGHT + MARGIN;
+  const harbourLot = wide ? townHarbourGeometry(width, height, center) : null;
+  /** Where the streets end: the promenade, or the map's edge. */
+  const streetEnd = harbourLot?.streetEnd ?? width;
   const ground = new Uint8Array(width * height);
   const set = (tx: number, ty: number, type: number) => {
     if (tx >= 0 && ty >= 0 && tx < width && ty < height)
@@ -647,14 +650,17 @@ export function layoutTown(
       }
   };
   for (const ry of roads) {
-    strip(0, ry, width, ry + 1, TownGround.walk);
-    strip(0, ry + 4, width, ry + 5, TownGround.walk);
+    strip(0, ry, streetEnd, ry + 1, TownGround.walk);
+    strip(0, ry + 4, streetEnd, ry + 5, TownGround.walk);
   }
   for (const v of verticalRoads) {
     strip(v.x, v.y0, v.x + 1, v.y1, TownGround.walk);
     strip(v.x + 4, v.y0, v.x + 5, v.y1, TownGround.walk);
   }
-  for (const ry of roads) strip(0, ry + 1, width, ry + 4, TownGround.road);
+  for (const ry of roads) strip(0, ry + 1, streetEnd, ry + 4, TownGround.road);
+  // The promenade runs the harbour's length along the water.
+  if (harbourLot)
+    strip(harbourLot.streetEnd, 0, harbourLot.coast, height, TownGround.walk);
   for (const v of verticalRoads)
     strip(v.x + 1, v.y0, v.x + 4, v.y1, TownGround.road);
 
@@ -777,7 +783,7 @@ export function layoutTown(
   // Centred on the town before it shifted for the post office's lawn, and
   // shifted with it (townLots.ts).
   const plaza = {
-    x: lots.shift + Math.floor((width - lots.shift) / 2),
+    x: lots.shift + Math.floor((town - lots.shift) / 2),
     y: lastRoad + ROAD_GAP + 6,
   };
   for (let ty = plaza.y - 5; ty <= plaza.y + 5; ty += 1)
@@ -786,7 +792,7 @@ export function layoutTown(
         set(tx, ty, TownGround.plaza);
   for (let ty = lastRoad + ROAD_GAP; ty < plaza.y - 4; ty += 1)
     set(plaza.x, ty, TownGround.walk);
-  for (let tx = MARGIN; tx < width - MARGIN; tx += 1)
+  for (let tx = MARGIN; tx < (harbourLot ? streetEnd : width - MARGIN); tx += 1)
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
 
@@ -794,7 +800,7 @@ export function layoutTown(
   const lamps: TownPoint[] = [];
   // Spaced from the town's first column, shifted with it (townLots.ts).
   for (const ry of roads)
-    for (let tx = 6 + (lots.shift % 11); tx < width - 4; tx += 11) {
+    for (let tx = 6 + (lots.shift % 11); tx < streetEnd - 4; tx += 11) {
       if (verticalRoads.some((v) => tx >= v.x - 1 && tx <= v.x + 5)) continue;
       // The center stands on this pavement and brings its own lamps.
       const underCenter =
@@ -807,13 +813,14 @@ export function layoutTown(
         tx >= post.x - 1 &&
         tx <= post.x + post.w;
       if (underPost) continue;
-      // So does the harbour's quay.
-      const underHarbour =
-        harbourLot &&
+      // So does the harbour's warehouse (townHarbourLot.ts).
+      const house = harbourLot?.warehouse;
+      const underWarehouse =
+        house &&
         ry === center.street &&
-        tx >= harbourLot.x - 1 &&
-        tx <= harbourLot.x + harbourLot.w;
-      if (underHarbour) continue;
+        tx >= house.x - 1 &&
+        tx <= house.x + house.w;
+      if (underWarehouse) continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }
 

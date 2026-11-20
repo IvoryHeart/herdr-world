@@ -53,9 +53,14 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
   const { TownShipyard } = await import("./TownShipyard");
   const { TownOpenWorkContext, TownWorkLens } = await import("./TownWorkLens");
   const { fixtureWorld } = await import("../board/boardFixture");
-  const { shipyardStore } = await import("../shipyard/shipyardStore");
-  const { shipyardFixtureCatalog, shipyardFixtureSnapshot } = await import(
-    "../shipyard/shipyardFixture"
+  const { SHIPYARD_REPO_KEY, shipyardStore } = await import(
+    "../shipyard/shipyardStore"
+  );
+  const { worldLocalStorage } = await import("../../browserStorage");
+  const { FIXTURE_REPO, shipyardFixtureCatalog, shipyardFixtureSnapshot } =
+    await import("../shipyard/shipyardFixture");
+  const { TOWN_PROJECT_COLORS, townHarbourLot, townLanesShown } = await import(
+    "./townHarbour"
   );
   type Mode = import("../shipyard/shipyardFixture").ShipyardFixtureMode;
   type Snapshot = import("../../../../shared/shipyard").ShipyardSnapshot;
@@ -67,18 +72,24 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
   let edit: (snapshot: Snapshot) => Snapshot = (snapshot) => snapshot;
   /** When set, World stops answering. */
   let down = false;
+  /** Repositories whose reads fail while the others answer. */
+  const broken = new Set<string>();
   /** The Shipyard service, answering from the testing fixture. */
   function serve(mode: Mode) {
+    // Each test starts with no project chosen on this browser.
+    worldLocalStorage.removeItem(SHIPYARD_REPO_KEY);
     shipyardStore.reset();
     calls.length = 0;
     edit = (snapshot) => snapshot;
     down = false;
+    broken.clear();
     shipyardStore.useFetch(async (input, init) => {
       const path = String(input);
       calls.push({ path, method: init?.method ?? "GET" });
       if (down) throw new TypeError("Failed to fetch");
       const url = new URL(path, "http://fixture.invalid");
       const repo = url.searchParams.get("repo");
+      if (repo && broken.has(repo)) throw new TypeError("Failed to fetch");
       const now = Date.now();
       return Response.json(
         repo
@@ -105,28 +116,42 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     host.className = "town-world";
     document.body.append(host);
     const root = createRoot(host);
+    const layout = town(narrow);
     await act(async () =>
       root.render(
         createElement(
           TownOpenWorkContext.Provider,
           { value: (tab?: string) => void opened.push(tab) },
-          createElement(TownShipyard, {
-            layout: town(narrow),
-            renderer: { current: null },
-          }),
+          createElement(TownShipyard, { layout, renderer: { current: null } }),
         ),
       ),
     );
     await settle();
+    const lanes = () => [
+      ...host.querySelectorAll<HTMLElement>(
+        ".town-harbour-lane:not([data-more])",
+      ),
+    ];
+    const lane = (repo: string) =>
+      host.querySelector<HTMLElement>(
+        `.town-harbour-lane[aria-label="Shipping lane ${repo}"]`,
+      )!;
     return {
       host,
+      layout,
       opened,
+      lanes,
+      lane,
       sign: () => host.querySelector<HTMLButtonElement>(".town-harbour-sign"),
-      ships: () => [
-        ...host.querySelectorAll<HTMLButtonElement>(".town-harbour-ship"),
+      ships: (repo = FIXTURE_REPO) => [
+        ...lane(repo).querySelectorAll<HTMLButtonElement>(".town-harbour-ship"),
       ],
-      crates: () => host.querySelectorAll(".town-harbour-crate").length,
-      lamp: () => host.querySelector<HTMLElement>(".town-harbour-lamp")!,
+      board: (repo = FIXTURE_REPO) =>
+        lane(repo).querySelector<HTMLButtonElement>(".town-harbour-board")!,
+      hull: (repo = FIXTURE_REPO) =>
+        lane(repo).querySelector<HTMLButtonElement>(".town-harbour-hull"),
+      lamp: (repo = FIXTURE_REPO) =>
+        lane(repo).querySelector<HTMLElement>(".town-harbour-lamp")!,
       async close() {
         await act(async () => root.unmount());
         host.remove();
@@ -134,15 +159,34 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     };
   }
 
-  test("the harbour: lamp, crates and ships from the Shipyard read", async () => {
+  test("one lane per project: board, lighthouse, slipway and ships", async () => {
     serve("ready");
     const harbour = await mount();
-    const sign = harbour.sign()!;
-    expect(sign.getAttribute("aria-label")).toBe(
-      "Shipyard: v1.5.0-rc.1 · 4 waiting · main passing. Open releases",
+    const repos = shipyardFixtureCatalog("ready", Date.now()).repositories;
+    expect(harbour.sign()!.getAttribute("aria-label")).toBe(
+      `Shipyard: ${repos.length} projects. Open releases`,
     );
+    // Every project has its lane, in the catalog's order, each its colour.
+    expect(
+      harbour.lanes().map((lane) => lane.getAttribute("aria-label")),
+    ).toEqual(repos.map((repo) => `Shipping lane ${repo}`));
+    const colours = harbour
+      .lanes()
+      .map((lane) => lane.style.getPropertyValue("--lane"));
+    expect(new Set(colours).size).toBe(repos.length);
+    expect(colours[0]).toBe(TOWN_PROJECT_COLORS[0]);
+    expect(harbour.board().getAttribute("aria-label")).toBe(
+      `${FIXTURE_REPO}: v1.5.0-rc.1 · 4 waiting · main passing. Open releases`,
+    );
+    expect(harbour.board().textContent).toBe("widgets");
     expect(harbour.lamp().dataset.tone).toBe("pass");
-    expect(harbour.crates()).toBe(4);
+    expect(harbour.lamp().getAttribute("aria-label")).toStartWith(
+      `${FIXTURE_REPO} lighthouse: `,
+    );
+    // The next release on the slipway, with the merged changes waiting.
+    expect(harbour.hull()!.textContent).toBe("4");
+    // No pull request is the harbour's: those are the warehouse's.
+    expect(harbour.host.querySelector(".town-harbour-crate")).toBeNull();
     const ships = harbour.ships();
     expect(ships.map((ship) => ship.textContent)).toEqual([
       "v1.5.0-rc.1",
@@ -159,17 +203,28 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     expect(ships[1]!.getAttribute("aria-label")).toContain(
       "latest, running on port 19190",
     );
-    await act(async () => sign.click());
+    // Every other project's own releases moor in its own lane.
+    for (const repo of repos.slice(1)) {
+      expect(harbour.ships(repo).length).toBeGreaterThan(0);
+      expect(
+        harbour.ships(repo).some((ship) => ship.textContent === "v1.4.0"),
+      ).toBe(false);
+    }
+
+    // The sign opens the Releases tab; a lane's board opens its project.
+    await act(async () => harbour.sign()!.click());
     expect(harbour.opened).toEqual(["releases"]);
-    await act(async () =>
-      harbour.host
-        .querySelector<HTMLButtonElement>(".town-harbour-cargo")!
-        .click(),
-    );
+    await act(async () => harbour.board(repos[1]).click());
+    await settle();
     expect(harbour.opened).toEqual(["releases", "releases"]);
+    expect(shipyardStore.state().repo).toBe(repos[1]!);
+    await act(async () => harbour.hull()!.click());
+    await settle();
+    expect(harbour.opened).toEqual(["releases", "releases", "releases"]);
+    expect(shipyardStore.state().repo).toBe(FIXTURE_REPO);
 
     // A ship opens its release; "All releases" opens the whole pipeline.
-    await act(async () => ships[1]!.click());
+    await act(async () => harbour.ships()[1]!.click());
     const card = document.querySelector<HTMLElement>(
       '[role="dialog"][aria-label="Release v1.4.0"]',
     )!;
@@ -185,77 +240,136 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
         .find((button) => button.textContent === "All releases")!
         .click(),
     );
-    expect(harbour.opened).toEqual(["releases", "releases", "releases"]);
+    expect(harbour.opened.length).toBe(4);
     expect(document.querySelector('[aria-label="Release v1.4.0"]')).toBeNull();
+    await harbour.close();
+  });
+
+  test("more projects than the sea holds: the last lane lists the rest", async () => {
+    serve("many");
+    const harbour = await mount();
+    const repos = shipyardFixtureCatalog("many", Date.now()).repositories;
+    const lot = townHarbourLot(harbour.layout)!;
+    const shown = townLanesShown(lot, repos.length);
+    expect(harbour.lanes().length).toBe(shown);
+    const more = harbour.host.querySelector<HTMLButtonElement>(
+      ".town-harbour-board[data-more]",
+    );
+    // A town's sea holds fewer lanes than the fixture's projects.
+    expect(shown).toBeLessThan(repos.length);
+    {
+      expect(more!.getAttribute("aria-label")).toBe(
+        `${repos.length - shown} more projects. List them`,
+      );
+      await act(async () => more!.click());
+      const list = document.querySelector<HTMLElement>(
+        '[role="dialog"][aria-label="More projects"]',
+      )!;
+      const rows = [...list.querySelectorAll<HTMLButtonElement>("li button")];
+      expect(rows.map((row) => row.querySelector("b")!.textContent)).toEqual(
+        repos.slice(shown),
+      );
+      await act(async () => rows[0]!.click());
+      await settle();
+      expect(harbour.opened).toEqual(["releases"]);
+      expect(shipyardStore.state().repo).toBe(repos[shown]!);
+    }
+    // A main failing somewhere is on the harbour's sign.
+    expect(harbour.sign()!.textContent).toContain(`${repos.length} projects`);
+    expect(harbour.sign()!.textContent).toContain("main failing");
     await harbour.close();
   });
 
   test("a newly published release sails in; the first read does not", async () => {
     serve("ready");
     const harbour = await mount();
-    expect(harbour.ships().filter((ship) => ship.dataset.arriving)).toEqual([]);
-    edit = (snapshot) => ({
-      ...snapshot,
-      data: snapshot.data && {
-        ...snapshot.data,
-        releases: {
-          ...snapshot.data.releases,
-          items: [
-            {
-              ...snapshot.data.releases.items[0]!,
-              id: 7,
-              tag: "v1.5.0",
-              version: "1.5.0",
-              name: "v1.5.0",
-              channel: "stable",
-              publishedAt: Date.now(),
-              url: "https://example.com/example-org/widgets/releases/tag/v1.5.0",
+    expect(
+      harbour.host.querySelectorAll(".town-harbour-ship[data-arriving]").length,
+    ).toBe(0);
+    edit = (snapshot) =>
+      snapshot.repo !== FIXTURE_REPO
+        ? snapshot
+        : {
+            ...snapshot,
+            data: snapshot.data && {
+              ...snapshot.data,
+              releases: {
+                ...snapshot.data.releases,
+                items: [
+                  {
+                    ...snapshot.data.releases.items[0]!,
+                    id: 7,
+                    tag: "v1.5.0",
+                    version: "1.5.0",
+                    name: "v1.5.0",
+                    channel: "stable",
+                    publishedAt: Date.now(),
+                    url: "https://example.com/example-org/widgets/releases/tag/v1.5.0",
+                  },
+                  ...snapshot.data.releases.items,
+                ],
+              },
             },
-            ...snapshot.data.releases.items,
-          ],
-        },
-      },
-    });
+          };
     await settle();
     const ships = harbour.ships();
     expect(ships[0]!.textContent).toBe("v1.5.0");
     expect(ships[0]!.dataset.arriving).toBe("true");
     expect(ships.slice(1).some((ship) => ship.dataset.arriving)).toBe(false);
-    expect(harbour.host.textContent).toContain("v1.5.0 released.");
+    // Only the project that released sails a ship in.
+    expect(
+      harbour.host.querySelectorAll(".town-harbour-ship[data-arriving]").length,
+    ).toBe(1);
+    expect(harbour.host.textContent).toContain(
+      `${FIXTURE_REPO} v1.5.0 released.`,
+    );
     await harbour.close();
   });
 
-  test("out of date: everything is old, so the lamp is unknown", async () => {
+  test("out of date: everything is old, so the lighthouse is unknown", async () => {
     serve("stale");
     const harbour = await mount();
-    expect(
-      harbour.host.querySelector<HTMLElement>(".town-harbour")!.dataset.stale,
-    ).toBe("true");
+    expect(harbour.lane(FIXTURE_REPO).dataset.stale).toBe("true");
     expect(harbour.lamp().dataset.tone).toBe("unknown");
-    expect(harbour.sign()!.getAttribute("aria-label")).toStartWith(
-      "Shipyard: Out of date · ",
+    expect(harbour.sign()!.getAttribute("aria-label")).toContain("out of date");
+    expect(harbour.board().getAttribute("aria-label")).toContain(
+      `${FIXTURE_REPO}: Out of date · `,
     );
     await harbour.close();
   });
 
-  test("GitHub off: no ships, no crates, the sign says why", async () => {
+  test("one lane's read fails: only that lane is out of date", async () => {
+    serve("ready");
+    const harbour = await mount();
+    const other = shipyardFixtureCatalog("ready", Date.now()).repositories[1]!;
+    expect(harbour.lane(other).dataset.stale).toBeUndefined();
+    broken.add(other);
+    await settle();
+    expect(harbour.lane(other).dataset.stale).toBe("true");
+    expect(harbour.lamp(other).dataset.tone).toBe("unknown");
+    // Its last ships stay, as old.
+    expect(harbour.ships(other).length).toBeGreaterThan(0);
+    expect(harbour.lane(FIXTURE_REPO).dataset.stale).toBeUndefined();
+    await harbour.close();
+  });
+
+  test("GitHub off: no ships, no slipway, the board says why", async () => {
     serve("off");
     const harbour = await mount();
-    expect(harbour.ships()).toEqual([]);
-    expect(harbour.crates()).toBe(0);
-    expect(harbour.host.querySelector(".town-harbour-cargo")).toBeNull();
+    expect(harbour.host.querySelectorAll(".town-harbour-ship").length).toBe(0);
+    expect(harbour.host.querySelector(".town-harbour-hull")).toBeNull();
     expect(harbour.lamp().dataset.tone).toBe("unknown");
-    expect(harbour.sign()!.textContent).toContain("GitHub source is off");
+    expect(harbour.board().getAttribute("aria-label")).toContain(
+      "GitHub source is off",
+    );
+    expect(harbour.sign()!.textContent).toContain("closed");
     await harbour.close();
   });
 
-  test("a shortened comparison shows a + crate, never a complete count", async () => {
+  test("a shortened comparison never shows a complete count", async () => {
     serve("limited");
     const harbour = await mount();
-    expect(harbour.crates()).toBe(6);
-    expect(harbour.host.querySelector(".town-harbour-tally")!.textContent).toBe(
-      "+",
-    );
+    expect(harbour.hull()!.textContent).toMatch(/^\d+\+$/);
     await harbour.close();
   });
 
@@ -265,9 +379,13 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     expect(harbour.host.querySelector(".town-harbour")).toBeNull();
     const fold =
       harbour.host.querySelector<HTMLButtonElement>(".town-harbour-fold")!;
-    expect(fold.textContent).toBe("v1.5.0-rc.1 · 4 waiting");
+    const repos = shipyardFixtureCatalog("ready", Date.now()).repositories;
+    expect(fold.textContent).toBe(`${repos.length}`);
+    expect(fold.querySelectorAll(".town-harbour-fold-lanes i").length).toBe(
+      repos.length,
+    );
     expect(fold.getAttribute("aria-label")).toBe(
-      "Shipyard: v1.5.0-rc.1 · 4 waiting · main passing. Open releases",
+      `Shipyard: ${repos.length} projects. Open releases`,
     );
     await act(async () => fold.click());
     expect(harbour.opened).toEqual(["releases"]);
@@ -379,7 +497,11 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await settle();
-    expect(calls[calls.length - 1]!.path).toBe(
+    // The chosen repository is read first, after the catalog.
+    const catalogRead = calls
+      .map((call) => call.path)
+      .lastIndexOf("/api/world/shipyard");
+    expect(calls[catalogRead + 1]!.path).toBe(
       "/api/world/shipyard?repo=example-org%2Fgadgets",
     );
     expect(select.value).toBe("example-org/gadgets");

@@ -1,64 +1,117 @@
-import { TOWN_TILE, type TownLayout } from "./townLayout";
-import { townHarbourLotBeside, type TownHarbourLot } from "./townHarbourLot";
-
-/**
- * Town's harbour (#1028): the Shipyard's release pipeline as a place. Main's
- * checks are the lighthouse's lamp, changes merged and waiting for the next
- * release are cargo crates on the quay, releases are ships moored in the
- * basin (newest by the quay crane), and a ship flies a green pennant while a
- * World on this computer runs its version. It reads only the Shipyard read
- * model (shipyard/shipyardModel.ts) the Work lens's Releases tab reads.
- *
- * Pure geometry for the painter (townHarbourPaint.ts), the landscape, the
- * DOM layer (TownShipyard.tsx) and tests.
- */
-
-export {
-  TOWN_HARBOUR_BASIN_ROWS,
-  TOWN_HARBOUR_QUAY_ROWS,
-  TOWN_HARBOUR_WIDTH,
-  townHarbourFoldAt,
-  townHarbourReserve,
+import { TOWN_TILE as T, type TownLayout } from "./townLayout";
+import {
+  townHarbourGeometry,
+  townLanePier,
   type TownHarbourLot,
 } from "./townHarbourLot";
 
 /**
- * The harbour's lot: right of the town center on the first street. A
- * narrow (stacked) town folds it to a sign on the town center instead.
+ * Town's harbour (#1028): the Shipyard as a place at the town's right-most
+ * edge, on open sea. Every project the Shipyard reads has its own shipping
+ * lane: a pier from the promenade flying the project's flag, the next
+ * release on the slipway at its root (the changes merged and waiting to
+ * ship), its latest releases moored along it as ships in the project's
+ * colours (a pennant while a World here runs one), and at its head a
+ * beacon for main's checks. Open pull requests are not the harbour's: they
+ * are cargo in the warehouse on the shore (townWarehouseModel.ts).
+ *
+ * Pure geometry for the layout, the landscape, the DOM layer
+ * (TownShipyard.tsx) and tests.
  */
+
+export {
+  TOWN_HARBOUR_ROOM,
+  TOWN_HARBOUR_SEA,
+  TOWN_HARBOUR_SHORE,
+  TOWN_LANE_PITCH,
+  townHarbourFoldAt,
+  townHarbourReserve,
+  townLanePier,
+  type TownHarbourLot,
+} from "./townHarbourLot";
+
+/** The harbour of a wide town; a narrow town folds it to a sign. */
 export function townHarbourLot(layout: TownLayout): TownHarbourLot | null {
   if (layout.formFactor === "narrow") return null;
-  return townHarbourLotBeside(layout.center);
+  return townHarbourGeometry(layout.width, layout.height, layout.center);
 }
 
-/** Ships the basin moors; older releases are the Releases tab's. */
+/** Released ships a lane moors; older releases are the Releases tab's. */
 export const TOWN_HARBOUR_BERTHS = 3;
-/** Crates the quay stacks; more show as a "+N" tally. */
-export const TOWN_HARBOUR_CRATES = 10;
-
-/** The lighthouse lamp's centre, in pixels from the lot's top-left. */
-export const TOWN_HARBOUR_LAMP = { x: 15, y: 12 } as const;
+/** A berth's width in tiles: one ship and the water round it. */
+export const TOWN_BERTH_TILES = 5;
+/** The pier's root before the slipway, in tiles: the lane's flag and sign. */
+const PIER_ROOT = 2;
+/** A ship's drawing with its outline, in pixels (townHarbourArt.ts). */
+export const TOWN_SHIP = { w: 68, h: 52 } as const;
+/** Rows of a ship's drawing below its waterline. */
+const SHIP_DRAFT = 3;
 
 /**
- * Berth `index`'s top-left in the basin, in pixels from the lot's top-left:
- * the newest release (index 0) by the crane at the right, older ones to its
- * left. A ship is 56 pixels wide and 44 tall, hull on the quay wall.
+ * The project colours, in lane order: Town's shirt palette (townSprites.ts),
+ * so ships and flags read as Town's. Eight lanes at most show, one colour
+ * each.
  */
-export function townHarbourBerth(index: number) {
-  return { x: 166 - index * 66, y: 58 };
-}
+export const TOWN_PROJECT_COLORS = [
+  "#4f7cc9",
+  "#d9644a",
+  "#59a86b",
+  "#e0b33c",
+  "#9b6ad6",
+  "#3fa7a3",
+  "#d65c8e",
+  "#6b7a8f",
+] as const;
 
-/** Crate `index`'s top-left on the quay, in pixels from the quay's top-left. */
-export function townHarbourCrate(index: number) {
-  const perRow = TOWN_HARBOUR_CRATES / 2;
+export const townProjectColor = (lane: number) =>
+  TOWN_PROJECT_COLORS[lane % TOWN_PROJECT_COLORS.length]!;
+
+/**
+ * Lane `lane`'s pier in world pixels: from the promenade's water edge out
+ * to its head, `y` its deck's top edge.
+ */
+export function townLanePierAt(lot: TownHarbourLot, lane: number) {
   return {
-    x: 14 + (index % perRow) * 17 + (Math.floor(index / perRow) % 2) * 8,
-    y: 22 - Math.floor(index / perRow) * 10,
+    x: lot.coast * T,
+    y: townLanePier(lane) * T,
+    w: (PIER_ROOT + (TOWN_HARBOUR_BERTHS + 1) * TOWN_BERTH_TILES) * T,
   };
 }
 
-/** The quay's top-left in world pixels. */
-export const townHarbourQuayAt = (lot: TownHarbourLot) => ({
-  x: lot.x * TOWN_TILE,
-  y: lot.quayY * TOWN_TILE,
-});
+/** The slipway and the bollards on a pier, in pixels from its root. */
+export const TOWN_PIER_SLIPWAY = {
+  x: PIER_ROOT * T,
+  w: TOWN_BERTH_TILES * T,
+} as const;
+export const TOWN_PIER_BOLLARDS = Array.from(
+  { length: TOWN_HARBOUR_BERTHS },
+  (_, i) => (PIER_ROOT + (i + 1.5) * TOWN_BERTH_TILES) * T,
+);
+
+/**
+ * Berth `berth`'s ship top-left on lane `lane`, in world pixels: berth 0 is
+ * the slipway by the promenade, then the released ships, newest first, out
+ * towards the open sea. A ship lies along the pier's north side, its
+ * waterline on the deck's edge.
+ */
+export function townBerthAt(lot: TownHarbourLot, lane: number, berth: number) {
+  const pier = townLanePierAt(lot, lane);
+  return {
+    x:
+      pier.x +
+      (PIER_ROOT + berth * TOWN_BERTH_TILES) * T +
+      (TOWN_BERTH_TILES * T - TOWN_SHIP.w) / 2,
+    y: pier.y - TOWN_SHIP.h + SHIP_DRAFT,
+  };
+}
+
+/** Where a lane's flag and name board stand: the pier's root. */
+export function townLaneSignAt(lot: TownHarbourLot, lane: number) {
+  const pier = townLanePierAt(lot, lane);
+  return { x: pier.x + PIER_ROOT * T - 4, y: pier.y + 4 };
+}
+
+/** How many lanes show; a last "+N" lane lists the rest. */
+export function townLanesShown(lot: TownHarbourLot, projects: number) {
+  return projects <= lot.lanes ? projects : Math.max(0, lot.lanes - 1);
+}

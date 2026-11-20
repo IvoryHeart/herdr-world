@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
-if (process.env.TOWN_POST_DOM !== "1") {
-  test("the post office in an isolated React DOM", async () => {
+if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
+  test("the warehouse in an isolated React DOM", async () => {
     const child = Bun.spawn(
       [
         process.execPath,
@@ -11,7 +11,7 @@ if (process.env.TOWN_POST_DOM !== "1") {
         import.meta.path,
       ],
       {
-        env: { ...process.env, TOWN_POST_DOM: "1" },
+        env: { ...process.env, TOWN_WAREHOUSE_DOM: "1" },
         stdout: "pipe",
         stderr: "pipe",
       },
@@ -50,8 +50,8 @@ if (process.env.TOWN_POST_DOM !== "1") {
   const { worldSourcesStore } = await import("../worldSources");
   const { WORLD_INTEGRATIONS_EVENT } = await import("../../integrations");
   const { layoutTown, TOWN_SHAPES } = await import("./townLayout");
-  const { TownPostOffice, TOWN_POST_LEAVE_MS } = await import(
-    "./TownPostOffice"
+  const { TownWarehouse, TOWN_WAREHOUSE_LEAVE_MS } = await import(
+    "./TownWarehouse"
   );
   const { TownOpenWorkContext, TownWorkLens } = await import("./TownWorkLens");
   const { fixtureWorld } = await import("../board/boardFixture");
@@ -107,7 +107,7 @@ if (process.env.TOWN_POST_DOM !== "1") {
       } satisfies Snapshot),
     );
 
-  /** Mounts the post office; `work` stands for Town's Work lens. */
+  /** Mounts the warehouse; `work` stands for Town's Work lens. */
   async function mount(narrow = false, work: (() => void) | null = null) {
     const host = document.createElement("div");
     host.className = "town-world";
@@ -118,7 +118,7 @@ if (process.env.TOWN_POST_DOM !== "1") {
         createElement(
           TownOpenWorkContext.Provider,
           { value: work },
-          createElement(TownPostOffice, {
+          createElement(TownWarehouse, {
             layout: town(narrow),
             renderer: { current: null },
           }),
@@ -127,9 +127,11 @@ if (process.env.TOWN_POST_DOM !== "1") {
     );
     return {
       host,
-      sign: () => host.querySelector<HTMLButtonElement>(".town-post-sign"),
+      sign: () => host.querySelector<HTMLButtonElement>(".town-warehouse-sign"),
       parcels: () => [
-        ...host.querySelectorAll<HTMLButtonElement>("button.town-post-parcel"),
+        ...host.querySelectorAll<HTMLButtonElement>(
+          "button.town-warehouse-parcel",
+        ),
       ],
       async close() {
         await act(async () => root.unmount());
@@ -143,7 +145,7 @@ if (process.env.TOWN_POST_DOM !== "1") {
     const office = await mount();
     const sign = office.sign()!;
     expect(sign.getAttribute("aria-label")).toBe(
-      "Post office: Closed · connect GitHub in Integrations",
+      "Warehouse: Closed · connect GitHub in Integrations",
     );
     expect(sign.title).toBe("Sign in with gh auth login.");
     expect(sign.textContent).not.toMatch(/\d/);
@@ -169,7 +171,7 @@ if (process.env.TOWN_POST_DOM !== "1") {
     await publish(items);
     const office = await mount();
     expect(office.sign()!.getAttribute("aria-label")).toBe(
-      "Post office: 1 ready to merge, 1 failing, 1 waiting",
+      "Warehouse: 1 ready to merge, 1 failing, 1 waiting",
     );
     expect(
       [...office.sign()!.querySelectorAll("[data-state]")].map(
@@ -204,7 +206,7 @@ if (process.env.TOWN_POST_DOM !== "1") {
       "waiting",
     ]);
     const leaving = office.host.querySelector<HTMLElement>("[data-leaving]")!;
-    expect(leaving.dataset.leaving).toBe("posted");
+    expect(leaving.dataset.leaving).toBe("loaded");
     expect(leaving.getAttribute("aria-hidden")).toBe("true");
     expect(office.host.querySelector('[role="status"]')!.textContent).toBe(
       "#1 Synthetic ready change merged.",
@@ -213,7 +215,9 @@ if (process.env.TOWN_POST_DOM !== "1") {
     expect(document.querySelector('[role="dialog"] .pr-card')).not.toBeNull();
     await act(
       () =>
-        new Promise((resolve) => setTimeout(resolve, TOWN_POST_LEAVE_MS + 50)),
+        new Promise((resolve) =>
+          setTimeout(resolve, TOWN_WAREHOUSE_LEAVE_MS + 50),
+        ),
     );
     expect(office.host.querySelector("[data-leaving]")).toBeNull();
     // A closed pull request just goes.
@@ -232,8 +236,9 @@ if (process.env.TOWN_POST_DOM !== "1") {
     );
     const office = await mount();
     expect(office.parcels().length).toBe(20);
-    const pile =
-      office.host.querySelector<HTMLButtonElement>(".town-post-pile")!;
+    const pile = office.host.querySelector<HTMLButtonElement>(
+      ".town-warehouse-pile",
+    )!;
     expect(pile.textContent).toBe("+10");
     expect(pile.getAttribute("aria-label")).toBe("10 more pull requests");
     await office.close();
@@ -247,13 +252,14 @@ if (process.env.TOWN_POST_DOM !== "1") {
     const office = await mount(true);
     expect(office.sign()).toBeNull();
     expect(office.parcels()).toEqual([]);
-    const fold =
-      office.host.querySelector<HTMLButtonElement>(".town-post-fold")!;
+    const fold = office.host.querySelector<HTMLButtonElement>(
+      ".town-warehouse-fold",
+    )!;
     expect(fold.getAttribute("aria-label")).toBe(
-      "Post office: 1 ready to merge, 0 failing, 0 waiting, 1 draft. Open",
+      "Warehouse: 1 ready to merge, 0 failing, 0 waiting, 1 draft. Open",
     );
-    // A pillar box marks the folded sign, as one stands by the house door.
-    expect(fold.querySelector(".town-post-box")).not.toBeNull();
+    // A crate marks the folded sign, as crates stand in the yard.
+    expect(fold.querySelector(".town-warehouse-mark")).not.toBeNull();
     await office.close();
   });
 
@@ -270,31 +276,39 @@ if (process.env.TOWN_POST_DOM !== "1") {
     const office = await mount(false, work);
     const sign = office.sign()!;
     expect(sign.getAttribute("aria-label")).toBe(
-      "Post office: 0 ready to merge, 0 failing, 30 waiting. Open all pull requests",
+      "Warehouse: 0 ready to merge, 0 failing, 30 waiting. Open all pull requests",
     );
     await act(async () => sign.click());
     expect(opened).toBe(1);
     // The pile's list leads with every pull request, not only its own.
     await act(async () =>
-      office.host.querySelector<HTMLButtonElement>(".town-post-pile")!.click(),
+      office.host
+        .querySelector<HTMLButtonElement>(".town-warehouse-pile")!
+        .click(),
     );
-    const pileList = document.querySelector(".town-post-popover")!;
-    const all = pileList.querySelector<HTMLButtonElement>(".town-post-all")!;
+    const pileList = document.querySelector(".town-warehouse-popover")!;
+    const all = pileList.querySelector<HTMLButtonElement>(
+      ".town-warehouse-all",
+    )!;
     expect(pileList.firstElementChild).toBe(all);
     expect(all.textContent).toBe("All pull requests");
     await act(async () => all.click());
     expect(opened).toBe(2);
-    expect(document.querySelector(".town-post-popover")).toBeNull();
+    expect(document.querySelector(".town-warehouse-popover")).toBeNull();
     await office.close();
 
     // On a phone the folded sign's list offers it too.
     const folded = await mount(true, work);
     await act(async () =>
-      folded.host.querySelector<HTMLButtonElement>(".town-post-fold")!.click(),
+      folded.host
+        .querySelector<HTMLButtonElement>(".town-warehouse-fold")!
+        .click(),
     );
     await act(async () =>
       document
-        .querySelector<HTMLButtonElement>(".town-post-popover .town-post-all")!
+        .querySelector<HTMLButtonElement>(
+          ".town-warehouse-popover .town-warehouse-all",
+        )!
         .click(),
     );
     expect(opened).toBe(3);
@@ -309,7 +323,7 @@ if (process.env.TOWN_POST_DOM !== "1") {
     };
     window.addEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
     expect(closed.sign()!.getAttribute("aria-label")).toBe(
-      "Post office: Closed · connect GitHub in Integrations",
+      "Warehouse: Closed · connect GitHub in Integrations",
     );
     await act(async () => closed.sign()!.click());
     window.removeEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
@@ -342,7 +356,7 @@ if (process.env.TOWN_POST_DOM !== "1") {
     await office.close();
   });
 
-  test("Town's Work lens is Board's kanban, over the post office's pull requests", async () => {
+  test("Town's Work lens is Board's kanban, over the warehouse's pull requests", async () => {
     await publish([
       fixturePullRequest(1, { title: "Synthetic ready change" }),
       fixturePullRequest(2, { checks: "fail", lane: "fixing" }),

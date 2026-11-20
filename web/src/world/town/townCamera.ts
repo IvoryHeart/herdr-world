@@ -9,6 +9,7 @@ import {
   TOWN_CITY_BOARD_SCALE,
   townCityBoardScale,
 } from "./townCenter";
+import { townHarbourLot } from "./townHarbour";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import { TOWN_RECEPTION_LIFT } from "./townBoardPlacement";
 import { townEase } from "./townTransition";
@@ -39,7 +40,9 @@ export type TownZoomLimits = {
 
 /**
  * Tiles from the town's left edge past the side road of the last host's
- * building or the town center, whichever stands further right.
+ * building or the town center, whichever stands further right; on a wide
+ * town, on to the harbour's shore and the water's edge, so home shows the
+ * warehouse and the shipping lanes' flags (townHarbour.ts).
  */
 export function townHostsWidth(layout: TownLayout) {
   if (!layout.buildings.length) return layout.width;
@@ -47,9 +50,17 @@ export function townHostsWidth(layout: TownLayout) {
     layout.center.x + layout.center.w,
     ...layout.buildings.map((b) => b.x + b.w),
   );
-  // The side road right of the last lot, and a tile of verge.
-  return Math.min(layout.width, right + 6);
+  const harbour = townHarbourLot(layout);
+  // The side road right of the last lot, and a tile of verge; or the
+  // promenade and the lanes' first tiles of sea.
+  return Math.min(
+    layout.width,
+    harbour ? harbour.coast + TOWN_HOME_SEA : right + 6,
+  );
 }
+
+/** Tiles of sea a wide town's home shows past the promenade. */
+const TOWN_HOME_SEA = 4;
 
 /** Reception boards' measured heights in screen pixels, by host. */
 export type TownBoardHeights = ReadonlyMap<string, number>;

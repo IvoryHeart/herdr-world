@@ -353,7 +353,7 @@ test("zoom in leaves home when the whole town is barely wider than home", () => 
   // step is raised to 1.2 times the whole town's zoom while home itself
   // lands at its own zoom (#817).
   const { view, layout, viewport, camera } = setup({
-    width: 1920,
+    width: 2400,
     height: 1850,
   });
   view.attach(camera, layout, viewport);
@@ -532,8 +532,10 @@ test("a host hidden beside the viewed room keeps the room in place, never jumpin
   const moved = two.buildings[1]!.rooms[0]!;
   expect(moved.key).toBe(room.key);
   expect(moved.x).toBeLessThan(room.x);
-  // The old position lies outside the smaller town.
-  expect(from.x).toBeGreaterThan(two.width * T);
+  // The old position lies past the smaller town's buildings.
+  expect(from.x).toBeGreaterThan(
+    Math.max(...two.buildings.map((b) => b.x + b.w)) * T,
+  );
   view.follow(two, viewport);
   // The camera stays where it was drawn, then glides with the room.
   expect([camera.x, camera.y]).toEqual([from.x, from.y]);

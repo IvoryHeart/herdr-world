@@ -11,7 +11,8 @@ import { shipyardFixtureFetch } from "./shipyardFixture";
  * The browser's Shipyard (#1028): one shared read of World's Shipyard API
  * (docs/shipyard-api.md) for Town's harbour and the Work lens's Releases
  * tab. It reads the catalog (suggested repositories and running Worlds),
- * then the chosen repository's pipeline. It asks again every minute while a
+ * then every suggested repository's pipeline, one shipping lane each in
+ * Town, and the chosen one's for the Releases tab. It asks again every minute while a
  * view shows it, sooner while the service says it is still refreshing, and
  * never while the page is hidden. The service bounds every GitHub read;
  * this only asks for what it last saw.
@@ -36,6 +37,16 @@ export type ShipyardState = {
   repo: string | null;
   /** The chosen repository's pipeline; null until it is read. */
   snapshot: ShipyardSnapshot | null;
+  /**
+   * Every lane's pipeline by repository, the chosen one's included: the
+   * last good answer for each, kept while a later read of it fails.
+   */
+  snapshots: Readonly<Record<string, ShipyardSnapshot>>;
+  /**
+   * Lanes other than the chosen one whose last read failed, with why: their
+   * kept answers read as out of date.
+   */
+  laneErrors: Readonly<Record<string, string>>;
   /** The service itself could not be reached or refused the read. */
   error: string | null;
 };
@@ -44,6 +55,8 @@ export const EMPTY_SHIPYARD: ShipyardState = {
   catalog: null,
   repo: null,
   snapshot: null,
+  snapshots: {},
+  laneErrors: {},
   error: null,
 };
 
@@ -96,7 +109,9 @@ class ShipyardStore {
       ...this.#state,
       repo,
       snapshot:
-        this.#state.snapshot?.repo === repo ? this.#state.snapshot : null,
+        this.#state.snapshot?.repo === repo
+          ? this.#state.snapshot
+          : (this.#state.snapshots[repo] ?? null),
     });
     return this.read(false, true);
   }
@@ -129,20 +144,49 @@ class ShipyardStore {
   async #read(sequence: number, force: boolean) {
     const catalog = await this.#json<ShipyardCatalog>(PATH, "GET");
     const repo = pickRepo(this.#state.repo, catalog);
-    const snapshot = repo
-      ? await this.#json<ShipyardSnapshot>(
-          `${PATH}${force ? "/refresh" : ""}?repo=${encodeURIComponent(repo)}`,
-          force ? "POST" : "GET",
-        )
-      : null;
+    const lanes = shipyardLanes(catalog, repo);
+    const ask = (name: string) => {
+      const refresh = force && name === repo;
+      return this.#json<ShipyardSnapshot>(
+        `${PATH}${refresh ? "/refresh" : ""}?repo=${encodeURIComponent(name)}`,
+        refresh ? "POST" : "GET",
+      );
+    };
+    // The chosen repository's read decides the Shipyard's health; another
+    // lane's failure keeps that lane's last answer, as out of date.
+    const rest = lanes.filter((name) => name !== repo);
+    const [chosen, ...others] = await Promise.allSettled(
+      [repo, ...rest].map((name) => (name ? ask(name) : Promise.resolve(null))),
+    );
+    if (chosen!.status === "rejected") throw chosen!.reason;
+    const snapshot = chosen!.value;
     if (sequence < this.#published) return;
     this.#published = sequence;
+    const snapshots: Record<string, ShipyardSnapshot> = {};
+    for (const name of lanes) {
+      const last = this.#state.snapshots[name];
+      if (last) snapshots[name] = last;
+    }
+    const laneErrors: Record<string, string> = {};
+    if (chosen!.status === "fulfilled" && chosen!.value)
+      snapshots[chosen!.value.repo] = chosen!.value;
+    others.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        if (result.value) snapshots[result.value.repo] = result.value;
+      } else
+        laneErrors[rest[index]!] =
+          result.reason instanceof Error
+            ? result.reason.message
+            : "Shipyard failed";
+    });
     // A choice made while this read ran wins over the repository it read.
-    const chosen = pickRepo(this.#state.repo, catalog);
+    const picked = pickRepo(this.#state.repo, catalog);
     this.#set({
       catalog,
-      repo: chosen,
-      snapshot: snapshot && snapshot.repo === chosen ? snapshot : null,
+      repo: picked,
+      snapshot: snapshot && snapshot.repo === picked ? snapshot : null,
+      snapshots,
+      laneErrors,
       error: null,
     });
   }
@@ -232,6 +276,19 @@ export function pickRepo(
     }
   }
   return catalog.repositories[0] ?? null;
+}
+
+/**
+ * The repositories with a shipping lane in Town: every one the catalog
+ * suggests, and the chosen one first when the catalog no longer does.
+ */
+export function shipyardLanes(
+  catalog: ShipyardCatalog,
+  chosen: string | null,
+): string[] {
+  const lanes = [...catalog.repositories];
+  if (chosen && !lanes.includes(chosen)) lanes.unshift(chosen);
+  return lanes;
 }
 
 export const shipyardStore = new ShipyardStore();

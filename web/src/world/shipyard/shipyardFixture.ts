@@ -22,6 +22,7 @@ import {
  * - `limited`: more changes than one read proves; the list is partial.
  * - `off`: GitHub is switched off in Integrations; only running Worlds show.
  * - `empty`: nothing suggested and nothing running yet.
+ * - `many`: sixteen projects, more lanes than a town's sea holds.
  * - `offline`: the first read is `ready`; every later read fails as if
  *   World stopped answering (press "Read GitHub again" to see it at once).
  *
@@ -35,7 +36,8 @@ export type ShipyardFixtureMode =
   | "limited"
   | "off"
   | "empty"
-  | "offline";
+  | "offline"
+  | "many";
 
 const MODES: readonly ShipyardFixtureMode[] = [
   "ready",
@@ -45,6 +47,7 @@ const MODES: readonly ShipyardFixtureMode[] = [
   "off",
   "empty",
   "offline",
+  "many",
 ];
 const PARAM = "shipyardFixture";
 let mode: ShipyardFixtureMode | null | undefined;
@@ -93,7 +96,27 @@ export function shipyardFixtureFetch() {
 }
 
 export const FIXTURE_REPO = "example-org/widgets";
+/** Every project the fixture suggests, in its catalog's order. */
+export const FIXTURE_REPOS = [
+  FIXTURE_REPO,
+  "example-org/gadgets",
+  "example-org/sprockets",
+  "example-org/cogs",
+  "example-org/levers",
+  "example-org/pulleys",
+  "example-org/rivets",
+  "example-org/hinges",
+  "example-org/gears",
+  "example-org/axles",
+  "example-org/springs",
+  "example-org/bolts",
+  "example-org/washers",
+  "example-org/ratchets",
+  "example-org/flywheels",
+  "example-org/bearings",
+] as const;
 const SITE = `https://example.com/${FIXTURE_REPO}`;
+const siteOf = (repo: string) => `https://example.com/${repo}`;
 const DAY = 86_400_000;
 const sha = (digit: string) => digit.repeat(40);
 
@@ -103,6 +126,7 @@ function release(
   daysAgo: number,
   now: number,
   channel: ShipyardRelease["channel"] = "stable",
+  repo: string = FIXTURE_REPO,
 ): ShipyardRelease {
   return {
     id,
@@ -111,7 +135,7 @@ function release(
     name: `v${version}`,
     publishedAt: now - daysAgo * DAY,
     channel,
-    url: `${SITE}/releases/tag/v${version}`,
+    url: `${siteOf(repo)}/releases/tag/v${version}`,
   };
 }
 
@@ -124,13 +148,17 @@ const TITLES = [
   "Retry a stalled agent start once",
 ];
 
-function pullRequests(count: number, now: number): ShipyardPullRequest[] {
+function pullRequests(
+  count: number,
+  now: number,
+  repo: string = FIXTURE_REPO,
+): ShipyardPullRequest[] {
   return Array.from({ length: count }, (_, index) => ({
     number: 120 - index,
     title: TITLES[index % TITLES.length]!,
     mergedAt: now - (index + 1) * 3 * 3_600_000,
     mergeSha: sha(((index + 3) % 10).toString()),
-    url: `${SITE}/pull/${120 - index}`,
+    url: `${siteOf(repo)}/pull/${120 - index}`,
   }));
 }
 
@@ -197,13 +225,109 @@ export function shipyardFixtureCatalog(
 ): ShipyardCatalog {
   return {
     observedAt: now,
-    repositories: mode === "empty" ? [] : [FIXTURE_REPO, "example-org/gadgets"],
+    repositories:
+      mode === "empty"
+        ? []
+        : FIXTURE_REPOS.slice(0, mode === "many" ? FIXTURE_REPOS.length : 3),
     instances: shipyardFixtureInstances(mode, now),
     limits: SHIPYARD_LIMITS,
   };
 }
 
-function pipeline(mode: ShipyardFixtureMode, now: number): ShipyardPipeline {
+/**
+ * Another project's pipeline: its own versions, main's checks and changes
+ * waiting, so every lane in Town looks like a different project.
+ */
+function otherPipeline(
+  index: number,
+  now: number,
+  repo: string,
+): ShipyardPipeline {
+  const site = siteOf(repo);
+  const health = (
+    ["pending", "pass", "fail", "pass", "unknown", "pass", "pass"] as const
+  )[(index - 1) % 7]!;
+  const major = index % 3;
+  const minor = 2 + index;
+  const releases = [
+    release(
+      index * 100 + 3,
+      `${major}.${minor}.1`,
+      2 + index,
+      now,
+      "stable",
+      repo,
+    ),
+    release(
+      index * 100 + 2,
+      `${major}.${minor}.0`,
+      9 + index,
+      now,
+      "stable",
+      repo,
+    ),
+    release(
+      index * 100 + 1,
+      `${major}.${minor - 1}.0`,
+      30 + index,
+      now,
+      "stable",
+      repo,
+    ),
+  ].slice(0, index % 4 === 3 ? 1 : 3);
+  if (index % 2 === 1)
+    releases.unshift(
+      release(
+        index * 100 + 4,
+        `${major}.${minor + 1}.0-beta.1`,
+        1,
+        now,
+        "prerelease",
+        repo,
+      ),
+    );
+  const baseline = releases.find((entry) => entry.channel === "stable")!;
+  const waiting = (index * 3) % 5;
+  return {
+    repo,
+    main: {
+      branch: "main",
+      sha: sha("4"),
+      health,
+      workflows: { items: [], complete: true, detail: null },
+      url: `${site}/actions?query=branch%3Amain`,
+    },
+    releases: { items: releases, complete: true, detail: null },
+    tags: { items: [], complete: true, detail: null },
+    waiting: {
+      state: "ready",
+      baseline: {
+        releaseId: baseline.id,
+        tag: baseline.tag,
+        sha: sha("8"),
+        channel: "stable",
+      },
+      mainSha: sha("4"),
+      aheadBy: waiting,
+      commits: Array.from({ length: waiting }, (_, i) =>
+        sha(((i + 5) % 10).toString()),
+      ),
+      pullRequests: pullRequests(waiting, now, repo),
+      complete: true,
+      detail: null,
+      compareUrl: `${site}/compare/${baseline.tag}...main`,
+      pullRequestsUrl: `${site}/pulls?q=is%3Apr+is%3Amerged+base%3Amain`,
+    },
+  };
+}
+
+function pipeline(
+  mode: ShipyardFixtureMode,
+  now: number,
+  repo: string = FIXTURE_REPO,
+): ShipyardPipeline {
+  const index = FIXTURE_REPOS.indexOf(repo as (typeof FIXTURE_REPOS)[number]);
+  if (index > 0) return otherPipeline(index, now, repo);
   const waiting = mode === "limited" ? 6 : 4;
   const failing = mode === "failing";
   const releases = [
@@ -310,7 +434,7 @@ export function shipyardFixtureSnapshot(
       detail: "GitHub could not be reached; showing the last good read.",
       checkedAt: now - 30_000,
       lastSuccessAt: now - 42 * 60_000,
-      data: { ...pipeline(mode, now - 42 * 60_000), repo },
+      data: { ...pipeline(mode, now - 42 * 60_000, repo), repo },
     };
   return {
     ...base,
@@ -318,6 +442,6 @@ export function shipyardFixtureSnapshot(
     detail: "GitHub release pipeline observed. Section limits apply.",
     checkedAt: now,
     lastSuccessAt: now,
-    data: { ...pipeline(mode, now), repo },
+    data: { ...pipeline(mode, now, repo), repo },
   };
 }

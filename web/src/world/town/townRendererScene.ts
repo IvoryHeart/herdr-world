@@ -19,12 +19,19 @@ import {
 } from "./townLayout";
 import { townBusRoute } from "./townBus";
 import { paintTownCenter } from "./townCenterPaint";
-import { townHarbourLot } from "./townHarbour";
 import {
-  paintTownHarbourBasin,
-  paintTownHarbourQuay,
-} from "./townHarbourPaint";
-import { townPostLot } from "./townPost";
+  TOWN_PIER_BOLLARDS,
+  TOWN_PIER_SLIPWAY,
+  townHarbourLot,
+  townLanePierAt,
+} from "./townHarbour";
+import {
+  TOWN_PIER_ART,
+  paintTownPier,
+  paintTownWarehouseHouse,
+  paintTownWarehouseYard,
+} from "./townHarbourArt";
+import { townPostLotBeside } from "./townPostLot";
 import { paintTownPostHouse, paintTownPostYard } from "./townPostPaint";
 import {
   paintTownFacade,
@@ -212,21 +219,32 @@ export function townOutdoor(
     (center.y + center.h) * T,
   );
   // The post office left of the center: its house, its yard on the street.
-  const post = townPostLot(layout);
-  if (post) {
+  if (layout.formFactor !== "narrow") {
+    const post = townPostLotBeside(center);
     add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
     add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
   }
-  // The harbour right of the center: its basin, its quay on the street.
+  // The harbour at the town's right edge: the warehouse on the shore, its
+  // yard on the first street, and a pier for every lane out to sea.
   const harbour = townHarbourLot(layout);
   if (harbour) {
-    add(paintTownHarbourBasin(), harbour.x * T, harbour.y * T, harbour.y * T);
+    const house = harbour.warehouse;
+    add(paintTownWarehouseHouse(), house.x * T, house.y * T, house.yardY * T);
     add(
-      paintTownHarbourQuay(),
-      harbour.x * T,
-      harbour.quayY * T,
-      harbour.quayY * T,
+      paintTownWarehouseYard(),
+      house.x * T,
+      house.yardY * T,
+      house.yardY * T,
     );
+    for (let lane = 0; lane < harbour.lanes; lane += 1) {
+      const pier = townLanePierAt(harbour, lane);
+      add(
+        paintTownPier(pier.w, TOWN_PIER_SLIPWAY, TOWN_PIER_BOLLARDS),
+        pier.x,
+        pier.y - TOWN_PIER_ART.deck,
+        pier.y,
+      );
+    }
   }
   return outdoorItems;
 }

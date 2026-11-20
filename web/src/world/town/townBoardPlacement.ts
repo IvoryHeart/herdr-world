@@ -1,5 +1,5 @@
 /**
- * Town's boards keep off the town center, the post office, the harbour and each other
+ * Town's boards keep off the town center, the post office, the warehouse and each other
  * (#790). A reception board stands above its building's front door and the
  * city billboard above the center, but boards keep their screen size while
  * the town zooms, so whether one covers its neighbours depends on the zoom:
@@ -13,7 +13,8 @@
 
 import { TOWN_CITY_BOARD_GAP, townCityBoardScale } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
-import { townHarbourLotBeside, townHarbourReserve } from "./townHarbourLot";
+import { townHarbourLot } from "./townHarbour";
+import { townWarehouseReserve } from "./townHarbourLot";
 import { townPostLotBeside, townPostReserve } from "./townPostLot";
 
 /** A rectangle in world pixels, x1 and y1 exclusive. */
@@ -109,7 +110,7 @@ export function townPlaceBoards(
 }
 
 /**
- * The town center's lot, the post office's, the harbour's and the
+ * The town center's lot, the post office's, the warehouse's and the
  * billboard, in world pixels.
  */
 export function townBoardObstacles(
@@ -127,10 +128,11 @@ export function townBoardObstacles(
       y1: center.street * T,
     },
   ];
-  if (layout.formFactor !== "narrow") {
+  const harbour = townHarbourLot(layout);
+  if (harbour) {
     for (const lot of [
       townPostReserve(townPostLotBeside(center)),
-      townHarbourReserve(townHarbourLotBeside(center)),
+      townWarehouseReserve(harbour.warehouse),
     ])
       boxes.push({
         x0: lot.x0 * T,

@@ -11,12 +11,14 @@ import type {
 } from "../../../../shared/worldSources";
 import { TOWN_CENTER_FRIEZE_Y, type TownCenterLot } from "./townCenter";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
-import { townPostLotBeside, type TownPostLot } from "./townPostLot";
+import { townHarbourLot } from "./townHarbour";
+import type { TownWarehouseLot } from "./townHarbourLot";
 
 /**
- * Town's post office (#760): a projection of the GitHub source's open pull
- * requests, yours and those waiting on your review, as parcels in a sorting
- * yard by the park. It reads only the snapshot every other view reads
+ * Town's warehouse (#1028; the post office's pull requests until then,
+ * #760): a projection of the GitHub source's open pull requests, yours and
+ * those waiting on your review, as crates in its yard on the harbour shore,
+ * waiting to be loaded for a release. It reads only the snapshot every other view reads
  * (useWorldSources) and the merge rules the pull request card applies
  * (shared/pullRequests.ts), and it keeps their honesty rules:
  *
@@ -32,7 +34,7 @@ import { townPostLotBeside, type TownPostLot } from "./townPostLot";
  */
 
 /** How a parcel looks: its state, worst-to-act-on last. */
-export type TownPostState =
+export type TownWarehouseState =
   | "ready"
   | "failing"
   | "waiting"
@@ -40,7 +42,7 @@ export type TownPostState =
   | "draft";
 
 /** The yard's order: ready to merge first, drafts last. */
-export const TOWN_POST_STATES: readonly TownPostState[] = [
+export const TOWN_WAREHOUSE_STATES: readonly TownWarehouseState[] = [
   "ready",
   "failing",
   "waiting",
@@ -48,20 +50,20 @@ export const TOWN_POST_STATES: readonly TownPostState[] = [
   "draft",
 ];
 
-export type TownPostParcel = {
+export type TownWarehouseParcel = {
   /** The work item's key. */
   key: string;
   number: number | null;
   title: string;
   repo: string;
-  state: TownPostState;
+  state: TownWarehouseState;
   /** The state in words: "ready to merge", "waiting for CI". */
   why: string;
 };
 
-export type TownPostCounts = Record<TownPostState, number>;
+export type TownWarehouseCounts = Record<TownWarehouseState, number>;
 
-export type TownPostOffice =
+export type TownWarehouse =
   /** No source has answered yet: nothing to say. */
   | { status: "loading" }
   /** The GitHub source is switched off in Integrations. */
@@ -70,17 +72,17 @@ export type TownPostOffice =
   | { status: "closed"; detail: string }
   | {
       status: "open";
-      parcels: TownPostParcel[];
-      counts: TownPostCounts;
+      parcels: TownWarehouseParcel[];
+      counts: TownWarehouseCounts;
       /** The last refresh failed: the list is the last good one. */
       stale: boolean;
     };
 
-/** Roles that bring a pull request to your post office. */
+/** Roles that bring a pull request to your warehouse. */
 const ROLES = new Set(["author", "reviewer", "assignee"]);
 
 /** An open pull request World's GitHub source brought for you. */
-export function townPostItem(item: WorkItem) {
+export function townWarehouseItem(item: WorkItem) {
   return (
     item.source === "github" &&
     item.kind === "pull_request" &&
@@ -99,10 +101,10 @@ const RULE_FAILS: Record<ReadinessRuleId, string> = {
 };
 
 /** Where a pull request stands, with the merge rules' honesty. */
-export function townPostState(
+export function townWarehouseState(
   item: WorkItem,
   now: number,
-): { state: TownPostState; why: string } {
+): { state: TownWarehouseState; why: string } {
   if (item.draft) return { state: "draft", why: "draft" };
   if (item.checks === "fail")
     return { state: "failing", why: "CI failing on its head" };
@@ -135,7 +137,7 @@ export function townPostState(
   return { state: "unknown", why: "changed files not read" };
 }
 
-const emptyCounts = (): TownPostCounts => ({
+const emptyCounts = (): TownWarehouseCounts => ({
   ready: 0,
   failing: 0,
   waiting: 0,
@@ -143,11 +145,11 @@ const emptyCounts = (): TownPostCounts => ({
   draft: 0,
 });
 
-/** The post office as the GitHub source has it now. */
-export function townPostOffice(
+/** The warehouse as the GitHub source has it now. */
+export function townWarehouse(
   snapshot: WorldSourcesSnapshot,
   now: number,
-): TownPostOffice {
+): TownWarehouse {
   const github = snapshot.sources.find((source) => source.id === "github");
   if (!github)
     return snapshot.sources.length
@@ -161,8 +163,8 @@ export function townPostOffice(
     return { status: "closed", detail: github.detail };
   const stale = github.state === "error";
   const updated = new Map<string, number>();
-  const parcels: TownPostParcel[] = snapshot.items
-    .filter(townPostItem)
+  const parcels: TownWarehouseParcel[] = snapshot.items
+    .filter(townWarehouseItem)
     .map((item) => {
       updated.set(item.key, item.updatedAt);
       return {
@@ -172,12 +174,13 @@ export function townPostOffice(
         repo: item.repo ?? item.ref,
         ...(stale
           ? { state: "unknown" as const, why: "GitHub out of date" }
-          : townPostState(item, now)),
+          : townWarehouseState(item, now)),
       };
     });
   parcels.sort(
     (a, b) =>
-      TOWN_POST_STATES.indexOf(a.state) - TOWN_POST_STATES.indexOf(b.state) ||
+      TOWN_WAREHOUSE_STATES.indexOf(a.state) -
+        TOWN_WAREHOUSE_STATES.indexOf(b.state) ||
       updated.get(b.key)! - updated.get(a.key)! ||
       a.key.localeCompare(b.key),
   );
@@ -191,7 +194,7 @@ export function townPostOffice(
   };
 }
 
-const COUNT_WORDS: Record<TownPostState, string> = {
+const COUNT_WORDS: Record<TownWarehouseState, string> = {
   ready: "ready",
   failing: "failing",
   waiting: "waiting",
@@ -203,8 +206,8 @@ const COUNT_WORDS: Record<TownPostState, string> = {
  * The sign's counts: ready, failing and waiting always (a zero there is
  * GitHub's answer), unknown and drafts when there are some.
  */
-export function townPostCountParts(counts: TownPostCounts) {
-  return TOWN_POST_STATES.filter(
+export function townWarehouseCountParts(counts: TownWarehouseCounts) {
+  return TOWN_WAREHOUSE_STATES.filter(
     (state) =>
       state === "ready" ||
       state === "failing" ||
@@ -218,7 +221,7 @@ export function townPostCountParts(counts: TownPostCounts) {
 }
 
 /** "3 ready · 1 failing · 4 waiting", or what stands in for counts. */
-export function townPostSignText(office: TownPostOffice) {
+export function townWarehouseSignText(office: TownWarehouse) {
   switch (office.status) {
     case "loading":
       return "Opening…";
@@ -229,58 +232,58 @@ export function townPostSignText(office: TownPostOffice) {
     case "open":
       return office.stale
         ? `GitHub out of date · ${office.parcels.length} unknown`
-        : townPostCountParts(office.counts)
+        : townWarehouseCountParts(office.counts)
             .map((part) => part.text)
             .join(" · ");
   }
 }
 
 /** "#123 Fix the login form": a parcel's name. */
-export const townPostName = (parcel: TownPostParcel) =>
+export const townWarehouseName = (parcel: TownWarehouseParcel) =>
   `${parcel.number === null ? "" : `#${parcel.number} `}${parcel.title}`;
 
 /** A parcel in words: its name, repository and state. */
-export const townPostLabel = (parcel: TownPostParcel) =>
-  `${townPostName(parcel)}, ${parcel.repo}, ${parcel.why}`;
+export const townWarehouseLabel = (parcel: TownWarehouseParcel) =>
+  `${townWarehouseName(parcel)}, ${parcel.repo}, ${parcel.why}`;
 
 /* ---------- where it stands ---------- */
 
 export {
-  TOWN_POST_HOUSE_ROWS,
-  TOWN_POST_WIDTH,
-  TOWN_POST_YARD_ROWS,
-  townPostReserve,
-  type TownPostLot,
-} from "./townPostLot";
+  TOWN_WAREHOUSE_HOUSE_ROWS,
+  TOWN_WAREHOUSE_WIDTH,
+  TOWN_WAREHOUSE_YARD_ROWS,
+  townWarehouseReserve,
+  type TownWarehouseLot,
+} from "./townHarbourLot";
 
-/** Columns of parcels in the yard; its right end keeps the mail cart. */
-export const TOWN_POST_COLUMNS = 7;
-export const TOWN_POST_ROWS = 3;
+/** Columns of crates in the yard; its right end keeps the hand cart. */
+export const TOWN_WAREHOUSE_COLUMNS = 7;
+export const TOWN_WAREHOUSE_ROWS = 3;
 /** Parcels the yard holds; more show as a "+N" pile. */
-export const TOWN_POST_SLOTS = TOWN_POST_COLUMNS * TOWN_POST_ROWS;
+export const TOWN_WAREHOUSE_SLOTS =
+  TOWN_WAREHOUSE_COLUMNS * TOWN_WAREHOUSE_ROWS;
 
 /** A parcel's slot in the yard, in pixels from the yard's top-left. */
-export const TOWN_POST_PITCH = { x: 20, y: 18 } as const;
-export const TOWN_POST_INSET = { x: 6, y: 6 } as const;
+export const TOWN_WAREHOUSE_PITCH = { x: 20, y: 18 } as const;
+export const TOWN_WAREHOUSE_INSET = { x: 6, y: 6 } as const;
 
 /**
- * The post office's lot: left of the town center on the first street,
- * outside the building grid (townPostLot.ts). A narrow (stacked) town folds
+ * The warehouse's lot: on the harbour shore at the first street's end,
+ * outside the building grid (townHarbourLot.ts). A narrow (stacked) town folds
  * it to a sign on the town center instead, as it does the city billboard.
  * The landscape keeps its lot clear.
  */
-export function townPostLot(layout: TownLayout): TownPostLot | null {
-  if (layout.formFactor === "narrow") return null;
-  return townPostLotBeside(layout.center);
+export function townWarehouseLot(layout: TownLayout): TownWarehouseLot | null {
+  return townHarbourLot(layout)?.warehouse ?? null;
 }
 
 /**
- * Where a narrow town's folded post office sign hangs, in world pixels: on
+ * Where a narrow town's folded warehouse sign hangs, in world pixels: on
  * the town center's right wing, under its windows and level with the doors.
  * A phone's home view keeps the center from just above its plaque down, so
  * the sign stays in view there; the roofs and tower above it are cropped.
  */
-export function townPostFoldAt(center: TownCenterLot) {
+export function townWarehouseFoldAt(center: TownCenterLot) {
   return {
     x: (center.x + center.w) * TOWN_TILE - 60,
     y: center.y * TOWN_TILE + TOWN_CENTER_FRIEZE_Y + 40,
@@ -288,11 +291,13 @@ export function townPostFoldAt(center: TownCenterLot) {
 }
 
 /** Slot `index`'s top-left in the yard, in pixels. */
-export function townPostSlot(index: number) {
+export function townWarehouseSlot(index: number) {
   return {
-    x: TOWN_POST_INSET.x + (index % TOWN_POST_COLUMNS) * TOWN_POST_PITCH.x,
+    x:
+      TOWN_WAREHOUSE_INSET.x +
+      (index % TOWN_WAREHOUSE_COLUMNS) * TOWN_WAREHOUSE_PITCH.x,
     y:
-      TOWN_POST_INSET.y +
-      Math.floor(index / TOWN_POST_COLUMNS) * TOWN_POST_PITCH.y,
+      TOWN_WAREHOUSE_INSET.y +
+      Math.floor(index / TOWN_WAREHOUSE_COLUMNS) * TOWN_WAREHOUSE_PITCH.y,
   };
 }
