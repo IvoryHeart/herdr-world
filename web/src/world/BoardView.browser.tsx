@@ -367,6 +367,20 @@ function apply(ops: BoardOp[]) {
       Object.assign(next.layout.offsets, op.offsets ?? {});
       Object.assign(next.layout.pinned, op.pinned ?? {});
       if (op.folded) next.layout.folded = op.folded;
+    } else if (op.op === "shape.put") {
+      // As the service does (server/src/world/board-store.ts).
+      const shapes = (next.shapes ??= []);
+      const at = shapes.findIndex((shape) => shape.id === op.shape.id);
+      if (at < 0 ? op.rev !== undefined : op.rev !== shapes[at]!.rev)
+        return { conflict: "That drawing changed elsewhere.", document: saved };
+      if (at < 0) shapes.push({ ...op.shape, rev: 1 });
+      else shapes[at] = { ...op.shape, rev: op.rev! + 1 };
+    } else if (op.op === "shape.delete") {
+      const shape = next.shapes?.find((entry) => entry.id === op.id);
+      if (shape && shape.rev !== op.rev)
+        return { conflict: "That drawing changed elsewhere.", document: saved };
+      next.shapes = next.shapes?.filter((entry) => entry.id !== op.id);
+      if (!next.shapes?.length) delete next.shapes;
     }
   }
   next.revision = saved.revision + 1;
@@ -3129,6 +3143,409 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         await rest();
         check(!onCard(), "after Tidy no note sits on a card");
       }
+    },
+  ],
+  [
+    "drawings",
+    async () => {
+      const shapes = () => saved.shapes ?? [];
+      const shape = (kind: string) => shapes().find((s) => s.kind === kind);
+      const tool = (label: string) =>
+        host.querySelector<HTMLButtonElement>(
+          `.board-sketch-tools [aria-label="${label}"]`,
+        );
+      if (innerWidth <= 720) {
+        // A phone shows drawings, without tools to draw or move them.
+        apply([
+          {
+            op: "shape.put",
+            shape: {
+              id: "seen",
+              kind: "rect",
+              color: "blue",
+              x: 0,
+              y: 0,
+              w: 120,
+              h: 80,
+              text: "Plan",
+            },
+          },
+        ]);
+        await store.refresh();
+        await waitFor(
+          () =>
+            Boolean(host.querySelector('.board-sketch [data-shape="seen"]')),
+          "a saved drawing shows on a phone",
+        );
+        check(
+          !host.querySelector(".board-sketch-tools, .board-sketch-hit"),
+          "a phone has no drawing tools and drawings take no touches",
+        );
+        check(
+          getComputedStyle(host.querySelector(".board-sketch")!)
+            .pointerEvents === "none",
+          "drawings leave touches to the board",
+        );
+        return;
+      }
+      check(Boolean(tool("Select")), "desktop Board shows the drawing tools");
+      check(
+        tool("Select")?.getAttribute("aria-pressed") === "true",
+        "Select is the starting tool",
+      );
+      const pad = () => host.querySelector<HTMLElement>(".board-sketch-pad")!;
+      const spot = emptySpot();
+      const x = Math.max(spot.x, 200),
+        y = Math.min(spot.y, innerHeight - 200);
+      const drawWith = async (
+        label: string,
+        path: { x: number; y: number }[],
+      ) => {
+        tool(label)!.click();
+        await settle();
+        check(Boolean(pad()), `${label} takes the pointer to draw`);
+        const [first, ...rest] = path;
+        pointer(pad(), "pointerdown", first!.x, first!.y, 41);
+        for (const p of rest) {
+          pointer(pad(), "pointermove", p.x, p.y, 41);
+          await settle(16);
+        }
+        const last = path[path.length - 1]!;
+        pointer(pad(), "pointerup", last.x, last.y, 41);
+        await settle();
+      };
+
+      // A rectangle, dragged out; Board goes back to Select with it chosen.
+      await drawWith("Rectangle", [
+        { x, y },
+        { x: x + 60, y: y + 40 },
+        { x: x + 140, y: y + 90 },
+      ]);
+      await waitFor(() => Boolean(shape("rect")), "a rectangle is saved");
+      const rect = shape("rect")!;
+      check(
+        rect.color === "ink" && rect.w > 0 && rect.h > 0 && rect.rev === 1,
+        `the rectangle is saved with its box (${JSON.stringify(rect)})`,
+      );
+      check(
+        tool("Select")?.getAttribute("aria-pressed") === "true" && !pad(),
+        "after a shape Board is back on Select",
+      );
+      check(
+        host
+          .querySelector(".board-sketch-selection")
+          ?.getAttribute("data-selected") === rect.id,
+        "the new rectangle is selected",
+      );
+      // A click with a shape tool draws one at a standard size.
+      await drawWith("Ellipse", [{ x: x + 300, y }]);
+      await drawWith("Diamond", [{ x: x + 300, y: y + 150 }]);
+      await waitFor(
+        () => Boolean(shape("ellipse") && shape("diamond")),
+        "an ellipse and a diamond are saved",
+      );
+      check(
+        shape("ellipse")!.w === 160 && shape("diamond")!.h === 100,
+        "a click draws a shape at the standard size",
+      );
+      // A pen stroke; the pen stays chosen for the next one.
+      await drawWith(
+        "Pen",
+        Array.from({ length: 12 }, (_, i) => ({
+          x: x + i * 10,
+          y: y + 200 + (i % 2) * 15,
+        })),
+      );
+      await waitFor(() => Boolean(shape("pen")), "a pen stroke is saved");
+      check(
+        shape("pen")!.points!.length >= 6 &&
+          tool("Pen")?.getAttribute("aria-pressed") === "true",
+        "the stroke keeps its turns and the pen stays chosen",
+      );
+      // Text, typed where it was placed.
+      tool("Text")!.click();
+      await settle();
+      pointer(pad(), "pointerdown", x + 500, y, 41);
+      await settle();
+      const editor =
+        host.querySelector<HTMLTextAreaElement>(".board-sketch-edit");
+      check(Boolean(editor), "the text tool opens a text box");
+      if (editor) {
+        Object.getOwnPropertyDescriptor(
+          HTMLTextAreaElement.prototype,
+          "value",
+        )!.set!.call(editor, "Ship it?");
+        editor.dispatchEvent(new Event("input", { bubbles: true }));
+        editor.blur();
+      }
+      await waitFor(
+        () => shape("text")?.text === "Ship it?",
+        "the typed text is saved",
+      );
+      // An arrow from the rectangle to a workspace card attaches to both.
+      const target = [
+        ...host.querySelectorAll<HTMLElement>(".board-card:not(.board-note)"),
+      ].find((el) => {
+        const r = el.getBoundingClientRect();
+        const c = centre(el);
+        return (
+          r.width > 20 &&
+          c.x > 120 &&
+          c.x < innerWidth - 20 &&
+          c.y > 20 &&
+          c.y < innerHeight - 80 &&
+          document.elementFromPoint(c.x, c.y)?.closest(".board-card") === el
+        );
+      })!;
+      const from = centre(
+        host.querySelector(`.board-sketch [data-shape="${rect.id}"]`)!,
+      );
+      // The shape's own centre may sit under a card; aim at its corner.
+      const rectBox = host
+        .querySelector(`.board-sketch [data-shape="${rect.id}"]`)!
+        .getBoundingClientRect();
+      const start = document
+        .elementFromPoint(from.x, from.y)
+        ?.closest(".board-card")
+        ? { x: rectBox.left + 4, y: rectBox.top + 4 }
+        : from;
+      await drawWith("Arrow", [start, centre(target)]);
+      await waitFor(() => Boolean(shape("arrow")), "an arrow is saved");
+      const arrow = shape("arrow")!;
+      check(
+        JSON.stringify(arrow.to?.attach) ===
+          JSON.stringify({ card: target.dataset.key }),
+        `the arrow's head attaches to the card (${JSON.stringify(arrow.to)})`,
+      );
+      check(
+        Boolean(arrow.from?.attach),
+        `the arrow's tail attaches to the rectangle (${JSON.stringify(arrow.from)})`,
+      );
+
+      // Select, move and resize the rectangle.
+      const hit = () =>
+        host.querySelector<SVGElement>(`[data-hit="${rect.id}"]`)!;
+      pointer(hit(), "pointerdown", x + 1, y + 1, 42);
+      pointer(hit(), "pointermove", x + 30, y + 21, 42);
+      pointer(hit(), "pointermove", x + 51, y + 41, 42);
+      await settle();
+      pointer(hit(), "pointerup", x + 51, y + 41, 42);
+      await waitFor(
+        () => shape("rect")!.rev === 2,
+        "the moved rectangle is saved",
+      );
+      check(
+        shape("rect")!.x > rect.x && shape("rect")!.y > rect.y,
+        "a dragged drawing moves",
+      );
+      const handle = host.querySelector<SVGElement>('[data-handle="se"]')!;
+      const h = centre(handle);
+      pointer(handle, "pointerdown", h.x, h.y, 43);
+      pointer(handle, "pointermove", h.x + 40, h.y + 30, 43);
+      await settle();
+      pointer(handle, "pointerup", h.x + 40, h.y + 30, 43);
+      await waitFor(
+        () => shape("rect")!.rev === 3,
+        "the resized rectangle is saved",
+      );
+      check(
+        shape("rect")!.w > rect.w && shape("rect")!.h > rect.h,
+        "a corner handle resizes the drawing",
+      );
+      // Colour and fill apply to the selection.
+      host
+        .querySelector<HTMLButtonElement>('[aria-label="Colour red"]')!
+        .click();
+      await waitFor(() => shape("rect")!.color === "red", "recoloured");
+      tool("Fill")!.click();
+      await waitFor(() => shape("rect")!.fill === true, "filled");
+
+      // Delete, undo and redo.
+      tool("Delete drawing")!.click();
+      await waitFor(() => !shape("rect"), "the rectangle is deleted");
+      check(
+        !shape("arrow")!.from!.attach,
+        "an arrow attached to a deleted drawing stays where it was",
+      );
+      const key = (init: KeyboardEventInit) =>
+        document.body.dispatchEvent(
+          new KeyboardEvent("keydown", { bubbles: true, ...init }),
+        );
+      key({ key: "z", ctrlKey: true });
+      await waitFor(
+        () => shape("rect")?.color === "red" && shape("rect")?.fill === true,
+        "undo brings the rectangle back as it was",
+      );
+      check(
+        JSON.stringify(shape("arrow")!.from!.attach) ===
+          JSON.stringify({ shape: rect.id }),
+        "undo reattaches the arrow",
+      );
+      await waitFor(
+        () => !tool("Redo drawing")!.disabled,
+        "an undone change can be redone",
+      );
+      tool("Redo drawing")!.click();
+      await waitFor(() => !shape("rect"), "redo deletes it again");
+      key({ key: "z", ctrlKey: true });
+      await waitFor(() => Boolean(shape("rect")), "undo once more");
+      key({ key: "z", ctrlKey: true });
+      await waitFor(() => !shape("rect")!.fill, "undo the fill");
+      // Undo never overwrites a change made elsewhere since.
+      apply([
+        {
+          op: "shape.put",
+          shape: { ...shape("rect")!, color: "green" },
+          rev: shape("rect")!.rev,
+        },
+      ]);
+      await store.refresh();
+      await settle();
+      key({ key: "z", ctrlKey: true });
+      await settle(200);
+      check(
+        shape("rect")!.color === "green",
+        "undo leaves a drawing changed elsewhere alone",
+      );
+      check(
+        Boolean(
+          host
+            .querySelector(".board-toast")
+            ?.textContent?.includes("changed since"),
+        ),
+        "and says why",
+      );
+
+      // A text edit begun before a change elsewhere does not replace that
+      // change: the editor opens again on the newer drawing, text kept.
+      const typing = () =>
+        host.querySelector<HTMLTextAreaElement>(".board-sketch-edit");
+      const typeInto = (el: HTMLTextAreaElement, value: string) => {
+        Object.getOwnPropertyDescriptor(
+          HTMLTextAreaElement.prototype,
+          "value",
+        )!.set!.call(el, value);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      const text = shape("text")!;
+      host
+        .querySelector(`[data-hit="${text.id}"]`)!
+        .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      await settle();
+      check(typing()?.value === "Ship it?", "double-click edits the text");
+      apply([
+        {
+          op: "shape.put",
+          shape: {
+            ...text,
+            text: "Ship it now",
+            color: "teal",
+            x: text.x + 40,
+          },
+          rev: text.rev,
+        },
+      ]);
+      await store.refresh();
+      await settle();
+      typeInto(typing()!, "Ship it today");
+      typing()!.blur();
+      await waitFor(
+        () =>
+          typing()?.value === "Ship it today" &&
+          shape("text")?.text === "Ship it now",
+        "a text edit that conflicts reopens with what was typed",
+      );
+      check(
+        shape("text")!.color === "teal" && shape("text")!.x === text.x + 40,
+        `the other browser's change is kept (${JSON.stringify(shape("text"))})`,
+      );
+      check(
+        Boolean(
+          host
+            .querySelector(".board-toast")
+            ?.textContent?.includes("changed elsewhere"),
+        ),
+        "and Board says why",
+      );
+      typing()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          key: "Enter",
+          ctrlKey: true,
+        }),
+      );
+      await waitFor(
+        () => shape("text")?.text === "Ship it today",
+        "the typed text saves over the newer drawing",
+      );
+      check(
+        shape("text")!.color === "teal" && shape("text")!.x === text.x + 40,
+        "saving the typed text keeps the other browser's colour and place",
+      );
+
+      // An arrow whose drawing moved elsewhere is dragged from where it is
+      // drawn, not from where it was last saved.
+      const onRect = shape("arrow")!;
+      const box = shape("rect")!;
+      check(
+        JSON.stringify(onRect.from?.attach) ===
+          JSON.stringify({ shape: box.id }),
+        `the arrow starts on the rectangle (${JSON.stringify(onRect.from)})`,
+      );
+      apply([
+        {
+          op: "shape.put",
+          shape: { ...box, x: box.x + 300 },
+          rev: box.rev,
+        },
+      ]);
+      await store.refresh();
+      await settle();
+      const arrowHit = () =>
+        host.querySelector<SVGPathElement>(`[data-hit="${onRect.id}"]`)!;
+      const [ax, ay, bx, by] = arrowHit()
+        .getAttribute("d")!
+        .match(/^M(-?[\d.]+) (-?[\d.]+)L(-?[\d.]+) (-?[\d.]+)/)!
+        .slice(1)
+        .map(Number) as [number, number, number, number];
+      check(
+        ax > box.x + 200,
+        `the arrow follows its moved rectangle (${ax}, rect ${box.x + 300})`,
+      );
+      pointer(arrowHit(), "pointerdown", 400, 400, 44);
+      pointer(arrowHit(), "pointermove", 430, 410, 44);
+      await settle();
+      pointer(arrowHit(), "pointerup", 430, 410, 44);
+      await waitFor(
+        () => !shape("arrow")!.from?.attach,
+        "the dragged arrow is saved, let go of the rectangle",
+      );
+      const dragged = shape("arrow")!;
+      const ddx = dragged.from!.x - ax,
+        ddy = dragged.from!.y - ay;
+      check(
+        Math.hypot(ddx, ddy) > 1 &&
+          Math.abs(dragged.to!.x - bx - ddx) < 0.5 &&
+          Math.abs(dragged.to!.y - by - ddy) < 0.5,
+        `both ends move by the drag from where they were drawn (${JSON.stringify(
+          { ax, ay, bx, by, from: dragged.from, to: dragged.to },
+        )})`,
+      );
+
+      // Escape puts the pen down; a reload shows every drawing.
+      tool("Pen")!.click();
+      await settle();
+      key({ key: "Escape" });
+      await settle();
+      check(!pad(), "Escape returns to Select");
+      const count = shapes().length;
+      mount(++mountKey);
+      await waitFor(
+        () =>
+          host.querySelectorAll(".board-sketch [data-shape]").length === count,
+        "drawings show again after a reload",
+      );
+      check(count === 6, `six drawings were kept (${count})`);
     },
   ],
   [

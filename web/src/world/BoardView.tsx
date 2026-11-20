@@ -66,6 +66,8 @@ import {
 } from "./board/elements/boardElementKinds";
 import { useBoardElements } from "./board/elements/useBoardElements";
 import "./board/elements/boardElements.css";
+import { useBoardSketch } from "./board/BoardSketch";
+import type { BoardShape } from "../../../shared/boardShapes";
 import {
   type BoardAnchor,
   type BoardDocumentStore,
@@ -221,6 +223,7 @@ const NOTE_PREFIX = "note:";
 const isNoteKey = (key: string) => key.startsWith(NOTE_PREFIX);
 /** Cards the user places and keeps where dropped: notes and elements. */
 const isFreeKey = (key: string) => isNoteKey(key) || isElementKey(key);
+const NO_SHAPES: readonly BoardShape[] = [];
 const NOTE_SIZE: Size = { w: 180, h: 110 };
 const SAVE_DELAY_MS = 600;
 
@@ -1273,6 +1276,47 @@ export default function BoardView({
     camGoal.current = null;
     invalidate("change");
   };
+  /* ---------- Drawings ---------- */
+  const sketch = useBoardSketch({
+    store: boardStore,
+    shapes: saved?.shapes ?? NO_SHAPES,
+    host: {
+      toWorld,
+      scale: () => cam.current.s,
+      targetBox: (attach) => {
+        const card = cards.current.get(
+          "note" in attach ? NOTE_PREFIX + attach.note : attach.card,
+        );
+        return card
+          ? {
+              x: card.x - card.size.w / 2,
+              y: card.y - card.size.h / 2,
+              w: card.size.w,
+              h: card.size.h,
+            }
+          : null;
+      },
+      cardAt: (sx, sy) => {
+        for (const el of document.elementsFromPoint(sx, sy)) {
+          const key = el.closest<HTMLElement>(".board-card")?.dataset.key;
+          if (!key) continue;
+          return isNoteKey(key)
+            ? { note: key.slice(NOTE_PREFIX.length) }
+            : { card: key };
+        }
+        return null;
+      },
+      note: (at) => void createNote(at),
+      notify: (text) => setToast({ text }),
+      selected: () => {
+        setPicked(null);
+        setNoteSelected(null);
+      },
+    },
+  });
+  // The frame loop runs once; it reaches the current drawings here.
+  const sketchRepaint = useRef(sketch.repaint);
+  sketchRepaint.current = sketch.repaint;
   const visibleCards = () => {
     const m = latest.current.model;
     const out: [string, PhysicsCard][] = [];
@@ -1678,6 +1722,7 @@ export default function BoardView({
         paths.current.delete(key);
       }
     paintStrings(svg, m);
+    sketchRepaint.current();
     // Measure every zone first, then write: reading a card's size after
     // writing the previous zone forced a full layout per host.
     const zones: [HTMLElement, number, number, number, number][] = [];
@@ -1989,7 +2034,7 @@ export default function BoardView({
   function classify(target: HTMLElement): GestureTarget | null {
     if (
       target.closest(
-        "[contenteditable='true'], .work-lens, .board-lens-dock, .board-facts, .board-peek",
+        "[contenteditable='true'], .work-lens, .board-lens-dock, .board-facts, .board-peek, .board-sketch-live, .board-sketch-tools",
       )
     )
       return null;
@@ -3598,7 +3643,7 @@ export default function BoardView({
           if (
             card ||
             target.closest(
-              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens, .board-lens-dock, .board-facts, .board-peek",
+              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens, .board-lens-dock, .board-facts, .board-peek, .board-sketch-live, .board-sketch-tools",
             )
           )
             return;
@@ -3673,6 +3718,8 @@ export default function BoardView({
               </div>
             );
           })}
+          {/* Drawings lie on the board, beneath its strings and cards. */}
+          {sketch.layer}
           <div ref={bandLayer} className="board-pin-bands" aria-hidden="true" />
           <svg ref={svgRef} className="board-wires" aria-hidden="true" />
           {/* Cards in their own container, new when a large board is built,
@@ -4098,6 +4145,7 @@ export default function BoardView({
             />
           ))}
         </div>
+        {sketch.tools}
         <button
           ref={cutRef}
           type="button"

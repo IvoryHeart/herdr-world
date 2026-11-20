@@ -90,15 +90,6 @@
   font-size: 12px;
 }
 
-.config-title {
-  margin: 0 8px 4px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
 .config-preference-row,
 .config-runtime-row {
   display: grid;
@@ -130,10 +121,6 @@
 
 .config-preference-row > .config-item-copy {
   grid-column: 2;
-}
-
-.config-item-copy .config-notification-status {
-  display: block;
 }
 
 .config-item-copy strong {
@@ -224,95 +211,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.config-preference-select {
-  min-width: 108px;
-  max-width: 132px;
-  height: 30px;
-  padding: 0 26px 0 8px;
-  border: 1px solid var(--border-soft);
-  border-radius: 7px;
-  color: var(--text);
-  background: var(--input-bg);
-  font: inherit;
-  font-size: 11px;
-}
-
-.config-preference-select:focus-visible {
-  border-color: var(--accent);
-  outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
-  outline-offset: 1px;
-}
-
-.config-accent-control {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.config-accent-control button {
-  --swatch: var(--accent);
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 2px solid var(--panel);
-  border-radius: 50%;
-  background: var(--swatch);
-  box-shadow: 0 0 0 1px var(--border);
-}
-
-.config-accent-control button[data-accent="blue"] {
-  --swatch: #7aa2f7;
-}
-
-.config-accent-control button[data-accent="neutral"] {
-  position: relative;
-  overflow: hidden;
-  background: var(--panel);
-}
-
-.config-accent-control button[data-accent="neutral"]::after {
-  content: "";
-  position: absolute;
-  top: 8px;
-  left: 1px;
-  width: 14px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--muted);
-  transform: rotate(-45deg);
-}
-
-.config-accent-control button[data-accent="teal"] {
-  --swatch: #2dd4bf;
-}
-
-.config-accent-control button[data-accent="green"] {
-  --swatch: #54d17a;
-}
-
-.config-accent-control button[data-accent="amber"] {
-  --swatch: #f0b95a;
-}
-
-.config-accent-control button[data-accent="rose"] {
-  --swatch: #f471b5;
-}
-
-.config-accent-control button[data-accent="violet"] {
-  --swatch: #a78bfa;
-}
-
-.config-accent-control button:hover:not(:disabled) {
-  border-color: var(--panel);
-  transform: scale(1.08);
-}
-
-.config-accent-control button.is-active {
-  box-shadow:
-    0 0 0 1px var(--panel),
-    0 0 0 3px var(--text-strong);
-}
-
 .config-menu-item {
   width: 100%;
   min-height: 44px;
@@ -359,31 +257,6 @@
     Consolas,
     monospace;
   white-space: nowrap;
-}
-
-.config-details-toggle {
-  width: 100%;
-  min-height: 40px;
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 16px;
-  align-items: center;
-  gap: 9px;
-  padding: 5px 8px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text);
-  font-size: 12px;
-  text-align: left;
-}
-
-.config-details-toggle:hover {
-  border-color: transparent;
-  background: var(--accent-soft);
-}
-
-.config-details-toggle > svg {
-  color: var(--muted);
 }
 
 .config-details {
@@ -454,10 +327,6 @@
     animation: config-sheet-in 160ms ease;
   }
 
-  .config-dropdown.is-expanded {
-    max-height: var(--config-sheet-expanded-max-height, 90dvh);
-  }
-
   .config-summary {
     align-items: center;
     padding: 2px 4px 8px;
@@ -470,22 +339,14 @@
     padding: 4px 0;
   }
 
-  .config-title,
   .config-preference-row,
   .config-runtime-row,
-  .config-details-toggle,
   .config-details {
     grid-column: 1 / -1;
   }
 
-  .config-title {
-    margin: 0 2px;
-    font-size: 10px;
-  }
-
   .config-preference-row,
-  .config-runtime-row,
-  .config-details-toggle {
+  .config-runtime-row {
     grid-template-columns: 24px minmax(0, 1fr) auto;
     gap: 8px;
     min-height: 38px;
@@ -514,28 +375,9 @@
     padding: 7px 10px;
   }
 
-  .config-menu-item-desktop-only {
-    display: none;
-  }
-
   .config-theme-control button {
     width: 30px;
     height: 26px;
-  }
-
-  .config-accent-control button {
-    width: 18px;
-    height: 18px;
-  }
-
-  .config-preference-select {
-    min-width: 104px;
-    max-width: 116px;
-  }
-
-  .config-accent-control button[data-accent="neutral"]::after {
-    top: 7px;
-    width: 12px;
   }
 
   .config-scale-control button {

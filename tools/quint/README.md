@@ -7,6 +7,15 @@ in shipped application assets or dependency resolution. Use `npm ci --ignore-scr
 not an unlocked global install. The package inventory is in `DEPENDENCY_NOTICES.md`;
 actual tooling/checker redistribution must preserve upstream licence texts.
 
+Quint is locked at 0.33.1 with adm-zip 0.6.1. The runner, installed-tool assertion
+and evidence validator derive the Quint identity from the tool manifest, so a
+lock update cannot accidentally retain an old hard-coded success identity. The
+full gate remains mandatory for tool updates; never reuse old worker evidence.
+All simulation commands explicitly select the TypeScript evaluator, and the
+runner refuses other/default backends before spawn. The Windows Rust evaluator's
+ZIP installer is unreachable; see [the adm-zip analysis](../../SECURITY.md#november-2026-adm-zip-alerts).
+
+
 `checker.json` pins Apalache 0.62.1's release URL, archive SHA-256 and extracted JAR
 SHA-256. That distribution provides translation and TLC. `tlc.json` limits the
 checker to one worker, a 1 GB heap and a 16 MB stack. `verification:setup` downloads
@@ -42,15 +51,16 @@ observation; malformed traces, adapter errors and cleanup errors abort. Witnesse
 are counted from successfully executed production replay, not only simulation.
 Raw output is kept in bounded local logs and summarized in console output.
 
-The maintained command executes all 12 runtime, observation, allocation, protocol,
+The maintained command executes all 16 runtime, observation, allocation, protocol,
 creation and Ranger models, their controls and larger-bound/host-order sensitivity.
-The verified JAR is launched directly. These bounded implementations and consumer mappings are independently accepted in review 5516249164. A complete Linux candidate run takes approximately four minutes
-with the configured bounds; this is execution evidence for this toolchain, not a
-guarantee for other environments or total peak-memory measurement. Final gate/resource approval remains a separate review checkpoint in `verification/`.
+The verified JAR is launched directly. These bounded implementations and consumer mappings are independently accepted in review 5516249164. The complete Quint 0.33.1 local run on 2026-11-19 passed all 16 cases in
+425 seconds with two workers. Scheduling weights in `scripts/verification-timings.json`
+come from that run and record its tool identities; these are local observations,
+not hosted CI timings or a total peak-memory measurement. Final gate/resource approval remains a separate review checkpoint in `verification/`.
 
 The canonical command uses `execution.json`'s bounded case pool (two workers by
 default), with isolated case processes and private checkers. Its aggregate manifest
-requires all 12 focused worker results against one current source/tool identity.
+requires all 16 focused worker results against one current source/tool identity.
 Failure/cancellation stops queue admission and drains peers; focused results do
 not substitute for this aggregate. Worker count is CPU-capped and recorded with
 case timings/resource observations. Retain conservative concurrency for the

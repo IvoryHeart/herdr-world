@@ -124,6 +124,12 @@ export const rpcVerbs = [
   rpc("bridge.ui_settings.get", "read", "world"),
   rpc("bridge.ui_settings.update", "reconcilable", "world"),
   rpc("connections.connect", "reconcilable", "world"),
+  rpc("connections.add_host", "reconcilable", "world"),
+  rpc("connections.connect_host", "reconcilable", "world"),
+  rpc("connections.discover_host", "reconcilable", "world"),
+  rpc("connections.disconnect_host", "reconcilable", "world"),
+  rpc("connections.remove_host", "reconcilable", "world"),
+  rpc("connections.host_integrations", "read", "world"),
   // Testing switch: the in-process herdr-core stand-in (start/kill/remove).
   rpc("connections.core_fixture", "reconcilable", "world"),
   // Probe, then a confirmed herdr-core install on this computer or an SSH host.

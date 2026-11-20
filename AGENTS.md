@@ -14,6 +14,7 @@
 - SSH profiles accept OpenSSH aliases or `user@host`; policy belongs in OpenSSH config. Never persist passwords, keys, passphrases or arbitrary SSH options.
 - Never commit generated `web/dist/`, `server/public/`, binaries, `.pages-dist/` or `dist/`.
 - Add a changelog fragment before pushing, or state `Changelog: none — <reason>` in the PR; [format](changes/README.md). Never edit `CHANGELOG.md` directly.
+- Non-documentation PRs require plain `Spec impact:` and `Verification impact:` lines naming changed specs/OpenSpec changes and evidence/owners/checks, or `none — <reason>`; `check:pr-body` enforces presence and diff consistency, and reviewers assess the decision.
 - Update current docs with significant product, API, configuration, installation or workflow changes:
   - `FEATURES.md`: controls, edge cases, limits and refusals.
   - `docs/TUTORIAL.md`: only learner steps; run `bun run build:site` after tutorial/site changes.

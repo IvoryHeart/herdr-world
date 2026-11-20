@@ -3,6 +3,8 @@ import {
   runBoardElementCommand,
 } from "./world-cli-elements";
 import { planBoardPatch } from "./board-plan";
+import { MEMORY_ACTIONS, type MemoryAction } from "../../../shared/memory";
+import { runMemoryCli } from "./world-cli-memory";
 import { StorageOutcomeUnknown } from "../storage/world-protocol";
 import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
 import { commandEvidence } from "../verbs/evidence";
@@ -68,7 +70,6 @@ import {
   type ResultStatus,
   type LedgerStore,
 } from "./world-ledger";
-
 /**
  * The World service's side of the `herdr-world` agent CLI (cli/world.ts).
  * Agents change World objects themselves: Board cards and colours, desk order
@@ -77,8 +78,12 @@ import {
  * undone. Groups retain bounded recent attribution, separate from Board undo. Herdr changes need `herdr: true` and cannot be undone by World.
  * Nothing here merges, deletes Herdr objects or reaches outside World.
  */
-
 export type WorldCliDeps = {
+  memory?(
+    action: MemoryAction,
+    params: Record<string, unknown>,
+    recheck: () => void,
+  ): Promise<unknown>;
   board: Pick<BoardStorePort, "get" | "patch" | "patchIf">;
   ledger: LedgerStore;
   /** Only a durable committed store may issue this receipt. */
@@ -119,9 +124,9 @@ export type WorldCliDeps = {
   /** Aborted when the service stops: calls that wait return early. */
   signal?: AbortSignal;
 };
-
 /** The commands the endpoint accepts, as the CLI spells them. */
 export const WORLD_CLI_COMMANDS = [
+  ...MEMORY_ACTIONS.map((action) => `memory ${action}` as const),
   ...GROUP_CLI_COMMANDS,
   "whoami",
   "ls",
@@ -146,18 +151,14 @@ export const WORLD_CLI_COMMANDS = [
   "spawned-by",
 ] as const;
 export type WorldCliCommand = (typeof WORLD_CLI_COMMANDS)[number];
-
 /* ---------- Identity ---------- */
-
 /* ---------- Targets ---------- */
-
 type Topology = {
   host: CliHost;
   workspaces: Record<string, unknown>[];
   tabs: Record<string, unknown>[];
   panes: Record<string, unknown>[];
 };
-
 type Target =
   | { kind: "workspace"; id: string }
   | { kind: "tab"; id: string; workspace_id: string }
@@ -168,9 +169,7 @@ type Target =
       workspace_id: string;
       terminal_id: string;
     };
-
 const str = (value: unknown) => (typeof value === "string" ? value : "");
-
 function resolveTarget(
   spec: unknown,
   topology: Topology,
@@ -637,6 +636,8 @@ export function createWorldCli(deps: WorldCliDeps) {
     host: CliHost | undefined,
     recheck: () => void,
   ): Promise<unknown> {
+    if (command.startsWith("memory "))
+      return runMemoryCli(deps.memory, command, params, recheck);
     const record = recordWithDeps.bind(null, completion);
     const patchBoard = patchBoardWithDeps.bind(null, deps);
     const changeBoard = changeBoardWithDeps.bind(null, deps);
@@ -681,8 +682,9 @@ export function createWorldCli(deps: WorldCliDeps) {
         return actor;
       case "ls": {
         const snapshot = await deps.snapshot();
-        return snapshot.connections.map((connection) => ({
+        const connections = snapshot.connections.map((connection) => ({
           connection_id: connection.connection_id,
+          connection_generation: connection.generation,
           label: connection.label,
           generation: connection.generation,
           current: connection.actionable && !connection.stale,
@@ -704,6 +706,21 @@ export function createWorldCli(deps: WorldCliDeps) {
               })),
           })),
         }));
+        return snapshot.hosts
+          ? {
+              hosts: snapshot.hosts.map((host) => ({
+                ...host,
+                runtimes: host.runtimes.map((runtime) => ({
+                  ...runtime,
+                  ...connections.find(
+                    (connection) =>
+                      connection.connection_id === runtime.connection_id,
+                  ),
+                })),
+              })),
+              connections,
+            }
+          : connections;
       }
       case "history": {
         const by = typeof params.actor === "string" ? params.actor : "";

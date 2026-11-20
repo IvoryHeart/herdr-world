@@ -421,3 +421,82 @@ test("Town room spots are saved in their own rows, after an upgrade from the sch
     db.close();
   }
 });
+test("Board drawings are saved in their own rows, after an upgrade from the schema before them", () => {
+  const p = fresh();
+  // A database written by the service before drawings existed.
+  const old = new Database(p.database);
+  try {
+    migrateWorldDatabase(old, p.database, worldMigrations.slice(0, -1));
+  } finally {
+    old.close();
+  }
+  const writer = open(p);
+  const shape = (id: string, x: number) => ({
+    op: "shape.put" as const,
+    shape: {
+      id,
+      kind: "ellipse" as const,
+      color: "teal" as const,
+      x,
+      y: 5,
+      w: 40,
+      h: 30,
+    },
+  });
+  let after;
+  try {
+    const [first, refused] = writer.batch(
+      [
+        {
+          ticket: 0,
+          request: {
+            type: "board" as const,
+            operation: { ops: [shape("d1", 1), shape("d2", 2)] },
+          },
+        },
+        {
+          // A malformed drawing refuses its whole patch, rows included.
+          ticket: 1,
+          request: {
+            type: "board" as const,
+            operation: {
+              ops: [shape("d3", 3), { ...shape("d4", 4), shape: { id: "d4" } }],
+            } as BoardOperation,
+          },
+        },
+      ],
+      1000,
+    );
+    expect(first!.error).toBeUndefined();
+    expect(refused!.error).toBeDefined();
+    after = writer.read().board!;
+    expect(after.shapes?.map((entry) => [entry.id, entry.rev])).toEqual([
+      ["d1", 1],
+      ["d2", 1],
+    ]);
+  } finally {
+    writer.close();
+  }
+  const reopened = open(p);
+  try {
+    expect(reopened.read().board).toEqual(after);
+  } finally {
+    reopened.close();
+  }
+  const db = new Database(p.database, { readonly: true });
+  try {
+    expect(
+      db.query("SELECT count(*) AS count FROM board_shapes").get(),
+    ).toEqual({ count: 2 });
+    // Drawing IDs are reserved like note and string IDs.
+    expect(
+      db
+        .query(
+          "SELECT count(*) AS count FROM world_ids WHERE id IN ('d1','d2','d3')",
+        )
+        .get(),
+    ).toEqual({ count: 2 });
+  } finally {
+    db.close();
+  }
+});
