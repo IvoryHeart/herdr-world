@@ -9,6 +9,11 @@ import { ConfigMenu } from "./components/ConfigMenu";
 import type { AgentIntegration } from "./components/AgentIntegrationsSettings";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { __storeTesting, OperationalContext, store } from "./store";
+import { worldSourcesStore } from "./world/worldSources";
+import {
+  integrationsFixtureEnabled,
+  resetIntegrationsFixture,
+} from "./integrationsFixture";
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -42,6 +47,51 @@ const click = (label: string) => {
   const element = button(label);
   element.focus();
   flushSync(() => element.click());
+};
+// Settings: its category tabs, a choice row, and its pages.
+const tab = (label: string) => {
+  const found = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(
+      '.settings-home-tabs [role="tab"]',
+    ),
+  ).find((element) => element.firstChild?.textContent === label);
+  if (!found) throw new Error(`Missing Settings tab: ${label}`);
+  return found;
+};
+const choose = (setting: string, option: string) => {
+  const found = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(
+      `[role="group"][aria-label="${setting}"] button`,
+    ),
+  ).find((element) => element.textContent === option);
+  if (!found) throw new Error(`Missing ${setting} option: ${option}`);
+  flushSync(() => found.click());
+};
+const focusable = (root: Element) =>
+  Array.from(
+    root.querySelectorAll<HTMLElement>(
+      "button:not(:disabled):not([tabindex='-1']), input:not(:disabled), select:not(:disabled), a[href]",
+    ),
+  ).filter((element) => element.getClientRects().length > 0);
+const settingsPageLoaded = () =>
+  !!document.querySelector(".settings-page") &&
+  !document.querySelector(".settings-page > .settings-home-empty");
+/** Opens a page of Settings from its list, at All when its tab is not open. */
+const openPage = async (title: string) => {
+  if (document.querySelector(".settings-page")) click("Back to Settings");
+  if (!document.querySelector(`.settings-home [aria-label="Open ${title}"]`))
+    flushSync(() => tab("All").click());
+  click(`Open ${title}`);
+  await waitFor(settingsPageLoaded);
+};
+/** Leaves a page for the list, so the page's settings unmount. */
+const backToList = () => click("Back to Settings");
+const closeSettings = () => click("Close Settings");
+const openSettings = async () => {
+  click("Menu");
+  click("Settings");
+  await waitFor(() => !!document.querySelector(".settings-home"));
+  return document.querySelector<HTMLElement>(".settings-home")!;
 };
 const configurationTest = { click, loadingRace: false };
 Object.assign(window, { configurationTest });
@@ -119,6 +169,142 @@ const key = async (element: Element, value: string, shiftKey = false) => {
     });
   await settle();
 };
+// The Integrations registry and its owners, as the World service reports them.
+const sourceRequests: Array<{ id: string; body: Record<string, unknown> }> = [];
+const worldSources = [
+  {
+    id: "github",
+    label: "GitHub",
+    enabled: true,
+    state: "connected",
+    detail: "Signed in.",
+    checkedAt: 1,
+    lastSuccessAt: 1,
+    itemCount: 2,
+    config: { kind: "github", mergedDays: 7 },
+  },
+  {
+    id: "jira",
+    label: "Jira",
+    enabled: false,
+    state: "disabled",
+    detail: "Off.",
+    checkedAt: 1,
+    lastSuccessAt: null,
+    itemCount: 0,
+    config: { kind: "jira", site: "", email: "", jql: "", tokenSet: false },
+  },
+];
+const runtimeRow = (
+  id: string,
+  label: string,
+  lifecycle: string,
+  runtimeGeneration: number,
+) => ({
+  id: `runtime:${id}`,
+  kind: "runtime",
+  type: "herdr",
+  label,
+  provides: ["terminals", "agents", "files"],
+  state: lifecycle === "ready" ? "connected" : "available",
+  detail: lifecycle === "ready" ? "Herdr · Ready" : "Herdr · Disconnected",
+  settings: [],
+  control: "connection",
+  connection: {
+    id,
+    generation: runtimeGeneration,
+    transport: id === "alpha" ? "local" : "ssh",
+    lifecycle,
+  },
+});
+let betaRuntimeGeneration = 4;
+const integrationsSnapshot = () => ({
+  observedAt: 1,
+  integrations: [
+    runtimeRow("alpha", "Alpha", "ready", 1),
+    runtimeRow("beta", "Beta", "disconnected", betaRuntimeGeneration),
+    ...worldSources.map((source) => ({
+      id: `source:${source.id}`,
+      kind: "source",
+      type: source.id,
+      label: source.label,
+      provides: [source.id === "github" ? "pull_requests" : "tickets"],
+      state: source.enabled
+        ? "connected"
+        : source.id === "jira"
+          ? "needs_connect"
+          : "available",
+      detail: source.detail,
+      settings: [],
+      control: "source",
+    })),
+    {
+      id: "source:metrics",
+      kind: "source",
+      type: "prometheus",
+      label: "Usage metrics",
+      provides: ["usage"],
+      state: "needs_connect",
+      detail: "Add a Prometheus URL to show usage and cost.",
+      settings: [],
+      control: "metrics",
+    },
+  ],
+  vault: {
+    backend: "file",
+    label: "Private file",
+    detail: "Readable only by the user that runs World.",
+    secrets: [
+      { name: "jira.token", label: "Jira API token", usedBy: "source:jira" },
+    ],
+  },
+});
+let registryReads = 0;
+const worldFetch = (url: string, init?: RequestInit) => {
+  if (url === "/api/world/integrations") {
+    registryReads++;
+    return Response.json(integrationsSnapshot());
+  }
+  if (url === "/api/world/sources" || url.startsWith("/api/world/sources?"))
+    return Response.json({
+      observedAt: 1,
+      refreshing: false,
+      sources: worldSources,
+      items: [],
+      links: [],
+      actions: [],
+    });
+  const source = /^\/api\/world\/sources\/(github|jira)$/u.exec(url)?.[1];
+  if (source && init?.method === "PUT") {
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    sourceRequests.push({ id: source, body });
+    const entry = worldSources.find((item) => item.id === source)!;
+    if (typeof body.enabled === "boolean") {
+      entry.enabled = body.enabled;
+      entry.state = body.enabled ? "connected" : "disabled";
+    }
+    return Response.json({
+      observedAt: 2,
+      refreshing: false,
+      sources: worldSources,
+      items: [],
+      links: [],
+      actions: [],
+    });
+  }
+  if (url === "/api/world/observability/configuration")
+    return Response.json({
+      providerId: "prometheus",
+      configured: false,
+      endpoint: null,
+      source: "none",
+      health: "unavailable",
+      healthReason: null,
+      observedAt: 1,
+      lastSuccessAt: null,
+    });
+  return null;
+};
 let authRequired = false;
 let logoutAttempts = 0;
 let pendingLogout: Promise<Response> | null = null;
@@ -134,6 +320,8 @@ Object.defineProperty(window, "fetch", {
       );
       return pendingLogout ?? new Response(null, { status: 500 });
     }
+    const world = worldFetch(url, init);
+    if (world) return world;
     return Response.json({
       version: "0.9.1",
       protocol: 22,
@@ -200,8 +388,16 @@ window.confirm = (message) => {
 // World's own skill rows (world.integration.*) have focused DOM tests.
 let worldIntegrationLists = 0;
 const bridgeCall = bridge.call.bind(bridge);
+const worldConnectionCalls: Array<{ method: string; id: unknown }> = [];
 bridge.call = ((method: string, ...rest: unknown[]) => {
   if (method === "world.integration.list") worldIntegrationLists++;
+  if (method === "connections.connect" || method === "connections.disconnect") {
+    worldConnectionCalls.push({
+      method,
+      id: (rest[0] as { id?: unknown } | undefined)?.id,
+    });
+    return Promise.resolve({});
+  }
   return method.startsWith("world.integration.")
     ? Promise.resolve({ integrations: [] })
     : bridgeCall(method, ...(rest as []));
@@ -293,10 +489,6 @@ function Harness() {
     "--config-sheet-max-height",
     `min(calc(78dvh / ${scale / 100}), calc(640px / ${scale / 100}))`,
   );
-  document.documentElement.style.setProperty(
-    "--config-sheet-expanded-max-height",
-    `calc(90dvh / ${scale / 100})`,
-  );
   return (
     <OperationalContext.Provider value={worldViewContext}>
       <ConfigMenu
@@ -340,6 +532,335 @@ const selectConnection = (id: string) => {
   );
   flushSync(render);
 };
+const integrationRow = (id: string) =>
+  document.querySelector<HTMLElement>(`[data-integration="${id}"]`);
+const kindTab = (kind: string) =>
+  document.querySelector<HTMLButtonElement>(
+    `.integrations-tabs [role="tab"][data-kind="${kind}"]`,
+  );
+const kindTabs = () =>
+  Array.from(
+    document.querySelectorAll<HTMLElement>('.integrations-tabs [role="tab"]'),
+    (tab) => tab.dataset.kind,
+  ).join(",");
+const tabCount = (kind: string) =>
+  kindTab(kind)?.querySelector(".integrations-tab-count")?.textContent;
+const openKind = (kind: string) => {
+  const tab = kindTab(kind);
+  if (!tab) throw new Error(`Missing Integrations tab: ${kind}`);
+  flushSync(() => tab.click());
+};
+const kindGroups = () =>
+  Array.from(
+    document.querySelectorAll<HTMLElement>(".integrations-kind:not([hidden])"),
+    (group) => group.dataset.kind,
+  ).join(",");
+const rowStates = () =>
+  JSON.stringify(
+    Object.fromEntries(
+      Array.from(
+        document.querySelectorAll<HTMLElement>(".integration-row"),
+        (row) => [row.dataset.integration, row.dataset.state],
+      ),
+    ),
+  );
+const searchIntegrations = (value: string) => {
+  const input = document.querySelector<HTMLInputElement>(
+    'input[aria-label="Search integrations"]',
+  )!;
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!.call(input, value);
+  flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
+};
+// One screen, one tab per kind the registry reports, lists every runtime and
+// source with its state and one action, and the vault by names only.
+async function integrationsScreen(dialog: Element) {
+  await waitFor(() => !!integrationRow("runtime:alpha"));
+  check(
+    kindTabs() === "all,runtime,source,harness,vault",
+    `Integrations tabs are not All, the registry's kinds and Vault: ${kindTabs()}`,
+  );
+  // All opens first and lists every kind under its heading; the Agents list
+  // counts the agents it shows on its host.
+  // Pi, Claude Code and Antigravity CLI; Future Agent is not detected.
+  await waitFor(() => tabCount("harness") !== undefined);
+  check(
+    tabCount("harness") === "3",
+    `the Agents tab does not count its listed agents: ${tabCount("harness")}`,
+  );
+  check(
+    kindTab("all")!.getAttribute("aria-selected") === "true" &&
+      tabCount("all") === "8" &&
+      tabCount("runtime") === "2" &&
+      tabCount("source") === "3" &&
+      tabCount("vault") === "1",
+    `All is not open or tabs do not count their rows: ${tabCount("all")}`,
+  );
+  check(
+    kindGroups() === "runtime,source,harness,vault" &&
+      document.querySelectorAll(".agent-integrations-list li").length === 4 &&
+      !integrationRow("harness:claude"),
+    `All does not list every kind once: ${kindGroups()}`,
+  );
+  openKind("runtime");
+  check(
+    rowStates() ===
+      JSON.stringify({
+        "runtime:alpha": "connected",
+        "runtime:beta": "available",
+      }),
+    `Runtimes tab rows or states are wrong: ${rowStates()}`,
+  );
+  check(
+    integrationRow("runtime:alpha")!.textContent!.includes(
+      "Gives World terminals, agents, files.",
+    ),
+    "a runtime row does not say what it provides",
+  );
+  // The vault is its own tab: the tokens it holds by name and who uses them.
+  openKind("vault");
+  const token = dialog.querySelector('[data-secret="jira.token"]');
+  check(
+    !dialog.querySelector(".integration-row[data-integration]") &&
+      !!token?.textContent?.includes("Jira API token") &&
+      token.textContent.includes("Used by Jira."),
+    "the Vault tab does not name what it holds",
+  );
+  openKind("runtime");
+  check(
+    dialog.scrollWidth <= dialog.clientWidth + 1,
+    "the Integrations screen overflows the viewport",
+  );
+
+  // A runtime row acts on the exact connection it showed.
+  click("Connect Beta");
+  await waitFor(() => worldConnectionCalls.length === 1);
+  check(
+    worldConnectionCalls[0].method === "connections.connect" &&
+      worldConnectionCalls[0].id === "beta",
+    "Connect did not connect that runtime",
+  );
+  await waitFor(() => !button("Connect Beta").disabled);
+  betaRuntimeGeneration++;
+  click("Connect Beta");
+  await waitFor(
+    () =>
+      !!dialog
+        .querySelector('[role="alert"]')
+        ?.textContent?.includes("changed since this list was read"),
+  );
+  check(
+    worldConnectionCalls.length === 1,
+    "a replaced runtime was acted on from a stale row",
+  );
+
+  // Sources switch off at once; one that needs settings opens them instead.
+  openKind("source");
+  check(
+    rowStates() ===
+      JSON.stringify({
+        "source:github": "connected",
+        "source:jira": "needs_connect",
+        "source:metrics": "needs_connect",
+      }),
+    `Sources tab rows or states are wrong: ${rowStates()}`,
+  );
+  await waitFor(() => !button("Disconnect GitHub").disabled);
+  click("Disconnect GitHub");
+  await waitFor(() => sourceRequests.length === 1);
+  check(
+    sourceRequests[0].id === "github" &&
+      sourceRequests[0].body.enabled === false,
+    "Disconnect did not switch GitHub off",
+  );
+  await waitFor(
+    () => integrationRow("source:github")?.dataset.state === "available",
+  );
+  click("Connect GitHub");
+  await waitFor(() => sourceRequests.length === 2);
+  check(
+    sourceRequests[1].body.enabled === true,
+    "Connect did not switch GitHub on",
+  );
+  await waitFor(() => !button("Connect Jira").disabled);
+  click("Connect Jira");
+  await waitFor(
+    () => !!dialog.querySelector('form[aria-label="Jira settings"]'),
+  );
+  check(
+    sourceRequests.length === 2,
+    "Connect Jira acted before its settings were filled in",
+  );
+  click("Jira settings");
+  check(
+    !dialog.querySelector('form[aria-label="Jira settings"]'),
+    "Jira settings did not close",
+  );
+  click("Connect Usage metrics");
+  await waitFor(
+    () => !!dialog.querySelector('form[aria-label="Usage metrics settings"]'),
+  );
+  click("Usage metrics settings");
+
+  // The service refreshes sources on its own: a refresh that finishes while
+  // the screen is open moves the row without another registry read, both to
+  // a failure and back to connected.
+  await waitFor(
+    () => integrationRow("source:github")?.dataset.state === "connected",
+  );
+  const github = worldSources.find((item) => item.id === "github")!;
+  // A poll already on its way carries the old answer; the next one is new.
+  const refreshSources = async () => {
+    await worldSourcesStore.refresh();
+    await worldSourcesStore.refresh();
+  };
+  const reads = registryReads;
+  github.state = "error";
+  github.detail = "Sign-in expired.";
+  await refreshSources();
+  await waitFor(
+    () =>
+      integrationRow("source:github")?.dataset.state === "error" &&
+      integrationRow("source:github")!.textContent!.includes(
+        "Sign-in expired.",
+      ),
+  );
+  github.state = "connected";
+  github.detail = "Signed in.";
+  await refreshSources();
+  await waitFor(
+    () => integrationRow("source:github")?.dataset.state === "connected",
+  );
+  check(
+    registryReads === reads,
+    "a source refresh needed another registry read to reach the screen",
+  );
+
+  // Search always covers everything: typing opens All with every match,
+  // the vault's tokens too, and each tab counts its matches.
+  check(
+    kindTab("source")!.getAttribute("aria-selected") === "true",
+    "the Sources tab is not open before searching",
+  );
+  searchIntegrations("jira");
+  await waitFor(() => tabCount("harness") === "0");
+  check(
+    kindTab("all")!.getAttribute("aria-selected") === "true" &&
+      kindGroups() === "source,vault" &&
+      rowStates() === JSON.stringify({ "source:jira": "needs_connect" }) &&
+      !!dialog.querySelector('[data-secret="jira.token"]') &&
+      tabCount("all") === "1" &&
+      tabCount("source") === "1" &&
+      tabCount("runtime") === "0" &&
+      tabCount("vault") === "1",
+    `search did not cover every integration: ${kindGroups()} ${rowStates()}`,
+  );
+  searchIntegrations("pi");
+  await waitFor(() => tabCount("harness") === "1");
+  check(
+    kindGroups().split(",").includes("harness") &&
+      document.querySelectorAll(".agent-integrations-list li").length === 1,
+    `All search did not find an agent: ${kindGroups()}`,
+  );
+  // A tab narrows the results; an empty one points at the tabs that match.
+  searchIntegrations("ssh");
+  openKind("source");
+  const empty = dialog.querySelector(".integrations-empty");
+  check(
+    !!empty?.textContent?.includes("No sources match “ssh”.") &&
+      !dialog.querySelector(".integration-row"),
+    "an empty search did not say so",
+  );
+  click("Runtimes (1)");
+  check(
+    kindTab("runtime")!.getAttribute("aria-selected") === "true" &&
+      rowStates() === JSON.stringify({ "runtime:beta": "available" }),
+    `a match in another tab could not be reached: ${rowStates()}`,
+  );
+  searchIntegrations("");
+  openKind("all");
+  searchIntegrations("nothing like this");
+  await waitFor(() => tabCount("harness") === "0");
+  check(
+    kindGroups() === "" &&
+      !!dialog
+        .querySelector(".integrations-empty")
+        ?.textContent?.includes("Nothing matches “nothing like this”."),
+    `a search with no match anywhere did not say so: ${kindGroups()}`,
+  );
+  searchIntegrations("");
+
+  // Dozens of rows and a new kind (the preview fixture): the kind gets its
+  // own tab, the tabs scroll on one row, and search still narrows.
+  history.replaceState(history.state, "", "?integrationsFixture");
+  resetIntegrationsFixture();
+  check(
+    integrationsFixtureEnabled() && !location.search.includes("integrations"),
+    "the integrations fixture switch was not consumed at once",
+  );
+  searchIntegrations("sample");
+  check(
+    kindTabs() === "all,runtime,source,harness,ide,vault" &&
+      kindTab("all")!.getAttribute("aria-selected") === "true" &&
+      tabCount("runtime") === "14" &&
+      tabCount("source") === "18" &&
+      tabCount("ide") === "8",
+    `a new kind did not get its own counted tab: ${kindTabs()}`,
+  );
+  const tabs = dialog.querySelector<HTMLElement>(".integrations-tabs")!;
+  check(
+    dialog.scrollWidth <= dialog.clientWidth + 1 &&
+      new Set(
+        Array.from(tabs.children, (tab) =>
+          Math.round(tab.getBoundingClientRect().top),
+        ),
+      ).size === 1,
+    "many kinds overflow the screen or wrap the tabs",
+  );
+  openKind("ide");
+  searchIntegrations("sample error");
+  check(
+    rowStates() ===
+      JSON.stringify({
+        "ide:sample-04": "error",
+        "ide:sample-08": "error",
+      }) && !dialog.querySelector(".integration-row button"),
+    `search by status failed or sample rows can act: ${rowStates()}`,
+  );
+  resetIntegrationsFixture();
+  history.replaceState(history.state, "", location.pathname);
+  searchIntegrations("");
+  check(
+    kindTabs() === "all,runtime,source,harness,vault" &&
+      kindTab("all")!.getAttribute("aria-selected") === "true",
+    "a kind that left kept its tab open",
+  );
+
+  // Agents keep their per-host list; the same search narrows it.
+  openKind("harness");
+  await waitFor(
+    () => document.querySelectorAll(".agent-integrations-list li").length === 4,
+  );
+  searchIntegrations("pi");
+  openKind("harness");
+  check(
+    document.querySelectorAll(".agent-integrations-list li").length === 1 &&
+      document
+        .querySelector(".agent-integrations-list li")!
+        .textContent!.includes("Pi"),
+    "search did not narrow the agent list",
+  );
+  searchIntegrations("nothing like this");
+  check(
+    !!dialog
+      .querySelector(".agent-integrations-settings")
+      ?.textContent?.includes("No agent matches"),
+    "an agent search with no match did not say so",
+  );
+  searchIntegrations("");
+}
 async function run() {
   const viewportSmoke = new URLSearchParams(location.search).has(
     "viewportSmoke",
@@ -384,43 +905,26 @@ async function run() {
   flushSync(render);
   click("Menu");
   await settle();
-  const originalOpen = window.open;
-  const openedLinks: Array<
-    [string | URL | undefined, string | undefined, string | undefined]
-  > = [];
-  window.open = (url, target, features) => {
-    openedLinks.push([url, target, features]);
-    return null;
-  };
-  try {
-    for (const [label, url] of [
-      ["Tutorial", "https://herdr.world/tutorial/"],
-      [
-        "Features and shortcuts",
-        "https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md",
-      ],
-      [
-        "Troubleshooting",
-        "https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#troubleshooting",
-      ],
-      ["Report an issue", "https://github.com/IvoryHeart/herdr-world/issues"],
-    ]) {
-      click(label!);
-      check(
-        !document.getElementById("herdr-world-config-menu"),
-        `${label} left the menu open`,
-      );
-      check(
-        JSON.stringify(openedLinks[openedLinks.length - 1]) ===
-          JSON.stringify([url, "_blank", "noopener,noreferrer"]),
-        `${label} opened an incorrect or unsafe destination`,
-      );
-      click("Menu");
-      await settle();
-    }
-  } finally {
-    window.open = originalOpen;
-  }
+  // The Menu holds the few things people do every day; Settings holds the rest.
+  for (const label of ["Settings", "Find or act", "Zen mode", "Help"])
+    check(
+      (() => {
+        try {
+          return !!button(label);
+        } catch {
+          return false;
+        }
+      })(),
+      `the Menu has no ${label} row`,
+    );
+  // Help's own description names the tutorial; no row is titled with it.
+  for (const label of ["Configuration", "Reload page", "Tutorial"])
+    check(
+      !Array.from(
+        document.querySelectorAll("#herdr-world-config-menu strong"),
+      ).some((element) => element.textContent === label),
+      `the Menu still lists ${label}`,
+    );
   check(
     !Array.from(document.querySelectorAll("button")).some((element) =>
       element.textContent?.includes("Log out"),
@@ -470,138 +974,47 @@ async function run() {
       document.documentElement.dataset.theme = theme;
       const menu = document.querySelector<HTMLElement>(".config-dropdown")!;
       const handle = menu.querySelector(".mobile-sheet-handle")!;
+      const content = menu.querySelector(".config-dropdown-content")!;
       await Promise.all(
         menu
           .getAnimations({ subtree: true })
           .map((animation) => animation.finished.catch(() => {})),
       );
-      const compactRect = menu.getBoundingClientRect();
-      for (const label of [
-        "Configuration",
-        "Changelog",
-        "Reload page",
-        "Check for updates",
-        "Connection details",
-        "Log out",
-      ]) {
-        const original = button(label);
-        const rect = original.getBoundingClientRect();
+      const rect = menu.getBoundingClientRect();
+      for (const label of ["Settings", "Find or act", "Help", "Log out"]) {
+        const row = button(label);
         check(
-          getComputedStyle(original).visibility === "visible" &&
-            (rect.bottom <= compactRect.bottom ||
-              menu.querySelector(".config-dropdown-content")!.scrollHeight >
-                menu.querySelector(".config-dropdown-content")!.clientHeight),
-          `default menu hides original action: ${label}`,
+          getComputedStyle(row).visibility === "visible" &&
+            (row.getBoundingClientRect().bottom <= rect.bottom ||
+              content.scrollHeight > content.clientHeight),
+          `${theme}: the Menu hides ${label}`,
         );
-      }
-      const moreButton = menu.querySelector(".mobile-sheet-more button")!;
-      check(
-        getComputedStyle(moreButton).visibility === "hidden",
-        "compact menu did not hide quick settings",
-      );
-      await swipe(handle, 0, -15);
-      check(
-        !menu.classList.contains("is-expanded"),
-        "short drag expanded menu",
-      );
-      await swipe(handle, 60, -10);
-      check(
-        !menu.classList.contains("is-expanded"),
-        "horizontal drag expanded menu",
-      );
-      await swipe(handle, 0, -60, true);
-      check(
-        !menu.classList.contains("is-expanded"),
-        `${theme}: accidental menu expansion`,
-      );
-      check(
-        Math.abs(menu.getBoundingClientRect().height - compactRect.height) < 1,
-        `cancelled expansion did not spring back: ${compactRect.height} -> ${menu.getBoundingClientRect().height}`,
-      );
-      const expandingFrames = await swipe(button("Configuration"), 0, -60);
-      check(
-        expandingFrames.some((frame) => frame.top < compactRect.top) &&
-          Math.abs(
-            compactRect.top -
-              expandingFrames[expandingFrames.length - 1].top -
-              Math.min(
-                60,
-                menu.getBoundingClientRect().height - compactRect.height,
-              ),
-          ) < 4,
-        `${theme}: menu expansion did not follow the finger`,
-      );
-      check(
-        menu.classList.contains("is-expanded") &&
-          menu.getBoundingClientRect().height > compactRect.height &&
-          getComputedStyle(moreButton).visibility === "visible" &&
-          getComputedStyle(menu.querySelector(".config-item-copy span")!)
-            .display === "none",
-        `${theme}: expansion must reveal buttons, not descriptions`,
-      );
-      const content = menu.querySelector(".config-dropdown-content")!;
-      if (content.scrollHeight > content.clientHeight) {
-        content.scrollTop = content.scrollHeight;
-        const scrollTop = content.scrollTop;
-        await swipe(handle, 0, -60, true);
-        check(
-          Math.abs(content.scrollTop - scrollTop) < 1,
-          "measuring sheet heights discarded the scroll position",
-        );
-        content.scrollTop = 0;
       }
       await swipe(handle, 0, -60);
       check(
-        menu.classList.contains("is-expanded"),
-        "swipe generated a collapsing click",
+        menu.isConnected &&
+          Math.abs(menu.getBoundingClientRect().top - rect.top) < 1 &&
+          Math.abs(menu.getBoundingClientRect().height - rect.height) < 1,
+        `${theme}: an upward drag moved or resized the Menu`,
       );
-      const expandedTop = menu.getBoundingClientRect().top;
-      await swipe(button("Configuration"), 0, 60, true);
-      check(
-        menu.classList.contains("is-expanded"),
-        "cancelled drag collapsed the menu",
-      );
-      const collapsingFrames = await swipe(button("Configuration"), 0, 60);
-      check(
-        Math.abs(
-          collapsingFrames[collapsingFrames.length - 1].top -
-            expandedTop -
-            Math.min(60, compactRect.top - expandedTop),
-        ) < 2,
-        "menu collapse did not follow the finger",
-      );
+      await swipe(button("Settings"), 0, 60, true);
       check(
         menu.isConnected &&
-          !menu.classList.contains("is-expanded") &&
-          Math.abs(menu.getBoundingClientRect().height - compactRect.height) <
-            1,
-        "expanded menu did not stop at its initial height",
+          Math.abs(menu.getBoundingClientRect().top - rect.top) < 1,
+        `${theme}: a cancelled drag did not spring back`,
       );
       check(
-        !document.querySelector(".configuration-modal"),
-        "drag activated the Configuration button",
+        !document.querySelector(".settings-home, .configuration-loading-modal"),
+        "a drag opened Settings",
       );
-      button("Connection details").scrollIntoView({ block: "nearest" });
-      await swipe(button("Connection details"), 0, 0);
-      check(
-        button("Connection details").getAttribute("aria-expanded") === "true",
-        "tap after drag did not activate a menu button",
-      );
-      await swipe(button("Connection details"), 0, 0);
-      check(
-        button("Connection details").getAttribute("aria-expanded") === "false",
-        "menu tap did not toggle connection details",
-      );
-      menu.querySelector(".config-dropdown-content")!.scrollTop = 0;
       const closingFrames = await swipe(
         menu.querySelector(".config-summary")!,
         0,
         60,
       );
       check(
-        Math.abs(
-          closingFrames[closingFrames.length - 1].top - compactRect.top - 60,
-        ) < 2,
+        Math.abs(closingFrames[closingFrames.length - 1].top - rect.top - 60) <
+          2,
         "menu dismissal did not follow the finger",
       );
       check(
@@ -609,28 +1022,17 @@ async function run() {
         "swipe down did not close menu and restore focus",
       );
       click("Menu");
-      check(
-        !document.querySelector(".config-dropdown.is-expanded"),
-        "menu did not reopen compact",
-      );
-      const reopenedMenu = document.querySelector(".config-dropdown")!;
-      await key(button("Show more menu options"), "Enter");
-      check(
-        !!document.querySelector(".config-dropdown.is-expanded"),
-        "keyboard could not expand menu",
-      );
-      click("Show fewer menu options");
+      // Tap where the row rests, not where the opening sheet passes.
       await Promise.all(
-        reopenedMenu
+        document
+          .getElementById("herdr-world-config-menu")!
           .getAnimations({ subtree: true })
           .map((animation) => animation.finished.catch(() => {})),
       );
-      check(
-        Math.abs(
-          reopenedMenu.getBoundingClientRect().height - compactRect.height,
-        ) < 1,
-        "keyboard collapse did not restore compact height",
-      );
+      await swipe(button("Zen mode"), 0, 0);
+      // The Menu closes with an exit animation after the tap's click.
+      await waitFor(() => !document.getElementById("herdr-world-config-menu"));
+      click("Menu");
     }
   } else if (!viewportSmoke) {
     check(
@@ -644,38 +1046,41 @@ async function run() {
     root.unmount();
     return;
   }
-  click("Configuration");
+  click("Settings");
   // Lazy mounting exposes the DOM before the dialog's focus effect runs.
   // Wait for focus before dispatching keys, or that effect can steal it back.
   await waitFor(
     () =>
       !configurationTest.loadingRace &&
       !!document
-        .querySelector(".configuration-modal")
+        .querySelector(".settings-home")
         ?.contains(document.activeElement),
   );
-  let dialog = document.querySelector<HTMLElement>(".configuration-modal")!;
+  let dialog = document.querySelector<HTMLElement>(".settings-home")!;
   check(
     dialog.contains(document.activeElement),
-    "Configuration did not receive focus",
-  );
-  button("Appearance").focus();
-  await key(button("Appearance"), "ArrowRight");
-  check(
-    button("Behavior").getAttribute("aria-selected") === "true",
-    "arrow key did not select Behavior",
+    "Settings did not receive focus",
   );
   check(
-    document.activeElement === button("Behavior"),
+    !document.getElementById("herdr-world-config-menu"),
+    "Settings left the Menu open",
+  );
+  tab("All").focus();
+  await key(tab("All"), "ArrowRight");
+  check(
+    tab("Appearance").getAttribute("aria-selected") === "true",
+    "arrow key did not select Appearance",
+  );
+  check(
+    document.activeElement === tab("Appearance"),
     "tab keyboard navigation lost focus",
   );
-  click("Appearance");
-  for (const theme of ["dark", "light"]) {
-    click(`Use ${theme} theme`);
-    for (const tab of document.querySelectorAll<HTMLElement>(
-      ".configuration-tabs [aria-selected='false']",
+  for (const theme of ["Dark", "Light"]) {
+    choose("Theme", theme);
+    for (const item of document.querySelectorAll<HTMLElement>(
+      ".settings-home-tabs [aria-selected='false']",
     )) {
-      const style = getComputedStyle(tab);
+      const style = getComputedStyle(item);
       check(
         parseFloat(style.borderTopWidth) > 0 &&
           style.borderTopStyle !== "none" &&
@@ -694,24 +1099,27 @@ async function run() {
   check(
     getChatTextScale() === null &&
       !!document.querySelector(
-        '[aria-label="Chat text size follows the terminal, currently 100%"]',
+        '[aria-label="Follow the terminal, currently Terminal · 100%"]',
       ),
     "Chat text must start linked to the terminal font size",
   );
-  click("Increase Chat text size");
+  click("Increase chat text size");
   await settle();
   check(
     getChatTextScale() === 105,
     `Chat text did not unlink (${getChatTextScale()})`,
   );
-  click("Link Chat text size to the terminal, currently 105%");
+  click("Follow the terminal, currently 105%");
   await settle();
   check(
     getChatTextScale() === null,
     "Chat text did not link to the terminal again",
   );
-  for (let i = 0; i < (innerWidth <= 320 ? 10 : 5); i++)
-    click("Increase interface scale");
+  for (let i = 0; i < (innerWidth <= 320 ? 10 : 5); i++) {
+    const increase = button("Increase interface size");
+    if (increase.disabled) break;
+    click("Increase interface size");
+  }
   await settle();
   const rect = dialog.getBoundingClientRect();
   check(
@@ -719,16 +1127,16 @@ async function run() {
       rect.right <= innerWidth + 1 &&
       rect.bottom <= innerHeight + 1 &&
       rect.top >= 0,
-    "scaled configuration exceeds viewport",
+    "scaled Settings exceeds viewport",
   );
   check(
     dialog.scrollWidth <= dialog.clientWidth + 1,
-    "configuration overflows horizontally",
+    "Settings overflows horizontally",
   );
   if (mobile) {
     check(
       Math.abs(rect.bottom - innerHeight) <= 1 && rect.left === 0,
-      "Configuration is not a bottom drawer",
+      "Settings is not a bottom drawer",
     );
     const content = dialog.querySelector<HTMLElement>(
       ".configuration-content",
@@ -750,42 +1158,40 @@ async function run() {
   } else {
     check(
       rect.left > 0 && rect.bottom < innerHeight,
-      "desktop Configuration became a drawer",
+      "desktop Settings became a drawer",
     );
   }
   if (viewportSmoke) {
     root.unmount();
     return;
   }
-  const firstControl = button(
-    mobile ? "Dismiss Configuration" : "Close Configuration",
+  const controls = focusable(dialog);
+  const firstControl = controls[0];
+  const lastControl = controls[controls.length - 1];
+  check(
+    firstControl === button(mobile ? "Dismiss Settings" : "Close Settings"),
+    "Settings does not start with its close control",
   );
-  const lastControl = button(mobile ? "Layout" : "Done");
   lastControl.focus();
   await key(lastControl, "Tab");
-  check(document.activeElement === firstControl, "Tab escaped Configuration");
+  check(document.activeElement === firstControl, "Tab escaped Settings");
   await key(firstControl, "Tab", true);
-  check(
-    document.activeElement === lastControl,
-    "Shift+Tab escaped Configuration",
-  );
-  click("Layout");
+  check(document.activeElement === lastControl, "Shift+Tab escaped Settings");
+  click("Open Layout");
   await waitFor(
     () =>
       !configurationTest.loadingRace &&
       !!document.querySelector("[aria-label='Layout Preferences']"),
   );
   check(
-    dialog.getClientRects().length === 0,
-    "parent dialog remains visible behind nested settings",
+    !document.querySelector(".settings-home"),
+    "Settings remains open behind the Layout dialog",
   );
   await key(document.activeElement!, "Escape");
-  await waitFor(() => dialog.getClientRects().length > 0);
-  check(
-    document.activeElement === button("Layout"),
-    "returning from Layout lost the trigger focus",
-  );
-  click("Connection");
+  await waitFor(() => !!document.querySelector(".settings-home"));
+  dialog = document.querySelector<HTMLElement>(".settings-home")!;
+  await waitFor(() => document.activeElement === button("Open Layout"));
+  await openPage("Terminal transport");
   await waitFor(
     () =>
       button("Terminal incremental transport").getAttribute("aria-disabled") ===
@@ -865,14 +1271,14 @@ async function run() {
         helpRect.top + helpRect.height / 2,
       ),
     ),
-    "help popover is hidden behind Configuration",
+    "help popover is hidden behind Settings",
   );
   await key(helpContent, "Escape");
   await waitFor(() => !document.querySelector(".configuration-help-content"));
   await settle();
   check(
     dialog.isConnected && document.activeElement === help,
-    "closing help closed Configuration or lost focus",
+    "closing help closed Settings or lost focus",
   );
   click("Terminal incremental transport");
   await waitFor(
@@ -886,23 +1292,16 @@ async function run() {
   );
   check(
     dialog.contains(document.activeElement),
-    "saving moved focus out of Configuration",
+    "saving moved focus out of Settings",
   );
-  click(
-    document.documentElement.dataset.layout === "mobile"
-      ? "Close Configuration"
-      : "Done",
-  );
+  closeSettings();
   await settle();
   check(
     document.activeElement === button("Menu"),
-    "closing Configuration did not restore Menu focus",
+    "closing Settings did not restore Menu focus",
   );
-  click("Menu");
-  click("Configuration");
-  await waitFor(() => !!document.querySelector(".configuration-modal"));
-  dialog = document.querySelector<HTMLElement>(".configuration-modal")!;
-  click("Connection");
+  dialog = await openSettings();
+  await openPage("Terminal transport");
   await waitFor(
     () =>
       button("Terminal incremental transport").getAttribute("aria-disabled") ===
@@ -960,9 +1359,9 @@ async function run() {
   const updatesBeforeLoadFailure = calls.filter(
     (call) => call.method === "settings.terminal_transport.update",
   ).length;
-  click("Appearance");
+  backToList();
   failRead = true;
-  click("Connection");
+  await openPage("Terminal transport");
   await waitFor(() => !!document.querySelector("[role='alert']"));
   failRead = false;
   click("Retry");
@@ -980,8 +1379,8 @@ async function run() {
   pendingRead = new Promise((resolve) => {
     resolveRead = resolve;
   });
-  click("Appearance");
-  click("Connection");
+  backToList();
+  await openPage("Terminal transport");
   await settle();
   check(
     button("Terminal incremental transport").getAttribute("aria-disabled") ===
@@ -1016,7 +1415,8 @@ async function run() {
     !calls.some((call) => call.method.startsWith("integration.")),
     "integrations were fetched before opening their tab",
   );
-  click("Integrations");
+  await openPage("Integrations");
+  await integrationsScreen(dialog);
   await waitFor(
     () => document.querySelectorAll(".agent-integrations-list li").length === 4,
   );
@@ -1219,8 +1619,8 @@ async function run() {
   const beforeTabRemount = mutationCount();
   click("Install Antigravity CLI integration");
   const listsBeforeTabRemount = integrationLists();
-  click("Appearance");
-  click("Integrations");
+  backToList();
+  await openPage("Integrations");
   await settle();
   check(
     button("Refresh integrations").getAttribute("aria-disabled") === "true" &&
@@ -1262,22 +1662,15 @@ async function run() {
   const beforeDialogRemount = mutationCount();
   click("Uninstall Antigravity CLI integration");
   const listsBeforeDialogRemount = integrationLists();
-  click(
-    document.documentElement.dataset.layout === "mobile"
-      ? "Close Configuration"
-      : "Done",
-  );
-  await waitFor(() => !document.querySelector(".configuration-modal"));
-  click("Menu");
-  click("Configuration");
-  await waitFor(() => !!document.querySelector(".configuration-modal"));
-  dialog = document.querySelector<HTMLElement>(".configuration-modal")!;
-  click("Integrations");
+  closeSettings();
+  await waitFor(() => !document.querySelector(".settings-home"));
+  dialog = await openSettings();
+  await openPage("Integrations");
   await settle();
   check(
     button("Refresh integrations").getAttribute("aria-disabled") === "true" &&
       integrationLists() === listsBeforeDialogRemount,
-    "reopened Configuration did not await its in-flight mutation",
+    "reopened Settings did not await its in-flight mutation",
   );
   flushSync(() =>
     document
@@ -1304,7 +1697,7 @@ async function run() {
         .querySelector('[role="alert"]')
         ?.textContent?.includes("Mutation failed after dialog remount") &&
       integrationLists() === listsBeforeDialogRemount + 1,
-    "reopened Configuration lost the failed mutation or did not reload status",
+    "reopened Settings lost the failed mutation or did not reload status",
   );
   click("Refresh integrations");
   await waitFor(
@@ -1330,7 +1723,7 @@ async function run() {
   const hiddenChange = Promise.withResolvers<unknown>();
   integrationChange = hiddenChange.promise;
   click("Install Antigravity CLI integration");
-  click("Appearance");
+  backToList();
   integrationChange = null;
   antigravity.state = "current";
   hiddenChange.resolve({
@@ -1338,7 +1731,7 @@ async function run() {
     details: { messages: ["Completed while unmounted"] },
   });
   await settle();
-  click("Integrations");
+  await openPage("Integrations");
   await waitFor(
     () =>
       button("Refresh integrations").getAttribute("aria-disabled") === "false",
@@ -1360,25 +1753,17 @@ async function run() {
     integrationChange = hiddenFailure.promise;
     click("Install Antigravity CLI integration");
     const writes = mutationCount();
-    click(
-      closeDialog
-        ? document.documentElement.dataset.layout === "mobile"
-          ? "Close Configuration"
-          : "Done"
-        : "Appearance",
-    );
+    if (closeDialog) closeSettings();
+    else backToList();
     integrationChange = null;
     hiddenFailure.reject(new Error("Mutation failed while unmounted"));
     await settle();
     if (closeDialog) {
-      click("Menu");
-      click("Configuration");
-      await waitFor(() => !!document.querySelector(".configuration-modal"));
-      dialog = document.querySelector<HTMLElement>(".configuration-modal")!;
+      dialog = await openSettings();
     }
     // A failed status refresh must not discard the mutation failure either.
     integrationLoadFailure = closeDialog;
-    click("Integrations");
+    await openPage("Integrations");
     await waitFor(
       () =>
         button("Refresh integrations").getAttribute("aria-disabled") ===
@@ -1526,14 +1911,22 @@ async function run() {
       document.querySelectorAll(".agent-integrations-list li").length === 4 &&
       !document.querySelector('[role="alert"]'),
   );
+  // Escape leaves a page for the list, then closes Settings.
   await key(button("Refresh integrations"), "Escape");
   await settle();
   check(
-    !document.querySelector(".configuration-modal") &&
+    !document.querySelector(".settings-page") &&
+      document.activeElement === button("Open Integrations"),
+    "Escape did not return from the page to its row",
+  );
+  await key(document.activeElement!, "Escape");
+  await settle();
+  check(
+    !document.querySelector(".settings-home") &&
       document.activeElement === button("Menu"),
     "Escape did not close and restore focus",
   );
-  // Open Configuration from a World view: with nothing selected, and with a
+  // Open Settings from a World view: with nothing selected, and with a
   // selection on another host at a runtime generation that is not current.
   // Integrations still loads the active connection it names.
   for (const context of [
@@ -1543,10 +1936,8 @@ async function run() {
     worldViewContext = context;
     flushSync(render);
     const before = integrationLists("alpha");
-    click("Menu");
-    click("Configuration");
-    await waitFor(() => !!document.querySelector(".configuration-modal"));
-    click("Integrations");
+    await openSettings();
+    await openPage("Integrations");
     await waitFor(
       () =>
         document.querySelectorAll(".agent-integrations-list li").length === 4 &&
@@ -1564,42 +1955,55 @@ async function run() {
           .textContent!.includes("Local test"),
       `Integrations opened from a World view (${JSON.stringify(context)}) did not load the active connection`,
     );
-    click(
-      document.documentElement.dataset.layout === "mobile"
-        ? "Close Configuration"
-        : "Done",
-    );
-    await waitFor(() => !document.querySelector(".configuration-modal"));
+    closeSettings();
+    await waitFor(() => !document.querySelector(".settings-home"));
   }
   worldViewContext = null;
   flushSync(render);
-  if (mobile) {
-    for (const tab of [
-      "Appearance",
-      "Behavior",
-      "Connection",
-      "Integrations",
+  // Help is a category of Settings; its rows open their pages in a new tab.
+  const originalOpen = window.open;
+  const openedLinks: Array<
+    [string | URL | undefined, string | undefined, string | undefined]
+  > = [];
+  window.open = (url, target, features) => {
+    openedLinks.push([url, target, features]);
+    return null;
+  };
+  try {
+    for (const [label, url] of [
+      ["Tutorial", "https://herdr.world/tutorial/"],
+      [
+        "Features and shortcuts",
+        "https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md",
+      ],
+      [
+        "Troubleshooting",
+        "https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#troubleshooting",
+      ],
+      ["Report an issue", "https://github.com/IvoryHeart/herdr-world/issues"],
     ]) {
       click("Menu");
-      click("Show more menu options");
-      const menu = document.querySelector(".config-dropdown")!;
-      await Promise.all(
-        menu
-          .getAnimations({ subtree: true })
-          .map((animation) => animation.finished.catch(() => {})),
-      );
-      click(tab);
-      await waitFor(() => !!document.querySelector(".configuration-modal"));
+      click("Help");
+      await waitFor(() => !!document.querySelector(".settings-home"));
       check(
-        button(tab).getAttribute("aria-selected") === "true",
-        `quick setting did not open ${tab}`,
+        tab("Help").getAttribute("aria-selected") === "true",
+        "Help did not open Settings at Help",
       );
-      click(
-        document.documentElement.dataset.layout === "mobile"
-          ? "Close Configuration"
-          : "Done",
+      click(label!);
+      check(
+        !document.querySelector(".settings-home"),
+        `${label} left Settings open`,
+      );
+      check(
+        JSON.stringify(openedLinks[openedLinks.length - 1]) ===
+          JSON.stringify([url, "_blank", "noopener,noreferrer"]),
+        `${label} opened an incorrect or unsafe destination`,
       );
     }
+  } finally {
+    window.open = originalOpen;
+  }
+  if (mobile) {
     for (const reducedMotion of [false, true]) {
       await input("Emulation.setEmulatedMedia", {
         features: [
@@ -1609,12 +2013,7 @@ async function run() {
           },
         ],
       });
-      click("Menu");
-      click("Configuration");
-      await waitFor(() => !!document.querySelector(".configuration-modal"));
-      const drawer = document.querySelector<HTMLElement>(
-        ".configuration-modal",
-      )!;
+      const drawer = await openSettings();
       await Promise.all(
         drawer.getAnimations().map((animation) => animation.finished),
       );
@@ -1625,22 +2024,24 @@ async function run() {
         "drawer did not honor motion preference",
       );
       const surface = reducedMotion
-        ? button("Dismiss Configuration")
+        ? button("Dismiss Settings")
         : drawer.querySelector(".configuration-content")!;
       await swipe(surface, 0, 60, true);
       check(
         drawer.isConnected &&
           Math.abs(drawer.getBoundingClientRect().top - top) < 1,
-        "cancelled swipe did not restore Configuration position",
+        "cancelled swipe did not restore Settings position",
       );
       const frames = await swipe(surface, 0, 60);
       check(
         Math.abs(frames[frames.length - 1].top - top - 60) < 2,
-        "scaled Configuration did not follow the finger",
+        "scaled Settings did not follow the finger",
       );
+      // Settings returns focus to Menu on the frame after it closes.
+      await waitFor(() => !document.querySelector(".settings-home"));
+      await settle();
       check(
-        !document.querySelector(".configuration-modal") &&
-          document.activeElement === button("Menu"),
+        document.activeElement === button("Menu"),
         "drawer dismissal did not restore Menu focus",
       );
     }

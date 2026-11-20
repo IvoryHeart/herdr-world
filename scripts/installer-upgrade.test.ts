@@ -472,7 +472,7 @@ test("installer upgrades run native released artifacts on every supported platfo
     "windows-x64",
   ]);
   expect(job.steps.find((step: any) => step.with?.path)?.with.ref).toBe(
-    "${{ needs.baseline.outputs.sha }}",
+    "${{ inputs.baseline_sha || needs.baseline.outputs.sha }}",
   );
   expect(
     job.steps.find((step: any) => step.name?.startsWith("Build the proposed"))
@@ -606,6 +606,6 @@ test("CI caches the baseline assets per release tag and platform", async () => {
     )?.with,
   ).toEqual({
     path: ".agents/installer-baseline-assets",
-    key: "installer-baseline-${{ needs.baseline.outputs.tag }}-${{ matrix.platform }}",
+    key: "installer-baseline-${{ inputs.baseline_tag || needs.baseline.outputs.tag }}-${{ matrix.platform }}",
   });
 });

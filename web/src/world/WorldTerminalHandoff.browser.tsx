@@ -1232,6 +1232,50 @@ async function run() {
   const topbarMenu = document.querySelector<HTMLElement>(".menu-button");
   const toggleTopbarMenu = () =>
     document.querySelector<HTMLButtonElement>(".menu-button")?.click();
+  // Town settings live in Settings, under Town & views.
+  const inspectorOpening = () =>
+    document.querySelector<HTMLElement>(
+      '.settings-home [role="group"][aria-label="Inspector opens"]',
+    );
+  const openInspectorOpening = async (reason: string) => {
+    if (inspectorOpening()) return inspectorOpening()!;
+    if (!document.querySelector(".config-dropdown")) toggleTopbarMenu();
+    await until(
+      () => document.querySelector(".config-dropdown .config-menu-item"),
+      `${reason}: Menu`,
+    );
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        ".config-dropdown .config-menu-item",
+      ),
+    ]
+      .find((button) => button.textContent?.includes("Settings"))!
+      .click();
+    await until(inspectorOpening, reason);
+    return inspectorOpening()!;
+  };
+  const chooseInspectorOpening = async (
+    label: "Snapped right" | "Floating",
+    reason: string,
+  ) => {
+    const group = await openInspectorOpening(reason);
+    flushSync(() =>
+      [...group.querySelectorAll<HTMLButtonElement>("button")]
+        .find((button) => button.textContent === label)!
+        .click(),
+    );
+    document
+      .querySelector<HTMLButtonElement>(
+        '.settings-home button[aria-label="Close Settings"]',
+      )!
+      .click();
+    await until(
+      () =>
+        !document.querySelector(".settings-home") &&
+        !document.querySelector(".config-dropdown"),
+      `${reason}: Settings closed`,
+    );
+  };
   const precedes = (left: Element | null, right: Element | null) =>
     Boolean(
       left &&
@@ -1495,8 +1539,20 @@ async function run() {
   // and is raised by the window manager (#346).
   const summaryWindow = () =>
     document.querySelector<HTMLElement>('[aria-label="Town summary window"]');
+  // The status chip opens the Town board; its Summary button opens the
+  // summary window (#1006).
   document
-    .querySelector<HTMLElement>('[aria-label^="Town summary: "]')!
+    .querySelector<HTMLElement>('.town-board-chip[aria-label^="Town board: "]')!
+    .click();
+  await until(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        '#town-board[data-open="true"] .town-board-open',
+      ),
+    "the status chip opens the Town board",
+  );
+  document
+    .querySelector<HTMLButtonElement>("#town-board .town-board-open")!
     .click();
   await until(() => summaryWindow(), "Town summary opens as a panel window");
   summaryWindow()!
@@ -1543,11 +1599,8 @@ async function run() {
   );
   toggleTopbarMenu();
   await until(
-    () =>
-      document.querySelector<HTMLSelectElement>(
-        'select[aria-label="Inspector opening"]',
-      ),
-    "Town settings in common menu",
+    () => document.querySelector(".config-summary"),
+    "application menu",
   );
   check(
     Boolean(
@@ -1557,30 +1610,18 @@ async function run() {
     ),
     "application menu shows the injected build version instead of the manifest placeholder",
   );
-  const inspectorOpeningSelect = document.querySelector<HTMLSelectElement>(
-    'select[aria-label="Inspector opening"]',
-  )!;
+  const defaultOpening = await openInspectorOpening(
+    "Town settings in Settings",
+  );
   check(
-    inspectorOpeningSelect.value === "docked" &&
-      !document.querySelector('select[aria-label="Office room alignment"]') &&
-      !document.querySelector('select[aria-label="Office long room titles"]'),
-    "Inspector opening was not menu-owned, did not default to Snap right, or Town-only settings remained",
+    defaultOpening.querySelector('[aria-pressed="true"]')?.textContent ===
+      "Snapped right" &&
+      !document.querySelector('[aria-label="Office room alignment"]') &&
+      !document.querySelector('[aria-label="Office long room titles"]'),
+    "Inspector opening was not in Settings, did not default to Snap right, or Town-only settings remained",
   );
   // The floating cases below choose Floating, as a user does.
-  flushSync(() => {
-    Object.getOwnPropertyDescriptor(
-      HTMLSelectElement.prototype,
-      "value",
-    )!.set!.call(inspectorOpeningSelect, "floating");
-    inspectorOpeningSelect.dispatchEvent(
-      new Event("change", { bubbles: true }),
-    );
-  });
-  toggleTopbarMenu();
-  await until(
-    () => !document.querySelector(".config-dropdown"),
-    "Town settings closed before shell Actions",
-  );
+  await chooseInspectorOpening("Floating", "Floating before shell Actions");
   function reviewerInspectorActive() {
     const frame = document.querySelector<HTMLElement>(
       ".world-managed-window.is-active",
@@ -2990,20 +3031,7 @@ async function run() {
     () => !document.querySelector(".world-managed-window"),
     "close presentation windows",
   );
-  toggleTopbarMenu();
-  await until(
-    () =>
-      document.querySelector<HTMLSelectElement>(
-        'select[aria-label="Inspector opening"]',
-      ),
-    "reopened Town settings",
-  );
-  const dockedOpeningSelect = document.querySelector<HTMLSelectElement>(
-    'select[aria-label="Inspector opening"]',
-  )!;
-  dockedOpeningSelect.value = "docked";
-  dockedOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  toggleTopbarMenu();
+  await chooseInspectorOpening("Snapped right", "reopened Town settings");
   await openAgent("Builder");
   await until(
     () =>
@@ -5183,20 +5211,10 @@ async function run() {
     () => window.__HERDR_TOWN_RENDERER__?.ready === true,
     "Town before later Inspector opening",
   );
-  toggleTopbarMenu();
-  await until(
-    () =>
-      document.querySelector<HTMLSelectElement>(
-        'select[aria-label="Inspector opening"]',
-      ),
+  await chooseInspectorOpening(
+    "Floating",
     "Town opening preference before Restore regression",
   );
-  const laterOpeningSelect = document.querySelector<HTMLSelectElement>(
-    'select[aria-label="Inspector opening"]',
-  )!;
-  laterOpeningSelect.value = "floating";
-  laterOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  toggleTopbarMenu();
   const laterDesk = () =>
     document.querySelector<HTMLButtonElement>(
       '.world-semantic-target[data-kind="desk"][data-target-key*="created-tab-3"]:not(:disabled)',

@@ -16,7 +16,9 @@ import {
   waitForBrowserFixture,
   waitForChromePort,
 } from "../browserChrome";
+import { InputDriver } from "./browserAcceptanceFixture";
 import { buildWorldBrowserBundle } from "./testing/browserBundles";
+import { chromeRenderingFlags } from "./testing/chromeRendering";
 import { connectCapture } from "./testing/connectCapture";
 
 const chrome =
@@ -37,8 +39,39 @@ const VIEWPORTS = [
   { name: "portrait", width: 1440, height: 2560, mobile: false },
 ] as const;
 
-/** A core host: the builder has a sub-agent that ends with it and one that outlives it. */
-async function coreSnapshot() {
+/**
+ * Terminals a start leaves on the host: a shell (t9), an agent (t10) and a
+ * second shell started while the Hosts filter hides the host (t11).
+ */
+const STARTED = {
+  t9: { address: "t9", labels: {}, argv: ["/bin/sh"], state: "live", pid: 19 },
+  t11: {
+    address: "t11",
+    labels: {},
+    argv: ["/bin/sh"],
+    state: "live",
+    pid: 21,
+  },
+  t10: {
+    address: "t10",
+    labels: {},
+    argv: ["claude"],
+    state: "live",
+    pid: 20,
+    turn: 0,
+    status: { state: "idle", app: "claude-code" },
+  },
+} as const;
+
+/**
+ * A core host: the builder has a sub-agent that ends with it and one that
+ * outlives it; `started` adds what a start left. `beta` adds a second core
+ * host with one shell, for a Hosts filter that hides the first.
+ */
+async function coreSnapshot(
+  started: readonly (keyof typeof STARTED)[] = [],
+  beta = false,
+) {
   const placed = (tab: string, where: string) => ({
     "herdr.space": "fx-web",
     "herdr.tab": tab,
@@ -88,19 +121,45 @@ async function coreSnapshot() {
       pid: 14,
     },
     { address: "t5", labels: {}, argv: ["/bin/sh"], state: "live", pid: 15 },
+    ...started.map((address) => STARTED[address]),
   ];
-  const mirror = new CoreMirror();
-  const sight = new CoreFirstSight();
-  mirror.baseline(1, terminals);
-  sight.observe("c0ffee", terminals);
-  const runtime = {
-    operations: coreRuntimeReader({
-      mirror,
-      actionable: true,
-      coreName: () => "fixture-host",
-      firstSight: sight,
-    }),
+  const reader = (
+    coreId: string,
+    name: string,
+    hosted: readonly Record<string, unknown>[],
+  ) => {
+    const mirror = new CoreMirror();
+    const sight = new CoreFirstSight();
+    mirror.baseline(1, hosted as never);
+    sight.observe(coreId, hosted as never);
+    return {
+      operations: coreRuntimeReader({
+        mirror,
+        actionable: true,
+        coreName: () => name,
+        firstSight: sight,
+      }),
+    };
   };
+  const runtimes = new Map([
+    ["core-fixture", reader("c0ffee", "fixture-host", terminals)],
+    ...(beta
+      ? [
+          [
+            "core-beta",
+            reader("beta0", "beta-host", [
+              {
+                address: "b1",
+                labels: {},
+                argv: ["/bin/sh"],
+                state: "live",
+                pid: 31,
+              },
+            ]),
+          ] as const,
+        ]
+      : []),
+  ]);
   const none = {
     list: () => [],
     has: () => false,
@@ -110,24 +169,28 @@ async function coreSnapshot() {
     readyRuntimeLease: () => null,
   };
   const core = {
-    list: () => [
-      {
-        id: "core-fixture",
-        label: "Fixture core",
+    list: () =>
+      [...runtimes.keys()].map((id) => ({
+        id,
+        label: id === "core-beta" ? "Beta core" : "Fixture core",
         source: "local-profile",
         is_default: false,
         state: "ready" as const,
         generation: 1,
-      },
-    ],
-    has: (id: string) => id === "core-fixture",
-    status: () => core.list()[0]!,
-    readyRuntimeLease: () => ({
-      connectionId: "core-fixture",
-      generation: 1,
-      runtime,
-      isCurrent: () => true,
-    }),
+      })),
+    has: (id: string) => runtimes.has(id),
+    status: (id: string) => core.list().find((status) => status.id === id)!,
+    readyRuntimeLease: (id: string) => {
+      const runtime = runtimes.get(id);
+      return runtime
+        ? {
+            connectionId: id,
+            generation: 1,
+            runtime,
+            isCurrent: () => true,
+          }
+        : null;
+    },
   };
   const service = new WorldSnapshotService(
     worldRuntimeRegistry(none as never, core as never),
@@ -247,3 +310,124 @@ for (const scene of ["launcher", "bin"] as const)
     },
     120000,
   );
+
+// One click on a core room's + and one on Terminal open the started shell's
+// window; one on + and one on Claude open the started agent's; a start in a
+// room the Hosts filter hides still opens its window (#1075).
+test.skipIf(!chrome).each([1440, 390])(
+  "core control: one click starts a core terminal and opens its window at %ipx",
+  async (width) => {
+    const dir = await mkdtemp(join(tmpdir(), "core-control-start-"));
+    const { assets } = await buildWorldBrowserBundle("CoreControl", dir);
+    const snapshots = new Map<string, string>();
+    for (const started of [
+      [],
+      ["t9"],
+      ["t9", "t10"],
+      ["t9", "t10", "t11"],
+    ] as const)
+      snapshots.set(
+        started.join(","),
+        JSON.stringify(await coreSnapshot(started, true)),
+      );
+    const result = Promise.withResolvers<string[]>();
+    const requested = Promise.withResolvers<void>();
+    const profile = join(dir, "profile"),
+      log = join(dir, "chrome.log");
+    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let socket: WebSocket | undefined;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        const url = new URL(request.url);
+        const path = url.pathname;
+        if (path === "/result") {
+          result.resolve(await request.json());
+          return new Response("ok");
+        }
+        if (path === "/snapshot")
+          return new Response(
+            snapshots.get(url.searchParams.get("started") ?? ""),
+          );
+        if (path === "/viewport-ready") {
+          const port = await waitForChromePort(child!, profile, log);
+          const targets = (await (
+            await fetch(`http://127.0.0.1:${port}/json/list`)
+          ).json()) as { type: string; webSocketDebuggerUrl: string }[];
+          socket = new WebSocket(
+            targets.find((target) => target.type === "page")!
+              .webSocketDebuggerUrl,
+          );
+          await new Promise<void>((resolve, reject) => {
+            socket!.onopen = () => resolve();
+            socket!.onerror = () => reject(new Error("CDP connection failed"));
+          });
+          const driver = new InputDriver(socket);
+          await driver.call("Emulation.setEmulatedMedia", {
+            features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+          });
+          await driver.call("Emulation.setDeviceMetricsOverride", {
+            width,
+            height: width === 390 ? 844 : 1000,
+            deviceScaleFactor: 1,
+            mobile: width === 390,
+          });
+          await driver.call("Emulation.setTouchEmulationEnabled", {
+            enabled: width === 390,
+          });
+          return new Response(String(width));
+        }
+        if (path === "/") requested.resolve();
+        const asset =
+          path === "/"
+            ? Bun.file(join(dir, "CoreControl/index.html"))
+            : assets.get(path);
+        if (asset) return new Response(asset);
+        if (path.startsWith("/world/") || path.endsWith(".svg")) {
+          const file = Bun.file(
+            join(import.meta.dir, "../../public", path.slice(1)),
+          );
+          if (await file.exists()) return new Response(file);
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+    try {
+      child = Bun.spawn(
+        [
+          chrome!,
+          "--headless=new",
+          "--remote-debugging-port=0",
+          "--window-size=1440,1000",
+          "--enable-webgl",
+          ...(await chromeRenderingFlags(chrome!)),
+          "--disable-dev-shm-usage",
+          "--no-first-run",
+          "--no-default-browser-check",
+          `--user-data-dir=${profile}`,
+          `${server.url.href}?scene=start`,
+        ],
+        { stdout: "ignore", stderr: Bun.file(log) },
+      );
+      const exited = child.exited.then(async (code) => {
+        throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
+      });
+      expect(
+        await waitForBrowserFixture(
+          requested.promise,
+          result.promise,
+          exited,
+          `Core control start at ${width}px`,
+          BROWSER_STARTUP_TIMEOUT_MS,
+        ),
+      ).toEqual([]);
+    } finally {
+      socket?.close();
+      await stopChrome(child);
+      server.stop(true);
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+  120000,
+);

@@ -75,7 +75,8 @@ if [ "$gate" = changed ] && [ -n "$base" ]; then
   set -- "$@" "--base=$base"
 fi
 
-if bun "$@" >"$log_file" 2>&1; then
+# Policy uses the complete PR diff even when units narrow to a single push.
+if bun scripts/check-push-policy.ts >"$log_file" 2>&1 && bun "$@" >>"$log_file" 2>&1; then
   ended_at=$(date +%s)
   elapsed=$((ended_at - started_at))
   printf '%s\t%s\t0\t%s\t%s\n' "$recorded_at" "$head_sha" "$elapsed" "$gate" >> "$report_file"

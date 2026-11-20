@@ -568,6 +568,34 @@ function human(command: string, reply: Reply): string {
   if (Array.isArray(result))
     return result.map((entry) => JSON.stringify(entry)).join("\n") || "(none)";
   const entry = (result ?? {}) as Record<string, unknown>;
+  if (command === "ls" && Array.isArray(entry.hosts)) {
+    return entry.hosts
+      .map((host) => {
+        const runtimeLines = host.runtimes.flatMap(
+          (runtime: {
+            kind: string;
+            version: string | null;
+            state: string;
+            workspaces?: { label?: string; workspace_id: string }[];
+          }) => [
+            `  ${runtime.kind} ${runtime.version ?? "(version unknown)"} — ${runtime.state}`,
+            ...(runtime.workspaces ?? []).map(
+              (room) => `    ${room.label ?? room.workspace_id}`,
+            ),
+          ],
+        );
+        return [
+          `${host.label} — ${host.state}`,
+          ...runtimeLines,
+          ...(host.state === "empty"
+            ? [
+                `  No runtime installed. Install ${host.installable_runtimes.map((runtime: { label: string }) => runtime.label).join(" or ")}.`,
+              ]
+            : []),
+        ].join("\n");
+      })
+      .join("\n");
+  }
   if (command.startsWith("ask")) {
     const answer = entry.answer as { text?: string } | undefined;
     if (command === "ask withdraw" || entry.withdrawn)

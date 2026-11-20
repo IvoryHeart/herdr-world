@@ -683,7 +683,7 @@ export function createWorldCli(deps: WorldCliDeps) {
         return actor;
       case "ls": {
         const snapshot = await deps.snapshot();
-        return snapshot.connections.map((connection) => ({
+        const connections = snapshot.connections.map((connection) => ({
           connection_id: connection.connection_id,
           connection_generation: connection.generation,
           label: connection.label,
@@ -706,6 +706,21 @@ export function createWorldCli(deps: WorldCliDeps) {
               })),
           })),
         }));
+        return snapshot.hosts
+          ? {
+              hosts: snapshot.hosts.map((host) => ({
+                ...host,
+                runtimes: host.runtimes.map((runtime) => ({
+                  ...runtime,
+                  ...connections.find(
+                    (connection) =>
+                      connection.connection_id === runtime.connection_id,
+                  ),
+                })),
+              })),
+              connections,
+            }
+          : connections;
       }
       case "history": {
         const by = typeof params.actor === "string" ? params.actor : "";

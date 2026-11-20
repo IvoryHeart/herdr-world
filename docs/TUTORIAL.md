@@ -71,8 +71,8 @@ Your shells and agents
    agent → Terminal**. In the shell, change to your project's folder with
    `cd` (`Set-Location` in PowerShell).
 6. With the **Herdr TUI**, open **Spaces → +** (New workspace), set
-   **Working directory** to your project, and choose **Create**. Select its
-   shell. Run `pwd` (`Get-Location` in PowerShell) to check your folder.
+   **Folder** to your project (tap a recent folder or type a path), and choose
+   **Create**. Select its shell. Run `pwd` (`Get-Location` in PowerShell) to check your folder.
 
 **You are done when:** the terminal shows your project's folder.
 
@@ -111,7 +111,7 @@ reconnects one. A disconnected host stays visible, marked
 ### Keep World up to date
 
 When a new release is out, World tells you once and puts a dot on **Menu**.
-Install it when you are ready with **Menu → Help & updates → Upgrade to …**.
+Install it when you are ready with **Menu → Upgrade to …**.
 After an upgrade, open tabs offer **Reload**; your terminals keep running.
 
 ## 2. Find what needs you in Town
@@ -175,7 +175,8 @@ Tap an agent or its table. Its window opens on **Chat**, with **Terminal**,
 on the right; drag its edge to resize it. [Chat with an agent](#chat) covers
 reading and replying.
 
-Prefer the terminal? Set **Menu → Agents open** to **Terminal**.
+Prefer the terminal? Set **Menu → Settings → Opening an agent shows** to
+**Terminal**.
 
 ### Find anything
 
@@ -194,9 +195,10 @@ Tap the domed **town center** at the top of the town for a ring of actions:
 
 Around it you will find:
 
-- **The Town board.** It counts every agent. Its **FUEL** gauges show how much
-  of each Claude and Codex subscription window is left. **Summary** lists who
-  needs you, unreviewed work, each host and spend.
+- **The Town board.** Tap the status chip at the top left to open it; Escape
+  or a tap outside closes it. It counts every agent. Its **FUEL** gauges show
+  how much of each Claude and Codex subscription window is left. **Summary**
+  lists who needs you, unreviewed work, each host and spend.
 - **The City expenses billboard.** Estimated cost for today and the last 7
   days. Each building's reception board shows its own share. Costs need a
   price table; see [harness usage](./usage.md).
@@ -312,8 +314,8 @@ message reached the transcript.
 A **profile** is a ready-made agent: a name, a harness and model, a role,
 skills, a first brief and a look in Town.
 
-1. Open **Menu → Agent profiles**. Pick a starter (Reviewer, Builder, Designer
-   or FirstMate), or choose **New profile**.
+1. Open **Menu → Settings → Agent profiles**. Pick a starter (Reviewer,
+   Builder, Designer or FirstMate), or choose **New profile**.
 2. Work through **Who**, **Brain**, **Skills & tools**, **Brief** and
    **Look & sound**, then **Save**. In the brief, `{{task}}` becomes the task
    you type at launch.
@@ -334,8 +336,8 @@ you chose.
 
 <a id="chimes"></a>
 
-1. Open **Menu → Sounds** and tap **Needs you**, **For you** and **Finished**
-   to hear each chime. On devices that should stay quiet, turn off
+1. Open **Menu → Settings → Chimes and who plays them** and tap **Needs
+   you**, **For you** and **Finished** to hear each chime. On devices that should stay quiet, turn off
    **Play chimes on this device**.
 2. Under **Town master**, choose your coordinating agent and tap
    **Make Town master**. Its chime is a sound of its own.
@@ -365,7 +367,7 @@ results, and ask you questions.
    ```
 
    Use `codex` or `pi` for those agents, or use
-   **Menu → Configuration → Integrations**.
+   **Menu → Settings → Agent integrations**.
 
 2. Start a new agent session. It can now ask you something:
 
@@ -423,7 +425,7 @@ target before you press **Send**.
 4. Open a pull request for its checks and reviews. **Merge…**, **Close…** and
    **Mark ready…** ask first and say exactly what will happen.
 
-Nothing shows? Open **Settings → Sources**. Sign in to GitHub with
+Nothing shows? Open **Menu → Settings → Sources**. Sign in to GitHub with
 `gh auth login` as the user that runs World, or add your Jira site and an API
 token.
 
@@ -572,7 +574,7 @@ First set up [Tailscale and Serve](#tailscale) in chapter 7. On a phone,
 2. Read and reply in **Chat**. In a terminal, tap **Message** to type with the
    phone keyboard; the key rows give you arrows, Esc and Ctrl.
 3. Open **Changes** to review the README diff.
-4. Adjust the size in **Menu → Appearance → Text size**.
+4. Adjust the size in **Menu → Settings → Appearance**.
 5. Install World as an app:
 
 | Browser or device | Where to install |

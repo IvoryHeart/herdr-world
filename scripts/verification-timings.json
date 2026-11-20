@@ -1,29 +1,31 @@
 {
-  "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/41083467325",
-  "units": "seconds; per-model ci-shard manifest elapsedMs divided by 1000",
-  "seconds": {
-    "binding-resolution": 10.679,
-    "browser-preparation": 72.123,
-    "browser-refresh": 62.829,
-    "chunk-assembly": 32.621,
-    "chunk-credits": 62.998,
-    "creation-flow": 16.107,
-    "ranger-authority": 10.58,
-    "ranger-recovery": 20.574,
-    "runtime-control": 37.172,
-    "runtime-drain": 37.882,
-    "runtime-leases": 46.514,
-    "space-admission": 225.083,
-    "observation-base": 60.119497273,
-    "herdr-core-runtime": 431.46,
-    "effect-recovery": 199.5,
-    "herdr-core-seen": 11.732
+  "sourceRun": "Local canonical full-parallel run, 2026-11-19",
+  "units": "seconds; per-model full-parallel manifest execution.cases elapsedMs divided by 1000",
+  "tools": {
+    "quint": "0.33.1",
+    "checker": "0.62.1",
+    "jarSha256": "880c0b2b72354816f12e9a9755829f2907071e9a181ffea1937954c23d54739d",
+    "node": "v24.19.0",
+    "java": "openjdk version \"21.0.13.1\" 2026-11-17",
+    "bun": "1.4.4"
   },
-  "localSources": {
-    "herdr-core-runtime": "Complete focused maintained run with the M7 kill fence, P4 worktree removal, launch briefs, the observe family and the typing family: sum of command elapsedMs, bounded exhaustive quotient with sends and kills checked in separate authority families (789,010 distinct states, 65 s), three seeds, twenty-nine invariant/replay controls, thirteen production controls and larger-bound sensitivity, on a machine running other model runs alongside (2026-11-11).",
-    "binding-resolution": "Focused maintained run: sum of command elapsedMs, including private TLC startup, three seeds (500 replay traces each), model fault and six code controls (2026-10-31).",
-    "observation-base": "Development exhaustive TLC with the pinned checker; 60.119497273 seconds including private checker startup. Existing entries retain their sourceRun.",
-    "effect-recovery": "Complete local verification gate, all 13 canonical models; effect-recovery case 199.5 seconds including real SQLite replay and controls. Existing entries retain their sourceRun.",
-    "herdr-core-seen": "Complete focused maintained run: sum of command elapsedMs, exhaustive TLC (3339 distinct states), three seeds (500 replay traces each), five model fault controls and larger-bound sensitivity (2026-11-11)."
-  }
+  "seconds": {
+    "herdr-core-runtime": 321.781,
+    "herdr-core-seen": 12.185,
+    "space-admission": 93.434,
+    "chunk-credits": 21.109,
+    "observation-base": 89.83,
+    "runtime-drain": 13.802,
+    "chunk-assembly": 8.945,
+    "creation-flow": 8.912,
+    "binding-resolution": 12.137,
+    "effect-recovery": 135.486,
+    "browser-preparation": 30.303,
+    "browser-refresh": 38.739,
+    "runtime-leases": 17.975,
+    "runtime-control": 15.544,
+    "ranger-recovery": 14.362,
+    "ranger-authority": 7.021
+  },
+  "note": "Measured with Quint 0.33.1 and two local workers; not hosted CI results. Core retains its structurally dedicated two-CPU CI shard. All models, bounds, replay and sensitivity controls passed; weights affect scheduling only."
 }

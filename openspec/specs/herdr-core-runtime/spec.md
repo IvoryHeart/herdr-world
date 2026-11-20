@@ -17,8 +17,9 @@ certification gating. A newest-release smoke test SHALL flag protocol drift.
 #### Scenario: Core and TUI on the same host
 
 - **WHEN** both runtimes are available
-- **THEN** each retains its own identity and generation, new agents default to
-  core with app placement, and explicitly selected TUI launches still work
+- **THEN** World discovers both under one host; each retains its own connection
+  identity and generation, new agents default to core with app placement, and
+  explicitly selected TUI launches still work
 
 #### Scenario: New release
 
@@ -267,7 +268,9 @@ World's own guarded host helpers on the core's host, never from core's
 `file.*`, and only under the connection and runtime generation the request
 names. An agent's worktree selection SHALL be bound to the program occupying
 its address. A core room MAY be a Git worktree World created or opened; its
-checkout is the room's folder. Removing it SHALL ask to confirm every
+checkout is the room's folder. Any other World-created room MAY keep a
+folder World checked on the core's host when creating it; its terminals SHALL
+start there. Removing a worktree room SHALL ask to confirm every
 terminal that ends with it, run the teardown hook only while that
 confirmation holds, end the confirmed terminals, and only then remove the
 checkout under the same generation. A `herdr-world` command inside a core

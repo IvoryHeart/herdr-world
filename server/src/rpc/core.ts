@@ -11,6 +11,7 @@ import {
 import type { CoreConnectionProfile } from "../connections/profiles";
 import { createCoreConnections } from "../herdr-core/connections";
 import { memoryCoreTopologyPort } from "../storage/core-topology";
+import { inspectWorkspacePath } from "../workspace/path";
 import {
   closeCoreRoom,
   CoreOperationRefused,
@@ -217,11 +218,38 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
         invalidate();
         return reply(outcome);
       }
-      case "world.core.room.create":
+      case "world.core.room.create": {
+        // A folder is checked on the core's host, as a Herdr workspace's.
+        let folder: string | undefined;
+        if (typeof p.folder === "string" && p.folder.trim()) {
+          const host = core.hostRuntime(lease);
+          const info = await inspectWorkspacePath(
+            p.folder,
+            {
+              host: host.sshHost(),
+              remotePlatform: host.remotePlatform,
+              runProcessWithCodeTimeout: host.runProcessWithCodeTimeout,
+            },
+            false,
+          );
+          if (info.error)
+            throw new CoreOperationRefused(`${info.error} ${info.path}`);
+          if (!lease.isCurrent())
+            throw new CoreOperationRefused(
+              "The host's herdr-core reconnected; look again and retry.",
+            );
+          folder = info.path;
+        }
         reply(
-          await createCoreRoom(lease, core.topology, String(p.label ?? "")),
+          await createCoreRoom(
+            lease,
+            core.topology,
+            String(p.label ?? ""),
+            folder,
+          ),
         );
         return invalidate();
+      }
       case "world.core.room.rename":
         await renameCoreRoom(
           lease,

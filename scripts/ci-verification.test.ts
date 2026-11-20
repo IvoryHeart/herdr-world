@@ -1,3 +1,4 @@
+import { lockedQuintVersion } from "./verification-setup";
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
@@ -46,6 +47,13 @@ test("three disjoint model groups cover the complete canonical inventory", () =>
   expect(new Set(all).size).toBe(all.length);
   for (const index of [0, 4, 1.5, NaN])
     expect(() => verificationShard(index)).toThrow();
+});
+
+test("the core model owns a dedicated two-CPU shard before its controls parallelize", () => {
+  const shard = [1, 2, 3]
+    .map(verificationShard)
+    .find((models) => models.includes("herdr-core-runtime"));
+  expect(shard).toEqual(["herdr-core-runtime"]);
 });
 
 test("the newest complete attempt per group is mandatory; omissions, duplicates and foreign runs fail", () => {
@@ -118,7 +126,7 @@ async function fixture(
           sourceRevision: git("rev-parse", "HEAD"),
           sourceInputs,
           tools: {
-            quint: "0.33.0",
+            quint: lockedQuintVersion,
             checker: "0.62.1",
             jarSha256: "b".repeat(64),
             node: "synthetic",

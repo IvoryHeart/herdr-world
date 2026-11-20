@@ -11,12 +11,15 @@ browser or phone. World connects to local and SSH hosts and shows them together.
 
 World works with the **Herdr TUI**, **herdr-core**, or both on one computer.
 **herdr-core is primary when installed and connected**: new agents use it unless
-you choose a Herdr TUI room. Each runtime has its own connection.
+you choose a Herdr TUI room. World discovers both on each host; each runtime keeps
+its own connection identity for safe operations.
 
 - **herdr-core:** install it with the [official instructions](https://github.com/herdrdev/herdr-core)
   or World's setup below. With core already running and no Herdr TUI, World's
-  first run connects to it automatically and makes it the default. For another
-  connection, open **Hosts → Manage connections → Add herdr-core**. Choose **This computer**, **A Unix host over SSH** or
+  first run connects to it automatically and makes it the default. With both
+  installed, World finds both. Add another host with
+  `herdr-world connections add you@host.example`, or use the existing runtime
+  controls in **Hosts → Manage connections → Add herdr-core**. Choose **This computer**, **A Unix host over SSH** or
   **A Windows host over SSH** and connect. Keep session **default** unless you changed
   `HC_SESSION`. Windows core needs Windows x64 and PowerShell; over SSH, install
   and start it on Windows first and use SSH key login.
@@ -54,7 +57,7 @@ Connection and retry never install or start herdr-core.
    | --- | --- |
    | Only herdr-core | Run `hc server start`; World's first run finds it and makes it the default. No Herdr TUI is needed. |
    | Only Herdr TUI | Run `herdr-world herdr setup`. |
-   | Both | Start each runtime you want, then add its connection. |
+   | Both | Start both; World discovers and connects both on this computer. |
    | Neither | Standalone installs core; Homebrew does so on first launch. With npm or an archive, run `herdr-world herdr upgrade --install`. |
 
    Setup starts a new core now and at login, including Windows x64. Existing
@@ -87,7 +90,7 @@ use the corner view menu. Town's time-of-day button below **ALL** cycles your
 clock, day, dusk and night. Amber light means someone needs you.
 
 GitHub pull requests appear after `gh auth login` for the account running
-World. Add Jira in **Settings → Sources**.
+World. Add Jira in **Settings → Integrations**.
 
 ## Screenshots
 

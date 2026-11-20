@@ -1,7 +1,7 @@
 import { herdrRuntimeFixture } from "../server/src/adapters/testing/runtime";
 import assert from "node:assert/strict";
 import { Database } from "bun:sqlite";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -19,6 +19,7 @@ import {
 } from "../server/src/assistant/tasks";
 import type { LegacyConnectionRuntime } from "../server/src/connections/runtime";
 import { observe } from "./observations";
+import { openWithoutSqliteSync } from "../server/src/testing/sqlite-no-sync";
 import type { TraceState } from "./replay";
 export type RecoveryState = {
   captured: boolean;
@@ -32,6 +33,26 @@ export type RecoveryState = {
   recovered: boolean;
   result: string;
 };
+let emptyTaskDatabase: Uint8Array | undefined;
+/** The initial state is always an empty current database. Build it through
+ * production storage once per replay process, then copy that closed seed.
+ * Every trace still owns real SQLite files and every save/reopen/rollback.
+ * Mutants retain their own constructor, including cold initialization. */
+function openReplayStorage(
+  directory: string,
+  openStorage: typeof openTaskStorage,
+) {
+  if (openStorage !== openTaskStorage)
+    return openStorage(directory, validateSavedTasks);
+  const path = join(directory, "tasks.sqlite");
+  if (!emptyTaskDatabase) {
+    const seed = openTaskStorage(directory, validateSavedTasks);
+    assert.deepEqual(seed.load(), { tasks: [], proposals: [], requests: [] });
+    seed.close();
+    emptyTaskDatabase = readFileSync(path);
+  } else writeFileSync(path, emptyTaskDatabase, { mode: 0o600 });
+  return openStorage(directory, validateSavedTasks);
+}
 export async function replayRangerRecovery(
   states: TraceState[],
   openStorage = openTaskStorage,
@@ -87,7 +108,9 @@ export async function replayRangerRecovery(
   const taskId = "00000000-0000-4000-8000-000000000001";
   const date = "2026-10-01T00:00:00Z";
   try {
-    storage = openStorage(directory, validateSavedTasks);
+    storage = openWithoutSqliteSync(() =>
+      openReplayStorage(directory, openStorage),
+    );
     for (const state of states) {
       const expected = state.recovery;
       switch (state.op) {
@@ -151,6 +174,7 @@ export async function replayRangerRecovery(
         case "failedSave": {
           const database = new Database(join(directory, "tasks.sqlite"));
           try {
+            database.exec("PRAGMA synchronous=OFF");
             database.exec(
               "CREATE TRIGGER IF NOT EXISTS synthetic_rejected_write BEFORE INSERT ON tasks WHEN NEW.title = 'Synthetic rejected' BEGIN SELECT RAISE(ABORT, 'synthetic rejected transaction'); END;",
             );
@@ -176,7 +200,9 @@ export async function replayRangerRecovery(
           storage = undefined;
           break;
         case "reopen":
-          storage = openStorage(directory, validateSavedTasks);
+          storage = openWithoutSqliteSync(() =>
+            openStorage(directory, validateSavedTasks),
+          );
           saved = storage.load();
           targets = saved.tasks[0]!.targets;
           break;

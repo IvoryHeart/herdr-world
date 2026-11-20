@@ -30,7 +30,11 @@ auto-sync runtime status and Board state. One in-process worker
 owns it; SQLite uses WAL and `synchronous=FULL`. Responses acknowledge a durable
 commit. Grouping up to 32 operations or 5 ms reduces synchronization frequency;
 these settings do not promise a particular response latency on every platform.
-Configuration, connections and secrets remain private files.
+Configuration, connections and secrets remain private files. The version-3
+`connections.json` stores hosts with runtime discovery records alongside the
+existing runtime profiles. Local profiles and identical SSH destinations group
+without renaming runtime IDs. See [host discovery and API](host-connections.md)
+for CLI use, migration and rollback constraints.
 
 At startup, World checks `boards/world-ledger.json` (or the configured
 `HERDR_WORLD_LEDGER_PATH`). Before importing a changed file, it makes a private,
@@ -508,7 +512,7 @@ reopening are separate; this setup behavior does not verify macOS login recovery
 A failed Homebrew bootstrap warns and leaves World available for SSH or browser
 setup. Repair a broken default-path executable before retrying. For managed
 TUI installations, use their package manager; World never replaces a shim or
-downgrades a newer binary. **Menu → Runtime** offers **Upgrade Herdr** or
+downgrades a newer binary. **Menu → Settings → Herdr and connection details** offers **Upgrade Herdr** or
 **Update Herdr integrations** when the local TUI needs them.
 
 What the upgrade does:
@@ -713,8 +717,8 @@ their Herdr supports stays available. Log in is not offered there.
 
 The Town board can show token use and reported cost from a Prometheus-compatible
 HTTP API. It does not supply Board notes, strings or agent status. Open
-**OTEL economy metrics** from the settings menu and save an HTTP or HTTPS base URL,
-or set the service startup default:
+**Menu → Settings → Integrations**, choose **Usage metrics → Connect** and save an HTTP or HTTPS
+base URL, or set the service startup default:
 
 ```bash
 HERDR_WORLD_OTEL_PROMETHEUS_URL=http://127.0.0.1:9090 herdr-world
@@ -735,7 +739,7 @@ topology, terminal conversations and Inspector operations continue normally.
 
 World shows your pull requests and tickets on Board's Work lens and as desk
 badges in Town. Both sources ship with World and are on by default; switch
-either off in **Settings → Sources**. Each is read only while a visible browser
+either off in **Settings → Integrations**. Each is read only while a visible browser
 tab shows it, at most once a minute, and a failed refresh keeps the last items.
 Requests answer within two seconds with what World has while a slow `gh`,
 Jira or SSH lookup finishes in the background.
@@ -745,7 +749,7 @@ Jira or SSH lookup finishes in the background.
   (for a user service, the same account the service runs as). Until then the
   source says **Sign in with gh auth login**. World stores no GitHub token.
   Merged pull requests cover the last 7 days by default (1 to 90 in
-  **Settings → Sources**, saved as `custom.world_sources.github.mergedDays`);
+  **Settings → Integrations**, saved as `custom.world_sources.github.mergedDays`);
   World reads open authored, review-requested and assigned pull requests in
   separate requests of at most 50 each, then reads your own pull requests'
   action details before merged history. History uses cursor pages of 50, up to
@@ -756,7 +760,7 @@ Jira or SSH lookup finishes in the background.
   source reports an error and keeps its last complete list. The message names
   the oldest valid merge date actually observed, or says no merge date could
   be confirmed. That date describes an observation, not continuous coverage or
-  a retention cutoff. Shorten the merged window in **Settings → Sources** and
+  a retention cutoff. Shorten the merged window in **Settings → Integrations** and
   refresh. A shortened refresh never replaces the list or authorizes actions.
 - **Your open pull requests** are read in more detail: checks on the head,
   changed files, and the last 30 reviews and 50 comments, which stay in the
@@ -772,8 +776,8 @@ Jira or SSH lookup finishes in the background.
   that the browser asked, in memory until the service restarts.
 - **Jira Cloud** needs your site (`example.atlassian.net`), account email and an
   [API token](https://id.atlassian.com/manage-profile/security/api-tokens),
-  entered in **Settings → Sources**. The site and email are saved in
-  `settings.json` (`custom.world_sources`); the token is saved in an owner-only
+  entered in **Settings → Integrations**. The site and email are saved in
+  `settings.json` (`custom.world_sources`); the token is saved in World's vault, an owner-only
   `source-secrets.json` (or `source-secrets-<hash>.json` beside a custom
   `HERDR_WORLD_SETTINGS_PATH`) in World's data directory and is never sent to the
   browser. Changing the site or email removes the saved token. The filter defaults to `(assignee = currentUser() OR watcher =
@@ -941,10 +945,10 @@ public Host and configure `--public-origin` when proxying to loopback.
 
 1. Open World over trusted HTTPS. On iOS/iPadOS 16.4 or newer, open the installed
    Home Screen PWA.
-2. Open **Menu → Behavior & automation → Task notifications**, enable alerts,
-   grant browser permission, and choose **Agent needs input** and/or
-   **Task completed**.
-3. Confirm **Background push** enrollment. If an existing browser only has local
+2. Open **Menu → Settings → Notifications & sounds**, turn on **Task
+   notifications**, grant browser permission, and choose **Notify when a task
+   needs you** and/or **Notify when a task finishes**.
+3. Confirm the row reads **On · Background push**. If an existing browser only has local
    alerts, toggle notifications off and on to enroll it again.
 
 Server delivery is enabled by default; each browser profile needs its own
@@ -1136,7 +1140,7 @@ another port with `--port`; do not run two shells for one installation.
 Open **Ranger** in the desktop toolbar or mobile controls. Connect a model provider
 using Ranger credentials, explicit Pi credentials, or a custom model endpoint.
 Use the gear button in the Ranger panel for model credentials and workspace
-permissions. **Menu → Configuration → Integrations** manages agent integration
+permissions. **Menu → Settings → Integrations** manages agent integration
 scripts on the selected Herdr host; it is separate from Ranger model setup.
 Allow specific workspaces in Ranger settings before asking it to read status,
 terminal output, agent history or Git changes. New installations allow no
