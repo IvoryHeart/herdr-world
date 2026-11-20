@@ -469,7 +469,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (a phone keeps only a few rows of yard above each building for its
     reception board); tap one to open it. Zoomed in to desks, the boards are put away with
     reception. At every zoom the reception boards keep clear of the town
-    center, the post office, the billboard and each other: a board that would
+    center, the post office, the observatory, the billboard and each other: a board that would
     cover one slides aside the least it can while staying over its building,
     else it hangs lower, below the center or the board in its way.
     The `?scene=town-scale` preview replaces every economy reader with labelled
@@ -507,6 +507,65 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
     the page drops the parameter at once and only the post office and the
     Work lens it opens use it.
+  - Town's **observatory** stands on the first street right of the library,
+    which stands right of the town center (a wide town grows rightwards to
+    keep its lot; nothing moves). Its
+    sign shows, for Claude and Codex, the **5 h** and **week** subscription
+    windows used and when each resets, such as "40% · Wed 14:00", or
+    "limit · 12:40" when the harness refused work; a window with under 15%
+    left is orange. A badge beside each name counts its agents at work, and a
+    tower window lights per agent at work (warm for Claude, cool for Codex,
+    pale for any other harness; "+N" past eight): Town's working agents, or
+    the runs that answered in the last ten minutes where those are more. A
+    harness with no reading, including one at work whose budget World cannot
+    read (such as Cursor), says "no reading", never 0%; an old reading is dimmed "out of date".
+    On a phone it folds to a night-blue sign with a telescope on the town
+    center's right wing, such as "Claude 71% Codex 18%". Either sign opens
+    **Usage**, a lens over Town with four tabs (Escape, Back, the close
+    button or a press outside closes it):
+    - **Budget**: each harness's windows with a meter, a line where even use
+      would be now and the pace in words: "On track to be used by the
+      reset", "Runs out around Thu 09:00, 1 d 5 h before it resets",
+      "On pace to leave about 40% unused" (under 80% by the reset), "Too
+      early in the window to tell" in its first tenth, or "Limit reached".
+      Each card says how many are at work and when and where the reading
+      was seen.
+    - **Runs at once**: per harness, the most runs going at the same moment
+      in each hour of the last 24, stacked into building (worker, fixer) and
+      reviewing or checking (reviewer, checker), with the week's busiest
+      hour and **Show as table** for the same numbers. A run is going while
+      its responses are at most ten minutes apart and while World sees its
+      agent working; two short runs at 12:05 and 12:30 are one at once.
+    - **Tokens**: the runs answering now and the week's heaviest, each with
+      role, item, tokens, calls, largest prompt and context fill; tokens by
+      role (with the typical run and calls) and by item or pull request. A
+      fixer's second or later round on one item, a context 85% full or a
+      run with several times its role's typical calls is flagged in words.
+      A run of a harness World reads no log of (Cursor, OpenCode and others)
+      shows its time at work and waiting, and "tokens and cost not available
+      for this harness".
+    - **Breakdown**: the last seven days by **Agent**, **Project**, **Room**
+      or **Day**, with time at work, time waiting on you, tokens, cost (the
+      harness's reported cost, else "est." from list prices) and pull
+      requests opened and merged, and a total row. "unknown" means no
+      reading; "(partly read)" means some sources were not readable. Agents
+      and rooms no longer open read "Earlier agent" and "Earlier room".
+      Under the table, **What World can read** names, per harness at work
+      this week, whether its tokens come from its session logs or only
+      World's time is known, and whether pull requests could be read.
+    Every number comes from [usage analytics](./docs/usage-analytics.md):
+    each API response counts once, roles are read from a run's first prompt
+    (unknown when it names none), and what the logs do not show says
+    "unknown" instead of an estimate. A run's pull request comes from a work
+    link its own agent session confirmed, never from its branch alone; a
+    branch a pull request has but no confirmed link reads "(pull request
+    unknown)". The read refreshes at most every 30
+    seconds; after five minutes of failed re-reads the sign says "Usage
+    unavailable". For trying rare states, open World with `?usageFixture`
+    (two harnesses at work), `?usageFixture=reached` (Claude's 5-hour limit
+    reached) or `?usageFixture=empty` (nothing observed); the page drops the
+    parameter at once, and only the observatory, Usage and agent cards use
+    synthetic runs until the next page load.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
@@ -713,6 +772,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     sweat drop at its desk: it is about to compact or lose the thread. An
     agent without a reading, or on a model World does not know, shows no bar
     rather than zero. See [harness usage data](docs/usage.md#context-fill).
+  - An agent's peek, and the hover card on its tab or pane row, show its run
+    this week: role, item, tokens, calls and largest prompt, such as
+    "Fixer · #101 · 12M tokens · 228 calls · largest prompt 176k", with a
+    warning line for what may be waste ("fixer round 3 on #101", "context
+    86% full"). In the peek the line opens Usage's **Tokens** tab. A pane
+    with no run in the read says "This run: usage unknown". An agent of a
+    harness World reads no log of shows its time instead, such as "at work
+    40 min · tokens and cost not available for this harness".
   - Zoomed into a room, each working agent shows a thought bubble over its
     head with a glyph for the step it runs now: a pencil for editing files,
     a test tube for tests, a prompt for a command, a magnifier for reading or

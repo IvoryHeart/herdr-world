@@ -186,8 +186,9 @@ opaque digests SHALL leave the transcript host.
 
 World SHALL provide `world.usage.analytics` and the authenticated local CLI
 `usage` read over the same numeric harness evidence. It SHALL aggregate before
-legacy detail clipping and group by agent, Git project, qualified room or UTC
-day for today or seven UTC calendar dates. Metrics SHALL distinguish unknown
+legacy detail clipping and group by agent, Git project, qualified room, UTC
+day or run (one harness session on one transcript host) for today or seven UTC
+calendar dates. Metrics SHALL distinguish unknown
 from observed zero and disclose partial coverage. Optional explicit harness
 cost SHALL remain separate from configured price estimates and SHALL NOT imply
 a subscription charge or invoice. Stale numeric rows SHALL NOT enter totals.
@@ -195,6 +196,18 @@ a subscription charge or invoice. Stale numeric rows SHALL NOT enter totals.
 #### Scenario: Unknown cost and no time evidence
 - **WHEN** logs expose tokens without dollar charges or observed runtime status intervals
 - **THEN** tokens remain visible and reported cost, active time and owner-wait time are null with unknown coverage
+
+#### Scenario: Run detail without prompt text
+- **WHEN** a caller groups by run
+- **THEN** each run row carries its source, harness, models, response count with each API response counted once, first and last response times, largest prompt, bounded spans when it was going (responses at most ten minutes apart, joined with the intervals World observed its agent working, which join only where they touch so an observed idle gap is never working time), checkout branch, its pull request and how it was attributed, and its pane's current context, and a role only from a fixed vocabulary matched in the run's first prompt, never the prompt text; a run whose first prompt names no role has an unknown role
+
+#### Scenario: Harness without a token reader
+- **WHEN** World observes an agent of a supported harness whose session logs no usage reader reads, or whose log has no run yet
+- **THEN** its observed active and waiting-on-you time still count, it appears as a run of its own measured by World, and its response count, largest prompt, tokens and cost are null (not available), never zero
+
+#### Scenario: Pull request attribution
+- **WHEN** a run's pull request is attributed
+- **THEN** only a work link validated by the pane's own agent session and naming exactly one pull request names it, and is kept with the run; a branch alone never names one, because it carries no repository: when a catalogue pull request has the run's branch but no such link proves it, the pull request is unknown and marked ambiguous, never the most recently updated or the only match
 
 #### Scenario: Same host through two runtime connections
 - **WHEN** TUI and core connections are known to read the same transcript host

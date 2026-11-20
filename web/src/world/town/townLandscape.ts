@@ -21,6 +21,10 @@
 import { townBusRoute } from "./townBus";
 import { townPostLot } from "./townPost";
 import { townLibraryLot, townLibraryReserve } from "./townLibraryLot";
+import {
+  townObservatoryLot,
+  townObservatoryReserve,
+} from "./townObservatoryLot";
 import { townPostReserve } from "./townPostLot";
 import {
   TOWN_FACADE,
@@ -244,6 +248,11 @@ function reservedLand(layout: TownLayout) {
   const library = townLibraryLot(layout);
   if (library) {
     const lot = townLibraryReserve(library);
+    reserve(lot.x0, lot.y0, lot.x1, lot.y1);
+  }
+  const observatory = townObservatoryLot(layout);
+  if (observatory) {
+    const lot = townObservatoryReserve(observatory);
     reserve(lot.x0, lot.y0, lot.x1, lot.y1);
   }
   if (layout.roads.length) {

@@ -18,6 +18,8 @@ import { useCoreSeen } from "../coreSeen";
 import { CorePinButton } from "../CorePin";
 import { ContextFillBar } from "../../components/ContextFillBar";
 import { useAgentContextFill } from "../agentContextFill";
+import { AgentUsageLine } from "../usage/AgentUsageLine";
+import { useOpenTownUsage } from "./TownUsageLens";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import {
   TERMINAL_COLOR_PALETTE,
@@ -117,6 +119,7 @@ export function TownPeek({
     generation: agent.currentPaneRef.generation,
     paneId: agent.currentPaneRef.nativeId,
   });
+  const openUsage = useOpenTownUsage();
   useEffect(() => {
     follow.current = true;
   }, [agent.key]);
@@ -261,6 +264,25 @@ export function TownPeek({
           ×
         </button>
       </div>
+      <AgentUsageLine
+        pane={
+          agent.harness
+            ? {
+                connectionId: agent.currentPaneRef.connectionId,
+                generation: agent.currentPaneRef.generation,
+                paneId: agent.currentPaneRef.nativeId,
+              }
+            : null
+        }
+        onOpen={
+          openUsage
+            ? () => {
+                onClose();
+                openUsage("tokens");
+              }
+            : null
+        }
+      />
       <div
         ref={screen}
         className="town-peek-screen"

@@ -7,7 +7,9 @@ import {
   parseAnalyticsQuery,
   usageProject,
 } from "./analytics";
-import { UsageActivity } from "./activity";
+import { UsageActivity, analyticsAgentId } from "./activity";
+import { agentSessionOf } from "../agent/checkout-context";
+import { agentCheckoutSessionFingerprint } from "../herdr/agent-checkout";
 import { emptyTokens } from "./totals";
 import { usageAnalyticsFixture } from "./fixture";
 const at = Date.parse("2026-11-19T12:00:00Z");
@@ -254,4 +256,219 @@ test("group clipping preserves totals before the response bound", async () => {
   expect(data.total.total_tokens.value).toBe(6000);
   expect(data.coverage.truncated).toBe(true);
   expect(Buffer.byteLength(JSON.stringify(data))).toBeLessThan(768 * 1024);
+});
+test("runs group one session's days and models, heaviest first, with role, PR and live context", async () => {
+  const s = setup();
+  const run = {
+    run_id: "run_a",
+    role: "fixer" as const,
+    branch: "crew/42",
+    spans: [[at - 55 * 60_000, at - 50 * 60_000]] as [number, number][],
+    max_prompt_tokens: 300,
+  };
+  s.usage.entities = [
+    { ...s.row, ...run, id: "a1", total_tokens: 40, responses: 3 },
+    {
+      ...s.row,
+      ...run,
+      id: "a2",
+      model: "other",
+      total_tokens: 60,
+      responses: 2,
+      spans: [[at - 115 * 60_000, at - 110 * 60_000]] as [number, number][],
+      max_prompt_tokens: 500,
+    },
+    {
+      ...s.row,
+      id: "b1",
+      run_id: "run_b",
+      role: null,
+      branch: null,
+      total_tokens: 5,
+    },
+  ];
+  s.usage.contexts = [
+    {
+      connection_id: "alpha",
+      connection_generation: 1,
+      workspace_id: "w1",
+      tab_id: "d1",
+      pane_id: "p1",
+      harness: "claude",
+      model: "model",
+      used_tokens: 500,
+      window_tokens: 1000,
+      observed_at: at,
+    },
+  ];
+  s.sources.items = [
+    {
+      key: "github:pr:example/project#9",
+      source: "github",
+      kind: "pull_request",
+      ref: "example/project#9",
+      number: 9,
+      branch: "crew/42",
+      title: "synthetic",
+      url: "https://example.test/pr/9",
+      roles: ["author"],
+      lane: "review",
+      status: "open",
+      updatedAt: at - 1000,
+    },
+  ];
+  const data = await s.service.get({ group_by: "run" });
+  expect(data.total.total_tokens.value).toBe(105);
+  expect(data.rows.map((r) => r.dimension)).toEqual(["run_a", "run_b"]);
+  expect(data.rows[0]).toMatchObject({
+    total_tokens: { value: 100 },
+    identity: { pane_id: "p1" },
+    run: {
+      source: "session-log",
+      harness: "claude",
+      models: ["other", "model"],
+      role: "fixer",
+      branch: "crew/42",
+      // The only catalogue pull request on its branch, but no validated link:
+      // a branch carries no repository, so none is named.
+      pull_request: null,
+      attribution: "ambiguous",
+      calls: 5,
+      max_prompt_tokens: 500,
+      // Responses an hour apart are two spans: when it was going.
+      spans: [
+        [at - 115 * 60_000, at - 110 * 60_000],
+        [at - 55 * 60_000, at - 50 * 60_000],
+      ],
+      context: { used_tokens: 500, window_tokens: 1000 },
+    },
+  });
+  expect(data.rows[1]?.run).toMatchObject({
+    role: null,
+    pull_request: null,
+    max_prompt_tokens: null,
+  });
+});
+
+/** Observes the setup's pane every 10 s (inside the lease) for `minutes`. */
+function observeFor(
+  s: ReturnType<typeof setup>,
+  from: number,
+  minutes: number,
+) {
+  for (let t = from; t <= from + minutes * 60_000; t += 10_000)
+    s.activity.observe("alpha", 1, [s.pane], t);
+}
+const RUN = `run_${"a".repeat(64)}`;
+const pr = (repo: string, number: number) => ({
+  key: `github:pr:${repo}#${number}`,
+  source: "github" as const,
+  kind: "pull_request" as const,
+  ref: `${repo}#${number}`,
+  number,
+  branch: "crew/42",
+  title: "synthetic",
+  url: `https://example.test/${repo}/pull/${number}`,
+  roles: ["author" as const],
+  lane: "review" as const,
+  status: "open",
+  updatedAt: at - 1000,
+});
+
+test("a harness World reads no log of still has runs and measured time; tokens stay unknown", async () => {
+  const s = setup();
+  s.pane.agent = "cursor";
+  s.usage.entities = [];
+  s.pane.agent_status = "working";
+  observeFor(s, at - 20 * 60_000, 10);
+  s.pane.agent_status = "blocked";
+  observeFor(s, at - 10 * 60_000 + 10_000, 5);
+  const agent = analyticsAgentId("alpha", 1, s.pane)!;
+  const data = await s.service.get({ group_by: "run" });
+  expect(data.rows).toHaveLength(1);
+  const row = data.rows[0]!;
+  expect(row.dimension).toBe(`world:${agent}`);
+  expect(row.total_tokens).toEqual({ value: null, coverage: "unknown" });
+  expect(row.active_ms.value).toBeGreaterThanOrEqual(10 * 60_000);
+  expect(row.waiting_on_you_ms.value).toBeGreaterThanOrEqual(5 * 60_000);
+  expect(row.run).toMatchObject({
+    source: "world",
+    harness: "cursor",
+    calls: null,
+    max_prompt_tokens: null,
+    pull_request: null,
+  });
+  expect(row.run!.spans).toHaveLength(1);
+  const [from, to] = row.run!.spans[0]!;
+  expect(to - from).toBeGreaterThanOrEqual(10 * 60_000);
+  const agents = await s.service.get({ group_by: "agent" });
+  expect(agents.rows[0]).toMatchObject({
+    dimension: agent,
+    total_tokens: { value: null },
+    active_ms: { coverage: "partial" },
+  });
+});
+
+test("World's time for an agent joins its log run, which a session-validated link names", async () => {
+  const s = setup();
+  s.usage.entities = [{ ...s.row, run_id: RUN, branch: "crew/42" }];
+  observeFor(s, at - 5 * 60_000, 4);
+  s.sources.items = [pr("example/one", 7), pr("example/two", 8)];
+  s.sources.items = [pr("example/two", 8)];
+  // One pull request elsewhere on the same branch name is not evidence.
+  expect((await s.service.get({ group_by: "run" })).rows[0]!.run).toMatchObject(
+    { pull_request: null, attribution: "ambiguous" },
+  );
+  s.sources.items = [pr("example/one", 7), pr("example/two", 8)];
+  const run = await s.service.get({ group_by: "run" });
+  // Two repositories' pull requests share the branch: none is guessed.
+  expect(run.rows.map((r) => r.dimension)).toEqual([RUN]);
+  expect(run.rows[0]!.active_ms.value).toBeGreaterThanOrEqual(4 * 60_000);
+  expect(run.rows[0]!.run).toMatchObject({
+    source: "session-log",
+    pull_request: null,
+    attribution: "ambiguous",
+  });
+  // A full agent session, so the pane's session can validate a link.
+  s.pane.agent_session = {
+    source: "herdr",
+    agent: "claude",
+    kind: "id",
+    value: "PRIVATE_SESSION_SENTINEL",
+  } as never;
+  const session = agentSessionOf(s.pane.agent_session)!;
+  s.sources.links = [
+    {
+      connectionId: "alpha",
+      generation: 1,
+      paneId: "p1",
+      sessionFingerprint: "another-session",
+      itemKey: "github:pr:example/one#7",
+      via: "branch",
+    },
+  ];
+  expect((await s.service.get({ group_by: "run" })).rows[0]!.run).toMatchObject(
+    { attribution: "ambiguous" },
+  );
+  s.sources.links = [
+    {
+      connectionId: "alpha",
+      generation: 1,
+      paneId: "p1",
+      sessionFingerprint: agentCheckoutSessionFingerprint(session),
+      itemKey: "github:pr:example/two#8",
+      via: "branch",
+    },
+  ];
+  expect((await s.service.get({ group_by: "run" })).rows[0]!.run).toMatchObject(
+    {
+      pull_request: { key: "github:pr:example/two#8", number: 8 },
+      attribution: "link",
+    },
+  );
+  // The link outlives the pane: a later read without it still names it.
+  s.sources.links = [];
+  expect((await s.service.get({ group_by: "run" })).rows[0]!.run).toMatchObject(
+    { attribution: "link" },
+  );
 });

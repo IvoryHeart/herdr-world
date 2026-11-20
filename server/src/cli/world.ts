@@ -26,7 +26,7 @@ import { parseAnalyticsQuery } from "../usage/analytics";
 import { usageAnalyticsFixture } from "../usage/fixture";
 import type { WorldUsageAnalytics } from "../../../shared/usageAnalytics";
 
-const USAGE_HELP = `Usage: herdr-world usage [--window today|7d] [--group-by agent|project|room|day]
+const USAGE_HELP = `Usage: herdr-world usage [--window today|7d] [--group-by agent|project|room|day|run]
   [--connection ID --generation N] [--pane ID] [--room ID] [--project ID] [--json]
 
 Read observed local usage through the running World's authenticated CLI endpoint.
@@ -617,7 +617,7 @@ function human(command: string, reply: Reply): string {
       `Usage ${usage.window.kind} by ${usage.group_by} (observed subtotals; gaps remain unknown)`,
       ...usage.rows.map(
         (r) =>
-          `${r.dimension ?? "unattributed"}: active ${number(r.active_ms.value)} ms, waiting ${number(r.waiting_on_you_ms.value)} ms, tokens ${number(r.total_tokens.value)}, reported USD ${number(r.reported_cost_usd.value)}, PRs opened ${number(r.prs_opened.value)}, merged ${number(r.prs_merged.value)}`,
+          `${r.dimension ?? "unattributed"}: active ${number(r.active_ms.value)} ms, waiting ${number(r.waiting_on_you_ms.value)} ms, tokens ${number(r.total_tokens.value)}, reported USD ${number(r.reported_cost_usd.value)}, PRs opened ${number(r.prs_opened.value)}, merged ${number(r.prs_merged.value)}${r.run ? `, ${r.run.harness} ${r.run.role ?? "unknown role"}, branch ${r.run.branch ?? "unknown"}, calls ${number(r.run.calls)}, largest prompt ${number(r.run.max_prompt_tokens)}` : ""}`,
       ),
       ...(usage.coverage.truncated
         ? ["Coverage truncated; totals include omitted groups."]

@@ -2,19 +2,43 @@ import { readFileSync, statSync } from "node:fs";
 import { replaceDataFile } from "../config/data-paths";
 import type { UsageAnalyticsIdentity } from "../../../shared/usageAnalytics";
 import { usageDigest } from "./host";
+import { harnessName } from "../herdr-core/harness";
+import {
+  joinUsageSpans,
+  validUsageSpans,
+  type UsageSpan,
+} from "../../../shared/usageSpans";
 
 const DAY = 86_400_000;
 const MAX_ROWS = 8192;
 /** An observation is never carried through a long gap without fresh evidence. */
 const LEASE_MS = 15_000;
+/**
+ * Working spans join only where they touch: an observed idle or blocked gap,
+ * however short, is not working time, and filling it would invent overlap
+ * with another agent's work. A row keeps at most this many spans; past it
+ * the two closest join (the bound, documented in docs/usage-analytics.md).
+ */
+const SPAN_GAP_MS = 0;
+const SPAN_LIMIT = 48;
+/** The history file's size limit, for reading and writing alike. */
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
+/** Agent→run and run→item links kept, newest last. */
+const MAX_LINKS = 4096;
+const RUN_ID = /^run_[a-f0-9]{64}$/;
 export type ActivityRow = UsageAnalyticsIdentity & {
   day: string;
   active_ms: number;
   waiting_on_you_ms: number;
   observed_ms: number;
+  /** World's name for the agent's harness; null when it names none known. */
+  harness?: string | null;
+  /** When World saw the agent working that day: sorted, bounded spans. */
+  spans?: UsageSpan[];
 };
 type Live = {
   identity: UsageAnalyticsIdentity;
+  harness: string | null;
   at: number;
   until: number;
   status: string;
@@ -37,6 +61,10 @@ export class UsageActivity {
   private projects = new Map<string, string>();
   private locations = new Map<string, string>();
   private lastObserved = new Map<string, number>();
+  /** An agent's transcript run, learnt while both were current. */
+  private runs = new Map<string, string>();
+  /** A run's pull request, from a session-validated work link. */
+  private items = new Map<string, string>();
   truncated = false;
   history: "available" | "unavailable" = "available";
   private closed = false;
@@ -58,7 +86,7 @@ export class UsageActivity {
   constructor(private readonly path?: string) {
     if (!path) return;
     try {
-      if (statSync(path).size > 4 * 1024 * 1024) throw new Error("size");
+      if (statSync(path).size > MAX_FILE_BYTES) throw new Error("size");
       const saved = JSON.parse(readFileSync(path, "utf8"));
       if (
         saved.version !== 1 ||
@@ -70,9 +98,39 @@ export class UsageActivity {
         if (!validRow(row)) throw new Error("row");
         this.rows.set(JSON.stringify([row.day, identity(row)]), row);
       }
+      const links = saved.links ?? { runs: [], items: [] };
+      if (
+        !Array.isArray(links.runs) ||
+        !Array.isArray(links.items) ||
+        links.runs.length > MAX_LINKS ||
+        links.items.length > MAX_LINKS
+      )
+        throw new Error("links");
+      for (const link of links.runs) {
+        if (
+          !Array.isArray(link) ||
+          !/^agent_[a-f0-9]{64}$/.test(link[0]) ||
+          !RUN_ID.test(link[1])
+        )
+          throw new Error("link");
+        this.runs.set(link[0], link[1]);
+      }
+      for (const link of links.items) {
+        if (
+          !Array.isArray(link) ||
+          !RUN_ID.test(link[0]) ||
+          typeof link[1] !== "string" ||
+          !link[1] ||
+          link[1].length > 512
+        )
+          throw new Error("link");
+        this.items.set(link[0], link[1]);
+      }
       this.truncated = saved.truncated === true;
     } catch (error) {
       this.rows.clear();
+      this.runs.clear();
+      this.items.clear();
       if ((error as NodeJS.ErrnoException).code !== "ENOENT")
         this.history = "unavailable";
     }
@@ -124,6 +182,7 @@ export class UsageActivity {
       }
       this.live.set(JSON.stringify([connection, pane.pane_id]), {
         identity: target,
+        harness: harnessName(pane.agent),
         at,
         until: at + LEASE_MS,
         status,
@@ -156,6 +215,24 @@ export class UsageActivity {
         live.identity = { ...live.identity, project_id: projectId };
       }
   }
+  /** Remembers an agent's transcript run, learnt while both are current. */
+  linkRun(agentId: string, runId: string) {
+    if (this.closed || !RUN_ID.test(runId)) return;
+    remember(this.runs, agentId, runId);
+  }
+  /** The transcript run an agent was linked to, if any. */
+  runOf(agentId: string) {
+    return this.runs.get(agentId) ?? null;
+  }
+  /** Remembers a run's pull request from a session-validated work link. */
+  linkItem(runId: string, itemKey: string) {
+    if (this.closed || !RUN_ID.test(runId) || itemKey.length > 512) return;
+    remember(this.items, runId, itemKey);
+  }
+  /** The pull request a run was linked to, if any. */
+  itemOf(runId: string) {
+    return this.items.get(runId) ?? null;
+  }
   private account(live: Live, at: number) {
     const until = Math.min(at, live.until);
     for (let from = live.at; from < until; ) {
@@ -175,7 +252,15 @@ export class UsageActivity {
       }
       if (["working", "blocked", "idle", "done"].includes(live.status)) {
         current.observed_ms += end - from;
-        if (live.status === "working") current.active_ms += end - from;
+        current.harness ??= live.harness;
+        if (live.status === "working") {
+          current.active_ms += end - from;
+          current.spans = joinUsageSpans(
+            [...(current.spans ?? []), [from, end]],
+            SPAN_GAP_MS,
+            SPAN_LIMIT,
+          );
+        }
         if (live.status === "blocked") current.waiting_on_you_ms += end - from;
         this.rows.set(key, current);
       }
@@ -203,18 +288,33 @@ export class UsageActivity {
   }
   save(now: number) {
     let rows = this.read(now);
-    while (Buffer.byteLength(JSON.stringify(rows)) > 4 * 1024 * 1024 - 1024) {
+    let runs = [...this.runs];
+    let items = [...this.items];
+    // The whole file stays within the limit it is read back under: rows,
+    // then links (oldest first), are halved until the envelope fits.
+    const envelope = () =>
+      JSON.stringify({
+        version: 1,
+        truncated: this.truncated,
+        rows,
+        links: { runs, items },
+      });
+    let text = envelope();
+    while (Buffer.byteLength(text) > MAX_FILE_BYTES - 1024) {
       this.truncated = true;
-      rows = rows
-        .sort((a, b) => b.day.localeCompare(a.day))
-        .slice(0, Math.floor(rows.length / 2));
+      if (rows.length > 1)
+        rows = rows
+          .sort((a, b) => b.day.localeCompare(a.day))
+          .slice(0, Math.floor(rows.length / 2));
+      else if (runs.length || items.length) {
+        runs = runs.slice(Math.ceil(runs.length / 2));
+        items = items.slice(Math.ceil(items.length / 2));
+      } else rows = [];
+      text = envelope();
     }
     if (this.path && !this.closed)
       try {
-        replaceDataFile(
-          this.path,
-          JSON.stringify({ version: 1, truncated: this.truncated, rows }),
-        );
+        replaceDataFile(this.path, text);
       } catch {
         this.history = "unavailable";
       }
@@ -225,7 +325,13 @@ export class UsageActivity {
     this.live.clear();
   }
 }
-function identity(row: UsageAnalyticsIdentity): UsageAnalyticsIdentity {
+function remember(map: Map<string, string>, key: string, value: string) {
+  map.delete(key);
+  map.set(key, value);
+  if (map.size > MAX_LINKS) map.delete(map.keys().next().value!);
+}
+/** Only the identity fields of an activity row. */
+export function identity(row: UsageAnalyticsIdentity): UsageAnalyticsIdentity {
   const {
     connection_id,
     connection_generation,
@@ -246,7 +352,13 @@ function identity(row: UsageAnalyticsIdentity): UsageAnalyticsIdentity {
 function validRow(row: ActivityRow) {
   return (
     row &&
-    Object.keys(row).length === 10 &&
+    Object.keys(row).length ===
+      10 + Number("harness" in row) + Number("spans" in row) &&
+    (row.harness === undefined ||
+      row.harness === null ||
+      (typeof row.harness === "string" &&
+        /^[a-z0-9_-]{1,40}$/.test(row.harness))) &&
+    (row.spans === undefined || validUsageSpans(row.spans, SPAN_LIMIT)) &&
     typeof row.connection_id === "string" &&
     row.connection_id.length <= 160 &&
     Number.isSafeInteger(row.connection_generation) &&

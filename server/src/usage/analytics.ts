@@ -5,13 +5,20 @@ import {
   type UsageAnalyticsMetrics,
   type UsageAnalyticsQuery,
   type UsageAnalyticsRow,
+  type UsageAnalyticsRun,
   type UsageMetric,
   type UsageProject,
   type WorldUsageAnalytics,
 } from "../../../shared/usageAnalytics";
 import type { WorldSourcesSnapshot } from "../../../shared/worldSources";
 import type { WorldSnapshotResult } from "../world/snapshot";
-import { analyticsAgentId, UsageActivity } from "./activity";
+import {
+  analyticsAgentId,
+  identity as activityIdentity,
+  type ActivityRow,
+  UsageActivity,
+} from "./activity";
+import { joinUsageSpans } from "../../../shared/usageSpans";
 import { usageDigest } from "./host";
 import { agentSessionOf } from "../agent/checkout-context";
 import { agentCheckoutSessionFingerprint } from "../herdr/agent-checkout";
@@ -42,7 +49,7 @@ export function parseAnalyticsQuery(
     raw.group_by !== undefined &&
     !USAGE_ANALYTICS_GROUPS.includes(raw.group_by as never)
   )
-    throw new UsageQueryError("Group by agent, project, room or day");
+    throw new UsageQueryError("Group by agent, project, room, day or run");
   for (const key of ["connection_id", "pane_id", "workspace_id", "project_id"])
     if (
       raw[key] !== undefined &&
@@ -77,11 +84,7 @@ type Fact = {
   identity: UsageAnalyticsIdentity;
   day: string;
   usage?: WorldUsageSnapshot["entities"][number];
-  activity?: {
-    active_ms: number;
-    waiting_on_you_ms: number;
-    observed_ms: number;
-  };
+  activity?: ActivityRow;
   pr?: { key: string; event: "opened" | "merged" };
 };
 const metric = (value: number | null, partial = true): UsageMetric => ({
@@ -303,7 +306,54 @@ export class WorldUsageAnalyticsService {
       }));
     for (const row of this.options.activity.read(now))
       if (Date.parse(row.day) >= from && Date.parse(row.day) < until)
-        facts.push({ day: row.day, identity: row, activity: row });
+        facts.push({
+          day: row.day,
+          identity: activityIdentity(row),
+          activity: row,
+        });
+    // An agent and its transcript run are one run: link them while both are
+    // current (the newest run in the agent's pane), and keep the link.
+    const newestRun = new Map<string, { run: string; at: number }>();
+    for (const fact of facts)
+      if (fact.usage?.run_id && fact.identity.agent_id) {
+        const prior = newestRun.get(fact.identity.agent_id);
+        if (!prior || fact.usage.last_at > prior.at)
+          newestRun.set(fact.identity.agent_id, {
+            run: fact.usage.run_id,
+            at: fact.usage.last_at,
+          });
+      }
+    for (const [agent, { run }] of newestRun)
+      this.options.activity.linkRun(agent, run);
+    // A run's pull request: only a link the agent's own session validates,
+    // naming exactly one pull request (docs/usage-analytics.md).
+    for (const [key, identity] of identities) {
+      const run = identity.agent_id
+        ? this.options.activity.runOf(identity.agent_id)
+        : null;
+      if (!run) continue;
+      const proof = sessionProof.get(key);
+      const linked = new Set(
+        work.links
+          .filter(
+            (l) =>
+              proof &&
+              l.sessionFingerprint === proof &&
+              targetKey(l.connectionId, l.generation, l.paneId) === key,
+          )
+          .map((l) => l.itemKey)
+          .filter((itemKey) =>
+            work.items.some(
+              (item) =>
+                item.key === itemKey &&
+                item.source === "github" &&
+                item.kind === "pull_request",
+            ),
+          ),
+      );
+      if (linked.size === 1)
+        this.options.activity.linkItem(run, [...linked][0]!);
+    }
     // Count a PR once globally. Multiple current agents cannot prove authorship.
     const seenPr = new Set<string>();
     for (const item of work.items) {
@@ -365,31 +415,47 @@ export class WorldUsageAnalyticsService {
     for (const fact of selected) {
       const i = fact.identity;
       const dimension =
-        group === "day"
-          ? fact.day
-          : group === "agent"
-            ? i.agent_id
-            : group === "project"
-              ? i.project_id
-              : i.workspace_id
-                ? JSON.stringify([
-                    i.connection_id,
-                    i.connection_generation,
-                    i.workspace_id,
-                  ])
-                : null;
+        group === "run"
+          ? (fact.usage?.run_id ??
+            (fact.activity && i.agent_id
+              ? (this.options.activity.runOf(i.agent_id) ??
+                `world:${i.agent_id}`)
+              : null))
+          : group === "day"
+            ? fact.day
+            : group === "agent"
+              ? i.agent_id
+              : group === "project"
+                ? i.project_id
+                : i.workspace_id
+                  ? JSON.stringify([
+                      i.connection_id,
+                      i.connection_generation,
+                      i.workspace_id,
+                    ])
+                  : null;
       const key = dimension ?? "unattributed";
       const bucket = groups.get(key) ?? {
         dimension,
         identity:
           group === "agent"
             ? { ...i, workspace_id: null, project_id: null }
-            : group === "room" && i.workspace_id
-              ? { ...i, agent_id: null, pane_id: null, project_id: null }
-              : null,
+            : group === "run" && dimension
+              ? i
+              : group === "room" && i.workspace_id
+                ? { ...i, agent_id: null, pane_id: null, project_id: null }
+                : null,
         facts: [],
       };
       bucket.facts.push(fact);
+      // A run's attributed fact names its pane, even if an older day's not.
+      if (
+        group === "run" &&
+        dimension &&
+        i.pane_id &&
+        !bucket.identity?.pane_id
+      )
+        bucket.identity = i;
       groups.set(key, bucket);
     }
     const rows: UsageAnalyticsRow[] = [...groups.entries()]
@@ -399,6 +465,17 @@ export class WorldUsageAnalyticsService {
         dimension: b.dimension,
         identity: b.identity,
         ...metrics(b.facts),
+        ...(group === "run" && b.dimension
+          ? {
+              run: runDetail(
+                b.facts,
+                b.identity,
+                usage,
+                work,
+                this.options.activity.itemOf(b.dimension),
+              ),
+            }
+          : {}),
       }));
     // Empty UTC buckets are unknown, never fabricated measured zeros.
     if (group === "day")
@@ -412,7 +489,14 @@ export class WorldUsageAnalyticsService {
             ...metrics([]),
           });
       }
-    rows.sort((a, b) => a.key.localeCompare(b.key));
+    // Heaviest runs first, so clipping keeps the ones worth looking at.
+    if (group === "run")
+      rows.sort(
+        (a, b) =>
+          (b.total_tokens.value ?? -1) - (a.total_tokens.value ?? -1) ||
+          a.key.localeCompare(b.key),
+      );
+    else rows.sort((a, b) => a.key.localeCompare(b.key));
     const github = work.sources.find((s) => s.id === "github");
     const response: WorldUsageAnalytics = {
       version: 1,
@@ -476,6 +560,106 @@ export class WorldUsageAnalyticsService {
     response.coverage.truncated ||= this.options.activity.truncated;
     return response;
   }
+}
+/**
+ * Responses at most this far apart are one span of work. It matches the host
+ * reader's own joining (projection.ts), and joins a run's days.
+ */
+const RUN_SPAN_GAP_MS = 10 * 60_000;
+/**
+ * A run's detail from its own usage rows, World's measured activity, current
+ * context and work links. A run with no usage rows is World's measurement
+ * alone: calls and prompts are unknown.
+ */
+function runDetail(
+  facts: Fact[],
+  identity: UsageAnalyticsIdentity | null,
+  usage: WorldUsageSnapshot,
+  work: WorldSourcesSnapshot,
+  linkedItem: string | null,
+): UsageAnalyticsRun {
+  const rows = facts.flatMap((f) => (f.usage ? [f.usage] : []));
+  const activity = facts.flatMap((f) => (f.activity ? [f.activity] : []));
+  const models = new Map<string, number>();
+  let prompt: number | null = null;
+  for (const row of rows) {
+    models.set(row.model, (models.get(row.model) ?? 0) + row.total_tokens);
+    if (row.max_prompt_tokens !== undefined)
+      prompt = Math.max(prompt ?? 0, row.max_prompt_tokens);
+  }
+  const spans = joinUsageSpans([
+    ...joinUsageSpans(
+      rows.flatMap((r) => r.spans ?? []),
+      RUN_SPAN_GAP_MS,
+      Infinity,
+    ),
+    ...activity.flatMap((a) => a.spans ?? []),
+  ]);
+  const newest = rows.length
+    ? rows.reduce((a, b) => (b.last_at > a.last_at ? b : a))
+    : null;
+  const harness =
+    newest?.harness ?? activity.find((a) => a.harness)?.harness ?? "unknown";
+  const branch = rows.find((r) => r.branch)?.branch ?? null;
+  const role = rows.find((r) => r.role)?.role ?? null;
+  const pullRequests = work.items.filter(
+    (item) => item.source === "github" && item.kind === "pull_request",
+  );
+  // Only a session-validated link names the pull request. A branch alone
+  // never does: it carries no repository, and the same branch name in another
+  // repository is not this run's work. A catalogue pull request with the
+  // run's branch but no link leaves the pull request unknown (ambiguous).
+  const linked = linkedItem
+    ? (pullRequests.find((item) => item.key === linkedItem) ?? {
+        key: linkedItem,
+        number: Number(/#(\d+)$/.exec(linkedItem)?.[1]) || undefined,
+      })
+    : undefined;
+  const pr = linked;
+  const attribution = linked
+    ? "link"
+    : branch && pullRequests.some((item) => item.branch === branch)
+      ? "ambiguous"
+      : "none";
+  const context =
+    identity?.pane_id && newest
+      ? usage.contexts?.find(
+          (c) =>
+            c.connection_id === identity.connection_id &&
+            c.connection_generation === identity.connection_generation &&
+            c.pane_id === identity.pane_id &&
+            c.harness === newest.harness,
+        )
+      : undefined;
+  const times = [
+    ...rows.flatMap((r) => [r.first_at, r.last_at]),
+    ...spans.flat(),
+  ];
+  const midnight = Date.parse(facts[0]!.day);
+  return {
+    source: rows.length ? "session-log" : "world",
+    harness,
+    models: [...models.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([model]) => model)
+      .slice(0, 8),
+    role,
+    branch,
+    pull_request: pr ? { key: pr.key, number: pr.number ?? null } : null,
+    attribution,
+    calls: rows.length ? rows.reduce((s, r) => s + r.responses, 0) : null,
+    // Older activity rows carry no spans: their day stands in for the times.
+    first_at: times.length ? Math.min(...times) : midnight,
+    last_at: times.length ? Math.max(...times) : midnight,
+    max_prompt_tokens: prompt,
+    spans,
+    context: context
+      ? {
+          used_tokens: context.used_tokens,
+          window_tokens: context.window_tokens,
+        }
+      : null,
+  };
 }
 function emptyIdentity(
   connection: string,

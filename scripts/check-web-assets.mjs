@@ -44,7 +44,11 @@ const maxFileCount = 212;
 // grew under it to 13 KB of headroom; 15.3 MiB carries both, initial budgets
 // unchanged (2026-11-19). The lazy #1035 Settings adds about 35 KiB
 // on top of it (15.31 MiB together, so 15.4 MiB on 2026-11-20).
-const maxTotalBytes = 15.4 * 1024 * 1024;
+// The Usage screens (#1029: Budget, Runs at once, Tokens and Breakdown, with
+// the testing fixture) load with Town's lazy chunk and add about 57 KiB.
+// Main grew under it (Settings pages), so its delta on main projects to
+// 15.41 MiB; 15.5 MiB carries both, initial budgets unchanged (2026-11-20).
+const maxTotalBytes = 15.5 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
