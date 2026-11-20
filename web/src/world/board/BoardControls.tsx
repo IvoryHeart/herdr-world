@@ -7,6 +7,7 @@ import {
   Plus,
   Sparkles,
   SkipForward,
+  SquarePlus,
 } from "lucide-react";
 import {
   useEffect,
@@ -28,6 +29,7 @@ import { BOARD_SURFACES, type BoardAppearance } from "./boardAppearance";
 
 const CONTROLS: readonly BoardControl[] = [
   "work",
+  "add",
   "lens",
   "next",
   "home",
@@ -39,6 +41,7 @@ const CONTROLS: readonly BoardControl[] = [
 ];
 const INITIAL_WIDTHS = {
   work: 76,
+  add: 36,
   lens: 84,
   next: 64,
   home: 140,
@@ -53,6 +56,7 @@ const DOCK_GAP = 12;
 const icon = (control: BoardControl) => {
   const Icon = {
     work: GitPullRequest,
+    add: SquarePlus,
     lens: Layers,
     next: SkipForward,
     home: null,
@@ -70,6 +74,8 @@ export function BoardControls(props: {
   workRef: RefObject<HTMLButtonElement | null>;
   workOpen: boolean;
   onWork(): void;
+  /** Opens Add to Board: every element kind in the registry. */
+  onAdd(): void;
   /** The lens on, by name, or null in Attention (Board as usual). */
   lens: string | null;
   /** Opens the lens chooser, or leaves the lens on. */
@@ -195,6 +201,7 @@ export function BoardControls(props: {
   const label = (control: BoardControl) =>
     ({
       work: "Work",
+      add: "Add to Board",
       lens: props.lens ?? "Lenses",
       next: "Next",
       home: `Needs a home · ${props.count}`,
@@ -239,6 +246,7 @@ export function BoardControls(props: {
   const act = (control: BoardControl) => {
     setOpen(false);
     if (control === "work") props.onWork();
+    else if (control === "add") props.onAdd();
     else if (control === "lens") props.onLens();
     else if (control === "next") props.onNext?.();
     else if (control === "home") props.onHome();

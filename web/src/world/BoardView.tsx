@@ -58,6 +58,14 @@ import {
 import { publishBoardCardPins } from "./board/boardCardPins";
 import { coreCardPinChanges, setCoreTabPinned, useCorePins } from "./corePins";
 import { createBoardCardRefs } from "./board/boardCardRefs";
+import { BoardElementCard } from "./board/elements/BoardElementCard";
+import {
+  ELEMENT_PREFIX,
+  elementKey,
+  isElementKey,
+} from "./board/elements/boardElementKinds";
+import { useBoardElements } from "./board/elements/useBoardElements";
+import "./board/elements/boardElements.css";
 import {
   type BoardAnchor,
   type BoardDocumentStore,
@@ -211,6 +219,8 @@ const TWEEN_SECONDS = 0.26;
 type StringEnd = { cardKey: string; paneKey?: string };
 const NOTE_PREFIX = "note:";
 const isNoteKey = (key: string) => key.startsWith(NOTE_PREFIX);
+/** Cards the user places and keeps where dropped: notes and elements. */
+const isFreeKey = (key: string) => isNoteKey(key) || isElementKey(key);
 const NOTE_SIZE: Size = { w: 180, h: 110 };
 const SAVE_DELAY_MS = 600;
 
@@ -579,6 +589,19 @@ export default function BoardView({
     return () => boardStore.stop();
   }, [boardStore]);
   const { document: saved } = useBoardDocument(boardStore);
+  // Memory, logs, docs and links (the registry's placed kinds).
+  const boardElements = useBoardElements({
+    store: boardStore,
+    saved,
+    world: shownWorld,
+    report: (pending) => report(pending),
+    centre: () => {
+      const rect = boardRef.current?.getBoundingClientRect();
+      return rect
+        ? toWorld(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        : { x: 0, y: 0 };
+    },
+  });
   const related = useRelations(world, boardStore);
   const [editing, setEditing] = useState<string | null>(null);
   /** The text being typed into a note, kept apart from the saved notes. */
@@ -968,9 +991,9 @@ export default function BoardView({
         stiffness: kind === "tab" ? 60 : 30,
       });
     }
-    // Topology changes remove cards that left; notes are not topology.
+    // Topology changes remove cards that left; notes and elements are not topology.
     for (const key of [...cards.current.keys()])
-      if (!at.has(key) && !isNoteKey(key)) cards.current.delete(key);
+      if (!at.has(key) && !isFreeKey(key)) cards.current.delete(key);
     if (!fitted.current && at.size) {
       fitted.current = true;
       fit(true);
@@ -1010,13 +1033,23 @@ export default function BoardView({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [far]);
 
-  /* ---------- Saved state: notes as free cards, layout loaded once ---------- */
+  /* ---------- Saved state: notes and elements as free cards, layout loaded once ---------- */
   useLayoutEffect(() => {
-    const notes = saved?.notes ?? [];
+    const free = [
+      ...(saved?.notes ?? []).map((note) => ({
+        ...note,
+        key: NOTE_PREFIX + note.id,
+      })),
+      ...(saved?.elements ?? []).map((element) => ({
+        x: element.x,
+        y: element.y,
+        key: elementKey(element.id),
+      })),
+    ];
     const heldKey = held.current?.key ?? null;
     const present = new Set<string>();
-    for (const note of notes) {
-      const key = NOTE_PREFIX + note.id;
+    for (const note of free) {
+      const key = note.key;
       present.add(key);
       const el = cardEls.current.get(key);
       const size = el?.offsetWidth
@@ -1046,7 +1079,7 @@ export default function BoardView({
       }
     }
     for (const key of [...cards.current.keys()])
-      if (isNoteKey(key) && !present.has(key)) cards.current.delete(key);
+      if (isFreeKey(key) && !present.has(key)) cards.current.delete(key);
     const incoming = saved ? layoutSignature(saved.layout) : "";
     if (
       saved &&
@@ -1322,7 +1355,7 @@ export default function BoardView({
       const list = visibleCards().map(([key, card]) => {
         card.home = homeOf(key, m);
         card.fixed =
-          isNoteKey(key) ||
+          isFreeKey(key) ||
           (layout.current.pinned.has(key) && !m.tabByKey.has(key)) ||
           tweens.current.has(key) ||
           holdingKey === key;
@@ -1559,7 +1592,7 @@ export default function BoardView({
       const reach = 700;
       const wanted = new Set<string>();
       for (const [key, card] of cards.current) {
-        if (isNoteKey(key)) continue;
+        if (isFreeKey(key)) continue;
         if (farRef.current && m.tabByKey.has(key)) continue;
         const sx = c.x + card.x * c.s,
           sy = c.y + card.y * c.s;
@@ -2318,7 +2351,7 @@ export default function BoardView({
     overBin.current = false;
     aimAtBin(null);
     if (!card) return;
-    if (binned && !isNoteKey(h.key)) {
+    if (binned && !isFreeKey(h.key)) {
       // The card goes back to its place; its agents wait for the bus.
       travelToLayout(m);
       const tab = m.tabByKey.get(h.key);
@@ -2331,6 +2364,11 @@ export default function BoardView({
       );
       if (note) void saveNote(note, { x: card.x, y: card.y });
       invalidate("note");
+      return;
+    }
+    if (isElementKey(h.key)) {
+      boardElements.move(h.key.slice(ELEMENT_PREFIX.length), card);
+      invalidate("element");
       return;
     }
     if (teammate.current) {
@@ -2378,6 +2416,7 @@ export default function BoardView({
     if (target.kind === "empty") {
       setPicked(null);
       setNoteSelected(null);
+      boardElements.select(null);
       setStringFrom(null);
       setGroupFrom(null);
       return;
@@ -2402,6 +2441,13 @@ export default function BoardView({
       setStringFrom(null);
       return;
     }
+    if (isElementKey(target.key)) {
+      // A tap opens it: its content is read now, from its own host.
+      setNoteSelected(null);
+      boardElements.open(target.key.slice(ELEMENT_PREFIX.length));
+      return;
+    }
+    boardElements.select(null);
     if (isNoteKey(target.key)) {
       setNoteSelected(target.key.slice(NOTE_PREFIX.length));
       // Keys go to the note, not to a terminal that had focus.
@@ -4029,6 +4075,28 @@ export default function BoardView({
               />
             </div>
           ))}
+          {boardElements.elements.map((element) => (
+            <BoardElementCard
+              key={element.id}
+              element={element}
+              place={boardElements.placeOf(element)}
+              selected={boardElements.selected === element.id}
+              cardRef={ref(elementKey(element.id))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  boardElements.open(element.id);
+                } else if (
+                  event.key === "Delete" ||
+                  event.key === "Backspace"
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  boardElements.remove(element);
+                }
+              }}
+            />
+          ))}
         </div>
         <button
           ref={cutRef}
@@ -4148,6 +4216,33 @@ export default function BoardView({
             }
           />
         ) : null}
+        {boardElements.render({
+          newWorkspaceHosts: model.hosts
+            .filter((host) => !host.stale)
+            .map((host) => ({ key: host.key, label: host.label })),
+          preferredProject: (() => {
+            const key = selectedWorkspace();
+            const space = key ? model.workspaceByKey.get(key) : undefined;
+            return space
+              ? {
+                  connectionId: space.connectionId,
+                  workspaceId: space.nativeId,
+                }
+              : null;
+          })(),
+          onNote: () => {
+            const rect = boardRef.current?.getBoundingClientRect();
+            if (rect)
+              void createNote(
+                toWorld(rect.left + rect.width / 2, rect.top + rect.height / 2),
+              );
+          },
+          onWork: () => setWorkOpen(true),
+          onNewWorkspace: (hostKey) => {
+            const host = model.hostByKey.get(hostKey);
+            if (host) setNewWorkspaceOn(host);
+          },
+        })}
         {newWorkspaceOn ? (
           <Suspense fallback={null}>
             <CreateWorkspaceDialog
@@ -4394,6 +4489,7 @@ export default function BoardView({
                 }
               : undefined
           }
+          onAdd={boardElements.openAdd}
           workRef={workButtonRef}
           workOpen={workOpen}
           onWork={() => setWorkOpen(!workOpen)}
