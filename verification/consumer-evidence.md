@@ -714,6 +714,27 @@ These direct native-input consumers extend Q09's accepted alternative; no abstra
 shell-execution guarantee is added. Q25's conversation fingerprint, read-only Codex
 inference and receipt boundaries remain mandatory for primary Chat.
 
+### Headless conversation identity (Q25)
+
+`process-transcript.test.ts` checks finite combinations of writable/read-only,
+regular/non-regular, unique/ambiguous/duplicate/deleted native descriptors,
+start-time changes, truncated/oversized evidence and invalid process IDs. It
+executes the production host command against real synthetic writers on Linux
+and macOS, beside a newer unrelated transcript. NUL-delimited macOS `lsof`
+fixtures cover field framing and filenames; SSH-port fixtures verify the exact
+captured destination and refusal on failed host reads. They do not claim native
+macOS or SSH execution on Linux.
+
+`herdr-core/headless-chat.test.ts` uses the testing-only `?coreFixture=headless`
+scenario: real disposable file holders and synthetic foreground records, with
+no model calls. Production discovery feeds Chat/History and the same TUI
+transcript readers, including a live append and occupant replacement. Existing
+history/agent-session tests retain process-record precedence, missing evidence,
+launch references and reused-pid isolation. These direct OS/parser/consumer
+checks cover the added evidence boundary; another abstract state model would
+not establish file ownership or external transcript semantics. Runtime lease and
+input authority models remain unchanged; the full verification gate is required.
+
 ### Captured Chat prompt choices and text destinations (Q25)
 
 The allowed transition is a checked, current prompt selecting its own choice,

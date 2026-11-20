@@ -176,6 +176,39 @@ the queued-send replacement window belongs to core (Q3), not World's pre-send ch
   a replaced occupant or retired runtime refuses while the stored answer remains
   retrievable, and an unanswered possible write stays uncertain without replay
 
+### Requirement: Process-evidenced headless conversations
+
+Core Chat SHALL identify Claude and Codex conversations, including `claude -p`
+and fresh `codex exec`, from evidence owned by the matching live foreground
+process on its captured connection's host. Claude's native process record SHALL
+retain precedence. Linux writable descriptors and macOS `lsof` output MAY name a
+unique native transcript or canonical Claude session debug ID, with process
+start-time checks around the read. Discovery SHALL be bounded and read-only.
+Missing, changed, unreadable, deleted or ambiguous process evidence SHALL NOT
+establish a session. World SHALL NOT infer Claude/Codex identity from directory
+recency. Explicit launch references and reading links SHALL retain their existing
+behavior; discovery SHALL NOT grant additional input authority.
+
+#### Scenario: Fresh headless run without a launch session ID
+
+- **WHEN** the identified Codex or Claude foreground process holds a unique
+  writable native conversation file on Linux or macOS
+- **THEN** Chat and History use that conversation through the shared TUI readers
+  and subsequent reads include newly appended messages
+
+#### Scenario: Remote process evidence
+
+- **WHEN** the agent runs on an SSH connection
+- **THEN** discovery and transcript reads execute on that same host and lease,
+  without falling back to this computer or another connection
+
+#### Scenario: No unique live conversation
+
+- **WHEN** a process has exited, changed during discovery, holds multiple
+  candidate sessions, has disabled persistence or exposes no readable evidence
+- **THEN** discovery supplies no session, even if newer transcripts exist nearby;
+  the existing explicit-reference and unavailable behavior remains
+
 ### Requirement: Shared app state with independent World ownership
 
 World SHALL own topology, asks/results and review receipts; it SHALL share

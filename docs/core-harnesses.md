@@ -89,12 +89,20 @@ Transcript reading uses the same resolver and format projections as TUI Chat;
 it never derives status or permission to send. A native resume/session argument
 can identify a transcript. Codex can use a title containing its Thread ID.
 World starts Claude and Pi with a new `--session-id` unless the profile's
-arguments already choose a session. Claude, however it was started, records the
-conversation it currently runs per process; World reads that record on the
+arguments already choose a session. Claude's native process record names the
+conversation it currently runs (including headless runs in newer releases); World reads that record on the
 agent's host only for the foreground process with the same start time, so a
-reused process ID never names another agent's conversation. Codex, Kimi, OMP,
-Muse, Grok and Antigravity keep no such record and World cannot choose their
-session ID, so they keep the paths below.
+reused process ID never names another agent's conversation. For fresh `codex exec`
+and Claude runs without a record or session flag, World can inspect the foreground
+process's writable regular files: a unique Codex rollout, Claude transcript, or
+canonical Claude session debug file. Linux uses `/proc/<pid>/fd`; macOS uses
+`lsof`. Reads are bounded to 512 descriptors, 256 KiB and three seconds, with
+the process start time checked before and after. Missing permissions, missing
+`lsof`, process exit/replacement, deleted files and multiple candidate sessions
+provide no identity. No newest-file guess is used for Claude/Codex; ephemeral
+runs without a saved transcript remain unreadable. A caller-chosen `--debug-file`
+name never establishes Claude's session ID. Kimi, OMP, Muse, Grok and
+Antigravity keep the paths below.
 Pi, Muse, Grok and Antigravity retain their directory discovery, visibly described
 as a possible guess. Otherwise use **Link a conversation for reading** and enter
 a session ID or an absolute transcript path on that host. Links last only while

@@ -7,8 +7,14 @@ key encoding. Every harness uses this same path, including harnesses without a
 transcript reader. The [core harness inventory](core-harnesses.md) lists launch,
 status, transcript and delivery support for every supported kind.
 
-Core Chat reuses the existing eight TUI transcript readers. Native resume
-arguments and Codex titles can identify a conversation; directory discovery is
+Core Chat reuses the existing eight TUI transcript readers. On Linux and macOS,
+it also identifies headless Codex/Claude conversations from the live foreground
+process: Claude's native session record, a unique writable native transcript,
+or a canonical Claude session debug file. Linux uses procfs; macOS needs `lsof`.
+SSH connections inspect the process on the agent's host. Missing, unreadable,
+deleted or ambiguous files do not identify a session; directory recency never
+identifies a Claude or Codex conversation. Disabling persistence leaves no
+transcript to read. Native resume arguments and Codex titles can identify a conversation; other harnesses' directory discovery is
 marked as a possible guess. If no readable conversation is identified, expand
 **Link a conversation for reading**, choose **Session ID** or **Transcript path**,
 enter the reference on the agent's host, and choose **Read linked conversation**.
