@@ -36,7 +36,11 @@ const maxFileCount = 193;
 // The Integrations screen (#1008, +17 KB) fit main alone, but main
 // grew under it to 13 KB of headroom; 15.3 MiB carries both, initial budgets
 // unchanged (2026-11-19).
-const maxTotalBytes = 15.3 * 1024 * 1024;
+// The Shipyard harbour (#1028: per-project lanes, ships, the warehouse's
+// crates, all in Town's lazy chunk, and the Releases tab) went 9 KB over;
+// 15.33 MiB carries it with about 22 KB of headroom, initial budgets
+// unchanged (2026-11-20).
+const maxTotalBytes = 15.33 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
