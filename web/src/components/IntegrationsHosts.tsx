@@ -14,13 +14,18 @@ import { CoreInstallPanel } from "./CoreInstall";
 
 type IntegrationHost = NonNullable<IntegrationsSnapshot["hosts"]>[number];
 
-/** Where herdr-core's installer runs for a host of the catalogue. */
-function coreInstallTarget(
+/**
+ * Where herdr-core's installer runs for a host of the catalogue: this
+ * computer, or a saved non-Windows SSH host (with or without runtimes yet).
+ * World's installer has no remote Windows steps, so those hosts get the
+ * manual hint instead.
+ */
+export function coreInstallTarget(
   entry: HostCatalogueEntry | undefined,
 ): CoreInstallHost | null {
   if (!entry) return null;
   if (entry.type === "local") return { type: "local" };
-  return entry.sshDestination
+  return entry.sshDestination && !entry.windows
     ? { type: "ssh", destination: entry.sshDestination }
     : null;
 }

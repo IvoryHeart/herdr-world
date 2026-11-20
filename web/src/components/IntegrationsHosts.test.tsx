@@ -36,7 +36,9 @@ if (process.env.INTEGRATIONS_HOSTS_TEST !== "1") {
   const { act, useState } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { parseIntegrations } = await import("../integrations");
-  const { RuntimeHosts } = await import("./IntegrationsHosts");
+  const { coreInstallTarget, RuntimeHosts } = await import(
+    "./IntegrationsHosts"
+  );
 
   const runtime = (id: string, kind: string) => ({
     connection_id: id,
@@ -85,6 +87,40 @@ if (process.env.INTEGRATIONS_HOSTS_TEST !== "1") {
     expect(snapshot.hosts?.[1]?.available_runtimes).toEqual([
       { kind: "herdr-core", label: "herdr-core" },
     ]);
+  });
+
+  test("herdr-core installs on this computer or any saved Unix SSH host", () => {
+    const entry = (fields: Record<string, unknown>) =>
+      ({
+        id: "host-x",
+        label: "x",
+        windows: false,
+        state: "empty",
+        discovery: "complete",
+        connectionIds: [],
+        installable: [],
+        ...fields,
+      }) as unknown as Parameters<typeof coreInstallTarget>[0];
+    expect(coreInstallTarget(entry({ type: "local" }))).toEqual({
+      type: "local",
+    });
+    // Added by SSH name only, nothing found yet: the installer takes it.
+    expect(
+      coreInstallTarget(
+        entry({ type: "ssh", sshDestination: "spare.example.test" }),
+      ),
+    ).toEqual({ type: "ssh", destination: "spare.example.test" });
+    // No remote Windows steps: the manual hint instead of a failing button.
+    expect(
+      coreInstallTarget(
+        entry({
+          type: "ssh",
+          sshDestination: "win.example.test",
+          windows: true,
+        }),
+      ),
+    ).toBeNull();
+    expect(coreInstallTarget(undefined)).toBeNull();
   });
 
   test("each host lists its runtimes and can add another", async () => {
