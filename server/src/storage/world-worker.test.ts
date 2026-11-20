@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 // Every World storage open starts a fresh worker, which parses its whole import
 // graph again. Pulling in the service composition root (adapters, connections,
@@ -6,7 +7,7 @@ import { expect, test } from "bun:test";
 // Windows arm64 runner to stall an open past a test's 5 s budget (#1126).
 test("the storage worker loads storage code, not the service composition", async () => {
   const build = await Bun.build({
-    entrypoints: [new URL("./world-worker.ts", import.meta.url).pathname],
+    entrypoints: [fileURLToPath(new URL("./world-worker.ts", import.meta.url))],
     target: "bun",
     metafile: true,
   });
