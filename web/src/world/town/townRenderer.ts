@@ -57,14 +57,8 @@ import {
 import type { TownModel } from "./townModel";
 import type { TerminalColor } from "../terminalColor";
 import { createTownLookResolver } from "./townAppearance";
-import {
-  subscribeTownDaylight,
-  townDaylightHour,
-  townDaylightMode,
-  townSky,
-  townSkyIsClear,
-  townSkyToward,
-} from "./townDaylight";
+import { townSkyIsClear } from "./townDaylight";
+import { createTownSky } from "./townWeather";
 import { createTownAtmosphere, townAtmospherePlan } from "./townAtmosphere";
 import {
   createTownLighting,
@@ -287,12 +281,8 @@ export async function createTownRenderer(
     glow: atmosphereGlow,
   });
   let atmosphereLayout: TownLayout | null = null;
-  let sky = townSky(townDaylightHour());
-  let skyEasing = false;
-  const unsubscribeDaylight = subscribeTownDaylight(() => {
-    skyEasing = true;
-    request("daylight");
-  });
+  // The time of day and the weather (townWeather.ts).
+  const skyDriver = createTownSky((reason) => request(reason));
 
   let model: TownModel | null = null;
   /** A desk's table is drawn in its terminal colour. */
@@ -704,14 +694,10 @@ export async function createTownRenderer(
       searchFx,
     );
     const animated = !camera.reducedMotion && !state.calm;
-    const skyTarget = townSky(townDaylightHour());
-    let skyMoving = false;
-    if (skyEasing && animated)
-      ({ sky, moving: skyMoving } = townSkyToward(sky, skyTarget, dt));
-    else sky = skyTarget;
-    skyEasing = skyMoving;
-    // Following the clock, the sky is looked at again each minute.
-    if (townDaylightMode() === "clock") ambient.changeAt(clock + 60);
+    const frameSky = skyDriver.frame(dt, clock, animated);
+    const { sky, moving: skyMoving } = frameSky;
+    if (frameSky.recheck) ambient.changeAt(clock + frameSky.recheck);
+    if (frameSky.flashAt !== null) ambient.at(frameSky.flashAt);
     if (
       lighting.update(
         sky,
@@ -721,7 +707,13 @@ export async function createTownRenderer(
       )
     )
       ambient.every(TOWN_WAITING_PULSE_RATE);
-    const drift = atmosphere.update(sky, clock, animated, world);
+    const drift = atmosphere.update(
+      sky,
+      clock,
+      animated,
+      world,
+      camera.viewport,
+    );
     onFrame(camera, level); // before the drag, so a carry aims at this frame
     const dragging = dragEffects.update(dt);
     const onlyFilling =
@@ -944,7 +936,7 @@ export async function createTownRenderer(
       }
       if (nextLayout !== atmosphereLayout) {
         atmosphereLayout = nextLayout;
-        atmosphere.sync(townAtmospherePlan(nextLayout));
+        atmosphere.sync(townAtmospherePlan(nextLayout), nextLayout);
       }
       if (dirty.scene) {
         dimDirty = true;
@@ -986,7 +978,7 @@ export async function createTownRenderer(
       motion.removeEventListener("change", onMotion);
       frames?.dispose();
       topology.clear();
-      unsubscribeDaylight();
+      skyDriver.dispose();
       lighting.destroy();
       atmosphere.destroy();
       agentViews.dispose();

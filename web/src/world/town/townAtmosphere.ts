@@ -1,9 +1,11 @@
 /**
- * Town's atmosphere: depth that follows the time of day (townDaylight.ts).
- * By day each building casts a sun shadow that swings with the hour, and
- * cloud shadows drift across the land; at night street lamps glow at their
- * heads (their pools of light are townLighting.ts's) and fireflies wander
- * over the grass.
+ * Town's atmosphere: depth that follows the time of day (townDaylight.ts)
+ * and the weather (townWeather.ts). By day each building casts a sun shadow
+ * that swings with the hour, and cloud shadows drift across the land, faster
+ * in wind; at night street lamps glow at their heads (their pools of light
+ * are townLighting.ts's) and fireflies wander over the grass. Rain, snow,
+ * gusts, fog and wet or snowy ground are townWeatherArt.ts's, drawn here
+ * between the ground and the buildings.
  *
  * It stays quiet. Shadows and clouds lie on the ground under the buildings,
  * so they never shade a room, a desk or a status mark; fireflies keep to open
@@ -38,6 +40,7 @@ import {
 } from "./townLighting";
 import { townHash, townCanvas } from "./townSprites";
 import type { TownRect } from "./townTransition";
+import { createTownWeatherArt } from "./townWeatherArt";
 
 export type TownFirefly = TownPoint & { seed: number };
 export type TownCloud = TownPoint & {
@@ -59,6 +62,8 @@ export type TownAtmospherePlan = {
 
 /** At most this many redraws a second for drifting atmosphere alone. */
 export const TOWN_ATMOSPHERE_MAX_RATE = 12;
+/** Redraws a second while rain falls or wind gusts; snow drifts at the cap. */
+export const TOWN_WEATHER_RATE = 20;
 /** How far past the town the clouds' span reaches, in world pixels. */
 const CLOUD_MARGIN = 600;
 /** A cloud fades in and out over this many pixels at the span's edges. */
@@ -203,13 +208,16 @@ export function townFireflyAt(fly: TownFirefly, drift: number, still: boolean) {
 /**
  * How often drifting atmosphere wants the town redrawn, in frames a second:
  * once per screen pixel of drift at zoom `z`, at most
- * TOWN_ATMOSPHERE_MAX_RATE. 0 when nothing drifts: calm or reduced motion, or
- * no clouds or fireflies in this sky.
+ * TOWN_ATMOSPHERE_MAX_RATE; TOWN_WEATHER_RATE while rain falls or wind gusts.
+ * 0 when nothing drifts: calm or reduced motion, or no clouds, fog, snow or
+ * fireflies in this sky.
  */
 export function townAtmosphereRate(sky: TownSky, z: number, animated: boolean) {
   if (!animated) return 0;
+  if (sky.rain > 0.02 || sky.gusts > 0.02) return TOWN_WEATHER_RATE;
+  if (sky.snow > 0.02) return TOWN_ATMOSPHERE_MAX_RATE;
   const speed = Math.max(
-    sky.sun > 0.02 ? 9 : 0,
+    sky.clouds > 0.02 || sky.fog > 0.02 ? 9 * sky.wind : 0,
     townFireflyNight(sky) > 0.02 ? FLY_SPEED : 0,
   );
   return speed
@@ -259,8 +267,18 @@ export function createTownAtmosphere(options: {
   const radial = radialTexture();
   const soft = softRectTexture();
   const cloud = cloudTexture();
+  // Wet and snowy ground lie under the sun's shadows; fog and what falls or
+  // blows, over the cloud shadows. All of it stays under the buildings.
+  const weatherUnder = ground.addChild(new Container());
   const shadowLayer = ground.addChild(new Container());
   const cloudLayer = ground.addChild(new Container());
+  const weatherOver = ground.addChild(new Container());
+  const weather = createTownWeatherArt({
+    under: weatherUnder,
+    over: weatherOver,
+    radial,
+    cloud,
+  });
   let plan: TownAtmospherePlan | null = null;
   const shadows: NineSliceSprite[] = [];
   const clouds: Sprite[] = [];
@@ -268,6 +286,8 @@ export function createTownAtmosphere(options: {
   const flies: Sprite[] = [];
   /** Seconds the atmosphere has drifted: it holds still without motion. */
   let drift = 0;
+  /** Seconds the clouds have drifted, faster in wind. */
+  let cloudDrift = 0;
   let lastClock: number | null = null;
   /** The shadow offset the strips were last laid out for. */
   let shadowAt = "";
@@ -289,9 +309,10 @@ export function createTownAtmosphere(options: {
 
   return {
     /** Rebuild from a layout's plan. */
-    sync(next: TownAtmospherePlan) {
+    sync(next: TownAtmospherePlan, layout: TownLayout) {
       clear();
       plan = next;
+      weather.sync(layout, next.span, next.clouds);
       shadowAt = "";
       // Two strips at most for each building (townShadowStrips).
       for (let i = 0; i < next.shadows.length * 2; i += 1) {
@@ -322,8 +343,17 @@ export function createTownAtmosphere(options: {
      * Place this frame's atmosphere under `sky`, with `world`'s camera.
      * Returns how often it wants redrawing (townAtmosphereRate).
      */
-    update(sky: TownSky, clock: number, animated: boolean, world: Container) {
-      if (animated && lastClock !== null) drift += clock - lastClock;
+    update(
+      sky: TownSky,
+      clock: number,
+      animated: boolean,
+      world: Container,
+      viewport: { width: number; height: number },
+    ) {
+      if (animated && lastClock !== null) {
+        drift += clock - lastClock;
+        cloudDrift += (clock - lastClock) * sky.wind;
+      }
       lastClock = clock;
       glow.scale.copyFrom(world.scale);
       glow.position.copyFrom(world.position);
@@ -352,13 +382,14 @@ export function createTownAtmosphere(options: {
           }
         });
       }
-      cloudLayer.visible = sky.sun > 0.02;
+      cloudLayer.visible = sky.clouds > 0.02;
       if (cloudLayer.visible)
         plan.clouds.forEach((shape, i) => {
-          const at = townCloudAt(shape, drift, plan!.span);
+          const at = townCloudAt(shape, cloudDrift, plan!.span);
           clouds[i]!.position.set(at.x, at.y);
-          clouds[i]!.alpha = 0.13 * sky.sun * at.fade;
+          clouds[i]!.alpha = 0.13 * Math.min(2.5, sky.clouds) * at.fade;
         });
+      weather.update(sky, drift, animated, world, viewport);
       for (const lamp of lamps) {
         lamp.visible = sky.lights > 0.01;
         lamp.alpha = 0.9 * sky.lights;
@@ -376,8 +407,9 @@ export function createTownAtmosphere(options: {
     },
     destroy() {
       clear();
-      shadowLayer.destroy();
-      cloudLayer.destroy();
+      weather.destroy();
+      for (const layer of [weatherUnder, shadowLayer, cloudLayer, weatherOver])
+        layer.destroy();
       radial.destroy(true);
       soft.destroy(true);
       cloud.destroy(true);
