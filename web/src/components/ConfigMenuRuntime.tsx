@@ -19,7 +19,7 @@ export function ConfigMenuRuntime({
   herdrUnavailable,
   herdrUpgrade,
   upgrading,
-  connectionId,
+  setupKey,
   setupEnabled,
   socket,
   detailsOpen,
@@ -30,7 +30,8 @@ export function ConfigMenuRuntime({
   herdrUnavailable: boolean;
   herdrUpgrade: { label: string; description: string } | null;
   upgrading: boolean;
-  connectionId: string;
+  /** The connection the setup card belongs to; null while Herdr is available. */
+  setupKey: string | null;
   setupEnabled: boolean;
   socket: string | undefined;
   detailsOpen: boolean;
@@ -70,8 +71,8 @@ export function ConfigMenuRuntime({
           onClick={onUpgrade}
         />
       ) : null}
-      {herdrUnavailable ? (
-        <HerdrSetupCard key={connectionId} enabled={setupEnabled} compact />
+      {herdrUnavailable && setupKey !== null ? (
+        <HerdrSetupCard key={setupKey} enabled={setupEnabled} compact />
       ) : null}
       <button
         type="button"

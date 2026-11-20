@@ -322,7 +322,9 @@ export function ConfigMenu({
       herdrUnavailable={herdrUnavailable}
       herdrUpgrade={herdrUpgrade}
       upgrading={!!s.herdrUpgrading}
-      connectionId={connectionClient.connectionId}
+      // Read the connection only when the setup card shows, as before: the
+      // Menu renders closed on every view and must not touch it eagerly.
+      setupKey={herdrUnavailable ? connectionClient.connectionId : null}
       setupEnabled={
         !s.connectionPaused && s.activeConnectionId === s.defaultConnectionId
       }
