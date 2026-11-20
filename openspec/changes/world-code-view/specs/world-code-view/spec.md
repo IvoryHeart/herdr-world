@@ -56,16 +56,34 @@ owner licence acceptance, same-origin behavior and explicit full shell/file-writ
 trust pass admission. World SHALL call installed servers only and SHALL NOT claim
 that nonbundling alone grants embedding rights. The owner SHALL be told that an
 IDE is not confined to the selected project and same-origin workbench/extension
-code shares World's browser authority. Failed licence, frame, webview, worker,
+code shares World's browser authority. Failed licence, frame, worker,
 secure-context or origin compatibility SHALL block embedding with a concrete
 reason and an explicit desktop handoff option. World SHALL NOT silently relax
 its global origin/CSP policy, rewrite restricted product assets or assert desktop
 extension parity based only on Marketplace availability.
 
+Webviews are the one compatibility gap that does not block embedding. A provider
+whose webviews load from another origin (stock VS Code and OpenVSCode Server use
+`*.vscode-cdn.net` from their product configuration) SHALL embed with webviews
+unavailable, and World SHALL say so on the provider before Enable. World SHALL
+keep the IDE frame policy to its own origin and SHALL NOT admit the provider's
+webview origin, serve webviews from a second World origin, or point the
+provider's webview template or host page at a World route. A provider that
+serves webviews from its own route on World's origin (code-server) runs that
+content with World's authority, which its admission disclosure covers. A second,
+isolated webview origin requires a reviewed change to World's one-origin rule
+and an HTTPS name with wildcard certificate first. The decision and the
+trade-off of each option are recorded in `docs/design/code-view/webview-origin.md`.
+
 #### Scenario: Official webviews require another origin
 
-- **WHEN** an installed Microsoft provider requires a CDN webview origin incompatible with World's current policy
-- **THEN** embedding remains blocked with the compatibility reason and explicit handoff; no automatic CSP exception or Open VSX substitution occurs
+- **WHEN** an installed stock VS Code or OpenVSCode Server provider loads its webviews from a CDN origin incompatible with World's current policy
+- **THEN** the provider row says before Enable that webviews such as Markdown preview stay blank inside World while editing, terminals, Git and debugging work, and the embedded workbench runs with those frames refused; no CSP exception, second origin, Open VSX substitution or rewritten webview template occurs
+
+#### Scenario: Webview template is never pointed at World
+
+- **WHEN** a stock VS Code or OpenVSCode Server provider is started or proxied by World
+- **THEN** its product configuration, webview template and webview host page reach the browser unchanged apart from World's own frame policy, so extension and document HTML never runs on World's origin through that provider
 
 #### Scenario: First enable grants broad authority
 
