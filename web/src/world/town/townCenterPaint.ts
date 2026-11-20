@@ -3,6 +3,7 @@
  * a clock drum, a columned portico under a pediment with a gold crest, slate
  * wings ending in pavilions, banners, lamps and wide front steps. Painted once
  * per width and shared; the renderer places it as one outdoor sprite.
+ * Outlined in Town's ink like the agents, desks and post office beside it.
  */
 
 import { TOWN_CENTER_FRIEZE_Y, TOWN_CENTER_HEIGHT } from "./townCenter";
@@ -10,6 +11,7 @@ import { TOWN_TILE as T } from "./townLayout";
 import {
   TOWN_OUTLINE,
   townCanvas,
+  townOutline,
   townShade,
   type TownCanvas,
 } from "./townSprites";
@@ -39,6 +41,13 @@ export function paintTownCenter(widthTiles: number): TownCanvas {
 }
 
 function paint(W: number, H: number): TownCanvas {
+  // The hall is outlined in Town's ink, as agents and desks are (#1098);
+  // its ground shadows lie outside the outline, on their own layer.
+  const [ground, shadow] = townCanvas(W, H);
+  const groundShadow = (x: number, y: number, w: number, h: number) => {
+    shadow.fillStyle = "rgba(0,0,0,.2)";
+    shadow.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+  };
   const [canvas, g] = townCanvas(W, H);
   const rect = (x: number, y: number, w: number, h: number, color: string) => {
     g.fillStyle = color;
@@ -61,7 +70,7 @@ function paint(W: number, H: number): TownCanvas {
   const pavilion = W >= 500 ? 44 : 32;
 
   /* ---------- ground shadow ---------- */
-  rect(14, plinth - 4, W - 20, 12, "rgba(0,0,0,.2)");
+  groundShadow(14, plinth - 4, W - 20, 12);
 
   /* ---------- wings and end pavilions ---------- */
   const wingTop = front - 34;
@@ -243,13 +252,7 @@ function paint(W: number, H: number): TownCanvas {
     rect(mid - s.w / 2, s.y, s.w, 3, STONE);
     rect(mid - s.w / 2, s.y + 7, s.w, 1, STONE_DARK);
   }
-  rect(
-    mid - steps[2]!.w / 2 + 2,
-    plinth + 28,
-    steps[2]!.w,
-    4,
-    "rgba(0,0,0,.18)",
-  );
+  groundShadow(mid - steps[2]!.w / 2 + 2, plinth + 28, steps[2]!.w, 4);
   for (const side of [-1, 1] as const) {
     // A lamp at each end of the bottom step.
     const lx = mid + side * (steps[2]!.w / 2 + 14);
@@ -267,7 +270,8 @@ function paint(W: number, H: number): TownCanvas {
     rect(tx + 4, plinth - 20, 1, 1, "#f2a5c4");
     rect(tx + 10, plinth - 14, 1, 1, "#fff5d6");
   }
-  return canvas;
+  shadow.drawImage(townOutline(canvas), 0, 0);
+  return ground;
 
   function slateRoof(x: number, y: number, w: number, h: number) {
     for (let r = 0; r < h; r += 1)

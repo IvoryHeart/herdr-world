@@ -3,6 +3,12 @@ import { TownCamera } from "./townCamera";
 import { layoutTown, TOWN_TILE as T, townShapeFor } from "./townLayout";
 import { townModelFromProjection } from "./townModel";
 import {
+  townWarehouseLot,
+  TOWN_WAREHOUSE_YARD_ROWS,
+} from "./townWarehouseModel";
+import {
+  TOWN_WAREHOUSE_SEARCH_KEY,
+  townLandmarkResults,
   townRectOnScreen,
   townSearchLight,
   townSearchOffscreen,
@@ -233,4 +239,37 @@ test("the result line counts matches and those off-screen", () => {
   expect(townSearchLabel(7, 3)).toBe("7 matches · 3 off-screen");
   expect(townSearchLabel(1, 0)).toBe("1 match");
   expect(townSearchLabel(0, 0)).toBe("No matches");
+});
+
+test("the warehouse is a landmark search finds and shows whole, on phone and desktop (#1033, #1028)", () => {
+  expect(townLandmarkResults("warehouse").map((r) => r.label)).toEqual([
+    "Warehouse",
+  ]);
+  expect(townLandmarkResults("Ware")[0]!.rank).toBe(0);
+  // What it holds finds it too, after names.
+  expect(townLandmarkResults("pull requests")[0]!.rank).toBe(1);
+  expect(townLandmarkResults("parcels").length).toBe(1);
+  expect(townLandmarkResults("login")).toEqual([]);
+  for (const [width, height] of [
+    [1440, 900],
+    [390, 844],
+  ] as const) {
+    const projection = town({ north: { alpha: working(2) } });
+    const model = townModelFromProjection(projection);
+    const { layout } = layoutTown(
+      model.input,
+      townShapeFor(width, height),
+      new Map(),
+      new Map(),
+    );
+    const lot = townWarehouseLot(layout);
+    expect(
+      townSearchRect(TOWN_WAREHOUSE_SEARCH_KEY, model, layout, noActors),
+    ).toEqual({
+      x: lot.x * T,
+      y: lot.y * T,
+      w: lot.w * T,
+      h: (lot.yardY + TOWN_WAREHOUSE_YARD_ROWS - lot.y) * T,
+    });
+  }
 });

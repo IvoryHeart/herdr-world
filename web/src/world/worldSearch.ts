@@ -59,7 +59,9 @@ export type WorldSearchKind =
   | "room"
   | "table"
   | "agent"
-  | "terminal";
+  | "terminal"
+  /** One of Town's own places, such as its warehouse (town/townSearch.ts). */
+  | "landmark";
 
 /** Part of an excerpt; `match` parts are a query word. */
 export type WorldSearchExcerptPart = { text: string; match: boolean };
@@ -67,7 +69,8 @@ export type WorldSearchExcerptPart = { text: string; match: boolean };
 export type WorldSearchResult = {
   /** Unique among results: the node's ID, or the table's desk key. */
   id: string;
-  /** The node choosing the result selects (a table's first pane). */
+  /** The node choosing the result selects (a table's first pane); a
+   * landmark has none and is only shown. */
   nodeId: string;
   kind: WorldSearchKind;
   label: string;

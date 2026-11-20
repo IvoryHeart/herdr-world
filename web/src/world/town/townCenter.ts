@@ -46,18 +46,16 @@ export const townCityBoardScale = (z: number) =>
   );
 
 /**
- * The center's top row: two tiles of verge above it, and on a wide town the
- * billboard's rows above those (its tallest, zoomed out).
+ * The center's top row: two tiles of verge above it, and the billboard's
+ * rows above those (its tallest, zoomed out). A phone keeps them too: its
+ * billboard stands above the center as on a wide town (#1033).
  */
-export const townCenterTop = (wide: boolean) =>
+export const TOWN_CENTER_TOP =
   2 +
-  (wide
-    ? Math.ceil(
-        (TOWN_CITY_BOARD_HEIGHT * TOWN_CITY_BOARD_SCALE.max +
-          TOWN_CITY_BOARD_GAP) /
-          TILE,
-      )
-    : 0);
+  Math.ceil(
+    (TOWN_CITY_BOARD_HEIGHT * TOWN_CITY_BOARD_SCALE.max + TOWN_CITY_BOARD_GAP) /
+      TILE,
+  );
 
 /** A phone's center fits its narrowest building; wider towns get wings. */
 export const townCenterWidth = (narrowPhone: boolean) =>
@@ -67,8 +65,7 @@ export const townCenterWidth = (narrowPhone: boolean) =>
  * The first street's top row, right under the center: its front steps open
  * straight onto the pavement, so it stands against the road.
  */
-export const townCenterStreet = (wide: boolean) =>
-  townCenterTop(wide) + TOWN_CENTER_HEIGHT;
+export const TOWN_CENTER_STREET = TOWN_CENTER_TOP + TOWN_CENTER_HEIGHT;
 
 /**
  * The paved apron at the foot of the front steps, a little wider than the

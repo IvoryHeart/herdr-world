@@ -13,6 +13,7 @@
 import {
   TOWN_LAND_PERIOD,
   TOWN_LANDSCAPE_SEED,
+  TownLand,
   townLandObjects,
   townLandscape,
   townWildLandscape,
@@ -24,6 +25,7 @@ import {
   TownGround,
   type TownLayout,
 } from "./townLayout";
+import { townHarbourLot } from "./townHarbour";
 import type { TownRect } from "./townTransition";
 
 /** A tile's code: the layout's ground (0–5), or LAND + a TownLand kind. */
@@ -88,9 +90,12 @@ export function townGroundPlan(
     if (cx1 > cx0 && cy1 > cy0)
       marks.push({ fill, x: cx0, y: cy0, w: cx1 - cx0, h: cy1 - cy0 });
   };
-  // Street markings run the town's width; beyond it the street is a lane.
+  // Street markings run to the harbour's promenade.
   const left = Math.max(region.x, 0);
-  const right = Math.min(region.x + region.w, width * T);
+  const right = Math.min(
+    region.x + region.w,
+    townHarbourLot(layout).streetEnd * T,
+  );
   for (const roadY of layout.roads) {
     const cy = (roadY + 2) * T + 7;
     for (let x = Math.floor(left / 16) * 16; x < right; x += 16)
@@ -139,6 +144,35 @@ export function townGroundPlan(
  * TOWN_LAND_PERIOD each way: repeated, it paints the land past every town's
  * land rect seamlessly, trees reaching over its edges included.
  */
+/**
+ * The plan of one period of open sea (TOWN_LAND_PERIOD tiles each way), for
+ * the sea past a wide town's land rect (townRendererTopology.ts); with
+ * `quay`, one column of it with the quay wall on its left.
+ */
+export function townSeaPlan(quay = false): TownGroundPlan {
+  const size = TOWN_LAND_PERIOD;
+  const w = quay ? 1 : size;
+  const region = { x: 0, y: 0, w: w * T, h: size * T };
+  const cols = w + 2;
+  const rows = size + 2;
+  const tiles = new Uint8Array(cols * rows).fill(
+    TOWN_GROUND_LAND + TownLand.sea,
+  );
+  if (quay)
+    for (let y = 0; y < rows; y += 1) tiles[y * cols] = TOWN_GROUND_LAND;
+  return {
+    region,
+    tx0: -1,
+    ty0: -1,
+    cols,
+    rows,
+    tiles,
+    marks: [],
+    objects: [],
+    key: `sea:${quay}`,
+  };
+}
+
 export function townWildPlan(seed = TOWN_LANDSCAPE_SEED): TownGroundPlan {
   const land = townWildLandscape(seed);
   const size = TOWN_LAND_PERIOD;

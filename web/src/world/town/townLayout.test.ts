@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import { townLandscape } from "./townLandscape";
+import { townHarbourLot } from "./townHarbour";
 import { townLevel, townZoomLimits } from "./townCamera";
-import { townPhoneShape } from "./townLots";
+import { MARGIN, ROAD_GAP, townPhoneShape } from "./townLots";
+import { TOWN_POST_ROOM } from "./townPostLot";
 import {
   layoutTown,
   townPinnedOrder,
@@ -851,13 +853,20 @@ test("the town center stands at the top, just across the first street", () => {
       for (const road of layout.verticalRoads)
         expect(road.y0).toBeGreaterThan(first);
       // Centred over the first row of buildings (the town's, without any).
+      // A phone's stacked column keeps its post office left of the center:
+      // there the center moves right off the axis only as far as that takes
+      // (#1033), the lot at the column's left edge.
       const row = buildings.filter((b) => b.y < layout.roads[1]!);
       if (row.length) {
         const axis =
           (Math.min(...row.map((b) => b.x)) +
             Math.max(...row.map((b) => b.x + b.w))) /
           2;
-        expect(Math.abs(center.x + center.w / 2 - axis)).toBeLessThanOrEqual(1);
+        const off = Math.abs(center.x + center.w / 2 - axis);
+        if (layout.formFactor === "narrow" && off > 1) {
+          expect(center.x + center.w / 2).toBeGreaterThan(axis);
+          expect(center.x - TOWN_POST_ROOM).toBe(MARGIN + ROAD_GAP);
+        } else expect(off).toBeLessThanOrEqual(1);
       }
       // A phone's center fits its narrowest building's view.
       if (townPhoneShape(shape))
@@ -925,8 +934,10 @@ test("the first street runs above the first row and on past the last crossing", 
     for (let x = last + ROAD_BAND; x < last + ROAD_BAND + 4; x += 1)
       expect(layout.ground[top * layout.width + x]).toBe(TownGround.walk);
     expect(last + ROAD_BAND + 4).toBeLessThanOrEqual(layout.width - 3);
-    // The street is open to the town's right edge.
-    expect(layout.ground[(top + 2) * layout.width + layout.width - 1]).toBe(
+    // The street is open to the town's right edge, or a wide town's
+    // promenade, the sea beyond it.
+    const end = townHarbourLot(layout)?.streetEnd ?? layout.width;
+    expect(layout.ground[(top + 2) * layout.width + end - 1]).toBe(
       TownGround.road,
     );
   }

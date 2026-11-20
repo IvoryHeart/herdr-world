@@ -21,6 +21,7 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const STATUS: Record<CliErrorCode, number> = {
   usage: 400,
   refused: 403,
+  question_cap: 429,
   not_found: 404,
   unavailable: 503,
 };

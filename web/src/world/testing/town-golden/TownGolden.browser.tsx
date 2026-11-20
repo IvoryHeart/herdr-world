@@ -2,6 +2,7 @@ import { clock } from "./install";
 import { createRoot } from "react-dom/client";
 import { WebGLRenderer } from "pixi.js";
 import { TownCanvas, type TownRoomActions } from "../../town/TownCanvas";
+import { TownPostProvider } from "../../town/TownPostOffice";
 import { buildWorldObject } from "../../worldObject";
 import {
   projectWorldOffice,
@@ -12,6 +13,11 @@ import { goldenConnections, goldenUsage } from "./scene";
 import { bridge } from "../../../api";
 import { comparePixels } from "./pixels";
 import { setTownDaylightMode } from "../../town/townDaylight";
+import { shipyardStore } from "../../shipyard/shipyardStore";
+import {
+  shipyardFixtureCatalog,
+  shipyardFixtureSnapshot,
+} from "../../shipyard/shipyardFixture";
 import "../../../styles/tokens.css";
 import "../../../styles/base.css";
 import "../../world.css";
@@ -89,6 +95,20 @@ async function prepare() {
       ? Promise.resolve(goldenUsage())
       : call(method, ...rest);
 
+  // The harbour reads the synthetic release pipeline in memory: the fixture
+  // server has no Shipyard API, and a network answer would race the clock.
+  shipyardStore.useFetch((input) => {
+    const repo = new URL(String(input), location.href).searchParams.get("repo");
+    const now = Date.now();
+    return Promise.resolve(
+      Response.json(
+        repo
+          ? shipyardFixtureSnapshot("ready", now, repo)
+          : shipyardFixtureCatalog("ready", now),
+      ),
+    );
+  });
+
   // Hold Town's time of day: following the clock would make the image depend
   // on the runner's time zone. Night shows the status lighting: lit and dark
   // rooms, each desk's state light and a waiting reception.
@@ -99,20 +119,26 @@ async function prepare() {
     null,
     TOWN_PRESENTATION_BOUNDS,
   );
+  const GOLDEN_POST = {
+    counts: { asks: 1, needs: 2, done: 3, outbox: 1 },
+  } as const;
   createRoot(document.getElementById("root")!).render(
     <div className="town-stage" style={{ position: "fixed", inset: 0 }}>
-      <TownCanvas
-        projection={projection}
-        selectedKey={null}
-        completionSeenKeys={new Set()}
-        conversationTargets={[]}
-        onSelect={noAction}
-        onActivateAgent={noAction}
-        onActivateRoom={noAction}
-        roomActions={roomActions}
-        selectedRoomKey={null}
-        observability={EMPTY_OFFICE_OBSERVABILITY}
-      />
+      {/* Fixed counts: the post office's sign reads them at a glance. */}
+      <TownPostProvider source={GOLDEN_POST}>
+        <TownCanvas
+          projection={projection}
+          selectedKey={null}
+          completionSeenKeys={new Set()}
+          conversationTargets={[]}
+          onSelect={noAction}
+          onActivateAgent={noAction}
+          onActivateRoom={noAction}
+          roomActions={roomActions}
+          selectedRoomKey={null}
+          observability={EMPTY_OFFICE_OBSERVABILITY}
+        />
+      </TownPostProvider>
     </div>,
   );
   await clock.until(

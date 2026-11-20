@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { join } from "node:path";
+import { acquireInstanceLock } from "../config/instance-lock";
 import { ConnectionProfileStore } from "../connections/profiles";
 import { createConnectionsCommand } from "./connections";
 import { runCli } from "./index";
@@ -93,4 +94,40 @@ test("offline host additions never persist explicit startup socket settings", as
   }).load();
   expect(saved?.profiles).toEqual([]);
   expect(saved?.hosts).toHaveLength(1);
+});
+
+test("startup between a host command's probe and snapshot refuses offline mutation", async () => {
+  cli = createTestCli();
+  cli.writeConfig("");
+  const probed = Promise.withResolvers<void>();
+  const proceed = Promise.withResolvers<boolean>();
+  const command = createConnectionsCommand({
+    probe: () => {
+      probed.resolve();
+      return proceed.promise;
+    },
+    discoverHost: async () => [],
+  });
+  const editing = runCli(
+    ["connections", "add", "runtime-fixture.example", "--preview-empty"],
+    cli.context,
+    [command],
+  );
+  await probed.promise;
+  const release = acquireInstanceLock(
+    join(cli.home, ".config", "herdr-world"),
+    0,
+  );
+  try {
+    proceed.resolve(false);
+    expect(await editing).toBe(1);
+    expect(cli.errors.join()).toContain("has not recorded a listening address");
+    expect(
+      new ConnectionProfileStore({
+        path: join(cli.home, ".config", "herdr-world", "connections.json"),
+      }).load(),
+    ).toBeNull();
+  } finally {
+    release();
+  }
 });

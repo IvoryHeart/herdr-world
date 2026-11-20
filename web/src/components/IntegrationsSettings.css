@@ -1,30 +1,38 @@
-/* Configuration → Integrations: one tab per kind, one row per integration. */
+/*
+ * Configuration → Integrations: one tab per kind, one row per integration.
+ * Rows share the Agents list's shape (icon tile, copy, actions on the right)
+ * so every kind reads as one list; colours come from the theme tokens.
+ */
 .integrations-settings {
   display: grid;
-  gap: 18px;
+  gap: 12px;
   padding: 4px 0;
 }
 
-.integrations-intro {
+.integrations-intro,
+.integrations-help {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .integrations-group {
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .integrations-search {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
+  background: var(--input-bg);
   color: var(--muted);
 }
 
@@ -44,17 +52,21 @@
   border-color: var(--accent);
 }
 
-/* Kinds sit on one row that scrolls sideways, so more kinds never push the
-   list down or wrap into a second bar on a phone. */
+/*
+ * Kinds are underlined text tabs, quieter than Configuration's own section
+ * buttons above them (their icons head the lists instead), on one row that
+ * scrolls sideways so more kinds never wrap into a second bar on a phone.
+ * The Vault holds tokens rather than being a kind, so it keeps its key and
+ * sits apart at the end.
+ */
 .integrations-tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
-  border-bottom: 1px solid var(--border-soft);
-  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
 }
 
 .integrations-tabs::-webkit-scrollbar {
@@ -67,17 +79,43 @@
   align-items: center;
   gap: 6px;
   min-height: 36px;
+  margin-bottom: -1px;
   padding: 6px 10px;
-  border-color: var(--border);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
   background: transparent;
+  box-shadow: none;
   color: var(--muted);
   font-size: 12px;
   white-space: nowrap;
 }
 
+.integrations-tabs > button:hover:not([aria-selected="true"]) {
+  background: var(--border-soft);
+  color: var(--text);
+}
+
 .integrations-tabs > button[aria-selected="true"] {
+  border-bottom-color: var(--accent);
   color: var(--text-strong);
-  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.integrations-tabs > button[data-kind="vault"] {
+  margin-left: auto;
+}
+
+.integrations-tabs > button[data-kind="vault"]::before {
+  content: "";
+  align-self: stretch;
+  width: 1px;
+  margin: 2px 6px 2px -4px;
+  background: var(--border);
+}
+
+.integrations-tabs > button > svg {
+  flex-shrink: 0;
 }
 
 .integrations-tab-count {
@@ -85,62 +123,86 @@
   padding: 0 5px;
   border-radius: 999px;
   background: var(--border-soft);
+  color: var(--muted);
   font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
   text-align: center;
 }
 
+.integrations-tabs > button[aria-selected="true"] .integrations-tab-count {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
 .integrations-tab-alert {
-  color: #efad9c;
-}
-
-.integrations-empty {
-  display: grid;
-  gap: 8px;
-}
-
-.integrations-empty > p {
-  margin: 0;
-}
-
-.integrations-empty-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  color: var(--danger-text);
 }
 
 .integrations-settings [hidden] {
   display: none;
 }
 
-/* All: one block per kind, each under its heading with a count. */
+/* A kind tab's help on the left, its own action (hosts, refresh) right. */
+.integrations-panel-head,
+.integrations-kind-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-width: 0;
+}
+
+.integrations-panel-head > .integrations-help {
+  flex: 1 1 240px;
+}
+
+.integrations-extra {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  margin-left: auto;
+  padding: 3px 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.integrations-extra:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* All: one block per kind under a small heading with its icon and count. */
 .integrations-kind {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .integrations-kind + .integrations-kind {
-  padding-top: 10px;
+  padding-top: 8px;
 }
 
-.integrations-kind > h3 {
+.integrations-kind-head > h3 {
   display: flex;
   align-items: center;
   gap: 6px;
   margin: 0;
-  font-size: 12px;
+  color: var(--muted);
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text-strong);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.integrations-group > .settings-helper,
-.integrations-kind > .settings-helper {
-  margin: 0;
+.integrations-kind-head > h3 > svg {
+  color: var(--muted);
 }
 
-.integrations-kind > button,
-.integrations-group > button {
-  justify-self: start;
+.integrations-kind-head .integrations-tab-count {
+  letter-spacing: 0;
 }
 
 .integrations-list {
@@ -154,8 +216,10 @@
 
 .integration-row {
   display: grid;
-  gap: 4px;
-  padding: 12px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 10px 12px;
   font-size: 12px;
 }
 
@@ -163,79 +227,165 @@
   border-top: 1px solid var(--border-soft);
 }
 
-.integration-row-head {
-  display: flex;
-  flex-wrap: wrap;
+.integration-row[data-state="error"] {
+  background: color-mix(in srgb, var(--danger-soft) 45%, transparent);
+}
+
+/* The same tile as the Agents list's agent icons. */
+.integration-icon {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: var(--input-bg);
+  color: var(--muted);
+}
+
+.integration-icon > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.integration-icon[data-type="github"] {
+  color: var(--text-strong);
+}
+
+.integration-icon-svg,
+.integration-icon-svg > svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+
+.integration-row-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 
 .integration-row-title {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.integration-row-title > svg {
-  color: var(--muted);
-}
-
 .integration-row-title > strong {
   color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .integration-row-actions {
   display: flex;
+  align-items: center;
   gap: 4px;
-  margin-left: auto;
+}
+
+.integration-row-actions > button {
+  min-height: 30px;
+  padding: 4px 12px;
+  font-size: 11px;
+}
+
+.integration-row-actions > .integration-action[data-action="connect"] {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.integration-row-actions
+  > .integration-action[data-action="connect"]:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.integration-row-actions > .integration-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  padding: 4px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+}
+
+.integration-row-actions > .integration-icon-button:hover,
+.integration-row-actions > .integration-icon-button[aria-expanded="true"] {
+  background: var(--border-soft);
+  color: var(--text);
 }
 
 .integration-state {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 7px;
+  padding: 0 7px;
   border: 1px solid var(--border-soft);
   border-radius: 999px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10.5px;
+  line-height: 17px;
   white-space: nowrap;
 }
 
 .integration-state[data-state="connected"] {
-  border-color: color-mix(in srgb, #54c88b 45%, var(--border-soft));
-  color: #83d9aa;
+  border-color: color-mix(in srgb, var(--green) 40%, var(--border-soft));
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.integration-state[data-state="needs_connect"] {
+  border-color: color-mix(in srgb, var(--yellow) 35%, var(--border-soft));
+  background: var(--warning-soft);
+  color: var(--warning-text);
 }
 
 .integration-state[data-state="error"] {
-  border-color: color-mix(in srgb, #ef9b85 45%, var(--border-soft));
-  color: #efad9c;
-}
-
-.integration-state[data-state="available"] {
-  color: var(--text);
+  border-color: color-mix(in srgb, var(--red) 45%, var(--border-soft));
+  background: var(--danger-soft);
+  color: var(--danger-text);
 }
 
 .integration-row-detail,
-.integration-row-provides,
-.integrations-empty {
+.integration-row-provides {
   margin: 0;
   color: var(--muted);
+  line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.integration-row-detail {
+  color: color-mix(in srgb, var(--muted) 55%, var(--text));
+  font-size: 12px;
 }
 
 .integration-row-provides {
   font-size: 11px;
 }
 
+/* A row's settings open under it, across the full row. */
+.integration-row-settings {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
 .integration-fields {
   display: grid;
   gap: 10px;
-  margin-top: 10px;
+  margin-top: 6px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--input-bg);
 }
 
 .integration-fields textarea {
@@ -255,9 +405,67 @@
   justify-content: space-between;
 }
 
-@media (max-width: 560px) {
+/* Empty lists and searches: a quiet dashed box, with its ways out. */
+.integrations-empty {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.integrations-empty > p {
+  margin: 0;
+}
+
+.integrations-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.integrations-empty-actions > button {
+  min-height: 30px;
+  font-size: 11px;
+}
+
+/* The Agents list sits under its heading like the other kinds. */
+.integrations-settings .agent-integrations-settings {
+  padding: 0;
+}
+
+.integrations-settings .agent-integrations-toolbar {
+  padding: 0 0 8px;
+}
+
+@media (pointer: coarse) {
+  .integrations-tabs > button,
+  .integration-row-actions > button,
+  .integrations-extra,
+  .integrations-empty-actions > button {
+    min-height: 44px;
+  }
+
+  .integration-row-actions > .integration-icon-button {
+    width: 44px;
+  }
+}
+
+/* Phones: the row keeps its actions on the right; very narrow screens move
+   them under the copy instead of squeezing the name. */
+@media (max-width: 350px) {
+  .integration-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
   .integration-row-actions {
-    width: 100%;
+    grid-column: 2;
     justify-content: flex-end;
   }
 }
