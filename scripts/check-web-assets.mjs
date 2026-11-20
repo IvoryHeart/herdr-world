@@ -47,7 +47,11 @@ const maxFileCount = 212;
 // The Town harbour and warehouse (#1028) fit main alone, but main's Library
 // (#1082) grew under it: 15.42 MiB together, so 15.5 MiB, initial budgets
 // unchanged (2026-11-20).
-const maxTotalBytes = 15.5 * 1024 * 1024;
+// Board's element screens (#1030: cards, Add to Board, the reader; +34 KB,
+// all in the lazy Board chunk) fit main alone, but Apartments (#1034) left
+// main 3 KB under 15.5 MiB: 15.53 MiB together, so 15.6 MiB, initial budgets
+// unchanged (2026-11-20).
+const maxTotalBytes = 15.6 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two
