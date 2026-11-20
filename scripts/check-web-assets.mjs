@@ -25,14 +25,16 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // The memory Library (#1027) is a lazy dialog (its JS and CSS) that shares
 // the library's Town art, which splits that art, Town's layout and its
 // sprites into small chunks of their own (+5 files, no initial load, on
-// 2026-11-20).
-const maxFileCount = 194;
+// 2026-11-20). Main reached 193 files under it (#1008), so the budget
+// carries both: 198.
+const maxFileCount = 198;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
-// The memory Library (#1027) adds 46 KB of lazy assets with 9 KB of headroom
-// left; 15.3 MiB carries it, initial budgets unchanged (2026-11-20).
-const maxTotalBytes = 15.3 * 1024 * 1024;
+// The memory Library (#1027) adds 57 KB of lazy assets; main grew to
+// 15.25 MiB under it (#1008), so 15.35 MiB carries both, initial budgets
+// unchanged (2026-11-20).
+const maxTotalBytes = 15.35 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
