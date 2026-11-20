@@ -13,7 +13,11 @@ import {
 } from "./harness";
 import type { ForegroundGroupReader } from "./process-group";
 import type { CoreMirror, CoreMirrorTerminal } from "./mirror";
-import { coreSpawnedBy, coreSummaryOf } from "./labels";
+import {
+  CORE_UNNAMED_SPACE_LABEL,
+  coreSpawnedBy,
+  coreSummaryOf,
+} from "./labels";
 import { coreRecipientToken } from "./recipient";
 import { coreOccupantFingerprint } from "./occupant";
 import type {
@@ -369,7 +373,14 @@ export function coreHidesAgent(record: CoreMirrorTerminal): boolean {
 
 type Placement =
   | { kind: "world"; room: CoreTopologyRoom; tab: CoreTopologyTab }
-  | { kind: "app"; space: string; tab: string | null; where: string }
+  | {
+      kind: "app";
+      space: string;
+      tab: string | null;
+      where: string;
+      /** `where` is World's placeholder caption (`CORE_UNNAMED_SPACE_LABEL`). */
+      placeholder: boolean;
+    }
   | { kind: "unplaced" };
 
 /**
@@ -396,6 +407,7 @@ function placementOf(
         space,
         tab: label(current, "herdr.tab"),
         where: label(current, "where") ?? "",
+        placeholder: worldPlaceholder(current),
       };
     const parent: unknown = current.parent;
     current = typeof parent === "string" ? byAddress.get(parent) : undefined;
@@ -403,16 +415,25 @@ function placementOf(
   return { kind: "unplaced" };
 }
 
+/** World wrote this terminal's caption for a space with no name. */
+function worldPlaceholder(record: CoreMirrorTerminal): boolean {
+  return record.labels?.[CORE_UNNAMED_SPACE_LABEL] === "1";
+}
+
 /**
  * `where` is the app's "<space> / <tab>" caption; it only names rooms. The
- * generic name World writes when it starts an agent in an unnamed space
- * names nothing.
+ * placeholder World writes when it starts an agent in an unnamed space
+ * (marked `placeholder`) names nothing; the same words from the app are
+ * its name.
  */
-function whereParts(where: string): [string | null, string | null] {
+function whereParts(
+  where: string,
+  placeholder = false,
+): [string | null, string | null] {
   const cut = where.lastIndexOf(" / ");
   const space = text(cut < 0 ? where : where.slice(0, cut));
   return [
-    space === CORE_UNNAMED_SPACE ? null : space,
+    placeholder && space === CORE_UNNAMED_SPACE ? null : space,
     cut < 0 ? null : text(where.slice(cut + 3)),
   ];
 }
@@ -537,6 +558,8 @@ export type CoreTopologyOptions = {
   foregroundGroup?: ForegroundGroupReader;
   /** World's memory of each desk's agent process, kept by the runtime. */
   desks?: CoreDeskMemory;
+  /** World's derived names for unnamed spaces, kept by the runtime. */
+  roomNames?: CoreRoomNames;
 };
 
 export function coreTopology(
@@ -554,6 +577,7 @@ export function coreTopology(
     occupancy,
     foregroundGroup,
     desks,
+    roomNames,
   }: CoreTopologyOptions = "turn" in options
     ? { firstSight: options }
     : options;
@@ -611,7 +635,7 @@ export function coreTopology(
       workspaceLabel = place.room.label || coreName;
       tabLabel = place.tab.label || workspaceLabel;
     } else if (place.kind === "app") {
-      const [spaceName, tabName] = whereParts(place.where);
+      const [spaceName, tabName] = whereParts(place.where, place.placeholder);
       workspaceId = SPACE_PREFIX + place.space;
       tabId = `${workspaceId}${TAB_SUFFIX}${place.tab ?? DEFAULT_TAB}`;
       workspaceLabel = spaceName ?? CORE_UNNAMED_SPACE;
@@ -635,10 +659,16 @@ export function coreTopology(
         label: workspaceLabel,
         focused: false,
       });
-      if (place.kind === "app" && !whereParts(place.where)[0])
+      if (
+        place.kind === "app" &&
+        !whereParts(place.where, place.placeholder)[0]
+      )
         unnamed.add(workspaceId);
     } else if (caption !== null && !appNamed.has(workspaceId)) {
-      const [spaceName] = whereParts(caption);
+      const [spaceName] = whereParts(
+        caption,
+        place.kind === "app" ? place.placeholder : worldPlaceholder(record),
+      );
       if (spaceName) {
         known.label = spaceName;
         unnamed.delete(workspaceId);
@@ -670,21 +700,21 @@ export function coreTopology(
     const harness = coreHarness(record, group, seen);
     const cwd = text(record.cwd, 4096);
     const foregroundCwd = text(foreground?.cwd, 4096);
-    if (unnamed.has(workspaceId)) {
-      const facts = evidence.get(workspaceId) ?? {
-        folder: null,
-        tab: null,
-        agent: null,
+    // The space's oldest terminal that shows anything speaks for it alone:
+    // a newer terminal never outranks it (`CoreRoomNames`).
+    if (unnamed.has(workspaceId) && !evidence.has(workspaceId)) {
+      const facts: SpaceEvidence = {
+        folder: folderName(cwd),
+        tab:
+          place.kind === "world"
+            ? text(place.tab.label)
+            : place.kind === "app"
+              ? whereParts(place.where, place.placeholder)[1]
+              : null,
+        agent: harness ? (text(record.name, 64) ?? harness) : null,
       };
-      evidence.set(workspaceId, facts);
-      facts.folder ??= folderName(cwd);
-      facts.tab ??=
-        place.kind === "world"
-          ? text(place.tab.label)
-          : place.kind === "app"
-            ? whereParts(place.where)[1]
-            : null;
-      if (harness) facts.agent ??= text(record.name, 64) ?? harness;
+      if (facts.folder || facts.tab || facts.agent)
+        evidence.set(workspaceId, facts);
     }
     // Spawn stamps (M7): core's own parent for a child it started, else
     // World's display stamp. Both are display relations.
@@ -760,7 +790,12 @@ export function coreTopology(
       agent_status: pane.agent_status,
     });
   }
-  nameUnnamedSpaces(workspaces, unnamed, evidence);
+  (roomNames ?? new CoreRoomNames()).name(
+    coreId,
+    workspaces,
+    unnamed,
+    evidence,
+  );
   // A core always offers a room to start in: with nothing else, its main
   // room, empty, so a new agent can start in core on first sight.
   if (workspaces.size === 0)
@@ -794,41 +829,76 @@ function folderName(path: string | null): string | null {
   );
 }
 
+type DerivedFrom = "folder" | "tab" | "agent";
+
 /**
- * Names, for display only, the app spaces core gives no name (#1103): from
- * the oldest terminal's folder, else its tab's name, else its first
- * agent. The evidence is the space's oldest terminals, so the name holds
- * while agents come and go. A derived name already taken in this core gets a
- * number (`api`, `api 2`), in room order, so plates stay distinct. The row
- * says where its name came from; core's space stays unnamed and the app's.
+ * World's display names for the app spaces core gives no name (#1103), kept
+ * for one core while each space lasts, so a name holds as agents come and
+ * go, in its room or another.
+ *
+ * - A space is named once, from its oldest terminal that shows anything:
+ *   that terminal's folder, else its tab's name, else its agent. With no
+ *   evidence yet it stays `Herdr space` and is named when evidence comes.
+ * - A name already taken in this core gets a number (`api`, `api 2`), in
+ *   room order, so plates stay distinct. A space keeps its number when
+ *   another room leaves; it is named again only when a room's own name
+ *   comes to read the same.
+ * - A space that is gone, or now has a name of its own, is forgotten.
+ *
+ * Display only: the row says where its name came from (`label_derived_from`)
+ * and core's space stays unnamed and the app's.
  */
-function nameUnnamedSpaces(
-  workspaces: ReadonlyMap<string, WorkspaceRow>,
-  unnamed: ReadonlySet<string>,
-  evidence: ReadonlyMap<string, SpaceEvidence>,
-) {
-  const key = (label: string) => label.toLocaleLowerCase();
-  const taken = new Set<string>();
-  for (const [id, row] of workspaces)
-    if (!unnamed.has(id) && typeof row.label === "string")
-      taken.add(key(row.label));
-  for (const [id, row] of workspaces) {
-    if (!unnamed.has(id)) continue;
-    const seen = evidence.get(id);
-    const from = seen?.folder
-      ? "folder"
-      : seen?.tab
-        ? "tab"
-        : seen?.agent
-          ? "agent"
-          : null;
-    if (!from || !seen) continue;
-    const base = seen[from]!;
-    let label = base;
-    for (let n = 2; taken.has(key(label)); n += 1) label = `${base} ${n}`;
-    taken.add(key(label));
-    row.label = label;
-    row.label_derived_from = from;
+export class CoreRoomNames {
+  private readonly names = new Map<
+    string,
+    { label: string; from: DerivedFrom }
+  >();
+  private coreId: string | null = null;
+
+  name(
+    coreId: string,
+    workspaces: ReadonlyMap<string, WorkspaceRow>,
+    unnamed: ReadonlySet<string>,
+    evidence: ReadonlyMap<string, SpaceEvidence>,
+  ): void {
+    // Another core (or a restarted one) has spaces of its own.
+    if (coreId !== this.coreId) this.names.clear();
+    this.coreId = coreId;
+    for (const id of this.names.keys())
+      if (!unnamed.has(id) || !workspaces.has(id)) this.names.delete(id);
+    const key = (label: string) => label.toLocaleLowerCase();
+    const taken = new Set<string>();
+    for (const [id, row] of workspaces)
+      if (!unnamed.has(id) && typeof row.label === "string")
+        taken.add(key(row.label));
+    // Names already given hold first, unless a room's own name now reads
+    // the same.
+    for (const [id, name] of this.names)
+      if (taken.has(key(name.label))) this.names.delete(id);
+      else taken.add(key(name.label));
+    for (const [id, row] of workspaces) {
+      if (!unnamed.has(id)) continue;
+      let name = this.names.get(id);
+      if (!name) {
+        const seen = evidence.get(id);
+        const from: DerivedFrom | null = seen?.folder
+          ? "folder"
+          : seen?.tab
+            ? "tab"
+            : seen?.agent
+              ? "agent"
+              : null;
+        if (!from || !seen) continue;
+        const base = seen[from]!;
+        let label = base;
+        for (let n = 2; taken.has(key(label)); n += 1) label = `${base} ${n}`;
+        taken.add(key(label));
+        name = { label, from };
+        this.names.set(id, name);
+      }
+      row.label = name.label;
+      row.label_derived_from = name.from;
+    }
   }
 }
 
@@ -859,6 +929,7 @@ export type CoreReadModelSource = {
   now?(): number;
   foregroundGroup?: ForegroundGroupReader;
   desks?: CoreDeskMemory;
+  roomNames?: CoreRoomNames;
 };
 
 /**
@@ -877,6 +948,7 @@ export function coreReadModel(source: CoreReadModelSource): CoreTopology {
     occupancy: (address) => source.mirror.occupancy(address),
     foregroundGroup: source.foregroundGroup,
     desks: source.desks,
+    roomNames: source.roomNames,
   });
 }
 

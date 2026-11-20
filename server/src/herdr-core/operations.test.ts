@@ -441,7 +441,10 @@ describe("launching in herdr-core (M2, M3)", () => {
     );
     expect(outcome).toMatchObject({ status: "started", placed: true });
     expect(runs(w)[0]!.params).toMatchObject({
-      labels: { where: "Herdr space / Builder" },
+      labels: {
+        where: "Herdr space / Builder",
+        "herdr-world.unnamed-space": "1",
+      },
     });
     // Its generic caption is no name: the room stays derived after the app's
     // terminal ends.
@@ -449,8 +452,7 @@ describe("launching in herdr-core (M2, M3)", () => {
     await w.settle();
     const [room] = (await w.rows()).workspaces;
     expect(room).toMatchObject({ workspace_id: "hc:space:s1" });
-    expect(room!.label_derived_from).toBe("folder");
-    expect(room!.label).not.toBe("Herdr space");
+    expect(room).toMatchObject({ label: "api", label_derived_from: "folder" });
   });
 
   test("a core that offers no writes refuses without sending anything", async () => {

@@ -9,6 +9,7 @@ import {
   CORE_UNPLACED_WORKSPACE,
   CoreDeskMemory,
   CoreFirstSight,
+  CoreRoomNames,
   coreAgentStatus,
   coreDeskProcess,
   coreDeskStatus,
@@ -910,6 +911,86 @@ describe("no core room is ever unnamed", () => {
       ["api 2", "folder"],
       ["api 3", "folder"],
       ["web", "folder"],
+    ]);
+  });
+
+  test("a newer terminal's folder never outranks the oldest terminal's agent", () => {
+    const scout = unnamedSpace("t1", "s1", {
+      name: "scout",
+      status: { state: "working", app: "gemini" },
+    });
+    const newer = unnamedSpace("t2", "s1", { cwd: "/srv/example/api" });
+    expect(named(coreTopology([scout], "example-host"))).toEqual([
+      ["scout", "agent"],
+    ]);
+    expect(named(coreTopology([scout, newer], "example-host"))).toEqual([
+      ["scout", "agent"],
+    ]);
+  });
+
+  test("with World's memory, a name holds when its terminals or another room leave", () => {
+    const roomNames = new CoreRoomNames();
+    const observe = (terminals: CoreMirrorTerminal[]) =>
+      named(
+        coreTopology(terminals, "example-host", {
+          coreId: "core-a",
+          roomNames,
+        }),
+      );
+    const first = unnamedSpace("t1", "s1", { cwd: "/srv/a/api" });
+    const second = unnamedSpace("t2", "s2", { cwd: "/srv/b/api" });
+    const secondNewer = unnamedSpace("t3", "s2", { cwd: "/srv/b/docs" });
+    expect(observe([first, second, secondNewer])).toEqual([
+      ["api", "folder"],
+      ["api 2", "folder"],
+    ]);
+    // The first room leaves: the second keeps its number.
+    expect(observe([second, secondNewer])).toEqual([["api 2", "folder"]]);
+    // Its oldest terminal leaves: the name stays.
+    expect(observe([secondNewer])).toEqual([["api 2", "folder"]]);
+    // A new room that would read `api` takes the free name.
+    const third = unnamedSpace("t4", "s3", { cwd: "/srv/c/api" });
+    expect(observe([secondNewer, third])).toEqual([
+      ["api 2", "folder"],
+      ["api", "folder"],
+    ]);
+    // A room's own name that reads the same wins; the derived one renumbers.
+    const named2 = record({
+      address: "t0",
+      labels: { "herdr.space": "s0", where: "API 2 / main" },
+    });
+    expect(observe([named2, secondNewer, third])).toEqual([
+      ["API 2", null],
+      ["docs", "folder"],
+      ["api", "folder"],
+    ]);
+  });
+
+  test("the app's own `Herdr space` caption names its space; World's placeholder does not", () => {
+    const rows = coreTopology(
+      [
+        unnamedSpace(
+          "t1",
+          "s1",
+          { cwd: "/srv/example/api" },
+          "Herdr space / Review",
+        ),
+        record({
+          address: "t2",
+          cwd: "/srv/example/docs",
+          labels: {
+            "herdr.space": "s2",
+            "herdr.tab": "b1",
+            where: "Herdr space / Builder",
+            "herdr-world.unnamed-space": "1",
+          },
+        }),
+      ],
+      "example-host",
+    );
+    expect(named(rows)).toEqual([
+      ["Herdr space", null],
+      ["docs", "folder"],
     ]);
   });
 });

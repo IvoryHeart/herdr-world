@@ -286,12 +286,15 @@ reuses the pid and argv is refused.
 #### Scenario: Unnamed app space
 
 - **WHEN** an app-created core space has no name in its `where` captions
-- **THEN** World names its room for display from the space's oldest terminal's
-  folder, else its tab, else its first agent, so the name holds while newer
-  agents come and go; the row says the name is derived and views mark it; a
-  name another room of the core already shows gets a number; World never
-  writes the derived name to core, its own launches caption the space
-  `Herdr space`, and with no evidence the room reads `Herdr space`
+- **THEN** World names its room for display once, from the space's oldest
+  terminal that shows anything: its folder, else its tab, else its agent;
+  World keeps that name while the space lasts, so agents coming and going, in
+  that room or another, never change it; the row says the name is derived and
+  views mark it; a name another room of the core already shows gets a number,
+  kept when other rooms leave; World never writes the derived name to core,
+  its own launches caption the space `Herdr space` with World's placeholder
+  label so the caption names nothing, while the app's own `Herdr space`
+  caption is a name; with no evidence the room reads `Herdr space`
 
 #### Scenario: Missing agent status
 

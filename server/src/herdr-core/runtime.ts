@@ -50,6 +50,7 @@ import {
 } from "./stream";
 import {
   CoreDeskMemory,
+  CoreRoomNames,
   CoreFirstSight,
   coreHidesAgent,
   coreRuntimeReader,
@@ -381,6 +382,8 @@ export function createCoreConnectionRuntime(
   // Which agent process each desk had, so one that exits walks away and its
   // report is not lent to the next program (topology.ts).
   const desks = new CoreDeskMemory();
+  // Each unnamed space's derived name, so it holds while agents come and go.
+  const roomNames = new CoreRoomNames();
   const layout = () =>
     epoch ? (options.layout?.(epoch.coreId) ?? null) : null;
   const readModelChanged = () => {
@@ -396,6 +399,7 @@ export function createCoreConnectionRuntime(
         now: at,
         foregroundGroup,
         desks,
+        roomNames,
       }),
     );
     if (groupTimer) clearTimeout(groupTimer);
@@ -733,6 +737,7 @@ export function createCoreConnectionRuntime(
       now,
       foregroundGroup,
       desks,
+      roomNames,
     }),
     readScreen,
     layout,
