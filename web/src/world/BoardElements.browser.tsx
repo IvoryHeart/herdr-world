@@ -629,6 +629,65 @@ const scenarios: [string, () => Promise<void>][] = [
     },
   ],
   [
+    "a stale draft never overwrites a newer page",
+    async () => {
+      const page: BoardElement = {
+        id: "doc-plan",
+        kind: "document",
+        title: "Plan",
+        x: 0,
+        y: 600,
+        rev: 1,
+        source: { text: "Original plan" },
+      };
+      await fresh([...SEEDED, page]);
+      await tap(card("doc-plan")!);
+      await waitFor(() => Boolean(reader()), "the page did not open");
+      button(reader()!, "Edit")!.click();
+      await waitFor(
+        () => Boolean(addDialog()?.querySelector("textarea")),
+        "Edit did not open the page form",
+      );
+      // Another browser or the CLI saves rev 2 while this form is open.
+      const remote = structuredClone(saved);
+      remote.elements = remote.elements!.map((element) =>
+        element.id === "doc-plan"
+          ? ({ ...element, rev: 2, source: { text: "Newer plan" } } as never)
+          : element,
+      );
+      remote.revision += 1;
+      saved = remote;
+      await store.refresh();
+      await settle(100);
+      const text = addDialog()!.querySelector("textarea")!;
+      check(text.value === "Original plan", "the open draft keeps its text");
+      type(text, "My draft");
+      button(addDialog()!, "Save")!.click();
+      await waitFor(
+        () => Boolean(addDialog()?.querySelector('[role="alert"]')),
+        "a stale save showed no problem",
+      );
+      const put = writes[0];
+      check(
+        put?.op === "element.put" && put.rev === 1,
+        `the draft saves against the rev it was opened from (${JSON.stringify(put)})`,
+      );
+      const now = saved.elements!.find((element) => element.id === "doc-plan");
+      check(
+        now?.rev === 2 &&
+          (now.source as { text: string }).text === "Newer plan",
+        "the newer page stays",
+      );
+      check(
+        addDialog()!.querySelector("textarea")!.value === "My draft" &&
+          /changed somewhere else/.test(
+            addDialog()!.querySelector('[role="alert"]')!.textContent ?? "",
+          ),
+        "the form stays open with the draft and says why",
+      );
+    },
+  ],
+  [
     "drag saves the place",
     async () => {
       const el = card("log-review")!;

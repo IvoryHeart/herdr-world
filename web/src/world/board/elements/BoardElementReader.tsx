@@ -169,7 +169,10 @@ export function BoardElementReader({
           state.phase === "done" &&
           state.result.status === "ready" &&
           state.result.content.type === "text" &&
-          transcriptTurns(state.result.content.text) ? (
+          transcriptTurns(
+            state.result.content.text,
+            state.result.content.truncated,
+          ) ? (
             <button
               type="button"
               className="ghost"
@@ -309,7 +312,9 @@ function ReadBody({
       </>
     );
   const turns =
-    element.kind === "log" && !raw ? transcriptTurns(content.text) : null;
+    element.kind === "log" && !raw
+      ? transcriptTurns(content.text, content.truncated)
+      : null;
   return (
     <>
       {turns ? (

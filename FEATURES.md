@@ -1424,7 +1424,9 @@ an opener or referrer.
   is a panel on the right; on a phone it is a sheet from the bottom. A memory
   folder lists its first 32 entries; tap one to open it, and the back arrow
   returns to the folder. A JSON-lines transcript shows as turns (you, the
-  agent, tools); **Show raw** shows the saved lines. Text is shown as text,
+  agent, tools); a line that is not a chat message (a structured log record,
+  say) stays in place as a note with its own text, and a log with no chat at
+  all reads as plain text. **Show raw** shows the saved lines. Text is shown as text,
   never as HTML, up to 64 KiB, and the reader says when it is cut.
 - **Edit** changes the title or source in place; **Remove** (or Delete on a
   focused card) takes it off Board and leaves the file or address alone.
@@ -1436,7 +1438,9 @@ an opener or referrer.
   missing file, a binary file, a busy service or a reconnect while reading
   each say so in plain words, with **Try again** where it can help.
 - Every write is one revision-checked change, so an edit made from an older
-  copy comes back as a conflict instead of overwriting. Elements are not
+  copy comes back as a conflict instead of overwriting. An Edit form saves
+  against the version it opened; if the element changed meanwhile, the form
+  stays open with your draft and says so, and reopening shows the newer one. Elements are not
   string ends yet; strings still join notes to workspaces, tabs and panes.
 
 The same registry and service serve agents:

@@ -89,17 +89,18 @@ function roleOf(role: unknown): TranscriptTurn["who"] | null {
  * One JSONL line as a turn, for the shapes harnesses save: a message with a
  * role (`{role, content}`), wrapped once (`{message: {...}}`,
  * `{payload: {...}}`), or a typed event (`{type: "user"|"assistant"}`).
- * Anything else stays visible as raw text under "note".
+ * Null for a chat record with nothing to show; "foreign" for anything else,
+ * which transcriptTurns keeps as its raw text under "note".
  */
-function turnOf(line: unknown): TranscriptTurn | null {
-  if (!line || typeof line !== "object") return null;
+function turnOf(line: unknown): TranscriptTurn | null | "foreign" {
+  if (!line || typeof line !== "object") return "foreign";
   const entry = line as Record<string, unknown>;
   const inner = [entry.message, entry.payload, entry].find(
     (candidate): candidate is Record<string, unknown> =>
       !!candidate && typeof candidate === "object" && "role" in candidate,
   );
   const who = roleOf(inner?.role) ?? roleOf(entry.type);
-  if (!who) return null;
+  if (!who) return "foreign";
   const body = contentText(inner?.content ?? entry.content ?? entry.text);
   if (body.tool && !body.text.trim())
     return { who: "tool", text: body.tool === "result" ? "…" : body.tool };
@@ -111,25 +112,42 @@ function turnOf(line: unknown): TranscriptTurn | null {
   return { who, text };
 }
 
+/** A line kept as it is, shortened like a turn. */
+function rawNote(line: string): TranscriptTurn {
+  const text = line.trim();
+  return {
+    who: "note",
+    text: text.length > MAX_TURN ? `${text.slice(0, MAX_TURN)}…` : text,
+  };
+}
+
 /**
  * A saved transcript as turns, when it is JSON lines; null for plain text,
- * which the reader shows as it is. A last line cut by the read limit is left
- * out (the reader says the log was cut).
+ * which the reader shows as it is. A record that is not a chat message (a
+ * structured log line, say) or a line that is not JSON stays visible as its
+ * own text under "note", so nothing in the source is dropped. Only a last
+ * line cut by the read limit is left out (the reader says the log was cut).
+ * Null too when no turn would show, so the reader falls back to the text.
  */
-export function transcriptTurns(text: string): TranscriptTurn[] | null {
+export function transcriptTurns(
+  text: string,
+  truncated = false,
+): TranscriptTurn[] | null {
   const lines = text.split("\n").filter((line) => line.trim());
   if (!lines.length || !lines[0]!.trim().startsWith("{")) return null;
   const turns: TranscriptTurn[] = [];
   let parsed = 0;
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     let value: unknown;
     try {
       value = JSON.parse(line);
     } catch {
+      if (!(truncated && index === lines.length - 1)) turns.push(rawNote(line));
       continue;
     }
     parsed += 1;
-    const turn = turnOf(value);
+    const read = turnOf(value);
+    const turn = read === "foreign" ? rawNote(line) : read;
     if (!turn) continue;
     const last = turns[turns.length - 1];
     // Tool calls in a row fold into one line.
@@ -137,7 +155,9 @@ export function transcriptTurns(text: string): TranscriptTurn[] | null {
       last.text = `${last.text}, ${turn.text}`;
     else turns.push(turn);
   }
-  return parsed >= Math.max(1, lines.length - 1) ? turns : null;
+  // Mostly not JSON: plain text that happens to start with a brace.
+  if (parsed < Math.max(1, lines.length - 1)) return null;
+  return turns.length ? turns : null;
 }
 
 /** Plain words for a read that did not produce content. */

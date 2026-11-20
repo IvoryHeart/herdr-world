@@ -144,7 +144,40 @@ describe("saved transcripts", () => {
     expect(
       transcriptTurns(
         `${JSON.stringify({ role: "user", content: "Hi" })}\n{"role":"assis`,
+        true,
       ),
     ).toEqual([{ who: "you", text: "Hi" }]);
+  });
+  test("structured records that are not chat stay visible as their text", () => {
+    const record = JSON.stringify({ level: "info", message: "Build passed" });
+    expect(transcriptTurns(record)).toEqual([{ who: "note", text: record }]);
+    const mixed = [
+      JSON.stringify({ role: "user", content: "Run it." }),
+      JSON.stringify({ level: "warn", message: "Slow disk" }),
+      JSON.stringify({ role: "assistant", content: "Done." }),
+    ].join("\n");
+    expect(transcriptTurns(mixed)).toEqual([
+      { who: "you", text: "Run it." },
+      {
+        who: "note",
+        text: JSON.stringify({ level: "warn", message: "Slow disk" }),
+      },
+      { who: "agent", text: "Done." },
+    ]);
+  });
+  test("a broken line that the read limit did not cut stays as text", () => {
+    expect(
+      transcriptTurns(
+        `${JSON.stringify({ role: "user", content: "Hi" })}\n{"role":"assis`,
+      ),
+    ).toEqual([
+      { who: "you", text: "Hi" },
+      { who: "note", text: '{"role":"assis' },
+    ]);
+  });
+  test("a log whose records show nothing falls back to its text", () => {
+    expect(
+      transcriptTurns(JSON.stringify({ role: "assistant", content: "" })),
+    ).toBeNull();
   });
 });

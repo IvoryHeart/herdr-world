@@ -68,19 +68,26 @@ export function useBoardElements({
     editing?: BoardElement,
   ): Promise<string | null> {
     if (editing) {
-      const current = byId.get(editing.id) ?? editing;
-      return store.patch([
+      // `editing` is the record the draft was opened from, so its rev
+      // belongs to the draft. A newer rev (another browser, the CLI, a move)
+      // makes the service refuse, and the draft stays for the person to
+      // copy before they reopen it: a stale draft never overwrites.
+      const problem = await store.patch([
         {
           op: "element.put",
           element: {
             ...input,
-            id: current.id,
-            x: current.x,
-            y: current.y,
+            id: editing.id,
+            x: editing.x,
+            y: editing.y,
           } as BoardElementInput,
-          rev: current.rev,
+          rev: editing.rev,
         },
       ]);
+      const current = byId.get(editing.id);
+      if (problem && current && current.rev !== editing.rev)
+        return "This changed somewhere else while you were editing, so it was not saved. Copy your text, then close and open it again.";
+      return problem;
     }
     // Each new element lands a little beside the last, so several added in
     // a row do not hide one another.

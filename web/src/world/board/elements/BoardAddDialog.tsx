@@ -220,7 +220,7 @@ function KindPicker({
 function ElementForm({
   kind,
   world,
-  editing,
+  editing: opened,
   preferredProject,
   onSave,
   onClose,
@@ -235,6 +235,10 @@ function ElementForm({
   ): Promise<string | null>;
   onClose(): void;
 }) {
+  // The draft starts from the record as it was when the form opened, and
+  // saves against that record's rev; a later remote change does not refresh
+  // it, so the service refuses the save instead of the draft overwriting it.
+  const [editing] = useState(opened);
   const choices = useMemo(() => projectChoices(world), [world]);
   const saved = editing?.source as Record<string, string> | undefined;
   const savedProject =
