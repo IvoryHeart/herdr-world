@@ -94,3 +94,83 @@ test("only Claude's own foreground process record names its session; a failed re
   ).toBeUndefined();
   expect(lookups).toEqual([77, 77, 77]);
 });
+
+test("headless agents use their own writable transcript on the agent host", async () => {
+  const lookups: [string, number][] = [];
+  const transcript = { kind: "path" as const, value: "/work/demo/live.jsonl" };
+  const files = {
+    ...localAgentSessionFiles,
+    remote: true,
+    findClaudeSessionForProcess: async () => null,
+    findAgentSessionForProcess: async (agent: string, pid: number) => {
+      lookups.push([agent, pid]);
+      return transcript;
+    },
+  };
+  for (const agent of ["codex", "claude"]) {
+    expect(
+      await processSession(
+        agent,
+        {
+          pid: 77,
+          name: agent,
+          argv: [agent, agent === "codex" ? "exec" : "-p"],
+        },
+        files,
+      ),
+    ).toEqual(transcript);
+    expect(
+      await processSession(
+        agent,
+        { pid: 78, name: "sh", argv: ["sh", "-c", agent] },
+        files,
+      ),
+    ).toBeUndefined();
+  }
+  expect(lookups).toEqual([
+    ["codex", 77],
+    ["claude", 77],
+  ]);
+});
+
+test("process transcript lookup failure is no evidence", async () => {
+  expect(
+    await processSession(
+      "codex",
+      { pid: 77, name: "codex" },
+      {
+        ...localAgentSessionFiles,
+        findAgentSessionForProcess: async () => {
+          throw new Error("permission denied");
+        },
+      },
+    ),
+  ).toBeUndefined();
+});
+
+test("an explicitly named Claude debug file cannot claim its filename as the session ID", async () => {
+  const files = {
+    ...localAgentSessionFiles,
+    findClaudeSessionForProcess: async () => null,
+    findAgentSessionForProcess: async () => ({
+      kind: "id" as const,
+      value: SESSION,
+    }),
+  };
+  for (const argv of [
+    ["claude", "-p", "--debug-file", "/config/debug/other.txt"],
+    ["claude", "-p", "--debug-file=/config/debug/other.txt"],
+    undefined,
+  ]) {
+    expect(
+      await processSession("claude", { pid: 77, name: "claude", argv }, files),
+    ).toBeUndefined();
+  }
+  expect(
+    await processSession(
+      "claude",
+      { pid: 77, name: "claude", argv: ["claude", "-p"] },
+      files,
+    ),
+  ).toEqual({ kind: "id", value: SESSION });
+});

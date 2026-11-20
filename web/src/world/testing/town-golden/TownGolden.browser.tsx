@@ -2,6 +2,7 @@ import { clock } from "./install";
 import { createRoot } from "react-dom/client";
 import { WebGLRenderer } from "pixi.js";
 import { TownCanvas, type TownRoomActions } from "../../town/TownCanvas";
+import { TownPostProvider } from "../../town/TownPostOffice";
 import { buildWorldObject } from "../../worldObject";
 import {
   projectWorldOffice,
@@ -118,20 +119,26 @@ async function prepare() {
     null,
     TOWN_PRESENTATION_BOUNDS,
   );
+  const GOLDEN_POST = {
+    counts: { asks: 1, needs: 2, done: 3, outbox: 1 },
+  } as const;
   createRoot(document.getElementById("root")!).render(
     <div className="town-stage" style={{ position: "fixed", inset: 0 }}>
-      <TownCanvas
-        projection={projection}
-        selectedKey={null}
-        completionSeenKeys={new Set()}
-        conversationTargets={[]}
-        onSelect={noAction}
-        onActivateAgent={noAction}
-        onActivateRoom={noAction}
-        roomActions={roomActions}
-        selectedRoomKey={null}
-        observability={EMPTY_OFFICE_OBSERVABILITY}
-      />
+      {/* Fixed counts: the post office's sign reads them at a glance. */}
+      <TownPostProvider source={GOLDEN_POST}>
+        <TownCanvas
+          projection={projection}
+          selectedKey={null}
+          completionSeenKeys={new Set()}
+          conversationTargets={[]}
+          onSelect={noAction}
+          onActivateAgent={noAction}
+          onActivateRoom={noAction}
+          roomActions={roomActions}
+          selectedRoomKey={null}
+          observability={EMPTY_OFFICE_OBSERVABILITY}
+        />
+      </TownPostProvider>
     </div>,
   );
   await clock.until(

@@ -16,6 +16,9 @@ import ClaudeTapLockFixture from "./testing/ClaudeTapLockFixture";
 
 // Testing-only preview: consume the switch before view routing rewrites the URL.
 const previewUrl = new URL(location.href);
+const questionBacklogFixture = previewUrl.searchParams.has(
+  "questionBacklogFixture",
+);
 const titleSpinnerFixture = previewUrl.searchParams.has("titleSpinnerFixture");
 const claudeTapLockFixture = previewUrl.searchParams.has(
   "claudeTapLockFixture",
@@ -29,8 +32,10 @@ if (
   titleSpinnerFixture ||
   claudeTapLockFixture ||
   boardTextConflictFixture ||
+  questionBacklogFixture ||
   focusTest
 ) {
+  previewUrl.searchParams.delete("questionBacklogFixture");
   previewUrl.searchParams.delete("claudeTapLockFixture");
   previewUrl.searchParams.delete("titleSpinnerFixture");
   previewUrl.searchParams.delete("boardTextConflictFixture");
@@ -43,6 +48,10 @@ const BoardTextConflictFixture = React.lazy(() =>
   import("./world/BoardView").then((module) => ({
     default: module.BoardTextConflictFixture,
   })),
+);
+
+const QuestionBacklogFixture = React.lazy(
+  () => import("./testing/QuestionBacklogFixture"),
 );
 
 class ErrorBoundary extends React.Component<
@@ -83,7 +92,10 @@ coreFixtureEnabled();
 coreInstallFake();
 integrationsFixtureEnabled();
 const stopInstanceNameSync =
-  titleSpinnerFixture || claudeTapLockFixture || boardTextConflictFixture
+  titleSpinnerFixture ||
+  claudeTapLockFixture ||
+  boardTextConflictFixture ||
+  questionBacklogFixture
     ? () => {}
     : initializeInstanceName();
 if (import.meta.hot) import.meta.hot.dispose(stopInstanceNameSync);
@@ -92,7 +104,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <React.Suspense fallback={null}>
-        {titleSpinnerFixture ? (
+        {questionBacklogFixture ? (
+          <QuestionBacklogFixture />
+        ) : titleSpinnerFixture ? (
           <TitleSpinnerFixture />
         ) : claudeTapLockFixture ? (
           <ClaudeTapLockFixture />
