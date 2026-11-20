@@ -10,8 +10,7 @@ import { WorkLens } from "../board/WorkLens";
 import type { WorldObject } from "../worldObject";
 import { AnswerOutboxContext } from "./answerOutbox";
 import { useTownPostSources } from "./townPostFixture";
-import { TownOpenUsageContext } from "./TownUsageLens";
-import type { UsageTab } from "../usage/UsageLens";
+import { TownOpenUsageContext, useTownUsage } from "./TownUsageLens";
 
 /**
  * Opens Board's Work lens over Town (#887). Town provides it; without it (a
@@ -56,24 +55,22 @@ export function TownWorkLens({
 }
 
 /**
- * Town's contexts: the answer outbox, the Work lens's opener and the Usage
- * screens' (the observatory's, TownUsageLens.tsx).
+ * Town's contexts: the answer outbox and the openers of the post office's
+ * Work lens and the observatory's Usage screens (TownUsageLens.tsx).
  */
 export function TownContexts({
   outbox,
-  openWork,
-  openUsage = null,
+  lenses,
   children,
 }: {
   outbox: () => void;
-  openWork: () => void;
-  openUsage?: ((tab?: UsageTab) => void) | null;
+  lenses: Pick<ReturnType<typeof useTownLenses>, "openWork" | "openUsage">;
   children: ReactNode;
 }) {
   return (
     <AnswerOutboxContext.Provider value={outbox}>
-      <TownOpenWorkContext.Provider value={openWork}>
-        <TownOpenUsageContext.Provider value={openUsage}>
+      <TownOpenWorkContext.Provider value={lenses.openWork}>
+        <TownOpenUsageContext.Provider value={lenses.openUsage}>
           {children}
         </TownOpenUsageContext.Provider>
       </TownOpenWorkContext.Provider>
@@ -82,16 +79,18 @@ export function TownContexts({
 }
 
 /**
- * Town's Work lens: the post office's opener and, while open, the lens. An
- * agent picked on a card opens as Town opens it.
+ * Town's lenses: the post office's Work and the observatory's Usage, their
+ * openers and, while open, the lenses. An agent picked on a Work card opens
+ * as Town opens it.
  */
-export function useTownWork(
+export function useTownLenses(
   world: WorldObject,
   onSelect: (id: string) => unknown,
 ) {
   const [shown, setShown] = useState(false);
-  const open = useCallback(() => setShown(true), []);
-  const lens = shown ? (
+  const openWork = useCallback(() => setShown(true), []);
+  const usage = useTownUsage();
+  const work = shown ? (
     <TownWorkLens
       world={world}
       onClose={() => setShown(false)}
@@ -101,5 +100,14 @@ export function useTownWork(
       }}
     />
   ) : null;
-  return { open, lens };
+  return {
+    openWork,
+    openUsage: usage.open,
+    lens: (
+      <>
+        {work}
+        {usage.lens}
+      </>
+    ),
+  };
 }
