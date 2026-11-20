@@ -282,11 +282,15 @@ export const townPostSignAt = (lot: TownPostLot) => ({
 });
 
 /**
- * The sign's tallest in screen pixels (title, "pull requests" and counts
- * wrapped once), and its scale at zoom `z` (townPost.css matches): a
- * phone's first view keeps the whole sign (scene/townSceneCamera.ts).
+ * A phone's sign's size in screen pixels, and its scale at zoom `z`
+ * (townPost.css matches): a phone's first view keeps the whole sign, its
+ * name at the top (scene/townSceneCamera.ts). The sign is 100 pixels wide
+ * and lists its counts one per row; title, "pull requests" and all five
+ * states measure 101 pixels tall in Chrome, the reserved height adds a few
+ * for other fonts.
  */
-export const TOWN_POST_SIGN_HEIGHT = 64;
+export const TOWN_POST_SIGN_WIDTH = 100;
+export const TOWN_POST_SIGN_HEIGHT = 104;
 export const townPostSignScale = (z: number) =>
   Math.min(2.4, Math.max(0.5, 1 / z));
 

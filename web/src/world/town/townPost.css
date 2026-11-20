@@ -44,6 +44,21 @@
   outline-offset: 2px;
 }
 
+/* A phone's sign is its own width, never its zero-width world's, and lists
+   its counts one per row: its height is then the same in any font, so the
+   camera keeps its name on screen (TOWN_POST_SIGN_HEIGHT), and it stays
+   narrow enough to hang over the house on the town's left edge (#1033). */
+.town-world .town-post-sign[data-listed] {
+  width: 100px;
+  min-width: 0;
+}
+
+.town-world .town-post-sign[data-listed] .town-post-sign-counts {
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+}
+
 /* A phone's sign says what its counts are: pull requests (#1033). */
 .town-post-sign-what {
   font-size: 9px;

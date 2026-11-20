@@ -26,6 +26,8 @@ import {
   townPostLot,
   townPostOffice,
   townPostReserve,
+  TOWN_POST_SIGN_HEIGHT,
+  TOWN_POST_SIGN_WIDTH,
   townPostSignAt,
   townPostSignScale,
   townPostSignText,
@@ -346,6 +348,7 @@ test.each([
   ["six rooms", town({ a: [2, 2, 2, 2, 2, 2] }), 390, 844],
   ["a tall building", town({ a: [6, 4, 3, 2] }), 390, 844],
   ["a very tall building", town({ a: [24, 12, 12, 8, 8, 4] }), 390, 844],
+  ["twelve rooms of twenty", town({ a: Array(12).fill(20) }), 390, 844],
   ["two buildings", town({ a: [4, 4, 4], b: [1] }), 390, 844],
 ] as const)(
   "a phone's home view shows the post office whole, its sign and the center (%s)",
@@ -366,7 +369,9 @@ test.each([
     const lot = townPostLot(layout);
     // The sign, at its tallest, from the house's eave.
     const sign = townPostSignAt(lot);
-    inside(sign.x, townPostSignTop(lot, camera.z));
+    const half = (TOWN_POST_SIGN_WIDTH / 2) * townPostSignScale(camera.z);
+    inside(sign.x - half, townPostSignTop(lot, camera.z));
+    inside(sign.x + half, townPostSignTop(lot, camera.z));
     // The house's front and the yard with its parcels, edge to edge.
     inside(lot.x * T, sign.y);
     inside((lot.x + lot.w) * T, (lot.yardY + TOWN_POST_YARD_ROWS) * T);
@@ -416,9 +421,23 @@ test("the testing fixture covers every state and merges a ready parcel", () => {
   );
 });
 
-test("the sign's scale in code and CSS agree", () => {
+test("the sign's scale and size in code and CSS agree", () => {
   const css = readFileSync(join(import.meta.dir, "townPost.css"), "utf8");
   expect(css).toContain("scale(clamp(0.5, var(--iz), 2.4))");
+  // A phone's sign takes its own width, not its zero-width world's, and
+  // lists its counts one per row, so its height is the reserved one.
+  const at = (rule: string) => {
+    const rest = css.slice(css.indexOf(rule));
+    return rest.slice(0, rest.indexOf("}"));
+  };
+  expect(at(".town-world .town-post-sign[data-listed] {")).toContain(
+    `width: ${TOWN_POST_SIGN_WIDTH}px;`,
+  );
+  expect(
+    at(".town-world .town-post-sign[data-listed] .town-post-sign-counts {"),
+  ).toContain("flex-direction: column;");
+  // Five rows of counts measure 101 pixels in Chrome.
+  expect(TOWN_POST_SIGN_HEIGHT).toBeGreaterThanOrEqual(101);
   expect(townPostSignScale(0.1)).toBe(2.4);
   expect(townPostSignScale(4)).toBe(0.5);
   expect(townPostSignScale(1)).toBe(1);
