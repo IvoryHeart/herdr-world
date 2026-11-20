@@ -23,7 +23,20 @@ Sources inspected on 2026-11-11:
   [eight existing transcript readers](../server/src/agent/chat-harnesses.ts).
 
 Every row has a **launch profile**, **native status** and **native send/answers/keys**.
-Native status means exactly core's records: without OSC 7501 it is **unknown**.
+Native status means core's records checked against the process: without OSC
+7501 an interactive agent is **unknown**. Two process facts adjust a report
+(`coreDeskStatus`): a live headless invocation (`claude -p`, `codex exec`,
+`opencode run` …) is working, and a known harness's working or waiting report
+is stale, read idle, once no harness runs in the terminal's foreground. A
+report speaks only for the harness running: one naming another harness, or
+left by a process World saw exit (`CoreDeskMemory`), is no report for its
+replacement. A harness seen inside a wrapper that stays in front remains the
+desk's agent, idle, after it exits, until another leader takes the terminal. Core
+0.1.21 reports only the foreground group's leader, so for a core on this Linux
+machine World also reads the group's other processes on the host
+(`process-group.ts`), as Herdr's TUI looks through a whole job. Upstream ask:
+core should report the foreground group's processes, so remote and macOS cores
+see agents run by wrappers too.
 This applies to Codex on Linux too: a missing core/harness report cannot be
 repaired by mapping it to idle. An isolated Linux core 0.1.21 / Codex 0.167.0
 launch publishes native idle/working through World's provider; the previously

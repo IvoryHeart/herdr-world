@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
+import { townActorWorld, TownActors } from "./townActors";
 import { layoutTown, TOWN_TILE as T, type TownLayout } from "./townLayout";
 import {
   TOWN_STATE_LIGHT,
   TOWN_WAITING_AMBER,
   townDeskLight,
   townLightPlan,
-  townRoomLit,
+  townPresence,
   townWaitingPulse,
 } from "./townLighting";
 import { townModelFromProjection, type TownModel } from "./townModel";
@@ -16,6 +17,31 @@ function scene(projection: ReturnType<typeof office>) {
   const { layout } = layoutTown(model.input, "wide");
   return { model, layout };
 }
+
+/** Agents where their status sends them, already arrived. */
+function arrived(
+  layout: TownLayout,
+  model: TownModel,
+  asking: ReadonlySet<string> = new Set(),
+  held: ReadonlySet<string> = new Set(),
+) {
+  const actors = new TownActors();
+  actors.sync(
+    townActorWorld(layout, model),
+    true,
+    new Set(),
+    asking,
+    undefined,
+    new Set(),
+    held,
+  );
+  return actors;
+}
+
+const settle = (actors: TownActors) => {
+  for (let i = 0; i < 4000 && actors.busy; i += 1) actors.step(1 / 30);
+  expect(actors.busy).toBe(false);
+};
 
 const roomOf = (model: TownModel, layout: TownLayout, label: string) => {
   const key = [...model.rooms.values()].find((room) =>
@@ -39,9 +65,12 @@ test("a room with work in it is lit and a quiet one stays dark", () => {
   );
   const busy = roomOf(model, layout, "busy");
   const quiet = roomOf(model, layout, "quiet");
-  expect(townRoomLit(model, busy.key)).toBe(true);
-  expect(townRoomLit(model, quiet.key)).toBe(false);
-  const plan = townLightPlan(layout, model);
+  const plan = townLightPlan(
+    layout,
+    model,
+    new Set(),
+    townPresence(arrived(layout, model).actors.values()),
+  );
   expect(plan.areas.some((area) => inside(busy, area))).toBe(true);
   expect(plan.areas.some((area) => inside(quiet, area))).toBe(false);
   // No desk light in the quiet room either: idle agents throw none.
@@ -125,7 +154,7 @@ test("the waiting pulse moves with motion and holds steady without it", () => {
     expect(townWaitingPulse(t, false)).toBe(1);
 });
 
-test("an open question lights its desk, room and reception whatever the status", () => {
+test("an open question pulses its reception; a desk and room stay lit only while the agent stays there", () => {
   for (const status of ["idle", "working", "done"] as const) {
     const { model, layout } = scene(
       office({ room: [status], quiet: ["idle"] }),
@@ -134,15 +163,26 @@ test("an open question lights its desk, room and reception whatever the status",
     const deskKey = room.cells.find((cell) => cell.deskKey)!.deskKey!;
     const agentKey = model.desks.get(deskKey)!.paneDevices[0]!.agentKey!;
     const asking = new Set([agentKey]);
-    expect(townDeskLight(model, deskKey, asking)).toBe("blocked");
-    const plan = townLightPlan(layout, model, asking);
+    // It walked to reception: the lobby pulses, the desk and room are dark.
+    const away = townPresence(arrived(layout, model, asking).actors.values());
+    expect(townDeskLight(model, deskKey, asking, away)).toBeNull();
+    const plan = townLightPlan(layout, model, asking, away);
     expect(plan.waiting).toHaveLength(1);
     expect(plan.waiting[0]!.color).toBe(TOWN_WAITING_AMBER);
-    expect(plan.points.map((p) => p.color)).toContain(TOWN_STATE_LIGHT.blocked);
-    expect(plan.areas.some((area) => inside(room, area))).toBe(true);
+    expect(plan.areas.some((area) => inside(room, area))).toBe(false);
+    // Held at its desk (its reception does not take the mark): amber there.
+    const held = townPresence(
+      arrived(layout, model, asking, asking).actors.values(),
+    );
+    expect(townDeskLight(model, deskKey, asking, held)).toBe("blocked");
+    const seated = townLightPlan(layout, model, asking, held);
+    expect(seated.points.map((p) => p.color)).toContain(
+      TOWN_STATE_LIGHT.blocked,
+    );
+    expect(seated.areas.some((area) => inside(room, area))).toBe(true);
     // The other room stays dark: its quiet agent asks nothing.
     const quiet = roomOf(model, layout, "quiet");
-    expect(plan.areas.some((area) => inside(quiet, area))).toBe(false);
+    expect(seated.areas.some((area) => inside(quiet, area))).toBe(false);
     // Answered, the question takes its light with it.
     const answered = townLightPlan(layout, model, new Set());
     expect(answered.waiting).toEqual([]);
@@ -150,6 +190,95 @@ test("an open question lights its desk, room and reception whatever the status",
       status === "idle" ? null : status,
     );
   }
+});
+
+test("light changes with the walk: a working agent lights its desk and room as it sits down", () => {
+  const before = scene(office({ room: ["idle"] }));
+  const after = scene(office({ room: ["working"] }));
+  const { layout } = after;
+  const room = roomOf(after.model, layout, "room");
+  const deskKey = room.cells.find((cell) => cell.deskKey)!.deskKey!;
+  const building = layout.buildings[0]!;
+  const bar = building.lounge;
+  const inBar = (area: { x: number; y: number; w: number; h: number }) =>
+    inside(bar, area);
+  const lit = (model: TownModel, actors: TownActors) => {
+    const plan = townLightPlan(
+      layout,
+      model,
+      new Set(),
+      townPresence(actors.actors.values()),
+    );
+    return {
+      room: plan.areas.some((area) => inside(room, area)),
+      bar: plan.areas.some(inBar),
+      desk: townDeskLight(
+        model,
+        deskKey,
+        new Set(),
+        townPresence(actors.actors.values()),
+      ),
+    };
+  };
+  // Idle: at the bar, which is lit; its desk and room are dark.
+  const actors = arrived(layout, before.model);
+  expect(lit(before.model, actors)).toEqual({
+    room: false,
+    bar: true,
+    desk: null,
+  });
+  // It starts working: no light moves ahead of it.
+  actors.sync(townActorWorld(layout, after.model), false);
+  actors.step(1 / 30);
+  expect(lit(after.model, actors)).toEqual({
+    room: false,
+    bar: false,
+    desk: null,
+  });
+  settle(actors);
+  expect(lit(after.model, actors)).toEqual({
+    room: true,
+    bar: false,
+    desk: "working",
+  });
+  // Its process is gone (World reads it idle): the desk and room go dark as
+  // it stands up, and the bar lights when it gets there.
+  actors.sync(townActorWorld(layout, before.model), false);
+  actors.step(1 / 30);
+  expect(lit(before.model, actors)).toEqual({
+    room: false,
+    bar: false,
+    desk: null,
+  });
+  settle(actors);
+  expect(lit(before.model, actors)).toEqual({
+    room: false,
+    bar: true,
+    desk: null,
+  });
+});
+
+test("an agent with no status report sits at its desk unlit: never guessed working", () => {
+  const { model, layout } = scene(office({ room: ["unknown"] }));
+  const room = roomOf(model, layout, "room");
+  const deskKey = room.cells.find((cell) => cell.deskKey)!.deskKey!;
+  const actors = arrived(layout, model);
+  expect([...townPresence(actors.actors.values()).seated]).toHaveLength(1);
+  const plan = townLightPlan(
+    layout,
+    model,
+    new Set(),
+    townPresence(actors.actors.values()),
+  );
+  expect(
+    townDeskLight(
+      model,
+      deskKey,
+      new Set(),
+      townPresence(actors.actors.values()),
+    ),
+  ).toBeNull();
+  expect(plan.areas.some((area) => inside(room, area))).toBe(false);
 });
 
 test("a plain terminal asking a question lights its desk and reception", () => {
