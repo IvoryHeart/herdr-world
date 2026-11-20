@@ -30,7 +30,7 @@ import { defineSettings } from "../registry";
 
 const percent = (value: number) => `${value}%`;
 
-/** Appearance: wired whole (#1035 prototype). */
+/** Appearance (#1035). */
 defineSettings("appearance", [
   {
     kind: "setting",
@@ -173,7 +173,7 @@ defineSettings("appearance", [
     words: ["terminal theme", "font family", "typeface", "colors"],
     icon: <SquareTerminal size={15} />,
     scope: "browser",
-    open: (host) => host.openConfiguration("Appearance"),
+    open: (host) => host.openPanel("terminal-look"),
   },
   {
     kind: "panel",
@@ -184,6 +184,6 @@ defineSettings("appearance", [
     words: ["mobile layout", "breakpoint", "sidebar", "display mode"],
     icon: <LayoutDashboard size={15} />,
     scope: "browser",
-    open: (host) => host.openConfiguration("Appearance"),
+    open: (host) => host.openPanel("layout"),
   },
 ]);

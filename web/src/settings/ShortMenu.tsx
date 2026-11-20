@@ -10,8 +10,8 @@ import { ConfigMenuItem } from "../components/ConfigMenuItem";
 import { shortcutLabel } from "../shortcutPreferences";
 
 /**
- * The short Menu of the Settings prototype (#1035): the few things people do
- * every day. Everything else is in Settings and its search.
+ * The Menu (#1035): the few things people do every day. Everything else is
+ * in Settings and its search.
  */
 export function ShortMenu({
   zenMode,

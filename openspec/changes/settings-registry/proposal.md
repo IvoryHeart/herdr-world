@@ -7,8 +7,9 @@ of finding things, so a person looking for "lighting" finds it nowhere. #451 pro
 a registry, categories, search and deep links; only its first fix was built. #1035
 asks for one home and one search for every setting and command.
 
-**Preview only.** Everything here is behind the `?settings=next` testing flag for one
-browser tab. With the flag off, World behaves as before.
+Settings and the short Menu are the default on desktop and phone. They replace the
+old Menu and the Configuration dialog; the old `?settings=next` preview switch is
+ignored.
 
 ## What Changes
 
@@ -29,8 +30,8 @@ browser tab. With the flag off, World behaves as before.
 
 ### Modified Capabilities
 
-- `world-surfaces`: add the settings registry, search, links and short Menu as a
-  flag-gated preview of the common settings menu.
+- `world-surfaces`: add the settings registry, search, links and short Menu; Settings
+  is the common settings menu.
 
 ## Impact
 
@@ -38,9 +39,8 @@ Browser only: `web/src/settings/`, feature catalogs (`world/town/town.settings.t
 `world/board/board.settings.tsx`), the Menu and the command box. No service, Herdr,
 storage or protocol change; settings keep their current values and stores. The
 current `world-surfaces` requirement that Inspector, calm motion and observability
-settings live in the common settings menu still holds: with the flag on they live in
-Settings, which the Menu opens.
+settings live in the common settings menu still holds: they live in Settings, which
+the Menu opens.
 
 Open decisions are in the PR description (#1062) and the `crew:idea` slices
-#1063–#1067; the requirement below is synchronized into the current spec only when
-the short Menu becomes the default.
+#1063 and #1065–#1067. The requirement below is synchronized into the current spec.

@@ -1,14 +1,16 @@
 /**
- * Settings: one place for every setting and command (#1035 prototype).
+ * Settings: one place for every setting and command (#1035).
  *
  * A search field, then a row of tabs (All and each category, with counts)
  * in the family of the Integrations screen (#1008); typing searches
- * everything and shows All. Each row changes its setting in place, opens
- * where a group of settings lives today, or runs its command. A link to a
- * row (`?setting=<id>`) opens Settings there.
+ * everything and shows All. Each row changes its setting in place, opens a
+ * page of settings inside Settings (Back returns to the list), opens a
+ * dialog or a view's control, or runs its command. A link to a row
+ * (`?setting=<id>`) opens Settings there; a link to a page opens the page.
  */
 
 import {
+  ChevronLeft,
   ChevronRight,
   Link2,
   Minus,
@@ -17,6 +19,10 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import {
+  type ComponentType,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type LazyExoticComponent,
+  Suspense,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -27,10 +33,12 @@ import {
 import { createPortal } from "react-dom";
 import { CloseButton } from "../components/CloseButton";
 import { MobileSheetHandle } from "../components/MobileSheetHandle";
+import { lazyWithReload } from "../lazyWithReload";
 import "./catalog";
-import { settingsLink } from "./flag";
+import { settingsLink } from "./links";
 import {
   type ChoiceOption,
+  type PanelEntry,
   type RegistryEntry,
   registryEntries,
   registryEntry,
@@ -39,15 +47,38 @@ import {
   type SettingEntry,
   type SettingsCategory,
   type SettingsHost,
+  type SettingsPage,
+  type SettingsPageProps,
   subscribeRegistry,
 } from "./registry";
 import { searchSettings } from "./search";
 import { useShownEntries } from "./useShownEntries";
 import "../components/ConfigMenu.css";
-import "../components/ConfigurationDialog.css";
+import "./SettingsModal.css";
 import "./SettingsHome.css";
 
 type Tab = "all" | SettingsCategory;
+
+type PageEntry = PanelEntry & { page: SettingsPage };
+
+const pageComponents = new Map<
+  SettingsPage["load"],
+  LazyExoticComponent<ComponentType<SettingsPageProps>>
+>();
+
+/** One lazy component per page, however many entries open it. */
+function pageComponent(entry: PageEntry) {
+  let component = pageComponents.get(entry.page.load);
+  if (!component) {
+    component = lazyWithReload(`settings-page:${entry.id}`, entry.page.load);
+    pageComponents.set(entry.page.load, component);
+  }
+  return component;
+}
+
+function isPage(entry: RegistryEntry | undefined): entry is PageEntry {
+  return entry?.kind === "panel" && !!entry.page;
+}
 
 const noSubscription = () => () => {};
 
@@ -69,14 +100,48 @@ function linkTarget(target: string | null | undefined): {
   return { tab: "all", entry: null };
 }
 
+/** Arrow keys, Home and End move between tabs, as in any tab list. */
+function nextTab(key: string, index: number, count: number) {
+  if (key === "ArrowRight") return (index + 1) % count;
+  if (key === "ArrowLeft") return (index + count - 1) % count;
+  if (key === "Home") return 0;
+  if (key === "End") return count - 1;
+  return null;
+}
+
+/** Tab and Shift+Tab stay inside the dialog. */
+function keepFocusInside(event: ReactKeyboardEvent<HTMLDivElement>) {
+  const controls = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>(
+      "button:not(:disabled):not([tabindex='-1']), input:not(:disabled), select:not(:disabled), a[href]",
+    ),
+  ).filter((element) => element.getClientRects().length > 0);
+  const first = controls[0];
+  const last = controls[controls.length - 1];
+  if (
+    event.shiftKey &&
+    (document.activeElement === first ||
+      document.activeElement === event.currentTarget)
+  ) {
+    event.preventDefault();
+    last?.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first?.focus();
+  }
+}
+
 export function SettingsHome({
   host,
   initial,
+  focus,
   onClose,
 }: {
   host: SettingsHost;
   /** An entry id or category id from a link or the command box. */
   initial?: string | null;
+  /** For a page: the row to show first, in place of the page's own. */
+  focus?: string;
   onClose: () => void;
 }) {
   const entries = useSyncExternalStore(
@@ -89,6 +154,14 @@ export function SettingsHome({
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState<string | null>(start.entry);
   const [copied, setCopied] = useState<string | null>(null);
+  // A page open inside Settings, and the row it was opened from.
+  const [page, setPage] = useState<{ entry: PageEntry; focus?: string } | null>(
+    () => {
+      const entry = start.entry ? registryEntry(start.entry) : undefined;
+      return isPage(entry) ? { entry, focus: focus ?? entry.page.focus } : null;
+    },
+  );
+  const returnTo = useRef<string | null>(page?.entry.id ?? null);
   const dialog = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -109,6 +182,7 @@ export function SettingsHome({
 
   // A link names one row: show it, put it in view and mark it once.
   useLayoutEffect(() => {
+    if (page) return;
     if (!start.entry) {
       if (!host.mobile) search.current?.focus({ preventScroll: true });
       else dialog.current?.focus({ preventScroll: true });
@@ -123,7 +197,31 @@ export function SettingsHome({
       ?.focus({ preventScroll: true });
     const timer = window.setTimeout(() => setHighlight(null), 2400);
     return () => window.clearTimeout(timer);
+    // Runs once, for the link; Back from a page puts focus back itself.
   }, [start.entry, host.mobile]);
+
+  const openPage = (entry: PageEntry) => {
+    returnTo.current = entry.id;
+    setPage({ entry, focus: entry.page.focus });
+  };
+  const back = () => setPage(null);
+  // Back puts focus on the row the page was opened from.
+  useLayoutEffect(() => {
+    if (page) {
+      dialog.current?.focus({ preventScroll: true });
+      return;
+    }
+    const id = returnTo.current;
+    if (!id) return;
+    returnTo.current = null;
+    const row = list.current?.querySelector<HTMLElement>(
+      `[data-setting="${CSS.escape(id)}"]`,
+    );
+    row?.scrollIntoView?.({ block: "nearest" });
+    row?.querySelector<HTMLElement>(".settings-home-go")?.focus({
+      preventScroll: true,
+    });
+  }, [page]);
 
   // The chosen tab stays in sight on a narrow screen.
   const tabList = useRef<HTMLDivElement>(null);
@@ -139,13 +237,14 @@ export function SettingsHome({
         return;
       event.preventDefault();
       event.stopPropagation();
-      if (query) setQuery("");
+      if (page) setPage(null);
+      else if (query) setQuery("");
       else onClose();
     };
     window.addEventListener("keydown", onKey, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKey, { capture: true });
-  }, [onClose, query]);
+  }, [onClose, query, page]);
 
   const copyLink = (id: string) => {
     const link = settingsLink(id);
@@ -182,17 +281,28 @@ export function SettingsHome({
         aria-modal="true"
         aria-label="Settings"
         tabIndex={-1}
-        onKeyDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === "Tab") keepFocusInside(event);
+        }}
       >
         <MobileSheetHandle label="Dismiss Settings" onClose={onClose} />
-        <div className="modal-head">
+        {page ? (
+          <SettingsPageView
+            entry={page.entry}
+            focus={page.focus}
+            onBack={back}
+            onClose={onClose}
+          />
+        ) : null}
+        <div className="modal-head" hidden={!!page}>
           <div>
             <h2>Settings</h2>
             <p>Every setting and command, in one place</p>
           </div>
           <CloseButton label="Close Settings" onClick={onClose} />
         </div>
-        <label className="settings-home-search">
+        <label className="settings-home-search" hidden={!!page}>
           <Search size={15} aria-hidden="true" />
           <input
             ref={search}
@@ -208,11 +318,12 @@ export function SettingsHome({
         </label>
         <div
           ref={tabList}
+          hidden={!!page}
           className="settings-home-tabs"
           role="tablist"
           aria-label="Settings categories"
         >
-          {tabs.map((item) => (
+          {tabs.map((item, index) => (
             <button
               key={item.id}
               type="button"
@@ -220,8 +331,18 @@ export function SettingsHome({
               id={`settings-tab-${item.id}`}
               aria-controls="settings-home-list"
               aria-selected={tab === item.id}
+              tabIndex={tab === item.id ? 0 : -1}
               data-empty={(counts.get(item.id) ?? 0) === 0 ? "" : undefined}
               onClick={() => setTab(item.id)}
+              onKeyDown={(event) => {
+                const next = nextTab(event.key, index, tabs.length);
+                if (next === null) return;
+                event.preventDefault();
+                setTab(tabs[next].id);
+                document
+                  .getElementById(`settings-tab-${tabs[next].id}`)
+                  ?.focus();
+              }}
             >
               {item.label}
               <span className="settings-home-tab-count">
@@ -232,6 +353,7 @@ export function SettingsHome({
         </div>
         <div
           ref={list}
+          hidden={!!page}
           id="settings-home-list"
           className="configuration-content settings-home-list"
           role="tabpanel"
@@ -267,6 +389,7 @@ export function SettingsHome({
                         highlighted={highlight === entry.id}
                         copied={copied === entry.id}
                         onCopyLink={copyLink}
+                        onOpenPage={openPage}
                         onLeave={onClose}
                       />
                     ))}
@@ -283,6 +406,7 @@ export function SettingsHome({
                   highlighted={highlight === entry.id}
                   copied={copied === entry.id}
                   onCopyLink={copyLink}
+                  onOpenPage={openPage}
                   onLeave={onClose}
                 />
               ))}
@@ -301,6 +425,7 @@ function SettingsRow({
   highlighted,
   copied,
   onCopyLink,
+  onOpenPage,
   onLeave,
 }: {
   entry: RegistryEntry;
@@ -310,6 +435,8 @@ function SettingsRow({
   highlighted: boolean;
   copied: boolean;
   onCopyLink: (id: string) => void;
+  /** A page opens inside Settings. */
+  onOpenPage: (entry: PageEntry) => void;
   /** Settings closes when a row opens another dialog or runs a command. */
   onLeave: () => void;
 }) {
@@ -330,6 +457,8 @@ function SettingsRow({
       <strong>{entry.title}</strong>
       {entry.kind === "command" && entry.disabledReason?.() ? (
         <span>{entry.disabledReason()}</span>
+      ) : entry.kind === "setting" && entry.status?.() ? (
+        <span className="settings-home-status">{entry.status()}</span>
       ) : entry.description ? (
         <span>{entry.description}</span>
       ) : null}
@@ -376,6 +505,7 @@ function SettingsRow({
     );
   }
 
+  const inPlace = isPage(entry) ? entry : null;
   const open =
     entry.kind === "panel"
       ? entry.open
@@ -414,10 +544,74 @@ function SettingsRow({
             {entry.kind === "panel" ? "Open" : "Run"}
             <ChevronRight size={13} />
           </button>
+        ) : inPlace ? (
+          <button
+            type="button"
+            className="settings-home-go"
+            aria-label={`Open ${entry.title}`}
+            onClick={() => onOpenPage(inPlace)}
+          >
+            Open
+            <ChevronRight size={13} />
+          </button>
         ) : null}
         {link}
       </div>
     </div>
+  );
+}
+
+/** A page of settings inside Settings, with Back to the list. */
+function SettingsPageView({
+  entry,
+  focus,
+  onBack,
+  onClose,
+}: {
+  entry: PageEntry;
+  focus?: string;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  const Page = pageComponent(entry);
+  return (
+    <>
+      <div className="modal-head settings-page-head">
+        <button
+          type="button"
+          className="settings-page-back"
+          aria-label="Back to Settings"
+          onClick={onBack}
+        >
+          <ChevronLeft size={16} />
+          <span>Settings</span>
+        </button>
+        <div>
+          <h2>{entry.title}</h2>
+          {entry.description ? <p>{entry.description}</p> : null}
+        </div>
+        <CloseButton label="Close Settings" onClick={onClose} />
+      </div>
+      <div
+        className="configuration-content settings-page"
+        data-settings-page={entry.id}
+      >
+        {entry.scope ? (
+          <p className="configuration-scope">
+            Applies to: {SCOPE_LABELS[entry.scope]}
+          </p>
+        ) : null}
+        <Suspense
+          fallback={
+            <p className="settings-home-empty" role="status">
+              Loading…
+            </p>
+          }
+        >
+          <Page focus={focus} close={onClose} />
+        </Suspense>
+      </div>
+    </>
   );
 }
 
@@ -434,14 +628,18 @@ function SettingControlView({
   const value = useEntryValue(entry, () => control.get(host));
   if (control.type === "toggle") {
     const on = value as boolean;
+    const busy = control.busy?.() ?? false;
     return (
       <button
         type="button"
         role="switch"
         aria-label={entry.title}
         aria-checked={on}
+        aria-disabled={busy || undefined}
         className={"settings-switch" + (on ? " is-on" : "")}
-        onClick={() => control.set(host, !on)}
+        onClick={() => {
+          if (!busy) control.set(host, !on);
+        }}
       >
         <span />
       </button>

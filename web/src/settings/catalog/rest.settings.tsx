@@ -1,7 +1,7 @@
 /**
- * The categories the prototype lists in place (#1035): each entry opens where
- * the setting is changed today. Option as Alt, Zen, updates and the session
- * commands are wired live; the rest move here whole in later slices.
+ * Agents, Keyboard, Integrations, This World and Help (#1035). A group of
+ * settings shows whole as a page inside Settings; a dialog of its own
+ * (shortcuts, terminal look, phone keys) opens from its row.
  */
 
 import {
@@ -37,6 +37,14 @@ import {
   subscribeTerminalOptionAsMeta,
   terminalOptionAsMeta,
 } from "../../terminalOptionKey";
+import {
+  connectionPage,
+  integrationsPage,
+  runtimePage,
+  speechPage,
+  worktreeCommandPage,
+  worldNamePage,
+} from "../pages/simplePages";
 import { defineSettings } from "../registry";
 import { openViewControl } from "../viewControls";
 
@@ -69,7 +77,7 @@ defineSettings("agents", [
     words: ["speech", "voice", "text to speech", "tts", "speak", "sounds"],
     icon: <Mic size={15} />,
     scope: "browser",
-    open: (host) => host.openConfiguration("Behavior"),
+    page: speechPage,
   },
   {
     kind: "panel",
@@ -80,7 +88,7 @@ defineSettings("agents", [
     words: ["worktree", "git worktree", "branch"],
     icon: <FolderGit2 size={15} />,
     scope: "world",
-    open: (host) => host.openConfiguration("Instance"),
+    page: worktreeCommandPage,
   },
 ]);
 
@@ -106,7 +114,7 @@ defineSettings("keyboard", [
     words: ["keybindings", "hotkeys", "keys", "remap", "preset"],
     icon: <Keyboard size={15} />,
     scope: "world",
-    open: (host) => host.openConfiguration("Behavior"),
+    open: (host) => host.openPanel("shortcut-editor"),
   },
   {
     kind: "setting",
@@ -134,7 +142,7 @@ defineSettings("keyboard", [
     words: ["mobile shortcuts", "key bar", "esc", "ctrl", "tab"],
     icon: <Smartphone size={15} />,
     scope: "browser",
-    open: (host) => host.openConfiguration("Behavior"),
+    open: (host) => host.openPanel("phone-keys"),
   },
   {
     kind: "command",
@@ -153,6 +161,17 @@ defineSettings("keyboard", [
 defineSettings("integrations", [
   {
     kind: "panel",
+    id: "integrations.all",
+    category: "integrations",
+    title: "Integrations",
+    description: "Runtimes, sources, harnesses, editors and the vault, by kind",
+    words: ["runtime", "rex", "vault", "tokens", "secrets", "connect"],
+    icon: <Plug size={15} />,
+    scope: "world",
+    page: integrationsPage,
+  },
+  {
+    kind: "panel",
     id: "integrations.sources",
     category: "integrations",
     title: "Sources",
@@ -160,7 +179,7 @@ defineSettings("integrations", [
     words: ["github", "jira", "tickets", "issues", "pull requests", "feeds"],
     icon: <Waypoints size={15} />,
     scope: "world",
-    open: (host) => host.openPanel("sources"),
+    page: { ...integrationsPage, focus: "source:github" },
   },
   {
     kind: "panel",
@@ -171,7 +190,7 @@ defineSettings("integrations", [
     words: ["otel", "prometheus", "observability", "cost", "tokens"],
     icon: <Activity size={15} />,
     scope: "world",
-    open: (host) => host.openPanel("metrics"),
+    page: { ...integrationsPage, focus: "source:metrics" },
   },
   {
     kind: "panel",
@@ -182,7 +201,7 @@ defineSettings("integrations", [
     words: ["claude", "codex", "hooks", "skills", "harness"],
     icon: <Plug size={15} />,
     scope: "world",
-    open: (host) => host.openConfiguration("Integrations"),
+    page: { ...integrationsPage, focus: "harness:" },
   },
   {
     kind: "panel",
@@ -205,7 +224,7 @@ defineSettings("integrations", [
     words: ["codec", "compression", "surface", "bandwidth"],
     icon: <Cable size={15} />,
     scope: "world",
-    open: (host) => host.openConfiguration("Connection"),
+    page: connectionPage,
   },
   {
     kind: "panel",
@@ -216,7 +235,7 @@ defineSettings("integrations", [
     words: ["auto sync", "git pull", "fetch", "repositories"],
     icon: <FolderGit2 size={15} />,
     scope: "world",
-    open: (host) => host.openConfiguration("Connection"),
+    open: (host) => host.openPanel("branch-sync"),
   },
 ]);
 
@@ -230,7 +249,7 @@ defineSettings("system", [
     words: ["instance name", "title", "rename"],
     icon: <Tag size={15} />,
     scope: "world",
-    open: (host) => host.openConfiguration("Instance"),
+    page: worldNamePage,
   },
   {
     kind: "setting",
@@ -305,9 +324,7 @@ defineSettings("system", [
     ],
     icon: <TerminalSquare size={15} />,
     scope: "connection",
-    // The Menu's Runtime section, opened under the short Menu until it moves
-    // here whole (slice 1).
-    open: (host) => host.openPanel("runtime"),
+    page: runtimePage,
   },
   {
     kind: "command",

@@ -14,7 +14,7 @@
  * an older dialog are one value.
  */
 
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 /** The categories, in the order the Settings screen shows them. */
 export const SETTINGS_CATEGORIES = [
@@ -95,9 +95,7 @@ export type SettingsHost = {
     setTerminalFontScale(scale: number): void;
   };
   zen: { on: boolean; available: boolean; set(on: boolean): void };
-  /** Opens today's Configuration dialog at a tab (settings listed in place). */
-  openConfiguration(tab: string): void;
-  /** Opens a panel the shell owns: the cheat sheet, profiles, sounds… */
+  /** Opens a dialog the shell owns: the cheat sheet, profiles, sounds… */
   openPanel(panel: SettingsPanel): void;
   mobile: boolean;
   mac: boolean;
@@ -106,13 +104,38 @@ export type SettingsHost = {
 };
 
 export type SettingsPanel =
+  /** The read-only shortcut cheat sheet. */
   | "shortcuts"
+  /** Change a key or choose a preset. */
+  | "shortcut-editor"
   | "agent-profiles"
   | "sounds"
-  | "sources"
-  | "metrics"
-  /** The Menu's Runtime section: Herdr's version, upgrade or setup, and connection details. */
-  | "runtime";
+  /** Terminal colour themes and font. */
+  | "terminal-look"
+  /** Phone or desktop layout, breakpoint and sidebar order. */
+  | "layout"
+  /** The key bar above a phone's keyboard. */
+  | "phone-keys"
+  /** Automatic branch updates on this connection. */
+  | "branch-sync";
+
+/** What a page inside Settings is given. */
+export type SettingsPageProps = {
+  /** A row to show first, such as the Integrations row `source:github`. */
+  focus?: string;
+  /** Closes Settings, for a page that starts something elsewhere. */
+  close(): void;
+};
+
+/**
+ * A group of settings shown whole inside Settings, with a way back to the
+ * list: loaded when first opened, so the list stays light.
+ */
+export type SettingsPage = {
+  load(): Promise<{ default: ComponentType<SettingsPageProps> }>;
+  /** The row the page shows first. */
+  focus?: string;
+};
 
 export type ChoiceOption<T extends string = string> = {
   value: T;
@@ -127,6 +150,8 @@ export type SettingControl =
       type: "toggle";
       get(host: SettingsHost): boolean;
       set(host: SettingsHost, on: boolean): void;
+      /** While a change is saving the switch ignores presses. */
+      busy?(): boolean;
     }
   | {
       type: "choice";
@@ -188,16 +213,23 @@ export type SettingEntry = EntryBase & {
   kind: "setting";
   scope: SettingScope;
   control: SettingControl;
+  /**
+   * The setting's state in words, read when shown, in place of the
+   * description: "Blocked by browser permissions".
+   */
+  status?(): string | null;
 };
 
-/** A group of settings kept in its own dialog today, listed in place. */
+/**
+ * A group of settings: a page inside Settings, or a dialog or view control
+ * it opens. Without either the entry only says where it lives (`alsoOn`).
+ */
 export type PanelEntry = EntryBase & {
   kind: "panel";
   scope?: SettingScope;
-  /**
-   * Opens where it is changed today. Without it the entry only says where it
-   * lives (`alsoOn`), for controls no other place can open yet.
-   */
+  /** Shown inside Settings, with Back to the list. */
+  page?: SettingsPage;
+  /** Opens a dialog or a view's control; Settings closes first. */
   open?(host: SettingsHost): void;
 };
 

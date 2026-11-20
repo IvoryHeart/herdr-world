@@ -46,7 +46,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Town reception filter | [Contract](../FEATURES.md#visual-control-plane) | [Source](../web/src/world/town/townReceptionFilter.ts) | [Tests](../web/src/world/town/townReceptionFilter.test.ts) |
 | World search | [Contract](../FEATURES.md#visual-control-plane) | [Source](../web/src/world/worldSearch.ts) | [Tests](../web/src/world/worldSearch.test.ts) |
 | Command box | [Contract](../FEATURES.md#visual-control-plane) | [Source](../web/src/components/CommandCombobox.tsx) | [Tests](../web/src/commandBoxKey.dom.test.ts) |
-| Settings registry and search (preview) | [Contract](../FEATURES.md#settings-preview) | [Registry](../web/src/settings/registry.ts), [search](../web/src/settings/search.ts) | [Tests](../web/src/settings/settings.dom.test.ts) |
+| Settings home, registry and search | [Contract](../openspec/specs/world-surfaces/spec.md) | [Registry](../web/src/settings/registry.ts), [search](../web/src/settings/search.ts), [home](../web/src/settings/SettingsHome.tsx) | [Tests](../web/src/settings/settings.dom.test.ts) |
 | Town lenses | [Contract](../FEATURES.md#visual-control-plane) | [Source](../web/src/world/town/townLens.ts) | [Tests](../web/src/world/town/townLens.test.ts) |
 | Room actions and moves | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/TownView.tsx) | [Tests](../web/src/world/officeRoomActions.test.ts) |
 | Shared terminal appearance | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/TerminalAppearanceEditor.tsx) | [Tests](../server/src/rpc/appearance.test.ts) |

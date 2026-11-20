@@ -7,6 +7,35 @@
   height: min(820px, calc(100dvh / var(--ui-scale, 1) - 36px));
 }
 
+/* The list's parts step aside while a page shows. */
+.settings-home [hidden] {
+  display: none !important;
+}
+
+/* A page inside Settings: Back, its title, then the page's own rows. */
+.settings-home .settings-page-head {
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-home .settings-page-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-page-back {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  min-height: 32px;
+  padding: 0 10px 0 4px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
 .settings-home-search {
   display: flex;
   align-items: center;
@@ -239,6 +268,10 @@
 }
 
 @media (pointer: coarse) {
+  .settings-page-back {
+    min-height: 40px;
+  }
+
   .settings-home-link,
   .settings-home-go {
     min-width: 40px;

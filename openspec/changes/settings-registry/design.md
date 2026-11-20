@@ -1,13 +1,14 @@
 ## Context
 
-The preview is in `web/src/settings/` behind `?settings=next`. The PR (#1062)
+Settings is in `web/src/settings/` and is the default; the `?settings=next` preview
+switch is retired. The PR (#1062)
 holds the design note, captures and the upstream draft; this file keeps the
 choices and the audit that later slices check against.
 
 ## Decisions
 
 - **The registry holds how to read and change a value, never the value.** Values
-  stay in today's stores, so Settings, the view and the old dialog show one value
+  stay in today's stores, so Settings, the view and any detail dialog show one value
   and no migration of stored data is needed.
 - **Features register their own entries** with `defineSettings(source, entries)` in
   their own folder (`world/town/town.settings.tsx`, `world/board/board.settings.tsx`)
@@ -31,10 +32,12 @@ choices and the audit that later slices check against.
 
 ## Audit: every setting and where it is changed today
 
-Desktop Menu = the dropdown Menu; phone Menu = the bottom sheet, whose "Quick
-settings" opens the Configuration dialog tabs. "Config" = the Configuration dialog.
+The audit records where each setting lived before Settings became the default.
+Desktop Menu = the old dropdown Menu; phone Menu = the old bottom sheet, whose "Quick
+settings" opened the Configuration dialog tabs. "Config" = the retired Configuration
+dialog.
 
-| Entry ID | Setting | Today (desktop and phone) |
+| Entry ID | Setting | Before (desktop and phone) |
 |---|---|---|
 | appearance.theme | Theme | Config → Appearance |
 | appearance.black-background | Black background | Config → Appearance |
@@ -84,6 +87,6 @@ settings" opens the Configuration dialog tabs. "Config" = the Configuration dial
 | help.* | Tutorial, features, troubleshooting, report, changelog | Menu → Help & updates |
 | command.* | Workspace, tab, pane, agent and window commands | Command box only |
 
-With the preview on, every row above is found by the one search and opens or
-changes from its result. Rows that still open today's dialog are moved whole in
-slice #1063.
+Every row above is now in Settings, found by the one search, and opens or changes
+from its result. Rows that still open a detail dialog are moved whole into Settings
+pages in slice #1063.

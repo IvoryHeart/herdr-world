@@ -1,7 +1,7 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 
-// The Settings prototype (#1035): one registry, one search, the Settings
-// screen and the command box, with the real catalog and a stand-in host.
+// Settings (#1035): one registry, one search, the Settings screen, its pages
+// and the command box, with the real catalog and a stand-in host.
 if (process.env.SETTINGS_HOME_DOM !== "1") {
   test("settings in an isolated React DOM", async () => {
     const child = Bun.spawn(
@@ -61,12 +61,8 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     "./viewControls"
   );
   const { SettingsHome } = await import("./SettingsHome");
-  const {
-    __loadSettingsFlagForTests,
-    settingsLink,
-    settingsPrototypeOn,
-    takeSettingsLink,
-  } = await import("./flag");
+  const { __loadSettingsLinkForTests, settingsLink, takeSettingsLink } =
+    await import("./links");
   const { townDaylightMode } = await import("../world/town/townDaylight");
   const { chimeDevice } = await import("../chimes/chimeCenter");
   type SettingsHost = import("./registry").SettingsHost;
@@ -87,7 +83,6 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
         setTerminalFontScale: (scale) => calls.push(`terminal:${scale}`),
       },
       zen: { on: false, available: true, set: (on) => calls.push(`zen:${on}`) },
-      openConfiguration: (tab) => calls.push(`configuration:${tab}`),
       openPanel: (panel) => calls.push(`panel:${panel}`),
       mobile: false,
       mac: false,
@@ -187,20 +182,22 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     );
   });
 
-  test("the flag lasts for the tab, and a link opens once", () => {
-    __loadSettingsFlagForTests("http://localhost/?settings=next");
-    expect(settingsPrototypeOn()).toBe(true);
-    __loadSettingsFlagForTests("http://localhost/?setting=town.time-of-day");
+  test("a link opens once, and the preview's old switch opens nothing", () => {
+    __loadSettingsLinkForTests("http://localhost/?setting=town.time-of-day");
     expect(takeSettingsLink()).toBe("town.time-of-day");
     expect(takeSettingsLink()).toBeNull();
-    __loadSettingsFlagForTests("http://localhost/?settings=off");
-    expect(settingsPrototypeOn()).toBe(false);
+    __loadSettingsLinkForTests("http://localhost/?settings=next");
+    expect(takeSettingsLink()).toBeNull();
     expect(settingsLink("sounds.on", "http://localhost/town?view=1#x")).toBe(
       "http://localhost/town?setting=sounds.on",
     );
   });
 
-  async function render(host: SettingsHost, initial: string | null = null) {
+  async function render(
+    host: SettingsHost,
+    initial: string | null = null,
+    focus?: string,
+  ) {
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
@@ -210,6 +207,7 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
         createElement(SettingsHome, {
           host,
           initial,
+          focus,
           onClose: () => (closed += 1),
         }),
       );
@@ -297,32 +295,117 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     await category.unmount();
   });
 
-  test("a row that opens today's dialog leaves Settings", async () => {
+  test("a row that opens a dialog leaves Settings", async () => {
     const { host, calls } = makeHost();
-    const view = await render(host, "integrations");
+    const view = await render(host, "keyboard");
     const open = view
       .dialog()
-      .querySelector<HTMLButtonElement>('[aria-label="Open Sources"]')!;
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Open Keyboard shortcuts"]',
+      )!;
     await act(async () => open.click());
-    expect(calls).toEqual(["panel:sources"]);
+    expect(calls).toEqual(["panel:shortcut-editor"]);
     expect(view.closed()).toBe(1);
     await view.unmount();
   });
 
-  test("Herdr and connection details opens the Menu's Runtime section", async () => {
-    const { host, calls } = makeHost();
-    const view = await render(host);
-    await view.type("upgrade herdr");
-    expect(view.rows()[0]).toBe("system.runtime");
+  test("everything the old Configuration and Menu held has a home here", () => {
+    // Pages open inside Settings; Integrations' rows open it at their row.
+    for (const id of [
+      "integrations.all",
+      "integrations.terminal-transport",
+      "system.runtime",
+      "system.name",
+      "agents.speech",
+      "agents.worktree-command",
+    ]) {
+      const entry = registryEntry(id);
+      expect(entry?.kind === "panel" && !!entry.page).toBe(true);
+    }
+    const focusOf = (id: string) => {
+      const entry = registryEntry(id);
+      return entry?.kind === "panel" ? entry.page?.focus : undefined;
+    };
+    expect(focusOf("integrations.sources")).toBe("source:github");
+    expect(focusOf("integrations.metrics")).toBe("source:metrics");
+    expect(focusOf("integrations.agents")).toBe("harness:");
+    expect(ids("upgrade herdr")[0]).toBe("system.runtime");
+    expect(ids("connection details")).toContain("system.runtime");
+    expect(ids("vault")[0]).toBe("integrations.all");
+  });
+
+  test("a page opens inside Settings, and Back returns to its row", async () => {
+    const seen: (string | undefined)[] = [];
+    let closePage = () => {};
+    defineSettings("page-test", [
+      {
+        kind: "panel",
+        id: "test.page",
+        category: "system",
+        title: "Test page",
+        description: "A page for this test",
+        scope: "world",
+        page: {
+          focus: "row:first",
+          load: async () => ({
+            default: ({ focus, close }) => {
+              seen.push(focus);
+              closePage = close;
+              return createElement("p", { id: "test-page" }, "Page body");
+            },
+          }),
+        },
+      },
+    ]);
+    const view = await render(makeHost().host, "system");
     const open = view
       .dialog()
-      .querySelector<HTMLButtonElement>(
-        '[aria-label="Open Herdr and connection details"]',
-      )!;
+      .querySelector<HTMLButtonElement>('[aria-label="Open Test page"]')!;
     await act(async () => open.click());
-    expect(calls).toEqual(["panel:runtime"]);
-    expect(view.closed()).toBe(1);
+    await act(async () => {});
+    expect(view.dialog().querySelector("#test-page")?.textContent).toBe(
+      "Page body",
+    );
+    expect(seen[seen.length - 1]).toBe("row:first");
+    expect(view.dialog().textContent).toContain("Applies to: All browsers");
+    // The list stays mounted under the page, hidden, so Back keeps its place.
+    expect(
+      view.dialog().querySelector('input[type="search"]')?.closest("[hidden]"),
+    ).not.toBeNull();
+    // Escape goes back first, then closes.
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+    expect(view.dialog().querySelector("#test-page")).toBeNull();
+    expect(document.activeElement).toBe(
+      view
+        .dialog()
+        .querySelector('[data-setting="test.page"] .settings-home-go'),
+    );
+    expect(view.closed()).toBe(0);
     await view.unmount();
+
+    // A link or an element's Connect opens the page at once, at its row.
+    const linked = await render(makeHost().host, "test.page", "row:second");
+    await act(async () => {});
+    expect(linked.dialog().querySelector("#test-page")).not.toBeNull();
+    expect(seen[seen.length - 1]).toBe("row:second");
+    const back = linked
+      .dialog()
+      .querySelector<HTMLButtonElement>('[aria-label="Back to Settings"]')!;
+    await act(async () => back.click());
+    expect(linked.rows()).toContain("test.page");
+    await linked.unmount();
+
+    // A page can close Settings itself (Upgrade Herdr does).
+    const closing = await render(makeHost().host, "test.page");
+    await act(async () => {});
+    await act(async () => closePage());
+    expect(closing.closed()).toBe(1);
+    await closing.unmount();
+    defineSettings("page-test", []);
   });
 
   test("controls that stay on a view are found and opened there", async () => {
@@ -374,8 +457,98 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     await act(async () => hostsRoot.unmount());
   });
 
+  test("World name is a page that keeps its own scope and drops an unsaved draft", async () => {
+    const { instanceNameClient } = await import("../instanceName");
+    const load = spyOn(instanceNameClient, "load").mockResolvedValue({
+      title_suffix: "Home",
+    });
+    const save = spyOn(instanceNameClient, "save").mockResolvedValue({
+      title_suffix: "Work",
+    });
+    try {
+      const view = await render(makeHost().host, "system.name");
+      for (let i = 0; i < 5; i += 1) await act(async () => {});
+      const input = () =>
+        view
+          .dialog()
+          .querySelector<HTMLInputElement>(".instance-name-settings input")!;
+      expect(view.dialog().textContent).toContain("Applies to: All browsers");
+      expect(view.dialog().textContent).toContain(
+        "Saved on this Herdr World server",
+      );
+      expect(input().value).toBe("Home");
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(
+          Object.getPrototypeOf(input()),
+          "value",
+        )!.set!.call(input(), "Unsaved");
+        input().dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      // Back leaves the page; opening it again shows the saved name.
+      await act(async () => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+      });
+      expect(view.dialog().querySelector(".instance-name-settings")).toBeNull();
+      const open = view
+        .dialog()
+        .querySelector<HTMLButtonElement>('[aria-label="Open World name"]')!;
+      await act(async () => open.click());
+      for (let i = 0; i < 5; i += 1) await act(async () => {});
+      expect(input().value).toBe("Home");
+      expect(save).not.toHaveBeenCalled();
+      expect(view.closed()).toBe(0);
+      await view.unmount();
+    } finally {
+      load.mockRestore();
+      save.mockRestore();
+    }
+  });
+
+  test("Task notifications says how it delivers, or why it cannot", async () => {
+    const { __storeTesting, store } = await import("../store");
+    const before = store.get();
+    try {
+      const status = (patch: Partial<ReturnType<typeof store.get>>) => {
+        __storeTesting.replaceState({ ...before, ...patch });
+        return registryEntry("notifications.tasks")!;
+      };
+      const read = (patch: Partial<ReturnType<typeof store.get>>) => {
+        const entry = status(patch);
+        return entry.kind === "setting" ? entry.status?.() : undefined;
+      };
+      expect(read({ taskNotificationPermission: "denied" })).toBe(
+        "Blocked by browser permissions",
+      );
+      expect(
+        read({
+          taskNotificationPermission: "granted",
+          taskNotificationsEnabled: true,
+          taskNotificationTransport: "push",
+        }),
+      ).toBe("On · Background push");
+      __storeTesting.replaceState({
+        ...before,
+        taskNotificationPermission: "granted",
+        taskNotificationsEnabled: true,
+        taskNotificationBusy: true,
+      });
+      const view = await render(makeHost().host, "notifications.tasks");
+      const toggle = view
+        .dialog()
+        .querySelector<HTMLButtonElement>(
+          'button[role="switch"][aria-label="Task notifications"]',
+        )!;
+      expect(toggle.getAttribute("aria-disabled")).toBe("true");
+      expect(view.dialog().textContent).toContain("Saving...");
+      await view.unmount();
+    } finally {
+      __storeTesting.replaceState(before);
+    }
+  });
+
   test("the command box's commands are in Settings, with its admission", async () => {
-    __loadSettingsFlagForTests("http://localhost/?settings=next");
     const ran: string[] = [];
     function CommandBox() {
       useCommandBoxRegistry(
@@ -443,7 +616,6 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     // The box goes (another connection): so do its commands.
     await act(async () => root.unmount());
     expect(registryEntry("command.create-workspace")).toBeUndefined();
-    __loadSettingsFlagForTests("http://localhost/?settings=off");
   });
 
   test("a row that depends on another setting appears as soon as it is on", async () => {

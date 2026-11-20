@@ -1,5 +1,5 @@
 /**
- * The command box's commands in the one registry (#1035 prototype). The box
+ * The command box's commands in the one registry (#1035). The box
  * builds its commands from what is open now (the focused workspace, tab and
  * pane, the window arrangement) and publishes them here, so Settings and its
  * search find "new workspace" as Cmd+K does. Each entry runs the box's own
@@ -12,7 +12,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import type { ActionGroupDefinition } from "../components/CommandCombobox";
-import { settingsPrototypeOn } from "./flag";
 import { type CommandEntry, defineSettings } from "./registry";
 import { commandMatchScore } from "./search";
 
@@ -33,8 +32,7 @@ type Published = {
 
 /**
  * How the box ranks one of its commands for `search`, given its own filter's
- * score. With the prototype on, commands rank by the registry's one search,
- * as Settings ranks them; a looser match (a path, a part of a name) still
+ * score. Commands rank by the registry's one search, as Settings ranks them; a looser match (a path, a part of a name) still
  * shows, below every match the one search makes.
  */
 export function rankCommand(
@@ -42,7 +40,6 @@ export function rankCommand(
   search: string,
   filtered: number,
 ) {
-  if (!settingsPrototypeOn()) return filtered;
   return commandMatchScore(action, search) || filtered * 0.5;
 }
 
@@ -50,8 +47,7 @@ export function rankCommand(
 const NOT_COMMANDS = new Set(["Files", "Help"]);
 
 /**
- * Publishes the box's command groups while the prototype is on and the box
- * can act. `results` are groups that are not commands of its own (World's
+ * Publishes the box's command groups while the box can act. `results` are groups that are not commands of its own (World's
  * finds, settings from the registry); they and Files and Help are left out.
  */
 export function useCommandBoxRegistry(
@@ -63,11 +59,10 @@ export function useCommandBoxRegistry(
   const groups = allGroups.filter(
     (group) => !results.includes(group) && !NOT_COMMANDS.has(group.heading),
   );
-  const on = settingsPrototypeOn();
   const latest = useRef(new Map<string, Published>());
   const published: Published[] = [];
   const seen = new Set<string>();
-  if (on && enabled)
+  if (enabled)
     for (const group of groups)
       for (const action of group.actions) {
         if (seen.has(action.key)) continue;
@@ -102,7 +97,6 @@ export function useCommandBoxRegistry(
     ]),
   );
   useEffect(() => {
-    if (!on) return;
     const entries: CommandEntry[] = [...latest.current.values()].map(
       (item) => ({
         kind: "command",
@@ -126,11 +120,6 @@ export function useCommandBoxRegistry(
       }),
     );
     defineSettings(SOURCE, entries);
-  }, [on, signature]);
-  useEffect(
-    () => () => {
-      if (on) defineSettings(SOURCE, []);
-    },
-    [on],
-  );
+  }, [signature]);
+  useEffect(() => () => defineSettings(SOURCE, []), []);
 }

@@ -1,5 +1,5 @@
 /**
- * Settings and commands in the command box (#1035 prototype). The box asks
+ * Settings and commands in the command box (#1035). The box asks
  * the registry's one search, so a word finds what the Settings screen finds;
  * a result changes the setting or runs the command at once: "night" offers
  * "Town time of day: Night", "font size" offers larger and smaller, "sounds"
@@ -13,7 +13,6 @@ import type {
   ActionGroupDefinition,
 } from "../components/CommandCombobox";
 import { DEVTOOLS } from "../world/devtools/flag";
-import { settingsPrototypeOn } from "./flag";
 import { openSettings, useSettingsHost } from "./host";
 import {
   entryShown,
@@ -146,7 +145,7 @@ const OPEN_SETTINGS: Omit<ActionDefinition, "score"> = {
 };
 
 /**
- * The groups the box shows for a search; none while the flag is off.
+ * The groups the box shows for a search.
  * `shown` is what this host shows (useShownEntries). The box's own commands
  * are in the registry too, so Settings finds them, but the box lists them
  * itself with the same search (rankAction), so they are left out here.
@@ -176,12 +175,11 @@ export function settingsCommandGroups(
   ].filter((group) => group.actions.length > 0);
 }
 
-/** For the command box: the groups, loading the registry when the flag is on. */
+/** For the command box: the groups, loading the registry when it first opens. */
 export function useSettingsCommandGroups(search: string) {
-  const on = settingsPrototypeOn();
   useEffect(() => {
-    if (on) void import("./catalog");
-  }, [on]);
+    void import("./catalog");
+  }, []);
   const entries = useSyncExternalStore(
     subscribeRegistry,
     registryEntries,
@@ -190,7 +188,7 @@ export function useSettingsCommandGroups(search: string) {
   const host = useSettingsHost();
   const shown = useShownEntries(entries, host);
   return useMemo(
-    () => (on ? settingsCommandGroups(shown, host, search) : []),
-    [on, shown, host, search],
+    () => settingsCommandGroups(shown, host, search),
+    [shown, host, search],
   );
 }

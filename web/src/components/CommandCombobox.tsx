@@ -1082,13 +1082,13 @@ function OwnedCommandCombobox({
         ),
       }),
     ),
-    // The Settings prototype (#1035): settings and commands from the one
+    // Settings (#1035): settings and commands from the one
     // registry and its search.
     ...settingsGroups,
     { heading: "Help", actions: helpActions },
   ].filter((group) => group.actions.length > 0);
 
-  // The Settings prototype (#1035): the box's commands join the one registry.
+  // Settings (#1035): the box's commands join the one registry.
   useCommandBoxRegistry(
     actionGroups,
     [...findGroups, ...settingsGroups],

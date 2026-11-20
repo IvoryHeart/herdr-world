@@ -100,10 +100,23 @@ defineSettings("notifications", [
     icon: <Bell size={15} />,
     scope: "browser",
     subscribe: subscribeStore,
+    status: () => {
+      const s = store.get();
+      if (s.taskNotificationBusy) return "Saving...";
+      if (s.taskNotificationPermission === "unsupported")
+        return "Not supported by this browser";
+      if (s.taskNotificationPermission === "denied")
+        return "Blocked by browser permissions";
+      if (!s.taskNotificationsEnabled) return null;
+      return s.taskNotificationTransport === "push"
+        ? "On · Background push"
+        : "On · Active page only";
+    },
     control: {
       type: "toggle",
       get: () => store.get().taskNotificationsEnabled,
       set: (_host, on) => void store.setTaskNotificationsEnabled(on),
+      busy: () => store.get().taskNotificationBusy,
     },
   },
   {
@@ -122,6 +135,7 @@ defineSettings("notifications", [
       get: () => store.get().taskNotificationPreferences.blocked,
       set: (_host, on) =>
         void store.setTaskNotificationPreference("blocked", on),
+      busy: () => store.get().taskNotificationBusy,
     },
   },
   {
@@ -140,6 +154,7 @@ defineSettings("notifications", [
       get: () => store.get().taskNotificationPreferences.completed,
       set: (_host, on) =>
         void store.setTaskNotificationPreference("completed", on),
+      busy: () => store.get().taskNotificationBusy,
     },
   },
   {
