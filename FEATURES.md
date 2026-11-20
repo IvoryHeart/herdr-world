@@ -1489,8 +1489,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 **All** opens first and lists every kind under its heading; then one tab per
 kind: **Runtimes** (this computer's Herdr or herdr-core and each SSH host),
 **Sources** (GitHub, Jira and Usage metrics), **Agents** (World's skill for
-each harness, per host) and **Editors** once one is listed; last, the
-**Vault**. The kind tabs come from the registry's kinds, so a new kind gets
+each harness, per host) and **Editors** once one is listed; last, set apart
+with its key, the **Vault**. The kind tabs come from the registry's kinds, so a new kind gets
 its own tab; a kind with nothing in it has no tab, except Runtimes and
 Agents. Each tab shows how many rows it has and a warning mark when one is
 failing; the tabs stay on one row and scroll sideways on a phone. The screen
@@ -1508,8 +1508,14 @@ host's agent list. To try the screen with dozens of rows, open World with
 sample rows (hosts, trackers and an **Editors** tab) in every state until the
 page reloads. Sample rows have no action and give World nothing.
 
-Each row says what it gives World (terminals, agents, files, pull requests,
-tickets or usage) and its state:
+Each row leads with the product's mark where World has one (Herdr, GitHub,
+each agent) or a plain symbol (tickets, usage), says what it
+gives World (terminals, agents, files, pull requests, tickets or usage) and
+shows its state as a coloured chip; its actions stay on its right, on a phone
+too. A source's settings open under its row from the settings button
+(**Jira settings**). Each kind's own action sits on its heading in **All** and
+at the top of its tab: **Add or edit hosts…** for Runtimes, **Refresh
+Sources** for Sources.
 
 - **Connected**: in use now.
 - **Available**: ready to use; **Connect** switches it on at once.
