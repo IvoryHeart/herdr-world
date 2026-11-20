@@ -5,8 +5,10 @@
  * frame, then a rebaked building's interior and desks fade in over its old
  * drawing (so an added or closed desk fades while the rest stays put), both
  * gliding together to its new place, and the old ground fades out over the
- * new (townTransition.ts). Otherwise ground and buildings are painted a few
- * per frame, as the camera reaches them.
+ * new (townTransition.ts). A host entering or leaving (townHostPlan) slows
+ * those to its pace, while its own building rises out of its lot or sinks
+ * into it, scaled about the middle of its base. Otherwise ground and
+ * buildings are painted a few per frame, as the camera reaches them.
  */
 
 import { CanvasSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
@@ -16,7 +18,12 @@ import type { TownBakeKeys } from "./scene/townSceneBake";
 import type { TownCamera } from "./townCamera";
 import type { TownRendererDiagnostics } from "./townDiagnostics";
 import { TOWN_LAND_PERIOD } from "./townLandscape";
-import { TOWN_TILE as T, type TownCell, type TownLayout } from "./townLayout";
+import {
+  TOWN_FACADE,
+  TOWN_TILE as T,
+  type TownCell,
+  type TownLayout,
+} from "./townLayout";
 import type { TownModel } from "./townModel";
 import { townGroundPlan, townWildPlan } from "./townGroundPlan";
 import { paintTownGroundPlan, type TownHostTheme } from "./townPaint";
@@ -31,6 +38,8 @@ import {
 } from "./townRendererScene";
 import type { TownCanvas, TownStaticSprites } from "./townSprites";
 import {
+  TOWN_HOST_RISE_SECONDS,
+  TOWN_HOST_SINK_SECONDS,
   TOWN_TRANSITION_SECONDS,
   townBuildingRect,
   townCrossfadeAlpha,
@@ -39,12 +48,17 @@ import {
   townGroundChunks,
   townLandRect,
   townMotionPose,
+  townHostPlan,
   townRectsMeet,
   townRetiringAlpha,
+  townRiseProgress,
+  townRisePose,
+  townSinkPose,
   townSceneGaps,
   townWildBands,
   type TownBuildingMotion,
   type TownCover,
+  type TownHostPlan,
   type TownRect,
 } from "./townTransition";
 
@@ -69,6 +83,8 @@ export type TownTopologyContext = {
   dropActors(hostKey: string): void;
   /** A building was baked: its rooms' dimming is drawn again. */
   onBuilt(): void;
+  /** Raise dust along a rising or sinking building's base (world pixels). */
+  dust(x: number, y: number, width: number): void;
 };
 
 /** One period of the wild land, painted once per page (townWildPlan). */
@@ -111,11 +127,17 @@ export function createTownTopology(ctx: TownTopologyContext) {
   };
   /** Drawings being replaced or removed, fading (and gliding) out. */
   type Retiring =
-    | { kind: "ground"; ground: GroundView; t: number }
+    | { kind: "ground"; ground: GroundView; t: number; seconds: number }
     | {
         kind: "building";
         view: BuildingView;
         t: number;
+        /** Seconds it takes to leave. */
+        seconds: number;
+        /** Its host left: it sinks into its lot this many seconds in. */
+        sink: number | null;
+        /** It has raised its dust. */
+        dusted: boolean;
         /** How its replacement covers it, or "none" when it leaves on its own. */
         cover: TownCover;
         /** Progress of its own crossfade, which runs on under its replacement. */
@@ -127,6 +149,50 @@ export function createTownTopology(ctx: TownTopologyContext) {
         dy: number;
       };
   const retiring: Retiring[] = [];
+  /** The hosts entering or leaving in the change being applied (begin). */
+  let plan: TownHostPlan | null = null;
+  /** The layout the last change was applied to, to compare the next with. */
+  let planned: TownLayout | null = null;
+  const planSeconds = () => plan?.seconds ?? TOWN_TRANSITION_SECONDS;
+  /** The middle of a building's base, in world pixels where it was baked. */
+  const baseOf = (view: BuildingView) => ({
+    x: (view.x + view.w / 2) * T,
+    y: (view.y + view.h + TOWN_FACADE) * T,
+  });
+  /**
+   * Draw a building `offset` from where it was baked, at `alpha`, scaled
+   * about the middle of its base (rising or sinking) or plain.
+   */
+  const place = (
+    view: BuildingView,
+    offset: { x: number; y: number },
+    alpha: number,
+    scale: { sx: number; sy: number } | null = null,
+  ) => {
+    const { container } = view;
+    if (scale) {
+      const base = baseOf(view);
+      container.pivot.set(base.x, base.y);
+      container.position.set(base.x + offset.x, base.y + offset.y);
+      container.scale.set(scale.sx, scale.sy);
+    } else {
+      container.pivot.set(0, 0);
+      container.position.set(offset.x, offset.y);
+      container.scale.set(1, 1);
+    }
+    container.alpha = alpha;
+  };
+  /** Where a building is drawn, relative to where it was baked. */
+  const offsetOf = (view: BuildingView) => ({
+    x: view.container.position.x - view.container.pivot.x,
+    y: view.container.position.y - view.container.pivot.y,
+  });
+  /** Dust along a building's base as it breaks ground or sinks. */
+  const dust = (view: BuildingView) => {
+    const base = baseOf(view);
+    const at = offsetOf(view);
+    ctx.dust(base.x + at.x, base.y + at.y - 2, view.w * T);
+  };
   /** Motion for buildings baked next frame: where each was drawn before. */
   const pendingMotion = new Map<string, Omit<TownBuildingMotion, "t">>();
   /**
@@ -277,7 +343,12 @@ export function createTownTopology(ctx: TownTopologyContext) {
     if (instant) destroyGround(old);
     else {
       old.outdoor.zIndex = -0.5;
-      retiring.push({ kind: "ground", ground: old, t: 0 });
+      retiring.push({
+        kind: "ground",
+        ground: old,
+        t: 0,
+        seconds: planSeconds(),
+      });
     }
   };
 
@@ -306,16 +377,24 @@ export function createTownTopology(ctx: TownTopologyContext) {
       return;
     }
     // Where it is drawn now (it may be gliding already), relative to its baked place.
-    const at = view.container.position;
+    const at = offsetOf(view);
     const dx = next ? (next.x - view.x) * T : at.x;
     const dy = next ? (next.y - view.y) * T : at.y;
     const fade = view.motion?.crossfade ? view.motion.t : null;
+    // One still rising stands as it is drawn: it settles, then leaves.
+    if (view.motion) place(view, at, view.container.alpha);
     view.motion = null;
     view.container.zIndex -= 0.5;
+    const sink = next ? undefined : plan?.sink.get(hostKey);
+    if (sink !== undefined) stats.hostDepartures += 1;
     retiring.push({
       kind: "building",
       view,
       t: 0,
+      seconds:
+        sink === undefined ? planSeconds() : sink + TOWN_HOST_SINK_SECONDS,
+      sink: sink ?? null,
+      dusted: false,
       cover: !next
         ? "none"
         : next.w >= view.w && next.h >= view.h
@@ -333,6 +412,7 @@ export function createTownTopology(ctx: TownTopologyContext) {
         dy: (view.y - next.y) * T + at.y,
         enter: false,
         crossfade: true,
+        seconds: planSeconds(),
       });
   };
 
@@ -344,33 +424,56 @@ export function createTownTopology(ctx: TownTopologyContext) {
     if (!building) return;
     pendingBuildings.push(building);
     if (!had && !instant) {
+      // A host that just arrived rises out of its lot; any other building
+      // drawn for the first time (one that was off screen) fades in.
+      const rise = plan?.rise.get(hostKey);
       pendingMotion.set(hostKey, {
         dx: 0,
         dy: 0,
         enter: true,
         crossfade: false,
+        ...(rise === undefined
+          ? {}
+          : { rise, seconds: rise + TOWN_HOST_RISE_SECONDS }),
       });
       stats.transitions += 1;
     }
   };
 
+  /** Draw a building in motion as it is `motion.t` of the way. */
+  const poseMotion = (view: BuildingView, motion: TownBuildingMotion) => {
+    const pose = townMotionPose(motion);
+    const rise = townRiseProgress(motion);
+    if (rise === null) place(view, pose, pose.alpha);
+    else {
+      const up = townRisePose(rise);
+      // It breaks ground: dust along its base.
+      if (rise > 0 && !motion.dusted) {
+        motion.dusted = true;
+        dust(view);
+      }
+      place(view, pose, up.alpha, motion.t >= 1 ? null : up);
+    }
+  };
+
   /** Advance glides and fades; true while any still runs. */
   const stepTransitions = (dt: number) => {
-    const step = dt / TOWN_TRANSITION_SECONDS;
     let active = false;
     for (const view of buildings) {
       const motion = view.motion;
       if (!motion) continue;
-      motion.t = Math.min(1, motion.t + step);
-      const pose = townMotionPose(motion);
-      view.container.position.set(pose.x, pose.y);
-      view.container.alpha = pose.alpha;
+      motion.t = Math.min(
+        1,
+        motion.t + dt / (motion.seconds ?? TOWN_TRANSITION_SECONDS),
+      );
+      poseMotion(view, motion);
       if (motion.crossfade) crossfade(view, townCrossfadeAlpha(motion));
       if (motion.t >= 1) view.motion = null;
       else active = true;
     }
     for (let index = retiring.length - 1; index >= 0; index -= 1) {
       const entry = retiring[index]!;
+      const step = dt / entry.seconds;
       entry.t = Math.min(1, entry.t + step);
       if (entry.t >= 1) {
         if (entry.kind === "ground") destroyGround(entry.ground);
@@ -386,12 +489,27 @@ export function createTownTopology(ctx: TownTopologyContext) {
       }
       const e = townEase(entry.t);
       const { from } = entry;
-      entry.view.container.position.set(
-        from.x + (entry.dx - from.x) * e,
-        from.y + (entry.dy - from.y) * e,
-      );
-      entry.view.container.alpha =
-        from.alpha * townRetiringAlpha(entry.t, entry.cover);
+      const at = {
+        x: from.x + (entry.dx - from.x) * e,
+        y: from.y + (entry.dy - from.y) * e,
+      };
+      if (entry.sink === null)
+        place(
+          entry.view,
+          at,
+          from.alpha * townRetiringAlpha(entry.t, entry.cover),
+        );
+      else {
+        // Its host left: it stretches, then sinks into its lot.
+        const down = townSinkPose(
+          (entry.t * entry.seconds - entry.sink) / TOWN_HOST_SINK_SECONDS,
+        );
+        if (down.sy < 1 && !entry.dusted) {
+          entry.dusted = true;
+          dust(entry.view);
+        }
+        place(entry.view, at, from.alpha * down.alpha, down);
+      }
       // A drawing replaced mid-crossfade finishes it under its replacement,
       // so the one under it is never uncovered.
       if (entry.fade !== null) {
@@ -425,9 +543,8 @@ export function createTownTopology(ctx: TownTopologyContext) {
     pendingMotion.delete(building.hostKey);
     if (motion) {
       view.motion = { ...motion, t: 0 };
-      const pose = townMotionPose(view.motion);
-      view.container.position.set(pose.x, pose.y);
-      view.container.alpha = pose.alpha;
+      if (motion.rise !== undefined) stats.hostArrivals += 1;
+      poseMotion(view, view.motion);
       if (motion.crossfade) {
         crossfade(view, townCrossfadeAlpha(view.motion));
         stats.crossfades += 1;
@@ -567,7 +684,7 @@ export function createTownTopology(ctx: TownTopologyContext) {
         // Culling ran last frame; a topology change checks each desk here.
         if (!cells?.length || (!urgent && !building.container.visible))
           continue;
-        const offset = building.container.position;
+        const offset = offsetOf(building);
         const remaining: TownCell[] = [];
         for (const cell of cells) {
           const rect = townDeskRect(cell);
@@ -633,7 +750,7 @@ export function createTownTopology(ctx: TownTopologyContext) {
         (b) => b.hostKey === building.hostKey,
       )!;
       // A gliding building is drawn between where it was and its new place.
-      const offset = building.container.position;
+      const offset = offsetOf(building);
       const visible = meets(townBuildingRect(placed), view, offset);
       building.container.visible = visible;
       if (!visible) continue;
@@ -649,9 +766,17 @@ export function createTownTopology(ctx: TownTopologyContext) {
       return buildings;
     },
     byHost: buildingByHost as ReadonlyMap<string, BuildingView>,
-    /** What each building is baked from now. */
-    setKeys(keys: TownBakeKeys) {
+    /**
+     * A change is being applied: what each building is baked from now, and
+     * the hosts entering or leaving since the last change (townHostPlan),
+     * whose pace startGround, replaceBuilding and removeBuilding take.
+     * Instant changes (the first frame, reduced motion, a drag) have none.
+     */
+    begin(keys: TownBakeKeys, instant: boolean) {
       bakeKeys = keys;
+      const next = ctx.layout();
+      plan = instant || !next ? null : townHostPlan(planned, next);
+      planned = next;
     },
     startGround,
     replaceBuilding,
