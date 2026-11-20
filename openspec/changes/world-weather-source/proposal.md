@@ -19,4 +19,4 @@ None. Existing GitHub/Jira work-source behavior remains applicable to work items
 
 ## Impact
 
-Shared wire types, Sources service/dialog/store, authenticated HTTP and local CLI. No dependencies, Town drawing, additional locations or long forecasts. Authorization is the issue mandate; review remains the delivery boundary.
+Shared wire types, Sources service/dialog/store, authenticated HTTP and local CLI. No dependencies, additional locations or long forecasts. Issue #1041 adds Town drawing behind each browser's Sky choice; the source stays unaware of it. Authorization is the issue mandate; review remains the delivery boundary.

@@ -781,9 +781,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
     **Town calm motion** reduces ambient animation.
-  - Light is Town's status language. The button under **ALL** sets the time
-    of day: it cycles **clock** (follows this device's time), **day**,
-    **dusk** and **night**, and each browser keeps its choice. As the sky
+  - Light is Town's status language. The sky button under **ALL** opens a
+    small **Sky** panel. **Time of day** is **Your clock** (follows this
+    device's time), **Day**, **Dusk** or **Night**. **Weather** is **Real
+    weather** (the default; it follows the [Weather source](#weather-source)
+    and shows its current reading, such as `Rain 7° · Example City`, or why
+    there is none), one held condition (**Clear**, **Cloud**, **Rain**,
+    **Snow**, **Fog**, **Storm** or **Wind**), or **No weather**. **Weather
+    place and source…** opens the Weather source in Settings → Integrations.
+    Each browser keeps both choices; the button shows the weather Town is
+    showing, or the time of day when there is none. As the sky
     darkens, rooms with someone working or waiting on you are lit and quiet
     rooms stay dark; each desk throws its agent's state colour (blue-white
     working, amber waiting on you, green done), and street lamps light the
@@ -794,14 +801,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     A failed host's cached building stays dark. Day leaves the town as
     painted.
   - Town's overlays share one style: the Town board (and its phone chips),
-    the zoom and time-of-day buttons, an agent's peek, toasts, and the hover
+    the zoom and sky buttons, the Sky panel, an agent's peek, toasts, and the hover
     cards of rooms, tables and fuel gauges are the same translucent dark
     panel, with one border, corner, shadow, type and spacing in World's light
     and dark themes, readable over a white roof or the night. Their titles,
     borders, buttons and focus rings are neutral. Amber in them marks only
     what needs you: a **Waiting** count above zero, a waiting agent's peek,
     the first answer to an agent's question and a **low** fuel gauge. The
-    time-of-day button keeps one neutral colour at dusk and night.
+    sky button keeps one neutral colour at dusk and night.
   - The time of day also gives the town depth. By day each building casts a
     sun shadow that swings from left in the morning to right in the evening,
     short at noon and long toward dawn and dusk, and faint cloud shadows drift
@@ -814,6 +821,26 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     redraws only as often as they move a screen pixel, at most 12 times a
     second. Rugs are woven with a bound edge, and room walls shade the floor
     along their foot.
+  - Weather follows the same rules. Clouds thicken and dim the sun; rain
+    falls at a slant with a wet street and puddles on roads and the plaza;
+    snow falls slowly and lies on the ground; fog veils the land in drifting
+    banks; wind speeds the clouds and blows streaks across the town; a
+    storm adds heavy rain, a dark sky and a soft, rare lightning flash. Light
+    real weather still shows clearly, and a held condition shows at moderate
+    strength. Rain, snow and wind streaks fall over the whole visible map,
+    buildings and trees included, at every zoom and scroll position; wet and
+    snowy ground and fog lie under the buildings and cover all the land on
+    screen, the forest around the town included, with no edge. Status light stays above
+    the weather, and dark weather lights rooms, desk colours and lamps as
+    dusk would, so lit rooms, desk colours, the amber reception pulse and the
+    post office read in a storm. Rain, snow and wind streaks keep the same
+    density on screen at every zoom, with a fixed cap (a phone shows a little
+    more than its share so it never looks patchy), and redraw at most 20
+    times a second (snow 12). Under calm motion or reduced motion nothing falls or flashes:
+    the street stays wet, snow lies, fog and cloud hold still, and nothing
+    redraws for the weather. With **No weather**, or when real weather is
+    off, unavailable or expired, Town looks exactly as it does without
+    weather.
   - Zoomed into a room or desk, every agent that needs you outside the view
     gets an arrow on the view's edge pointing at it, with its mark (**!**,
     **?** or **✓**); arrows pointing the same way or at one building merge

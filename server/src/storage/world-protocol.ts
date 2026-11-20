@@ -11,7 +11,7 @@ import type {
   LedgerResult,
   LedgerStore,
 } from "../world/world-ledger";
-import type { Clock, Scheduler } from "../service/ports";
+import type { Clock, Scheduler } from "../service/clock";
 
 export type StoragePorts = { clock: Clock; scheduler: Scheduler };
 export type AttentionState =

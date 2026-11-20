@@ -26,7 +26,7 @@ import {
   Texture,
 } from "pixi.js";
 import type { OfficePaneDevice } from "../herdrOfficeProjection";
-import type { TownSky } from "./townDaylight";
+import { TOWN_NO_WEATHER, type TownSky } from "./townDaylight";
 import {
   TOWN_LOBBY_HEIGHT,
   TOWN_TILE as T,
@@ -278,6 +278,8 @@ export function createTownLighting(options: {
     sun: 1,
     shadowX: 0,
     shadowY: 0,
+    clouds: 1,
+    ...TOWN_NO_WEATHER,
   };
   let drawn = "";
 
