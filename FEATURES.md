@@ -2376,11 +2376,19 @@ and herdr-core alike:
   runtime and open contexts. Other connections and browser sessions stay open.
   Choose another default before removing the current one; explicit service
   Herdr settings still pin the process default. `--restart` remains optional
-  on loopback. A managed service bound to one non-loopback address still needs
-  `--restart` to save and restart; stop a foreground process there before editing.
-  With no listener answering, edits are saved for the next start, including when
-  a managed service is starting or unreachable. Validation errors exit 2;
-  persistence and service failures exit 1, without an offline retry of a live edit.
+  on loopback for the installed service; omit it for a development or preview
+  World. `HERDR_WORLD_DATA_DIR` selects the data folder; its live instance lock
+  records the actual service address, and the CLI uses that folder's own token.
+  `HERDR_WORLD_URL` and `HERDR_WORLD_TOKEN` cannot redirect these edits, and a
+  service owning another registry refuses them. A managed service bound to one
+  non-loopback address still needs `--restart` to save and restart; stop a
+  foreground process there before editing.
+  An unreachable live owner, refused edit or unreadable HTTP reply names the
+  target service and gives recovery steps, without an offline retry. Check that
+  World's data folder, address and live catalogue before retrying, or stop it
+  before editing offline. With no live owner, edits are saved for the next start;
+  for older services without locks, the installed service's configured address
+  is still checked. Validation errors exit 2; persistence and service failures exit 1.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
 - **herdr-core connections.** Open **Hosts → Manage connections → Add

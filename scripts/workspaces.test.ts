@@ -123,7 +123,9 @@ test("CI and release jobs install once from the workspace root", () => {
         (file === "release.yml" &&
           [
             "publish",
-            "published-archives",
+            "archives",
+            "verify",
+            "publication-status",
             "npm-publish",
             "homebrew-pr",
             "homebrew-smoke",
