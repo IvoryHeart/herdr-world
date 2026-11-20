@@ -88,7 +88,11 @@ test("wings go yours, projects, agents; instructions first, the index first", ()
 test("a reader sees only the shelves it reads", () => {
   const docs = libraryWings(catalog, { kind: "agent", id: "p3" });
   const ids = docs.flatMap((w) => w.shelves.map((s) => s.source.id));
-  expect(ids.sort()).toEqual(["fx-claude-user", "fx-docs-agents"]);
+  expect(ids.sort()).toEqual([
+    "fx-claude-user",
+    "fx-docs-agents",
+    "fx-docs-memory",
+  ]);
   const web = libraryWings(catalog, { kind: "project", id: "w1" });
   expect(web.flatMap((w) => w.shelves).length).toBe(8);
 });

@@ -346,6 +346,16 @@ export function MemoryShelves({
                   <FilePlus2 size={14} aria-hidden="true" /> Create{" "}
                   {fileSourceName(source)}
                 </button>
+              ) : source.state === "missing" ? (
+                // A fresh project has no auto-memory folder yet; the first
+                // note creates it (the API makes a missing source folder).
+                <button
+                  type="button"
+                  className="memory-create"
+                  onClick={() => onAdd(source, null)}
+                >
+                  <FilePlus2 size={14} aria-hidden="true" /> Add the first note
+                </button>
               ) : entries.length === 0 ? (
                 <p className="memory-hint">Empty shelf.</p>
               ) : (

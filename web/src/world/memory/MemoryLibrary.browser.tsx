@@ -7,8 +7,8 @@ import { memoryFixtureTouch, setMemoryFixtureForTests } from "./memoryFixture";
 /*
  * The Library (#1027) against its synthetic host (the `?memoryFixture`
  * switch): browse what an agent loads, read a book, edit and save, a save
- * that conflicts, the delete confirmation, a new note and search, on a
- * laptop and a phone. Every path and name is invented.
+ * that conflicts, the delete confirmation, a new note, the first note in a
+ * missing memory folder and search, on a laptop and a phone. Every path and name is invented.
  */
 
 const phone = innerWidth < 640;
@@ -211,6 +211,33 @@ async function run() {
     "Load latest never read theirs",
   );
 
+  // The switch's uncertain write keeps your text on the revision you read,
+  // so saving again conflicts with the edit made elsewhere.
+  byText(".memory-book .memory-actions button", "Edit")!.click();
+  type(
+    await waitFor(() => $<HTMLTextAreaElement>(".memory-text"), "no editor"),
+    "lost [uncertain]",
+  );
+  byText(".memory-book .memory-actions button", "Save")!.click();
+  await waitFor(
+    () => byText(".memory-notice", "doesn't match your text"),
+    "an uncertain save gave no reconcile notice",
+  );
+  check(
+    $<HTMLTextAreaElement>(".memory-text")?.value === "lost [uncertain]",
+    "the uncertain save lost your text",
+  );
+  byText(".memory-book .memory-actions button", "Save")!.click();
+  await waitFor(
+    () => byText(".memory-notice", "changed on the host"),
+    "saving again after an uncertain save did not conflict",
+  );
+  byText(".memory-notice button", "Load latest")!.click();
+  await waitFor(
+    () => content().includes("Edited elsewhere"),
+    "Load latest never read the edit made elsewhere",
+  );
+
   // Delete asks first; Keep it keeps it.
   byText(".memory-book .memory-actions button", "Delete")!.click();
   const confirm = await waitFor(
@@ -230,7 +257,7 @@ async function run() {
     () => !$('[role="alertdialog"]'),
     "Keep it did not close the question",
   );
-  check(content().includes("Theirs."), "Keep it lost the book");
+  check(content().includes("Edited elsewhere"), "Keep it lost the book");
   byText(".memory-book .memory-actions button", "Delete")!.click();
   await waitFor(() => $('[role="alertdialog"]'), "Delete did not ask again");
   byText('[role="alertdialog"] button', /^Delete$/)!.click();
@@ -304,6 +331,23 @@ async function run() {
     "docs-writer sees web-app's shelves",
   );
   await fits("another reader");
+
+  // A fresh project's missing memory folder takes its first note.
+  byText(".memory-create", "Add the first note")!.click();
+  type(
+    await waitFor(
+      () => $<HTMLInputElement>('input[aria-label="Note name"]'),
+      "Add the first note opened no name",
+    ),
+    "first",
+  );
+  type($<HTMLTextAreaElement>(".memory-text")!, "# First\n\nHello.\n");
+  byText(".memory-book .memory-actions button", "Create")!.click();
+  await waitFor(
+    () => book("first.md") && content().includes("Hello."),
+    "the first note in a missing folder never opened",
+  );
+  await backToShelves();
 
   // Escape closes the Library.
   const search = $<HTMLInputElement>('input[aria-label="Search memory"]')!;

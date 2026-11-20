@@ -41,6 +41,11 @@ import "./memoryLibrary.css";
  * only through that host's connection and generation; contents live in this
  * dialog's state and leave with it. Desktop shows readers, shelves and the
  * open book side by side; a phone shows one at a time with Back.
+ *
+ * The chosen host is explicit (the request's, or the one picked in Host):
+ * when its connection goes away the Library says so and never falls through
+ * to another host, whose agents may share native IDs. Any host or reader
+ * change retires replies still in flight (catalog, search, book).
  */
 
 type Pane = "shelves" | "book";
@@ -66,17 +71,21 @@ export function MemoryLibrary({
     if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
   }, []);
   const hosts = memoryHosts();
-  const [hostId, setHostId] = useState(
-    () =>
-      hosts.find((host) => host.connection_id === request.connectionId)
-        ?.connection_id ??
-      hosts[0]?.connection_id ??
-      null,
+  // Only an open with no host named, before any host is known, takes the
+  // first one to appear; a named or picked host is never replaced silently.
+  // The testing switch has one synthetic host, which stands for any named one.
+  const [hostId, setHostId] = useState<string | null>(() =>
+    memoryFixtureOn()
+      ? (hosts[0]?.connection_id ?? null)
+      : (request.connectionId ?? hosts[0]?.connection_id ?? null),
   );
+  useEffect(() => {
+    if (hostId === null && hosts[0]) setHostId(hosts[0].connection_id);
+  }, [hostId, hosts]);
   const host =
-    hosts.find((candidate) => candidate.connection_id === hostId) ??
-    hosts[0] ??
-    null;
+    hosts.find((candidate) => candidate.connection_id === hostId) ?? null;
+  const hostLabel = useRef<string | null>(null);
+  if (host) hostLabel.current = host.label;
   const hostKey = host ? memoryTargetKey(host) : null;
   const state = host ? memoryCatalogState(host) : null;
   const catalog = state?.catalog ?? null;
@@ -91,16 +100,29 @@ export function MemoryLibrary({
   const [searchError, setSearchError] = useState<string | null>(null);
   const searchToken = useRef(0);
 
-  // Opening reads the host fresh; another host (or generation) starts over.
+  // Opening reads the host fresh; another host (or generation), or losing
+  // it, starts over and retires a search still under way.
   useEffect(() => {
-    if (!host) return;
-    void requestMemoryCatalog(host, { force: true });
+    searchToken.current += 1;
+    setSearching(false);
+    setSearchError(null);
     setBook(null);
     setSearch(null);
     setPane("shelves");
-    searchToken.current += 1;
+    if (host) void requestMemoryCatalog(host, { force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hostKey]);
+
+  // Another reader (picked, or a gone one replaced) retires a search still
+  // under way, so its matches never show under the new reader.
+  const readerKey =
+    reader.kind === "all" ? "all" : `${reader.kind}:${reader.id}`;
+  useEffect(() => {
+    searchToken.current += 1;
+    setSearching(false);
+    setSearchError(null);
+    setSearch(null);
+  }, [readerKey]);
 
   // A reader the host doesn't have (gone, or another host's) shows everything;
   // the testing switch maps any agent to its first one.
@@ -197,7 +219,30 @@ export function MemoryLibrary({
           <CloseButton onClick={onClose} label="Close library" />
         </div>
 
-        {!host ? (
+        {!host && hostId !== null ? (
+          <div className="memory-empty-state memory-gone" role="status">
+            <p>
+              {hostLabel.current ?? "This host"} is no longer connected, so its
+              memory is unavailable here.
+            </p>
+            {hosts.length ? (
+              <div className="memory-actions">
+                {hosts.map((candidate) => (
+                  <button
+                    key={candidate.connection_id}
+                    type="button"
+                    onClick={() => {
+                      setHostId(candidate.connection_id);
+                      setReader(ALL_READERS);
+                    }}
+                  >
+                    Open {candidate.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : !host ? (
           <p className="memory-empty-state">
             No connected host to read memory from. Connect one in Hosts, then
             open the Library again.

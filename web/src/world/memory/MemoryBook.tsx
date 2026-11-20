@@ -23,6 +23,12 @@ import {
  * its explicit actions. Nothing saves by itself: Edit, then Save; Delete,
  * then confirm. A save with an old revision conflicts and keeps your text;
  * an unknown outcome reads the file again before anything else.
+ *
+ * A draft keeps the revision it was started from (`base`), not whatever the
+ * book read last: a recovery read after an uncertain save adopts the host's
+ * revision only when the host already holds the draft (the save landed).
+ * Otherwise the draft stays on its old base, so the next Save conflicts if
+ * anyone else changed the file, and Load latest shows their text.
  */
 
 /** What the book pane shows: an existing file, or a new one to write. */
@@ -71,6 +77,10 @@ export function MemoryBook({
   const [draft, setDraft] = useState<string | null>(
     open.kind === "new" ? "" : null,
   );
+  /** The revision the draft was started from; Save sends only this one. */
+  const [base, setBase] = useState<string | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -79,7 +89,11 @@ export function MemoryBook({
   const deleteRef = useRef<HTMLButtonElement>(null);
   const refused = open.kind === "entry" && open.entry.state === "refused";
 
-  const read = (keepDraft: boolean) => {
+  /**
+   * Read the file fresh. `recover` follows an uncertain save: the draft
+   * stays unless the host already holds exactly it.
+   */
+  const read = (recover = false) => {
     if (open.kind !== "entry" || refused) return;
     const mine = ++token.current;
     setReading(true);
@@ -94,7 +108,24 @@ export function MemoryBook({
             modified: result.modified_at,
             size: result.size,
           });
-          if (!keepDraft) setDraft(null);
+          const draftNow = draftRef.current;
+          if (!recover || draftNow === null) {
+            setDraft(null);
+            setBase(null);
+          } else if (draftNow === result.content) {
+            // The uncertain save landed: the host has the draft.
+            setDraft(null);
+            setBase(null);
+            setNotice({
+              tone: "info",
+              text: "Saved. World read the file again and it has your text.",
+            });
+          } else
+            setNotice({
+              tone: "warn",
+              text: "World can't tell whether that went through, and the file on the host doesn't match your text. Your text is still here: Save again only succeeds if nobody else changed the file; Load latest shows the host's text (yours is lost).",
+              reload: true,
+            });
         },
         (error: unknown) => {
           if (mine !== token.current) return;
@@ -112,11 +143,12 @@ export function MemoryBook({
     token.current += 1;
     setLoaded(null);
     setDraft(open.kind === "new" ? "" : null);
+    setBase(null);
     setName("");
     setNotice(null);
     setConfirming(false);
     setBusy(false);
-    read(false);
+    read();
     // `read` closes over this identity's props.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity]);
@@ -125,7 +157,7 @@ export function MemoryBook({
     if (confirming) deleteRef.current?.focus();
   }, [confirming]);
 
-  const fail = (error: unknown, keep: boolean) => {
+  const fail = (error: unknown, recover: boolean) => {
     const code = memoryErrorCode(error);
     if (code === "conflict")
       setNotice({
@@ -133,12 +165,18 @@ export function MemoryBook({
         text: "This file changed on the host since you opened it. Your text is still here; load the latest to see theirs (yours is lost).",
         reload: true,
       });
-    else if (code === "uncertain") {
+    else if (code === "uncertain" && open.kind === "new") {
       setNotice({
         tone: "warn",
-        text: "World can't tell whether that went through. It read the file again; check it before trying again.",
+        text: "World can't tell whether the note was created. It is reading the shelves again; check them before trying again.",
       });
-      read(keep);
+      onChanged();
+    } else if (code === "uncertain") {
+      setNotice({
+        tone: "warn",
+        text: "World can't tell whether that went through. It is reading the file again; check it before trying again.",
+      });
+      read(recover);
     } else setNotice({ tone: "error", text: memoryErrorText(error) });
   };
 
@@ -159,14 +197,8 @@ export function MemoryBook({
       }
       job = client.create(target, source.id, created, draft);
     } else {
-      if (!loaded) return setBusy(false);
-      job = client.update(
-        target,
-        source.id,
-        open.entry.path,
-        loaded.revision,
-        draft,
-      );
+      if (!base) return setBusy(false);
+      job = client.update(target, source.id, open.entry.path, base, draft);
     }
     job.then(
       () => {
@@ -179,13 +211,13 @@ export function MemoryBook({
             tone: "info",
             text: "Saved. Agents see it the next time they load it.",
           });
-          read(false);
+          read();
         }
       },
       (error: unknown) => {
         if (mine !== token.current) return;
         setBusy(false);
-        fail(error, true);
+        fail(error, open.kind === "entry");
       },
     );
   };
@@ -287,7 +319,7 @@ export function MemoryBook({
               type="button"
               onClick={() => {
                 setNotice(null);
-                read(false);
+                read();
               }}
             >
               Load latest
@@ -327,7 +359,7 @@ export function MemoryBook({
               type="button"
               className="memory-primary"
               onClick={save}
-              disabled={busy || (open.kind === "entry" && !loaded)}
+              disabled={busy || (open.kind === "entry" && !base)}
             >
               {busy ? "Saving…" : open.kind === "new" ? "Create" : "Save"}
             </button>
@@ -337,7 +369,10 @@ export function MemoryBook({
               onClick={() => {
                 setNotice(null);
                 if (open.kind === "new") onBack();
-                else setDraft(null);
+                else {
+                  setDraft(null);
+                  setBase(null);
+                }
               }}
             >
               Cancel
@@ -354,7 +389,11 @@ export function MemoryBook({
           <div className="memory-actions">
             <button
               type="button"
-              onClick={() => setDraft(loaded?.content ?? "")}
+              onClick={() => {
+                if (!loaded) return;
+                setDraft(loaded.content);
+                setBase(loaded.revision);
+              }}
               disabled={!loaded || busy}
             >
               <Pencil size={14} aria-hidden="true" /> Edit

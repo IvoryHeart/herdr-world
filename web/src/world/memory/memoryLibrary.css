@@ -454,6 +454,15 @@
   font-size: 13px;
 }
 
+.memory-gone {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.memory-gone p {
+  margin: 0;
+}
+
 .memory-pick {
   justify-content: center;
   height: 100%;

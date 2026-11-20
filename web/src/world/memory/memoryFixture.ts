@@ -14,12 +14,19 @@ import type { MemoryClient } from "./memoryClient";
  * this page only, instead of any real host's. The page drops the parameter
  * at once; a reload ends it. It has every state worth seeing: shared and
  * stale files, a file another hides, an empty one, a refused one, a missing
- * file to create and an agent whose harness has no reader. Edits, adds and
- * deletes work and conflicts can be forced (`memoryFixtureTouch`). Paths
+ * file to create, a missing memory folder whose first note creates it and
+ * an agent whose harness has no reader. Edits, adds and
+ * deletes work and conflicts can be forced (`memoryFixtureTouch`); saving
+ * text with `[uncertain]` in it acts out a lost, uncertain write. Paths
  * are synthetic and nothing reaches a host.
  */
 
 const PARAM = "memoryFixture";
+/**
+ * Saving text that contains this makes the synthetic host lose the write,
+ * change the file as another editor would and answer "uncertain".
+ */
+export const UNCERTAIN_MARK = "[uncertain]";
 let on: boolean | undefined;
 
 /** The switch, read once per page load; the parameter is removed. */
@@ -61,6 +68,8 @@ const HOME = "/users/example";
 type FixtureFile = { content: string; modified: number; revision: number };
 type FixtureSource = Omit<MemorySource, "state"> & {
   refused?: string;
+  /** A folder that does not exist yet (until a note is created in it). */
+  absent?: boolean;
   /** Per-file harness modes other than the source's timing. */
   modes?: Record<
     string,
@@ -199,6 +208,20 @@ function seed(now: number): FixtureLibrary {
       agent_ids: ["p3"],
     }),
     source({
+      id: "fx-docs-memory",
+      harnesses: ["claude"],
+      kind: "memory",
+      scope: "project",
+      path: `${HOME}/.claude/projects/-workspace-docs-site/memory`,
+      shape: "directory",
+      load: "startup-candidate",
+      description: "Claude's auto memory for this project",
+      details: { claude: "MEMORY.md loads at start; topic files when needed" },
+      project_ids: ["w2"],
+      agent_ids: ["p3"],
+      absent: true,
+    }),
+    source({
       id: "fx-reviewer-memory",
       harnesses: ["claude"],
       kind: "memory",
@@ -314,43 +337,51 @@ function catalog(target: MemoryTarget): MemoryCatalog {
   const now = Date.now();
   const { sources, files } = lib();
   const entries: MemoryEntry[] = [];
-  const out: MemorySource[] = sources.map(({ refused, modes, ...rest }) => {
-    const prefix = `${rest.id}\u0000`;
-    const own = [...files.entries()].filter(([k]) => k.startsWith(prefix));
-    for (const [k, file] of own) {
-      const path = k.slice(prefix.length);
-      const size = bytes(file.content);
-      const age = now - file.modified;
-      const loads: MemoryEntry["harness_loads"] = {};
-      for (const harness of rest.harnesses) {
-        const timing =
-          rest.id === "fx-web-memory" && path !== "MEMORY.md"
-            ? "on-demand"
-            : rest.load;
-        loads[harness] =
-          size === 0
-            ? { mode: "empty" }
-            : (modes?.[path]?.[harness] ?? { mode: timing });
+  const out: MemorySource[] = sources.map(
+    ({ refused, modes, absent, ...rest }) => {
+      const prefix = `${rest.id}\u0000`;
+      const own = [...files.entries()].filter(([k]) => k.startsWith(prefix));
+      for (const [k, file] of own) {
+        const path = k.slice(prefix.length);
+        const size = bytes(file.content);
+        const age = now - file.modified;
+        const loads: MemoryEntry["harness_loads"] = {};
+        for (const harness of rest.harnesses) {
+          const timing =
+            rest.id === "fx-web-memory" && path !== "MEMORY.md"
+              ? "on-demand"
+              : rest.load;
+          loads[harness] =
+            size === 0
+              ? { mode: "empty" }
+              : (modes?.[path]?.[harness] ?? { mode: timing });
+        }
+        entries.push({
+          id: `fx-${entries.length + 1}`,
+          source_id: rest.id,
+          path,
+          size,
+          modified_at: file.modified,
+          age_ms: age,
+          stale: age > MEMORY_LIMITS.stale_ms,
+          state: "available",
+          load: rest.load,
+          harness_loads: loads,
+        });
       }
-      entries.push({
-        id: `fx-${entries.length + 1}`,
-        source_id: rest.id,
-        path,
-        size,
-        modified_at: file.modified,
-        age_ms: age,
-        stale: age > MEMORY_LIMITS.stale_ms,
-        state: "available",
-        load: rest.load,
-        harness_loads: loads,
-      });
-    }
-    if (refused) return { ...rest, state: "refused", reason: refused };
-    const missing = rest.shape === "file" && own.length === 0;
-    return missing
-      ? { ...rest, state: "missing", reason: "The file does not exist yet" }
-      : { ...rest, state: "available" };
-  });
+      if (refused) return { ...rest, state: "refused", reason: refused };
+      if (own.length === 0 && (rest.shape === "file" || absent))
+        return {
+          ...rest,
+          state: "missing",
+          reason:
+            rest.shape === "file"
+              ? "The file does not exist yet"
+              : "The folder does not exist yet",
+        };
+      return { ...rest, state: "available" };
+    },
+  );
   return {
     ...target,
     observed_at: now,
@@ -482,6 +513,7 @@ export function memoryFixtureClient(): MemoryClient {
         fail("invalid", "A file source takes only its own name");
       const k = key(sourceId, path);
       if (lib().files.has(k)) fail("conflict", "A file with that name exists");
+      found.absent = false;
       lib().files.set(k, { content, modified: Date.now(), revision: 1 });
       return {
         ...target,
@@ -498,6 +530,16 @@ export function memoryFixtureClient(): MemoryClient {
       if (!file) fail("not_found", "The file is gone");
       if (`r${file.revision}` !== revision)
         fail("conflict", "The file changed since you opened it");
+      if (content.includes(UNCERTAIN_MARK)) {
+        // The testing switch's lost write: someone else edits the file and
+        // the host stops answering, so World can't tell what happened.
+        memoryFixtureTouch(
+          sourceId,
+          path,
+          `${file.content.trimEnd()}\n\nEdited elsewhere meanwhile.\n`,
+        );
+        fail("uncertain", "The host stopped answering");
+      }
       file.content = content;
       file.modified = Date.now();
       file.revision += 1;

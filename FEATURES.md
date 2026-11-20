@@ -204,22 +204,32 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   file") or empty. Discovery cannot prove what a running agent already loaded.
 - Shelves group files by source, `MEMORY.md` first. Each file shows its size, its
   age (stale after 30 days) and who else reads it. Refused sources and files say
-  why; a missing instruction file offers **Create**; harnesses World cannot read
+  why; a missing instruction file offers **Create** and a missing memory folder
+  (a fresh project) offers **Add the first note**, which creates the folder;
+  harnesses World cannot read
   say so; truncated lists and searches say they show the first ones only.
 - Opening a book reads it fresh from its host. **Edit** then **Save** writes it
   with the revision you read. If the file changed meanwhile, the save is refused,
   your text stays and **Load latest** shows theirs. When World can't tell whether a
-  write landed, it reads the file again and asks you to check. **Delete** asks
+  write landed, it reads the file again: if the host has your text it says
+  Saved; otherwise your text stays on the revision you started from, so saving
+  again is refused if anyone else changed the file. **Delete** asks
   first, focused on its button, with **Keep it**; deleting a topic says if
   `MEMORY.md` still lists it. **+** on a shelf adds a note, reminding you to add
   Claude topics to `MEMORY.md`. Reload the harness to pick up changes.
 - **Search** runs on submit over the chosen reader's files; tap a match to open it.
+  Choosing another reader or host drops a search still under way.
+- The Library stays on the host it opened on or you picked. If that host
+  disconnects, it says the host's memory is unavailable and offers the other
+  hosts; it never shows another host's agent in its place.
   Escape, system Back or the close button closes the Library; on a phone a book
   shows one pane with its own **Back** to the shelves. Opening the Library reads
   the host again. File contents are never cached; only the sign's counts are.
 - To try it without real memory, open World with `?memoryFixture`: a synthetic
   host with two projects, four agents, shared, stale, shadowed, empty, missing and
   refused files. The page drops the parameter at once; edits stay in the page.
+  Saving text that contains `[uncertain]` acts out a write whose outcome is
+  unknown while someone else edits the file.
 
 ## World update notifications
 
