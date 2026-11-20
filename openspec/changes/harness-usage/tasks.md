@@ -2,9 +2,10 @@
 
 Implementation delivered; the November audit retains this change because
 later limits/context/tap acceptance is not established by base PR #642 alone,
-and the new stale-lock counterexample violates the window-maxima contract.
-Q55 and issue #1086 record the actual 20 → 23 → 22 trace; this is unfinished
-repair/acceptance, not an unsynchronized delivered requirement.
+and the audit found a stale-lock violation of the window-maxima contract.
+Issue #1086 repairs publication ownership; Q55 now records positive model and
+consumer conformance with the original 20 → 23 → 22 trace retained as a fault
+control. Broader limits/context/tap acceptance remains unfinished.
 
 Delivered requirements are synchronized into [the current contract](../../specs/world-usage/spec.md).
 No unsynchronized requirement delta remains in this record; unfinished tasks
@@ -32,7 +33,7 @@ and acceptance above keep the change active.
 
 ## Audit follow-up
 
-- [ ] Repair #1086's stale-owner commit protocol and replace Q55's expected
+- [x] Repair #1086's stale-owner commit protocol and replace Q55's expected
   counterexample with positive model/consumer conformance.
 - [ ] Reconcile independent acceptance of later subscription/context/tap
   consumers (#717, #727, #750, #853); #642's numeric-reader review is narrower.

@@ -62,15 +62,15 @@ SHALL be left out of fresh totals; partial coverage, missing hosts and pricing
 limits SHALL remain explicit. Unattributed usage already included in the city
 total SHALL NOT be added a second time or guessed onto a room. Boards SHALL
 offer a short caveat line with the full explanations available on hover or focus.
-The post office SHALL project the user's open pull requests from Sources and
-open the existing pull-request card; it SHALL NOT own another source poll,
+The warehouse on the harbour shore (world-shipyard) SHALL project the user's
+open pull requests from Sources and open the existing pull-request card; it SHALL NOT own another source poll,
 readiness rule or merge authority. Closed/unconfigured/error Sources SHALL
 remain distinguishable from an empty successful result.
 
-#### Scenario: A merged pull request leaves the post office
+#### Scenario: A merged pull request leaves the warehouse
 
 - **WHEN** a subsequent admitted Sources observation reports a displayed PR merged
-- **THEN** its parcel leaves the open yard and its card and merge history use the
+- **THEN** its crate leaves the open yard and its card and merge history use the
   same source identity, without treating an absent or failed observation as a merge
 
 ### Requirement: Return recaps use observed history

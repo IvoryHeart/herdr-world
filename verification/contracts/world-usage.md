@@ -57,8 +57,9 @@ and verb-policy models continue to supply operation authority.
 Deterministic parser and service matrices exercise the actual numeric adapters
 and all relevant lease transitions. A new state machine would duplicate a pure
 projection while the existing runtime manager remains the source of lease
-authority. Direct evidence is therefore selected; no expanded model proof or
-new platform conformance is claimed.
+authority. Direct evidence is selected for numeric projection. The separately bounded
+[Claude tap ownership model](claude-tap-lock.md) covers publication/recovery;
+it does not expand the numeric projection or platform claims.
 
 - `server/src/usage/projection.test.ts`: response deduplication, cumulative
   high-water recovery, model/cache conventions, unknown baselines and UTC bounds.
@@ -94,9 +95,11 @@ new platform conformance is claimed.
 - `claude-tap.test.ts`: the tap records only numbers, keeps the highest
   reading per window when sessions write out of order (a later `resets_at`
   starts fresh, an earlier one never replaces it) and serializes
-  read-merge-replace under a lock file (an interleaved tap cannot lower it;
-  a waiting tap merges with the holder's commit; a dead tap's lock is
-  cleared and a tap that lost its lock commits nothing), finds the user's status
+  read-merge-replace under a process-owned nonempty lock directory (an
+  interleaved tap cannot lower it; a waiting tap merges with the holder's commit;
+  only confirmed-dead processes are recovered and delayed cleanup cannot remove
+  a replacement's directory); `quint/claude-tap-lock.test.ts` exercises the
+  suspension boundaries, including the final check/rename interval, finds the user's status
   line by Claude Code's precedence without recursing, and as a real program
   passes the same input to it and its output and exit code through unchanged;
   Claude launches retain their per-launch settings, including chaining through an installed host-wide tap.

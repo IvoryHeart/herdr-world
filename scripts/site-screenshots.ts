@@ -183,7 +183,7 @@ export async function runSiteScreenshots(options: {
             'window.siteLoaded = new Promise(r => addEventListener("load", r, { once: true }));',
         });
         await command("Page.navigate", {
-          url: `${server.url.href}?view=${shot.view ?? "town"}&townPostFixture`,
+          url: `${server.url.href}?view=${shot.view ?? "town"}&townWarehouseFixture`,
         });
         const evaluate = async (expression: string) => {
           const result = await command("Runtime.evaluate", {

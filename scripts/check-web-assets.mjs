@@ -44,7 +44,10 @@ const maxFileCount = 212;
 // grew under it to 13 KB of headroom; 15.3 MiB carries both, initial budgets
 // unchanged (2026-11-19). The lazy #1035 Settings adds about 35 KiB
 // on top of it (15.31 MiB together, so 15.4 MiB on 2026-11-20).
-const maxTotalBytes = 15.4 * 1024 * 1024;
+// The Town harbour and warehouse (#1028) fit main alone, but main's Library
+// (#1082) grew under it: 15.42 MiB together, so 15.5 MiB, initial budgets
+// unchanged (2026-11-20).
+const maxTotalBytes = 15.5 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;

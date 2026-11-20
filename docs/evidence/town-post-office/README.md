@@ -1,5 +1,9 @@
 # Town post office (#760)
 
+History: since #1028 the pull requests are the warehouse's crates on the
+harbour's shore (`TownWarehouse.tsx`, `?townWarehouseFixture`); the post
+office holds none.
+
 Synthetic composite captures from 2026-11-08. A scratch page draws the
 production post office art (`paintTownPostHouse`, `paintTownPostYard`) at its
 layout lot for a one-building wide town, plus a plain street and park walk,
