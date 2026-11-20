@@ -11,6 +11,7 @@ import "./styles/base.css";
 import "./styles/vendor.css";
 import { OverlayScrollbarLayer } from "./components/OverlayScrollbarLayer";
 import TitleSpinnerFixture from "./testing/TitleSpinnerFixture";
+import ClaudeTapLockFixture from "./testing/ClaudeTapLockFixture";
 
 // Testing-only preview: consume the switch before view routing rewrites the URL.
 const previewUrl = new URL(location.href);
@@ -21,10 +22,14 @@ if (paneChatFixture) {
 }
 const PaneChatFixture = React.lazy(() => import("./testing/PaneChatFixture"));
 const titleSpinnerFixture = previewUrl.searchParams.has("titleSpinnerFixture");
+const claudeTapLockFixture = previewUrl.searchParams.has(
+  "claudeTapLockFixture",
+);
 const boardTextConflictFixture = previewUrl.searchParams.has(
   "boardTextConflictFixture",
 );
-if (titleSpinnerFixture || boardTextConflictFixture) {
+if (titleSpinnerFixture || claudeTapLockFixture || boardTextConflictFixture) {
+  previewUrl.searchParams.delete("claudeTapLockFixture");
   previewUrl.searchParams.delete("titleSpinnerFixture");
   previewUrl.searchParams.delete("boardTextConflictFixture");
   history.replaceState(history.state, "", previewUrl);
@@ -76,7 +81,10 @@ coreFixtureEnabled();
 coreInstallFake();
 integrationsFixtureEnabled();
 const stopInstanceNameSync =
-  titleSpinnerFixture || paneChatFixture || boardTextConflictFixture
+  titleSpinnerFixture ||
+  paneChatFixture ||
+  claudeTapLockFixture ||
+  boardTextConflictFixture
     ? () => {}
     : initializeInstanceName();
 if (import.meta.hot) import.meta.hot.dispose(stopInstanceNameSync);
@@ -89,6 +97,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <PaneChatFixture />
         ) : titleSpinnerFixture ? (
           <TitleSpinnerFixture />
+        ) : claudeTapLockFixture ? (
+          <ClaudeTapLockFixture />
         ) : boardTextConflictFixture ? (
           <BoardTextConflictFixture />
         ) : (

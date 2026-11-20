@@ -22,6 +22,11 @@ and [stale Claude tap publication (#1086)](https://github.com/IvoryHeart/herdr-w
 Both are `crew:ready`, with production traces. Neither is hidden by a new safety
 claim or fixed by an out-of-scope protocol rewrite.
 
+Subsequent repair #1086 replaces Q55's diagnostic with positive model and
+real-filesystem conformance across eight live/dead writer schedules. Its original
+counterexample remains a rejected fault control; the tables below retain the
+audit-time findings. See [the current tap contract](contracts/claude-tap-lock.md).
+
 | First-parent change | Contract added/changed, if any | Current spec coverage | O/W/A/R | What verifies it today |
 | --- | --- | --- | --- | --- |
 | `7e41a1dd3` Integrations v1: one registry and one Integrations screen (#1026) | Unified read-only integration registry and private vault | S: registry/vault (added) | W,A,R | Q58 direct unit: server/src/integrations/registry.test.ts, server/src/integrations/vault.test.ts; browser: web/src/configuration.browser.tsx |

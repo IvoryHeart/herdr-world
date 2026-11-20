@@ -1,8 +1,6 @@
+import { runTapLockVerification } from "./claude-tap-lock-verification";
 import { composedCases, replayTracesPerSeed } from "./composed-cases";
-import {
-  runRegistryVerification,
-  runTapLockExploration,
-} from "./connection-registry-verification";
+import { runRegistryVerification } from "./connection-registry-verification";
 import { runCoreVerification } from "./herdr-core-verification";
 import { runSeenVerification } from "./herdr-core-seen";
 import { replayEffectRecovery } from "./effect-recovery";
@@ -681,19 +679,20 @@ export async function runReviewedQuintModels(
     );
     const results = [];
     for (const item of runCases) {
-      if (item.name === "claude-tap-lock") {
-        const result = await runTapLockExploration({ command });
-        results.push(result);
-        console.log(JSON.stringify(result));
-        continue;
-      }
-      if (item.name === "connection-registry") {
-        const result = await runRegistryVerification({
+      if (
+        item.name === "claude-tap-lock" ||
+        item.name === "connection-registry"
+      ) {
+        const verify =
+          item.name === "claude-tap-lock"
+            ? runTapLockVerification
+            : runRegistryVerification;
+        const result = await verify({
           root,
           output,
           artifacts,
           command,
-          mutate: () => implementationMutation("connection-registry"),
+          mutate: () => implementationMutation(item.name),
         });
         results.push(result);
         console.log(JSON.stringify(result));
