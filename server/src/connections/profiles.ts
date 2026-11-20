@@ -22,6 +22,7 @@ import { nativeSocketPath } from "../config/server-config";
 import { worldEnv } from "../config/environment";
 import { validateConnectionId } from "./protocol";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "./types";
+import { acquireRegistryOwnership } from "./registry-ownership";
 import { hostId, type HostProfile, validateHostProfile } from "./hosts";
 
 export const CONNECTION_PROFILE_FILE_VERSION = 3;
@@ -250,6 +251,9 @@ export function validateLocalConnectionProfile(
   };
 }
 
+/** Longest remote socket path a profile may name, leaving room under sun_path. */
+export const REMOTE_SOCKET_PATH_MAX_BYTES = 100;
+
 function validateRemoteSocketPath(value: unknown, field: string): string {
   // An empty path asks the bridge to infer the default Herdr socket location
   // under the remote home directory at connect time.
@@ -257,7 +261,7 @@ function validateRemoteSocketPath(value: unknown, field: string): string {
   if (
     typeof value !== "string" ||
     value.length < 2 ||
-    Buffer.byteLength(value, "utf8") > 100 ||
+    Buffer.byteLength(value, "utf8") > REMOTE_SOCKET_PATH_MAX_BYTES ||
     !value.startsWith("/") ||
     !/^[\x21-\x7e]+$/.test(value) ||
     /[:\\\s]/.test(value)
@@ -594,6 +598,8 @@ export class ConnectionProfileStore {
   readonly path: string;
   private writeQueue: Promise<void> = Promise.resolve();
   #closed = false;
+  #serviceOwnership?: () => void;
+  #closing?: Promise<void>;
 
   constructor(private readonly options: ConnectionProfileStoreOptions = {}) {
     this.path = options.path ?? defaultConnectionProfilesPath();
@@ -663,10 +669,54 @@ export class ConnectionProfileStore {
     return validateConnectionRegistry(parsed);
   }
 
-  /** Refuse every later write, then settle once the queued ones finish. */
+  /** Take ownership before bootstrap; retain it through the final storage drain. */
+  async acquireServiceOwnership(): Promise<void> {
+    if (this.#closed) throw new Error("World storage is closed");
+    this.prepareOwnership();
+    const release = await acquireRegistryOwnership(this.path, "service");
+    if (this.#closed) {
+      release();
+      throw new Error("World storage is closed");
+    }
+    this.#serviceOwnership = release;
+  }
+
+  /** The caller must read its snapshot inside this scope, then await its write. */
+  async withOwnership<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.#closed) throw new Error("World storage is closed");
+    if (this.#serviceOwnership) return operation();
+    this.prepareOwnership();
+    const release = await acquireRegistryOwnership(this.path, "edit");
+    try {
+      if (this.#closed) throw new Error("World storage is closed");
+      return await operation();
+    } finally {
+      release();
+    }
+  }
+
+  private prepareOwnership(): void {
+    const parent = dirname(this.path);
+    assertNotSymlink(this.path);
+    assertNotSymlink(parent);
+    mkdirSync(parent, { recursive: true, mode: 0o700 });
+    const stat = lstatSync(parent);
+    if (!stat.isDirectory())
+      throw new Error("connection registry parent is not a directory");
+    if (process.platform !== "win32" && (stat.mode & 0o077) !== 0) {
+      if (!this.canHardenDefaultPath())
+        throw new Error("connection registry parent permissions must be 0700");
+      chmodSync(parent, 0o700);
+    }
+  }
+
+  /** Refuse later writes and release service ownership only after the drain. */
   close(): Promise<void> {
     this.#closed = true;
-    return this.writeQueue;
+    return (this.#closing ??= this.writeQueue.then(() => {
+      this.#serviceOwnership?.();
+      this.#serviceOwnership = undefined;
+    }));
   }
 
   save(registry: PersistedConnectionRegistry): Promise<void> {

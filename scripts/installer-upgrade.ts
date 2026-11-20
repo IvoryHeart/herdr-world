@@ -243,8 +243,9 @@ export function runtimeEnvironment(home: string): NodeJS.ProcessEnv {
     PORT: "0",
     OPEN_BROWSER: "0",
     HERDR_WORLD_PASSWORD: "installer-upgrade-fixture-password",
-    HERDR_WORLD_CONNECTIONS_PATH: join(home, "connections.json"),
-    HERDR_CONNECTIONS_PATH: join(home, "connections.json"),
+    // Storage creates this dedicated parent privately; HOME itself may be 0755.
+    HERDR_WORLD_CONNECTIONS_PATH: join(home, "connections", "connections.json"),
+    HERDR_CONNECTIONS_PATH: join(home, "connections", "connections.json"),
     HERDR_SOCKET_PATH: join(home, "absent-control.sock"),
     HERDR_CLIENT_SOCKET_PATH: join(home, "absent-render.sock"),
   };

@@ -1,0 +1,427 @@
+/* The post office's sign (TownPostOffice.tsx), in Town's pixel skin: a red
+   enamel plate with cream lettering, like the pillar box at the door,
+   counting what Needs you lists with the shared agent marks. */
+
+/* The sign stands on the ridge at the roof's right end and grows up and
+   left over the lawn, keeping a readable size as the town zooms. */
+.town-world .town-post-sign {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 96px;
+  padding: 3px 7px 4px;
+  color: #fbf1dc;
+  background: #9c1e24;
+  border: 2px solid #1c1722;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1px #d4454a,
+    0 2px 0 #1c1722;
+  transform: translate(-100%, -100%) scale(clamp(0.5, var(--iz), 2.4));
+  transform-origin: 100% 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  image-rendering: pixelated;
+}
+
+/* Anything waiting on you lights the plate's rim gold. */
+.town-world .town-post-sign[data-waiting] {
+  box-shadow:
+    inset 0 0 0 1px #e8c75a,
+    0 2px 0 #1c1722;
+}
+
+.town-world .town-post-sign:focus-visible,
+.town-world .town-post-fold:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+.town-post-sign-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #ffd166;
+}
+
+/* Counts wrap, so the sign stays about the house's width. */
+.town-post-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1px 6px;
+  width: max-content;
+  max-width: 180px;
+  font-weight: 600;
+  white-space: normal;
+  text-align: center;
+}
+
+.town-post-counts > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.town-post-counts .agent-mark {
+  /* The marks' colours on Town's own background, light or dark theme. */
+  color: #1c1722;
+  box-shadow: 0 0 0 1px #1c1722;
+}
+
+.town-post-counts [data-kind="none"] {
+  font-weight: 400;
+  color: #f0d6c4;
+}
+
+.town-post-letter {
+  color: #ffe9c2;
+}
+
+/* A pillar box: the sign's and the fold's mark. */
+.town-post-mark {
+  position: relative;
+  flex: none;
+  display: inline-block;
+  width: 8px;
+  height: 12px;
+  background:
+    linear-gradient(#1c1722, #1c1722) 1px 4px / 6px 1px no-repeat,
+    linear-gradient(#e8c75a, #e8c75a) 2px 7px / 4px 2px no-repeat,
+    #d4252b;
+  border: 1px solid #1c1722;
+  border-radius: 4px 4px 1px 1px;
+  image-rendering: pixelated;
+}
+
+/* A narrow town's fold across the post office's front. */
+.town-world .town-post-fold {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 6px;
+  color: #fbf1dc;
+  background: #9c1e24;
+  border: 2px solid #1c1722;
+  border-radius: 4px;
+  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.town-world .town-post-fold[data-waiting] {
+  box-shadow: inset 0 0 0 1px #e8c75a;
+}
+
+.town-world .town-post-fold .town-post-counts {
+  gap: 4px;
+  max-width: none;
+  font-weight: 700;
+}
+
+/* The yard (#1105): a painted letter per question on the forecourt's
+   cobbles, and the trolley's load of your answers (townPostPaint.ts).
+   Popovers portal out of Town, so they use literal colours. */
+
+.town-world .town-post-yard {
+  --post-waiting: #ffd166;
+  --post-checks: #ff8a7a;
+}
+
+.town-world .town-post-envelope:focus-visible,
+.town-world .town-post-bundle:focus-visible,
+.town-world .town-post-trolley:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+.town-world .town-post-yard {
+  position: absolute;
+  pointer-events: none;
+}
+
+.town-world .town-post-envelope,
+.town-post-icon {
+  width: 14px;
+  height: 10px;
+  padding: 0;
+  background: #fbf6e8 no-repeat 0 0 / 14px 10px;
+  border: 0;
+  image-rendering: pixelated;
+}
+
+.town-world .town-post-envelope {
+  position: absolute;
+  filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.25));
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    left 0.35s ease,
+    top 0.35s ease;
+}
+
+.town-world .town-post-envelope:hover,
+.town-world .town-post-envelope:focus-visible {
+  z-index: 2;
+}
+
+.town-shell[data-calm="true"] .town-world .town-post-envelope {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-world .town-post-envelope {
+    transition: none;
+  }
+}
+
+/* Hover or focus shows who wrote and the question, readable at any zoom. */
+.town-post-label {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  display: none;
+  gap: 1px;
+  width: max-content;
+  max-width: 240px;
+  padding: 3px 6px;
+  color: #f1efe6;
+  background: #1b2230;
+  border: 2px solid #a81e24;
+  border-radius: 2px;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: left;
+  white-space: normal;
+  transform: translateX(-50%) scale(clamp(0.6, var(--iz), 2.4));
+  transform-origin: 50% 100%;
+  pointer-events: none;
+}
+
+.town-post-label b {
+  display: block;
+  font-weight: 700;
+}
+
+.town-post-label span {
+  display: block;
+  color: #a9b2a4;
+}
+
+.town-world .town-post-envelope:hover .town-post-label,
+.town-world .town-post-envelope:focus-visible .town-post-label {
+  display: grid;
+}
+
+/* Letters beyond the yard: a tied bundle with its count. */
+.town-world .town-post-bundle {
+  position: absolute;
+  width: 16px;
+  height: 12px;
+  padding: 0;
+  color: #4a0f12;
+  background: #fbf6e8;
+  border: 1px solid #1c1722;
+  border-radius: 1px;
+  box-shadow:
+    -2px -2px 0 -1px #e8dcc0,
+    -2px -2px 0 0 #1c1722;
+  font:
+    700 7px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* The trolley's load: a stack of your answers with its count. */
+.town-world .town-post-trolley {
+  position: absolute;
+  min-width: 22px;
+  height: 12px;
+  padding: 0 2px;
+  color: #2a1a04;
+  background: var(--post-waiting);
+  border: 1px solid #1c1722;
+  border-radius: 1px;
+  box-shadow:
+    0 -2px 0 -1px #fbf6e8,
+    0 -2px 0 0 #1c1722;
+  font:
+    700 8px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.town-world .town-post-trolley[data-check] {
+  background: var(--post-checks);
+}
+
+.town-post-icon {
+  position: relative;
+  flex: none;
+  display: inline-block;
+}
+
+/* The bundle's list and the letter card. */
+.popover-content.town-post-popover {
+  z-index: 6100;
+  display: grid;
+  gap: 6px;
+  width: min(320px, calc(100vw - 16px));
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  padding: 8px 10px;
+  color: #f1efe6;
+  background: #1b2230;
+  border: 3px solid #a81e24;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 2px #4a0f12,
+    0 3px 0 #4a0f12;
+  font-size: 12px;
+}
+
+.town-post-card-from {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.town-post-note {
+  margin: 0;
+  color: #a9b2a4;
+}
+
+.town-post-action {
+  justify-self: start;
+  min-height: 36px;
+  padding: 2px 10px;
+  color: #2a1a04;
+  background: #ffd166;
+  border: 1px solid #3b2414;
+  border-radius: 2px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.town-post-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.town-post-row {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  column-gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 4px 4px 2px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.town-post-row:hover,
+.town-post-row:focus-visible {
+  background: #273141;
+}
+
+.town-post-row:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: -2px;
+}
+
+.town-post-row .town-post-icon {
+  grid-row: span 2;
+  align-self: center;
+  margin-left: 2px;
+}
+
+.town-post-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.town-post-row-why {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #a9b2a4;
+}
+
+.town-post-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  color: #f1efe6;
+  background: #1b2230;
+  border-radius: inherit;
+  font-size: 12px;
+}
+
+.town-post-card-from span:last-child {
+  margin-left: auto;
+  color: #a9b2a4;
+  font-size: 11px;
+}
+
+.town-post-card-question {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 12em;
+  overflow-y: auto;
+}
+
+.town-post-card-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.town-post-card-options li {
+  padding: 1px 6px;
+  border: 1px solid #4b5568;
+  border-radius: 2px;
+  color: #d8dccf;
+  font-size: 11px;
+}

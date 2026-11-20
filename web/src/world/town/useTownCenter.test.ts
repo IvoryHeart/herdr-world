@@ -75,6 +75,7 @@ test("the ring offers a new agent first, then the Town master and the town's err
     "needs-you",
     "summary",
     "profiles",
+    "apartments",
     "library",
     "room",
   ]);

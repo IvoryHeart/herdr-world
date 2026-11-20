@@ -7,6 +7,7 @@ import { libraryAvailable } from "../memory/memoryTargets";
  */
 
 import {
+  Building2,
   ClipboardList,
   Crown,
   DoorOpen,
@@ -26,6 +27,8 @@ import type {
   HerdrOfficeProjection,
   OfficeAgent,
 } from "../herdrOfficeProjection";
+import { openApartments } from "../apartments/apartmentsStore";
+import { useApartments } from "../apartments/useApartments";
 import {
   type MemoryLibraryRequest,
   openMemoryLibrary,
@@ -107,6 +110,7 @@ export function useTownCenter(
     openChat(key, false),
   );
   const holder = useAgentProfiles().document?.town_master ?? null;
+  const residents = useApartments().residents.length;
   return townCenterActions({
     world,
     office,
@@ -117,6 +121,7 @@ export function useTownCenter(
     summary,
     openChat,
     toast,
+    residents,
   });
 }
 
@@ -131,6 +136,7 @@ export function townCenterActions({
   summary,
   openChat,
   toast,
+  residents,
 }: {
   world: Pick<WorldObject, "leaves">;
   office: Pick<HerdrOfficeProjection, "rooms" | "roster">;
@@ -143,6 +149,8 @@ export function townCenterActions({
   summary: { summary: { counts: { needsYou: number } }; open(): void };
   openChat(agentKey: string): void;
   toast(kind: "ok" | "error", text: string): void;
+  /** Apartments' residents, shown on its medallion. */
+  residents?: number;
 }): TownCenterAction[] {
   const launchRoom =
     selectedRoomKey && rooms.canCreateSeat(selectedRoomKey)
@@ -169,6 +177,7 @@ export function townCenterActions({
     needsYouAction(summary.summary.counts.needsYou),
     summaryAction(() => summary.open()),
     profilesAction(),
+    apartmentsAction(residents),
     ...(libraryAvailable(world) ? [libraryAction()] : []),
     {
       id: "room",
@@ -281,6 +290,15 @@ export const summaryAction = (
   icon: ClipboardList,
   detail,
   run: open,
+});
+
+/** Finished agents, searchable and resumable (apartments/). */
+export const apartmentsAction = (residents?: number): TownCenterAction => ({
+  id: "apartments",
+  label: "Apartments",
+  icon: Building2,
+  detail: residents ? `${residents} residents` : undefined,
+  run: () => openApartments(),
 });
 
 /** The agent profiles, in the profile editor. */
