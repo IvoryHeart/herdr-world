@@ -149,13 +149,23 @@ test("Chrome teardown exits cleanly and force-stops a stuck process", async () =
     await result;
     expect(jest.getTimerCount()).toBe(0);
 
+    const delayed = Promise.withResolvers<number>();
+    const reaped = stopChrome({ kill, exited: delayed.promise });
+    jest.advanceTimersByTime(2_000);
+    await Promise.resolve();
+    await Promise.resolve();
+    jest.advanceTimersByTime(9_999);
+    delayed.resolve(0);
+    await reaped;
+    expect(jest.getTimerCount()).toBe(0);
+
     const stuck = stopChrome({ kill, exited: new Promise(() => {}) });
     jest.advanceTimersByTime(2_000);
     await Promise.resolve();
     await Promise.resolve();
-    jest.advanceTimersByTime(2_000);
+    jest.advanceTimersByTime(10_000);
     await expect(stuck).rejects.toThrow(
-      "Chrome forced exit timed out after 2000ms",
+      "Chrome forced exit timed out after 10000ms",
     );
     expect(jest.getTimerCount()).toBe(0);
   } finally {

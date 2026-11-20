@@ -54,7 +54,9 @@ export async function stopChrome(
     await withBrowserDeadline(child.exited, "Chrome exit", 2_000);
   } catch {
     child.kill("SIGKILL");
-    await withBrowserDeadline(child.exited, "Chrome forced exit", 2_000);
+    // A loaded CI runner can delay reaping even after SIGKILL. Keep teardown
+    // bounded while allowing the OS/native child-exit notification to arrive.
+    await withBrowserDeadline(child.exited, "Chrome forced exit", 10_000);
   }
 }
 

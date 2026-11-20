@@ -52,8 +52,14 @@ const target = {
   witness: ["terminal-a"],
   color_key: "studio:tab-a",
 };
-test("all 24 note/appearance/refusal orders use transaction-local state and refuse the entire invalid patch", () => {
-  for (const order of orders(["a", "b", "appearance", "refused"] as const)) {
+// Each independent database permutation gets its own deadline and cleanup.
+test.each(
+  orders(["a", "b", "appearance", "refused"] as const).map(
+    (order) => [order] as const,
+  ),
+)(
+  "note/appearance/refusal order %j uses transaction-local state and refuses the entire invalid patch",
+  (order) => {
     const p = fresh(),
       writer = open(p);
     const operations: Record<(typeof order)[number], BoardOperation> = {
@@ -147,8 +153,8 @@ test("all 24 note/appearance/refusal orders use transaction-local state and refu
     } finally {
       db.close();
     }
-  }
-});
+  },
+);
 test("a SQL refusal rolls back Board records, reserved IDs and binding captures but not neighboring accepted patches", () => {
   const p = fresh(),
     seed = open(p);
