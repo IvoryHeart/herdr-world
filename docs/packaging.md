@@ -39,7 +39,7 @@ standalone compiled fixture copied away from its source. It records the SQLite
 version actually linked by each platform; a Bun version alone does not establish
 identical SQLite versions or filesystem durability behavior across platforms.
 
-The web build is limited to 188 files and 15.25 MiB total embedded assets,
+The web build is limited to 190 files and 15.3 MiB total embedded assets,
 including lazy features such as Ranger, commit history, the diff worker, the
 Town and Board views and PDF.js with its worker, which load only when a browser
 without a PDF viewer opens a PDF. Startup limits remain 660 KiB
