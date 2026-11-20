@@ -181,7 +181,7 @@ The Town and Board images and both sharing images are drawn from a synthetic
 scene rather than a live runtime, so they can show a busy day reproducibly: two
 hosts, four project rooms, agents working, asking, blocked, finished and idle,
 their current steps, usage costs, context readings, both subscription gauges and
-the post office's synthetic parcels. The
+the warehouse's synthetic crates. The
 [scene](../web/src/world/testing/site-shots/scene.ts) holds only synthetic names
 and numbers; its [page](../web/src/world/testing/site-shots/SiteShots.browser.tsx)
 mounts the production `TownCanvas` and `BoardView` and answers their reads from

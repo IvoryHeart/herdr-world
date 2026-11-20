@@ -1,5 +1,14 @@
 ### Added
 
-- Town harbour and Work → Releases tab show main's checks, merged changes
-  waiting to ship, releases as ships and the Worlds running them, with links
-  only; `?shipyardFixture` shows synthetic states for testing.
+- Town harbour at the town's right-most edge, on open sea, with one
+  colour-coded shipping lane per project: main's checks in each lighthouse,
+  merged changes waiting on the slipway, releases as ships and the Worlds
+  running them, with links only. Work → Releases shows the same per project;
+  `?shipyardFixture` (and `=many` for more projects than lanes) shows
+  synthetic states for testing.
+
+### Changed
+
+- Open pull requests moved from the post office to Town's new warehouse on the
+  harbour's shore, as crates; `?townPostFixture` is now
+  `?townWarehouseFixture`.

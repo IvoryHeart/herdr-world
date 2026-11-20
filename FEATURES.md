@@ -21,21 +21,31 @@ A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
 - V1 provides navigation links only: no release/tag creation or deployment
   changes. `herdr-world shipyard demo --scenario stale|limited --json` exercises
   synthetic rare states without a service or credentials.
-- **Town harbour**: on a wide Town, a harbour sits right of the town center.
-  The lighthouse lamp is main's checks (green passing, red failing, yellow
-  running, grey unknown). Crates on the quay are merged pull requests waiting
-  for the next release, up to ten with a tally; `+` means the comparison was
-  shortened and `?` means unknown. Ships are the latest three releases, newest
-  by the crane; prereleases have orange hulls and a green pennant means a World
-  on this computer runs that version. A ship opens its release card with
-  **All releases**; the sign and crates open **Work → Releases**. A new release
-  sails in once and is announced; the first read and a repository change stay
-  still. Stale data fades the harbour, greys the lamp and says **Out of date**;
-  so does a failed read of World itself, and then every running World reads
-  as stopped reporting without **Open**.
-  GitHub off or no repository leaves an empty basin and says how to go on. A
-  narrow Town folds the harbour into one sign on the town center's left wing.
-  Calm Town and reduced motion stop the bobbing and sailing.
+- **Town harbour**: a wide Town ends at its right-most edge in the sea, which
+  runs on off the map. The streets end at a stone promenade; one shipping lane
+  per project crosses the water from it, each in its own colour (eight colours
+  that repeat), named on a board with its flag at the pier's root. Projects are
+  the repositories the Shipyard suggests (up to eight) plus the one chosen in **Work →
+  Releases**, which comes first. On a lane, the hull on the slipway is the next
+  release, with the count of merged pull requests waiting for it (`200+` when
+  shortened, `?` unknown); the latest three releases are ships moored along the
+  pier, newest first, prereleases with orange hulls and a green pennant while a
+  World on this computer runs that version. The lighthouse at the pier's head
+  is main's checks (green passing, red failing, yellow running, grey unknown).
+  The Shipyard sign counts projects and those with main failing or out of date.
+  A board or hull opens that project in **Work → Releases**; a ship opens its
+  release card with **All releases**. A new release sails in once, only in its
+  own lane, and is announced; the first read and a repository change stay
+  still. More projects than the sea holds (about thirteen on a one-building
+  town) end in a **+N more** lane listing the rest by name and state; each opens
+  in **Work → Releases**. Stale data fades a lane, greys its lamp and says
+  **Out of date**; so does a failed read of that one project, keeping its
+  last ships, and a failed read of World itself, and then every
+  running World reads as stopped reporting without **Open**. GitHub off or no
+  repository leaves an empty sea and says how to go on. A narrow Town folds the
+  harbour into one sign on the town center's left wing, with a dot per project
+  in its colour and lamp. Calm Town and reduced motion stop the bobbing and
+  sailing. Open pull requests are the warehouse's, not the harbour's.
 - **Work → Releases** (Board's Work lens and Town's harbour): main's checks,
   waiting changes, shipped releases and running Worlds, with links to GitHub
   and **Open** only for fresh loopback Worlds (usable on the service machine).
@@ -44,7 +54,8 @@ A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
   directly. The repository select, including **Another repository…**, is remembered per
   browser. **Read GitHub again** forces one bounded refresh.
 - Testing only: `?shipyardFixture` (or `=failing|stale|limited|off|empty|offline`)
-  shows synthetic data without GitHub; the page drops the parameter at once.
+  shows synthetic data without GitHub, three projects; `=many` shows sixteen,
+  more lanes than a town's sea holds. The page drops the parameter at once.
   `offline` answers once, then fails every read as if World stopped answering.
 
 ## Runtime support
@@ -375,40 +386,44 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     center's corner and each reception's expenses to a sign in its title;
     tap one to open it. Zoomed in to desks, the boards are put away with
     reception. At every zoom the reception boards keep clear of the town
-    center, the post office, the harbour, the billboard and each other: a
+    center, the post office, the warehouse, the billboard and each other: a
     board that would cover one slides aside the least it can while staying
     over its building, else it hangs lower, below the center or the board in its way.
     The `?scene=town-scale` preview replaces every economy reader with labelled
     test data for its synthetic buildings, including the Town board and Spend lens.
   - Town's **post office** stands on the first street left of the town
-    center, its sorting yard on the pavement: your open pull requests (opened by you, waiting on your
-    review or assigned to you) as parcels in its sorting yard, ready to merge
-    first. Its sign counts them without hovering, such as "2 ready · 1
-    failing · 3 waiting", adding unknown and draft when there are some. A
-    parcel's tag shows its state: green ready to merge, red CI failing on its
-    head, amber waiting (for CI, a review, a fix or GitHub), a grey crate for
-    unknown and a pale letter for a draft. It reads the GitHub source and the
-    pull request card's merge rules, so stale or partial detail is unknown,
-    never ready. Hover or focus a parcel for "#123 title", its repository and
-    its state in words; tap it for the same pull request card the desk badge
-    opens (**Details**, **Merge…** and the rest). A merged parcel is carried
-    off the yard (with calm or reduced motion it just goes); a closed one
-    fades. More than the yard holds make a "+N" pile that opens the rest as a
-    list. Click the post office's sign, or **All pull requests** at the top of
-    the pile's list or the phone sign's list, to open Board's **Work** lens
-    over Town: every pull request in the same columns, with the Tickets tab,
-    each card's actions and the same Escape, Back or press-outside close. An
-    agent on a card opens as tapping it in Town does. With the GitHub source off, signed out or not yet answered, the
-    post office is closed and says to connect GitHub in **Integrations** (its sign opens them), with no
-    parcels and no counts; when a refresh fails it keeps the last list as
-    unknown and says GitHub is out of date. On a phone it folds to a sign on
-    the town center's right wing, in view at home zoom (a red pillar box and coloured ready,
-    failing and waiting counts) that opens the parcels as a list. For trying it without real pull
-    requests, open World with `?townPostFixture` (synthetic pull requests in
-    every state; ten seconds later the first ready one merges),
-    `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
-    the page drops the parameter at once and only the post office and the
-    Work lens it opens use it.
+    center; it no longer holds pull requests.
+  - Town's **warehouse** stands on the shore at the first street's end, by
+    the harbour, its yard on the pavement: your open pull requests (opened by
+    you, waiting on your review or assigned to you) as crates in its yard,
+    ready to merge first. Its sign counts them without hovering, such as "2
+    ready · 1 failing · 3 waiting", adding unknown and draft when there are
+    some. A crate's straps and stencil show its state: green ready to merge,
+    red CI failing on its head, amber waiting (for CI, a review, a fix or
+    GitHub), grey for unknown and loose planks on a pallet for a draft. It
+    reads the GitHub source and the pull request card's merge rules, so stale
+    or partial detail is unknown, never ready. Hover or focus a crate for
+    "#123 title", its repository and its state in words; tap it for the same
+    pull request card the desk badge opens (**Details**, **Merge…** and the
+    rest). A merged crate is carried off toward the quay for the next release
+    (with calm or reduced motion it just goes); a closed one fades. More than
+    the yard holds make a "+N" pile that opens the rest as a list. Click the
+    warehouse's sign, or **All pull requests** at the top of the pile's list
+    or the phone sign's list, to open Board's **Work** lens over Town: every
+    pull request in the same columns, with the Tickets tab, each card's
+    actions and the same Escape, Back or press-outside close. An agent on a
+    card opens as tapping it in Town does. With the GitHub source off, signed
+    out or not yet answered, the warehouse is closed and says to connect
+    GitHub in **Integrations** (its sign opens them), with no crates and no
+    counts; when a refresh fails it keeps the last list as unknown and says
+    GitHub is out of date. On a phone it folds to a sign on the town center's
+    right wing, in view at home zoom (a crate and coloured ready, failing and
+    waiting counts) that opens the crates as a list. For trying it without
+    real pull requests, open World with `?townWarehouseFixture` (synthetic
+    pull requests in every state; ten seconds later the first ready one
+    merges), `?townWarehouseFixture=many` (a pile) or
+    `?townWarehouseFixture=off` (signed out); the page drops the parameter at
+    once and only the warehouse and the Work lens it opens use it.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
