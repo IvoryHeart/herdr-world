@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
   mkdtempSync,
@@ -12,8 +12,14 @@ import { join } from "node:path";
 import { openWorldLedger, type WorldLedgerStorage } from "./world-storage";
 import type { OutboxEffect } from "./world-protocol";
 
+// Each open starts a SQLite worker; slow Windows runners take over a second
+// per open, so two opens and their writes can pass Bun's 5 s default.
+setDefaultTimeout(30_000);
+
 const roots: string[] = [];
-const opened: WorldLedgerStorage[] = [];
+// Opens are tracked while pending, so a test that fails mid-open still
+// closes its worker before its folder is removed (Windows refuses busy files).
+const opened: Promise<WorldLedgerStorage | null>[] = [];
 const ports = {
   clock: { now: () => 1000, monotonic: () => performance.now() },
   scheduler: {
@@ -32,8 +38,8 @@ const paths = () => {
   };
 };
 const open = async (target = paths()) => {
-  const storage = await openWorldLedger(target, ports);
-  opened.push(storage);
+  const storage = openWorldLedger(target, ports);
+  opened.push(storage.catch(() => null));
   return storage;
 };
 const ask = (id: string) => ({
@@ -53,7 +59,9 @@ const effect = (id: string): OutboxEffect[] => [
   },
 ];
 afterEach(async () => {
-  await Promise.all(opened.splice(0).map((storage) => storage.close()));
+  await Promise.all(
+    opened.splice(0).map(async (pending) => (await pending)?.close()),
+  );
   for (const root of roots.splice(0))
     rmSync(root, { recursive: true, force: true });
 });
@@ -98,7 +106,7 @@ test("one worker owns a database; independent roots and close/reopen share nothi
   // rejection matcher, which can otherwise starve MessagePort delivery.
   const refusal = await openWorldLedger(target, ports).then(
     (unexpected) => {
-      opened.push(unexpected);
+      opened.push(Promise.resolve(unexpected));
       return null;
     },
     (error: unknown) => error,

@@ -44,7 +44,6 @@ import { createSshProfileRuntimeConfig } from "../connections/ssh-profile-runtim
 import { bindListenerBeforeConnectionStart } from "../connections/startup";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
 import { createAuthHandlers } from "../http/auth";
-import type { IdeService } from "../ide/service";
 import { createWorldIde } from "../ide/world-ide";
 import {
   createHerdrSetupHandlers,
@@ -182,11 +181,10 @@ async function compose(
     scheduleProcessExit: deps.scheduleProcessExit,
   });
   let connectionRevision = 0;
-  let worldIde: IdeService | null = null;
+  let worldIde: ReturnType<typeof createWorldIde> | null = null;
   function publishConnectionsChanged() {
     if (stopping) return;
-    // A reconnect or change detaches IDEs attached under the old one (they
-    // run on), and reattaches to those whose connection is back.
+    // Detach IDEs from a changed connection (they run on); reattach when back.
     void worldIde?.reconcile();
     broadcast(
       JSON.stringify({
