@@ -44,6 +44,12 @@
   outline-offset: 2px;
 }
 
+/* A phone's sign says what its counts are: pull requests (#1033). */
+.town-post-sign-what {
+  font-size: 9px;
+  color: #d8c8a8;
+}
+
 .town-post-sign-title {
   font:
     700 10px "Silkscreen",
@@ -327,38 +333,10 @@
   white-space: nowrap;
 }
 
-/* Folded: a wooden plate on the town center, like the billboard's. */
-.town-world .town-post-fold {
-  position: absolute;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 24px;
-  padding: 2px 6px;
-  color: #ffe9c2;
-  background: #6e4a2e;
-  border: 2px solid #3b2414;
-  border-radius: 4px;
-  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
-  font:
-    700 10px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  white-space: nowrap;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.town-world .town-post-fold:focus-visible {
-  outline: 2px solid #ffd166;
-  outline-offset: 2px;
-}
-
 /*
  * The pillar box by the house door (townPostPaint.ts), drawn small: a red
  * post with a dark cap, a letter slot, a gold plate and a dark foot. It marks
- * the folded sign, so a phone's town shows a post office, not an envelope.
+ * the post office's list.
  */
 .town-post-box {
   position: relative;
@@ -404,31 +382,7 @@
   gap: 6px;
 }
 
-.town-post-fold-counts {
-  display: inline-flex;
-  gap: 3px;
-}
-
-.town-post-fold-counts b {
-  min-width: 12px;
-  padding: 0 2px;
-  color: #1c1722;
-  border-radius: 2px;
-  text-align: center;
-}
-
-.town-post-fold-counts [data-state="ready"] {
-  background: #5fbf5a;
-}
-.town-post-fold-counts [data-state="failing"] {
-  background: #d4252b;
-  color: #fff;
-}
-.town-post-fold-counts [data-state="waiting"] {
-  background: #ffd166;
-}
-
-/* The folded sign's and the pile's list. */
+/* A phone sign's and the pile's list. */
 .popover-content.town-post-popover {
   z-index: 6100;
   display: grid;

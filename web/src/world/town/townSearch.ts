@@ -4,6 +4,11 @@
  * the rest of Town dims a little (townSelectionEffects.ts).
  */
 
+import {
+  worldSearchWords,
+  worldTextMatches,
+  type WorldSearchResult,
+} from "../worldSearch";
 import { findCell } from "./townCameraTargets";
 import {
   TOWN_FACADE,
@@ -12,6 +17,48 @@ import {
   type TownLayout,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
+import { townPostLot, TOWN_POST_YARD_ROWS } from "./townPost";
+
+/** The post office's search key: Town's landmark, not a World node. */
+export const TOWN_POST_SEARCH_KEY = "town:post-office";
+
+/**
+ * Town's landmarks the search finds besides World's nodes (#1033): its
+ * name, then the words it also answers to.
+ */
+const TOWN_LANDMARKS = [
+  {
+    key: TOWN_POST_SEARCH_KEY,
+    label: "Post office",
+    also: "pull requests parcels github mail",
+  },
+] as const;
+
+/** Town's landmarks a query finds, names before what they hold. */
+export function townLandmarkResults(rawQuery: string): WorldSearchResult[] {
+  const words = worldSearchWords(rawQuery);
+  return TOWN_LANDMARKS.flatMap((landmark) => {
+    const name = landmark.label.toLocaleLowerCase();
+    if (!worldTextMatches(`${name} ${landmark.also}`, words)) return [];
+    return [
+      {
+        id: landmark.key,
+        nodeId: landmark.key,
+        kind: "landmark" as const,
+        label: landmark.label,
+        place: ["Pull requests"],
+        status: null,
+        stale: false,
+        excerpt: null,
+        rank: worldTextMatches(name, words) ? 0 : 1,
+      },
+    ];
+  });
+}
+
+/** Whether a Town key is one of its landmarks, not a World node. */
+export const townLandmarkKey = (key: string) =>
+  TOWN_LANDMARKS.some((landmark) => landmark.key === key);
 
 /** What a search lights up: its matches' keys and the places holding them. */
 export type TownSearchLight = {
@@ -76,7 +123,8 @@ const deskRect = (layout: TownLayout, deskKey: string | null | undefined) => {
 
 /**
  * Where a match is drawn, in world pixels: an agent where it sits or
- * stands, a table or terminal at its table, a room or building whole. One
+ * stands, a table or terminal at its table, a room, building or the post
+ * office whole. One
  * Town does not draw is null, such as a table, or anything at a table, that
  * its room folds away: its room is not where it can be seen.
  */
@@ -86,6 +134,15 @@ export function townSearchRect(
   layout: TownLayout,
   actorPosition: TownActorPosition,
 ): TownSearchRect | null {
+  if (key === TOWN_POST_SEARCH_KEY) {
+    const lot = townPostLot(layout);
+    return {
+      x: lot.x * T,
+      y: lot.y * T,
+      w: lot.w * T,
+      h: (lot.yardY + TOWN_POST_YARD_ROWS - lot.y) * T,
+    };
+  }
   const building = layout.buildings.find(
     (candidate) => candidate.hostKey === key,
   );

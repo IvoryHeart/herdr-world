@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { PULL_REQUEST_DETAIL_MAX_AGE_MS } from "../../../../shared/pullRequestFreshness";
 import type {
   WorkItem,
@@ -21,11 +23,13 @@ import {
 import {
   TOWN_POST_SLOTS,
   TOWN_POST_YARD_ROWS,
-  townPostFoldAt,
   townPostLot,
   townPostOffice,
   townPostReserve,
+  townPostSignAt,
+  townPostSignScale,
   townPostSignText,
+  townPostSignTop,
   townPostSlot,
   townPostState,
 } from "./townPost";
@@ -209,14 +213,17 @@ const towns: [string, TownInput, TownShape][] = [
     town({ a: [2], b: [1], c: [1], d: [1], e: [1] }),
     TOWN_SHAPES.wide,
   ],
+  ["phone, one room", town({ a: [1] }), TOWN_SHAPES.phone],
+  ["phone, six rooms", town({ a: [2, 2, 2, 2, 2, 2] }), TOWN_SHAPES.phone],
+  ["phone, two buildings", town({ a: [4, 4, 4], b: [1] }), TOWN_SHAPES.phone],
+  ["portrait window", town({ a: [2], b: [1] }), TOWN_SHAPES.portrait],
 ];
 
 test.each(towns)(
   "the post office stands left of the town center on the first street (%s), on clear land",
   (_, input, shape) => {
     const { layout } = layoutTown(input, shape);
-    const lot = townPostLot(layout)!;
-    expect(lot).not.toBeNull();
+    const lot = townPostLot(layout);
     const area = townPostReserve(lot);
     const { center } = layout;
     const firstStreet = Math.min(...layout.roads);
@@ -259,8 +266,8 @@ test("making room for the post office moves nothing as the town grows", () => {
   // and plaza with it, so even a one-building town has lawn for the lot.
   const { layout } = layoutTown(town({ a: [1] }), TOWN_SHAPES.wide);
   const shift = TOWN_POST_ROOM;
-  expect(townPostLot(layout)!.x).toBe(layout.center.x - shift);
-  expect(townPostLot(layout)!.x).toBeGreaterThanOrEqual(3);
+  expect(townPostLot(layout).x).toBe(layout.center.x - shift);
+  expect(townPostLot(layout).x).toBeGreaterThanOrEqual(3);
   const b = layout.buildings[0]!;
   // The road down the town's left side stands left of the building, the
   // lot's columns left of that road.
@@ -273,7 +280,7 @@ test("making room for the post office moves nothing as the town grows", () => {
   // center, centred over the wider row, takes the post office with it.
   const grown = layoutTown(town({ a: [1], b: [1] }), TOWN_SHAPES.wide).layout;
   expect(grown.buildings[0]!.x).toBe(b.x);
-  expect(townPostLot(grown)!.x).toBe(grown.center.x - shift);
+  expect(townPostLot(grown).x).toBe(grown.center.x - shift);
 });
 
 test.each([
@@ -293,7 +300,7 @@ test.each([
     const camera = new TownCamera();
     camera.viewport = viewport;
     new TownSceneCamera(new Map(), () => {}).attach(camera, layout, viewport);
-    const lot = townPostLot(layout)!;
+    const lot = townPostLot(layout);
     const topLeft = camera.toScreen(lot.x * T, lot.y * T);
     const bottomRight = camera.toScreen(
       (lot.x + lot.w) * T,
@@ -306,38 +313,71 @@ test.each([
   },
 );
 
-test("a narrow town folds the post office to a sign: no lot", () => {
-  const { layout } = layoutTown(town({ a: [2] }), TOWN_SHAPES.phone);
-  expect(townPostLot(layout)).toBeNull();
+test("a phone's stacked column holds the post office beside the center (#1033)", () => {
+  // A small town's column widens to the lot, its lawn and the center; the
+  // buildings stay centred under them.
+  const small = layoutTown(town({ a: [1] }), TOWN_SHAPES.phone).layout;
+  const lot = townPostLot(small);
+  const b = small.buildings[0]!;
+  expect(lot.x).toBe(MARGIN + ROAD_GAP);
+  expect(small.center.x).toBe(lot.x + TOWN_POST_ROOM);
+  const row = { x0: lot.x, x1: small.center.x + small.center.w };
+  expect(Math.abs(b.x + b.w / 2 - (row.x0 + row.x1) / 2)).toBeLessThanOrEqual(
+    1,
+  );
+  expect(small.width).toBeGreaterThanOrEqual(row.x1 + ROAD_GAP);
+  // A building wide enough for both keeps the center on its axis.
+  const wide = layoutTown(
+    town({ a: [8, 8, 8, 8, 8, 8, 8, 8, 8] }),
+    TOWN_SHAPES.phone,
+  ).layout;
+  const w = wide.buildings[0]!;
+  expect(w.w).toBeGreaterThanOrEqual(2 * TOWN_POST_ROOM + wide.center.w);
+  expect(
+    Math.abs(wide.center.x + wide.center.w / 2 - (w.x + w.w / 2)),
+  ).toBeLessThanOrEqual(1);
+  expect(townPostLot(wide).x).toBeGreaterThanOrEqual(w.x);
 });
 
 test.each([
   ["one single-desk room", town({ a: [1] }), 390, 844],
   ["three single-desk rooms", town({ a: [1, 1, 1] }), 390, 844],
   ["three single-desk rooms, small phone", town({ a: [1, 1, 1] }), 360, 640],
+  ["six rooms", town({ a: [2, 2, 2, 2, 2, 2] }), 390, 844],
   ["a tall building", town({ a: [6, 4, 3, 2] }), 390, 844],
+  ["a very tall building", town({ a: [24, 12, 12, 8, 8, 4] }), 390, 844],
+  ["two buildings", town({ a: [4, 4, 4], b: [1] }), 390, 844],
 ] as const)(
-  "the folded sign stands inside a phone's home view (%s)",
+  "a phone's home view shows the post office whole, its sign and the center (%s)",
   (_, input, width, height) => {
     const { layout } = layoutTown(input, TOWN_SHAPES.phone);
     const viewport = townViewport(width, height, { left: 0, right: 0 });
     const camera = new TownCamera();
     camera.viewport = viewport;
     new TownSceneCamera(new Map(), () => {}).attach(camera, layout, viewport);
-    const at = townPostFoldAt(layout.center);
-    const sign = camera.toScreen(at.x, at.y);
-    // The sign keeps its screen size near home zoom (--iz): about 100 by
-    // 30 pixels around its point, all of it inside the chrome's insets.
     const { inset } = viewport;
-    expect(sign.x - 50).toBeGreaterThanOrEqual(inset.left);
-    expect(sign.x + 50).toBeLessThanOrEqual(width - inset.right);
-    expect(sign.y - 15).toBeGreaterThanOrEqual(inset.top);
-    expect(sign.y + 15).toBeLessThanOrEqual(height - inset.bottom);
-    // On the center's front, clear of its plaque and doors in the middle.
-    const center = layout.center;
-    expect(at.x).toBeLessThan((center.x + center.w) * T);
-    expect(at.x - 50).toBeGreaterThan((center.x + center.w / 2) * T + 24);
-    expect(at.y).toBeLessThan((center.y + center.h) * T);
+    const inside = (x: number, y: number) => {
+      const p = camera.toScreen(x, y);
+      expect(p.x).toBeGreaterThanOrEqual(inset.left - 0.5);
+      expect(p.x).toBeLessThanOrEqual(width - inset.right + 0.5);
+      expect(p.y).toBeGreaterThanOrEqual(inset.top - 0.5);
+      expect(p.y).toBeLessThanOrEqual(height - inset.bottom + 0.5);
+    };
+    const lot = townPostLot(layout);
+    // The sign, at its tallest, from the house's eave.
+    const sign = townPostSignAt(lot);
+    inside(sign.x, townPostSignTop(lot, camera.z));
+    // The house's front and the yard with its parcels, edge to edge.
+    inside(lot.x * T, sign.y);
+    inside((lot.x + lot.w) * T, (lot.yardY + TOWN_POST_YARD_ROWS) * T);
+    // The center beside it, across its width, and the first building's
+    // roofline under them.
+    const { center } = layout;
+    inside(center.x * T, center.street * T);
+    inside((center.x + center.w) * T, center.street * T);
+    const b = layout.buildings[0]!;
+    inside(b.x * T, b.y * T);
+    inside((b.x + b.w) * T, b.y * T);
   },
 );
 
@@ -374,4 +414,12 @@ test("the testing fixture covers every state and merges a ready parcel", () => {
   expect(townPostOffice(townPostFixtureSnapshot("off", NOW), NOW).status).toBe(
     "closed",
   );
+});
+
+test("the sign's scale in code and CSS agree", () => {
+  const css = readFileSync(join(import.meta.dir, "townPost.css"), "utf8");
+  expect(css).toContain("scale(clamp(0.5, var(--iz), 2.4))");
+  expect(townPostSignScale(0.1)).toBe(2.4);
+  expect(townPostSignScale(4)).toBe(0.5);
+  expect(townPostSignScale(1)).toBe(1);
 });

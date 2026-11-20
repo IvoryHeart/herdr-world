@@ -9,7 +9,6 @@ import type {
   WorkItem,
   WorldSourcesSnapshot,
 } from "../../../../shared/worldSources";
-import { TOWN_CENTER_FRIEZE_Y, type TownCenterLot } from "./townCenter";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import { townPostLotBeside, type TownPostLot } from "./townPostLot";
 
@@ -265,27 +264,35 @@ export const TOWN_POST_INSET = { x: 6, y: 6 } as const;
 
 /**
  * The post office's lot: left of the town center on the first street,
- * outside the building grid (townPostLot.ts). A narrow (stacked) town folds
- * it to a sign on the town center instead, as it does the city billboard.
- * The landscape keeps its lot clear.
+ * outside the building grid (townPostLot.ts). A phone's stacked town keeps
+ * it too, in the column its buildings share (#1033). The landscape keeps
+ * its lot clear.
  */
-export function townPostLot(layout: TownLayout): TownPostLot | null {
-  if (layout.formFactor === "narrow") return null;
+export function townPostLot(layout: TownLayout): TownPostLot {
   return townPostLotBeside(layout.center);
 }
 
 /**
- * Where a narrow town's folded post office sign hangs, in world pixels: on
- * the town center's right wing, under its windows and level with the doors.
- * A phone's home view keeps the center from just above its plaque down, so
- * the sign stays in view there; the roofs and tower above it are cropped.
+ * The sign's foot, in world pixels: it hangs from the house's eave, centred
+ * on the lot, keeping a readable size as the town zooms (townPost.css).
  */
-export function townPostFoldAt(center: TownCenterLot) {
-  return {
-    x: (center.x + center.w) * TOWN_TILE - 60,
-    y: center.y * TOWN_TILE + TOWN_CENTER_FRIEZE_Y + 40,
-  };
-}
+export const townPostSignAt = (lot: TownPostLot) => ({
+  x: (lot.x + lot.w / 2) * TOWN_TILE,
+  y: lot.y * TOWN_TILE + 34,
+});
+
+/**
+ * The sign's tallest in screen pixels (title, "pull requests" and counts
+ * wrapped once), and its scale at zoom `z` (townPost.css matches): a
+ * phone's first view keeps the whole sign (scene/townSceneCamera.ts).
+ */
+export const TOWN_POST_SIGN_HEIGHT = 64;
+export const townPostSignScale = (z: number) =>
+  Math.min(2.4, Math.max(0.5, 1 / z));
+
+/** The sign's top at zoom `z`, in world pixels. */
+export const townPostSignTop = (lot: TownPostLot, z: number) =>
+  townPostSignAt(lot).y - TOWN_POST_SIGN_HEIGHT * townPostSignScale(z);
 
 /** Slot `index`'s top-left in the yard, in pixels. */
 export function townPostSlot(index: number) {

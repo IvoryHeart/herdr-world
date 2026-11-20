@@ -358,9 +358,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     a phone, explains each caveat in full, including usage tied to no pane or
     room ("unattributed", already in the totals) and a limited detail list. The boards re-read usage about once a minute and when the page
     regains focus; when re-reads fail, the last figures stay for at most five
-    minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard folds to a sign in the town
-    center's corner and each reception's expenses to a sign in its title;
-    tap one to open it. Zoomed in to desks, the boards are put away with
+    minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard stands above the town center as
+    on a wide screen; each reception's expenses fold to a sign in its title
+    (a phone keeps only a few rows of yard above each building for its
+    reception board); tap one to open it. Zoomed in to desks, the boards are put away with
     reception. At every zoom the reception boards keep clear of the town
     center, the post office, the billboard and each other: a board that would
     cover one slides aside the least it can while staying over its building,
@@ -388,9 +389,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     agent on a card opens as tapping it in Town does. With the GitHub source off, signed out or not yet answered, the
     post office is closed and says to connect GitHub in **Integrations** (its sign opens them), with no
     parcels and no counts; when a refresh fails it keeps the last list as
-    unknown and says GitHub is out of date. On a phone it folds to a sign on
-    the town center's right wing, in view at home zoom (a red pillar box and coloured ready,
-    failing and waiting counts) that opens the parcels as a list. For trying it without real pull
+    unknown and says GitHub is out of date. On a phone the post office stands as
+    the same building and yard beside the town center, in view at home zoom
+    with the center and the first building; its sign reads "POST OFFICE",
+    "pull requests" and the counts (or "Closed"), and tapping it opens the
+    parcels as a list. Searching Town for "post office" (or "pull requests")
+    lists the **Post office** and choosing it takes the map there, on a phone
+    or a wide screen. For trying it without real pull
     requests, open World with `?townPostFixture` (synthetic pull requests in
     every state; ten seconds later the first ready one merges),
     `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
@@ -890,7 +895,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
     click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
     a readable zoom and pulses it; choosing it again, or **Enter** a second
-    time, opens it as selecting does. A result Town does not draw, such as
+    time, opens it as selecting does. Town's own places are found too: "post
+    office" (or "pull requests") lists the **Post office**, and choosing it
+    moves the camera there; choosing it again only shows it again. A result Town does not draw, such as
     an agent at a table its room folds away, opens at once and counts as
     off-screen. Under **Town calm motion** or reduced motion the camera jumps
     and nothing pulses. **Escape** (in the box, on a result or on the map),

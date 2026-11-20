@@ -784,7 +784,7 @@ export function layoutTown(
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
 
-  const post = formFactor === "narrow" ? null : townPostLotBeside(center);
+  const post = townPostLotBeside(center);
   const lamps: TownPoint[] = [];
   // Spaced from the town's first column, shifted with it (townLots.ts).
   for (const ry of roads)
@@ -796,10 +796,7 @@ export function layoutTown(
       if (underCenter) continue;
       // The post office's yard fronts it too (townPostLot.ts).
       const underPost =
-        post &&
-        ry === center.street &&
-        tx >= post.x - 1 &&
-        tx <= post.x + post.w;
+        ry === center.street && tx >= post.x - 1 && tx <= post.x + post.w;
       if (underPost) continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }
