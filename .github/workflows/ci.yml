@@ -133,12 +133,9 @@ jobs:
               with:
                   bun-version: "1.4.4"
                   no-cache: true
-            - name: Check knowledge-map impact
+            - name: Check PR description
               if: github.event_name == 'pull_request'
-              run: bun scripts/check-knowledge-map.ts "$GITHUB_EVENT_PATH"
-            - name: Check changelog fragments
-              if: github.event_name == 'pull_request'
-              run: bun scripts/changelog-fragments.ts pr "$GITHUB_EVENT_PATH"
+              run: bun run check:pr-body --event "$GITHUB_EVENT_PATH"
             - name: Determine validation scope
               id: scope
               env:
