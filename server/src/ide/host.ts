@@ -289,8 +289,9 @@ export type IdeHostAttach = {
 
 /**
  * Checks that the folder's server is this World's, for this provider and
- * folder, and prints its state, since-when, exit code, the token while it
- * runs, and the end of its log once it has exited. Starts nothing.
+ * folder, and prints its state, since-when, exit code, the token and how
+ * many server downloads VS Code began while it runs, and the end of its
+ * log once it has exited. Starts nothing.
  */
 export function hostAttachScript(attach: IdeHostAttach) {
   validHostId(attach.id);
@@ -310,6 +311,9 @@ export function hostAttachScript(attach: IdeHostAttach) {
     "sed -n '/^started=/p' \"$d/record\"",
     '[ -f "$d/exit" ] && printf "exit=%s\\n" "$(head -n 1 "$d/exit")"',
     'if [ "$st" != exited ] && [ -f "$d/token" ]; then printf "token=%s\\n" "$(cat "$d/token")"; fi',
+    // VS Code's CLI logs one line per attempt to download its web server
+    // and never says why one failed: the count shows it retrying.
+    'if [ "$st" != exited ]; then printf "downloads=%s\\n" "$(grep -c "Downloading server [0-9a-f]" "$d/log" 2>/dev/null)"; fi',
     'if [ "$st" = exited ]; then tail -n 20 "$d/log" 2>/dev/null | tr -d "\\r" | sed "s/^/log=/"; fi',
   ].join("\n");
 }
@@ -443,6 +447,22 @@ export function plainExitReason(lines: string[], code: number | null) {
     .find((line) => /error|fail|denied|unable|not /i.test(line));
   const suffix = last ? `: ${last.trim().slice(0, 240)}` : ".";
   return `The IDE server stopped${code === null ? "" : ` (exit ${code})`}${suffix}`;
+}
+
+/**
+ * Why World stopped waiting for a server that still runs. VS Code's CLI
+ * retries a failed download of its web server on the next request and
+ * never says why it failed; `downloads` counts its attempts.
+ */
+export function startWaitReason(
+  hostLabel: string,
+  why: "timeout" | "downloading" | { downloads: number },
+) {
+  if (why === "timeout")
+    return `It didn't answer in time and still runs on ${hostLabel}. Open it to try again, or Stop it.`;
+  if (why === "downloading")
+    return `It is still downloading VS Code's web server on ${hostLabel} (about 300 MB). Open it again in a minute, or Stop it.`;
+  return `VS Code couldn't download its web server on ${hostLabel}; it tried ${why.downloads} times. It needs about 1 GB free in your home folder and access to update.code.visualstudio.com. Check both, then Open it to try again.`;
 }
 
 /** Exit codes a start script gives only before it launches anything. */

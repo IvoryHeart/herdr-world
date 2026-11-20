@@ -13,6 +13,7 @@ import {
   parseHostLines,
   parseHostList,
   plainExitReason,
+  startWaitReason,
 } from "./host";
 import {
   type IdeForward,
@@ -144,6 +145,8 @@ const HOST_CHECK_MS = 3_000;
 /** Another start mid-launch on the host: how often and long to look again. */
 const STARTING_LOOK_MS = 200;
 const STARTING_LOOKS = 25;
+/** VS Code retried its server download this often while World waited. */
+const DOWNLOAD_RETRIES = 2;
 
 export const systemIdeProbe: IdeProbe = async (upstream) => {
   try {
@@ -693,13 +696,17 @@ export class IdeInstances {
     const deadline = this.now().getTime() + this.startTimeoutMs;
     let delay = 100;
     let nextCheck = this.now().getTime() + HOST_CHECK_MS;
+    let firstDownloads: number | null = null;
     while (current()) {
       const upstream = instance.upstream;
       if (!upstream) return;
       if (this.now().getTime() > deadline) {
         this.detach(
           instance,
-          `It didn't answer in time and still runs on ${instance.hostLabel}. Open it to try again, or Stop it.`,
+          startWaitReason(
+            instance.hostLabel,
+            instance.downloading ? "downloading" : "timeout",
+          ),
         );
         return;
       }
@@ -719,14 +726,23 @@ export class IdeInstances {
       }
       if (this.now().getTime() >= nextCheck) {
         nextCheck = this.now().getTime() + HOST_CHECK_MS;
-        if (!(await this.stillRuns(instance, epoch))) return;
+        const downloads = await this.stillRuns(instance, epoch);
+        if (downloads === null) return;
+        if (downloads >= 0) firstDownloads ??= downloads;
+        if (downloads - (firstDownloads ?? downloads) >= DOWNLOAD_RETRIES) {
+          this.detach(
+            instance,
+            startWaitReason(instance.hostLabel, { downloads }),
+          );
+          return;
+        }
       }
       await this.sleep(delay);
       delay = Math.min(delay * 2, 1_000);
     }
   }
 
-  /** While it starts: has it exited on its own? Then failed, with why. */
+  /** Exited: failed with why, null. Else downloads begun (-1: unknown). */
   private async stillRuns(instance: Instance, epoch: number) {
     const result = await this.run(
       this.target(instance),
@@ -740,8 +756,8 @@ export class IdeInstances {
       }),
       { timeoutMs: HOST_RUN_TIMEOUT_MS },
     );
-    if (instance.epoch !== epoch || instance.state !== "starting") return false;
-    if (result.code !== 0) return true;
+    if (instance.epoch !== epoch || instance.state !== "starting") return null;
+    if (result.code !== 0) return -1;
     const { values, log } = parseHostLines(result.stdout);
     const state = values.get("state");
     if (state === "exited" || state === "gone") {
@@ -751,9 +767,9 @@ export class IdeInstances {
         instance,
         plainExitReason(log, code && /^\d+$/.test(code) ? Number(code) : null),
       );
-      return false;
+      return null;
     }
-    return true;
+    return Number(values.get("downloads")) || 0;
   }
 
   /** Ends World's attachment: its streams and forward. The server runs on. */

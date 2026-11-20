@@ -301,6 +301,38 @@ test("a server that doesn't answer in time is detached, not stopped", async () =
   expect(world.get(opened.id)?.reason).toContain("still runs on this computer");
 });
 
+test("VS Code retrying its server download is detached with why, not left waiting", async () => {
+  const h = setup();
+  let now = 0;
+  let downloads = 3;
+  const world = new IdeInstances({
+    localRoot: join(h.top, "data"),
+    worldId: () => WORLD,
+    // Its CLI logs one line per download attempt and never why one failed.
+    run: async (_target: unknown, script: string) =>
+      script.includes("downloads=")
+        ? {
+            code: 0,
+            stdout: `state=running\ndownloads=${downloads++}\n`,
+            stderr: "",
+          }
+        : { code: 0, stdout: "root=/x\nresult=started\n", stderr: "" },
+    probe: async () => null,
+    now: () => new Date(now),
+    sleep: async () => {
+      now += 3_000;
+    },
+  });
+  worlds.push(world);
+  const opened = await world.open(h.request());
+  await until(() => world.get(opened.id)?.state === "detached", "detached");
+  expect(world.get(opened.id)?.reason).toContain(
+    "couldn't download its web server on this computer",
+  );
+  // Attempts before World began waiting don't count against it.
+  expect(world.get(opened.id)?.reason).toContain("tried 5 times");
+});
+
 test("Stop that can't reach the host keeps the server listed with why", async () => {
   const h = setup();
   let reachable = true;
