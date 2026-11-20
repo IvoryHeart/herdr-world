@@ -26,7 +26,7 @@ export function townSearchKey(
 }
 
 /**
- * Town's results: its landmarks (the post office) and World's nodes, names
+ * Town's results: its landmarks (the warehouse) and World's nodes, names
  * before places before task summaries.
  */
 export function townSearchResults(world: WorldObject, query: string) {

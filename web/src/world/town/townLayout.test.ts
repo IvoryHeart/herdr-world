@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { townLandscape } from "./townLandscape";
+import { townHarbourLot } from "./townHarbour";
 import { townLevel, townZoomLimits } from "./townCamera";
 import { MARGIN, ROAD_GAP, townPhoneShape } from "./townLots";
 import { TOWN_POST_ROOM } from "./townPostLot";
@@ -933,8 +934,10 @@ test("the first street runs above the first row and on past the last crossing", 
     for (let x = last + ROAD_BAND; x < last + ROAD_BAND + 4; x += 1)
       expect(layout.ground[top * layout.width + x]).toBe(TownGround.walk);
     expect(last + ROAD_BAND + 4).toBeLessThanOrEqual(layout.width - 3);
-    // The street is open to the town's right edge.
-    expect(layout.ground[(top + 2) * layout.width + layout.width - 1]).toBe(
+    // The street is open to the town's right edge, or a wide town's
+    // promenade, the sea beyond it.
+    const end = townHarbourLot(layout)?.streetEnd ?? layout.width;
+    expect(layout.ground[(top + 2) * layout.width + end - 1]).toBe(
       TownGround.road,
     );
   }

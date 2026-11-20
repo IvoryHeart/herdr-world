@@ -166,14 +166,14 @@ if (process.env.TOWN_SEARCH_DOM !== "1") {
     town.unmount();
   });
 
-  test("searching the post office finds it and shows it, never opens a node (#1033)", () => {
+  test("searching the warehouse finds it and shows it, never opens a node (#1033, #1028)", () => {
     const town = mount();
-    for (const query of ["post office", "pull requests"]) {
+    for (const query of ["warehouse", "pull requests"]) {
       town.type(query);
       const row = town.rows()[0]!;
-      expect(row.textContent).toContain("Post office");
+      expect(row.textContent).toContain("Warehouse");
       town.click(row);
-      expect(town.chosen()).toMatchObject({ key: "town:post-office" });
+      expect(town.chosen()).toMatchObject({ key: "town:warehouse" });
       // Choosing it again shows it again: it is Town's, not a node to open.
       town.click(town.rows()[0]!);
       expect(town.opened).toEqual([]);
@@ -181,7 +181,7 @@ if (process.env.TOWN_SEARCH_DOM !== "1") {
     // Other words do not find it.
     town.type("login");
     expect(town.rows().map((row) => row.textContent)).not.toContainEqual(
-      expect.stringContaining("Post office"),
+      expect.stringContaining("Warehouse"),
     );
     town.unmount();
   });
