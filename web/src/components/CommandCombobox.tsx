@@ -74,10 +74,11 @@ import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
 import { WorktreeLocationDialog } from "./WorktreeLocationDialog";
 import { WorktreeOpenDialog } from "./WorktreeOpenDialog";
 import { worktreeCommandActions } from "./worktreeCommandActions";
-import { useCommandBoxRegistry } from "../settings/commandBoxRegistry";
+import {
+  rankCommand,
+  useCommandBoxRegistry,
+} from "../settings/commandBoxRegistry";
 import { useSettingsCommandGroups } from "../settings/commandBoxSettings";
-import { settingsPrototypeOn } from "../settings/flag";
-import { commandMatchScore } from "../settings/search";
 
 type TextAction =
   | { type: "rename-workspace"; workspace: Workspace }
@@ -186,11 +187,7 @@ function rankAction(action: ActionDefinition, search: string) {
     search,
     action.keywords,
   );
-  if (!settingsPrototypeOn()) return filtered;
-  // The Settings prototype (#1035): commands rank by the registry's one
-  // search, as Settings ranks them. A looser match (a path, a part of a
-  // name) still shows, below every match the one search makes.
-  return commandMatchScore(action, search) || filtered * 0.5;
+  return rankCommand(action, search, filtered);
 }
 
 function pathLeaf(path: string) {
@@ -1091,17 +1088,10 @@ function OwnedCommandCombobox({
     { heading: "Help", actions: helpActions },
   ].filter((group) => group.actions.length > 0);
 
-  // The Settings prototype (#1035): the box's commands join the one
-  // registry, so Settings finds them too. Search results (files, World's
-  // finds), settings and Help are not commands of their own.
+  // The Settings prototype (#1035): the box's commands join the one registry.
   useCommandBoxRegistry(
-    actionGroups.filter(
-      (group) =>
-        !findGroups.includes(group) &&
-        !settingsGroups.includes(group) &&
-        group.heading !== "Files" &&
-        group.heading !== "Help",
-    ),
+    actionGroups,
+    [...findGroups, ...settingsGroups],
     operationalShortcutsEnabled,
     run,
   );

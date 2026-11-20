@@ -402,6 +402,7 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
             ],
           },
         ],
+        [],
         true,
         (action) => {
           ran.push("through the box");

@@ -14,6 +14,7 @@ import { useEffect, useRef } from "react";
 import type { ActionGroupDefinition } from "../components/CommandCombobox";
 import { settingsPrototypeOn } from "./flag";
 import { type CommandEntry, defineSettings } from "./registry";
+import { commandMatchScore } from "./search";
 
 const SOURCE = "command-box";
 
@@ -30,12 +31,38 @@ type Published = {
   run: () => void;
 };
 
-/** Publishes `groups` while the prototype is on and the box can act. */
+/**
+ * How the box ranks one of its commands for `search`, given its own filter's
+ * score. With the prototype on, commands rank by the registry's one search,
+ * as Settings ranks them; a looser match (a path, a part of a name) still
+ * shows, below every match the one search makes.
+ */
+export function rankCommand(
+  action: { title: string; detail?: string; keywords?: readonly string[] },
+  search: string,
+  filtered: number,
+) {
+  if (!settingsPrototypeOn()) return filtered;
+  return commandMatchScore(action, search) || filtered * 0.5;
+}
+
+/** Groups that are results, not commands of the box's own. */
+const NOT_COMMANDS = new Set(["Files", "Help"]);
+
+/**
+ * Publishes the box's command groups while the prototype is on and the box
+ * can act. `results` are groups that are not commands of its own (World's
+ * finds, settings from the registry); they and Files and Help are left out.
+ */
 export function useCommandBoxRegistry(
-  groups: readonly ActionGroupDefinition[],
+  allGroups: readonly ActionGroupDefinition[],
+  results: readonly ActionGroupDefinition[],
   enabled: boolean,
   run: (action: () => void) => void,
 ) {
+  const groups = allGroups.filter(
+    (group) => !results.includes(group) && !NOT_COMMANDS.has(group.heading),
+  );
   const on = settingsPrototypeOn();
   const latest = useRef(new Map<string, Published>());
   const published: Published[] = [];
