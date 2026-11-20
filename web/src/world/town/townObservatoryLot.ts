@@ -1,22 +1,24 @@
 /**
- * Where Town's observatory (#1029) stands, as tiles: right of the town
- * center, its door on the first street as the center's is, so the center,
- * the post office on its left and the observatory on its right make one
- * place to act from at the top of the town. Pure geometry with no runtime
- * imports, so the layout can keep room for it (townLayout.ts) and the scene
- * (landscape, painter, renderer) reads it without the read model.
+ * Where Town's observatory (#1029) stands, as tiles: right of the library,
+ * which stands right of the town center (townLibraryLot.ts), its door on the
+ * first street as theirs are, so the post office, the center, the library
+ * and the observatory make one civic row at the top of the town. Pure
+ * geometry with no runtime imports, so the lots can keep room for it
+ * (townLots.ts) and the scene (landscape, painter, renderer) reads it
+ * without the read model.
  */
 
 import type { TownCenterLot } from "./townCenter";
 import type { TownLayout } from "./townLayout";
+import { TOWN_LIBRARY_ROOM } from "./townLibraryLot";
 
 /** The observatory's width in tiles. */
 export const TOWN_OBSERVATORY_WIDTH = 10;
 /** Its rows, the dome on top and the door on the bottom one. */
 export const TOWN_OBSERVATORY_ROWS = 12;
-/** Lawn between the center's east wing and the observatory. */
+/** Lawn between the library's lot and the observatory. */
 export const TOWN_OBSERVATORY_GAP = 2;
-/** Columns a wide town keeps right of its center for the lot and its verge. */
+/** Columns a wide town keeps right of the library for the lot and its verge. */
 export const TOWN_OBSERVATORY_ROOM =
   TOWN_OBSERVATORY_GAP + TOWN_OBSERVATORY_WIDTH + 1;
 
@@ -29,15 +31,15 @@ export type TownObservatoryLot = {
 };
 
 /**
- * The lot right of the center's east wing, standing on the first street's
- * pavement. The layout grows rightwards to keep it (townLayout.ts), so it
- * never makes anything already standing move.
+ * The lot right of the library's, standing on the first street's pavement.
+ * A wide town grows rightwards to keep it (townLots.ts), so it never makes
+ * anything already standing move.
  */
 export function townObservatoryLotBeside(
   center: TownCenterLot,
 ): TownObservatoryLot {
   return {
-    x: center.x + center.w + TOWN_OBSERVATORY_GAP,
+    x: center.x + center.w + TOWN_LIBRARY_ROOM + TOWN_OBSERVATORY_GAP,
     y: center.street - TOWN_OBSERVATORY_ROWS,
     w: TOWN_OBSERVATORY_WIDTH,
     h: TOWN_OBSERVATORY_ROWS,
@@ -55,8 +57,8 @@ export function townObservatoryReserve(lot: TownObservatoryLot) {
 }
 
 /**
- * The observatory's lot: right of the town center on the first street. A
- * narrow (stacked) town folds it to a sign on the center's left wing.
+ * The observatory's lot: right of the library on the first street. A narrow
+ * (stacked) town folds it to a sign on the center's right wing.
  */
 export function townObservatoryLot(
   layout: TownLayout,

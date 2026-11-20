@@ -380,9 +380,10 @@ test("zoom in steps from home to a building, a room and a desk, then zooms", () 
 test("zoom in leaves home when the whole town is barely wider than home", () => {
   // The whole town is a separate step, but within 1.2 times home: home's
   // step is raised to 1.2 times the whole town's zoom while home itself
-  // lands at its own zoom (#817).
+  // lands at its own zoom (#817). Wide enough that home stops at its
+  // desk-level cap with the library and observatory in its span.
   const { view, layout, viewport, camera } = setup({
-    width: 1920,
+    width: 2200,
     height: 1850,
   });
   view.attach(camera, layout, viewport);

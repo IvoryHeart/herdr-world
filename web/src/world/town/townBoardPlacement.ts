@@ -13,6 +13,7 @@
 
 import { TOWN_CITY_BOARD_GAP, townCityBoardScale } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
+import { townLibraryLotBeside, townLibraryReserve } from "./townLibraryLot";
 import {
   townObservatoryLotBeside,
   townObservatoryReserve,
@@ -112,8 +113,8 @@ export function townPlaceBoards(
 }
 
 /**
- * The town center's lot, the post office's, the observatory's and the
- * billboard, in world pixels.
+ * The town center's lot, the post office's, the library's, the
+ * observatory's and the billboard, in world pixels.
  */
 export function townBoardObstacles(
   layout: TownLayout,
@@ -138,6 +139,13 @@ export function townBoardObstacles(
     y1: post.y1 * T,
   });
   if (layout.formFactor !== "narrow") {
+    const library = townLibraryReserve(townLibraryLotBeside(center));
+    boxes.push({
+      x0: library.x0 * T,
+      x1: library.x1 * T,
+      y0: library.y0 * T,
+      y1: library.y1 * T,
+    });
     const observatory = townObservatoryReserve(
       townObservatoryLotBeside(center),
     );

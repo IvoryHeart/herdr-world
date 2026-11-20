@@ -23,6 +23,7 @@ import {
   townObservatoryWorking,
 } from "./townObservatoryModel";
 import { townPostLot, townPostReserve } from "./townPost";
+import { townLibraryLot, townLibraryReserve } from "./townLibraryLot";
 
 const NOW = Date.UTC(2026, 10, 18, 12);
 const HOUR = 3_600_000;
@@ -165,7 +166,7 @@ const towns: [string, TownInput, TownShape][] = [
 ];
 
 test.each(towns)(
-  "the observatory stands right of the town center on the first street (%s), on clear land",
+  "the observatory stands right of the library on the first street (%s), on clear land",
   (_, input, shape) => {
     const { layout } = layoutTown(input, shape);
     const lot = townObservatoryLot(layout)!;
@@ -173,9 +174,11 @@ test.each(towns)(
     const area = townObservatoryReserve(lot);
     const { center } = layout;
     const firstStreet = Math.min(...layout.roads);
-    // Right of the center's east wing, a short lawn between, inside the town.
-    expect(area.x0).toBeGreaterThanOrEqual(center.x + center.w);
-    expect(lot.x - (center.x + center.w)).toBeLessThanOrEqual(3);
+    // Right of the library's lot, a short lawn between, inside the town.
+    const library = townLibraryReserve(townLibraryLot(layout)!);
+    expect(area.x0).toBeGreaterThanOrEqual(library.x1);
+    expect(lot.x).toBeGreaterThan(center.x + center.w);
+    expect(lot.x - library.x1).toBeLessThanOrEqual(2);
     expect(area.x1).toBeLessThanOrEqual(layout.width);
     // Its door on the first street's pavement, above every building.
     expect(lot.y + lot.h).toBe(firstStreet);

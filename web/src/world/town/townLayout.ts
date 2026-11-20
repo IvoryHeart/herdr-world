@@ -9,10 +9,8 @@
  */
 
 import { townCenterForecourt, type TownCenterLot } from "./townCenter";
-import {
-  TOWN_OBSERVATORY_ROOM,
-  townObservatoryLotBeside,
-} from "./townObservatoryLot";
+import { townLibraryLotBeside } from "./townLibraryLot";
+import { townObservatoryLotBeside } from "./townObservatoryLot";
 import { townPostLotBeside } from "./townPostLot";
 import {
   ADD_ROOM_WIDTH,
@@ -608,17 +606,12 @@ export function layoutTown(
     draft.h = h;
     return { ...draft, x, y, roadY, topRoadY };
   });
-  // The topmost street runs on past the last crossing for the bus stop. A
-  // wide town keeps lawn right of its center for the observatory
-  // (townObservatoryLot.ts); growing rightwards moves nothing that stands.
+  // The topmost street runs on past the last crossing for the bus stop.
   const width =
     Math.max(
       lots.width + BUS_STOP_CLEARANCE,
       37,
-      center.x +
-        center.w +
-        (formFactor === "narrow" ? 0 : TOWN_OBSERVATORY_ROOM) +
-        MARGIN,
+      center.x + center.w + MARGIN,
     ) + MARGIN;
   const lastRoad = roads[roads.length - 1]!;
   const height = lastRoad + ROAD_GAP + PARK_HEIGHT + MARGIN;
@@ -794,6 +787,7 @@ export function layoutTown(
       set(tx, plaza.y, TownGround.walk);
 
   const post = townPostLotBeside(center);
+  const library = formFactor === "narrow" ? null : townLibraryLotBeside(center);
   const observatory =
     formFactor === "narrow" ? null : townObservatoryLotBeside(center);
   const lamps: TownPoint[] = [];
@@ -809,6 +803,13 @@ export function layoutTown(
       const underPost =
         ry === center.street && tx >= post.x - 1 && tx <= post.x + post.w;
       if (underPost) continue;
+      // So does the library's reading garden (townLibraryLot.ts).
+      const underLibrary =
+        library &&
+        ry === center.street &&
+        tx >= library.x - 1 &&
+        tx <= library.x + library.w;
+      if (underLibrary) continue;
       // So does the observatory's door (townObservatoryLot.ts).
       const underObservatory =
         observatory &&

@@ -246,7 +246,7 @@ Every service call requires an immutable connection ID and observed generation
 require `--yes`. Conflicts preserve the current file; an unknown write outcome
 requires a fresh read. Nothing retries a write automatically. Contents stay on
 the owning host and in private responses, without a World content cache, index,
-Board copy or telemetry. No new visual surface is included in this data delivery.
+Board copy or telemetry. The Library (below) is the browser's view of this data.
 
 The Unix host needs Python 3; Windows, symlinks, hardlinks, special/binary/non-UTF-8
 files and non-Markdown entries refuse. Discovery stops at 32 projects, 128 agents,
@@ -255,6 +255,48 @@ is literal and case-insensitive, with a 2 MiB scan budget and 100 results. Parti
 results say `truncated`, skipped reads are counted, and each host request has a
 15-second deadline. `herdr-world memory demo --json` creates and cleans up an
 isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
+
+### The Library
+
+- Open it from Town's **library**, right of the town center on the first street,
+  from the town center's ring (**Library**), from Board's hub (**Library**, on the
+  selected agent or workspace), from an agent window's settings (**Memory**)
+  or from Settings (**Agents** → **Library (memory)**, or search "memory").
+  On a phone the library folds to a book sign on the town center's left wing.
+  The library's sign counts files, stale files and shared files across up to four
+  hosts, read at most every five minutes; it never shows contents.
+- The left column (a picker on a phone) chooses a reader: everything on a host,
+  a project or an agent. An agent leads with what it would load: files read at
+  start, files read when needed and files skipped, shadowed ("Hidden by another
+  file") or empty. Discovery cannot prove what a running agent already loaded.
+- Shelves group files by source, `MEMORY.md` first. Each file shows its size, its
+  age (stale after 30 days) and who else reads it. Refused sources and files say
+  why; a missing instruction file offers **Create** and a missing memory folder
+  (a fresh project) offers **Add the first note**, which creates the folder;
+  harnesses World cannot read
+  say so; truncated lists and searches say they show the first ones only.
+- Opening a book reads it fresh from its host. **Edit** then **Save** writes it
+  with the revision you read. If the file changed meanwhile, the save is refused,
+  your text stays and **Load latest** shows theirs. When World can't tell whether a
+  write landed, it reads the file again: if the host has your text it says
+  Saved; otherwise your text stays on the revision you started from, so saving
+  again is refused if anyone else changed the file. **Delete** asks
+  first, focused on its button, with **Keep it**; deleting a topic says if
+  `MEMORY.md` still lists it. **+** on a shelf adds a note, reminding you to add
+  Claude topics to `MEMORY.md`. Reload the harness to pick up changes.
+- **Search** runs on submit over the chosen reader's files; tap a match to open it.
+  Choosing another reader or host drops a search still under way.
+- The Library stays on the host it opened on or you picked. If that host
+  disconnects, it says the host's memory is unavailable and offers the other
+  hosts; it never shows another host's agent in its place.
+  Escape, system Back or the close button closes the Library; on a phone a book
+  shows one pane with its own **Back** to the shelves. Opening the Library reads
+  the host again. File contents are never cached; only the sign's counts are.
+- To try it without real memory, open World with `?memoryFixture`: a synthetic
+  host with two projects, four agents, shared, stale, shadowed, empty, missing and
+  refused files. The page drops the parameter at once; edits stay in the page.
+  Saving text that contains `[uncertain]` acts out a write whose outcome is
+  unknown while someone else edits the file.
 
 ## World update notifications
 
@@ -465,8 +507,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
     the page drops the parameter at once and only the post office and the
     Work lens it opens use it.
-  - Town's **observatory** stands on the first street right of the town
-    center (a wide town grows rightwards to keep its lot; nothing moves). Its
+  - Town's **observatory** stands on the first street right of the library,
+    which stands right of the town center (a wide town grows rightwards to
+    keep its lot; nothing moves). Its
     sign shows, for Claude and Codex, the **5 h** and **week** subscription
     windows used and when each resets, such as "40% · Wed 14:00", or
     "limit · 12:40" when the harness refused work; a window with under 15%
@@ -477,7 +520,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     harness with no reading, including one at work whose budget World cannot
     read (such as Cursor), says "no reading", never 0%; an old reading is dimmed "out of date".
     On a phone it folds to a night-blue sign with a telescope on the town
-    center's left wing, such as "Claude 71% Codex 18%". Either sign opens
+    center's right wing, such as "Claude 71% Codex 18%". Either sign opens
     **Usage**, a lens over Town with four tabs (Escape, Back, the close
     button or a press outside closes it):
     - **Budget**: each harness's windows with a meter, a line where even use

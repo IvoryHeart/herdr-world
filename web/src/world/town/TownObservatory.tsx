@@ -22,7 +22,7 @@ import "./townObservatory.css";
 /**
  * The observatory's DOM layer (#1029): its sign with each harness's 5 h and
  * week used and when each resets, a lit window per agent at work, and on a
- * narrow town a folded sign on the center's left wing. Either sign opens the
+ * narrow town a folded sign on the center's right wing. Either sign opens the
  * Usage screens.
  */
 export const TownObservatory = memo(function TownObservatory({

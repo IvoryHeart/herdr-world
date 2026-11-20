@@ -497,13 +497,43 @@ test("installer upgrades run native released artifacts on every supported platfo
     ),
   );
   for (const step of job.steps)
-    expect(step["continue-on-error"]).toBeUndefined();
+    if (step.id !== "installer_evidence")
+      expect(step["continue-on-error"]).toBeUndefined();
   expect(job["continue-on-error"]).toBeUndefined();
   expect(
     job.steps.find((step: any) => step.with?.["retention-days"])?.with[
       "retention-days"
     ],
   ).toBe(1);
+});
+
+test("installer evidence retries one failed upload without weakening native checks", async () => {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../.github/workflows/installer-upgrade.yml", import.meta.url),
+    ).text(),
+  ) as any;
+  const steps = workflow.jobs.upgrade.steps;
+  const uploads = steps.filter((step: any) =>
+    step.uses?.startsWith("actions/upload-artifact@"),
+  );
+  expect(uploads).toHaveLength(2);
+  const [first, retry] = uploads;
+  expect(first.id).toBe("installer_evidence");
+  expect(first.if).toBe("always()");
+  expect(first["continue-on-error"]).toBe(true);
+  expect(retry.if).toBe(
+    "always() && steps.installer_evidence.outcome == 'failure'",
+  );
+  expect(retry["continue-on-error"]).toBeUndefined();
+  expect(retry.uses).toBe(first.uses);
+  expect(retry.with).toEqual({ ...first.with, overwrite: true });
+  expect(steps.indexOf(retry)).toBe(steps.indexOf(first) + 1);
+  expect(steps.at(-1)).toBe(retry);
+  expect(steps.filter((step: any) => step["continue-on-error"])).toEqual([
+    first,
+  ]);
+  expect(workflow.jobs.upgrade["continue-on-error"]).toBeUndefined();
 });
 
 test("installer fixture cleanup removes nested files and tolerates an already removed fixture", async () => {

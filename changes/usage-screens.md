@@ -1,6 +1,6 @@
 ### Added
 
-- Town has an observatory right of the town center: each harness's 5-hour and
+- Town has an observatory right of the library: each harness's 5-hour and
   weekly budget used with reset times, a lit window per agent at work, and on a
   phone a folded sign. It opens Usage, with budget pace, runs at once by hour
   (building vs reviewing and checking, counted as true overlap) and tokens by
