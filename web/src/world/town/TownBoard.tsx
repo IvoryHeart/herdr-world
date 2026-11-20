@@ -45,8 +45,11 @@ export function TownBoard({
   usageStore,
   onOpenSummary,
   sinceYouLeft,
+  harnesses = [],
 }: {
   counts: TownSummary["counts"];
+  /** The town's agents' harnesses: one without a reading is named. */
+  harnesses?: TownSummary["harnesses"];
   usageStore?: TownUsageStore;
   onOpenSummary?: () => void;
   /** "Since you left" after a return: on the sign, and under the phone chip. */
@@ -112,13 +115,13 @@ export function TownBoard({
   const now = Date.now();
   const limits = townLimits(usage);
   const gauges = townFuelGauges(limits, now);
-  const notes = townFuelNotes(limits, gauges);
+  const notes = townFuelNotes(limits, gauges, harnesses);
   const lowest = townFuelLowest(gauges);
   const summary = `${counts.working} working, ${counts.needsYou} need you, ${counts.finished} done, ${counts.quiet} quiet${
     counts.outOfFuel ? `, ${counts.outOfFuel} out of fuel` : ""
   }; ${population}${lowest ? `; ${townFuelLowestText(lowest, now)}` : ""}`;
   // Only what needs action shows on the indicator: the waiting count, and
-  // fuel once it runs low.
+  // fuel once a current reading runs low (never a dimmed or stale one).
   const lowFuel = lowest && (lowest.window.low || lowest.window.reached);
   return (
     <>

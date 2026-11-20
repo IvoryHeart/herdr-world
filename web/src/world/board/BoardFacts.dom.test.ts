@@ -191,7 +191,9 @@ if (process.env.BOARD_FACTS_DOM !== "1") {
     expect(lines[1]).toBe(
       "Claude 5 h 76% left · week 78% left · seen just now",
     );
-    expect(lines[2]).toBe("Codex week 92% left · seen just now");
+    expect(lines[2]).toBe(
+      "Codex 5 h not reported · week 92% left · seen just now",
+    );
     act(() => root.unmount());
   });
 }

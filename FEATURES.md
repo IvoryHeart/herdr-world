@@ -369,9 +369,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     data (Codex from its session logs, Claude from its status line) shows a short bar per window
     (`5 h`, `week`) with the percent left; under 15 % left it turns amber and
     says **low**. A reading more than 15 minutes old shows its age under the
-    bars in muted text, such as "seen 1 h ago". Hover, focus or tap a gauge for
-    each reset time, how long ago the numbers were seen, and their source. Old
-    numbers (over 3 h, or past a reset) read **stale** with no level; with several hosts the board shows the one with the least left.
+    bars in muted text, such as "seen 20 min ago"; past 30 minutes its levels
+    dim and the age reads "as of 09:24", and a dimmed reading never turns the
+    compact chip **low** on its own. A window the source did not send reads,
+    for example, `5 h — not reported` instead of vanishing, and a harness with
+    agents in Town but no reading from any host reads `Codex — no reading yet`
+    in muted text. Hover, focus or tap a gauge for each reset time, how long
+    ago the numbers were seen, their source and one line on what refreshes
+    them. Old numbers (over 3 h, or past a reset) read **stale** with no level;
+    with several hosts the board shows a current reading before a dimmed one,
+    and among those the one with the least left. The summary window's hosts and
+    Board's facts show each host's reading with the same rules.
     Claude gets its own gauge within about a minute of the first answer from an
     agent started from World's launcher: its status line passes Claude Code's 5 h and week windows to
     World, and the agent's status line looks as before. World shows Claude Code's

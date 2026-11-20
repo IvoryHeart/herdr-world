@@ -109,6 +109,7 @@ test("Town places Pods after Hosts and before Spend without changing reception",
     asks: [],
     finished: [],
     hosts: [],
+    harnesses: [],
     spend: { available: false },
   };
   const props = {

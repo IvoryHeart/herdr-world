@@ -174,7 +174,10 @@ FEATURES.md).
 Town shows these as fuel gauges on the board sign and per host in the Summary;
 see FEATURES.md. The board re-reads them every 30 seconds while it is shown,
 so a new reading reaches the sign within about a minute. A harness reported as `unsupported` appears on the sign as
-**not available** with its reason, never as an empty or full gauge.
+**not available** with its reason, never as an empty or full gauge; a
+`missing` harness with agents in Town reads **no reading yet**. The wire is
+unchanged: how old a reading looks (dimmed and "as of 09:24" after 30 minutes)
+and which windows read "not reported" are decided in the browser.
 
 ## Context fill
 

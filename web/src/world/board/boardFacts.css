@@ -120,7 +120,8 @@
 .board-facts-list li[data-low] {
   color: var(--s-blocked);
 }
-.board-facts-list li[data-stale] {
+.board-facts-list li[data-stale],
+.board-facts-list li[data-aged] {
   color: var(--board-soft);
 }
 .board-facts-list button {
@@ -164,7 +165,8 @@
   padding-left: 30px;
   line-height: 1.35;
 }
-.board-zone-facts [data-stale] {
+.board-zone-facts [data-stale],
+.board-zone-facts [data-aged] {
   opacity: 0.7;
 }
 .board-far .board-zone-counts,

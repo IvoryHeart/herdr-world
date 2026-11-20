@@ -34,6 +34,11 @@ export type TownSummary = {
    */
   finished: readonly TownSummaryItem[];
   hosts: readonly TownSummaryHost[];
+  /**
+   * The harnesses ("claude", "codex", …) of the town's agents, as Herdr
+   * names them, so FUEL can name one with agents but no limits reading.
+   */
+  harnesses: readonly string[];
   spend: TownSummarySpend;
 };
 
@@ -114,7 +119,7 @@ export function townSummaryAgents(counts: TownSummaryCounts): number {
 const roomContributions = new WeakMap<OfficeStatusCounts, TownSummaryCounts>();
 const topologies = new WeakMap<
   HerdrOfficeProjection,
-  { hosts: TownSummaryHost[]; totals: TownSummaryCounts }
+  { hosts: TownSummaryHost[]; totals: TownSummaryCounts; harnesses: string[] }
 >();
 
 function summaryTopology(office: HerdrOfficeProjection) {
@@ -156,7 +161,14 @@ function summaryTopology(office: HerdrOfficeProjection) {
       rooms,
     };
   });
-  const result = { hosts, totals };
+  const harnesses = [
+    ...new Set(
+      office.roster.flatMap((entry) =>
+        entry.agent.harness ? [entry.agent.harness.toLowerCase()] : [],
+      ),
+    ),
+  ].sort();
+  const result = { hosts, totals, harnesses };
   topologies.set(office, result);
   return result;
 }
@@ -185,7 +197,7 @@ export function townSummary(
     .sort((left, right) => (right.since ?? 0) - (left.since ?? 0));
   // Complete room contributions were counted cooperatively before publication.
   // Asks, metrics and the display clock do not recount raw agent topology.
-  const { hosts, totals } = summaryTopology(office);
+  const { hosts, totals, harnesses } = summaryTopology(office);
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
   return {
@@ -203,6 +215,7 @@ export function townSummary(
     asks,
     finished,
     hosts,
+    harnesses,
     spend: available
       ? {
           available: true,
