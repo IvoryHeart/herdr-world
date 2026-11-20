@@ -468,11 +468,14 @@ export function CoreFixturePanel({
               ? "Alphabet scenario: reviewer is t1b, after t19. "
               : coreFixtureScenario() === "first-run"
                 ? "First-run scenario: checks that a fresh World discovers only core and saves it as the default. "
-                : ""}
+                : coreFixtureScenario() === "headless"
+                  ? "Headless scenario: builder (codex exec) and reviewer (claude -p) expose synthetic conversations through real open files. "
+                  : ""}
             A stand-in herdr-core inside this World service with four synthetic
-            agents and a shell. Nothing is installed and no program runs. Its
-            placed agents have a desktop-app pane at 96×28; the reviewer's pane
-            can be resized or closed below.
+            agents and a shell. Nothing is installed; the headless scenario runs
+            only disposable transcript holders. Its placed agents have a
+            desktop-app pane at 96×28; the reviewer's pane can be resized or
+            closed below.
           </span>
         </div>
       </div>
