@@ -4,8 +4,9 @@
 
 World SHALL provide `world.usage.analytics` and the authenticated local CLI
 `usage` read over the same numeric harness evidence. It SHALL aggregate before
-legacy detail clipping and group by agent, Git project, qualified room or UTC
-day for today or seven UTC calendar dates. Metrics SHALL distinguish unknown
+legacy detail clipping and group by agent, Git project, qualified room, UTC
+day or run (one harness session on one transcript host) for today or seven UTC
+calendar dates. Metrics SHALL distinguish unknown
 from observed zero and disclose partial coverage. Optional explicit harness
 cost SHALL remain separate from configured price estimates and SHALL NOT imply
 a subscription charge or invoice. Stale numeric rows SHALL NOT enter totals.
@@ -13,6 +14,10 @@ a subscription charge or invoice. Stale numeric rows SHALL NOT enter totals.
 #### Scenario: Unknown cost and no time evidence
 - **WHEN** logs expose tokens without dollar charges or observed runtime status intervals
 - **THEN** tokens remain visible and reported cost, active time and owner-wait time are null with unknown coverage
+
+#### Scenario: Run detail without prompt text
+- **WHEN** a caller groups by run
+- **THEN** each run row carries its harness, models, response count with each API response counted once, first and last response times, largest prompt, active UTC hours, checkout branch, the catalogue pull request whose head is that branch and its pane's current context, and a role only from a fixed vocabulary matched in the run's first prompt, never the prompt text; a run whose first prompt names no role has an unknown role
 
 #### Scenario: Same host through two runtime connections
 - **WHEN** TUI and core connections are known to read the same transcript host

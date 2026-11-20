@@ -10,6 +10,8 @@ import { WorkLens } from "../board/WorkLens";
 import type { WorldObject } from "../worldObject";
 import { AnswerOutboxContext } from "./answerOutbox";
 import { useTownPostSources } from "./townPostFixture";
+import { TownOpenUsageContext } from "./TownUsageLens";
+import type { UsageTab } from "../usage/UsageLens";
 
 /**
  * Opens Board's Work lens over Town (#887). Town provides it; without it (a
@@ -53,20 +55,27 @@ export function TownWorkLens({
   );
 }
 
-/** Town's contexts: the answer outbox and the Work lens's opener. */
+/**
+ * Town's contexts: the answer outbox, the Work lens's opener and the Usage
+ * screens' (the observatory's, TownUsageLens.tsx).
+ */
 export function TownContexts({
   outbox,
   openWork,
+  openUsage = null,
   children,
 }: {
   outbox: () => void;
   openWork: () => void;
+  openUsage?: ((tab?: UsageTab) => void) | null;
   children: ReactNode;
 }) {
   return (
     <AnswerOutboxContext.Provider value={outbox}>
       <TownOpenWorkContext.Provider value={openWork}>
-        {children}
+        <TownOpenUsageContext.Provider value={openUsage}>
+          {children}
+        </TownOpenUsageContext.Provider>
       </TownOpenWorkContext.Provider>
     </AnswerOutboxContext.Provider>
   );

@@ -108,7 +108,7 @@ by the usual CLI envelope, for example
 ## Query and grouping
 
 `window` defaults to `today`; `7d` starts six UTC midnights earlier. `group_by`
-defaults to `day` and accepts `agent`, `project`, `room`, `day`. All windows are
+defaults to `day` and accepts `agent`, `project`, `room`, `day`, `run`. All windows are
 half-open, ending at the response observation time. Empty days are explicit
 unknown buckets. `total` includes admitted facts before row clipping.
 
@@ -129,7 +129,22 @@ connection share a common-directory-derived ID. Different connections remain
 distinct projects. Unresolved/non-Git checkouts remain unattributed. A historical
 project ID can outlive the currently observed project labels.
 
-For a character card, query `group_by:"agent"` with its qualified pane filter.
+A run is one harness session on one transcript host, across its days and
+models. `group_by:"run"` rows are heaviest first and carry `run`: harness,
+models (most tokens first), `role`, `branch`, `pull_request` (the work
+catalogue's PR whose head is that branch, or null), `calls` (API responses,
+each counted once), `first_at`/`last_at`, `max_prompt_tokens` (largest single
+prompt, input plus cache), `hours` (per UTC day, bit h set when the run
+answered in hour h) and `context` (its pane's current context fill, only while
+it runs in a pane). `role` is one of `worker`, `fixer`, `reviewer`, `checker`
+or `scout`, read from the run's first prompt (`builder` reads as worker; a
+`/review` command as reviewer) and null when that prompt names none. The prompt
+text is matched and dropped; it is never stored or published. `branch` is the
+checkout branch the harness log records, never `HEAD`. Older services omit the
+run detail; consumers show it as unknown.
+
+For a character card, query `group_by:"agent"` with its qualified pane filter,
+or `group_by:"run"` and match the row's qualified pane identity.
 For a chart, query `group_by:"day"` and optionally filter that pane, room or
 project. Resolve presentation names through the existing World snapshot and
 project catalogue. Session, room and checkout evidence is rechecked after Git
@@ -177,6 +192,18 @@ reads; changed or retired evidence cannot attach numbers to a replacement.
   arguments or Codex title evidence; no cwd-based transcript guessing. Unsupported
   Windows host tools and unsupported harness formats stay unavailable/unknown.
   No provider request, credential read, terminal input or UI action is added.
+
+## Usage screens
+
+Town's observatory and the Usage screens read `group_by:"run"` and
+`group_by:"project"` for `7d` through one shared browser read per grouping,
+refreshed at most every 30 seconds; agent cards share the same read (see
+[FEATURES.md](../FEATURES.md#visual-control-plane)). For testing rare states without real
+logs, open World with `?usageFixture` (busy), `?usageFixture=reached` (Claude's
+5-hour limit reached) or `?usageFixture=empty` (nothing observed). The page
+removes the parameter at once and the switch lasts until the next page load.
+Only `world.usage.analytics` answers change, with synthetic runs on
+`example-org/web-app`; every other read is real.
 
 Focused evidence lives beside the implementation: activity, analytics, projects,
 core, projection and service tests, plus CLI and admitted RPC tests. These prove

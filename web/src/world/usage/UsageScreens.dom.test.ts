@@ -1,0 +1,288 @@
+import { expect, test } from "bun:test";
+
+if (process.env.USAGE_SCREENS_DOM !== "1") {
+  test("the observatory, Usage and the agent card line in an isolated React DOM", async () => {
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        "test",
+        "--preload",
+        new URL("../../testing/reactDomPreload.ts", import.meta.url).pathname,
+        import.meta.path,
+      ],
+      {
+        env: { ...process.env, USAGE_SCREENS_DOM: "1" },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [out, err, code] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    if (code !== 0) throw new Error(`${out}\n${err}`);
+    expect(code).toBe(0);
+  }, 30_000);
+} else {
+  const browser = globalThis.window as unknown as typeof globalThis;
+  for (const [key, value] of Object.entries({
+    location: browser.location,
+    history: browser.history,
+    HTMLButtonElement: browser.HTMLButtonElement,
+    KeyboardEvent: browser.KeyboardEvent,
+    CustomEvent: browser.CustomEvent,
+    NodeFilter: browser.NodeFilter,
+    PointerEvent: browser.PointerEvent ?? browser.MouseEvent,
+    MouseEvent: browser.MouseEvent,
+    FocusEvent: browser.FocusEvent,
+    ResizeObserver: browser.ResizeObserver,
+    getComputedStyle: browser.getComputedStyle.bind(browser),
+    requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
+    cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
+  }))
+    Object.defineProperty(globalThis, key, {
+      value,
+      configurable: true,
+      writable: true,
+    });
+  const { act, createElement } = await import("react");
+  const { createRoot } = await import("react-dom/client");
+  const { bridge } = await import("../../api");
+  const { layoutTown, TOWN_SHAPES } = await import("../town/townLayout");
+  const { TownObservatory } = await import("../town/TownObservatory");
+  const { TownOpenUsageContext } = await import("../town/TownUsageLens");
+  const { UsageLens } = await import("./UsageLens");
+  const { AgentUsageLine } = await import("./AgentUsageLine");
+  const { resetUsageFixture, usageFixture } = await import("./usageFixture");
+  const { resetUsageStores } = await import("./usageStore");
+  const { usageRuns } = await import("./usageModel");
+
+  // The service is never reached: a call that is not the fixture's fails.
+  const calls: string[] = [];
+  bridge.call = (async (method: string) => {
+    calls.push(method);
+    throw new Error("no service in this test");
+  }) as typeof bridge.call;
+
+  /** Turns the testing switch on as a page load with `?usageFixture=`. */
+  function fixture(mode: "busy" | "reached" | "empty" | null) {
+    history.replaceState(
+      null,
+      "",
+      mode === null ? "/" : `/?usageFixture=${mode}`,
+    );
+    resetUsageFixture();
+    resetUsageStores();
+  }
+
+  async function mount(element: ReturnType<typeof createElement>) {
+    const host = document.createElement("div");
+    host.className = "town-world";
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () => root.render(element));
+    // The fixture answers on the next microtask.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    return {
+      host,
+      async close() {
+        await act(async () => root.unmount());
+        host.remove();
+      },
+    };
+  }
+
+  const town = (narrow: boolean) =>
+    layoutTown(
+      {
+        hosts: [{ key: "a", displayOrder: 0 }],
+        rooms: [{ key: "a/0", hostKey: "a", order: 0, deskKeys: ["a/0/0"] }],
+      },
+      narrow ? TOWN_SHAPES.phone : TOWN_SHAPES.wide,
+    ).layout;
+
+  const observatory = (narrow: boolean, open: (tab?: string) => void) =>
+    createElement(
+      TownOpenUsageContext.Provider,
+      { value: open },
+      createElement(TownObservatory, {
+        layout: town(narrow),
+        agents: new Map(),
+      }),
+    );
+
+  test("the switch is read once and its parameter leaves the address at once", async () => {
+    fixture("busy");
+    const view = await mount(observatory(false, () => {}));
+    expect(location.search).toBe("");
+    expect(calls).toEqual([]);
+    await view.close();
+  });
+
+  test("the observatory sign shows both harnesses' windows, lights a window per agent at work and opens Usage", async () => {
+    fixture("busy");
+    const opened: (string | undefined)[] = [];
+    const view = await mount(observatory(false, (tab) => opened.push(tab)));
+    const sign = view.host.querySelector<HTMLButtonElement>(
+      ".town-observatory-sign",
+    )!;
+    expect(sign.textContent).toContain("OBSERVATORY");
+    expect(sign.textContent).toContain("Claude2");
+    expect(sign.textContent).toContain("40% · ");
+    expect(sign.textContent).toContain("71% · ");
+    expect(sign.getAttribute("aria-label")).toStartWith(
+      "Observatory: Claude, 2 at work: 5 h 40% used",
+    );
+    expect(sign.getAttribute("aria-label")).toEndWith(". Open Usage");
+    expect(
+      [
+        ...view.host.querySelectorAll<HTMLElement>(".town-observatory-light"),
+      ].map((light) => light.dataset.harness),
+    ).toEqual(["claude", "claude", "codex"]);
+    await act(async () => sign.click());
+    expect(opened).toEqual(["budget"]);
+    await view.close();
+  });
+
+  test("a narrow town shows the folded sign with each harness's fuller window", async () => {
+    fixture("busy");
+    const opened: (string | undefined)[] = [];
+    const view = await mount(observatory(true, (tab) => opened.push(tab)));
+    expect(view.host.querySelector(".town-observatory-sign")).toBeNull();
+    const fold = view.host.querySelector<HTMLButtonElement>(
+      ".town-observatory-fold",
+    )!;
+    expect(fold.textContent).toBe("Claude 71%Codex 18%");
+    await act(async () => fold.click());
+    expect(opened).toEqual(["budget"]);
+    await view.close();
+  });
+
+  test("a reached limit reads as a limit; nothing observed reads as no reading, never zero", async () => {
+    fixture("reached");
+    let view = await mount(observatory(true, () => {}));
+    expect(view.host.querySelector(".town-observatory-fold")!.textContent).toBe(
+      "Claude limitCodex 18%",
+    );
+    await view.close();
+    fixture("empty");
+    view = await mount(observatory(false, () => {}));
+    const sign = view.host.querySelector(".town-observatory-sign")!;
+    expect(sign.textContent).toContain("No budget reading yet");
+    expect(sign.textContent).not.toMatch(/\d/);
+    await view.close();
+  });
+
+  test("a failed read says usage is unavailable", async () => {
+    fixture(null);
+    const view = await mount(observatory(false, () => {}));
+    expect(
+      view.host.querySelector(".town-observatory-sign")!.textContent,
+    ).toContain("Usage unavailable");
+    expect(calls).toContain("world.usage.analytics");
+    await view.close();
+  });
+
+  test("Usage answers budget pace, runs at once by hour and tokens by role, item and run", async () => {
+    fixture("busy");
+    let closed = 0;
+    const view = await mount(
+      createElement(UsageLens, { onClose: () => (closed += 1) }),
+    );
+    const lens = view.host.querySelector<HTMLElement>(".usage-lens")!;
+    const tab = (name: string) =>
+      [...lens.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+        (button) => button.textContent === name,
+      )!;
+    expect(tab("Budget").getAttribute("aria-selected")).toBe("true");
+    expect(
+      [...lens.querySelectorAll(".usage-card")].map((card) =>
+        card.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Claude budget", "Codex budget"]);
+    expect(lens.querySelectorAll(".usage-pace").length).toBe(4);
+
+    await act(async () => tab("Runs at once").click());
+    expect(lens.dataset.tab).toBe("runs");
+    expect(lens.querySelectorAll(".usage-chart").length).toBe(2);
+    const toggle = [...lens.querySelectorAll("button")].find(
+      (button) => button.textContent === "Show as table",
+    )!;
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(lens.querySelector(".usage-table")).not.toBeNull();
+
+    await act(async () => tab("Tokens").click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(lens.textContent).toContain("Running now");
+    expect(lens.textContent).toContain("Heaviest this week");
+    expect(lens.querySelector('[aria-label="Tokens by role"]')).not.toBeNull();
+    expect(lens.textContent).toContain("By item#101");
+    expect(lens.textContent).toContain("active 30 h");
+    // A fixer going in circles stands out.
+    expect(lens.querySelector(".usage-flag")).not.toBeNull();
+
+    await act(async () =>
+      lens
+        .querySelector<HTMLButtonElement>('[aria-label="Close Usage"]')!
+        .click(),
+    );
+    expect(closed).toBe(1);
+    await view.close();
+  });
+
+  test("with nothing observed, Usage says there is no reading instead of zeros", async () => {
+    fixture("empty");
+    const view = await mount(
+      createElement(UsageLens, { initialTab: "tokens", onClose: () => {} }),
+    );
+    const lens = view.host.querySelector(".usage-lens")!;
+    expect(lens.textContent).toContain("Tokens are unknown.");
+    await view.close();
+  });
+
+  test("an agent's card line shows its run, or says unknown for a pane with no run", async () => {
+    fixture("busy");
+    const now = Date.now();
+    const live = usageRuns(
+      usageFixture(now, "busy", { group_by: "run", window: "7d" }),
+    ).find((run) => run.identity?.pane_id && run.tokens !== null)!;
+    const identity = live.identity!;
+    let opened = 0;
+    const view = await mount(
+      createElement(AgentUsageLine, {
+        pane: {
+          connectionId: identity.connection_id!,
+          generation: identity.connection_generation!,
+          paneId: identity.pane_id!,
+        },
+        onOpen: () => (opened += 1),
+      }),
+    );
+    const line =
+      view.host.querySelector<HTMLButtonElement>("button.agent-usage")!;
+    expect(line.textContent).toContain(" tokens · ");
+    expect(line.textContent).toContain(`${live.calls} calls`);
+    expect(line.getAttribute("aria-label")).toEndWith(". Open Usage");
+    await act(async () => line.click());
+    expect(opened).toBe(1);
+    await view.close();
+
+    const other = await mount(
+      createElement(AgentUsageLine, {
+        pane: {
+          connectionId: "fixture",
+          generation: 2,
+          paneId: identity.pane_id!,
+        },
+      }),
+    );
+    expect(other.host.textContent).toBe("This run: usage unknown");
+    await other.close();
+  });
+}

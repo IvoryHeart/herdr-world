@@ -1,0 +1,250 @@
+/* The observatory (TownObservatory.tsx), in Town's pixel skin: a night-blue
+   sign with a brass edge over the dome, a lit window per agent at work, and
+   on a narrow town a folded sign on the center's left wing. */
+
+.town-world .town-observatory-sign,
+.town-world .town-observatory-fold,
+.town-world .town-observatory-lights {
+  --obs-claude: #ffd27a;
+  --obs-codex: #9fe3ff;
+  --obs-warn: #ff8a5c;
+  --obs-ink: #f3ecd8;
+  --obs-soft: #b9c2dd;
+}
+
+/* The sign keeps a readable size as the town zooms, like the post office's. */
+.town-world .town-observatory-sign {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-width: 120px;
+  padding: 3px 8px 5px;
+  color: var(--obs-ink);
+  background: #1d2440;
+  border: 2px solid #8a6420;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1px #d6a640,
+    0 2px 0 #3b2414;
+  transform: translate(-50%, -100%) scale(clamp(0.5, var(--iz), 2.4));
+  transform-origin: 50% 100%;
+  font-size: 10px;
+  line-height: 1.25;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  image-rendering: pixelated;
+}
+.town-world .town-observatory-sign:focus-visible,
+.town-world .town-observatory-fold:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+.town-world .town-observatory-sign:hover {
+  box-shadow:
+    inset 0 0 0 1px #ffd166,
+    0 2px 0 #3b2414;
+}
+
+.town-observatory-title {
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #ffd166;
+}
+.town-observatory-note {
+  color: var(--obs-soft);
+}
+
+/* Harness rows under two window columns, 5 h then week. */
+.town-observatory-dials {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  gap: 1px 8px;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.town-observatory-head {
+  color: var(--obs-soft);
+  font-size: 9px;
+  text-align: left;
+}
+.town-observatory-row {
+  display: contents;
+}
+.town-observatory-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 700;
+  text-align: left;
+}
+.town-observatory-name b {
+  min-width: 11px;
+  padding: 0 2px;
+  border-radius: 2px;
+  color: #1c1722;
+  background: var(--obs-claude);
+  text-align: center;
+  font-size: 9px;
+}
+.town-observatory-name b[data-harness="codex"] {
+  background: var(--obs-codex);
+}
+.town-observatory-cell {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+.town-observatory-cell i {
+  display: block;
+  width: 64px;
+  height: 3px;
+  background:
+    linear-gradient(
+      90deg,
+      var(--obs-ink) 0 var(--used),
+      transparent var(--used)
+    ),
+    #3a4366;
+}
+.town-observatory-cell[data-low] i {
+  background:
+    linear-gradient(
+      90deg,
+      var(--obs-warn) 0 var(--used),
+      transparent var(--used)
+    ),
+    #3a4366;
+}
+.town-observatory-cell[data-kind="reached"],
+.town-observatory-cell[data-low] {
+  color: var(--obs-warn);
+  font-weight: 700;
+}
+.town-observatory-cell[data-kind="none"] {
+  color: var(--obs-soft);
+}
+.town-observatory-row[data-stale] > * {
+  opacity: 0.6;
+}
+.town-observatory-stale {
+  grid-column: 1 / -1;
+  color: var(--obs-soft);
+  font-size: 9px;
+}
+
+/* A window per agent at work, Claude's warm and Codex's cool. */
+.town-world .town-observatory-lights {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.town-observatory-light {
+  position: absolute;
+  background: var(--obs-claude);
+  box-shadow: 0 0 10px 2px
+    color-mix(in srgb, var(--obs-claude) 55%, transparent);
+  animation: town-observatory-lit 900ms ease-out both;
+}
+.town-observatory-light[data-harness="codex"] {
+  background: var(--obs-codex);
+  box-shadow: 0 0 10px 2px color-mix(in srgb, var(--obs-codex) 55%, transparent);
+}
+.town-observatory-more {
+  position: absolute;
+  padding: 0 3px;
+  color: #1c1722;
+  background: #ffd166;
+  border: 1px solid #1c1722;
+  border-radius: 3px;
+  font:
+    700 9px "Silkscreen",
+    ui-monospace,
+    monospace;
+}
+@keyframes town-observatory-lit {
+  0% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 0.7;
+  }
+}
+
+/* The folded sign on a narrow town's center. */
+.town-world .town-observatory-fold {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 2px 6px;
+  color: var(--obs-ink);
+  background: #1d2440;
+  border: 2px solid #8a6420;
+  border-radius: 4px;
+  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.town-observatory-fold-dials {
+  display: inline-flex;
+  gap: 6px;
+}
+.town-observatory-fold-dials [data-reached] {
+  color: var(--obs-warn);
+}
+.town-observatory-fold-dials [data-stale] {
+  opacity: 0.6;
+}
+.town-observatory-scope {
+  position: relative;
+  flex: none;
+  display: inline-block;
+  width: 16px;
+  height: 12px;
+  background: radial-gradient(
+    circle at 50% 100%,
+    #8cc7b8 0 7px,
+    transparent 7.5px
+  );
+  image-rendering: pixelated;
+}
+.town-observatory-scope::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 0;
+  width: 10px;
+  height: 3px;
+  background: #d6a640;
+  transform: rotate(-35deg);
+  transform-origin: left center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-observatory-light {
+    animation: none;
+  }
+}
+@media (forced-colors: active) {
+  .town-observatory-cell i {
+    forced-color-adjust: none;
+    border: 1px solid CanvasText;
+  }
+}
