@@ -22,8 +22,9 @@ import { nativeSocketPath } from "../config/server-config";
 import { worldEnv } from "../config/environment";
 import { validateConnectionId } from "./protocol";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "./types";
+import { hostId, type HostProfile, validateHostProfile } from "./hosts";
 
-export const CONNECTION_PROFILE_FILE_VERSION = 2;
+export const CONNECTION_PROFILE_FILE_VERSION = 3;
 export const MAX_CONNECTION_PROFILES = 64;
 const MAX_PROFILE_FILE_BYTES = 1024 * 1024;
 const MAX_LABEL_LENGTH = 80;
@@ -122,9 +123,10 @@ export function connectionRecoveryFingerprint(
 }
 
 export type PersistedConnectionRegistry = {
-  version: 1 | typeof CONNECTION_PROFILE_FILE_VERSION;
+  version: 1 | 2 | typeof CONNECTION_PROFILE_FILE_VERSION;
   default_connection_id: string;
   profiles: ConnectionProfile[];
+  hosts?: HostProfile[];
 };
 
 export type PublicConnectionProfile = ConnectionProfile & {
@@ -489,14 +491,24 @@ export function validateConnectionRegistry(
     value,
     ["version", "default_connection_id", "profiles"],
     "connection registry",
+    ["hosts"],
   );
   if (
     value.version !== 1 &&
+    value.version !== 2 &&
     value.version !== CONNECTION_PROFILE_FILE_VERSION
   ) {
     throw new Error("unsupported connection registry version");
   }
-  if (!Array.isArray(value.profiles) || value.profiles.length === 0) {
+  if (
+    !Array.isArray(value.profiles) ||
+    (value.profiles.length === 0 &&
+      !(
+        value.version === 3 &&
+        Array.isArray(value.hosts) &&
+        value.hosts.length
+      ))
+  ) {
     throw new Error("connection registry must contain at least one profile");
   }
   if (value.profiles.length > MAX_CONNECTION_PROFILES) {
@@ -505,7 +517,19 @@ export function validateConnectionRegistry(
   const profiles = value.profiles.map((profile) =>
     value.version === 1
       ? validateLocalConnectionProfile(profile)
-      : validateConnectionProfile(profile),
+      : value.version === 3 &&
+          profile?.id === STARTUP_DEFAULT_CONNECTION_ID &&
+          profile?.type === "local" &&
+          !profile?.runtime
+        ? // Preserve the implicit runtime's resource IDs when hosts first persist.
+          {
+            ...validateConnectionProfile({
+              ...profile,
+              id: "startup-migration",
+            }),
+            id: STARTUP_DEFAULT_CONNECTION_ID,
+          }
+        : validateConnectionProfile(profile),
   );
   const ids = new Set<string>();
   for (const profile of profiles) {
@@ -514,15 +538,43 @@ export function validateConnectionRegistry(
     ids.add(profile.id);
   }
   const defaultConnectionId = validateConnectionId(value.default_connection_id);
-  if (!ids.has(defaultConnectionId)) {
+  if (
+    !ids.has(defaultConnectionId) &&
+    !(
+      profiles.length === 0 &&
+      defaultConnectionId === STARTUP_DEFAULT_CONNECTION_ID
+    )
+  ) {
     throw new Error("default connection profile does not exist");
   }
   // A herdr-core default is valid: a computer with only herdr-core has no
   // Herdr connection to be its default (#935).
+  let hosts: HostProfile[] | undefined;
+  if (value.hosts !== undefined) {
+    if (
+      value.version !== 3 ||
+      !Array.isArray(value.hosts) ||
+      value.hosts.length > MAX_CONNECTION_PROFILES
+    )
+      throw new Error("invalid host catalogue");
+    hosts = value.hosts.map(validateHostProfile);
+    if (new Set(hosts.map((host) => host.id)).size !== hosts.length)
+      throw new Error("duplicate host");
+    for (const host of hosts) {
+      for (const record of host.discovered ?? []) {
+        const profile = profiles.find(
+          (profile) => profile.id === record.connection_id,
+        );
+        if (!profile || hostId(profile) !== host.id)
+          throw new Error("host runtime ownership mismatch");
+      }
+    }
+  }
   return {
     version: value.version,
     default_connection_id: defaultConnectionId,
     profiles,
+    ...(hosts ? { hosts } : {}),
   };
 }
 
