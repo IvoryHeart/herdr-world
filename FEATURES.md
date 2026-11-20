@@ -2723,6 +2723,11 @@ and herdr-core alike:
 - **Core rooms and launches.** Core agents appear in Town, Board, Desk and
   Needs you. App-placed agents share rooms from their app space/tab labels;
   subagents join their parent's room; others use the core's main room.
+  An app space with no name is named, for display only, from its oldest
+  terminal's folder, else its tab, else its first agent; plates and Board
+  cards show such a name in lighter letters with a tooltip saying where it
+  came from, and a repeated name gets a number (`api`, `api 2`). World never
+  renames the space; with nothing to name it from, it reads `Herdr space`.
   **New agent** defaults to core when ready. Choose a TUI room to use that
   runtime. Profiles resolve an installed executable on the selected host;
   installation and harness sign-in remain yours. Claude and Codex receive

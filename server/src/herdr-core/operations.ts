@@ -32,6 +32,7 @@ import type { CoreMirrorTerminal } from "./mirror";
 import type { CoreConnectionRuntime } from "./runtime";
 import {
   CORE_MAIN_ROOM,
+  CORE_UNNAMED_SPACE,
   coreHarness,
   coreRoomOfWorkspace,
   coreRoomWorkspaceId,
@@ -214,8 +215,14 @@ function folderOf(
 async function roomLabelOf(lease: Lease, workspaceId: string): Promise<string> {
   const { workspaces } = await lease.runtime.operations.listWorkspaces();
   const room = (
-    workspaces as Array<{ workspace_id: string; label?: unknown }>
+    workspaces as Array<{
+      workspace_id: string;
+      label?: unknown;
+      label_derived_from?: unknown;
+    }>
   ).find((w) => w.workspace_id === workspaceId);
+  // A name World derived is display only: the caption never spreads it.
+  if (room?.label_derived_from) return CORE_UNNAMED_SPACE;
   return typeof room?.label === "string" && room.label ? room.label : "World";
 }
 

@@ -283,6 +283,16 @@ reuses the pid and argv is refused.
   starts needing the user triggers a push from core status events under Herdr's
   attention rule
 
+#### Scenario: Unnamed app space
+
+- **WHEN** an app-created core space has no name in its `where` captions
+- **THEN** World names its room for display from the space's oldest terminal's
+  folder, else its tab, else its first agent, so the name holds while newer
+  agents come and go; the row says the name is derived and views mark it; a
+  name another room of the core already shows gets a number; World never
+  writes the derived name to core, its own launches caption the space
+  `Herdr space`, and with no evidence the room reads `Herdr space`
+
 #### Scenario: Missing agent status
 
 - **WHEN** a harness has no reported status or its reporting times out, including

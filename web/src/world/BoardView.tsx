@@ -181,6 +181,7 @@ import {
 } from "../../../shared/relations";
 import { aimAtBin } from "./bin/binDrop";
 import { putAgentInBin } from "./bin/WorldBin";
+import { BoardRoomName } from "./board/BoardRoomName";
 import { keyTakenByViewSearch } from "./viewSearchShortcut";
 import {
   groupTerminals,
@@ -3735,7 +3736,7 @@ export default function BoardView({
                     {lens.data ? <BoardLensReading mark={lens.mark} /> : null}
                     <div className="board-row">
                       {pinnedKeys.has(space.key) ? <PinBadge /> : null}
-                      <span className="board-label">{space.label}</span>
+                      <BoardRoomName space={space} />
                       <button
                         type="button"
                         className="board-fold"

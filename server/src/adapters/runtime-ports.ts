@@ -10,6 +10,11 @@ export type WorkspaceRow = RuntimeRow & {
   workspace_id?: string;
   focused?: boolean;
   cwd?: string;
+  /**
+   * Set when the runtime gave the room no name and World named it for display
+   * from this evidence (herdr-core's unnamed app spaces); never written back.
+   */
+  label_derived_from?: "folder" | "tab" | "agent";
   worktree?: RuntimeRow & {
     repo_name?: string;
     checkout_path?: string;
