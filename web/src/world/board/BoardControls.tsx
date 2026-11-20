@@ -43,6 +43,7 @@ const CONTROLS: readonly BoardControl[] = [
 ];
 /** The controls a help entry points at (board.help.ts). */
 const HELP_ANCHORS: Partial<Record<BoardControl, { "data-help": string }>> = {
+  add: helpAnchor("board.add"),
   next: helpAnchor("board.next"),
   lens: helpAnchor("board.lenses"),
   fit: helpAnchor("board.camera"),

@@ -15,6 +15,7 @@ Every World screen answers this too: press ? beside the views (on a phone, the v
 
 - [The town board as a chip](#town-board-chip)
 - [What's new from the Town Master](#town-master)
+- [Add memory, logs, docs and links](#board-add)
 - [What can I do here?](#world-help)
 - [Hosts on a phone](#world-phone-hosts)
 
@@ -131,6 +132,20 @@ Cards stay where you put them. Dragging a pane row onto another tab moves only t
 3. On a phone, hold a card or pane row to lift it; a quick swipe pans.
 
 Where: Board, any card. Since 0.3.0.
+
+<a id="board-add"></a>
+
+### Add memory, logs, docs and links
+
+![Add memory, logs, docs and links](../web/public/help/board.add.desktop.light.webp)
+
+Add to Board places a project's memory, a past agent's log, a document or a link on the board as a card you can open and read.
+
+1. Press Add to Board in Board's controls.
+2. Pick a kind, then choose what it shows.
+3. Press the card to read it beside the board.
+
+Where: Board, the controls along the top. Since 0.3.6.
 
 <a id="board-notes"></a>
 
