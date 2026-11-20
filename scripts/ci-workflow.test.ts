@@ -135,6 +135,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "plugin-windows",
     "installer-upgrade",
     "launchd",
+    "dependency-security",
   ]);
   expect(delivery?.if).toBe("always()");
   expect(
@@ -178,16 +179,10 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     },
   });
   expect(
-    scope?.steps.find((step) => step.name === "Check knowledge-map impact"),
+    scope?.steps.find((step) => step.name === "Check PR description"),
   ).toMatchObject({
     if: "github.event_name == 'pull_request'",
-    run: 'bun scripts/check-knowledge-map.ts "$GITHUB_EVENT_PATH"',
-  });
-  expect(
-    scope?.steps.find((step) => step.name === "Check changelog fragments"),
-  ).toMatchObject({
-    if: "github.event_name == 'pull_request'",
-    run: 'bun scripts/changelog-fragments.ts pr "$GITHUB_EVENT_PATH"',
+    run: 'bun run check:pr-body --event "$GITHUB_EVENT_PATH"',
   });
   expect(
     scope?.steps.find((step) => step.uses?.startsWith("actions/checkout@"))

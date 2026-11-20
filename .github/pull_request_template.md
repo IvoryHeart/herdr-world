@@ -6,6 +6,20 @@
 - Changelog: <changes/NAME.md fragment, or none — explain why nothing is user-facing>
 - Knowledge map impact: <updated, or unchanged — explain why navigation did not change>
 
+Spec impact: <updated spec path or OpenSpec change name, or none — reason>
+Verification impact: <updated model, adapter, coverage owner or named check path, or none — reason>
+
+<!-- Required for non-documentation PRs, as plain lines without bold labels.
+Good: Spec impact: none — Contributor tooling leaves product contracts unchanged.
+Bad: Spec impact: none
+Good: Verification impact: scripts/check-pr-body.test.ts — Policy input and diff regression cases.
+Bad: Verification impact: none
+Name changed paths (or a spec/change directory or name); claims about untouched
+files fail. Changes under openspec/specs/ or openspec/changes/ forbid Spec impact:
+none. Changes under quint/, verification/ or an inventory owner forbid Verification
+impact: none. This is a cheap consistency check; reviewers assess the decision.
+-->
+
 ## Verification
 
 - Checks run and results (or why they were not run):

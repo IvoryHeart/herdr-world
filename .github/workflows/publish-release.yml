@@ -94,4 +94,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          gh workflow run "Release" --ref "$TAG"
+          gh workflow run "Release" --ref "$TAG" -f dry_run=false

@@ -38,6 +38,7 @@ export type HarnessInput = {
 };
 
 export type IntegrationsInputs = {
+  hosts?: () => NonNullable<IntegrationsSnapshot["hosts"]>;
   runtimes: () => RuntimeInput[];
   sources: () => Promise<WorldSourceStatus[]>;
   metrics: () => OfficeObservabilityConfiguration;
@@ -234,6 +235,7 @@ export async function integrationsSnapshot(
   );
   return {
     observedAt: inputs.now(),
+    ...(inputs.hosts ? { hosts: settle(inputs.hosts, []) } : {}),
     integrations: [
       ...settle(() => inputs.runtimes().map(runtimeEntry), []),
       ...sources.map(sourceEntry),

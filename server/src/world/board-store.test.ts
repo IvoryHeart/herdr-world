@@ -657,6 +657,104 @@ describe("Board store", () => {
       ).toThrow("desk rank");
   });
 
+  test("drawings: created, edited by revision, refused when stale, deleted", () => {
+    const store = new BoardStore(path);
+    const box = {
+      id: "s1",
+      kind: "rect" as const,
+      color: "blue" as const,
+      x: 10,
+      y: 20,
+      w: 120,
+      h: 80,
+      fill: true,
+      text: "Idea",
+    };
+    const stroke = {
+      id: "s2",
+      kind: "pen" as const,
+      color: "ink" as const,
+      x: 0,
+      y: 0,
+      w: 30,
+      h: 10,
+      points: [0, 0, 10, 5, 30, 10],
+    };
+    const arrow = {
+      id: "s3",
+      kind: "arrow" as const,
+      color: "red" as const,
+      x: 0,
+      y: 0,
+      w: 100,
+      h: 100,
+      from: { x: 0, y: 0, attach: { shape: "s1" } },
+      to: { x: 100, y: 100, attach: { card: "studio:w1" } },
+    };
+    store.patch([
+      { op: "shape.put", shape: box },
+      { op: "shape.put", shape: stroke },
+      { op: "shape.put", shape: arrow },
+    ]);
+    expect(store.get().shapes?.map((shape) => [shape.id, shape.rev])).toEqual([
+      ["s1", 1],
+      ["s2", 1],
+      ["s3", 1],
+    ]);
+    store.patch([{ op: "shape.put", shape: { ...box, x: 50 }, rev: 1 }]);
+    expect(store.get().shapes?.[0]).toEqual({ ...box, x: 50, rev: 2 });
+    // An edit from an older revision, or of a deleted drawing, is refused.
+    expect(() =>
+      store.patch([{ op: "shape.put", shape: { ...box, x: 90 }, rev: 1 }]),
+    ).toThrow(BoardConflictError);
+    expect(() =>
+      store.patch([{ op: "shape.delete", id: "s1", rev: 1 }]),
+    ).toThrow(BoardConflictError);
+    store.patch([{ op: "shape.delete", id: "s1", rev: 2 }]);
+    expect(() =>
+      store.patch([{ op: "shape.put", shape: box, rev: 2 }]),
+    ).toThrow("That drawing was deleted.");
+    // The arrow keeps its end where it was; nothing else changes.
+    expect(store.get().shapes?.map((shape) => shape.id)).toEqual(["s2", "s3"]);
+    // Saved, read back after a restart.
+    expect(new BoardStore(path).get().shapes).toEqual(store.get().shapes);
+    store.patch([
+      { op: "shape.delete", id: "s2", rev: 1 },
+      { op: "shape.delete", id: "s3", rev: 1 },
+    ]);
+    // A board without drawings has no list, as before drawings.
+    expect("shapes" in store.get()).toBe(false);
+  });
+
+  test("drawings: malformed shapes are refused whole", () => {
+    const store = new BoardStore(path);
+    const base = { id: "s1", color: "ink", x: 0, y: 0, w: 10, h: 10 };
+    for (const shape of [
+      { ...base, kind: "star" },
+      { ...base, kind: "rect", color: "mauve" },
+      { ...base, kind: "rect", w: -1 },
+      { ...base, kind: "rect", x: Number.NaN },
+      { ...base, kind: "pen", points: [1, 2, 3] },
+      { ...base, kind: "pen" },
+      { ...base, kind: "rect", points: [1, 2] },
+      { ...base, kind: "arrow", from: { x: 0, y: 0 } },
+      {
+        ...base,
+        kind: "arrow",
+        from: { x: 0, y: 0, attach: { shape: "s1" } },
+        to: { x: 1, y: 1 },
+      },
+      { ...base, kind: "pen", points: [0, 0], text: "no" },
+      { ...base, kind: "text", text: "x".repeat(2_001) },
+    ])
+      expect(() =>
+        store.patch([{ op: "shape.put", shape: shape as never }]),
+      ).toThrow("invalid board");
+    expect(store.get().revision).toBe(0);
+    // Old boards (no shapes key) parse with none.
+    expect("shapes" in parseBoardDocument(store.get())).toBe(false);
+  });
+
   test("room spots: a host's spots are replaced together, other hosts' kept", () => {
     const store = new BoardStore(path);
     store.patch([

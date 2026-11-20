@@ -110,6 +110,7 @@ export type RpcServices = {
   worldCli: ReturnType<typeof createWorldCliService>;
   worldSnapshots: ObservedSnapshots | null;
   worldUsage?: import("../usage/service").WorldUsageService;
+  worldMemory?: import("../memory/service").MemoryService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;

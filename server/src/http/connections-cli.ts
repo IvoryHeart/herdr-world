@@ -3,6 +3,7 @@ import { sanitizeConnectionError } from "../connections/manager";
 import type { ConnectionProfileService } from "../connections/profile-service";
 import { ProfileInputError } from "../connections/profile-validation";
 import { handleWorldCliEndpoint } from "./world-cli-endpoint";
+import type { WorldSnapshotResult } from "../world/snapshot";
 
 export const CONNECTIONS_CLI_PATH = "/api/connections/cli";
 
@@ -14,9 +15,16 @@ export function handleConnectionsCliEndpoint(
     serverPort: number;
     bearerAuth(req: Request, ip: string): true | Response | null;
     registryPath: string;
+    snapshot?(): Promise<WorldSnapshotResult>;
     profiles: Pick<
       ConnectionProfileService,
-      "create" | "remove" | "setDefault"
+      | "create"
+      | "remove"
+      | "setDefault"
+      | "list"
+      | "coreList"
+      | "hosts"
+      | "defaultId"
     >;
   },
 ): Promise<Response> {
@@ -41,7 +49,34 @@ export function handleConnectionsCliEndpoint(
         };
       try {
         let result: unknown;
-        if (request?.command === "add") {
+        if (request?.command === "host-add") {
+          result = {
+            host: await deps.profiles.hosts.add(params.host),
+            snapshot: await deps.snapshot?.(),
+          };
+        } else if (request?.command === "host-remove") {
+          result = await deps.profiles.hosts.remove(params.host_id);
+        } else if (request?.command === "discover") {
+          result = {
+            host: await deps.profiles.hosts.connect(params.host_id),
+            snapshot: await deps.snapshot?.(),
+          };
+        } else if (request?.command === "list") {
+          result = {
+            default_connection_id: deps.profiles.defaultId(),
+            hosts: deps.profiles.hosts.list(),
+            connections: deps.profiles.list(),
+            core_connections: deps.profiles.coreList(),
+            profiles: [
+              ...deps.profiles.list(),
+              ...deps.profiles.coreList(),
+            ].map((profile) => ({
+              ...profile,
+              default: profile.id === deps.profiles.defaultId(),
+              saved: !profile.read_only,
+            })),
+          };
+        } else if (request?.command === "add") {
           if (
             params.default !== undefined &&
             typeof params.default !== "boolean"

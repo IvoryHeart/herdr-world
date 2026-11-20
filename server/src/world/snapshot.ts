@@ -1,3 +1,24 @@
+import { groupHostSnapshots } from "./host-snapshots";
+import type {
+  WorldAgentStatus,
+  WorldAgentStatusCounts,
+  WorldSnapshotPriority,
+  WorldWorkspaceCoverage,
+  WorldSnapshotCoverage,
+  WorldSnapshot,
+  WorldConnectionSnapshot,
+  WorldSnapshotResult,
+} from "./snapshot-types";
+export type {
+  WorldSnapshotPriority,
+  WorldWorkspaceCoverage,
+  WorldSnapshotCoverage,
+  WorldSnapshot,
+  WorldWatchAdmission,
+  WorldConnectionSnapshot,
+  WorldSnapshotResult,
+  WorldHostSnapshot,
+} from "./snapshot-types";
 import { parseSnapshotParameters } from "./snapshot-parameters";
 import { WorldObservation, parseObservationBase } from "./observation-v1";
 import * as observation from "./snapshot-observers";
@@ -8,9 +29,10 @@ import {
 } from "../adapters/runtime-ports";
 import { createHash } from "node:crypto";
 import { sanitizeConnectionError } from "../connections/manager";
-import type { ConnectionId, ConnectionStatus } from "../connections/types";
+import type { ConnectionId } from "../connections/types";
 import type { WorldWatchlist } from "./watchlist";
 import type { WorldRuntimeStatus } from "./runtime-registry";
+import type { WorldHost } from "../../../shared/hosts";
 
 const MAX_WORKSPACES = 512;
 const MAX_TABS = 2_048;
@@ -23,33 +45,6 @@ const MAX_PRESENTED_SPACES = 128;
 const MAX_PRESENTED_TABS_PER_SPACE = 8;
 const MAX_PRESENTED_LEAVES_PER_SPACE = 16;
 
-type WorldAgentStatus = "working" | "idle" | "blocked" | "done" | "unknown";
-type WorldAgentStatusCounts = Record<WorldAgentStatus, number>;
-
-export type WorldSnapshotPriority = {
-  connection_id: string;
-  workspace_id: string;
-  pane_id?: string;
-  terminal_id?: string;
-};
-
-export type WorldWorkspaceCoverage = {
-  workspace_id: string;
-  tabs: number;
-  panes: number;
-  agent_panes: number;
-  status: WorldAgentStatusCounts;
-};
-
-export type WorldSnapshotCoverage = {
-  workspaces: number;
-  tabs: number;
-  panes: number;
-  agent_panes: number;
-  status: WorldAgentStatusCounts;
-  by_workspace: WorldWorkspaceCoverage[];
-};
-
 type RuntimeWithOperations = { operations: RuntimeReader };
 
 type RuntimeLease<Runtime> = {
@@ -59,50 +54,9 @@ type RuntimeLease<Runtime> = {
   isCurrent(): boolean;
 };
 
-export type WorldSnapshot = {
-  workspaces: Record<string, unknown>[];
-  tabs: Record<string, unknown>[];
-  panes: Record<string, unknown>[];
-  agents: Record<string, unknown>[];
-  coverage: WorldSnapshotCoverage;
-  watch_admission: WorldWatchAdmission;
-};
-
-export type WorldWatchAdmission = {
-  revision: number;
-  registered: number;
-  missing: number;
-  unresolved: number;
-  matched: number;
-  admitted: number;
-  admission_failed: number;
-};
-
-export type WorldConnectionSnapshot = {
-  connection_id: string;
-  label: string;
-  source: string;
-  /** Present only for herdr-core: its agents are observed, not controlled. */
-  runtime?: "herdr-core";
-  is_default: boolean;
-  state: ConnectionStatus["state"];
-  generation: number;
-  snapshot_generation: number | null;
-  stale: boolean;
-  actionable: boolean;
-  error?: { message: string };
-  snapshot_error?: string;
-  snapshot: WorldSnapshot | null;
-};
-
-export type WorldSnapshotResult = {
-  revision: number;
-  observed_at: number;
-  connections: WorldConnectionSnapshot[];
-};
-
 type Registry<Runtime> = {
   list(): WorldRuntimeStatus[];
+  hosts?(): WorldHost[];
   readyRuntimeLease(connectionId: ConnectionId): RuntimeLease<Runtime> | null;
 };
 
@@ -484,6 +438,9 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       revision: this.revision,
       observed_at: this.now(),
       connections,
+      ...(this.registry.hosts
+        ? { hosts: groupHostSnapshots(this.registry.hosts(), connections) }
+        : {}),
     };
   }
 
