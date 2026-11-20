@@ -4,6 +4,7 @@ import { integrationsFixtureEnabled } from "./integrationsFixture";
 import { initializeLayoutPreferences } from "./layoutPreferences";
 import { initializeShortcutPreferences } from "./shortcutPreferences";
 import { initializeInstanceName } from "./instanceName";
+import { consumeFocusTest } from "./world/focusTest";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./styles/tokens.css";
@@ -22,7 +23,14 @@ const claudeTapLockFixture = previewUrl.searchParams.has(
 const boardTextConflictFixture = previewUrl.searchParams.has(
   "boardTextConflictFixture",
 );
-if (titleSpinnerFixture || claudeTapLockFixture || boardTextConflictFixture) {
+// Testing-only: `?focusTest=1` offers 1-minute focus sessions in this tab.
+const focusTest = consumeFocusTest(previewUrl);
+if (
+  titleSpinnerFixture ||
+  claudeTapLockFixture ||
+  boardTextConflictFixture ||
+  focusTest
+) {
   previewUrl.searchParams.delete("claudeTapLockFixture");
   previewUrl.searchParams.delete("titleSpinnerFixture");
   previewUrl.searchParams.delete("boardTextConflictFixture");

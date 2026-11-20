@@ -91,6 +91,6 @@ export function focusLength(ms: number) {
   return rest ? `${hours} h ${rest} m` : `${hours} h`;
 }
 
-/** A choice's label: "25 m", "Until I stop". */
+/** A choice's label: "25 m", "90 m", "Until I stop". */
 export const focusChoiceLabel = (minutes: number | null) =>
-  minutes === null ? "Until I stop" : focusLength(minutes * 60_000);
+  minutes === null ? "Until I stop" : `${minutes} m`;

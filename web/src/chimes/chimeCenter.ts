@@ -17,6 +17,7 @@ import {
   profileFor,
   profilesSnapshot,
 } from "../world/agentProfiles";
+import { focusHeld } from "../world/focus";
 import { chimeAudioReady, playChime } from "./player";
 
 /**
@@ -105,6 +106,8 @@ type Deps = {
   ready: () => boolean;
   play: (timbre: Timbre, motif: Motif, volume: number) => boolean;
   setTimer: (run: () => void, ms: number) => unknown;
+  /** A focus session holds every chime (#1131); none when left out. */
+  held?: () => boolean;
 };
 
 const browserDeps: Deps = {
@@ -114,6 +117,7 @@ const browserDeps: Deps = {
   ready: chimeAudioReady,
   play: playChime,
   setTimer: (run, ms) => setTimeout(run, ms),
+  held: () => focusHeld(),
 };
 
 /** Who sent a change, from the Town master role and the launch profile. */
@@ -152,6 +156,7 @@ export function createChimeCenter(deps: Deps = browserDeps) {
     const townMaster = sender?.townMaster ?? false;
     const wanted =
       device.on &&
+      !deps.held?.() &&
       shouldChime({
         motif,
         townMaster,
@@ -245,4 +250,18 @@ export function burstDetail(announcement: Announcement, detail: string) {
   return announcement.reasons.length > 1
     ? announcement.reasons.join(" · ")
     : detail;
+}
+
+/**
+ * A focus session's end (#1131): the "for you" motif once, in the Town
+ * master's timbre, when this device has sound on and audio unlocked.
+ */
+export function playFocusEnd(
+  deps: Pick<Deps, "document" | "device" | "ready" | "play"> = browserDeps,
+) {
+  const device = deps.device();
+  if (!device.on || !deps.ready()) return false;
+  const settings = deps.document()?.chimes ?? DEFAULT_CHIMES;
+  const timbre = timbreFor({ townMaster: true, profileChime: null }, settings);
+  return deps.play(timbre, "for_you", device.volume);
 }

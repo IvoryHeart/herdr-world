@@ -15,6 +15,7 @@ import {
   chimeDevice,
   setChimeDevice,
   resetChimeBursts,
+  playFocusEnd,
 } from "./chimeCenter";
 import { worldLocalStorage } from "../browserStorage";
 
@@ -33,7 +34,12 @@ const document: ProfilesDocument = {
 };
 
 function harness(
-  options: { ready?: boolean; on?: boolean; document?: ProfilesDocument } = {},
+  options: {
+    ready?: boolean;
+    on?: boolean;
+    document?: ProfilesDocument;
+    held?: () => boolean;
+  } = {},
 ) {
   let clock = 1_000;
   const played: [Timbre, Motif][] = [];
@@ -48,6 +54,7 @@ function harness(
       return true;
     },
     setTimer: (run, ms) => timers.push({ at: clock + ms, run }),
+    held: options.held ?? (() => false),
   });
   return {
     announce,
@@ -261,5 +268,44 @@ describe("Chime center", () => {
     } finally {
       setChimeInterestSource(null);
     }
+  });
+});
+
+describe("Focus session (#1131)", () => {
+  test("a focus session holds the chime and a queued escalation", () => {
+    let held = true;
+    const h = harness({ held: () => held });
+    const first = h.announce(change({}));
+    expect(first.chimed).toBe(false);
+    expect(h.played).toEqual([]);
+    held = false;
+    h.advance(BURST_MS);
+    h.announce(change({}));
+    h.advance(200);
+    h.announce(change({ kind: "blocked" }));
+    held = true;
+    h.advance(BURST_MS);
+    // The first chime plays once focus ends; the escalation queued before
+    // a new session started is held.
+    expect(h.played).toEqual([["marimba", "finished"]]);
+  });
+
+  test("the end plays the for-you motif once in the Town master's timbre", () => {
+    const played: [Timbre, Motif, number][] = [];
+    const deps = (on: boolean, ready: boolean) => ({
+      document: () => document,
+      device: () => ({ on, volume: 0.4 }),
+      ready: () => ready,
+      play: (timbre: Timbre, motif: Motif, volume: number) => {
+        played.push([timbre, motif, volume]);
+        return true;
+      },
+    });
+    expect(playFocusEnd(deps(true, true))).toBe(true);
+    expect(playFocusEnd(deps(false, true))).toBe(false);
+    expect(playFocusEnd(deps(true, false))).toBe(false);
+    expect(played).toEqual([
+      [DEFAULT_CHIMES.timbres.town_master, "for_you", 0.4],
+    ]);
   });
 });
