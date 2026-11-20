@@ -19,6 +19,11 @@ import {
 } from "./townLayout";
 import { townBusRoute } from "./townBus";
 import { paintTownCenter } from "./townCenterPaint";
+import { townLibraryLot } from "./townLibraryLot";
+import {
+  paintTownLibraryHouse,
+  paintTownLibraryYard,
+} from "./townLibraryPaint";
 import { townPostLot } from "./townPost";
 import { paintTownPostHouse, paintTownPostYard } from "./townPostPaint";
 import {
@@ -211,6 +216,22 @@ export function townOutdoor(
   if (post) {
     add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
     add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
+  }
+  // The library right of the center: its hall, its reading garden.
+  const library = townLibraryLot(layout);
+  if (library) {
+    add(
+      paintTownLibraryHouse(),
+      library.x * T,
+      library.y * T,
+      library.yardY * T,
+    );
+    add(
+      paintTownLibraryYard(),
+      library.x * T,
+      library.yardY * T,
+      library.yardY * T,
+    );
   }
   return outdoorItems;
 }

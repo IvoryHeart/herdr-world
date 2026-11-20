@@ -13,6 +13,7 @@
 
 import { TOWN_CITY_BOARD_GAP, townCityBoardScale } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
+import { townLibraryLotBeside, townLibraryReserve } from "./townLibraryLot";
 import { townPostLotBeside, townPostReserve } from "./townPostLot";
 
 /** A rectangle in world pixels, x1 and y1 exclusive. */
@@ -107,7 +108,7 @@ export function townPlaceBoards(
   return offsets;
 }
 
-/** The town center's lot, the post office's and the billboard, in world pixels. */
+/** The town center's lot, the post office's, the library's and the billboard, in world pixels. */
 export function townBoardObstacles(
   layout: TownLayout,
   /** The billboard's size in screen pixels; null when folded or unmeasured. */
@@ -130,6 +131,13 @@ export function townBoardObstacles(
       x1: post.x1 * T,
       y0: post.y0 * T,
       y1: post.y1 * T,
+    });
+    const library = townLibraryReserve(townLibraryLotBeside(center));
+    boxes.push({
+      x0: library.x0 * T,
+      x1: library.x1 * T,
+      y0: library.y0 * T,
+      y1: library.y1 * T,
     });
   }
   if (city) {

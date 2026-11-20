@@ -13,6 +13,7 @@ import {
   type TownCenterLot,
 } from "./townCenter";
 import type { TownShape } from "./townLayout";
+import { TOWN_LIBRARY_ROOM } from "./townLibraryLot";
 import { TOWN_POST_ROOM } from "./townPostLot";
 
 export const ROOM_TOP = 9;
@@ -209,5 +210,10 @@ export function townPlaceLots(
     center.x += shift;
     width += shift;
   }
+  // The library stands right of the center (townLibraryLot.ts) on the lawn
+  // a wide town keeps there; a town narrower than that grows to hold it,
+  // which moves nothing that stands.
+  if (!narrow)
+    width = Math.max(width, center.x + center.w + TOWN_LIBRARY_ROOM + MARGIN);
   return { buildings: placed, verticalRoads, roads, width, center, shift };
 }

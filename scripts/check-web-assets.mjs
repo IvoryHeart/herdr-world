@@ -22,11 +22,17 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // The #981 Code view design study adds three standalone, on-demand static
 // assets (HTML, CSS and JS), without adding to the application's eager graph.
 // Account for those files explicitly; byte and startup budgets remain binding.
-const maxFileCount = 189;
+// The memory Library (#1027) is a lazy dialog (its JS and CSS) that shares
+// the library's Town art, which splits that art, Town's layout and its
+// sprites into small chunks of their own (+5 files, no initial load, on
+// 2026-11-20).
+const maxFileCount = 194;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
-const maxTotalBytes = 15.25 * 1024 * 1024;
+// The memory Library (#1027) adds 46 KB of lazy assets with 9 KB of headroom
+// left; 15.3 MiB carries it, initial budgets unchanged (2026-11-20).
+const maxTotalBytes = 15.3 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
