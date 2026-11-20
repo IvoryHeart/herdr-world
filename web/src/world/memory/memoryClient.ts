@@ -75,7 +75,7 @@ export function memoryClientOver(call: Call): MemoryClient {
     connection_generation: target.connection_generation,
   });
   return {
-    list: (target) => call("list", at(target)) as Promise<MemoryCatalog>,
+    list: (target) => call("list", at(target)).then(catalogReply),
     search: (target, query, filter = {}) =>
       call("search", {
         ...at(target),
@@ -111,6 +111,27 @@ export function memoryClientOver(call: Call): MemoryClient {
         confirmed: true,
       }) as Promise<MemoryMutation>,
   };
+}
+
+/**
+ * A list reply the views can count: its lists are arrays. Anything else (a
+ * server without the memory API, a synthetic host) is a failed read, never a
+ * Town that cannot render.
+ */
+function catalogReply(reply: unknown): MemoryCatalog {
+  const catalog = reply as Partial<MemoryCatalog> | null;
+  const lists = ["projects", "agents", "sources", "entries"] as const;
+  if (
+    !catalog ||
+    typeof catalog !== "object" ||
+    lists.some((key) => !Array.isArray(catalog[key]))
+  )
+    throw new Error("invalid: The host's reply was not a memory catalog.");
+  return {
+    ...catalog,
+    unsupported: Array.isArray(catalog.unsupported) ? catalog.unsupported : [],
+    warnings: Array.isArray(catalog.warnings) ? catalog.warnings : [],
+  } as MemoryCatalog;
 }
 
 const bridgeClient = memoryClientOver((action, params) =>

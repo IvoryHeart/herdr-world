@@ -18,6 +18,7 @@ import {
   memoryFixtureTouch,
   setMemoryFixtureForTests,
 } from "./memoryFixture";
+import { townLibraryCounts, townLibrarySignText } from "../town/TownLibrary";
 
 afterEach(() => {
   setMemoryClientForTests(null);
@@ -35,7 +36,9 @@ test("every call names its connection and generation; writes say who asked", asy
   const calls: [string, Record<string, unknown>][] = [];
   const client = memoryClientOver(async (action, params) => {
     calls.push([action, params]);
-    return {};
+    return action === "list"
+      ? { projects: [], agents: [], sources: [], entries: [] }
+      : {};
   });
   const at: MemoryTarget = { connection_id: "c1", connection_generation: 7 };
   await client.list(at);
@@ -82,6 +85,20 @@ test("every call names its connection and generation; writes say who asked", asy
       },
     ],
   ]);
+});
+
+test("a list reply that is not a catalog fails the read, not the views", async () => {
+  for (const reply of [{}, null, "ok", { entries: [] }]) {
+    const client = memoryClientOver(async () => reply);
+    const at: MemoryTarget = { connection_id: "c1", connection_generation: 7 };
+    const failed = await client.list(at).catch((error: unknown) => error);
+    expect(memoryErrorCode(failed)).toBe("invalid");
+  }
+  setMemoryClientForTests(memoryClientOver(async () => ({})));
+  publishMemoryHosts([host(3)]);
+  await requestMemoryCatalog(host(3));
+  expect(memoryCatalogState(host(3))?.status).toBe("failed");
+  expect(townLibrarySignText(townLibraryCounts())).toBe("unavailable");
 });
 
 test("failures keep their code and read without it", () => {
