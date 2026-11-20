@@ -40,7 +40,11 @@ World SHALL read current conditions and no more than six upcoming hours through 
 
 ### Requirement: Shared weather API and CLI
 
-World SHALL expose a small weather value in its Sources API/store and at GET /api/world/weather: available/unavailable, one resolved coarse location, current condition (clear, cloudy, rain, snow, fog, storm or wind), intensity in 0..1, Celsius temperature, day/night at that place, provider valid time, read time, expiry and at most six hourly readings. Unavailable SHALL contain null current data and an empty hourly list. Weather SHALL NOT generate work items or alter Town drawings. The local CLI SHALL show/set location, turn Weather on/off and print the current reading. CLI administration SHALL use World's existing loopback, bearer-token and no-Origin rules; only explicit CLI requests MAY await the bounded provider read. Invalid coordinates, excessive text, unknown settings, multiple locations and custom provider URLs SHALL be refused.
+World SHALL expose a small weather value in its Sources API/store and at GET /api/world/weather: available/unavailable, one resolved coarse location, current condition (clear, cloudy, rain, snow, fog, storm or wind), intensity in 0..1, Celsius temperature, day/night at that place, provider valid time, read time, expiry and at most six hourly readings. Unavailable SHALL contain null current data and an empty hourly list. Weather SHALL NOT generate work items. Town MAY draw the current condition only while that browser's Sky choice follows real weather, and SHALL draw no weather from an unavailable or expired reading. The local CLI SHALL show/set location, turn Weather on/off and print the current reading. CLI administration SHALL use World's existing loopback, bearer-token and no-Origin rules; only explicit CLI requests MAY await the bounded provider read. Invalid coordinates, excessive text, unknown settings, multiple locations and custom provider URLs SHALL be refused.
+
+#### Scenario: Town follows real weather
+- **WHEN** a browser's Town follows real weather and the reading becomes unavailable or expires
+- **THEN** Town draws no weather and looks as it does with weather off
 
 #### Scenario: Read current weather from CLI
 - **WHEN** the user enables Weather, saves a location and runs herdr-world weather
