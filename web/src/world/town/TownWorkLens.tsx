@@ -6,16 +6,19 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { WorkLens } from "../board/WorkLens";
+import { WorkLens, type WorkLensTab } from "../board/WorkLens";
 import type { WorldObject } from "../worldObject";
 import { AnswerOutboxContext } from "./answerOutbox";
 import { useTownPostSources } from "./townPostFixture";
 
 /**
- * Opens Board's Work lens over Town (#887). Town provides it; without it (a
- * town drawn alone, as in captures) the post office offers no Work lens.
+ * Opens Board's Work lens over Town (#887), on its first tab or on `tab`
+ * (the harbour opens Releases, #1028). Town provides it; without it (a town
+ * drawn alone, as in captures) the post office and the harbour offer no
+ * Work lens.
  */
-export const TownOpenWorkContext = createContext<(() => void) | null>(null);
+export type TownOpenWork = (tab?: WorkLensTab) => void;
+export const TownOpenWorkContext = createContext<TownOpenWork | null>(null);
 export const useOpenTownWork = () => useContext(TownOpenWorkContext);
 
 /**
@@ -25,10 +28,12 @@ export const useOpenTownWork = () => useContext(TownOpenWorkContext);
  */
 export function TownWorkLens({
   world,
+  tab,
   onSelectAgent,
   onClose,
 }: {
   world: WorldObject;
+  tab?: WorkLensTab;
   onSelectAgent(id: string): void;
   onClose(): void;
 }) {
@@ -46,6 +51,7 @@ export function TownWorkLens({
       world={world}
       sources={sources}
       className="town-work"
+      initialTab={tab}
       agentAction={(label) => `Open agent ${label}`}
       onSelectAgent={onSelectAgent}
       onClose={onClose}
@@ -60,7 +66,7 @@ export function TownContexts({
   children,
 }: {
   outbox: () => void;
-  openWork: () => void;
+  openWork: TownOpenWork;
   children: ReactNode;
 }) {
   return (
@@ -80,14 +86,19 @@ export function useTownWork(
   world: WorldObject,
   onSelect: (id: string) => unknown,
 ) {
-  const [shown, setShown] = useState(false);
-  const open = useCallback(() => setShown(true), []);
+  const [shown, setShown] = useState<WorkLensTab | null>(null);
+  const open = useCallback<TownOpenWork>(
+    (tab = "pull_requests") => setShown(tab),
+    [],
+  );
   const lens = shown ? (
     <TownWorkLens
+      key={shown}
       world={world}
-      onClose={() => setShown(false)}
+      tab={shown}
+      onClose={() => setShown(null)}
       onSelectAgent={(id) => {
-        setShown(false);
+        setShown(null);
         void onSelect(id);
       }}
     />

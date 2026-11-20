@@ -1,8 +1,8 @@
 # Shipyard data API and CLI
 
 Shipyard v1 reads GitHub release pipelines and local World listener reports.
-Town/Board presentation is separate work (#1028). Both views should use this one
-contract, independent of the Herdr TUI or herdr-core connection selected. There
+Town's harbour and the Work lens's Releases tab present it through one browser
+store and view model (`web/src/world/shipyard/`). Both use this one contract, independent of the Herdr TUI or herdr-core connection selected. There
 are no release, tag, install, preview-start or deployment mutations.
 
 ## Try it
@@ -126,7 +126,7 @@ SHAs). GET and refresh return the same shape; CLI `show` wraps it in `result`:
 }
 ```
 
-The shared compile-time model is `shared/shipyard.ts`. Future consumers map:
+The shared compile-time model is `shared/shipyard.ts`. Consumers map (`web/src/world/shipyard/shipyardModel.ts`):
 
 - Main health → `data.main.health`, head SHA and `workflows` provenance. It
   summarizes the latest observed attempt of each workflow on that head. It does
@@ -226,5 +226,8 @@ also has no guessed open URL. IPv4/IPv6 loopback links contain no login token.
 - Real composed listener admission, actual ephemeral port and native transport:
   `server/src/service/shipyard.test.ts`.
 
-No UI or browser suite is introduced by this data-only change. #1028 owns visual
-consumers and their phone/desktop browser acceptance.
+Presentation: `web/src/world/shipyard/shipyardModel.test.ts` (view model),
+`shipyardStore.test.ts` (reads, refresh, repository choice),
+`web/src/world/town/townHarbour.test.ts` (lot geometry) and the isolated DOM
+suite `web/src/world/town/TownShipyard.dom.test.ts` (harbour, fold, Releases
+tab, links and refresh).

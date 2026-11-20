@@ -9,6 +9,7 @@
  */
 
 import { townCenterForecourt, type TownCenterLot } from "./townCenter";
+import { townHarbourLotBeside } from "./townHarbourLot";
 import { townPostLotBeside } from "./townPostLot";
 import {
   ADD_ROOM_WIDTH,
@@ -604,12 +605,17 @@ export function layoutTown(
     draft.h = h;
     return { ...draft, x, y, roadY, topRoadY };
   });
-  // The topmost street runs on past the last crossing for the bus stop.
+  // The topmost street runs on past the last crossing for the bus stop. A
+  // wide town keeps lawn right of its center for the harbour
+  // (townHarbourLot.ts); a narrow one folds the harbour to a sign.
+  const harbourLot =
+    shape.formFactor === "narrow" ? null : townHarbourLotBeside(center);
   const width =
     Math.max(
       lots.width + BUS_STOP_CLEARANCE,
       37,
       center.x + center.w + MARGIN,
+      harbourLot ? harbourLot.x + harbourLot.w + MARGIN : 0,
     ) + MARGIN;
   const lastRoad = roads[roads.length - 1]!;
   const height = lastRoad + ROAD_GAP + PARK_HEIGHT + MARGIN;
@@ -801,6 +807,13 @@ export function layoutTown(
         tx >= post.x - 1 &&
         tx <= post.x + post.w;
       if (underPost) continue;
+      // So does the harbour's quay.
+      const underHarbour =
+        harbourLot &&
+        ry === center.street &&
+        tx >= harbourLot.x - 1 &&
+        tx <= harbourLot.x + harbourLot.w;
+      if (underHarbour) continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }
 

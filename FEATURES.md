@@ -3,7 +3,7 @@
 A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
 [Install it](./README.md#quick-start) or follow the [tutorial](./docs/TUTORIAL.md).
 
-## Shipyard data
+## Shipyard
 
 - `herdr-world shipyard list|show` and the same-origin
   [Shipyard API](docs/shipyard-api.md) read GitHub releases, tags, workflow health
@@ -20,8 +20,27 @@ A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
   port discovery runs, and agent runtimes are not treated as World deployments.
 - V1 provides navigation links only: no release/tag creation or deployment
   changes. `herdr-world shipyard demo --scenario stale|limited --json` exercises
-  synthetic rare states without a service or credentials. Town/Board visuals
-  follow separately; this capability adds no screens or buildings.
+  synthetic rare states without a service or credentials.
+- **Town harbour**: on a wide Town, a harbour sits right of the town center.
+  The lighthouse lamp is main's checks (green passing, red failing, yellow
+  running, grey unknown). Crates on the quay are merged pull requests waiting
+  for the next release, up to ten with a tally; `+` means the comparison was
+  shortened and `?` means unknown. Ships are the latest three releases, newest
+  by the crane; prereleases have orange hulls and a green pennant means a World
+  on this computer runs that version. A ship opens its release card with
+  **All releases**; the sign and crates open **Work → Releases**. A new release
+  sails in once and is announced; the first read and a repository change stay
+  still. Stale data fades the harbour, greys the lamp and says **Out of date**.
+  GitHub off or no repository leaves an empty basin and says how to go on. A
+  narrow Town folds the harbour into one sign on the town center's left wing.
+  Calm Town and reduced motion stop the bobbing and sailing.
+- **Work → Releases** (Board's Work lens and Town's harbour): main's checks,
+  waiting changes, shipped releases and running Worlds, with links to GitHub
+  and **Open** only for fresh loopback Worlds (usable on the service machine).
+  The repository select, including **Another repository…**, is remembered per
+  browser. **Read GitHub again** forces one bounded refresh.
+- Testing only: `?shipyardFixture` (or `=failing|stale|limited|off|empty`)
+  shows synthetic data without GitHub; the page drops the parameter at once.
 
 ## Runtime support
 
@@ -351,9 +370,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     center's corner and each reception's expenses to a sign in its title;
     tap one to open it. Zoomed in to desks, the boards are put away with
     reception. At every zoom the reception boards keep clear of the town
-    center, the post office, the billboard and each other: a board that would
-    cover one slides aside the least it can while staying over its building,
-    else it hangs lower, below the center or the board in its way.
+    center, the post office, the harbour, the billboard and each other: a
+    board that would cover one slides aside the least it can while staying
+    over its building, else it hangs lower, below the center or the board in its way.
     The `?scene=town-scale` preview replaces every economy reader with labelled
     test data for its synthetic buildings, including the Town board and Spend lens.
   - Town's **post office** stands on the first street left of the town

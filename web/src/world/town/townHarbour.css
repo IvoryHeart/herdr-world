@@ -1,0 +1,379 @@
+/* The harbour (TownShipyard.tsx), in Town's pixel skin: a wooden sign over
+   the basin, the lighthouse lamp in main's tone, ships for releases and
+   kraft crates for waiting changes on the quay. Popovers portal out of
+   Town, so they use literal colours. */
+
+.town-world .town-harbour,
+.town-world .town-harbour-fold {
+  --harbour-pass: #5fbf5a;
+  --harbour-fail: #d4252b;
+  --harbour-pending: #ffd166;
+  --harbour-unknown: #9aa3ad;
+  --harbour-stable: #2f5d9e;
+  --harbour-pre: #c76a12;
+}
+
+.town-world .town-harbour {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* The sign over the basin's far wall, readable at any zoom. */
+.town-world .town-harbour-sign {
+  position: absolute;
+  top: 2px;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 96px;
+  max-width: 240px;
+  padding: 3px 7px 4px;
+  color: #ffe9c2;
+  background: #6e4a2e;
+  border: 2px solid #3b2414;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1px #8a5a34,
+    0 2px 0 #3b2414;
+  transform: translate(-50%, -100%) scale(clamp(0.5, var(--iz), 2.4));
+  transform-origin: 50% 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.town-harbour-sign-title {
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #ffd166;
+}
+
+.town-harbour-sign-text {
+  font-weight: 600;
+  text-align: center;
+}
+
+.town-world .town-harbour[data-quiet] .town-harbour-sign-text {
+  font-weight: 400;
+  color: #d8c8a8;
+}
+
+/* The lighthouse lamp: main's checks as light. */
+.town-world .town-harbour-lamp,
+.town-harbour-beacon {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--harbour-tone, var(--harbour-unknown));
+  border: 1px solid #1c1722;
+  transform: translate(-50%, -50%);
+}
+.town-world .town-harbour-lamp {
+  box-shadow: 0 0 6px 2px var(--harbour-tone, transparent);
+}
+[data-tone="pass"]:is(.town-harbour-lamp, .town-harbour-beacon) {
+  --harbour-tone: var(--harbour-pass, #5fbf5a);
+}
+[data-tone="fail"]:is(.town-harbour-lamp, .town-harbour-beacon) {
+  --harbour-tone: var(--harbour-fail, #d4252b);
+}
+[data-tone="pending"]:is(.town-harbour-lamp, .town-harbour-beacon) {
+  --harbour-tone: var(--harbour-pending, #ffd166);
+}
+.town-world .town-harbour-lamp[data-tone="unknown"] {
+  box-shadow: none;
+}
+/* Checks running: the lamp turns. Calm or reduced motion: it just shines. */
+.town-world .town-harbour-lamp[data-tone="pending"] {
+  animation: town-harbour-turn 1.6s steps(4) infinite;
+}
+@keyframes town-harbour-turn {
+  50% {
+    box-shadow: 0 0 2px 0 var(--harbour-tone);
+  }
+}
+
+/* A ship: a sail on a mast and a hull painted with its tag. */
+.town-world .town-harbour-ship {
+  position: absolute;
+  width: 56px;
+  height: 44px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: town-harbour-bob 4s ease-in-out infinite;
+  image-rendering: pixelated;
+}
+.town-world .town-harbour-ship:nth-child(2) {
+  animation-delay: -1.3s;
+}
+.town-world .town-harbour-ship:nth-child(3) {
+  animation-delay: -2.6s;
+}
+.town-world .town-harbour-ship:focus-visible,
+.town-world .town-harbour-sign:focus-visible,
+.town-world .town-harbour-cargo:focus-visible,
+.town-world .town-harbour-fold:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+.town-harbour-sail {
+  position: absolute;
+  left: 26px;
+  top: 0;
+  width: 2px;
+  height: 30px;
+  background: #3b2414;
+}
+.town-harbour-sail::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 4px;
+  width: 20px;
+  height: 22px;
+  background: linear-gradient(90deg, #f6f2e6 0 70%, #d9d2bf 70%);
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+  filter: drop-shadow(1px 0 0 #1c1722);
+}
+/* A World here runs this release: a green pennant at the masthead. */
+.town-world .town-harbour-ship[data-running] .town-harbour-sail::after {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 0;
+  width: 12px;
+  height: 6px;
+  background: var(--harbour-pass);
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+}
+
+.town-harbour-hull {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 56px;
+  height: 15px;
+  overflow: hidden;
+  color: #fff;
+  background:
+    linear-gradient(#1c1722 0 2px, transparent 2px), var(--harbour-stable);
+  clip-path: polygon(0 0, 100% 0, 88% 100%, 10% 100%);
+  font:
+    700 7px / 15px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+.town-world .town-harbour-ship[data-channel="prerelease"] .town-harbour-hull {
+  background:
+    linear-gradient(#1c1722 0 2px, transparent 2px), var(--harbour-pre);
+}
+
+@keyframes town-harbour-bob {
+  50% {
+    transform: translateY(1px);
+  }
+}
+
+/* A new release sails in from the open water to its berth. */
+.town-world .town-harbour-ship[data-arriving] {
+  animation: town-harbour-arrive 1.6s ease-out;
+}
+@keyframes town-harbour-arrive {
+  from {
+    transform: translateX(-90px);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+/* The quay's cargo, one button over the crate stacks. */
+.town-world .town-harbour-cargo {
+  position: absolute;
+  left: 0;
+  width: 112px;
+  height: 48px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.town-harbour-crate {
+  position: absolute;
+  width: 15px;
+  height: 11px;
+  background:
+    linear-gradient(#dcae7a 0 3px, transparent 3px),
+    linear-gradient(90deg, transparent 5px, #e8d2a8 5px 8px, transparent 8px),
+    #c8915a;
+  border: 1px solid #1c1722;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.25);
+}
+.town-harbour-tally {
+  position: absolute;
+  min-width: 15px;
+  height: 11px;
+  padding: 0 1px;
+  color: #2a1a04;
+  background: #ffd166;
+  border: 1px solid #1c1722;
+  font:
+    700 7px / 11px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  text-align: center;
+}
+
+/* Out of date: the whole harbour fades, so nothing looks current. */
+.town-world
+  .town-harbour[data-stale]
+  :is(.town-harbour-ship, .town-harbour-cargo) {
+  filter: saturate(0.3) brightness(0.92);
+}
+
+.town-harbour-announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.town-shell[data-calm="true"]
+  .town-world
+  :is(.town-harbour-ship, .town-harbour-lamp) {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .town-world :is(.town-harbour-ship, .town-harbour-lamp) {
+    animation: none;
+  }
+}
+
+/* Folded: a wooden plate on the town center's left wing. */
+.town-world .town-harbour-fold {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 6px;
+  color: #ffe9c2;
+  background: #6e4a2e;
+  border: 2px solid #3b2414;
+  border-radius: 4px;
+  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.town-world .town-harbour-fold .town-harbour-beacon {
+  position: static;
+  transform: none;
+}
+.town-world .town-harbour-fold[data-quiet] {
+  color: #d8c8a8;
+}
+
+/* A small ship: the fold's and the card's mark. */
+.town-harbour-icon {
+  position: relative;
+  flex: none;
+  display: inline-block;
+  width: 16px;
+  height: 14px;
+}
+.town-harbour-icon::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 0;
+  width: 7px;
+  height: 8px;
+  background: #f6f2e6;
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+.town-harbour-icon::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 16px;
+  height: 5px;
+  background: #2f5d9e;
+  clip-path: polygon(0 0, 100% 0, 85% 100%, 15% 100%);
+}
+
+/* The ship's card: its release, as the Releases tab shows it. */
+.popover-content.town-harbour-popover {
+  --board-card: #273141;
+  --board-line: #3b4658;
+  --board-soft: #a9b2a4;
+  --ship-stable: #6f9be0;
+  --ship-pre: #e08a3c;
+  --ship-pass: #5fbf5a;
+  z-index: 6100;
+  display: grid;
+  gap: 6px;
+  width: min(320px, calc(100vw - 16px));
+  padding: 8px 10px;
+  color: #f1efe6;
+  background: #1b2230;
+  border: 3px solid #6e4a2e;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 2px #3b2414,
+    0 3px 0 #3b2414;
+  font-size: 12px;
+}
+.town-harbour-popover-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font:
+    700 11px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #ffd166;
+}
+.town-harbour-popover-note {
+  margin: 0;
+  color: #a9b2a4;
+}
+.town-harbour-all {
+  justify-self: start;
+  min-height: 36px;
+  padding: 2px 10px;
+  color: #2a1a04;
+  background: #ffd166;
+  border: 1px solid #3b2414;
+  border-radius: 2px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}

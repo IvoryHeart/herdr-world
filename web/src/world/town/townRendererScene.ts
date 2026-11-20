@@ -19,6 +19,11 @@ import {
 } from "./townLayout";
 import { townBusRoute } from "./townBus";
 import { paintTownCenter } from "./townCenterPaint";
+import { townHarbourLot } from "./townHarbour";
+import {
+  paintTownHarbourBasin,
+  paintTownHarbourQuay,
+} from "./townHarbourPaint";
 import { townPostLot } from "./townPost";
 import { paintTownPostHouse, paintTownPostYard } from "./townPostPaint";
 import {
@@ -211,6 +216,17 @@ export function townOutdoor(
   if (post) {
     add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
     add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
+  }
+  // The harbour right of the center: its basin, its quay on the street.
+  const harbour = townHarbourLot(layout);
+  if (harbour) {
+    add(paintTownHarbourBasin(), harbour.x * T, harbour.y * T, harbour.y * T);
+    add(
+      paintTownHarbourQuay(),
+      harbour.x * T,
+      harbour.quayY * T,
+      harbour.quayY * T,
+    );
   }
   return outdoorItems;
 }
