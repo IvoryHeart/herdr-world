@@ -5,6 +5,7 @@ import {
   type UsageAnalyticsMetrics,
   type UsageAnalyticsQuery,
   type UsageAnalyticsRow,
+  type UsageAnalyticsRun,
   type UsageMetric,
   type UsageProject,
   type WorldUsageAnalytics,
@@ -42,7 +43,7 @@ export function parseAnalyticsQuery(
     raw.group_by !== undefined &&
     !USAGE_ANALYTICS_GROUPS.includes(raw.group_by as never)
   )
-    throw new UsageQueryError("Group by agent, project, room or day");
+    throw new UsageQueryError("Group by agent, project, room, day or run");
   for (const key of ["connection_id", "pane_id", "workspace_id", "project_id"])
     if (
       raw[key] !== undefined &&
@@ -365,31 +366,43 @@ export class WorldUsageAnalyticsService {
     for (const fact of selected) {
       const i = fact.identity;
       const dimension =
-        group === "day"
-          ? fact.day
-          : group === "agent"
-            ? i.agent_id
-            : group === "project"
-              ? i.project_id
-              : i.workspace_id
-                ? JSON.stringify([
-                    i.connection_id,
-                    i.connection_generation,
-                    i.workspace_id,
-                  ])
-                : null;
+        group === "run"
+          ? (fact.usage?.run_id ?? null)
+          : group === "day"
+            ? fact.day
+            : group === "agent"
+              ? i.agent_id
+              : group === "project"
+                ? i.project_id
+                : i.workspace_id
+                  ? JSON.stringify([
+                      i.connection_id,
+                      i.connection_generation,
+                      i.workspace_id,
+                    ])
+                  : null;
       const key = dimension ?? "unattributed";
       const bucket = groups.get(key) ?? {
         dimension,
         identity:
           group === "agent"
             ? { ...i, workspace_id: null, project_id: null }
-            : group === "room" && i.workspace_id
-              ? { ...i, agent_id: null, pane_id: null, project_id: null }
-              : null,
+            : group === "run" && dimension
+              ? i
+              : group === "room" && i.workspace_id
+                ? { ...i, agent_id: null, pane_id: null, project_id: null }
+                : null,
         facts: [],
       };
       bucket.facts.push(fact);
+      // A run's attributed fact names its pane, even if an older day's not.
+      if (
+        group === "run" &&
+        dimension &&
+        i.pane_id &&
+        !bucket.identity?.pane_id
+      )
+        bucket.identity = i;
       groups.set(key, bucket);
     }
     const rows: UsageAnalyticsRow[] = [...groups.entries()]
@@ -399,6 +412,9 @@ export class WorldUsageAnalyticsService {
         dimension: b.dimension,
         identity: b.identity,
         ...metrics(b.facts),
+        ...(group === "run" && b.dimension
+          ? { run: runDetail(b.facts, b.identity, usage, work) }
+          : {}),
       }));
     // Empty UTC buckets are unknown, never fabricated measured zeros.
     if (group === "day")
@@ -412,7 +428,14 @@ export class WorldUsageAnalyticsService {
             ...metrics([]),
           });
       }
-    rows.sort((a, b) => a.key.localeCompare(b.key));
+    // Heaviest runs first, so clipping keeps the ones worth looking at.
+    if (group === "run")
+      rows.sort(
+        (a, b) =>
+          (b.total_tokens.value ?? -1) - (a.total_tokens.value ?? -1) ||
+          a.key.localeCompare(b.key),
+      );
+    else rows.sort((a, b) => a.key.localeCompare(b.key));
     const github = work.sources.find((s) => s.id === "github");
     const response: WorldUsageAnalytics = {
       version: 1,
@@ -476,6 +499,70 @@ export class WorldUsageAnalyticsService {
     response.coverage.truncated ||= this.options.activity.truncated;
     return response;
   }
+}
+/** A run's detail from its own usage rows, current context and work links. */
+function runDetail(
+  facts: Fact[],
+  identity: UsageAnalyticsIdentity | null,
+  usage: WorldUsageSnapshot,
+  work: WorldSourcesSnapshot,
+): UsageAnalyticsRun {
+  const rows = facts.flatMap((f) => (f.usage ? [f.usage] : []));
+  const models = new Map<string, number>();
+  const hours = new Map<string, number>();
+  let prompt: number | null = null;
+  for (const row of rows) {
+    models.set(row.model, (models.get(row.model) ?? 0) + row.total_tokens);
+    if (row.hours !== undefined)
+      hours.set(row.day, ((hours.get(row.day) ?? 0) | row.hours) >>> 0);
+    if (row.max_prompt_tokens !== undefined)
+      prompt = Math.max(prompt ?? 0, row.max_prompt_tokens);
+  }
+  const newest = rows.reduce((a, b) => (b.last_at > a.last_at ? b : a));
+  const branch = rows.find((r) => r.branch)?.branch ?? null;
+  const role = rows.find((r) => r.role)?.role ?? null;
+  const pr = branch
+    ? work.items
+        .filter(
+          (item) =>
+            item.source === "github" &&
+            item.kind === "pull_request" &&
+            item.branch === branch,
+        )
+        .sort((a, b) => b.updatedAt - a.updatedAt)[0]
+    : undefined;
+  const context = identity?.pane_id
+    ? usage.contexts?.find(
+        (c) =>
+          c.connection_id === identity.connection_id &&
+          c.connection_generation === identity.connection_generation &&
+          c.pane_id === identity.pane_id &&
+          c.harness === newest.harness,
+      )
+    : undefined;
+  return {
+    harness: newest.harness,
+    models: [...models.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([model]) => model)
+      .slice(0, 8),
+    role,
+    branch,
+    pull_request: pr ? { key: pr.key, number: pr.number ?? null } : null,
+    calls: rows.reduce((s, r) => s + r.responses, 0),
+    first_at: Math.min(...rows.map((r) => r.first_at)),
+    last_at: Math.max(...rows.map((r) => r.last_at)),
+    max_prompt_tokens: prompt,
+    hours: [...hours.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, mask]) => ({ day, mask })),
+    context: context
+      ? {
+          used_tokens: context.used_tokens,
+          window_tokens: context.window_tokens,
+        }
+      : null,
+  };
 }
 function emptyIdentity(
   connection: string,

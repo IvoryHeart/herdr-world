@@ -1,4 +1,4 @@
-import type { UsageTokens } from "../../../shared/usage";
+import type { UsageRunRole, UsageTokens } from "../../../shared/usage";
 
 export type NumericUsageRow = {
   day: string;
@@ -8,7 +8,16 @@ export type NumericUsageRow = {
   first_at: number;
   last_at: number;
   reported_cost_usd?: number | null;
+  /** UTC hours of `day` with at least one response: bit h is hour h. */
+  hours?: number;
+  /** The largest single prompt (input plus cached tokens) that day. */
+  max_prompt_tokens?: number;
+  /** The run's role from its first prompt's fixed vocabulary (usageRole). */
+  role?: UsageRunRole | null;
+  /** The checkout branch the harness recorded for the run. */
+  branch?: string | null;
 };
+
 /** A harness's own subscription-limit report: numbers and times only. */
 export type LimitObservation = {
   at: number;
@@ -55,8 +64,56 @@ export function createUsageProjection(
     model: string;
     tokens: UsageTokens;
     cost?: number;
+    prompt: number;
   };
   const events = new Map<string, Event>();
+  // A run's role: only the first prompt's own words, matched against a fixed
+  // vocabulary and dropped at once. Null when the first prompt names none.
+  let role: string | null = null,
+    roleRead = false,
+    branch: string | null = null;
+  const readRole = (text: unknown) => {
+    if (roleRead || typeof text !== "string") return;
+    const head = text.trimStart().slice(0, 400);
+    if (!head) return;
+    if (/^<command-name>\/(?:code-)?review\b/.test(head)) {
+      roleRead = true;
+      role = "reviewer";
+      return;
+    }
+    // Harness preambles (environment, instructions, command echoes) are
+    // not the person's first prompt.
+    if (head.startsWith("<") || head.startsWith("# AGENTS.md")) return;
+    roleRead = true;
+    const named = /\b(worker|builder|fixer|reviewer|checker|scout)\b/i.exec(
+      head,
+    )?.[1];
+    role = named
+      ? named.toLowerCase() === "builder"
+        ? "worker"
+        : named.toLowerCase()
+      : null;
+  };
+  const readBranch = (value: unknown) => {
+    if (
+      typeof value === "string" &&
+      value !== "HEAD" &&
+      /^[a-zA-Z0-9][a-zA-Z0-9_./+-]{0,119}$/.test(value)
+    )
+      branch = value;
+  };
+  const userText = (content: unknown): unknown =>
+    typeof content === "string"
+      ? content
+      : Array.isArray(content)
+        ? content.find(
+            (part) =>
+              part &&
+              typeof part === "object" &&
+              typeof part.text === "string" &&
+              (part.type === "text" || part.type === "input_text"),
+          )?.text
+        : undefined;
   const keys = [
     "input",
     "cache_read",
@@ -182,6 +239,7 @@ export function createUsageProjection(
     name: any,
     tokens: UsageTokens,
     cost?: number,
+    prompt = tokens.input + tokens.cache_read + tokens.cache_write,
   ) => {
     if (
       typeof id !== "string" ||
@@ -208,12 +266,14 @@ export function createUsageProjection(
       }
       for (const k of keys) tokens[k] = Math.max(prior.tokens[k], tokens[k]);
       at = Math.max(prior.at, at);
+      prompt = Math.max(prior.prompt, prompt);
     }
     events.set(key, {
       id: key,
       at,
       model: normalized,
       tokens,
+      prompt,
       ...(cost !== undefined
         ? { cost: Math.max(prior?.cost ?? 0, cost) }
         : prior?.cost !== undefined
@@ -228,6 +288,9 @@ export function createUsageProjection(
     try {
       if (harness === "codex") {
         if (r.type === "session_meta" && identifier(p.id)) session = hash(p.id);
+        if (r.type === "session_meta") readBranch(object(p.git).branch);
+        if (r.type === "event_msg" && p.type === "user_message")
+          readRole(p.message);
         if (r.type === "turn_context") model = identifier(p.model) || "unknown";
         if (r.type !== "event_msg" || p.type !== "token_count") return;
         if (p.rate_limits) rateLimits(p.rate_limits, time(r.timestamp));
@@ -291,11 +354,23 @@ export function createUsageProjection(
             return;
           }
         }
-        remember(identity, time(r.timestamp), model, delta);
+        remember(
+          identity,
+          time(r.timestamp),
+          model,
+          delta,
+          undefined,
+          Number.isSafeInteger(latest.input_tokens)
+            ? latest.input_tokens
+            : delta.input + delta.cache_read,
+        );
         return;
       }
       if (harness === "claude") {
         if (identifier(r.sessionId)) session = hash(r.sessionId);
+        readBranch(r.gitBranch);
+        if (r.type === "user" && r.isMeta !== true && r.isSidechain !== true)
+          readRole(userText(m.content));
         if (r.type === "assistant") claudeRefusal(r, m);
         if (r.type !== "assistant" || !m.usage) return;
         const u = object(m.usage);
@@ -410,6 +485,8 @@ export function createUsageProjection(
           model,
           session,
           partial,
+          role,
+          branch,
         ]),
       );
     },
@@ -437,6 +514,10 @@ export function createUsageProjection(
               responses: 0,
               first_at: e.at,
               last_at: e.at,
+              hours: 0,
+              max_prompt_tokens: 0,
+              role: role as UsageRunRole | null,
+              branch,
             }),
           );
         for (const k of keys) row.tokens[k] += e.tokens[k];
@@ -449,6 +530,8 @@ export function createUsageProjection(
         costs.set(key, cost);
         row.first_at = Math.min(row.first_at, e.at);
         row.last_at = Math.max(row.last_at, e.at);
+        row.hours = (row.hours! | (1 << new Date(e.at).getUTCHours())) >>> 0;
+        row.max_prompt_tokens = Math.max(row.max_prompt_tokens!, e.prompt);
       }
       for (const [key, cost] of costs)
         if (cost.known) {

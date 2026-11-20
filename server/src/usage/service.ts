@@ -490,6 +490,19 @@ export class WorldUsageService {
             : {}),
           price_table_version: table?.version ?? null,
           state,
+          run_id: `run_${usageDigest(
+            JSON.stringify([
+              this.options.hostScope?.(status.id) ?? status.id,
+              row.harness,
+              row.session_key,
+            ]),
+          )}`,
+          ...(row.hours !== undefined ? { hours: row.hours } : {}),
+          ...(row.max_prompt_tokens !== undefined
+            ? { max_prompt_tokens: row.max_prompt_tokens }
+            : {}),
+          ...(row.role !== undefined ? { role: row.role } : {}),
+          ...(row.branch !== undefined ? { branch: row.branch } : {}),
         });
         deduplication.set(
           entities.at(-1)!.id,
@@ -528,6 +541,12 @@ export class WorldUsageService {
       row.first_at = Math.min(...candidates.map((e) => e.first_at));
       row.last_at = Math.max(...candidates.map((e) => e.last_at));
       row.observation_span_ms = row.last_at - row.first_at;
+      if (candidates.some((e) => e.hours !== undefined))
+        row.hours = candidates.reduce((m, e) => (m | (e.hours ?? 0)) >>> 0, 0);
+      if (candidates.some((e) => e.max_prompt_tokens !== undefined))
+        row.max_prompt_tokens = Math.max(
+          ...candidates.map((e) => e.max_prompt_tokens ?? 0),
+        );
       row.estimated_cost_usd = estimateUsage(row.tokens, row.model, table);
       if (owners.size !== 1) row.pane_id = row.tab_id = row.workspace_id = null;
       return row;

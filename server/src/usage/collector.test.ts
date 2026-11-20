@@ -317,6 +317,42 @@ test("remote projection validation rejects malformed numeric values and strips e
   expect(() =>
     validateHostUsage({ ...base, rows: [{ tokens: { input: -1 } }] }),
   ).toThrow();
+  const row = {
+    harness: "claude",
+    session_key: "a".repeat(64),
+    file_keys: [],
+    model: "synthetic",
+    day: "2026-11-19",
+    responses: 1,
+    first_at: Date.parse("2026-11-19T01:00:00Z"),
+    last_at: Date.parse("2026-11-19T02:00:00Z"),
+    partial: false,
+    tokens: {
+      input: 1,
+      cache_read: 0,
+      cache_write: 0,
+      output: 1,
+      reasoning: 0,
+    },
+    role: "fixer",
+    branch: "crew/42",
+    hours: 1,
+    max_prompt_tokens: 1,
+  };
+  expect(validateHostUsage({ ...base, rows: [row] }).rows[0]).toMatchObject({
+    role: "fixer",
+    branch: "crew/42",
+  });
+  for (const bad of [
+    { role: "You are PRIVATE_SENTINEL" },
+    { branch: "/home/PRIVATE_SENTINEL" },
+    { branch: "a b" },
+    { hours: 2 ** 24 },
+    { max_prompt_tokens: -1 },
+  ])
+    expect(() =>
+      validateHostUsage({ ...base, rows: [{ ...row, ...bad }] }),
+    ).toThrow();
 });
 
 test("ordinary inventory cannot crowd out an exact bound file and discloses its cap", async () => {

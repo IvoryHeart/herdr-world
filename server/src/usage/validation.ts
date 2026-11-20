@@ -1,5 +1,6 @@
 import type { HostUsage } from "./collector";
 import type { LimitObservation } from "./projection";
+import { USAGE_RUN_ROLES, type UsageRunRole } from "../../../shared/usage";
 
 /** Never let a remote projection smuggle text, paths, invalid counts or unbounded rows. */
 export function validateHostUsage(raw: any): HostUsage {
@@ -62,6 +63,21 @@ export function validateHostUsage(raw: any): HostUsage {
         r.reported_cost_usd > 1e12)
     )
       throw new Error("Invalid reported cost");
+    if (
+      (r.hours !== undefined &&
+        (!Number.isSafeInteger(r.hours) ||
+          r.hours < 0 ||
+          r.hours >= 2 ** 24)) ||
+      (r.max_prompt_tokens !== undefined && !count(r.max_prompt_tokens)) ||
+      (r.role !== undefined &&
+        r.role !== null &&
+        !(USAGE_RUN_ROLES as readonly unknown[]).includes(r.role)) ||
+      (r.branch !== undefined &&
+        r.branch !== null &&
+        (typeof r.branch !== "string" ||
+          !/^[a-zA-Z0-9][a-zA-Z0-9_./+-]{0,119}$/.test(r.branch)))
+    )
+      throw new Error("Invalid usage run detail");
     const tokens = {
       input: r.tokens.input,
       cache_read: r.tokens.cache_read,
@@ -90,6 +106,12 @@ export function validateHostUsage(raw: any): HostUsage {
       ...(r.reported_cost_usd !== undefined
         ? { reported_cost_usd: r.reported_cost_usd as number | null }
         : {}),
+      ...(r.hours !== undefined ? { hours: r.hours as number } : {}),
+      ...(r.max_prompt_tokens !== undefined
+        ? { max_prompt_tokens: r.max_prompt_tokens as number }
+        : {}),
+      ...(r.role !== undefined ? { role: r.role as UsageRunRole | null } : {}),
+      ...(r.branch !== undefined ? { branch: r.branch as string | null } : {}),
     };
   });
   if (

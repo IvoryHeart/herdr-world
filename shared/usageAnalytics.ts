@@ -1,10 +1,16 @@
-import type { UsageLimit, UsageSource, UsageTokens } from "./usage";
+import type {
+  UsageLimit,
+  UsageRunRole,
+  UsageSource,
+  UsageTokens,
+} from "./usage";
 
 export const USAGE_ANALYTICS_GROUPS = [
   "agent",
   "project",
   "room",
   "day",
+  "run",
 ] as const;
 export type UsageAnalyticsGroup = (typeof USAGE_ANALYTICS_GROUPS)[number];
 export type UsageAnalyticsQuery = {
@@ -40,11 +46,38 @@ export type UsageAnalyticsIdentity = {
   workspace_id: string | null;
   project_id: string | null;
 };
+/**
+ * One run (a harness session) in `group_by: "run"`: what it is, how hard it
+ * worked and when. Numbers only; the role is a fixed word, never prompt text.
+ */
+export type UsageAnalyticsRun = {
+  harness: string;
+  /** Models it used, most tokens first. */
+  models: string[];
+  /** The role its first prompt names; null when it names none. */
+  role: UsageRunRole | null;
+  /** The checkout branch the harness recorded; null when unknown. */
+  branch: string | null;
+  /** The work catalogue's pull request whose head is that branch. */
+  pull_request: { key: string; number: number | null } | null;
+  /** API responses, each counted once. */
+  calls: number;
+  first_at: number;
+  last_at: number;
+  /** The largest single prompt; null from a service that did not read it. */
+  max_prompt_tokens: number | null;
+  /** UTC hours with at least one response, per UTC day: bit h is hour h. */
+  hours: { day: string; mask: number }[];
+  /** Its pane's current context, when it is running in a pane now. */
+  context: { used_tokens: number; window_tokens: number | null } | null;
+};
 export type UsageAnalyticsRow = UsageAnalyticsMetrics & {
   key: string;
   /** Null is the explicit unattributed bucket, including for project/agent. */
   dimension: string | null;
   identity: UsageAnalyticsIdentity | null;
+  /** Present on `group_by: "run"` rows with a run. */
+  run?: UsageAnalyticsRun;
 };
 export type UsageProject = {
   id: string;

@@ -255,3 +255,87 @@ test("group clipping preserves totals before the response bound", async () => {
   expect(data.coverage.truncated).toBe(true);
   expect(Buffer.byteLength(JSON.stringify(data))).toBeLessThan(768 * 1024);
 });
+test("runs group one session's days and models, heaviest first, with role, PR and live context", async () => {
+  const s = setup();
+  const run = {
+    run_id: "run_a",
+    role: "fixer" as const,
+    branch: "crew/42",
+    hours: 1 << 11,
+    max_prompt_tokens: 300,
+  };
+  s.usage.entities = [
+    { ...s.row, ...run, id: "a1", total_tokens: 40, responses: 3 },
+    {
+      ...s.row,
+      ...run,
+      id: "a2",
+      model: "other",
+      total_tokens: 60,
+      responses: 2,
+      hours: 1 << 10,
+      max_prompt_tokens: 500,
+    },
+    {
+      ...s.row,
+      id: "b1",
+      run_id: "run_b",
+      role: null,
+      branch: null,
+      total_tokens: 5,
+    },
+  ];
+  s.usage.contexts = [
+    {
+      connection_id: "alpha",
+      connection_generation: 1,
+      workspace_id: "w1",
+      tab_id: "d1",
+      pane_id: "p1",
+      harness: "claude",
+      model: "model",
+      used_tokens: 500,
+      window_tokens: 1000,
+      observed_at: at,
+    },
+  ];
+  s.sources.items = [
+    {
+      key: "github:pr:example/project#9",
+      source: "github",
+      kind: "pull_request",
+      ref: "example/project#9",
+      number: 9,
+      branch: "crew/42",
+      title: "synthetic",
+      url: "https://example.test/pr/9",
+      roles: ["author"],
+      lane: "review",
+      status: "open",
+      updatedAt: at - 1000,
+    },
+  ];
+  const data = await s.service.get({ group_by: "run" });
+  expect(data.total.total_tokens.value).toBe(105);
+  expect(data.rows.map((r) => r.dimension)).toEqual(["run_a", "run_b"]);
+  expect(data.rows[0]).toMatchObject({
+    total_tokens: { value: 100 },
+    identity: { pane_id: "p1" },
+    run: {
+      harness: "claude",
+      models: ["other", "model"],
+      role: "fixer",
+      branch: "crew/42",
+      pull_request: { key: "github:pr:example/project#9", number: 9 },
+      calls: 5,
+      max_prompt_tokens: 500,
+      hours: [{ day: "2026-11-19", mask: (1 << 10) | (1 << 11) }],
+      context: { used_tokens: 500, window_tokens: 1000 },
+    },
+  });
+  expect(data.rows[1]?.run).toMatchObject({
+    role: null,
+    pull_request: null,
+    max_prompt_tokens: null,
+  });
+});

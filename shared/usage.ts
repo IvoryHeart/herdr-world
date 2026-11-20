@@ -37,7 +37,30 @@ export type UsageEntity = UsageTarget & {
   reported_cost_usd?: number | null;
   price_table_version: string | null;
   state: UsageState;
+  /**
+   * The run (one harness session) this row belongs to: an opaque ID, equal
+   * across its days and models on one transcript host. Absent from older
+   * services.
+   */
+  run_id?: string;
+  /** UTC hours of `day` with at least one response: bit h is hour h. */
+  hours?: number;
+  /** The largest single prompt (input plus cached tokens) of the row. */
+  max_prompt_tokens?: number;
+  /** The role the run's first prompt names, from a fixed vocabulary. */
+  role?: UsageRunRole | null;
+  /** The checkout branch the harness recorded for the run. */
+  branch?: string | null;
 };
+/** Roles a run's first prompt can name; anything else is unknown (null). */
+export const USAGE_RUN_ROLES = [
+  "worker",
+  "fixer",
+  "reviewer",
+  "checker",
+  "scout",
+] as const;
+export type UsageRunRole = (typeof USAGE_RUN_ROLES)[number];
 export type UsageSource = {
   connection_id: string;
   connection_generation: number;
