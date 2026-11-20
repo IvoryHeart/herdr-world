@@ -290,7 +290,7 @@ process.exit(await runCli(process.argv.slice(2), context));
     for (const file of [shared, claude])
       writeFileSync(
         file,
-        readFileSync(file, "utf8").replace("VERSION=3", "VERSION=1"),
+        readFileSync(file, "utf8").replace("VERSION=4", "VERSION=1"),
       );
     const upgraded = runInstaller(fixture, undefined, environment);
     expect(upgraded.exitCode).toBe(0);

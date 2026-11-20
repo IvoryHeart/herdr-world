@@ -3,12 +3,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
 import { WorkLens, type WorkLensTab } from "../board/WorkLens";
 import type { WorldObject } from "../worldObject";
 import { AnswerOutboxContext } from "./answerOutbox";
+import { TownPostProvider } from "./TownPostOffice";
 import { useTownWarehouseSources } from "./townWarehouseFixture";
 
 /**
@@ -59,20 +61,24 @@ export function TownWorkLens({
   );
 }
 
-/** Town's contexts: the answer outbox and the Work lens's opener. */
+/**
+ * Town's contexts: the answer outbox, the Work lens's opener and Town's
+ * world, which the post office counts Needs you's items in (#1098).
+ */
 export function TownContexts({
   outbox,
-  openWork,
+  work,
   children,
 }: {
   outbox: () => void;
-  openWork: TownOpenWork;
+  work: { open: TownOpenWork; world: WorldObject };
   children: ReactNode;
 }) {
+  const post = useMemo(() => ({ world: work.world }), [work.world]);
   return (
     <AnswerOutboxContext.Provider value={outbox}>
-      <TownOpenWorkContext.Provider value={openWork}>
-        {children}
+      <TownOpenWorkContext.Provider value={work.open}>
+        <TownPostProvider source={post}>{children}</TownPostProvider>
       </TownOpenWorkContext.Provider>
     </AnswerOutboxContext.Provider>
   );
@@ -103,5 +109,5 @@ export function useTownWork(
       }}
     />
   ) : null;
-  return { open, lens };
+  return { open, lens, world };
 }

@@ -1,0 +1,138 @@
+/* The help panel and entry cards (HelpPanel.tsx, HelpEntryCard.tsx). */
+.help-panel {
+  display: grid;
+  gap: 12px;
+  width: min(760px, 100%);
+}
+.help-panel .modal-head {
+  margin-bottom: 0;
+}
+.help-panel-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.help-panel-tabs button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.help-panel-tabs button[aria-selected="true"] {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+.help-panel-missing {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text-strong);
+}
+.help-panel-entries,
+.help-entry ol {
+  margin: 0;
+  padding: 0;
+}
+.help-panel-entries {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+}
+.help-panel-version {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.help-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.help-entry img {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.help-entry-text {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.help-entry h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 14px;
+}
+.help-entry p {
+  margin: 0;
+}
+.help-entry ol {
+  padding-left: 18px;
+}
+.help-entry-where {
+  color: var(--muted);
+  font-size: 12px;
+}
+.help-entry-where span {
+  font-weight: 600;
+}
+.help-entry-try {
+  padding: 3px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 58%, var(--border));
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--text-strong);
+  font: inherit;
+  cursor: pointer;
+}
+.help-panel-more {
+  margin: 0;
+  font-size: 12px;
+}
+.help-panel.is-phone .help-entry,
+.help-entries-compact .help-entry {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Try: the control a help entry points at, ringed for a moment. */
+[data-help-spotlight] {
+  /* Controls that show on hover (Chat's Speak) show while ringed. */
+  opacity: 1 !important;
+  outline: 3px solid var(--accent) !important;
+  outline-offset: 3px;
+  animation: help-spotlight 0.8s ease-in-out 3;
+}
+.board[data-help-spotlight] {
+  outline-offset: -6px;
+}
+@keyframes help-spotlight {
+  50% {
+    outline-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-help-spotlight] {
+    animation: none;
+  }
+}
+.help-panel-all {
+  justify-self: start;
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
