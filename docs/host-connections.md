@@ -9,7 +9,9 @@ also accepted for rediscovery. `connections remove <host-id>` removes that host'
 runtime profiles and transports, without stopping the external runtime programs.
 Choose another default runtime first when removing the host that owns the default.
 
-Every found runtime connects. An installed but stopped runtime reports its own
+Every found runtime connects. Saved endpoints are tried through their original
+runtime transports; a live qualified runtime remains found even when its
+executable is off PATH or outside the standard installation directories. An installed but stopped runtime reports its own
 connection error; it does not hide a reachable sibling. A successfully empty host
 stays saved with the registered installation choices. Discovery errors never mean
 “install a runtime.” Installing or starting remains a separate person's action.

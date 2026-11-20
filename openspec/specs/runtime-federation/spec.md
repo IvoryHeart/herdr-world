@@ -124,6 +124,8 @@ installation choices. Once any runtime is found, ordinary host responses SHALL N
 suggest installing siblings; the Integrations API SHALL retain additional choices
 per host. Failed probes SHALL be incomplete evidence, not evidence of absence.
 Successful siblings SHALL still connect when another provider probe fails.
+Saved endpoints SHALL be admitted through their original runtime transports;
+a live qualified runtime SHALL remain found even when executable lookup misses.
 
 Each runtime SHALL retain its immutable connection ID, independent generation and
 owning manager. Host identity SHALL NOT grant downstream operation authority or
@@ -145,6 +147,11 @@ return hosts with their runtimes and rooms, retaining the per-connection project
 - **WHEN** herdr-core and the Herdr TUI are installed on this computer
 - **THEN** World discovers and connects both under one host, without asking for a runtime
 - **AND** their rooms and agents retain separate connection-qualified identities
+
+#### Scenario: Existing runtime outside standard executable locations
+- **WHEN** a saved runtime endpoint is reachable but its executable is off PATH
+- **THEN** its original transport admits that runtime under its existing connection ID
+- **AND** binary absence alone does not retire its lease or suggest installation
 
 #### Scenario: Empty host and later installation
 - **WHEN** a newly added SSH destination has no registered runtime

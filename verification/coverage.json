@@ -67,7 +67,10 @@
         "server/src/service/local-recovery.test.ts",
         "server/src/connections/host-service.test.ts",
         "server/src/cli/host-connections.test.ts",
-        "server/src/service/host-connections.test.ts"
+        "server/src/service/host-connections.test.ts",
+        "server/src/connections/profile-process.test.ts",
+        "server/src/assistant.integration.test.ts",
+        "server/src/assistant-recovery.integration.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "shared-lifecycle",
@@ -89,7 +92,10 @@
           "server/src/service/local-recovery.test.ts",
           "server/src/connections/host-service.test.ts",
           "server/src/cli/host-connections.test.ts",
-          "server/src/service/host-connections.test.ts"
+          "server/src/service/host-connections.test.ts",
+          "server/src/connections/profile-process.test.ts",
+          "server/src/assistant.integration.test.ts",
+          "server/src/assistant-recovery.integration.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

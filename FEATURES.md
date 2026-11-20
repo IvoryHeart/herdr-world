@@ -10,7 +10,8 @@ The service and CLI discover herdr-core and the Herdr TUI on each host and conne
 every runtime found. `herdr-world connections add sample@host.example` needs no
 runtime flag. `herdr-world connections discover <host-id>` repeats discovery;
 connecting a host also repeats it. Discovery checks presence and version, never
-starts or installs a runtime. Core uses `HC_SESSION` locally (otherwise `default`)
+starts or installs a runtime. Saved live endpoints remain available even when
+the runtime executable is off PATH. Core uses `HC_SESSION` locally (otherwise `default`)
 and its standard state directory, including `XDG_STATE_HOME`.
 
 An empty host stays saved and reports **No runtime installed**, with the registered

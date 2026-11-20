@@ -12,7 +12,9 @@ SSH/platform boundary, so no additional Quint model is selected.
 
 `host-service.test.ts` exercises migration with preserved IDs, empty host durability,
 independent runtime failure, removal/rediscovery, partial probe failure, host removal
-and shutdown while discovery awaits. `host-discovery.test.ts` checks every fixed
+and shutdown while discovery awaits. Native process composition tests also retain
+live saved endpoints when their executable is off PATH, including Ranger restart
+and profile CRUD; executable absence cannot retire an admitted live runtime. `host-discovery.test.ts` checks every fixed
 POSIX/PowerShell argv, destination refusals before process invocation, bounded
 version probing and registration of another provider. `host-snapshots.test.ts`
 retains actual cached topology while one runtime loses its generation and also

@@ -154,6 +154,19 @@ test("first host persistence keeps the implicit runtime's ID across restart", as
   expect(service.hosts.list()[0]?.connection_ids).toEqual(["startup-default"]);
 });
 
+test("a saved live runtime remains discoverable when its executable is off PATH", async () => {
+  const { service, manager } = await fixture(
+    [tui("configured-tui")],
+    async () => [],
+  );
+  await service.startConfigured();
+  expect(manager.readyRuntimeLease("configured-tui")?.isCurrent()).toBeTrue();
+  expect(service.hosts.list()[0]).toMatchObject({
+    state: "ready",
+    installable_runtimes: [],
+  });
+});
+
 test("an explicit startup override shadows the migrated ID without overwriting its saved profile", async () => {
   const { service, store } = await fixture([], async (_host, profiles) =>
     profiles.map((profile) => ({ profile, version: null })),
@@ -289,13 +302,16 @@ test("an empty SSH host persists; installation choices disappear as soon as any 
 test("removal retires only its runtime; rediscovery reuses its ID and advances its generation", async () => {
   const profiles = [tui("tui-old"), core("core-old")];
   let present = profiles;
-  const { service, manager, coreManager } = await fixture(profiles, async () =>
-    present.map((profile) => ({ profile, version: null })),
+  const { service, manager, coreManager, failures } = await fixture(
+    profiles,
+    async () => present.map((profile) => ({ profile, version: null })),
   );
   await service.startConfigured();
   const old = coreManager.readyRuntimeLease("core-old")!;
   const sibling = manager.readyRuntimeLease("tui-old")!;
   present = [profiles[0]!];
+  await coreManager.stop("core-old");
+  failures.add("core-old");
   await service.hosts.connect("host-local");
   expect(old.isCurrent()).toBeFalse();
   expect(sibling.isCurrent()).toBeTrue();
@@ -306,6 +322,7 @@ test("removal retires only its runtime; rediscovery reuses its ID and advances i
       .runtimes.find((runtime) => runtime.connection_id === "core-old")?.state,
   ).toBe("absent");
   present = profiles;
+  failures.delete("core-old");
   await service.hosts.connect("host-local");
   expect(coreManager.readyRuntimeLease("core-old")!.generation).toBeGreaterThan(
     old.generation,
@@ -411,10 +428,11 @@ test("a late discovery cannot start runtimes after service shutdown", async () =
   const { service, starts } = await fixture([tui("local-old")], () => pending);
   const connecting = service.hosts.connect("host-local");
   await Promise.resolve();
+  const beforeShutdown = [...starts];
   service.stopSupervision();
   release([{ profile: core("late-core"), version: null }]);
   await expect(connecting).rejects.toThrow("stopping");
-  expect(starts).toEqual([]);
+  expect(starts).toEqual(beforeShutdown);
   expect(service.coreList()).toEqual([]);
 });
 

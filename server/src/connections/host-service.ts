@@ -252,6 +252,19 @@ export class HostConnectionService {
       throw new ProfileInputError(
         "explicit startup settings pin this runtime; manage saved hosts separately",
       );
+    // Saved endpoints can be live even when their executable is off PATH.
+    // Admit each through its original transport, never another runtime's probe.
+    await Promise.allSettled(
+      profiles
+        .filter(
+          (profile) =>
+            host.discovered?.find(
+              (record) => record.connection_id === profile.id,
+            )?.present !== false,
+        )
+        .map((profile) => this.ports.start(profile.id)),
+    );
+    if (this.stopped) throw new Error("host discovery is stopping");
     let found: DiscoveredRuntime[];
     let checkedKinds: string[] | undefined;
     let discoveryError: string | undefined;
@@ -267,18 +280,6 @@ export class HostConnectionService {
         discoveryError = sanitizeConnectionError(error);
       } else {
         this.errors.set(id, sanitizeConnectionError(error));
-        // Existing connections still reconnect by their own immutable identities.
-        if (!this.stopped)
-          await Promise.allSettled(
-            profiles
-              .filter(
-                (profile) =>
-                  host.discovered?.find(
-                    (record) => record.connection_id === profile.id,
-                  )?.present !== false,
-              )
-              .map((profile) => this.ports.start(profile.id)),
-          );
         return this.item(id);
       }
     }
@@ -307,9 +308,11 @@ export class HostConnectionService {
         (record) => record.connection_id === profile.id,
       );
       if (
-        checkedKinds &&
-        !checkedKinds.includes(previous?.kind ?? runtimeKind(profile)) &&
-        previous?.present !== false
+        !ids.has(profile.id) &&
+        (this.ports.status(profile.id).state === "ready" ||
+          (checkedKinds &&
+            !checkedKinds.includes(previous?.kind ?? runtimeKind(profile)) &&
+            previous?.present !== false))
       ) {
         ids.add(profile.id);
         found.push({
