@@ -53,7 +53,7 @@ export function withCoreRecipient<T>(
  * not report), which does not apply to core.
  */
 export const CORE_NO_SESSION =
-  "World has not found where this agent saves its conversation yet. It looks in the agent's own session record and its launch command. You can still send it a message, and the Terminal tab shows it live.";
+  "World has not found where this agent saves its conversation yet. It looks in the agent's own session record, its open conversation files and its launch command. You can still send it a message, and the Terminal tab shows it live.";
 
 /** CORE_NO_SESSION for Codex, whose session ID Chat can link for reading. */
 export const CORE_CODEX_UNLINKED = `${CORE_NO_SESSION} If you know its Codex session ID, link it to read the conversation here.`;
@@ -147,16 +147,23 @@ export function createCoreAgentSessions(args: {
       | { pid?: unknown; name?: unknown; argv?: unknown }
       | undefined;
     let found: Awaited<ReturnType<typeof processSession>>;
-    const pid = foreground?.pid;
+    const identity = (current: Row | undefined) =>
+      JSON.stringify([
+        address,
+        view.occupancy(address) ?? 0,
+        agent,
+        current?.foreground,
+      ]);
     const key =
-      typeof pid === "number"
-        ? JSON.stringify([address, view.occupancy(address) ?? 0, pid])
-        : undefined;
+      typeof foreground?.pid === "number" ? identity(record) : undefined;
     const cached = key ? recorded.get(key) : undefined;
     if (cached && Date.now() - cached.at < 1000)
       found = cached.value as typeof found;
     else {
       found = await processSession(agent, foreground, files);
+      // A slow host read must not publish the previous foreground's session.
+      if (key && key !== identity(view.terminal(address) as Row | undefined))
+        return;
       if (key) recorded.set(key, { at: Date.now(), value: found });
       if (recorded.size > 64) recorded.clear();
     }
