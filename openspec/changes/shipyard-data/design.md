@@ -1,0 +1,12 @@
+## Decisions
+
+- Use the existing SourcesService GitHub enabled setting and process runner; credentials stay in gh. Shipyard reads a requested github.com owner/repository, independent of personal work-item author filters.
+- Pin main once per refresh. GitHub's designated latest published stable release, read separately from the display window, defines the baseline, falling back to a published prerelease only when the release window is complete and has no stable release. Drafts and bare tags never establish shipping. Compare the resolved tag commit to the pinned main SHA; only associated merged PRs whose merge commit is in that difference are waiting. No timestamp heuristic or guessed zero.
+- Each section exposes completeness. An unavailable comparison, missing baseline, diverged ancestry or shortened commit/PR window cannot prove a complete unreleased list. Workflow green describes only observed workflows on that head, never branch protection or permission to release.
+- Requests share bounded cached refreshes with last-success provenance. Failures retain display data as stale. Disabling GitHub removes its cached data and supersedes any in-flight result. One repository refresh runs at a time; eight repository slots bound memory.
+- Each listener publishes an expiring local observation in its data folder's instances directory (or an explicitly shared HERDR_WORLD_INSTANCE_REGISTRY_DIR). Registry reads are bounded, never contact advertised addresses, and never expose filesystem paths, PIDs or secrets. Only fresh loopback reports can provide an open link. Expired reports are stale and non-actionable. Remote runtime connections are not World deployments.
+- CLI uses existing loopback/token admission with a dedicated read-only endpoint. Browser calls use the existing same-origin session policy. Links are data, never server-side browser actions. No tags, releases, installs or deployment mutations exist.
+
+## Verification
+
+Synthetic GitHub responses exercise all authors, ancestry membership, baseline choice, pagination limits, head-specific workflow health, redaction and partial failures. Service tests exercise single flight, cadence, eviction, stale retention and settings fences. Registry tests exercise lifecycle, expiry, malformed records and safe URLs. HTTP/CLI tests exercise admission, strict input and output; a CLI demo provides rare states without credentials. UI acceptance belongs to #1028.

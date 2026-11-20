@@ -123,15 +123,13 @@ export function townBoardObstacles(
       y1: center.street * T,
     },
   ];
-  if (layout.formFactor !== "narrow") {
-    const post = townPostReserve(townPostLotBeside(center));
-    boxes.push({
-      x0: post.x0 * T,
-      x1: post.x1 * T,
-      y0: post.y0 * T,
-      y1: post.y1 * T,
-    });
-  }
+  const post = townPostReserve(townPostLotBeside(center));
+  boxes.push({
+    x0: post.x0 * T,
+    x1: post.x1 * T,
+    y0: post.y0 * T,
+    y1: post.y1 * T,
+  });
   if (city) {
     const scale = townCityBoardScale(z);
     const mid = (center.x + center.w / 2) * T;

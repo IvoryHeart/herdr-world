@@ -239,22 +239,39 @@ if (process.env.TOWN_POST_DOM !== "1") {
     await office.close();
   });
 
-  test("a narrow town folds it to a sign on the town center", async () => {
+  test("a phone's town stands the post office whole, its sign naming pull requests (#1033)", async () => {
     await publish([
       fixturePullRequest(1),
       fixturePullRequest(2, { draft: true }),
     ]);
     const office = await mount(true);
-    expect(office.sign()).toBeNull();
-    expect(office.parcels()).toEqual([]);
-    const fold =
-      office.host.querySelector<HTMLButtonElement>(".town-post-fold")!;
-    expect(fold.getAttribute("aria-label")).toBe(
-      "Post office: 1 ready to merge, 0 failing, 0 waiting, 1 draft. Open",
+    // The house's sign and the yard's parcels, as on a wide town.
+    const sign = office.sign()!;
+    expect(sign.dataset.listed).toBe("true");
+    expect(office.parcels().length).toBe(2);
+    expect(sign.getAttribute("aria-label")).toBe(
+      "Post office, pull requests: 1 ready to merge, 0 failing, 0 waiting, 1 draft. Open",
     );
-    // A pillar box marks the folded sign, as one stands by the house door.
-    expect(fold.querySelector(".town-post-box")).not.toBeNull();
+    // It reads as the post office and says what its counts are.
+    expect(sign.textContent).toContain("POST OFFICE");
+    expect(sign.textContent).toContain("pull requests");
+    // Tapping it opens the parcels as a list.
+    await act(async () => sign.click());
+    const list = document.querySelector(".town-post-popover")!;
+    expect(list.querySelectorAll(".town-post-row").length).toBe(2);
+    expect(list.textContent).toContain("POST OFFICE");
     await office.close();
+    expect(document.querySelector(".town-post-popover")).toBeNull();
+
+    // Signed out, it still reads as the post office, closed.
+    await publish([], "not_connected", "Sign in with gh auth login.");
+    const closed = await mount(true);
+    const shut = closed.sign()!;
+    expect(shut.textContent).toContain("POST OFFICE");
+    expect(shut.textContent).toContain("Closed");
+    expect(shut.dataset.quiet).toBe("true");
+    expect(closed.parcels()).toEqual([]);
+    await closed.close();
   });
 
   test("in Town, its sign and both lists open every pull request in the Work lens", async () => {
@@ -287,11 +304,9 @@ if (process.env.TOWN_POST_DOM !== "1") {
     expect(document.querySelector(".town-post-popover")).toBeNull();
     await office.close();
 
-    // On a phone the folded sign's list offers it too.
+    // On a phone the sign's list offers it too.
     const folded = await mount(true, work);
-    await act(async () =>
-      folded.host.querySelector<HTMLButtonElement>(".town-post-fold")!.click(),
-    );
+    await act(async () => folded.sign()!.click());
     await act(async () =>
       document
         .querySelector<HTMLButtonElement>(".town-post-popover .town-post-all")!

@@ -7,6 +7,28 @@ concurrent independently qualified operational contexts and fair bounded aggrega
 
 ## Requirements
 
+### Requirement: Serialized live catalogue edits
+
+CLI and Settings edits admitted by a running World SHALL use one serialized
+read-modify-save-publication queue. A successful edit SHALL survive a later
+unrelated successful edit. A failed persistence operation SHALL leave the
+preceding catalogue intact, report failure and permit later queue admission;
+retry SHALL derive its change from the latest committed catalogue. The persisted
+default SHALL always name a retained profile. Runtime generation and cleanup
+fences remain independently required.
+
+#### Scenario: Settings save overlaps a CLI edit
+
+- **WHEN** a Settings edit is requested while a CLI add, remove or default save is pending, or in the reverse order
+- **THEN** both successful edits appear in memory and on disk after settlement,
+  with one persistence owner and no restart of unaffected sibling runtimes
+
+#### Scenario: A failed live request
+
+- **WHEN** live admission or persistence fails
+- **THEN** the CLI reports the failure without attempting an offline file write,
+  and the next admitted edit reads the latest committed service catalogue
+
 ### Requirement: Runtime authority
 Herdr SHALL own structural topology, agent lifecycle and terminal streams. One World service SHALL
 own the saved host catalogue and its runtime connection profiles, and SHALL isolate each runtime connection in its own

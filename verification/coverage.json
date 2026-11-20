@@ -3164,6 +3164,148 @@
         ],
         "review": "New design contract pending PR review."
       }
+    },
+    {
+      "id": "Q54",
+      "area": "Live catalogue writer serialization",
+      "owner": "server/src/connections/profile-service.ts",
+      "requirement": "openspec/specs/runtime-federation/spec.md",
+      "properties": "Successful unrelated edits survive, one service persistence owner, failure preserves catalogue, retry reads current state",
+      "existingTests": [
+        "quint/connection-registry.test.ts",
+        "server/src/service/connections-cli.test.ts",
+        "server/src/cli/connections.test.ts",
+        "server/src/connections/profile-service.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1004",
+      "status": "modeled",
+      "technique": "finite-model-and-exhaustive-consumer",
+      "assessment": "48 configurations: three CLI verbs, both writer orders, both arrival boundaries and independent save failures with retry",
+      "remaining": "Runtime rollback and platform durability retain existing consumers. Offline preservation and startup races use the separate registry ownership protocol and real-process consumers mapped in Q02; the live queue is not cross-process ownership.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": ["quint/connection-registry.qnt"],
+        "contracts": ["verification/contracts/connection-registry.md"],
+        "tests": [
+          "quint/connection-registry.test.ts",
+          "server/src/service/connections-cli.test.ts",
+          "server/src/cli/connections.test.ts",
+          "server/src/connections/profile-service.test.ts"
+        ],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q55",
+      "area": "Claude limits stale-lock ownership",
+      "owner": "server/src/usage/claude-tap.ts",
+      "requirement": "openspec/specs/world-usage/spec.md",
+      "properties": "Comparable window maxima must not decrease after stale-lock recovery; a retired holder must not publish",
+      "existingTests": [
+        "quint/claude-tap-lock.test.ts",
+        "server/src/usage/claude-tap.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/853",
+      "status": "pending",
+      "technique": "counterexample-with-production-replay",
+      "assessment": "TLC and real filesystem replay expose check/rename suspension: 20 -> 23 -> 22",
+      "remaining": "Known product bug #1086. Gate completion validates the reproducer, not safety; requires atomic ownership repair and independent positive conformance.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": ["quint/claude-tap-lock.qnt"],
+        "contracts": ["verification/contracts/claude-tap-lock.md"],
+        "tests": [
+          "quint/claude-tap-lock.test.ts",
+          "server/src/usage/claude-tap.test.ts"
+        ],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q56",
+      "area": "First-run and immutable launch preparation",
+      "owner": "server/src/connections/first-run.ts",
+      "requirement": "openspec/specs/herdr-core-runtime/spec.md",
+      "properties": "Saved/explicit authority wins, no unsaved default or launch before preparation, complete retry after uncertain file publication",
+      "existingTests": [
+        "server/src/connections/first-run.test.ts",
+        "server/src/usage/claude-launch-settings.test.ts",
+        "server/src/herdr-core/shell.test.ts",
+        "server/src/herdr-core/operations.test.ts",
+        "server/src/rpc/launcher-tap.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/984",
+      "status": "alternative-evidence",
+      "technique": "finite-failure-matrix-and-native-subprocess",
+      "assessment": "One async discovery save with before/after failure and retry; equal-content cache publications commute; real subprocess/PTY tests retain byte transport",
+      "remaining": "Cross-process startup ownership uses the Q02 registry-process consumers and connection-registry contract. Native harness/macOS acceptance and power loss remain platform checks; existing creation/core models own post-preparation launch.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/launch-preparation.md"],
+        "tests": [
+          "server/src/connections/first-run.test.ts",
+          "server/src/usage/claude-launch-settings.test.ts",
+          "server/src/herdr-core/shell.test.ts",
+          "server/src/herdr-core/operations.test.ts",
+          "server/src/rpc/launcher-tap.test.ts"
+        ],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q57",
+      "area": "Open agent runtime move candidate",
+      "owner": "verification/contracts/agent-move-audit.md",
+      "requirement": "verification/contracts/agent-move-audit.md",
+      "properties": "Quit before resume; at most one running conversation; details follow or loss/uncertainty reported",
+      "existingTests": [
+        "quint/replay.test.ts",
+        "quint/binding-resolution.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/990",
+      "status": "pending",
+      "technique": "external-candidate-exhaustive-assessment",
+      "assessment": "Frozen open #990 df398319a031f840668f7e6ea0dff765c5764c11: actual serial controller 576-outcome matrix ran; native and persistence consumers mapped in contract",
+      "remaining": "Feature and candidate consumer files are not merged. Current listed tests cover only existing shared runtime/binding fences; native, metadata, browser acceptance remains with #990. Independent Worlds and crash atomicity are not claimed.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/agent-move-audit.md"],
+        "tests": ["quint/replay.test.ts", "quint/binding-resolution.test.ts"],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q58",
+      "area": "Read-only integrations registry and private vault",
+      "owner": "server/src/integrations/",
+      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "properties": "Existing owners retain control authority; owner failure is isolated; only supported secret names leave storage; private atomic publication and closure refusal",
+      "existingTests": [
+        "server/src/integrations/registry.test.ts",
+        "server/src/integrations/vault.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1026",
+      "status": "alternative-evidence",
+      "technique": "direct-owner-and-filesystem-matrices",
+      "assessment": "Read-only owner projection plus synchronous in-service vault read/replace: no independent writer completion to permute. Real tests cover owner failures, named-secret privacy, legacy migration, unsafe targets and closed storage.",
+      "remaining": "Source refresh, connection authority and integration installation retain their own consumers. Independent-process filesystem and power-loss behavior are not proved.",
+      "requiredChecks": ["bun run check"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/architecture-audit-2026-11.md"],
+        "tests": [
+          "server/src/integrations/registry.test.ts",
+          "server/src/integrations/vault.test.ts"
+        ],
+        "checks": ["bun run test server/src/integrations"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
     }
   ],
   "promotionReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
