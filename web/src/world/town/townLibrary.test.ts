@@ -1,3 +1,6 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { createElement } from "react";
+import { AgentMemoryLink } from "../memory/AgentMemoryLink";
 import { afterEach, expect, test } from "bun:test";
 import type { MemoryCatalog } from "../../../../shared/memory";
 import {
@@ -89,14 +92,18 @@ test("the Library reads live hosts only, at their current generation, with World
     leaves: [
       {
         connectionId: "c1",
-        pane: { pane_id: "p1" },
+        kind: "agent",
+        actionable: true,
+        pane: { pane_id: "p1", agent: "opencode" },
         terminalId: "t1",
         agentName: "builder",
         label: "pane 1",
       },
       {
         connectionId: "c3",
-        pane: {},
+        kind: "agent",
+        coreControl: true,
+        pane: { agent: "codex" },
         terminalId: "t9",
         agentName: "helper",
         label: "pane 9",
@@ -117,4 +124,45 @@ test("the Library reads live hosts only, at their current generation, with World
       names: { t9: "helper" },
     },
   ]);
+});
+
+test("unsupported-only hosts publish no Library and render no sign or agent entry", () => {
+  const world = {
+    hosts: [
+      {
+        connectionId: "only",
+        connection: { generation: 7 },
+        label: "Example",
+        actionable: true,
+      },
+    ],
+    leaves: [
+      {
+        kind: "agent",
+        connectionId: "only",
+        actionable: true,
+        pane: { pane_id: "p1", agent: "letta" },
+      },
+    ],
+  } as unknown as WorldObject;
+  publishMemoryHosts(memoryHostsOf(world));
+  expect(townLibraryCounts()).toEqual({ status: "none" });
+  expect(
+    renderToStaticMarkup(
+      createElement(AgentMemoryLink, {
+        connectionId: "only",
+        agentId: "p1",
+        harness: "letta",
+      }),
+    ),
+  ).toBe("");
+  expect(
+    renderToStaticMarkup(
+      createElement(AgentMemoryLink, {
+        connectionId: "only",
+        agentId: "p1",
+        harness: "opencode",
+      }),
+    ),
+  ).toContain("Memory");
 });

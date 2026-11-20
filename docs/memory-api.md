@@ -19,7 +19,10 @@ fixture uses temporary synthetic files and the real memory service/worker. It
 starts no server and needs no connected agent. Expect `shared_agents:["p1","p2"]`,
 `stale:true`, `created:"created"`, `updated:"updated"`, `deleted:"deleted"`,
 `stale_revision:"conflict"`, `unconfirmed_delete:"refused"`, `truncated:true`,
-`entry_count:512` and `cleaned_up:true`. The directory is removed even on error.
+`entry_count:512` and `cleaned_up:true`. `opencode_sources` lists the project and
+user `AGENTS.md` with descriptions and `startup-candidate` timing;
+`unsupported_sources:0` proves the unsupported-only project contributes nothing.
+The directory is removed even on error.
 
 For real, read-only inspection against a running World service:
 
@@ -33,7 +36,8 @@ herdr-world memory read --connection CONNECTION_ID --generation GENERATION --sou
 Use the `connection_id` and `connection_generation` from a `current:true` entry
 in `ls`, then a `source.id` and entry `path` from memory list. A workspace's ID
 is the existing World workspace/room ID; an agent's ID is its pane/terminal ID.
-`--workspace ID`, `--agent ID` and `--harness claude|codex|pi` filter list/search.
+`--workspace ID`, `--agent ID` and `--harness NAME` filter list/search. Harness
+names are listed in `herdr-world memory --help` and the adapter table below.
 Filters preserve the source's full sharing associations within the bounded view.
 
 For explicit management, `create` and `update` take `--file INPUT.md` and
@@ -65,13 +69,49 @@ connection ID. IDs are not capabilities: each call discovers ownership anew.
 | Claude | User `CLAUDE.md` and rules; ancestor `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md` and `AGENTS.md` fallback candidates; project `.claude/rules`; project auto-memory `MEMORY.md` and topic files; project/user named subagent memory directories |
 | Codex | User and repository-root-to-cwd `AGENTS.override.md`/`AGENTS.md`; Markdown under `memories` and `memories_v2` |
 | Pi | User and ancestor `AGENTS.md` |
+| OpenCode (`opencode`) | Global `~/.config/opencode/AGENTS.md` and ancestor `AGENTS.md`; documented Claude compatibility fallbacks |
+| GitHub Copilot CLI (`copilot`) | Personal `copilot-instructions.md` and `instructions/**/*.instructions.md`; ancestor `AGENTS.md`, `CLAUDE.md`, `.claude/CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`; root/cwd `.github/instructions` |
+| Cursor (`cursor`) | Root `AGENTS.md` and `CLAUDE.md`; `.cursor/rules/**/*.mdc` (plain `.md` rules are ignored) |
+| Qwen Code (`qwen`) | User `QWEN.md`, project `QWEN.md`, `AGENTS.md`, `.qwen/QWEN.local.md`; user/project `.qwen/rules`; user `~/.qwen/memories` |
+| Droid (`droid`) | User `.factory`, `.agents`, `.agent` and ancestor directories, including those context folders: `AGENTS.md`, `agents.md`, `Agents.md`, `CLAUDE.md`, `Claude.md` |
+| Kimi (`kimi`) | Root-to-cwd `AGENTS.md` and legacy `.kimi/AGENTS.md`; current `.kimi-code/AGENTS.md`, user `.kimi-code/AGENTS.md`/`SYSTEM.md` and shared `.agents/AGENTS.md`; version/template decides use |
+| oh-my-pi (`omp`) | Ancestor `AGENTS.md`; native user `.omp/agent` and ancestor `.omp` context/system files, `RULES.md`, `rules` and `instructions`; profile and nearest nonempty directory decide use |
+| Kilo (`kilo`) | Global `~/.config/kilo/AGENTS.md`; ancestor `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`; global Claude fallback before migration |
+| Hermes (`hermes`) | User `SOUL.md`, `memories/MEMORY.md` and `memories/USER.md`; ancestor `.hermes.md`, `HERMES.md`, `AGENTS.md`, `CLAUDE.md` context-type candidates |
+| Qoder CLI (`qodercli`) | User `~/.qoder/AGENTS.md`, ancestor `AGENTS.md`, `AGENTS.local.md`, `.qoder/rules`; optional user `.qoder/memory` |
+| Antigravity CLI (`antigravity-cli`) | Ancestor `AGENTS.md`, `GEMINI.md`, `.agents/AGENTS.md`, `.agents/GEMINI.md`, immediate `.agents/rules/*.md`; global `.gemini` instructions and `.gemini/config/rules` |
+| Devin (`devin`) | User `~/.config/devin` and workspace `AGENTS.md`, `AGENTS.local.md`, `AGENT.md`, project `CLAUDE.md` and user Claude compatibility; observed subdirectory candidates load on demand |
+| Mastra Code (`mastracode`) | Project root, `.claude`, `.mastracode` and user `.claude`, `.mastracode`, `.config/claude`, `.config/mastracode` instruction candidates; first location wins, `AGENTS.md` before `CLAUDE.md` |
+| Grok (`grok`) | User `.grok` and ancestor compatible instruction filenames; `.grok/rules` and `.claude/rules` Markdown candidates |
+
+Only observed agents whose harness has an adapter contribute sources. A project
+with no such agent has no sources, even if an `AGENTS.md` exists on disk. Empty
+projects do not synthesize every adapter's sources. The API still reports
+unsupported agents explicitly; the Library omits unsupported hosts, projects and
+agents from its choices, entry points and Town sign rather than showing zero
+memories. Supported agents keep missing-source shelves and their creation actions.
+
+For browser acceptance, open the preview with `?memoryFixture`, choose **Town** →
+**Library**, then **opencode-app** (on a phone, use the reader picker). Its project
+and user instructions have descriptions and load at start; **opencode-builder**
+shows both in its startup list. **no-memory-app** and its unsupported agent are
+absent from the picker. Open a fresh page with `?memoryFixture=unsupported` to
+simulate an unsupported-only host: Town has no Library sign or ring entry, Board
+has no Library hub entry, and Settings/search omit Library. Both parameters are
+removed immediately; reload to return to real topology. Neither fixture reads
+real files or starts agents.
 
 The worker uses the owning host's `HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and
-`PI_CODING_AGENT_DIR`, never the service computer's home for an SSH connection.
+`PI_CODING_AGENT_DIR`, plus `XDG_CONFIG_HOME`, `COPILOT_HOME`, `HERMES_HOME`,
+`QWEN_HOME` and `KIMI_CODE_HOME`, never the service computer's home for an SSH
+connection. Other harnesses expose their documented default roots; per-process
+profiles and additional config locations are not inferred.
 Claude's default project key uses the main repository path, including linked
 worktree `commondir` metadata. A user `autoMemoryDirectory` or safe
 `CLAUDE_CODE_PROJECT_DIR_NAME` overrides it. No repository-supplied path override
-is followed. New harness support is one adapter emitting the common source model.
+is followed. New harness support is one adapter emitting the common source model
+and an entry in the shared capability registry (`shared/memory.ts`); a regression
+keeps them aligned.
 
 Sources are **candidates for a future load**, not a snapshot of an agent's
 already-loaded context. The service does not read another process's environment,
@@ -80,20 +120,37 @@ trust policy, interpret path-scoped rules, or toggle memory. `warnings` preserve
 these limits. Unknown harnesses appear in `unsupported`. Nonempty Codex overrides
 shadow the matching `AGENTS.md`; Claude instructions can shadow its fallback.
 `entry.harness_loads` reports this separately for each harness sharing a file.
-`load` is the coarse default timing; `harness_loads` refines it. Claude topic
-files are on demand, while `MEMORY.md` is a startup candidate. Nested subagent
+OpenCode's `AGENTS.md` shadows its same-scope Claude fallback. Rule
+folders describe conditional loading; bounded scalar frontmatter recognizes
+Cursor/oh-my-pi `alwaysApply`, Qwen `paths` and Antigravity `trigger` without
+interpreting globs or expanding imports. Other rule applicability stays with the
+harness. `load` is the coarse default timing; `harness_loads` refines it. Claude
+topic files are on demand, while `MEMORY.md` is a startup candidate. Nested subagent
 folders remain on demand; their configuration determines the actual reader.
 
 Harness load budgets differ from World's editing budget: Codex's default
 instruction chain is 32 KiB, and Claude's auto-memory index has a 200-line/25 KB
 startup limit. Larger entries can be editable here without being fully loaded.
 Codex generated recall can overwrite manual edits. Databases, transcripts,
-binary stores and skills are outside this v1's Markdown model. Reload or restart
-in the harness to use changed instructions.
+binary stores and skills are outside this v1's Markdown model. `.mdc` rules are
+readable and searchable with the same limits and filesystem refusals, but remain
+read-only in the CLI/API/Library; management still accepts only `.md`. Cursor
+rules offer no Markdown creation action because Cursor ignores that extension.
+Opaque per-project auto-memory keys (Qwen/Qoder), custom instruction globs/URLs,
+non-Markdown legacy rule files, foreign oh-my-pi providers, Hermes profiles/other
+context types, Kilo configured rules and Antigravity plugin/legacy rule roots are
+not expanded in this slice. Reload or restart in the harness to use changed
+instructions.
 
 These defaults follow [Claude's memory documentation](https://code.claude.com/docs/en/memory),
 [Codex instruction discovery](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
 and [Codex local memory storage](https://learn.chatgpt.com/docs/customization/memories).
+Each adapter cites its maker's documentation in its code comment. Letta's
+[MemFS](https://docs.letta.com/configuration/memory) requires agent-owned memory
+identity not present in observed topology; no filesystem adapter is invented.
+Mastra Code observational memory is database-backed and excluded; its documented
+Markdown instructions are supported. Third-party memory systems remain outside
+this slice.
 
 ## RPC calls for #1027
 

@@ -1,4 +1,8 @@
-import { MEMORY_ACTIONS, MEMORY_LIMITS } from "../../../shared/memory";
+import {
+  MEMORY_ACTIONS,
+  MEMORY_LIMITS,
+  MEMORY_HARNESSES,
+} from "../../../shared/memory";
 import { readSync, openSync, closeSync, fstatSync, constants } from "node:fs";
 import { parseCommandArgs, UsageError } from "./command";
 
@@ -6,7 +10,7 @@ export const MEMORY_HELP = `herdr-world memory list|search|read|create|update|de
 herdr-world memory demo [--json]  testing-only synthetic files, cleaned up afterwards
 
 Service calls require --connection ID --generation N (from ls --json).
-list:   [--workspace ID] [--agent ID] [--harness claude|codex|pi]
+list:   [--workspace ID] [--agent ID] [--harness ${MEMORY_HARNESSES.join("|")}]
 search: QUERY [same filters]
 read:   --source ID --path RELATIVE.md
 create: --source ID --path RELATIVE.md --file INPUT --user-action

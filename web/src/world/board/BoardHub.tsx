@@ -1,3 +1,4 @@
+import { libraryAvailable } from "../memory/memoryTargets";
 /**
  * Board's hub beside the bin: the town center's actions (useTownCenter.ts)
  * as compact buttons. **+** launches an agent, the crown opens the Town
@@ -60,18 +61,23 @@ export function boardLaunchSpace(
  * everything on the first host.
  */
 export function boardLibraryAction(
-  world: Pick<WorldObject, "nodeById">,
+  world: Pick<WorldObject, "nodeById" | "leaves">,
   selectedId: string | null,
 ) {
   const node = selectedId ? world.nodeById.get(selectedId) : undefined;
-  if (node && !node.stale && (node.kind === "agent" || node.kind === "space"))
-    return libraryAction(
+  if (node && !node.stale && (node.kind === "agent" || node.kind === "space")) {
+    const request =
       node.kind === "agent"
         ? { connectionId: node.connectionId, agentId: node.nativeId }
-        : { connectionId: node.connectionId, workspaceId: node.nativeId },
-      `for ${node.kind === "agent" ? agentName(node) : node.label}`,
-    );
-  return libraryAction();
+        : { connectionId: node.connectionId, workspaceId: node.nativeId };
+    return libraryAvailable(world, request)
+      ? libraryAction(
+          request,
+          `for ${node.kind === "agent" ? agentName(node) : node.label}`,
+        )
+      : null;
+  }
+  return libraryAvailable(world) ? libraryAction() : null;
 }
 
 /**
@@ -103,6 +109,7 @@ export function boardHubActions({
   toast(kind: "ok" | "error", text: string): void;
 }): TownCenterAction[] {
   const space = boardLaunchSpace(world, selectedId);
+  const library = boardLibraryAction(world, selectedId);
   const roster = world.leaves.flatMap((leaf) =>
     leaf.kind === "agent"
       ? [
@@ -146,7 +153,7 @@ export function boardHubActions({
     needsYouAction(),
     summaryAction(onOpenSummary, "in Town"),
     profilesAction(),
-    boardLibraryAction(world, selectedId),
+    ...(library ? [library] : []),
     {
       id: "workspace",
       label: "New workspace",

@@ -1,4 +1,4 @@
-import { beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import type { MemoryCatalog } from "../../../../shared/memory";
 import {
   MEMORY_FIXTURE_AGENT_NAMES as NAMES,
@@ -26,6 +26,8 @@ beforeAll(async () => {
   catalog = await memoryFixtureClient().list(MEMORY_FIXTURE_TARGET);
 });
 
+afterAll(() => setMemoryFixtureForTests(undefined));
+
 const source = (id: string) => catalog.sources.find((s) => s.id === id)!;
 
 test("readers: everything, then each project with its agents by name", () => {
@@ -34,9 +36,10 @@ test("readers: everything, then each project with its agents by name", () => {
     "Everything",
     "web-app",
     "docs-site",
+    "opencode-app",
   ]);
   expect(rows[0]!.files).toBe(catalog.entries.length);
-  expect(rows[0]!.detail).toBe("2 projects, 4 agents");
+  expect(rows[0]!.detail).toBe("3 projects, 4 agents");
   expect(rows[1]!.agents!.map((a) => [a.label, a.detail])).toEqual([
     ["web-builder", "Claude"],
     ["web-reviewer", "Codex"],
@@ -60,7 +63,7 @@ test("shells read nothing and stay off the readers list", () => {
     kind: "agent",
     id: "t9",
   });
-  expect(readerRows(withShell)[0]!.detail).toBe("2 projects, 4 agents");
+  expect(readerRows(withShell)[0]!.detail).toBe("3 projects, 4 agents");
 });
 
 test("wings go yours, projects, agents; instructions first, the index first", () => {
@@ -179,4 +182,47 @@ test("sizes, ages and paths read short", () => {
   expect(formatAge(61 * 86_400_000)).toBe("2 months ago");
   expect(shortPath("/a/b/c/d")).toBe("…/c/d");
   expect(shortPath("/a/b")).toBe("/a/b");
+});
+
+test("unsupported-only projects and unsupported agents have no reader or zero count", () => {
+  const unsupported: MemoryCatalog = {
+    ...catalog,
+    projects: [
+      ...catalog.projects,
+      { id: "no-memory", label: "No memory", path: "/workspace/plain" },
+    ],
+    agents: [
+      ...catalog.agents,
+      {
+        id: "plain",
+        project_id: "no-memory",
+        harness: "letta",
+        path: "/workspace/plain",
+      },
+    ],
+  };
+  const rows = readerRows(unsupported);
+  expect(
+    rows.some(
+      (row) => row.reader.kind === "project" && row.reader.id === "no-memory",
+    ),
+  ).toBe(false);
+  expect(
+    rows
+      .flatMap((row) => row.agents ?? [])
+      .some(
+        (row) =>
+          row.reader.kind === "agent" &&
+          ["p4", "plain"].includes(row.reader.id),
+      ),
+  ).toBe(false);
+});
+
+test("OpenCode fixture describes project and user instructions loaded at start", () => {
+  const load = agentLoad(catalog, "p5")!;
+  expect(load.startup).toHaveLength(2);
+  expect(load.onDemand).toEqual([]);
+  const sources = catalog.sources.filter((s) => s.agent_ids.includes("p5"));
+  expect(sources.map((s) => s.scope).sort()).toEqual(["project", "user"]);
+  expect(sources.every((s) => s.description.includes("OpenCode"))).toBe(true);
 });
