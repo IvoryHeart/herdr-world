@@ -71,6 +71,16 @@ const sameOwner = (
 
 const moveTimeoutMs = 90_000;
 
+/** Core has no adapter for the TUI's pane.move or tab.move operations. */
+export function coreMoveRefusal(): TownMoveOutcome {
+  return {
+    status: "refused",
+    reason: "unsupported",
+    message:
+      "Moving agents between desks or rooms is not supported for herdr-core yet.",
+  };
+}
+
 function parseOutcome(result: unknown): TownMoveOutcome {
   const value = result as Partial<TownMoveOutcome> & Record<string, unknown>;
   if (
@@ -99,6 +109,7 @@ export async function requestDeskMove(
       reason: "other_host",
       message: "Desks move only within one host.",
     };
+  if (desk.coreOpen) return coreMoveRefusal();
   const client = bridge.connection(
     desk.tabRef.connectionId,
     desk.tabRef.generation,
@@ -136,6 +147,7 @@ export async function requestDeskReorder(
       reason: "other_room",
       message: "Desks reorder only within one room.",
     };
+  if (desk.coreOpen) return coreMoveRefusal();
   return requestTabReorder(
     desk.tabRef,
     desk.tabRef.nativeId,
@@ -186,6 +198,7 @@ export async function requestAgentMove(
       reason: "other_host",
       message: "Agents move only within one host.",
     };
+  if (device.coreOpen) return coreMoveRefusal();
   const client = bridge.connection(
     device.paneRef.connectionId,
     device.paneRef.generation,

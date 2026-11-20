@@ -14,7 +14,11 @@ import {
 } from "../../../../shared/relations";
 import { officeDeskKey } from "../officeRoom";
 import { townDeskColorTarget } from "./townModel";
-import type { TownMoveResult } from "./townMoves";
+import {
+  coreMoveRefusal,
+  townMoveNotice,
+  type TownMoveResult,
+} from "./townMoves";
 import type { TownJoinRequest } from "./townJoinSeats";
 
 /** What Town's team actions need from the view (TownView.tsx). */
@@ -91,6 +95,19 @@ export function townTeamActions(deps: TownTeamDeps) {
     const desk = deps.deskForKey(deskKey);
     const target = deps.deskForKey(targetKey);
     if (!desk || !target || deps.movingKey) return "returned";
+    // Joining across rooms first needs a native desk move. Refuse before
+    // changing membership or asking to close a room when core cannot move it.
+    if (desk.coreOpen && desk.roomKey !== target.roomKey) {
+      toast(
+        "error",
+        townMoveNotice(
+          desk.displayLabel,
+          coreMoveRefusal(),
+          desk.tabRef.nativeId,
+        ),
+      );
+      return "returned";
+    }
     const members = deskTerminals(desk).slice(0, 1);
     const with_ = deskTerminals(target).slice(0, 1);
     if (!members.length || !with_.length) {

@@ -110,6 +110,11 @@ no control for it. Platform and harness limits apply across the table.
   its core rooms separately from Herdr apps and cannot rename or close an
   app-created room. Linked-machine core terminals are observations, not
   directly controllable desks.
+- **Town moves on core:** dragging a live core agent to another desk, or its
+  desk to another room, reports that the move is not supported yet. Unpinned
+  desk reordering and joining a team in another room are refused with the same
+  reason; no terminal or team membership changes. Pinned desks can still
+  reorder among their room's pinned seats using World's saved view layout.
 - **Core agent environment (Unix):** New agent finds and starts the harness
   through the core host's `$SHELL` (`/bin/sh` when unset): interactive on Linux,
   login and interactive on macOS. Supported shells are sh, bash, zsh, dash,

@@ -193,6 +193,18 @@ including ending a room shell, and a confirmation SHALL name each terminal's
 occupant incarnation (the mirror's occupancy token), so a replacement that
 reuses the pid and argv is refused.
 
+#### Scenario: Town refuses unsupported core moves visibly
+
+- **WHEN** a user drags a live core agent onto another desk in its room or
+  another room, moves its desk to another room, reorders an unpinned desk,
+  or tries to join a desk's team in another room
+- **THEN** Town accepts the pickup and visibly reports that moving core
+  agents between desks or rooms is not supported yet, without sending TUI
+  operations, changing placement or changing team membership
+- **AND** it does not ask to close the source room for an unsupported move;
+  stale agents and desks remain non-actionable, while pinned desks retain
+  World's saved ordering among their room's pinned seats
+
 #### Scenario: Review a finished turn
 
 - **WHEN** a finished turn becomes visibly seen in foreground World

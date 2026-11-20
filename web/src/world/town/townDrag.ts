@@ -80,7 +80,13 @@ export function townDragFor(
     if (!zoomedIn) return null;
     const agent = model.agents.get(hit.key);
     const seat = model.agentSeats.get(hit.key);
-    if (!agent || !seat || !agent.canOpenInSpaces || agent.stale) return null;
+    if (
+      !agent ||
+      !seat ||
+      (!agent.canOpenInSpaces && !agent.coreChat) ||
+      agent.stale
+    )
+      return null;
     return {
       kind: "agent",
       key: agent.key,
@@ -93,7 +99,10 @@ export function townDragFor(
     hit.kind === "desk" ? hit.key : hit.kind === "pane" ? hit.deskKey : null;
   const desk = deskKey ? model.desks.get(deskKey) : undefined;
   // A pinned desk moves too, among its room's pinned seats (townDropTarget).
-  if (!desk || !desk.canOpenInSpaces) return null;
+  // Live core desks lift too: unsupported native moves report their reason
+  // through the same move actions instead of silently ignoring the gesture.
+  if (!desk || (!desk.canOpenInSpaces && !desk.coreOpen) || desk.stale)
+    return null;
   return {
     kind: "desk",
     key: desk.key,
