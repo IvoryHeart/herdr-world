@@ -5075,3 +5075,6 @@ function MoveDialog({
     </div>
   );
 }
+
+// Keep the testing-only preview behind Board's existing lazy bundle boundary.
+export { default as BoardTextConflictFixture } from "./testing/BoardTextConflictFixture";

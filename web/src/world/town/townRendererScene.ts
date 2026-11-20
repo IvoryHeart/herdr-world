@@ -210,10 +210,8 @@ export function townOutdoor(
   );
   // The post office left of the center: its house, its yard on the street.
   const post = townPostLot(layout);
-  if (post) {
-    add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
-    add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
-  }
+  add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
+  add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
   // The apartment building beside the plaza, where finished agents live on.
   const apartments = townApartmentsLot(layout);
   if (apartments)
