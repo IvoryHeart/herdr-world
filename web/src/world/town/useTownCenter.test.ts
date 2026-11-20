@@ -67,6 +67,7 @@ test("the ring offers a new agent first, then the Town master and the town's err
     "needs-you",
     "summary",
     "profiles",
+    "library",
     "room",
   ]);
   expect(action("launch").primary).toBe(true);
