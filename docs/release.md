@@ -41,6 +41,11 @@ persisted when adding core. It then restarts the previous binary
 without `HERDR_SESSION` before changing the saved default: an explicit session
 intentionally pins the process default. Listing checks the requested rooms and
 the observed pane/terminal identities, since TUI launch replies omit room IDs.
+After prompt input, listing waits for server-pushed topology changes until both
+the aggregate and CLI contain every launched agent in the same observation.
+It never accumulates partial passes or retries on a timer. A missing agent,
+stale topology or changed runtime generation still fails the bounded wait;
+the failure names the runtime and harness and the last unmet assertion.
 The older pre-0.2.4 cookie migration remains covered by installer acceptance below.
 
 The walk installs pinned, real `claude` and `codex` executables, signed out.

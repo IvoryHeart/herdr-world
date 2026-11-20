@@ -19,7 +19,7 @@ test("release walk fixture, recorder and receipt regressions pass", () => {
       stderr: "pipe",
     },
   );
-  expect(result.stderr.toString()).toContain("Ran 17 tests");
+  expect(result.stderr.toString()).toContain("Ran 20 tests");
   expect(result.exitCode).toBe(0);
 });
 

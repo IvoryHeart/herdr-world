@@ -188,31 +188,58 @@ def input_reaches(world, fixture, agent):
 
 
 def listing(world, agents):
-    rows = world.snapshot()
-    cli = json.loads(run([world.binary, 'ls', '--json'], {**world.env, 'HERDR_WORLD_URL': world.base}).stdout)
-    entries = cli.get('result') if isinstance(cli, dict) else cli
+    reason = 'aggregate/CLI listing never converged'
+    last_failure = 'listing was not observed'
+
+    def read():
+        rows = world.snapshot()
+        cli = json.loads(run([world.binary, 'ls', '--json'], {**world.env, 'HERDR_WORLD_URL': world.base}).stdout)
+        return rows, cli.get('result') if isinstance(cli, dict) else cli
+
+    def complete(observation):
+        nonlocal last_failure
+        try:
+            assert_listing(*observation, agents)
+            return True
+        except AssertionError as error:
+            last_failure = str(error)
+            return False
+
+    # Terminal input invalidates asynchronous topology. The CLI takes a
+    # separate snapshot; wait for pushed changes just as launch detection does.
+    # Every attempt must contain all agents, never accumulated partial passes.
+    try:
+        world.observe(read, complete, reason)
+    except AssertionError as error:
+        if str(error) != reason:
+            raise
+        raise AssertionError(f'{reason}: {last_failure}') from None
+
+
+def assert_listing(rows, entries, agents):
     assert isinstance(entries, list), 'herdr-world ls did not return runtime listings'
     for agent in agents:
+        context = f'{agent["runtime"]}/{agent["kind"]}: '
         connection = next((row for row in rows if row['connection_id'] == agent['connection']['connection_id']), None)
-        assert connection, 'aggregate omitted a connected runtime'
-        assert connection['generation'] == agent['connection']['generation'], 'aggregate runtime generation changed'
-        assert not connection['stale'] and connection['snapshot'], 'aggregate returned stale runtime topology'
+        assert connection, context + 'aggregate omitted a connected runtime'
+        assert connection['generation'] == agent['connection']['generation'], context + 'aggregate runtime generation changed'
+        assert not connection['stale'] and connection['snapshot'], context + 'aggregate returned stale runtime topology'
         snapshot = connection['snapshot']
         # TUI launch returns pane/terminal IDs, not a workspace ID. Keep the
         # requested room and verify its binding through the actual topology.
-        assert any(item['workspace_id'] == agent['workspace_id'] for item in snapshot['workspaces']), 'aggregate omitted a runtime room'
+        assert any(item['workspace_id'] == agent['workspace_id'] for item in snapshot['workspaces']), context + 'aggregate omitted a runtime room'
         assert any(item['pane_id'] == agent['result']['pane_id'] and
                    item['terminal_id'] == agent['result']['terminal_id'] and
                    item['workspace_id'] == agent['workspace_id'] and
-                   item.get('agent') == agent['kind'] for item in snapshot['panes']), 'aggregate omitted the launched agent from its runtime room'
-        assert any(item['pane_id'] == agent['result']['pane_id'] for item in snapshot['agents']), 'aggregate omitted a runtime agent'
+                   item.get('agent') == agent['kind'] for item in snapshot['panes']), context + 'aggregate omitted the launched agent from its runtime room'
+        assert any(item['pane_id'] == agent['result']['pane_id'] for item in snapshot['agents']), context + 'aggregate omitted a runtime agent'
         entry = next((item for item in entries if item['connection_id'] == connection['connection_id']), None)
-        assert entry and entry['current'], 'herdr-world ls omitted a connected runtime'
+        assert entry and entry['current'], context + 'herdr-world ls omitted a connected runtime'
         workspace = next((item for item in entry['workspaces'] if item['workspace_id'] == agent['workspace_id']), None)
-        assert workspace, 'herdr-world ls omitted a runtime room'
+        assert workspace, context + 'herdr-world ls omitted a runtime room'
         panes = [pane for tab in workspace['tabs'] for pane in tab['panes']]
         found = next((pane for pane in panes if pane['pane_id'] == agent['result']['pane_id']), None)
-        assert found and found.get('agent') == agent['kind'], 'herdr-world ls omitted a runtime agent'
+        assert found and found.get('agent') == agent['kind'], context + 'herdr-world ls omitted a runtime agent'
 
 
 def chat_reply(world, fixture, agent):

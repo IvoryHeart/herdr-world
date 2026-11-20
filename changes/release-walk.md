@@ -23,3 +23,6 @@
   listener port so native acceptance reaches the intended journeys.
 - Preserve channel rehearsal and the all-channel verification barrier alongside
   pre-tag walk authorization and reuse of the approved Unix release archives.
+- Wait for pushed topology changes after release-walk prompt input before
+  asserting aggregate/CLI listing, requiring all agents together and naming the
+  affected runtime and harness when the bounded wait fails.

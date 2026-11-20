@@ -9,6 +9,8 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 from journeys import Fixture, launch, listing, upgrade
+from processes import Events
+from world import World
 
 
 class JourneyTests(unittest.TestCase):
@@ -23,7 +25,7 @@ class JourneyTests(unittest.TestCase):
             result = dict(tab_id=runtime + '-tab', pane_id=pane['pane_id'], terminal_id=pane['terminal_id'])
             if runtime == 'herdr-core':
                 result['workspace_id'] = workspace
-            agents.append(dict(connection=connection, result=result, workspace_id=workspace, kind=kind))
+            agents.append(dict(connection=connection, result=result, workspace_id=workspace, runtime=runtime, kind=kind))
             rows.append(dict(**connection, stale=False, snapshot=dict(
                 workspaces=[dict(workspace_id=workspace)], panes=[pane],
                 agents=[dict(pane_id=pane['pane_id'], agent=kind)])))
@@ -31,12 +33,66 @@ class JourneyTests(unittest.TestCase):
                 workspace_id=workspace, tabs=[dict(panes=[dict(pane_id=pane['pane_id'], agent=kind)])])]))
         return agents, rows, entries
 
+    def listing_world(self, rows):
+        world = SimpleNamespace(binary=Path('/synthetic/world'), env={}, base='http://127.0.0.1:1',
+                                snapshot=Mock(return_value=rows), messages=Events())
+        # Exercise the real event wait without starting a server or sleeping.
+        world.observe = lambda read, predicate, reason: World.observe(world, read, predicate, reason, timeout=0)
+        return world
+
+    def test_listing_waits_for_pushed_topology_after_input_before_cli_converges(self):
+        agents, rows, entries = self.listed_agents()
+        world = self.listing_world(rows)
+        pending = copy.deepcopy(entries)
+        pending[0]['workspaces'][0]['tabs'][0]['panes'][0].pop('agent')
+        def cli(*args):
+            if world.snapshot.call_count == 1:
+                # A CLI call takes a separate snapshot, after terminal input
+                # invalidation. Only a real pushed update permits another read.
+                world.messages.add(dict(method='world.changed'))
+                return SimpleNamespace(stdout=json.dumps(pending))
+            return SimpleNamespace(stdout=json.dumps(entries))
+        with patch('journeys.run', side_effect=cli) as command:
+            listing(world, agents)
+        self.assertEqual(world.snapshot.call_count, 2)
+        self.assertEqual(command.call_count, 2)
+        self.assertEqual(command.call_args.args[0], [world.binary, 'ls', '--json'])
+        self.assertEqual(command.call_args.args[1]['HERDR_WORLD_URL'], world.base)
+
+    def test_listing_does_not_retry_without_a_push_and_names_the_missing_agent(self):
+        agents, rows, entries = self.listed_agents()
+        entries[1]['workspaces'][0]['tabs'][0]['panes'].clear()
+        world = self.listing_world(rows)
+        with patch('journeys.run', return_value=SimpleNamespace(stdout=json.dumps(entries))) as command:
+            with self.assertRaisesRegex(AssertionError, 'herdr-core/codex: herdr-world ls omitted a runtime agent'):
+                listing(world, agents)
+        self.assertEqual(world.snapshot.call_count, 1)
+        self.assertEqual(command.call_count, 1)
+
     def test_listing_accepts_tui_launch_shape_and_runtime_agent_rows(self):
         agents, rows, entries = self.listed_agents()
-        world = Mock(binary=Path('/synthetic/world'), env={}, base='http://127.0.0.1:1')
-        world.snapshot.return_value = rows
+        world = self.listing_world(rows)
         with patch('journeys.run', return_value=SimpleNamespace(stdout=json.dumps(entries))):
             listing(world, agents)
+
+    def test_listing_requires_all_agents_in_one_aggregate_and_cli_observation(self):
+        agents, rows, entries = self.listed_agents()
+        pending_rows = copy.deepcopy(rows)
+        pending_rows[0]['snapshot']['agents'].clear()
+        pending_entries = copy.deepcopy(entries)
+        pending_entries[1]['workspaces'][0]['tabs'][0]['panes'].clear()
+        world = self.listing_world(rows)
+        world.snapshot.side_effect = [pending_rows, rows]
+        def cli(*args):
+            if world.snapshot.call_count == 1:
+                world.messages.add(dict(method='world.changed'))
+                return SimpleNamespace(stdout=json.dumps(entries))
+            return SimpleNamespace(stdout=json.dumps(pending_entries))
+        with patch('journeys.run', side_effect=cli) as command:
+            with self.assertRaisesRegex(AssertionError, 'herdr-core/codex: herdr-world ls omitted a runtime agent'):
+                listing(world, agents)
+        self.assertEqual(world.snapshot.call_count, 2)
+        self.assertEqual(command.call_count, 2)
 
     def test_listing_rejects_missing_stale_moved_or_replaced_runtime_agents(self):
         agents, rows, entries = self.listed_agents()
@@ -58,14 +114,18 @@ class JourneyTests(unittest.TestCase):
             entries.pop(0)
         def missing_cli_room(rows, entries):
             entries[0]['workspaces'].clear()
+        def stale_cli_runtime(rows, entries):
+            entries[0]['current'] = False
         def missing_cli_agent(rows, entries):
             entries[0]['workspaces'][0]['tabs'][0]['panes'].clear()
+        def wrong_cli_agent(rows, entries):
+            entries[0]['workspaces'][0]['tabs'][0]['panes'][0]['agent'] = 'codex'
         for mutate in (missing_runtime, stale_runtime, changed_generation, missing_room, missing_agent,
-                       moved_agent, replaced_terminal, missing_cli_runtime, missing_cli_room, missing_cli_agent):
+                       moved_agent, replaced_terminal, missing_cli_runtime, missing_cli_room,
+                       stale_cli_runtime, missing_cli_agent, wrong_cli_agent):
             current_rows, current_entries = copy.deepcopy((rows, entries))
             mutate(current_rows, current_entries)
-            world = Mock(binary=Path('/synthetic/world'), env={}, base='http://127.0.0.1:1')
-            world.snapshot.return_value = current_rows
+            world = self.listing_world(current_rows)
             with self.subTest(case=mutate.__name__), patch('journeys.run', return_value=SimpleNamespace(stdout=json.dumps(current_entries))):
                 with self.assertRaisesRegex(AssertionError, 'aggregate|herdr-world ls'):
                     listing(world, agents)
