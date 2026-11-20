@@ -219,11 +219,9 @@ export function townOutdoor(
     (center.y + center.h) * T,
   );
   // The post office left of the center: its house, its yard on the street.
-  if (layout.formFactor !== "narrow") {
-    const post = townPostLotBeside(center);
-    add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
-    add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
-  }
+  const post = townPostLotBeside(center);
+  add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
+  add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
   // The harbour at the town's right edge: the warehouse on the shore, its
   // yard on the first street, and a pier for every lane out to sea.
   const harbour = townHarbourLot(layout);

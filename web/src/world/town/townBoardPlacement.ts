@@ -128,19 +128,16 @@ export function townBoardObstacles(
       y1: center.street * T,
     },
   ];
-  const harbour = townHarbourLot(layout);
-  if (harbour) {
-    for (const lot of [
-      townPostReserve(townPostLotBeside(center)),
-      townWarehouseReserve(harbour.warehouse),
-    ])
-      boxes.push({
-        x0: lot.x0 * T,
-        x1: lot.x1 * T,
-        y0: lot.y0 * T,
-        y1: lot.y1 * T,
-      });
-  }
+  for (const lot of [
+    townPostReserve(townPostLotBeside(center)),
+    townWarehouseReserve(townHarbourLot(layout).warehouse),
+  ])
+    boxes.push({
+      x0: lot.x0 * T,
+      x1: lot.x1 * T,
+      y0: lot.y0 * T,
+      y1: lot.y1 * T,
+    });
   if (city) {
     const scale = townCityBoardScale(z);
     const mid = (center.x + center.w / 2) * T;

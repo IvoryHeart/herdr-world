@@ -87,7 +87,7 @@ export type ListenerDeps = {
   worldCli: ReturnType<typeof createWorldCliService>;
   connectionCli: Pick<
     Parameters<typeof handleConnectionsCliEndpoint>[2],
-    "profiles" | "registryPath"
+    "profiles" | "registryPath" | "snapshot"
   >;
   settings: GuiSettingsStore;
   update: ReturnType<typeof createUpdateHandlers>;

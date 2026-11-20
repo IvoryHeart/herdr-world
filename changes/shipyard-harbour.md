@@ -12,5 +12,6 @@
 ### Changed
 
 - Open pull requests moved from the post office to Town's new warehouse on the
-  harbour's shore, as crates; `?townPostFixture` is now
+  harbour's shore, as crates, on a phone too; Town's search finds them as the
+  **Warehouse** ("warehouse" or "pull requests"); `?townPostFixture` is now
   `?townWarehouseFixture`.

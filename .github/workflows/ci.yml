@@ -133,12 +133,9 @@ jobs:
               with:
                   bun-version: "1.4.4"
                   no-cache: true
-            - name: Check knowledge-map impact
+            - name: Check PR description
               if: github.event_name == 'pull_request'
-              run: bun scripts/check-knowledge-map.ts "$GITHUB_EVENT_PATH"
-            - name: Check changelog fragments
-              if: github.event_name == 'pull_request'
-              run: bun scripts/changelog-fragments.ts pr "$GITHUB_EVENT_PATH"
+              run: bun run check:pr-body --event "$GITHUB_EVENT_PATH"
             - name: Determine validation scope
               id: scope
               env:
@@ -156,6 +153,21 @@ jobs:
               env:
                   GH_TOKEN: ${{ github.token }}
               run: bun scripts/installer-upgrade.ts plan
+
+    dependency-security:
+        name: Shipped dependency security
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: "1.4.4"
+                  no-cache: true
+            - run: bun install --frozen-lockfile --ignore-scripts
+            - run: bun run security:check
 
     static:
         name: Static checks
@@ -245,7 +257,7 @@ jobs:
 
     delivery:
         name: Delivery checks
-        needs: [validation-scope, validation, world-browser, behavioral, plugin-windows, installer-upgrade, launchd]
+        needs: [validation-scope, validation, world-browser, behavioral, plugin-windows, installer-upgrade, launchd, dependency-security]
         env:
             HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
         if: always()
@@ -258,6 +270,10 @@ jobs:
               with:
                   bun-version: "1.4.4"
                   no-cache: true
+            - name: Require current dependency security audit
+              env:
+                  SECURITY_RESULT: ${{ needs.dependency-security.result }}
+              run: test "$SECURITY_RESULT" = success
             - name: Determine validation scope
               run: echo "Validation mode is $VALIDATION_MODE"
               env:

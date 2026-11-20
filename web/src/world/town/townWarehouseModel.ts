@@ -285,7 +285,9 @@ export function townWarehouseLot(layout: TownLayout): TownWarehouseLot {
  */
 export function townWarehouseFoldAt(center: TownCenterLot) {
   return {
-    x: (center.x + center.w) * TOWN_TILE - 60,
+    // Far enough in that a phone whose center stands right of the post
+    // office (townLots.ts) keeps the whole sign on screen.
+    x: (center.x + center.w) * TOWN_TILE - 80,
     y: center.y * TOWN_TILE + TOWN_CENTER_FRIEZE_Y + 40,
   };
 }

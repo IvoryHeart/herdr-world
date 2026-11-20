@@ -3574,19 +3574,12 @@ export default function App({
       document.documentElement.style.removeProperty(
         "--config-sheet-max-height",
       );
-      document.documentElement.style.removeProperty(
-        "--config-sheet-expanded-max-height",
-      );
     } else {
       const scale = uiScale / 100;
       document.documentElement.style.setProperty("--ui-scale", String(scale));
       document.documentElement.style.setProperty(
         "--config-sheet-max-height",
         `min(calc(78dvh / ${scale}), calc(640px / ${scale}))`,
-      );
-      document.documentElement.style.setProperty(
-        "--config-sheet-expanded-max-height",
-        `calc(90dvh / ${scale})`,
       );
     }
     // Radix positions popovers using getBoundingClientRect. Some engines

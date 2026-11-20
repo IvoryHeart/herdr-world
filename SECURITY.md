@@ -4,6 +4,75 @@
 
 Security fixes cover the latest release.
 
+## Dependency alerts and ownership
+
+Maintainers own dependency alerts and the `dependency-security` issue queue.
+Shipped high or critical vulnerabilities must be fixed or have an approved,
+reasoned exception **before the next release**; development-only alerts must be
+resolved or explicitly tracked with a mitigation **within one week**. A red
+dependency check blocks publication and must not be bypassed for a release.
+
+Run `bun run security:check` to audit the committed Bun and Quint locks against
+the [public npm advisory service](https://docs.npmjs.com/cli/v11/commands/npm-audit/#bulk-advisory-endpoint).
+It reports package/version, GHSA advisory, severity, the first published newer
+stable version outside the affected range, and any exception. Advisory range
+matching includes prereleases, using the locked npm semver policy library. The release gate
+fails for fixable high/critical advisories in the runtime dependency closure.
+All server/web runtime, optional and peer dependencies across target platforms
+are potentially shipped: the executable embeds the service and web assets, npm
+packages wrap that executable, and Pages reuses web art. This deliberately makes
+no claim that tree shaking removes a vulnerable dependency. Root development
+dependencies and isolated Quint tooling are reported separately and do not block
+shipping. Build tools themselves are not runtime dependencies. The npm launcher
+has no third-party runtime imports.
+
+The check runs in protected PR delivery checks (including metadata reruns), daily
+on main, and before release or Pages publication. Registry errors fail closed.
+The daily/main workflow creates a `crew:ready`, `dependency-security` issue with
+`Priority: high` for new shipped high/critical findings, even when no fix exists.
+Issues deduplicate by package/advisory; a new affected version after a closed
+issue queues another item. Inspect the workflow artifact for the complete report.
+
+Exceptions live in `security/dependency-exceptions.json`. Each entry requires
+`package`, exact `version`, `advisory` (the GHSA URL), a specific `reason` and
+`expires` (`YYYY-MM-DD`, UTC). Maintainers approve exceptions through normal
+independent PR review. An exception expires at the start of that day; expired or
+malformed entries fail the gate. An exception permits that exact finding only,
+remains visible in reports/issues, and must be removed when the dependency is fixed.
+
+Dependabot covers Actions, the root Bun workspace (`package.json`,
+`web/package.json`, `server/package.json`, `bun.lock`) and isolated npm tooling
+(`tools/quint/package.json`, `tools/quint/package-lock.json`). Version and security
+updates are grouped per ecosystem. Keep dependency graph, Dependabot alerts and
+automatic security updates enabled in repository security settings. The
+dependency gate checks Bun versions directly, independently of GitHub's alert
+ingestion.
+
+For a safe failure demonstration, run `bun run security:check --demo-vulnerable`.
+It audits a synthetic shipped `lodash@4.17.15`, exits 1 and names the live GHSA
+advisories and available fixes, without changing installed or locked versions.
+
+### November 2026 adm-zip alerts
+
+The eight alerts (#1–#8) were in the **development-only** Quint lock. Quint
+0.33.1 upgrades adm-zip from 0.5.18 to 0.6.1, resolving the seven patched alerts.
+[GHSA-vwc7-r8mq-g2x9](https://github.com/advisories/GHSA-vwc7-r8mq-g2x9)
+has no declared patched version and lists 0.5.9–0.6.0 as affected; 0.6.1 is outside
+that published range. Do not infer from that alone that destination symlinks are safe.
+
+The vulnerable operation is extraction with overwrite enabled into a destination
+containing a symlink. Quint's `dist/src/rust/binaryManager.js` uses adm-zip's
+`extractAllTo(..., true)` only for the Windows Rust evaluator's ZIP installer.
+Our supported POSIX verification commands explicitly select the TypeScript
+evaluator and TLC, launch the owned Apalache JAR directly and supply its endpoint.
+`verification:setup` installs npm dependencies with lifecycle scripts disabled,
+then verifies a pinned **tar** archive and JAR digest in a fresh temporary directory.
+It never invokes the Rust ZIP installer. The runner policy refuses any `run` without an
+explicit `--backend typescript` (including duplicate/backend override flags)
+before spawning Quint; its regression preserves this non-reachability claim. Windows checker execution remains unsupported. If an
+alert persists after the lock update, dismiss it as code not used with this
+analysis linked; re-evaluate before enabling a Rust evaluator or ZIP installer.
+
 ## Reporting a Vulnerability
 
 **Do not open a public issue.** Use a private repository security advisory with

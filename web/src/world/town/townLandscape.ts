@@ -241,10 +241,8 @@ function reservedLand(layout: TownLayout) {
     const sy = Math.floor(stop.wait.y / T);
     reserve(sx - 2, sy - 5, sx + 3, sy + 2);
   }
-  if (layout.formFactor !== "narrow") {
-    const lot = townPostReserve(townPostLotBeside(layout.center));
-    reserve(lot.x0, lot.y0, lot.x1, lot.y1);
-  }
+  const post = townPostReserve(townPostLotBeside(layout.center));
+  reserve(post.x0, post.y0, post.x1, post.y1);
   const harbour = townHarbourLot(layout);
   for (const lot of [
     townWarehouseReserve(harbour.warehouse),

@@ -24,6 +24,7 @@ import {
 } from "./boardControlsLayout";
 import "./boardControls.css";
 import { BoardSettingsDialog } from "./BoardSettingsDialog";
+import { useViewControlRequest } from "../../settings/viewControls";
 import { BOARD_SURFACES, type BoardAppearance } from "./boardAppearance";
 
 const CONTROLS: readonly BoardControl[] = [
@@ -106,6 +107,9 @@ export function BoardControls(props: {
     }),
   );
   const measuredLayout = useRef(layout);
+  // Settings and the command box open this menu or its colours (#1035).
+  useViewControlRequest("board.settings", () => setOpen(true));
+  useViewControlRequest("board.colours", () => setDialog("colors"));
   useLayer(open, () => setOpen(false), {
     element: () => menu.current,
     anchors: () => [trigger.current],
