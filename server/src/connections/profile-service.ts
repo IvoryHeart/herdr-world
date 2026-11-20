@@ -1,16 +1,21 @@
-import { HerdrClient } from "../bridge/herdr-client";
+import { persistHostCatalogue } from "./host-persistence";
+import {
+  ConnectionProbeError,
+  retryableLocalSocketError,
+  testConnectionProfile,
+} from "./profile-probe";
+export {
+  ConnectionProbeError,
+  testConnectionSockets,
+  testLocalConnectionProfile,
+  testConnectionProfile,
+} from "./profile-probe";
 import {
   connectionIdentityForProfile,
   localMigrationSeed,
 } from "./profile-creation";
-import {
-  assertSupportedHerdrProtocol,
-  HerdrCompatibilityError,
-} from "../bridge/protocol-compat";
-import { createSshTunnelManager, SshTunnelError } from "../bridge/ssh-tunnel";
-import { ThinClient } from "../bridge/thin-client";
+import { SshTunnelError } from "../bridge/ssh-tunnel";
 import { systemScheduler, type Scheduler } from "../service/ports";
-import { runProcess } from "../utils/process-utils";
 import type {
   CoreConnectionListItem,
   CoreConnectionSupport,
@@ -33,9 +38,11 @@ import {
   publicConnectionProfile,
   validateConnectionProfile,
 } from "./profiles";
-import { createSshProfileRuntimeConfig } from "./ssh-profile-runtime";
 import { ProfileInputError, validateProfileInput } from "./profile-validation";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "./types";
+import { HostConnectionService } from "./host-service";
+import type { DiscoverHost } from "./host-discovery";
+import { forgetHostRuntime, hostId } from "./hosts";
 
 export { connectionIdentityForProfile } from "./profile-creation";
 
@@ -77,7 +84,9 @@ export function loadConnectionProfileBootstrap(args: {
       persistedRegistry,
       registrations: [
         { profile: args.startupProfile, readOnly: true },
-        ...persisted,
+        ...persisted.filter(
+          ({ profile }) => profile.id !== STARTUP_DEFAULT_CONNECTION_ID,
+        ),
       ],
     };
   }
@@ -107,32 +116,6 @@ export type ConnectionProfileListItem = ReturnType<
 
 type RetryTimer = ReturnType<Scheduler["schedule"]>;
 
-export class ConnectionProbeError extends Error {
-  constructor(
-    message: string,
-    readonly retryable: boolean,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = "ConnectionProbeError";
-  }
-}
-
-/** Native local transport failures only; arbitrary error text is not retry intent. */
-function retryableLocalSocketError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const code = (error as NodeJS.ErrnoException).code;
-  return (
-    /^(?:ENOENT|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE)$/.test(code ?? "") ||
-    /^(?:ENOENT|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE):/.test(
-      error.message,
-    ) ||
-    /^(?:timeout: ping|connection closed before response: ping|timed out waiting for Herdr protocol \d+ handshake|thin client connection closed during handshake)$/.test(
-      error.message,
-    )
-  );
-}
-
 export type ConnectionRetryOptions = {
   baseDelayMs?: number;
   maxDelayMs?: number;
@@ -144,6 +127,8 @@ export type ConnectionRetryOptions = {
 };
 
 type RetryState = {
+  /** User connection intent survives a temporarily absent runtime. */
+  wanted: boolean;
   enabled: boolean;
   attempt: number;
   token: number;
@@ -151,81 +136,11 @@ type RetryState = {
   stableTimer: RetryTimer | null;
 };
 
-export async function testConnectionSockets(
-  controlSocketPath: string,
-  clientSocketPath: string,
-): Promise<{ ok: true; version: string | null; protocol: number }> {
-  const herdr = new HerdrClient(controlSocketPath);
-  let thinClient: ThinClient | null = null;
-  try {
-    const ping = await herdr.call("ping", {}, 8_000);
-    const protocol: unknown = ping?.protocol;
-    try {
-      assertSupportedHerdrProtocol(protocol);
-    } catch (error) {
-      throw new ConnectionProbeError((error as Error).message, false, {
-        cause: error,
-      });
-    }
-    thinClient = new ThinClient(clientSocketPath, async () => protocol);
-    // ThinClient mirrors runtime failures through EventEmitter in addition to
-    // rejecting connect(). A probe has no long-lived consumer, but it still
-    // must register an error listener before opening the socket so ordinary
-    // render failures remain contained by this promise.
-    thinClient.on("error", () => undefined);
-    try {
-      await thinClient.connect(80, 24);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const permanent =
-        error instanceof HerdrCompatibilityError ||
-        /(?:protocol .*not supported|rejected thin-client protocol|welcomed protocol|unsupported encoding|bincode:|invalid protocol version)/i.test(
-          message,
-        );
-      throw new ConnectionProbeError(
-        message,
-        !permanent && retryableLocalSocketError(error),
-        { cause: error },
-      );
-    }
-    return {
-      ok: true,
-      version: typeof ping?.version === "string" ? ping.version : null,
-      protocol,
-    };
-  } finally {
-    thinClient?.close();
-  }
-}
-
-export function testLocalConnectionProfile(
-  profile: LocalConnectionProfile | StartupLocalProfile,
-) {
-  return testConnectionSockets(
-    profile.control_socket_path,
-    profile.client_socket_path,
-  );
-}
-
-export async function testConnectionProfile(profile: TuiManagedProfile) {
-  if (profile.type === "local") return testLocalConnectionProfile(profile);
-  const config = createSshProfileRuntimeConfig(profile);
-  const tunnel = createSshTunnelManager({ config, runProcess });
-  try {
-    await tunnel.startAutoSshTunnel();
-    return await testConnectionSockets(
-      config.socketPath,
-      config.clientSocketPath,
-    );
-  } finally {
-    await tunnel.cleanupAutoSshTunnel();
-  }
-}
-
 export class ConnectionProfileService<
   Runtime extends ConnectionRuntime = ConnectionRuntime,
   CoreRuntime extends ConnectionRuntime = ConnectionRuntime,
 > {
+  readonly hosts: HostConnectionService;
   private readonly profiles = new Map<
     string,
     {
@@ -260,6 +175,7 @@ export class ConnectionProfileService<
       changed?(): void;
       /** This computer has no Herdr TUI; absent assumes it has (#935). */
       noHerdrTui?(): boolean;
+      discoverHost?: DiscoverHost;
     },
   ) {
     this.registry = args.bootstrap.persistedRegistry;
@@ -282,9 +198,47 @@ export class ConnectionProfileService<
       this.profiles.set(registration.profile.id, registration);
       this.registerRuntime(registration.profile);
     }
+    this.hosts = new HostConnectionService({
+      profiles: () => [...this.profiles.values()].map(({ profile }) => profile),
+      saved: () => this.registry?.hosts ?? [],
+      status: (id) => this.managerOf(id).status(id),
+      defaultId: () => args.manager.defaultId(),
+      readOnly: (id) =>
+        args.bootstrap.explicitStartupOverride &&
+        this.profiles.get(id)?.readOnly === true,
+      drop: (hostId, ids) => this.removeProfiles(ids, hostId),
+      mutate: (operation) => this.mutate(operation),
+      discover: args.discoverHost,
+      wantsConnection: (id) => this.retryStates.get(id)?.wanted === true,
+      start: (id, resetRetry = true) =>
+        this.startManaged(id, resetRetry || !this.retryStates.get(id)?.enabled),
+      stop: async (id, preserveIntent = false) => {
+        this.disableRetry(id, preserveIntent);
+        await this.managerOf(id).stop(id);
+      },
+      persist: async (hosts, additions) => {
+        this.requireWritableRegistryState();
+        this.registry = await persistHostCatalogue({
+          hosts,
+          additions,
+          previous: this.registry,
+          profiles: this.profiles,
+          explicitStartupOverride: args.bootstrap.explicitStartupOverride,
+          manager: args.manager,
+          store: args.store,
+          register: (profile) => this.registerRuntime(profile),
+          managerOf: (id) => this.managerOf(id),
+          disableMutations: () => this.disableMutationsAfterRollbackFailure(),
+        });
+      },
+    });
   }
 
   /** Herdr (TUI) connections: every existing consumer's catalogue. */
+  defaultId(): string {
+    return this.args.manager.defaultId();
+  }
+
   list(): ConnectionProfileListItem[] {
     return this.args.manager.list().map((status) => {
       const entry = this.requireProfile(status.id);
@@ -395,12 +349,15 @@ export class ConnectionProfileService<
 
   stopSupervision(): void {
     this.supervisionStopped = true;
+    this.hosts.stop();
     for (const connectionId of this.retryStates.keys()) {
       this.disableRetry(connectionId);
     }
   }
 
   async startConfigured(): Promise<void> {
+    if (this.args.discoverHost && !this.args.bootstrap.explicitStartupOverride)
+      return this.hosts.startConfigured();
     const targets = new Set<string>([this.args.manager.defaultId()]);
     for (const { profile } of this.profiles.values()) {
       if (profile.auto_connect) targets.add(profile.id);
@@ -549,6 +506,9 @@ export class ConnectionProfileService<
         profiles: registry.profiles.map((profile) =>
           profile.id === connectionId ? replacement : profile,
         ),
+        ...(registry.hosts
+          ? { hosts: forgetHostRuntime(registry.hosts, connectionId) }
+          : {}),
       };
       await this.args.store.save(nextRegistry);
       this.disableRetry(connectionId);
@@ -621,73 +581,81 @@ export class ConnectionProfileService<
 
   remove(connectionId: unknown): Promise<{ ok: true }> {
     return this.mutate(async () => {
-      this.requireWritableRegistryState();
       if (typeof connectionId !== "string")
         throw new ProfileInputError("connection id is required");
-      const current = this.requireWritableProfile(connectionId);
-      if (this.args.manager.defaultId() === connectionId) {
-        throw new ProfileInputError("cannot remove the default connection");
-      }
-      const registry = this.requireRegistry();
-      const nextProfiles = registry.profiles.filter(
-        (profile) => profile.id !== connectionId,
-      );
-      const nextRegistry: PersistedConnectionRegistry | null =
-        nextProfiles.length > 0
-          ? {
-              ...registry,
-              version: CONNECTION_PROFILE_FILE_VERSION,
-              profiles: nextProfiles,
-              default_connection_id:
-                registry.default_connection_id === connectionId
-                  ? nextProfiles[0].id
-                  : registry.default_connection_id,
-            }
-          : null;
-      if (!nextRegistry && !this.args.bootstrap.explicitStartupOverride) {
-        throw new ProfileInputError(
-          "cannot remove the last persisted connection",
-        );
-      }
-      const previousState =
-        this.managerOf(connectionId).status(connectionId).state;
-      const shouldRecoverConnection =
-        previousState === "ready" ||
-        previousState === "connecting" ||
-        previousState === "reconnecting" ||
-        this.retryStates.get(connectionId)?.enabled === true;
-
-      // Retire routing first. If persistence then fails, the existing durable
-      // registry still describes the old profile and we can safely restore its
-      // factory without ever exposing a profile that disk says was removed.
-      this.disableRetry(connectionId);
-      await this.managerOf(connectionId).unregister(connectionId);
-      try {
-        if (nextRegistry) await this.args.store.save(nextRegistry);
-        else await this.args.store.clear();
-      } catch (error) {
-        const recoveryFailures: unknown[] = [];
-        try {
-          this.registerRuntime(current);
-          if (shouldRecoverConnection) {
-            await this.startManaged(connectionId, true);
-          }
-        } catch (recoveryError) {
-          recoveryFailures.push(recoveryError);
-        }
-        if (recoveryFailures.length > 0) {
-          throw new AggregateError(
-            [error, ...recoveryFailures],
-            "connection removal failed and runtime recovery was incomplete",
-            { cause: error },
-          );
-        }
-        throw error;
-      }
-      this.profiles.delete(connectionId);
-      this.registry = nextRegistry;
-      return { ok: true };
+      return this.removeProfiles([connectionId]);
     });
+  }
+
+  private async removeProfiles(
+    connectionIds: string[],
+    removeHostId?: string,
+  ): Promise<{ ok: true }> {
+    this.requireWritableRegistryState();
+    const removed = connectionIds.map((id) => ({
+      profile: this.requireWritableProfile(id),
+      recover:
+        ["ready", "connecting", "reconnecting"].includes(
+          this.managerOf(id).status(id).state,
+        ) || this.retryStates.get(id)?.enabled === true,
+    }));
+    if (connectionIds.includes(this.args.manager.defaultId()))
+      throw new ProfileInputError("cannot remove the default connection");
+    const registry = this.requireRegistry();
+    const profiles = registry.profiles.filter(
+      (profile) => !connectionIds.includes(profile.id),
+    );
+    let hosts = registry.hosts;
+    for (const id of connectionIds) hosts = forgetHostRuntime(hosts, id);
+    if (removeHostId) hosts = hosts?.filter((host) => host.id !== removeHostId);
+    const next: PersistedConnectionRegistry | null =
+      profiles.length || hosts?.length
+        ? {
+            ...registry,
+            version: CONNECTION_PROFILE_FILE_VERSION,
+            profiles,
+            ...(hosts ? { hosts } : {}),
+            default_connection_id: profiles.some(
+              (profile) => profile.id === registry.default_connection_id,
+            )
+              ? registry.default_connection_id
+              : (profiles[0]?.id ?? STARTUP_DEFAULT_CONNECTION_ID),
+          }
+        : null;
+    if (!next && !this.args.bootstrap.explicitStartupOverride)
+      throw new ProfileInputError(
+        "cannot remove the last persisted connection",
+      );
+    const retired: typeof removed = [];
+    try {
+      for (const entry of removed) {
+        this.disableRetry(entry.profile.id);
+        await this.managerOf(entry.profile.id).unregister(entry.profile.id);
+        retired.push(entry);
+      }
+      if (next) await this.args.store.save(next);
+      else await this.args.store.clear();
+    } catch (error) {
+      const failures: unknown[] = [];
+      for (const entry of retired) {
+        try {
+          this.registerRuntime(entry.profile);
+          if (entry.recover) await this.startManaged(entry.profile.id, true);
+        } catch (recoveryError) {
+          failures.push(recoveryError);
+        }
+      }
+      if (failures.length)
+        throw new AggregateError(
+          [error, ...failures],
+          "connection removal failed and runtime recovery was incomplete",
+          { cause: error },
+        );
+      throw error;
+    }
+    for (const id of connectionIds) this.profiles.delete(id);
+    this.registry = next;
+    return { ok: true };
   }
 
   setDefault(
@@ -733,6 +701,15 @@ export class ConnectionProfileService<
   connect(
     connectionId: unknown,
   ): Promise<ConnectionProfileListItem | CoreConnectionListItem> {
+    if (
+      this.args.discoverHost &&
+      !this.args.bootstrap.explicitStartupOverride &&
+      typeof connectionId === "string"
+    ) {
+      return this.hosts
+        .connectRuntime(connectionId)
+        .then(() => this.item(connectionId));
+    }
     return this.mutate(async () => {
       if (typeof connectionId !== "string")
         throw new Error("connection id is required");
@@ -782,6 +759,7 @@ export class ConnectionProfileService<
     let state = this.retryStates.get(connectionId);
     if (!state) {
       state = {
+        wanted: false,
         enabled: false,
         attempt: 0,
         token: 0,
@@ -804,12 +782,14 @@ export class ConnectionProfileService<
     state.stableTimer = null;
     state.attempt = 0;
     state.enabled = true;
+    state.wanted = true;
   }
 
-  private disableRetry(connectionId: string): void {
+  private disableRetry(connectionId: string, preserveIntent = false): void {
     const state = this.retryStates.get(connectionId);
     if (!state) return;
     state.enabled = false;
+    if (!preserveIntent) state.wanted = false;
     state.token += 1;
     state.retryTimer?.cancel();
     state.stableTimer?.cancel();
@@ -915,6 +895,26 @@ export class ConnectionProfileService<
     // startManaged owns failure classification and generation-based duplicate
     // suppression for both initial and timer-triggered startups.
     await this.startManaged(connectionId, false).catch(() => undefined);
+    if (
+      this.args.discoverHost &&
+      !this.args.bootstrap.explicitStartupOverride &&
+      this.managerOf(connectionId).has(connectionId)
+    ) {
+      const ready = this.managerOf(connectionId).status(connectionId);
+      if (ready.state === "ready")
+        this.hosts.reconnected(
+          hostId(this.requireProfile(connectionId).profile),
+          () =>
+            !this.supervisionStopped &&
+            state.enabled &&
+            state.token === token &&
+            this.managerOf(connectionId).has(connectionId) &&
+            this.managerOf(connectionId).status(connectionId).state ===
+              "ready" &&
+            this.managerOf(connectionId).status(connectionId).generation ===
+              ready.generation,
+        );
+    }
   }
 
   private retryCurrent(
