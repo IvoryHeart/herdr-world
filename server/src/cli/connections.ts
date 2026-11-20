@@ -13,6 +13,7 @@ import {
 } from "../connections/profiles";
 import {
   applyLiveConnectionChange,
+  connectionServiceTarget,
   supportsLiveConnectionChanges,
 } from "./connection-service";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
@@ -32,8 +33,8 @@ import {
 import {
   connectionRegistryPath,
   type ListenerProbe,
+  probeUrl,
   probeListener,
-  readServiceAccess,
   readServiceSetup,
   restartRunningService,
   serviceHerdrSockets,
@@ -87,13 +88,19 @@ herdr-core add options:
 The profiles are the same ones the connection selector edits. While World serves,
 it admits these changes live: auto-connect profiles connect, removed profiles
 disconnect, and the default changes without restarting other connections or
-browser sessions. On loopback, --restart remains available but is no longer needed.
+browser sessions. On loopback, --restart remains available but is no longer needed
+for the installed service; omit it for a development or preview World.
 A service bound to one non-loopback address needs --restart to save and restart;
 stop a foreground process on that address before editing.
-With no listener answering, edits are saved for the next start. Only the address
-in the service config is checked: stop any other herdr-world process sharing
-this registry on another port before editing here. SSH tests need a running
-remote Herdr and non-interactive SSH authentication.
+HERDR_WORLD_DATA_DIR selects the World's data folder. Its live instance lock
+records the service address; edits go there with that folder's own CLI token.
+HERDR_WORLD_URL and HERDR_WORLD_TOKEN cannot redirect connection edits, and a
+service owning a different registry refuses them. If the owner cannot be reached
+or refuses, no offline write is attempted: check that World's address, data
+folder and live catalogue before retrying, or stop it before editing offline.
+With no live owner, edits are saved for the next start. Older services without
+an instance lock are checked at the installed service's configured address.
+SSH tests need a running remote Herdr and non-interactive SSH authentication.
 `;
 }
 
@@ -321,12 +328,20 @@ export function createConnectionsCommand(
         edit = { id, values, profile };
         // Do not load, validate against, or save a CLI snapshot while the service
         // owns the registry. Settings and CLI mutations share its admission queue.
-        const serving = await probe(readServiceAccess(setup));
-        if (serving && supportsLiveConnectionChanges(setup)) {
+        const target = connectionServiceTarget(context, setup);
+        const serving =
+          target.running || (target.managed && (await probe(target.access)));
+        if (serving && values.restart === true && !target.managed) {
+          context.error(
+            "herdr-world connections: --restart controls the installed service; omit --restart to edit this World live, or stop and restart this foreground World directly. The registry was not changed.",
+          );
+          return EXIT_FAILURE;
+        }
+        if (serving && supportsLiveConnectionChanges(target)) {
           try {
             const reply = await (
               dependencies.apply ?? applyLiveConnectionChange
-            )(context, setup, action, {
+            )(context, target, action, {
               registry_path: store.path,
               id,
               profile,
@@ -342,7 +357,7 @@ export function createConnectionsCommand(
           } catch (error) {
             if (error instanceof UsageError) throw error;
             context.error(
-              `herdr-world connections: ${(error as Error).message}. No offline write was attempted; check the live catalogue before retrying.`,
+              `herdr-world connections: ${(error as Error).message}. No offline write was attempted; check the live catalogue before retrying, or stop that World before editing offline.`,
             );
             return EXIT_FAILURE;
           }
@@ -360,7 +375,7 @@ export function createConnectionsCommand(
           }
           if (!managed || values.restart !== true) {
             context.error(
-              "herdr-world connections: live edits need loopback. Use --restart for a running managed service, or stop the foreground process first; the registry was not changed.",
+              `herdr-world connections: World at ${new URL(probeUrl(target.access)).origin} refuses live edits because they need loopback. Use --restart for a running managed service, or stop the foreground process first; the registry was not changed.`,
             );
             return EXIT_FAILURE;
           }
