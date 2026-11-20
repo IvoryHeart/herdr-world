@@ -1612,7 +1612,16 @@ async function run() {
   if (scale === "typical" && mode === "test") {
     await checkTownCenter(host, check, waitFor);
     const [connection] = base.connections;
-    const pane = connection!.snapshot!.panes.find((item) => item.agent)!;
+    // A blocked agent queues at reception, a few steps from its building's
+    // front door: its walk out is short whatever the frame rate
+    // (townBusTrip.browser.ts).
+    const queued = new Set(
+      base.agentPanes
+        .filter((item) => item.agent_status === "blocked")
+        .map((item) => item.pane_id),
+    );
+    const panes = connection!.snapshot!.panes.filter((item) => item.agent);
+    const pane = panes.find((item) => queued.has(item.pane_id)) ?? panes[0]!;
     await checkTownBusTrip(
       host,
       check,

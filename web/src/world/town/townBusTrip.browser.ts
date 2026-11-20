@@ -2,6 +2,31 @@ import type { BinEntry, BinState } from "../../../../shared/bin";
 import { worldBinStore } from "../bin/useWorldBin";
 
 /**
+ * Waits for `condition` while Town keeps drawing. An actor walks at most
+ * 50 ms of its way a frame (townRenderer), so a walk out of its building
+ * takes as many frames however long they take to draw: from a far desk,
+ * 170 frames, 8 s locally and over 30 s in software rendering on a two-core
+ * runner at 1440px. It fails when frames stop coming or a walk takes far
+ * more frames than any building needs.
+ */
+async function whileDrawing(condition: () => boolean, message: string) {
+  const drawn = () => window.__HERDR_TOWN_RENDERER__?.frames ?? 0;
+  const start = drawn();
+  let last = start;
+  let since = performance.now();
+  while (!condition()) {
+    const now = drawn();
+    if (now !== last) {
+      last = now;
+      since = performance.now();
+    }
+    if (now - start > 600 || performance.now() - since > 5_000)
+      throw new Error(`${message} (${now - start} frames drawn)`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+/**
  * Town's bus in a real Town, its trip held still at each moment (a stopped
  * bus's clock stands): it waits parked at Apartments, drives out to the
  * rider's stop and opens its door there, carries the rider in its window,
@@ -78,7 +103,7 @@ export async function checkTownBusTrip(
       () => person() !== null && bus() !== null,
       "a binned agent shows no rider or Town no bus",
     );
-    await waitFor(
+    await whileDrawing(
       () => person()!.hasAttribute("data-out"),
       "the binned agent never came out to its stop",
     );
