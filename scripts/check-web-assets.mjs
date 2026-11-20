@@ -50,7 +50,10 @@ const maxFileCount = 212;
 // Apartments (#1011: the resident search/history dialog, its store and Town's
 // apartment building) add about 18.7 KB to lazy chunks; startup budgets are
 // unchanged.
-const maxTotalBytes = 15.5 * 1024 * 1024;
+// Merging Apartments with the harness Library visibility slice (#1133) totals
+// 16,253,087 bytes, 159 bytes over 15.5 MiB. Allow 0.01 MiB for the combined
+// bundle; file-count and startup budgets remain unchanged.
+const maxTotalBytes = 15.51 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two
