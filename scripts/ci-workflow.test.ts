@@ -134,6 +134,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "behavioral",
     "installer-upgrade",
     "launchd",
+    "dependency-security",
   ]);
   expect(delivery?.if).toBe("always()");
   expect(

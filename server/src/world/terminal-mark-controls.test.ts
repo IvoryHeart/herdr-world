@@ -363,8 +363,8 @@ for (const [index, control] of cases.entries())
       stdout: "pipe",
       stderr: "pipe",
     });
-    // Positive bundles include 128 real serialized writes; this is a harness
-    // deadline, not a latency assertion.
+    // Positive bundles exercise real SQLite and worker/RPC lifecycles; this is
+    // a harness deadline, not a latency assertion.
     const timeout = setTimeout(
       () => child.kill(),
       control.assertion ? 30_000 : 50_000,

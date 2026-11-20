@@ -66,6 +66,7 @@ test("Pages installs locked dependencies before testing, building and rendering 
   expect(setupIndex).toBeGreaterThan(-1);
   expect(installIndex).toBeGreaterThan(setupIndex);
   for (const command of [
+    "bun run security:check",
     "bun run test scripts/pages-content.test.ts scripts/pages-workflow.test.ts scripts/pages-film.test.ts",
     "bun run build:site",
     "bun run film:render",
@@ -91,6 +92,12 @@ test("Pages deploys on main pushes or manual dispatch and checks installer avail
       "web/src/world/town/**",
       "web/src/world/terminalColor.ts",
       "shared/terminalColor.ts",
+      "bun.lock",
+      "package.json",
+      "web/package.json",
+      "server/package.json",
+      "security/**",
+      "scripts/dependency-security.ts",
       "scripts/build-pages.ts",
       "scripts/film-render.ts",
       "scripts/pages-content.ts",

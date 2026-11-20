@@ -112,6 +112,7 @@ test("the welcome card names current views only", () => {
 test("Town's no-hosts state points to Hosts → Manage connections", () => {
   const markup = renderToStaticMarkup(createElement(TownNoHosts));
   expect(markup).toContain("Hosts → Manage connections");
+  expect(markup).toContain(">Connect</button>");
   expect(markup).not.toContain("Spaces");
 });
 

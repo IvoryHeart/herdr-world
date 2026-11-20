@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - Formula/herdr-world.rb
+      - Formula/herdr-world-rc.rb
       - .github/workflows/herdr-world.yml
       - .github/scripts/check-homebrew-runtime.rb
   workflow_dispatch:
@@ -22,6 +23,7 @@ jobs:
       matrix:
         runner: [macos-15, macos-15-intel]
     env:
+      HERDR_WORLD_PACKAGE: herdr-world
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
       HOMEBREW_NO_AUTOREMOVE: "1"
@@ -36,16 +38,16 @@ jobs:
           brew update
           tap=herdrworld/ownership-check
           brew tap-new --no-git "$tap"
-          install -m 0644 Formula/herdr-world.rb "$(brew --repository "$tap")/Formula/herdr-world.rb"
-          brew install --formula "$tap/herdr-world"
-          test -z "$(brew deps "$tap/herdr-world")"
-          test ! -e "$(brew --prefix "$tap/herdr-world")/bin/herdr"
-          brew test "$tap/herdr-world"
+          install -m 0644 "Formula/$HERDR_WORLD_PACKAGE.rb" "$(brew --repository "$tap")/Formula/$HERDR_WORLD_PACKAGE.rb"
+          brew install --formula "$tap/$HERDR_WORLD_PACKAGE"
+          test -z "$(brew deps "$tap/$HERDR_WORLD_PACKAGE")"
+          test ! -e "$(brew --prefix "$tap/$HERDR_WORLD_PACKAGE")/bin/herdr"
+          brew test "$tap/$HERDR_WORLD_PACKAGE"
       - name: Bootstrap missing core and preserve it across World reinstall
         shell: bash
         run: |
           set -euo pipefail
-          package=herdrworld/ownership-check/herdr-world
+          package="herdrworld/ownership-check/$HERDR_WORLD_PACKAGE"
           world="$(brew --prefix "$package")/bin/herdr-world"
           fixture_home="$(mktemp -d /tmp/hw.XXXXXX)"
           trap 'rm -rf "$fixture_home"' EXIT

@@ -713,8 +713,8 @@ their Herdr supports stays available. Log in is not offered there.
 
 The Town board can show token use and reported cost from a Prometheus-compatible
 HTTP API. It does not supply Board notes, strings or agent status. Open
-**OTEL economy metrics** from the settings menu and save an HTTP or HTTPS base URL,
-or set the service startup default:
+**Menu → Integrations**, choose **Usage metrics → Connect** and save an HTTP or HTTPS
+base URL, or set the service startup default:
 
 ```bash
 HERDR_WORLD_OTEL_PROMETHEUS_URL=http://127.0.0.1:9090 herdr-world
@@ -735,7 +735,7 @@ topology, terminal conversations and Inspector operations continue normally.
 
 World shows your pull requests and tickets on Board's Work lens and as desk
 badges in Town. Both sources ship with World and are on by default; switch
-either off in **Settings → Sources**. Each is read only while a visible browser
+either off in **Settings → Integrations**. Each is read only while a visible browser
 tab shows it, at most once a minute, and a failed refresh keeps the last items.
 Requests answer within two seconds with what World has while a slow `gh`,
 Jira or SSH lookup finishes in the background.
@@ -745,7 +745,7 @@ Jira or SSH lookup finishes in the background.
   (for a user service, the same account the service runs as). Until then the
   source says **Sign in with gh auth login**. World stores no GitHub token.
   Merged pull requests cover the last 7 days by default (1 to 90 in
-  **Settings → Sources**, saved as `custom.world_sources.github.mergedDays`);
+  **Settings → Integrations**, saved as `custom.world_sources.github.mergedDays`);
   World reads open authored, review-requested and assigned pull requests in
   separate requests of at most 50 each, then reads your own pull requests'
   action details before merged history. History uses cursor pages of 50, up to
@@ -756,7 +756,7 @@ Jira or SSH lookup finishes in the background.
   source reports an error and keeps its last complete list. The message names
   the oldest valid merge date actually observed, or says no merge date could
   be confirmed. That date describes an observation, not continuous coverage or
-  a retention cutoff. Shorten the merged window in **Settings → Sources** and
+  a retention cutoff. Shorten the merged window in **Settings → Integrations** and
   refresh. A shortened refresh never replaces the list or authorizes actions.
 - **Your open pull requests** are read in more detail: checks on the head,
   changed files, and the last 30 reviews and 50 comments, which stay in the
@@ -772,8 +772,8 @@ Jira or SSH lookup finishes in the background.
   that the browser asked, in memory until the service restarts.
 - **Jira Cloud** needs your site (`example.atlassian.net`), account email and an
   [API token](https://id.atlassian.com/manage-profile/security/api-tokens),
-  entered in **Settings → Sources**. The site and email are saved in
-  `settings.json` (`custom.world_sources`); the token is saved in an owner-only
+  entered in **Settings → Integrations**. The site and email are saved in
+  `settings.json` (`custom.world_sources`); the token is saved in World's vault, an owner-only
   `source-secrets.json` (or `source-secrets-<hash>.json` beside a custom
   `HERDR_WORLD_SETTINGS_PATH`) in World's data directory and is never sent to the
   browser. Changing the site or email removes the saved token. The filter defaults to `(assignee = currentUser() OR watcher =

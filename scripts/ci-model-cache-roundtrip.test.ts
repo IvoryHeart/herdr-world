@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { lockedQuintVersion } from "./verification-setup";
 import { modelCache, modelCacheKey } from "./ci-model-cache";
 import {
   aggregateCIShards,
@@ -69,7 +70,7 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
           sourceInputs,
           tools: {
             ...key.runtime,
-            quint: "0.33.0",
+            quint: lockedQuintVersion,
             checker: checker.version,
             jarSha256: checker.jarSha256,
           },

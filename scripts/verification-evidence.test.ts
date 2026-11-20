@@ -1,3 +1,4 @@
+import { lockedQuintVersion } from "./verification-setup";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -20,7 +21,7 @@ test("evidence rejects stale inputs, incomplete runs and escaping paths", async 
       sourceRevision: "a".repeat(40),
       sourceInputs: await fingerprintInputs(root, ["source.ts"]),
       tools: {
-        quint: "0.33.0",
+        quint: lockedQuintVersion,
         checker: "0.62.1",
         jarSha256: "b".repeat(64),
         node: "synthetic",
@@ -47,6 +48,13 @@ test("evidence rejects stale inputs, incomplete runs and escaping paths", async 
       complete: true,
     };
     await validateEvidence(root, manifest, 1);
+    await expect(
+      validateEvidence(
+        root,
+        { ...manifest, tools: { ...manifest.tools, quint: "0.33.0" } },
+        1,
+      ),
+    ).rejects.toThrow("Unpinned verifier");
     await expect(
       validateEvidence(root, { ...manifest, complete: false }, 1),
     ).rejects.toThrow("incomplete");
