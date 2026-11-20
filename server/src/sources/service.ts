@@ -198,6 +198,21 @@ export class SourcesService {
       : this.#settings[id]?.enabled !== false;
   }
 
+  /** Shipyard shares the same GitHub switch and settings-generation fence. */
+  shipyardSource() {
+    return {
+      enabled: this.enabled("github"),
+      generation: this.#sources.github.generation,
+      repositories: [
+        ...new Set(
+          this.#sources.github.items.flatMap((item) =>
+            item.repo ? [item.repo] : [],
+          ),
+        ),
+      ],
+    };
+  }
+
   /** Days of merged pull requests to show. */
   mergedDays() {
     return safe(

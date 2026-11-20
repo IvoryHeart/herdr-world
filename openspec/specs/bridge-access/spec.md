@@ -172,7 +172,10 @@ folder's single `session-secret.json`. A listener started on a folder another
 running listener holds SHALL stop before loading signing state, naming the
 holder's process and port. A folder whose holder no longer runs SHALL be taken
 over. Management commands and the agent CLI SHALL NOT take the folder. Tests
-SHALL NOT use the user's data folder.
+SHALL NOT use the user's data folder. After binding, the holder SHALL atomically
+record its actual host, port and TLS setting in the instance lock, including the
+chosen port for an ephemeral bind. Local connection management MAY read that
+address without taking the folder's lock or changing its signing state.
 
 #### Scenario: A second instance shares a folder
 - **WHEN** a World listener starts on a data folder a running World holds

@@ -3,6 +3,10 @@
 Read [current coverage](../verification/README.md) and the
 [implementation report](../docs/quint-adoption-implementation.md) first. The
 [spike assessment](../docs/quint-adoption-spike.md) is historical foundation.
+The November additions have distinct verdicts: `connection-registry` checks
+all 48 bounded service schedules, while `claude-tap-lock` reproduces the known
+#1086 counterexample and remains pending repair. Neither inherits the foundation's
+independent acceptance. See the [audit](../verification/architecture-audit-2026-11.md).
 These models and adapters are accepted, maintained development tooling. Existing cooperative preparation yields accept an injected scheduler for
 deterministic replay; application defaults and shipped dependencies are unchanged.
 Bounded contract promotion is independently accepted; local delivery and protected CI require the unfiltered gate. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
@@ -55,7 +59,7 @@ killing observation. The cheap harness regressions run with:
 bun test quint/replay.test.ts
 ```
 
-Each model is simulated with seeds 42, 73 and 103, 500 samples per seed and
+The foundation cases are simulated with seeds 42, 73 and 103, 500 samples per seed and
 at most 25 transitions. One hundred generated traces per seed and case are replayed, except staged
 preparation, socket credits and creation, which replay all 500 sampled paths per seed so rare conditional-admission
 witnesses cannot be lost during export. Actual required witnesses must appear in

@@ -210,14 +210,17 @@ if (process.env.HERDR_LAUNCH_TARGET_DOM_TEST !== "1") {
     const root = createRoot(host);
     catalogs.length = 0;
     let closed = 0;
+    // One click starts it and opens its window (#1075): the launcher hands
+    // the started core terminal to World, which opens it once shown.
+    const opened: unknown[] = [];
     try {
       await act(async () =>
         root.render(
           h(AgentLauncherDialog, {
             world: { spaces: [tui, core] } as WorldObject,
             initial: {},
-            onOpen() {
-              throw new Error("a core terminal has no World window yet");
+            onOpen(terminal) {
+              opened.push(terminal);
             },
             onEditProfiles() {},
             onClose() {
@@ -256,18 +259,22 @@ if (process.env.HERDR_LAUNCH_TARGET_DOM_TEST !== "1") {
         },
       ]);
       expect(closed).toBe(1);
+      expect(opened).toEqual([
+        { connectionId: "box-core", runtimeGeneration: 5, terminalId: "t9" },
+      ]);
       // Quick start must use the same core route as Terminal, rather than
       // TUI agent.start (which injects a launch command into a shell).
       for (const kind of ["claude", "codex"]) {
         coreLaunches.length = 0;
+        opened.length = 0;
         await act(async () =>
           root.render(
             h(AgentLauncherDialog, {
               key: `quick-${kind}`,
               world: { spaces: [tui, core] } as WorldObject,
               initial: {},
-              onOpen() {
-                throw new Error("core agents arrive in Town");
+              onOpen(terminal) {
+                opened.push(terminal);
               },
               onEditProfiles() {},
               onClose() {},
@@ -295,6 +302,9 @@ if (process.env.HERDR_LAUNCH_TARGET_DOM_TEST !== "1") {
               text: "",
             },
           },
+        ]);
+        expect(opened).toEqual([
+          { connectionId: "box-core", runtimeGeneration: 5, terminalId: "t9" },
         ]);
       }
       // The TUI stays a per-launch choice: an asked-for TUI room is kept.

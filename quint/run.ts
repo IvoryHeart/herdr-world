@@ -1,10 +1,10 @@
-import { coreWitnesses } from "./herdr-core-runtime";
-import { runCoreVerification } from "./herdr-core-verification";
+import { composedCases, replayTracesPerSeed } from "./composed-cases";
 import {
-  runSeenVerification,
-  seenMismatches,
-  seenWitnesses,
-} from "./herdr-core-seen";
+  runRegistryVerification,
+  runTapLockExploration,
+} from "./connection-registry-verification";
+import { runCoreVerification } from "./herdr-core-verification";
+import { runSeenVerification } from "./herdr-core-seen";
 import { replayEffectRecovery } from "./effect-recovery";
 import { verificationModels } from "./models";
 import {
@@ -30,9 +30,11 @@ import { replayRangerRecovery } from "./ranger-recovery";
 import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
+import { assertQuintBackend } from "../scripts/verification-quint-policy";
 import { withPrivateChecker } from "../scripts/verification-checker";
 import {
   assertVerificationInstalled,
+  lockedQuintVersion,
   checkerHome,
   checkerJar,
   quintCli,
@@ -62,16 +64,7 @@ const artifacts = relative(root, output);
 const cli = quintCli;
 const cancellation = new AbortController();
 const cases = [
-  {
-    name: "herdr-core-runtime",
-    witnesses: coreWitnesses,
-    mismatches: ["core.state"],
-  },
-  {
-    name: "herdr-core-seen",
-    witnesses: seenWitnesses,
-    mismatches: seenMismatches,
-  },
+  ...composedCases,
   {
     name: "binding-resolution",
     witnesses: [
@@ -383,17 +376,7 @@ const cases = [
   },
 ] as const;
 type CommandResult = { code: number; ms: number; log: string; args: string[] };
-function replayTracesPerSeed(name: Model) {
-  if (name === "effect-recovery") return 500;
-  return [
-    "binding-resolution",
-    "browser-preparation",
-    "chunk-credits",
-    "creation-flow",
-  ].includes(name)
-    ? 500
-    : 100;
-}
+
 const commands: CommandResult[] = [];
 let commandPublication = Promise.resolve();
 let activeLabel = "setup";
@@ -411,6 +394,7 @@ async function command(
   expectedViolation = false,
   signal = cancellation.signal,
 ) {
+  assertQuintBackend(args);
   activeLabel = label;
   const started = performance.now();
   const executionArgs = args.map((arg) =>
@@ -692,11 +676,29 @@ export async function runReviewedQuintModels(
     const version = await command("version", ["--version"]);
     assert.equal(
       version.trim(),
-      "0.33.0",
-      "spike requires pinned Quint 0.33.0",
+      lockedQuintVersion,
+      "Verification requires the locked Quint version",
     );
     const results = [];
     for (const item of runCases) {
+      if (item.name === "claude-tap-lock") {
+        const result = await runTapLockExploration({ command });
+        results.push(result);
+        console.log(JSON.stringify(result));
+        continue;
+      }
+      if (item.name === "connection-registry") {
+        const result = await runRegistryVerification({
+          root,
+          output,
+          artifacts,
+          command,
+          mutate: () => implementationMutation("connection-registry"),
+        });
+        results.push(result);
+        console.log(JSON.stringify(result));
+        continue;
+      }
       if (item.name === "herdr-core-runtime") {
         const result = await runCoreVerification({
           root,
@@ -1207,7 +1209,13 @@ export async function runReviewedQuintModels(
       await writeFile(
         resolve(output, "results.json"),
         JSON.stringify(
-          { version: "0.33.0", seed: 42, samples: 500, maxSteps: 25, results },
+          {
+            version: lockedQuintVersion,
+            seed: 42,
+            samples: 500,
+            maxSteps: 25,
+            results,
+          },
           null,
           2,
         ),
@@ -1274,7 +1282,7 @@ export async function runReviewedQuintModels(
     );
     cancellation.signal.throwIfAborted();
     console.log(
-      "All selected finite models verified; scoped replays and negative controls passed.",
+      "All selected verification cases completed; inspect per-case safety verdicts and known counterexamples.",
     );
     console.log(`Evidence: ${artifacts}`);
   } catch (error) {

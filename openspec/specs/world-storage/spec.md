@@ -116,8 +116,8 @@ later writes and retain committed cached reads without reopening storage.
 
 ### Requirement: Durable Board concerns with compatible revisions and bindings
 
-World SHALL store Board notes, strings, appearance, layout concerns, interest and
-relations in separate SQLite tables through the instance's single asynchronous
+World SHALL store Board notes, strings, drawings, appearance, layout concerns,
+interest and relations in separate SQLite tables through the instance's single asynchronous
 writer. Board patches SHALL remain all-or-none, retain existing document and
 per-note/Group conflict wire behavior, and commit identity captures with their
 records. Only acknowledged commits SHALL advance synchronous reads, replies or

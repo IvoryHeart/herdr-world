@@ -34,11 +34,16 @@ export function setChatTextScale(scale: number | null) {
   apply();
 }
 
+/** Calls `listener` whenever Chat's or the terminal's text scale changes. */
+export function subscribeChatTextScale(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
 export function useChatTextScale() {
-  return useSyncExternalStore((listener) => {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
-  }, getChatTextScale);
+  return useSyncExternalStore(subscribeChatTextScale, getChatTextScale);
 }
 
 /** App: save the terminal font scale and size Chat's text from both. */
