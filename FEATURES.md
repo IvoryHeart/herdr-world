@@ -379,7 +379,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     them. Old numbers (over 3 h, or past a reset) read **stale** with no level;
     with several hosts the board shows a current reading before a dimmed one,
     and among those the one with the least left. The summary window's hosts and
-    Board's facts show each host's reading with the same rules.
+    Board's facts show each host's reading with the same rules, and name a
+    harness with agents on that host but no reading from it.
     Claude gets its own gauge within about a minute of the first answer from an
     agent started from World's launcher: its status line passes Claude Code's 5 h and week windows to
     World, and the agent's status line looks as before. World shows Claude Code's

@@ -70,6 +70,8 @@ export type TownSummaryHost = {
   /** Offline or stale hosts show when they were last seen. */
   stale: boolean;
   counts: TownSummaryCounts;
+  /** The harnesses of this host's agents, as `TownSummary.harnesses`. */
+  harnesses: readonly string[];
   rooms: readonly {
     key: string;
     label: string;
@@ -148,6 +150,13 @@ function summaryTopology(office: HerdrOfficeProjection) {
     if (!rooms) byHost.set(room.hostKey, (rooms = []));
     rooms.push({ key: room.key, label: room.displayLabel, counts });
   }
+  const hostHarnesses = new Map<string, Set<string>>();
+  office.roster.forEach((entry) => {
+    if (!entry.agent.harness) return;
+    let set = hostHarnesses.get(entry.hostKey);
+    if (!set) hostHarnesses.set(entry.hostKey, (set = new Set()));
+    set.add(entry.agent.harness.toLowerCase());
+  });
   const hosts = office.hosts.map((host): TownSummaryHost => {
     const rooms = byHost.get(host.key) ?? [];
     const counts = emptyCounts();
@@ -158,15 +167,12 @@ function summaryTopology(office: HerdrOfficeProjection) {
       label: host.accessibleLabel ?? host.displayLabel,
       stale: host.stale,
       counts,
+      harnesses: [...(hostHarnesses.get(host.key) ?? [])].sort(),
       rooms,
     };
   });
   const harnesses = [
-    ...new Set(
-      office.roster.flatMap((entry) =>
-        entry.agent.harness ? [entry.agent.harness.toLowerCase()] : [],
-      ),
-    ),
+    ...new Set([...hostHarnesses.values()].flatMap((set) => [...set])),
   ].sort();
   const result = { hosts, totals, harnesses };
   topologies.set(office, result);

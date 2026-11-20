@@ -15,11 +15,13 @@ import {
 import {
   townFuelClock,
   townFuelGauge,
+  townFuelNotes,
   townFuelRows,
   townReachedText,
   townResetTime,
   townSeenAge,
   type TownFuelGauge,
+  type TownFuelNote,
 } from "../town/townLimits";
 import { townIdleWords } from "../town/townLens";
 import type { TownPlaceEconomy } from "../town/townPlaceUsage";
@@ -116,6 +118,31 @@ export function boardHostGauges(
       return gauge ? [gauge] : [];
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * A host's harnesses without a gauge, named as Town's sign names them: one
+ * that keeps no readable limits, or one with agents on this host
+ * (`harnesses`) and no reading from it yet.
+ */
+export function boardHostFuelNotes(
+  limits: readonly UsageLimit[],
+  connectionId: string,
+  gauges: readonly TownFuelGauge[],
+  harnesses: readonly string[],
+): TownFuelNote[] {
+  return townFuelNotes(
+    limits.filter((limit) => limit.connection_id === connectionId),
+    gauges,
+    harnesses,
+  );
+}
+
+/** "Codex no reading yet" or "Codex limits not available", for one line. */
+export function boardFuelNoteText(note: TownFuelNote): string {
+  return note.kind === "no-reading"
+    ? `${note.name} no reading yet`
+    : `${note.name} limits not available`;
 }
 
 export type BoardAgentNow = {
