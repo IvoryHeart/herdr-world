@@ -127,6 +127,8 @@ export type ConnectionRetryOptions = {
 };
 
 type RetryState = {
+  /** User connection intent survives a temporarily absent runtime. */
+  wanted: boolean;
   enabled: boolean;
   attempt: number;
   token: number;
@@ -207,9 +209,11 @@ export class ConnectionProfileService<
       drop: (hostId, ids) => this.removeProfiles(ids, hostId),
       mutate: (operation) => this.mutate(operation),
       discover: args.discoverHost,
-      start: (id) => this.startManaged(id, true),
-      stop: async (id) => {
-        this.disableRetry(id);
+      wantsConnection: (id) => this.retryStates.get(id)?.wanted === true,
+      start: (id, resetRetry = true) =>
+        this.startManaged(id, resetRetry || !this.retryStates.get(id)?.enabled),
+      stop: async (id, preserveIntent = false) => {
+        this.disableRetry(id, preserveIntent);
         await this.managerOf(id).stop(id);
       },
       persist: async (hosts, additions) => {
@@ -702,9 +706,8 @@ export class ConnectionProfileService<
       !this.args.bootstrap.explicitStartupOverride &&
       typeof connectionId === "string"
     ) {
-      const profile = this.requireProfile(connectionId).profile;
       return this.hosts
-        .connect(hostId(profile))
+        .connectRuntime(connectionId)
         .then(() => this.item(connectionId));
     }
     return this.mutate(async () => {
@@ -756,6 +759,7 @@ export class ConnectionProfileService<
     let state = this.retryStates.get(connectionId);
     if (!state) {
       state = {
+        wanted: false,
         enabled: false,
         attempt: 0,
         token: 0,
@@ -778,12 +782,14 @@ export class ConnectionProfileService<
     state.stableTimer = null;
     state.attempt = 0;
     state.enabled = true;
+    state.wanted = true;
   }
 
-  private disableRetry(connectionId: string): void {
+  private disableRetry(connectionId: string, preserveIntent = false): void {
     const state = this.retryStates.get(connectionId);
     if (!state) return;
     state.enabled = false;
+    if (!preserveIntent) state.wanted = false;
     state.token += 1;
     state.retryTimer?.cancel();
     state.stableTimer?.cancel();

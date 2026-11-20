@@ -56,9 +56,15 @@ export function migrateHosts(
     const existing = hosts.get(host.id);
     if (!existing) hosts.set(host.id, host);
     else if (!saved.some((entry) => entry.id === host.id)) {
-      existing.auto_connect ||= profile.auto_connect;
       if (host.remote_platform) existing.remote_platform = host.remote_platform;
     }
+  }
+  // Existing per-runtime settings remain authoritative after migration. Empty
+  // hosts have no profiles yet, so retain their saved onboarding policy.
+  for (const host of hosts.values()) {
+    const members = profiles.filter((profile) => hostId(profile) === host.id);
+    if (members.length)
+      host.auto_connect = members.some((profile) => profile.auto_connect);
   }
   return [...hosts.values()];
 }

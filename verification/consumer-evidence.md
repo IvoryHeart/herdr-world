@@ -24,6 +24,20 @@ RPC, CLI admission, aggregate observation, `ls`, rediscovery and the Integration
 registry with synthetic external runtimes. `cli/host-connections.test.ts` covers
 offline persistence and no offline fallback after refused live admission.
 
+The lifecycle repair additionally exhausts all eight combinations of saved host
+policy and two per-runtime auto-connect flags, and all four combinations of which
+runtime automatically recovers and whether its sibling was explicitly stopped.
+Real profile-service calls and a controlled retry scheduler check the actual
+connection intent, lifecycle state and retry eligibility, including newly found
+siblings. Persistence/reload checks cover both directions of auto-connect edits;
+deferred-start and discovery schedules cover queued Disconnect, temporary absence,
+explicit endpoint retry, host-wide reconnection and a failed catalogue write before
+later hosts. These are direct finite composition checks of host admission policy;
+the manager's generation/lease transition system is unchanged. Extending Quint's
+manager model would not exercise the distinct profile settings, filesystem failure
+or scheduler callbacks that caused these regressions. The full gate remains
+required for the Q02 owner change, alongside these consumer checks.
+
 These finite and composition checks cover the added host projection and admission
 boundary; the full verification gate covers unchanged lease/observation ordering.
 They do not certify real SSH keys, remote operating systems or arbitrary future

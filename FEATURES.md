@@ -31,6 +31,13 @@ Legacy profiles on this computer or the same exact SSH destination become one ho
 without rewriting runtime IDs, room positions, pins, colours or saved Hosts filter
 ticks. Different SSH aliases are not resolved or guessed to be the same machine.
 Explicit startup socket/session/SSH overrides retain their pinned runtime behavior.
+Per-runtime auto-connect settings remain effective after migration; a host's flag
+reflects whether any member enables it. Startup connects the saved default and
+profiles with auto-connect enabled, then discovers eligible hosts. A failed host
+or catalogue write does not prevent other startup targets from connecting.
+Disconnecting one runtime keeps it stopped when a sibling reconnects or its
+per-connection Connect is used. Explicit host Connect or rediscovery connects all
+found runtimes; newly discovered runtimes connect during automatic discovery too.
 
 `herdr-world ls` returns hosts with their runtimes and rooms; `connections` lists
 host/runtime kind, version and state. Existing per-connection API arrays and legacy

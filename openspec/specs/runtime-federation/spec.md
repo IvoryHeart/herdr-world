@@ -115,7 +115,8 @@ A host SHALL be this computer or one exact OpenSSH alias / `user@host` destinati
 Adding a host SHALL require no runtime selection. A registered provider SHALL own
 presence/version probes and the default connection profile for its runtime. World
 SHALL discover all registered providers on host connection and explicit rediscovery,
-and SHALL connect every found runtime independently. Discovery SHALL NOT install
+and SHALL connect every found runtime independently, subject to the per-runtime
+connection intent below. Discovery SHALL NOT install
 or start a runtime, probe installation requirements, or persist secrets or SSH options.
 SSH discovery SHALL use only fixed, bounded, noninteractive read-only probes.
 
@@ -135,6 +136,22 @@ Existing profiles SHALL be grouped by local machine or exact SSH destination wit
 rewriting IDs, native resource bindings, room positions, pins, colours or saved filter
 ticks. Rediscovery SHALL reuse historical runtime IDs. Different aliases SHALL NOT
 be assumed equivalent. Explicit startup overrides SHALL retain their pinned behavior.
+
+Existing per-connection auto-connect settings SHALL remain authoritative after host
+migration; a nonempty host's auto-connect flag SHALL reflect whether any member
+profile enables it. Startup SHALL attempt only the saved default and auto-connect
+profiles, plus newly discovered runtimes on eligible hosts. Empty hosts SHALL retain
+their saved auto-connect policy. Saved startup targets SHALL start independently
+before discovery; a host discovery or persistence failure SHALL NOT prevent other
+hosts from starting or reject whole-service startup.
+
+Automatic rediscovery and per-connection Connect SHALL preserve each existing
+runtime's connection intent. Explicit Disconnect SHALL cancel that runtime's intent
+and retries; sibling reconnection SHALL NOT restore them. Temporary discovery
+absence SHALL suspend retries without cancelling intent. Explicit host Connect or
+rediscovery SHALL authorize connecting every found runtime on that host.
+Per-connection Connect SHALL attempt its exact saved endpoint even when earlier
+discovery reported absence, and SHALL report its connection failure to the caller.
 
 The snapshot and connection-list APIs SHALL add a host catalogue containing runtime
 kind, version, lifecycle and immutable connection ID, retaining the existing
@@ -174,6 +191,23 @@ return hosts with their runtimes and rooms, retaining the per-connection project
 - **WHEN** existing local profiles or profiles for the same SSH destination are loaded
 - **THEN** they appear under one host without renaming their runtime IDs or preferences
 - **AND** unrelated destinations and explicit startup overrides remain distinct
+
+#### Scenario: Auto-connect edited after migration
+- **WHEN** an existing profile's auto-connect setting changes after its host is saved
+- **THEN** the next startup honors the updated per-profile setting and derives the host flag from its members
+- **AND** a sibling with auto-connect disabled is not started merely because its host is eligible
+- **AND** the saved default retains its existing startup behavior
+
+#### Scenario: Sibling reconnect after explicit disconnect
+- **WHEN** a person disconnects one runtime and another runtime on the host reconnects
+- **THEN** discovery repeats and newly found runtimes connect, while the explicitly disconnected runtime stays stopped with retries disabled
+- **AND** per-connection Connect affects only its target and preserves sibling connection intent
+- **AND** explicit host Connect or rediscovery may reconnect all found runtimes
+
+#### Scenario: Catalogue cannot be persisted during startup
+- **WHEN** discovery of one host fails to persist its catalogue
+- **THEN** other saved startup targets have independently been attempted and later hosts still discover and connect
+- **AND** the failed host reports a bounded discovery error while whole-service startup continues
 
 ### Requirement: Return bounded aggregate observation with host-local progress
 

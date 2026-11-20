@@ -28,8 +28,9 @@ export type HostServicePorts = {
   /** Uses the profile service's same serialized admission queue. */
   mutate<T>(operation: () => Promise<T>): Promise<T>;
   persist(hosts: HostProfile[], additions: ConnectionProfile[]): Promise<void>;
-  start(id: string): Promise<void>;
-  stop(id: string): Promise<void>;
+  wantsConnection?(id: string): boolean;
+  start(id: string, resetRetry?: boolean): Promise<void>;
+  stop(id: string, preserveIntent?: boolean): Promise<void>;
   discover?: DiscoverHost;
 };
 
@@ -181,6 +182,23 @@ export class HostConnectionService {
     );
   }
 
+  /** Legacy Connect owns only its named runtime; discovery preserves siblings' intent. */
+  connectRuntime(id: string): Promise<void> {
+    return this.ports.mutate(async () => {
+      if (this.stopped) throw new Error("host discovery is stopping");
+      const profile = this.ports
+        .profiles()
+        .find((profile) => profile.id === id);
+      if (!profile) throw new ProfileInputError("unknown connection");
+      await this.ports.start(id);
+      await this.discoverAndConnect(
+        hostId(profile),
+        (entry) => this.ports.wantsConnection?.(entry.id) ?? false,
+        new Set([id]),
+      );
+    });
+  }
+
   disconnect(id: unknown): Promise<WorldHost> {
     return this.ports.mutate(async () => {
       const host = this.require(id);
@@ -209,20 +227,41 @@ export class HostConnectionService {
   }
 
   async startConfigured(): Promise<void> {
-    // A round is bounded and serialized with mutations; transport starts within
-    // each host settle independently, so one failed runtime cannot hide another.
+    if (this.stopped) return;
+    const profiles = this.ports.profiles();
+    const targets = new Set(
+      profiles
+        .filter(
+          (profile) =>
+            profile.auto_connect || profile.id === this.ports.defaultId(),
+        )
+        .map((profile) => profile.id),
+    );
+    // Start saved targets independently before any slow probe or catalogue write.
+    // Host discovery still commits through the shared mutation queue.
+    await Promise.allSettled([...targets].map((id) => this.ports.start(id)));
     for (const host of this.catalogue()) {
+      if (this.stopped) return;
       if (
-        host.auto_connect ||
-        this.ports
-          .profiles()
-          .some(
-            (profile) =>
-              profile.id === this.ports.defaultId() &&
-              hostId(profile) === host.id,
-          )
+        !host.auto_connect &&
+        !profiles.some(
+          (profile) => hostId(profile) === host.id && targets.has(profile.id),
+        )
       )
-        await this.connect(host.id);
+        continue;
+      await this.ports
+        .mutate(() =>
+          this.discoverAndConnect(
+            host.id,
+            (profile) =>
+              targets.has(profile.id) &&
+              (this.ports.wantsConnection?.(profile.id) ?? true),
+            new Set(targets),
+          ),
+        )
+        .catch((error) => {
+          this.errors.set(host.id, sanitizeConnectionError(error));
+        });
     }
   }
 
@@ -236,13 +275,21 @@ export class HostConnectionService {
     this.reconnecting.add(id);
     void this.ports
       .mutate(async () => {
-        if (!this.stopped && current()) await this.discoverAndConnect(id);
+        if (!this.stopped && current())
+          await this.discoverAndConnect(
+            id,
+            (profile) => this.ports.wantsConnection?.(profile.id) ?? false,
+          );
       })
       .catch(() => undefined)
       .finally(() => this.reconnecting.delete(id));
   }
 
-  private async discoverAndConnect(id: string): Promise<WorldHost> {
+  private async discoverAndConnect(
+    id: string,
+    shouldStartExisting: (profile: ConnectionProfile) => boolean = () => true,
+    attempted = new Set<string>(),
+  ): Promise<WorldHost> {
     if (this.stopped) throw new Error("host discovery is stopping");
     const host = this.require(id);
     const profiles = this.ports
@@ -258,11 +305,12 @@ export class HostConnectionService {
       profiles
         .filter(
           (profile) =>
-            host.discovered?.find(
-              (record) => record.connection_id === profile.id,
-            )?.present !== false,
+            shouldStartExisting(profile) && !attempted.has(profile.id),
         )
-        .map((profile) => this.ports.start(profile.id)),
+        .map((profile) => {
+          attempted.add(profile.id);
+          return this.ports.start(profile.id, false);
+        }),
     );
     if (this.stopped) throw new Error("host discovery is stopping");
     let found: DiscoveredRuntime[];
@@ -360,11 +408,18 @@ export class HostConnectionService {
     await Promise.allSettled(
       profiles
         .filter((profile) => !ids.has(profile.id))
-        .map((profile) => this.ports.stop(profile.id)),
+        .map((profile) => this.ports.stop(profile.id, true)),
     );
     if (!this.stopped)
       await Promise.allSettled(
-        found.map(({ profile }) => this.ports.start(profile.id)),
+        found
+          .filter(
+            ({ profile }) =>
+              !attempted.has(profile.id) &&
+              (!profiles.some((entry) => entry.id === profile.id) ||
+                shouldStartExisting(profile)),
+          )
+          .map(({ profile }) => this.ports.start(profile.id, false)),
       );
     return this.item(id);
   }

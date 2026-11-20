@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HostDiscoveryError, type DiscoverHost } from "./host-discovery";
-import { hostId, migrateHosts } from "./hosts";
+import { hostId, migrateHosts, type HostProfile } from "./hosts";
+import { HostConnectionService } from "./host-service";
 import {
   ConnectionManager,
   type ConnectionRuntime,
@@ -14,7 +15,11 @@ import {
   loadConnectionProfileBootstrap,
   type ConnectionRetryOptions,
 } from "./profile-service";
-import { ConnectionProfileStore, type ConnectionProfile } from "./profiles";
+import {
+  CONNECTION_PROFILE_FILE_VERSION,
+  ConnectionProfileStore,
+  type ConnectionProfile,
+} from "./profiles";
 
 const roots: string[] = [];
 const cleanups: (() => Promise<unknown>)[] = [];
@@ -60,7 +65,11 @@ function core(id: string, destination?: string): ConnectionProfile {
 async function fixture(
   initial: ConnectionProfile[],
   discover: DiscoverHost,
-  options: { retry?: ConnectionRetryOptions; changed?(): void } = {},
+  options: {
+    retry?: ConnectionRetryOptions;
+    changed?(): void;
+    hosts?: HostProfile[];
+  } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "world-hosts-"));
   roots.push(root);
@@ -69,7 +78,8 @@ async function fixture(
   });
   if (initial.length)
     await store.save({
-      version: 2,
+      version: options.hosts ? CONNECTION_PROFILE_FILE_VERSION : 2,
+      ...(options.hosts ? { hosts: options.hosts } : {}),
       default_connection_id: initial[0]!.id,
       profiles: initial,
     });
@@ -505,4 +515,269 @@ test("a successful automatic reconnect rediscovers newly installed sibling runti
   await discovered.promise;
   expect(coreManager.readyRuntimeLease("later-core")?.isCurrent()).toBeTrue();
   expect(service.hosts.list()[0]?.runtimes).toHaveLength(2);
+});
+
+for (const savedAuto of [false, true]) {
+  for (const tuiAuto of [false, true]) {
+    for (const coreAuto of [false, true]) {
+      test(`startup honors profile auto-connect (${tuiAuto}/${coreAuto}) over saved host ${savedAuto}`, async () => {
+        const remote = "sample@intent.example";
+        const profiles = [
+          tui("local-default"),
+          { ...tui("remote-tui", remote), auto_connect: tuiAuto },
+          { ...core("remote-core", remote), auto_connect: coreAuto },
+        ];
+        const hosts = migrateHosts(profiles);
+        hosts.find((host) => host.type === "ssh")!.auto_connect = savedAuto;
+        const probes: string[] = [];
+        const { service, starts } = await fixture(
+          profiles,
+          async (host, known) => {
+            probes.push(host.id);
+            return known.map((profile) => ({ profile, version: null }));
+          },
+          { hosts },
+        );
+        expect(
+          service.hosts.list().find((host) => host.type === "ssh")
+            ?.auto_connect,
+        ).toBe(tuiAuto || coreAuto);
+        await service.startConfigured();
+        expect(starts.includes("remote-tui")).toBe(tuiAuto);
+        expect(starts.includes("remote-core")).toBe(coreAuto);
+        expect(probes.includes(hostId(profiles[1]!))).toBe(tuiAuto || coreAuto);
+      });
+    }
+  }
+}
+
+test("profile auto-connect edits survive host catalogue persistence and restart", async () => {
+  const profiles = [
+    tui("local-default"),
+    { ...tui("remote", "sample@edit.example"), auto_connect: false },
+  ];
+  const discover: DiscoverHost = async (_host, known) =>
+    known.map((profile) => ({ profile, version: null }));
+  const initial = await fixture(profiles, discover, {
+    hosts: migrateHosts(profiles),
+  });
+  await initial.service.update("remote", {
+    ...profiles[1]!,
+    auto_connect: true,
+  });
+  const enabled = initial.store.load()!;
+  const on = await fixture(enabled.profiles, discover, {
+    hosts: enabled.hosts,
+  });
+  await on.service.startConfigured();
+  expect(on.starts).toContain("remote");
+  // Disconnect before editing so testing this setting never needs a real transport probe.
+  await on.service.disconnect("remote");
+  await on.service.update("remote", { ...profiles[1]!, auto_connect: false });
+  const disabled = on.store.load()!;
+  const off = await fixture(disabled.profiles, discover, {
+    hosts: disabled.hosts,
+  });
+  await off.service.startConfigured();
+  expect(off.starts).not.toContain("remote");
+});
+
+test("connecting one runtime preserves its disconnected sibling until explicit host connect", async () => {
+  const profiles = [tui("tui-old"), core("core-old")];
+  const { service, manager, coreManager, starts } = await fixture(
+    profiles,
+    async (_host, known) =>
+      known.map((profile) => ({ profile, version: null })),
+  );
+  await service.startConfigured();
+  await service.disconnect("core-old");
+  await service.disconnect("tui-old");
+  const before = starts.length;
+  await service.connect("tui-old");
+  expect(manager.status("tui-old").state).toBe("ready");
+  expect(coreManager.status("core-old").state).toBe("disconnected");
+  expect(starts.slice(before)).toEqual(["tui-old"]);
+  expect(service.willRetry("core-old", { retryable: true })).toBeFalse();
+  await service.hosts.connect("host-local");
+  expect(coreManager.status("core-old").state).toBe("ready");
+});
+
+for (const recoverCore of [false, true]) {
+  for (const disconnectSibling of [false, true]) {
+    test(`automatic ${recoverCore ? "core" : "TUI"} reconnect preserves sibling intent (${disconnectSibling}) and discovers new runtimes`, async () => {
+      const jobs: (() => void)[] = [];
+      const refreshed = Promise.withResolvers<void>();
+      let rounds = 0;
+      const profiles = [tui("tui-old"), core("core-old")];
+      const recovering = recoverCore ? "core-old" : "tui-old";
+      const sibling = recoverCore ? "tui-old" : "core-old";
+      const { service, manager, coreManager, contexts, starts } = await fixture(
+        profiles,
+        async (_host, known) => {
+          rounds++;
+          return [...known, ...(rounds > 1 ? [core("new-core")] : [])].map(
+            (profile) => ({ profile, version: null }),
+          );
+        },
+        {
+          retry: {
+            schedule: (callback) => {
+              jobs.push(callback);
+              return { cancel() {} };
+            },
+          },
+          changed: () => {
+            if (rounds > 1) refreshed.resolve();
+          },
+        },
+      );
+      await service.startConfigured();
+      if (disconnectSibling) await service.disconnect(sibling);
+      const count = starts.filter((id) => id === sibling).length;
+      const outage = Object.assign(
+        new Error("ECONNREFUSED: synthetic outage"),
+        { retryable: true },
+      );
+      contexts.get(recovering)!.reportError(outage, { reconnecting: true });
+      service.runtimeFailed(recovering, outage);
+      jobs.shift()!();
+      await refreshed.promise;
+      const siblingManager = recoverCore ? manager : coreManager;
+      expect(siblingManager.status(sibling).state).toBe(
+        disconnectSibling ? "disconnected" : "ready",
+      );
+      expect(starts.filter((id) => id === sibling)).toHaveLength(count);
+      expect(service.willRetry(sibling, outage)).toBe(!disconnectSibling);
+      expect(coreManager.status("new-core").state).toBe("ready");
+    });
+  }
+}
+
+test("startup isolates a host persistence failure and starts all saved targets before probes", async () => {
+  const profiles = [
+    tui("first", "first.example"),
+    tui("second", "second.example"),
+    tui("local"),
+  ];
+  const hosts = migrateHosts(profiles);
+  const started: string[] = [];
+  const probed: string[] = [];
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const service = new HostConnectionService({
+    profiles: () => profiles,
+    saved: () => hosts,
+    defaultId: () => "local",
+    status: (id) => ({
+      id,
+      label: id,
+      source: "test",
+      state: "disconnected",
+      generation: 0,
+      is_default: id === "local",
+    }),
+    mutate: (operation) => operation(),
+    start: async (id) => {
+      started.push(id);
+    },
+    stop: async () => {},
+    discover: async (host, known) => {
+      probed.push(host.id);
+      if (host.id === hosts[0]!.id) {
+        entered.resolve();
+        await release.promise;
+      }
+      return known.map((profile) => ({ profile, version: null }));
+    },
+    persist: async (next) => {
+      if (next[0]!.discovered && !next[1]!.discovered)
+        throw new Error("ENOSPC: synthetic persistence failure");
+      hosts.splice(0, hosts.length, ...next);
+    },
+  });
+  const startup = service.startConfigured();
+  await entered.promise;
+  const allStartedBeforeProbe = profiles.every((profile) =>
+    started.includes(profile.id),
+  );
+  release.resolve();
+  await expect(startup).resolves.toBeUndefined();
+  expect(allStartedBeforeProbe).toBeTrue();
+  expect(probed).toEqual(hosts.map((host) => host.id));
+  expect(service.list()[0]?.discovery).toBe("error");
+});
+
+test("temporary discovery absence retains recovery intent but explicit disconnect clears it", async () => {
+  const profiles = [tui("tui-old"), core("core-old")];
+  let present = profiles;
+  let rounds = 0;
+  let onRefresh: (() => void) | undefined;
+  const { service, coreManager, failures } = await fixture(
+    profiles,
+    async () => {
+      rounds++;
+      return present.map((profile) => ({ profile, version: null }));
+    },
+    { changed: () => onRefresh?.() },
+  );
+  await service.startConfigured();
+  await coreManager.stop("core-old");
+  failures.add("core-old");
+  present = [profiles[0]!];
+  await service.hosts.connect("host-local");
+  expect(
+    service.hosts
+      .list()[0]
+      ?.runtimes.find((runtime) => runtime.connection_id === "core-old")?.state,
+  ).toBe("absent");
+  expect(service.willRetry("core-old", { retryable: true })).toBeFalse();
+  failures.clear();
+  present = profiles;
+  const refreshed = Promise.withResolvers<void>();
+  onRefresh = () => refreshed.resolve();
+  service.hosts.reconnected("host-local", () => true);
+  await refreshed.promise;
+  expect(rounds).toBe(3);
+  expect(coreManager.status("core-old").state).toBe("ready");
+  await service.disconnect("core-old");
+  failures.add("core-old");
+  present = [profiles[0]!];
+  const absent = Promise.withResolvers<void>();
+  onRefresh = () => absent.resolve();
+  service.hosts.reconnected("host-local", () => true);
+  await absent.promise;
+  expect(
+    service.hosts
+      .list()[0]
+      ?.runtimes.find((runtime) => runtime.connection_id === "core-old")?.state,
+  ).toBe("absent");
+  // Legacy Connect must still try the exact saved endpoint and expose its failure.
+  await expect(service.connect("core-old")).rejects.toThrow(
+    "synthetic runtime unavailable",
+  );
+  expect(coreManager.status("core-old").state).toBe("error");
+});
+
+test("a disconnect queued before startup discovery cannot be undone by startup's old target set", async () => {
+  const profiles = [tui("tui-old"), core("core-old")];
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const { service, coreManager } = await fixture(
+    profiles,
+    async (_host, known) =>
+      known.map((profile) => ({ profile, version: null })),
+  );
+  const startManaged = coreManager.start.bind(coreManager);
+  coreManager.start = async (id) => {
+    await startManaged(id);
+    entered.resolve();
+    await release.promise;
+  };
+  const startup = service.startConfigured();
+  await entered.promise;
+  await service.disconnect("core-old");
+  release.resolve();
+  await startup;
+  expect(coreManager.status("core-old").state).toBe("disconnected");
+  expect(service.willRetry("core-old", { retryable: true })).toBeFalse();
 });

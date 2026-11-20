@@ -26,6 +26,22 @@ never falls back to writing the catalogue. Legacy runtime-specific `add --core`,
 Explicit startup socket/session/SSH overrides continue to pin their runtime; use
 saved hosts for general host discovery.
 
+Existing per-runtime auto-connect controls remain authoritative after migration.
+For hosts with saved profiles, `auto_connect` is the OR of those profiles' current
+settings; an empty host keeps its saved policy. Startup attempts the default and
+auto-connect profiles independently before probes, then discovers eligible hosts.
+A disabled sibling stays disconnected even when another profile enables the host.
+A discovery or catalogue-write failure reports a host error and does not abort
+other hosts or whole-service startup.
+
+Per-connection Connect attempts its exact endpoint, including after an earlier
+absence report, and returns its failure. It and successful automatic reconnects
+repeat host discovery without reviving explicitly disconnected siblings or
+resetting their retry policy. Newly discovered runtimes connect. Temporary
+absence suspends retry while retaining connection intent for rediscovery;
+explicit Disconnect cancels that intent. Explicit host Connect / discover
+reconnects every found runtime and therefore overrides per-runtime disconnects.
+
 ## API for host screens
 
 `connections.list` adds `hosts` alongside the unchanged `connections` (TUI) and
