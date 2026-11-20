@@ -159,6 +159,7 @@ export function TownSkyControl() {
         ref={trigger}
         type="button"
         className="town-zoom-daylight"
+        data-help="town.daylight"
         data-mode={daylight}
         data-weather={weather}
         aria-label={label}

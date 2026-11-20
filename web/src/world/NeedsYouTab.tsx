@@ -37,6 +37,7 @@ import {
   type NeedsYouItem,
   type NeedsYouState,
 } from "./needsYou";
+import { NeedsYouAskerActions } from "./NeedsYouAskerActions";
 import { NeedsYouMessage } from "./NeedsYouItem";
 import { askAttachmentUpload } from "./askAttachments";
 import { preloadWorkspaceInspector } from "./inspectorPreload";
@@ -452,6 +453,7 @@ export function NeedsYouList({
           Nothing needs you.
         </p>
       )}
+      <NeedsYouAskerActions asks={asks} store={asksStore} />
       {shownStart > 0 ? (
         <button
           type="button"

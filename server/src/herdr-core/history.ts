@@ -44,9 +44,9 @@ export function argvSession(
 }
 
 /**
- * The session Claude Code's own record names for the process in the
- * terminal's foreground, read on the agent's host. Only a foreground that
- * is Claude itself counts: core's foreground pid is its process group's
+ * A native session record or writable transcript owned by the foreground,
+ * read on the agent's host. Only the harness process itself counts:
+ * core's foreground pid is its process group's
  * leader, so a wrapper leading the group is no evidence. A failed read is
  * no evidence either.
  */
@@ -56,15 +56,32 @@ export async function processSession(
   files: AgentSessionFileAccess,
 ): Promise<CoreHistorySession | undefined> {
   if (
-    agent !== "claude" ||
-    !files.findClaudeSessionForProcess ||
+    (agent !== "claude" && agent !== "codex") ||
     typeof foreground?.pid !== "number" ||
-    (harnessOfArgv(foreground.argv) ?? harnessName(foreground.name)) !==
-      "claude"
+    (harnessOfArgv(foreground.argv) ?? harnessName(foreground.name)) !== agent
   )
     return;
-  const id = await files
-    .findClaudeSessionForProcess(foreground.pid)
+  if (agent === "claude") {
+    const id = await files
+      .findClaudeSessionForProcess?.(foreground.pid)
+      .catch(() => null);
+    if (id) return { kind: "id", value: id };
+  }
+  const session = await files
+    .findAgentSessionForProcess?.(agent, foreground.pid)
     .catch(() => null);
-  return id ? { kind: "id", value: id } : undefined;
+  // A caller can choose any --debug-file name, including another UUID.
+  // Only the native default debug filename supplies session evidence.
+  if (
+    agent === "claude" &&
+    session?.kind === "id" &&
+    (!Array.isArray(foreground.argv) ||
+      foreground.argv.some(
+        (arg) =>
+          typeof arg === "string" &&
+          (arg === "--debug-file" || arg.startsWith("--debug-file=")),
+      ))
+  )
+    return;
+  return session ?? undefined;
 }

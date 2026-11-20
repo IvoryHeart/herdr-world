@@ -24,6 +24,7 @@ import { TownStepBubble } from "./TownStepBubble";
 import { TownFuelMark } from "./TownFuelMark";
 import type { TownStepStore } from "./townStepStore";
 import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
+import { TownPostOffice } from "./TownPostOffice";
 import { TownLibrary } from "./TownLibrary";
 import { TownShipyard } from "./TownShipyard";
 import { TownWarehouse } from "./TownWarehouse";
@@ -284,6 +285,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   return (
     <>
       <TownCityBillboard center={layout.center} boardRef={boards.cityRef} />
+      <TownPostOffice layout={layout} renderer={renderer} />
       <TownWarehouse layout={layout} renderer={renderer} />
       <TownShipyard layout={layout} renderer={renderer} />
       <TownLibrary layout={layout} />

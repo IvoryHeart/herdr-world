@@ -79,7 +79,7 @@ This reconciles the remaining baseline entries without treating a component mode
 
 | Area | Mapping and required consumer evidence | Limits |
 | --- | --- | --- |
-| Q02 Profile service and persistence | Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local recovery consumers cover capped backoff, explicit Reconnect, cancellation tokens and manager generations; the production native-socket fixture covers late readiness, non-actionable failed topology and fresh qualified admission. Models: runtime-control, runtime-drain. | Persistence atomicity and retry clock/jitter remain real integration evidence; manager readiness alone does not prove catalogue consistency. |
+| Q02 Profile service and persistence | Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local recovery consumers cover capped backoff, explicit Reconnect, cancellation tokens and manager generations; the production native-socket fixture covers late readiness, non-actionable failed topology and fresh qualified admission. Offline ownership adds [direct CLI/process evidence](contracts/connection-registry.md): all 24 independent edit admission orders, real two-process writers, startup/discovery races and process-death recovery. Models: runtime-control, runtime-drain (unchanged scope). | Persistence atomicity and retry clock/jitter remain real integration evidence; manager readiness alone does not prove catalogue consistency. |
 | Q03 SSH supervision | Manager currency and drain fence late transport completion. Real supervisor/tunnel tests exercise process exits, cancellation, reconnect classification and private path ownership. Models: runtime-leases, runtime-drain. | Real OpenSSH, OS process and Windows transport semantics remain platform checks; the manager model does not simulate SSH. |
 | Q04 Subscriptions | Retired manager owners cannot publish readiness. Subscription tests independently exercise stop-before-ready, stop-during-retry, coalesced drain and callback suppression. Models: runtime-leases, runtime-drain. | Subscription retry progress requires actual timers and transport behavior; model producer guarantees do not prove callback consumers. |
 | Q05 RPC/HTTP routing | Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams. The session-link routing fixture combines the real manager, RPC dispatcher, runtime handlers and filesystem lookup with a synthetic external transport; identical pane IDs stay isolated, and replacement during confirmation or immediately before transport dispatch cannot report a link. Models: runtime-leases, runtime-control. | No model substitutes for endpoint parsing or HTTP stream cancellation; legacy compatibility is scoped separately from explicit admission. |
@@ -758,6 +758,27 @@ exactly one command with Enter and recovery after failed sends in both input mod
 These direct native-input consumers extend Q09's accepted alternative; no abstract
 shell-execution guarantee is added. Q25's conversation fingerprint, read-only Codex
 inference and receipt boundaries remain mandatory for primary Chat.
+
+### Headless conversation identity (Q25)
+
+`process-transcript.test.ts` checks finite combinations of writable/read-only,
+regular/non-regular, unique/ambiguous/duplicate/deleted native descriptors,
+start-time changes, truncated/oversized evidence and invalid process IDs. It
+executes the production host command against real synthetic writers on Linux
+and macOS, beside a newer unrelated transcript. NUL-delimited macOS `lsof`
+fixtures cover field framing and filenames; SSH-port fixtures verify the exact
+captured destination and refusal on failed host reads. They do not claim native
+macOS or SSH execution on Linux.
+
+`herdr-core/headless-chat.test.ts` uses the testing-only `?coreFixture=headless`
+scenario: real disposable file holders and synthetic foreground records, with
+no model calls. Production discovery feeds Chat/History and the same TUI
+transcript readers, including a live append and occupant replacement. Existing
+history/agent-session tests retain process-record precedence, missing evidence,
+launch references and reused-pid isolation. These direct OS/parser/consumer
+checks cover the added evidence boundary; another abstract state model would
+not establish file ownership or external transcript semantics. Runtime lease and
+input authority models remain unchanged; the full verification gate is required.
 
 ### Captured Chat prompt choices and text destinations (Q25)
 

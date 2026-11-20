@@ -100,8 +100,7 @@ export type WorldServiceDeps = {
 
 export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 
-/** How long stop waits for requests that were running when it began. */
-const DRAIN_TIMEOUT_MS = 2_000;
+const DRAIN_TIMEOUT_MS = 2_000; // Wait for requests already running at stop.
 
 /**
  * Claim the data folder, open storage and build one World service. Nothing
@@ -124,6 +123,7 @@ export async function createWorldService(deps: WorldServiceDeps) {
     throw error;
   }
   try {
+    await storage.connections.acquireServiceOwnership();
     return await compose(deps, storage, sessionSecret, releaseDataFolder);
   } catch (error) {
     await storage.close().catch(() => {});

@@ -28,7 +28,12 @@ export function TownZoomControls({
     };
   }, [ownsShellControls]);
   return (
-    <div className="town-zoom" role="group" aria-label="Camera">
+    <div
+      className="town-zoom"
+      role="group"
+      aria-label="Camera"
+      data-help="town.zoom"
+    >
       <button type="button" aria-label="Zoom in" onClick={() => onStep(1)}>
         +
       </button>
