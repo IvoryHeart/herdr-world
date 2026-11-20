@@ -12,7 +12,8 @@ export type WorldBrowserEntry =
   | "CoreTerminalWatch"
   | "CoreSharedState"
   | "CoreFiles"
-  | "QuestionCards";
+  | "QuestionCards"
+  | "BoardElements";
 export type WorldBrowserBundle = {
   directory: string;
   assets: Map<string, Blob>;

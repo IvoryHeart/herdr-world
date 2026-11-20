@@ -1,7 +1,8 @@
 # Board element data API
 
-Issue #1016 supplies the data contract for the Board presentation in #1030.
-There are no new controls in this delivery. Use the existing authenticated World
+Issue #1016 supplies the data contract; Board's own screens (#1030: cards,
+**Add to Board** and the reader, in `web/src/world/board/elements/`) use exactly
+these calls. Use the existing authenticated World
 WebSocket RPC or the local `herdr-world` CLI. No new HTTP listener is needed.
 Browser methods have the prefix `world.board.elements.`. Every method below
 returns its result in the normal RPC `{id,result}` envelope; malformed requests

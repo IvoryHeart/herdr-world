@@ -2,7 +2,7 @@
    the sticky notes: a card-index drawer, a ruled ledger page, a sheet with a
    folded corner and a luggage tag. Like notes they keep their own paper
    colours on every surface, with the notes' ink. */
-.board-element {
+.board-card.board-element {
   --element-paper: #fbfaf6;
   --element-edge: color-mix(in srgb, var(--note-ink, #29281f) 22%, transparent);
   width: 208px;
@@ -71,7 +71,7 @@
 }
 
 /* Memory: a card-index drawer, its label on a tab and cards standing in it. */
-.board-element-memory {
+.board-card.board-element-memory {
   --element-paper: #eadcb8;
   margin-top: 12px;
   padding-top: 14px;
@@ -114,7 +114,7 @@
 }
 
 /* Log: a ruled ledger page with a red margin. */
-.board-element-log {
+.board-card.board-element-log {
   --element-paper: #fdfcf3;
   padding-left: 24px;
   background:
@@ -138,7 +138,7 @@
 }
 
 /* Doc: a sheet with its corner folded down. */
-.board-element-document {
+.board-card.board-element-document {
   border-radius: 3px 18px 3px 3px;
   background:
     linear-gradient(
@@ -151,7 +151,7 @@
 }
 
 /* Link: a luggage tag, its eyelet on the pointed end. */
-.board-element.board-element-link {
+.board-card.board-element-link {
   --element-paper: #f4e3c4;
   min-height: 72px;
   padding-left: 30px;
@@ -173,14 +173,14 @@
   background: var(--board-bg, #fff);
 }
 
-.board-element.board-element-offline {
+.board-card.board-element-offline {
   opacity: 0.6;
   border-style: dashed;
 }
 .board-element-offline-mark {
   font-weight: 700;
 }
-.board-far .board-element {
+.board-far .board-card.board-element {
   width: 320px;
   font-size: 22px;
 }
