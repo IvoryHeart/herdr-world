@@ -150,16 +150,22 @@ export function coreAgentStatus(
   return turn > seen ? "done" : "idle";
 }
 
-/** The harness in a terminal: its report, else what runs in it now. */
+/**
+ * The harness in a terminal: what runs in it now, else its report's, else
+ * (World's memory of the desk) the one that just left it. A process that
+ * runs there outranks a report, which may be a departed program's.
+ */
 export function coreHarness(
   record: CoreMirrorTerminal,
   group: readonly (readonly string[])[] | null = null,
+  seen: CoreDeskSeen = NOTHING_SEEN,
 ): string | null {
+  const running = coreDeskProcess(record, group).running?.harness;
+  if (running) return running;
   const report = coreStatusReport(record);
   const reported = harnessName(report?.app);
   if (reported) return reported;
-  const running = coreDeskProcess(record, group).running?.harness;
-  if (running) return running;
+  if (seen.left) return seen.left;
   // A program that speaks 7501 is an agent even if no list names it.
   return report ? (report.app?.toLowerCase() ?? "agent") : null;
 }
@@ -199,27 +205,123 @@ export function coreDeskProcess(
     const member = harnessInvocation(argv);
     if (member) return { running: member, gone: false };
   }
-  return { running: null, gone: group !== null || !mayWrapHarness(foreground) };
+  return {
+    running: null,
+    gone: group !== null || !mayWrapHarness(foreground, record.pid),
+  };
+}
+
+/** What World remembers of one desk (`CoreDeskMemory.observe`). */
+export type CoreDeskSeen = {
+  /**
+   * The harness World saw running here, now gone while the same foreground
+   * leader (its wrapper) stays in front: the agent between headless calls.
+   */
+  left: string | null;
+  /** The report is the one a departed process left: it speaks for nobody now. */
+  stale: boolean;
+};
+const NOTHING_SEEN: CoreDeskSeen = { left: null, stale: false };
+
+/**
+ * What World saw of each desk's agent process, so a process that leaves
+ * neither drops its agent at once nor lends its report to the next one.
+ *
+ * - While a wrapper (`bash run.sh`) stays in front, a harness World saw run
+ *   inside it stays the desk's agent after it exits: the agent walks to the
+ *   bar instead of vanishing, and is there between headless calls. A new
+ *   foreground leader (the wrapper ended, a shell is back) forgets it, as a
+ *   directly started agent is forgotten when it exits.
+ * - The report standing when World saw the process leave is that process's:
+ *   it is stale until the report changes, so a replacement that never
+ *   reports is unknown (or, headless, working), never the departed one's
+ *   word.
+ *
+ * Observation is process evidence only, read at each projection; a process
+ * that starts and ends between two reads is never seen.
+ */
+export class CoreDeskMemory {
+  private readonly desks = new Map<
+    string,
+    {
+      leader: number | null;
+      harness: string;
+      present: boolean;
+      staleReport: string | null;
+    }
+  >();
+
+  observe(record: CoreMirrorTerminal, desk: CoreDeskProcess): CoreDeskSeen {
+    const pid = object(record.foreground)?.pid;
+    const leader = typeof pid === "number" ? pid : null;
+    const report = JSON.stringify(record.status ?? null);
+    let seen = this.desks.get(record.address);
+    if (seen && seen.leader !== leader) {
+      this.desks.delete(record.address);
+      seen = undefined;
+    }
+    if (seen && seen.staleReport !== null && seen.staleReport !== report)
+      seen.staleReport = null;
+    const running = desk.running?.harness ?? null;
+    if (running) {
+      if (seen) {
+        seen.harness = running;
+        seen.present = true;
+      } else
+        this.desks.set(record.address, {
+          leader,
+          harness: running,
+          present: true,
+          staleReport: null,
+        });
+    } else if (seen?.present) {
+      seen.present = false;
+      seen.staleReport = report;
+    }
+    if (!seen) return NOTHING_SEEN;
+    return {
+      left: seen.present ? null : seen.harness,
+      stale: seen.staleReport === report,
+    };
+  }
+
+  /** Forgets desks that are no longer live terminals. */
+  retain(addresses: ReadonlySet<string>): void {
+    for (const address of this.desks.keys())
+      if (!addresses.has(address)) this.desks.delete(address);
+  }
 }
 
 /**
  * A desk's status: its program's report checked against the process. A
  * headless run (`claude -p`, `codex exec`) works for as long as it lives,
- * report or none. A known harness's working or waiting report from a process
- * that has left the terminal is stale: it reads idle, so the agent leaves its
- * desk. Otherwise the report decides, and with none the status is unknown.
+ * report or none. A report speaks only for the harness that runs there: one
+ * a departed process left (`seen.stale`), or one naming another harness
+ * than the one running, is no report. With nothing running, a known
+ * harness's working or waiting report is stale and reads idle, as does the
+ * agent World saw leave: the agent leaves its desk. Otherwise the report
+ * decides, and with none the status is unknown.
  */
 export function coreDeskStatus(
   record: CoreMirrorTerminal,
   desk: CoreDeskProcess,
   firstSight: number | null = null,
+  seen: CoreDeskSeen = NOTHING_SEEN,
 ): CoreAgentStatus {
-  const reported = coreAgentStatus(record, firstSight);
+  const reportedHarness = harnessName(coreStatusReport(record)?.app);
+  const foreign =
+    desk.running !== null &&
+    reportedHarness !== null &&
+    reportedHarness !== desk.running.harness;
+  const reported =
+    seen.stale || foreign ? "unknown" : coreAgentStatus(record, firstSight);
   if (desk.running?.headless && reported !== "blocked") return "working";
   if (
     desk.gone &&
-    harnessName(coreStatusReport(record)?.app) &&
-    (reported === "working" || reported === "blocked")
+    (seen.left || reportedHarness) &&
+    (reported === "working" ||
+      reported === "blocked" ||
+      (seen.left && reported === "unknown"))
   )
     return "idle";
   return reported;
@@ -234,7 +336,7 @@ export function coreHidesAgent(record: CoreMirrorTerminal): boolean {
   const foreground = object(record.foreground);
   return Boolean(
     foreground &&
-      mayWrapHarness(foreground) &&
+      mayWrapHarness(foreground, record.pid) &&
       !coreDeskProcess(record).running,
   );
 }
@@ -400,6 +502,8 @@ export type CoreTopologyOptions = {
   now?: number;
   /** The host's read of a foreground group, for a core on this machine. */
   foregroundGroup?: ForegroundGroupReader;
+  /** World's memory of each desk's agent process, kept by the runtime. */
+  desks?: CoreDeskMemory;
 };
 
 export function coreTopology(
@@ -416,6 +520,7 @@ export function coreTopology(
     now = Date.now(),
     occupancy,
     foregroundGroup,
+    desks,
   }: CoreTopologyOptions = "turn" in options
     ? { firstSight: options }
     : options;
@@ -428,6 +533,7 @@ export function coreTopology(
     )
     .sort((a, b) => addressOrder(a.address, b.address));
   const byAddress = new Map(local.map((record) => [record.address, record]));
+  desks?.retain(new Set(byAddress.keys()));
   const worldTabs = worldTabsOf(world, byAddress);
   const workspaces = new Map<string, WorkspaceRow>();
   const tabs = new Map<string, RuntimeRow>();
@@ -517,7 +623,8 @@ export function coreTopology(
           )
         : null;
     const desk = coreDeskProcess(record, group);
-    const harness = coreHarness(record, group);
+    const seen = desks?.observe(record, desk) ?? NOTHING_SEEN;
+    const harness = coreHarness(record, group, seen);
     const cwd = text(record.cwd, 4096);
     const foregroundCwd = text(foreground?.cwd, 4096);
     // Spawn stamps (M7): core's own parent for a child it started, else
@@ -545,7 +652,7 @@ export function coreTopology(
           }
         : {}),
       agent_status: harness
-        ? coreDeskStatus(record, desk, firstSight.turn(record.address))
+        ? coreDeskStatus(record, desk, firstSight.turn(record.address), seen)
         : "unknown",
     };
     // The program at this address, as a verified core caller's asks name it
@@ -636,6 +743,7 @@ export type CoreReadModelSource = {
   coreId?(): string | null;
   now?(): number;
   foregroundGroup?: ForegroundGroupReader;
+  desks?: CoreDeskMemory;
 };
 
 /**
@@ -653,6 +761,7 @@ export function coreReadModel(source: CoreReadModelSource): CoreTopology {
     now: source.now?.(),
     occupancy: (address) => source.mirror.occupancy(address),
     foregroundGroup: source.foregroundGroup,
+    desks: source.desks,
   });
 }
 

@@ -49,6 +49,7 @@ import {
   type CoreStreamConnector,
 } from "./stream";
 import {
+  CoreDeskMemory,
   CoreFirstSight,
   coreHidesAgent,
   coreRuntimeReader,
@@ -377,6 +378,9 @@ export function createCoreConnectionRuntime(
         : undefined
       : (options.foregroundGroups ?? undefined);
   let groupTimer: ReturnType<typeof setTimeout> | null = null;
+  // Which agent process each desk had, so one that exits walks away and its
+  // report is not lent to the next program (topology.ts).
+  const desks = new CoreDeskMemory();
   const layout = () =>
     epoch ? (options.layout?.(epoch.coreId) ?? null) : null;
   const readModelChanged = () => {
@@ -391,6 +395,7 @@ export function createCoreConnectionRuntime(
         occupancy: (address) => mirror.occupancy(address),
         now: at,
         foregroundGroup,
+        desks,
       }),
     );
     if (groupTimer) clearTimeout(groupTimer);
@@ -727,6 +732,7 @@ export function createCoreConnectionRuntime(
       coreId: () => epoch?.coreId ?? null,
       now,
       foregroundGroup,
+      desks,
     }),
     readScreen,
     layout,

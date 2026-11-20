@@ -130,12 +130,74 @@ describe("a local core's runtime looks inside a wrapper while one leads", () => 
       ];
       await until(() => changes > before);
       expect(await desk()).toEqual(["claude", "working"]);
-      // The wrapper ends: an interactive shell leads, so reading stops.
-      fake.foreground(address, { pid: 41, name: "bash", argv: ["bash"] });
+      // The wrapper ends: the terminal's own shell leads, so reading stops.
+      const root = fake.terminal(address)!.pid as number;
+      fake.foreground(address, { pid: root, name: "bash", argv: ["bash"] });
       await until(async () => (await desk())[0] === null);
       const settled = reads;
       await Bun.sleep(30);
       expect(reads).toBe(settled);
+    } finally {
+      runtime.stop();
+    }
+  });
+
+  test("a piped shell function leads its job as a copy of the interactive shell: World keeps reading, and a run that ends walks off", async () => {
+    const fake = new FakeCore({ heartbeatMs: 60_000, version: "0.1.21" });
+    fake.revive();
+    // `f(){ claude -p …; read -r; }; f | cat`: the forked shell keeps its argv.
+    const address = fake.create({
+      foreground: {
+        pid: 40,
+        name: "bash",
+        argv: ["bash", "--noprofile", "--norc", "-i"],
+      },
+    });
+    let group: string[][] = [["cat"]];
+    let reads = 0;
+    let changes = 0;
+    const runtime = createCoreConnectionRuntime({
+      identity: { id: "core", label: "core", source: "test" },
+      context: { generation: 1, isCurrent: () => true, reportError: () => {} },
+      transport: { open: async () => "memory", close: async () => {} },
+      connect: async () => {
+        const [server, world] = memoryStreamPair();
+        fake.accept(server);
+        return world;
+      },
+      observations: new CoreObservationStore(() => {}),
+      onFailure: () => {},
+      onReadModel: () => changes++,
+      local: true,
+      foregroundGroups: (leader) => {
+        reads++;
+        return leader === 40 ? group : null;
+      },
+      groupRefreshMs: 5,
+      publishDelayMs: 1,
+    });
+    const desk = async () => {
+      const { panes } = await runtime.operations.listTerminals();
+      const pane = (panes ?? []).find((p) => p.pane_id?.endsWith(address))!;
+      return [pane.agent ?? null, pane.agent_status];
+    };
+    try {
+      await runtime.startTransport();
+      await runtime.startBackground();
+      await until(() => reads > 0);
+      expect(await desk()).toEqual([null, "unknown"]);
+      // The run starts under the unchanged leader: no core event at all,
+      // yet World publishes the change.
+      let before = changes;
+      group = [["claude", "-p", "go"], ["cat"]];
+      await until(() => changes > before);
+      expect(await desk()).toEqual(["claude", "working"]);
+      // It exits; the function waits on `read`. The agent stays, idle: Town
+      // walks it from the desk to the bar instead of dropping it.
+      before = changes;
+      group = [["cat"]];
+      await until(() => changes > before);
+      expect(await desk()).toEqual(["claude", "idle"]);
     } finally {
       runtime.stop();
     }

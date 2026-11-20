@@ -115,7 +115,17 @@ no control for it. Platform and harness limits apply across the table.
   none it stays unknown, never working. A working or waiting report from an
   agent that has left the terminal (killed mid-turn, with a shell, editor or
   empty wrapper in front) is stale: World shows it idle, so it walks to the
-  bar and its desk and room go dark.
+  bar and its desk and room go dark. A report speaks only for the harness that
+  runs: when another harness replaces the one that reported, or a new process
+  starts after World saw the reporter exit, the newcomer is unknown (working,
+  if headless) until it reports itself. An agent World saw run inside a
+  still-running wrapper stays at that desk's terminal after it exits, idle, so
+  it walks to the bar between headless calls instead of vanishing; once the
+  wrapper ends and the shell is back, the desk is a plain terminal again. A
+  word that is an option's value never marks a run headless
+  (`codex -C exec` is interactive Codex in a folder named `exec`). A shell
+  function or alias piped into another command (`f | cat`) runs as a copy of
+  the shell; World looks inside it as it does a wrapper.
 - **Codex status on Linux core:** working/idle comes from Codex's native
   OSC 7501 reports, just as on macOS. If core publishes no status, World
   shows **unknown** even when Chat and Terminal work. World cannot recover

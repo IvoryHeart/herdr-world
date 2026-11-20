@@ -27,7 +27,11 @@ Native status means core's records checked against the process: without OSC
 7501 an interactive agent is **unknown**. Two process facts adjust a report
 (`coreDeskStatus`): a live headless invocation (`claude -p`, `codex exec`,
 `opencode run` …) is working, and a known harness's working or waiting report
-is stale, read idle, once no harness runs in the terminal's foreground. Core
+is stale, read idle, once no harness runs in the terminal's foreground. A
+report speaks only for the harness running: one naming another harness, or
+left by a process World saw exit (`CoreDeskMemory`), is no report for its
+replacement. A harness seen inside a wrapper that stays in front remains the
+desk's agent, idle, after it exits, until another leader takes the terminal. Core
 0.1.21 reports only the foreground group's leader, so for a core on this Linux
 machine World also reads the group's other processes on the host
 (`process-group.ts`), as Herdr's TUI looks through a whole job. Upstream ask:

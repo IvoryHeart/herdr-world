@@ -7,6 +7,7 @@ import { CoreMirror, type CoreMirrorTerminal } from "./mirror";
 import type { CoreRecording } from "./testing/capture-core";
 import {
   CORE_UNPLACED_WORKSPACE,
+  CoreDeskMemory,
   CoreFirstSight,
   coreAgentStatus,
   coreDeskProcess,
@@ -279,6 +280,31 @@ describe("a working agent shows at its desk: reports checked against the process
     expect(run(["git", "status"])).toBeNull();
   });
 
+  test("an option's value is never a subcommand", () => {
+    const run = (argv: string[]) => harnessInvocation(argv)?.headless;
+    // Interactive Codex in a folder named `exec`.
+    expect(run(["codex", "-C", "exec"])).toBe(false);
+    expect(run(["codex", "--cd", "exec", "fix it"])).toBe(false);
+    expect(run(["codex", "-m", "exec"])).toBe(false);
+    // Values given inline, and options that take none, leave the command next.
+    expect(run(["codex", "-C", "/srv/app", "exec", "x"])).toBe(true);
+    expect(run(["codex", "--cd=/srv/app", "exec", "x"])).toBe(true);
+    expect(run(["codex", "-C/srv/app", "exec", "x"])).toBe(true);
+    expect(run(["codex", "--full-auto", "--search", "exec", "x"])).toBe(true);
+    // Images take values up to the next option.
+    expect(run(["codex", "-i", "a.png", "exec"])).toBe(false);
+    expect(run(["codex", "-i", "a.png", "--oss", "exec", "x"])).toBe(true);
+    // An option this list does not know may take the word after it.
+    expect(run(["codex", "--someday", "exec"])).toBe(false);
+    expect(run(["opencode", "--port", "run"])).toBe(false);
+    // The pane: interactive and silent is unknown; its idle report stands.
+    const codex = { foreground: fg(["codex", "-C", "exec"]) };
+    expect(desk(codex)).toEqual(["codex", "unknown"]);
+    expect(desk({ ...codex, status: { state: "idle", app: "codex" } })).toEqual(
+      ["codex", "idle"],
+    );
+  });
+
   test("a headless run starts: the desk works with no report at all", () => {
     expect(desk({ foreground: fg(["claude", "-p", "go"]) })).toEqual([
       "claude",
@@ -377,6 +403,115 @@ describe("a working agent shows at its desk: reports checked against the process
         status: { state: "working", app: "MyBot" },
       }),
     ).toEqual(["mybot", "working"]);
+  });
+
+  test("a report speaks only for the harness that runs: a replacement never inherits it", () => {
+    const wrapper = { foreground: fg(["bash", "run.sh"]) };
+    // Claude reported working and exited; interactive Codex now runs silent.
+    expect(
+      desk({ ...wrapper, status: { state: "working", app: "claude" } }, [
+        ["codex"],
+      ]),
+    ).toEqual(["codex", "unknown"]);
+    // The same when the leader itself is the new harness.
+    expect(
+      desk({
+        foreground: fg(["codex"]),
+        status: { state: "working", app: "claude" },
+      }),
+    ).toEqual(["codex", "unknown"]);
+    // A headless replacement works on its own evidence.
+    expect(
+      desk({ ...wrapper, status: { state: "idle", app: "claude" } }, [
+        ["codex", "exec", "x"],
+      ]),
+    ).toEqual(["codex", "working"]);
+  });
+
+  /** One desk projected again and again, with World's memory of it. */
+  const watched = () => {
+    const desks = new CoreDeskMemory();
+    const firstSight = new CoreFirstSight();
+    return (fields: Partial<CoreMirrorTerminal>, group: string[][]) => {
+      const pane = coreTopology([record(fields)], "test core", {
+        firstSight,
+        foregroundGroup: () => group,
+        desks,
+      }).panes[0]!;
+      return [pane.agent ?? null, pane.agent_status];
+    };
+  };
+
+  test("a headless run that ends inside its wrapper leaves for the bar, not out of sight", () => {
+    const view = watched();
+    const wrapper = { foreground: fg(["bash", "run.sh"]) };
+    expect(view(wrapper, [])).toEqual([null, "unknown"]);
+    expect(view(wrapper, [["claude", "-p", "go"], ["tee"]])).toEqual([
+      "claude",
+      "working",
+    ]);
+    // Between calls: the agent stays, idle (Town walks it to the bar).
+    expect(view(wrapper, [["sleep", "60"]])).toEqual(["claude", "idle"]);
+    expect(view(wrapper, [])).toEqual(["claude", "idle"]);
+    // The next call: back at its desk.
+    expect(view(wrapper, [["claude", "-p", "next"]])).toEqual([
+      "claude",
+      "working",
+    ]);
+    expect(view(wrapper, [])).toEqual(["claude", "idle"]);
+    // The wrapper ends and the shell is back: forgotten, as a direct agent is.
+    expect(view({ foreground: { ...fg(["bash"]), pid: 41 } }, [])).toEqual([
+      null,
+      "unknown",
+    ]);
+    // A plain shell's short-lived child never becomes an agent desk.
+    expect(view(wrapper, [["git", "status"]])).toEqual([null, "unknown"]);
+    expect(view(wrapper, [])).toEqual([null, "unknown"]);
+  });
+
+  test("a report left by a process that exited is lent to no replacement", () => {
+    const view = watched();
+    const wrapper = { foreground: fg(["bash", "run.sh"]) };
+    const working = { state: "working", app: "claude" };
+    expect(view({ ...wrapper, status: working }, [["claude"]])).toEqual([
+      "claude",
+      "working",
+    ]);
+    // Killed mid-turn: its working report is stale.
+    expect(view({ ...wrapper, status: working }, [])).toEqual([
+      "claude",
+      "idle",
+    ]);
+    // A new interactive Claude that has not reported is unknown, not working.
+    expect(view({ ...wrapper, status: working }, [["claude"]])).toEqual([
+      "claude",
+      "unknown",
+    ]);
+    // Its own first report counts.
+    expect(
+      view({ ...wrapper, status: { state: "idle", app: "claude" } }, [
+        ["claude"],
+      ]),
+    ).toEqual(["claude", "idle"]);
+    expect(view({ ...wrapper, status: working }, [["claude"]])).toEqual([
+      "claude",
+      "working",
+    ]);
+  });
+
+  test("a function or alias in a pipeline leads its job as a copy of the shell", () => {
+    // `f | cat`: the forked shell keeps the interactive shell's argv.
+    const subshell = {
+      pid: 30,
+      foreground: fg(["bash", "--noprofile", "--norc", "-i"]),
+    };
+    expect(coreHidesAgent(record(subshell))).toBe(true);
+    // The terminal's own shell at its prompt hides nothing.
+    expect(
+      coreHidesAgent(
+        record({ ...subshell, foreground: { ...fg(["bash"]), pid: 30 } }),
+      ),
+    ).toBe(false);
   });
 
   test("an interactive agent's status is its own report; none is unknown", () => {
