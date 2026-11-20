@@ -135,6 +135,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "plugin-windows",
     "installer-upgrade",
     "launchd",
+    "dependency-security",
   ]);
   expect(delivery?.if).toBe("always()");
   expect(
