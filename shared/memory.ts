@@ -41,6 +41,17 @@ export const MEMORY_HARNESSES = [
   "grok",
   "devin",
   "mastracode",
+  "amp",
+  "cline",
+  "gemini",
+  "kiro",
+  "maki",
+  "pig",
+  "crush",
+  "command-code",
+  "prime-agent",
+  "dsh-tui",
+  "muse",
 ] as const;
 export type MemoryHarness = (typeof MEMORY_HARNESSES)[number];
 
@@ -61,6 +72,7 @@ const MEMORY_HARNESS_ALIASES: Record<string, string> = {
   antigravity: "antigravity-cli",
   agy: "antigravity-cli",
   "grok-build": "grok",
+  "kiro-cli": "kiro",
 };
 
 export function memoryHarness(value: unknown): MemoryHarness | null {

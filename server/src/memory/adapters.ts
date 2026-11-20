@@ -2,74 +2,24 @@ import { createHash } from "node:crypto";
 import { posix as path } from "node:path";
 import type {
   MemoryAgent,
-  MemoryHarness,
   MemoryProject,
   MemorySource,
 } from "../../../shared/memory";
 
-export type HostEnvironment = {
-  home: string;
-  codex: string;
-  claude: string;
-  pi: string;
-  config_home?: string;
-  copilot?: string;
-  hermes?: string;
-  kimi?: string;
-  qwen?: string;
-  claude_memory: string | null;
-  claude_project_name: string | null;
-  contexts: Record<string, { path: string; root: string; memory_root: string }>;
-};
-type Context = {
-  project: MemoryProject;
-  agent?: MemoryAgent;
-  env: HostEnvironment;
-};
-type Candidate = Omit<
-  MemorySource,
-  "id" | "harnesses" | "details" | "project_ids" | "agent_ids" | "state"
->;
-export type MemoryAdapter = {
-  harness: MemoryHarness;
-  candidates(context: Context): Candidate[];
-};
-const file = (
-  value: string,
-  scope: Candidate["scope"],
-  description: string,
-): Candidate => ({
-  path: value,
-  shape: "file",
-  kind: "instructions",
-  scope,
-  load: "startup-candidate",
-  description,
-});
-const directory = (
-  value: string,
-  scope: Candidate["scope"],
-  kind: "memory" | "rules",
-  description: string,
-): Candidate => ({
-  path: value,
-  shape: "directory",
-  kind,
-  scope,
-  load: kind === "memory" ? "on-demand" : "startup-candidate",
-  description,
-});
-
-function ancestors(cwd: string, stop?: string): string[] {
-  const values: string[] = [];
-  for (let current = cwd; values.length < 32; current = path.dirname(current)) {
-    values.unshift(current);
-    if (current === stop || current === path.dirname(current)) break;
-  }
-  return values;
-}
-const context = ({ project, agent, env }: Context) =>
-  env.contexts[agent?.path ?? project.path]!;
+import {
+  ancestors,
+  context,
+  directory,
+  file,
+  files,
+  rules,
+  configHome,
+  type Candidate,
+  type HostEnvironment,
+  type MemoryAdapter,
+} from "./adapter-paths";
+import { REGISTRY_MEMORY_ADAPTERS } from "./registry-adapters";
+export type { HostEnvironment, MemoryAdapter } from "./adapter-paths";
 
 // https://code.claude.com/docs/en/memory
 const claude: MemoryAdapter = {
@@ -195,36 +145,33 @@ const pi: MemoryAdapter = {
   harness: "pi",
   candidates(c) {
     const at = context(c);
+    const names = ["AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"];
     return [
-      file(path.join(c.env.pi, "AGENTS.md"), "user", "Pi user instructions"),
-      ...ancestors(at.path).map((root) =>
-        file(
-          path.join(root, "AGENTS.md"),
+      ...files(
+        c.env.pi,
+        names,
+        "user",
+        "Pi context; first existing filename per directory wins",
+      ),
+      ...ancestors(at.path).flatMap((root) =>
+        files(
+          root,
+          names,
           "project",
-          "Pi ancestor instructions",
+          "Pi ancestor context; first existing filename per directory wins",
+        ),
+      ),
+      ...[c.env.pi, path.join(at.path, ".pi")].flatMap((root) =>
+        files(
+          root,
+          ["SYSTEM.md", "APPEND_SYSTEM.md"],
+          root === c.env.pi ? "user" : "project",
+          "Pi system prompt; project SYSTEM.md replaces the global prompt, append files accumulate",
         ),
       ),
     ];
   },
 };
-// Defaults only: imports, configured extra files and per-process overrides are not expanded.
-const files = (
-  root: string,
-  names: string[],
-  scope: Candidate["scope"],
-  description: string,
-) => names.map((name) => file(path.join(root, name), scope, description));
-const rules = (
-  root: string,
-  scope: Candidate["scope"],
-  description: string,
-): Candidate => ({
-  ...directory(root, scope, "rules", description),
-  load: "on-demand",
-});
-const configHome = (env: HostEnvironment) =>
-  env.config_home ?? path.join(env.home, ".config");
-
 // https://opencode.ai/docs/instructions/
 const opencode: MemoryAdapter = {
   harness: "opencode",
@@ -251,7 +198,7 @@ const opencode: MemoryAdapter = {
         file(
           path.join(root, "CLAUDE.md"),
           "project",
-          "OpenCode fallback when this directory has no AGENTS.md; compatibility can be disabled",
+          "OpenCode fallback when its ancestor chain has no AGENTS.md; compatibility can be disabled",
         ),
       ]),
     ];
@@ -731,6 +678,7 @@ export const MEMORY_ADAPTERS: readonly MemoryAdapter[] = [
   grok,
   devin,
   mastracode,
+  ...REGISTRY_MEMORY_ADAPTERS,
 ];
 
 export function memorySources(

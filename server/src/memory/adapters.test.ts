@@ -1,5 +1,5 @@
 import { MEMORY_HARNESSES, memoryHarness } from "../../../shared/memory";
-import { WORLD_HARNESSES } from "../cli/harness-names";
+import { coreHarnessNames } from "../herdr-core/harness";
 import { expect, test } from "bun:test";
 import {
   MEMORY_ADAPTERS,
@@ -59,9 +59,12 @@ test("a project offers only its observed supported harnesses", () => {
 
 test("browser capabilities and service adapters name exactly the same supported World harnesses", () => {
   expect(MEMORY_ADAPTERS.map((a) => a.harness)).toEqual([...MEMORY_HARNESSES]);
-  expect(MEMORY_HARNESSES.every((h) => WORLD_HARNESSES.includes(h))).toBe(true);
+  expect(MEMORY_HARNESSES.every((h) => coreHarnessNames().includes(h))).toBe(
+    true,
+  );
   expect(memoryHarness("cursor-agent")).toBe("cursor");
   expect(memoryHarness("/opt/bin/oh-my-pi")).toBe("omp");
+  expect(memoryHarness("/opt/bin/kiro-cli")).toBe("kiro");
   expect(memoryHarness("unknown-harness")).toBeNull();
 });
 
