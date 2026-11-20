@@ -66,7 +66,8 @@ The advisory [Town golden images workflow](../.github/workflows/town-golden.yml)
 compares the production `TownCanvas` (Pixi scene and DOM overlays) with five stored
 PNGs on PR changes and main pushes. It is separate from required Delivery checks.
 The fixture contains only synthetic hosts, four rooms, sixteen desks and mixed
-working, blocked, finished and idle agents. Its usage read is synthetic and
+working, blocked, finished and idle agents, and the harbour shows the synthetic
+`ready` Shipyard pipeline read in memory. Its usage read is synthetic and
 carries only context readings: two agents at 90% and 95% look tired at their
 desks (a sweat drop), and the expense boards show no data. Town's time of day
 is held at night, so the image never depends on the runner's clock or time zone
@@ -180,7 +181,7 @@ The Town and Board images and both sharing images are drawn from a synthetic
 scene rather than a live runtime, so they can show a busy day reproducibly: two
 hosts, four project rooms, agents working, asking, blocked, finished and idle,
 their current steps, usage costs, context readings, both subscription gauges and
-the post office's synthetic parcels. The
+the warehouse's synthetic crates. The
 [scene](../web/src/world/testing/site-shots/scene.ts) holds only synthetic names
 and numbers; its [page](../web/src/world/testing/site-shots/SiteShots.browser.tsx)
 mounts the production `TownCanvas` and `BoardView` and answers their reads from
