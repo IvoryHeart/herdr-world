@@ -116,11 +116,12 @@ Town's bus has taken them. One bus runs on a fixed schedule: every four minutes
 from the service's start (`BIN_BUS_INTERVAL_MS` in
 [shared/bin.ts](../shared/bin.ts)) it sets off if anyone is waiting, everyone
 waiting boards, and its trip lasts two minutes (`BIN_BUS_TRIP_MS`); each browser
-fits Town's drive into it, ending off the map. When its trip ends, its riders'
-closes are recorded. The bus on the map can be stopped (`world.bin.pause`): its
+fits Town's drive into it: from Apartments by road to each stop with riders and
+back, its riders walking in as the trip ends. When its trip ends, its riders'
+closes are recorded. The bus out on its trip can be stopped (`world.bin.pause`): its
 trip clock stands and nothing is recorded until it is let go (`world.bin.resume`)
 or every rider has been put back. An agent added while the bus is out waits
-for the next one. Put back works until the bus has left the map, even for an
+for the next one. Put back works until the trip ends, even for an
 agent Town already shows aboard: where the bus picks an agent up depends on
 each browser's Town layout, so the service does not decide boarding. Its browser RPCs (all
 bridge-scoped `world.*`, browser actor only):

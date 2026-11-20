@@ -252,12 +252,19 @@ test("the billboard's scale in code and CSS agree", () => {
   expect(townCityBoardScale(0.8)).toBeCloseTo(1.25);
 });
 
-test("a wide town keeps lawn above its center for the billboard at its largest", () => {
+test("a town keeps lawn above its center for the billboard at its largest", () => {
   const wide = layoutOf(2);
   const boxes = townBoardObstacles(wide, { w: 240, h: 104 }, 0.1);
   const city = boxes[boxes.length - 1]!;
   expect(city.y1).toBe(wide.center.y * T - TOWN_CITY_BOARD_GAP);
   expect(city.y0).toBeGreaterThanOrEqual(0);
-  // A phone folds the billboard into the center's corner: no lawn above.
-  expect(layoutOf(2, { width: 390, height: 844 }).center.y).toBe(2);
+  // A phone stands its billboard above the center too, on the same lawn
+  // (#1033).
+  const phone = layoutOf(2, { width: 390, height: 844 });
+  expect(phone.formFactor).toBe("narrow");
+  expect(phone.center.y).toBe(wide.center.y);
+  const phoneBoxes = townBoardObstacles(phone, { w: 240, h: 104 }, 0.1);
+  const phoneCity = phoneBoxes[phoneBoxes.length - 1]!;
+  expect(phoneCity.y1).toBe(phone.center.y * T - TOWN_CITY_BOARD_GAP);
+  expect(phoneCity.y0).toBeGreaterThanOrEqual(0);
 });

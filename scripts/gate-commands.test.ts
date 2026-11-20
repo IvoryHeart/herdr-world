@@ -162,6 +162,7 @@ test("the static lane retains all checks and builds production assets once", () 
     "build",
     "build:site",
     "spec:check",
+    "help:check",
   ].map((script) => `run ${script}`);
   expect(exercise(["scripts/check-delivery.ts", "--static"])).toEqual({
     status: 0,

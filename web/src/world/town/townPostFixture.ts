@@ -1,32 +1,24 @@
-import { useEffect, useState } from "react";
-import { PULL_REQUEST_DETAIL_MAX_AGE_MS } from "../../../../shared/pullRequestFreshness";
-import type {
-  WorkItem,
-  WorldSourcesSnapshot,
-  WorldSourceStatus,
-} from "../../../../shared/worldSources";
-import { useWorldSources } from "../worldSources";
+import type { WorldAsk } from "../worldAsks";
+import type { TownOutgoing } from "./townPostModel";
 
 /**
- * A testing-only switch for the post office (#760): open World with
- * `?townPostFixture` and Town's post office shows synthetic pull requests in
- * every state instead of the GitHub source's, until the page reloads. The
- * page drops the parameter at once. Ten seconds after it loads, the first
- * ready parcel is merged, to show it leave. `?townPostFixture=many` adds a
- * pile beyond the yard; `?townPostFixture=off` shows a signed-out source.
+ * A testing-only switch for the post office (#1105): open World with
+ * `?townPostFixture` and Town's post office shows synthetic letters (one
+ * from an unverified caller) and answers on the trolley instead of the
+ * World ledger's, until the page reloads. The page drops the parameter at
+ * once. `?townPostFixture=many` adds a bundle beyond the yard;
+ * `?townPostFixture=empty` shows a post office with no mail.
  *
- * Only the post office and the Work lens it opens read it; Board's Work
- * lens and every other view keep the real source.
- * Its pull requests are on example.com repositories World never has, so the
- * service refuses any action on them.
+ * Only the post office reads it (its sign counts the test letters and
+ * answers to check): Needs you, reception and the Outbox keep
+ * the real questions, so a test letter's card says it has nothing to
+ * answer instead of opening Needs you.
  */
 
-export type TownPostFixtureMode = "pile" | "many" | "off";
+export type TownPostFixtureMode = "letters" | "many" | "empty";
 
 const PARAM = "townPostFixture";
 let mode: TownPostFixtureMode | null | undefined;
-/** When the page first read the fixture; every reader shares it. */
-let fixtureStart: number | null = null;
 
 /** The switch, read once per page load; the parameter is removed. */
 export function townPostFixtureMode(): TownPostFixtureMode | null {
@@ -36,7 +28,7 @@ export function townPostFixtureMode(): TownPostFixtureMode | null {
   const url = new URL(location.href);
   const value = url.searchParams.get(PARAM);
   if (value === null) return mode;
-  mode = value === "many" || value === "off" ? value : "pile";
+  mode = value === "many" || value === "empty" ? value : "letters";
   url.searchParams.delete(PARAM);
   history.replaceState(history.state, "", url);
   return mode;
@@ -45,236 +37,65 @@ export function townPostFixtureMode(): TownPostFixtureMode | null {
 /** For tests: forget the switch so the next read sees the URL again. */
 export function resetTownPostFixture() {
   mode = undefined;
-  fixtureStart = null;
 }
 
-const REPO = "example-org/web-app";
+/** Fixture letters carry this id prefix; their cards answer nothing. */
+export const TOWN_POST_FIXTURE_PREFIX = "town-post-fixture:";
 
-function pr(
-  number: number,
-  now: number,
-  fields: Partial<WorkItem> & { fresh?: boolean },
-): WorkItem {
-  const headSha = (number % 16).toString(16).repeat(40);
-  const { fresh = true, ...rest } = fields;
-  const readAt = fresh ? now : now - 2 * PULL_REQUEST_DETAIL_MAX_AGE_MS;
-  const repo = rest.repo ?? REPO;
+const QUESTIONS: [string, string, string[]][] = [
+  [
+    "orbit",
+    "Ship the login fix to staging now, or wait for the review?",
+    ["Ship now", "Wait"],
+  ],
+  [
+    "harbor",
+    "The migration drops an unused column. Keep a backup table?",
+    ["Keep backup", "Drop it"],
+  ],
+  [
+    "meadow",
+    "Which name do you prefer for the new settings page?",
+    ["Preferences", "Settings"],
+  ],
+  [
+    "lantern",
+    "Tests are flaky on CI only. Retry once or investigate first?",
+    [],
+  ],
+];
+
+function ask(index: number, now: number): WorldAsk {
+  const [agent, question, options] = QUESTIONS[index % QUESTIONS.length]!;
+  const round = Math.floor(index / QUESTIONS.length);
   return {
-    key: `github:pr:${repo}#${number}`,
-    source: "github",
-    kind: "pull_request",
-    ref: `${repo}#${number}`,
-    title: `Synthetic change ${number}`,
-    url: `https://example.com/${repo}/pull/${number}`,
-    lane: "ready",
-    status: "open",
-    roles: ["author"],
-    updatedAt: now - number * 60_000,
-    number,
-    repo,
-    base: "main",
-    draft: false,
-    checks: "pass",
-    review: "approved",
-    mergeable: "mergeable",
-    headSha,
-    pr: {
-      baseRef: "main",
-      behindBy: 0,
-      checks: [{ name: "Unit tests", state: "pass", required: true }],
-      checksTruncated: false,
-      reviewers: [
-        {
-          reviewer: "rev-example",
-          url: `https://example.com/${repo}/pull/${number}#review`,
-          at: now - 60_000,
-          outcome: "confirmed",
-          line: "RESULT: all findings confirmed",
-          commit: headSha,
-          commitsSince: 0,
-        },
-      ],
-      uiChange: false,
-      images: 0,
+    id: `${TOWN_POST_FIXTURE_PREFIX}${index}`,
+    at: now - (40 - index) * 60_000,
+    actor: {
+      label: `${agent}${round ? `-${round + 1}` : ""}`,
+      // The third letter comes from a caller the service could not verify.
+      verified: index !== 2,
+      ...(index !== 2
+        ? { name: `${agent}${round ? `-${round + 1}` : ""}` }
+        : {}),
+      pane_id: `pane-${index}`,
     },
-    prObservation: {
-      source: "github",
-      state: fresh ? "fresh" : "stale",
-      headSha,
-      readAt,
-      expiresAt: readAt + PULL_REQUEST_DETAIL_MAX_AGE_MS,
-    },
-    ...rest,
+    question,
+    options,
+    owner_only: false,
   };
 }
 
-function github(
-  now: number,
-  state: WorldSourceStatus["state"],
-  detail: string,
-  itemCount: number,
-): WorldSourceStatus {
-  return {
-    id: "github",
-    label: "GitHub",
-    enabled: true,
-    state,
-    detail,
-    checkedAt: now,
-    lastSuccessAt: state === "connected" ? now : null,
-    itemCount,
-    config: { kind: "github", mergedDays: 7 },
-  };
-}
-
-/** The synthetic snapshot for `mode` at `now`. */
-export function townPostFixtureSnapshot(
+/** The fixture's letters and trolley for a mode. */
+export function townPostFixture(
   fixture: TownPostFixtureMode,
   now: number,
-): WorldSourcesSnapshot {
-  if (fixture === "off")
-    return {
-      observedAt: now,
-      refreshing: false,
-      sources: [
-        github(
-          now,
-          "not_connected",
-          "Sign in with gh auth login as the user that runs World, then refresh.",
-          0,
-        ),
-      ],
-      items: [],
-      links: [],
-      actions: [],
-    };
-  const items: WorkItem[] = [
-    pr(101, now, { title: "Synthetic: tidy the settings form" }),
-    pr(102, now, {
-      title: "Synthetic: faster board refresh",
-      repo: "example-org/service",
-    }),
-    pr(103, now, {
-      title: "Synthetic: retry flaky upload",
-      checks: "fail",
-      lane: "fixing",
-    }),
-    pr(104, now, {
-      title: "Synthetic: new empty state",
-      checks: "pending",
-      lane: "review",
-    }),
-    pr(105, now, {
-      title: "Synthetic: review someone's docs change",
-      roles: ["reviewer"],
-      review: "review_required",
-      lane: "green",
-      repo: "example-org/docs",
-    }),
-    pr(106, now, {
-      title: "Synthetic: cache the avatars",
-      lane: "green",
-      pr: {
-        baseRef: "main",
-        behindBy: 0,
-        checks: [{ name: "Unit tests", state: "pass", required: true }],
-        checksTruncated: false,
-        reviewers: [
-          {
-            reviewer: "rev-example",
-            url: `https://example.com/${REPO}/pull/106#review`,
-            at: now - 60_000,
-            outcome: "open",
-            line: "RESULT: 1 finding open",
-            commit: (106 % 16).toString(16).repeat(40),
-            commitsSince: 0,
-          },
-        ],
-        uiChange: false,
-        images: 0,
-      },
-    }),
-    pr(107, now, {
-      title: "Synthetic: sketch of the new menu",
-      draft: true,
-      lane: "review",
-    }),
-    pr(108, now, {
-      title: "Synthetic: rename the export button",
-      fresh: false,
-    }),
-  ];
-  if (fixture === "many")
-    for (let n = 120; n < 150; n += 1)
-      items.push(
-        pr(n, now, {
-          title: `Synthetic: pile item ${n}`,
-          checks: "pending",
-          lane: "review",
-        }),
-      );
+): { asks: WorldAsk[]; outgoing: TownOutgoing } {
+  if (fixture === "empty")
+    return { asks: [], outgoing: { waiting: 0, checks: 0 } };
+  const count = fixture === "many" ? 26 : QUESTIONS.length;
   return {
-    observedAt: now,
-    refreshing: false,
-    sources: [github(now, "connected", "Up to date", items.length)],
-    items,
-    links: [],
-    actions: [],
+    asks: Array.from({ length: count }, (_, index) => ask(index, now)),
+    outgoing: { waiting: 2, checks: 1 },
   };
-}
-
-/** The fixture with its first ready pull request merged. */
-export function townPostFixtureMerged(
-  snapshot: WorldSourcesSnapshot,
-): WorldSourcesSnapshot {
-  const first = snapshot.items.find(
-    (item) => item.lane === "ready" && !item.draft && item.checks === "pass",
-  );
-  if (!first) return snapshot;
-  return {
-    ...snapshot,
-    items: snapshot.items.map((item) =>
-      item === first
-        ? { ...item, lane: "merged", finishedAt: Date.now() }
-        : item,
-    ),
-  };
-}
-
-/** How long after loading the fixture merges its first ready pull request. */
-export const TOWN_POST_FIXTURE_MERGE_MS = 10_000;
-
-/**
- * The page's one synthetic snapshot at `now`: the post office and the Work
- * lens it opens (#887) agree on it, merged or not.
- */
-function townPostFixtureAt(fixture: TownPostFixtureMode, now: number) {
-  fixtureStart ??= now;
-  const snapshot = townPostFixtureSnapshot(fixture, fixtureStart);
-  return fixture !== "off" && now - fixtureStart >= TOWN_POST_FIXTURE_MERGE_MS
-    ? townPostFixtureMerged(snapshot)
-    : snapshot;
-}
-
-/**
- * The snapshot the post office and its Work lens read: the GitHub source's,
- * or with the testing switch on, the synthetic one.
- */
-export function useTownPostSources(): WorldSourcesSnapshot {
-  const live = useWorldSources();
-  const [fixture] = useState(townPostFixtureMode);
-  const [synthetic, setSynthetic] = useState(() =>
-    fixture ? townPostFixtureAt(fixture, Date.now()) : null,
-  );
-  useEffect(() => {
-    if (!fixture || fixture === "off" || fixtureStart === null) return;
-    const left = fixtureStart + TOWN_POST_FIXTURE_MERGE_MS - Date.now();
-    if (left <= 0) return;
-    const timer = window.setTimeout(
-      () => setSynthetic(townPostFixtureAt(fixture, Date.now())),
-      left + 20,
-    );
-    return () => window.clearTimeout(timer);
-  }, [fixture]);
-  return synthetic ?? live;
 }

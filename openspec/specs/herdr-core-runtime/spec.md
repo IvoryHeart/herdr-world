@@ -7,6 +7,25 @@ shared app state and recovery while preserving each runtime's authority.
 
 ## Requirements
 
+### Requirement: Account-shell launch environment
+
+Unix core agent discovery and launch SHALL enter the selected host's supported
+interactive account shell, with login startup on macOS, so its tool environment
+applies directly. World SHALL NOT collect and copy that environment. Unsupported
+shells SHALL retain direct execution and Windows SHALL retain native launching.
+Profile arguments and prompts SHALL remain literal arguments across shell entry.
+
+#### Scenario: Tools installed by shell startup
+
+- **WHEN** a supported account shell adds a harness or tool to its environment
+- **THEN** discovery and the launched core agent can use that tool on that host,
+  without exporting its environment to World or another connection
+
+#### Scenario: Unsupported account shell
+
+- **WHEN** the account shell cannot parse the supported exec form
+- **THEN** launch uses direct execution with the same literal arguments
+
 ### Requirement: Full coexisting runtime support
 
 World SHALL support herdr-core read-write beside the TUI runtime, select installed
@@ -72,6 +91,13 @@ and service/runtime/occupant fences at admission, dispatch and publication.
   saves only `core-local` as its default and connects using `HC_SESSION` or `default`
 - **AND** discovery never starts core or alters its login item; saved defaults
   and explicit startup choices remain authoritative on subsequent starts
+
+#### Scenario: Discovery persistence fails and startup is retried
+
+- **WHEN** saving the discovered profile fails
+- **THEN** startup reports failure rather than publishing an unsaved default;
+  retry reloads persisted state first, retaining any completed save and any
+  subsequently saved or explicit choice before considering discovery again
 
 #### Scenario: Confirmed install from World
 
@@ -177,6 +203,39 @@ the queued-send replacement window belongs to core (Q3), not World's pre-send ch
   a replaced occupant or retired runtime refuses while the stored answer remains
   retrievable, and an unanswered possible write stays uncertain without replay
 
+### Requirement: Process-evidenced headless conversations
+
+Core Chat SHALL identify Claude and Codex conversations, including `claude -p`
+and fresh `codex exec`, from evidence owned by the matching live foreground
+process on its captured connection's host. Claude's native process record SHALL
+retain precedence. Linux writable descriptors and macOS `lsof` output MAY name a
+unique native transcript or canonical Claude session debug ID, with process
+start-time checks around the read. Discovery SHALL be bounded and read-only.
+Missing, changed, unreadable, deleted or ambiguous process evidence SHALL NOT
+establish a session. World SHALL NOT infer Claude/Codex identity from directory
+recency. Explicit launch references and reading links SHALL retain their existing
+behavior; discovery SHALL NOT grant additional input authority.
+
+#### Scenario: Fresh headless run without a launch session ID
+
+- **WHEN** the identified Codex or Claude foreground process holds a unique
+  writable native conversation file on Linux or macOS
+- **THEN** Chat and History use that conversation through the shared TUI readers
+  and subsequent reads include newly appended messages
+
+#### Scenario: Remote process evidence
+
+- **WHEN** the agent runs on an SSH connection
+- **THEN** discovery and transcript reads execute on that same host and lease,
+  without falling back to this computer or another connection
+
+#### Scenario: No unique live conversation
+
+- **WHEN** a process has exited, changed during discovery, holds multiple
+  candidate sessions, has disabled persistence or exposes no readable evidence
+- **THEN** discovery supplies no session, even if newer transcripts exist nearby;
+  the existing explicit-reference and unavailable behavior remains
+
 ### Requirement: Shared app state with independent World ownership
 
 World SHALL own topology, asks/results and review receipts; it SHALL share
@@ -229,6 +288,42 @@ reuses the pid and argv is refused.
 - **WHEN** a harness has no reported status or its reporting times out, including
   a harness whose integration World installed
 - **THEN** World leaves status unknown and never injects or writes status to core
+
+#### Scenario: Headless run and wrapper
+
+- **WHEN** a terminal runs `claude -p …` directly, or `bash run.sh` runs it in
+  the same foreground group on a core on this machine
+- **THEN** the desk shows Claude working while that process lives, looking as
+  if started directly; a wrapper running only `git` or `bun test` stays a plain
+  terminal
+
+#### Scenario: Stale working report
+
+- **WHEN** an agent reported working and is killed mid-turn, leaving a shell,
+  an editor or a wrapper with no harness in its group in front
+- **THEN** World shows it idle and never writes status to core
+
+#### Scenario: Replacement inherits no report
+
+- **WHEN** a wrapper's agent that reported working exits and another harness,
+  or a new process of the same harness, starts in its place without reporting
+- **THEN** the desk shows the newcomer unknown (working, if headless), never
+  the departed agent's word
+
+#### Scenario: Headless run ends inside its wrapper
+
+- **WHEN** a headless run World saw inside a wrapper exits while the wrapper
+  stays in front
+- **THEN** the desk keeps that agent, idle, so Town walks it to the bar; when
+  another program leads the terminal, the desk is a plain terminal again
+
+#### Scenario: Unread group is no exit
+
+- **WHEN** World saw an agent inside a wrapper and one later read of the
+  wrapper's foreground group fails
+- **THEN** the desk keeps that agent, its report and, for a headless run, its
+  working status, never an earlier reporter's name; only a group read without
+  it, or another program leading the terminal, counts as its exit
 
 ### Requirement: World-started core terminals and confirmed kills
 
@@ -392,8 +487,25 @@ popups and use the fixed PowerShell named-pipe/key transport for Windows connect
 
 World SHALL offer a core launch kind for every harness in Herdr's integration
 registry, detection manifest, desktop program list and World's profiles. World
-SHALL read status only from core records, showing unknown without a report,
-without running TUI screen inference or status-writing integrations for core.
+SHALL read status from core records checked against the process, without
+running TUI screen inference or status-writing integrations for core: an
+interactive agent without a report SHALL be unknown, never working; a live
+headless invocation (`claude -p`, `codex exec` and the like) SHALL be working
+unless it reports blocked; and a known harness's working or blocked report
+SHALL be stale, read idle, once no harness runs in the terminal's foreground.
+A report SHALL speak only for the harness running: one naming another
+harness, or left unchanged by a process World saw exit, SHALL count as no
+report. A harness World saw inside a wrapper SHALL stay the desk's agent,
+idle, after it exits while that wrapper leads the terminal; that departed
+harness, never an earlier reporter, SHALL name the desk. World SHALL count a
+process as exited only on evidence: a foreground group the host could not read
+SHALL keep what World last saw running there, harness and headless alike, as
+the desk's process evidence ahead of any report. An option's value SHALL never mark an
+invocation headless.
+World SHALL find a desk's agent as Herdr's TUI does: the foreground group's
+leader, else, where the host can read it (a core on this Linux machine), the
+nearest group member that is a harness; a shell or interpreter leading the
+group whose members World cannot read SHALL keep its report.
 Generic profile briefs SHALL use the same native delivery path as Chat after
 core has observed the original program's foreground, with native `if: "idle"`
 so core checks readiness after its queue/startup/draft waits, before typing.
@@ -473,7 +585,10 @@ that duplicates core's responsibilities.
    ordered-mirror gap and recovery rules remain required.
 6. **Q6 — Status coverage:** complete core status for every harness, including
    non-reporting agents (#826), remains an upstream question. Missing status
-   stays unknown; World never injects status.
+   stays unknown; World never injects status. Core 0.1.21 reports only the
+   foreground group's leader: World reads the other members on the host for a
+   local Linux core, and asks core to report them so remote and macOS cores
+   see agents run by wrappers.
 7. **Q7 — Labels:** core has no compare-and-set or numeric-max seen update.
    An unseen concurrent write, or unread returning a label to the value World
    decided on, can be overwritten despite World's best-effort seen fences.

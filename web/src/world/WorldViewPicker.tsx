@@ -5,8 +5,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { Command, Maximize2, Server } from "lucide-react";
+import { CircleHelp, Command, Maximize2, Server } from "lucide-react";
 import { openCommandBox } from "../commandBoxKey";
+import { helpTabForView, openHelp } from "../help/helpEvents";
 import { shortcutTitle, useShortcutPreferences } from "../shortcutPreferences";
 import { useLayer } from "../layerStack";
 import {
@@ -76,6 +77,16 @@ export function WorldViewPicker({
             </button>
           ))}
           <CommandBoxButton />
+          <button
+            type="button"
+            className="world-view-picker-command world-view-picker-help"
+            data-help="world.help"
+            aria-label="What can I do here?"
+            title="What can I do here?"
+            onClick={() => openHelp(helpTabForView(view))}
+          >
+            <CircleHelp size={14} aria-hidden />
+          </button>
         </div>
       </>
     );
@@ -222,6 +233,7 @@ function PhoneViewPicker({
               type="button"
               role="menuitem"
               aria-haspopup="true"
+              data-help="world.phone-hosts"
               onClick={() => setPanel("hosts")}
             >
               <Server size={18} aria-hidden />
@@ -234,11 +246,21 @@ function PhoneViewPicker({
           <button
             type="button"
             role="menuitem"
+            data-help="world.command-box"
             // After the menu hands focus back, so the box keeps it.
             onClick={() => choose(() => window.setTimeout(openCommandBox))}
           >
             <Command size={18} aria-hidden />
             Find or act
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            data-help="world.help"
+            onClick={() => choose(() => openHelp(helpTabForView(view)))}
+          >
+            <CircleHelp size={18} aria-hidden />
+            What can I do here?
           </button>
           <button
             type="button"
@@ -254,6 +276,9 @@ function PhoneViewPicker({
         ref={trigger}
         type="button"
         className="world-view-picker-fab"
+        // Try spotlights this button for help entries inside its menu; the
+        // menu's every data-help control is listed (WorldViewPicker.test.tsx).
+        data-help-opens="world.help world.phone-hosts world.command-box"
         aria-label={`Switch view, now ${worldViewLabel(view)}`}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -274,6 +299,7 @@ function CommandBoxButton() {
     <button
       type="button"
       className="world-view-picker-command"
+      data-help="world.command-box"
       aria-label={title}
       title={title}
       onClick={openCommandBox}

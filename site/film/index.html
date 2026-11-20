@@ -1357,16 +1357,16 @@ MAIN.agents = [
 ];
 let TW = null, SCALE = null;
 
-/** The main town's bus: in from the left, a halt at the stop by the laptop, then off. */
+/** The main town's bus: along the street from the left, a halt at the stop by the laptop, then on out of shot. */
 function mainBus(t) {
   if (t < BIN.busIn || t > BIN.gone) return null;
-  const stop = binStop(TW), leg = TW.route.legs[0], hx = stop.wait.x - 46;
+  const stop = binStop(TW), y = stop.halt.y, hx = stop.wait.x - 46, from = Math.max(0, hx - 700);
   let x;
-  if (t < BIN.halt) x = lerp(leg.from, hx, eo(seg(t, BIN.busIn, BIN.halt)));
+  if (t < BIN.halt) x = lerp(from, hx, eo(seg(t, BIN.busIn, BIN.halt)));
   else if (t < BIN.go) x = hx;
   else x = lerp(hx, hx + 1500, Math.pow(seg(t, BIN.go, BIN.gone), 2));
   const stopped = t >= BIN.halt && t < BIN.go;
-  return { x, y: leg.y, hazard: stopped && (REDUCED || Math.floor(t * 4) % 2 === 0), riders: t >= BIN.board ? ['sweeper'] : [] };
+  return { x, y, hazard: stopped && (REDUCED || Math.floor(t * 4) % 2 === 0), riders: t >= BIN.board ? ['sweeper'] : [] };
 }
 function townCams(town) {
   const b = laptopOf(town), L = town.layout;

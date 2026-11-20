@@ -32,6 +32,12 @@ export type ApartmentTenant = {
   session_holder: string | null;
   first_seen_at: number;
   last_seen_at: number;
+  /**
+   * Its program has left the terminal (a shell is all that remains): not
+   * running, so its session no longer hides a resident. It still moves out
+   * when the terminal ends.
+   */
+  away?: boolean;
   /** Its look in World as last seen live; null when World could not read it. */
   appearance: ApartmentAppearance | null;
 };
@@ -229,6 +235,7 @@ export class WorldApartments {
     const live = new Set<string>();
     for (const host of this.hosts.values())
       for (const tenant of host.tenants.values()) {
+        if (tenant.away) continue;
         const key = apartmentSessionKey(tenant);
         if (key) live.add(key);
       }
@@ -279,7 +286,12 @@ export class WorldApartments {
       const harness = text(pane.agent, 40);
       const terminal = text(pane.terminal_id, 200);
       const paneId = text(pane.pane_id, 200);
-      if (!harness || !terminal || !paneId) continue;
+      if (!harness || !terminal || !paneId) {
+        // A terminal shown without its agent: that agent is no longer running.
+        const left = terminal ? host.tenants.get(terminal) : undefined;
+        if (left && !harness) left.away = true;
+        continue;
+      }
       const agent = agentListRecord(agents, { ...pane, pane_id: pane.pane_id });
       const before = host.tenants.get(terminal);
       // Another program in the same terminal is another agent.
@@ -331,6 +343,7 @@ export class WorldApartments {
         session_holder: reported ? null : same ? before.session_holder : null,
         first_seen_at: same ? before.first_seen_at : observedAt,
         last_seen_at: observedAt,
+        away: false,
         appearance: look ?? (same ? before.appearance : null),
       };
       // The same agent stays one object, so a session read still running

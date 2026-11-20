@@ -13,6 +13,11 @@ import {
   remotePrefixesCommand,
 } from "./session-census-files";
 import {
+  processTranscriptCommand,
+  processTranscriptSession,
+  type ProcessAgentSession,
+} from "./process-transcript";
+import {
   claudeProcessRecordCommand,
   claudeProcessSession,
 } from "./claude-process-session";
@@ -69,6 +74,11 @@ export type AgentSessionFileAccess = {
    * Null when there is no record or it is not that process's.
    */
   findClaudeSessionForProcess?(pid: number): Promise<string | null>;
+  /** A unique writable native transcript/debug file held by this live process. */
+  findAgentSessionForProcess?(
+    agent: "claude" | "codex",
+    pid: number,
+  ): Promise<ProcessAgentSession | null>;
   /**
    * The newest Pi session started in a directory: without Herdr's Pi
    * integration, nothing names the pane's session.
@@ -333,6 +343,16 @@ export function createAgentSessionFileAccess(args: {
       if (result.code !== 0)
         throw new Error(result.stderr || "Claude process lookup failed.");
       return claudeProcessSession(pid, result.stdout.toString("utf8"));
+    };
+    local.findAgentSessionForProcess = async (agent, pid) => {
+      if (process.platform === "win32") return null;
+      const result = await args.runBinaryProcessWithTimeout(
+        ["sh", "-c", processTranscriptCommand(pid)],
+        3000,
+      );
+      return result.code === 0
+        ? processTranscriptSession(agent, result.stdout)
+        : null;
     };
     return local;
   }
@@ -611,6 +631,20 @@ find -L "$root" -mindepth 2 -maxdepth 2 -type f -name ${args.shQuote(`${id}.json
             .slice(0, 1000),
         );
       return claudeProcessSession(pid, result.stdout.toString("utf8"));
+    },
+    async findAgentSessionForProcess(agent, pid) {
+      const result = await args.runBinaryProcessWithTimeout(
+        sshReadCommandArgv(
+          host,
+          `bash -lc ${args.shQuote(processTranscriptCommand(pid))}`,
+          [],
+          "agent.session.find",
+        ),
+        3000,
+      );
+      return result.code === 0
+        ? processTranscriptSession(agent, result.stdout)
+        : null;
     },
     async clockOffset() {
       const before = Date.now();

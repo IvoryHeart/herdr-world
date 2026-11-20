@@ -1,7 +1,7 @@
 /**
  * The town center's actions (TownCenterMenu.tsx), each reusing what World
  * already has: the agent launcher and profiles, the Town master's chat,
- * Needs you, the Town summary and room creation. Board's hub beside the bin
+ * Needs you, the Town summary, the Library and room creation. Board's hub beside the bin
  * (board/BoardHub.tsx) offers the same actions, built by the same helpers.
  */
 
@@ -11,6 +11,7 @@ import {
   Crown,
   DoorOpen,
   Inbox,
+  LibraryBig,
   Shirt,
   UserPlus,
 } from "lucide-react";
@@ -27,6 +28,10 @@ import type {
 } from "../herdrOfficeProjection";
 import { openApartments } from "../apartments/apartmentsStore";
 import { useApartments } from "../apartments/useApartments";
+import {
+  type MemoryLibraryRequest,
+  openMemoryLibrary,
+} from "../memory/memoryEvents";
 import { openNeedsYou } from "../needsYou";
 import type { WorldObject } from "../worldObject";
 import type { TownCenterAction } from "./TownCenterMenu";
@@ -172,6 +177,7 @@ export function townCenterActions({
     summaryAction(() => summary.open()),
     profilesAction(),
     apartmentsAction(residents),
+    libraryAction(),
     {
       id: "room",
       label: "New room",
@@ -300,4 +306,19 @@ export const profilesAction = (): TownCenterAction => ({
   label: "Profiles",
   icon: Shirt,
   run: () => openProfileEditor(),
+});
+
+/**
+ * The Library (#1027): what agents and projects remember, on `request`'s
+ * host, project or agent when given.
+ */
+export const libraryAction = (
+  request: MemoryLibraryRequest = {},
+  detail?: string,
+): TownCenterAction => ({
+  id: "library",
+  label: "Library",
+  icon: LibraryBig,
+  detail,
+  run: () => openMemoryLibrary(request),
 });

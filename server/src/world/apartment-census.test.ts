@@ -13,6 +13,7 @@ import {
   CENSUS_QUIET_MS,
 } from "./apartment-census";
 import { WorldApartments } from "./apartments";
+import { APARTMENT_CAPACITY } from "../../../shared/apartments";
 
 const NOW = Date.UTC(2026, 10, 20, 12);
 const HOUR = 60 * 60 * 1000;
@@ -310,6 +311,71 @@ describe("Apartments hold every agent not running now", () => {
     // Its end was seen: it lives here again, ended, once.
     expect(apartments.list().residents).toMatchObject([
       { session_id: id(7), move_out: "ended" },
+    ]);
+  });
+
+  test("a resumed resident whose agent left for a shell is shown again", async () => {
+    const old = NOW - 24 * HOUR;
+    const path = `/home/example/.claude/projects/alpha/${id(10)}.jsonl`;
+    const disk: Disk = new Map([
+      [
+        path,
+        {
+          harness: "claude",
+          text: claude(id(10), "Resume me", old),
+          mtimeMs: old,
+        },
+      ],
+    ]);
+    const { apartments, census } = world(disk);
+    census.request("local");
+    await census.settled();
+    const running = {
+      pane_id: "p1",
+      terminal_id: "t1",
+      agent: "claude",
+      agent_session: { kind: "id", value: id(10) },
+    };
+    apartments.fresh("local", 1, [running], NOW, []);
+    expect(apartments.list().residents).toEqual([]);
+    // The agent exits; its terminal stays open with a shell.
+    const before = apartments.list().revision;
+    apartments.fresh(
+      "local",
+      1,
+      [{ pane_id: "p1", terminal_id: "t1" }],
+      NOW,
+      [],
+    );
+    expect(apartments.list().residents).toMatchObject([{ session_id: id(10) }]);
+    expect(apartments.list().revision).toBeGreaterThan(before);
+    // Started again in the same terminal: hidden again.
+    apartments.fresh("local", 1, [running], NOW, []);
+    expect(apartments.list().residents).toEqual([]);
+  });
+
+  test("running, recent and read conversations take no place from older ones", async () => {
+    const old = NOW - 24 * HOUR;
+    const disk: Disk = new Map();
+    // More recent conversations than Apartments hold, all still being written.
+    for (let n = 0; n < APARTMENT_CAPACITY; n += 1)
+      disk.set(`/home/example/.claude/projects/busy/${id(1000 + n)}.jsonl`, {
+        harness: "claude",
+        text: claude(id(1000 + n), "Busy", NOW),
+        mtimeMs: NOW - 1000 - n,
+      });
+    const oldest = `/home/example/.claude/projects/alpha/${id(11)}.jsonl`;
+    disk.set(oldest, {
+      harness: "claude",
+      text: claude(id(11), "Find me", old),
+      mtimeMs: old,
+    });
+    const { apartments, census, reads } = world(disk);
+    census.request("local");
+    await census.settled();
+    expect(reads).toEqual([oldest]);
+    expect(apartments.list().residents).toMatchObject([
+      { session_id: id(11), summary: "Find me" },
     ]);
   });
 

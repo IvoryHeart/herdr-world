@@ -292,7 +292,11 @@ export class ApartmentCensus {
     const quiet = now - CENSUS_QUIET_MS;
     const updates: ApartmentMoveIn[] = [];
     const unread: CensusFile[] = [];
-    for (const file of listed.slice(0, APARTMENT_CAPACITY)) {
+    // Only conversations that are or may become residents take a place, so
+    // running, recent, empty and evicted ones never crowd older ones out.
+    let places = 0;
+    for (const file of listed) {
+      if (places >= APARTMENT_CAPACITY) break;
       if (file.mtimeMs > quiet) continue;
       const named = censusSessionFromName(file);
       const key = named
@@ -314,10 +318,12 @@ export class ApartmentCensus {
           });
         }
         host.done.set(file.path, file.mtimeMs);
+        places += 1;
         continue;
       }
       if (host.done.has(file.path)) continue;
       unread.push(file);
+      places += 1;
     }
     if (updates.length) await this.deps.found(updates);
     const reading = unread.slice(0, CENSUS_READS_PER_PASS);
