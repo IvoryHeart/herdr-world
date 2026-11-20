@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { lockSync } from "proper-lockfile";
-import { assertSafeDataPath } from "./data-paths";
+import { assertSafeDataPath, replaceDataFile } from "./data-paths";
 
 /** How long a starting World waits for another one's startup check. */
 const CLAIM_WAIT_MS = 5_000;
@@ -17,7 +17,8 @@ const CLAIM_WAIT_MS = 5_000;
 const CLAIM_STALE_MS = 10_000;
 const claimWait = new Int32Array(new SharedArrayBuffer(4));
 
-type Holder = { pid: number; port: number };
+export type InstanceAddress = { host: string; port: number; tls: boolean };
+type Holder = { pid: number; port: number; host?: string; tls?: boolean };
 
 /** Folders held by live World services in this process. */
 const heldRoots = new Set<string>();
@@ -43,11 +44,24 @@ function readHolder(path: string): Holder | null {
   try {
     const holder = JSON.parse(text) as Partial<Holder>;
     if (Number.isInteger(holder.pid) && Number(holder.pid) > 0)
-      return { pid: Number(holder.pid), port: Number(holder.port) };
+      return {
+        pid: Number(holder.pid),
+        port: Number(holder.port),
+        ...(typeof holder.host === "string" ? { host: holder.host } : {}),
+        ...(typeof holder.tls === "boolean" ? { tls: holder.tls } : {}),
+      };
   } catch {
     // Written only under the claim, so unreadable means a crashed startup.
   }
   return null;
+}
+
+/** Read-only discovery; a live holder remains authoritative if HTTP is down. */
+export function readRunningInstance(root: string): Holder | null {
+  const path = join(root, "instance.lock");
+  assertSafeDataPath(path);
+  const holder = readHolder(path);
+  return holder && processAlive(holder.pid) ? holder : null;
 }
 
 /**
@@ -89,7 +103,7 @@ export function acquireInstanceLock(
   port: number,
   alive: (pid: number) => boolean = processAlive,
   waitMs = CLAIM_WAIT_MS,
-): () => void {
+): (() => void) & { listening(address: InstanceAddress): void } {
   const path = join(root, "instance.lock");
   assertSafeDataPath(path);
   mkdirSync(root, { recursive: true, mode: 0o700 });
@@ -124,10 +138,21 @@ export function acquireInstanceLock(
   }
   // Only this live process could replace its own lock, so no claim is needed.
   let released = false;
-  return () => {
+  const release = () => {
     if (released) return;
     released = true;
     heldRoots.delete(held);
     if (readHolder(path)?.pid === process.pid) rmSync(path, { force: true });
   };
+  return Object.assign(release, {
+    listening(address: InstanceAddress) {
+      if (released || readHolder(path)?.pid !== process.pid)
+        throw new Error("World no longer owns its data folder");
+      // Publish only after bind, including the actual port for a port-0 start.
+      replaceDataFile(
+        path,
+        `${JSON.stringify({ pid: process.pid, ...address })}\n`,
+      );
+    },
+  });
 }
