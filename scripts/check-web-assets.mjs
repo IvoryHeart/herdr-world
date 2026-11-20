@@ -48,9 +48,24 @@ const maxFileCount = 212;
 // the testing fixture) load with Town's lazy chunk and add about 57 KiB.
 // Main grew under it (Settings pages), so its delta on main projects to
 // 15.41 MiB; 15.5 MiB carries both, initial budgets unchanged (2026-11-20).
-const maxTotalBytes = 15.5 * 1024 * 1024;
+// The Town harbour and warehouse (#1028) fit main alone, but main's Library
+// (#1082) grew under it: 15.42 MiB together, so 15.5 MiB, initial budgets
+// unchanged (2026-11-20).
+// Apartments (#1011: the resident search/history dialog, its store and Town's
+// apartment building) add about 18.7 KB to lazy chunks; startup budgets are
+// unchanged.
+// The combined Usage/harbour/Apartments merge measures 15.55 MiB; 15.6 MiB
+// carries those lazy features together, with startup budgets unchanged.
+const maxTotalBytes = 15.6 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
+// Help pictures (#1025, web/public/help/) are generated per help entry at two
+// sizes and two themes, and load only when a help card is shown. They have
+// their own budget so that adding help never competes with code for bytes:
+// 50 files and 1.0 MiB for 13 entries on 2026-11-20.
+export const HELP_PICTURE_DIRECTORY = "help";
+const maxHelpPictureFiles = 240;
+const maxHelpPictureBytes = 5 * 1024 * 1024;
 const maxInitialJsBytes = 660 * 1024;
 const maxInitialJsGzipBytes = 202 * 1024;
 const maxInitialCssBytes = 196 * 1024;
@@ -169,7 +184,11 @@ export function assertNoRuntimeCode(name, text) {
     throw new Error(`${name} compiles code at run time (eval or Function)`);
 }
 
-export async function collectAssetStats(root = publicRoot) {
+/** Counts the bundle, leaving out the help pictures' own folder. */
+export async function collectAssetStats(
+  root = publicRoot,
+  exclude = [HELP_PICTURE_DIRECTORY],
+) {
   const directories = [root];
   let fileCount = 0;
   let totalBytes = 0;
@@ -180,6 +199,7 @@ export async function collectAssetStats(root = publicRoot) {
     for (const entry of entries) {
       const path = `${directory}/${entry.name}`;
       if (entry.isDirectory()) {
+        if (directory === root && exclude.includes(entry.name)) continue;
         directories.push(path);
         continue;
       }
@@ -194,6 +214,10 @@ export async function collectAssetStats(root = publicRoot) {
 
 async function checkAssets() {
   const { fileCount, totalBytes } = await collectAssetStats(publicRoot);
+  const help = await collectAssetStats(
+    `${publicRoot}/${HELP_PICTURE_DIRECTORY}`,
+    [],
+  ).catch(() => ({ fileCount: 0, totalBytes: 0 }));
   let manifest;
   try {
     manifest = JSON.parse(
@@ -228,6 +252,8 @@ async function checkAssets() {
   const checks = [
     ["files", fileCount, maxFileCount, 1, "files"],
     ["total", totalBytes, maxTotalBytes, 1024 * 1024, "MiB"],
+    ["help pictures", help.fileCount, maxHelpPictureFiles, 1, "files"],
+    ["help pictures", help.totalBytes, maxHelpPictureBytes, 1024 * 1024, "MiB"],
     ["initial JS", jsBytes, maxInitialJsBytes, 1024, "KiB"],
     ["initial JS gzip", jsGzipBytes, maxInitialJsGzipBytes, 1024, "KiB"],
     ["initial CSS", cssBytes, maxInitialCssBytes, 1024, "KiB"],

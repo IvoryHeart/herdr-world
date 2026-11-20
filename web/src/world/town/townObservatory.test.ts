@@ -16,14 +16,16 @@ import {
   townObservatory,
   townObservatoryCellText,
   townObservatoryFrom,
+  townObservatoryFoldAt,
   townObservatoryLit,
   townObservatoryLot,
   townObservatoryReserve,
   townObservatorySpoken,
   townObservatoryWorking,
 } from "./townObservatoryModel";
-import { townPostLot, townPostReserve } from "./townPost";
+import { townPostLotBeside, townPostReserve } from "./townPostLot";
 import { townLibraryLot, townLibraryReserve } from "./townLibraryLot";
+import { townWarehouseFoldAt } from "./townWarehouseModel";
 
 const NOW = Date.UTC(2026, 10, 18, 12);
 const HOUR = 3_600_000;
@@ -187,7 +189,7 @@ test.each(towns)(
     );
     for (const b of layout.buildings) expect(b.y).toBeGreaterThan(area.y1);
     // Clear of the post office on the center's other side.
-    const post = townPostReserve(townPostLot(layout)!);
+    const post = townPostReserve(townPostLotBeside(layout.center));
     expect(post.x1).toBeLessThanOrEqual(area.x0);
     // No street lamp stands in front of it.
     for (const lamp of layout.lamps)
@@ -213,6 +215,11 @@ test.each(towns)(
 test("a narrow town folds the observatory to a sign on the center", () => {
   const { layout } = layoutTown(town({ a: [1] }), TOWN_SHAPES.phone);
   expect(layout.formFactor).toBe("narrow");
+  // Main's warehouse sign also folds onto the right wing: keep both usable.
+  expect(
+    townWarehouseFoldAt(layout.center).y -
+      townObservatoryFoldAt(layout.center).y,
+  ).toBeGreaterThanOrEqual(36);
   expect(townObservatoryLot(layout)).toBeNull();
 });
 

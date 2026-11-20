@@ -124,9 +124,9 @@ The usage read SHALL report, per qualified host, the newest subscription-limit o
 - **AND** absent reset evidence remains incomparable rather than an invented
   monotonic window; contention may skip an optional reading
 
-The stale-lock publication counterexample in
-[Q55](../../../verification/contracts/claude-tap-lock.md) is a known violation
-of this requirement, tracked by issue #1086; its diagnostic is not safety proof.
+[Q55](../../../verification/contracts/claude-tap-lock.md) checks the repaired
+publication protocol with positive model and real-filesystem conformance; the
+original issue #1086 counterexample remains a rejected fault control.
 
 #### Scenario: Unix TUI Claude launch prepares settings
 
@@ -157,6 +157,14 @@ of this requirement, tracked by issue #1086; its diagnostic is not safety proof.
 #### Scenario: Claude refuses work at its limit
 - **WHEN** the newest Claude limit record on a host is a usage-limit refusal whose reset is in the future
 - **THEN** that host's Claude limit reports the limit reached until that reset, attributed to the Claude transcript, with no percent, and becomes stale once the reset passes
+
+#### Scenario: Concurrent Claude taps retain comparable maxima through publication
+- **WHEN** Claude sessions publish readings with the same reset time, including a writer suspended immediately before replacing the limits file
+- **THEN** committed comparable readings never decrease; a later reset starts fresh and an earlier reset never replaces a later one
+
+#### Scenario: A Claude tap owner is suspended or dies
+- **WHEN** another tap encounters an owned limits transaction
+- **THEN** elapsed age alone never authorizes reclamation; a live or unverifiable owner retains ownership through file publication, a confirmed-dead owner can be recovered without removing a replacement owner's lock, and contention skips the optional reading after a bounded half-second wait while preserving the user's status command
 
 #### Scenario: Limits age or disappear
 - **WHEN** the newest observation passes a window's reset, grows old, cannot be refreshed, or its logs are removed

@@ -40,11 +40,13 @@ and before/after-failure retry checks cover that preparation boundary cheaply.
 Q57 separately assesses the open move candidate's exhaustive serial controller.
 
 The audit also found a **real counterexample**: Q55's stale tap owner can publish
-after its ownership check was superseded (#1086). The canonical case requires
-TLC rejection and actual reproduction; successful diagnostic completion is not
-a safety pass. Q55 stays pending repair. Q54's offline CLI witness likewise
-records the unproved cross-process boundary (#1084). Never interpret an overall
-completed gate as approval of those known product failures.
+after its ownership check was superseded (#1086). The repaired canonical case requires
+positive TLC exploration and actual filesystem conformance; live-owner stealing
+remains a rejected fault control. Q55 records that repaired evidence separately
+from independent acceptance. Q54's offline CLI witness now requires preservation;
+[registry ownership](contracts/connection-registry.md#saved-connection-registry-ownership)
+adds independent-process and startup consumers for #1084. A completed gate does
+not approve known failures.
 
 - `pending`: assessed but additional executable evidence or its mapping is unfinished.
 - `modeled`: a maintained model has a real implementation adapter and explicit scope.
@@ -81,6 +83,13 @@ runtimes ready,” conflicts with runtime federation even if code and tests copy
 Review rejects that requirement against the qualified-admission scenarios before
 accepting a model. Reachability witnesses and the late-start negative control then
 check that the intended prohibition is exercised, rather than assumed away.
+
+The [Claude tap ownership contract](contracts/claude-tap-lock.md) adds a bounded
+publication/recovery case for issue #1086. Its positive TLC invariant and all
+eight actual-filesystem suspension schedules must pass. Age-based live-owner
+stealing remains an expected-rejected fault control, rather than a diagnostic
+counterexample counted as a safety pass. Unknown process liveness fails closed;
+filesystem/platform behavior and numeric privacy retain direct consumer checks.
 
 ## Implementation checkpoints
 

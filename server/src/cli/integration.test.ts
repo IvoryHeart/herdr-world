@@ -321,7 +321,8 @@ test("skill guide changes require a version bump", () => {
   const digests: Record<number, string> = {
     1: "094336333630edbf6ed474d0be6278fe18bf997bd5c2187b3c194925dc0eb43b",
     2: "d84016adbcd751ff9a029149008afa6938a08e6153a72c6f8964eeb8ab499d74",
-    3: "a32ef4c41d293039603ae93033b68f05f26c1137aa7af7c5e6a65bfe42997f93",
+    3: "fe85aec47b97d22ea3da55e7d9b5a66e15be730e4c20339fe407d54d79754e82",
+    4: "66faa36d9776c72dc71a778901a8bada1da6d6574cfa026ae68dfaa4aeb826dc",
   };
   expect(createHash("sha256").update(WORLD_SKILL).digest("hex")).toBe(
     digests[WORLD_SKILL_VERSION]!,

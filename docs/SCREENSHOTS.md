@@ -66,7 +66,8 @@ The advisory [Town golden images workflow](../.github/workflows/town-golden.yml)
 compares the production `TownCanvas` (Pixi scene and DOM overlays) with five stored
 PNGs on PR changes and main pushes. It is separate from required Delivery checks.
 The fixture contains only synthetic hosts, four rooms, sixteen desks and mixed
-working, blocked, finished and idle agents. Its usage read is synthetic and
+working, blocked, finished and idle agents, and the harbour shows the synthetic
+`ready` Shipyard pipeline read in memory. Its usage read is synthetic and
 carries only context readings: two agents at 90% and 95% look tired at their
 desks (a sweat drop), the expense boards show no data and the observatory
 reads "Usage unavailable". Town's time of day
@@ -181,7 +182,7 @@ The Town and Board images and both sharing images are drawn from a synthetic
 scene rather than a live runtime, so they can show a busy day reproducibly: two
 hosts, four project rooms, agents working, asking, blocked, finished and idle,
 their current steps, usage costs, context readings, both subscription gauges and
-the post office's synthetic parcels. The
+the warehouse's synthetic crates. The
 [scene](../web/src/world/testing/site-shots/scene.ts) holds only synthetic names
 and numbers; its [page](../web/src/world/testing/site-shots/SiteShots.browser.tsx)
 mounts the production `TownCanvas` and `BoardView` and answers their reads from
@@ -207,6 +208,13 @@ committing.
 | Desktop Town desks | `herdr-world-desktop-town-steps.png` | Two zoom steps in: thought bubbles naming each working agent's step |
 | Desktop Board | `herdr-world-desktop-board.png` | One host at 1120 × 700 CSS pixels, drawn at 1.5× |
 | Mobile Town | `herdr-world-mobile-town.png` | Town at 390 × 844 with a touch screen |
+
+### Help pictures
+
+Help pictures (`web/public/help/`) are generated from the help declarations
+with the same synthetic scene; see
+[Help that ships with a feature](../CONTRIBUTING.md#help-that-ships-with-a-feature).
+They are never captured or edited by hand.
 
 ### Chat, Spaces, Files and Changes
 

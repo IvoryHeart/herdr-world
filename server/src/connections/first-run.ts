@@ -14,21 +14,23 @@ export async function initializeConnectionProfiles(
     discovery?: LocalDiscoveryOptions;
   },
 ) {
-  const bootstrap = loadConnectionProfileBootstrap(args);
-  if (bootstrap.persistedRegistry || bootstrap.explicitStartupOverride)
-    return bootstrap;
-  const profile = discoverLocalCoreConnection(args.discovery);
-  if (!profile) return bootstrap;
-  const registry: PersistedConnectionRegistry = {
-    version: CONNECTION_PROFILE_FILE_VERSION,
-    default_connection_id: profile.id,
-    profiles: [profile],
-  };
-  await args.store.save(registry);
-  return {
-    defaultConnectionId: profile.id,
-    explicitStartupOverride: false,
-    persistedRegistry: registry,
-    registrations: [{ profile, readOnly: false }],
-  };
+  return args.store.withOwnership(async () => {
+    const bootstrap = loadConnectionProfileBootstrap(args);
+    if (bootstrap.persistedRegistry || bootstrap.explicitStartupOverride)
+      return bootstrap;
+    const profile = discoverLocalCoreConnection(args.discovery);
+    if (!profile) return bootstrap;
+    const registry: PersistedConnectionRegistry = {
+      version: CONNECTION_PROFILE_FILE_VERSION,
+      default_connection_id: profile.id,
+      profiles: [profile],
+    };
+    await args.store.save(registry);
+    return {
+      defaultConnectionId: profile.id,
+      explicitStartupOverride: false,
+      persistedRegistry: registry,
+      registrations: [{ profile, readOnly: false }],
+    };
+  });
 }

@@ -445,7 +445,13 @@ export function createWorldCliService(deps: {
             ? recordAnswer
               ? recordAnswer(p.id, answer, { kind: "owner" })
               : answerAsk(ledger(), p.id, answer, "owner", now())
-            : dismissAsk(ledger(), p.id, "owner", now())),
+            : dismissAsk(
+                ledger(),
+                p.id,
+                "owner",
+                now(),
+                p.all_from_asker === true,
+              )),
           true,
         );
         if (method === "world.ask.answer") publishDelivery();

@@ -24,6 +24,9 @@ follow it, check what it changed, and then pick it up from your phone.
 
 This page is only reading material: World itself runs on your computer.
 
+Looking for one feature? [Help](./HELP.md) shows what each screen can do,
+with pictures. In World, press ? beside the views for the same help.
+
 ## 1. Get started
 
 <a id="start"></a>
@@ -202,9 +205,11 @@ Around it you will find:
 - **The City expenses billboard.** Estimated cost for today and the last 7
   days. Each building's reception board shows its own share. Costs need a
   price table; see [harness usage](./usage.md).
-- **The post office.** With GitHub connected, your open pull requests wait here
-  as parcels. Tap one for its card and **Merge…**. Tap its sign to see every
-  pull request on the Work board.
+- **The warehouse.** With GitHub connected, your open pull requests wait in its
+  yard as crates. Tap one for its card and **Merge…**. Tap its sign to see
+  every pull request on the Work board.
+- **The harbour.** At the town's right edge, each project has a shipping lane:
+  ships are its releases. Tap a lane's name board to see its releases.
 
 After 30 minutes or more away, the board starts with **Since you left**: what
 is new for you, what finished and what merged.
@@ -236,11 +241,11 @@ room starts a new tab or agent there.
 1. Drag an agent you no longer need onto the **bin** at the bottom of the
    screen, or choose **⋯ → Put in bin** in its window.
 2. The agent walks out to the nearest bus stop. Nothing is closed yet.
-3. Every four minutes a red bus collects whoever is waiting. World closes
-   those agents only once it has driven off.
+3. Every four minutes a red bus collects whoever is waiting and drives them
+   to Apartments. World closes those agents only once they have walked in.
 
 Changed your mind? Open the tray from the bin and choose **Put back** before
-the bus leaves. **Close now** skips the wait.
+they walk into Apartments. **Close now** skips the wait.
 
 **You are done when:** you can find an agent, see what it is doing and open
 its window.

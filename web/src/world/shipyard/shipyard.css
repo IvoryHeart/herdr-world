@@ -1,0 +1,366 @@
+/* The release pipeline (ShipyardPipeline.tsx) inside the Work lens: four
+   stages as the lens's columns, left to right as work ships, in Board's
+   (or Town's) palette. A phone stacks them and scrolls down. */
+
+.shipyard {
+  --ship-pass: #3fa34d;
+  --ship-fail: #d4252b;
+  --ship-pending: #e0a800;
+  --ship-unknown: #8b939c;
+  --ship-stable: #2f5d9e;
+  --ship-pre: #c76a12;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+}
+
+.shipyard-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.shipyard-repo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.shipyard-repo > span {
+  color: var(--board-soft);
+}
+
+.shipyard-repo select,
+.shipyard-repo-form input,
+.shipyard-repo-form button,
+.shipyard-refresh,
+.shipyard-setup {
+  min-height: 34px;
+  border: 1px solid var(--board-line);
+  border-radius: 8px;
+  background: var(--board-card);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.shipyard-repo select {
+  max-width: min(60vw, 280px);
+  padding: 0 8px;
+}
+.shipyard-repo-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.shipyard-repo-form input {
+  width: min(56vw, 240px);
+  padding: 0 10px;
+}
+.shipyard-repo-form button,
+.shipyard-setup {
+  padding: 0 12px;
+  cursor: pointer;
+}
+.shipyard-repo-form button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.shipyard-refresh {
+  width: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+.shipyard-refresh:disabled svg {
+  animation: shipyard-spin 1.2s linear infinite;
+}
+@keyframes shipyard-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shipyard-refresh:disabled svg {
+    animation: none;
+  }
+}
+
+.shipyard-age {
+  margin-left: auto;
+  color: var(--board-soft);
+  font-size: 12px;
+}
+.shipyard-error {
+  color: var(--ship-fail);
+  font-size: 12px;
+}
+.shipyard-stale {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--ship-pending);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ship-pending) 14%, transparent);
+  font-size: 13px;
+}
+
+.shipyard-stages {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+}
+
+/* A stage: the lens's column, with an arrow into the next one. */
+.shipyard-stage {
+  position: relative;
+  flex: 0 0 min(280px, 80vw);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--board-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--board-card) 45%, transparent);
+  overflow-y: auto;
+  font-size: 13px;
+}
+.shipyard-stage h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 13px;
+}
+.shipyard-lead {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+}
+.shipyard-lead[data-tone="pass"] {
+  color: var(--ship-pass);
+}
+.shipyard-lead[data-tone="fail"] {
+  color: var(--ship-fail);
+}
+.shipyard-meta,
+.shipyard-note {
+  margin: 0;
+  color: var(--board-soft);
+  font-size: 12px;
+}
+.shipyard-meta code {
+  font-size: 11px;
+}
+.shipyard-soft {
+  color: var(--board-soft);
+  font-size: 12px;
+}
+
+.shipyard-list,
+.shipyard-ships {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shipyard-list li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--board-card);
+}
+.shipyard-list a {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.shipyard-list a:hover,
+.shipyard-ship a:hover {
+  text-decoration: underline;
+}
+.shipyard-list li[data-state="stale"] {
+  opacity: 0.7;
+}
+.shipyard-instance {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+}
+.shipyard-instance > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shipyard-list a.shipyard-open {
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid var(--board-line);
+  border-radius: 999px;
+}
+
+.shipyard-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+.shipyard-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  font-size: 12px;
+}
+
+/* The pixel marks that tie the lens to Town's harbour. */
+.shipyard-beacon,
+.shipyard-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #1c1722;
+  border-radius: 50%;
+  background: var(--ship-unknown);
+}
+.shipyard-dot {
+  width: 8px;
+  height: 8px;
+}
+:is(.shipyard-beacon, .shipyard-dot)[data-tone="pass"] {
+  background: var(--ship-pass);
+}
+:is(.shipyard-beacon, .shipyard-dot)[data-tone="fail"] {
+  background: var(--ship-fail);
+}
+:is(.shipyard-beacon, .shipyard-dot)[data-tone="pending"] {
+  background: var(--ship-pending);
+}
+.shipyard-crate {
+  flex: none;
+  width: 11px;
+  height: 9px;
+  border: 1px solid #1c1722;
+  background:
+    linear-gradient(90deg, transparent 4px, #e8d2a8 4px 6px, transparent 6px),
+    #c8915a;
+}
+.shipyard-hull {
+  flex: none;
+  width: 14px;
+  height: 10px;
+  background:
+    linear-gradient(#fbf6e8 0 5px, transparent 5px) 4px 0 / 5px 100% no-repeat,
+    linear-gradient(transparent 6px, var(--ship-stable) 6px);
+  clip-path: polygon(
+    0 60%,
+    100% 60%,
+    82% 100%,
+    18% 100%,
+    18% 60%,
+    30% 0,
+    66% 0,
+    66% 60%
+  );
+}
+.shipyard-berth {
+  flex: none;
+  width: 12px;
+  height: 10px;
+  border: 1px solid #1c1722;
+  border-top-width: 3px;
+  background: #9b6a3f;
+}
+
+.shipyard-ship {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 7px 9px;
+  border-left: 3px solid var(--ship-stable);
+  border-radius: 8px;
+  background: var(--board-card);
+}
+.shipyard-ship[data-channel="prerelease"] {
+  border-left-color: var(--ship-pre);
+}
+.shipyard-ship a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+.shipyard-chip {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ship-stable) 18%, transparent);
+  font-size: 11px;
+  line-height: 18px;
+}
+.shipyard-chip[data-channel="prerelease"] {
+  background: color-mix(in srgb, var(--ship-pre) 20%, transparent);
+}
+.shipyard-chip[data-baseline] {
+  background: color-mix(in srgb, var(--ship-pass) 20%, transparent);
+}
+.shipyard-berths {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11px;
+}
+.shipyard-berths span {
+  padding: 0 6px;
+  border: 1px solid var(--board-line);
+  border-radius: 4px;
+}
+.shipyard-berths [data-state="stale"] {
+  opacity: 0.6;
+}
+
+.shipyard-closed {
+  justify-content: flex-start;
+}
+.shipyard-setup {
+  align-self: flex-start;
+}
+
+/* A phone stacks the stages and scrolls them down. */
+@media (max-width: 719px) {
+  .shipyard-stages {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .shipyard-stage {
+    flex: none;
+    overflow: visible;
+  }
+  .shipyard-age {
+    margin-left: 0;
+    flex-basis: 100%;
+    order: 3;
+  }
+}

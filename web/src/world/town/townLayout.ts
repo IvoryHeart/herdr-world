@@ -8,7 +8,12 @@
  * step contains the previous one.
  */
 
+import {
+  townApartmentsLot,
+  townApartmentsPathColumn,
+} from "./townApartmentsLot";
 import { townCenterForecourt, type TownCenterLot } from "./townCenter";
+import { TOWN_HARBOUR_ROOM, townHarbourGeometry } from "./townHarbourLot";
 import { townLibraryLotBeside } from "./townLibraryLot";
 import { townObservatoryLotBeside } from "./townObservatoryLot";
 import { townPostLotBeside } from "./townPostLot";
@@ -606,15 +611,23 @@ export function layoutTown(
     draft.h = h;
     return { ...draft, x, y, roadY, topRoadY };
   });
-  // The topmost street runs on past the last crossing for the bus stop.
-  const width =
+  // The topmost street runs on past the last crossing for the bus stop. The
+  // town ends at its right edge in the harbour (townHarbourLot.ts): the
+  // warehouse on the first street, a promenade the streets run into, and
+  // the open sea. A phone's stacked town has it too, right of its buildings,
+  // reached by panning or zooming like the rest of Town.
+  const town =
     Math.max(
       lots.width + BUS_STOP_CLEARANCE,
       37,
       center.x + center.w + MARGIN,
     ) + MARGIN;
+  const width = town + TOWN_HARBOUR_ROOM;
   const lastRoad = roads[roads.length - 1]!;
   const height = lastRoad + ROAD_GAP + PARK_HEIGHT + MARGIN;
+  const harbourLot = townHarbourGeometry(width, height, center);
+  /** Where the streets end: the promenade. */
+  const streetEnd = harbourLot.streetEnd;
   const ground = new Uint8Array(width * height);
   const set = (tx: number, ty: number, type: number) => {
     if (tx >= 0 && ty >= 0 && tx < width && ty < height)
@@ -643,14 +656,16 @@ export function layoutTown(
       }
   };
   for (const ry of roads) {
-    strip(0, ry, width, ry + 1, TownGround.walk);
-    strip(0, ry + 4, width, ry + 5, TownGround.walk);
+    strip(0, ry, streetEnd, ry + 1, TownGround.walk);
+    strip(0, ry + 4, streetEnd, ry + 5, TownGround.walk);
   }
   for (const v of verticalRoads) {
     strip(v.x, v.y0, v.x + 1, v.y1, TownGround.walk);
     strip(v.x + 4, v.y0, v.x + 5, v.y1, TownGround.walk);
   }
-  for (const ry of roads) strip(0, ry + 1, width, ry + 4, TownGround.road);
+  for (const ry of roads) strip(0, ry + 1, streetEnd, ry + 4, TownGround.road);
+  // The promenade runs the harbour's length along the water.
+  strip(harbourLot.streetEnd, 0, harbourLot.coast, height, TownGround.walk);
   for (const v of verticalRoads)
     strip(v.x + 1, v.y0, v.x + 4, v.y1, TownGround.road);
 
@@ -773,7 +788,7 @@ export function layoutTown(
   // Centred on the town before it shifted for the post office's lawn, and
   // shifted with it (townLots.ts).
   const plaza = {
-    x: lots.shift + Math.floor((width - lots.shift) / 2),
+    x: lots.shift + Math.floor((town - lots.shift) / 2),
     y: lastRoad + ROAD_GAP + 6,
   };
   for (let ty = plaza.y - 5; ty <= plaza.y + 5; ty += 1)
@@ -782,9 +797,17 @@ export function layoutTown(
         set(tx, ty, TownGround.plaza);
   for (let ty = lastRoad + ROAD_GAP; ty < plaza.y - 4; ty += 1)
     set(plaza.x, ty, TownGround.walk);
-  for (let tx = MARGIN; tx < width - MARGIN; tx += 1)
+  for (let tx = MARGIN; tx < streetEnd; tx += 1)
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
+  // Apartments' footpath, from its bus stop on the last street down the
+  // house's lawn to the plaza's walk and its door (townBus.ts).
+  const apartments = townApartmentsLot({ plaza, width });
+  if (apartments) {
+    const column = townApartmentsPathColumn(apartments, plaza);
+    for (let ty = lastRoad + ROAD_GAP; ty < plaza.y; ty += 1)
+      set(column, ty, TownGround.walk);
+  }
 
   const post = townPostLotBeside(center);
   const library = formFactor === "narrow" ? null : townLibraryLotBeside(center);
@@ -793,7 +816,7 @@ export function layoutTown(
   const lamps: TownPoint[] = [];
   // Spaced from the town's first column, shifted with it (townLots.ts).
   for (const ry of roads)
-    for (let tx = 6 + (lots.shift % 11); tx < width - 4; tx += 11) {
+    for (let tx = 6 + (lots.shift % 11); tx < streetEnd - 4; tx += 11) {
       if (verticalRoads.some((v) => tx >= v.x - 1 && tx <= v.x + 5)) continue;
       // The center stands on this pavement and brings its own lamps.
       const underCenter =
@@ -803,6 +826,11 @@ export function layoutTown(
       const underPost =
         ry === center.street && tx >= post.x - 1 && tx <= post.x + post.w;
       if (underPost) continue;
+      // So does the harbour's warehouse (townHarbourLot.ts).
+      const house = harbourLot.warehouse;
+      const underWarehouse =
+        ry === center.street && tx >= house.x - 1 && tx <= house.x + house.w;
+      if (underWarehouse) continue;
       // So does the library's reading garden (townLibraryLot.ts).
       const underLibrary =
         library &&
