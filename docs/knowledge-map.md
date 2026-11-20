@@ -7,6 +7,10 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 [World component routes](../web/src/world/README.md) for UI ownership, and the
 [style guide](design/style-guide.md) for visual work.
 
+For recent contract gaps and evidence boundaries, see the
+[November architecture audit](../verification/architecture-audit-2026-11.md) and
+[three model-selection questions](../verification/README.md#three-questions-before-choosing-a-model).
+
 | Area | Contract | Owning source | Focused tests |
 | --- | --- | --- | --- |
 | Code view research/proposal and IDE integration study (not shipping) | [Research, provider comparison and gates](design/code-view/research.md), [OpenSpec proposal](../openspec/changes/world-code-view/proposal.md) | [Synthetic mock](../web/public/code-view-prototype.html), [interaction code](../web/public/code-view-prototype/mock.js); no live IDE adapter | [Exact preview clicks](design/code-view/design.md), [fixture tests](../web/src/testing/codeViewPrototype.test.ts); `/code-view-prototype.html` |
@@ -22,6 +26,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Integrations registry, screen and vault | [Contract](../FEATURES.md#integrations) | [Registry](../server/src/integrations/registry.ts), [vault](../server/src/integrations/vault.ts), [screen](../web/src/components/IntegrationsSettings.tsx) | [Tests](../server/src/integrations/registry.test.ts), [browser](../web/src/configuration.browser.tsx) |
 | Harness integrations | [Contract](../openspec/specs/world-harness-integration/spec.md) | [Source](../server/src/cli/integration.ts) | [Tests](../server/src/cli/integration.test.ts) |
 | Agent and project memory data/API | [Contract](../openspec/specs/world-memory/spec.md), [API and CLI](memory-api.md) | [Model](../shared/memory.ts), [service/adapters](../server/src/memory/service.ts), [host worker](../server/src/memory/worker.py) | [Filesystem tests](../server/src/memory/service.test.ts), [routing tests](../server/src/memory/routing.test.ts), [CLI tests](../server/src/cli/memory.test.ts) |
+| Memory Library (Town, Board, agent settings) | [Features](../FEATURES.md#the-library) | [Dialog](../web/src/world/memory/MemoryLibrary.tsx), [model](../web/src/world/memory/memoryModel.ts), [Town building](../web/src/world/town/TownLibrary.tsx) | [Browser tests](../web/src/world/memory/MemoryLibrary.browser.test.ts), [lifecycle browser tests](../web/src/world/memory/MemoryLibraryLifecycle.browser.test.ts), [model tests](../web/src/world/memory/memoryModel.test.ts) |
 | World IDs and bindings | [Contract](../openspec/specs/world-identity/spec.md) | [Source](../server/src/storage/world-ids.ts) | [Tests](../server/src/world/binding-resolution.test.ts) |
 | Durable asks/results and attention | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/storage/world-storage.ts) | [Tests](../server/src/storage/world-storage-crash.test.ts) |
 | Effect recovery and deadlines | [Contract](../openspec/specs/world-effects/spec.md) | [Source](../server/src/effects/runner.ts) | [Tests](../server/src/effects/recovery-matrix.test.ts) |
@@ -42,6 +47,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Inspector focus | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/useWorldInspectorWindows.ts) | [Tests](../web/src/chatFocus.test.ts) |
 | Optional cost metrics | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../server/src/world/observability.ts) | [Tests](../web/src/world/officeObservability.test.ts) |
 | Work sources and PR links | [Contract](../openspec/specs/world-surfaces/spec.md#requirement-built-in-sources) | [Source](../shared/worldSources.ts) | [Tests](../server/src/sources/github.test.ts) |
+| Shipyard release and deployment data | [Contract](../openspec/specs/world-shipyard/spec.md), [API and consumer mapping](shipyard-api.md) | [Service](../server/src/shipyard/service.ts), [GitHub acquisition](../server/src/shipyard/github.ts), [instances](../server/src/shipyard/instances.ts), [CLI](../server/src/cli/shipyard.ts) | [Graph/source tests](../server/src/shipyard/github.test.ts), [service tests](../server/src/shipyard/service.test.ts), [composed API/CLI](../server/src/service/shipyard.test.ts) |
 | Town view | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/TownView.tsx) | [Tests](../web/src/world/town/TownCanvas.test.ts) |
 | Board view | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/BoardView.tsx) | [Tests](../web/src/world/board/boardModel.test.ts) |
 | Board attention and moves | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/board/boardAttention.ts) | [Tests](../web/src/world/BoardView.test.ts) |

@@ -3,6 +3,26 @@
 A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
 [Install it](./README.md#quick-start) or follow the [tutorial](./docs/TUTORIAL.md).
 
+## Shipyard data
+
+- `herdr-world shipyard list|show` and the same-origin
+  [Shipyard API](docs/shipyard-api.md) read GitHub releases, tags, workflow health
+  on the observed main commit and merged changes waiting after the release
+  baseline. All authors count; membership follows the commit graph, not dates.
+- Channels are stable or prerelease. Drafts and bare tags do not count as shipped.
+  Missing, stale, diverged or shortened data stays explicit; it never means
+  “nothing waiting” or permission to release. The existing GitHub Sources switch
+  and service user's `gh` sign-in apply. Reads share a bounded cache and deadline.
+- Running World listeners report their versions, ports and known source branches
+  in a private local registry. Isolated previews can opt into one shared registry;
+  expired reports are stale and have no open action. Only fresh loopback reports
+  provide navigation URLs, usable from the service machine. No remote host or
+  port discovery runs, and agent runtimes are not treated as World deployments.
+- V1 provides navigation links only: no release/tag creation or deployment
+  changes. `herdr-world shipyard demo --scenario stale|limited --json` exercises
+  synthetic rare states without a service or credentials. Town/Board visuals
+  follow separately; this capability adds no screens or buildings.
+
 ## Runtime support
 
 A host is this computer or one exact OpenSSH alias / `user@host` destination.
@@ -236,7 +256,7 @@ Every service call requires an immutable connection ID and observed generation
 require `--yes`. Conflicts preserve the current file; an unknown write outcome
 requires a fresh read. Nothing retries a write automatically. Contents stay on
 the owning host and in private responses, without a World content cache, index,
-Board copy or telemetry. No new visual surface is included in this data delivery.
+Board copy or telemetry. The Library (below) is the browser's view of this data.
 
 The Unix host needs Python 3; Windows, symlinks, hardlinks, special/binary/non-UTF-8
 files and non-Markdown entries refuse. Discovery stops at 32 projects, 128 agents,
@@ -245,6 +265,48 @@ is literal and case-insensitive, with a 2 MiB scan budget and 100 results. Parti
 results say `truncated`, skipped reads are counted, and each host request has a
 15-second deadline. `herdr-world memory demo --json` creates and cleans up an
 isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
+
+### The Library
+
+- Open it from Town's **library**, right of the town center on the first street,
+  from the town center's ring (**Library**), from Board's hub (**Library**, on the
+  selected agent or workspace), from an agent window's settings (**Memory**)
+  or from Settings (**Agents** → **Library (memory)**, or search "memory").
+  On a phone the library folds to a book sign on the town center's left wing.
+  The library's sign counts files, stale files and shared files across up to four
+  hosts, read at most every five minutes; it never shows contents.
+- The left column (a picker on a phone) chooses a reader: everything on a host,
+  a project or an agent. An agent leads with what it would load: files read at
+  start, files read when needed and files skipped, shadowed ("Hidden by another
+  file") or empty. Discovery cannot prove what a running agent already loaded.
+- Shelves group files by source, `MEMORY.md` first. Each file shows its size, its
+  age (stale after 30 days) and who else reads it. Refused sources and files say
+  why; a missing instruction file offers **Create** and a missing memory folder
+  (a fresh project) offers **Add the first note**, which creates the folder;
+  harnesses World cannot read
+  say so; truncated lists and searches say they show the first ones only.
+- Opening a book reads it fresh from its host. **Edit** then **Save** writes it
+  with the revision you read. If the file changed meanwhile, the save is refused,
+  your text stays and **Load latest** shows theirs. When World can't tell whether a
+  write landed, it reads the file again: if the host has your text it says
+  Saved; otherwise your text stays on the revision you started from, so saving
+  again is refused if anyone else changed the file. **Delete** asks
+  first, focused on its button, with **Keep it**; deleting a topic says if
+  `MEMORY.md` still lists it. **+** on a shelf adds a note, reminding you to add
+  Claude topics to `MEMORY.md`. Reload the harness to pick up changes.
+- **Search** runs on submit over the chosen reader's files; tap a match to open it.
+  Choosing another reader or host drops a search still under way.
+- The Library stays on the host it opened on or you picked. If that host
+  disconnects, it says the host's memory is unavailable and offers the other
+  hosts; it never shows another host's agent in its place.
+  Escape, system Back or the close button closes the Library; on a phone a book
+  shows one pane with its own **Back** to the shelves. Opening the Library reads
+  the host again. File contents are never cached; only the sign's counts are.
+- To try it without real memory, open World with `?memoryFixture`: a synthetic
+  host with two projects, four agents, shared, stale, shadowed, empty, missing and
+  refused files. The page drops the parameter at once; edits stay in the page.
+  Saving text that contains `[uncertain]` acts out a write whose outcome is
+  unknown while someone else edits the file.
 
 ## World update notifications
 
@@ -412,9 +474,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     a phone, explains each caveat in full, including usage tied to no pane or
     room ("unattributed", already in the totals) and a limited detail list. The boards re-read usage about once a minute and when the page
     regains focus; when re-reads fail, the last figures stay for at most five
-    minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard folds to a sign in the town
-    center's corner and each reception's expenses to a sign in its title;
-    tap one to open it. Zoomed in to desks, the boards are put away with
+    minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard stands above the town center as
+    on a wide screen; each reception's expenses fold to a sign in its title
+    (a phone keeps only a few rows of yard above each building for its
+    reception board); tap one to open it. Zoomed in to desks, the boards are put away with
     reception. At every zoom the reception boards keep clear of the town
     center, the post office, the billboard and each other: a board that would
     cover one slides aside the least it can while staying over its building,
@@ -442,9 +505,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     agent on a card opens as tapping it in Town does. With the GitHub source off, signed out or not yet answered, the
     post office is closed and says to connect GitHub in **Integrations** (its sign opens them), with no
     parcels and no counts; when a refresh fails it keeps the last list as
-    unknown and says GitHub is out of date. On a phone it folds to a sign on
-    the town center's right wing, in view at home zoom (a red pillar box and coloured ready,
-    failing and waiting counts) that opens the parcels as a list. For trying it without real pull
+    unknown and says GitHub is out of date. On a phone the post office stands as
+    the same building and yard beside the town center, in view at home zoom
+    with the center and the first building; its sign reads "POST OFFICE",
+    "pull requests" and the counts (or "Closed"), and tapping it opens the
+    parcels as a list. Searching Town for "post office" (or "pull requests")
+    lists the **Post office** and choosing it takes the map there, on a phone
+    or a wide screen. For trying it without real pull
     requests, open World with `?townPostFixture` (synthetic pull requests in
     every state; ten seconds later the first ready one merges),
     `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
@@ -948,7 +1015,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
     click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
     a readable zoom and pulses it; choosing it again, or **Enter** a second
-    time, opens it as selecting does. A result Town does not draw, such as
+    time, opens it as selecting does. Town's own places are found too: "post
+    office" (or "pull requests") lists the **Post office**, and choosing it
+    moves the camera there; choosing it again only shows it again. A result Town does not draw, such as
     an agent at a table its room folds away, opens at once and counts as
     off-screen. Under **Town calm motion** or reduced motion the camera jumps
     and nothing pulses. **Escape** (in the box, on a result or on the map),
@@ -1254,9 +1323,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     device since Board opened; a drawing changed elsewhere since is left
     alone, with a notice. A move, resize or text edit of a drawing someone
     changed elsewhere meanwhile is refused with the same notice and their
-    version stays; typed text reopens on their version, so nothing typed is
-    lost. Drawings are saved with the board on the World
-    service (at most 1,000; a stroke keeps at most 2,000 points, simplified
+    version stays; typed text reopens on their version. If you have already
+    started another text edit, it stays open and the refused drafts reopen in
+    turn when you finish it, so nothing typed is lost. Drawings are saved with
+    the board on the World service (at most 1,000; a stroke keeps at most 2,000 points, simplified
     as it is drawn) and are visual only: an arrow never sends anything to an
     agent. Issues and pull requests are reached through their agent's tab
     card. A phone shows drawings but has no drawing tools; drawings there

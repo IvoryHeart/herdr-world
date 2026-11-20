@@ -158,7 +158,7 @@ export type WorldCliTransport = (
 ) => Promise<Reply>;
 
 /** Where the service listens and the CLI token it takes, as the CLI sees them. */
-function serviceEndpoint(context: CliContext) {
+export function serviceEndpoint(context: CliContext) {
   const env = context.runtime.env;
   let base = env.HERDR_WORLD_URL?.replace(/\/+$/, "");
   let token = env.HERDR_WORLD_TOKEN;
