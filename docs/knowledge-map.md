@@ -18,6 +18,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Core harnesses and transcripts | [Contract](../openspec/specs/herdr-core-runtime/spec.md) | [Source](../server/src/herdr-core/harness.ts) | [Tests](../server/src/herdr-core/history.test.ts) |
 | Core runtime ordering and authority | [Contract](../openspec/specs/herdr-core-runtime/spec.md) | [Source](../server/src/herdr-core/) | [Tests](../server/src/herdr-core/connections.test.ts) |
 | Core Files, Git, asks and Ranger | [Contract](../openspec/specs/herdr-core-runtime/spec.md) | [Source](../server/src/herdr-core/host-runtime.ts) | [Tests](../server/src/herdr-core/host-runtime.test.ts) |
+| Claude limits writer ownership | [Contract](../verification/contracts/claude-tap-lock.md) | [Source](../server/src/usage/claude-tap.ts) | [Tests](../quint/claude-tap-lock.test.ts) |
 | Harness usage and estimates | [Contract](../openspec/specs/world-usage/spec.md) | [Source](../server/src/usage/projection.ts) | [Tests](../server/src/usage/projection.test.ts) |
 | Integrations registry, screen and vault | [Contract](../FEATURES.md#integrations) | [Registry](../server/src/integrations/registry.ts), [vault](../server/src/integrations/vault.ts), [screen](../web/src/components/IntegrationsSettings.tsx) | [Tests](../server/src/integrations/registry.test.ts), [browser](../web/src/configuration.browser.tsx) |
 | Harness integrations | [Contract](../openspec/specs/world-harness-integration/spec.md) | [Source](../server/src/cli/integration.ts) | [Tests](../server/src/cli/integration.test.ts) |

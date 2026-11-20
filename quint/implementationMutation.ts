@@ -101,6 +101,7 @@ export async function mutateImplementation(
     "Unsupported model/fault combination",
   );
   const owners: Record<Model, string> = {
+    "claude-tap-lock": "server/src/usage/claude-tap.ts",
     "herdr-core-runtime": "server/src/herdr-core/mirror.ts",
     "herdr-core-seen": "web/src/world/coreShared.ts",
     "binding-resolution": "server/src/world/binding-resolution.ts",
@@ -147,7 +148,15 @@ export async function mutateImplementation(
                         : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
-  if (name === "herdr-core-runtime") {
+  if (name === "claude-tap-lock") {
+    const guard =
+      "(ports.kill ?? process.kill)(owner, 0);\n        return false;";
+    assert.equal(original.split(guard).length, 2, "tap liveness guard changed");
+    contents = original.replace(
+      guard,
+      "(ports.kill ?? process.kill)(owner, 0);\n        return true;",
+    );
+  } else if (name === "herdr-core-runtime") {
     const guards: Record<string, [string, string]> = {
       "core-gap": ["if (seq !== this.cursorValue + 1) {", "if (false) {"],
       "core-heartbeat": [

@@ -128,6 +128,14 @@ The usage read SHALL report, per qualified host, the newest subscription-limit o
 - **WHEN** the newest Claude limit record on a host is a usage-limit refusal whose reset is in the future
 - **THEN** that host's Claude limit reports the limit reached until that reset, attributed to the Claude transcript, with no percent, and becomes stale once the reset passes
 
+#### Scenario: Concurrent Claude taps retain comparable maxima through publication
+- **WHEN** Claude sessions publish readings with the same reset time, including a writer suspended immediately before replacing the limits file
+- **THEN** committed comparable readings never decrease; a later reset starts fresh and an earlier reset never replaces a later one
+
+#### Scenario: A Claude tap owner is suspended or dies
+- **WHEN** another tap encounters an owned limits transaction
+- **THEN** elapsed age alone never authorizes reclamation; a live or unverifiable owner retains ownership through file publication, a confirmed-dead owner can be recovered without removing a replacement owner's lock, and contention skips the optional reading after a bounded half-second wait while preserving the user's status command
+
 #### Scenario: Limits age or disappear
 - **WHEN** the newest observation passes a window's reset, grows old, cannot be refreshed, or its logs are removed
 - **THEN** it is reported stale, or missing once a successful read finds none, and Town shows stale or no gauge rather than a level

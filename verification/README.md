@@ -55,6 +55,13 @@ Review rejects that requirement against the qualified-admission scenarios before
 accepting a model. Reachability witnesses and the late-start negative control then
 check that the intended prohibition is exercised, rather than assumed away.
 
+The [Claude tap ownership contract](contracts/claude-tap-lock.md) adds a bounded
+publication/recovery case for issue #1086. Its positive TLC invariant and all
+eight actual-filesystem suspension schedules must pass. Age-based live-owner
+stealing remains an expected-rejected fault control, rather than a diagnostic
+counterexample counted as a safety pass. Unknown process liveness fails closed;
+filesystem/platform behavior and numeric privacy retain direct consumer checks.
+
 ## Implementation checkpoints
 
 1. Baseline: all 43 areas assessed against existing evidence; every bounded

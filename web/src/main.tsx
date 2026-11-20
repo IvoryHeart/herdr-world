@@ -11,12 +11,17 @@ import "./styles/base.css";
 import "./styles/vendor.css";
 import { OverlayScrollbarLayer } from "./components/OverlayScrollbarLayer";
 import TitleSpinnerFixture from "./testing/TitleSpinnerFixture";
+import ClaudeTapLockFixture from "./testing/ClaudeTapLockFixture";
 
 // Testing-only preview: consume the switch before view routing rewrites the URL.
 const previewUrl = new URL(location.href);
 const titleSpinnerFixture = previewUrl.searchParams.has("titleSpinnerFixture");
-if (titleSpinnerFixture) {
+const claudeTapLockFixture = previewUrl.searchParams.has(
+  "claudeTapLockFixture",
+);
+if (titleSpinnerFixture || claudeTapLockFixture) {
   previewUrl.searchParams.delete("titleSpinnerFixture");
+  previewUrl.searchParams.delete("claudeTapLockFixture");
   history.replaceState(history.state, "", previewUrl);
 }
 const WorldFoundationApp = React.lazy(
@@ -60,16 +65,23 @@ initializeShortcutPreferences();
 coreFixtureEnabled();
 coreInstallFake();
 integrationsFixtureEnabled();
-const stopInstanceNameSync = titleSpinnerFixture
-  ? () => {}
-  : initializeInstanceName();
+const stopInstanceNameSync =
+  titleSpinnerFixture || claudeTapLockFixture
+    ? () => {}
+    : initializeInstanceName();
 if (import.meta.hot) import.meta.hot.dispose(stopInstanceNameSync);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <React.Suspense fallback={null}>
-        {titleSpinnerFixture ? <TitleSpinnerFixture /> : <WorldFoundationApp />}
+        {titleSpinnerFixture ? (
+          <TitleSpinnerFixture />
+        ) : claudeTapLockFixture ? (
+          <ClaudeTapLockFixture />
+        ) : (
+          <WorldFoundationApp />
+        )}
       </React.Suspense>
       <OverlayScrollbarLayer />
     </ErrorBoundary>

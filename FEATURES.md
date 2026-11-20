@@ -215,7 +215,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Claude gets its own gauge within about a minute of the first answer from an
     agent started from World's launcher: its status line passes Claude Code's 5 h and week windows to
     World, and the agent's status line looks as before. World shows Claude Code's
-    own figure, which can trail claude.ai by about a point. When Claude refused
+    own figure, which can trail claude.ai by about a point. Concurrent tap
+    writers keep the highest comparable reading until reset, even if one pauses
+    before publication. Only confirmed process death permits lock recovery;
+    contention or unknown liveness skips a reading after about half a second
+    and still runs the user's status command. When Claude refused
     work at its limit, the gauge reads **reached, resets …** instead of a level.
     Every row stays inside the board at its desktop, phone and Board widths: a
     longer value takes room from its bar, **reached, resets …** wraps, and a

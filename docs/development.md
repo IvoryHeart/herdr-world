@@ -89,6 +89,14 @@ CLI locates its token. Preview data and built assets stay untracked.
 
 ## Development tools
 
+To inspect the Claude limits ownership repair without a live account, open
+`/?claudeTapLockFixture`. The testing-only page removes its parameter immediately
+and shows synthetic histories checked by the real filesystem regression. Click
+**Suspend live writer** to see `20 → 22 → 23`; click **Recover dead writer** to
+see `20 → 23 → 23`. Both stay within one reset window and never decrease. Reload
+to leave this walkthrough. It does not execute tap writers in the browser;
+`bun run test quint/claude-tap-lock.test.ts` exercises the actual protocol.
+
 To check harness title spinners without running agents, open
 `/?titleSpinnerFixture` on a development or preview World. The testing-only page
 removes the parameter immediately and shows a synthetic `π`-prefixed title.

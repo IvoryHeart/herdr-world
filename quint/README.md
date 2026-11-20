@@ -147,3 +147,10 @@ canonical entry point. Tool failures retain bounded partial logs and incomplete
 failure records; they cannot complete a manifest. CLI memory is capped at 512 MB
 in addition to checker JVM bounds. Interrupted top-level checks always fail and
 force retirement after ten seconds if ordinary cancellation cannot finish.
+
+The [Claude tap ownership case](../verification/contracts/claude-tap-lock.md)
+checks all eight bounded live/dead suspension schedules, replays their real
+filesystem commit histories and retains unsafe live-owner stealing as a rejected
+model and production fault. It runs in the unfiltered gate; numeric privacy,
+status-line chaining, cleanup races and native filesystem behavior retain their
+direct consumer tests.

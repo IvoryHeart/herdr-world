@@ -1997,6 +1997,7 @@
         "web/src/world/town/townPlaceSummary.test.ts",
         "server/src/usage/limits.test.ts",
         "server/src/usage/claude-tap.test.ts",
+        "quint/claude-tap-lock.test.ts",
         "server/src/cli/integration-claude.test.ts",
         "server/src/rpc/usage.test.ts",
         "server/src/usage/process.test.ts",
@@ -2010,10 +2011,11 @@
       "status": "alternative-evidence",
       "remaining": "Metrics do not grant operation authority; provider availability and network deadlines are observed integration behavior.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration. Harness-log usage uses direct parser, incremental host-cache, attribution/lease, retention/size, transport cancellation/reaping and RPC admission consumers under verification/contracts/world-usage.md. These read-only consumers do not expand accepted model claims.",
+      "evidenceDecision": "Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration. Harness-log usage uses direct parser, incremental host-cache, attribution/lease, retention/size, transport cancellation/reaping and RPC admission consumers under verification/contracts/world-usage.md. Numeric consumers retain direct evidence. The Claude tap publication/recovery subset has a candidate finite model and real-filesystem replay under verification/contracts/claude-tap-lock.md; this does not expand previously accepted model claims.",
       "partialEvidence": {
-        "models": [],
+        "models": ["quint/claude-tap-lock.qnt"],
         "contracts": [
+          "verification/contracts/claude-tap-lock.md",
           "verification/consumer-evidence.md",
           "verification/contracts/world-usage.md"
         ],
@@ -2035,10 +2037,11 @@
           "server/src/bridge/herdr-client.test.ts",
           "server/src/usage/context.test.ts",
           "server/src/usage/limits.test.ts",
-          "server/src/usage/claude-tap.test.ts"
+          "server/src/usage/claude-tap.test.ts",
+          "quint/claude-tap-lock.test.ts"
         ],
-        "checks": ["bun run check"],
-        "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+        "checks": ["bun run check", "bun run verification:gate"],
+        "review": "Numeric consumer foundation accepted in review 5516249164. Claude tap ownership repair and model mapping require fresh independent review; existing consumer/platform checks and excluded claims remain mandatory."
       },
       "promotion": {
         "decision": "accepted",
@@ -2066,7 +2069,8 @@
             "Counted-once private numeric usage and bounded UTC rollups; explicit stale, missing and truncated coverage",
             "Unique current session attribution and runtime fencing; no observation grants mutation authority",
             "Newest subscription limits, fresh context fill and unknown-window honesty",
-            "Claude tap numeric privacy and input/output chaining; local installation preserves user edits and exact unchanged settings restoration"
+            "Claude tap numeric privacy and input/output chaining; local installation preserves user edits and exact unchanged settings restoration",
+            "Comparable Claude tap readings never decrease through final rename; only confirmed-dead owners are recovered and delayed cleanup preserves replacement ownership"
           ],
           "tests": [
             "server/src/usage/projection.test.ts",
@@ -2079,6 +2083,7 @@
             "web/src/world/town/townPlaceSummary.test.ts",
             "server/src/usage/limits.test.ts",
             "server/src/usage/claude-tap.test.ts",
+            "quint/claude-tap-lock.test.ts",
             "server/src/cli/integration-claude.test.ts",
             "server/src/usage/process.test.ts",
             "server/src/usage/reader.test.ts",

@@ -16,4 +16,5 @@ export const verificationModels = [
   "chunk-assembly",
   "ranger-authority",
   "herdr-core-seen",
+  "claude-tap-lock",
 ] as const;
