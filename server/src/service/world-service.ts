@@ -10,7 +10,6 @@ import { createRuntimeAssistantContext } from "./assistant-context";
 import { HerdrClient } from "../bridge/herdr-client";
 import { createServiceForwards } from "./forward-service";
 import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
-import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { authTokenPrintCommand } from "../config/auth-token";
 import type { DataPaths } from "../config/data-paths";
@@ -40,7 +39,6 @@ import {
   serializeHerdrEventEnvelope,
 } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
-import { createSshProfileRuntimeConfig } from "../connections/ssh-profile-runtime";
 import { bindListenerBeforeConnectionStart } from "../connections/startup";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
 import { createAuthHandlers } from "../http/auth";
@@ -70,7 +68,8 @@ import { serializeWorldInvalidation } from "../world/invalidation";
 import { WorldUsageService } from "../usage/service";
 import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
-import { createFocusService, FOCUS_SETTINGS_KEY } from "../world/focus";
+import { startSettingsFocus } from "../world/focus";
+import { profileRuntimeConfig } from "./profile-runtime-config";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
 import { createRuntimeMemoryService } from "../memory/runtime-service";
@@ -149,38 +148,21 @@ async function compose(
   const snapshotAdmission = new WorldSnapshotAdmission();
   /** Town moves run one at a time per connection (see world/desk-move). */
   const townMoveQueues = new Map<string, ReturnType<typeof createMoveQueue>>();
-  // The owner's focus session; its publisher exists once browsers can listen.
   let publishFocusChanged: (revision: number) => void = () => {};
-  const focus = createFocusService({
+  const focus = await startSettingsFocus({
     clock,
     scheduler,
-    load: async () => (await settings.read()).custom[FOCUS_SETTINGS_KEY],
-    save: async (state) => {
-      await settings.update((current) => ({
-        ...current,
-        custom: { ...current.custom, [FOCUS_SETTINGS_KEY]: state },
-      }));
-    },
+    settings,
     publish: (revision) => publishFocusChanged(revision),
     log: (message) => logger.warn(message),
   });
-  await focus.start();
   const webPush = createWebPushService({
     path: paths.webPush,
     warn: (message) => logger.warn(message),
-    // Held while the owner focuses; the recap tells what came in.
     held: () => focus.held(),
   });
   const { officeObservability, handleOfficeObservability } =
     await createUsageTelemetry(settings, () => clock.now(), logger);
-  const downstreamConnectionConfig = {
-    socketPath: config.socketPath,
-    clientSocketPath: config.clientSocketPath,
-    sshHost: config.sshHost,
-    session: config.session,
-    hasExplicitSocketPath: config.hasExplicitSocketPath,
-    hasExplicitClientSocketPath: config.hasExplicitClientSocketPath,
-  };
   const auth = createAuthHandlers({
     authRequired: config.authRequired,
     password: config.password,
@@ -583,20 +565,7 @@ async function compose(
   ) {
     const identity = connectionIdentityForProfile(profile);
     return (context: ConnectionRuntimeContext) => {
-      const profileConfig: SshTunnelConfig =
-        profile.id === STARTUP_DEFAULT_CONNECTION_ID
-          ? downstreamConnectionConfig
-          : profile.type === "ssh"
-            ? createSshProfileRuntimeConfig(profile)
-            : {
-                socketPath: profile.control_socket_path,
-                clientSocketPath: profile.client_socket_path,
-                sshHost: undefined,
-                session: undefined,
-                hasExplicitSocketPath: true,
-                hasExplicitClientSocketPath: true,
-                ownedRuntimeDirectory: undefined,
-              };
+      const profileConfig = profileRuntimeConfig(profile, config);
       let runtime: LegacyConnectionRuntime;
       try {
         runtime = adapters.herdr.createRuntime({

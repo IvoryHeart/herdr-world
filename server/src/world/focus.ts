@@ -7,6 +7,7 @@ import {
   parseFocusState,
 } from "../../../shared/focus";
 import type { Clock, Scheduler } from "../service/ports";
+import type { GuiSettingsStore } from "../config/gui-settings";
 
 /** Where the session is kept: the service settings file's custom bag. */
 export const FOCUS_SETTINGS_KEY = "world_focus_v1";
@@ -165,3 +166,29 @@ export function createFocusService(deps: {
 }
 
 export type FocusService = ReturnType<typeof createFocusService>;
+
+/**
+ * The service's focus session, kept in the settings file and started; its
+ * changes are published through `publish` once browsers can listen.
+ */
+export async function startSettingsFocus(deps: {
+  clock: Pick<Clock, "now">;
+  scheduler: Scheduler;
+  settings: Pick<GuiSettingsStore, "read" | "update">;
+  publish(revision: number): void;
+  log(message: string): void;
+}) {
+  const { settings, ...rest } = deps;
+  const focus = createFocusService({
+    ...rest,
+    load: async () => (await settings.read()).custom[FOCUS_SETTINGS_KEY],
+    save: async (state) => {
+      await settings.update((current) => ({
+        ...current,
+        custom: { ...current.custom, [FOCUS_SETTINGS_KEY]: state },
+      }));
+    },
+  });
+  await focus.start();
+  return focus;
+}
