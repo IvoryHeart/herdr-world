@@ -13,6 +13,7 @@ import {
   WORLD_AGENT_PROFILES_EVENT,
 } from "./agentProfiles";
 import type { AgentStartFrom } from "./agentStarts";
+import { MemoryLibraryHost } from "./memory/MemoryLibraryHost";
 import { useDeskReveal } from "./deskReveal";
 import { DeskView } from "./DeskView";
 import { useStableCallback } from "./useStableCallback";
@@ -154,6 +155,7 @@ function AgentDialogs({
   }, []);
   return (
     <Suspense fallback={null}>
+      <MemoryLibraryHost world={world} />
       {sounds ? (
         <SoundsDialog
           world={world}

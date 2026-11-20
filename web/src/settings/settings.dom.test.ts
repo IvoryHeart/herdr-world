@@ -130,6 +130,20 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     expect(ids("zzqx")).toEqual([]);
   });
 
+  test("searching memory opens the Library", () => {
+    expect(ids("memory")[0]).toBe("memory.library");
+    expect(ids("CLAUDE.md")[0]).toBe("memory.library");
+    const opened: unknown[] = [];
+    const listener = (event: Event) =>
+      opened.push((event as CustomEvent).detail);
+    window.addEventListener("herdr-world:memory", listener);
+    const library = registryEntry("memory.library");
+    if (library?.kind !== "panel") throw new Error("Library is a panel");
+    library.open?.(makeHost().host);
+    window.removeEventListener("herdr-world:memory", listener);
+    expect(opened).toEqual([{}]);
+  });
+
   test("the command box changes a setting from a result", () => {
     const { host } = makeHost();
     const groups = settingsCommandGroups(registryEntries(), host, "night");
