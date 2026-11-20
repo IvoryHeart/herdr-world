@@ -35,7 +35,18 @@
     transition: transform var(--sheet-duration) ease-out;
   }
 
-  .mobile-sheet.is-dragging {
+  .mobile-sheet-more {
+    display: none;
+    visibility: hidden;
+  }
+
+  .mobile-sheet:is(.is-expanded, .is-dragging, .is-resizing)
+    .mobile-sheet-more {
+    display: block;
+    visibility: visible;
+  }
+
+  .mobile-sheet:is(.is-dragging, .is-resizing) {
     transition: none;
   }
 }

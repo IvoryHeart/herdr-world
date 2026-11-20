@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { focusDialogElement } from "./dialogFocus";
 import { MobileSheetHandle } from "./MobileSheetHandle";
-import "../settings/SettingsModal.css";
+import "./ConfigurationDialog.css";
 
 export function ConfigurationLoadingDialog({
   onClose,
@@ -48,10 +48,13 @@ export function ConfigurationLoadingDialog({
         className="modal configuration-loading-modal mobile-sheet"
         role="dialog"
         aria-modal="true"
-        aria-label="Loading Settings"
+        aria-label="Loading Configuration"
       >
-        <MobileSheetHandle label="Dismiss loading Settings" onClose={onClose} />
-        <p role="status">Loading Settings...</p>
+        <MobileSheetHandle
+          label="Dismiss loading configuration"
+          onClose={onClose}
+        />
+        <p role="status">Loading configuration...</p>
         <button ref={buttonRef} type="button" onClick={onClose}>
           {buttonLabel}
         </button>

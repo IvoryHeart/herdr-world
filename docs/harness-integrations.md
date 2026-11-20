@@ -192,7 +192,7 @@ restoration without running services. The fixture cleans up afterwards.
 
 ## Settings
 
-**Menu → Settings → Integrations** shows a **World skill** line under each
+**Menu → Configuration → Integrations** shows a **World skill** line under each
 of Herdr's harness rows when the selected connection is World's local host:
 its state (Current, Outdated, Not installed, or Unsupported with the reason),
 its path, and **Install**, **Update** or **Uninstall**. The buttons call

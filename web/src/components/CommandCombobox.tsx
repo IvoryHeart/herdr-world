@@ -74,11 +74,6 @@ import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
 import { WorktreeLocationDialog } from "./WorktreeLocationDialog";
 import { WorktreeOpenDialog } from "./WorktreeOpenDialog";
 import { worktreeCommandActions } from "./worktreeCommandActions";
-import {
-  rankCommand,
-  useCommandBoxRegistry,
-} from "../settings/commandBoxRegistry";
-import { useSettingsCommandGroups } from "../settings/commandBoxSettings";
 
 type TextAction =
   | { type: "rename-workspace"; workspace: Workspace }
@@ -181,13 +176,10 @@ function actionCommandValue(action: ActionDefinition) {
 }
 
 function rankAction(action: ActionDefinition, search: string) {
-  if (action.score !== undefined) return action.score;
-  const filtered = commandFilter(
-    actionSearchValue(action),
-    search,
-    action.keywords,
+  return (
+    action.score ??
+    commandFilter(actionSearchValue(action), search, action.keywords)
   );
-  return rankCommand(action, search, filtered);
 }
 
 function pathLeaf(path: string) {
@@ -984,7 +976,6 @@ function OwnedCommandCombobox({
     });
   }
 
-  const settingsGroups = useSettingsCommandGroups(search);
   const helpActions: ActionDefinition[] = onShowShortcuts
     ? [
         {
@@ -1027,9 +1018,6 @@ function OwnedCommandCombobox({
         },
       )
     : [];
-  const findGroups = (search.trim() ? [extension.find?.(search)] : []).filter(
-    (group): group is ActionGroupDefinition => Boolean(group),
-  );
   const actionGroups: ActionGroupDefinition[] = [
     ...(!extension.groups.length || extension.context
       ? [
@@ -1065,7 +1053,9 @@ function OwnedCommandCombobox({
           },
         ]),
     { heading: "Arrange windows", actions: arrangementActions },
-    ...findGroups,
+    ...(search.trim() ? [extension.find?.(search)] : []).filter(
+      (group): group is ActionGroupDefinition => Boolean(group),
+    ),
     ...(open && capturedExtension ? capturedExtension : extension).groups.map(
       (group) => ({
         ...group,
@@ -1082,19 +1072,8 @@ function OwnedCommandCombobox({
         ),
       }),
     ),
-    // Settings (#1035): settings and commands from the one
-    // registry and its search.
-    ...settingsGroups,
     { heading: "Help", actions: helpActions },
   ].filter((group) => group.actions.length > 0);
-
-  // Settings (#1035): the box's commands join the one registry.
-  useCommandBoxRegistry(
-    actionGroups,
-    [...findGroups, ...settingsGroups],
-    operationalShortcutsEnabled,
-    run,
-  );
 
   const normalizedSearch = normalizeSearchText(search);
   const rankedActions = normalizedSearch

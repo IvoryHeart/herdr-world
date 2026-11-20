@@ -1,5 +1,3 @@
-/* The Settings sheet and its loading sheet (#1035). */
-
 .configuration-backdrop[hidden],
 .configuration-modal [hidden] {
   display: none;
@@ -15,6 +13,7 @@
 }
 
 .configuration-modal .modal-head,
+.configuration-tabs,
 .configuration-modal .modal-actions {
   flex: 0 0 auto;
 }
@@ -23,6 +22,30 @@
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+.configuration-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.configuration-tabs button {
+  flex: 1 1 80px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px;
+  font-size: 12px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted);
+}
+
+.configuration-tabs button[aria-selected="true"] {
+  color: var(--text-strong);
+  background: var(--accent-soft);
 }
 
 .configuration-content {
@@ -183,6 +206,10 @@
 }
 
 @media (max-width: 500px) {
+  .configuration-tabs button {
+    flex-basis: calc(50% - 4px);
+  }
+
   :where(html:not([data-layout="mobile"])) .configuration-modal {
     padding: 12px;
   }

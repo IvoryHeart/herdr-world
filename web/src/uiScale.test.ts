@@ -207,7 +207,7 @@ test.skipIf(!chrome).concurrent.each([
           !menuOnly &&
           !viewportSmoke &&
           asset.kind === "chunk" &&
-          /function (SettingsHome|MobileLayoutDialog)\(/.test(
+          /function (ConfigurationDialog|MobileLayoutDialog)\(/.test(
             await asset.text(),
           )
         )
@@ -344,7 +344,7 @@ test.skipIf(!chrome).concurrent.each([
       if (fixture === "configuration" && !menuOnly && !viewportSmoke) {
         expect(heldChunks.size).toBe(2);
         for (const detail of [false, true]) {
-          const selector = '[aria-label="Loading Settings"]';
+          const selector = '[aria-label="Loading Configuration"]';
           await waitFor(`!!document.querySelector('${selector}')`);
           await waitFor(
             `document.querySelector('${selector}').contains(document.activeElement)`,
@@ -364,16 +364,18 @@ test.skipIf(!chrome).concurrent.each([
           await key("Escape", 27);
           await waitFor(`!document.querySelector('${selector}')`);
           if (detail) {
-            await waitFor(
-              'document.activeElement.getAttribute("aria-label") === "Open Layout"',
-            );
-            await evaluate('configurationTest.click("Open Layout")');
+            expect(
+              await evaluate(
+                'document.activeElement.textContent.includes("Layout")',
+              ),
+            ).toBe(true);
+            await evaluate('configurationTest.click("Layout")');
           } else {
             await waitFor(
               'document.activeElement.getAttribute("aria-label") === "Menu"',
             );
             await evaluate(
-              'configurationTest.click("Menu"); configurationTest.click("Settings")',
+              'configurationTest.click("Menu"); configurationTest.click("Configuration")',
             );
           }
           await waitFor(`!!document.querySelector('${selector}')`);
@@ -418,7 +420,7 @@ test.skipIf(!chrome).concurrent.each([
             const source = await assets.get(path)!.text();
             if (
               source.includes(
-                `function ${detail ? "MobileLayoutDialog" : "SettingsHome"}(`,
+                `function ${detail ? "MobileLayoutDialog" : "ConfigurationDialog"}(`,
               )
             ) {
               gate.resolve();
@@ -430,17 +432,17 @@ test.skipIf(!chrome).concurrent.each([
           if (raceDismissal) {
             const loadedSelector = detail
               ? '[aria-label="Layout Preferences"]'
-              : ".settings-home";
+              : ".configuration-modal";
             await waitFor(`!document.querySelector('${loadedSelector}')`);
             await waitFor(
               detail
-                ? 'document.activeElement.getAttribute("aria-label") === "Open Layout"'
+                ? 'document.activeElement.textContent.includes("Layout")'
                 : 'document.activeElement.getAttribute("aria-label") === "Menu"',
             );
             await evaluate(
               detail
-                ? 'configurationTest.click("Open Layout")'
-                : 'configurationTest.click("Menu"); configurationTest.click("Settings")',
+                ? 'configurationTest.click("Layout")'
+                : 'configurationTest.click("Menu"); configurationTest.click("Configuration")',
             );
             await waitFor(`!!document.querySelector('${loadedSelector}')`);
             await evaluate("configurationTest.loadingRace = false");

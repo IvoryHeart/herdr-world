@@ -52,7 +52,6 @@ import { townScaleLensFacts } from "./townScaleLens";
 import { townScaleSceneRequested } from "./townScaleScene";
 import type { TownTarget } from "./townTargets";
 import { keyTakenByViewSearch } from "../viewSearchShortcut";
-import { useViewControlRequest } from "../../settings/viewControls";
 import "./townLens.css";
 
 const STORAGE_KEY = "townLens";
@@ -632,8 +631,6 @@ export function useTownLenses(
   },
 ) {
   const state = useTownLensState();
-  // Settings and the command box open Town's chooser too (#1035).
-  useViewControlRequest("town.lenses", state.open);
   useTownLensKeys(state, shell, escapeTaken);
   const view = useTownLensView(state.lens, model, facts);
   /** The accessible target focused last, read in the legend. */
