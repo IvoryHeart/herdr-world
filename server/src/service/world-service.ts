@@ -121,6 +121,9 @@ export async function createWorldService(deps: WorldServiceDeps) {
     throw error;
   }
   try {
+    // Offline snapshots and discovery must finish before the service loads its
+    // catalogue. Keep ownership until storage.close() fences the final write.
+    await storage.connections.acquireServiceOwnership();
     return await compose(deps, storage, sessionSecret, releaseDataFolder);
   } catch (error) {
     await storage.close().catch(() => {});
