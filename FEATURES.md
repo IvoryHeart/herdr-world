@@ -1538,7 +1538,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   question, **Mark reviewed** on finished work (it marks the report shown, says
   so if the mark could not be saved, and the item offers **Retry** if the report
   could not be read); a blocked agent has none. Every icon has a label and a
-  tooltip. A message longer than two lines shows **more** on its last line: it,
+  tooltip. When a verified terminal has several questions, **Dismiss all N
+  questions from [asker]** closes its whole open backlog in one step, across
+  pages and runtime restarts, without answering or closing another terminal's
+  questions. Failed saves stay visible for retry; unverified claims are not
+  grouped. Testing only: open `?questionBacklogFixture` (removed immediately)
+  for 20 synthetic Atlas questions and one Beacon question; dismiss Atlas and
+  Beacon stays. The fixture never contacts a runtime; reload to leave it.
+  A message longer than two lines shows **more** on its last line: it,
   or a tap on the text, shows the whole message in place with its links, and
   **less** clips it again. Keyboard focus entering the message reveals its
   links. Hovering the agent's name shows its card with
@@ -1915,12 +1922,22 @@ when piped, with stable exit codes:
   pane's Herdr if World could not record it; it names the failure and exits 1.
   When no alert is confirmed yet, exit 6 (`not_delivered`) carries the recorded ID;
   `retrying: true` means the service will retry a temporary failure with backoff.
+  At 20 open questions per verified terminal (or the shared unverified
+  allowance), or 500 overall, new asks return `question_cap` (exit 3, HTTP 429)
+  and tell the caller to wait until a question closes. These refusals never
+  alert or chime, including repeated attempts; the CLI sends no fallback alert.
+  The allowance follows the terminal across runtime restarts.
   Closing the ask cancels a pending alert. Duplicates are possible after a lost
   reply or restart. JSON preserves `recorded` and Herdr's `notified` evidence
   (`null` for a repeated cause), including through `--wait`. Another verified agent (never
   the asker) may answer a question that is not marked `--owner-only`.
 - `ask withdraw ID` or `ask withdraw --key CAUSE`: the original verified asker
   withdraws a cleared cause, including when a creation reply lost its ask ID.
+  The same freshly verified connection and stable terminal can withdraw after
+  a runtime restart or session change, even when generation and occupant
+  fingerprint differ. Another terminal or connection cannot. Older records
+  without stable terminal identity retain their original stricter checks;
+  answer delivery and receipt authority still follow the original session.
   Answering or withdrawing removes its question marks. `--key` keeps repeated
   causes to one ask; after withdrawal a recurrence can create a fresh question.
   A waiting CLI returns `withdrawn` when its question was cancelled. Repeating

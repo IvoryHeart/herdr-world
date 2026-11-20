@@ -274,6 +274,39 @@ test("--skill prints the agent guide", async () => {
 });
 
 describe("service owner alert", () => {
+  test("repeated question-cap refusals stay quiet and preserve the wait error", async () => {
+    const { context: ctx, out } = context();
+    let alerts = 0;
+    const transport: WorldCliTransport = async () => ({
+      ok: false,
+      code: "question_cap",
+      recorded: false,
+      error:
+        "you have 20 open questions; wait until a question closes before asking again",
+    });
+    for (let attempt = 0; attempt < 21; attempt++) {
+      expect(
+        await runWorldCommand(
+          "ask",
+          ["Continue?", "--json"],
+          ctx,
+          transport,
+          false,
+          () => {
+            alerts++;
+            return { shown: true, reason: "shown" };
+          },
+        ),
+      ).toBe(WORLD_EXIT.refused);
+    }
+    expect(alerts).toBe(0);
+    expect(JSON.parse(out[0]!)).toMatchObject({
+      code: "question_cap",
+      notified: null,
+      error: expect.stringContaining("wait"),
+    });
+  });
+
   test("uses the service outcome without starting a CLI-side Herdr send", async () => {
     const { context: ctx, out } = context();
     ctx.captureCommand = () => {

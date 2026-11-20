@@ -1,4 +1,9 @@
-export type CliErrorCode = "usage" | "refused" | "not_found" | "unavailable";
+export type CliErrorCode =
+  | "usage"
+  | "refused"
+  | "question_cap"
+  | "not_found"
+  | "unavailable";
 
 export class CliError extends Error {
   constructor(

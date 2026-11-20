@@ -982,6 +982,22 @@ cannot be opened without resolving to a colliding entity on another runtime or s
 - **WHEN** a notification's runtime generation or agent session has been replaced
 - **THEN** World reports the original target as unavailable and does not open its replacement
 
+### Requirement: Needs you backlog dismissal
+
+Needs you SHALL offer one labelled action to dismiss every open question from
+one verified connection/terminal when it has multiple questions. Its count and
+scope SHALL include the full backlog across pages, runtime generations and
+sessions, including questions no longer attached to a live agent. Matching
+names or unverified pane claims SHALL NOT group different askers. Saving SHALL
+disable repeat input, report failure in place and allow retry without hiding
+unsaved questions. A successful dismissal SHALL update the shared open-question
+list and count without inventing an answer.
+
+#### Scenario: Backlog spans generations and pages
+- **WHEN** the owner selects the asker's labelled Dismiss all action
+- **THEN** that asker's entire open backlog leaves Needs you in one step
+- **AND** other askers' questions stay visible, even if they share a display name
+
 ### Requirement: Desk attention triage
 
 Desk SHALL present every current actionable agent within the host filter by what it needs from the
