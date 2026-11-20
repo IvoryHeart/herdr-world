@@ -26,6 +26,8 @@ export type ClaudeTapPorts = {
   uid: number | null;
   now: number;
   pid: number;
+  /** Signal 0 probes existence only; injectable for deterministic recovery tests. */
+  kill?: (pid: number, signal: 0) => unknown;
 };
 
 /**
@@ -77,59 +79,77 @@ export function claudeStatusLineTap(
     const dir = path.join(home, ".cache", "herdr-world"),
       file = path.join(dir, "claude-status-line.json"),
       lock = `${file}.lock`,
-      temporary = `${file}.${pid}.tmp`;
-    // Every Claude session's tap writes this one file with its own last
-    // snapshot, so taps run concurrently and an older session's can arrive
-    // after a fresher one. Read, merge and replace is one transaction under
-    // an exclusive lock file: without it two taps could both read 20 %, one
-    // commit 23 % and the other then replace it with its 22 %.
-    // The lock names its holder: a removed lock's inode can be reused.
-    const token = `${pid} ${now} ${Math.random()}`;
-    const mine = () => {
+      token = `${pid}-${now}-${Math.random().toString(36).slice(2) || "0"}`,
+      candidate = `${lock}.${token}`,
+      temporary = `${file}.${token}.tmp`;
+    // Publish a NONEMPTY directory to acquire: rename cannot replace another
+    // nonempty directory, on Unix or Windows. Initializing it elsewhere avoids
+    // an empty-lock interval in which a suspended acquirer could be reclaimed.
+    // Only confirmed process death permits removing an owner's unique marker.
+    // Age cannot fence a live process paused after its final ownership check.
+    const dead = (owner: number) => {
+      if (!Number.isSafeInteger(owner) || owner <= 0) return false;
       try {
-        return fs.readFileSync(lock, "utf8") === token;
-      } catch {
+        (ports.kill ?? process.kill)(owner, 0);
         return false;
+      } catch (error: any) {
+        // Permission errors, unknown platforms and PID reuse fail closed.
+        return error?.code === "ESRCH";
       }
     };
+    const mine = () => fs.existsSync(path.join(lock, token));
     let held = false;
     try {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      fs.mkdirSync(candidate, { mode: 0o700 });
+      fs.writeFileSync(path.join(candidate, token), "", { mode: 0o600 });
       const pause = new Int32Array(new SharedArrayBuffer(4));
-      // A tap holds the lock for milliseconds: wait up to half a second.
+      // A tap normally holds the lock for milliseconds: wait half a second.
       for (let attempt = 0; attempt < 100 && !held; attempt++) {
         try {
-          const fd = fs.openSync(lock, "wx", 0o600);
+          fs.renameSync(candidate, lock);
           held = true;
-          try {
-            fs.writeFileSync(fd, token);
-          } finally {
-            fs.closeSync(fd);
-          }
           break;
         } catch (error: any) {
-          if (error?.code !== "EEXIST") throw error;
+          if (
+            ![
+              "EEXIST",
+              "ENOTEMPTY",
+              "EACCES",
+              "EPERM",
+              "ENOTDIR",
+              "EISDIR",
+            ].includes(error?.code)
+          )
+            throw error;
         }
         try {
-          // A lock this old was left by a tap that died: move it aside and
-          // remove it, but put back a fresh lock moved by mistake.
-          const age = Date.now() - fs.lstatSync(lock).mtimeMs,
-            holder = fs.readFileSync(lock, "utf8");
-          if (age > 10_000) {
-            const moved = `${lock}.${pid}.stale`;
-            fs.renameSync(lock, moved);
-            if (fs.readFileSync(moved, "utf8") !== holder)
-              try {
-                fs.linkSync(moved, lock);
-              } catch {
-                // Another tap holds a new lock; the moved one's holder sees
-                // it is no longer the lock and commits nothing.
-              }
-            fs.unlinkSync(moved);
-            continue;
+          for (const owner of fs.readdirSync(lock)) {
+            if (
+              /^[1-9]\d*-\d+-[a-z0-9]+$/.test(owner) &&
+              dead(Number(owner.split("-")[0]))
+            )
+              fs.unlinkSync(path.join(lock, owner));
           }
-        } catch {
-          // Released meanwhile, or another tap is clearing it: try again.
+          // Never recursively delete or move the lock: a delayed reclaimer
+          // may now be looking at a replacement owner's nonempty directory.
+          fs.rmdirSync(lock);
+          continue;
+        } catch (error: any) {
+          if (error?.code === "ENOTDIR") {
+            // Upgrade from the old file lock only when its PID is dead.
+            // unlink cannot remove a replacement directory lock.
+            try {
+              const legacy = fs.readFileSync(lock, "utf8");
+              if (
+                /^\d+ \d+ [\d.]+$/.test(legacy) &&
+                dead(Number(legacy.split(" ")[0]))
+              )
+                fs.unlinkSync(lock);
+            } catch {
+              // Released meanwhile, or unverifiable: do not steal it.
+            }
+          }
         }
         Atomics.wait(pause, 0, 0, 5);
       }
@@ -174,7 +194,8 @@ export function claudeStatusLineTap(
           JSON.stringify({ version: 1, at: now, windows }),
           { mode: 0o600 },
         );
-        // Commit only while the lock is still this tap's own.
+        // A live owner cannot be reclaimed between this check and rename.
+        // A confirmed-dead owner cannot resume publication.
         if (mine()) fs.renameSync(temporary, file);
         else fs.unlinkSync(temporary);
       }
@@ -186,10 +207,20 @@ export function claudeStatusLineTap(
         // Nothing prepared.
       }
     } finally {
+      // Each unlink names this generation only; rmdir refuses a new holder.
       try {
-        if (held && mine()) fs.unlinkSync(lock);
+        if (held) {
+          fs.unlinkSync(path.join(lock, token));
+          fs.rmdirSync(lock);
+        }
       } catch {
-        // Already cleared as stale.
+        // Already released, or another nonempty directory was installed.
+      }
+      try {
+        fs.unlinkSync(path.join(candidate, token));
+        fs.rmdirSync(candidate);
+      } catch {
+        // Candidate was installed as the lock.
       }
     }
   }

@@ -4,6 +4,7 @@
 - Parent PR or branch, if stacked:
 - Documentation impact: <list relevant guides updated, or explain why existing instructions remain accurate; changelog alone is insufficient>
 - Changelog: <changes/NAME.md fragment, or none — explain why nothing is user-facing>
+- Help: <changed *.help.ts declaration, or none — explain why an added feature needs no help entry; only needed when a fragment has ### Added>
 - Knowledge map impact: <updated, or unchanged — explain why navigation did not change>
 
 Spec impact: <updated spec path or OpenSpec change name, or none — reason>
