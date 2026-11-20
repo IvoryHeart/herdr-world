@@ -12,6 +12,7 @@ import {
   type ConnectionStatus,
 } from "../../api";
 import type { RelationsDocument } from "../../../../shared/relations";
+import type { BoardShape } from "../../../../shared/boardShapes";
 import type {
   StoredInterest,
   GroupInterest,
@@ -110,12 +111,16 @@ export type BoardDocument = {
   };
   notes: BoardNote[];
   strings: BoardString[];
+  /** Drawings; absent when the board has none (shared/boardShapes.ts). */
+  shapes?: BoardShape[];
   /** Absent from a service older than relations. */
   relations?: RelationsDocument;
 };
 export type BoardOp =
   | { op: "note.put"; note: Omit<BoardNote, "rev">; rev?: number }
   | { op: "note.delete"; id: string; rev: number }
+  | { op: "shape.put"; shape: Omit<BoardShape, "rev">; rev?: number }
+  | { op: "shape.delete"; id: string; rev: number }
   | { op: "string.put"; string: BoardString }
   | { op: "string.delete"; id: string }
   | {

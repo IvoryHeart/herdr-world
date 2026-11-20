@@ -1,5 +1,6 @@
 import { ConnectionSwitcher } from "../components/ConnectionSwitcher";
 import { HerdrSetupCard } from "../components/HerdrSetupCard";
+import { openIntegrations } from "../integrations";
 import type { WorldRuntimeState } from "./runtimeStore";
 import type { WorldObject } from "./worldObject";
 
@@ -80,6 +81,9 @@ export function TownNoHosts() {
         Add or reconnect a local or SSH Herdr profile with{" "}
         <strong>Hosts → Manage connections</strong>.
       </p>
+      <button type="button" onClick={() => openIntegrations()}>
+        Connect
+      </button>
     </div>
   );
 }

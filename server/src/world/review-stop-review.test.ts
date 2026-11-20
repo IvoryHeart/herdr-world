@@ -4,10 +4,10 @@ import {
   DESK_METADATA_MAX_BYTES,
   deskMetadataBytes,
 } from "../../../shared/deskState";
-import { deskIdentity } from "../../../web/src/world/useDeskState";
 import { terminalMarkInput } from "../storage/testing/terminal-mark-input";
 import { WorldSnapshotService } from "./snapshot";
 import { reviewPane, reviewStopFixture } from "./testing/review-stop-fixture";
+import { seedReviewStops, reviewMarkInput } from "./testing/review-stop-seed";
 
 const fixtures: Awaited<ReturnType<typeof reviewStopFixture>>[] = [];
 afterEach(async () => {
@@ -22,6 +22,7 @@ async function fixture() {
 test("re-entering recovery protects all 501 known current captures until fresh classification", async () => {
   const f = await fixture();
   const panes = Array.from({ length: 501 }, (_, i) => reviewPane(i));
+  await f.seedStore((writer) => seedReviewStops(writer, "alpha", panes, 1001));
   f.setPanes(panes);
   await f.observe();
   const stop = f.stop();
@@ -68,6 +69,7 @@ test("unknown ownership durably ends a preceding known review before World resta
 async function fullDeskFixture() {
   const f = await fixture();
   const panes = Array.from({ length: 100 }, (_, i) => reviewPane(i));
+  await f.seedStore((writer) => seedReviewStops(writer, "alpha", panes, 1001));
   f.setPanes(panes);
   await f.observe();
   // Match the writer's canonical unresolved binding representation exactly.
@@ -83,13 +85,25 @@ async function fullDeskFixture() {
     );
   const length =
     Math.floor((DESK_METADATA_MAX_BYTES - bytes()) / panes.length) + 2;
-  const mark = (index: number, size: number) =>
-    f.client.call("world.desk.review", {
-      ...deskIdentity(f.leaf(index)),
-      reviewed: true,
-      stop_id: "x".repeat(size),
-    });
-  for (let i = 0; i < panes.length; i++) await mark(i, length);
+  // Queue independent rows together so the real worker groups their commits.
+  // Retain live acknowledged attachments: the capacity regression must detect
+  // accounting that substitutes their width for the persisted representation.
+  await Promise.all(
+    f.storage.terminalMarks.list().map((row) =>
+      f.storage.terminalMarks.put(
+        reviewMarkInput(row, {
+          ...row.body,
+          reviewed_stop: "x".repeat(length),
+        }),
+      ),
+    ),
+  );
+  await f.observe();
+  expect(
+    f.storage.terminalMarks
+      .list()
+      .every((row) => row.binding.state === "attached"),
+  ).toBe(true);
   const row = f.storage.terminalMarks.list()[0]!,
     input = terminalMarkInput("desk");
   const target = {

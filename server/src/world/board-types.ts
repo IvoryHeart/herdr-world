@@ -12,6 +12,8 @@ import type {
 import type { StoredInterest, GroupInterest } from "../../../shared/interest";
 import type { GroupOp } from "./board-groups";
 import type { AppearanceChanges } from "./appearance-edits";
+import type { BoardShape } from "../../../shared/boardShapes";
+export type { BoardShape } from "../../../shared/boardShapes";
 
 export type BoardPoint = { x: number; y: number };
 export type NoteColor = "yellow" | "pink" | "blue" | "green";
@@ -92,6 +94,11 @@ export type BoardDocument = {
   layout: BoardLayoutDocument;
   notes: BoardNote[];
   strings: BoardString[];
+  /**
+   * Drawings (shared/boardShapes.ts); absent when the board has none, as on
+   * boards saved before drawings.
+   */
+  shapes?: BoardShape[];
   /** Which terminals know each other (shared/relations.ts). */
   relations: RelationsDocument;
 };
@@ -119,6 +126,13 @@ export type BoardOp =
       rev?: number;
     }
   | { op: "note.delete"; id: string; rev: number }
+  | {
+      op: "shape.put";
+      shape: Omit<BoardShape, "rev">;
+      /** The revision the client edited; omitted when creating. */
+      rev?: number;
+    }
+  | { op: "shape.delete"; id: string; rev: number }
   | { op: "string.put"; string: BoardString }
   | { op: "string.delete"; id: string }
   | {

@@ -2,7 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MAX_ASSIGNMENTS, ProfileStore, profileWrite } from "./profile-store";
+import {
+  MAX_ASSIGNMENTS,
+  ProfileStore,
+  profileWrite,
+  seededProfiles,
+} from "./profile-store";
+import { memoryBacking } from "../testing/memory-backing";
 
 const fresh = () =>
   join(mkdtempSync(join(tmpdir(), "world-profiles-")), "agent-profiles.json");
@@ -36,7 +42,8 @@ describe("Profile store", () => {
   });
 
   test("assignments are bounded and one per terminal", () => {
-    const store = new ProfileStore(fresh());
+    const backing = memoryBacking(seededProfiles());
+    const store = new ProfileStore(backing);
     for (let i = 0; i < MAX_ASSIGNMENTS + 5; i += 1)
       store.assign({
         connection_id: "local",
@@ -49,6 +56,7 @@ describe("Profile store", () => {
       profile_id: "reviewer",
     });
     const { assignments } = store.get();
+    expect(new ProfileStore(backing).get()).toEqual(store.get());
     expect(assignments).toHaveLength(MAX_ASSIGNMENTS);
     expect(assignments.at(-1)).toMatchObject({ profile_id: "reviewer" });
     expect(

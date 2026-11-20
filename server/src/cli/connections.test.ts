@@ -227,7 +227,7 @@ describe("herdr-world connections", () => {
   test("rejects invalid profiles as usage errors", async () => {
     cli = createTestCli();
     cli.writeConfig("");
-    expect(await connections(["add", "x"])).toBe(EXIT_USAGE);
+    expect(await connections(["add", "x", "--local"])).toBe(EXIT_USAGE);
     expect(
       await connections(["add", "x", "--windows", "--control-socket", "/a"]),
     ).toBe(EXIT_USAGE);
@@ -415,6 +415,9 @@ describe("herdr-world connections", () => {
     expect(await connections(["--help"])).toBe(EXIT_OK);
     expect(cli.output.join("\n")).toContain("admits these changes live");
     expect(cli.output.join("\n")).toContain("no longer needed");
+    expect(cli.output.join("\n")).toContain("HERDR_WORLD_DATA_DIR");
+    expect(cli.output.join("\n")).toContain("instance lock");
+    expect(cli.output.join("\n")).toContain("cannot redirect connection edits");
     expect(cli.output.join("\n")).toMatch(
       /--auto-connect\s+connect at startup and at once on a running World/,
     );

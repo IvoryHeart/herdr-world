@@ -24,6 +24,34 @@ reviewed `package-lock.json`, outside application workspaces. Install it with
 `bun run verification:setup`; do not add checker binaries to the application or
 replace its lock with an unlocked global dependency.
 
+Dependabot groups updates for all manifests: the root/web/server Bun workspace
+and lock, isolated Quint npm manifest and lock, and Actions. Security updates
+remain enabled independently of weekly version updates. Maintainers own alerts;
+shipped high/critical findings must be fixed or excepted before the next release,
+and development-only alerts within a week. Run `bun run security:check` after a
+dependency change; see [SECURITY.md](SECURITY.md#dependency-alerts-and-ownership)
+for the shipping boundary, response policy and exact expiring exception format.
+`bun run security:check --demo-vulnerable` demonstrates an advisory failure using
+synthetic input, without editing files or installing vulnerable code.
+
+Same-repository Dependabot PRs receive automatic maintenance from trusted base
+policy: refreshed notices, a generated fragment when the shipped graph changes,
+or a specific `Changelog: none` reason for development/Actions-only updates, plus
+PR-body documentation metadata and reasoned `Spec impact:` / `Verification impact:`
+lines for routine version updates. Notice generation follows workspace dependency
+paths, including development, optional and peer dependencies, but stops at
+OS/CPU-specific packages. Their exclusive transitive dependencies are excluded;
+packages also reachable through a portable path remain required. Every expected
+portable package must still be installed at its locked version, or preparation
+fails. The preparation job runs with a read-only token,
+disables dependency lifecycle scripts and never executes candidate scripts. A
+separate write job checks out only trusted policy, validates the allowed output
+paths and current head, commits generated docs to the bot branch, then explicitly
+dispatches CI because token-created commits do not start workflows automatically.
+Human PR policies, independent review and protection remain required. If a bot
+update changes tool semantics or models, take ownership of its failing gate;
+automation does not weaken verification or approve/merge a PR.
+
 Behavioral verification CI uses Node 24.19.0 and Eclipse Temurin JDK
 21.0.13+9 (Linux x64). The shards and aggregate install that exact Java build
 through a commit-pinned `actions/setup-java`, reusing its runner tool cache when
@@ -45,9 +73,12 @@ assets required by server typechecks and process tests.
 | Completed candidate | Follow the [candidate-delivery procedure](.agents/skills/candidate-delivery/SKILL.md). |
 | Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus affected non-browser unit tests. Browser suites and behavioral verification run in CI, where required `Delivery checks` blocks merges. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`; a push that only merges `origin/main` runs `bun run check:static`. CI tests the proposed merge of the PR base and head; every main push runs the full matrix. |
 | Full local gate | `bun run check:delivery` runs all local lanes; `HERDR_WORLD_PREPUSH=full git push` makes the hook run it. Native platform acceptance and enforced CI resource accounting remain separate. |
+| CI and delivery numbers | `bun run ci:health --days 3` reads GitHub without writing files; see [definitions and limits](docs/ci-pipelines.md#health-and-delivery-measures). |
 | Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); manage disk capacity separately; it never blocks a check. |
 
 `test:quick` excludes only `{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,ThemedSelect.browser,HerdrSetupCard}.test.ts`; it includes other browser and integration tests.
+CI shares native launchd acceptance with the Darwin installer jobs; the two protected macOS names report those results from Ubuntu. Main retains the full platform matrix.
+
 Tests sit beside their source. `bun scripts/affected.ts origin/main` lists branch impact.
 
 Tests launched with `bun run test`, the local gates and CI receive a fresh
@@ -93,7 +124,44 @@ push. Native platform lanes remain responsible for their OS-specific behavior.
 
 Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook checks formatting and lint without
-writing files, and its `pre-push` hook runs the applicable check. Use focused checks
+writing files, and its `pre-push` hook runs the applicable check. Before that gate,
+the hook checks the complete PR's changelog, knowledge-map, spec and verification
+impact policy. It reads an existing PR description, or `HERDR_WORLD_PR_BODY=<file>` for the intended description
+before a first push. Non-documentation PRs need the two impact lines even with a
+changelog fragment and knowledge-map update. API errors cannot supply an exemption.
+
+Use two plain lines without bold labels in every non-documentation PR:
+
+```text
+Spec impact: <updated spec path or OpenSpec change name, or none — reason>
+Verification impact: <updated model, adapter, coverage owner or named check path, or none — reason>
+```
+
+Good examples:
+
+```text
+Spec impact: none — Contributor tooling leaves product contracts unchanged.
+Verification impact: scripts/check-pr-body.test.ts — Policy input and diff regression cases.
+```
+
+Bad examples (each lacks a reason):
+
+```text
+Spec impact: none
+Verification impact: none
+```
+
+`bun run check:pr-body <file>` checks the committed PR diff, as pre-push and CI do.
+Spec claims name a changed path, spec directory or OpenSpec change name. Verification
+claims name a changed model, adapter, coverage owner or test/check path. An untouched
+claim fails. `Spec impact: none` fails when `openspec/specs/` or `openspec/changes/`
+changes; `Verification impact: none` fails when `quint/`, `verification/` or an owner
+in `verification/coverage.json` changes (including files under directory owners).
+These are cheap consistency checks: reviewers still judge whether a `none` is true
+and whether the evidence is sufficient. Ordinary documentation retains its exemption;
+dependency-bot PRs and merge-only pushes retain their existing policy paths.
+
+Use focused checks
 only for a specific question while developing. For a code push, the hook runs
 `bun run check:changed` against the remote branch (or `origin/main` for a new
 branch). It always runs notices, changelog validation, the size ratchet, formatting,
@@ -145,7 +213,7 @@ full unit inventory locally and full CI gate, even when that input is absent fro
 | Behavioral verification | Model/tooling/OpenSpec inputs or model-backed coverage owners; model-free owners run the cheap coverage inventory check | All accepted models, across three CI groups balanced by measured work |
 | World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
-| Native installation | Install/plugin/package inputs, server/shared binary sources, build-version metadata or affected installation consumers | Installer upgrades, Windows plugin and both macOS architectures |
+| Native installation | Install/plugin/package inputs, imports of the compiled entry points or native test consumers, and build-version metadata | Installer upgrades, Windows plugin and both macOS architectures |
 
 The agent-tooling exception from #484 still covers `scripts/agent/**` (the worktree
 helper), the agent development guide and `changes/<slug>.md`: static checks and affected
