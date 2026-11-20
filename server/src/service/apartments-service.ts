@@ -1,9 +1,29 @@
-import type { ApartmentLink } from "../../../shared/apartments";
+import type { AgentProfile } from "../../../shared/agentProfile";
+import type {
+  ApartmentAppearance,
+  ApartmentLink,
+} from "../../../shared/apartments";
+import {
+  type AppearanceDocument,
+  appearanceFor,
+  avatarLook,
+} from "../../../shared/appearance";
+import {
+  resolveTerminalColorByKeys,
+  tabCardKey,
+  TERMINAL_COLOR_NAMES,
+  type TerminalColorName,
+  workspaceColorKey,
+} from "../../../shared/terminalColor";
 import type { WorldSourcesSnapshot } from "../../../shared/worldSources";
 import type { AgentSessionFileAccess } from "../agent/session-file-access";
 import type { ApartmentsPort } from "../storage/apartments";
 import { readApartmentHistory } from "../world/apartment-history";
-import { type ApartmentTenant, WorldApartments } from "../world/apartments";
+import {
+  type ApartmentPane,
+  type ApartmentTenant,
+  WorldApartments,
+} from "../world/apartments";
 import type { Complete, Fresh } from "../world/snapshot-observers";
 
 type Status = { id: string; label: string };
@@ -39,6 +59,10 @@ export function createApartmentsService<Core extends CoreLease>(deps: {
     hostRuntime(lease: Core): CoreHost;
   } | null;
   sources?(): WorldSourcesSnapshot | null;
+  /** The saved avatars and colours (Board's document). */
+  board?(): { get(): AppearanceDocument };
+  /** The agent profiles World launches from. */
+  profiles?(): { profile(id: string): AgentProfile | undefined };
   publish(revision: number): void;
   log(message: string): void;
 }) {
@@ -84,6 +108,43 @@ export function createApartmentsService<Core extends CoreLease>(deps: {
     }
     return found;
   };
+  /**
+   * A host's live agents' looks, the way Town draws them
+   * (web/src/world/town/townAppearance.ts): the avatar chosen for the pane,
+   * else its profile's look; and its table's colour.
+   */
+  const appearance = (connectionId: string) => {
+    const document = deps.board?.().get();
+    if (!document) return null;
+    const colors = document.layout.colors ?? {};
+    return (pane: ApartmentPane): ApartmentAppearance => {
+      const avatar = appearanceFor(document.appearance, {
+        connection_id: connectionId,
+        kind: "pane",
+        native_id: pane.pane_id,
+        witness: [pane.terminal_id],
+      })?.avatar;
+      const profile = pane.profile_id
+        ? deps.profiles?.().profile(pane.profile_id)
+        : undefined;
+      const color = pane.workspace_id
+        ? resolveTerminalColorByKeys(
+            colors,
+            pane.tab_id
+              ? tabCardKey(connectionId, pane.tab_id, pane.workspace_ids)
+              : "",
+            workspaceColorKey(connectionId, pane.workspace_id),
+          ).color
+        : (profile?.color ?? null);
+      return {
+        profile_id: pane.profile_id,
+        look: avatarLook(avatar) ?? profile?.look ?? null,
+        color: (TERMINAL_COLOR_NAMES as readonly string[]).includes(color ?? "")
+          ? (color as TerminalColorName)
+          : null,
+      };
+    };
+  };
   const apartments = new WorldApartments({
     port: deps.port,
     now: deps.now,
@@ -112,6 +173,7 @@ export function createApartmentsService<Core extends CoreLease>(deps: {
         .agentSessions()
         .knownSession(terminalId, harness);
     },
+    appearance,
     links,
     lastReport: async (tenant) => {
       const access = tenant.session_id ? files(tenant.connection_id) : null;

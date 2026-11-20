@@ -1557,6 +1557,19 @@ the agent runs).
   room; a town too small for it hides the building), from **Apartments** in
   the town center ring, or from **Apartments** in Board's hub. All three read
   the same residents, and the ring and hub show how many live there.
+- Each resident shows its avatar, as Town and Inspector show a live agent:
+  its Town character on its terminal colour, with its harness's icon, in the
+  list (with its harness, project, room and host) and larger in the opened
+  resident. World keeps the avatar at move-in: the avatar chosen for its
+  pane, else its profile's look, else the character Town drew for it, and
+  its tab's or room's colour. Herdr TUI and herdr-core residents look the
+  same. A resident whose avatar was not kept (it moved in before World kept
+  avatars) shows the nearest: its profile's look, else a profile of the same
+  harness, else World's default character; hovering the avatar says which.
+  Its colour then falls back to the plain tile.
+- `?apartments-preview=avatars` in the page's address shows synthetic
+  residents, one per avatar case, for that load only (the page removes it at
+  once; nothing is saved).
 - Search matches name, harness, project, folder, room, host, summary, report,
   `#42` or `PR 42`, repository and the day it ran or moved in (`2026-11-19`).
   Residents list newest first.

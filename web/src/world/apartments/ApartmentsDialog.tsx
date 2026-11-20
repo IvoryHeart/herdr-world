@@ -1,5 +1,11 @@
 import { ArrowLeft, Building2, Play, Search, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   type ApartmentHistory,
   type ApartmentResident,
@@ -9,15 +15,25 @@ import {
   searchApartments,
 } from "../../../../shared/apartments";
 import { AgentHistoryChat } from "../../components/AgentHistoryChat";
+import { AgentIcon } from "../../components/AgentIcon";
 import type { HistoryEntry } from "../../components/agentHistory";
 import { groupHistoryChatItems } from "../../components/agentHistoryView";
 import { CloseButton } from "../../components/CloseButton";
 import { useLayer } from "../../layerStack";
 import { store } from "../../store";
 import { formatUiDateTime } from "../../uiLocale";
-import { harnessLabel, launchAgent, type LaunchTarget } from "../agentProfiles";
+import {
+  harnessLabel,
+  launchAgent,
+  type LaunchTarget,
+  type ProfilesDocument,
+  useAgentProfiles,
+} from "../agentProfiles";
 import { launchConfirmedTerminal, noteAgentStarted } from "../agentStarts";
+import { ProfileSprite } from "../ProfileSprite";
+import { TERMINAL_COLOR_HEX } from "../terminalColor";
 import type { WorldObject, WorldSpaceObject } from "../worldObject";
+import { residentLook, residentLookNote } from "./residentLook";
 import { useApartments, worldApartmentsStore } from "./useApartments";
 import "./apartments.css";
 
@@ -62,6 +78,7 @@ export function ApartmentsDialog({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const apartments = useApartments();
+  const profiles = useAgentProfiles().document;
   const [query, setQuery] = useState(initialQuery);
   const [openId, setOpenId] = useState<string | null>(null);
   useLayer(true, onClose, { element: () => ref.current });
@@ -99,6 +116,7 @@ export function ApartmentsDialog({
           <ResidentDetail
             key={open.id}
             resident={open}
+            profiles={profiles}
             world={world}
             element={() => ref.current}
             onOpen={onOpen}
@@ -130,6 +148,7 @@ export function ApartmentsDialog({
                   <li key={resident.id}>
                     <ResidentRow
                       resident={resident}
+                      profiles={profiles}
                       onOpen={() => setOpenId(resident.id)}
                     />
                   </li>
@@ -149,52 +168,98 @@ export function ApartmentsDialog({
   );
 }
 
+/**
+ * A resident's avatar: the Town character it had (residentLook.ts), on its
+ * colour, with its harness's icon, as the Inspector shows a live agent.
+ */
+export function ResidentAvatar({
+  resident,
+  profiles,
+  large = false,
+}: {
+  resident: ApartmentResident;
+  profiles: Pick<ProfilesDocument, "profiles"> | null;
+  large?: boolean;
+}) {
+  const look = useMemo(
+    () => residentLook(resident, profiles),
+    [resident, profiles],
+  );
+  const color = resident.appearance?.color;
+  const note = residentLookNote(look);
+  return (
+    <span
+      className="apartments-avatar"
+      data-large={large || undefined}
+      data-avatar-source={look.source}
+      style={
+        color
+          ? ({ "--agent-colour": TERMINAL_COLOR_HEX[color] } as CSSProperties)
+          : undefined
+      }
+      title={note ?? undefined}
+    >
+      <ProfileSprite look={look.look} scale={large ? 3 : 2} />
+      <span className="apartments-avatar-harness">
+        <AgentIcon agent={resident.harness ?? undefined} compact />
+      </span>
+    </span>
+  );
+}
+
 function ResidentRow({
   resident,
+  profiles,
   onOpen,
 }: {
   resident: ApartmentResident;
+  profiles: Pick<ProfilesDocument, "profiles"> | null;
   onOpen(): void;
 }) {
   const project = apartmentProject(resident);
   return (
     <button type="button" className="apartments-row" onClick={onOpen}>
-      <span>
-        <strong>{resident.name}</strong>
+      <ResidentAvatar resident={resident} profiles={profiles} />
+      <span className="apartments-row-body">
+        <span className="apartments-row-head">
+          <strong>{resident.name}</strong>
+          <time
+            className="apartments-muted"
+            dateTime={new Date(resident.moved_out_at).toISOString()}
+          >
+            {when(resident.moved_out_at)}
+          </time>
+        </span>
         <span className="apartments-muted">
           {[
             resident.harness ? harnessLabel(resident.harness) : null,
             project,
+            resident.room && resident.room !== project ? resident.room : null,
             resident.connection_label,
           ]
             .filter(Boolean)
             .join(" · ")}
         </span>
-        <time
-          className="apartments-muted"
-          dateTime={new Date(resident.moved_out_at).toISOString()}
-        >
-          {when(resident.moved_out_at)}
-        </time>
+        {resident.summary ? (
+          <span className="apartments-row-summary">{resident.summary}</span>
+        ) : null}
+        {resident.links.length ? (
+          <span className="apartments-row-links">
+            {resident.links.map((link) => (
+              <span key={`${link.kind}${link.repo ?? ""}${link.number}`}>
+                {link.kind === "pr" ? "PR" : "Issue"} #{link.number}
+              </span>
+            ))}
+          </span>
+        ) : null}
       </span>
-      {resident.summary ? (
-        <span className="apartments-row-summary">{resident.summary}</span>
-      ) : null}
-      {resident.links.length ? (
-        <span className="apartments-row-links">
-          {resident.links.map((link) => (
-            <span key={`${link.kind}${link.repo ?? ""}${link.number}`}>
-              {link.kind === "pr" ? "PR" : "Issue"} #{link.number}
-            </span>
-          ))}
-        </span>
-      ) : null}
     </button>
   );
 }
 
 function ResidentDetail({
   resident,
+  profiles,
   world,
   element,
   onOpen,
@@ -202,6 +267,7 @@ function ResidentDetail({
   onBack,
 }: {
   resident: ApartmentResident;
+  profiles: Pick<ProfilesDocument, "profiles"> | null;
   world: WorldObject;
   element(): Element | null;
   onOpen(terminal: {
@@ -298,7 +364,21 @@ function ResidentDetail({
 
   return (
     <div className="apartments-detail">
-      <h2>{resident.name}</h2>
+      <header className="apartments-detail-head">
+        <ResidentAvatar resident={resident} profiles={profiles} large />
+        <div>
+          <h2>{resident.name}</h2>
+          <p className="apartments-muted">
+            {[
+              resident.harness ? harnessLabel(resident.harness) : null,
+              resident.room,
+              resident.connection_label,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+      </header>
       <dl className="apartments-facts">
         <dt>Harness</dt>
         <dd>{resident.harness ? harnessLabel(resident.harness) : "Unknown"}</dd>

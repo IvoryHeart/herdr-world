@@ -59,6 +59,7 @@ const resident = (
   last_report: null,
   links: [{ kind: "pr", number: 42, repo: "example/repo" }],
   session_id: "0f0e0d0c-0000-4000-8000-000000000001",
+  appearance: null,
   ...extra,
 });
 

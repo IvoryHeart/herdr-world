@@ -4,8 +4,10 @@ import {
   APARTMENT_LIMITS,
   APARTMENT_RETENTION_MS,
   type ApartmentLink,
+  parseApartmentAppearance,
   type ApartmentResident,
 } from "../../../shared/apartments";
+
 import { newWorldId } from "./world-identifiers";
 import { StorageWriteRejected, type StorageRequest } from "./world-protocol";
 
@@ -129,6 +131,7 @@ export function parseApartmentMoveIn(value: unknown): ApartmentMoveIn {
       })
       .slice(0, APARTMENT_LIMITS.links),
     session_id: text(value.session_id, "session", APARTMENT_LIMITS.session),
+    appearance: parseApartmentAppearance(value.appearance),
   };
 }
 

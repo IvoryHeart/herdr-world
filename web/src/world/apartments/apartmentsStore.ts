@@ -5,6 +5,7 @@ import {
   type ApartmentResident,
   type ApartmentState,
   EMPTY_APARTMENTS,
+  parseApartmentAppearance,
 } from "../../../../shared/apartments";
 
 /** The service's apartments as this page last read them. */
@@ -79,6 +80,7 @@ function residentOf(value: unknown): ApartmentResident | null {
       .map(linkOf)
       .filter((link): link is ApartmentLink => link !== null),
     session_id: text(value.session_id),
+    appearance: parseApartmentAppearance(value.appearance),
   };
 }
 

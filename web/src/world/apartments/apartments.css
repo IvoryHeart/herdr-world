@@ -27,20 +27,91 @@
   padding: 0;
   overflow-y: auto;
 }
+/* A resident: its avatar beside what it did. */
 button.apartments-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
   width: 100%;
   margin-bottom: 6px;
-  flex-direction: column;
-  align-items: stretch;
   text-align: left;
 }
-.apartments-row > span {
+.apartments-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.apartments-row-head,
+.apartments-row-links {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: 4px 8px;
 }
-.apartments-row time {
+.apartments-row-head time {
   margin-left: auto;
+}
+/* The Town character on its terminal colour, its harness icon in the corner,
+   as the Inspector shows a live agent. */
+.apartments-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 48px;
+  border-radius: 6px;
+  background: var(--agent-colour, var(--accent-soft));
+}
+.apartments-avatar[data-large] {
+  width: 54px;
+  height: 72px;
+  border-radius: 8px;
+}
+.apartments-avatar .profile-sprite {
+  image-rendering: pixelated;
+}
+/* Its harness's icon on the tile's corner, as small as a status badge. */
+.apartments-avatar-harness {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  line-height: 0;
+}
+.apartments-avatar-harness .agent-icon.is-compact {
+  width: 17px;
+  height: 17px;
+  flex-basis: 17px;
+  border-radius: 5px;
+}
+.apartments-avatar-harness .agent-icon.is-compact svg {
+  width: 12px;
+  height: 12px;
+}
+.apartments-avatar[data-large]
+  .apartments-avatar-harness
+  .agent-icon.is-compact {
+  width: 21px;
+  height: 21px;
+  flex-basis: 21px;
+}
+.apartments-avatar[data-large]
+  .apartments-avatar-harness
+  .agent-icon.is-compact
+  svg {
+  width: 15px;
+  height: 15px;
+}
+.apartments-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.apartments-detail-head > div {
+  min-width: 0;
 }
 .apartments-row-summary {
   overflow: hidden;

@@ -1,5 +1,6 @@
 import { agentListRecord } from "../../../shared/agentMetadata";
 import type {
+  ApartmentAppearance,
   ApartmentLink,
   ApartmentResident,
   ApartmentState,
@@ -9,6 +10,7 @@ import {
   APARTMENT_RETENTION_MS,
 } from "../../../shared/apartments";
 import type { BinEntry } from "../../../shared/bin";
+import { readTerminalSettings } from "../agent/terminal-tokens";
 import type { ApartmentMoveIn, ApartmentsPort } from "../storage/apartments";
 
 type Row = Record<string, unknown>;
@@ -30,6 +32,20 @@ export type ApartmentTenant = {
   session_holder: string | null;
   first_seen_at: number;
   last_seen_at: number;
+  /** Its look in World as last seen live; null when World could not read it. */
+  appearance: ApartmentAppearance | null;
+};
+
+/** What World needs to read a live agent's look (its pane, room and table). */
+export type ApartmentPane = {
+  pane_id: string;
+  terminal_id: string;
+  workspace_id: string | null;
+  tab_id: string | null;
+  /** The host's room IDs, which qualify a tab's colour key. */
+  workspace_ids: ReadonlySet<string>;
+  /** The profile World launched it from (its pane's World tokens). */
+  profile_id: string | null;
 };
 
 /**
@@ -112,6 +128,15 @@ export class WorldApartments {
         label: string;
         runtime: "herdr" | "herdr-core";
       };
+      /**
+       * Reads live agents' looks on one host: the avatar chosen for the
+       * pane, its profile's look and its colour. Asked once per observation
+       * and read while the agent lives, because closing a terminal clears
+       * its saved avatar before the move-in is seen.
+       */
+      appearance?(
+        connectionId: string,
+      ): ((pane: ApartmentPane) => ApartmentAppearance) | null;
       /** Pull requests and issues linked to the agent, when sources know. */
       links?(tenant: ApartmentTenant): ApartmentLink[];
       /**
@@ -172,6 +197,15 @@ export class WorldApartments {
     const tabs = new Map(
       (topology.tabs ?? []).map((row) => [row.tab_id, text(row.label, 200)]),
     );
+    const workspaceIds = new Set(
+      (topology.workspaces ?? [])
+        .map((row) => text(row.workspace_id, 200))
+        .filter((id): id is string => !!id),
+    );
+    let lookOf:
+      | ((pane: ApartmentPane) => ApartmentAppearance)
+      | null
+      | undefined;
     for (const pane of panes) {
       const harness = text(pane.agent, 40);
       const terminal = text(pane.terminal_id, 200);
@@ -183,6 +217,22 @@ export class WorldApartments {
       const same = before && before.harness === harness;
       if (!same && host.tenants.size >= MAX_TENANTS_PER_HOST) continue;
       const reported = sessionId(pane, agent);
+      if (lookOf === undefined)
+        lookOf = safe(() => this.deps.appearance?.(connectionId) ?? null, null);
+      const look = lookOf
+        ? safe<ApartmentAppearance | null>(
+            () =>
+              lookOf!({
+                pane_id: paneId,
+                terminal_id: terminal,
+                workspace_id: text(pane.workspace_id, 200),
+                tab_id: text(pane.tab_id, 200),
+                workspace_ids: workspaceIds,
+                profile_id: readTerminalSettings(pane).profile_id ?? null,
+              }),
+            null,
+          )
+        : null;
       const seen: ApartmentTenant = {
         connection_id: connectionId,
         generation,
@@ -204,6 +254,7 @@ export class WorldApartments {
         session_holder: reported ? null : same ? before.session_holder : null,
         first_seen_at: same ? before.first_seen_at : observedAt,
         last_seen_at: observedAt,
+        appearance: look ?? (same ? before.appearance : null),
       };
       // The same agent stays one object, so a session read still running
       // when it leaves lands on the record it leaves.
@@ -346,6 +397,7 @@ export class WorldApartments {
       last_report: null,
       links: safe(() => this.deps.links?.(tenant) ?? [], []),
       session_id: tenant.session_id,
+      appearance: tenant.appearance,
     };
     const task = (async () => {
       let saved: ApartmentResident;

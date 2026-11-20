@@ -1,3 +1,6 @@
+import { AGENT_NAME, type AgentLook, parseLook } from "./agentProfile";
+import { TERMINAL_COLOR_NAMES, type TerminalColorName } from "./terminalColor";
+
 /**
  * Apartments: where finished agents live. When an agent's terminal ends, or
  * the person retires it through the bin, World keeps one resident record in
@@ -25,6 +28,47 @@ export const APARTMENT_LIMITS = {
   links: 20,
   url: 500,
 } as const;
+
+/**
+ * How a resident looked in World when it moved in, read while it was live:
+ * the profile World launched it from, its Town character (its chosen avatar's
+ * or its profile's look; null when Town drew it from its own key) and its
+ * colour.
+ */
+export type ApartmentAppearance = {
+  profile_id: string | null;
+  look: AgentLook | null;
+  color: TerminalColorName | null;
+};
+
+/**
+ * A resident's look, leniently: a part that is missing or no longer valid
+ * (a look from another build) counts as unknown, never as a bad resident.
+ * Residents from before World kept looks have none (null).
+ */
+export function parseApartmentAppearance(
+  value: unknown,
+): ApartmentAppearance | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  let look: ApartmentAppearance["look"] = null;
+  if (row.look !== null && row.look !== undefined)
+    try {
+      look = parseLook(row.look);
+    } catch {
+      look = null;
+    }
+  return {
+    profile_id:
+      typeof row.profile_id === "string" && AGENT_NAME.test(row.profile_id)
+        ? row.profile_id
+        : null,
+    look,
+    color: (TERMINAL_COLOR_NAMES as readonly unknown[]).includes(row.color)
+      ? (row.color as TerminalColorName)
+      : null,
+  };
+}
 
 /** ended: its terminal closed by itself. retired: it rode the bin's bus. */
 export type ApartmentMoveOut = "ended" | "retired";
@@ -65,6 +109,11 @@ export type ApartmentResident = {
   links: ApartmentLink[];
   /** The harness's session ID, when the agent reported one. */
   session_id: string | null;
+  /**
+   * Its look in World; null for residents that moved in before World kept
+   * it. The Apartments window then shows the nearest look it has.
+   */
+  appearance: ApartmentAppearance | null;
 };
 
 export type ApartmentState = {
