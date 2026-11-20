@@ -407,6 +407,44 @@ describe("World aggregate runtime store", () => {
     expect(parsed?.connections[0].snapshot?.workspaces[0].label).toBe("valid");
   });
 
+  test("runtimes read as their machine; the runtime only where it has two", () => {
+    const template = result("valid").connections[0];
+    const runtime = (id: string, kind: string) => ({
+      connection_id: id,
+      kind,
+      installed: true,
+    });
+    const parsed = parseWorldSnapshotResult({
+      ...result("valid"),
+      connections: ["tui", "core", "remote", "loose"].map((id) => ({
+        ...template,
+        connection_id: id,
+        label: `profile ${id}`,
+      })),
+      hosts: [
+        {
+          host_id: "host-local",
+          label: "This computer",
+          runtimes: [runtime("tui", "herdr"), runtime("core", "herdr-core")],
+        },
+        {
+          host_id: "host-remote",
+          label: "dev.example.test",
+          runtimes: [
+            runtime("remote", "herdr"),
+            { ...runtime("gone", "herdr-core"), installed: false },
+          ],
+        },
+      ],
+    });
+    expect(parsed?.connections.map(({ label }) => label)).toEqual([
+      "This computer · Herdr",
+      "This computer · herdr-core",
+      "dev.example.test",
+      "profile loose",
+    ]);
+  });
+
   test("retains every aggregate candidate for view-specific projection", () => {
     const template = result("valid").connections[0];
     const parsed = parseWorldSnapshotResult({

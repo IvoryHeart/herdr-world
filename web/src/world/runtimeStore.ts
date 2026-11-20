@@ -328,6 +328,47 @@ function parseConnection(value: unknown): WorldRuntimeConnection | null {
   };
 }
 
+/**
+ * Runtime labels by connection ID from the snapshot's hosts (#1047): the
+ * machine's name, with the runtime added only where it has more than one,
+ * so every view names hosts as the Hosts menu does.
+ */
+function hostRuntimeLabels(value: unknown): Map<string, string> {
+  const labels = new Map<string, string>();
+  if (!Array.isArray(value)) return labels;
+  for (const entry of value) {
+    const host = record(entry);
+    if (!host || typeof host.label !== "string" || !host.label.trim()) continue;
+    if (!Array.isArray(host.runtimes)) continue;
+    const runtimes = host.runtimes
+      .map(record)
+      .filter(
+        (runtime) =>
+          runtime &&
+          typeof runtime.connection_id === "string" &&
+          runtime.installed !== false,
+      ) as Record<string, unknown>[];
+    for (const runtime of runtimes)
+      labels.set(
+        runtime.connection_id as string,
+        runtimes.length > 1
+          ? `${host.label} · ${runtime.kind === "herdr" ? "Herdr" : String(runtime.kind)}`
+          : host.label,
+      );
+  }
+  return labels;
+}
+
+function withHostLabel(
+  connection: WorldRuntimeConnection,
+  labels: ReadonlyMap<string, string>,
+): WorldRuntimeConnection {
+  const label = labels.get(connection.connectionId);
+  return label && label !== connection.label
+    ? { ...connection, label }
+    : connection;
+}
+
 export function parseWorldSnapshotResult(
   value: unknown,
 ): Omit<WorldRuntimeState, "status" | "error"> | null {
@@ -344,13 +385,14 @@ export function parseWorldSnapshotResult(
   }
   const seen = new Set<string>();
   const connections: WorldRuntimeConnection[] = [];
+  const labels = hostRuntimeLabels(item.hosts);
   // The same-origin service has already bounded the managed catalogue. A
   // renderer cap here would discard selection and descendant information.
   for (const value of item.connections) {
     const connection = parseConnection(value);
     if (!connection || seen.has(connection.connectionId)) continue;
     seen.add(connection.connectionId);
-    connections.push(connection);
+    connections.push(withHostLabel(connection, labels));
   }
   return {
     ...(typeof item.service_incarnation === "string"
@@ -373,6 +415,7 @@ async function prepareWorldSnapshotResult(
   if (!item || !Array.isArray(item.connections)) return null;
   const header = parseWorldSnapshotResult({ ...item, connections: [] });
   if (!header) return null;
+  const labels = hostRuntimeLabels(item.hosts);
   const seen = new Set<string>();
   for (const value of item.connections) {
     if (!current()) return null;
@@ -384,7 +427,7 @@ async function prepareWorldSnapshotResult(
       throw new Error("invalid World observation catalogue");
     if (connection && !seen.has(connection.connectionId)) {
       seen.add(connection.connectionId);
-      header.connections.push(connection);
+      header.connections.push(withHostLabel(connection, labels));
     }
     await yieldTask();
   }
@@ -813,6 +856,13 @@ export class WorldRuntimeStore {
         throw new Error("invalid World observation catalogue");
       if (incarnation && record(response)?.service_incarnation !== incarnation)
         throw new Error("World observation service incarnation mismatch");
+      // Held hosts carry their host label; compare like with like so an
+      // unchanged host is retained.
+      const labels = hostRuntimeLabels(record(response)?.hosts);
+      const parseLabelled = (row: unknown) => {
+        const connection = parseConnection(row);
+        return connection && withHostLabel(connection, labels);
+      };
       try {
         return await prepareWorldSnapshotResult(
           response,
@@ -825,7 +875,7 @@ export class WorldRuntimeStore {
                   this.state,
                   incarnation,
                   base,
-                  parseConnection,
+                  parseLabelled,
                 )
             : parseConnection,
         );

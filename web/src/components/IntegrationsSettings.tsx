@@ -47,6 +47,7 @@ import {
 } from "../world/worldSources";
 import type { AgentMatches } from "./AgentIntegrationsSettings";
 import { ConnectionManagerDialog } from "./ConnectionSwitcher";
+import { RuntimeHosts } from "./IntegrationsHosts";
 import "./IntegrationsSettings.css";
 
 type Action = {
@@ -179,9 +180,13 @@ const tabLabel = (tab: Tab) =>
 /** The tab last opened on this page: Integrations reopens where it was. */
 let lastTab: Tab | null = null;
 
-/** The tab a focused row sits in: `source:github` is in Sources. */
+/**
+ * The tab a focused row sits in: `source:github` is in Sources, a host
+ * (`host:<id>`) in Runtimes.
+ */
 function kindOf(focus: string | undefined): IntegrationKind | null {
   const prefix = focus?.split(":", 1)[0];
+  if (prefix === "host") return "runtime";
   return INTEGRATION_KINDS.find((kind) => kind === prefix) ?? null;
 }
 
@@ -555,6 +560,20 @@ export function IntegrationsSettings({
       )}
     </h3>
   );
+  // Runtimes read per machine once the service names its hosts.
+  const hostsListed = !!snapshot?.hosts?.length;
+  const runtimeHosts = () => (
+    <RuntimeHosts
+      hosts={snapshot?.hosts ?? []}
+      rows={ofKind("runtime")}
+      terms={terms}
+      rowFor={rowFor}
+      open={open}
+      toggle={toggle}
+      busy={busy !== null}
+      run={run}
+    />
+  );
   const group = (kind: IntegrationKind) => (
     <section
       key={kind}
@@ -563,7 +582,9 @@ export function IntegrationsSettings({
       aria-label={INTEGRATION_KIND_LABELS[kind]}
     >
       {heading(kind)}
-      {ofKind(kind).length ? (
+      {kind === "runtime" && hostsListed ? (
+        runtimeHosts()
+      ) : ofKind(kind).length ? (
         <ul className="integrations-list">{ofKind(kind).map(rowFor)}</ul>
       ) : (
         <p className="integrations-empty">{PANELS[kind]?.empty}</p>
@@ -619,15 +640,20 @@ export function IntegrationsSettings({
   } else {
     const listed = ofKind(active);
     const kindLabel = INTEGRATION_KIND_LABELS[active];
-    before = listed.length ? (
-      <ul className="integrations-list">{listed.map(rowFor)}</ul>
-    ) : terms.length ? (
-      noMatch(`No ${kindLabel.toLowerCase()} match`)
-    ) : (
-      <p className="integrations-empty">
-        {PANELS[active]?.empty ?? `No ${kindLabel.toLowerCase()} yet.`}
-      </p>
-    );
+    before =
+      active === "runtime" &&
+      hostsListed &&
+      (listed.length || !terms.length) ? (
+        runtimeHosts()
+      ) : listed.length ? (
+        <ul className="integrations-list">{listed.map(rowFor)}</ul>
+      ) : terms.length ? (
+        noMatch(`No ${kindLabel.toLowerCase()} match`)
+      ) : (
+        <p className="integrations-empty">
+          {PANELS[active]?.empty ?? `No ${kindLabel.toLowerCase()} yet.`}
+        </p>
+      );
   }
   const agentsBlock = agentsKind ? (
     <section

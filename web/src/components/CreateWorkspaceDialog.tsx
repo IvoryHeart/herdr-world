@@ -16,7 +16,8 @@ import { useId, useMemo } from "react";
 import { CornerLeftUp, Folder, History } from "lucide-react";
 import type { WorkspacePathInfo } from "../../../shared/workspacePath";
 import { bridge, type ConnectionClient } from "../api";
-import { hostRuntimeLabel, worldHosts, type WorldHost } from "../worldHosts";
+import { worldHosts, type WorldHost } from "../worldHosts";
+import { primaryRuntime, runtimeName, worldHostGroups } from "../hostGroups";
 import { createCoreRoom } from "../world/coreControl";
 import {
   completeFolder,
@@ -61,6 +62,15 @@ export function CreateWorkspaceDialog({
   } | null>(null);
   const hosts = useStoreSelector(worldHosts);
   const ready = hosts.filter((host) => host.state === "ready");
+  // The picker names machines; each option stands for its host's first
+  // ready runtime, and a Runtime choice appears only where a host has more.
+  const groups = useStoreSelector(worldHostGroups);
+  const readyHosts = groups
+    .map((group) => ({
+      ...group,
+      ready: group.runtimes.filter((runtime) => runtime.state === "ready"),
+    }))
+    .filter((group) => group.ready.length);
   const destinationSource = useRef({ ready, inherited, initialDestination });
   destinationSource.current = { ready, inherited, initialDestination };
   const current: WorldHost | null =
@@ -71,6 +81,11 @@ export function CreateWorkspaceDialog({
           host.generation === destination.runtimeGeneration,
       )) ||
     null;
+  const currentHost = current
+    ? readyHosts.find((group) =>
+        group.ready.some((runtime) => runtime.id === current.id),
+      )
+    : undefined;
   const inCore = current?.runtime === "herdr-core";
   const createReason = !current
     ? "Choose a current destination host."
@@ -306,11 +321,17 @@ export function CreateWorkspaceDialog({
           <select
             aria-label="Destination host"
             disabled={submitting}
-            value={destination?.connectionId ?? ""}
+            value={currentHost?.ready[0]!.id ?? ""}
             onChange={(event) => {
-              const owner = ready.find(
-                (connection) => connection.id === event.target.value,
+              const host = readyHosts.find(
+                (group) => group.ready[0]!.id === event.target.value,
               );
+              const owner =
+                host &&
+                primaryRuntime(
+                  { runtimes: host.ready },
+                  inherited?.connectionId,
+                );
               setDestination(
                 owner
                   ? {
@@ -324,15 +345,39 @@ export function CreateWorkspaceDialog({
             <option value="" disabled>
               Choose a host
             </option>
-            {ready.map((host) => (
-              <option key={host.id} value={host.id}>
-                {hostRuntimeLabel(host)
-                  ? `${host.label} · ${hostRuntimeLabel(host)}`
-                  : host.label}
+            {readyHosts.map((host) => (
+              <option key={host.id} value={host.ready[0]!.id}>
+                {host.label}
               </option>
             ))}
           </select>
         </label>
+        {currentHost && currentHost.ready.length > 1 ? (
+          <label className="form-field">
+            <span>Runtime</span>
+            <select
+              aria-label="Runtime"
+              disabled={submitting}
+              value={destination?.connectionId ?? ""}
+              onChange={(event) => {
+                const owner = currentHost.ready.find(
+                  (runtime) => runtime.id === event.target.value,
+                );
+                if (owner)
+                  setDestination({
+                    connectionId: owner.id,
+                    runtimeGeneration: owner.generation,
+                  });
+              }}
+            >
+              {currentHost.ready.map((runtime) => (
+                <option key={runtime.id} value={runtime.id}>
+                  {runtimeName(runtime)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         <label className="form-field">
           <span>Name</span>
