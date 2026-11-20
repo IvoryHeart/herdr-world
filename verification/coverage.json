@@ -63,6 +63,8 @@
         "server/src/connections/ssh-preflight-recovery.test.ts",
         "server/src/connections/profiles.test.ts",
         "server/src/connections/first-run.test.ts",
+        "server/src/cli/connections.test.ts",
+        "server/src/connections/registry-process.test.ts",
         "server/src/connections/local-recovery.test.ts",
         "server/src/service/local-recovery.test.ts",
         "server/src/connections/host-service.test.ts",
@@ -82,10 +84,14 @@
         "models": ["quint/runtime-control.qnt", "quint/runtime-drain.qnt"],
         "contracts": [
           "verification/consumer-evidence.md",
-          "verification/composition.md"
+          "verification/composition.md",
+          "verification/contracts/connection-registry.md"
         ],
         "tests": [
           "server/src/connections/profile-service.test.ts",
+          "server/src/cli/connections.test.ts",
+          "server/src/connections/registry-process.test.ts",
+          "server/src/connections/first-run.test.ts",
           "server/src/connections/ssh-preflight-recovery.test.ts",
           "server/src/connections/profiles.test.ts",
           "server/src/connections/local-recovery.test.ts",
@@ -100,7 +106,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local initial-socket retry consumes the same unchanged runtime-control/drain transitions; deterministic scheduler cancellation/backoff tests and a production-composition native-socket test verify late readiness, fresh admission and retired-generation refusal. This does not establish macOS login activation. Host catalogue migration preserves runtime IDs; serialized discovery, empty-host durability, disappearance/rediscovery, independent sibling failure, host removal and discovery during shutdown consume the same unchanged manager transitions. Real composition tests cover authenticated host RPC/CLI admission and no offline fallback. Host admission additionally exhausts eight saved-host/profile auto-connect combinations and four recovering-runtime/sibling-disconnect combinations with the actual retry scheduler. Persistence reload, deferred-start Disconnect, explicit absent-endpoint Connect, retained intent across temporary absence and failed-write startup isolation are direct finite consumer evidence; manager transitions remain unchanged. See the host ownership consumer decision.",
+      "evidenceDecision": "Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local initial-socket retry consumes the same unchanged runtime-control/drain transitions; deterministic scheduler cancellation/backoff tests and a production-composition native-socket test verify late readiness, fresh admission and retired-generation refusal. This does not establish macOS login activation. Host catalogue migration preserves runtime IDs; serialized discovery, empty-host durability, disappearance/rediscovery, independent sibling failure, host removal and discovery during shutdown consume the same unchanged manager transitions. Real composition tests cover authenticated host RPC/CLI admission and no offline fallback. Host admission additionally exhausts eight saved-host/profile auto-connect combinations and four recovering-runtime/sibling-disconnect combinations with the actual retry scheduler. Persistence reload, deferred-start Disconnect, explicit absent-endpoint Connect, retained intent across temporary absence and failed-write startup isolation are direct finite consumer evidence; manager transitions remain unchanged. See the host ownership consumer decision. Saved registry ownership adds direct exhaustive CLI admission orders and actual independent-process startup/crash consumers (verification/contracts/connection-registry.md); these establish the native file-lock and consumer boundaries without expanding the manager models.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -3200,7 +3206,7 @@
       "status": "modeled",
       "technique": "finite-model-and-exhaustive-consumer",
       "assessment": "48 configurations: three CLI verbs, both writer orders, both arrival boundaries and independent save failures with retry",
-      "remaining": "Runtime rollback and platform durability retain existing consumers. Offline CLI lost update is reproduced and reported as #1084; live queue is not cross-process ownership.",
+      "remaining": "Runtime rollback and platform durability retain existing consumers. Offline preservation and startup races use the separate registry ownership protocol and real-process consumers mapped in Q02; the live queue is not cross-process ownership.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/connection-registry.qnt"],
@@ -3259,7 +3265,7 @@
       "status": "alternative-evidence",
       "technique": "finite-failure-matrix-and-native-subprocess",
       "assessment": "One async discovery save with before/after failure and retry; equal-content cache publications commute; real subprocess/PTY tests retain byte transport",
-      "remaining": "Cross-process startup race remains #1084. Native harness/macOS acceptance and power loss remain platform checks; existing creation/core models own post-preparation launch.",
+      "remaining": "Cross-process startup ownership uses the Q02 registry-process consumers and connection-registry contract. Native harness/macOS acceptance and power loss remain platform checks; existing creation/core models own post-preparation launch.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": [],

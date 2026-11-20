@@ -2680,13 +2680,20 @@ and herdr-core alike:
   records the actual service address, and the CLI uses that folder's own token.
   `HERDR_WORLD_URL` and `HERDR_WORLD_TOKEN` cannot redirect these edits, and a
   service owning another registry refuses them. A managed service bound to one
-  non-loopback address still needs `--restart` to save and restart; stop a
-  foreground process there before editing.
+  non-loopback address still needs `--restart`: it stops the service, saves
+  offline, then starts it again even if the edit is refused. Stop a foreground
+  process there before editing.
   An unreachable live owner, refused edit or unreadable HTTP reply names the
   target service and gives recovery steps, without an offline retry. Check that
   World's data folder, address and live catalogue before retrying, or stop it
-  before editing offline. With no live owner, edits are saved for the next start;
-  for older services without locks, the installed service's configured address
+  before editing offline. Offline commands serialize the whole read/edit/save,
+  so successful unrelated edits survive concurrent CLI commands. Service startup
+  and first-run discovery share that ownership; a starting or busy owner can
+  refuse an edit without writing. Ownership follows the registry even across
+  data folders, survives process pauses and releases automatically on process exit.
+  Keep the private `connections.json.ownership.sqlite` sidecar in place; never
+  delete or replace it to bypass a busy owner. With no live owner, edits are saved
+  for the next start; for older services without locks, the installed service's configured address
   is still checked. Validation errors exit 2; persistence and service failures exit 1.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
