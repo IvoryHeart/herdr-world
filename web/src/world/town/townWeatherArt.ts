@@ -161,6 +161,28 @@ export function townGustAt(
   };
 }
 
+/** A sheet's overhang past each screen edge, in screen pixels. */
+const SHEET_BLEED = 64;
+
+/**
+ * The world rectangle a weather sheet covers for a camera at `origin` and
+ * zoom `z` on a `width` × `height` screen: the whole screen and a little
+ * more, whatever the zoom or scroll.
+ */
+export function townWeatherSheet(
+  origin: { x: number; y: number },
+  z: number,
+  width: number,
+  height: number,
+): TownRect {
+  return {
+    x: (-SHEET_BLEED - origin.x) / z,
+    y: (-SHEET_BLEED - origin.y) / z,
+    w: (width + SHEET_BLEED * 2) / z,
+    h: (height + SHEET_BLEED * 2) / z,
+  };
+}
+
 /* ---------- drawing ---------- */
 
 function texture(
@@ -271,11 +293,6 @@ export function createTownWeatherArt(options: {
       clouds: readonly { x: number; y: number; speed: number }[],
     ) {
       span = nextSpan;
-      for (const sprite of [wet, lying, fog]) {
-        sprite.position.set(span.x, span.y);
-        sprite.width = span.w;
-        sprite.height = span.h;
-      }
       for (const child of [
         ...puddleLayer.removeChildren(),
         ...bankLayer.removeChildren(),
@@ -312,6 +329,17 @@ export function createTownWeatherArt(options: {
       world: Container,
       viewport: { width: number; height: number },
     ) {
+      const { width, height } = viewport;
+      const z = world.scale.x || 1;
+      // The wet, snowy or foggy sheets cover the screen, not the town: the
+      // wild land around it runs on past any span (townWildBands), so a sheet
+      // sized to the town would stop at a hard edge over the forest.
+      const seen = townWeatherSheet(world.position, z, width, height);
+      for (const sprite of [wet, lying, fog]) {
+        sprite.position.set(seen.x, seen.y);
+        sprite.width = seen.w;
+        sprite.height = seen.h;
+      }
       wet.visible = sky.wet > 0.01;
       wet.alpha = 0.2 * sky.wet;
       puddleLayer.visible = wet.visible;
@@ -330,8 +358,6 @@ export function createTownWeatherArt(options: {
           bank.sprite.alpha =
             0.4 * sky.fog * Math.min(1, along / 300, (span.w - along) / 300);
         }
-      const { width, height } = viewport;
-      const z = world.scale.x || 1;
       const place = (sprite: Sprite, x: number, y: number, size = 1) => {
         sprite.visible = true;
         sprite.position.set(

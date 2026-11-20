@@ -657,7 +657,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     real weather still shows clearly, and a held condition shows at moderate
     strength. Rain, snow and wind streaks fall over the whole visible map,
     buildings and trees included, at every zoom and scroll position; wet and
-    snowy ground and fog lie under the buildings. Status light stays above
+    snowy ground and fog lie under the buildings and cover all the land on
+    screen, the forest around the town included, with no edge. Status light stays above
     the weather, and dark weather lights rooms, desk colours and lamps as
     dusk would, so lit rooms, desk colours, the amber reception pulse and the
     post office read in a storm. Rain, snow and wind streaks keep the same

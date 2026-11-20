@@ -9,6 +9,7 @@ import {
   townRainAt,
   townRainSlant,
   townSnowAt,
+  townWeatherSheet,
 } from "./townWeatherArt";
 import { layoutTown, TOWN_TILE as T, TownGround } from "./townLayout";
 import { townModelFromProjection } from "./townModel";
@@ -96,5 +97,28 @@ test("rain and snow cover the whole screen, phone and laptop", () => {
             cells.add(row * cols + Math.floor((p.x / w) * cols));
         }
         expect(cells.size).toBe(cols * rows);
+      }
+});
+
+test("wet, snowy and foggy ground covers the whole screen at any zoom or scroll", () => {
+  // The camera draws world point p at screen p * z + origin. Far above, below
+  // or beside the town (the forest runs on), the sheet still reaches past
+  // every edge of the screen, so its edge is never seen.
+  for (const [w, h] of [
+    [390, 844],
+    [1512, 982],
+  ] as const)
+    for (const z of [0.25, 0.5, 1, 2, 4])
+      for (const origin of [
+        { x: 0, y: 0 },
+        { x: 400, y: 9000 },
+        { x: -12_000, y: -7000 },
+        { x: 8000, y: -300 },
+      ]) {
+        const sheet = townWeatherSheet(origin, z, w, h);
+        expect(sheet.x * z + origin.x).toBeLessThan(0);
+        expect(sheet.y * z + origin.y).toBeLessThan(0);
+        expect((sheet.x + sheet.w) * z + origin.x).toBeGreaterThan(w);
+        expect((sheet.y + sheet.h) * z + origin.y).toBeGreaterThan(h);
       }
 });
