@@ -1,3 +1,4 @@
+import { lockedQuintVersion } from "./verification-setup";
 import { execFileSync } from "node:child_process";
 import { verificationModels } from "../quint/models";
 import { expect, test } from "bun:test";
@@ -32,7 +33,7 @@ test("canonical evidence requires every focused worker and one source/tool ident
       sourceRevision: "a".repeat(40),
       sourceInputs,
       tools: {
-        quint: "0.33.0",
+        quint: lockedQuintVersion,
         checker: "0.62.1",
         jarSha256: "b".repeat(64),
         node: "synthetic",
@@ -142,7 +143,7 @@ test.serial.each(["resources", "publication"] as const)(
         sourceRevision: revision,
         sourceInputs,
         tools: {
-          quint: "0.33.0",
+          quint: lockedQuintVersion,
           checker: "0.62.1",
           jarSha256: "b".repeat(64),
           node: "synthetic",

@@ -30,9 +30,11 @@ import { replayRangerRecovery } from "./ranger-recovery";
 import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
+import { assertQuintBackend } from "../scripts/verification-quint-policy";
 import { withPrivateChecker } from "../scripts/verification-checker";
 import {
   assertVerificationInstalled,
+  lockedQuintVersion,
   checkerHome,
   checkerJar,
   quintCli,
@@ -411,6 +413,7 @@ async function command(
   expectedViolation = false,
   signal = cancellation.signal,
 ) {
+  assertQuintBackend(args);
   activeLabel = label;
   const started = performance.now();
   const executionArgs = args.map((arg) =>
@@ -692,8 +695,8 @@ export async function runReviewedQuintModels(
     const version = await command("version", ["--version"]);
     assert.equal(
       version.trim(),
-      "0.33.0",
-      "spike requires pinned Quint 0.33.0",
+      lockedQuintVersion,
+      "Verification requires the locked Quint version",
     );
     const results = [];
     for (const item of runCases) {
@@ -1207,7 +1210,13 @@ export async function runReviewedQuintModels(
       await writeFile(
         resolve(output, "results.json"),
         JSON.stringify(
-          { version: "0.33.0", seed: 42, samples: 500, maxSteps: 25, results },
+          {
+            version: lockedQuintVersion,
+            seed: 42,
+            samples: 500,
+            maxSteps: 25,
+            results,
+          },
           null,
           2,
         ),
