@@ -1,0 +1,41 @@
+import { expect, test } from "bun:test";
+import { replayRegistryMatrix } from "./connection-registry";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { createTestCli } from "../server/src/cli/test-context";
+import { createConnectionsCommand } from "../server/src/cli/connections";
+import { runCli } from "../server/src/cli/index";
+
+test("all 48 registry writer, arrival, persistence and retry schedules preserve successful edits", async () => {
+  expect((await replayRegistryMatrix()).configurations).toBe(48);
+});
+
+test("counterexample: two offline CLI writers acknowledge success but lose an addition", async () => {
+  const cli = createTestCli();
+  cli.writeConfig("");
+  const add = (id: string) =>
+    runCli(["connections", "add", id, "--core"], cli.context, [
+      createConnectionsCommand({
+        probe: async () => false,
+        herdrInstalled: async () => false,
+      }),
+    ]);
+  try {
+    expect(await add("alpha")).toBe(0);
+    expect(await Promise.all([add("beta"), add("gamma")])).toEqual([0, 0]);
+    const saved = JSON.parse(
+      readFileSync(
+        join(cli.home, ".config", "herdr-world", "connections.json"),
+        "utf8",
+      ),
+    );
+    // Characterization of a reported defect, deliberately not a passing claim
+    // for offline serialization. Remove this witness when its repair lands.
+    expect(saved.profiles.map((p: { id: string }) => p.id)).toEqual([
+      "alpha",
+      "gamma",
+    ]);
+  } finally {
+    cli.cleanup();
+  }
+});
