@@ -145,7 +145,10 @@ consumers show it as unknown.
 `spans` are sorted, bounded `[from, to]` millisecond pairs: when the run was
 going. Responses at most ten minutes apart join into one span (the host reader
 keeps at most 48 per run and day), and the spans World saw the run's agent
-`working` join in, so a long call between two responses still counts. Runs at
+`working` join in, so a long call between two responses still counts. World's
+own working spans join only where they touch: an observed idle or blocked gap,
+however short, stays a gap, so it never becomes overlap with another agent.
+Past 48 spans in a day, an agent's two closest spans join (the bound). Runs at
 once is the overlap of these spans, never a count of runs that answered
 somewhere in an hour.
 
@@ -155,19 +158,22 @@ Every harness World supports gets World's own measurement: time `working` and
 harnesses whose session logs World also reads tokens from: today Claude,
 Codex, Pi and Gemini. An agent World saw while its pane held a transcript run
 is joined to that run (the newest run in its pane), and the link is kept with
-the activity history. An agent of any other harness is a run of its own, keyed
-`world:<agent ID>`, with `source:"world"`: `calls`, `max_prompt_tokens` and
+the activity history. An agent of any other harness, or of a harness World
+reads whose log has no run yet (before its first response, or while the log is
+unreadable), is a run of its own, keyed `world:<agent ID>`, with
+`source:"world"`: `calls`, `max_prompt_tokens` and
 token and cost metrics are `null` (not available), never zero, while
 `active_ms`, `waiting_on_you_ms` and `spans` come from World's measurement.
 
 `pull_request` comes from a work link the agent's own session validated (the
 link's session fingerprint matches the pane's current agent session) naming
 exactly one GitHub pull request; that link is kept with the run
-(`attribution:"link"`). Otherwise the branch names a pull request only when
-exactly one in the work catalogue has that head branch
-(`attribution:"branch"`). When several repositories' pull requests share the
-branch, `pull_request` is null and `attribution` is `ambiguous`: World never
-picks the most recently updated. `none` means no evidence.
+(`attribution:"link"`). A branch alone never names a pull request: it
+carries no repository, and the same branch name in another repository is not
+this run's work. When a catalogue pull request has the run's branch but no
+validated link proves it, `pull_request` is null and `attribution` is
+`ambiguous`: World never picks the only match or the most recently updated.
+`none` means no evidence.
 
 For a character card, query `group_by:"agent"` with its qualified pane filter,
 or `group_by:"run"` and match the row's qualified pane identity.

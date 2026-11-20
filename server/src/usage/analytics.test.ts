@@ -329,8 +329,10 @@ test("runs group one session's days and models, heaviest first, with role, PR an
       models: ["other", "model"],
       role: "fixer",
       branch: "crew/42",
-      pull_request: { key: "github:pr:example/project#9", number: 9 },
-      attribution: "branch",
+      // The only catalogue pull request on its branch, but no validated link:
+      // a branch carries no repository, so none is named.
+      pull_request: null,
+      attribution: "ambiguous",
       calls: 5,
       max_prompt_tokens: 500,
       // Responses an hour apart are two spans: when it was going.
@@ -411,6 +413,12 @@ test("World's time for an agent joins its log run, which a session-validated lin
   const s = setup();
   s.usage.entities = [{ ...s.row, run_id: RUN, branch: "crew/42" }];
   observeFor(s, at - 5 * 60_000, 4);
+  s.sources.items = [pr("example/one", 7), pr("example/two", 8)];
+  s.sources.items = [pr("example/two", 8)];
+  // One pull request elsewhere on the same branch name is not evidence.
+  expect((await s.service.get({ group_by: "run" })).rows[0]!.run).toMatchObject(
+    { pull_request: null, attribution: "ambiguous" },
+  );
   s.sources.items = [pr("example/one", 7), pr("example/two", 8)];
   const run = await s.service.get({ group_by: "run" });
   // Two repositories' pull requests share the branch: none is guessed.

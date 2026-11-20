@@ -605,26 +605,22 @@ function runDetail(
   const pullRequests = work.items.filter(
     (item) => item.source === "github" && item.kind === "pull_request",
   );
-  // A session-validated link names the pull request. A branch alone names it
-  // only when one pull request in the catalogue has that head branch: the
-  // same branch in two repositories stays unknown, never the latest.
+  // Only a session-validated link names the pull request. A branch alone
+  // never does: it carries no repository, and the same branch name in another
+  // repository is not this run's work. A catalogue pull request with the
+  // run's branch but no link leaves the pull request unknown (ambiguous).
   const linked = linkedItem
     ? (pullRequests.find((item) => item.key === linkedItem) ?? {
         key: linkedItem,
         number: Number(/#(\d+)$/.exec(linkedItem)?.[1]) || undefined,
       })
     : undefined;
-  const byBranch = branch
-    ? pullRequests.filter((item) => item.branch === branch)
-    : [];
-  const pr = linked ?? (byBranch.length === 1 ? byBranch[0] : undefined);
+  const pr = linked;
   const attribution = linked
     ? "link"
-    : pr
-      ? "branch"
-      : byBranch.length > 1
-        ? "ambiguous"
-        : "none";
+    : branch && pullRequests.some((item) => item.branch === branch)
+      ? "ambiguous"
+      : "none";
   const context =
     identity?.pane_id && newest
       ? usage.contexts?.find(

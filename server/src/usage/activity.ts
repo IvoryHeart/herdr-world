@@ -13,9 +13,16 @@ const DAY = 86_400_000;
 const MAX_ROWS = 8192;
 /** An observation is never carried through a long gap without fresh evidence. */
 const LEASE_MS = 15_000;
-/** Working spans this close join; a row keeps at most this many. */
-const SPAN_GAP_MS = 60_000;
+/**
+ * Working spans join only where they touch: an observed idle or blocked gap,
+ * however short, is not working time, and filling it would invent overlap
+ * with another agent's work. A row keeps at most this many spans; past it
+ * the two closest join (the bound, documented in docs/usage-analytics.md).
+ */
+const SPAN_GAP_MS = 0;
 const SPAN_LIMIT = 48;
+/** The history file's size limit, for reading and writing alike. */
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
 /** Agent→run and run→item links kept, newest last. */
 const MAX_LINKS = 4096;
 const RUN_ID = /^run_[a-f0-9]{64}$/;
@@ -79,7 +86,7 @@ export class UsageActivity {
   constructor(private readonly path?: string) {
     if (!path) return;
     try {
-      if (statSync(path).size > 4 * 1024 * 1024) throw new Error("size");
+      if (statSync(path).size > MAX_FILE_BYTES) throw new Error("size");
       const saved = JSON.parse(readFileSync(path, "utf8"));
       if (
         saved.version !== 1 ||
@@ -281,23 +288,33 @@ export class UsageActivity {
   }
   save(now: number) {
     let rows = this.read(now);
-    while (Buffer.byteLength(JSON.stringify(rows)) > 4 * 1024 * 1024 - 1024) {
+    let runs = [...this.runs];
+    let items = [...this.items];
+    // The whole file stays within the limit it is read back under: rows,
+    // then links (oldest first), are halved until the envelope fits.
+    const envelope = () =>
+      JSON.stringify({
+        version: 1,
+        truncated: this.truncated,
+        rows,
+        links: { runs, items },
+      });
+    let text = envelope();
+    while (Buffer.byteLength(text) > MAX_FILE_BYTES - 1024) {
       this.truncated = true;
-      rows = rows
-        .sort((a, b) => b.day.localeCompare(a.day))
-        .slice(0, Math.floor(rows.length / 2));
+      if (rows.length > 1)
+        rows = rows
+          .sort((a, b) => b.day.localeCompare(a.day))
+          .slice(0, Math.floor(rows.length / 2));
+      else if (runs.length || items.length) {
+        runs = runs.slice(Math.ceil(runs.length / 2));
+        items = items.slice(Math.ceil(items.length / 2));
+      } else rows = [];
+      text = envelope();
     }
     if (this.path && !this.closed)
       try {
-        replaceDataFile(
-          this.path,
-          JSON.stringify({
-            version: 1,
-            truncated: this.truncated,
-            rows,
-            links: { runs: [...this.runs], items: [...this.items] },
-          }),
-        );
+        replaceDataFile(this.path, text);
       } catch {
         this.history = "unavailable";
       }

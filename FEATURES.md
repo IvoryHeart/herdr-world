@@ -429,9 +429,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     each API response counts once, roles are read from a run's first prompt
     (unknown when it names none), and what the logs do not show says
     "unknown" instead of an estimate. A run's pull request comes from a work
-    link its own agent session confirmed, or its branch when exactly one pull
-    request has it; a branch shared by pull requests in several
-    repositories reads "(pull request unknown)". The read refreshes at most every 30
+    link its own agent session confirmed, never from its branch alone; a
+    branch a pull request has but no confirmed link reads "(pull request
+    unknown)". The read refreshes at most every 30
     seconds; after five minutes of failed re-reads the sign says "Usage
     unavailable". For trying rare states, open World with `?usageFixture`
     (two harnesses at work), `?usageFixture=reached` (Claude's 5-hour limit

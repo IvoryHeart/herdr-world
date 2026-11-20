@@ -298,7 +298,8 @@ export function usageItem(
   run: NonNullable<UsageAnalyticsRow["run"]>,
   key = "",
 ): UsageItem {
-  // Several pull requests share its branch: name none, and join no other run.
+  // A pull request has its branch but no validated link proves it: name
+  // none, and join no other run.
   if (run.attribution === "ambiguous" && run.branch)
     return {
       key: `run:${key}`,
@@ -319,6 +320,30 @@ export function usageItem(
   return { key: "none", label: "No branch", number: null };
 }
 
+/**
+ * A log run that counts a World run's work: the same harness on the same
+ * connection and runtime generation, of the same agent and pane or ones it
+ * no longer knows (a stale pane), going at the same time. The server joins the two
+ * itself when it can tie the agent to the run; this catches the rest.
+ */
+function sameWork(world: UsageAnalyticsRow, log: UsageAnalyticsRow) {
+  const a = world.identity;
+  const b = log.identity;
+  return (
+    log.run?.source === "session-log" &&
+    log.run.harness === world.run?.harness &&
+    !!a &&
+    !!b &&
+    a.connection_id === b.connection_id &&
+    a.connection_generation === b.connection_generation &&
+    (b.agent_id === null || b.agent_id === a.agent_id) &&
+    (b.pane_id === null || b.pane_id === a.pane_id) &&
+    world.run.spans.some(([from, to]) =>
+      log.run!.spans.some(([start, end]) => start <= to && from <= end),
+    )
+  );
+}
+
 export function median(values: readonly number[]) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -330,9 +355,10 @@ export function median(values: readonly number[]) {
 
 /**
  * The answer's runs with item, live state and waste flags, heaviest first.
- * World's measurement alone stands for a run only for a harness whose logs
- * World cannot read: for the others it is an agent World could not join to
- * its log run, whose work that run already counts.
+ * World's measurement alone is a run of its own: a harness whose logs World
+ * cannot read, or an agent of one it can whose log has no run yet (before
+ * its first response, or while the log is unreadable). It is left out only
+ * when a log run World could not join it to plainly counts the same work.
  */
 export function usageRuns(data: WorldUsageAnalytics): UsageRunView[] {
   const runs: UsageRunView[] = [];
@@ -340,7 +366,12 @@ export function usageRuns(data: WorldUsageAnalytics): UsageRunView[] {
     const run = row.run;
     if (!run || row.dimension === null) continue;
     const tokensReadable = usageReadsTokens(run.harness);
-    if (run.source === "world" && tokensReadable) continue;
+    if (
+      run.source === "world" &&
+      tokensReadable &&
+      data.rows.some((other) => sameWork(row, other))
+    )
+      continue;
     const context = run.context
       ? {
           used: run.context.used_tokens,

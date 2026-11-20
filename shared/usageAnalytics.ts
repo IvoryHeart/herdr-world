@@ -65,15 +65,15 @@ export type UsageAnalyticsRun = {
   /** The checkout branch the harness recorded; null when unknown. */
   branch: string | null;
   /**
-   * Its pull request: from a work link its own agent session validated, or
-   * the only catalogue pull request whose head is its branch.
+   * Its pull request: only from a work link its own agent session
+   * validated. A branch alone never names one (it carries no repository).
    */
   pull_request: { key: string; number: number | null } | null;
   /**
-   * How `pull_request` was found; `ambiguous` when several pull requests
-   * (in different repositories) share its branch, so none is named.
+   * How `pull_request` was found; `ambiguous` when a catalogue pull request
+   * has its branch but no validated link proves it, so none is named.
    */
-  attribution: "link" | "branch" | "ambiguous" | "none";
+  attribution: "link" | "ambiguous" | "none";
   /** API responses, each counted once; null for World's measurement alone. */
   calls: number | null;
   first_at: number;

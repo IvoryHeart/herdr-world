@@ -17,15 +17,15 @@ a subscription charge or invoice. Stale numeric rows SHALL NOT enter totals.
 
 #### Scenario: Run detail without prompt text
 - **WHEN** a caller groups by run
-- **THEN** each run row carries its source, harness, models, response count with each API response counted once, first and last response times, largest prompt, bounded spans when it was going (responses at most ten minutes apart, joined with the intervals World observed its agent working), checkout branch, its pull request and how it was attributed, and its pane's current context, and a role only from a fixed vocabulary matched in the run's first prompt, never the prompt text; a run whose first prompt names no role has an unknown role
+- **THEN** each run row carries its source, harness, models, response count with each API response counted once, first and last response times, largest prompt, bounded spans when it was going (responses at most ten minutes apart, joined with the intervals World observed its agent working, which join only where they touch so an observed idle gap is never working time), checkout branch, its pull request and how it was attributed, and its pane's current context, and a role only from a fixed vocabulary matched in the run's first prompt, never the prompt text; a run whose first prompt names no role has an unknown role
 
 #### Scenario: Harness without a token reader
-- **WHEN** World observes an agent of a supported harness whose session logs no usage reader reads
+- **WHEN** World observes an agent of a supported harness whose session logs no usage reader reads, or whose log has no run yet
 - **THEN** its observed active and waiting-on-you time still count, it appears as a run of its own measured by World, and its response count, largest prompt, tokens and cost are null (not available), never zero
 
 #### Scenario: Pull request attribution
 - **WHEN** a run's pull request is attributed
-- **THEN** a work link validated by the pane's own agent session and naming exactly one pull request wins and is kept with the run; otherwise the branch names a pull request only when exactly one catalogue pull request has that head branch; when several repositories' pull requests share it, the pull request is unknown and marked ambiguous, never the most recently updated
+- **THEN** only a work link validated by the pane's own agent session and naming exactly one pull request names it, and is kept with the run; a branch alone never names one, because it carries no repository: when a catalogue pull request has the run's branch but no such link proves it, the pull request is unknown and marked ambiguous, never the most recently updated or the only match
 
 #### Scenario: Same host through two runtime connections
 - **WHEN** TUI and core connections are known to read the same transcript host

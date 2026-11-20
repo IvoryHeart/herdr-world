@@ -177,8 +177,8 @@ test("a harness World reads no log of shows its time; tokens are not available, 
     "tokens and cost not available for this harness",
   );
   expect(usageRunFacts(cursor)).not.toMatch(/\b0 tokens/);
-  // An agent of a harness World reads, but no log run joined: its time is in
-  // the breakdown, never a second run beside its log run.
+  // An agent of a harness World reads whose log has no run yet (before its
+  // first response, or an unreadable log) is still a run World measured.
   const claude = {
     ...data,
     rows: data.rows.map((row) =>
@@ -187,9 +187,36 @@ test("a harness World reads no log of shows its time; tokens are not available, 
         : row,
     ),
   };
-  expect(usageRuns(claude).some((r) => r.source === "world" && r.live)).toBe(
-    false,
-  );
+  const early = usageRuns(claude).find(
+    (r) => r.source === "world" && r.harness === "claude",
+  )!;
+  expect(early).toMatchObject({ tokensReadable: true, live: true });
+  expect(usageRunFacts(early)).toContain("tokens unknown");
+  // A log run World could not tie to the agent (its pane is gone) that went
+  // at the same time on the same connection counts that work: not twice.
+  const world = claude.rows.find((r) => r.key === early.key)!;
+  const log = claude.rows.find((r) => r.run?.source === "session-log")!;
+  const unjoined = {
+    ...claude,
+    rows: [
+      ...claude.rows,
+      {
+        ...log,
+        key: `run_${"f".repeat(64)}`,
+        dimension: `run_${"f".repeat(64)}`,
+        identity: { ...world.identity!, pane_id: null, agent_id: null },
+        run: { ...log.run!, harness: "claude", spans: world.run!.spans },
+      },
+    ],
+  };
+  expect(usageRuns(unjoined).some((r) => r.key === early.key)).toBe(false);
+  const added = unjoined.rows[unjoined.rows.length - 1]!.identity!;
+  // Another pane's or agent's log run is someone else's work: it stays.
+  added.pane_id = "another-pane";
+  expect(usageRuns(unjoined).some((r) => r.key === early.key)).toBe(true);
+  added.pane_id = null;
+  added.agent_id = "another-agent";
+  expect(usageRuns(unjoined).some((r) => r.key === early.key)).toBe(true);
 });
 
 test("empty reads are unknown, never zero", () => {
