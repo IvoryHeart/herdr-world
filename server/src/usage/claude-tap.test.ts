@@ -53,6 +53,7 @@ const ports = (
   uid,
   now,
   pid: 7,
+  kill: () => true,
   ...more,
 });
 /** World's own executable: Bun under test, the compiled World binary when installed. */
@@ -212,7 +213,8 @@ test("concurrent taps never lower the reading: one reads, merges and replaces at
     ...fs,
     renameSync(from: fs.PathLike, to: fs.PathLike) {
       fs.renameSync(from, to);
-      committed.push(fiveHourUsed(home));
+      if (String(to).endsWith("claude-status-line.json"))
+        committed.push(fiveHourUsed(home));
     },
   };
   // Tap A has read 20 % and prepared 22 % when tap B, holding 23 %, runs.
@@ -225,7 +227,7 @@ test("concurrent taps never lower the reading: one reads, merges and replaces at
     fs: {
       ...logged,
       writeFileSync(...args: Parameters<typeof fs.writeFileSync>) {
-        if (!interleaved) {
+        if (String(args[0]).endsWith(".tmp") && !interleaved) {
           interleaved = true;
           claudeStatusLineTap(fiveHourAt(23), {
             ...ports(home),
@@ -253,15 +255,16 @@ test("a tap waits for the lock holder and merges with what it committed", () => 
     lock = `${file}.lock`;
   claudeStatusLineTap(fiveHourAt(20), ports(home));
   // Tap A holds the lock; it commits 24 % while tap B waits with 23 %.
-  fs.writeFileSync(lock, "");
+  fs.mkdirSync(lock);
+  fs.writeFileSync(join(lock, "9-1900000000000-abc"), "");
   let waited = 0;
   claudeStatusLineTap(fiveHourAt(23), {
     ...ports(home),
     fs: {
       ...fs,
-      openSync(...args: Parameters<typeof fs.openSync>) {
+      renameSync(...args: Parameters<typeof fs.renameSync>) {
         try {
-          return fs.openSync(...args);
+          return fs.renameSync(...args);
         } catch (error) {
           if (waited++ === 0) {
             const before = reading(home);
@@ -269,7 +272,8 @@ test("a tap waits for the lock holder and merges with what it committed", () => 
               file,
               before.replace('"used_percent":20', '"used_percent":24'),
             );
-            fs.unlinkSync(lock);
+            fs.unlinkSync(join(lock, "9-1900000000000-abc"));
+            fs.rmdirSync(lock);
           }
           throw error;
         }
@@ -281,42 +285,175 @@ test("a tap waits for the lock holder and merges with what it committed", () => 
   expect(fs.readdirSync(dir)).toEqual(["claude-status-line.json"]);
 });
 
-test("a lock left by a dead tap is cleared, and a tap whose lock was cleared commits nothing", () => {
+test("confirmed-dead directory and legacy file owners are recovered", () => {
   const { home } = sandbox();
   const dir = join(home, ".cache", "herdr-world"),
-    file = join(dir, "claude-status-line.json"),
-    lock = `${file}.lock`;
+    lock = join(dir, "claude-status-line.json.lock");
   claudeStatusLineTap(fiveHourAt(20), ports(home));
-  fs.writeFileSync(lock, "");
-  const old = new Date(Date.now() - 60_000);
-  fs.utimesSync(lock, old, old);
-  claudeStatusLineTap(fiveHourAt(21), ports(home));
+  const dead = () => {
+    throw Object.assign(new Error("gone"), { code: "ESRCH" });
+  };
+  // Directory ownership survives age; only process death enables recovery.
+  fs.mkdirSync(lock);
+  fs.writeFileSync(join(lock, "99-1900000000000-abc"), "");
+  claudeStatusLineTap(fiveHourAt(21), { ...ports(home), kill: dead });
   expect(fiveHourUsed(home)).toBe(21);
+  // Old tap versions left token-bearing file locks.
+  fs.writeFileSync(lock, "99 1900000000000 0.1");
+  claudeStatusLineTap(fiveHourAt(22), { ...ports(home), kill: dead });
+  expect(fiveHourUsed(home)).toBe(22);
+  // A process dying during release can leave an empty directory.
+  fs.mkdirSync(lock);
+  claudeStatusLineTap(fiveHourAt(23), ports(home));
+  expect(fiveHourUsed(home)).toBe(23);
   expect(fs.readdirSync(dir)).toEqual(["claude-status-line.json"]);
+});
 
-  // Paused past the stale age, tap A's lock was cleared and another tap now
-  // holds a new one: A drops its prepared reading and leaves that lock alone.
+test("a tap that lost its unique marker leaves the replacement untouched", () => {
+  const { home } = sandbox();
+  const dir = join(home, ".cache", "herdr-world");
+  const lock = join(dir, "claude-status-line.json.lock");
+  claudeStatusLineTap(fiveHourAt(20), ports(home));
   let replaced = false;
   claudeStatusLineTap(fiveHourAt(30), {
     ...ports(home),
     fs: {
       ...fs,
       writeFileSync(...args: Parameters<typeof fs.writeFileSync>) {
-        if (!replaced) {
-          replaced = true;
-          fs.unlinkSync(lock);
-          fs.writeFileSync(lock, "");
-        }
-        return fs.writeFileSync(...args);
+        fs.writeFileSync(...args);
+        if (!String(args[0]).endsWith(".tmp")) return;
+        replaced = true;
+        for (const owner of fs.readdirSync(lock))
+          fs.unlinkSync(join(lock, owner));
+        fs.rmdirSync(lock);
+        fs.mkdirSync(lock);
+        fs.writeFileSync(join(lock, "8-1900000000000-replacement"), "");
       },
     },
   });
   expect(replaced).toBe(true);
-  expect(fiveHourUsed(home)).toBe(21);
+  expect(fiveHourUsed(home)).toBe(20);
+  expect(fs.readdirSync(lock)).toEqual(["8-1900000000000-replacement"]);
   expect(fs.readdirSync(dir).sort()).toEqual([
     "claude-status-line.json",
     "claude-status-line.json.lock",
   ]);
+});
+
+test("the native process-existence probe recovers an exited writer", async () => {
+  const { home } = sandbox();
+  const lock = join(
+    home,
+    ".cache",
+    "herdr-world",
+    "claude-status-line.json.lock",
+  );
+  const child = Bun.spawn([process.execPath, "-e", "process.exit(0)"], {
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  await child.exited;
+  claudeStatusLineTap(fiveHourAt(20), ports(home));
+  fs.mkdirSync(lock);
+  fs.writeFileSync(join(lock, `${child.pid}-1900000000000-native`), "");
+  claudeStatusLineTap(fiveHourAt(23), { ...ports(home), kill: undefined });
+  expect(fiveHourUsed(home)).toBe(23);
+  expect(fs.existsSync(lock)).toBe(false);
+});
+
+test("unknown liveness and malformed ownership keep the reading optional", () => {
+  for (const owner of ["9-1900000000000-abc", "unverifiable"]) {
+    const { home } = sandbox();
+    const lock = join(
+      home,
+      ".cache",
+      "herdr-world",
+      "claude-status-line.json.lock",
+    );
+    claudeStatusLineTap(fiveHourAt(20), ports(home));
+    settings(join(home, ".claude", "settings.json"), {
+      statusLine: { type: "command", command: "user-line" },
+    });
+    fs.mkdirSync(lock);
+    fs.writeFileSync(join(lock, owner), "");
+    fs.utimesSync(lock, new Date(0), new Date(0));
+    let attempts = 0;
+    expect(
+      claudeStatusLineTap(fiveHourAt(23), {
+        ...ports(home),
+        kill: () => {
+          throw Object.assign(new Error("unknown"), { code: "EPERM" });
+        },
+        fs: {
+          ...fs,
+          renameSync(from, to) {
+            attempts++;
+            fs.renameSync(from, to);
+          },
+        },
+      }),
+    ).toBe("user-line");
+    expect(attempts).toBe(100);
+    expect(fiveHourUsed(home)).toBe(20);
+    expect(fs.readdirSync(lock)).toEqual([owner]);
+  }
+});
+
+test("a delayed dead-owner reclaimer cannot remove a replacement's directory", () => {
+  const { home } = sandbox();
+  const lock = join(
+    home,
+    ".cache",
+    "herdr-world",
+    "claude-status-line.json.lock",
+  );
+  claudeStatusLineTap(fiveHourAt(20), ports(home));
+  fs.mkdirSync(lock);
+  fs.writeFileSync(join(lock, "99-1900000000000-abc"), "");
+  let interleaved = false;
+  let refused = false;
+  claudeStatusLineTap(fiveHourAt(22), {
+    ...ports(home),
+    kill: (pid) => {
+      if (pid === 99) throw Object.assign(new Error("gone"), { code: "ESRCH" });
+    },
+    fs: {
+      ...fs,
+      rmdirSync(target) {
+        if (String(target) === lock && !interleaved) {
+          interleaved = true;
+          // B acquires the now-empty lock while A has cleanup pending.
+          claudeStatusLineTap(fiveHourAt(23), {
+            ...ports(home),
+            pid: 8,
+            fs: {
+              ...fs,
+              renameSync(from, to) {
+                if (String(to).endsWith("claude-status-line.json")) {
+                  try {
+                    fs.rmdirSync(lock);
+                  } catch (error: any) {
+                    refused = [
+                      "ENOTEMPTY",
+                      "EEXIST",
+                      "EPERM",
+                      "EACCES",
+                    ].includes(error.code);
+                  }
+                }
+                fs.renameSync(from, to);
+              },
+            },
+          });
+        }
+        fs.rmdirSync(target);
+      },
+    },
+  });
+  expect(interleaved).toBe(true);
+  expect(refused).toBe(true);
+  expect(fiveHourUsed(home)).toBe(23);
+  expect(fs.existsSync(lock)).toBe(false);
 });
 
 test("Claude's local settings sit at the canonical Git root when the user owns it", () => {
