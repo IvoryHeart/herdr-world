@@ -120,7 +120,8 @@ export const TownShipyard = memo(function TownShipyard({
   renderer: { readonly current: TownRendererHandle | null };
 }) {
   const state = useShipyard();
-  const view = shipyardView(state);
+  const now = Date.now();
+  const view = shipyardView(state, now);
   const openWork = useOpenTownWork();
   const releases = openWork ? () => openWork("releases") : null;
   const arriving = useArrivals(view);
@@ -173,7 +174,6 @@ export const TownShipyard = memo(function TownShipyard({
       </button>
     );
   const open = view.status === "open" ? view : null;
-  const now = Date.now();
   const ships = open ? open.ships.slice(0, TOWN_HARBOUR_BERTHS) : [];
   return (
     <div
@@ -362,8 +362,7 @@ function Cargo({
   onFocus(event: FocusEvent<HTMLElement>): void;
 }) {
   const { cargo } = view;
-  // Crates are merged pull requests, as the sign counts; direct commits
-  // are listed in the Releases tab.
+  // Crates are the proven merged pull requests, as the sign counts.
   const proven = cargo.pullRequests.length;
   const partial = cargo.count.includes("+");
   const stacked =

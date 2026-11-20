@@ -130,3 +130,35 @@ describe("shipyard store", () => {
     expect(pickRepo(null, shipyardFixtureCatalog("empty", NOW))).toBeNull();
   });
 });
+
+describe("the offline testing switch", () => {
+  test("answers once, then every read fails and the view goes old", async () => {
+    const { resetShipyardFixture } = await import("./shipyardFixture");
+    const { shipyardView } = await import("./shipyardModel");
+    const page = globalThis as unknown as Record<string, unknown>;
+    const saved = { location: page.location, history: page.history };
+    page.location = { href: "http://world.invalid/?shipyardFixture=offline" };
+    page.history = { state: null, replaceState: () => {} };
+    try {
+      resetShipyardFixture();
+      shipyardStore.reset();
+      shipyardStore.useFetch(null);
+      await shipyardStore.read();
+      expect(shipyardStore.state().error).toBeNull();
+      expect(shipyardView(shipyardStore.state()).status).toBe("open");
+      await shipyardStore.read(true);
+      const state = shipyardStore.state();
+      expect(state.error).toBe("Failed to fetch");
+      expect(state.snapshot).not.toBeNull();
+      const view = shipyardView(state);
+      if (view.status !== "open") throw new Error(view.status);
+      expect(view.stale).toBe(true);
+      expect(view.running.some((entry) => entry.openUrl)).toBe(false);
+    } finally {
+      page.location = saved.location;
+      page.history = saved.history;
+      resetShipyardFixture();
+      shipyardStore.reset();
+    }
+  });
+});

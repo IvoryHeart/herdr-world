@@ -15,7 +15,14 @@ import type { ShipyardState } from "./shipyardStore";
  * - Stale data is labelled old, and old health is never "passing".
  * - A waiting list that is shortened, diverged or unprovable never reads as
  *   "nothing waiting"; its count says so ("200+", "unknown").
- * - Running Worlds show whatever GitHub's state; only fresh ones open.
+ * - Running Worlds show whatever GitHub's state; only fresh ones open. A
+ *   report past its lease, or any report kept from before a failed read,
+ *   is not fresh: it shows as stopped reporting and loses its Open link.
+ * - A failed read of World's own service makes everything shown old, even
+ *   when the last snapshot said it was fresh.
+ * - Waiting changes are the pull requests the commit graph proves; the API
+ *   does not prove how other commits reached main, so none are called
+ *   "direct".
  *
  * Pure: the views, the harbour art and the tests read it.
  */
@@ -36,8 +43,8 @@ export type ShipyardCargo = {
   count: string;
   /** Proven waiting pull requests, newest merge first. */
   pullRequests: ShipyardPullRequest[];
-  /** Direct commits on main with no pull request, when known. */
-  directCommits: number;
+  /** Commits on main since the baseline, when the comparison is complete. */
+  commits: number | null;
   /** What limits the list, in words; null when complete. */
   note: string | null;
   /** "since v1.4.0", or null without a baseline. */
@@ -100,23 +107,35 @@ const BEACON_WORDS: Record<ShipyardBeacon, string> = {
 export const shipyardBeaconWords = (beacon: ShipyardBeacon) =>
   BEACON_WORDS[beacon];
 
-/** The Shipyard as the store last read it. */
-export function shipyardView(state: ShipyardState): ShipyardView {
+/**
+ * The Shipyard as the store last read it, at `now`. A store error means the
+ * last read failed: whatever an earlier read said is kept but shown old.
+ */
+export function shipyardView(
+  state: ShipyardState,
+  now: number = Date.now(),
+): ShipyardView {
   const { catalog, snapshot } = state;
   if (!catalog && !snapshot)
     return state.error
       ? { status: "unreachable", detail: state.error }
       : { status: "loading" };
+  const failed = state.error !== null;
   const window = snapshot?.instances ?? catalog!.instances;
-  const running = [...window.items].sort(
+  const running = window.items.map((instance) =>
+    instanceAt(instance, now, failed),
+  );
+  running.sort(
     (a, b) =>
       Number(b.state === "fresh") - Number(a.state === "fresh") ||
       b.reportedAt - a.reportedAt ||
       a.port - b.port,
   );
-  const runningNote = window.complete
-    ? null
-    : (window.detail ?? "Some running Worlds could not be read.");
+  const runningNote = failed
+    ? "World did not answer; running Worlds are as last seen."
+    : window.complete
+      ? null
+      : (window.detail ?? "Some running Worlds could not be read.");
   if (!state.repo) return { status: "no_repo", running, runningNote };
   if (!snapshot || snapshot.repo !== state.repo)
     return {
@@ -134,15 +153,17 @@ export function shipyardView(state: ShipyardState): ShipyardView {
       running,
       runningNote,
     };
-  const stale = snapshot.state === "stale";
+  const stale = failed || snapshot.state === "stale";
   const data = snapshot.data;
   return {
     status: "open",
     repo: snapshot.repo,
     stale,
-    detail: snapshot.detail,
+    detail: failed
+      ? `World did not answer (${state.error}); showing the last read.`
+      : snapshot.detail,
     lastSuccessAt: snapshot.lastSuccessAt,
-    refreshing: snapshot.refreshing,
+    refreshing: !failed && snapshot.refreshing,
     main: mainOf(data, stale),
     cargo: cargoOf(data),
     ships: shipsOf(data, running),
@@ -152,6 +173,21 @@ export function shipyardView(state: ShipyardState): ShipyardView {
     running,
     runningNote,
   };
+}
+
+/**
+ * A running World as it stands at `now`: past its lease, or kept from before
+ * a failed read, it is no longer known to run, so it cannot be opened.
+ */
+function instanceAt(
+  instance: ShipyardInstance,
+  now: number,
+  failed: boolean,
+): ShipyardInstance {
+  if (instance.state === "fresh" && !failed && instance.expiresAt > now)
+    return instance;
+  if (instance.state === "stale" && instance.openUrl === null) return instance;
+  return { ...instance, state: "stale", openUrl: null };
 }
 
 function mainOf(data: ShipyardPipeline, stale: boolean) {
@@ -171,7 +207,6 @@ function mainOf(data: ShipyardPipeline, stale: boolean) {
 function cargoOf(data: ShipyardPipeline): ShipyardCargo {
   const waiting = data.waiting;
   const prs = [...waiting.pullRequests].sort((a, b) => b.mergedAt - a.mergedAt);
-  const inPrs = new Set(prs.map((pr) => pr.mergeSha));
   const since = waiting.baseline ? `since ${waiting.baseline.tag}` : null;
   const base = {
     pullRequests: prs,
@@ -181,12 +216,11 @@ function cargoOf(data: ShipyardPipeline): ShipyardCargo {
   };
   switch (waiting.state) {
     case "ready": {
-      const direct = waiting.commits.filter((c) => !inPrs.has(c)).length;
       const complete = waiting.complete;
       return {
         ...base,
         count: `${prs.length}${complete ? "" : "+"} waiting`,
-        directCommits: direct,
+        commits: complete ? waiting.commits.length : null,
         note: complete
           ? null
           : (waiting.detail ?? "The list may be missing some changes."),
@@ -196,7 +230,7 @@ function cargoOf(data: ShipyardPipeline): ShipyardCargo {
       return {
         ...base,
         count: `${prs.length}+ waiting`,
-        directCommits: 0,
+        commits: null,
         note:
           waiting.detail ??
           `Main is ${waiting.aheadBy ?? "many"} commits ahead; only part was read.`,
@@ -205,7 +239,7 @@ function cargoOf(data: ShipyardPipeline): ShipyardCargo {
       return {
         ...base,
         count: "no release yet",
-        directCommits: 0,
+        commits: null,
         note:
           waiting.detail ??
           "No published release to count from, so nothing is counted as waiting.",
@@ -214,7 +248,7 @@ function cargoOf(data: ShipyardPipeline): ShipyardCargo {
       return {
         ...base,
         count: "unknown",
-        directCommits: 0,
+        commits: null,
         note:
           waiting.detail ??
           "Main and the last release have diverged; waiting changes are unknown.",
@@ -223,7 +257,7 @@ function cargoOf(data: ShipyardPipeline): ShipyardCargo {
       return {
         ...base,
         count: "unknown",
-        directCommits: 0,
+        commits: null,
         note:
           waiting.detail ?? "GitHub could not compare main with the release.",
       };

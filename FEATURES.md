@@ -30,17 +30,22 @@ A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
   on this computer runs that version. A ship opens its release card with
   **All releases**; the sign and crates open **Work → Releases**. A new release
   sails in once and is announced; the first read and a repository change stay
-  still. Stale data fades the harbour, greys the lamp and says **Out of date**.
+  still. Stale data fades the harbour, greys the lamp and says **Out of date**;
+  so does a failed read of World itself, and then every running World reads
+  as stopped reporting without **Open**.
   GitHub off or no repository leaves an empty basin and says how to go on. A
   narrow Town folds the harbour into one sign on the town center's left wing.
   Calm Town and reduced motion stop the bobbing and sailing.
 - **Work → Releases** (Board's Work lens and Town's harbour): main's checks,
   waiting changes, shipped releases and running Worlds, with links to GitHub
   and **Open** only for fresh loopback Worlds (usable on the service machine).
-  The repository select, including **Another repository…**, is remembered per
+  Waiting changes list the merged pull requests the commit graph proves and
+  the total commit count; World does not guess which commits were pushed
+  directly. The repository select, including **Another repository…**, is remembered per
   browser. **Read GitHub again** forces one bounded refresh.
-- Testing only: `?shipyardFixture` (or `=failing|stale|limited|off|empty`)
+- Testing only: `?shipyardFixture` (or `=failing|stale|limited|off|empty|offline`)
   shows synthetic data without GitHub; the page drops the parameter at once.
+  `offline` answers once, then fails every read as if World stopped answering.
 
 ## Runtime support
 

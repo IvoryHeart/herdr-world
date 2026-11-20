@@ -26,8 +26,8 @@ import "./shipyard.css";
  */
 export function ShipyardPipeline() {
   const state = useShipyard();
-  const view = shipyardView(state);
   const now = useMinute();
+  const view = shipyardView(state, now);
   return (
     <div className="shipyard" aria-label="Release pipeline">
       <ShipyardHead view={view} state={state} now={now} />
@@ -282,10 +282,9 @@ function CargoStage({ view }: { view: Open }) {
           ))}
         </ul>
       ) : null}
-      {cargo.directCommits ? (
+      {cargo.commits ? (
         <p className="shipyard-meta">
-          and {cargo.directCommits} direct commit
-          {cargo.directCommits === 1 ? "" : "s"} on main
+          {cargo.commits} commit{cargo.commits === 1 ? "" : "s"} on main in all
         </p>
       ) : null}
       {cargo.note ? <p className="shipyard-note">{cargo.note}</p> : null}

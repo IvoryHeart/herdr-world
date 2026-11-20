@@ -22,6 +22,8 @@ import {
  * - `limited`: more changes than one read proves; the list is partial.
  * - `off`: GitHub is switched off in Integrations; only running Worlds show.
  * - `empty`: nothing suggested and nothing running yet.
+ * - `offline`: the first read is `ready`; every later read fails as if
+ *   World stopped answering (press "Read GitHub again" to see it at once).
  *
  * Every link is on example.com, so nothing real opens or changes.
  */
@@ -32,7 +34,8 @@ export type ShipyardFixtureMode =
   | "stale"
   | "limited"
   | "off"
-  | "empty";
+  | "empty"
+  | "offline";
 
 const MODES: readonly ShipyardFixtureMode[] = [
   "ready",
@@ -41,9 +44,12 @@ const MODES: readonly ShipyardFixtureMode[] = [
   "limited",
   "off",
   "empty",
+  "offline",
 ];
 const PARAM = "shipyardFixture";
 let mode: ShipyardFixtureMode | null | undefined;
+/** `offline`: whether the one good pipeline read has been answered. */
+let answered = false;
 
 /** The switch, read once per page load; the parameter is removed. */
 export function shipyardFixtureMode(): ShipyardFixtureMode | null {
@@ -64,6 +70,7 @@ export function shipyardFixtureMode(): ShipyardFixtureMode | null {
 /** For tests: forget the switch so the next read sees the URL again. */
 export function resetShipyardFixture() {
   mode = undefined;
+  answered = false;
 }
 
 /** The fixture's service, when the switch is on. */
@@ -74,6 +81,9 @@ export function shipyardFixtureFetch() {
     const url = new URL(String(input), "http://fixture.invalid");
     const now = Date.now();
     const repo = url.searchParams.get("repo");
+    if (current === "offline" && answered)
+      return Promise.reject(new TypeError("Failed to fetch"));
+    if (current === "offline" && repo) answered = true;
     // Echo the repository asked for, so a choice stored earlier still shows.
     const body = repo
       ? shipyardFixtureSnapshot(current, now, repo)

@@ -65,14 +65,18 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
 
   const calls: { path: string; method: string }[] = [];
   let edit: (snapshot: Snapshot) => Snapshot = (snapshot) => snapshot;
+  /** When set, World stops answering. */
+  let down = false;
   /** The Shipyard service, answering from the testing fixture. */
   function serve(mode: Mode) {
     shipyardStore.reset();
     calls.length = 0;
     edit = (snapshot) => snapshot;
+    down = false;
     shipyardStore.useFetch(async (input, init) => {
       const path = String(input);
       calls.push({ path, method: init?.method ?? "GET" });
+      if (down) throw new TypeError("Failed to fetch");
       const url = new URL(path, "http://fixture.invalid");
       const repo = url.searchParams.get("repo");
       const now = Date.now();
@@ -309,7 +313,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
       "4 waiting since v1.4.0",
     );
     expect(stage("Waiting to ship").textContent).toContain(
-      "1 direct commit on main",
+      "5 commits on main in all",
     );
     expect(
       stage("Shipped releases").querySelectorAll(".shipyard-ship").length,
@@ -343,6 +347,28 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
         method: "POST",
       },
     ]);
+
+    // World stops answering: the last read stays, but old, and nothing opens.
+    down = true;
+    await act(async () =>
+      lens
+        .querySelector<HTMLButtonElement>('[aria-label="Read GitHub again"]')!
+        .click(),
+    );
+    expect(lens.querySelector(".shipyard-age")!.textContent).toStartWith(
+      "Out of date",
+    );
+    expect(lens.querySelector(".shipyard-stale")!.textContent).toContain(
+      "World did not answer",
+    );
+    expect(stage("Main branch").textContent).not.toContain("main passing");
+    expect(stage("Running Worlds").querySelector("a.shipyard-open")).toBeNull();
+    expect(stage("Running Worlds").textContent).toContain(
+      "0 running, 3 stopped reporting",
+    );
+    down = false;
+    await settle();
+    expect(stage("Main branch").textContent).toContain("main passing");
 
     // Another repository is read and kept on this browser.
     const select = lens.querySelector<HTMLSelectElement>(
