@@ -36,6 +36,7 @@ type Lease = AnswerLease;
 
 export function createWorldCliService(deps: {
   elements?: import("./board-element-service").BoardElementService;
+  memory?(): import("../memory/service").MemoryService;
   core?(): CoreAnswerConnections | CoreCallerSource | null;
   ledger(): LedgerStore;
   attention?(): WorldLedgerStorage["outbox"];
@@ -347,6 +348,12 @@ export function createWorldCliService(deps: {
         },
         request,
       );
+    },
+    memory: (action, params, recheck) => {
+      const memory = deps.memory?.();
+      if (!memory)
+        throw new CliError("unavailable", "Memory service is unavailable");
+      return memory.call(action, params, recheck);
     },
     publishBoard: deps.publishBoard,
     publishLedger,

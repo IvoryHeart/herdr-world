@@ -16,6 +16,7 @@ import { newWorldId } from "./world-identifiers";
 import { worldIdsMigration } from "./world-ids";
 import {
   worldBoardMigration,
+  worldBoardShapesMigration,
   worldRoomPinsMigration,
   worldBoardElementsMigration,
 } from "./world-board";
@@ -103,6 +104,7 @@ export const worldMigrations = [
   migrateLegacyCompletionReviews,
   worldRoomPinsMigration,
   coreTopologyMigration,
+  worldBoardShapesMigration,
   worldBoardElementsMigration,
 ] as const;
 

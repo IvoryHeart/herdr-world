@@ -44,6 +44,11 @@ import { replaceDataFile } from "../config/data-paths";
 import { RECIPIENT_MAX, type ObservedAgent } from "./board-recipient";
 import { cardKey, tabCardKey } from "../../../shared/terminalColor";
 import {
+  checkBoardShapes,
+  parseBoardShape,
+  parseBoardShapes,
+} from "../../../shared/boardShapes";
+import {
   leaveGroups,
   RELATION_LIMITS,
   terminalKey,
@@ -438,6 +443,11 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       return note(entry, rev);
     }),
     strings: strings.map(string),
+    // Boards saved before drawings have none.
+    ...(value.shapes === undefined ||
+    (Array.isArray(value.shapes) && !value.shapes.length)
+      ? {}
+      : { shapes: parseBoardShapes(value.shapes) }),
     relations: relations(value.relations),
   };
   checkBounds(document);
@@ -463,6 +473,7 @@ function checkBounds(document: BoardDocument) {
     Object.keys(layout.group_interest ?? {}).length;
   if (entries > BOARD_LIMITS.layoutEntries)
     fail(`at most ${BOARD_LIMITS.layoutEntries} layout entries`);
+  if (document.shapes) checkBoardShapes(document.shapes);
   const noteIds = new Set(document.notes.map((entry) => entry.id));
   if (noteIds.size !== document.notes.length) fail("duplicate note ids");
   const stringIds = new Set(document.strings.map((entry) => entry.id));
@@ -648,6 +659,37 @@ function applyOp(
           !("note" in entry.from && entry.from.note === op.id) &&
           !("note" in entry.to && entry.to.note === op.id),
       );
+      return;
+    }
+    case "shape.put": {
+      const shapes = (next.shapes ??= []);
+      const existing = shapes.findIndex((entry) => entry.id === op.shape?.id);
+      if (existing < 0) {
+        if (op.rev !== undefined)
+          throw new BoardConflictError("That drawing was deleted.", current);
+        shapes.push(parseBoardShape(op.shape, 1));
+      } else {
+        if (op.rev !== shapes[existing]!.rev)
+          throw new BoardConflictError(
+            "That drawing changed elsewhere.",
+            current,
+          );
+        shapes[existing] = parseBoardShape(op.shape, shapes[existing]!.rev + 1);
+      }
+      return;
+    }
+    case "shape.delete": {
+      const shapes = next.shapes ?? [];
+      const existing = shapes.find((entry) => entry.id === op.id);
+      if (!existing) return;
+      if (existing.rev !== op.rev)
+        throw new BoardConflictError(
+          "That drawing changed elsewhere.",
+          current,
+        );
+      // Arrows attached to it keep their last saved point.
+      next.shapes = shapes.filter((entry) => entry.id !== op.id);
+      if (!next.shapes.length) delete next.shapes;
       return;
     }
     case "string.put": {

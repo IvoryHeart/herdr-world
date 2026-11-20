@@ -9,6 +9,7 @@ import {
 } from "../components/ui/popover";
 import type { HostsFilter } from "./hostsFilter";
 import { hostCount, hostRuntimeLabel, type WorldHost } from "../worldHosts";
+import { useViewControlRequest } from "../settings/viewControls";
 
 export type HostsControlProps = {
   connections: readonly WorldHost[];
@@ -32,6 +33,8 @@ export function hostsSelectionLabel(
  */
 export function useConnectionManager() {
   const [managing, setManaging] = useState(false);
+  // Settings and the command box open it too (#1035).
+  useViewControlRequest("connections.manage", () => setManaging(true));
   return {
     open: () => setManaging(true),
     dialog: managing
