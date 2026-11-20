@@ -37,6 +37,7 @@ import { lazyWithReload } from "../lazyWithReload";
 import { InspectorLoadingShell } from "../components/InspectorLoadingShell";
 import { ThemeScope } from "../themeScope";
 import { AgentProfileLink } from "./AgentProfileLink";
+import { AgentMemoryLink } from "./memory/AgentMemoryLink";
 import { InspectorPaneMap } from "../components/InspectorPaneMap";
 import {
   OperationalContext,
@@ -888,10 +889,16 @@ function InspectorResources({
                       disabled={presentationStale}
                     >
                       {conversation.context.kind === "agent" ? (
-                        <AgentProfileLink
-                          connectionId={conversation.connectionId}
-                          terminalId={conversation.terminalId}
-                        />
+                        <>
+                          <AgentProfileLink
+                            connectionId={conversation.connectionId}
+                            terminalId={conversation.terminalId}
+                          />
+                          <AgentMemoryLink
+                            connectionId={conversation.connectionId}
+                            agentId={conversation.paneId}
+                          />
+                        </>
                       ) : null}
                     </TerminalAppearanceEditor>
                   ) : undefined

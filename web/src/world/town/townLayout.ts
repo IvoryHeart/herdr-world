@@ -10,6 +10,7 @@
 
 import { townCenterForecourt, type TownCenterLot } from "./townCenter";
 import { TOWN_HARBOUR_ROOM, townHarbourGeometry } from "./townHarbourLot";
+import { townLibraryLotBeside } from "./townLibraryLot";
 import { townPostLotBeside } from "./townPostLot";
 import {
   ADD_ROOM_WIDTH,
@@ -796,6 +797,7 @@ export function layoutTown(
       set(tx, plaza.y, TownGround.walk);
 
   const post = townPostLotBeside(center);
+  const library = formFactor === "narrow" ? null : townLibraryLotBeside(center);
   const lamps: TownPoint[] = [];
   // Spaced from the town's first column, shifted with it (townLots.ts).
   for (const ry of roads)
@@ -814,6 +816,13 @@ export function layoutTown(
       const underWarehouse =
         ry === center.street && tx >= house.x - 1 && tx <= house.x + house.w;
       if (underWarehouse) continue;
+      // So does the library's reading garden (townLibraryLot.ts).
+      const underLibrary =
+        library &&
+        ry === center.street &&
+        tx >= library.x - 1 &&
+        tx <= library.x + library.w;
+      if (underLibrary) continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }
 

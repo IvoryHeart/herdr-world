@@ -32,6 +32,11 @@ import {
   paintTownWarehouseYard,
 } from "./townHarbourArt";
 import { townPostLotBeside } from "./townPostLot";
+import { townLibraryLot } from "./townLibraryLot";
+import {
+  paintTownLibraryHouse,
+  paintTownLibraryYard,
+} from "./townLibraryPaint";
 import { paintTownPostHouse, paintTownPostYard } from "./townPostPaint";
 import {
   paintTownFacade,
@@ -235,6 +240,22 @@ export function townOutdoor(
       pier.x,
       pier.y - TOWN_PIER_ART.deck,
       pier.y,
+    );
+  }
+  // The library right of the center: its hall, its reading garden.
+  const library = townLibraryLot(layout);
+  if (library) {
+    add(
+      paintTownLibraryHouse(),
+      library.x * T,
+      library.y * T,
+      library.yardY * T,
+    );
+    add(
+      paintTownLibraryYard(),
+      library.x * T,
+      library.yardY * T,
+      library.yardY * T,
     );
   }
   return outdoorItems;

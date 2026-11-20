@@ -22,6 +22,7 @@ import { townBusRoute } from "./townBus";
 import { townHarbourLot, townHarbourReserve } from "./townHarbour";
 import { townWarehouseReserve } from "./townHarbourLot";
 import { townPostLotBeside, townPostReserve } from "./townPostLot";
+import { townLibraryLot, townLibraryReserve } from "./townLibraryLot";
 import {
   TOWN_FACADE,
   TOWN_TILE as T,
@@ -141,7 +142,7 @@ export type TownLandscape = {
   /**
    * Chebyshev distance from the tile to the nearest reserved tile (a road,
    * pavement, plaza, building, the town center, a lamp, bench, bush, board,
-   * bus stop, the post office or the billboard verge), capped above REACH.
+   * bus stop, the post office, the library or the billboard verge), capped above REACH.
    */
   reserved(tx: number, ty: number): number;
   /** The free tile's surface; reserved tiles keep the layout's ground. */
@@ -249,6 +250,11 @@ function reservedLand(layout: TownLayout) {
     townHarbourReserve(harbour),
   ])
     reserve(lot.x0, lot.y0, lot.x1, lot.y1);
+  const library = townLibraryLot(layout);
+  if (library) {
+    const lot = townLibraryReserve(library);
+    reserve(lot.x0, lot.y0, lot.x1, lot.y1);
+  }
   if (layout.roads.length) {
     const top = Math.min(...layout.roads);
     reserve(0, top - TOWN_BILLBOARD_VERGE, width, top);

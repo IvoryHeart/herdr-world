@@ -1,0 +1,84 @@
+/**
+ * Where Town's library (#1027) stands, as tiles: right of the town center,
+ * fronting the first street as the center and the post office do, so the
+ * three make one civic row at the top of the town. Its reading garden fronts
+ * the street; the house holds every agent's and project's memory as books.
+ * Pure geometry with no layout import, so the lots can make room for it
+ * (townLots.ts) and everything else reads it from the laid-out center.
+ * A narrow town folds it to a sign on the center (TownLibrary.tsx).
+ */
+
+import { TOWN_CENTER_FRIEZE_Y, type TownCenterLot } from "./townCenter";
+
+/** The lot's width in tiles: the building and its garden share it. */
+export const TOWN_LIBRARY_WIDTH = 12;
+/** The building's rows, its door on the bottom one. */
+export const TOWN_LIBRARY_HOUSE_ROWS = 6;
+/** The reading garden's rows, in front of the door. */
+export const TOWN_LIBRARY_YARD_ROWS = 4;
+/** Lawn between the center's east wing and the library. */
+export const TOWN_LIBRARY_GAP = 2;
+/** Columns a wide town keeps right of its center for the lot and its lawn. */
+export const TOWN_LIBRARY_ROOM = TOWN_LIBRARY_GAP + TOWN_LIBRARY_WIDTH;
+
+export type TownLibraryLot = {
+  /** Left column and the building's top row, in tiles. */
+  x: number;
+  y: number;
+  w: number;
+  /** The garden's top row, at the foot of the door. */
+  yardY: number;
+};
+
+/**
+ * The lot right of the town center's east wing, its garden's front edge on
+ * the first street's pavement. A wide town is always wide enough to hold it
+ * (townLots.ts), and nothing stands there, so it never moves anything.
+ */
+export function townLibraryLotBeside(center: TownCenterLot): TownLibraryLot {
+  const yardY = center.street - TOWN_LIBRARY_YARD_ROWS;
+  return {
+    x: center.x + center.w + TOWN_LIBRARY_GAP,
+    y: yardY - TOWN_LIBRARY_HOUSE_ROWS,
+    w: TOWN_LIBRARY_WIDTH,
+    yardY,
+  };
+}
+
+/** Tiles the lot keeps clear (x1, y1 exclusive), with a tile of verge. */
+export function townLibraryReserve(lot: TownLibraryLot) {
+  return {
+    x0: lot.x - 1,
+    y0: lot.y - 1,
+    x1: lot.x + lot.w + 1,
+    y1: lot.yardY + TOWN_LIBRARY_YARD_ROWS + 1,
+  };
+}
+
+/** The lot of a laid-out town; null on a narrow one, which folds it. */
+export function townLibraryLot(layout: {
+  formFactor: string;
+  center: TownCenterLot;
+}): TownLibraryLot | null {
+  return layout.formFactor === "narrow"
+    ? null
+    : townLibraryLotBeside(layout.center);
+}
+
+/**
+ * On a narrow town: the folded sign's spot on the center's left wing, in
+ * world pixels, below the Shipyard's signpost (townHarbourLot.ts). The post
+ * office stands left of the center (townPostLot.ts).
+ */
+export function townLibraryFoldAt(center: TownCenterLot, tile: number) {
+  return {
+    x: center.x * tile + 60,
+    y: center.y * tile + TOWN_CENTER_FRIEZE_Y + 40 + TOWN_FOLD_STACK,
+  };
+}
+
+/**
+ * World pixels between signs stacked on the center's wing: two signs about
+ * 28 pixels high, each at up to 1.6 times that near home zoom (--iz).
+ */
+export const TOWN_FOLD_STACK = 46;
