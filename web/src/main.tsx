@@ -26,8 +26,10 @@ if (titleSpinnerFixture || boardTextConflictFixture) {
 const WorldFoundationApp = React.lazy(
   () => import("./world/WorldFoundationApp"),
 );
-const BoardTextConflictFixture = React.lazy(
-  () => import("./world/testing/BoardTextConflictFixture"),
+const BoardTextConflictFixture = React.lazy(() =>
+  import("./world/BoardView").then((module) => ({
+    default: module.BoardTextConflictFixture,
+  })),
 );
 
 class ErrorBoundary extends React.Component<
