@@ -13,10 +13,8 @@ import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
 import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { authTokenPrintCommand } from "../config/auth-token";
-import type { DataPaths } from "../config/data-paths";
 import { acquireInstanceLock } from "../config/instance-lock";
 import { publishInstanceAddress } from "./instance-address";
-import type { ServerConfig } from "../config/server-config";
 import { listenerSessionSecret } from "../config/session-secret";
 import { startupConnectionSettings } from "../connections/profile-creation";
 import {
@@ -80,22 +78,11 @@ import { DeskWatches } from "../world/desk-watches";
 import { readDeskWatch } from "../world/desk-watch-read";
 import { createBrowserClients, summarizeHerdrEvent } from "./clients";
 import { listen } from "./listener";
-import type { Clock, Scheduler, WorldAdapters } from "./ports";
+import type { WorldServiceDeps } from "./ports";
 import { createRpcDispatcher } from "./rpc-dispatch";
-import type { OpenStorage, WorldStorage } from "./storage";
+import type { WorldStorage } from "./storage";
 
-/** Everything a World service takes from its process; nothing else is global. */
-export type WorldServiceDeps = {
-  config: ServerConfig;
-  /** The data folder this service owns from creation until stop. */
-  paths: DataPaths;
-  clock: Clock;
-  scheduler: Scheduler;
-  storage: OpenStorage;
-  adapters: WorldAdapters;
-  /** After an installed update: end the process so its supervisor restarts it. */
-  scheduleProcessExit(): void;
-};
+export type { WorldServiceDeps } from "./ports";
 
 export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 
