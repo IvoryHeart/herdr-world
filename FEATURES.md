@@ -5,18 +5,41 @@ A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
 
 ## Runtime support
 
-herdr-core is primary for new agents when installed and connected. Choose a
-Herdr TUI room to launch there instead. Both appear in **Hosts** and
-**Manage connections**, with separate connections.
+A host is this computer or one exact OpenSSH alias / `user@host` destination.
+The service and CLI discover herdr-core and the Herdr TUI on each host and connect
+every runtime found. `herdr-world connections add sample@host.example` needs no
+runtime flag. `herdr-world connections discover <host-id>` repeats discovery;
+connecting a host also repeats it. Discovery checks presence and version, never
+starts or installs a runtime. Core uses `HC_SESSION` locally (otherwise `default`)
+and its standard state directory, including `XDG_STATE_HOME`.
 
-With no saved connections or explicit Herdr socket/session/SSH override, first
-run finds an installed local core when the Herdr TUI is absent, saves only
-`core-local` and makes it the default. It uses `HC_SESSION` (otherwise `default`)
-and core's standard state directory, including `XDG_STATE_HOME`. A running core's
-agents appear immediately; discovery never starts core or changes its login item.
-Saved connections and their chosen default stay as they are. When the TUI is
-installed, first run keeps its existing local discovery; add core in **Manage
-connections** if wanted.
+An empty host stays saved and reports **No runtime installed**, with the registered
+runtime choices. Installation always needs a person's action. Once any runtime is
+found, host responses offer no installation suggestions; the Integrations API
+lists additional runtime choices per host. A probe failure is an unavailable or
+degraded host, never evidence that a runtime needs installing. SSH uses fixed,
+bounded, noninteractive probes; passwords, keys and arbitrary SSH options are
+never saved. Set SSH policy in OpenSSH configuration; use `--windows` for a Windows
+SSH host.
+
+Each runtime retains its own immutable connection ID and generation. One failed
+runtime makes the host degraded while reachable siblings remain actionable.
+Retained topology for the failed or removed runtime is stale and non-actionable.
+Rediscovery reuses a removed runtime's ID, with a new generation on reconnect.
+Legacy profiles on this computer or the same exact SSH destination become one host
+without rewriting runtime IDs, room positions, pins, colours or saved Hosts filter
+ticks. Different SSH aliases are not resolved or guessed to be the same machine.
+Explicit startup socket/session/SSH overrides retain their pinned runtime behavior.
+
+`herdr-world ls` returns hosts with their runtimes and rooms; `connections` lists
+host/runtime kind, version and state. Existing per-connection API arrays and legacy
+runtime-specific CLI add flags remain available. The current browser Hosts and
+Manage connections screens still present runtime entries; their host grouping is
+a separate screen change. See [host connections](docs/host-connections.md) for the
+API shape and migration rules.
+
+herdr-core is primary for new agents when installed and connected. Choose a
+Herdr TUI room to launch there instead.
 
 `service uninstall` removes current and legacy World user services on macOS and
 Linux when their definitions identify them as World-owned. It preserves settings,

@@ -9,7 +9,7 @@ concurrent independently qualified operational contexts and fair bounded aggrega
 
 ### Requirement: Runtime authority
 Herdr SHALL own structural topology, agent lifecycle and terminal streams. One World service SHALL
-own the saved connection catalogue and SHALL isolate each local or SSH Herdr connection in its own
+own the saved host catalogue and its runtime connection profiles, and SHALL isolate each runtime connection in its own
 runtime, transport, subscription, cache and reconnect generation. The browser SHALL communicate
 with that World service rather than connecting to independently deployed bridges.
 
@@ -108,6 +108,65 @@ with that World service rather than connecting to independently deployed bridges
 - **AND** permanent, permission, protocol and unclassified failures do not acquire indefinite retries
 - **AND** disconnect, removal, replacement, generation retirement and shutdown cancel old retry work;
   explicit Reconnect remains available and failed topology remains non-actionable until freshly observed
+
+### Requirement: Hosts own independently discovered runtime connections
+
+A host SHALL be this computer or one exact OpenSSH alias / `user@host` destination.
+Adding a host SHALL require no runtime selection. A registered provider SHALL own
+presence/version probes and the default connection profile for its runtime. World
+SHALL discover all registered providers on host connection and explicit rediscovery,
+and SHALL connect every found runtime independently. Discovery SHALL NOT install
+or start a runtime, probe installation requirements, or persist secrets or SSH options.
+SSH discovery SHALL use only fixed, bounded, noninteractive read-only probes.
+
+A successfully discovered empty host SHALL remain saved and report the registered
+installation choices. Once any runtime is found, ordinary host responses SHALL NOT
+suggest installing siblings; the Integrations API SHALL retain additional choices
+per host. Failed probes SHALL be incomplete evidence, not evidence of absence.
+Successful siblings SHALL still connect when another provider probe fails.
+
+Each runtime SHALL retain its immutable connection ID, independent generation and
+owning manager. Host identity SHALL NOT grant downstream operation authority or
+select a fallback runtime. Missing runtimes SHALL retire their leases and retain
+stale, non-actionable topology. Reachable siblings SHALL remain independently live.
+Existing profiles SHALL be grouped by local machine or exact SSH destination without
+rewriting IDs, native resource bindings, room positions, pins, colours or saved filter
+ticks. Rediscovery SHALL reuse historical runtime IDs. Different aliases SHALL NOT
+be assumed equivalent. Explicit startup overrides SHALL retain their pinned behavior.
+
+The snapshot and connection-list APIs SHALL add a host catalogue containing runtime
+kind, version, lifecycle and immutable connection ID, retaining the existing
+per-connection arrays. Host snapshot runtime entries SHALL carry their own generation,
+staleness and actionability; topology SHALL remain indexed by connection ID.
+`herdr-world connections` SHALL list hosts and runtimes. `herdr-world ls` SHALL
+return hosts with their runtimes and rooms, retaining the per-connection projection.
+
+#### Scenario: Both runtimes on this computer
+- **WHEN** herdr-core and the Herdr TUI are installed on this computer
+- **THEN** World discovers and connects both under one host, without asking for a runtime
+- **AND** their rooms and agents retain separate connection-qualified identities
+
+#### Scenario: Empty host and later installation
+- **WHEN** a newly added SSH destination has no registered runtime
+- **THEN** the host remains saved with installation choices and no automatic installation
+- **AND** after a runtime is installed, explicit rediscovery finds it without re-adding the host
+- **AND** ordinary host results stop suggesting other runtimes while Integrations retains choices
+
+#### Scenario: One runtime is unavailable or removed
+- **WHEN** one runtime on a multi-runtime host becomes unreachable or disappears
+- **THEN** the host is degraded and its reachable sibling remains live and actionable
+- **AND** the unavailable runtime's retained rooms are stale and non-actionable
+- **AND** a later rediscovery reuses its ID with a new runtime generation
+
+#### Scenario: Discovery cannot authenticate or one provider fails
+- **WHEN** a fixed SSH probe fails or returns an invalid response
+- **THEN** World reports incomplete discovery without claiming the runtime is absent
+- **AND** successful providers still connect using only their own identities
+
+#### Scenario: Legacy per-runtime catalogue migrates
+- **WHEN** existing local profiles or profiles for the same SSH destination are loaded
+- **THEN** they appear under one host without renaming their runtime IDs or preferences
+- **AND** unrelated destinations and explicit startup overrides remain distinct
 
 ### Requirement: Return bounded aggregate observation with host-local progress
 
