@@ -287,6 +287,10 @@ Object.defineProperty(window, "fetch", {
 let active = "alpha";
 let generation = 1;
 const settings: Record<string, boolean> = { alpha: true, beta: false };
+const autoRenameSettings: Record<string, boolean> = {
+  alpha: true,
+  beta: false,
+};
 const listeners = new Set<(event: HerdrEventMsg) => void>();
 const calls: Array<{ id: string; method: string; params: any }> = [];
 let pendingRead: Promise<{ surface_codecs: boolean }> | null = null;
@@ -378,6 +382,12 @@ bridge.connection = (id) => {
     acceptsServerGeneration: (value) => value === lease,
     call: async (method, params) => {
       calls.push({ id: connectionId, method, params });
+      if (method === "settings.agent_auto_rename.get")
+        return { enabled: autoRenameSettings[connectionId] };
+      if (method === "settings.agent_auto_rename.update") {
+        autoRenameSettings[connectionId] = params!.enabled as boolean;
+        return { enabled: autoRenameSettings[connectionId] };
+      }
       if (method === "settings.terminal_transport.get") {
         if (failRead) throw new Error("Load failed");
         return pendingRead ?? { surface_codecs: settings[connectionId] };
@@ -1266,6 +1276,17 @@ async function run() {
     "returning from Layout lost the trigger focus",
   );
   click("Connection");
+  await waitFor(() => !button("Automatic tab renaming").disabled);
+  check(
+    button("Automatic tab renaming").getAttribute("aria-checked") === "true",
+    "default auto-rename preference missing",
+  );
+  click("Automatic tab renaming");
+  await waitFor(
+    () =>
+      button("Automatic tab renaming").getAttribute("aria-checked") === "false",
+  );
+  check(autoRenameSettings.alpha === false, "auto-rename preference not saved");
   await waitFor(
     () =>
       button("Terminal incremental transport").getAttribute("aria-disabled") ===
@@ -1392,6 +1413,11 @@ async function run() {
     button("Terminal incremental transport").getAttribute("aria-checked") ===
       "false",
     "reopening discarded the saved preference",
+  );
+  await waitFor(() => !button("Automatic tab renaming").disabled);
+  check(
+    button("Automatic tab renaming").getAttribute("aria-checked") === "false",
+    "reopening discarded the auto-rename preference",
   );
   failSave = true;
   click("Terminal incremental transport");

@@ -42,6 +42,7 @@ test.skipIf(!chrome)(
         ) => Promise<Record<string, unknown>>
       >();
     const calls: { method: string; params: Record<string, unknown> }[] = [];
+    const manualRenames: { tabId: string; label: string }[] = [];
     let destination = false,
       moved = false;
     let label = "Analysis",
@@ -134,6 +135,10 @@ test.skipIf(!chrome)(
                         generation: 3,
                         isCurrent: () => true,
                         runtime: {
+                          tabAutoRenamer: {
+                            markManualRename: (tabId: string, label: string) =>
+                              manualRenames.push({ tabId, label }),
+                          },
                           ...herdrRuntimeFixture({
                             call: async (
                               method: string,
@@ -315,6 +320,10 @@ test.skipIf(!chrome)(
         30000,
       );
       expect(outcomes).toEqual([[], []]);
+      expect(manualRenames).toContainEqual({
+        tabId: "tab-1",
+        label: "Shared native tab",
+      });
       for (const [name, cdp] of [
         ["desktop", desktop],
         ["phone", phone],
