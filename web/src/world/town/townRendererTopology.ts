@@ -51,6 +51,8 @@ import {
   townHostPlan,
   townRectsMeet,
   townRetiringAlpha,
+  townRiseAt,
+  townRiseCarried,
   townRiseProgress,
   townRisePose,
   townSinkPose,
@@ -136,6 +138,11 @@ export function createTownTopology(ctx: TownTopologyContext) {
         seconds: number;
         /** Its host left: it sinks into its lot this many seconds in. */
         sink: number | null;
+        /**
+         * It was still rising (townRiseCarried): it rises on from where it
+         * was, from this many seconds in, in step with its replacement.
+         */
+        rise: number | null;
         /** It has raised its dust. */
         dusted: boolean;
         /** How its replacement covers it, or "none" when it leaves on its own. */
@@ -381,8 +388,10 @@ export function createTownTopology(ctx: TownTopologyContext) {
     const dx = next ? (next.x - view.x) * T : at.x;
     const dy = next ? (next.y - view.y) * T : at.y;
     const fade = view.motion?.crossfade ? view.motion.t : null;
-    // One still rising stands as it is drawn: it settles, then leaves.
-    if (view.motion) place(view, at, view.container.alpha);
+    // One still rising keeps rising from the height it is drawn at, and so
+    // does its replacement: a rebake or a move never pops it up or down.
+    const rise = view.motion ? townRiseCarried(view.motion) : null;
+    const dusted = view.motion?.dusted ?? false;
     view.motion = null;
     view.container.zIndex -= 0.5;
     const sink = next ? undefined : plan?.sink.get(hostKey);
@@ -394,6 +403,7 @@ export function createTownTopology(ctx: TownTopologyContext) {
       seconds:
         sink === undefined ? planSeconds() : sink + TOWN_HOST_SINK_SECONDS,
       sink: sink ?? null,
+      rise,
       dusted: false,
       cover: !next
         ? "none"
@@ -401,7 +411,12 @@ export function createTownTopology(ctx: TownTopologyContext) {
           ? "whole"
           : "part",
       fade,
-      from: { x: at.x, y: at.y, alpha: view.container.alpha },
+      // A rising drawing's opacity is its rise's (townRisePose).
+      from: {
+        x: at.x,
+        y: at.y,
+        alpha: rise === null ? view.container.alpha : 1,
+      },
       dx,
       dy,
     });
@@ -412,7 +427,13 @@ export function createTownTopology(ctx: TownTopologyContext) {
         dy: (view.y - next.y) * T + at.y,
         enter: false,
         crossfade: true,
-        seconds: planSeconds(),
+        ...(rise === null
+          ? { seconds: planSeconds() }
+          : {
+              rise,
+              dusted,
+              seconds: Math.max(planSeconds(), rise + TOWN_HOST_RISE_SECONDS),
+            }),
       });
   };
 
@@ -420,13 +441,15 @@ export function createTownTopology(ctx: TownTopologyContext) {
   const replaceBuilding = (hostKey: string, instant: boolean) => {
     const building = ctx.layout()?.buildings.find((b) => b.hostKey === hostKey);
     const had = buildingByHost.has(hostKey);
+    // One that has not been drawn yet keeps its rise to come.
+    const waiting = pendingMotion.get(hostKey)?.rise;
     retireBuilding(hostKey, instant, building);
     if (!building) return;
     pendingBuildings.push(building);
     if (!had && !instant) {
       // A host that just arrived rises out of its lot; any other building
       // drawn for the first time (one that was off screen) fades in.
-      const rise = plan?.rise.get(hostKey);
+      const rise = plan?.rise.get(hostKey) ?? waiting;
       pendingMotion.set(hostKey, {
         dx: 0,
         dy: 0,
@@ -493,14 +516,21 @@ export function createTownTopology(ctx: TownTopologyContext) {
         x: from.x + (entry.dx - from.x) * e,
         y: from.y + (entry.dy - from.y) * e,
       };
+      const up =
+        entry.rise === null
+          ? null
+          : townRisePose(townRiseAt(entry.t * entry.seconds, entry.rise));
+      const alpha = from.alpha * (up?.alpha ?? 1);
       if (entry.sink === null)
         place(
           entry.view,
           at,
-          from.alpha * townRetiringAlpha(entry.t, entry.cover),
+          alpha * townRetiringAlpha(entry.t, entry.cover),
+          up,
         );
       else {
-        // Its host left: it stretches, then sinks into its lot.
+        // Its host left: it stretches, then sinks into its lot (from the
+        // height it had risen to, if it was still rising).
         const down = townSinkPose(
           (entry.t * entry.seconds - entry.sink) / TOWN_HOST_SINK_SECONDS,
         );
@@ -508,7 +538,14 @@ export function createTownTopology(ctx: TownTopologyContext) {
           entry.dusted = true;
           dust(entry.view);
         }
-        place(entry.view, at, from.alpha * down.alpha, down);
+        place(
+          entry.view,
+          at,
+          alpha * down.alpha,
+          up
+            ? { sx: Math.min(1.2, up.sx * down.sx), sy: up.sy * down.sy }
+            : down,
+        );
       }
       // A drawing replaced mid-crossfade finishes it under its replacement,
       // so the one under it is never uncovered.
@@ -543,7 +580,7 @@ export function createTownTopology(ctx: TownTopologyContext) {
     pendingMotion.delete(building.hostKey);
     if (motion) {
       view.motion = { ...motion, t: 0 };
-      if (motion.rise !== undefined) stats.hostArrivals += 1;
+      if (motion.enter && motion.rise !== undefined) stats.hostArrivals += 1;
       poseMotion(view, view.motion);
       if (motion.crossfade) {
         crossfade(view, townCrossfadeAlpha(view.motion));

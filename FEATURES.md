@@ -433,11 +433,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     then its building rises out of its lot in a puff of dust, springs a
     little past its height and settles, its reception and plaques appearing
     as it stands. A host leaving (removed or unticked) stretches up, sinks
-    into its lot in dust, and the town closes the gap. It takes under a
-    second, and the building can be used at once. Several hosts at once rise
-    or sink one after another. A host that only disconnects keeps its
-    building, and opening or reloading Town shows the buildings already
-    there with no arrival. Reduced motion swaps buildings at once, with no
+    into its lot in dust, and the town closes the gap. Each building rises
+    or sinks in under a second, and can be used at once. Several hosts at
+    once rise or sink one after another, a moment apart. A building that is
+    changed, moved or removed while it rises carries on from its height. A
+    host that only disconnects keeps its building, and opening or reloading
+    Town shows the buildings already there with no arrival. Reduced motion swaps buildings at once, with no
     movement; calm motion raises no dust.
   - The land around the town is generated: woods with pines, meadows, hedged
     flower gardens and orchards, ponds with reeds, winding footpaths, and each

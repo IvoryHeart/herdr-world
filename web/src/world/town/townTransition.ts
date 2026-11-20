@@ -146,8 +146,10 @@ export type TownBuildingMotion = {
   /** Seconds the whole motion takes (TOWN_TRANSITION_SECONDS when unset). */
   seconds?: number;
   /**
-   * A host arriving: its building enters by rising out of its lot this many
-   * seconds into the motion (townRisePose), instead of fading in.
+   * A host arriving: its building enters by rising out of its lot, for
+   * TOWN_HOST_RISE_SECONDS from this many seconds into the motion
+   * (townRisePose), instead of fading in. Negative when a rebake took over
+   * a rise already under way (townRiseCarried).
    */
   rise?: number;
   /** A rising building has raised its dust. */
@@ -157,10 +159,29 @@ export type TownBuildingMotion = {
 /** How far up a rising building is (0..1), or null for one that does not rise. */
 export function townRiseProgress(motion: TownBuildingMotion) {
   if (motion.rise === undefined) return null;
-  const seconds = motion.seconds ?? TOWN_TRANSITION_SECONDS;
-  return clamp01(
-    (motion.t * seconds - motion.rise) / Math.max(0.001, seconds - motion.rise),
+  // A motion lasts at least until its rise ends.
+  if (motion.t >= 1) return 1;
+  return townRiseAt(
+    motion.t * (motion.seconds ?? TOWN_TRANSITION_SECONDS),
+    motion.rise,
   );
+}
+
+/** How far up (0..1) a building is `seconds` in, when its rise starts at `rise`. */
+export const townRiseAt = (seconds: number, rise: number) =>
+  clamp01((seconds - rise) / TOWN_HOST_RISE_SECONDS);
+
+/**
+ * When, from now, a building in motion starts (or started: negative) to
+ * rise, so a drawing that replaces it, or the one leaving as it is
+ * replaced, rises on from the same height. Null when it is not rising or
+ * already stands.
+ */
+export function townRiseCarried(motion: TownBuildingMotion) {
+  if (motion.rise === undefined) return null;
+  const start =
+    motion.rise - motion.t * (motion.seconds ?? TOWN_TRANSITION_SECONDS);
+  return start <= -TOWN_HOST_RISE_SECONDS ? null : start;
 }
 
 /**
