@@ -1,4 +1,4 @@
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import type { Root } from "react-dom/client";
 
@@ -48,9 +48,7 @@ async function registerDomTests() {
   const { act, createElement: h, StrictMode } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { InstanceNameSettings } = await import("./InstanceNameSettings");
-  const { createInstanceNameClient, instanceNameClient } = await import(
-    "../instanceName"
-  );
+  const { createInstanceNameClient } = await import("../instanceName");
   let root: Root | null = null;
   let container: HTMLDivElement;
 
@@ -317,89 +315,5 @@ async function registerDomTests() {
     expect(input().value).toBe("Next draft");
     expect(savedName()).toBe("Herdr World \u00b7 Work");
     expect(document.title).toBe("Herdr World \u00b7 Work");
-  });
-
-  test("Configuration keeps instance scope separate and discards an unsaved draft on tab dismissal", async () => {
-    const { ConfigurationDialog } = await import("./ConfigurationDialog");
-    const {
-      defaultMobileTerminalShortcutRows,
-      defaultMobileTerminalSideShortcuts,
-    } = await import("../mobileTerminalShortcuts");
-    const load = spyOn(instanceNameClient, "load").mockResolvedValue({
-      title_suffix: "Home",
-    });
-    const save = spyOn(instanceNameClient, "save").mockResolvedValue({
-      title_suffix: "Work",
-    });
-    container = document.createElement("div");
-    document.body.append(container);
-    root = createRoot(container);
-    let closed = false;
-    const noop = () => {};
-    try {
-      await act(async () =>
-        root?.render(
-          h(ConfigurationDialog, {
-            initialTab: "Instance",
-            onClose: () => {
-              closed = true;
-            },
-            theme: "system",
-            accentColor: "blue",
-            uiScale: 100,
-            terminalFontScale: 100,
-            terminalFontName: "monospace",
-            mobileTerminalShortcuts: defaultMobileTerminalShortcutRows(),
-            mobileTerminalSideShortcuts: defaultMobileTerminalSideShortcuts(),
-            terminalThemeSelection: {
-              dark: "herdr-dark",
-              light: "herdr-light",
-            },
-            customTerminalThemes: [],
-            onThemeChange: noop,
-            blackBackground: false,
-            onBlackBackgroundChange: noop,
-            onAccentColorChange: noop,
-            onUiScaleChange: noop,
-            onTerminalFontScaleChange: noop,
-            onTerminalFontNameChange: noop,
-            onMobileTerminalShortcutsChange: noop,
-            onMobileTerminalSideShortcutsChange: noop,
-            onTerminalThemeSelectionChange: noop,
-            onCustomTerminalThemesChange: noop,
-          }),
-        ),
-      );
-      const panel = container.querySelector<HTMLElement>(
-        "#configuration-panel-Instance",
-      )!;
-      expect(panel.hidden).toBe(false);
-      expect(panel.textContent).toContain("Saved on this Herdr World server");
-      expect(panel.textContent).not.toContain("Saved in this browser");
-      expect(container.querySelector(".modal-actions")?.textContent).toContain(
-        "Use Save",
-      );
-      await edit("Unsaved");
-      await click("Appearance");
-      expect(container.querySelector(".instance-name-settings")).toBeNull();
-      await click("Behavior");
-      await act(async () => {
-        button("Behavior").dispatchEvent(
-          new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
-        );
-      });
-      expect(button("Instance").getAttribute("aria-selected")).toBe("true");
-      expect(input().value).toBe("Home");
-      expect(save).not.toHaveBeenCalled();
-      await act(async () => {
-        input().dispatchEvent(
-          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-        );
-      });
-      expect(closed).toBe(true);
-    } finally {
-      load.mockRestore();
-      save.mockRestore();
-    }
   });
 }

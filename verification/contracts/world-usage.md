@@ -1,7 +1,7 @@
 # World usage projection evidence
 
 Requirement authority: issue #213 and the approved
-[World usage delta](../../openspec/changes/harness-usage/specs/world-usage/spec.md).
+[current World usage contract](../../openspec/specs/world-usage/spec.md).
 This extends Q38's read-only numeric observation consumer; accepted runtime lease
 and verb-policy models continue to supply operation authority.
 
@@ -126,3 +126,10 @@ checks; CI retains the required complete behavioral verification selection.
 Tests do not establish live SSH fleet availability, arbitrary future harness
 schema compatibility, synchronized source clocks, full history beyond budgets,
 actual provider charges or performance deadlines on every host.
+
+## November writer assessment
+
+The read-only projection assessment above does not prove the Claude tap writer's
+stale-lock commit protocol. [Q55](claude-tap-lock.md) records the model and real
+counterexample for #1086; its safety claim stays pending. Immutable launch-settings
+preparation is separately assessed in [Q56](launch-preparation.md).

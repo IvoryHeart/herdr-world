@@ -1,0 +1,149 @@
+/* Board drawings (BoardSketch.tsx): on the board's camera, beneath cards. */
+.board-sketch {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+  font-family: inherit;
+}
+.board-sketch-ink {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.board-sketch-pen .board-sketch-ink {
+  stroke-width: 3;
+}
+.board-sketch-fill {
+  fill: color-mix(in srgb, currentColor 20%, transparent);
+}
+.board-sketch-text {
+  fill: currentColor;
+  white-space: pre;
+}
+.board-sketch-hit {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: move;
+}
+.board-sketch-frame {
+  fill: none;
+  stroke: var(--board-accent);
+}
+.board-sketch-handle {
+  fill: var(--board-card);
+  stroke: var(--board-accent);
+  pointer-events: all;
+  cursor: nwse-resize;
+}
+.board-sketch-handle[data-handle="ne"],
+.board-sketch-handle[data-handle="sw"] {
+  cursor: nesw-resize;
+}
+.board-sketch-end {
+  cursor: crosshair;
+}
+.board-sketch-edit {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 4px;
+  border: 1px dashed var(--board-accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--board-card) 70%, transparent);
+  font: inherit;
+  line-height: 1.3;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+}
+.board-sketch-edit-label {
+  display: flex;
+  padding-top: 8px;
+}
+
+/* A drawing tool takes the pointer over the whole board. */
+.board-sketch-pad {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+.board-sketch-pad-text {
+  cursor: text;
+}
+.board-sketch-pad-note {
+  cursor: copy;
+}
+
+.board-sketch-tools {
+  position: absolute;
+  z-index: 5;
+  left: max(12px, env(safe-area-inset-left, 0px));
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  grid-template-columns: repeat(2, 32px);
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--board-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--board-card) 94%, transparent);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+  color: var(--board-ink);
+}
+.board-sketch-tool {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.board-sketch-tool:hover,
+.board-sketch-tool:focus-visible {
+  background: color-mix(in srgb, var(--board-accent) 16%, transparent);
+}
+.board-sketch-tool[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--board-accent) 30%, transparent);
+}
+.board-sketch-tool:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
+.board-sketch-rule {
+  grid-column: 1 / -1;
+  height: 1px;
+  margin: 2px 4px;
+  background: var(--board-line);
+}
+.board-sketch-colors {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  justify-items: center;
+}
+.board-sketch-color {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: currentColor;
+  background-clip: content-box;
+  cursor: pointer;
+}
+.board-sketch-color[aria-pressed="true"] {
+  outline: 2px solid var(--board-accent);
+  outline-offset: 1px;
+}

@@ -64,7 +64,13 @@
         "server/src/connections/profiles.test.ts",
         "server/src/connections/first-run.test.ts",
         "server/src/connections/local-recovery.test.ts",
-        "server/src/service/local-recovery.test.ts"
+        "server/src/service/local-recovery.test.ts",
+        "server/src/connections/host-service.test.ts",
+        "server/src/cli/host-connections.test.ts",
+        "server/src/service/host-connections.test.ts",
+        "server/src/connections/profile-process.test.ts",
+        "server/src/assistant.integration.test.ts",
+        "server/src/assistant-recovery.integration.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "shared-lifecycle",
@@ -83,12 +89,18 @@
           "server/src/connections/ssh-preflight-recovery.test.ts",
           "server/src/connections/profiles.test.ts",
           "server/src/connections/local-recovery.test.ts",
-          "server/src/service/local-recovery.test.ts"
+          "server/src/service/local-recovery.test.ts",
+          "server/src/connections/host-service.test.ts",
+          "server/src/cli/host-connections.test.ts",
+          "server/src/service/host-connections.test.ts",
+          "server/src/connections/profile-process.test.ts",
+          "server/src/assistant.integration.test.ts",
+          "server/src/assistant-recovery.integration.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local initial-socket retry consumes the same unchanged runtime-control/drain transitions; deterministic scheduler cancellation/backoff tests and a production-composition native-socket test verify late readiness, fresh admission and retired-generation refusal. This does not establish macOS login activation.",
+      "evidenceDecision": "Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local initial-socket retry consumes the same unchanged runtime-control/drain transitions; deterministic scheduler cancellation/backoff tests and a production-composition native-socket test verify late readiness, fresh admission and retired-generation refusal. This does not establish macOS login activation. Host catalogue migration preserves runtime IDs; serialized discovery, empty-host durability, disappearance/rediscovery, independent sibling failure, host removal and discovery during shutdown consume the same unchanged manager transitions. Real composition tests cover authenticated host RPC/CLI admission and no offline fallback. Host admission additionally exhausts eight saved-host/profile auto-connect combinations and four recovering-runtime/sibling-disconnect combinations with the actual retry scheduler. Persistence reload, deferred-start Disconnect, explicit absent-endpoint Connect, retained intent across temporary absence and failed-write startup isolation are direct finite consumer evidence; manager transitions remain unchanged. See the host ownership consumer decision.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -115,7 +127,8 @@
         "server/src/bridge/ssh-master.test.ts",
         "server/src/bridge/ssh-openssh.test.ts",
         "server/src/bridge/forward-owner.test.ts",
-        "server/src/bridge/ssh-forward.test.ts"
+        "server/src/bridge/ssh-forward.test.ts",
+        "server/src/connections/host-discovery.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "shared-lifecycle",
@@ -142,12 +155,13 @@
           "server/src/bridge/ssh-master.test.ts",
           "server/src/bridge/ssh-openssh.test.ts",
           "server/src/bridge/forward-owner.test.ts",
-          "server/src/bridge/ssh-forward.test.ts"
+          "server/src/bridge/ssh-forward.test.ts",
+          "server/src/connections/host-discovery.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Manager currency and drain fence late transport completion. Real supervisor/tunnel tests exercise process exits, cancellation, reconnect classification and private path ownership. Candidate Roamgate transport consumers add explicit master/forward ownership, bounded session scheduling and qualified status reconciliation checks; existing model bounds and native-platform exclusions remain unchanged. Independent candidate acceptance is still required.",
+      "evidenceDecision": "Manager currency and drain fence late transport completion. Real supervisor/tunnel tests exercise process exits, cancellation, reconnect classification and private path ownership. Candidate Roamgate transport consumers add explicit master/forward ownership, bounded session scheduling and qualified status reconciliation checks; existing model bounds and native-platform exclusions remain unchanged. Independent candidate acceptance is still required. Fixed provider probes are bounded and noninteractive, reject unsafe destinations before invocation, retain partial successful siblings, and never start/install runtimes or persist SSH policy. Direct fixed-argv tests cover discovery; real platform exclusions remain unchanged.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -466,7 +480,9 @@
         "server/src/service/observation-v1.test.ts",
         "server/src/world/snapshot-terminal-settings.test.ts",
         "web/src/world/observationBase.test.ts",
-        "quint/observation-base.test.ts"
+        "quint/observation-base.test.ts",
+        "server/src/world/host-snapshots.test.ts",
+        "server/src/service/host-connections.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "observation",
@@ -474,7 +490,7 @@
       "status": "shared-model",
       "remaining": "Snapshot integration is the selected consumer evidence for manager authority; no exhaustive claim over arbitrary host topology or transport schedules.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real snapshot tests exercise retirement during construction, expired catalogue scheduling, failed-host stale topology and healthy sibling publication with bounded synthetic transports. Fresh Desk observation callbacks run once at successful host admission with the read-start time; cache reuse, invalidation and retirement never replay those observations. Observation v1 adds bounded base admission and/or incremental consumer evidence; historical acceptance remains scoped to the existing models and consumers. M1/P6 additions require independent candidate review. Service scheduling progress and Q12/Q13 transport claims are unchanged.",
+      "evidenceDecision": "Real snapshot tests exercise retirement during construction, expired catalogue scheduling, failed-host stale topology and healthy sibling publication with bounded synthetic transports. Fresh Desk observation callbacks run once at successful host admission with the read-start time; cache reuse, invalidation and retirement never replay those observations. Observation v1 adds bounded base admission and/or incremental consumer evidence; historical acceptance remains scoped to the existing models and consumers. M1/P6 additions require independent candidate review. Service scheduling progress and Q12/Q13 transport claims are unchanged. Host grouping is a read-only projection over unchanged per-runtime observations. Sixteen two-runtime lifecycle combinations check independent actionability/staleness; a real snapshot cache consumer retains a failed sibling generation while a healthy runtime stays actionable. No host identity grants authority or changes scheduling bounds.",
       "partialEvidence": {
         "models": ["quint/observation-base.qnt"],
         "contracts": [
@@ -489,7 +505,9 @@
           "server/src/service/observation-v1.test.ts",
           "server/src/world/snapshot-terminal-settings.test.ts",
           "web/src/world/observationBase.test.ts",
-          "quint/observation-base.test.ts"
+          "quint/observation-base.test.ts",
+          "server/src/world/host-snapshots.test.ts",
+          "server/src/service/host-connections.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -3144,6 +3162,148 @@
           "bun run verification:gate"
         ],
         "review": "New design contract pending PR review."
+      }
+    },
+    {
+      "id": "Q54",
+      "area": "Live catalogue writer serialization",
+      "owner": "server/src/connections/profile-service.ts",
+      "requirement": "openspec/specs/runtime-federation/spec.md",
+      "properties": "Successful unrelated edits survive, one service persistence owner, failure preserves catalogue, retry reads current state",
+      "existingTests": [
+        "quint/connection-registry.test.ts",
+        "server/src/service/connections-cli.test.ts",
+        "server/src/cli/connections.test.ts",
+        "server/src/connections/profile-service.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1004",
+      "status": "modeled",
+      "technique": "finite-model-and-exhaustive-consumer",
+      "assessment": "48 configurations: three CLI verbs, both writer orders, both arrival boundaries and independent save failures with retry",
+      "remaining": "Runtime rollback and platform durability retain existing consumers. Offline CLI lost update is reproduced and reported as #1084; live queue is not cross-process ownership.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": ["quint/connection-registry.qnt"],
+        "contracts": ["verification/contracts/connection-registry.md"],
+        "tests": [
+          "quint/connection-registry.test.ts",
+          "server/src/service/connections-cli.test.ts",
+          "server/src/cli/connections.test.ts",
+          "server/src/connections/profile-service.test.ts"
+        ],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q55",
+      "area": "Claude limits stale-lock ownership",
+      "owner": "server/src/usage/claude-tap.ts",
+      "requirement": "openspec/specs/world-usage/spec.md",
+      "properties": "Comparable window maxima must not decrease after stale-lock recovery; a retired holder must not publish",
+      "existingTests": [
+        "quint/claude-tap-lock.test.ts",
+        "server/src/usage/claude-tap.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/853",
+      "status": "pending",
+      "technique": "finite-model-with-production-replay",
+      "assessment": "Positive TLC invariant and real filesystem replay cover eight live/dead acquisition, preparation, final-rename and release schedules; age-stealing remains a rejected model and production fault control.",
+      "remaining": "Independent acceptance of the repaired protocol and Q55 mapping; host-local PID identity and platform filesystem semantics remain direct consumer assumptions.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": ["quint/claude-tap-lock.qnt"],
+        "contracts": ["verification/contracts/claude-tap-lock.md"],
+        "tests": [
+          "quint/claude-tap-lock.test.ts",
+          "server/src/usage/claude-tap.test.ts"
+        ],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q56",
+      "area": "First-run and immutable launch preparation",
+      "owner": "server/src/connections/first-run.ts",
+      "requirement": "openspec/specs/herdr-core-runtime/spec.md",
+      "properties": "Saved/explicit authority wins, no unsaved default or launch before preparation, complete retry after uncertain file publication",
+      "existingTests": [
+        "server/src/connections/first-run.test.ts",
+        "server/src/usage/claude-launch-settings.test.ts",
+        "server/src/herdr-core/shell.test.ts",
+        "server/src/herdr-core/operations.test.ts",
+        "server/src/rpc/launcher-tap.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/984",
+      "status": "alternative-evidence",
+      "technique": "finite-failure-matrix-and-native-subprocess",
+      "assessment": "One async discovery save with before/after failure and retry; equal-content cache publications commute; real subprocess/PTY tests retain byte transport",
+      "remaining": "Cross-process startup race remains #1084. Native harness/macOS acceptance and power loss remain platform checks; existing creation/core models own post-preparation launch.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/launch-preparation.md"],
+        "tests": [
+          "server/src/connections/first-run.test.ts",
+          "server/src/usage/claude-launch-settings.test.ts",
+          "server/src/herdr-core/shell.test.ts",
+          "server/src/herdr-core/operations.test.ts",
+          "server/src/rpc/launcher-tap.test.ts"
+        ],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q57",
+      "area": "Open agent runtime move candidate",
+      "owner": "verification/contracts/agent-move-audit.md",
+      "requirement": "verification/contracts/agent-move-audit.md",
+      "properties": "Quit before resume; at most one running conversation; details follow or loss/uncertainty reported",
+      "existingTests": [
+        "quint/replay.test.ts",
+        "quint/binding-resolution.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/990",
+      "status": "pending",
+      "technique": "external-candidate-exhaustive-assessment",
+      "assessment": "Frozen open #990 df398319a031f840668f7e6ea0dff765c5764c11: actual serial controller 576-outcome matrix ran; native and persistence consumers mapped in contract",
+      "remaining": "Feature and candidate consumer files are not merged. Current listed tests cover only existing shared runtime/binding fences; native, metadata, browser acceptance remains with #990. Independent Worlds and crash atomicity are not claimed.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/agent-move-audit.md"],
+        "tests": ["quint/replay.test.ts", "quint/binding-resolution.test.ts"],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q58",
+      "area": "Read-only integrations registry and private vault",
+      "owner": "server/src/integrations/",
+      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "properties": "Existing owners retain control authority; owner failure is isolated; only supported secret names leave storage; private atomic publication and closure refusal",
+      "existingTests": [
+        "server/src/integrations/registry.test.ts",
+        "server/src/integrations/vault.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1026",
+      "status": "alternative-evidence",
+      "technique": "direct-owner-and-filesystem-matrices",
+      "assessment": "Read-only owner projection plus synchronous in-service vault read/replace: no independent writer completion to permute. Real tests cover owner failures, named-secret privacy, legacy migration, unsafe targets and closed storage.",
+      "remaining": "Source refresh, connection authority and integration installation retain their own consumers. Independent-process filesystem and power-loss behavior are not proved.",
+      "requiredChecks": ["bun run check"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/architecture-audit-2026-11.md"],
+        "tests": [
+          "server/src/integrations/registry.test.ts",
+          "server/src/integrations/vault.test.ts"
+        ],
+        "checks": ["bun run test server/src/integrations"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
       }
     }
   ],

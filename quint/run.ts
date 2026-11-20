@@ -1,5 +1,6 @@
 import { runTapLockVerification } from "./claude-tap-lock-verification";
 import { composedCases, replayTracesPerSeed } from "./composed-cases";
+import { runRegistryVerification } from "./connection-registry-verification";
 import { runCoreVerification } from "./herdr-core-verification";
 import { runSeenVerification } from "./herdr-core-seen";
 import { replayEffectRecovery } from "./effect-recovery";
@@ -678,13 +679,20 @@ export async function runReviewedQuintModels(
     );
     const results = [];
     for (const item of runCases) {
-      if (item.name === "claude-tap-lock") {
-        const result = await runTapLockVerification({
+      if (
+        item.name === "claude-tap-lock" ||
+        item.name === "connection-registry"
+      ) {
+        const verify =
+          item.name === "claude-tap-lock"
+            ? runTapLockVerification
+            : runRegistryVerification;
+        const result = await verify({
           root,
           output,
           artifacts,
           command,
-          mutate: () => implementationMutation("claude-tap-lock"),
+          mutate: () => implementationMutation(item.name),
         });
         results.push(result);
         console.log(JSON.stringify(result));
@@ -1273,7 +1281,7 @@ export async function runReviewedQuintModels(
     );
     cancellation.signal.throwIfAborted();
     console.log(
-      "All selected finite models verified; scoped replays and negative controls passed.",
+      "All selected verification cases completed; inspect per-case safety verdicts and known counterexamples.",
     );
     console.log(`Evidence: ${artifacts}`);
   } catch (error) {

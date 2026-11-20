@@ -26,7 +26,8 @@
     "runtime-leases": 17.975,
     "runtime-control": 15.544,
     "ranger-recovery": 14.362,
-    "ranger-authority": 7.021
+    "ranger-authority": 7.021,
+    "connection-registry": 8.721
   },
-  "note": "Measured with Quint 0.33.1 and two local workers; not hosted CI results. Core retains its structurally dedicated two-CPU CI shard. All models, bounds, replay and sensitivity controls passed; weights affect scheduling only. Claude tap weight is the measured local focused case on 2026-11-20 (12.672s), with all eight schedules and both controls passing."
+  "note": "Measured with Quint 0.33.1 and two local workers; not hosted CI results. Core retains its structurally dedicated two-CPU CI shard. The original model groups, bounds, replay and sensitivity controls passed; connection-registry retains its audit scheduling weight and 48 real service scenarios; weights affect scheduling only. Claude tap weight is the measured local focused case on 2026-11-20 (12.672s), with all eight schedules and both controls passing."
 }

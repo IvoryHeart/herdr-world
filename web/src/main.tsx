@@ -19,13 +19,22 @@ const titleSpinnerFixture = previewUrl.searchParams.has("titleSpinnerFixture");
 const claudeTapLockFixture = previewUrl.searchParams.has(
   "claudeTapLockFixture",
 );
-if (titleSpinnerFixture || claudeTapLockFixture) {
-  previewUrl.searchParams.delete("titleSpinnerFixture");
+const boardTextConflictFixture = previewUrl.searchParams.has(
+  "boardTextConflictFixture",
+);
+if (titleSpinnerFixture || claudeTapLockFixture || boardTextConflictFixture) {
   previewUrl.searchParams.delete("claudeTapLockFixture");
+  previewUrl.searchParams.delete("titleSpinnerFixture");
+  previewUrl.searchParams.delete("boardTextConflictFixture");
   history.replaceState(history.state, "", previewUrl);
 }
 const WorldFoundationApp = React.lazy(
   () => import("./world/WorldFoundationApp"),
+);
+const BoardTextConflictFixture = React.lazy(() =>
+  import("./world/BoardView").then((module) => ({
+    default: module.BoardTextConflictFixture,
+  })),
 );
 
 class ErrorBoundary extends React.Component<
@@ -66,7 +75,7 @@ coreFixtureEnabled();
 coreInstallFake();
 integrationsFixtureEnabled();
 const stopInstanceNameSync =
-  titleSpinnerFixture || claudeTapLockFixture
+  titleSpinnerFixture || claudeTapLockFixture || boardTextConflictFixture
     ? () => {}
     : initializeInstanceName();
 if (import.meta.hot) import.meta.hot.dispose(stopInstanceNameSync);
@@ -79,6 +88,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <TitleSpinnerFixture />
         ) : claudeTapLockFixture ? (
           <ClaudeTapLockFixture />
+        ) : boardTextConflictFixture ? (
+          <BoardTextConflictFixture />
         ) : (
           <WorldFoundationApp />
         )}

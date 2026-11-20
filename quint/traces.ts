@@ -17,6 +17,7 @@ import { verificationModels } from "./models";
 export type Model = (typeof verificationModels)[number];
 
 const actions = {
+  "connection-registry": [],
   "claude-tap-lock": [],
   "herdr-core-runtime": [],
   "herdr-core-seen": [],
@@ -192,6 +193,10 @@ export function validateTrace(
   if (model === "effect-recovery") return validateEffectTrace(value);
   if (model === "observation-base") return validateObservationTrace(value);
   if (model === "binding-resolution") return validateBindingTrace(value);
+  if (model === "connection-registry")
+    assert.fail(
+      "Architecture audit uses direct exhaustive consumer schedules, not sampled traces",
+    );
   assert(Array.isArray(value) && value.length > 1, "empty trace");
   for (const [index, state] of value.entries()) {
     record(state);

@@ -87,6 +87,15 @@ it; leave other worktrees' listeners and data alone. For CLI checks, point
 `HERDR_WORLD_URL` at this listener and use the same `HERDR_WORLD_DATA_DIR` so the
 CLI locates its token. Preview data and built assets stay untracked.
 
+To include several previews in Shipyard's local instance observations, set
+`HERDR_WORLD_INSTANCE_REGISTRY_DIR` to the same private directory in each
+listener's environment at startup. Without it, each isolated data folder keeps
+its own registry. This shares display observations only; credentials, storage
+and connections stay in each preview's own folder. Reports expire after 45
+seconds without renewal, and stale reports have no open link. See the
+[Shipyard API guide](shipyard-api.md#local-instance-registry) for bounds and CLI
+try commands. No discovery probes or additional servers are started by Shipyard.
+
 ## Development tools
 
 To inspect the Claude limits ownership repair without a live account, open

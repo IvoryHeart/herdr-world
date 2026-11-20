@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 import type { HerdrOfficeProjection } from "../../herdrOfficeProjection";
 import { TownCamera, townHomeSpan, townHostsWidth } from "../townCamera";
-import { townCenterEmblem } from "../townCenter";
+import {
+  TOWN_CITY_BOARD_GAP,
+  TOWN_CITY_BOARD_HEIGHT,
+  townCenterEmblem,
+  townCityBoardScale,
+} from "../townCenter";
+import { townPostLot, townPostSignTop } from "../townPost";
 import {
   TOWN_FACADE,
   TOWN_PHONE_BOARD_ROWS,
@@ -163,11 +169,13 @@ test("a wide town opens framed on the billboard, the whole center and every buil
 
 test("a phone opens at home: the town center on top, the first building under it", () => {
   for (const [size, projection, framed] of [
-    // A short first building fits whole under the whole center.
-    [{ width: 390, height: 1200 }, office({ alpha: working(2) }), "flag"],
+    // A short first building fits whole under the whole center and the
+    // billboard above it (#1033).
+    [{ width: 390, height: 1200 }, office({ alpha: working(2) }), "board"],
     // A taller one keeps its lounge, where idle agents rest, in view.
-    [{ width: 390, height: 780 }, office({ alpha: working(2) }), "lounge"],
-    // One taller than the screen leaves the center its plaque and doors.
+    [{ width: 390, height: 640 }, office({ alpha: working(2) }), "lounge"],
+    // One taller than the screen leaves the center its plaque and doors,
+    // and the post office beside it its sign.
     [
       PHONE,
       office(
@@ -187,28 +195,49 @@ test("a phone opens at home: the town center on top, the first building under it
     expect(camera.z).toBe(camera.limits!.home);
     const top = viewport.inset.top;
     const bottom = viewport.height - viewport.inset.bottom;
-    // The center's plaque is on screen, centred on the buildings' axis
-    // (within half a tile: a floor an odd number of tiles narrower than the
-    // widest stands half a tile off it).
+    // The view is centred on the buildings' axis; the center's plaque is on
+    // screen, the center and the post office beside it whole across
+    // (#1033; townPost.test.ts checks the rest of them).
     const plaque = townCenterEmblem(layout.center, T);
     const sign = camera.toScreen(plaque.x, plaque.y);
     expect(sign.y).toBeGreaterThan(top);
     expect(
-      Math.abs(sign.x - camera.toScreen((first.x + first.w / 2) * T, 0).x),
-    ).toBeLessThanOrEqual((T / 2) * camera.z + 0.01);
-    const flag = camera.toScreen(0, layout.center.y * T - 40).y;
+      Math.abs(
+        camera.toScreen((first.x + first.w / 2) * T, 0).x -
+          (viewport.inset.left + viewport.width - viewport.inset.right) / 2,
+      ),
+    ).toBeLessThanOrEqual(1);
+    const left = camera.toScreen(townPostLot(layout).x * T, 0).x;
+    const right = camera.toScreen((layout.center.x + layout.center.w) * T, 0).x;
+    expect(left).toBeGreaterThanOrEqual(viewport.inset.left - 0.5);
+    expect(right).toBeLessThanOrEqual(
+      viewport.width - viewport.inset.right + 0.5,
+    );
+    const board = camera.toScreen(
+      0,
+      layout.center.y * T -
+        TOWN_CITY_BOARD_GAP -
+        TOWN_CITY_BOARD_HEIGHT * townCityBoardScale(camera.z),
+    ).y;
     const lounge = camera.toScreen(0, (first.y + first.h + TOWN_FACADE) * T).y;
-    expect(flag).toBeLessThanOrEqual(top + 0.01);
-    if (framed === "flag") expect(flag).toBeCloseTo(top);
+    expect(board).toBeLessThanOrEqual(top + 0.01);
+    if (framed === "board") expect(board).toBeCloseTo(top);
     if (framed === "lounge") expect(lounge).toBeCloseTo(bottom);
     if (framed === "plaque") {
-      expect(camera.toScreen(0, plaque.y - 28).y).toBeCloseTo(top);
+      const kept = Math.min(
+        plaque.y - 28,
+        townPostSignTop(townPostLot(layout), camera.z),
+      );
+      expect(camera.toScreen(0, kept).y).toBeCloseTo(top);
       expect(lounge).toBeGreaterThan(bottom);
     } else expect(lounge).toBeLessThanOrEqual(bottom + 0.01);
     // The reception board stands in the yard above the building, on screen.
-    const board = camera.toScreen(0, (first.y - TOWN_PHONE_BOARD_ROWS) * T).y;
-    expect(board).toBeGreaterThan(sign.y);
-    expect(board).toBeLessThan(bottom);
+    const reception = camera.toScreen(
+      0,
+      (first.y - TOWN_PHONE_BOARD_ROWS) * T,
+    ).y;
+    expect(reception).toBeGreaterThan(sign.y);
+    expect(reception).toBeLessThan(bottom);
     expect(view.atHome()).toBe(true);
   }
 });

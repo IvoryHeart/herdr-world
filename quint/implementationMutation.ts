@@ -101,6 +101,7 @@ export async function mutateImplementation(
     "Unsupported model/fault combination",
   );
   const owners: Record<Model, string> = {
+    "connection-registry": "server/src/connections/profile-service.ts",
     "claude-tap-lock": "server/src/usage/claude-tap.ts",
     "herdr-core-runtime": "server/src/herdr-core/mirror.ts",
     "herdr-core-seen": "web/src/world/coreShared.ts",
@@ -156,6 +157,14 @@ export async function mutateImplementation(
       guard,
       "(ports.kill ?? process.kill)(owner, 0);\n        return true;",
     );
+  } else if (name === "connection-registry") {
+    const guard = "this.mutationQueue.then(async () => {";
+    assert.equal(
+      original.split(guard).length,
+      2,
+      "registry queue mutation target changed",
+    );
+    contents = original.replace(guard, "Promise.resolve().then(async () => {");
   } else if (name === "herdr-core-runtime") {
     const guards: Record<string, [string, string]> = {
       "core-gap": ["if (seq !== this.cursorValue + 1) {", "if (false) {"],

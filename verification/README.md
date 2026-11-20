@@ -19,6 +19,33 @@ delivered product changes are not reopened solely to add a formal-model label.
 
 ## Coverage decisions
 
+### Three questions before choosing a model
+
+1. Can two writers or independently completing operations affect the same state?
+2. Must a unique owner, identity or authority survive reordering, replacement or retry?
+3. Can interruption leave ambiguous effects that recovery must distinguish from work never sent?
+
+Derive allowed and forbidden scenarios from the requirements first. Any yes
+needs an explicit evidence decision: model the meaningful state space, or name
+a cheaper check that exhausts every relevant interleaving and its limits.
+Example tests alone are not an exhaustive alternative. Map the real consumers
+in `coverage.json`; run the complete gate when changing a model-backed owner.
+
+The [November audit](architecture-audit-2026-11.md) found two instructive cases.
+CLI and Settings share a catalogue, so Q54 adds writer/save/failure/retry
+exploration and 48 actual service schedules; ordinary runtime leases did not
+cover lost updates. By contrast, Q56's immutable settings files have equal
+content for equal names: concurrent publication commutes, so real atomic-file
+and before/after-failure retry checks cover that preparation boundary cheaply.
+Q57 separately assesses the open move candidate's exhaustive serial controller.
+
+The audit also found a **real counterexample**: Q55's stale tap owner can publish
+after its ownership check was superseded (#1086). The repaired canonical case requires
+positive TLC exploration and actual filesystem conformance; live-owner stealing
+remains a rejected fault control. Q55 records that repaired evidence separately
+from independent acceptance. Q54's offline CLI witness still records the unproved
+cross-process boundary (#1084). A completed gate does not approve known failures.
+
 - `pending`: assessed but additional executable evidence or its mapping is unfinished.
 - `modeled`: a maintained model has a real implementation adapter and explicit scope.
 - `shared-model`: a named model's guarantees are connected to this consumer; real

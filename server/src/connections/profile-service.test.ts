@@ -22,6 +22,7 @@ import {
 } from "./profile-service";
 import {
   ConnectionProfileStore,
+  CONNECTION_PROFILE_FILE_VERSION,
   type LocalConnectionProfile,
   type PersistedConnectionRegistry,
   type SshConnectionProfile,
@@ -536,7 +537,7 @@ describe("connection profile service", () => {
     expect(manager.has("startup-default")).toBeFalse();
     expect(retired?.stops).toBe(1);
     expect(store.load()).toEqual({
-      version: 2,
+      version: CONNECTION_PROFILE_FILE_VERSION,
       default_connection_id: "alpha",
       profiles: [
         {
@@ -583,7 +584,7 @@ describe("connection profile service", () => {
       is_default: true,
     });
     expect(store.load()).toEqual({
-      version: 2,
+      version: CONNECTION_PROFILE_FILE_VERSION,
       default_connection_id: "local",
       profiles: [
         {
@@ -1300,7 +1301,7 @@ describe("connection profile service", () => {
       read_only: false,
     });
     expect(store.load()).toEqual({
-      version: 2,
+      version: CONNECTION_PROFILE_FILE_VERSION,
       default_connection_id: "alpha",
       profiles: [local("alpha", false), ssh("remote")],
     });
@@ -1414,7 +1415,7 @@ describe("connection profile service", () => {
     );
 
     expect(store.load()).toEqual({
-      version: 2,
+      version: CONNECTION_PROFILE_FILE_VERSION,
       default_connection_id: "alpha",
       profiles: [replacement],
     });

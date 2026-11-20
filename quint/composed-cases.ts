@@ -2,8 +2,13 @@ import { coreWitnesses } from "./herdr-core-runtime";
 import { seenMismatches, seenWitnesses } from "./herdr-core-seen";
 import type { Model } from "./traces";
 
-// These cases own dedicated exploration and production-replay runners.
+// Composed cases have dedicated replay/exploration runners.
 export const composedCases = [
+  {
+    name: "connection-registry",
+    witnesses: [],
+    mismatches: ["registry.overlap"],
+  },
   { name: "claude-tap-lock", witnesses: [], mismatches: [] },
   {
     name: "herdr-core-runtime",
