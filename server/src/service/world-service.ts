@@ -324,7 +324,6 @@ async function compose(
     publish: revisionPublisher("world_apartments_changed", "world-apartments"),
     log: (message) => logger.warn(message),
   });
-
   const {
     observe: observeHost,
     retire: retireTerminalMarks,
