@@ -50,11 +50,7 @@ import {
   tabbableElements,
   isActuallyTabbable,
 } from "./dialogFocus";
-import { ConfirmDialog } from "./ModalDialogs";
-import {
-  RemoveConnectionIdeServers,
-  removeConnectionMessage,
-} from "./RemoveConnectionIdeServers";
+import { RemoveConnectionDialog } from "./RemoveConnectionDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import "./ConnectionSwitcher.css";
 
@@ -934,26 +930,11 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
             onRemove={setRemoveTarget}
           />
         </div>
-        <ConfirmDialog
-          open={!!removeTarget}
-          title="Remove Connection"
-          message={
-            removeTarget
-              ? removeConnectionMessage(removeTarget.label)
-              : "Remove this connection?"
-          }
-          details={
-            removeTarget ? (
-              <RemoveConnectionIdeServers connectionId={removeTarget.id} />
-            ) : null
-          }
-          confirmLabel="Remove"
-          danger
+        <RemoveConnectionDialog
+          target={removeTarget}
           onClose={() => setRemoveTarget(null)}
-          onConfirm={() => {
-            const target = removeTarget;
+          onConfirm={(target) => {
             setRemoveTarget(null);
-            if (!target) return;
             void performAction(
               `remove-${target.id}`,
               () => bridge.call("connections.remove", { id: target.id }),

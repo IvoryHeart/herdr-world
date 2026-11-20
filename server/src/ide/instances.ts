@@ -181,13 +181,8 @@ export function plainExitReason(lines: string[], code: number | null) {
 }
 
 /** Exit codes a start script gives only before it launches anything. */
-function definiteStartFailure(code: number | null) {
-  return (
-    code === HOST_EXIT.dir ||
-    code === HOST_EXIT.token ||
-    code === HOST_EXIT.folder
-  );
-}
+const definiteStartFailure = (code: number | null) =>
+  [HOST_EXIT.dir, HOST_EXIT.token, HOST_EXIT.folder].some((c) => c === code);
 
 function hostFailure(code: number | null, hostLabel: string, remote: boolean) {
   if (code === HOST_EXIT.dir)
@@ -241,8 +236,7 @@ export class IdeInstances {
    * not attached until World reaches their host again.
    */
   private restore() {
-    const records = this.options.inventory?.read() ?? [];
-    for (const record of records) {
+    for (const record of this.options.inventory?.read() ?? []) {
       if (this.byId.has(record.id)) continue;
       const ssh = record.ssh_destination
         ? { destination: record.ssh_destination }
@@ -294,10 +288,9 @@ export class IdeInstances {
   private persist() {
     const inventory = this.options.inventory;
     if (!inventory) return;
-    const records = this.records();
-    const text = JSON.stringify(records);
+    const text = JSON.stringify(this.records());
     if (text === this.persisted) return;
-    inventory.write(records);
+    inventory.write(JSON.parse(text));
     this.persisted = text;
   }
 

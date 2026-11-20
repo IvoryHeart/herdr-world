@@ -1,11 +1,38 @@
 import { useMemo } from "react";
+import { ConfirmDialog } from "./ModalDialogs";
 import { type IdeClient, pageIdeClient } from "../world/code/ideClient";
 import { IdeServerList, runningIdeServers } from "../world/code/IdeServers";
 import { useIdeStatus } from "../world/code/useIdeStatus";
 
-/** The Remove Connection question: removing stops nothing that runs. */
-export function removeConnectionMessage(label: string) {
-  return `Remove connection "${label}"? This disconnects Herdr World but does not stop the Herdr server, or any IDE server World started on it.`;
+/**
+ * Remove Connection: removing stops nothing that runs, neither the Herdr
+ * server nor an IDE server World started there; it lists those first.
+ */
+export function RemoveConnectionDialog({
+  target,
+  onClose,
+  onConfirm,
+}: {
+  target: { id: string; label: string } | null;
+  onClose: () => void;
+  onConfirm: (target: { id: string; label: string }) => void;
+}) {
+  return (
+    <ConfirmDialog
+      open={!!target}
+      title="Remove Connection"
+      message={`Remove connection "${target?.label ?? ""}"? This disconnects Herdr World but does not stop the Herdr server, or any IDE server World started on it.`}
+      details={
+        target ? <RemoveConnectionIdeServers connectionId={target.id} /> : null
+      }
+      confirmLabel="Remove"
+      danger
+      onClose={onClose}
+      onConfirm={() => {
+        if (target) onConfirm(target);
+      }}
+    />
+  );
 }
 
 /**
@@ -15,7 +42,7 @@ export function removeConnectionMessage(label: string) {
  * where to stop the ones no longer needed. Mounted only while the dialog
  * is open.
  */
-export function RemoveConnectionIdeServers({
+function RemoveConnectionIdeServers({
   connectionId,
   client,
 }: {
