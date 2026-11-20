@@ -1,7 +1,8 @@
 /**
- * Town's bus, as geometry: a stop at every road crossing, the one route the
- * bus drives past all of them, and where each binned agent waits. Pure: the
- * service owns the schedule (shared/bin.ts) and who rides; this places them.
+ * Town's bus, as geometry: a stop at every road crossing, the bus's terminus
+ * at Apartments, the roads it drives between them, and where each binned
+ * agent waits. Pure: the service owns the schedule (shared/bin.ts) and who
+ * rides; this places them, and townBusDrive.ts times the drive.
  */
 
 import type { BinEntry } from "../../../../shared/bin";
@@ -14,6 +15,17 @@ import {
 } from "./townLayout";
 import type { TownModel } from "./townModel";
 import { TOWN_WALK_SPEED } from "./townActors";
+import {
+  townApartmentsDoor,
+  townApartmentsLot,
+  townApartmentsPathColumn,
+} from "./townApartmentsLot";
+import {
+  TOWN_BUS_DOOR_DX,
+  townLaneY,
+  townRoadGraph,
+  type TownRoadGraph,
+} from "./townBusDrive";
 import type { TownDirection } from "./townSprites";
 
 /** A street is five tiles: pavement, three lanes, pavement. */
@@ -46,8 +58,8 @@ export type TownBusStop = {
   key: string;
   /** Where its riders wait, on the pavement beside the crossing. */
   wait: TownPoint;
-  /** How far along the route the bus passes it, in world pixels. */
-  at: number;
+  /** Where the bus halts for it, on the street's lanes just short of the crossing. */
+  halt: TownPoint;
   /**
    * Riders in each row of its queue: as many as its pavement holds before
    * the next stop's sign along the street or the map's edge, at most
@@ -56,41 +68,89 @@ export type TownBusStop = {
   row: number;
 };
 
-/** One pass along a street, edge to edge, at the lanes' height. */
-export type TownBusLeg = { y: number; from: number; to: number };
-
-export type TownBusRoute = {
-  legs: readonly TownBusLeg[];
-  length: number;
-  stops: readonly TownBusStop[];
-  /** The map's width in world pixels: the bus fades in and out beyond it. */
-  width: number;
+/**
+ * The bus's home and every trip's end: Apartments' stop, on the last street
+ * above the building, where riders step off and walk in by its door.
+ */
+export type TownBusTerminus = {
+  /** Where the bus stands, parked between trips and letting riders off. */
+  halt: TownPoint;
+  /** Riders step off onto the pavement here, beside its front door. */
+  kerb: TownPoint;
+  /** Their walk from the kerb, its last point the door they go in by. */
+  walk: readonly TownPoint[];
+  /** The stop's sign's foot (like a stop's `wait`), or null at the center. */
+  sign: TownPoint | null;
+  /**
+   * Apartments, or the town center where a town too small for the building
+   * (townApartmentsLot) opens Apartments from the center instead.
+   */
+  to: "apartments" | "center";
 };
 
-const lane = (road: number) => (road + STREET / 2) * T;
-/** Each street is driven from this many tiles off the map to as many beyond it. */
-const OFF_MAP = 6;
+export type TownBusRoute = {
+  stops: readonly TownBusStop[];
+  terminus: TownBusTerminus | null;
+  /** The streets and side roads the bus drives (townBusDrive.ts). */
+  graph: TownRoadGraph;
+};
+
+const lane = townLaneY;
+/** A stop's bus halts this far left of where its riders wait, clear of the crossing. */
+const HALT_BEFORE = 24;
+/** The bus's half length: a halt stays this far inside the map. */
+const BUS_HALF = 32;
+
+/**
+ * Where the bus parks and riders get off: on the last street, its front
+ * door at the top of a footpath (layoutTown paints it) beside Apartments,
+ * down to the plaza's walk and in at the building's door. Without the
+ * building, in front of the town center's door.
+ */
+export function townBusTerminus(
+  layout: Pick<TownLayout, "roads" | "plaza" | "width" | "center">,
+): TownBusTerminus | null {
+  if (!layout.roads.length) return null;
+  const lot = townApartmentsLot(layout);
+  if (lot) {
+    const last = Math.max(...layout.roads);
+    const pathX = (townApartmentsPathColumn(lot, layout.plaza) + 0.5) * T;
+    const kerb = { x: pathX, y: (last + STREET - 0.5) * T };
+    const walkY = (layout.plaza.y + 0.5) * T;
+    const door = townApartmentsDoor(lot);
+    return {
+      halt: { x: pathX - TOWN_BUS_DOOR_DX, y: lane(last) },
+      kerb,
+      walk: [kerb, { x: pathX, y: walkY }, { x: door.x, y: walkY }, door],
+      sign: { x: pathX + 6, y: kerb.y },
+      to: "apartments",
+    };
+  }
+  const { center } = layout;
+  if (!layout.roads.includes(center.street)) return null;
+  const doorX = (center.x + center.w / 2) * T;
+  const kerb = { x: doorX, y: (center.street + 0.5) * T };
+  return {
+    halt: { x: doorX - TOWN_BUS_DOOR_DX, y: lane(center.street) },
+    kerb,
+    walk: [kerb, { x: doorX, y: center.street * T - 2 }],
+    sign: null,
+    to: "center",
+  };
+}
 
 /**
  * Every crossing of a street and a side road has a stop, the town's left
  * edge roads included, shared with any crossing on that street fewer than
- * TOWN_STOP_SPACING tiles away. The bus drives every street from one edge of
- * the map to the other, alternating direction, so it passes every crossing
- * whatever the rows' widths; between streets it is off the map.
+ * TOWN_STOP_SPACING tiles away. The bus lives at its terminus (Apartments)
+ * and drives only the town's roads (townBusDrive.ts), out to the stops where
+ * someone waits and back, so it never leaves the map.
  */
 export function townBusRoute(layout: TownLayout): TownBusRoute {
   const roads = [...new Set(layout.roads)].sort((a, b) => a - b);
-  const left = -OFF_MAP * T;
-  const right = (layout.width + OFF_MAP) * T;
-  const legs = roads.map((road, index) => ({
-    y: lane(road),
-    from: index % 2 ? right : left,
-    to: index % 2 ? left : right,
-  }));
-  const span = right - left;
+  const terminus = townBusTerminus(layout);
   const stops: TownBusStop[] = [];
-  roads.forEach((road, index) => {
-    const leg = legs[index]!;
+  for (const road of roads)
     for (const side of layout.verticalRoads)
       if (side.y0 === road + STREET || side.y1 === road) {
         const wait = { x: (side.x - 0.5) * T, y: (road + STREET - 0.5) * T };
@@ -102,23 +162,29 @@ export function townBusRoute(layout: TownLayout): TownBusRoute {
           )
         )
           continue;
-        const key = `${side.x}:${road}`;
         stops.push({
-          key,
+          key: `${side.x}:${road}`,
           wait,
-          at: index * span + Math.abs(wait.x - leg.from),
+          halt: {
+            x: Math.max(BUS_HALF, wait.x - HALT_BEFORE),
+            y: lane(road),
+          },
           row: 1,
         });
       }
-  });
+  // Apartments' sign stands on its street's pavement like a stop's.
+  const signs = [
+    ...stops.map((stop) => stop.wait),
+    ...(terminus?.sign ? [terminus.sign] : []),
+  ];
   for (const stop of stops) {
     // A queue runs left along the pavement from the stop, its front row
     // half a step further out, and ends short of the sign to its left.
     const bound = Math.max(
       0,
-      ...stops
-        .filter((o) => o.wait.y === stop.wait.y && o.wait.x < stop.wait.x)
-        .map((o) => o.wait.x + SIGN_RIGHT),
+      ...signs
+        .filter((o) => o.y === stop.wait.y && o.x < stop.wait.x)
+        .map((o) => o.x + SIGN_RIGHT),
     );
     const room = stop.wait.x - bound - HALF_AGENT - TOWN_QUEUE_GAP / 2;
     stop.row = Math.max(
@@ -126,7 +192,11 @@ export function townBusRoute(layout: TownLayout): TownBusRoute {
       Math.min(TOWN_QUEUE_ROW, Math.floor(room / TOWN_QUEUE_GAP) + 1),
     );
   }
-  return { legs, length: legs.length * span, stops, width: layout.width * T };
+  const graph = townRoadGraph(layout, [
+    ...stops.map((stop) => stop.halt),
+    ...(terminus ? [terminus.halt] : []),
+  ]);
+  return { stops, terminus, graph };
 }
 
 /**
@@ -178,163 +248,6 @@ export function townQueueLeft(stop: TownBusStop, shown: number) {
     : townQueueSpot(stop, Math.max(0, shown - 1)).x;
 }
 
-/** About how long the bus waits at each stop where someone boards. */
-export const TOWN_BUS_DWELL_MS = 10_000;
-/** The bus's slowest cruise, in world pixels a second (agents walk ~80). */
-const CRUISE_MIN = 80;
-const CRUISE_MAX = 2_000;
-/** Seconds the bus takes to reach its cruise from a stop, or to stop from it. */
-const EASE_S = 3;
-
-/** A stretch of steady acceleration: its start speed, rate and length in s. */
-type Phase = { t: number; v: number; acc: number };
-
-/**
- * How the bus drives `length` pixels at cruise `v` (rate `a`), coming in
- * moving or from a stop (`moving0`) and leaving moving or stopping
- * (`moving1`). Too short to reach cruise, it changes speed just enough.
- */
-function drivePhases(
-  length: number,
-  moving0: boolean,
-  moving1: boolean,
-  v: number,
-  a: number,
-): Phase[] {
-  if (length <= 0) return [];
-  if (moving0 && moving1) return [{ t: length / v, v, acc: 0 }];
-  const ramp = (v * v) / (2 * a);
-  if (moving0 !== moving1) {
-    if (length < ramp) {
-      const acc = (v * v) / (2 * length);
-      return [{ t: v / acc, v: moving0 ? v : 0, acc: moving0 ? -acc : acc }];
-    }
-    const change = { t: v / a, v: moving0 ? v : 0, acc: moving0 ? -a : a };
-    const cruise = { t: (length - ramp) / v, v, acc: 0 };
-    return moving0 ? [cruise, change] : [change, cruise];
-  }
-  if (length < 2 * ramp) {
-    const peak = Math.sqrt(a * length);
-    return [
-      { t: peak / a, v: 0, acc: a },
-      { t: peak / a, v: peak, acc: -a },
-    ];
-  }
-  return [
-    { t: v / a, v: 0, acc: a },
-    { t: (length - 2 * ramp) / v, v, acc: 0 },
-    { t: v / a, v, acc: -a },
-  ];
-}
-
-const phasesTime = (phases: readonly Phase[]) =>
-  phases.reduce((sum, phase) => sum + phase.t, 0);
-
-function phasesDistance(phases: readonly Phase[], t: number) {
-  let done = 0;
-  for (const phase of phases) {
-    const step = Math.min(t, phase.t);
-    done += phase.v * step + 0.5 * phase.acc * step * step;
-    if (t <= phase.t) return done;
-    t -= phase.t;
-  }
-  return done;
-}
-
-/** One trip's drive: when it comes in, each halt, and where it is when. */
-export type TownBusTimeline = {
-  /** Seconds into the trip the bus comes in; it waits off the map until then. */
-  start: number;
-  pieces: readonly {
-    t0: number;
-    t1: number;
-    from: number;
-    /** Where the piece ends: the next stop, or the route's end. */
-    to: number;
-    phases: readonly Phase[];
-  }[];
-  /** Each stop the bus waits at: its arrival, in seconds into the trip. */
-  halts: ReadonlyMap<string, number>;
-  /** The cruise it drives at, in world pixels a second. */
-  cruise: number;
-  length: number;
-};
-
-/**
- * Fit the bus's drive into the trip, which the service times: it comes in,
- * slows to each stop in `halting` (where someone boards), waits about 10 s,
- * speeds up and goes on, and leaves the map as the trip ends. It drives no
- * faster than it must; with time to spare it comes in later.
- */
-export function townBusTimeline(
-  route: TownBusRoute,
-  halting: ReadonlySet<string>,
-  tripMs: number,
-): TownBusTimeline {
-  const stops: TownBusStop[] = [];
-  for (const stop of [...route.stops].sort((a, b) => a.at - b.at))
-    if (halting.has(stop.key) && !stops.some((s) => s.at === stop.at))
-      stops.push(stop);
-  const trip = tripMs / 1000;
-  // Many stops share at most half the trip, so the bus still has time to drive.
-  const dwell = Math.min(
-    TOWN_BUS_DWELL_MS / 1000,
-    (trip * 0.5) / Math.max(1, stops.length),
-  );
-  const marks = [0, ...stops.map((stop) => stop.at), route.length];
-  const plan = (v: number) =>
-    marks
-      .slice(1)
-      .map((to, index) =>
-        drivePhases(
-          to - marks[index]!,
-          index === 0,
-          index === marks.length - 2,
-          v,
-          v / EASE_S,
-        ),
-      );
-  const drive = (v: number) =>
-    plan(v).reduce((sum, phases) => sum + phasesTime(phases), 0);
-  const budget = Math.max(0, trip - dwell * stops.length);
-  let cruise = CRUISE_MIN;
-  if (drive(CRUISE_MIN) > budget) {
-    let low = CRUISE_MIN;
-    let high = CRUISE_MAX;
-    for (let step = 0; step < 40; step += 1) {
-      const mid = (low + high) / 2;
-      if (drive(mid) > budget) low = mid;
-      else high = mid;
-    }
-    cruise = high;
-  }
-  const legs = plan(cruise);
-  let t = Math.max(0, budget - drive(cruise));
-  const start = t;
-  const pieces: TownBusTimeline["pieces"][number][] = [];
-  const halts = new Map<string, number>();
-  legs.forEach((phases, index) => {
-    const from = marks[index]!;
-    const to = marks[index + 1]!;
-    pieces.push({ t0: t, t1: t + phasesTime(phases), from, to, phases });
-    t += phasesTime(phases);
-    const stop = stops[index];
-    if (!stop) return;
-    halts.set(stop.key, t);
-    for (const other of route.stops)
-      if (other.at === stop.at) halts.set(other.key, t);
-    pieces.push({
-      t0: t,
-      t1: t + dwell,
-      from: stop.at,
-      to: stop.at,
-      phases: [],
-    });
-    t += dwell;
-  });
-  return { start, pieces, halts, cruise, length: route.length };
-}
-
 /** A stop's clock reads "due" from this long before the bus pulls in. */
 export const TOWN_BUS_DUE_MS = 5_000;
 
@@ -371,53 +284,6 @@ export function townStopClock({
       ? (halt ?? 0) * 1000 - elapsed
       : next + (nextHalt ?? 0) * 1000;
   return until <= TOWN_BUS_DUE_MS ? "due" : binClockLabel(until);
-}
-
-/**
- * How far along the route the bus is `elapsedMs` into its trip, or null
- * while it has not yet come in.
- */
-/** A microsecond: closer than this to a piece's end is at its end. */
-const END_S = 1e-6;
-
-export function townBusAlong(timeline: TownBusTimeline, elapsedMs: number) {
-  const t = elapsedMs / 1000;
-  if (t < timeline.start) return null;
-  for (const piece of timeline.pieces)
-    if (t <= piece.t1)
-      // A piece's end is its mark exactly; summed phases may round short.
-      return t >= piece.t1 - END_S
-        ? piece.to
-        : piece.from + phasesDistance(piece.phases, t - piece.t0);
-  return timeline.length;
-}
-
-/**
- * How much of the bus shows at `x`: it fades in as it comes onto the map
- * and out as it leaves, so it is gone from the screen when its trip ends.
- */
-export function townBusOpacity(route: TownBusRoute, x: number) {
-  const outside = Math.max(0, -x, x - route.width);
-  return Math.max(0, Math.min(1, 1 - (outside - 1.5 * T) / (3 * T)));
-}
-
-/** The bus's position `along` pixels along the route, and its heading. */
-export function townBusAt(route: TownBusRoute, along: number) {
-  let left = Math.max(0, along);
-  for (let index = 0; index < route.legs.length; index += 1) {
-    const leg = route.legs[index]!;
-    const step = Math.abs(leg.to - leg.from);
-    if (left <= step || index === route.legs.length - 1) {
-      const k = step ? Math.min(1, left / step) : 1;
-      return {
-        x: leg.from + (leg.to - leg.from) * k,
-        y: leg.y,
-        facing: (leg.to < leg.from ? "left" : "right") as "left" | "right",
-      };
-    }
-    left -= step;
-  }
-  return { x: 0, y: 0, facing: "right" as const };
 }
 
 /** A binned agent shown in Town, at the stop nearest its room. */
@@ -615,6 +481,56 @@ export function townRiderWalk(
     frame,
     walking: true,
   };
+}
+
+/** A walk's length along `points`, in world pixels. */
+export function townWalkLength(points: readonly TownPoint[]) {
+  let length = 0;
+  for (let i = 1; i < points.length; i += 1)
+    length +=
+      Math.abs(points[i]!.x - points[i - 1]!.x) +
+      Math.abs(points[i]!.y - points[i - 1]!.y);
+  return length;
+}
+
+/**
+ * An agent `walked` pixels along `points` (straight runs, across or up and
+ * down), with the walking frames townRiderWalk draws; at the end it stands,
+ * facing the way it last walked.
+ */
+export function townWalkAlong(
+  points: readonly TownPoint[],
+  walked: number,
+): {
+  x: number;
+  y: number;
+  dir: TownDirection;
+  frame: number;
+  walking: boolean;
+} {
+  let left = Math.max(0, walked);
+  let dir: TownDirection = "down";
+  for (let i = 1; i < points.length; i += 1) {
+    const a = points[i - 1]!;
+    const b = points[i]!;
+    const length = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+    if (!length) continue;
+    dir =
+      b.x !== a.x ? (b.x < a.x ? "left" : "right") : b.y < a.y ? "up" : "down";
+    if (left < length) {
+      const k = left / length;
+      return {
+        x: a.x + (b.x - a.x) * k,
+        y: a.y + (b.y - a.y) * k,
+        dir,
+        frame: Math.floor(walked / 6) % 4,
+        walking: true,
+      };
+    }
+    left -= length;
+  }
+  const end = points[points.length - 1] ?? { x: 0, y: 0 };
+  return { x: end.x, y: end.y, dir, frame: 0, walking: false };
 }
 
 /** How long a rider's walk between `from` and `to` takes, in ms. */

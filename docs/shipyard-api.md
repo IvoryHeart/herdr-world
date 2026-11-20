@@ -1,8 +1,8 @@
 # Shipyard data API and CLI
 
 Shipyard v1 reads GitHub release pipelines and local World listener reports.
-Town/Board presentation is separate work (#1028). Both views should use this one
-contract, independent of the Herdr TUI or herdr-core connection selected. There
+Town's harbour and the Work lens's Releases tab present it through one browser
+store and view model (`web/src/world/shipyard/`). Both use this one contract, independent of the Herdr TUI or herdr-core connection selected. There
 are no release, tag, install, preview-start or deployment mutations.
 
 ## Try it
@@ -126,15 +126,17 @@ SHAs). GET and refresh return the same shape; CLI `show` wraps it in `result`:
 }
 ```
 
-The shared compile-time model is `shared/shipyard.ts`. Future consumers map:
+The shared compile-time model is `shared/shipyard.ts`. Consumers map (`web/src/world/shipyard/shipyardModel.ts`):
 
 - Main health → `data.main.health`, head SHA and `workflows` provenance. It
   summarizes the latest observed attempt of each workflow on that head. It does
   **not** evaluate branch protection or authorize shipping. No runs, unknown
   conclusions or a shortened workflow window cannot produce `pass`.
 - Waiting cargo → `data.waiting.pullRequests`; use `complete` and `state`
-  before displaying totals or “nothing waiting”. `commits` also exposes direct
-  commits with no associated PR. This is all-author repository data, independent
+  before displaying totals or “nothing waiting”. `commits` lists every commit in
+  the comparison; it does not say how a commit reached main (a PR merged with a
+  merge commit also brings its feature commits), so never call the commits
+  outside `mergeSha` direct pushes. This is all-author repository data, independent
   of Sources' personal PR filters and merged-days window.
 - Release ships → `data.releases.items` (`stable`/`prerelease`, publication date,
   version and safe URL). Drafts are excluded; bare tags are separate evidence.
@@ -171,7 +173,7 @@ PRs targeting main whose merge commit is in that comparison are waiting. A
 moved tag is observed at read time; this does not attest historical tag integrity.
 Divergence reports `diverged`. Missing GitHub permissions or comparison data
 reports `unavailable`. Shortened commit/PR associations report `limited`. Dates
-never determine membership. A complete zero-PR list can still contain direct
+never determine membership. A complete zero-PR list can still contain
 commits; use `aheadBy` too.
 
 Each source read has a 60-second total deadline, 10 seconds per request and a
@@ -226,5 +228,8 @@ also has no guessed open URL. IPv4/IPv6 loopback links contain no login token.
 - Real composed listener admission, actual ephemeral port and native transport:
   `server/src/service/shipyard.test.ts`.
 
-No UI or browser suite is introduced by this data-only change. #1028 owns visual
-consumers and their phone/desktop browser acceptance.
+Presentation: `web/src/world/shipyard/shipyardModel.test.ts` (view model),
+`shipyardStore.test.ts` (reads, refresh, repository choice),
+`web/src/world/town/townHarbour.test.ts` (lot geometry) and the isolated DOM
+suite `web/src/world/town/TownShipyard.dom.test.ts` (harbour, fold, Releases
+tab, links and refresh).

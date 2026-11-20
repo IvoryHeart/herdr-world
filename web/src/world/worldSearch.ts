@@ -60,7 +60,7 @@ export type WorldSearchKind =
   | "table"
   | "agent"
   | "terminal"
-  /** One of Town's own places, such as its post office (town/townSearch.ts). */
+  /** One of Town's own places, such as its warehouse (town/townSearch.ts). */
   | "landmark";
 
 /** Part of an excerpt; `match` parts are a query word. */

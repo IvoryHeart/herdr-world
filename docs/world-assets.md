@@ -63,14 +63,16 @@ release requirement and is not inferred from PixiJS or any neighboring asset.
 The Town view draws only original pixel art generated at load time from compact
 definitions in `web/src/world/town/townSprites.ts` and `townPaint.ts`: ground,
 roads, buildings, furniture, speech bubbles and characters, whose appearance is
-derived from each agent's key. The land around the town (woods, gardens, ponds,
+derived from each agent's key. The harbour's ships, hulls, flags, piers,
+lighthouse and the warehouse with its crates are painted the same way by
+`townHarbourArt.ts`. The land around the town (woods, gardens, ponds,
 paths) is generated from a fixed seed by `townLandscape.ts` and drawn by
 `townLandscapePaint.ts` in the same way. It ships no image files and no third-party art.
 
 The website film draws its Town scenes, characters and finale parade with the
 same code: `site/film/town-art.ts` re-exports `townLayout.ts`, `townPaint.ts`,
 `townSprites.ts`, the town center's painting, the post office's house and yard
-(`townPost.ts`, `townPostPaint.ts`), the thought bubbles' step glyphs
+(`townPostLot.ts`, `townPostPaint.ts`), the thought bubbles' step glyphs
 (`townStepArt.ts`), the agents' indoor routes and lobby crowd spots
 (`townActors.ts`), arrival walks (`townArrivals.ts`), bus stops (`townBus.ts`)
 and the terminal colour palette, and `bun run build:site` bundles them into

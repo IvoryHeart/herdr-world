@@ -1,15 +1,17 @@
 /**
  * The town center's actions (TownCenterMenu.tsx), each reusing what World
  * already has: the agent launcher and profiles, the Town master's chat,
- * Needs you, the Town summary and room creation. Board's hub beside the bin
+ * Needs you, the Town summary, the Library and room creation. Board's hub beside the bin
  * (board/BoardHub.tsx) offers the same actions, built by the same helpers.
  */
 
 import {
+  Building2,
   ClipboardList,
   Crown,
   DoorOpen,
   Inbox,
+  LibraryBig,
   Shirt,
   UserPlus,
 } from "lucide-react";
@@ -24,6 +26,12 @@ import type {
   HerdrOfficeProjection,
   OfficeAgent,
 } from "../herdrOfficeProjection";
+import { openApartments } from "../apartments/apartmentsStore";
+import { useApartments } from "../apartments/useApartments";
+import {
+  type MemoryLibraryRequest,
+  openMemoryLibrary,
+} from "../memory/memoryEvents";
 import { openNeedsYou } from "../needsYou";
 import type { WorldObject } from "../worldObject";
 import type { TownCenterAction } from "./TownCenterMenu";
@@ -101,6 +109,7 @@ export function useTownCenter(
     openChat(key, false),
   );
   const holder = useAgentProfiles().document?.town_master ?? null;
+  const residents = useApartments().residents.length;
   return townCenterActions({
     world,
     office,
@@ -111,6 +120,7 @@ export function useTownCenter(
     summary,
     openChat,
     toast,
+    residents,
   });
 }
 
@@ -125,6 +135,7 @@ export function townCenterActions({
   summary,
   openChat,
   toast,
+  residents,
 }: {
   world: Pick<WorldObject, "leaves">;
   office: Pick<HerdrOfficeProjection, "rooms" | "roster">;
@@ -137,6 +148,8 @@ export function townCenterActions({
   summary: { summary: { counts: { needsYou: number } }; open(): void };
   openChat(agentKey: string): void;
   toast(kind: "ok" | "error", text: string): void;
+  /** Apartments' residents, shown on its medallion. */
+  residents?: number;
 }): TownCenterAction[] {
   const launchRoom =
     selectedRoomKey && rooms.canCreateSeat(selectedRoomKey)
@@ -163,6 +176,8 @@ export function townCenterActions({
     needsYouAction(summary.summary.counts.needsYou),
     summaryAction(() => summary.open()),
     profilesAction(),
+    apartmentsAction(residents),
+    libraryAction(),
     {
       id: "room",
       label: "New room",
@@ -276,10 +291,34 @@ export const summaryAction = (
   run: open,
 });
 
+/** Finished agents, searchable and resumable (apartments/). */
+export const apartmentsAction = (residents?: number): TownCenterAction => ({
+  id: "apartments",
+  label: "Apartments",
+  icon: Building2,
+  detail: residents ? `${residents} residents` : undefined,
+  run: () => openApartments(),
+});
+
 /** The agent profiles, in the profile editor. */
 export const profilesAction = (): TownCenterAction => ({
   id: "profiles",
   label: "Profiles",
   icon: Shirt,
   run: () => openProfileEditor(),
+});
+
+/**
+ * The Library (#1027): what agents and projects remember, on `request`'s
+ * host, project or agent when given.
+ */
+export const libraryAction = (
+  request: MemoryLibraryRequest = {},
+  detail?: string,
+): TownCenterAction => ({
+  id: "library",
+  label: "Library",
+  icon: LibraryBig,
+  detail,
+  run: () => openMemoryLibrary(request),
 });

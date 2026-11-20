@@ -4,8 +4,9 @@ Read [current coverage](../verification/README.md) and the
 [implementation report](../docs/quint-adoption-implementation.md) first. The
 [spike assessment](../docs/quint-adoption-spike.md) is historical foundation.
 The November additions have distinct verdicts: `connection-registry` checks
-all 48 bounded service schedules, while `claude-tap-lock` reproduces the known
-#1086 counterexample and remains pending repair. Neither inherits the foundation's
+all 48 bounded service schedules, while `claude-tap-lock` checks the repaired
+#1086 protocol across eight live/dead writer schedules, retaining the original
+counterexample as a rejected fault control. Neither inherits the foundation's
 independent acceptance. See the [audit](../verification/architecture-audit-2026-11.md).
 These models and adapters are accepted, maintained development tooling. Existing cooperative preparation yields accept an injected scheduler for
 deterministic replay; application defaults and shipped dependencies are unchanged.
@@ -151,3 +152,10 @@ canonical entry point. Tool failures retain bounded partial logs and incomplete
 failure records; they cannot complete a manifest. CLI memory is capped at 512 MB
 in addition to checker JVM bounds. Interrupted top-level checks always fail and
 force retirement after ten seconds if ordinary cancellation cannot finish.
+
+The [Claude tap ownership case](../verification/contracts/claude-tap-lock.md)
+checks all eight bounded live/dead suspension schedules, replays their real
+filesystem commit histories and retains unsafe live-owner stealing as a rejected
+model and production fault. It runs in the unfiltered gate; numeric privacy,
+status-line chaining, cleanup races and native filesystem behavior retain their
+direct consumer tests.

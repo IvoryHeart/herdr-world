@@ -68,7 +68,7 @@ import {
 import { createTownAtmosphere, townAtmospherePlan } from "./townAtmosphere";
 import {
   createTownLighting,
-  townLightPlan,
+  townRelighter,
   townWaitingPulse,
   TOWN_WAITING_PULSE_RATE,
 } from "./townLighting";
@@ -274,14 +274,17 @@ export async function createTownRenderer(
     glowLayer,
     screenLayer,
   );
-  /** The open questions the lights were last planned with. */
-  let litAsking: ReadonlySet<string> | undefined;
   const lighting = createTownLighting({
     app,
     mapLayer: lightMapLayer,
     glowLayer,
   });
   lighting.resize(element.clientWidth, element.clientHeight);
+  const relight = townRelighter(lighting, () =>
+    layout && model
+      ? [layout, model, state.askingKeys, actors.actors.values()]
+      : null,
+  );
   const atmosphere = createTownAtmosphere({
     ground: atmosphereGround,
     glow: atmosphereGlow,
@@ -661,6 +664,7 @@ export async function createTownRenderer(
     stats.frames += 1;
     const cameraMoved = camera.update(dt);
     const actorsMoved = actors.step(camera.reducedMotion ? 10 : dt, elapsed);
+    if (actorsMoved) relight();
     const limits = camera.limits!;
     level = townLevel(camera.z, limits);
     const deskBlend = townBlend(limits.desk * 0.82, limits.desk, camera.z);
@@ -935,13 +939,8 @@ export async function createTownRenderer(
       // still takes the new model and layout.
       if (dirty.scene || dirty.actors.size)
         syncActors(dirty.first, dirty.first ? undefined : dirty.actors);
-      // Lights follow the town and its open questions: a question asked or
-      // answered changes a desk, a room and a reception without a new scene.
-      // An unchanged plan draws nothing new (lighting.sync compares).
-      if (dirty.scene || nextState.askingKeys !== litAsking) {
-        litAsking = nextState.askingKeys;
-        lighting.sync(townLightPlan(nextLayout, nextModel, litAsking));
-      }
+      // A question asked or answered, or an agent placed at once, relights.
+      relight();
       if (nextLayout !== atmosphereLayout) {
         atmosphereLayout = nextLayout;
         atmosphere.sync(townAtmospherePlan(nextLayout));

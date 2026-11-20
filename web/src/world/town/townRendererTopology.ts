@@ -25,7 +25,8 @@ import {
   type TownLayout,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
-import { townGroundPlan, townWildPlan } from "./townGroundPlan";
+import { townGroundPlan, townSeaPlan, townWildPlan } from "./townGroundPlan";
+import { townHarbourLot } from "./townHarbour";
 import { paintTownGroundPlan, type TownHostTheme } from "./townPaint";
 import {
   bakeTownBuilding,
@@ -91,6 +92,8 @@ export type TownTopologyContext = {
 
 /** One period of the wild land, painted once per page (townWildPlan). */
 let wildCanvas: TownCanvas | null = null;
+let seaCanvas: TownCanvas | null = null;
+let quayCanvas: TownCanvas | null = null;
 
 export function createTownTopology(ctx: TownTopologyContext) {
   const { camera, sprites, landLayer, groundLayer, sceneLayer, stats } = ctx;
@@ -240,6 +243,10 @@ export function createTownTopology(ctx: TownTopologyContext) {
     dropWild();
     wildSource?.destroy();
     wildSource = null;
+    seaSource?.destroy();
+    seaSource = null;
+    quaySource?.destroy();
+    quaySource = null;
   };
 
   /**
@@ -252,15 +259,41 @@ export function createTownTopology(ctx: TownTopologyContext) {
    * ground. The pieces change only as cells enter or leave the view.
    */
   let wildSource: CanvasSource | null = null;
+  let seaSource: CanvasSource | null = null;
+  let quaySource: CanvasSource | null = null;
   let wildLand = "";
   const wildPieces = new Map<string, Sprite>();
   const dropWild = () => {
     for (const piece of wildPieces.values()) piece.destroy({ texture: true });
     wildPieces.clear();
   };
+  /** One baked period: the wild land, the open sea or the quay's column. */
+  const source = (kind: "wild" | "sea" | "quay") => {
+    if (kind === "sea") {
+      seaCanvas ??= paintTownGroundPlan(townSeaPlan());
+      return (seaSource ??= new CanvasSource({
+        resource: seaCanvas,
+        scaleMode: "nearest",
+      }));
+    }
+    if (kind === "quay") {
+      quayCanvas ??= paintTownGroundPlan(townSeaPlan(true));
+      return (quaySource ??= new CanvasSource({
+        resource: quayCanvas,
+        scaleMode: "nearest",
+      }));
+    }
+    wildCanvas ??= paintTownGroundPlan(townWildPlan());
+    return (wildSource ??= new CanvasSource({
+      resource: wildCanvas,
+      scaleMode: "nearest",
+    }));
+  };
   const showWild = (layout: TownLayout) => {
     const land = townLandRect(layout);
-    const landKey = `${land.x},${land.y},${land.w},${land.h}`;
+    // The town's coast (townHarbourLot.ts): the sea runs on past it.
+    const seaX = townHarbourLot(layout).coast * T;
+    const landKey = `${land.x},${land.y},${land.w},${land.h},${seaX}`;
     if (landKey !== wildLand) {
       dropWild();
       wildLand = landKey;
@@ -268,28 +301,55 @@ export function createTownTopology(ctx: TownTopologyContext) {
     const S = TOWN_LAND_PERIOD * T;
     const view = viewRect(2);
     const needed = new Set<string>();
+    const place = (
+      key: string,
+      kind: "wild" | "sea" | "quay",
+      band: { x: number; y: number; w: number; h: number },
+      frameX: number,
+      frameY: number,
+    ) => {
+      if (band.w <= 0 || band.h <= 0) return;
+      needed.add(key);
+      if (wildPieces.has(key)) return;
+      const frame = new Rectangle(frameX, frameY, band.w, band.h);
+      const piece = new Sprite(new Texture({ source: source(kind), frame }));
+      piece.position.set(band.x, band.y);
+      landLayer.addChild(piece);
+      wildPieces.set(key, piece);
+    };
     for (let cy = Math.floor(view.y / S); cy * S < view.y + view.h; cy += 1)
       for (let cx = Math.floor(view.x / S); cx * S < view.x + view.w; cx += 1) {
         const cell = { x: cx * S, y: cy * S, w: S, h: S };
         townWildBands(land, cell).forEach((band, i) => {
           const key = `${cx},${cy},${i}`;
-          needed.add(key);
-          if (wildPieces.has(key)) return;
-          wildCanvas ??= paintTownGroundPlan(townWildPlan());
-          wildSource ??= new CanvasSource({
-            resource: wildCanvas,
-            scaleMode: "nearest",
-          });
-          const frame = new Rectangle(
-            band.x - cell.x,
+          const x0 = band.x;
+          const x1 = band.x + band.w;
+          // The land up to the coast, then the quay's column, then sea.
+          const landEnd = Math.min(x1, seaX);
+          const quayEnd = Math.min(x1, seaX + T);
+          const seaStart = Math.max(x0, seaX + T);
+          place(
+            `${key},w`,
+            "wild",
+            { ...band, w: landEnd - x0 },
+            x0 - cell.x,
             band.y - cell.y,
-            band.w,
-            band.h,
           );
-          const piece = new Sprite(new Texture({ source: wildSource, frame }));
-          piece.position.set(band.x, band.y);
-          landLayer.addChild(piece);
-          wildPieces.set(key, piece);
+          const quayStart = Math.max(x0, seaX);
+          place(
+            `${key},q`,
+            "quay",
+            { ...band, x: quayStart, w: quayEnd - quayStart },
+            quayStart - seaX,
+            band.y - cell.y,
+          );
+          place(
+            `${key},s`,
+            "sea",
+            { ...band, x: seaStart, w: x1 - seaStart },
+            seaStart - cell.x,
+            band.y - cell.y,
+          );
         });
       }
     for (const [key, piece] of wildPieces)

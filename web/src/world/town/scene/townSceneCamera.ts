@@ -33,7 +33,6 @@ import {
   townCenterEmblem,
   townCityBoardScale,
 } from "../townCenter";
-import { townPostLot, townPostSignTop } from "../townPost";
 import {
   TOWN_TRANSITION_SECONDS,
   townTransitionSeconds,
@@ -160,18 +159,15 @@ export class TownSceneCamera {
       // beside it and the first building under them, down to its lounge
       // where idle agents rest; a tall screen shows the billboard above too.
       // A screen too short for all keeps the whole building and slides the
-      // center up, never past its plaque and doors nor the post office's
-      // sign (#1033).
+      // center up, never past its plaque and doors (#1033), so the
+      // warehouse's folded sign on the center stays in view (#1028).
       const x = first ? (first.x + first.w / 2) * T : (layout.width * T) / 2;
       const focus = camera.focusPoint();
       const board =
         layout.center.y * T -
         TOWN_CITY_BOARD_GAP -
         TOWN_CITY_BOARD_HEIGHT * townCityBoardScale(limits.home);
-      const plaque = Math.min(
-        townCenterEmblem(layout.center, T).y - 28,
-        townPostSignTop(townPostLot(layout), limits.home),
-      );
+      const plaque = townCenterEmblem(layout.center, T).y - 28;
       const shown =
         (viewport.height - viewport.inset.top - viewport.inset.bottom) /
         limits.home;
