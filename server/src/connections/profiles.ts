@@ -250,6 +250,9 @@ export function validateLocalConnectionProfile(
   };
 }
 
+/** Longest remote socket path a profile may name, leaving room under sun_path. */
+export const REMOTE_SOCKET_PATH_MAX_BYTES = 100;
+
 function validateRemoteSocketPath(value: unknown, field: string): string {
   // An empty path asks the bridge to infer the default Herdr socket location
   // under the remote home directory at connect time.
@@ -257,7 +260,7 @@ function validateRemoteSocketPath(value: unknown, field: string): string {
   if (
     typeof value !== "string" ||
     value.length < 2 ||
-    Buffer.byteLength(value, "utf8") > 100 ||
+    Buffer.byteLength(value, "utf8") > REMOTE_SOCKET_PATH_MAX_BYTES ||
     !value.startsWith("/") ||
     !/^[\x21-\x7e]+$/.test(value) ||
     /[:\\\s]/.test(value)
