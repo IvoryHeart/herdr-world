@@ -199,11 +199,11 @@ Where: Beside the views at the top; on a phone, the views button. Since 0.3.6.
 
 One box finds agents, rooms and actions anywhere in World.
 
-1. Press Ctrl+K (Cmd+K on a Mac), or the ⌘ button beside the views.
+1. Press Ctrl+K (Cmd+K on a Mac) or the ⌘ button beside the views; on a phone, open the views menu and choose Find or act.
 2. Type a few letters of a name or an action.
 3. Press Enter to go there or do it.
 
-Where: Beside the views at the top. Since 0.3.0.
+Where: Beside the views at the top; on a phone, in the views menu. Since 0.3.0.
 
 <a id="world-phone-hosts"></a>
 

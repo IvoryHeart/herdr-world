@@ -460,8 +460,9 @@ phone and desktop sizes, light and dark, and records each picture's inputs in
 `web/src/help/pictures.json`. `HELP_PICTURES_IDS="board.next town.zoom"` limits
 a run. Nobody edits a picture by hand. `help:check` fails when an entry's
 control is no longer marked (naming the entry), a picture is missing or its
-inputs changed (the control's surrounding markup, its picture settings or the
-stage), a `*.help.ts` file is not listed, a picture is left over, or
+inputs changed (its picture settings, the control's markup, or any file the
+stage renders from: every component, stylesheet, scene and script it imports),
+so any UI change regenerates the pictures; a `*.help.ts` file is not listed, a picture is left over, or
 `docs/HELP.md` is out of date. A PR whose changelog fragment has `### Added`
 changes a `*.help.ts` file or states `Help: none — <reason>`.
 

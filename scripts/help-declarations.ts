@@ -6,8 +6,8 @@
  * (scripts/help-docs.ts).
  */
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { HELP_ENTRIES } from "../web/src/help/entries";
 import {
   HELP_PICTURE_THEMES,
@@ -40,15 +40,86 @@ export const HELP_PICTURE_CROPS: Record<
 };
 
 /**
- * What a picture is made from besides its control: the stage and its
- * synthetic scene. A change to any of them makes every picture stale.
+ * Where a picture's rendering starts: the stage and the generator. Every
+ * repository file they import, directly or through other files (components,
+ * CSS, the synthetic scene, the capture script), is an input of every
+ * picture; see helpStageInputs.
  */
 export const HELP_STAGE_FILES = [
   "web/src/help/testing/HelpShots.browser.tsx",
-  "web/src/world/testing/site-shots/siteStage.tsx",
-  "web/src/world/testing/site-shots/scene.ts",
   "scripts/help-pictures.ts",
 ] as const;
+
+/**
+ * Imported files that are not what a picture shows: the help declarations
+ * (each entry's own control and picture are hashed per entry) and the
+ * manifest the generator writes.
+ */
+function notAPictureInput(file: string) {
+  return (
+    file.endsWith(".help.ts") ||
+    file === HELP_ENTRIES_FILE ||
+    file === HELP_PICTURE_MANIFEST
+  );
+}
+
+const SCRIPT_SPECIFIER =
+  /\bfrom\s*["']([^"']+)["']|\bimport\s*\(?\s*["']([^"']+)["']/g;
+const STYLE_SPECIFIER =
+  /@import\s+(?:url\()?\s*["']([^"']+)["']|url\(\s*["']?([^"')]+)["']?\s*\)/g;
+const RESOLVE_SUFFIXES = [
+  "",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".mjs",
+  ".css",
+  ".json",
+  "/index.ts",
+  "/index.tsx",
+];
+
+function resolveRelative(from: string, specifier: string, root: string) {
+  if (!specifier.startsWith(".")) return undefined;
+  const base = join(root, dirname(from), specifier.replace(/[?#].*$/, ""));
+  for (const suffix of RESOLVE_SUFFIXES) {
+    const path = base + suffix;
+    if (existsSync(path) && statSync(path).isFile())
+      return relative(root, path);
+  }
+  return undefined;
+}
+
+const stageInputs = new Map<string, readonly string[]>();
+
+/**
+ * Every repository file the pictures are rendered from: the stage files and
+ * everything they import through relative paths (scripts, components, CSS
+ * and its `@import`/`url()` assets), in a stable order. Packages are pinned
+ * by the lockfile and not followed. A change to any of these files makes
+ * every picture stale, because any of them can move what a crop shows.
+ */
+export function helpStageInputs(root = ROOT): readonly string[] {
+  const known = stageInputs.get(root);
+  if (known) return known;
+  const found = new Set<string>();
+  const pending: string[] = [...HELP_STAGE_FILES];
+  while (pending.length > 0) {
+    const file = pending.pop()!;
+    if (found.has(file) || notAPictureInput(file)) continue;
+    found.add(file);
+    if (!/\.(tsx?|jsx?|mjs|css)$/.test(file)) continue;
+    const text = readFileSync(join(root, file), "utf8");
+    const pattern = file.endsWith(".css") ? STYLE_SPECIFIER : SCRIPT_SPECIFIER;
+    for (const match of text.matchAll(pattern)) {
+      const resolved = resolveRelative(file, match[1] ?? match[2]!, root);
+      if (resolved && !found.has(resolved)) pending.push(resolved);
+    }
+  }
+  const inputs = [...found].sort();
+  stageInputs.set(root, inputs);
+  return inputs;
+}
 
 /** Lines around a control that count as the control's own markup. */
 const NEIGHBOURHOOD = 20;
@@ -128,8 +199,9 @@ export function helpDeclarationFiles(root = ROOT) {
 
 /**
  * A picture's inputs, hashed: the entry's control and picture, the control's
- * markup wherever it is marked, and the stage. The check compares this with
- * the manifest written when the pictures were made.
+ * markup wherever it is marked, and every file the stage renders from
+ * (helpStageInputs). The check compares this with the manifest written when
+ * the pictures were made.
  */
 export function helpPictureFingerprint(
   entry: HelpEntry,
@@ -147,7 +219,7 @@ export function helpPictureFingerprint(
   );
   for (const anchor of anchors.get(entry.control) ?? [])
     hash.update(`\n${anchor.file}\n${anchor.markup}`);
-  for (const file of HELP_STAGE_FILES)
+  for (const file of helpStageInputs(root))
     hash.update(`\n${file}\n${readFileSync(join(root, file), "utf8")}`);
   return hash.digest("hex").slice(0, 16);
 }

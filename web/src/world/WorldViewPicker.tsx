@@ -246,6 +246,7 @@ function PhoneViewPicker({
           <button
             type="button"
             role="menuitem"
+            data-help="world.command-box"
             // After the menu hands focus back, so the box keeps it.
             onClick={() => choose(() => window.setTimeout(openCommandBox))}
           >
@@ -275,8 +276,9 @@ function PhoneViewPicker({
         ref={trigger}
         type="button"
         className="world-view-picker-fab"
-        // Try spotlights this button for help entries inside its menu.
-        data-help-opens="world.help world.phone-hosts"
+        // Try spotlights this button for help entries inside its menu; the
+        // menu's every data-help control is listed (WorldViewPicker.test.tsx).
+        data-help-opens="world.help world.phone-hosts world.command-box"
         aria-label={`Switch view, now ${worldViewLabel(view)}`}
         aria-haspopup="menu"
         aria-expanded={open}

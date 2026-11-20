@@ -85,7 +85,7 @@ export function helpCheckProblems(input: HelpCheckInput): string[] {
       );
     else if (made.fingerprint !== input.fingerprint(entry))
       problems.push(
-        `help entry "${entry.id}" has an out-of-date picture: its control, its picture or the stage changed; run bun run help:pictures`,
+        `help entry "${entry.id}" has an out-of-date picture: its control, its picture or a file the stage renders from changed; run bun run help:pictures`,
       );
   }
   const expected = new Set(

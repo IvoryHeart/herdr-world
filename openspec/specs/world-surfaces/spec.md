@@ -4819,6 +4819,12 @@ changed help declaration or a stated reason.
 - **WHEN** a component stops marking a control that a help entry points at
 - **THEN** the help check fails and names the entry and the control
 
+#### Scenario: A pictured style changes
+
+- **WHEN** a stylesheet or component that the picture stage renders changes
+  and the pictures are not regenerated
+- **THEN** the help check fails and names each entry whose picture is out of date
+
 #### Scenario: What can I do here?
 
 - **WHEN** the user opens help on Town, Board or Chat
