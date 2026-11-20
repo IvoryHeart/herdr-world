@@ -15,6 +15,7 @@ import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { authTokenPrintCommand } from "../config/auth-token";
 import type { DataPaths } from "../config/data-paths";
 import { acquireInstanceLock } from "../config/instance-lock";
+import { publishInstanceAddress } from "./instance-address";
 import type { ServerConfig } from "../config/server-config";
 import { listenerSessionSecret } from "../config/session-secret";
 import { startupConnectionSettings } from "../connections/profile-creation";
@@ -51,11 +52,12 @@ import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
 import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
-import { storedSourceSettings, withSourceSettings } from "../sources/http";
-import { CheckoutResolver } from "../sources/links";
-import { readSourceSecrets, writeSourceSecrets } from "../sources/secrets";
+import { composeSources, runSourceProcess } from "../sources/composition";
+import { ShipyardService } from "../shipyard/service";
+import { ShipyardInstances } from "../shipyard/instances";
+import { shipyardInstanceIdentity } from "../shipyard/identity";
+import { createShipyardHttp } from "../shipyard/http";
 import { withIntegrations } from "../integrations/http";
-import { SourcesService } from "../sources/service";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
@@ -72,6 +74,7 @@ import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
+import { createRuntimeMemoryService } from "../memory/runtime-service";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
 import { AgentActivityCache } from "../world/agent-activity-cache";
@@ -131,7 +134,7 @@ async function compose(
   deps: WorldServiceDeps,
   storage: WorldStorage,
   sessionSecret: string,
-  releaseDataFolder: () => void,
+  releaseDataFolder: ReturnType<typeof acquireInstanceLock>,
 ) {
   const { config, paths, clock, scheduler, adapters } = deps;
   const logger = serverLogger;
@@ -263,6 +266,7 @@ async function compose(
   );
 
   const worldCli = createWorldCliService({
+    memory: () => rpcServices.worldMemory!,
     core: () => coreCallers,
     board,
     ledger: () => storage.ledger(),
@@ -410,6 +414,7 @@ async function compose(
   const observedConnections = worldRuntimeRegistry(
     connectionManager,
     core.manager,
+    () => connectionProfiles.hosts.list(),
   );
   const agentActivity = new AgentActivityCache({
     clock,
@@ -682,6 +687,7 @@ async function compose(
     store: storage.connections,
     changed: publishConnectionsChanged,
     bootstrap: connectionBootstrap,
+    discoverHost: deps.adapters.herdr.discoverHost,
     createRuntime: runtimeFactoryForProfile,
     // The setup card's lookup; a ready implicit local server is Herdr (#935).
     noHerdrTui: () =>
@@ -696,40 +702,10 @@ async function compose(
     },
   });
 
-  // Built-in sources (GitHub, Jira). On by default; each runs only while a
-  // browser asks and keeps its credentials in private service storage.
-  const runSourceProcess = async (argv: string[], timeoutMs: number) => {
-    try {
-      return await runProcessWithCodeTimeout(argv, timeoutMs, {
-        env: {
-          ...process.env,
-          GH_PROMPT_DISABLED: "1",
-          GIT_TERMINAL_PROMPT: "0",
-          NO_COLOR: "1",
-        },
-      });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT")
-        return { code: 127, stdout: "", stderr: "" };
-      throw error;
-    }
-  };
-  const worldSources = new SourcesService({
-    settings: await settings
-      .read()
-      .then(storedSourceSettings)
-      .catch(() => ({})),
-    persistSettings: async (sources) => {
-      await settings.update((current) => withSourceSettings(current, sources));
-    },
-    secrets: {
-      read: () => readSourceSecrets(paths.sourceSecrets),
-      write: (secrets) => {
-        if (!storageOpen) throw new Error("World storage is closed");
-        writeSourceSecrets(secrets, paths.sourceSecrets);
-      },
-    },
-    run: runSourceProcess,
+  const worldSources = await composeSources({
+    settings,
+    paths,
+    storageOpen: () => storageOpen,
     topology: async () =>
       worldSnapshots ? (await worldSnapshots.snapshot()).connections : [],
     runtimeOwners: () =>
@@ -740,7 +716,7 @@ async function compose(
             ? [{ connection_id: id, generation }]
             : [],
         ),
-    resolver: new CheckoutResolver(runSourceProcess, (connectionId) => {
+    hostOf: (connectionId) => {
       if (connectionId === STARTUP_DEFAULT_CONNECTION_ID && config.sshHost)
         return { kind: "ssh", destination: config.sshHost };
       const profile = connectionProfiles
@@ -750,7 +726,7 @@ async function compose(
       if (profile?.type === "ssh" && profile.remote_platform !== "windows")
         return { kind: "ssh", destination: profile.ssh_destination };
       return null;
-    }),
+    },
     now: () => clock.now(),
   });
   const handleWorldSources = withIntegrations(worldSources, {
@@ -759,6 +735,24 @@ async function compose(
     vaultPath: paths.sourceSecrets,
     now: () => clock.now(),
   });
+  const shipyardInstances = new ShipyardInstances(
+    paths.instanceRegistry,
+    paths.root,
+    () => clock.now(),
+    scheduler,
+  );
+  const shipyardIdentity = await shipyardInstanceIdentity(
+    serviceIncarnation,
+    config.appVersion,
+    clock.now(),
+  );
+  const shipyard = new ShipyardService({
+    run: runSourceProcess,
+    source: () => worldSources.shipyardSource(),
+    instances: () => shipyardInstances.read(),
+    now: () => clock.now(),
+  });
+  const shipyardHttp = createShipyardHttp(shipyard);
 
   worldUsage = new WorldUsageService({
     incarnation: serviceIncarnation,
@@ -810,6 +804,11 @@ async function compose(
     worldCli,
     worldSnapshots,
     worldUsage,
+    worldMemory: createRuntimeMemoryService({
+      tui: () => connectionManager,
+      core: coreRpc,
+      now: () => clock.now(),
+    }),
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
@@ -875,12 +874,14 @@ async function compose(
             connectionCli: {
               profiles: connectionProfiles,
               registryPath: paths.connections,
+              snapshot: () => worldSnapshots!.snapshot(),
             },
             settings,
             update,
             herdrSetup,
             officeObservability: handleOfficeObservability,
             sources: handleWorldSources,
+            shipyard: { service: shipyard, http: shipyardHttp },
             track,
             stopping: () => stopping,
           }),
@@ -894,6 +895,13 @@ async function compose(
           });
         },
       });
+      publishInstanceAddress(releaseDataFolder, config, server);
+      shipyardInstances.start(
+        shipyardIdentity,
+        server.port ?? config.port,
+        config.host,
+        !!config.tls,
+      );
       worldCli.start();
       forwards.listeningOn(server.port ?? config.port);
       return {
@@ -951,6 +959,8 @@ async function compose(
     // Admit nothing new: requests get 503 while the port stays bound, and no
     // reconnect, push, Ranger start or wait for an answer begins.
     stopping = true;
+    shipyard.close();
+    shipyardInstances.stop();
     const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
     deskWatches.stop();
@@ -974,8 +984,9 @@ async function compose(
       await drained();
     } finally {
       try {
-        // Finished agents seen so far are written before storage closes.
-        await apartments.apartments.stop();
+        // Finished agents seen so far are written before storage closes;
+        // a history census still reading stops.
+        await apartments.stop();
         await closeTerminalMarks();
         storageOpen = false;
         await storage.close();

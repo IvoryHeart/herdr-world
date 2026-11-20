@@ -29,18 +29,28 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // usage-metrics and connection-manager modules with World's views, so they
 // become their own small chunks (+3 files after removing the two retired
 // dialogs, no new bytes on the initial load).
-const maxFileCount = 193;
+// #1035 Settings (one registry and one search) loads as two lazy
+// chunks and a stylesheet; its catalog shares small stores with Town, chat and
+// the command box, which split into chunks of their own (+6 files and about
+// 35 KiB, with no initial load, on 2026-11-20). Retiring the Configuration
+// dialog split its tabs into lazy Settings pages (Runtime, connection,
+// Integrations, instance name, speech, worktree command) with their
+// stylesheets: +12 files and fewer total bytes (212 files, 15.3 MiB).
+const maxFileCount = 212;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
 // The Integrations screen (#1008, +17 KB) fit main alone, but main
 // grew under it to 13 KB of headroom; 15.3 MiB carries both, initial budgets
-// unchanged (2026-11-19).
+// unchanged (2026-11-19). The lazy #1035 Settings adds about 35 KiB
+// on top of it (15.31 MiB together, so 15.4 MiB on 2026-11-20).
+// The Town harbour and warehouse (#1028) fit main alone, but main's Library
+// (#1082) grew under it: 15.42 MiB together, so 15.5 MiB, initial budgets
+// unchanged (2026-11-20).
 // Apartments (#1011: the resident search/history dialog, its store and Town's
-// apartment building) add about 18.7 KB to lazy chunks with main at 15.24 MiB,
-// so the total rose to 15.3 MiB on 2026-11-19; startup budgets are unchanged.
-// With both, the bundle left about 33 KB of headroom.
-const maxTotalBytes = 15.3 * 1024 * 1024;
+// apartment building) add about 18.7 KB to lazy chunks; startup budgets are
+// unchanged.
+const maxTotalBytes = 15.5 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
@@ -101,13 +111,13 @@ export function assertLazyGrammarAssets(manifest) {
   );
   // The World shell may embed WorkspaceInspectorHost in its Office view;
   // validate it when Vite emits a standalone feature chunk, while requiring
-  // the general settings dialog that remains lazy.
-  for (const name of ["ConfigurationDialog", "WorkspaceInspectorHost"]) {
+  // Settings, which remains lazy.
+  for (const name of ["SettingsHome", "WorkspaceInspectorHost"]) {
     const entries = Object.keys(manifest).filter(
       (key) => manifest[key].name === name,
     );
     if (!entries.length) {
-      if (name === "ConfigurationDialog") {
+      if (name === "SettingsHome") {
         throw new Error(`Missing Vite feature chunk: ${name}`);
       }
       continue;

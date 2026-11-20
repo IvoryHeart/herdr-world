@@ -55,6 +55,7 @@ if (process.env.APARTMENTS_DOM !== "1") {
     "../testing/apartmentsFixture"
   );
   const { setApartmentsClient } = await import("./useApartments");
+  const { fixtureResidents } = await import("../testing/apartmentsFixture");
   setApartmentsClient(fixtureApartmentsClient(Date.now()));
   const { ApartmentsDialog, resumeRooms } = await import("./ApartmentsDialog");
   const { fixtureHost, fixtureWorld } = await import("../board/boardFixture");
@@ -119,7 +120,7 @@ if (process.env.APARTMENTS_DOM !== "1") {
     const view = await mount();
     expect(view.names()).toEqual(["ada", "grace", "linus", "hopper", "turing"]);
     expect(view.dialog().textContent).toContain(
-      "5 residents · kept 90 days, up to 500",
+      "5 residents · up to 5000, newest kept",
     );
     await view.search("#42");
     expect(view.names()).toEqual(["ada"]);
@@ -179,6 +180,39 @@ if (process.env.APARTMENTS_DOM !== "1") {
       "World cannot resume this agent: it never reported its session.",
     );
     await view.unmount();
+  });
+
+  test("agents found in harness histories live here asleep; a long list shows the newest", async () => {
+    const now = Date.now();
+    const asleep = Array.from({ length: 250 }, (_, index) => ({
+      ...fixtureResidents(now)[0]!,
+      id: `r-found${index}`,
+      name: "claude",
+      room: null,
+      move_out: "found" as const,
+      terminal_id: `session:0f0e0d0c-0000-4000-8000-1${String(index).padStart(11, "0")}`,
+      session_id: `0f0e0d0c-0000-4000-8000-1${String(index).padStart(11, "0")}`,
+      moved_out_at: now - (30 + index) * 24 * 60 * 60 * 1000,
+      summary: `Asleep task ${index}`,
+      last_report: null,
+      links: [],
+    }));
+    setApartmentsClient(fixtureApartmentsClient(now, asleep));
+    const view = await mount();
+    expect(view.names()).toHaveLength(200);
+    expect(view.dialog().textContent).toContain(
+      "255 residents · up to 5000, newest kept · newest 200 shown; search to find older",
+    );
+    await view.search("Asleep task 249");
+    expect(view.names()).toEqual(["claude"]);
+    await act(async () => view.button("claude").click());
+    const text = view.dialog().textContent ?? "";
+    expect(text).toContain("Asleep: found in its harness's history");
+    expect(text).toContain(
+      "claude --resume 0f0e0d0c-0000-4000-8000-100000000249",
+    );
+    await view.unmount();
+    setApartmentsClient(fixtureApartmentsClient(Date.now()));
   });
 
   test("Esc goes back to the list, then closes", async () => {

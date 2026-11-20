@@ -116,23 +116,19 @@ async function run() {
     const trigger = container.querySelector<HTMLButtonElement>(
       "button[aria-label='Menu']",
     )!;
-    if (!document.querySelector(".configuration-modal")) {
+    if (!document.querySelector(".settings-home")) {
       flushSync(() => trigger.click());
-      const configuration = Array.from(
+      const settings = Array.from(
         document.querySelectorAll<HTMLButtonElement>(".config-menu-item"),
-      ).find((button) => button.textContent?.includes("Configuration"))!;
-      flushSync(() => configuration.click());
-      for (
-        let i = 0;
-        i < 40 && !document.querySelector(".configuration-modal");
-        i++
-      )
+      ).find((button) => button.textContent?.includes("Settings"))!;
+      flushSync(() => settings.click());
+      for (let i = 0; i < 40 && !document.querySelector(".settings-home"); i++)
         await settle();
     }
-    const menu = document.querySelector<HTMLElement>(".configuration-modal")!;
+    const menu = document.querySelector<HTMLElement>(".settings-home")!;
     flushSync(() =>
       menu
-        .querySelector<HTMLButtonElement>("#configuration-tab-Behavior")!
+        .querySelector<HTMLButtonElement>("#settings-tab-notifications")!
         .click(),
     );
     await settle();
@@ -142,9 +138,9 @@ async function run() {
     const master = menu.querySelector<HTMLButtonElement>(
       "button[aria-label='Task notifications']",
     )!;
-    const status = master.parentElement!.querySelector<HTMLElement>(
-      ".config-item-copy > span",
-    )!;
+    const status = master
+      .closest(".settings-home-row")!
+      .querySelector<HTMLElement>(".config-item-copy > span")!;
     check(
       status.textContent?.includes("Background push") === true &&
         getComputedStyle(status).display !== "none" &&
@@ -152,10 +148,10 @@ async function run() {
       `${theme}: delivery mode not visible`,
     );
     const completion = menu.querySelector<HTMLButtonElement>(
-      "button[aria-label='Task completed']",
+      "button[aria-label='Notify when a task finishes']",
     )!;
     const blocked = menu.querySelector<HTMLButtonElement>(
-      "button[aria-label='Task needs attention']",
+      "button[aria-label='Notify when a task needs you']",
     )!;
     completion.scrollIntoView({ block: "nearest" });
     completion.focus();
@@ -180,9 +176,9 @@ async function run() {
     for (const control of [completion, blocked]) {
       control.scrollIntoView({ block: "nearest" });
       const rect = control.getBoundingClientRect();
-      const label = control.parentElement!.querySelector<HTMLElement>(
-        ".config-item-copy strong",
-      )!;
+      const label = control
+        .closest(".settings-home-row")!
+        .querySelector<HTMLElement>(".config-item-copy strong")!;
       check(
         label.clientWidth > 0 && label.scrollWidth <= label.clientWidth,
         `${theme}: ${control.getAttribute("aria-label")} label is truncated`,
@@ -216,7 +212,9 @@ async function run() {
     "master switch remained enabled",
   );
   check(
-    !document.querySelector("button[aria-label='Task needs attention']"),
+    !document.querySelector(
+      "button[aria-label='Notify when a task needs you']",
+    ),
     "disabled preferences remained visible",
   );
   root.unmount();

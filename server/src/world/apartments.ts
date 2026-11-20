@@ -6,7 +6,7 @@ import type {
 } from "../../../shared/apartments";
 import {
   APARTMENT_CAPACITY,
-  APARTMENT_RETENTION_MS,
+  apartmentSessionKey,
 } from "../../../shared/apartments";
 import type { BinEntry } from "../../../shared/bin";
 import type { ApartmentMoveIn, ApartmentsPort } from "../storage/apartments";
@@ -30,6 +30,12 @@ export type ApartmentTenant = {
   session_holder: string | null;
   first_seen_at: number;
   last_seen_at: number;
+  /**
+   * Its program has left the terminal (a shell is all that remains): not
+   * running, so its session no longer hides a resident. It still moves out
+   * when the terminal ends.
+   */
+  away?: boolean;
 };
 
 /**
@@ -83,7 +89,9 @@ function summaryOf(pane: Row, agent: Row | null): string | null {
  * an agent's terminal, that agent moves into an apartment (one durable
  * resident). A host that disconnects or restarts witnesses nothing: its
  * agents are forgotten, never recorded, because their end was not seen.
- * Agents the bin's bus took are recorded as retired.
+ * Agents the bin's bus took are recorded as retired. Agents found in the
+ * harnesses' histories (world/apartment-census.ts) move in asleep; a
+ * resident whose session runs again at a desk is hidden while it runs.
  *
  * A resident is written as soon as its end is seen; its last report, an
  * optional transcript read, is added to the written record afterwards, so a
@@ -101,6 +109,8 @@ export class WorldApartments {
   private readonly pending = new Set<Promise<unknown>>();
   /** Session reads still running, by connection:generation:terminal. */
   private readonly probing = new Map<string, Promise<unknown>>();
+  /** Residents hidden because their session runs now, as last published. */
+  private hidden = "";
   private stopped = false;
 
   constructor(
@@ -140,13 +150,37 @@ export class WorldApartments {
     return !!this.deps.port;
   }
 
+  /** Residents not running now: one whose session runs again is hidden. */
   list(): ApartmentState {
+    const live = this.liveSessions();
     return {
       revision: this.revision,
-      residents: this.deps.port?.list() ?? [],
+      residents: (this.deps.port?.list() ?? []).filter((resident) => {
+        const key = apartmentSessionKey(resident);
+        return !key || !live.has(key);
+      }),
       capacity: APARTMENT_CAPACITY,
-      retention_ms: APARTMENT_RETENTION_MS,
     };
+  }
+
+  /** Sessions agents at a desk hold now, by apartmentSessionKey. */
+  liveSessions(): Set<string> {
+    const live = new Set<string>();
+    for (const host of this.hosts.values())
+      for (const tenant of host.tenants.values()) {
+        if (tenant.away) continue;
+        const key = apartmentSessionKey(tenant);
+        if (key) live.add(key);
+      }
+    return live;
+  }
+
+  /** Residents found in the harnesses' histories move in asleep. */
+  async found(residents: readonly ApartmentMoveIn[]) {
+    const port = this.deps.port;
+    if (!port || this.stopped || !residents.length) return;
+    await port.found(residents);
+    this.changed();
   }
 
   get(id: string): ApartmentResident | undefined {
@@ -176,7 +210,12 @@ export class WorldApartments {
       const harness = text(pane.agent, 40);
       const terminal = text(pane.terminal_id, 200);
       const paneId = text(pane.pane_id, 200);
-      if (!harness || !terminal || !paneId) continue;
+      if (!harness || !terminal || !paneId) {
+        // A terminal shown without its agent: that agent is no longer running.
+        const left = terminal ? host.tenants.get(terminal) : undefined;
+        if (left && !harness) left.away = true;
+        continue;
+      }
       const agent = agentListRecord(agents, { ...pane, pane_id: pane.pane_id });
       const before = host.tenants.get(terminal);
       // Another program in the same terminal is another agent.
@@ -204,6 +243,7 @@ export class WorldApartments {
         session_holder: reported ? null : same ? before.session_holder : null,
         first_seen_at: same ? before.first_seen_at : observedAt,
         last_seen_at: observedAt,
+        away: false,
       };
       // The same agent stays one object, so a session read still running
       // when it leaves lands on the record it leaves.
@@ -211,6 +251,7 @@ export class WorldApartments {
       host.tenants.set(terminal, tenant);
       if (!reported) this.probe(tenant);
     }
+    this.liveChanged();
   }
 
   /**
@@ -232,6 +273,7 @@ export class WorldApartments {
         leaving.push(tenant);
       }
     for (const tenant of leaving) this.moveOut(tenant);
+    if (leaving.length) this.liveChanged();
   }
 
   /** The bus has left with these riders. */
@@ -250,8 +292,10 @@ export class WorldApartments {
   /** A connection's runtime changed: its agents' ends can no longer be seen. */
   connectionStatus(status: { id: string; generation: number; state: string }) {
     const host = this.hosts.get(status.id);
-    if (host && host.generation !== status.generation)
+    if (host && host.generation !== status.generation) {
       this.hosts.delete(status.id);
+      this.liveChanged();
+    }
   }
 
   async evict(ids: readonly string[]) {
@@ -299,6 +343,7 @@ export class WorldApartments {
         tenant.session_id = null;
         tenant.session_holder = by;
       }
+      this.liveChanged();
     };
     let answer: unknown;
     try {
@@ -377,6 +422,24 @@ export class WorldApartments {
     })();
     this.pending.add(task);
     void task.finally(() => this.pending.delete(task));
+  }
+
+  /**
+   * A resident's session started or stopped running at a desk: the list
+   * every view shows changed, though no record did.
+   */
+  private liveChanged() {
+    const port = this.deps.port;
+    if (!port) return;
+    const live = this.liveSessions();
+    const keys = port.sessionKeys();
+    const hidden = [...live]
+      .filter((key) => keys.has(key))
+      .sort()
+      .join("\n");
+    if (hidden === this.hidden) return;
+    this.hidden = hidden;
+    this.changed();
   }
 
   private changed() {

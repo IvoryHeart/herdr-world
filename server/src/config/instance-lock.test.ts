@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { acquireInstanceLock } from "./instance-lock";
+import { acquireInstanceLock, readRunningInstance } from "./instance-lock";
 
 const roots: string[] = [];
 
@@ -35,6 +35,31 @@ test("names its holder and releases only its own lock", () => {
   writeFileSync(path, JSON.stringify({ pid: process.pid + 1, port: 1 }));
   release();
   expect(existsSync(path)).toBeTrue();
+});
+
+test("publishes the bound address, discovers a live owner and releases it", () => {
+  const root = folder();
+  const release = acquireInstanceLock(root, 0);
+  const address = { host: "::", port: 19042, tls: true };
+  release.listening(address);
+  expect(readRunningInstance(root)).toEqual({ pid: process.pid, ...address });
+  release();
+  expect(readRunningInstance(root)).toBeNull();
+  expect(() => release.listening(address)).toThrow("no longer owns");
+});
+
+test("does not discover a dead owner or replace another process's lock", () => {
+  const root = folder();
+  const release = acquireInstanceLock(root, 19042);
+  writeFileSync(
+    join(root, "instance.lock"),
+    JSON.stringify({ pid: 2147483647, port: 19043 }),
+  );
+  expect(readRunningInstance(root)).toBeNull();
+  expect(() =>
+    release.listening({ host: "127.0.0.1", port: 19042, tls: false }),
+  ).toThrow("no longer owns");
+  release();
 });
 
 test("refuses a folder a live World holds", () => {

@@ -2,7 +2,7 @@
  * The website's Town in the production TownCanvas, for herdr.world's
  * screenshots (scripts/site-screenshots.ts). Real time and real motion with
  * a fixed random sequence; nothing contacts World, Herdr or GitHub. The
- * post office shows its own synthetic parcels (`?townPostFixture`).
+ * warehouse shows its own synthetic crates (`?townWarehouseFixture`).
  */
 window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 let seed = 0x73697465;

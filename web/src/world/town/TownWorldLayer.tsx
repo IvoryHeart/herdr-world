@@ -25,7 +25,9 @@ import { TownFuelMark } from "./TownFuelMark";
 import type { TownStepStore } from "./townStepStore";
 import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
 import { TownApartments } from "./TownApartments";
-import { TownPostOffice } from "./TownPostOffice";
+import { TownLibrary } from "./TownLibrary";
+import { TownShipyard } from "./TownShipyard";
+import { TownWarehouse } from "./TownWarehouse";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {
   townPlaceSummary,
@@ -264,6 +266,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
     summary: () => townPlaceSummary(summary, model.projection, place),
     usage: { kind: place.kind, target },
   });
+  // A phone's reception board keeps only the rows above its building
+  // (TOWN_PHONE_BOARD_ROWS), so its expenses fold to a sign in its title;
+  // the billboard and the post office stand as on a wide town (#1033).
   const folded = layout.formFactor === "narrow";
   /** A host's room by its workspace, for its reception's expenses. */
   const roomLabel =
@@ -279,12 +284,10 @@ export const TownWorldLayer = memo(function TownWorldLayer({
     };
   return (
     <>
-      <TownCityBillboard
-        center={layout.center}
-        folded={folded}
-        boardRef={boards.cityRef}
-      />
-      <TownPostOffice layout={layout} renderer={renderer} />
+      <TownCityBillboard center={layout.center} boardRef={boards.cityRef} />
+      <TownWarehouse layout={layout} renderer={renderer} />
+      <TownShipyard layout={layout} renderer={renderer} />
+      <TownLibrary layout={layout} />
       <TownApartments layout={layout} />
       {layout.buildings.map((building) => {
         if (!visible.hosts.has(building.hostKey)) return null;

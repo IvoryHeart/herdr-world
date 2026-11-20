@@ -12,8 +12,10 @@ import "./world.css";
 
 // World's control of a herdr-core host (#869), on core agents as the
 // server's read model lists them: `?scene=launcher` opens New agent with no
-// room chosen; `?scene=bin` puts an agent with sub-agents in the bin. Every
-// call is recorded; the page reaches no runtime.
+// room chosen; `?scene=bin` puts an agent with sub-agents in the bin;
+// `?scene=start` renders the whole World and starts a shell and an agent
+// with one click each (#1075). Every call is recorded; the page reaches no
+// runtime.
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -31,6 +33,17 @@ console.error = (...args: unknown[]) => {
 };
 
 const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+/** What World observes (`?scene=start`): before, then after each start. */
+const observed: {
+  snapshot: unknown;
+  started: Map<string, unknown>;
+  launched: boolean;
+} = {
+  snapshot: null,
+  started: new Map(),
+  launched: false,
+};
+const controls = new Set<(control: Record<string, unknown>) => void>();
 /** What world.core.kill_plan answers: the builder and its dying sub-agent. */
 const plan = {
   core_id: "c0ffee",
@@ -71,8 +84,31 @@ Object.assign(bridge, {
         skills: [],
       };
     if (method === "world.core.kill_plan") return plan;
-    if (method === "world.core.launch")
-      return { status: "started", terminal_id: "t9", placed: false };
+    if (method === "world.snapshot") return observed.snapshot;
+    if (method === "world.core.launch") {
+      // A shell is t9, an agent t10; the service invalidates World's
+      // observation before it answers, as world.core.launch does.
+      const address =
+        params.shell !== true ? "t10" : observed.launched ? "t11" : "t9";
+      if (params.shell === true) observed.launched = true;
+      if (observed.started.has(address)) {
+        observed.snapshot = observed.started.get(address);
+        for (const listener of controls)
+          listener({
+            type: "world_invalidated",
+            connection_id: "core-fixture",
+            connection_generation: 1,
+          });
+      }
+      return { status: "started", terminal_id: address, placed: false };
+    }
+    if (method === "world.core.watch")
+      return {
+        stream: String(params.stream),
+        grid: { cols: 80, rows: 24 },
+        moved_from: null,
+      };
+    if (method === "world.core.hold") return { held: true };
     return null;
   },
   connection: (connectionId: string) => ({
@@ -83,9 +119,178 @@ Object.assign(bridge, {
       return null;
     },
   }),
-  onControl: () => () => {},
+  onControl: (listener: (control: Record<string, unknown>) => void) => {
+    controls.add(listener);
+    return () => controls.delete(listener);
+  },
   onStatus: () => () => {},
 });
+
+/**
+ * One click on a room's + and one on Terminal start a core shell and open
+ * its window; one more pair starts an agent and opens it (#1075). The page
+ * is the whole World, on the server's core read model.
+ */
+async function startScene() {
+  const width = Number(await (await fetch("/viewport-ready")).text());
+  check(window.innerWidth === width, `viewport ${window.innerWidth}/${width}`);
+  const [before, shell, agent, hidden] = await Promise.all(
+    [
+      "/snapshot",
+      "/snapshot?started=t9",
+      "/snapshot?started=t9,t10",
+      "/snapshot?started=t9,t10,t11",
+    ].map(async (path) => (await fetch(path)).json()),
+  );
+  observed.snapshot = before;
+  observed.started.set("t9", shell);
+  observed.started.set("t10", agent);
+  observed.started.set("t11", hidden);
+  const [
+    { __storeTesting, emptyServerSessionState, store },
+    { worldRuntimeStore },
+    { initializeLayoutPreferences },
+    { initializeShortcutPreferences },
+    { quietGreetingForTest },
+    { default: WorldFoundationApp },
+    { writeHostsFilter },
+    { requestAgentLaunch, WORLD_AGENT_LAUNCH_EVENT },
+  ] = await Promise.all([
+    import("../store"),
+    import("./runtimeStore"),
+    import("../layoutPreferences"),
+    import("../shortcutPreferences"),
+    import("./townMasterGreeting"),
+    import("./WorldFoundationApp"),
+    import("./hostsFilter"),
+    import("./agentProfiles"),
+  ]);
+  // The core room a + asks the launcher for, to ask again once hidden.
+  let room: Record<string, unknown> | undefined;
+  window.addEventListener(WORLD_AGENT_LAUNCH_EVENT, (event) => {
+    room ??= (event as CustomEvent<Record<string, unknown>>).detail;
+  });
+  // The Town Master's greeting would sit over what this presses.
+  quietGreetingForTest();
+  history.replaceState(null, "", "/");
+  initializeLayoutPreferences();
+  initializeShortcutPreferences();
+  store.init = () => {};
+  const id = "core-fixture";
+  __storeTesting.replaceState({
+    ...store.get(),
+    ...emptyServerSessionState(1),
+    status: "connected",
+    catalogueReady: true,
+    activeConnectionId: id,
+    defaultConnectionId: id,
+    connections: [
+      {
+        id,
+        label: "Fixture core",
+        source: "local-profile",
+        state: "ready",
+        generation: 1,
+        is_default: true,
+      },
+      {
+        id: "core-beta",
+        label: "Beta core",
+        source: "local-profile",
+        state: "ready",
+        generation: 1,
+        is_default: false,
+      },
+    ],
+  });
+  await worldRuntimeStore.refresh();
+  // Hosts shows the fixture core first; beta is hidden until the last start.
+  writeHostsFilter(["core-fixture"]);
+  const root = document.createElement("div");
+  document.body.append(root);
+  createRoot(root).render(<WorldFoundationApp />);
+  const until = async (condition: () => unknown, label: string) => {
+    for (let attempt = 0; attempt < 300; attempt++) {
+      if (condition()) return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error(`timed out: ${label}`);
+  };
+  // A managed window showing the started terminal's core watch.
+  const windowOf = (address: string) =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        `[data-window-id] [data-core-watch="${address}"]`,
+      ),
+    ].find((element) => element.getBoundingClientRect().height > 0);
+  const start = async (choose: () => HTMLButtonElement | undefined) => {
+    const add = () =>
+      document.querySelector<HTMLButtonElement>(
+        '.town-new-seat[aria-label^="New agent or terminal in"]:not(:disabled)',
+      );
+    await until(add, "a core room's + in Town");
+    add()!.click();
+    await until(choose, "the launcher's choice");
+    choose()!.click();
+  };
+  // One click on +, one on Terminal: the shell starts and its window opens.
+  await start(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        ".agent-launcher-card:not(:disabled)",
+      ) ?? undefined,
+  );
+  await until(() => windowOf("t9"), "the started shell's window opens");
+  check(
+    calls.filter((c) => c.method === "world.core.launch").length === 1,
+    "one click started one shell",
+  );
+  check(
+    calls.some(
+      (c) => c.method === "world.core.watch" && c.params.address === "t9",
+    ),
+    "the shell's window watches the started terminal",
+  );
+  check(
+    !document.querySelector(".agent-launcher"),
+    "the launcher closed after the start",
+  );
+  // The same for an agent: its window opens on the started agent.
+  await start(() =>
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(".agent-launcher-kind"),
+    ].find((button) => button.textContent?.trim() === "Claude"),
+  );
+  await until(() => windowOf("t10"), "the started agent's window opens");
+  check(
+    calls.filter((c) => c.method === "world.core.launch").length === 2,
+    "one click started one agent",
+  );
+  // Hosts now shows only beta; the launcher still offers the hidden host's room,
+  // and a start there opens its window from the unfiltered World.
+  const seats = () => document.querySelectorAll(".town-new-seat").length;
+  const shown = seats();
+  writeHostsFilter(["core-beta"]);
+  await until(() => seats() !== shown, "the Hosts filter hides the core");
+  check(room?.connectionId === "core-fixture", "the + asked for the core room");
+  requestAgentLaunch(room ?? {});
+  const card = () =>
+    document.querySelector<HTMLButtonElement>(
+      ".agent-launcher-card:not(:disabled)",
+    ) ?? undefined;
+  await until(card, "the launcher on the hidden host's room");
+  card()!.click();
+  await until(
+    () => windowOf("t11"),
+    "the shell started on a hidden host opens its window",
+  );
+  const launches = calls.filter((c) => c.method === "world.core.launch");
+  check(
+    launches.length === 3 &&
+      launches[2]!.params.connection_id === "core-fixture",
+    `one click started the hidden host's shell: ${JSON.stringify(launches[launches.length - 1]?.params)}`,
+  );
+}
 
 async function run() {
   const viewport = document.createElement("meta");
@@ -107,6 +312,7 @@ async function run() {
   const root = document.createElement("div");
   document.body.append(root);
   const scene = new URLSearchParams(location.search).get("scene");
+  if (scene === "start") return startScene();
   if (scene === "launcher") {
     let closed = 0;
     flushSync(() =>
@@ -114,7 +320,7 @@ async function run() {
         <AgentLauncherDialog
           world={world}
           initial={{}}
-          onOpen={() => failures.push("a core terminal has no World window")}
+          onOpen={() => failures.push("nothing opens before a start")}
           onEditProfiles={() => {}}
           onClose={() => {
             closed += 1;

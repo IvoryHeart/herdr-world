@@ -1,10 +1,12 @@
 ### Added
 
-- Apartments: an agent whose terminal ends, or that the bus takes, moves into
-  an apartment building in Town instead of vanishing. Search residents by
+- Apartments: an apartment building in Town holds every agent not running
+  now, asleep and resumable: agents found in each connected host's Claude,
+  Codex, Pi and Oh My Pi histories (including those from before Apartments),
+  and agents whose terminal ends or that the bus takes. Search residents by
   name, project, summary, pull request or date, read their history, resume
-  Claude and Codex agents into a room, or evict them. Board's hub and the
-  town center ring open the same residents.
+  Claude and Codex agents into a room, or evict them for good. Board's hub
+  and the town center ring open the same residents.
 
 ### Fixed
 

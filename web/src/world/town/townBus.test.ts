@@ -36,6 +36,7 @@ import { TownGround, type TownLayout, type TownShape } from "./townLayout";
 import { TOWN_WALK_SPEED } from "./townActors";
 import { layoutTown, TOWN_SHAPES, TOWN_TILE as T } from "./townLayout";
 import type { TownModel } from "./townModel";
+import { townHarbourLot } from "./townHarbour";
 
 const town = (hosts: Record<string, number[]>) => ({
   hosts: Object.keys(hosts).map((key, displayOrder) => ({ key, displayOrder })),
@@ -121,13 +122,15 @@ test("every road crossing has a stop, and the bus halts on its street for it", (
           expect(stop!.wait.x).toBeGreaterThan(0);
         }
       // The bus halts for each on its street's lanes, short of the
-      // crossing and wholly on the map.
+      // crossing and wholly on the map, short of the harbour's promenade.
       for (const stop of route.stops) {
         const [, road] = stop.key.split(":").map(Number);
         expect(stop.halt.y).toBe((road! + 2.5) * T);
         expect(stop.halt.x).toBeLessThan(stop.wait.x);
         expect(stop.halt.x).toBeGreaterThanOrEqual(32);
-        expect(stop.halt.x).toBeLessThanOrEqual(layout.width * T - 32);
+        expect(stop.halt.x).toBeLessThanOrEqual(
+          townHarbourLot(layout).streetEnd * T - 32,
+        );
       }
     }
 });
@@ -147,7 +150,9 @@ test("every town's bus lives at Apartments: it parks on the last street, by a fo
       const last = Math.max(...layout.roads);
       expect(terminus!.halt.y).toBe((last + 2.5) * T);
       expect(terminus!.halt.x).toBeGreaterThanOrEqual(32);
-      expect(terminus!.halt.x).toBeLessThanOrEqual(layout.width * T - 32);
+      expect(terminus!.halt.x).toBeLessThanOrEqual(
+        townHarbourLot(layout).streetEnd * T - 32,
+      );
       // Its door (facing right, parked) opens onto the footpath's kerb.
       expect(townBusDoor(terminus!.halt, "right", terminus!.kerb.y)).toEqual(
         terminus!.kerb,
@@ -298,12 +303,13 @@ test("the bus drives from Apartments to each stop with riders by road, waits the
           moving: false,
           doors: false,
         });
-      // It never leaves the map or the roads, and never jumps.
+      // It never leaves the map or the roads (the streets end at the
+      // harbour's promenade), and never jumps.
       let previous = pose(0);
       for (let s = 0; s <= TRIP / 1000; s += 0.1) {
         const now = pose(s);
         expect(now.x).toBeGreaterThanOrEqual(0);
-        expect(now.x).toBeLessThanOrEqual(layout.width * T);
+        expect(now.x).toBeLessThanOrEqual(townHarbourLot(layout).streetEnd * T);
         expect(now.y).toBeGreaterThanOrEqual(0);
         expect(now.y).toBeLessThanOrEqual(layout.height * T);
         // Its lanes, or the pavement where a side road meets a street.

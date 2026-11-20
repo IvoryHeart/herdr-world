@@ -1,0 +1,458 @@
+/* The warehouse (TownWarehouse.tsx), in Town's pixel skin: a wooden
+   shop sign under the eave with the counts, and a painted crate per pull
+   request on the yard's setts, strapped and stencilled for its state
+   (townHarbourArt.ts). Popovers portal out
+   of Town, so they use literal colours. */
+
+.town-world .town-warehouse-sign,
+.town-world .town-warehouse-yard {
+  --crate-ready: #5fbf5a;
+  --crate-failing: #d4252b;
+  --crate-waiting: #ffd166;
+  --crate-unknown: #9aa3ad;
+  --crate-draft: #e8e2d0;
+}
+
+/* The sign hangs from the eave, keeping a readable size as the town zooms,
+   like the city billboard. It hangs from the eave's right end and grows
+   left, over the land, so zoomed out it never covers the lanes' flags. */
+.town-world .town-warehouse-sign {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 96px;
+  padding: 3px 7px 4px;
+  color: #ffe9c2;
+  background: #6e4a2e;
+  border: 2px solid #3b2414;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1px #8a5a34,
+    0 2px 0 #3b2414;
+  transform: translate(-100%, -100%) scale(clamp(0.5, var(--iz), 2.4));
+  transform-origin: 100% 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  image-rendering: pixelated;
+}
+
+.town-world .town-warehouse-sign:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+.town-warehouse-sign-title {
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #ffd166;
+}
+
+/* Counts wrap after ready, failing and waiting, so the sign stays about
+   the house's width. */
+.town-warehouse-sign-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1px 6px;
+  /* The sign sizes to its content, so without a width each count would
+     take its own line. */
+  width: max-content;
+  max-width: 176px;
+  font-weight: 600;
+  white-space: normal;
+  text-align: center;
+}
+
+.town-warehouse-sign-counts > span {
+  white-space: nowrap;
+}
+
+.town-warehouse-sign-counts i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 3px;
+  vertical-align: 1px;
+  border: 1px solid #1c1722;
+}
+
+.town-warehouse-sign-counts [data-state="ready"] i {
+  background: var(--crate-ready);
+}
+.town-warehouse-sign-counts [data-state="failing"] i {
+  background: var(--crate-failing);
+}
+.town-warehouse-sign-counts [data-state="waiting"] i {
+  background: var(--crate-waiting);
+}
+.town-warehouse-sign-counts [data-state="unknown"] i {
+  background: var(--crate-unknown);
+}
+.town-warehouse-sign-counts [data-state="draft"] i {
+  background: var(--crate-draft);
+}
+
+/* Closed or opening: the sign is quiet, no counts that look like data. */
+.town-world .town-warehouse-sign[data-quiet] .town-warehouse-sign-counts {
+  font-weight: 400;
+  color: #d8c8a8;
+}
+
+/* The yard lies on the painted planks; parcels stand in its slots. */
+.town-world .town-warehouse-yard {
+  position: absolute;
+  pointer-events: none;
+}
+
+.town-world .town-warehouse-parcel,
+.town-warehouse-icon {
+  position: absolute;
+  width: 16px;
+  height: 13px;
+  padding: 0;
+  background: transparent no-repeat 0 0 / 16px 13px;
+  border: 0;
+  filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.25));
+  image-rendering: pixelated;
+}
+
+.town-world .town-warehouse-parcel {
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    left 0.35s ease,
+    top 0.35s ease;
+}
+
+/* A ready crate glints: it can be merged. */
+.town-world .town-warehouse-parcel[data-state="ready"] {
+  filter: drop-shadow(0 0 1px #fff4b8) drop-shadow(0 2px 0 rgb(0 0 0 / 0.3));
+}
+/* A draft is planks on a pallet, not yet a crate: muted. */
+.town-world .town-warehouse-parcel[data-state="draft"] {
+  opacity: 0.75;
+}
+
+.town-world .town-warehouse-parcel:hover,
+.town-world .town-warehouse-parcel:focus-visible {
+  z-index: 2;
+}
+
+.town-world .town-warehouse-parcel:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 1px;
+}
+
+/* Hover or focus names the parcel above it, readable at any zoom. */
+.town-warehouse-label {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  display: none;
+  gap: 1px;
+  width: max-content;
+  max-width: 240px;
+  padding: 3px 6px;
+  color: #f1efe6;
+  background: #1b2230;
+  border: 2px solid #6e4a2e;
+  border-radius: 2px;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: left;
+  white-space: normal;
+  transform: translateX(-50%) scale(clamp(0.6, var(--iz), 2.4));
+  transform-origin: 50% 100%;
+  pointer-events: none;
+}
+
+.town-warehouse-label b {
+  display: block;
+  font-weight: 700;
+}
+
+.town-warehouse-label span {
+  display: block;
+  color: #a9b2a4;
+}
+
+.town-world .town-warehouse-parcel:hover .town-warehouse-label,
+.town-world .town-warehouse-parcel:focus-visible .town-warehouse-label {
+  display: grid;
+}
+
+/* Parcels beyond the yard: a pile with its count. */
+.town-world .town-warehouse-pile {
+  position: absolute;
+  width: 18px;
+  height: 14px;
+  padding: 0;
+  color: #2a1a04;
+  background: #ffd166;
+  border: 1px solid #1c1722;
+  border-radius: 2px;
+  box-shadow:
+    -2px -2px 0 -1px #c8915a,
+    -2px -2px 0 0 #1c1722;
+  font:
+    700 8px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.town-world .town-warehouse-pile:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 1px;
+}
+
+/* Leaving: a merged crate is lifted and carried off to the quay, loaded
+   for the next release; any other just fades. Calm or reduced motion:
+   it is simply gone. */
+.town-world .town-warehouse-parcel[data-leaving] {
+  z-index: 3;
+  pointer-events: none;
+  animation: town-warehouse-gone 0.6s ease-in forwards;
+}
+
+.town-world .town-warehouse-parcel[data-leaving="loaded"] {
+  animation: town-warehouse-loaded 1.4s ease-in forwards;
+}
+
+@keyframes town-warehouse-loaded {
+  0% {
+    transform: none;
+    opacity: 1;
+  }
+  25% {
+    transform: translateY(-10px) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(200px, -12px) scale(0.6);
+    opacity: 0;
+  }
+}
+
+@keyframes town-warehouse-gone {
+  to {
+    opacity: 0;
+  }
+}
+
+.town-shell[data-calm="true"] .town-warehouse-parcel[data-leaving] {
+  display: none;
+}
+
+.town-shell[data-calm="true"] .town-world .town-warehouse-parcel {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-world .town-warehouse-parcel[data-leaving] {
+    display: none;
+  }
+  .town-world .town-warehouse-parcel {
+    transition: none;
+  }
+}
+
+.town-warehouse-announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Folded: a wooden plate on the town center, like the billboard's. */
+.town-world .town-warehouse-fold {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 6px;
+  color: #ffe9c2;
+  background: #6e4a2e;
+  border: 2px solid #3b2414;
+  border-radius: 4px;
+  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.town-world .town-warehouse-fold:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+/* A crate, the folded sign's and the card's mark. */
+.town-warehouse-mark {
+  position: relative;
+  flex: none;
+  display: inline-block;
+  width: 16px;
+  height: 13px;
+  background: transparent no-repeat 0 0 / 16px 13px;
+  image-rendering: pixelated;
+}
+
+.town-warehouse-popover-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.town-warehouse-fold-counts {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.town-warehouse-fold-counts b {
+  min-width: 12px;
+  padding: 0 2px;
+  color: #1c1722;
+  border-radius: 2px;
+  text-align: center;
+}
+
+.town-warehouse-fold-counts [data-state="ready"] {
+  background: #5fbf5a;
+}
+.town-warehouse-fold-counts [data-state="failing"] {
+  background: #d4252b;
+  color: #fff;
+}
+.town-warehouse-fold-counts [data-state="waiting"] {
+  background: #ffd166;
+}
+
+/* The folded sign's and the pile's list. */
+.popover-content.town-warehouse-popover {
+  z-index: 6100;
+  display: grid;
+  gap: 6px;
+  width: min(320px, calc(100vw - 16px));
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  padding: 8px 10px;
+  color: #f1efe6;
+  background: #1b2230;
+  border: 3px solid #6e4a2e;
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 2px #3b2414,
+    0 3px 0 #3b2414;
+  font-size: 12px;
+}
+
+.town-warehouse-popover-title {
+  font:
+    700 11px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #ffd166;
+}
+
+.town-warehouse-popover-counts,
+.town-warehouse-popover-note {
+  margin: 0;
+  color: #a9b2a4;
+}
+
+.town-warehouse-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.town-warehouse-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  column-gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 4px 4px 2px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.town-warehouse-row:hover,
+.town-warehouse-row:focus-visible {
+  background: #273141;
+}
+
+.town-warehouse-row:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: -2px;
+}
+
+.town-warehouse-row .town-warehouse-icon {
+  position: relative;
+  grid-row: span 2;
+  align-self: center;
+  margin-left: 2px;
+}
+
+.town-warehouse-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.town-warehouse-row-why {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #a9b2a4;
+}
+
+.town-warehouse-setup,
+.town-warehouse-all {
+  justify-self: start;
+  min-height: 28px;
+  padding: 2px 10px;
+  color: #2a1a04;
+  background: #ffd166;
+  border: 1px solid #3b2414;
+  border-radius: 2px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Opens the Work lens (#887); a full touch target, as the rows are. */
+.town-warehouse-all {
+  min-height: 36px;
+}
