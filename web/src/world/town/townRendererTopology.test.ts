@@ -122,3 +122,22 @@ test("a building that leaves while it rises sinks from where it was", () => {
   expect(lowest).toBeLessThan(before);
   expect(view.container.destroyed).toBe(true);
 });
+
+test("a drawing rebaked while it rises stays under its replacement until the rise ends", () => {
+  const { topology, view, change } = arriving();
+  // A desk changes 250 ms into the rise, with no host coming or going: the
+  // replacement fades in over the rest of the rise (until 0.8 s), so the old
+  // drawing must stay under it as long, not only for a plain rebake's fade.
+  change([a, b]);
+  topology.replaceBuilding(b.hostKey, false);
+  let elapsed = 0.25;
+  while (elapsed < 0.75) {
+    topology.step(0.05);
+    elapsed += 0.05;
+    expect(view.container.destroyed).toBe(false);
+  }
+  expect(view.container.scale.y).toBeCloseTo(heightAt(elapsed), 5);
+  topology.step(0.05);
+  topology.step(0.05);
+  expect(view.container.destroyed).toBe(true);
+});

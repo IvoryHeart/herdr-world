@@ -396,12 +396,18 @@ export function createTownTopology(ctx: TownTopologyContext) {
     view.container.zIndex -= 0.5;
     const sink = next ? undefined : plan?.sink.get(hostKey);
     if (sink !== undefined) stats.hostDepartures += 1;
+    // The leaving drawing and its replacement glide and crossfade in step:
+    // both last until a carried rise ends, so the old one is never removed
+    // while the new one is still fading in over it.
+    const seconds =
+      rise === null
+        ? planSeconds()
+        : Math.max(planSeconds(), rise + TOWN_HOST_RISE_SECONDS);
     retiring.push({
       kind: "building",
       view,
       t: 0,
-      seconds:
-        sink === undefined ? planSeconds() : sink + TOWN_HOST_SINK_SECONDS,
+      seconds: sink === undefined ? seconds : sink + TOWN_HOST_SINK_SECONDS,
       sink: sink ?? null,
       rise,
       dusted: false,
@@ -427,13 +433,8 @@ export function createTownTopology(ctx: TownTopologyContext) {
         dy: (view.y - next.y) * T + at.y,
         enter: false,
         crossfade: true,
-        ...(rise === null
-          ? { seconds: planSeconds() }
-          : {
-              rise,
-              dusted,
-              seconds: Math.max(planSeconds(), rise + TOWN_HOST_RISE_SECONDS),
-            }),
+        seconds,
+        ...(rise === null ? {} : { rise, dusted }),
       });
   };
 
