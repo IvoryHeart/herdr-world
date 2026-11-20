@@ -10,9 +10,11 @@ const chrome =
 const root = resolve(import.meta.dir, "../..");
 type Result = { mounted: boolean; entry: string | null; errors: string[] };
 
-test.skipIf(!chrome).each([false, true])(
-  "the real application entry mounts and consumes its switch (title-spinner preview: %s)",
-  async (spinnerPreview) => {
+test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
+  "the real application entry mounts and consumes its switch (%s)",
+  async (preview) => {
+    const spinnerPreview = preview === "title-spinner";
+    const boardPreview = preview === "board-text";
     const artifacts = join(root, ".agents/delivery");
     await mkdir(artifacts, { recursive: true });
     const directory = await mkdtemp(join(artifacts, "app-startup-"));
@@ -106,11 +108,56 @@ test.skipIf(!chrome).each([false, true])(
               if(task.textContent!=='π Review results')errors.push('Real task change lost');
               report(errors.length===0);
             };
+            const boardText=async()=>{
+              const query=()=>document.querySelector('.board-sketch-edit');
+              const saved=()=>document.querySelector('[aria-label="Saved drawing text"]').textContent;
+              const frame=()=>new Promise(requestAnimationFrame);
+              const waitFor=condition=>new Promise(resolve=>{
+                if(condition()){resolve();return;}
+                const observer=new MutationObserver(()=>{if(condition()){observer.disconnect();resolve();}});
+                observer.observe(document.getElementById('root'),{subtree:true,childList:true,characterData:true,attributes:true});
+              });
+              const edit=async id=>{
+                document.querySelector('[data-hit="'+id+'"]').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));
+                await frame();
+              };
+              const type=async text=>{
+                Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(query(),text);
+                query().dispatchEvent(new Event('input',{bubbles:true}));
+                await frame();
+              };
+              const click=async label=>{
+                const button=[...document.querySelectorAll('button')].find(button=>button.textContent===label);
+                const event=new PointerEvent('pointerdown',{bubbles:true,cancelable:true});
+                button.dispatchEvent(event);
+                if(!event.defaultPrevented)throw new Error('Fixture control would blur the active editor');
+                button.click();
+                await frame();
+              };
+              const save=()=>query().dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true}));
+              if(new URL(location.href).searchParams.has('boardTextConflictFixture'))throw new Error('Preview switch retained');
+              if(new URL(location.href).searchParams.get('keep')!=='yes')throw new Error('Other query parameter lost');
+              await edit('a');await type('Draft A');
+              await click('Other client changes A');
+              await edit('b');await type('Draft B');
+              await click('Finish pending save');
+              if(query()?.value!=='Draft B')throw new Error('A refusal replaced B');
+              if(!saved().includes('Other client A'))throw new Error('Remote A was overwritten');
+              save();
+              await waitFor(()=>query()?.value==='Draft A'&&saved().includes('Draft B'));
+              save();
+              await waitFor(()=>!query()&&saved().includes('Draft A'));
+              report(true);
+            };
             const inspect=()=>{
               const boundary=document.querySelector('#root > pre');
               if(boundary){errors.push(boundary.textContent);report(false);return;}
               if(${spinnerPreview} && document.querySelector('[data-testid="task-title"]')){
                 if(!previewStarted){previewStarted=true;preview().catch(error=>{errors.push(String(error));report(false);});}
+                return;
+              }
+              if(${boardPreview} && document.querySelector('[data-hit="a"]')){
+                if(!previewStarted){previewStarted=true;boardText().catch(error=>{errors.push(String(error));report(false);});}
                 return;
               }
               if(document.querySelector('#root .world-foundation-shell')){setTimeout(()=>report(true),250);return;}
@@ -144,7 +191,11 @@ test.skipIf(!chrome).each([false, true])(
           "--window-size=1440,900",
           `--user-data-dir=${join(directory, "profile")}`,
           ...SWIFTSHADER_FLAGS,
-          spinnerPreview ? address + "?titleSpinnerFixture&keep=yes" : address,
+          spinnerPreview
+            ? address + "?titleSpinnerFixture&keep=yes"
+            : boardPreview
+              ? address + "?boardTextConflictFixture&keep=yes"
+              : address,
         ],
         { stdout: "ignore", stderr: "ignore" },
       );

@@ -1225,9 +1225,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     device since Board opened; a drawing changed elsewhere since is left
     alone, with a notice. A move, resize or text edit of a drawing someone
     changed elsewhere meanwhile is refused with the same notice and their
-    version stays; typed text reopens on their version, so nothing typed is
-    lost. Drawings are saved with the board on the World
-    service (at most 1,000; a stroke keeps at most 2,000 points, simplified
+    version stays; typed text reopens on their version. If you have already
+    started another text edit, it stays open and the refused drafts reopen in
+    turn when you finish it, so nothing typed is lost. Drawings are saved with
+    the board on the World service (at most 1,000; a stroke keeps at most 2,000 points, simplified
     as it is drawn) and are visual only: an arrow never sends anything to an
     agent. Issues and pull requests are reached through their agent's tab
     card. A phone shows drawings but has no drawing tools; drawings there
