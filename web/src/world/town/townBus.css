@@ -154,34 +154,79 @@
   background: rgb(0 0 0 / 0.22);
 }
 .town-bin-rider:not([data-out]),
-.town-bin-rider[data-boarded],
+.town-bin-rider[data-ride="aboard"],
+.town-bin-rider[data-ride="home"],
 .town-bin-rider[data-queued] {
   visibility: hidden;
 }
+/* Stepping on and off, in front of the bus it boards or leaves. */
+.town-bin-rider[data-ride="boarding"],
+.town-bin-rider[data-ride="alighting"] {
+  z-index: 4;
+}
 
 /*
- * A red London double-decker, side on: two decks of windows (where its
- * riders sit), a dark destination blind at the front and two wheels. It
- * faces its way along the street (data-facing).
+ * A red London double-decker (TownBusLayer). Its anchor is the middle of
+ * its lanes; it shows side on along a street (data-facing left or right),
+ * from the front coming down a side road and from the back going up one,
+ * leaning a little into its corners (--tilt). Side on, two decks of windows
+ * (where its riders sit), a front door that folds open at a stop
+ * (data-doors), headlights and brake lights (brighter braking, and while
+ * stopped) and wheels that turn while it moves (data-moving).
  */
 .town-bus {
+  --red: #d4252b;
+  --red-dark: #9e1a1f;
+  --cream: #f6f2e6;
+  --glass: #bfe3f2;
+  --ink: #3b3b3b;
   position: absolute;
   left: 0;
   top: 0;
   z-index: 3;
   width: 62px;
-  height: 42px;
-  margin: -34px 0 0 -31px;
+  height: 46px;
+  margin: -36px 0 0 -31px;
   padding: 0;
-  background: linear-gradient(#d4252b 0 44%, #f6f2e6 44% 51%, #d4252b 51% 100%);
-  border: 2px solid #3b3b3b;
-  border-radius: 7px 10px 2px 2px;
-  box-shadow: 0 3px 0 -1px rgb(0 0 0 / 0.35);
+  background: none;
+  border: 0;
   cursor: pointer;
   pointer-events: auto;
-  transition: opacity 0.2s linear;
+}
+.town-bus[data-facing="up"],
+.town-bus[data-facing="down"] {
+  width: 30px;
+  height: 48px;
+  margin: -40px 0 0 -15px;
 }
 .town-bus[hidden] {
+  display: none;
+}
+.town-bus-side,
+.town-bus-end {
+  position: absolute;
+  inset: 0 0 4px;
+  rotate: var(--tilt, 0deg);
+  transform-origin: 50% 100%;
+}
+.town-bus-side {
+  background: linear-gradient(
+    var(--red) 0 44%,
+    var(--cream) 44% 51%,
+    var(--red) 51% 92%,
+    var(--red-dark) 92%
+  );
+  border: 2px solid var(--ink);
+  border-radius: 7px 10px 2px 2px;
+  box-shadow: 0 3px 0 -1px rgb(0 0 0 / 0.35);
+}
+.town-bus[data-facing="left"] .town-bus-side {
+  scale: -1 1;
+}
+.town-bus[data-facing="up"] .town-bus-side,
+.town-bus[data-facing="down"] .town-bus-side,
+.town-bus[data-facing="left"] .town-bus-end,
+.town-bus[data-facing="right"] .town-bus-end {
   display: none;
 }
 .town-bus-deck {
@@ -191,12 +236,17 @@
   top: 3px;
   height: 11px;
   overflow: hidden;
-  background: repeating-linear-gradient(90deg, #bfe3f2 0 9px, #d4252b 9px 11px);
+  background: repeating-linear-gradient(
+    90deg,
+    var(--glass) 0 9px,
+    var(--red) 9px 11px
+  );
   border-radius: 1px;
 }
 .town-bus-lower {
-  top: 21px;
-  right: 14px;
+  top: 22px;
+  left: 14px;
+  right: 15px;
 }
 /* A rider in a window: head and shoulders over the sill. */
 .town-bus-passenger {
@@ -210,8 +260,8 @@
 .town-bus-passenger[data-boarded] {
   visibility: visible;
 }
-/* The destination blind above the windscreen, and the windscreen. */
-.town-bus::before {
+/* The destination blind over the windscreen, and the windscreen. */
+.town-bus-side::before {
   content: "";
   position: absolute;
   right: 1px;
@@ -220,23 +270,130 @@
   height: 4px;
   background: #222;
   box-shadow:
-    0 6px 0 #bfe3f2,
-    0 18px 0 #bfe3f2;
+    0 6px 0 var(--glass),
+    0 19px 0 var(--glass);
 }
-/* The wheels. */
-.town-bus::after {
+/* Headlight at the front, brake light at the back. */
+.town-bus-side::after {
   content: "";
   position: absolute;
-  left: 8px;
-  bottom: -6px;
+  right: -1px;
+  bottom: 5px;
+  width: 3px;
+  height: 3px;
+  background: #ffe08a;
+  box-shadow: -57px 0 0 #7a1414;
+}
+.town-bus[data-braking] .town-bus-side::after,
+.town-bus[data-stopped] .town-bus-side::after {
+  box-shadow:
+    -57px 0 0 #ff3b30,
+    -59px 0 4px #ff3b30;
+}
+/* The front door, behind the front wheel: two glass leaves that fold back. */
+.town-bus-door {
+  position: absolute;
+  right: 3px;
+  top: 21px;
+  width: 9px;
+  height: 15px;
+  background: #2b2430;
+  border: 1px solid var(--ink);
+  border-bottom: 0;
+}
+.town-bus-door::before,
+.town-bus-door::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  background: linear-gradient(var(--glass) 0 70%, var(--red-dark) 70%);
+  transition: scale 0.6s ease-in-out;
+}
+.town-bus-door::before {
+  left: 0;
+  transform-origin: 0 50%;
+  border-right: 1px solid var(--ink);
+}
+.town-bus-door::after {
+  right: 0;
+  transform-origin: 100% 50%;
+}
+.town-bus[data-doors] .town-bus-door::before,
+.town-bus[data-doors] .town-bus-door::after {
+  scale: 0.2 1;
+}
+/* The wheels, with a hub that turns while it moves. */
+.town-bus-wheel {
+  position: absolute;
+  right: 12px;
+  bottom: -7px;
   width: 9px;
   height: 9px;
-  background: #222;
+  box-sizing: border-box;
+  background: conic-gradient(#555 0 25%, #222 0 50%, #555 0 75%, #222 0);
+  border: 2px solid #222;
   border-radius: 50%;
-  box-shadow: 32px 0 0 #222;
 }
-.town-bus[data-facing="left"] {
-  scale: -1 1;
+.town-bus-wheel-back {
+  right: auto;
+  left: 7px;
+}
+.town-bus[data-moving] .town-bus-wheel {
+  animation: town-bus-wheel 0.4s linear infinite;
+}
+@keyframes town-bus-wheel {
+  to {
+    rotate: 1turn;
+  }
+}
+/*
+ * Head on, coming down a side road: two windscreens, the cream band, the
+ * destination blind and headlights over a bumper. From behind, going up
+ * one: small rear windows, brake lights and a plate.
+ */
+.town-bus-end {
+  border: 2px solid var(--ink);
+  border-radius: 8px 8px 3px 3px;
+  box-shadow: 0 3px 0 -1px rgb(0 0 0 / 0.35);
+}
+.town-bus[data-facing="down"] .town-bus-end {
+  background:
+    linear-gradient(#222, #222) 50% 3px / 18px 5px no-repeat,
+    linear-gradient(var(--glass), var(--glass)) 50% 10px / 20px 9px no-repeat,
+    linear-gradient(var(--glass), var(--glass)) 50% 26px / 20px 8px no-repeat,
+    radial-gradient(circle, #ffe08a 0 2px, transparent 2.5px) 2px 36px / 6px 6px
+    no-repeat,
+    radial-gradient(circle, #ffe08a 0 2px, transparent 2.5px) 18px 36px / 6px
+    6px no-repeat,
+    linear-gradient(
+      var(--red) 0 44%,
+      var(--cream) 44% 50%,
+      var(--red) 50% 88%,
+      #3b3b3b 88%
+    );
+}
+.town-bus[data-facing="up"] .town-bus-end {
+  background:
+    linear-gradient(var(--glass), var(--glass)) 50% 6px / 16px 7px no-repeat,
+    linear-gradient(var(--glass), var(--glass)) 50% 24px / 12px 5px no-repeat,
+    linear-gradient(#ffd54a, #ffd54a) 50% 33px / 10px 3px no-repeat,
+    radial-gradient(circle, #7a1414 0 2px, transparent 2.5px) 2px 34px / 6px 6px
+    no-repeat,
+    radial-gradient(circle, #7a1414 0 2px, transparent 2.5px) 18px 34px / 6px
+    6px no-repeat,
+    linear-gradient(
+      var(--red) 0 44%,
+      var(--cream) 44% 50%,
+      var(--red) 50% 88%,
+      #3b3b3b 88%
+    );
+}
+.town-bus[data-facing="up"][data-braking] .town-bus-end {
+  box-shadow:
+    0 3px 0 -1px rgb(0 0 0 / 0.35),
+    inset 0 -12px 6px -8px #ff3b30;
 }
 /* Stopped: its hazard lights blink until it goes on. */
 .town-bus[data-stopped] {
@@ -249,9 +406,17 @@
     outline-color: transparent;
   }
 }
+.town-bus:focus-visible {
+  outline: 2px dashed #ffd54a;
+  outline-offset: 2px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .town-bus[data-stopped] {
     animation: none;
+  }
+  .town-bus-door::before,
+  .town-bus-door::after {
+    transition: none;
   }
 }

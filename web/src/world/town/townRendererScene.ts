@@ -140,7 +140,8 @@ export function townOutdoor(
         add(sprites.lamp, lamp.x * T + 5, lamp.y * T - 22, lamp.y * T + 8),
     });
   // The pole stands just right of where the stop's first rider waits.
-  for (const stop of townBusRoute(layout).stops)
+  const route = townBusRoute(layout);
+  for (const stop of route.stops)
     outdoorItems.push({
       x: stop.wait.x,
       y: stop.wait.y,
@@ -153,6 +154,20 @@ export function townOutdoor(
             stop.wait.y - TOWN_BUS_STOP_SIGN.height,
             stop.wait.y + 1,
           ),
+        ),
+    });
+  // Apartments' stop, where every bus ends (townBus.ts), stands the same way.
+  const terminus = route.terminus?.sign;
+  if (terminus)
+    outdoorItems.push({
+      x: terminus.x,
+      y: terminus.y,
+      place: () =>
+        add(
+          sprites.busTerminus,
+          terminus.x + 1,
+          terminus.y - TOWN_BUS_STOP_SIGN.height,
+          terminus.y + 1,
         ),
     });
   for (const bush of layout.bushes)

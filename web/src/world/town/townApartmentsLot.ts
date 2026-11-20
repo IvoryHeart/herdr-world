@@ -6,8 +6,11 @@
  * DOM layer hangs its sign (TownApartments.tsx).
  */
 
-import type { TownLayout } from "./townLayout";
+import type { TownLayout, TownPoint } from "./townLayout";
 import { MARGIN } from "./townLots";
+
+/** World pixels a tile (townLayout's TOWN_TILE, which imports this file). */
+const T = 16;
 
 /** The house's width in tiles. */
 export const TOWN_APARTMENTS_WIDTH = 8;
@@ -51,4 +54,20 @@ export function townApartmentsReserve(lot: TownApartmentsLot) {
     x1: lot.x + lot.w + 1,
     y1: lot.y + lot.h,
   };
+}
+
+/**
+ * The footpath's column (layoutTown paints it), on the house's plaza side:
+ * from the bus's stop on the street above down its lawn to the plaza's walk.
+ */
+export function townApartmentsPathColumn(
+  lot: TownApartmentsLot,
+  plaza: TownPoint,
+) {
+  return lot.x < plaza.x ? lot.x + lot.w : lot.x - 1;
+}
+
+/** Where an agent goes in at the front door, in world pixels. */
+export function townApartmentsDoor(lot: TownApartmentsLot): TownPoint {
+  return { x: (lot.x + lot.w / 2) * T, y: (lot.y + lot.h) * T - 4 };
 }

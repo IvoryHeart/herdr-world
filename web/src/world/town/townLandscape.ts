@@ -234,9 +234,13 @@ function reservedLand(layout: TownLayout) {
     layout.plaza.x + 3,
     layout.plaza.y + 2,
   );
-  for (const stop of townBusRoute(layout).stops) {
-    const sx = Math.floor(stop.wait.x / T);
-    const sy = Math.floor(stop.wait.y / T);
+  const route = townBusRoute(layout);
+  for (const sign of [
+    ...route.stops.map((stop) => stop.wait),
+    ...(route.terminus?.sign ? [route.terminus.sign] : []),
+  ]) {
+    const sx = Math.floor(sign.x / T);
+    const sy = Math.floor(sign.y / T);
     reserve(sx - 2, sy - 5, sx + 3, sy + 2);
   }
   const post = townPostLot(layout);

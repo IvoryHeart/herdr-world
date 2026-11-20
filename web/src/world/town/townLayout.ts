@@ -8,6 +8,10 @@
  * step contains the previous one.
  */
 
+import {
+  townApartmentsLot,
+  townApartmentsPathColumn,
+} from "./townApartmentsLot";
 import { townCenterForecourt, type TownCenterLot } from "./townCenter";
 import { townPostLotBeside } from "./townPostLot";
 import {
@@ -783,6 +787,14 @@ export function layoutTown(
   for (let tx = MARGIN; tx < width - MARGIN; tx += 1)
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
+  // Apartments' footpath, from its bus stop on the last street down the
+  // house's lawn to the plaza's walk and its door (townBus.ts).
+  const apartments = townApartmentsLot({ plaza, width });
+  if (apartments) {
+    const column = townApartmentsPathColumn(apartments, plaza);
+    for (let ty = lastRoad + ROAD_GAP; ty < plaza.y; ty += 1)
+      set(column, ty, TownGround.walk);
+  }
 
   const post = formFactor === "narrow" ? null : townPostLotBeside(center);
   const lamps: TownPoint[] = [];

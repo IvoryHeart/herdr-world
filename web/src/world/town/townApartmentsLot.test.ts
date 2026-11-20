@@ -8,7 +8,11 @@ import {
   type TownInput,
   type TownShape,
 } from "./townLayout";
-import { townApartmentsLot, townApartmentsReserve } from "./townApartmentsLot";
+import {
+  townApartmentsLot,
+  townApartmentsPathColumn,
+  townApartmentsReserve,
+} from "./townApartmentsLot";
 import { MARGIN } from "./townLots";
 
 const town = (spec: Record<string, number[]>): TownInput => ({
@@ -50,10 +54,16 @@ test.each(towns)(
     expect(area.x1).toBeLessThanOrEqual(layout.width - MARGIN + 1);
     expect(lot.y).toBeGreaterThan(Math.max(...layout.roads) + 4);
     expect(lot.y + lot.h).toBe(layout.plaza.y);
-    // Only grass under it: no road, walk, plaza or building.
+    // Only grass under it: no road, walk, plaza or building, but for the
+    // footpath beside it from the bus's stop down to the plaza's walk.
+    const path = townApartmentsPathColumn(lot, layout.plaza);
     for (let ty = area.y0; ty < area.y1; ty += 1)
       for (let tx = area.x0; tx < area.x1; tx += 1)
-        expect(layout.ground[ty * layout.width + tx]).toBe(TownGround.grass);
+        expect(layout.ground[ty * layout.width + tx]).toBe(
+          tx === path && ty < layout.plaza.y
+            ? TownGround.walk
+            : TownGround.grass,
+        );
     // Nothing else stands on it.
     const inside = (x: number, y: number) =>
       x >= area.x0 && x < area.x1 && y >= area.y0 && y < area.y1;

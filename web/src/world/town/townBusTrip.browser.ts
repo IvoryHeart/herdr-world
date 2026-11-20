@@ -1,0 +1,162 @@
+import type { BinEntry, BinState } from "../../../../shared/bin";
+import { worldBinStore } from "../bin/useWorldBin";
+
+/**
+ * Town's bus in a real Town, its trip held still at each moment (a stopped
+ * bus's clock stands): it waits parked at Apartments, drives out to the
+ * rider's stop and opens its door there, carries the rider in its window,
+ * comes back to the same spot, and the rider walks in to Apartments, whose
+ * sign counts one more. `setBin` sets the fake service's bin, null for its
+ * own empty one.
+ */
+export async function checkTownBusTrip(
+  host: HTMLElement,
+  check: (condition: boolean, message: string) => void,
+  waitFor: (condition: () => boolean, message: string) => Promise<void>,
+  setBin: (bin: BinState | null) => void,
+  rider: Pick<
+    BinEntry,
+    | "connection_id"
+    | "connection_generation"
+    | "workspace_id"
+    | "tab_id"
+    | "pane_id"
+    | "terminal_id"
+  >,
+) {
+  const TRIP = 120_000;
+  const entry: BinEntry = {
+    ...rider,
+    id: "town-bus-trip-proof",
+    label: "bus proof",
+    view: "town",
+    riding: false,
+    preserve_tab: false,
+  };
+  let revision = 1_000;
+  const show = async (
+    elapsed: number | null,
+    riding: boolean,
+    over = false,
+  ) => {
+    revision += 1;
+    setBin({
+      epoch: "town-bus-trip",
+      revision,
+      entries: over ? [] : [{ ...entry, riding }],
+      closing: over ? [{ ...entry, riding }] : [],
+      outcomes: [],
+      bus: {
+        interval_ms: 240_000,
+        trip_ms: TRIP,
+        next_ms: riding ? 240_000 : 60_000,
+        elapsed_ms: elapsed,
+        stopped: elapsed !== null,
+        trip: riding ? 1 : null,
+      },
+    });
+    await worldBinStore().refresh();
+    // Town draws the change on its next frames.
+    for (let i = 0; i < 2; i += 1)
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+  };
+  const bus = () => host.querySelector<HTMLElement>(".town-bus");
+  const person = () =>
+    host.querySelector<HTMLElement>(".town-bin-rider[data-ride]");
+  const sign = () =>
+    host.querySelector<HTMLElement>(".town-apartments-sign[data-count]");
+  const at = () => {
+    const match = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(
+      bus()?.style.transform ?? "",
+    );
+    return match ? { x: Number(match[1]), y: Number(match[2]) } : null;
+  };
+
+  try {
+    await show(null, false);
+    await waitFor(
+      () => person() !== null && bus() !== null,
+      "a binned agent shows no rider or Town no bus",
+    );
+    await waitFor(
+      () => person()!.hasAttribute("data-out"),
+      "the binned agent never came out to its stop",
+    );
+    const parked = at();
+    check(
+      parked !== null && !bus()!.hidden,
+      "the bus is not parked on the map between trips",
+    );
+    check(
+      bus()!.dataset.facing === "right" && !bus()!.hasAttribute("data-moving"),
+      "the parked bus is not standing still facing the footpath",
+    );
+    const before = Number(sign()?.dataset.count ?? Number.NaN);
+    check(Number.isFinite(before), "Apartments' sign shows no count");
+
+    // The trip, a second at a time.
+    let away = 0;
+    let doorsAway = false;
+    let aboardMoving = false;
+    const seen = new Set<string>();
+    const sample = async (ms: number) => {
+      await show(ms, true);
+      const now = at();
+      check(
+        now !== null && !bus()!.hidden,
+        `the bus vanished ${ms / 1000} s into its trip`,
+      );
+      const moved = Math.hypot(now!.x - parked!.x, now!.y - parked!.y);
+      away = Math.max(away, moved);
+      if (moved > 40 && bus()!.hasAttribute("data-doors")) doorsAway = true;
+      const ride = person()?.dataset.ride ?? "gone";
+      seen.add(ride);
+      if (
+        ride === "aboard" &&
+        host.querySelector(".town-bus-passenger[data-boarded]")
+      )
+        aboardMoving = true;
+      return ride;
+    };
+    let last = "queue";
+    for (let ms = 0; ms < TRIP; ms += 1_000) {
+      const ride = await sample(ms);
+      // A rider at the kerb boards in well under a second: look closer.
+      if (last === "queue" && ride !== "queue" && !seen.has("boarding"))
+        for (let fine = Math.max(0, ms - 900); fine < ms; fine += 100)
+          await sample(fine);
+      last = ride;
+    }
+    check(away > 40, "the bus never drove out to the rider's stop");
+    check(doorsAway, "the bus never opened its door away from Apartments");
+    check(aboardMoving, "the rider never showed in the bus's window");
+    for (const ride of ["queue", "boarding", "aboard", "alighting"])
+      check(seen.has(ride), `the rider was never seen ${ride}`);
+
+    // The last second: it is back where it started; the rider is in.
+    await show(TRIP - 200, true);
+    const back = at();
+    check(
+      back !== null && back.x === parked!.x && back.y === parked!.y,
+      `the bus ended its trip at ${JSON.stringify(back)}, not ${JSON.stringify(parked)}`,
+    );
+    check(person()?.dataset.ride === "home", "the rider is not in at the end");
+    await waitFor(
+      () => Number(sign()?.dataset.count) === before + 1,
+      `Apartments' sign did not count the rider in (${sign()?.dataset.count})`,
+    );
+    // The service closes it: nobody appears at Apartments or anywhere else.
+    await show(null, false, true);
+    check(
+      person() === null || person()!.dataset.ride !== "queue",
+      "the closed rider showed again at its stop",
+    );
+    check(
+      Number(sign()?.dataset.count) === before + 1,
+      "Apartments' count changed when the close came through",
+    );
+  } finally {
+    setBin(null);
+    await worldBinStore().refresh();
+  }
+}
