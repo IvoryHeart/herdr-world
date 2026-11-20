@@ -47,6 +47,9 @@ const maxFileCount = 212;
 // The Town harbour and warehouse (#1028) fit main alone, but main's Library
 // (#1082) grew under it: 15.42 MiB together, so 15.5 MiB, initial budgets
 // unchanged (2026-11-20).
+// Apartments (#1011: the resident search/history dialog, its store and Town's
+// apartment building) add about 18.7 KB to lazy chunks; startup budgets are
+// unchanged.
 const maxTotalBytes = 15.5 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };

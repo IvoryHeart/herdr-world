@@ -1,4 +1,5 @@
 import { handleAgentMoveRpc } from "./agent-move";
+import { handleApartmentsRpc } from "./apartments";
 import { planBoardPatch } from "../world/board-plan";
 import { parseObservationBase } from "../world/observation-v1";
 import { pruneSnapshotAppearance } from "../world/appearance-prune";
@@ -89,6 +90,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   )
     return handleCoreWatchRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
+  if (method.startsWith("world.apartments.")) return handleApartmentsRpc(rpc);
   if (method.startsWith("world.core.")) return handleCoreRpc(rpc);
   if (method.startsWith("world.float.")) return handleFloatRpc(rpc);
   if (method.startsWith("world.integration."))
