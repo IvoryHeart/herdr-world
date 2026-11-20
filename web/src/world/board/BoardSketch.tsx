@@ -113,6 +113,14 @@ const newShapeId = () =>
 const outlineOf = (kind: BoardShapeKind) =>
   kind === "ellipse" ? "ellipse" : kind === "diamond" ? "diamond" : "rect";
 
+type TextEdit = {
+  key: number;
+  shape: ShapeDraft;
+  created: boolean;
+  rev?: number;
+  text: string;
+};
+
 /**
  * What the pointer is doing, from press to release. A drag that changes a
  * drawing keeps the revision it began from (`rev`), so a newer version saved
@@ -163,15 +171,20 @@ export function useBoardSketch({
     setLiveState(shape);
   };
   /**
-   * The drawing whose text is being typed, the revision the edit began from
-   * and the text it opens with (typed text kept through a conflict).
+   * The active editor, followed by refused drafts waiting for it to finish.
+   * Each session has its own key, even when two drafts name the same drawing.
    */
-  const [editing, setEditing] = useState<{
-    shape: ShapeDraft;
-    created: boolean;
-    rev?: number;
-    text: string;
-  } | null>(null);
+  const [edits, setEdits] = useState<TextEdit[]>([]);
+  const editKeys = useRef(0);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const editing = edits[0] ?? null;
+  const startEdit = (edit: Omit<TextEdit, "key">) => {
+    // Drawing presses prevent default focus changes. Finish the textarea
+    // before replacing it, including text typed since its initial value.
+    editorRef.current?.blur();
+    const session = { ...edit, key: ++editKeys.current };
+    setEdits((was) => [session, ...was]);
+  };
   /** Changes on their way to the service, shown at once. */
   const [overrides, setOverrides] = useState(
     () => new Map<string, ShapeDraft | null>(),
@@ -315,7 +328,7 @@ export function useBoardSketch({
   const remove = (id: string, rev?: number) => {
     const all = current();
     const shape = all.find((s) => s.id === id);
-    if (!shape) return;
+    if (!shape) return Promise.resolve(true);
     const ops: ShapeOp[] = [{ op: "shape.delete", id, rev: rev || shape.rev }];
     // Arrows attached to it stay where they point now.
     for (const arrow of all) {
@@ -329,7 +342,7 @@ export function useBoardSketch({
       ops.push(put({ ...strip(arrow), ...arrowBox(from, to), from, to }));
     }
     setSelected(null);
-    change(ops);
+    return change(ops);
   };
   const point = (at: Point): BoardShapeEnd => ({
     x: Math.round(at.x * 10) / 10,
@@ -473,7 +486,7 @@ export function useBoardSketch({
     } else if (tool === "text") {
       event.stopPropagation();
       event.preventDefault();
-      setEditing({
+      startEdit({
         created: true,
         text: "",
         shape: {
@@ -515,48 +528,52 @@ export function useBoardSketch({
   const finishEdit = (text: string) => {
     if (!editing) return;
     const { shape, created, rev = 0 } = editing;
-    setEditing(null);
+    setEdits((was) => was.filter((edit) => edit.key !== editing.key));
     const value = text.replace(/\s+$/, "");
     let saved: Promise<boolean>;
     if (shape.kind === "text") {
       if (!value) {
-        if (!created) remove(shape.id, rev);
-        return;
+        if (created) return;
+        saved = remove(shape.id, rev);
+      } else {
+        setSelected(shape.id);
+        saved = change([
+          put({ ...shape, text: value, ...textBox(value) }, rev),
+        ]);
       }
-      setSelected(shape.id);
-      saved = change([put({ ...shape, text: value, ...textBox(value) }, rev)]);
     } else {
       if (value === (shape.text ?? "")) return;
       const rest: ShapeDraft = { ...shape };
       delete rest.text;
       saved = change([put(value ? { ...rest, text: value } : rest, rev)]);
     }
-    // Changed elsewhere while typing: the newer drawing stays and the editor
-    // opens again on it with the typed text, so nothing typed is lost.
+    // Keep every refused draft. Another editor may have opened while this
+    // save was pending; it finishes first, then this draft reopens in turn.
     void saved.then((ok) => {
       if (ok) return;
       const now = store.get().document?.shapes?.find((s) => s.id === shape.id);
-      // Not over another edit begun since.
-      setEditing(
-        (was) =>
-          was ?? {
-            shape: now ? strip(now) : shape,
-            created: !now,
-            ...(now ? { rev: now.rev } : {}),
-            text,
-          },
-      );
+      const key = ++editKeys.current;
+      setEdits((was) => [
+        ...was,
+        {
+          key,
+          shape: now ? strip(now) : shape,
+          created: !now,
+          ...(now ? { rev: now.rev } : {}),
+          text,
+        },
+      ]);
     });
   };
   const editShape = (shape: ShapeDraft) => {
     if (shape.kind === "pen" || shape.kind === "arrow") return;
-    setSelected(shape.id);
-    setEditing({
+    startEdit({
       shape,
       created: false,
       rev: revOf(shape.id),
       text: shape.text ?? "",
     });
+    setSelected(shape.id);
   };
 
   /* ---------- Keys and outside presses ---------- */
@@ -820,7 +837,8 @@ export function useBoardSketch({
   })();
   const editor = editing ? (
     <TextEditor
-      key={editing.shape.id}
+      key={editing.key}
+      inputRef={editorRef}
       shape={editing.shape}
       initial={editing.text}
       onDone={finishEdit}

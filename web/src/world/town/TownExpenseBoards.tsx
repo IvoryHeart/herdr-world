@@ -56,67 +56,32 @@ function Headline({
   );
 }
 
-/**
- * A board on its posts, or on a phone a sign that opens it: the boards stay
- * readable at any width.
- */
+/** A board on its posts, readable at any width. */
 function Board({
-  folded,
   label,
-  summary,
-  sign,
   className,
   style,
   boardRef,
   children,
 }: {
-  folded: boolean;
   label: string;
-  /** The headline figures in words, the folded sign's name. */
-  summary: string;
-  /** The folded sign's short text. */
-  sign: string;
   className: string;
   style?: CSSProperties;
-  /** The unfolded board, measured to keep other boards off it. */
+  /** The board, measured to keep other boards off it. */
   boardRef?: Ref<HTMLElement>;
   children: ReactNode;
 }) {
-  if (!folded)
-    return (
-      <section
-        ref={boardRef}
-        className={`town-expenses ${className}`}
-        style={style}
-        role="group"
-        aria-label={label}
-      >
-        <div className="town-expenses-panel">{children}</div>
-        <span className="town-expenses-posts" aria-hidden="true" />
-      </section>
-    );
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={`town-expenses-sign ${className}`}
-          style={style}
-          aria-label={`${label}: ${summary}. Open`}
-          title={label}
-        >
-          <Coins size={12} aria-hidden="true" />
-          <span>{sign}</span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="town-expenses-popover"
-        collisionPadding={8}
-        aria-label={label}
-      >
-        <div className="town-expenses-panel">{children}</div>
-      </PopoverContent>
-    </Popover>
+    <section
+      ref={boardRef}
+      className={`town-expenses ${className}`}
+      style={style}
+      role="group"
+      aria-label={label}
+    >
+      <div className="town-expenses-panel">{children}</div>
+      <span className="town-expenses-posts" aria-hidden="true" />
+    </section>
   );
 }
 
@@ -128,7 +93,7 @@ const townRoomText = (total: TownExpenseTotal) =>
       : ""
   }`;
 
-/** The figures in words, for the folded sign's name. */
+/** The figures in words, for a folded sign's name. */
 const spokenText = (expenses: TownCityExpenses | TownHostExpenses) =>
   expenses.status === "ready"
     ? townExpenseText(expenses.total)
@@ -141,7 +106,7 @@ const SIGN_WAITING = {
   "no-data": "no data",
 };
 
-/** The folded sign's few characters: the cost, else the tokens. */
+/** A folded sign's few characters: the cost, else the tokens. */
 const signText = (expenses: TownCityExpenses | TownHostExpenses) => {
   if (expenses.status !== "ready") return SIGN_WAITING[expenses.status];
   const { total } = expenses;
@@ -154,36 +119,27 @@ const signText = (expenses: TownCityExpenses | TownHostExpenses) => {
 /**
  * The city expenses billboard: the whole World's tokens and estimated cost,
  * today or over 7 days. It stands on the lawn above the town center, never
- * over it, or on a phone, where the center tops the stacked town, folds to a
- * sign in the center's empty corner beside its tower.
+ * over it, on a phone's stacked town too (#1033).
  */
 export function TownCityBillboard({
   center,
-  folded,
   boardRef,
   stores = townUsageStore,
 }: {
   center: TownCenterLot;
-  folded: boolean;
   boardRef?: Ref<HTMLElement>;
   stores?: (span: TownUsageWindow) => TownUsageStore;
 }) {
   const [span, setSpan] = useState<TownUsageWindow>("today");
   const expenses = townCityExpenses(useTownExpensesUsage(stores(span)));
-  const style = folded
-    ? { left: (center.x + 4) * T, top: (center.y + 2) * T }
-    : {
-        left: (center.x + center.w / 2) * T,
-        top: center.y * T - TOWN_CITY_BOARD_GAP,
-      };
   return (
     <Board
-      folded={folded}
       label="City expenses"
-      summary={`${TOWN_WINDOW_LABEL[span]} ${spokenText(expenses)}`}
-      sign={signText(expenses)}
       className="town-expenses-city"
-      style={style}
+      style={{
+        left: (center.x + center.w / 2) * T,
+        top: center.y * T - TOWN_CITY_BOARD_GAP,
+      }}
       boardRef={boardRef}
     >
       <header className="town-expenses-title">

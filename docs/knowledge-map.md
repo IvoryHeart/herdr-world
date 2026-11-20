@@ -7,6 +7,10 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 [World component routes](../web/src/world/README.md) for UI ownership, and the
 [style guide](design/style-guide.md) for visual work.
 
+For recent contract gaps and evidence boundaries, see the
+[November architecture audit](../verification/architecture-audit-2026-11.md) and
+[three model-selection questions](../verification/README.md#three-questions-before-choosing-a-model).
+
 | Area | Contract | Owning source | Focused tests |
 | --- | --- | --- | --- |
 | Code view (installed VS Code/code-server/OpenVSCode per project, same-origin proxy) | [Contract](../FEATURES.md#code-view), [research and gates](design/code-view/research.md), [OpenSpec change](../openspec/changes/world-code-view/proposal.md) | [View](../web/src/world/code/CodeView.tsx), [client](../web/src/world/code/ideClient.ts), [service](../server/src/ide/service.ts), [proxy](../server/src/ide/proxy.ts), [SSH hosts](../server/src/ide/remote.ts), [process cleanup](../server/src/ide/process-tree.ts) | [Browser test](../web/src/world/code/CodeView.browser.test.ts), [route test](../server/src/ide/ide-route.test.ts), [SSH scripts](../server/src/ide/remote.test.ts), [stop cleanup](../server/src/ide/instances.test.ts); `?ideFixture=` |
@@ -42,6 +46,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Inspector focus | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/useWorldInspectorWindows.ts) | [Tests](../web/src/chatFocus.test.ts) |
 | Optional cost metrics | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../server/src/world/observability.ts) | [Tests](../web/src/world/officeObservability.test.ts) |
 | Work sources and PR links | [Contract](../openspec/specs/world-surfaces/spec.md#requirement-built-in-sources) | [Source](../shared/worldSources.ts) | [Tests](../server/src/sources/github.test.ts) |
+| Shipyard release and deployment data | [Contract](../openspec/specs/world-shipyard/spec.md), [API and consumer mapping](shipyard-api.md) | [Service](../server/src/shipyard/service.ts), [GitHub acquisition](../server/src/shipyard/github.ts), [instances](../server/src/shipyard/instances.ts), [CLI](../server/src/cli/shipyard.ts) | [Graph/source tests](../server/src/shipyard/github.test.ts), [service tests](../server/src/shipyard/service.test.ts), [composed API/CLI](../server/src/service/shipyard.test.ts) |
 | Town view | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/TownView.tsx) | [Tests](../web/src/world/town/TownCanvas.test.ts) |
 | Board view | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/BoardView.tsx) | [Tests](../web/src/world/board/boardModel.test.ts) |
 | Board attention and moves | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/board/boardAttention.ts) | [Tests](../web/src/world/BoardView.test.ts) |

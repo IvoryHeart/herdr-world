@@ -5,21 +5,21 @@ implemented in PR 1. Architect-protocol confirmed the five verb/state/authority/
 recovery/dispatch conditions under #549, with wording to be made explicit there.
 
 
-- [Ask identity](../../../server/src/world/world-cli-actor.ts) verifies the caller's process
+- [Ask identity](../../../../server/src/world/world-cli-actor.ts) verifies the caller's process
   on supported local hosts and captures the reported asking session.
-  [Ask fingerprinting](../../../server/src/world/world-cli-asks.ts) hashes
+  [Ask fingerprinting](../../../../server/src/world/world-cli-asks.ts) hashes
   `[source, agent, kind, value]`. A claimed pane alone is not a verified asker.
-- [Chat's conversation source](../../../server/src/agent/herdr-conversation.ts) already
+- [Chat's conversation source](../../../../server/src/agent/herdr-conversation.ts) already
   checks conversation identity, unsettled deliveries, command-like input and
   the current agent before `agent.prompt`. It records outcome evidence and
   detects a session change during the send. Reuse this path; add no second
   agent-input queue and never fall back to `pane.send_input`.
-- [Conversation bindings](../../../server/src/agent/conversation-binding.ts) distinguish
+- [Conversation bindings](../../../../server/src/agent/conversation-binding.ts) distinguish
   reported sessions, Codex title bindings and guesses. Codex's title fingerprint
   is a different scheme from the raw reported-session hash. Never pass one
   scheme to a comparison expecting the other, or learn a new recipient from a
   later title, display name, directory or reused pane ID.
-- [The send-race tests](../../../server/src/agent/conversation-send-race.test.ts)
+- [The send-race tests](../../../../server/src/agent/conversation-send-race.test.ts)
   demonstrate that Herdr cannot atomically enforce the expected session when it
   queues a prompt. Last-moment checks and later evidence cannot eliminate that
   race. PR 2 must retain this limitation and classify ambiguous delivery honestly.
