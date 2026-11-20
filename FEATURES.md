@@ -1562,7 +1562,8 @@ the agent runs).
   list (with its harness, project, room and host) and larger in the opened
   resident. World keeps the avatar at move-in: the avatar chosen for its
   pane, else its profile's look, else the character Town drew for it, and
-  its tab's or room's colour. Herdr TUI and herdr-core residents look the
+  the colour Town showed: its tab's, else (a spawned agent) its parent's
+  tab's, else its room's. Herdr TUI and herdr-core residents look the
   same. A resident whose avatar was not kept (it moved in before World kept
   avatars) shows the nearest: its profile's look, else a profile of the same
   harness, else World's default character; hovering the avatar says which.

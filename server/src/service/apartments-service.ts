@@ -15,11 +15,19 @@ import {
   type TerminalColorName,
   workspaceColorKey,
 } from "../../../shared/terminalColor";
+import {
+  relationsOf,
+  type RelationsDocument,
+  type TerminalPlace,
+  terminalKey,
+  withInheritedColors,
+} from "../../../shared/relations";
 import type { WorldSourcesSnapshot } from "../../../shared/worldSources";
 import type { AgentSessionFileAccess } from "../agent/session-file-access";
 import type { ApartmentsPort } from "../storage/apartments";
 import { readApartmentHistory } from "../world/apartment-history";
 import {
+  type ApartmentHost,
   type ApartmentPane,
   type ApartmentTenant,
   WorldApartments,
@@ -59,8 +67,10 @@ export function createApartmentsService<Core extends CoreLease>(deps: {
     hostRuntime(lease: Core): CoreHost;
   } | null;
   sources?(): WorldSourcesSnapshot | null;
-  /** The saved avatars and colours (Board's document). */
-  board?(): { get(): AppearanceDocument };
+  /** The saved avatars, colours and spawn claims (Board's document). */
+  board?(): {
+    get(): AppearanceDocument & { relations?: RelationsDocument };
+  };
   /** The agent profiles World launches from. */
   profiles?(): { profile(id: string): AgentProfile | undefined };
   publish(revision: number): void;
@@ -109,14 +119,56 @@ export function createApartmentsService<Core extends CoreLease>(deps: {
     return found;
   };
   /**
+   * The saved colours plus the colours spawned tables inherit on this host,
+   * from the saved spawn claims and the panes' spawn tokens.
+   */
+  const inheritedColors = (
+    connectionId: string,
+    host: ApartmentHost,
+    document: AppearanceDocument & { relations?: RelationsDocument },
+  ) => {
+    const colors = document.layout.colors ?? {};
+    const relations = relationsOf(
+      { spawns: document.relations?.spawns ?? [], groups: [] },
+      [
+        {
+          connection_id: connectionId,
+          generation: host.generation,
+          current: true,
+          panes: host.panes,
+        },
+      ],
+    );
+    if (!relations.length) return colors;
+    const places = new Map<string, TerminalPlace>();
+    for (const pane of host.panes)
+      if (pane.workspace_id && pane.tab_id)
+        places.set(
+          terminalKey({
+            connection_id: connectionId,
+            terminal_id: pane.terminal_id,
+          }),
+          {
+            connectionId,
+            workspaceId: pane.workspace_id,
+            tabId: pane.tab_id,
+            paneId: pane.pane_id,
+            workspaceIds: host.workspace_ids,
+          },
+        );
+    return withInheritedColors(colors, relations, places);
+  };
+  /**
    * A host's live agents' looks, the way Town draws them
    * (web/src/world/town/townAppearance.ts): the avatar chosen for the pane,
-   * else its profile's look; and its table's colour.
+   * else its profile's look; and its table's colour, where a spawned table
+   * without its own shows its parent's (withInheritedColors, as every live
+   * view does).
    */
-  const appearance = (connectionId: string) => {
+  const appearance = (connectionId: string, host: ApartmentHost) => {
     const document = deps.board?.().get();
     if (!document) return null;
-    const colors = document.layout.colors ?? {};
+    const colors = inheritedColors(connectionId, host, document);
     return (pane: ApartmentPane): ApartmentAppearance => {
       const avatar = appearanceFor(document.appearance, {
         connection_id: connectionId,

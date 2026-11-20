@@ -143,3 +143,70 @@ test("a resident keeps its avatar, its profile and its table's colour", async ()
     },
   });
 });
+
+/**
+ * A spawned agent on a table without its own colour shows its parent's
+ * table colour in Town (withInheritedColors); its resident keeps that one,
+ * not its room's, whether the parent is named by its token or a saved claim.
+ */
+test("a spawned resident keeps the colour it inherited from its parent", async () => {
+  const room = (terminal: string, tab: string, tokens?: object) => ({
+    pane_id: `p-${terminal}`,
+    terminal_id: terminal,
+    workspace_id: "w1",
+    tab_id: tab,
+    agent: "claude",
+    ...(tokens ? { tokens } : {}),
+  });
+  const service = createApartmentsService({
+    port: memoryApartmentsPort([], () => NOW),
+    now: () => NOW,
+    tui: () => ({
+      has: (id) => id === "local",
+      list: () => [{ id: "local", label: "This computer" }],
+      readyRuntimeLease: () => null,
+    }),
+    core: () => null,
+    board: () => ({
+      get: () => ({
+        layout: { colors: { "local:w1": "pink", "local:tab1": "teal" } },
+        relations: {
+          spawns: [
+            {
+              child: { connection_id: "local", terminal_id: "t3" },
+              parent: { connection_id: "local", terminal_id: "t1" },
+              source: "test",
+              generation: 1,
+              observed_at: NOW - 5000,
+            },
+          ],
+          groups: [],
+        },
+      }),
+    }),
+    publish: () => {},
+    log: () => {},
+  });
+  const panes = [
+    room("t1", "tab1"),
+    // Named by its spawn token.
+    room("t2", "tab2", { spawned_by_terminal: "t1" }),
+    // Named by Board's saved claim only.
+    room("t3", "tab3"),
+    // Not spawned: its room's colour.
+    room("t4", "tab4"),
+  ];
+  const topology = { workspaces: [{ workspace_id: "w1", label: "alpha" }] };
+  service.fresh(() => {})("local", 1, panes, NOW - 1000, [], topology);
+  service.complete(() => {})("local", 1, []);
+  await service.apartments.settled();
+  const colors = Object.fromEntries(
+    service.apartments
+      .list()
+      .residents.map((resident) => [
+        resident.terminal_id,
+        resident.appearance?.color,
+      ]),
+  );
+  expect(colors).toEqual({ t1: "teal", t2: "teal", t3: "teal", t4: "pink" });
+});

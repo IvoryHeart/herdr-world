@@ -49,6 +49,27 @@ export type ApartmentPane = {
 };
 
 /**
+ * One pane of the observation the looks are read from: where it sits and its
+ * Herdr metadata, so a spawned agent's colour can come from its parent's
+ * table, as Town draws it.
+ */
+export type ApartmentHostPane = {
+  pane_id: string;
+  terminal_id: string;
+  workspace_id: string | null;
+  tab_id: string | null;
+  tokens?: unknown;
+};
+
+/** The observation the looks are read from. */
+export type ApartmentHost = {
+  generation: number;
+  panes: readonly ApartmentHostPane[];
+  /** The host's room IDs, which qualify a tab's colour key. */
+  workspace_ids: ReadonlySet<string>;
+};
+
+/**
  * What a runtime knows of a live agent's session now: its ID, or none, and
  * which program in the terminal it was read for. No evidence at all (the
  * host is not ready, a read failed) is null.
@@ -72,6 +93,24 @@ const text = (value: unknown, max = 2000): string | null => {
   const trimmed = value.trim();
   return trimmed ? trimmed.slice(0, max) : null;
 };
+
+/** The observation's panes as the look reader reads them. */
+const hostPanes = (panes: readonly Row[]): ApartmentHostPane[] =>
+  panes.flatMap((pane) => {
+    const paneId = text(pane.pane_id, 200);
+    const terminal = text(pane.terminal_id, 200);
+    return paneId && terminal
+      ? [
+          {
+            pane_id: paneId,
+            terminal_id: terminal,
+            workspace_id: text(pane.workspace_id, 200),
+            tab_id: text(pane.tab_id, 200),
+            tokens: pane.tokens,
+          },
+        ]
+      : [];
+  });
 
 /** The harness session ID the pane or its agent record reports. */
 function sessionId(pane: Row, agent: Row | null): string | null {
@@ -130,12 +169,15 @@ export class WorldApartments {
       };
       /**
        * Reads live agents' looks on one host: the avatar chosen for the
-       * pane, its profile's look and its colour. Asked once per observation
-       * and read while the agent lives, because closing a terminal clears
-       * its saved avatar before the move-in is seen.
+       * pane, its profile's look and its colour (inherited from its
+       * spawning parent's table like Town's, so it is given every pane of
+       * the observation). Asked once per observation and read while the
+       * agent lives, because closing a terminal clears its saved avatar
+       * before the move-in is seen.
        */
       appearance?(
         connectionId: string,
+        host: ApartmentHost,
       ): ((pane: ApartmentPane) => ApartmentAppearance) | null;
       /** Pull requests and issues linked to the agent, when sources know. */
       links?(tenant: ApartmentTenant): ApartmentLink[];
@@ -218,7 +260,15 @@ export class WorldApartments {
       if (!same && host.tenants.size >= MAX_TENANTS_PER_HOST) continue;
       const reported = sessionId(pane, agent);
       if (lookOf === undefined)
-        lookOf = safe(() => this.deps.appearance?.(connectionId) ?? null, null);
+        lookOf = safe(
+          () =>
+            this.deps.appearance?.(connectionId, {
+              generation,
+              panes: hostPanes(panes),
+              workspace_ids: workspaceIds,
+            }) ?? null,
+          null,
+        );
       const look = lookOf
         ? safe<ApartmentAppearance | null>(
             () =>
