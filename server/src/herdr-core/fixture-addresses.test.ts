@@ -12,7 +12,7 @@ test("the alphabet preview admits reviewer at t1b, its Terminal and its Files un
     await expect(fixture.start("unknown")).rejects.toThrow("scenario");
     expect(await fixture.start("alphabet")).toMatchObject({
       running: true,
-      terminals: 8,
+      terminals: 11,
     });
     await until(
       () => w.core.manager.status(CORE_FIXTURE_CONNECTION_ID).state === "ready",
@@ -126,6 +126,31 @@ test("Start changes only the owned fixture when switching to the alphabet scenar
     expect(
       w.lease(CORE_FIXTURE_CONNECTION_ID).runtime.core.terminal("t1"),
     ).toBeUndefined();
+  } finally {
+    await fixture.remove();
+    await w.dispose();
+  }
+});
+
+test("the preview's unnamed app spaces read as their folders, marked derived; the named one as is", async () => {
+  const w = await coreWorld();
+  const fixture = createCoreFixture(() => w.service);
+  try {
+    await fixture.start();
+    await until(
+      () => w.core.manager.status(CORE_FIXTURE_CONNECTION_ID).state === "ready",
+    );
+    const rows = await w.rows(CORE_FIXTURE_CONNECTION_ID);
+    expect(
+      rows.workspaces
+        .filter((row) => row.workspace_id?.startsWith("hc:space:"))
+        .map((row) => [row.label, row.label_derived_from ?? null]),
+    ).toEqual([
+      ["web", null],
+      ["api", "folder"],
+      ["docs", "folder"],
+      ["infra", "folder"],
+    ]);
   } finally {
     await fixture.remove();
     await w.dispose();

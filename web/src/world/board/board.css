@@ -229,6 +229,12 @@
 .board-workspace .board-label {
   font-size: 16px;
 }
+/* A name World derived for an unnamed space (folder, tab or agent) reads
+   lighter than a name the runtime gave; its tooltip says where it came from. */
+.board-workspace .board-label.is-derived {
+  font-weight: 400;
+  opacity: 0.72;
+}
 .board-sum {
   display: flex;
   flex-wrap: wrap;

@@ -411,6 +411,9 @@ describe("herdr-core connections", () => {
       ["scout", "working"],
       ["helper", null],
       ["fixture-shell", null],
+      ["api-agent", "idle"],
+      ["docs-agent", "idle"],
+      ["infra-agent", "idle"],
     ]);
     expect(fixture.kill()).toMatchObject({ running: false });
     await until(() => observed(w, "core-fixture")?.state === "stale");
