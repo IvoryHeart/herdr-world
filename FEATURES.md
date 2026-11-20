@@ -562,7 +562,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     The `?scene=town-scale` preview replaces every economy reader with labelled
     test data for its synthetic buildings, including the Town board and Spend lens.
   - Town's **post office** stands on the first street left of the town
-    center, on a phone as on a wide screen; it no longer holds pull requests.
+    center, on a phone as on a wide screen: Town's place for what is
+    addressed to you. Its red sign on the roof counts, without hovering,
+    what **Needs you** lists, by kind with the shared marks: "? 2 questions",
+    "! 1 blocked", "✓ 3 to review", and "✉ 1 to check" for saved answers
+    waiting in the Outbox; with none it reads "Nothing for you", and its rim
+    turns gold while a question or a blocked agent waits. Click it, or focus
+    it and press Enter, to open the same **Needs you** tab as the top bar's
+    counter, where you answer, withdraw and reach the Outbox as usual; it is
+    not a second inbox. It counts the hosts the Hosts filter shows, as Needs
+    you does. It holds no pull requests: those are the warehouse's. On a
+    phone the sign folds to a smaller red plate across the house's front, in
+    view at home zoom, with the marks and numbers only; tap it for Needs you.
   - Town's **warehouse** stands on the shore at the first street's end, by
     the harbour, its yard on the pavement: your open pull requests (opened by
     you, waiting on your review or assigned to you) as crates in its yard,
@@ -588,10 +599,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     counts; when a refresh fails it keeps the last list as unknown and says
     GitHub is out of date. On a phone it stands on the harbour's shore too,
     and a sign on the town center's right wing, in view at home zoom (a crate
-    and coloured ready, failing and waiting counts), opens the crates as a
-    list. Searching Town for "warehouse" (or "pull requests") lists the
-    **Warehouse** and choosing it takes the map there, on a phone or a wide
-    screen. For trying it without
+    and "PRs", no counts: the post office counts what needs you), opens the
+    crates as a list with their counts. Searching Town for "warehouse" (or
+    "pull requests") lists the **Warehouse** and choosing it takes the map
+    there, on a phone or a wide screen. For trying it without
     real pull requests, open World with `?townWarehouseFixture` (synthetic
     pull requests in every state; ten seconds later the first ready one
     merges), `?townWarehouseFixture=many` (a pile) or
@@ -1551,7 +1562,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   links. Hovering the agent's name shows its card with
   the latest message. An answered question folds to one line until the tab
   closes. It shows a page of 30 items; **Show … more** and **Show the … before**
-  turn the page, and every opener turns to its item's page. Town's reception
+  turn the page, and every opener turns to its item's page. Town's post
+  office sign opens it too. Town's reception
   letters, Desk's **Answer** and the **!**/**✓** badge on a Board card open it at
   that item. When Town has saved answers to check, **✉ Outbox** at the foot opens
   Town's Summary there. It replaces Town's Needs you rail.
@@ -1757,8 +1769,8 @@ each source's state, switch it off or configure it under **Settings**.
   `herdr-world agent-checkout --pr`, and to a ticket whose key its branch names
   (for example `abc-12-fix-login` and `ABC-12`). Its Town desk shows the badge
   on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), its Board tab
-  card shows the same badge, and Board's Work lens names it on the card. Town's post office shows every open pull
-  request for you as a parcel, including those whose agent has gone. A link holds only for the agent session and
+  card shows the same badge, and Board's Work lens names it on the card. Town's warehouse shows every open pull
+  request for you as a crate, including those whose agent has gone. A link holds only for the agent session and
   Herdr runtime it was made in.
 - **Your open pull requests** get a card in Work with CI on the head (a dot
   per check), each explicitly attributed rev agent's latest `RESULT #N: …`
