@@ -1,10 +1,9 @@
 ## Delivery state
 
-Implementation delivered; acceptance evidence still to reconcile: task 4.2 complete affected unit/browser/platform and behavioral gates plus independent review.
+Delivered and verified; task 4.2 records reconciled review and gate evidence.
 
-Delivered requirements are synchronized into [the current contract](../../specs/ask-answer-delivery/spec.md).
-No unsynchronized requirement delta remains in this record; unfinished tasks
-and acceptance above keep the change active.
+Delivered requirements are synchronized into [the current contract](../../../specs/ask-answer-delivery/spec.md).
+No unsynchronized delta or unfinished implementation remains.
 
 ## Why
 
@@ -43,5 +42,5 @@ Depends on the SQLite foundation, its reviewed lifecycle, and #549's identity an
 effect contracts. Affects ask answer/get handlers, the declared-verb/outbox
 consumer, the existing Chat adapter, CLI output/acknowledgement and a bounded
 Reception delivery-notice query. No new runtime, transcript store, Chat queue,
-workflow authoring model or third-party dependency. Implementation is delivered under the current contract; the complete gates and
-independent acceptance in task 4.2 remain to reconcile.
+workflow authoring model or third-party dependency. Implementation is delivered under the current contract; task 4.2 records review
+and gate evidence reconciled by #1057.

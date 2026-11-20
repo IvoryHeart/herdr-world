@@ -1,10 +1,17 @@
 ## Delivery state
 
-Implementation delivered; acceptance evidence still to reconcile: final confirmation of the original #267 source-link/privacy findings and the later PR detail/readiness/action consumers. #287 and #653 acceptance covers merged-history repairs, not all source additions.
+Delivered; the November audit reconciles the original #267 findings against
+current source and the passing Sources consumer suites. In particular, branch
+inference now requires a known matching head repository (`links.ts`), with the
+missing-head regression in `links.test.ts`; settings epochs, token/site changes,
+qualification and badge equality retain their direct tests. Historical review
+5624492359 was partial, not clean acceptance. PR #653's clean follow-up reviews
+5788630408/5788703732 and merged Delivery checks cover bounded history. The
+current audit supplies the remaining source/detail/action regression evidence;
+its independent PR review remains the handoff boundary.
 
-Delivered requirements are synchronized into [the current contract](../../specs/world-surfaces/spec.md#requirement-built-in-sources).
-No unsynchronized requirement delta remains in this record; unfinished tasks
-and acceptance above keep the change active.
+Delivered requirements are synchronized into [the current contract](../../../specs/world-surfaces/spec.md#requirement-built-in-sources).
+No unsynchronized requirement delta or unfinished implementation remains.
 
 ## 1. Service
 

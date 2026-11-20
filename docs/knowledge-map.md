@@ -7,6 +7,10 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 [World component routes](../web/src/world/README.md) for UI ownership, and the
 [style guide](design/style-guide.md) for visual work.
 
+For recent contract gaps and evidence boundaries, see the
+[November architecture audit](../verification/architecture-audit-2026-11.md) and
+[three model-selection questions](../verification/README.md#three-questions-before-choosing-a-model).
+
 | Area | Contract | Owning source | Focused tests |
 | --- | --- | --- | --- |
 | Code view research/proposal and IDE integration study (not shipping) | [Research, provider comparison and gates](design/code-view/research.md), [OpenSpec proposal](../openspec/changes/world-code-view/proposal.md) | [Synthetic mock](../web/public/code-view-prototype.html), [interaction code](../web/public/code-view-prototype/mock.js); no live IDE adapter | [Exact preview clicks](design/code-view/design.md), [fixture tests](../web/src/testing/codeViewPrototype.test.ts); `/code-view-prototype.html` |
