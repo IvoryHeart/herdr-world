@@ -29,7 +29,11 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // usage-metrics and connection-manager modules with World's views, so they
 // become their own small chunks (+3 files after removing the two retired
 // dialogs, no new bytes on the initial load).
-const maxFileCount = 193;
+// Main raised both whole-bundle totals for #1035 Settings to 212 files and
+// 15.4 MiB on 2026-11-20 (204 files, 15.30 MiB measured there). The headroom
+// status projects this stacked branch onto that main, so it carries main's
+// totals; the Apartments avatars (#1069) add about 6 KB and no files.
+const maxFileCount = 212;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
@@ -40,7 +44,7 @@ const maxFileCount = 193;
 // apartment building) add about 18.7 KB to lazy chunks with main at 15.24 MiB,
 // so the total rose to 15.3 MiB on 2026-11-19; startup budgets are unchanged.
 // With both, the bundle left about 33 KB of headroom.
-const maxTotalBytes = 15.3 * 1024 * 1024;
+const maxTotalBytes = 15.4 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
