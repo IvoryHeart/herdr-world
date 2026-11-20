@@ -9,7 +9,8 @@ import type { TownOutgoing } from "./townPostModel";
  * once. `?townPostFixture=many` adds a bundle beyond the yard;
  * `?townPostFixture=empty` shows a post office with no mail.
  *
- * Only the post office reads it: Needs you, reception and the Outbox keep
+ * Only the post office reads it (its sign counts the test letters and
+ * answers to check): Needs you, reception and the Outbox keep
  * the real questions, so a test letter's card says it has nothing to
  * answer instead of opening Needs you.
  */

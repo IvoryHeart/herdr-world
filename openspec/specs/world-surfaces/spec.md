@@ -982,6 +982,22 @@ cannot be opened without resolving to a colliding entity on another runtime or s
 - **WHEN** a notification's runtime generation or agent session has been replaced
 - **THEN** World reports the original target as unavailable and does not open its replacement
 
+### Requirement: Needs you backlog dismissal
+
+Needs you SHALL offer one labelled action to dismiss every open question from
+one verified connection/terminal when it has multiple questions. Its count and
+scope SHALL include the full backlog across pages, runtime generations and
+sessions, including questions no longer attached to a live agent. Matching
+names or unverified pane claims SHALL NOT group different askers. Saving SHALL
+disable repeat input, report failure in place and allow retry without hiding
+unsaved questions. A successful dismissal SHALL update the shared open-question
+list and count without inventing an answer.
+
+#### Scenario: Backlog spans generations and pages
+- **WHEN** the owner selects the asker's labelled Dismiss all action
+- **THEN** that asker's entire open backlog leaves Needs you in one step
+- **AND** other askers' questions stay visible, even if they share a display name
+
 ### Requirement: Desk attention triage
 
 Desk SHALL present every current actionable agent within the host filter by what it needs from the
@@ -4959,6 +4975,13 @@ update check reports a newer release, one line naming it whose control leads
 to World's update control. The greeting SHALL NOT install anything, answer,
 merge or review.
 
+The card SHALL also carry World's help news, drawn from the help
+declarations: under **What's new**, up to four entries newer than the last
+version shown in this browser, each with its picture and **Try**; on a
+browser World has never greeted, **Start here**, the short first-run path,
+instead. Closing the card SHALL mark them seen in this browser, so the next
+visit shows only newer entries.
+
 On wide screens the card SHALL open from the Town Master's figure beside the
 Town board, at the hub in Board and at the summary in Desk; on phones it SHALL
 be a sheet with Back. The card SHALL close with ✕, Escape, Back or a press
@@ -5003,6 +5026,47 @@ too; with no last time known, the hello SHALL leave the time out.
 
 - **WHEN** the page comes back on screen after less than 30 minutes hidden
 - **THEN** it is not a new visit and no greeting opens
+
+#### Scenario: What's new after an update
+
+- **WHEN** the user opens an updated World on a browser that was shown an
+  older version's help
+- **THEN** the card lists what is new since then, each with a picture and Try
+- **AND** after the card closes, the next visit does not list them again
+
+### Requirement: Help that ships with each feature
+
+Each user-facing feature SHALL declare its help beside its code: a title,
+what it is, at most five steps, where it lives, the control it points at and
+the version it arrived in. World's help (**What can I do here?**), the Town
+Master's news, docs/HELP.md and the website's help page SHALL come from these
+declarations. Help SHALL open on the tab for the current screen and offer
+**Try** for each entry, which marks the control on screen, or the button that
+opens its menu when the control is inside a closed one, and says where to find
+it when it is not on this screen.
+
+Each declaration's pictures SHALL be generated from the synthetic scenes at
+phone and desktop sizes, in light and dark. The repository's help check SHALL
+fail, naming the entry, when an entry's control is no longer marked in any
+component or its pictures are missing or older than their inputs; and the PR
+description check SHALL fail when a change fragment adds something without a
+changed help declaration or a stated reason.
+
+#### Scenario: A control is renamed
+
+- **WHEN** a component stops marking a control that a help entry points at
+- **THEN** the help check fails and names the entry and the control
+
+#### Scenario: A pictured style changes
+
+- **WHEN** a stylesheet or component that the picture stage renders changes
+  and the pictures are not regenerated
+- **THEN** the help check fails and names each entry whose picture is out of date
+
+#### Scenario: What can I do here?
+
+- **WHEN** the user opens help on Town, Board or Chat
+- **THEN** help shows that place's entries, each with a picture and Try
 
 ### Requirement: Settings home and short Menu
 

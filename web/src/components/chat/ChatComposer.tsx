@@ -76,7 +76,11 @@ export function ChatComposer({
     };
   }, [active, focusIntent]);
   return (
-    <div className="agent-chat-composer" ref={composerRef}>
+    <div
+      className="agent-chat-composer"
+      data-help="chat.composer"
+      ref={composerRef}
+    >
       <TerminalComposer
         surface="chat"
         open={active}

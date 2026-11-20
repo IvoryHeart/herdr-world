@@ -7,10 +7,12 @@
  * drops the parameter at once; the box stays until the page reloads.
  * `?coreFixture=alphabet` puts the reviewer at terminal 20 (`t1b`).
  * `?coreFixture=first-run` also checks automatic core-only discovery in scratch state.
+ * `?coreFixture=headless` gives builder/reviewer real synthetic transcript writers.
  */
 const PARAM = "coreFixture";
 let enabled: boolean | undefined;
-let scenario: "default" | "alphabet" | "first-run" = "default";
+type Scenario = "default" | "alphabet" | "first-run" | "headless";
+let scenario: Scenario = "default";
 
 /** The switch, read once per page load; the parameter is removed. */
 export function coreFixtureEnabled(): boolean {
@@ -22,13 +24,17 @@ export function coreFixtureEnabled(): boolean {
   enabled = true;
   const selected = url.searchParams.get(PARAM);
   scenario =
-    selected === "alphabet" || selected === "first-run" ? selected : "default";
+    selected === "alphabet" ||
+    selected === "first-run" ||
+    selected === "headless"
+      ? selected
+      : "default";
   url.searchParams.delete(PARAM);
   history.replaceState(history.state, "", url);
   return enabled;
 }
 
-export function coreFixtureScenario(): "default" | "alphabet" | "first-run" {
+export function coreFixtureScenario(): Scenario {
   coreFixtureEnabled();
   return scenario;
 }

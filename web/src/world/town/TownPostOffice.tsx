@@ -1,38 +1,54 @@
-import { memo, useRef, useState, type FocusEvent } from "react";
+import {
+  createContext,
+  memo,
+  useContext,
+  useRef,
+  useState,
+  type FocusEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
+import { AgentMark } from "../../components/AgentMark";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "../../components/ui/popover";
-import { needsYouAskKey, openNeedsYou } from "../needsYou";
-import {
-  sharedAsksStore,
-  useWorldAsks,
-  type WorldAsksStore,
-} from "../worldAsks";
+import { useNow } from "../handoffs";
+import { needsYouAskKey, needsYouItems, openNeedsYou } from "../needsYou";
+import { useReviewedWork } from "../useReviewedWork";
 import {
   sharedAnswerDeliveries,
   useAnswerDeliveryCounts,
   type WorldAnswerDeliveriesStore,
 } from "../worldAnswerDeliveries";
+import {
+  sharedAsksStore,
+  useWorldAsks,
+  type WorldAsksStore,
+} from "../worldAsks";
+import type { WorldObject } from "../worldObject";
 import { useOpenAnswerOutbox } from "./answerOutbox";
 import { BadgePopover } from "./DeskWorkBadge";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
 import {
+  TOWN_POST_EMPTY,
   TOWN_POST_TROLLEY,
   townLetterAge,
   townLetterFrom,
   townLetterLabel,
   townLetterLine,
-  townPostCountParts,
+  townPostCounts,
+  townPostFoldAt,
   townPostOffice,
+  townPostParts,
   townPostSignAt,
-  townPostSignText,
   townPostSlot,
   townPostSpoken,
+  townPostWaiting,
   townPostYardCount,
   type TownLetter,
+  type TownPostCounts,
   type TownPostOffice as Office,
 } from "./townPostModel";
 import {
@@ -49,70 +65,76 @@ import { townLetterUrl } from "./townPostPaint";
 import type { TownRendererHandle } from "./townRenderer";
 import "./townPost.css";
 
-const letterArt = (verified: boolean) => {
-  const url = townLetterUrl(verified);
-  return url ? `url("${url}")` : undefined;
-};
+/**
+ * What the post office counts: Town's world (the Hosts filter applied, as
+ * Needs you's), counted with Needs you's own items, or fixed counts where a
+ * town is drawn alone (captures). Without either it shows its sign alone.
+ */
+export type TownPostSource =
+  | { world: Pick<WorldObject, "leaves" | "nodeById"> }
+  | { counts: TownPostCounts };
 
-/** The letters and the trolley: the fixture's, else the World ledger's. */
-function usePostOffice(
-  asksStore: WorldAsksStore,
-  deliveries: WorldAnswerDeliveriesStore,
-): Office {
-  const asks = useWorldAsks(asksStore);
-  const outgoing = useAnswerDeliveryCounts(deliveries);
-  const fixture = townPostFixtureMode();
-  const [now] = useState(() => Date.now());
-  if (fixture) {
-    const made = townPostFixture(fixture, now);
-    return townPostOffice(made.asks, made.outgoing);
-  }
-  return townPostOffice(asks, outgoing);
+const TownPostContext = createContext<TownPostSource | null>(null);
+
+/** Town provides its world; only the post office re-renders as it counts. */
+export function TownPostProvider({
+  source,
+  children,
+}: {
+  source: TownPostSource;
+  children: ReactNode;
+}) {
+  return (
+    <TownPostContext.Provider value={source}>
+      {children}
+    </TownPostContext.Provider>
+  );
 }
 
-const isFixture = (letter: TownLetter) =>
-  letter.id.startsWith(TOWN_POST_FIXTURE_PREFIX);
+/** Needs you's items by kind, from the same stores and clock as its list. */
+function useWorldCounts(
+  world: Pick<WorldObject, "leaves" | "nodeById">,
+): TownPostCounts {
+  const asks = useWorldAsks(sharedAsksStore());
+  const work = useReviewedWork();
+  const now = useNow(30_000);
+  const outbox = useAnswerDeliveryCounts().checks;
+  return townPostCounts(
+    needsYouItems(world, asks, (leaf) => work.toReview(leaf, now)),
+    outbox,
+  );
+}
 
-/** Needs you, at a letter's question, or at its first question. */
-const answer = (letter?: TownLetter) =>
-  openNeedsYou(letter ? needsYouAskKey(letter.id) : undefined);
+function CountedSign({
+  world,
+  children,
+}: {
+  world: Pick<WorldObject, "leaves" | "nodeById">;
+  children(counts: TownPostCounts): ReactNode;
+}) {
+  return children(useWorldCounts(world));
+}
 
 /**
- * Town's post office (#1105): mail, not cargo. Questions your agents asked
- * you lie in its sorting yard as letters, oldest first, each opening a
- * letter card whose **Answer** opens Needs you at that question; your
- * answers still on their way ride the mail trolley, which opens Town's
- * Outbox. Its sign counts both without hovering and opens Needs you. A
- * narrow (stacked) town has the same post office beside its town center.
+ * The fixture's post office (`?townPostFixture`), made once per mount, or
+ * null without the switch.
  */
-export const TownPostOffice = memo(function TownPostOffice({
-  layout,
-  renderer,
-  asksStore = sharedAsksStore(),
-  deliveries = sharedAnswerDeliveries(),
-}: {
-  layout: TownLayout;
-  /** Brings a focused letter into view. */
-  renderer: { readonly current: TownRendererHandle | null };
-  asksStore?: WorldAsksStore;
-  deliveries?: WorldAnswerDeliveriesStore;
-}) {
-  const office = usePostOffice(asksStore, deliveries);
-  const openOutbox = useOpenAnswerOutbox();
-  const [cardId, setCardId] = useState<string | null>(null);
-  const cardAnchor = useRef<HTMLElement | null>(null);
-  const letter = cardId
-    ? office.letters.find((entry) => entry.id === cardId)
-    : undefined;
-  const openCard = (id: string, anchor: HTMLElement | null) => {
-    cardAnchor.current = anchor;
-    setCardId(id);
-  };
-  const lot = townPostLotBeside(layout.center);
-  const narrow = layout.formFactor === "narrow";
-  const sign = townPostSignAt(lot, narrow);
-  /** Keyboard focus on an off-screen letter or sign pans it into view. */
-  const reveal = (event: FocusEvent<HTMLElement>) => {
+function useFixtureOffice(): Office | null {
+  const [office] = useState(() => {
+    const fixture = townPostFixtureMode();
+    if (!fixture) return null;
+    const made = townPostFixture(fixture, Date.now());
+    return townPostOffice(made.asks, made.outgoing);
+  });
+  return office;
+}
+
+/** Keyboard focus on an off-screen sign or letter pans `at` into view. */
+function revealer(
+  renderer: { readonly current: TownRendererHandle | null },
+  at: { x: number; y: number },
+) {
+  return (event: FocusEvent<HTMLElement>) => {
     const handle = renderer.current;
     const target = event.currentTarget;
     if (!handle || !focusVisible(target)) return;
@@ -126,14 +148,206 @@ export const TownPostOffice = memo(function TownPostOffice({
       box.bottom < height - margin
     )
       return;
-    handle.camera.flyTo(
-      (lot.x + lot.w / 2) * T,
-      lot.yardY * T,
-      handle.camera.z,
-      0.4,
-    );
+    handle.camera.flyTo(at.x, at.y, handle.camera.z, 0.4);
     handle.invalidate("focus");
   };
+}
+
+/**
+ * Town's post office (#1098, #1105): what is addressed to you, mail and
+ * never cargo. Its sign counts Needs you's items by kind without hovering
+ * (questions, blocked agents, finished work to review) and the Outbox's
+ * answers to check; clicking it, or Enter on it, opens Needs you, the same
+ * list as the top bar's counter. A narrow town folds the sign to a smaller
+ * one across its house's front. In its yard each open question lies as a
+ * letter, oldest first, opening a letter card whose **Answer** opens Needs
+ * you at that question; your answers still on their way ride the mail
+ * trolley, which opens Town's Outbox.
+ */
+export const TownPostOffice = memo(function TownPostOffice({
+  layout,
+  renderer,
+  asksStore = sharedAsksStore(),
+  deliveries = sharedAnswerDeliveries(),
+}: {
+  layout: TownLayout;
+  /** Brings a focused sign or letter into view. */
+  renderer: { readonly current: TownRendererHandle | null };
+  asksStore?: WorldAsksStore;
+  deliveries?: WorldAnswerDeliveriesStore;
+}) {
+  const source = useContext(TownPostContext);
+  const fixture = useFixtureOffice();
+  const folded = layout.formFactor === "narrow";
+  const lot = townPostLotBeside(layout.center);
+  const at = folded ? townPostFoldAt(lot) : townPostSignAt(lot);
+  const reveal = revealer(renderer, at);
+  const sign = (counts: TownPostCounts | null) => (
+    <Sign counts={counts} folded={folded} at={at} onFocus={reveal} />
+  );
+  const counted = fixture ? (
+    sign(fixtureCounts(fixture))
+  ) : !source ? (
+    sign(null)
+  ) : "counts" in source ? (
+    sign(source.counts)
+  ) : (
+    <CountedSign world={source.world}>{sign}</CountedSign>
+  );
+  return (
+    <>
+      {counted}
+      {fixture ? (
+        <PostYard office={fixture} layout={layout} renderer={renderer} />
+      ) : (
+        <LedgerYard
+          asksStore={asksStore}
+          deliveries={deliveries}
+          layout={layout}
+          renderer={renderer}
+        />
+      )}
+    </>
+  );
+});
+
+/** The sign's counts for the fixture's letters and trolley. */
+const fixtureCounts = (office: Office): TownPostCounts => ({
+  ...TOWN_POST_EMPTY,
+  asks: office.letters.length,
+  outbox: office.outgoing.checks,
+});
+
+function Sign({
+  counts,
+  folded,
+  at,
+  onFocus,
+}: {
+  counts: TownPostCounts | null;
+  folded: boolean;
+  at: { x: number; y: number };
+  onFocus(event: FocusEvent<HTMLElement>): void;
+}) {
+  const parts = counts ? townPostParts(counts) : [];
+  const waiting = counts ? townPostWaiting(counts) : 0;
+  return (
+    <button
+      type="button"
+      className={folded ? "town-post-fold" : "town-post-sign"}
+      data-waiting={waiting > 0 || undefined}
+      style={{ left: at.x, top: at.y }}
+      aria-label={`Post office: ${counts ? townPostSpoken(counts) : "Needs you"}. Open Needs you`}
+      title="Post office: open Needs you"
+      onPointerDown={(event) => event.stopPropagation()}
+      onFocus={onFocus}
+      onClick={(event) => {
+        event.stopPropagation();
+        openNeedsYou();
+      }}
+    >
+      {folded ? (
+        <span className="town-post-mark" aria-hidden="true" />
+      ) : (
+        <span className="town-post-sign-title" aria-hidden="true">
+          <span className="town-post-mark" />
+          POST OFFICE
+        </span>
+      )}
+      {counts ? (
+        <span className="town-post-counts" aria-hidden="true">
+          {parts.length ? (
+            parts.map((part) => (
+              <span key={part.key} data-kind={part.key}>
+                {part.mark ? (
+                  <AgentMark kind={part.mark} />
+                ) : (
+                  <span className="town-post-letter">✉</span>
+                )}
+                {folded ? part.count : part.text}
+              </span>
+            ))
+          ) : (
+            <span data-kind="none">{folded ? "0" : "Nothing for you"}</span>
+          )}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/** Whether focus arrived by keyboard (a tap must not move the camera). */
+function focusVisible(target: HTMLElement) {
+  try {
+    return target.matches(":focus-visible");
+  } catch {
+    return false;
+  }
+}
+
+const letterArt = (verified: boolean) => {
+  const url = townLetterUrl(verified);
+  return url ? `url("${url}")` : undefined;
+};
+
+const isFixture = (letter: TownLetter) =>
+  letter.id.startsWith(TOWN_POST_FIXTURE_PREFIX);
+
+/** Needs you at a letter's question. */
+const answer = (letter: TownLetter) => openNeedsYou(needsYouAskKey(letter.id));
+
+/** The yard from the World ledger: open asks and answers on their way. */
+function LedgerYard({
+  asksStore,
+  deliveries,
+  layout,
+  renderer,
+}: {
+  asksStore: WorldAsksStore;
+  deliveries: WorldAnswerDeliveriesStore;
+  layout: TownLayout;
+  renderer: { readonly current: TownRendererHandle | null };
+}) {
+  const asks = useWorldAsks(asksStore);
+  const outgoing = useAnswerDeliveryCounts(deliveries);
+  return (
+    <PostYard
+      office={townPostOffice(asks, outgoing)}
+      layout={layout}
+      renderer={renderer}
+    />
+  );
+}
+
+/**
+ * The yard (#1105): a letter per open question, oldest first, a "+N"
+ * bundle beyond the yard's slots, and the mail trolley with your answers
+ * on their way.
+ */
+function PostYard({
+  office,
+  layout,
+  renderer,
+}: {
+  office: Office;
+  layout: TownLayout;
+  renderer: { readonly current: TownRendererHandle | null };
+}) {
+  const openOutbox = useOpenAnswerOutbox();
+  const [cardId, setCardId] = useState<string | null>(null);
+  const cardAnchor = useRef<HTMLElement | null>(null);
+  const letter = cardId
+    ? office.letters.find((entry) => entry.id === cardId)
+    : undefined;
+  const openCard = (id: string, anchor: HTMLElement | null) => {
+    cardAnchor.current = anchor;
+    setCardId(id);
+  };
+  const lot = townPostLotBeside(layout.center);
+  const reveal = revealer(renderer, {
+    x: (lot.x + lot.w / 2) * T,
+    y: lot.yardY * T,
+  });
   // A question answered, dismissed or withdrawn takes its card with it.
   const card =
     cardId && letter
@@ -162,25 +376,6 @@ export const TownPostOffice = memo(function TownPostOffice({
   const bundle = office.letters.slice(shown.length);
   return (
     <>
-      <button
-        type="button"
-        className="town-post-sign"
-        data-quiet={office.letters.length || outgoing ? undefined : ""}
-        data-narrow={narrow ? "" : undefined}
-        style={{ left: sign.x, top: sign.y }}
-        aria-label={`Post office: ${townPostSpoken(office)}. Open Needs you`}
-        onPointerDown={(event) => event.stopPropagation()}
-        onFocus={reveal}
-        onClick={(event) => {
-          event.stopPropagation();
-          answer(office.letters[0]);
-        }}
-      >
-        <span className="town-post-sign-title" aria-hidden="true">
-          POST OFFICE
-        </span>
-        <SignCounts office={office} />
-      </button>
       <div
         className="town-post-yard"
         role="group"
@@ -198,7 +393,7 @@ export const TownPostOffice = memo(function TownPostOffice({
             <button
               key={entry.id}
               type="button"
-              className="town-post-letter"
+              className="town-post-envelope"
               data-unverified={entry.verified ? undefined : ""}
               style={{
                 left: at.x,
@@ -239,31 +434,6 @@ export const TownPostOffice = memo(function TownPostOffice({
       </div>
       {card}
     </>
-  );
-});
-
-function focusVisible(element: HTMLElement) {
-  try {
-    return element.matches(":focus-visible");
-  } catch {
-    return false;
-  }
-}
-
-/** The sign's second line: the counts by kind, or "No mail". */
-function SignCounts({ office }: { office: Office }) {
-  const parts = townPostCountParts(office);
-  return (
-    <span className="town-post-sign-counts" aria-hidden="true">
-      {parts.length
-        ? parts.map((part) => (
-            <span key={part.kind} data-kind={part.kind}>
-              <i aria-hidden="true" />
-              {part.text}
-            </span>
-          ))
-        : townPostSignText(office)}
-    </span>
   );
 }
 

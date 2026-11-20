@@ -1,21 +1,145 @@
+/**
+ * Town's post office (#1098, #1105): the place for what is addressed to
+ * you, mail and never cargo. Pull requests are the warehouse's crates
+ * (townWarehouseModel.ts) and releases the harbour's ships (#1028).
+ *
+ * - Its sign (#1098) counts Needs you's items by kind, as Needs you lists
+ *   them (needsYou.ts), and the Outbox's answers to check; opening it opens
+ *   Needs you.
+ * - Its yard (#1105) holds letters in: the questions agents asked you with
+ *   `herdr-world ask` that are still open (the World ledger's asks, the
+ *   same list Needs you answers), oldest first. Its mail trolley carries
+ *   letters out: your saved answers the service is still delivering, or
+ *   whose delivery needs a look (Town's Outbox).
+ *
+ * Pure counting, words and geometry; TownPostOffice.tsx draws it.
+ */
+
+import type { AgentMarkKind } from "../agentMarks";
+import type { NeedsYouItem } from "../needsYou";
 import { askerName, type WorldAsk } from "../worldAsks";
 import { TOWN_TILE } from "./townLayout";
 import type { TownPostLot } from "./townPostLot";
+/** What the post office counts: Needs you's kinds and the Outbox. */
+export type TownPostCounts = {
+  /** Questions agents asked you (`herdr-world ask`). */
+  asks: number;
+  /** Agents blocked on their own question. */
+  needs: number;
+  /** Finished work not reviewed yet. */
+  done: number;
+  /** Saved answers to check in Town Summary's Outbox. */
+  outbox: number;
+};
+
+export const TOWN_POST_EMPTY: TownPostCounts = {
+  asks: 0,
+  needs: 0,
+  done: 0,
+  outbox: 0,
+};
+
+/** Needs you's items by kind, plus the Outbox's answers to check. */
+export function townPostCounts(
+  items: readonly Pick<NeedsYouItem, "kind">[],
+  outbox: number,
+): TownPostCounts {
+  const counts = { ...TOWN_POST_EMPTY, outbox };
+  for (const item of items) counts[item.kind] += 1;
+  return counts;
+}
+
+/** What waits on you: questions and blocked agents, as the counter counts. */
+export const townPostWaiting = (counts: TownPostCounts) =>
+  counts.asks + counts.needs;
+
+/** One count on the sign: its mark, number and words. */
+export type TownPostPart = {
+  key: keyof TownPostCounts;
+  /** The shared agent mark; the Outbox is a letter, not an agent state. */
+  mark: AgentMarkKind | null;
+  count: number;
+  /** Short, on the sign. */
+  text: string;
+  /** In full, for the accessible name. */
+  spoken: string;
+};
+
+const plural = (count: number, one: string, many: string) =>
+  `${count} ${count === 1 ? one : many}`;
 
 /**
- * Town's post office (#1105): mail, never cargo. Pull requests are the
- * warehouse's crates and releases the harbour's ships (#1028); the post
- * office carries messages between you and your agents:
- *
- * - Letters in: the questions agents asked you with `herdr-world ask` that
- *   are still open (the World ledger's asks, the same list Needs you
- *   answers), oldest first, each a letter in the sorting yard.
- * - Letters out: your saved answers the service is still delivering, or
- *   whose delivery needs a look (Town's Outbox), on the mail trolley.
- *
- * Pure: the read model, its words and the yard's geometry, for the DOM
- * layer (TownPostOffice.tsx) and tests.
+ * The sign's counts, most urgent first, leaving out kinds with none: "? 2
+ * questions", "! 1 blocked", "✓ 3 to review", "✉ 1 to check".
  */
+export function townPostParts(counts: TownPostCounts): TownPostPart[] {
+  const parts: TownPostPart[] = [
+    {
+      key: "asks",
+      mark: "asks",
+      count: counts.asks,
+      text: plural(counts.asks, "question", "questions"),
+      spoken: plural(counts.asks, "question for you", "questions for you"),
+    },
+    {
+      key: "needs",
+      mark: "needs",
+      count: counts.needs,
+      text: `${counts.needs} blocked`,
+      spoken: plural(counts.needs, "agent blocked", "agents blocked"),
+    },
+    {
+      key: "done",
+      mark: "done",
+      count: counts.done,
+      text: `${counts.done} to review`,
+      spoken: plural(counts.done, "finished to review", "finished to review"),
+    },
+    {
+      key: "outbox",
+      mark: null,
+      count: counts.outbox,
+      text: `${counts.outbox} to check`,
+      spoken: plural(counts.outbox, "answer to check", "answers to check"),
+    },
+  ];
+  return parts.filter((part) => part.count > 0);
+}
+
+/** The sign in words: its counts, or that nothing is addressed to you. */
+export function townPostSpoken(counts: TownPostCounts) {
+  const parts = townPostParts(counts);
+  return parts.length
+    ? parts.map((part) => part.spoken).join(", ")
+    : "nothing for you";
+}
+
+/**
+ * Where a wide town's sign stands, in world pixels: on the ridge at the
+ * roof's right end, growing up and left over the lawn, so at every zoom it
+ * leaves the house's front and the town center's west wing in view.
+ */
+export function townPostSignAt(lot: TownPostLot) {
+  return { x: (lot.x + lot.w) * TOWN_TILE - 10, y: lot.y * TOWN_TILE + 6 };
+}
+
+/**
+ * Where a narrow town's folded post office hangs, in world pixels: across
+ * its own house's cornice, under the roof and over the "POST" fascia. A
+ * phone stands the post office beside the town center (#1033), and its
+ * home view keeps the house from just above the eaves down, so the sign
+ * stays in view; the center's wings hold the harbour's, the library's and
+ * the warehouse's signs.
+ */
+export function townPostFoldAt(lot: TownPostLot) {
+  return {
+    x: (lot.x + lot.w / 2) * TOWN_TILE,
+    y: lot.y * TOWN_TILE + TOWN_POST_FOLD_Y,
+  };
+}
+
+/** World pixels from the house's top to the folded sign: the cornice. */
+export const TOWN_POST_FOLD_Y = 40;
 
 export type TownLetter = {
   /** The ask's id. */
@@ -59,43 +183,6 @@ export function townPostOffice(
   };
 }
 
-const plural = (count: number, one: string, many: string) =>
-  `${count} ${count === 1 ? one : many}`;
-
-/** The sign's counts, each with its kind, in the order the sign shows them. */
-export function townPostCountParts(office: TownPostOffice) {
-  const parts: { kind: "letters" | "waiting" | "checks"; text: string }[] = [];
-  if (office.letters.length)
-    parts.push({
-      kind: "letters",
-      text: plural(office.letters.length, "letter", "letters"),
-    });
-  if (office.outgoing.waiting)
-    parts.push({ kind: "waiting", text: `${office.outgoing.waiting} to send` });
-  if (office.outgoing.checks)
-    parts.push({ kind: "checks", text: `${office.outgoing.checks} to check` });
-  return parts;
-}
-
-/** The sign's second line: "2 letters · 1 to send", or "No mail". */
-export function townPostSignText(office: TownPostOffice) {
-  const parts = townPostCountParts(office);
-  return parts.length ? parts.map((part) => part.text).join(" · ") : "No mail";
-}
-
-/** The counts in full words, for names and announcements. */
-export function townPostSpoken(office: TownPostOffice) {
-  const parts: string[] = [];
-  const { letters, outgoing } = office;
-  if (letters.length)
-    parts.push(plural(letters.length, "question for you", "questions for you"));
-  if (outgoing.waiting)
-    parts.push(plural(outgoing.waiting, "answer to send", "answers to send"));
-  if (outgoing.checks)
-    parts.push(plural(outgoing.checks, "answer to check", "answers to check"));
-  return parts.length ? parts.join(", ") : "no mail";
-}
-
 /** A letter's name: who it is from, marked when unverified. */
 export const townLetterFrom = (letter: TownLetter) =>
   `${letter.from}${letter.verified ? "" : " (unverified)"}`;
@@ -124,7 +211,7 @@ export const TOWN_LETTER_SIZE = { w: 14, h: 10 } as const;
  * The mail trolley's bed (townPostPaint.ts): its left edge `fromRight`
  * pixels left of the yard's right edge, its top `y` pixels down, `w` wide.
  */
-export const TOWN_POST_TROLLEY = { fromRight: 30, y: 18, w: 22 } as const;
+export const TOWN_POST_TROLLEY = { fromRight: 32, y: 22, w: 24 } as const;
 
 /** How many letters lie in the yard; the rest make the "+N" bundle. */
 export const townPostYardCount = (count: number) =>
@@ -139,20 +226,6 @@ export function townPostSlot(index: number) {
       Math.floor(index / TOWN_POST_COLUMNS) * TOWN_POST_PITCH.y,
   };
 }
-
-/**
- * Where the sign hangs, in world pixels, its bottom edge on the eave: on a
- * wide town from the eave's right end, growing left over the house; on a
- * narrow (phone) town, whose post office is a few fingers wide, from its
- * left end, growing right as a narrow plate with a count per row.
- */
-export function townPostSignAt(lot: TownPostLot, narrow = false) {
-  const y = lot.y * TOWN_TILE + 34;
-  return narrow
-    ? { x: lot.x * TOWN_TILE + 4, y }
-    : { x: (lot.x + lot.w) * TOWN_TILE - 12, y };
-}
-
 /** How long ago a letter was written: "just now", "12 min ago", "3 h ago". */
 export function townLetterAge(at: number, now: number) {
   const minutes = Math.floor(Math.max(0, now - at) / 60_000);

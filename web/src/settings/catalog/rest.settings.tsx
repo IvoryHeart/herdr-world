@@ -9,6 +9,7 @@ import {
   BookOpen,
   Bug,
   Cable,
+  CircleHelp,
   Download,
   FileClock,
   FolderGit2,
@@ -23,6 +24,7 @@ import {
   Search,
   Server,
   Smartphone,
+  Sparkles,
   Tag,
   TerminalSquare,
   UsersRound,
@@ -30,6 +32,7 @@ import {
 } from "lucide-react";
 import { logoutBrowserSession } from "../../api";
 import { openCommandBox } from "../../commandBoxKey";
+import { helpTabForPath, openHelp } from "../../help/helpEvents";
 import { shortcutLabel } from "../../shortcutPreferences";
 import { store } from "../../store";
 import {
@@ -342,6 +345,27 @@ defineSettings("system", [
 ]);
 
 defineSettings("help", [
+  // World's own help (#1025): declared beside each feature (web/src/help/).
+  {
+    kind: "command",
+    id: "help.here",
+    category: "help",
+    title: "What can I do here?",
+    description: "What each screen offers, with Try",
+    words: ["help", "how", "guide", "explain", "try"],
+    icon: <CircleHelp size={15} />,
+    run: () => openHelp(helpTabForPath(window.location.pathname)),
+  },
+  {
+    kind: "command",
+    id: "help.whats-new",
+    category: "help",
+    title: "What's new",
+    description: "New in World, with pictures",
+    words: ["new", "news", "updates", "release", "latest"],
+    icon: <Sparkles size={15} />,
+    run: () => openHelp("new"),
+  },
   {
     kind: "command",
     id: "help.tutorial",

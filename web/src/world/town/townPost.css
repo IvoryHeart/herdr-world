@@ -1,18 +1,9 @@
-/* The post office (TownPostOffice.tsx), in Town's pixel skin: a red
-   enamel sign under the eave with the counts, a painted letter per
-   question on the sorting yard's planks, and the trolley's load of your
-   answers (townPostPaint.ts). Popovers portal out of Town, so they use
-   literal colours. */
+/* The post office's sign (TownPostOffice.tsx), in Town's pixel skin: a red
+   enamel plate with cream lettering, like the pillar box at the door,
+   counting what Needs you lists with the shared agent marks. */
 
-.town-world .town-post-sign,
-.town-world .town-post-yard {
-  --post-letters: #fbf6e8;
-  --post-waiting: #ffd166;
-  --post-checks: #ff8a7a;
-}
-
-/* The sign hangs from the eave's right end and grows left, over the house
-   and the lawn beyond it, keeping a readable size as the town zooms. */
+/* The sign stands on the ridge at the roof's right end and grows up and
+   left over the lawn, keeping a readable size as the town zooms. */
 .town-world .town-post-sign {
   position: absolute;
   z-index: 1;
@@ -21,13 +12,13 @@
   gap: 2px;
   min-width: 96px;
   padding: 3px 7px 4px;
-  color: #fff4e8;
-  background: #a81e24;
-  border: 2px solid #4a0f12;
+  color: #fbf1dc;
+  background: #9c1e24;
+  border: 2px solid #1c1722;
   border-radius: 3px;
   box-shadow:
-    inset 0 0 0 1px #d4252b,
-    0 2px 0 #4a0f12;
+    inset 0 0 0 1px #d4454a,
+    0 2px 0 #1c1722;
   transform: translate(-100%, -100%) scale(clamp(0.5, var(--iz), 2.4));
   transform-origin: 100% 100%;
   font-size: 10px;
@@ -38,88 +29,138 @@
   image-rendering: pixelated;
 }
 
-/* A phone's post office is narrow: the plate stands on the eave's left
-   end, a fixed width with a count per row, growing right and up. */
-.town-world .town-post-sign[data-narrow] {
-  width: 100px;
-  min-width: 0;
-  transform: translate(0, -100%) scale(clamp(0.5, var(--iz), 2.4));
-  transform-origin: 0 100%;
-}
-
-.town-world .town-post-sign[data-narrow] .town-post-sign-counts {
-  flex-direction: column;
-  align-items: center;
-  max-width: none;
+/* Anything waiting on you lights the plate's rim gold. */
+.town-world .town-post-sign[data-waiting] {
+  box-shadow:
+    inset 0 0 0 1px #e8c75a,
+    0 2px 0 #1c1722;
 }
 
 .town-world .town-post-sign:focus-visible,
-.town-world .town-post-letter:focus-visible,
-.town-world .town-post-bundle:focus-visible,
-.town-world .town-post-trolley:focus-visible {
+.town-world .town-post-fold:focus-visible {
   outline: 2px solid #ffd166;
   outline-offset: 2px;
 }
 
 .town-post-sign-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font:
     700 10px "Silkscreen",
     "Pixelify Sans",
     ui-monospace,
     monospace;
   letter-spacing: 0.06em;
-  color: #ffe39a;
+  color: #ffd166;
 }
 
-.town-post-sign-counts {
+/* Counts wrap, so the sign stays about the house's width. */
+.town-post-counts {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 1px 6px;
   width: max-content;
-  max-width: 176px;
+  max-width: 180px;
   font-weight: 600;
   white-space: normal;
   text-align: center;
 }
 
-.town-post-sign-counts > span {
+.town-post-counts > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   white-space: nowrap;
 }
 
-.town-post-sign-counts i {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 3px;
-  vertical-align: 1px;
-  border: 1px solid #1c1722;
+.town-post-counts .agent-mark {
+  /* The marks' colours on Town's own background, light or dark theme. */
+  color: #1c1722;
+  box-shadow: 0 0 0 1px #1c1722;
 }
 
-.town-post-sign-counts [data-kind="letters"] i {
-  background: var(--post-letters);
-}
-.town-post-sign-counts [data-kind="waiting"] i {
-  background: var(--post-waiting);
-}
-.town-post-sign-counts [data-kind="checks"] i {
-  background: var(--post-checks);
-}
-
-/* No mail: the sign is quiet. */
-.town-world .town-post-sign[data-quiet] .town-post-sign-counts {
+.town-post-counts [data-kind="none"] {
   font-weight: 400;
-  color: #f0c8c0;
-  opacity: 0.85;
+  color: #f0d6c4;
 }
 
-/* The yard lies on the painted planks; letters lie in its slots. */
+.town-post-letter {
+  color: #ffe9c2;
+}
+
+/* A pillar box: the sign's and the fold's mark. */
+.town-post-mark {
+  position: relative;
+  flex: none;
+  display: inline-block;
+  width: 8px;
+  height: 12px;
+  background:
+    linear-gradient(#1c1722, #1c1722) 1px 4px / 6px 1px no-repeat,
+    linear-gradient(#e8c75a, #e8c75a) 2px 7px / 4px 2px no-repeat,
+    #d4252b;
+  border: 1px solid #1c1722;
+  border-radius: 4px 4px 1px 1px;
+  image-rendering: pixelated;
+}
+
+/* A narrow town's fold across the post office's front. */
+.town-world .town-post-fold {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 6px;
+  color: #fbf1dc;
+  background: #9c1e24;
+  border: 2px solid #1c1722;
+  border-radius: 4px;
+  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.town-world .town-post-fold[data-waiting] {
+  box-shadow: inset 0 0 0 1px #e8c75a;
+}
+
+.town-world .town-post-fold .town-post-counts {
+  gap: 4px;
+  max-width: none;
+  font-weight: 700;
+}
+
+/* The yard (#1105): a painted letter per question on the forecourt's
+   cobbles, and the trolley's load of your answers (townPostPaint.ts).
+   Popovers portal out of Town, so they use literal colours. */
+
+.town-world .town-post-yard {
+  --post-waiting: #ffd166;
+  --post-checks: #ff8a7a;
+}
+
+.town-world .town-post-envelope:focus-visible,
+.town-world .town-post-bundle:focus-visible,
+.town-world .town-post-trolley:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
 .town-world .town-post-yard {
   position: absolute;
   pointer-events: none;
 }
 
-.town-world .town-post-letter,
+.town-world .town-post-envelope,
 .town-post-icon {
   width: 14px;
   height: 10px;
@@ -129,7 +170,7 @@
   image-rendering: pixelated;
 }
 
-.town-world .town-post-letter {
+.town-world .town-post-envelope {
   position: absolute;
   filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.25));
   cursor: pointer;
@@ -139,17 +180,17 @@
     top 0.35s ease;
 }
 
-.town-world .town-post-letter:hover,
-.town-world .town-post-letter:focus-visible {
+.town-world .town-post-envelope:hover,
+.town-world .town-post-envelope:focus-visible {
   z-index: 2;
 }
 
-.town-shell[data-calm="true"] .town-world .town-post-letter {
+.town-shell[data-calm="true"] .town-world .town-post-envelope {
   transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .town-world .town-post-letter {
+  .town-world .town-post-envelope {
     transition: none;
   }
 }
@@ -187,8 +228,8 @@
   color: #a9b2a4;
 }
 
-.town-world .town-post-letter:hover .town-post-label,
-.town-world .town-post-letter:focus-visible .town-post-label {
+.town-world .town-post-envelope:hover .town-post-label,
+.town-world .town-post-envelope:focus-visible .town-post-label {
   display: grid;
 }
 

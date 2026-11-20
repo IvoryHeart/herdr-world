@@ -1,37 +1,132 @@
 import { afterEach, expect, test } from "bun:test";
+import { needsYouCount, type NeedsYouItem } from "../needsYou";
 import type { WorldAsk } from "../worldAsks";
 import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { TownCamera } from "./townCamera";
+import { townHarbourFoldAt } from "./townHarbourLot";
+import { townLibraryFoldAt } from "./townLibraryLot";
+import { layoutTown, TOWN_SHAPES, TOWN_TILE as T } from "./townLayout";
 import {
-  layoutTown,
-  TOWN_SHAPES,
-  TOWN_TILE as T,
-  type TownInput,
-} from "./townLayout";
+  TOWN_LETTER_SIZE,
+  TOWN_POST_EMPTY,
+  TOWN_POST_SLOTS,
+  TOWN_POST_TROLLEY,
+  townLetterAge,
+  townLetterLabel,
+  townPostCounts,
+  townPostFoldAt,
+  townPostOffice,
+  townPostParts,
+  townPostSignAt,
+  townPostSlot,
+  townPostSpoken,
+  townPostWaiting,
+  townPostYardCount,
+} from "./townPostModel";
 import {
   TOWN_POST_WIDTH,
   TOWN_POST_YARD_ROWS,
   townPostLotBeside,
 } from "./townPostLot";
 import {
-  TOWN_LETTER_SIZE,
-  TOWN_POST_SLOTS,
-  TOWN_POST_TROLLEY,
-  townLetterAge,
-  townLetterLabel,
-  townPostCountParts,
-  townPostOffice,
-  townPostSignAt,
-  townPostSignText,
-  townPostSlot,
-  townPostSpoken,
-  townPostYardCount,
-} from "./townPostModel";
-import {
   resetTownPostFixture,
   townPostFixture,
   townPostFixtureMode,
 } from "./townPostFixture";
+import { townWarehouseFoldAt } from "./townWarehouseModel";
+
+const items = (
+  ...kinds: NeedsYouItem["kind"][]
+): Pick<NeedsYouItem, "kind">[] => kinds.map((kind) => ({ kind }));
+
+test("it counts Needs you's items by kind, and the Outbox's checks", () => {
+  const listed = items("asks", "asks", "needs", "done", "done", "done");
+  const counts = townPostCounts(listed, 1);
+  expect(counts).toEqual({ asks: 2, needs: 1, done: 3, outbox: 1 });
+  // Waiting is what the top bar's counter counts: asks and blocked agents.
+  expect(townPostWaiting(counts)).toBe(needsYouCount(listed as NeedsYouItem[]));
+});
+
+test("its sign reads at a glance: urgent first, empty kinds left out", () => {
+  const parts = townPostParts({ asks: 2, needs: 1, done: 0, outbox: 1 });
+  expect(parts.map((part) => [part.mark, part.text])).toEqual([
+    ["asks", "2 questions"],
+    ["needs", "1 blocked"],
+    [null, "1 to check"],
+  ]);
+  expect(townPostSpoken({ asks: 1, needs: 2, done: 1, outbox: 2 })).toBe(
+    "1 question for you, 2 agents blocked, 1 finished to review, 2 answers to check",
+  );
+  expect(townPostParts(TOWN_POST_EMPTY)).toEqual([]);
+  expect(townPostSpoken(TOWN_POST_EMPTY)).toBe("nothing for you");
+});
+
+const town = (rooms: number[]) => ({
+  hosts: [{ key: "a", displayOrder: 0 }],
+  rooms: rooms.map((desks, order) => ({
+    key: `a/${order}`,
+    hostKey: "a",
+    order,
+    deskKeys: Array.from({ length: desks }, (_, desk) => `a/${order}/${desk}`),
+  })),
+});
+
+test("a wide town's sign stands on the post office's roof, not on the town center", () => {
+  const { layout } = layoutTown(town([2, 1]), TOWN_SHAPES.wide);
+  const lot = townPostLotBeside(layout.center);
+  const at = townPostSignAt(lot);
+  // Anchored at its bottom-right, the sign grows up and left over the lot.
+  expect(at.x).toBeGreaterThan(lot.x * T);
+  expect(at.x).toBeLessThanOrEqual((lot.x + lot.w) * T);
+  expect(at.x).toBeLessThan(layout.center.x * T);
+  expect(at.y).toBeLessThan(lot.yardY * T);
+});
+
+test.each([
+  ["one single-desk room", [1], 390, 844],
+  ["three single-desk rooms", [1, 1, 1], 390, 844],
+  ["three single-desk rooms, small phone", [1, 1, 1], 360, 640],
+  ["a tall building", [6, 4, 3, 2], 390, 844],
+] as const)(
+  "a narrow town folds it to a sign across its own house, in a phone's home view (%s)",
+  (_, rooms, width, height) => {
+    const { layout } = layoutTown(town([...rooms]), TOWN_SHAPES.phone);
+    const viewport = townViewport(width, height, { left: 0, right: 0 });
+    const camera = new TownCamera();
+    camera.viewport = viewport;
+    new TownSceneCamera(new Map(), () => {}).attach(camera, layout, viewport);
+    const lot = townPostLotBeside(layout.center);
+    const at = townPostFoldAt(lot);
+    const sign = camera.toScreen(at.x, at.y);
+    // A folded sign keeps its screen size near home zoom (--iz, up to 1.6):
+    // the post office's is up to about 138 by 28 pixels with all four
+    // counts, the wings' signs about 100 by 28.
+    const z = camera.z;
+    const scale = z * Math.min(1.6, Math.max(0.55, 1 / z));
+    const { inset } = viewport;
+    expect(sign.x - 69 * scale).toBeGreaterThanOrEqual(inset.left);
+    expect(sign.y - 14 * scale).toBeGreaterThanOrEqual(inset.top);
+    expect(sign.y + 14 * scale).toBeLessThanOrEqual(height - inset.bottom);
+    // On the post office's front, under its roof and above its yard.
+    expect(at.x).toBeGreaterThan(lot.x * T);
+    expect(at.x).toBeLessThan((lot.x + lot.w) * T);
+    expect(at.y).toBeGreaterThan(lot.y * T);
+    expect(at.y).toBeLessThan(lot.yardY * T);
+    // Clear of the signs on the town center's wings.
+    const center = layout.center;
+    for (const other of [
+      townHarbourFoldAt(center, T),
+      townLibraryFoldAt(center, T),
+      townWarehouseFoldAt(center),
+    ]) {
+      const there = camera.toScreen(other.x, other.y);
+      const apart =
+        Math.abs(sign.x - there.x) > (69 + 50) * scale ||
+        Math.abs(sign.y - there.y) > 28 * scale;
+      expect(apart).toBe(true);
+    }
+  },
+);
 
 const ask = (
   id: string,
@@ -68,39 +163,19 @@ test("letters are the open questions, oldest first, unverified callers marked", 
   expect(townLetterLabel(office.letters[1]!)).toBe(
     "Letter from agent-b: Question b?",
   );
-});
-
-test("the sign counts letters in and answers out, or says there is no mail", () => {
-  expect(townPostSignText(townPostOffice([], none))).toBe("No mail");
-  expect(townPostSpoken(townPostOffice([], none))).toBe("no mail");
-  expect(townPostSignText(townPostOffice([ask("a", 1)], none))).toBe(
-    "1 letter",
-  );
-  const full = townPostOffice([ask("a", 1), ask("b", 2)], {
-    waiting: 1,
+  // Answers out never go negative.
+  expect(townPostOffice([], { waiting: -1, checks: 2 }).outgoing).toEqual({
+    waiting: 0,
     checks: 2,
   });
-  expect(townPostSignText(full)).toBe("2 letters · 1 to send · 2 to check");
-  expect(townPostCountParts(full).map((part) => part.kind)).toEqual([
-    "letters",
-    "waiting",
-    "checks",
-  ]);
-  expect(townPostSpoken(full)).toBe(
-    "2 questions for you, 1 answer to send, 2 answers to check",
-  );
-  // Answers out alone still make mail.
-  expect(townPostSignText(townPostOffice([], { waiting: 0, checks: 1 }))).toBe(
-    "1 to check",
-  );
 });
 
-test("the yard's letters fit its planks, the trolley's end kept clear", () => {
+test("the yard's letters fit its cobbles, the trolley's end kept clear", () => {
   const yardW = TOWN_POST_WIDTH * T;
   const last = townPostSlot(TOWN_POST_SLOTS - 1);
-  // The trolley's handle starts six pixels left of its bed.
+  // The trolley's handle starts seven pixels left of its bed.
   expect(last.x + TOWN_LETTER_SIZE.w).toBeLessThan(
-    yardW - TOWN_POST_TROLLEY.fromRight - 6,
+    yardW - TOWN_POST_TROLLEY.fromRight - 7,
   );
   expect(last.y + TOWN_LETTER_SIZE.h).toBeLessThanOrEqual(
     TOWN_POST_YARD_ROWS * T,
@@ -111,46 +186,21 @@ test("the yard's letters fit its planks, the trolley's end kept clear", () => {
   expect(townPostYardCount(TOWN_POST_SLOTS + 1)).toBe(TOWN_POST_SLOTS - 1);
 });
 
-const town = (spec: Record<string, number[]>): TownInput => ({
-  hosts: Object.keys(spec).map((key, displayOrder) => ({ key, displayOrder })),
-  rooms: Object.entries(spec).flatMap(([hostKey, rooms]) =>
-    rooms.map((desks, order) => ({
-      key: `${hostKey}/${order}`,
-      hostKey,
-      order,
-      deskKeys: Array.from(
-        { length: desks },
-        (_, d) => `${hostKey}/${order}/${d}`,
-      ),
-    })),
-  ),
-});
-
 test.each([
-  ["one single-desk room", town({ a: [1] }), 390, 844],
-  ["three single-desk rooms", town({ a: [1, 1, 1] }), 390, 844],
-  ["three single-desk rooms, small phone", town({ a: [1, 1, 1] }), 360, 640],
-  ["a tall building", town({ a: [6, 4, 3, 2] }), 390, 844],
+  ["one single-desk room", [1], 390, 844],
+  ["three single-desk rooms", [1, 1, 1], 390, 844],
+  ["three single-desk rooms, small phone", [1, 1, 1], 360, 640],
+  ["a tall building", [6, 4, 3, 2], 390, 844],
 ] as const)(
-  "a phone's home view shows the post office's sign and yard (%s)",
-  (_, input, width, height) => {
-    const { layout } = layoutTown(input, TOWN_SHAPES.phone);
+  "a phone's home view shows the post office's yard (%s)",
+  (_, rooms, width, height) => {
+    const { layout } = layoutTown(town([...rooms]), TOWN_SHAPES.phone);
     const viewport = townViewport(width, height, { left: 0, right: 0 });
     const camera = new TownCamera();
     camera.viewport = viewport;
     new TownSceneCamera(new Map(), () => {}).attach(camera, layout, viewport);
     const lot = townPostLotBeside(layout.center);
-    const at = townPostSignAt(lot, true);
-    const sign = camera.toScreen(at.x, at.y);
-    // Near home zoom the narrow plate keeps its screen size (--iz): 104
-    // pixels wide with its border and at most 60 tall with three counts,
-    // growing up and right of its point.
     const { inset } = viewport;
-    expect(sign.x).toBeGreaterThanOrEqual(inset.left);
-    expect(sign.x + 104).toBeLessThanOrEqual(width - inset.right);
-    expect(sign.y - 60).toBeGreaterThanOrEqual(inset.top);
-    // Its zoom keeps the plate at screen size, not shrunk with the town.
-    expect(1 / camera.z).toBeLessThanOrEqual(2.4);
     const yard = camera.toScreen(
       lot.x * T,
       (lot.yardY + TOWN_POST_YARD_ROWS) * T,
@@ -210,9 +260,7 @@ test("the fixture switch is read once and leaves the address", () => {
   expect(townPostFixture("many", now).asks.length).toBeGreaterThan(
     TOWN_POST_SLOTS,
   );
-  expect(
-    townPostSignText(
-      townPostOffice([], townPostFixture("empty", now).outgoing),
-    ),
-  ).toBe("No mail");
+  const empty = townPostOffice([], townPostFixture("empty", now).outgoing);
+  expect(empty.letters).toEqual([]);
+  expect(empty.outgoing).toEqual(none);
 });

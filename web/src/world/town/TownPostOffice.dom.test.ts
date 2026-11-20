@@ -44,10 +44,12 @@ if (process.env.TOWN_POST_DOM !== "1") {
       configurable: true,
       writable: true,
     });
+  // The shared asks, reviewed-work and Outbox stores never reach a service here.
+  globalThis.fetch = (() => new Promise<Response>(() => {})) as never;
   const { act, createElement } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { layoutTown, TOWN_SHAPES } = await import("./townLayout");
-  const { TownPostOffice } = await import("./TownPostOffice");
+  const { TownPostOffice, TownPostProvider } = await import("./TownPostOffice");
   const { AnswerOutboxContext } = await import("./answerOutbox");
   const { WorldAsksStore } = await import("../worldAsks");
   const { WorldAnswerDeliveriesStore } = await import(
@@ -55,6 +57,8 @@ if (process.env.TOWN_POST_DOM !== "1") {
   );
   const { needsYouState, resetNeedsYouForTest } = await import("../needsYou");
   const { TOWN_POST_SLOTS } = await import("./townPostModel");
+  type Source = import("./TownPostOffice").TownPostSource;
+  type Leaf = import("../worldObject").WorldLeafObject;
   type WorldAsk = import("../worldAsks").WorldAsk;
 
   const town = (narrow: boolean) =>
@@ -65,6 +69,130 @@ if (process.env.TOWN_POST_DOM !== "1") {
       },
       narrow ? TOWN_SHAPES.phone : TOWN_SHAPES.wide,
     ).layout;
+
+  async function mountSign(source: Source | null, narrow = false) {
+    const host = document.createElement("div");
+    host.className = "town-world";
+    document.body.append(host);
+    const root = createRoot(host);
+    const office = createElement(TownPostOffice, {
+      layout: town(narrow),
+      renderer: { current: null },
+    });
+    await act(async () =>
+      root.render(
+        source
+          ? createElement(TownPostProvider, { source, children: office })
+          : office,
+      ),
+    );
+    return {
+      sign: host.querySelector<HTMLButtonElement>("button")!,
+      counts: () =>
+        [...host.querySelectorAll<HTMLElement>(".town-post-counts > span")].map(
+          (span) => [span.dataset.kind, span.textContent],
+        ),
+      async close() {
+        await act(async () => root.unmount());
+        host.remove();
+      },
+    };
+  }
+
+  test("its sign counts what is addressed to you, by kind, and opens Needs you", async () => {
+    resetNeedsYouForTest();
+    const office = await mountSign({
+      counts: { asks: 2, needs: 1, done: 3, outbox: 1 },
+    });
+    expect(office.sign.className).toBe("town-post-sign");
+    expect(office.sign.hasAttribute("data-waiting")).toBe(true);
+    expect(office.sign.textContent).toStartWith("POST OFFICE");
+    // The shared agent marks, as Needs you and the desks show them.
+    expect(office.counts()).toEqual([
+      ["asks", "?2 questions"],
+      ["needs", "!1 blocked"],
+      ["done", "✓3 to review"],
+      ["outbox", "✉1 to check"],
+    ]);
+    expect(office.sign.getAttribute("aria-label")).toBe(
+      "Post office: 2 questions for you, 1 agent blocked, 3 finished to review, 1 answer to check. Open Needs you",
+    );
+    // No pull requests: those are the warehouse's.
+    expect(office.sign.textContent).not.toMatch(/ready|failing|PR|pull/i);
+    expect(needsYouState().open).toBe(false);
+    await act(async () => office.sign.click());
+    expect(needsYouState().open).toBe(true);
+    await office.close();
+  });
+
+  test("with nothing for you, it says so and does not light up", async () => {
+    const office = await mountSign({
+      counts: { asks: 0, needs: 0, done: 0, outbox: 0 },
+    });
+    expect(office.counts()).toEqual([["none", "Nothing for you"]]);
+    expect(office.sign.hasAttribute("data-waiting")).toBe(false);
+    expect(office.sign.getAttribute("aria-label")).toBe(
+      "Post office: nothing for you. Open Needs you",
+    );
+    await office.close();
+  });
+
+  test("a narrow town folds it to a sign of marks and numbers", async () => {
+    resetNeedsYouForTest();
+    const office = await mountSign(
+      { counts: { asks: 0, needs: 2, done: 1, outbox: 0 } },
+      true,
+    );
+    expect(office.sign.className).toBe("town-post-fold");
+    expect(office.counts()).toEqual([
+      ["needs", "!2"],
+      ["done", "✓1"],
+    ]);
+    // Keyboard: a button, so Enter and Space open it as a click does.
+    expect(office.sign.type).toBe("button");
+    await act(async () => office.sign.click());
+    expect(needsYouState().open).toBe(true);
+    await office.close();
+  });
+
+  test("in Town it counts Needs you's own items in Town's world", async () => {
+    const leaf = (id: string, status: Leaf["status"]) =>
+      ({
+        id,
+        kind: "agent",
+        nativeId: `w1:${id}`,
+        connectionId: "local",
+        generation: 1,
+        label: `${id}-claude`,
+        agentName: id,
+        status,
+        stale: false,
+        actionable: true,
+        lastActivityAt: 1,
+        terminalId: `terminal-${id}`,
+        pane: { pane_id: `w1:${id}` },
+        stateLabels: {},
+      }) as unknown as Leaf;
+    const leaves = [
+      leaf("one", "blocked"),
+      leaf("two", "blocked"),
+      leaf("three", "working"),
+    ];
+    const office = await mountSign({
+      world: { leaves, nodeById: new Map(leaves.map((l) => [l.id, l])) },
+    });
+    expect(office.counts()).toEqual([["needs", "!2 blocked"]]);
+    await office.close();
+  });
+
+  test("drawn alone, it is a sign without counts", async () => {
+    const office = await mountSign(null);
+    expect(office.counts()).toEqual([]);
+    expect(office.sign.getAttribute("aria-label")).toBe(
+      "Post office: Needs you. Open Needs you",
+    );
+    await office.close();
+  });
 
   const ask = (index: number, verified = true): WorldAsk => ({
     id: `q-${index}`,
@@ -128,9 +256,10 @@ if (process.env.TOWN_POST_DOM !== "1") {
     });
     return {
       host,
-      sign: () => host.querySelector<HTMLButtonElement>(".town-post-sign"),
       letters: () => [
-        ...host.querySelectorAll<HTMLButtonElement>("button.town-post-letter"),
+        ...host.querySelectorAll<HTMLButtonElement>(
+          "button.town-post-envelope",
+        ),
       ],
       trolley: () =>
         host.querySelector<HTMLButtonElement>(".town-post-trolley"),
@@ -149,24 +278,6 @@ if (process.env.TOWN_POST_DOM !== "1") {
     act(async () => {
       (element as HTMLElement).click();
     });
-
-  test("the sign counts letters in and answers out, and opens Needs you at the oldest", async () => {
-    const view = await mount(false, stores([ask(2), ask(1)], 2, 1));
-    try {
-      expect(view.sign()?.textContent).toBe(
-        "POST OFFICE2 letters2 to send1 to check",
-      );
-      expect(view.sign()?.getAttribute("aria-label")).toBe(
-        "Post office: 2 questions for you, 2 answers to send, 1 answer to check. Open Needs you",
-      );
-      expect(view.sign()?.hasAttribute("data-quiet")).toBe(false);
-      await click(view.sign());
-      expect(needsYouState().open).toBe(true);
-      expect(needsYouState().request.itemKey).toBe("ask:q-1");
-    } finally {
-      await view.close();
-    }
-  });
 
   test("each question is a letter; its card shows the question and answers in Needs you", async () => {
     const view = await mount(false, stores([ask(1), ask(2, false)]));
@@ -219,11 +330,9 @@ if (process.env.TOWN_POST_DOM !== "1") {
     }
   });
 
-  test("with no mail the sign is quiet and the yard empty", async () => {
+  test("with no mail the yard is empty", async () => {
     const view = await mount(false, stores([]));
     try {
-      expect(view.sign()?.textContent).toBe("POST OFFICENo mail");
-      expect(view.sign()?.hasAttribute("data-quiet")).toBe(true);
       expect(view.letters()).toHaveLength(0);
       expect(view.trolley()).toBeNull();
     } finally {
@@ -257,12 +366,11 @@ if (process.env.TOWN_POST_DOM !== "1") {
     }
   });
 
-  test("a narrow town has the same post office, its sign a narrow plate", async () => {
+  test("a narrow town has the same yard beside its folded sign", async () => {
     let opened = 0;
     const view = await mount(true, stores([ask(1)], 1, 0), () => (opened += 1));
     try {
-      expect(view.sign()?.hasAttribute("data-narrow")).toBe(true);
-      expect(view.sign()?.textContent).toBe("POST OFFICE1 letter1 to send");
+      expect(view.host.querySelector(".town-post-fold")).not.toBeNull();
       expect(view.letters()).toHaveLength(1);
       await click(view.trolley());
       expect(opened).toBe(1);

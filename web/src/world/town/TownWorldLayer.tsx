@@ -24,9 +24,9 @@ import { TownStepBubble } from "./TownStepBubble";
 import { TownFuelMark } from "./TownFuelMark";
 import type { TownStepStore } from "./townStepStore";
 import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
+import { TownPostOffice } from "./TownPostOffice";
 import { TownLibrary } from "./TownLibrary";
 import { TownShipyard } from "./TownShipyard";
-import { TownPostOffice } from "./TownPostOffice";
 import { TownWarehouse } from "./TownWarehouse";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {
