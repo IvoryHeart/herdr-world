@@ -12,6 +12,7 @@ import {
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import { TOWN_RECEPTION_LIFT } from "./townBoardPlacement";
 import { TOWN_LIBRARY_ROOM } from "./townLibraryLot";
+import { TOWN_POST_ROOM } from "./townPostLot";
 import { townEase } from "./townTransition";
 
 export type TownViewport = {
@@ -138,7 +139,13 @@ export function townZoomLimits(
       usableHeight / (layout.height * TOWN_TILE),
     ) * 0.98;
   const narrow = layout.formFactor === "narrow";
-  const widest = Math.max(1, ...layout.buildings.map((b) => b.w));
+  // A stacked town's column also holds the post office beside the center
+  // (townLots.ts), so a phone's first view shows both.
+  const widest = Math.max(
+    1,
+    ...layout.buildings.map((b) => b.w),
+    narrow ? TOWN_POST_ROOM + layout.center.w : 0,
+  );
   // Wide screens open on the hosts' buildings, the town center above them
   // and its billboard above that; the verge and the park beyond stay just
   // off-screen; ALL shows them.

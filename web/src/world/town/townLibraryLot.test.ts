@@ -16,7 +16,7 @@ import {
   townLibraryLot,
   townLibraryReserve,
 } from "./townLibraryLot";
-import { townPostFoldAt, townPostLot, townPostReserve } from "./townPost";
+import { townPostLot, townPostReserve } from "./townPost";
 
 const town = (spec: Record<string, number[]>): TownInput => ({
   hosts: Object.keys(spec).map((key, displayOrder) => ({ key, displayOrder })),
@@ -62,7 +62,7 @@ test.each(towns)(
     expect(lot.yardY + TOWN_LIBRARY_YARD_ROWS).toBe(firstStreet);
     for (const b of layout.buildings) expect(b.y).toBeGreaterThan(area.y1);
     // Clear of the post office on the other side.
-    const post = townPostReserve(townPostLot(layout)!);
+    const post = townPostReserve(townPostLot(layout));
     expect(post.x1).toBeLessThanOrEqual(area.x0);
     // No street lamp stands in front of the garden.
     for (const lamp of layout.lamps)
@@ -91,7 +91,7 @@ test("making room for the library moves nothing that stands", () => {
   for (const layout of [one, two]) {
     const lot = townLibraryLot(layout)!;
     expect(lot.x).toBe(layout.center.x + layout.center.w + 2);
-    expect(townPostLot(layout)!.x).toBeLessThan(layout.center.x);
+    expect(townPostLot(layout).x).toBeLessThan(layout.center.x);
   }
 });
 
@@ -130,12 +130,13 @@ test("a narrow town folds the library to a sign on the center's left wing", () =
   expect(townLibraryLot(layout)).toBeNull();
   const { center } = layout;
   const at = townLibraryFoldAt(center, T);
-  const post = townPostFoldAt(center);
-  // Left of the plaque and doors in the middle; the post office's sign is
-  // on the right, so the two never overlap (each about 100 pixels wide).
+  // Left of the plaque and doors in the middle, on the center itself: the
+  // post office stands left of the center on a phone too (#1033), so the
+  // sign (about 100 pixels wide) never hangs over its lot.
   expect(at.x - 50).toBeGreaterThanOrEqual(center.x * T);
   expect(at.x + 50).toBeLessThan((center.x + center.w / 2) * T - 24);
-  expect(post.x - at.x).toBeGreaterThan(100);
-  expect(at.y).toBe(post.y);
+  expect(townPostReserve(townPostLot(layout)).x1 * T).toBeLessThanOrEqual(
+    at.x - 50,
+  );
   expect(at.y).toBeLessThan((center.y + center.h) * T);
 });

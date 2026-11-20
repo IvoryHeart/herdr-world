@@ -264,6 +264,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
     summary: () => townPlaceSummary(summary, model.projection, place),
     usage: { kind: place.kind, target },
   });
+  // A phone's reception board keeps only the rows above its building
+  // (TOWN_PHONE_BOARD_ROWS), so its expenses fold to a sign in its title;
+  // the billboard and the post office stand as on a wide town (#1033).
   const folded = layout.formFactor === "narrow";
   /** A host's room by its workspace, for its reception's expenses. */
   const roomLabel =
@@ -279,11 +282,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
     };
   return (
     <>
-      <TownCityBillboard
-        center={layout.center}
-        folded={folded}
-        boardRef={boards.cityRef}
-      />
+      <TownCityBillboard center={layout.center} boardRef={boards.cityRef} />
       <TownPostOffice layout={layout} renderer={renderer} />
       <TownLibrary layout={layout} />
       {layout.buildings.map((building) => {

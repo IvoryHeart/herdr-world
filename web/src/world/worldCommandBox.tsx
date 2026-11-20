@@ -36,6 +36,7 @@ const KIND_WORDS: Record<WorldSearchResult["kind"], string> = {
   table: "Table",
   agent: "Agent",
   terminal: "Terminal",
+  landmark: "Town",
 };
 
 const KIND_ICONS = {

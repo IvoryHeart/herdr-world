@@ -66,8 +66,8 @@ export function townLibraryLot(layout: {
 }
 
 /**
- * On a narrow town: the folded sign's spot on the center's left wing, the
- * post office's fold being on its right (townPostFoldAt), in world pixels.
+ * On a narrow town: the folded sign's spot on the center's left wing, in
+ * world pixels. The post office stands left of the center (townPostLot.ts).
  */
 export function townLibraryFoldAt(center: TownCenterLot, tile: number) {
   return {

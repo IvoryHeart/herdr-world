@@ -7,8 +7,8 @@
 
 import {
   TOWN_CENTER_HEIGHT,
-  townCenterStreet,
-  townCenterTop,
+  TOWN_CENTER_STREET,
+  TOWN_CENTER_TOP,
   townCenterWidth,
   type TownCenterLot,
 } from "./townCenter";
@@ -142,8 +142,14 @@ export function townPlaceLots(
     topRoadY: number;
   }[] = [];
   const verticalRoads: TownVerticalRoad[] = [];
-  const widestLot = Math.max(0, ...floors.map((lot) => lot.w));
-  let road = townCenterStreet(!narrow);
+  // A stacked town's lots share one column, at least as wide as the post
+  // office, its lawn and the center side by side at its top (#1033).
+  const widestLot = Math.max(
+    0,
+    ...floors.map((lot) => lot.w),
+    narrow ? TOWN_POST_ROOM + centerW : 0,
+  );
+  let road = TOWN_CENTER_STREET;
   const roads: number[] = [road];
   /** Every row's left edge: right of the road down the town's left side. */
   const left = MARGIN + ROAD_GAP;
@@ -189,11 +195,22 @@ export function townPlaceLots(
     road = roadY;
   }
   // Centred over the first row (a stacked town's shared axis), facing it
-  // across the first street.
+  // across the first street. A stacked town keeps its post office's lot in
+  // its column, left of the center: the center moves right off the axis
+  // only as far as that takes.
   const axis = left + Math.max(firstRowRight - left, centerW) / 2;
+  const centered = Math.round(axis - centerW / 2);
   const center: TownCenterLot = {
-    x: Math.max(MARGIN, Math.round(axis - centerW / 2)),
-    y: townCenterTop(!narrow),
+    x: Math.max(
+      MARGIN,
+      narrow
+        ? Math.min(
+            left + widestLot - centerW,
+            Math.max(centered, left + TOWN_POST_ROOM),
+          )
+        : centered,
+    ),
+    y: TOWN_CENTER_TOP,
     w: centerW,
     h: TOWN_CENTER_HEIGHT,
     street: roads[0]!,
@@ -201,15 +218,15 @@ export function townPlaceLots(
   // The post office stands left of the center (townPostLot.ts): a wide town
   // keeps lawn for it by standing everything that many columns right. The
   // shift is the same for every wide town, so a town that grows (and its
-  // center with it) never moves what already stands. A narrow town folds
-  // the post office to a sign instead.
+  // center with it) never moves what already stands. A stacked town's
+  // column already holds it.
   const shift = narrow ? 0 : TOWN_POST_ROOM;
   if (shift) {
     for (const lot of placed) lot.x += shift;
     for (const road of verticalRoads) road.x += shift;
     center.x += shift;
     width += shift;
-  }
+  } else width = Math.max(width, left + widestLot + ROAD_GAP);
   // The library stands right of the center (townLibraryLot.ts) on the lawn
   // a wide town keeps there; a town narrower than that grows to hold it,
   // which moves nothing that stands.

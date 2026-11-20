@@ -124,14 +124,14 @@ export function townBoardObstacles(
       y1: center.street * T,
     },
   ];
+  const post = townPostReserve(townPostLotBeside(center));
+  boxes.push({
+    x0: post.x0 * T,
+    x1: post.x1 * T,
+    y0: post.y0 * T,
+    y1: post.y1 * T,
+  });
   if (layout.formFactor !== "narrow") {
-    const post = townPostReserve(townPostLotBeside(center));
-    boxes.push({
-      x0: post.x0 * T,
-      x1: post.x1 * T,
-      y0: post.y0 * T,
-      y1: post.y1 * T,
-    });
     const library = townLibraryReserve(townLibraryLotBeside(center));
     boxes.push({
       x0: library.x0 * T,

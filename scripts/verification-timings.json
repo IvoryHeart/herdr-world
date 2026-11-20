@@ -25,7 +25,9 @@
     "runtime-leases": 17.975,
     "runtime-control": 15.544,
     "ranger-recovery": 14.362,
-    "ranger-authority": 7.021
+    "ranger-authority": 7.021,
+    "connection-registry": 8.721,
+    "claude-tap-lock": 2.791
   },
-  "note": "Measured with Quint 0.33.1 and two local workers; not hosted CI results. Core retains its structurally dedicated two-CPU CI shard. All models, bounds, replay and sensitivity controls passed; weights affect scheduling only."
+  "note": "Measured with Quint 0.33.1 and two local workers; not hosted CI results. Core retains its structurally dedicated two-CPU CI shard. The original 16 model groups, bounds, replay and sensitivity controls passed; November audit additions use focused measured checker-command totals for scheduling (registry additionally replays 48 real scenarios; tap retains a known product counterexample #1086); weights affect scheduling only."
 }
