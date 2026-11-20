@@ -29,6 +29,7 @@ import {
   SiteTown,
   siteTownScene,
 } from "../../world/testing/site-shots/siteStage";
+import { worldHostGroups } from "../../hostGroups";
 import { WorldViewPicker } from "../../world/WorldViewPicker";
 import type { WorldView } from "../../world/worldViewRouting";
 import { findHelpTarget } from "../helpTry";
@@ -132,24 +133,21 @@ async function settle(limit = 8000) {
 
 const view: WorldView = scene === "board" ? "board" : "town";
 const hosts = {
-  connections: [
-    {
-      id: "site-host-0",
-      label: "studio",
-      runtime: "herdr" as const,
+  hosts: worldHostGroups({
+    connections: [
+      ["site-host-0", "studio"],
+      ["site-host-1", "buildbox"],
+    ].map(([id, label]) => ({
+      id: id!,
+      label: label!,
+      source: "site",
+      is_default: id === "site-host-0",
       state: "ready" as const,
       generation: 1,
-      endpoint: "site-host-0",
-    },
-    {
-      id: "site-host-1",
-      label: "buildbox",
-      runtime: "herdr" as const,
-      state: "ready" as const,
-      generation: 1,
-      endpoint: "site-host-1",
-    },
-  ],
+      type: "ssh" as const,
+    })),
+    coreConnections: [],
+  }),
   ids: null,
   explanation: "",
   onChange: noAction,
