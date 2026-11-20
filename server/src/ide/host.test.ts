@@ -206,10 +206,26 @@ test.if(hasSetsid())(
   20_000,
 );
 
-test.if(hasSetsid())(
-  "two starts for the same folder at once launch one server",
-  async () => {
+/**
+ * A `mkdir` that succeeds on a folder that already exists, as uutils
+ * coreutils (Ubuntu 26.04's default) does when two create it at once. The
+ * scripts' PATH puts the host's ~/bin first, so they run this one.
+ */
+function lenientMkdir(home: string) {
+  const bin = join(home, "bin");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    join(bin, "mkdir"),
+    '#!/bin/sh\nfor last; do :; done\n/bin/mkdir "$@" 2>/dev/null || [ -d "$last" ]\n',
+  );
+  chmodSync(join(bin, "mkdir"), 0o755);
+}
+
+test.if(hasSetsid()).each([["an exclusive"], ["a lenient"]])(
+  "two starts for the same folder at once launch one server, with %s mkdir",
+  async (kind) => {
     const h = setup();
+    if (kind === "a lenient") lenientMkdir(h.home);
     const results = await Promise.all([
       h.run(h.start(), "token-one\n"),
       h.run(h.start(), "token-two\n"),
