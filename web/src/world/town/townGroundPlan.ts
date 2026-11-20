@@ -90,12 +90,11 @@ export function townGroundPlan(
     if (cx1 > cx0 && cy1 > cy0)
       marks.push({ fill, x: cx0, y: cy0, w: cx1 - cx0, h: cy1 - cy0 });
   };
-  // Street markings run the town's width, or to a wide town's promenade;
-  // beyond it the street is a lane.
+  // Street markings run to the harbour's promenade.
   const left = Math.max(region.x, 0);
   const right = Math.min(
     region.x + region.w,
-    (townHarbourLot(layout)?.streetEnd ?? width) * T,
+    townHarbourLot(layout).streetEnd * T,
   );
   for (const roadY of layout.roads) {
     const cy = (roadY + 2) * T + 7;

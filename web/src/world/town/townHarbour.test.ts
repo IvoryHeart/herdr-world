@@ -53,11 +53,7 @@ describe("town harbour", () => {
       for (const [hosts, rooms] of SIZES) {
         const layout = town(shape, hosts, rooms);
         const lot = townHarbourLot(layout);
-        if (layout.formFactor === "narrow") {
-          expect(lot).toBeNull();
-          continue;
-        }
-        if (!lot) throw new Error("no harbour on a wide town");
+        // Every form factor: a phone's stacked town has its harbour too.
         // The sea is the map's last columns and runs off its right edge.
         expect(lot.right).toBe(layout.width);
         expect(lot.coast).toBe(layout.width - TOWN_HARBOUR_SEA);

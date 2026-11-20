@@ -246,12 +246,11 @@ function reservedLand(layout: TownLayout) {
     reserve(lot.x0, lot.y0, lot.x1, lot.y1);
   }
   const harbour = townHarbourLot(layout);
-  if (harbour)
-    for (const lot of [
-      townWarehouseReserve(harbour.warehouse),
-      townHarbourReserve(harbour),
-    ])
-      reserve(lot.x0, lot.y0, lot.x1, lot.y1);
+  for (const lot of [
+    townWarehouseReserve(harbour.warehouse),
+    townHarbourReserve(harbour),
+  ])
+    reserve(lot.x0, lot.y0, lot.x1, lot.y1);
   if (layout.roads.length) {
     const top = Math.min(...layout.roads);
     reserve(0, top - TOWN_BILLBOARD_VERGE, width, top);

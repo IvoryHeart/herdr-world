@@ -42,9 +42,12 @@ A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
   **Out of date**; so does a failed read of that one project, keeping its
   last ships, and a failed read of World itself, and then every
   running World reads as stopped reporting without **Open**. GitHub off or no
-  repository leaves an empty sea and says how to go on. A narrow Town folds the
-  harbour into one sign on the town center's left wing, with a dot per project
-  in its colour and lamp. Calm Town and reduced motion stop the bobbing and
+  repository leaves an empty sea and says how to go on. A phone or portrait
+  Town has the same harbour right of its stacked buildings: drag or pinch to
+  reach it, or tap the **Shipyard** signpost on the town center's left wing
+  (a dot per project in its colour and lamp, and an arrow), which flies to
+  the sea with the promenade and a whole pier across the screen. Calm Town
+  and reduced motion stop the bobbing and
   sailing. Open pull requests are the warehouse's, not the harbour's.
 - **Work → Releases** (Board's Work lens and Town's harbour): main's checks,
   waiting changes, shipped releases and running Worlds, with links to GitHub
@@ -416,9 +419,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     out or not yet answered, the warehouse is closed and says to connect
     GitHub in **Integrations** (its sign opens them), with no crates and no
     counts; when a refresh fails it keeps the last list as unknown and says
-    GitHub is out of date. On a phone it folds to a sign on the town center's
-    right wing, in view at home zoom (a crate and coloured ready, failing and
-    waiting counts) that opens the crates as a list. For trying it without
+    GitHub is out of date. On a phone it stands on the harbour's shore too,
+    and a sign on the town center's right wing, in view at home zoom (a crate
+    and coloured ready, failing and waiting counts), opens the crates as a
+    list. For trying it without
     real pull requests, open World with `?townWarehouseFixture` (synthetic
     pull requests in every state; ten seconds later the first ready one
     merges), `?townWarehouseFixture=many` (a pile) or

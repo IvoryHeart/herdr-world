@@ -244,14 +244,15 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     await office.close();
   });
 
-  test("a narrow town folds it to a sign on the town center", async () => {
+  test("a narrow town keeps it on the shore, with a folded sign on the town center", async () => {
     await publish([
       fixturePullRequest(1),
       fixturePullRequest(2, { draft: true }),
     ]);
     const office = await mount(true);
-    expect(office.sign()).toBeNull();
-    expect(office.parcels()).toEqual([]);
+    // The warehouse itself stands on the harbour's shore, as on a wide town.
+    expect(office.sign()).not.toBeNull();
+    expect(office.parcels().length).toBe(2);
     const fold = office.host.querySelector<HTMLButtonElement>(
       ".town-warehouse-fold",
     )!;

@@ -32,6 +32,7 @@ import {
   townBerthAt,
   townHarbourFoldAt,
   townHarbourLot,
+  townHarbourView,
   townLanePierAt,
   townLaneSignAt,
   townLanesShown,
@@ -184,8 +185,9 @@ export function townHarbourSignText(
  * one), and main's checks in the lighthouse at the pier's head. A board, a
  * hull or a ship's "All releases" opens that project in the Work lens's
  * Releases tab; a ship opens its release's card. Open pull requests are the
- * warehouse's (TownWarehouse.tsx). A narrow town folds the harbour to a
- * sign on the town center's left wing.
+ * warehouse's (TownWarehouse.tsx). A narrow (phone) town has the same
+ * harbour right of its stacked buildings, reached by panning or zooming,
+ * and a signpost on the town center's left wing that flies there.
  */
 export const TownShipyard = memo(function TownShipyard({
   layout,
@@ -230,22 +232,48 @@ export const TownShipyard = memo(function TownShipyard({
     handle.camera.flyTo(at.x, at.y, handle.camera.z, 0.4);
     handle.invalidate("focus");
   };
+  /**
+   * The folded sign's signpost: fly to the harbour, framing the promenade
+   * and the first lanes' piers across the view at no more than home zoom;
+   * without a camera (a town drawn alone), open the releases instead.
+   */
+  const sail = () => {
+    const handle = renderer.current;
+    if (!handle) {
+      openWork?.("releases");
+      return;
+    }
+    const { camera } = handle;
+    const { width, inset } = camera.viewport;
+    const view = townHarbourView(lot, width - inset.left - inset.right);
+    // Never closer than the town's own first view: a large portrait screen
+    // shows the harbour at the scale it shows the buildings.
+    const z = camera.clampZoom(Math.min(view.z, camera.limits?.home ?? view.z));
+    const focus = camera.focusPoint();
+    camera.flyTo(view.x, view.top + (focus.y - inset.top) / z, z);
+    handle.invalidate("harbour");
+  };
   const signText = townHarbourSignText(lanes, chosen);
   const label = `Shipyard: ${signText}${openWork ? ". Open releases" : ""}`;
-  if (!lot)
-    return (
+  const shown = townLanesShown(lot, lanes.length);
+  const rest = lanes.slice(shown);
+  const signAt = { x: lot.streetEnd * T + 4, y: TOWN_HARBOUR_SIGN_ROW * T };
+  // A phone's first view keeps the stacked buildings; a signpost on the
+  // town center's left wing points the way to the sea.
+  const signpost =
+    layout.formFactor === "narrow" ? (
       <button
         type="button"
         className="town-harbour-fold"
         data-quiet={!lanes.length || undefined}
         style={{ left: fold.x, top: fold.y }}
-        aria-label={label}
+        aria-label={`Shipyard: ${signText}. Go to the harbour`}
         title="Shipyard"
         onPointerDown={(event) => event.stopPropagation()}
         onFocus={reveal}
         onClick={(event) => {
           event.stopPropagation();
-          openWork?.("releases");
+          sail();
         }}
       >
         <span className="town-harbour-icon" aria-hidden="true" />
@@ -261,60 +289,63 @@ export const TownShipyard = memo(function TownShipyard({
           </span>
         ) : null}
         <span aria-hidden="true">{foldedText(lanes, chosen)}</span>
+        <span className="town-harbour-fold-arrow" aria-hidden="true">
+          →
+        </span>
       </button>
-    );
-  const shown = townLanesShown(lot, lanes.length);
-  const rest = lanes.slice(shown);
-  const signAt = { x: lot.streetEnd * T + 4, y: TOWN_HARBOUR_SIGN_ROW * T };
+    ) : null;
   return (
-    <div
-      className="town-harbour"
-      data-quiet={!lanes.length || undefined}
-      role="group"
-      aria-label="Shipyard"
-    >
-      <button
-        type="button"
-        className="town-harbour-sign"
-        style={{ left: signAt.x, top: signAt.y }}
-        data-at-x={signAt.x}
-        data-at-y={signAt.y + 40}
-        aria-label={label}
-        onPointerDown={(event) => event.stopPropagation()}
-        onFocus={reveal}
-        onClick={(event) => {
-          event.stopPropagation();
-          openWork?.("releases");
-        }}
+    <>
+      {signpost}
+      <div
+        className="town-harbour"
+        data-quiet={!lanes.length || undefined}
+        role="group"
+        aria-label="Shipyard"
       >
-        <span className="town-harbour-sign-title" aria-hidden="true">
-          SHIPYARD
-        </span>
-        <span className="town-harbour-sign-text" aria-hidden="true">
-          {signText}
-        </span>
-      </button>
-      {lanes.slice(0, shown).map((lane, index) => (
-        <LaneView
-          key={lane.repo}
-          lot={lot}
-          index={index}
-          lane={lane}
-          now={now}
-          onOpenProject={openProject}
+        <button
+          type="button"
+          className="town-harbour-sign"
+          style={{ left: signAt.x, top: signAt.y }}
+          data-at-x={signAt.x}
+          data-at-y={signAt.y + 40}
+          aria-label={label}
+          onPointerDown={(event) => event.stopPropagation()}
           onFocus={reveal}
-        />
-      ))}
-      {rest.length ? (
-        <MoreLanes
-          lot={lot}
-          index={shown}
-          lanes={rest}
-          onOpenProject={openProject}
-          onFocus={reveal}
-        />
-      ) : null}
-    </div>
+          onClick={(event) => {
+            event.stopPropagation();
+            openWork?.("releases");
+          }}
+        >
+          <span className="town-harbour-sign-title" aria-hidden="true">
+            SHIPYARD
+          </span>
+          <span className="town-harbour-sign-text" aria-hidden="true">
+            {signText}
+          </span>
+        </button>
+        {lanes.slice(0, shown).map((lane, index) => (
+          <LaneView
+            key={lane.repo}
+            lot={lot}
+            index={index}
+            lane={lane}
+            now={now}
+            onOpenProject={openProject}
+            onFocus={reveal}
+          />
+        ))}
+        {rest.length ? (
+          <MoreLanes
+            lot={lot}
+            index={shown}
+            lanes={rest}
+            onOpenProject={openProject}
+            onFocus={reveal}
+          />
+        ) : null}
+      </div>
+    </>
   );
 });
 

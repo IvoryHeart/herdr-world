@@ -149,8 +149,9 @@ const FOLDED_WAITING = {
  * Town's warehouse (#760, moved to the harbour by #1028): your open pull requests as parcels in its
  * sorting yard beside the town center, ready to merge first, each opening the pull
  * request card the desk badge opens. Its sign counts them without hovering.
- * On a narrow (stacked) town it folds to a sign on the town center that
- * opens the same parcels as a list, as the city billboard folds. Its sign,
+ * On a narrow (stacked) town it stands on the shore too, right of the
+ * buildings, and a folded sign on the town center opens the same parcels
+ * as a list within a phone's first view. Its sign,
  * and "All pull requests" in its lists, open Board's Work lens over Town
  * (#887): every pull request as the same kanban.
  */
@@ -198,9 +199,9 @@ export const TownWarehouse = memo(function TownWarehouse({
     )
       return;
     const lot = townWarehouseLot(layout);
-    const at = lot
-      ? { x: (lot.x + lot.w / 2) * T, y: lot.yardY * T }
-      : townWarehouseFoldAt(layout.center);
+    const at = target.classList.contains("town-warehouse-fold")
+      ? townWarehouseFoldAt(layout.center)
+      : { x: (lot.x + lot.w / 2) * T, y: lot.yardY * T };
     handle.camera.flyTo(at.x, at.y, handle.camera.z, 0.4);
     handle.invalidate("focus");
   };
@@ -218,19 +219,6 @@ export const TownWarehouse = memo(function TownWarehouse({
         )
       : null;
   const lot = townWarehouseLot(layout);
-  if (!lot)
-    return (
-      <>
-        <FoldedSign
-          center={layout.center}
-          office={office}
-          onOpen={openCard}
-          onOpenWork={openWork}
-          onFocus={reveal}
-        />
-        {card}
-      </>
-    );
   const parcels = office.status === "open" ? office.parcels : [];
   const shown = parcels.slice(0, yardSlots(parcels.length));
   const pile = parcels.slice(shown.length);
@@ -343,6 +331,15 @@ export const TownWarehouse = memo(function TownWarehouse({
             .join(" ")}
         </span>
       </div>
+      {layout.formFactor === "narrow" ? (
+        <FoldedSign
+          center={layout.center}
+          office={office}
+          onOpen={openCard}
+          onOpenWork={openWork}
+          onFocus={reveal}
+        />
+      ) : null}
       {card}
     </>
   );
