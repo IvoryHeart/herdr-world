@@ -87,7 +87,9 @@ Targets are on your own host; add --connection ID for another one.
          log: --connection ID --workspace ID --path PATH [--agent-ref ID]
          link: --url HTTP_URL (stored only; no fetch or iframe)
   board element read ID [--generation N] [--path CHILD] [--json]
-         project sources need the named connection's current generation;
+         project sources need the named connection's current generation from
+         ls --json: choose a current: true row; use its connection_id, generation
+         and workspaces[].workspace_id. Refresh ls after a generation refusal;
          a memory directory accepts a relative child path. Reads cap at 64 KiB.
   board element delete ID --rev REV [--json]
          removes only the reference; list returns the revision needed to edit/delete.

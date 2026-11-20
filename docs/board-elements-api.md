@@ -157,9 +157,40 @@ herdr-world board element read crew-1016-plan --json
 
 Expect all eleven registry kinds, a saved record, then its text. Copy the returned
 element `rev` into `board element delete crew-1016-plan --rev REV --json` to remove
-it. No file editing or rare runtime state is needed. For a project source use
-`board element put memory project-memory --title Memory --connection studio
---workspace project-a --path MEMORY.md --json`, then
-`board element read project-memory --generation 7 --json` with actual connection
-selectors from `herdr-world ls --json`. The same command without `--generation`
-deterministically demonstrates the refusal. No new testing switch is needed.
+it. No file editing or rare runtime state is needed.
+
+For a successful project-source read, first discover the selectors:
+
+```sh
+herdr-world ls --json
+```
+
+Example output (actor omitted):
+
+```json
+{"ok":true,"result":[{"connection_id":"studio","label":"Studio","generation":7,"current":true,"workspaces":[{"workspace_id":"project-a","label":"Project","tabs":[]}]}]}
+```
+
+Choose a `current: true` connection row and one of its workspaces. Copy that
+row's `connection_id` and `generation`, and the workspace's `workspace_id`.
+`generation` is the connection's current runtime generation, not the generation
+of cached topology; `current: false` rows are not actionable. For the candidate
+checkout workspace, use its existing `FEATURES.md` as a test memory source:
+
+```sh
+herdr-world board element put memory crew-1016-memory --title Memory --connection studio --workspace project-a --path FEATURES.md --json
+herdr-world board element read crew-1016-memory --generation 7 --json
+```
+
+Replace `studio`, `project-a` and `7` with the values from the same `ls` row.
+Expect `status: "ready"`, `content.type: "text"` and the beginning of the project's
+`FEATURES.md`; the target repeats the selected connection, generation, workspace
+and relative path. The same discovery works for logs and file-backed documents.
+Copy the saved element's `rev` into `board element delete crew-1016-memory --rev
+REV --json` to clean up. For normal memory use, omit `--path` to read `MEMORY.md`.
+
+If the runtime reconnects between listing and reading, refresh `ls --json` and
+use the new generation for the same connection. Never choose a different
+connection to work around a refusal. Reading without `--generation`
+deterministically demonstrates `generation_required` (exit 3). No new testing
+switch is needed.

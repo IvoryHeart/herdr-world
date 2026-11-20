@@ -79,3 +79,9 @@ source mappings, conflicts and limits for the Board presentation consumer.
 #### Scenario: CLI creates and browser reads
 - **WHEN** a CLI document creation is acknowledged
 - **THEN** browser list/read SHALL observe the same committed element and text
+
+#### Scenario: CLI discovers a project source generation
+- **WHEN** a caller runs `herdr-world ls --json`
+- **THEN** each connection row SHALL include its snapshot connection's current runtime `generation`, connection ID, current status and workspace selectors
+- **AND** a caller SHALL be able to use a `current: true` row's selectors to create and read a project-backed element without guessing the generation
+- **AND** a generation change SHALL still require refreshing the listing rather than falling back to another runtime

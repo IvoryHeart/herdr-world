@@ -684,6 +684,7 @@ export function createWorldCli(deps: WorldCliDeps) {
         return snapshot.connections.map((connection) => ({
           connection_id: connection.connection_id,
           label: connection.label,
+          generation: connection.generation,
           current: connection.actionable && !connection.stale,
           workspaces: (connection.snapshot?.workspaces ?? []).map((ws) => ({
             workspace_id: ws.workspace_id,

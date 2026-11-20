@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStorage, type WorldStorage } from "../service/storage";
@@ -11,6 +11,7 @@ import { createWorldCli, type WorldCliDeps } from "../world/world-cli";
 import type { BridgeRpcContext } from "./context";
 import { parseWorldArgs, runWorldCommand } from "../cli/world";
 import type { CliContext } from "../cli/command";
+import { readLocalFile, listLocalFiles } from "../workspace/local-files";
 
 const roots: string[] = [],
   stores: WorldStorage[] = [];
@@ -27,12 +28,24 @@ async function fixture() {
     { clock: systemClock, scheduler: systemScheduler },
   );
   stores.push(storage);
+  writeFileSync(join(root, "MEMORY.md"), "Remember the release criteria.");
   const events: number[] = [];
   const elements = createBoardElementService({
     board: storage.board,
     publish: (revision) => events.push(revision),
-    project: () => {
-      throw new Error("No host needed");
+    project: (source, generation) => {
+      expect(source.connection_id).toBe("studio");
+      expect(source.workspace_id).toBe("project-a");
+      expect(generation).toBe(7);
+      return {
+        files: {
+          readWorkspaceFile: (params) =>
+            readLocalFile(root, String(params.path)),
+          listWorkspaceFiles: (params) =>
+            listLocalFiles(root, String(params.path), true),
+        },
+        isCurrent: () => true,
+      };
     },
   });
   let current = true;
@@ -57,6 +70,31 @@ async function fixture() {
   };
   const cli = createWorldCli({
     hosts: () => [],
+    snapshot: async () => ({
+      revision: 1,
+      observed_at: 1000,
+      connections: [
+        {
+          connection_id: "studio",
+          label: "Studio",
+          generation: 7,
+          snapshot_generation: 7,
+          actionable: true,
+          stale: false,
+          snapshot: {
+            workspaces: [{ workspace_id: "project-a", label: "Project" }],
+          },
+        },
+        {
+          connection_id: "archive",
+          label: "Archive",
+          generation: 11,
+          snapshot_generation: 10,
+          actionable: false,
+          stale: true,
+        },
+      ],
+    }),
     board: storage.board(),
     ledger: storage.ledger(),
     elements,
@@ -211,4 +249,67 @@ test("real CLI parser and transport produce JSON and meaningful refusal exit cod
     ],
   ])
     expect(() => parseWorldArgs("board", args)).toThrow();
+});
+
+test("CLI ls selectors support successful project reads for every file-backed kind", async () => {
+  const f = await fixture();
+  const output: string[] = [];
+  const context = {
+    runtime: { env: {} },
+    log: (line: string) => output.push(line),
+    error: (line: string) => output.push(line),
+  } as unknown as CliContext;
+  const transport = (command: string, params: Record<string, unknown>) =>
+    f.cli.handle({ command, params }, null);
+  const run = async (command: string, args: string[]) => {
+    output.length = 0;
+    expect(
+      await runWorldCommand(command, [...args, "--json"], context, transport),
+    ).toBe(0);
+    return JSON.parse(output[0]!);
+  };
+  const listed = await run("ls", []);
+  expect(listed.result).toMatchObject([
+    { connection_id: "studio", generation: 7, current: true },
+    { connection_id: "archive", generation: 11, current: false },
+  ]);
+  const connection = listed.result.find(
+    (row: { current: boolean }) => row.current,
+  );
+  const workspace = connection.workspaces[0];
+  for (const kind of ["memory", "log", "document"]) {
+    const id = `project-${kind}`;
+    const saved = await run("board", [
+      "element",
+      "put",
+      kind,
+      id,
+      "--title",
+      "Project source",
+      "--connection",
+      connection.connection_id,
+      "--workspace",
+      workspace.workspace_id,
+      "--path",
+      "MEMORY.md",
+    ]);
+    expect(saved.result.status).toBe("saved");
+    const read = await run("board", [
+      "element",
+      "read",
+      id,
+      "--generation",
+      String(connection.generation),
+    ]);
+    expect(read.result).toMatchObject({
+      status: "ready",
+      target: {
+        connection_id: connection.connection_id,
+        connection_generation: connection.generation,
+        workspace_id: workspace.workspace_id,
+        path: "MEMORY.md",
+      },
+      content: { text: "Remember the release criteria.", truncated: false },
+    });
+  }
 });

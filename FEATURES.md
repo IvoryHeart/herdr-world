@@ -1416,7 +1416,11 @@ iframe HTML. Removing an element leaves source content intact. Element edits
 have no CLI history/undo; existing sticky note and card behavior is unchanged.
 
 Project reads explicitly name the saved connection's current generation through
-shared TUI/core Files handlers. Offline/stale sources never use another host.
+shared TUI/core Files handlers. `herdr-world ls --json` returns each connection's
+`generation`, `connection_id`, `current` status and workspace IDs; choose a
+`current: true` row and pass its `generation` to `board element read --generation`.
+Refresh the listing after a generation refusal. Offline/stale sources never use
+another host.
 Paths stay project-relative, including symlink checks; errors omit absolute
 roots. Missing/binary sources are unavailable and retired reads are refused.
 Limits: 500 elements, 16,000-character inline text, 64 KiB source text, 32 directory
