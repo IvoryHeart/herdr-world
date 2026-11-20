@@ -4,19 +4,22 @@ import { TERMINAL_COLOR_NAMES, type TerminalColorName } from "./terminalColor";
 /**
  * Apartments: where finished agents live. When an agent's terminal ends, or
  * the person retires it through the bin, World keeps one resident record in
- * its own store instead of letting the agent vanish. Town draws the records
- * as an apartment building and Board lists the same records; both read this
- * one model.
+ * its own store instead of letting the agent vanish. Every other agent a
+ * connected host's harnesses remember (their transcripts, from before
+ * Apartments too) moves in asleep, unless it is running now. Town draws the
+ * records as an apartment building and Board lists the same records; both
+ * read this one model.
  *
  * A record is a read-only memory of a terminal that no longer exists: it is
  * never an actionable target. Resuming starts a new agent in a room the
  * person picks, with the harness's own resume command.
  */
 
-/** How many residents World keeps; the oldest move out first. */
-export const APARTMENT_CAPACITY = 500;
-/** Residents older than this move out on the next write. */
-export const APARTMENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+/**
+ * How many residents World keeps: the whole history, up to this many; the
+ * oldest move out first. There is no age limit.
+ */
+export const APARTMENT_CAPACITY = 5000;
 
 export const APARTMENT_LIMITS = {
   name: 100,
@@ -70,8 +73,18 @@ export function parseApartmentAppearance(
   };
 }
 
-/** ended: its terminal closed by itself. retired: it rode the bin's bus. */
-export type ApartmentMoveOut = "ended" | "retired";
+/**
+ * ended: its terminal closed by itself. retired: it rode the bin's bus.
+ * found: asleep; World found it in its harness's own history on the host
+ * (it ended while World was not watching, or before Apartments existed).
+ */
+export type ApartmentMoveOut = "ended" | "retired" | "found";
+
+export const APARTMENT_MOVE_OUTS: readonly ApartmentMoveOut[] = [
+  "ended",
+  "retired",
+  "found",
+];
 
 export type ApartmentLink = {
   kind: "pr" | "issue";
@@ -97,9 +110,15 @@ export type ApartmentResident = {
   connection_id: string;
   connection_label: string;
   runtime: "herdr" | "herdr-core";
-  /** The terminal it ran in (historical, never a target). */
+  /**
+   * The terminal it ran in (historical, never a target); `session:<id>` for
+   * a resident found in its harness's history.
+   */
   terminal_id: string;
-  /** When World first saw it (epoch ms), and when it moved out. */
+  /**
+   * When World first saw it (epoch ms), and when it moved out; for a found
+   * resident, its transcript's start and last write.
+   */
   first_seen_at: number;
   moved_out_at: number;
   move_out: ApartmentMoveOut;
@@ -120,17 +139,28 @@ export type ApartmentState = {
   revision: number;
   residents: ApartmentResident[];
   capacity: number;
-  retention_ms: number;
 };
 
 export const EMPTY_APARTMENTS: ApartmentState = {
   revision: 0,
   residents: [],
   capacity: APARTMENT_CAPACITY,
-  retention_ms: APARTMENT_RETENTION_MS,
 };
 
 const SESSION = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
+
+/**
+ * One agent's identity across Apartments: its harness and session. Two
+ * records with the same key are the same agent (a session ID is the
+ * harness's own unique name for it). Null without a session.
+ */
+export function apartmentSessionKey(
+  resident: Pick<ApartmentResident, "harness" | "session_id">,
+): string | null {
+  return resident.session_id
+    ? `${resident.harness ?? ""}/${resident.session_id}`
+    : null;
+}
 
 /**
  * The command that resumes a resident in its harness, or null when World

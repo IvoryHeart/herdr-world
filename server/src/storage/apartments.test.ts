@@ -58,10 +58,23 @@ const resident = (
   summary: `Synthetic summary for ${name}`,
   last_report: null,
   links: [{ kind: "pr", number: 42, repo: "example/repo" }],
-  session_id: "0f0e0d0c-0000-4000-8000-000000000001",
+  session_id: `session-${name}`,
   appearance: null,
   ...extra,
 });
+const found = (
+  name: string,
+  movedOut: number,
+  extra: Partial<ApartmentMoveIn> = {},
+) =>
+  resident(name, movedOut, {
+    move_out: "found",
+    room: null,
+    tab: null,
+    links: [],
+    terminal_id: `session:session-${name}`,
+    ...extra,
+  });
 
 describe("apartment residents live in World's SQLite", () => {
   test("a resident survives a round trip with its links bounded and deduplicated", () => {
@@ -90,29 +103,29 @@ describe("apartment residents live in World's SQLite", () => {
     }
   });
 
-  test("retention moves out the oldest by age, then by capacity; evict removes by ID", () => {
+  test("capacity moves out the oldest, at any age; evict removes by ID", () => {
     const db = database();
     try {
-      const bounds = { capacity: 2, retention_ms: 30 * DAY };
-      const at = 100 * DAY;
-      writeApartments(
-        db,
-        { type: "move-in", resident: resident("old", at - 40 * DAY) },
-        at,
-        bounds,
-      );
-      expect(readApartments(db)).toEqual([]);
+      const bounds = { capacity: 2 };
+      const at = 4000 * DAY;
       for (const [name, day] of [
+        ["ancient", -3000],
         ["a", 1],
         ["b", 2],
-        ["c", 3],
       ] as const)
         writeApartments(
           db,
-          { type: "move-in", resident: resident(name, at - 10 * DAY + day) },
+          { type: "move-in", resident: resident(name, at + day * DAY) },
           at,
           bounds,
         );
+      expect(readApartments(db).map((row) => row.name)).toEqual(["a", "b"]);
+      writeApartments(
+        db,
+        { type: "move-in", resident: resident("c", at + 3 * DAY) },
+        at,
+        bounds,
+      );
       expect(readApartments(db).map((row) => row.name)).toEqual(["b", "c"]);
       const b = readApartments(db)[0]!.id;
       const { residents } = writeApartments(
@@ -122,6 +135,88 @@ describe("apartment residents live in World's SQLite", () => {
         bounds,
       );
       expect(residents.map((row) => row.name)).toEqual(["c"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("one session is one resident: found, ended again, evicted for good", () => {
+    const db = database();
+    try {
+      const at = 100 * DAY;
+      const write = (operation: Parameters<typeof writeApartments>[1]) =>
+        writeApartments(db, operation, at).residents;
+      // Found in a history: asleep, once, however often it is found.
+      write({ type: "found", residents: [found("ada", at - 5 * DAY)] });
+      write({ type: "found", residents: [found("ada", at - 5 * DAY)] });
+      expect(readApartments(db).map((row) => row.move_out)).toEqual(["found"]);
+      // Its transcript was written since: the record follows, summary kept.
+      write({
+        type: "found",
+        residents: [found("ada", at - DAY, { summary: "Another summary" })],
+      });
+      expect(readApartments(db)).toMatchObject([
+        { moved_out_at: at - DAY, summary: "Synthetic summary for ada" },
+      ]);
+      // Resumed at a desk and ended there: the seen end replaces it.
+      write({ type: "move-in", resident: resident("ada", at) });
+      expect(readApartments(db)).toMatchObject([
+        { move_out: "ended", moved_out_at: at },
+      ]);
+      // A history never overwrites a seen end.
+      write({ type: "found", residents: [found("ada", at + DAY)] });
+      expect(readApartments(db)).toMatchObject([{ move_out: "ended" }]);
+      // Evicted: the next census does not bring it back.
+      const id = readApartments(db)[0]!.id;
+      write({ type: "evict", ids: [id] });
+      write({ type: "found", residents: [found("ada", at + 2 * DAY)] });
+      expect(readApartments(db)).toEqual([]);
+      // Unless it runs again and its end is seen.
+      write({ type: "move-in", resident: resident("ada", at + 3 * DAY) });
+      write({ type: "evict", ids: [] });
+      expect(readApartments(db)).toHaveLength(1);
+      // Found records without a session, or not marked found, are refused.
+      write({
+        type: "found",
+        residents: [
+          found("nobody", at, { session_id: null }),
+          found("seen", at, { move_out: "ended" }),
+        ],
+      });
+      expect(readApartments(db).map((row) => row.name)).toEqual(["ada"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("an older database gains session keys for the residents it has", () => {
+    const path = join(folder(), "world.sqlite");
+    const db = new Database(path);
+    try {
+      const before = worldMigrations.findIndex(
+        (sql) =>
+          typeof sql === "string" && sql.includes("ADD COLUMN session_key"),
+      );
+      expect(before).toBeGreaterThan(0);
+      migrateWorldDatabase(db, path, worldMigrations.slice(0, before), 0);
+      const old = resident("grace", 10 * DAY, { harness: "codex" });
+      db.query("INSERT INTO apartment_residents VALUES(?,?,?)").run(
+        "r-old",
+        old.moved_out_at,
+        JSON.stringify(old),
+      );
+      migrateWorldDatabase(db, path, worldMigrations, 0);
+      writeApartments(
+        db,
+        {
+          type: "found",
+          residents: [found("grace", 20 * DAY, { harness: "codex" })],
+        },
+        20 * DAY,
+      );
+      expect(readApartments(db)).toMatchObject([
+        { id: "r-old", move_out: "ended" },
+      ]);
     } finally {
       db.close();
     }
@@ -215,14 +310,20 @@ describe("apartment residents live in World's SQLite", () => {
   });
 
   test("the memory port follows the same rules", async () => {
-    const port = memoryApartmentsPort([], () => 50 * DAY, { capacity: 1 });
+    const port = memoryApartmentsPort([], () => 50 * DAY, { capacity: 2 });
+    await port.found([found("z", 40 * DAY)]);
+    expect([...port.sessionKeys()]).toEqual(["claude/session-z"]);
     await port.moveIn(resident("a", 49 * DAY));
+    await port.evict([port.list()[1]!.id]);
+    await port.found([found("a", 49 * DAY)]);
+    expect(port.list().map((row) => row.name)).toEqual(["z"]);
     const b = await port.moveIn(resident("b", 50 * DAY));
-    expect(port.list().map((row) => row.name)).toEqual(["b"]);
+    await port.found([found("y", 45 * DAY)]);
+    expect(port.list().map((row) => row.name)).toEqual(["y", "b"]);
     await port.report(b.id, "Opened PR #42");
     expect(port.get(b.id)?.last_report).toBe("Opened PR #42");
     await port.evict([b.id]);
-    expect(port.list()).toEqual([]);
+    expect(port.list().map((row) => row.name)).toEqual(["y"]);
   });
 
   test("the real storage worker keeps residents across a reopen", async () => {

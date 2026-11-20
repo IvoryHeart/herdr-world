@@ -1,6 +1,7 @@
 import { STARTER_PROFILES } from "../../../../shared/agentProfile";
 import type {
   ApartmentAppearance,
+  ApartmentMoveOut,
   ApartmentResident,
   ApartmentState,
 } from "../../../../shared/apartments";
@@ -46,7 +47,7 @@ export function fixtureResidents(now: number): ApartmentResident[] {
     string,
     string,
     number,
-    "ended" | "retired",
+    ApartmentMoveOut,
     string,
     number | null,
   ][] = [
@@ -142,11 +143,14 @@ export function fixtureResidents(now: number): ApartmentResident[] {
 }
 
 /** A client answering Apartments' calls from synthetic residents in memory. */
-export function fixtureApartmentsClient(now: number): ApartmentsClient {
+export function fixtureApartmentsClient(
+  now: number,
+  extra: readonly ApartmentResident[] = [],
+): ApartmentsClient {
   let state: ApartmentState = {
     ...EMPTY_APARTMENTS,
     revision: 1,
-    residents: fixtureResidents(now),
+    residents: [...fixtureResidents(now), ...extra],
   };
   return {
     async call(method, params = {}) {

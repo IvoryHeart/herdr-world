@@ -2,10 +2,11 @@ import type { Database } from "bun:sqlite";
 import {
   APARTMENT_CAPACITY,
   APARTMENT_LIMITS,
-  APARTMENT_RETENTION_MS,
+  APARTMENT_MOVE_OUTS,
   type ApartmentLink,
   parseApartmentAppearance,
   type ApartmentResident,
+  apartmentSessionKey,
 } from "../../../shared/apartments";
 
 import { newWorldId } from "./world-identifiers";
@@ -13,9 +14,12 @@ import { StorageWriteRejected, type StorageRequest } from "./world-protocol";
 
 /**
  * Durable apartment residents (shared/apartments.ts). Each row is one
- * finished agent; writes add one resident, add the last report it left
- * (read after it moved in), or evict some, and every write applies
- * retention (age, then capacity) in the same transaction.
+ * finished agent; writes add one resident, add residents found in harness
+ * histories, add the last report one left (read after it moved in), or
+ * evict some, and every write applies capacity in the same transaction.
+ * One harness session is one resident: a move-in replaces a record of the
+ * same session, and an eviction is remembered so history never brings
+ * that session back (a later observed end does).
  */
 export const apartmentsMigration = `CREATE TABLE apartment_residents (
  id TEXT PRIMARY KEY NOT NULL CHECK(length(id)>0),
@@ -24,10 +28,27 @@ export const apartmentsMigration = `CREATE TABLE apartment_residents (
 );
 CREATE INDEX apartment_residents_age ON apartment_residents(moved_out_at);`;
 
+/** Residents keyed by session, and the sessions evicted. */
+export const apartmentSessionsMigration = `ALTER TABLE apartment_residents ADD COLUMN session_key TEXT;
+UPDATE apartment_residents SET session_key=coalesce(json_extract(body,'$.harness'),'')||'/'||json_extract(body,'$.session_id') WHERE json_extract(body,'$.session_id') IS NOT NULL;
+CREATE INDEX apartment_residents_session ON apartment_residents(session_key);
+CREATE TABLE apartment_evictions (
+ session_key TEXT PRIMARY KEY NOT NULL CHECK(length(session_key)>0),
+ at INTEGER NOT NULL
+);
+CREATE INDEX apartment_evictions_age ON apartment_evictions(at);`;
+
+/** How many evicted sessions World remembers; the oldest are forgotten. */
+const EVICTION_MEMORY = 20_000;
+/** At most this many found residents per write. */
+export const APARTMENT_FOUND_BATCH = 500;
+
 export type ApartmentMoveIn = Omit<ApartmentResident, "id">;
 
 export type ApartmentOperation =
   | { type: "move-in"; resident: ApartmentMoveIn }
+  /** Asleep residents from harness histories; known or evicted ones skip. */
+  | { type: "found"; residents: ApartmentMoveIn[] }
   | { type: "report"; id: string; last_report: string }
   | { type: "evict"; ids: string[] };
 
@@ -40,7 +61,14 @@ export type ApartmentWriteResult = {
 export type ApartmentsPort = {
   list(): ApartmentResident[];
   get(id: string): ApartmentResident | undefined;
+  /** Residents' sessions (apartmentSessionKey), without copying them. */
+  sessionKeys(): ReadonlySet<string>;
   moveIn(resident: ApartmentMoveIn): Promise<ApartmentResident>;
+  /**
+   * Residents found in harness histories. A session already resident or
+   * evicted is skipped; a found one written since is brought up to date.
+   */
+  found(residents: readonly ApartmentMoveIn[]): Promise<void>;
   /** Adds the last report a resident left; a resident gone since is skipped. */
   report(id: string, lastReport: string): Promise<void>;
   evict(ids: readonly string[]): Promise<void>;
@@ -97,7 +125,7 @@ export function parseApartmentMoveIn(value: unknown): ApartmentMoveIn {
     fail("terminal");
   if (value.runtime !== "herdr" && value.runtime !== "herdr-core")
     return fail("runtime");
-  if (value.move_out !== "ended" && value.move_out !== "retired")
+  if (!APARTMENT_MOVE_OUTS.includes(value.move_out as never))
     return fail("move_out");
   const links = Array.isArray(value.links) ? value.links : [];
   const seen = new Set<string>();
@@ -118,7 +146,7 @@ export function parseApartmentMoveIn(value: unknown): ApartmentMoveIn {
     terminal_id: terminalId,
     first_seen_at: time(value.first_seen_at, "first_seen_at"),
     moved_out_at: time(value.moved_out_at, "moved_out_at"),
-    move_out: value.move_out,
+    move_out: value.move_out as ApartmentResident["move_out"],
     summary: text(value.summary, "summary", APARTMENT_LIMITS.text),
     last_report: text(value.last_report, "last report", APARTMENT_LIMITS.text),
     links: links
@@ -146,14 +174,29 @@ export function readApartments(db: Database): ApartmentResident[] {
   }));
 }
 
-/** Age, then capacity: the oldest residents move out first. */
-function retain(db: Database, at: number, capacity: number, retention: number) {
-  db.query("DELETE FROM apartment_residents WHERE moved_out_at<?").run(
-    at - retention,
-  );
+/** Capacity: the residents that moved out longest ago go first. */
+function retain(db: Database, capacity: number) {
   db.query(
     "DELETE FROM apartment_residents WHERE id IN (SELECT id FROM apartment_residents ORDER BY moved_out_at DESC,id DESC LIMIT -1 OFFSET ?)",
   ).run(capacity);
+  db.query(
+    "DELETE FROM apartment_evictions WHERE session_key IN (SELECT session_key FROM apartment_evictions ORDER BY at DESC,session_key DESC LIMIT -1 OFFSET ?)",
+  ).run(EVICTION_MEMORY);
+}
+
+function insert(db: Database, resident: ApartmentMoveIn): string {
+  const id = newWorldId(
+    "r",
+    (candidate) =>
+      !!db.query("SELECT 1 FROM apartment_residents WHERE id=?").get(candidate),
+  );
+  db.query("INSERT INTO apartment_residents VALUES(?,?,?,?)").run(
+    id,
+    resident.moved_out_at,
+    JSON.stringify(resident),
+    apartmentSessionKey(resident),
+  );
+  return id;
 }
 
 /** Runs inside the sole writer's transaction. */
@@ -161,24 +204,60 @@ export function writeApartments(
   db: Database,
   operation: ApartmentOperation,
   at: number,
-  bounds: { capacity?: number; retention_ms?: number } = {},
+  bounds: { capacity?: number } = {},
 ): ApartmentWriteResult {
   let added: string | undefined;
   if (operation.type === "move-in") {
     const resident = parseApartmentMoveIn(operation.resident);
-    const id = newWorldId(
-      "r",
-      (candidate) =>
-        !!db
-          .query("SELECT 1 FROM apartment_residents WHERE id=?")
-          .get(candidate),
-    );
-    db.query("INSERT INTO apartment_residents VALUES(?,?,?)").run(
-      id,
-      resident.moved_out_at,
-      JSON.stringify(resident),
-    );
-    added = id;
+    const key = apartmentSessionKey(resident);
+    if (key) {
+      // The same session moving in again (resumed and ended) is one agent.
+      db.query("DELETE FROM apartment_residents WHERE session_key=?").run(key);
+      db.query("DELETE FROM apartment_evictions WHERE session_key=?").run(key);
+    }
+    added = insert(db, resident);
+  } else if (operation.type === "found") {
+    if (
+      !Array.isArray(operation.residents) ||
+      operation.residents.length > APARTMENT_FOUND_BATCH
+    )
+      throw new Error("invalid apartment residents");
+    for (const value of operation.residents) {
+      const resident = parseApartmentMoveIn(value);
+      const key = apartmentSessionKey(resident);
+      if (!key || resident.move_out !== "found") continue;
+      if (
+        db
+          .query("SELECT 1 FROM apartment_evictions WHERE session_key=?")
+          .get(key)
+      )
+        continue;
+      const known = db
+        .query(
+          "SELECT id,moved_out_at,body FROM apartment_residents WHERE session_key=?",
+        )
+        .get(key) as { id: string; moved_out_at: number; body: string } | null;
+      if (!known) {
+        insert(db, resident);
+        continue;
+      }
+      // Only a found record follows its transcript's later writes.
+      const before = JSON.parse(known.body) as ApartmentMoveIn;
+      if (
+        before.move_out === "found" &&
+        resident.moved_out_at > known.moved_out_at
+      )
+        db.query(
+          "UPDATE apartment_residents SET moved_out_at=?,body=? WHERE id=?",
+        ).run(
+          resident.moved_out_at,
+          JSON.stringify({
+            ...resident,
+            summary: before.summary ?? resident.summary,
+          }),
+          known.id,
+        );
+    }
   } else if (operation.type === "report") {
     const row =
       typeof operation.id === "string"
@@ -199,18 +278,22 @@ export function writeApartments(
   } else if (operation.type === "evict") {
     if (!Array.isArray(operation.ids) || operation.ids.length > 1000)
       throw new Error("invalid apartment eviction");
+    const find = db.query(
+      "SELECT session_key FROM apartment_residents WHERE id=?",
+    );
+    const remember = db.query(
+      "INSERT OR REPLACE INTO apartment_evictions VALUES(?,?)",
+    );
     const remove = db.query("DELETE FROM apartment_residents WHERE id=?");
     for (const id of operation.ids) {
       if (typeof id !== "string") throw new Error("invalid apartment eviction");
+      const key = (find.get(id) as { session_key: string | null } | null)
+        ?.session_key;
+      if (key) remember.run(key, at);
       remove.run(id);
     }
   } else throw new Error("unknown apartment operation");
-  retain(
-    db,
-    at,
-    bounds.capacity ?? APARTMENT_CAPACITY,
-    bounds.retention_ms ?? APARTMENT_RETENTION_MS,
-  );
+  retain(db, bounds.capacity ?? APARTMENT_CAPACITY);
   return { residents: readApartments(db), ...(added ? { id: added } : {}) };
 }
 
@@ -220,6 +303,11 @@ export function createApartmentsPort(
   request: <T>(operation: StorageRequest) => Promise<T>,
 ): ApartmentsPort {
   let residents = structuredClone([...initial]);
+  const keysOf = (list: readonly ApartmentResident[]) =>
+    new Set(
+      list.map(apartmentSessionKey).filter((key): key is string => !!key),
+    );
+  let keys = keysOf(residents);
   let closed = false;
   let queue: Promise<unknown> = Promise.resolve();
   const write = (operation: ApartmentOperation) => {
@@ -230,6 +318,7 @@ export function createApartmentsPort(
         operation,
       });
       residents = result.residents;
+      keys = keysOf(residents);
       return result;
     };
     const task = queue.then(run, run);
@@ -238,6 +327,7 @@ export function createApartmentsPort(
   };
   return {
     list: () => structuredClone(residents),
+    sessionKeys: () => keys,
     get: (id) => {
       const found = residents.find((resident) => resident.id === id);
       return found && structuredClone(found);
@@ -251,6 +341,13 @@ export function createApartmentsPort(
         : undefined;
       if (!added) throw new Error("The resident moved out at once");
       return structuredClone(added);
+    },
+    async found(found) {
+      for (let at = 0; at < found.length; at += APARTMENT_FOUND_BATCH)
+        await write({
+          type: "found",
+          residents: found.slice(at, at + APARTMENT_FOUND_BATCH),
+        });
     },
     async report(id, lastReport) {
       await write({ type: "report", id, last_report: lastReport });
@@ -268,18 +365,43 @@ export function createApartmentsPort(
 export function memoryApartmentsPort(
   initial: readonly ApartmentResident[] = [],
   now: () => number,
-  bounds: { capacity?: number; retention_ms?: number } = {},
+  bounds: { capacity?: number } = {},
 ): ApartmentsPort {
   let rows = structuredClone([...initial]);
+  const evicted = new Set<string>();
   let next = 1;
+  const add = (resident: ApartmentMoveIn) => {
+    const id = `r-memory${next++}`;
+    rows.push({ ...resident, id });
+    return id;
+  };
   return createApartmentsPort(initial, async <T>(op: StorageRequest) => {
     if (op.type !== "apartments") throw new Error("unexpected request");
     const operation = op.operation;
     let added: string | undefined;
     if (operation.type === "move-in") {
       const resident = parseApartmentMoveIn(operation.resident);
-      added = `r-memory${next++}`;
-      rows.push({ ...resident, id: added });
+      const key = apartmentSessionKey(resident);
+      if (key) {
+        rows = rows.filter((row) => apartmentSessionKey(row) !== key);
+        evicted.delete(key);
+      }
+      added = add(resident);
+    } else if (operation.type === "found") {
+      for (const value of operation.residents) {
+        const resident = parseApartmentMoveIn(value);
+        const key = apartmentSessionKey(resident);
+        if (!key || resident.move_out !== "found" || evicted.has(key)) continue;
+        const known = rows.find((row) => apartmentSessionKey(row) === key);
+        if (!known) add(resident);
+        else if (
+          known.move_out === "found" &&
+          resident.moved_out_at > known.moved_out_at
+        )
+          Object.assign(known, resident, {
+            summary: known.summary ?? resident.summary,
+          });
+      }
     } else if (operation.type === "report") {
       rows = rows.map((row) =>
         row.id === operation.id
@@ -293,16 +415,15 @@ export function memoryApartmentsPort(
           : row,
       );
     } else {
-      const evicted = new Set(operation.ids);
-      rows = rows.filter((row) => !evicted.has(row.id));
+      const ids = new Set(operation.ids);
+      for (const row of rows) {
+        const key = ids.has(row.id) ? apartmentSessionKey(row) : null;
+        if (key) evicted.add(key);
+      }
+      rows = rows.filter((row) => !ids.has(row.id));
     }
-    const at = now();
+    void now;
     rows = rows
-      .filter(
-        (row) =>
-          row.moved_out_at >=
-          at - (bounds.retention_ms ?? APARTMENT_RETENTION_MS),
-      )
       .sort(
         (a, b) => b.moved_out_at - a.moved_out_at || b.id.localeCompare(a.id),
       )

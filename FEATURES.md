@@ -1542,15 +1542,32 @@ assign tasks, or provide a Clear operation.
 
 ### Apartments: finished agents
 
-When an agent's terminal ends, or the bus takes it from the bin, the agent
-moves into **Apartments** instead of vanishing. Each resident keeps its name,
-harness, project folder, room and tab, host, when it ran, its last task summary,
-its last report (the closing message of its transcript, when the host answers
-within ten seconds; added just after the move-in, and lost if World stops
-first), the pull requests and issues the Sources linked to it, and its harness
-session (the one its Chat reads: Herdr's report, or for herdr-core a linked
-Codex session, Claude's process record or the launch command, read again while
-the agent runs).
+**Apartments** holds every agent that is not running now, asleep and
+resumable: agents from before Apartments existed, on every connected host
+(Herdr TUI and herdr-core). Agents move in three ways:
+
+- **Found asleep**: on each connected host World reads the transcripts Claude
+  Code (`~/.claude/projects`), Codex (`~/.codex/sessions` and
+  `archived_sessions`), Pi and Oh My Pi keep, honouring `CLAUDE_CONFIG_DIR`,
+  `CODEX_HOME`, `PI_CODING_AGENT_DIR` and `PI_CONFIG_DIR`. Each such agent
+  moves in with its harness as name, its folder, its session, when its
+  transcript started and was last written, and its first request as summary.
+  World looks through a host's histories when it first sees the host, then
+  every 15 minutes, newest first and at most 400 transcripts read per pass
+  (a longer history continues a minute later). It reads only each file's
+  first bytes, once per World run, and writes nothing on the host. Codex
+  subagents and Claude sidechains are another agent's helpers, not agents.
+- **Its terminal ended**, seen by World while it observed the host.
+- **Retired by the bus** when the bus took it from the bin.
+
+Each resident keeps its name, harness, project folder, room and tab, host, when
+it ran, its last task summary, its last report (the closing message of its
+transcript, when the host answers within ten seconds; added just after the
+move-in, and lost if World stops first), the pull requests and issues the
+Sources linked to it, and its harness session (the one its Chat reads: Herdr's
+report, or for herdr-core a linked Codex session, Claude's process record or
+the launch command, read again while the agent runs). One session is one
+resident: an ending World sees replaces the found record of that session.
 
 - Open it from the green **APARTMENTS** sign on the sandstone block in Town's
   park beside the town center (left of the plaza, or right when there is no
@@ -1565,19 +1582,23 @@ the agent runs).
   the colour Town showed: its tab's, else (a spawned agent) its parent's
   tab's, else its room's. Herdr TUI and herdr-core residents look the
   same. A resident whose avatar was not kept (it moved in before World kept
-  avatars) shows the nearest: its profile's look, else a profile of the same
+  avatars, or World found it in its harness's history) shows the nearest: its profile's look, else a profile of the same
   harness, else World's default character; hovering the avatar says which.
   Its colour then falls back to the plain tile.
 - `?apartments-preview=avatars` in the page's address shows synthetic
   residents, one per avatar case, for that load only (the page removes it at
   once; nothing is saved).
+- A resident whose session runs again at a desk is hidden while it runs, and
+  returns when it stops. A transcript written in the last 10 minutes is left
+  for a later pass, since its agent may still be running.
 - Search matches name, harness, project, folder, room, host, summary, report,
   `#42` or `PR 42`, repository and the day it ran or moved in (`2026-11-19`).
-  Residents list newest first.
-- Opening a resident shows its facts, summary, report and linked work.
-  **Read history** reads its conversation from the harness transcript on its
-  host, the same chat reading Inspector uses (the latest 200 messages); a
-  message opens in full. History needs that host connected.
+  Residents list newest first; the newest 200 matches are shown, and a search
+  finds older ones.
+- Opening a resident shows its facts, how it moved in, summary, report and
+  linked work. **Read history** reads its conversation from the harness
+  transcript on its host, the same chat reading Inspector uses (the latest 200
+  messages); a message opens in full. History needs that host connected.
 - **Resume in room** starts the agent again with its harness's own resume
   (`claude --resume <session>` or `codex resume <session>`) in a room on the
   host where it ran: its old room when it still exists, or the one chosen. A
@@ -1586,11 +1607,16 @@ the agent runs).
   for a resident with no session, and for harnesses other than Claude and
   Codex; the resident stays either way.
 - **Evict…**, then **Evict**, forgets a resident. Its transcript stays on the
-  host. World keeps residents 90 days and at most 500; the oldest go first.
-- Limits: only ends World sees are recorded, while it observes the host. An
+  host, and a later pass does not bring it back; it returns only if it runs
+  again and World sees it end. World keeps at most 5000 residents, whatever
+  their age; the longest asleep go first.
+- Limits: Kimi, Grok, Muse and Antigravity keep histories World does not look
+  through, so their agents are recorded only when World sees them end. An
   agent whose host disconnects, restarts or changes runtime generation is not
-  recorded, nor one that ends while World is stopped. Linked work is read at
-  move-out. Records live in World's own store on this computer.
+  recorded as ended, nor one that ends while World is stopped; a found record
+  covers it later when its harness is one of the four above. Found agents have
+  no room, tab or linked work. Records live in World's own store on this
+  computer.
 
 ### Teams and spawn stamps
 

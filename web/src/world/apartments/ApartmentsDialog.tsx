@@ -37,7 +37,8 @@ import { residentLook, residentLookNote } from "./residentLook";
 import { useApartments, worldApartmentsStore } from "./useApartments";
 import "./apartments.css";
 
-const DAY = 24 * 60 * 60 * 1000;
+/** Rows shown at once; a search narrows a long history. */
+export const APARTMENT_ROWS_SHOWN = 200;
 const when = (at: number) => formatUiDateTime(new Date(at).toISOString());
 
 /** Rooms that can start an agent on this resident's host. */
@@ -58,7 +59,7 @@ export function resumeRooms(
 }
 
 /**
- * Apartments: every agent that finished, searchable; one opens with its
+ * Apartments: every agent not running now, searchable; one opens with its
  * history and resumes into a room on the host where it ran.
  */
 export function ApartmentsDialog({
@@ -89,7 +90,7 @@ export function ApartmentsDialog({
   const open = openId
     ? (apartments.residents.find((item) => item.id === openId) ?? null)
     : null;
-  const days = Math.round(apartments.retention_ms / DAY);
+  const shown = found.slice(0, APARTMENT_ROWS_SHOWN);
 
   return (
     <div className="modal-backdrop">
@@ -140,11 +141,14 @@ export function ApartmentsDialog({
                 ? "Reading residents…"
                 : query.trim()
                   ? `${found.length} of ${apartments.residents.length} residents`
-                  : `${apartments.residents.length} residents · kept ${days} days, up to ${apartments.capacity}`}
+                  : `${apartments.residents.length} residents · up to ${apartments.capacity}, newest kept`}
+              {found.length > shown.length
+                ? ` · newest ${shown.length} shown; search to find older`
+                : ""}
             </p>
             {found.length ? (
               <ul className="apartments-list" aria-label="Residents">
-                {found.map((resident) => (
+                {shown.map((resident) => (
                   <li key={resident.id}>
                     <ResidentRow
                       resident={resident}
@@ -158,7 +162,7 @@ export function ApartmentsDialog({
               <p>
                 {apartments.residents.length
                   ? "No resident matches."
-                  : "No one lives here yet. When an agent's terminal ends, or the bus takes it, it moves in here."}
+                  : "No one lives here yet. Agents from connected hosts' Claude, Codex and Pi histories move in asleep; an agent whose terminal ends, or that the bus takes, moves in too."}
               </p>
             ) : null}
           </>
@@ -399,7 +403,9 @@ function ResidentDetail({
         <dd>
           {resident.move_out === "retired"
             ? "Retired by the bus"
-            : "Its terminal ended"}
+            : resident.move_out === "found"
+              ? "Asleep: found in its harness's history"
+              : "Its terminal ended"}
         </dd>
       </dl>
       {resident.summary ? (
