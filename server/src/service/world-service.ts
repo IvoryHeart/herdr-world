@@ -979,8 +979,7 @@ async function compose(
       // also fails the Herdr calls still waiting. Startup then settles
       // fenced, and so does every request, within a bound.
       await forwards.stop();
-      // IDE servers run on their hosts; World only lets go of them.
-      ide.closeAll();
+      ide.closeAll(); // IDE servers run on; World only lets go.
       await disposeAssistant();
       await connectionManager.stopAll();
       await core.stop();

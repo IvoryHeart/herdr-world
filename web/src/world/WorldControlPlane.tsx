@@ -561,17 +561,11 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                       onCloseReading={stableCloseDeskReading}
                     />
                   ) : view === "code" ? (
-                    <Suspense
-                      fallback={
-                        <div className="world-view-loading">Loading Code…</div>
-                      }
-                    >
-                      <CodeView
-                        world={world}
-                        onOpenAgent={stableOpenAgentChat}
-                        onOpenTerminal={stableOpenTerminalById}
-                      />
-                    </Suspense>
+                    <CodeView
+                      world={world}
+                      onOpenAgent={stableOpenAgentChat}
+                      onOpenTerminal={stableOpenTerminalById}
+                    />
                   ) : view === "town" ? (
                     <Suspense
                       fallback={
