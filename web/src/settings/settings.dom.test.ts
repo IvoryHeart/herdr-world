@@ -542,6 +542,29 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
         )!;
       expect(toggle.getAttribute("aria-disabled")).toBe("true");
       expect(view.dialog().textContent).toContain("Saving...");
+      // The save finishes without changing the value: the open row follows.
+      await act(async () =>
+        __storeTesting.replaceState({
+          ...before,
+          taskNotificationPermission: "granted",
+          taskNotificationsEnabled: true,
+          taskNotificationTransport: "push",
+          taskNotificationBusy: false,
+        }),
+      );
+      expect(toggle.getAttribute("aria-disabled")).toBeNull();
+      expect(view.dialog().textContent).not.toContain("Saving...");
+      expect(view.dialog().textContent).toContain("On · Background push");
+      const setEnabled = spyOn(
+        store,
+        "setTaskNotificationsEnabled",
+      ).mockImplementation(async () => {});
+      try {
+        await act(async () => toggle.click());
+        expect(setEnabled).toHaveBeenCalledWith(false);
+      } finally {
+        setEnabled.mockRestore();
+      }
       await view.unmount();
     } finally {
       __storeTesting.replaceState(before);

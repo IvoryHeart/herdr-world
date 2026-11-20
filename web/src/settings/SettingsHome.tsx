@@ -452,13 +452,17 @@ function SettingsRow({
   const meta = [showCategory ? category : null, scope]
     .filter(Boolean)
     .join(" · ");
+  // A status line ("Saving...") changes while Settings stays open.
+  const status = useEntryValue(entry, () =>
+    entry.kind === "setting" ? (entry.status?.() ?? null) : null,
+  );
   const copy = (
     <span className="config-item-copy">
       <strong>{entry.title}</strong>
       {entry.kind === "command" && entry.disabledReason?.() ? (
         <span>{entry.disabledReason()}</span>
-      ) : entry.kind === "setting" && entry.status?.() ? (
-        <span className="settings-home-status">{entry.status()}</span>
+      ) : status ? (
+        <span className="settings-home-status">{status}</span>
       ) : entry.description ? (
         <span>{entry.description}</span>
       ) : null}
@@ -626,9 +630,12 @@ function SettingControlView({
 }) {
   const control = entry.control;
   const value = useEntryValue(entry, () => control.get(host));
+  // Busy ends without the value changing when a save is refused or restored.
+  const busy = useEntryValue(entry, () =>
+    control.type === "toggle" ? (control.busy?.() ?? false) : false,
+  );
   if (control.type === "toggle") {
     const on = value as boolean;
-    const busy = control.busy?.() ?? false;
     return (
       <button
         type="button"
