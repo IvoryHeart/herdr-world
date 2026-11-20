@@ -29,14 +29,18 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // usage-metrics and connection-manager modules with World's views, so they
 // become their own small chunks (+3 files after removing the two retired
 // dialogs, no new bytes on the initial load).
-const maxFileCount = 193;
+// Roamgate's accepted diffs 1.6.1 upgrade adds lazy backend/theme chunks.
+// World keeps its curated shiki/langs registry and pre-resolves worker inputs,
+// avoiding the full language bundle and duplicate worker grammars. The branch
+// measures 276 files / 15.1 MiB; allow the delta on main plus modest headroom.
+const maxFileCount = 290;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
 // The Integrations screen (#1008, +17 KB) fit main alone, but main
 // grew under it to 13 KB of headroom; 15.3 MiB carries both, initial budgets
 // unchanged (2026-11-19).
-const maxTotalBytes = 15.3 * 1024 * 1024;
+const maxTotalBytes = 16.5 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;

@@ -1,3 +1,5 @@
+import { getSharedHighlighter } from "@pierre/diffs";
+import { bundledLanguages } from "./shiki";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -135,6 +137,17 @@ function Fixture({ mobile }: { mobile: boolean }) {
   );
 }
 async function run() {
+  const OriginalWorker = window.Worker;
+  let workerDiffReplies = 0;
+  window.Worker = class extends OriginalWorker {
+    constructor(url: string | URL, options?: WorkerOptions) {
+      super(url, options);
+      this.addEventListener("message", ({ data }) => {
+        if (data.type === "success" && data.requestType === "diff")
+          workerDiffReplies++;
+      });
+    }
+  };
   const previousState = store.get();
   const originalConnection = bridge.connection;
   bridge.connection = () => client;
@@ -198,6 +211,31 @@ async function run() {
     return event.defaultPrevented;
   };
   try {
+    // The real 1.6 resolver must use World's registry, including custom CSP,
+    // without falling back to Shiki's complete language bundle.
+    const highlighter = await getSharedHighlighter({
+      themes: ["pierre-dark", "pierre-light", "github-dark", "github-light"],
+      langs: Object.keys(bundledLanguages),
+      preferredHighlighter: "shiki-wasm",
+    });
+    for (const theme of [
+      "pierre-dark",
+      "pierre-light",
+      "github-dark",
+      "github-light",
+    ]) {
+      const { tokens, fg } = highlighter.codeToTokens(
+        'const answer = "hello";',
+        {
+          lang: "typescript",
+          theme,
+        },
+      );
+      check(
+        tokens.flat().some((token) => token.color !== fg),
+        `${theme}: Shiki tokens lost their colors`,
+      );
+    }
     // Start with a cached generated file and an explicit collapsed state.
     writeDiffCollapseState(
       "initial-diff",
@@ -394,8 +432,45 @@ async function run() {
       "refreshed tree",
     );
     check(mutationCalls === 2, "Batch continued after a failure");
+    const highlightedFile: GitDiffFile = {
+      ...file,
+      diff: 'diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1 +1 @@\n-const answer = 1;\n+const answer = "hello";\n',
+    };
+    flushSync(() =>
+      root.render(
+        <DiffContentView
+          entry={{ ...entries[0], generated: false }}
+          file={highlightedFile}
+          loading={false}
+          error={null}
+          entries={[{ ...entries[0], generated: false }]}
+          connectionClient={client}
+          mobile={window.innerWidth < 600}
+          resourceKey="highlighted-diff"
+        />,
+      ),
+    );
+    for (const theme of ["dark", "light"]) {
+      document.documentElement.dataset.theme = theme;
+      await until(
+        () =>
+          workerDiffReplies > 0 &&
+          [...container.querySelectorAll("diffs-container")].some((node) => {
+            const spans =
+              node.shadowRoot?.querySelectorAll(
+                '[data-line] span[style*="--diffs-token"]',
+              ) ?? [];
+            return (
+              new Set([...spans].map((span) => getComputedStyle(span).color))
+                .size > 1
+            );
+          }),
+        `${theme}: real diff worker renders Shiki-colored tokens`,
+      );
+    }
   } finally {
     root.unmount();
+    window.Worker = OriginalWorker;
     container.remove();
     bridge.connection = originalConnection;
     __storeTesting.replaceState(previousState);

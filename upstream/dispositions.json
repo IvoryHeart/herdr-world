@@ -1229,16 +1229,18 @@
     {
       "commit": "f4367c30ff7f3932beb13de6dae7193517a2b282",
       "title": "chore(deps): bump @pierre/diffs from 1.5.1 to 1.6.1 (#508)",
-      "status": "deferred",
-      "reason": "@pierre/diffs 1.6's diff worker bundles both highlighter backends and a second copy of World's curated grammars: +56 files and +1.9 MiB, beyond World's 180-file and web total budgets. World stays on 1.5.x and raises no budget (firstmate-2 ruling, 2026-11-05).",
+      "status": "adapted",
+      "reason": "Owner authorized adopting @pierre/diffs ^1.6.1 (locked 1.6.1) on 20 November 2026. World retains curated Shiki 4.6 grammars via shiki/langs, compiles out worker-side loaders for pre-resolved inputs, and increases only total/file asset budgets for remaining lazy backend/theme assets.",
       "evidence": [
-        "docs/upstream-follow-ups.md#diff-worker-dependency-update",
         "web/package.json",
+        "bun.lock",
+        "web/vite.config.ts",
+        "web/src/diffViewer.browser.tsx",
         "docs/packaging.md",
-        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
+        "docs/upstream-follow-ups.md#diff-worker-dependency-update"
       ],
-      "followUp": "docs/upstream-follow-ups.md#diff-worker-dependency-update",
-      "revisitWhen": "Every source sync; adopt when the worker fits World's file and total web budgets or the owner changes them.",
+      "followUp": null,
+      "revisitWhen": null,
       "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
@@ -1905,7 +1907,7 @@
         "web/src/components/AgentHistoryDrawer.paneChatFocus.test.tsx",
         "server/src/rpc/agent.ts",
         "server/src/rpc/core-host.ts",
-        "patches/@pierre%2Ftheming@1.0.1.patch"
+        "patches/@pierre%2Ftheming@1.0.2.patch"
       ],
       "followUp": null,
       "revisitWhen": null,
@@ -1945,7 +1947,7 @@
       "commit": "f9e07866ba3cc39cc3483b2b4405628af4ffd63c",
       "title": "chore(deps): bump @pierre/highlights from 0.2.0 to 0.3.0 (#573)",
       "status": "adapted",
-      "reason": "Pierre Highlights has no World consumer while the 1.6 worker remains deferred; World keeps its existing 1.5 worker and adopts the later Shiki update.",
+      "reason": "World uses the Shiki WASM backend in diffs 1.6.1, which pins its optional Highlights backend to 0.2.0. Roamgate's separate 0.3.0 Highlights package has no direct World consumer; Shiki 4.6 is adopted.",
       "evidence": [
         "web/package.json",
         "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
@@ -2053,7 +2055,7 @@
       "evidence": [
         "web/package.json",
         "web/src/shiki.ts",
-        "patches/@pierre%2Ftheming@1.0.1.patch"
+        "patches/@pierre%2Ftheming@1.0.2.patch"
       ],
       "followUp": null,
       "revisitWhen": null,

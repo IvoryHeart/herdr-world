@@ -43,7 +43,9 @@ export default defineConfig(({ mode }) => {
           ),
         },
         {
-          find: /^shiki$/,
+          // Diffs 1.6 pre-resolves grammars on the main thread via shiki/langs.
+          // Share World's lazy language registry with both import paths.
+          find: /^shiki(?:\/langs)?$/,
           replacement: fileURLToPath(
             new URL("./src/shiki.ts", import.meta.url),
           ),
@@ -52,6 +54,11 @@ export default defineConfig(({ mode }) => {
     },
     worker: {
       format: "es",
+      rolldownOptions: {
+        // Diffs 1.6 receives resolved grammars/themes from the main thread.
+        // Remove its unreachable worker-side loaders and duplicate assets.
+        transform: { define: { __DIFFS_WORKER__: "true" } },
+      },
     },
     build: {
       // Retain Vite 5's browser baseline instead of Vite 7's newer default.

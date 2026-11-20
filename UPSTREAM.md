@@ -120,15 +120,22 @@ with omission/restart notices and fresh-run identity checks. World retains its
 schema-v4 task storage and already-delivered markdown URL hardening. Compatible
 Biome, oxlint, icon, xterm, Shiki and typebox updates land without downgrading World
 dependencies. A version-scoped Pierre theme-registry patch excludes theme presets
-World never offers, keeping both existing diff appearances and the asset budgets.
+World never offers, keeping both existing diff appearances. The owner-authorized
+20 November repair adopts Roamgate's `@pierre/diffs` `^1.6.1` range (locked 1.6.1),
+with Shiki 4.6.0 and the corresponding Pierre theming 1.0.2 patch. Diffs 1.6's
+main-thread `shiki/langs` resolver uses World's curated lazy registry, and its
+worker build removes unreachable grammar/theme loaders. Remaining lazy backend
+and theme assets require a bounded increase to 290 files / 16.5 MiB to retain
+headroom on current main; startup budgets stay unchanged.
 
 World's top app bar, Town entry, memory-only drafts, bounded History window,
 connection-qualified image/RPC access, React diagnostic patch, packaging and release
-identity remain. The existing mobile navigation, diff-worker upgrade and browser
+identity remain. The existing mobile navigation and browser
 forwarding deferrals are carried, together with the seen/recency divergences.
 The new CodeQL-only action update stays outside World's controls; no `.github` or
-`.codex` changes are included. The unused Pierre Highlights update belongs to the
-already-deferred 1.6 worker. Every incoming commit and outstanding decision is
+`.codex` changes are included. Diffs 1.6.1 pins its optional Highlights backend to
+0.2.0; World continues to use Shiki WASM, so Roamgate's separate Highlights 0.3.0
+update is not a direct dependency. Every incoming commit and outstanding decision is
 accounted for in the ledger and the
 [19 November assessment](docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026).
 

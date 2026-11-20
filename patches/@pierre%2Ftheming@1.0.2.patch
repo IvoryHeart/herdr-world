@@ -1,8 +1,7 @@
 diff --git a/dist/collections/shiki.js b/dist/collections/shiki.js
-index ff3de6eecb80aafa1f4f54a86dfd2dfc56b78eac..9314937197d1eb89521b81a88cc941c43252c5e2 100644
 --- a/dist/collections/shiki.js
 +++ b/dist/collections/shiki.js
-@@ -2,146 +2,17 @@ import { createThemeCollection } from "../modules/createThemeCollection.js";
+@@ -2,146 +2,16 @@
  import { createTheme } from "../modules/createTheme.js";
  //#region src/collections/shiki.ts
  const SHIKI_COLLECTION = "shiki";
@@ -79,10 +78,11 @@ index ff3de6eecb80aafa1f4f54a86dfd2dfc56b78eac..9314937197d1eb89521b81a88cc941c4
 +const DARK_SHIKI_THEMES = ["github-dark"];
  const LIGHT_SHIKI_THEME_NAMES = new Set(LIGHT_SHIKI_THEMES);
  function shikiColorScheme(name) {
- 	if (LIGHT_SHIKI_THEME_NAMES.has(name)) return "light";
- 	return "dark";
+-	if (LIGHT_SHIKI_THEME_NAMES.has(name)) return "light";
++	if (LIGHT_SHIKI_THEME_NAMES.has(name)) return "light";
+-	return "dark";
++	return "dark";
  }
-+// World exposes Pierre light/dark only. Retain GitHub themes for grammar checks.
  const SHIKI_THEME_IMPORTS = {
 -	andromeeda: () => import("@shikijs/themes/andromeeda"),
 -	"aurora-x": () => import("@shikijs/themes/aurora-x"),
@@ -99,10 +99,12 @@ index ff3de6eecb80aafa1f4f54a86dfd2dfc56b78eac..9314937197d1eb89521b81a88cc941c4
 -	"everforest-dark": () => import("@shikijs/themes/everforest-dark"),
 -	"everforest-light": () => import("@shikijs/themes/everforest-light"),
 -	"github-dark": () => import("@shikijs/themes/github-dark"),
++	"github-dark": () => import("@shikijs/themes/github-dark"),
 -	"github-dark-default": () => import("@shikijs/themes/github-dark-default"),
 -	"github-dark-dimmed": () => import("@shikijs/themes/github-dark-dimmed"),
 -	"github-dark-high-contrast": () => import("@shikijs/themes/github-dark-high-contrast"),
 -	"github-light": () => import("@shikijs/themes/github-light"),
++	"github-light": () => import("@shikijs/themes/github-light"),
 -	"github-light-default": () => import("@shikijs/themes/github-light-default"),
 -	"github-light-high-contrast": () => import("@shikijs/themes/github-light-high-contrast"),
 -	"gruvbox-dark-hard": () => import("@shikijs/themes/gruvbox-dark-hard"),
@@ -149,8 +151,7 @@ index ff3de6eecb80aafa1f4f54a86dfd2dfc56b78eac..9314937197d1eb89521b81a88cc941c4
 -	"vitesse-black": () => import("@shikijs/themes/vitesse-black"),
 -	"vitesse-dark": () => import("@shikijs/themes/vitesse-dark"),
 -	"vitesse-light": () => import("@shikijs/themes/vitesse-light")
-+ "github-dark": () => import("@shikijs/themes/github-dark"),
-+ "github-light": () => import("@shikijs/themes/github-light"),
  };
  function createShikiTheme(name) {
- 	return createTheme({
+-	return createTheme({
++	return createTheme({
