@@ -16,6 +16,7 @@ import { useWorldSources } from "../worldSources";
 import { actionablePullRequest } from "../../../../shared/pullRequests";
 import { PullRequestCard } from "../PullRequestCard";
 import { usePullRequestAttention } from "../pullRequestAttention";
+import { ShipyardPipeline } from "../shipyard/ShipyardPipeline";
 import {
   workCardFacts,
   workLensColumns,
@@ -38,9 +39,13 @@ function neverSetUp(source: WorldSourceStatus) {
     : !source.config.site && !source.config.email && !source.config.tokenSet;
 }
 
+/** The lens's tabs: its two kanbans, and the release pipeline (#1028). */
+export type WorkLensTab = WorkLensGroup | "releases";
+
 /**
- * The Work lens: pull requests from review to merged, and tickets by status.
- * Board opens it over its cards and Town from its post office (#887); a
+ * The Work lens: pull requests from review to merged, tickets by status, and
+ * releases as a pipeline from main to the Worlds running them (#1028).
+ * Board opens it over its cards and Town from its post office (#887) or harbour; a
  * card's agents jump to their Board cards or open in Town. It is a layer:
  * Escape, Back or a press outside closes it.
  */
@@ -53,7 +58,10 @@ export function WorkLens({
   sources,
   className,
   agentAction = (label) => `Show agent ${label} on Board`,
+  initialTab = "pull_requests",
 }: {
+  /** The tab it opens on. */
+  initialTab?: WorkLensTab;
   world: WorldObject;
   /**
    * The sources to show; the live ones without it. Town passes its post
@@ -78,7 +86,9 @@ export function WorkLens({
     element: () => sectionRef.current,
     anchors: () => [anchor?.() ?? null],
   });
-  const [group, setGroup] = useState<WorkLensGroup>("pull_requests");
+  const [tab, setTab] = useState<WorkLensTab>(initialTab);
+  const releases = tab === "releases";
+  const group: WorkLensGroup = releases ? "pull_requests" : tab;
   // History days the user opened or closed; the newest day starts open.
   const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
   const deskPins = useDeskPins(store);
@@ -112,7 +122,7 @@ export function WorkLens({
     <section
       ref={sectionRef}
       className={className ? `work-lens ${className}` : "work-lens"}
-      aria-label="Work: pull requests and tickets"
+      aria-label="Work: pull requests, tickets and releases"
     >
       <header className="work-lens-head">
         <div className="work-lens-tabs" role="tablist" aria-label="Work">
@@ -120,14 +130,15 @@ export function WorkLens({
             [
               ["pull_requests", "Pull requests"],
               ["tickets", "Tickets"],
+              ["releases", "Releases"],
             ] as const
           ).map(([id, label]) => (
             <button
               key={id}
               type="button"
               role="tab"
-              aria-selected={group === id}
-              onClick={() => setGroup(id)}
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
             >
               {label}
             </button>
@@ -150,14 +161,15 @@ export function WorkLens({
           <X size={16} aria-hidden="true" />
         </button>
       </header>
-      {problems.length ? (
+      {releases ? <ShipyardPipeline /> : null}
+      {!releases && problems.length ? (
         <p className="work-lens-note" role="status">
           {problems
             .map((source) => `${source.label}: ${source.detail}`)
             .join(" ")}
         </p>
       ) : null}
-      {unset.length ? (
+      {!releases && unset.length ? (
         <p className="work-lens-hint">
           {unset.map((source) => (
             <button
@@ -171,7 +183,7 @@ export function WorkLens({
           ))}
         </p>
       ) : null}
-      {empty ? (
+      {!releases && empty ? (
         <p className="work-lens-note">
           {snapshot.sources.length === 0
             ? "Loading sources…"
@@ -182,77 +194,79 @@ export function WorkLens({
               : "No source is connected yet. Open Integrations to connect GitHub or Jira."}
         </p>
       ) : null}
-      <div className="work-lens-columns">
-        {columns.map((column) => (
-          <div
-            key={column.lane}
-            className="work-lens-column"
-            data-lane={column.lane}
-          >
-            <h3>
-              {column.label} <span>{column.cards.length}</span>
-            </h3>
-            {column.days ? (
-              <div className="work-lens-days">
-                {column.days.map((day, index) => {
-                  const key = `${column.lane}:${day.key}`;
-                  const open = openDays[key] ?? index === 0;
-                  return (
-                    <section key={day.key} aria-label={day.label}>
-                      <button
-                        type="button"
-                        className="work-lens-day"
-                        aria-expanded={open}
-                        onClick={() =>
-                          setOpenDays((value) => ({ ...value, [key]: !open }))
-                        }
-                      >
-                        <ChevronRight size={14} aria-hidden="true" />
-                        {day.label} <span>{day.cards.length}</span>
-                      </button>
-                      {open ? (
-                        <ul>
-                          {day.cards.map((card) => (
-                            <WorkCard
-                              key={card.item.key}
-                              card={card}
-                              compact
-                              onSelectAgent={onSelectAgent}
-                              agentAction={agentAction}
-                            />
-                          ))}
-                        </ul>
-                      ) : null}
-                    </section>
-                  );
-                })}
-              </div>
-            ) : (
-              <ul>
-                {column.cards.map((card) =>
-                  actionablePullRequest(card.item) ? (
-                    <li key={card.item.key} className="work-card-pr">
-                      <PullRequestCard
-                        item={card.item}
-                        agents={card.agents}
-                        attention={attention.get(card.item.key) ?? null}
+      {releases ? null : (
+        <div className="work-lens-columns">
+          {columns.map((column) => (
+            <div
+              key={column.lane}
+              className="work-lens-column"
+              data-lane={column.lane}
+            >
+              <h3>
+                {column.label} <span>{column.cards.length}</span>
+              </h3>
+              {column.days ? (
+                <div className="work-lens-days">
+                  {column.days.map((day, index) => {
+                    const key = `${column.lane}:${day.key}`;
+                    const open = openDays[key] ?? index === 0;
+                    return (
+                      <section key={day.key} aria-label={day.label}>
+                        <button
+                          type="button"
+                          className="work-lens-day"
+                          aria-expanded={open}
+                          onClick={() =>
+                            setOpenDays((value) => ({ ...value, [key]: !open }))
+                          }
+                        >
+                          <ChevronRight size={14} aria-hidden="true" />
+                          {day.label} <span>{day.cards.length}</span>
+                        </button>
+                        {open ? (
+                          <ul>
+                            {day.cards.map((card) => (
+                              <WorkCard
+                                key={card.item.key}
+                                card={card}
+                                compact
+                                onSelectAgent={onSelectAgent}
+                                agentAction={agentAction}
+                              />
+                            ))}
+                          </ul>
+                        ) : null}
+                      </section>
+                    );
+                  })}
+                </div>
+              ) : (
+                <ul>
+                  {column.cards.map((card) =>
+                    actionablePullRequest(card.item) ? (
+                      <li key={card.item.key} className="work-card-pr">
+                        <PullRequestCard
+                          item={card.item}
+                          agents={card.agents}
+                          attention={attention.get(card.item.key) ?? null}
+                          onSelectAgent={onSelectAgent}
+                        />
+                      </li>
+                    ) : (
+                      <WorkCard
+                        key={card.item.key}
+                        card={card}
                         onSelectAgent={onSelectAgent}
+                        agentAction={agentAction}
                       />
-                    </li>
-                  ) : (
-                    <WorkCard
-                      key={card.item.key}
-                      card={card}
-                      onSelectAgent={onSelectAgent}
-                      agentAction={agentAction}
-                    />
-                  ),
-                )}
-              </ul>
-            )}
-          </div>
-        ))}
-      </div>
+                    ),
+                  )}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

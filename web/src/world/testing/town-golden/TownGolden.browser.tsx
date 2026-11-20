@@ -12,6 +12,11 @@ import { goldenConnections, goldenUsage } from "./scene";
 import { bridge } from "../../../api";
 import { comparePixels } from "./pixels";
 import { setTownDaylightMode } from "../../town/townDaylight";
+import { shipyardStore } from "../../shipyard/shipyardStore";
+import {
+  shipyardFixtureCatalog,
+  shipyardFixtureSnapshot,
+} from "../../shipyard/shipyardFixture";
 import "../../../styles/tokens.css";
 import "../../../styles/base.css";
 import "../../world.css";
@@ -88,6 +93,20 @@ async function prepare() {
     method === "world.usage.get"
       ? Promise.resolve(goldenUsage())
       : call(method, ...rest);
+
+  // The harbour reads the synthetic release pipeline in memory: the fixture
+  // server has no Shipyard API, and a network answer would race the clock.
+  shipyardStore.useFetch((input) => {
+    const repo = new URL(String(input), location.href).searchParams.get("repo");
+    const now = Date.now();
+    return Promise.resolve(
+      Response.json(
+        repo
+          ? shipyardFixtureSnapshot("ready", now, repo)
+          : shipyardFixtureCatalog("ready", now),
+      ),
+    );
+  });
 
   // Hold Town's time of day: following the clock would make the image depend
   // on the runner's time zone. Night shows the status lighting: lit and dark

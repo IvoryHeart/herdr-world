@@ -17,10 +17,16 @@ import {
   type TownLayout,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
-import { townPostLot, TOWN_POST_YARD_ROWS } from "./townPost";
+import {
+  townWarehouseLot,
+  TOWN_WAREHOUSE_YARD_ROWS,
+} from "./townWarehouseModel";
 
-/** The post office's search key: Town's landmark, not a World node. */
-export const TOWN_POST_SEARCH_KEY = "town:post-office";
+/**
+ * The warehouse's search key: Town's landmark, not a World node. It holds
+ * your pull requests on the harbour shore (#1028).
+ */
+export const TOWN_WAREHOUSE_SEARCH_KEY = "town:warehouse";
 
 /**
  * Town's landmarks the search finds besides World's nodes (#1033): its
@@ -28,9 +34,9 @@ export const TOWN_POST_SEARCH_KEY = "town:post-office";
  */
 const TOWN_LANDMARKS = [
   {
-    key: TOWN_POST_SEARCH_KEY,
-    label: "Post office",
-    also: "pull requests parcels github mail",
+    key: TOWN_WAREHOUSE_SEARCH_KEY,
+    label: "Warehouse",
+    also: "pull requests crates parcels github harbour",
   },
 ] as const;
 
@@ -123,8 +129,8 @@ const deskRect = (layout: TownLayout, deskKey: string | null | undefined) => {
 
 /**
  * Where a match is drawn, in world pixels: an agent where it sits or
- * stands, a table or terminal at its table, a room, building or the post
- * office whole. One
+ * stands, a table or terminal at its table, a room, building or the
+ * warehouse whole. One
  * Town does not draw is null, such as a table, or anything at a table, that
  * its room folds away: its room is not where it can be seen.
  */
@@ -134,13 +140,13 @@ export function townSearchRect(
   layout: TownLayout,
   actorPosition: TownActorPosition,
 ): TownSearchRect | null {
-  if (key === TOWN_POST_SEARCH_KEY) {
-    const lot = townPostLot(layout);
+  if (key === TOWN_WAREHOUSE_SEARCH_KEY) {
+    const lot = townWarehouseLot(layout);
     return {
       x: lot.x * T,
       y: lot.y * T,
       w: lot.w * T,
-      h: (lot.yardY + TOWN_POST_YARD_ROWS - lot.y) * T,
+      h: (lot.yardY + TOWN_WAREHOUSE_YARD_ROWS - lot.y) * T,
     };
   }
   const building = layout.buildings.find(

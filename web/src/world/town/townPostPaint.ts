@@ -2,10 +2,10 @@
  * The post office's art (#760), in Town's pixel style and palette: a red
  * brick house under the center's slate, cream stone trim, a striped awning
  * over a lit door, a red pillar box, and at the door a plank sorting yard
- * with an empty mail trolley. Every parcel is the DOM layer's
- * (TownPostOffice.tsx), one per pull request: the art paints none, so a
- * closed post office shows none. Painted once and shared; the renderer places
- * the house and the yard as two outdoor sprites.
+ * with an empty mail trolley. Pull requests are the warehouse's
+ * (TownWarehouse.tsx), so the post office holds none. Painted once and
+ * shared; the renderer places the house and the yard as two outdoor
+ * sprites.
  */
 
 import { TOWN_TILE as T } from "./townLayout";
@@ -13,7 +13,7 @@ import {
   TOWN_POST_HOUSE_ROWS,
   TOWN_POST_WIDTH,
   TOWN_POST_YARD_ROWS,
-} from "./townPost";
+} from "./townPostLot";
 import {
   TOWN_OUTLINE,
   townCanvas,

@@ -3,7 +3,7 @@
 A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
 [Install it](./README.md#quick-start) or follow the [tutorial](./docs/TUTORIAL.md).
 
-## Shipyard data
+## Shipyard
 
 - `herdr-world shipyard list|show` and the same-origin
   [Shipyard API](docs/shipyard-api.md) read GitHub releases, tags, workflow health
@@ -20,8 +20,46 @@ A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
   port discovery runs, and agent runtimes are not treated as World deployments.
 - V1 provides navigation links only: no release/tag creation or deployment
   changes. `herdr-world shipyard demo --scenario stale|limited --json` exercises
-  synthetic rare states without a service or credentials. Town/Board visuals
-  follow separately; this capability adds no screens or buildings.
+  synthetic rare states without a service or credentials.
+- **Town harbour**: a wide Town ends at its right-most edge in the sea, which
+  runs on off the map. The streets end at a stone promenade; one shipping lane
+  per project crosses the water from it, each in its own colour (eight colours
+  that repeat), named on a board with its flag at the pier's root. Projects are
+  the repositories the Shipyard suggests (up to eight) plus the one chosen in **Work →
+  Releases**, which comes first. On a lane, the hull on the slipway is the next
+  release, with the count of merged pull requests waiting for it (`200+` when
+  shortened, `?` unknown); the latest three releases are ships moored along the
+  pier, newest first, prereleases with orange hulls and a green pennant while a
+  World on this computer runs that version. The lighthouse at the pier's head
+  is main's checks (green passing, red failing, yellow running, grey unknown).
+  The Shipyard sign counts projects and those with main failing or out of date.
+  A board or hull opens that project in **Work → Releases**; a ship opens its
+  release card with **All releases**. A new release sails in once, only in its
+  own lane, and is announced; the first read and a repository change stay
+  still. More projects than the sea holds (about thirteen on a one-building
+  town) end in a **+N more** lane listing the rest by name and state; each opens
+  in **Work → Releases**. Stale data fades a lane, greys its lamp and says
+  **Out of date**; so does a failed read of that one project, keeping its
+  last ships, and a failed read of World itself, and then every
+  running World reads as stopped reporting without **Open**. GitHub off or no
+  repository leaves an empty sea and says how to go on. A phone or portrait
+  Town has the same harbour right of its stacked buildings: drag or pinch to
+  reach it, or tap the **Shipyard** signpost on the town center's left wing
+  (a dot per project in its colour and lamp, and an arrow), which flies to
+  the sea with the promenade and a whole pier across the screen. Calm Town
+  and reduced motion stop the bobbing and
+  sailing. Open pull requests are the warehouse's, not the harbour's.
+- **Work → Releases** (Board's Work lens and Town's harbour): main's checks,
+  waiting changes, shipped releases and running Worlds, with links to GitHub
+  and **Open** only for fresh loopback Worlds (usable on the service machine).
+  Waiting changes list the merged pull requests the commit graph proves and
+  the total commit count; World does not guess which commits were pushed
+  directly. The repository select, including **Another repository…**, is remembered per
+  browser. **Read GitHub again** forces one bounded refresh.
+- Testing only: `?shipyardFixture` (or `=failing|stale|limited|off|empty|offline`)
+  shows synthetic data without GitHub, three projects; `=many` shows sixteen,
+  more lanes than a town's sea holds. The page drops the parameter at once.
+  `offline` answers once, then fails every read as if World stopped answering.
 
 ## Runtime support
 
@@ -231,7 +269,7 @@ Every service call requires an immutable connection ID and observed generation
 require `--yes`. Conflicts preserve the current file; an unknown write outcome
 requires a fresh read. Nothing retries a write automatically. Contents stay on
 the owning host and in private responses, without a World content cache, index,
-Board copy or telemetry. No new visual surface is included in this data delivery.
+Board copy or telemetry. The Library (below) is the browser's view of this data.
 
 The Unix host needs Python 3; Windows, symlinks, hardlinks, special/binary/non-UTF-8
 files and non-Markdown entries refuse. Discovery stops at 32 projects, 128 agents,
@@ -240,6 +278,48 @@ is literal and case-insensitive, with a 2 MiB scan budget and 100 results. Parti
 results say `truncated`, skipped reads are counted, and each host request has a
 15-second deadline. `herdr-world memory demo --json` creates and cleans up an
 isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
+
+### The Library
+
+- Open it from Town's **library**, right of the town center on the first street,
+  from the town center's ring (**Library**), from Board's hub (**Library**, on the
+  selected agent or workspace), from an agent window's settings (**Memory**)
+  or from Settings (**Agents** → **Library (memory)**, or search "memory").
+  On a phone the library folds to a book sign on the town center's left wing.
+  The library's sign counts files, stale files and shared files across up to four
+  hosts, read at most every five minutes; it never shows contents.
+- The left column (a picker on a phone) chooses a reader: everything on a host,
+  a project or an agent. An agent leads with what it would load: files read at
+  start, files read when needed and files skipped, shadowed ("Hidden by another
+  file") or empty. Discovery cannot prove what a running agent already loaded.
+- Shelves group files by source, `MEMORY.md` first. Each file shows its size, its
+  age (stale after 30 days) and who else reads it. Refused sources and files say
+  why; a missing instruction file offers **Create** and a missing memory folder
+  (a fresh project) offers **Add the first note**, which creates the folder;
+  harnesses World cannot read
+  say so; truncated lists and searches say they show the first ones only.
+- Opening a book reads it fresh from its host. **Edit** then **Save** writes it
+  with the revision you read. If the file changed meanwhile, the save is refused,
+  your text stays and **Load latest** shows theirs. When World can't tell whether a
+  write landed, it reads the file again: if the host has your text it says
+  Saved; otherwise your text stays on the revision you started from, so saving
+  again is refused if anyone else changed the file. **Delete** asks
+  first, focused on its button, with **Keep it**; deleting a topic says if
+  `MEMORY.md` still lists it. **+** on a shelf adds a note, reminding you to add
+  Claude topics to `MEMORY.md`. Reload the harness to pick up changes.
+- **Search** runs on submit over the chosen reader's files; tap a match to open it.
+  Choosing another reader or host drops a search still under way.
+- The Library stays on the host it opened on or you picked. If that host
+  disconnects, it says the host's memory is unavailable and offers the other
+  hosts; it never shows another host's agent in its place.
+  Escape, system Back or the close button closes the Library; on a phone a book
+  shows one pane with its own **Back** to the shelves. Opening the Library reads
+  the host again. File contents are never cached; only the sign's counts are.
+- To try it without real memory, open World with `?memoryFixture`: a synthetic
+  host with two projects, four agents, shared, stale, shadowed, empty, missing and
+  refused files. The page drops the parameter at once; edits stay in the page.
+  Saving text that contains `[uncertain]` acts out a write whose outcome is
+  unknown while someone else edits the file.
 
 ## World update notifications
 
@@ -412,44 +492,47 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (a phone keeps only a few rows of yard above each building for its
     reception board); tap one to open it. Zoomed in to desks, the boards are put away with
     reception. At every zoom the reception boards keep clear of the town
-    center, the post office, the billboard and each other: a board that would
-    cover one slides aside the least it can while staying over its building,
-    else it hangs lower, below the center or the board in its way.
+    center, the post office, the warehouse, the billboard and each other: a
+    board that would cover one slides aside the least it can while staying
+    over its building, else it hangs lower, below the center or the board in its way.
     The `?scene=town-scale` preview replaces every economy reader with labelled
     test data for its synthetic buildings, including the Town board and Spend lens.
   - Town's **post office** stands on the first street left of the town
-    center, its sorting yard on the pavement: your open pull requests (opened by you, waiting on your
-    review or assigned to you) as parcels in its sorting yard, ready to merge
-    first. Its sign counts them without hovering, such as "2 ready · 1
-    failing · 3 waiting", adding unknown and draft when there are some. A
-    parcel's tag shows its state: green ready to merge, red CI failing on its
-    head, amber waiting (for CI, a review, a fix or GitHub), a grey crate for
-    unknown and a pale letter for a draft. It reads the GitHub source and the
-    pull request card's merge rules, so stale or partial detail is unknown,
-    never ready. Hover or focus a parcel for "#123 title", its repository and
-    its state in words; tap it for the same pull request card the desk badge
-    opens (**Details**, **Merge…** and the rest). A merged parcel is carried
-    off the yard (with calm or reduced motion it just goes); a closed one
-    fades. More than the yard holds make a "+N" pile that opens the rest as a
-    list. Click the post office's sign, or **All pull requests** at the top of
-    the pile's list or the phone sign's list, to open Board's **Work** lens
-    over Town: every pull request in the same columns, with the Tickets tab,
-    each card's actions and the same Escape, Back or press-outside close. An
-    agent on a card opens as tapping it in Town does. With the GitHub source off, signed out or not yet answered, the
-    post office is closed and says to connect GitHub in **Integrations** (its sign opens them), with no
-    parcels and no counts; when a refresh fails it keeps the last list as
-    unknown and says GitHub is out of date. On a phone the post office stands as
-    the same building and yard beside the town center, in view at home zoom
-    with the center and the first building; its sign reads "POST OFFICE",
-    "pull requests" and the counts (or "Closed"), and tapping it opens the
-    parcels as a list. Searching Town for "post office" (or "pull requests")
-    lists the **Post office** and choosing it takes the map there, on a phone
-    or a wide screen. For trying it without real pull
-    requests, open World with `?townPostFixture` (synthetic pull requests in
-    every state; ten seconds later the first ready one merges),
-    `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
-    the page drops the parameter at once and only the post office and the
-    Work lens it opens use it.
+    center, on a phone as on a wide screen; it no longer holds pull requests.
+  - Town's **warehouse** stands on the shore at the first street's end, by
+    the harbour, its yard on the pavement: your open pull requests (opened by
+    you, waiting on your review or assigned to you) as crates in its yard,
+    ready to merge first. Its sign counts them without hovering, such as "2
+    ready · 1 failing · 3 waiting", adding unknown and draft when there are
+    some. A crate's straps and stencil show its state: green ready to merge,
+    red CI failing on its head, amber waiting (for CI, a review, a fix or
+    GitHub), grey for unknown and loose planks on a pallet for a draft. It
+    reads the GitHub source and the pull request card's merge rules, so stale
+    or partial detail is unknown, never ready. Hover or focus a crate for
+    "#123 title", its repository and its state in words; tap it for the same
+    pull request card the desk badge opens (**Details**, **Merge…** and the
+    rest). A merged crate is carried off toward the quay for the next release
+    (with calm or reduced motion it just goes); a closed one fades. More than
+    the yard holds make a "+N" pile that opens the rest as a list. Click the
+    warehouse's sign, or **All pull requests** at the top of the pile's list
+    or the phone sign's list, to open Board's **Work** lens over Town: every
+    pull request in the same columns, with the Tickets tab, each card's
+    actions and the same Escape, Back or press-outside close. An agent on a
+    card opens as tapping it in Town does. With the GitHub source off, signed
+    out or not yet answered, the warehouse is closed and says to connect
+    GitHub in **Integrations** (its sign opens them), with no crates and no
+    counts; when a refresh fails it keeps the last list as unknown and says
+    GitHub is out of date. On a phone it stands on the harbour's shore too,
+    and a sign on the town center's right wing, in view at home zoom (a crate
+    and coloured ready, failing and waiting counts), opens the crates as a
+    list. Searching Town for "warehouse" (or "pull requests") lists the
+    **Warehouse** and choosing it takes the map there, on a phone or a wide
+    screen. For trying it without
+    real pull requests, open World with `?townWarehouseFixture` (synthetic
+    pull requests in every state; ten seconds later the first ready one
+    merges), `?townWarehouseFixture=many` (a pile) or
+    `?townWarehouseFixture=off` (signed out); the page drops the parameter at
+    once and only the warehouse and the Work lens it opens use it.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
