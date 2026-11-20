@@ -262,7 +262,8 @@ reuses the pid and argv is refused.
 
 - **WHEN** World saw an agent inside a wrapper and one later read of the
   wrapper's foreground group fails
-- **THEN** the desk keeps that agent and its report; only a group read without
+- **THEN** the desk keeps that agent, its report and, for a headless run, its
+  working status, never an earlier reporter's name; only a group read without
   it, or another program leading the terminal, counts as its exit
 
 ### Requirement: World-started core terminals and confirmed kills
@@ -439,7 +440,8 @@ report. A harness World saw inside a wrapper SHALL stay the desk's agent,
 idle, after it exits while that wrapper leads the terminal; that departed
 harness, never an earlier reporter, SHALL name the desk. World SHALL count a
 process as exited only on evidence: a foreground group the host could not read
-SHALL keep what World last saw. An option's value SHALL never mark an
+SHALL keep what World last saw running there, harness and headless alike, as
+the desk's process evidence ahead of any report. An option's value SHALL never mark an
 invocation headless.
 World SHALL find a desk's agent as Herdr's TUI does: the foreground group's
 leader, else, where the host can read it (a core on this Linux machine), the

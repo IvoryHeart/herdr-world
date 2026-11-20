@@ -151,7 +151,8 @@ export function coreAgentStatus(
 }
 
 /**
- * The harness in a terminal: what runs in it now, else its report's, else
+ * The harness in a terminal: what runs in it now (or, while its group
+ * cannot be read, what World last saw run there), else its report's, else
  * (World's memory of the desk) the one that just left it. A process that
  * runs there outranks a report, and a report a departed process left
  * (`seen.stale`) names nobody: the agent that left keeps the desk's
@@ -162,7 +163,8 @@ export function coreHarness(
   group: readonly (readonly string[])[] | null = null,
   seen: CoreDeskSeen = NOTHING_SEEN,
 ): string | null {
-  const running = coreDeskProcess(record, group).running?.harness;
+  const running =
+    coreDeskProcess(record, group).running?.harness ?? seen.held?.harness;
   if (running) return running;
   const report = seen.stale ? null : coreStatusReport(record);
   const reported = harnessName(report?.app);
@@ -222,8 +224,23 @@ export type CoreDeskSeen = {
   left: string | null;
   /** The report is the one a departed process left: it speaks for nobody now. */
   stale: boolean;
+  /**
+   * The harness World last saw run here, while the host cannot read the
+   * foreground group now: no evidence it left, so it still runs there.
+   */
+  held: HarnessInvocation | null;
 };
-const NOTHING_SEEN: CoreDeskSeen = { left: null, stale: false };
+const NOTHING_SEEN: CoreDeskSeen = { left: null, stale: false, held: null };
+
+/** The desk's process evidence, with a harness `seen` holds through an unread group. */
+export function coreDeskHeld(
+  desk: CoreDeskProcess,
+  seen: CoreDeskSeen,
+): CoreDeskProcess {
+  return !desk.running && seen.held
+    ? { running: seen.held, gone: false }
+    : desk;
+}
 
 /**
  * What World saw of each desk's agent process, so a process that leaves
@@ -235,7 +252,8 @@ const NOTHING_SEEN: CoreDeskSeen = { left: null, stale: false };
  *   foreground leader (the wrapper ended, a shell is back) forgets it, as a
  *   directly started agent is forgotten when it exits.
  * - A process leaves only on evidence (`desk.gone`): a foreground group the
- *   host could not read keeps what World last saw.
+ *   host could not read keeps what World last saw, harness and headless
+ *   alike (`held`), ahead of any report.
  * - The report standing when World saw the process leave is that process's:
  *   it is stale until the report changes, so a replacement that never
  *   reports is unknown (or, headless, working), never the departed one's
@@ -249,7 +267,7 @@ export class CoreDeskMemory {
     string,
     {
       leader: number | null;
-      harness: string;
+      invocation: HarnessInvocation;
       present: boolean;
       staleReport: string | null;
     }
@@ -266,15 +284,15 @@ export class CoreDeskMemory {
     }
     if (seen && seen.staleReport !== null && seen.staleReport !== report)
       seen.staleReport = null;
-    const running = desk.running?.harness ?? null;
+    const running = desk.running;
     if (running) {
       if (seen) {
-        seen.harness = running;
+        seen.invocation = running;
         seen.present = true;
       } else
         this.desks.set(record.address, {
           leader,
-          harness: running,
+          invocation: running,
           present: true,
           staleReport: null,
         });
@@ -285,8 +303,9 @@ export class CoreDeskMemory {
     }
     if (!seen) return NOTHING_SEEN;
     return {
-      left: seen.present ? null : seen.harness,
+      left: seen.present ? null : seen.invocation.harness,
       stale: seen.staleReport === report,
+      held: seen.present && !running ? seen.invocation : null,
     };
   }
 
@@ -627,8 +646,9 @@ export function coreTopology(
               : undefined,
           )
         : null;
-    const desk = coreDeskProcess(record, group);
-    const seen = desks?.observe(record, desk) ?? NOTHING_SEEN;
+    const read = coreDeskProcess(record, group);
+    const seen = desks?.observe(record, read) ?? NOTHING_SEEN;
+    const desk = coreDeskHeld(read, seen);
     const harness = coreHarness(record, group, seen);
     const cwd = text(record.cwd, 4096);
     const foregroundCwd = text(foreground?.cwd, 4096);

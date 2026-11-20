@@ -523,6 +523,39 @@ describe("a working agent shows at its desk: reports checked against the process
     ]);
   });
 
+  test("an unread group keeps a report-free headless run working", () => {
+    const view = watched();
+    const wrapper = { foreground: fg(["bash", "run.sh"]) };
+    const run = [["claude", "-p", "go"], ["tee"]];
+    expect(view(wrapper, run)).toEqual(["claude", "working"]);
+    expect(view(wrapper, null)).toEqual(["claude", "working"]);
+    expect(view(wrapper, run)).toEqual(["claude", "working"]);
+    expect(view(wrapper, [])).toEqual(["claude", "idle"]);
+  });
+
+  test("an unread group keeps the agent World saw, not an older reporter", () => {
+    const view = watched();
+    const wrapper = { foreground: fg(["bash", "run.sh"]) };
+    const working = { state: "working", app: "claude" };
+    expect(view({ ...wrapper, status: working }, [["claude"]])).toEqual([
+      "claude",
+      "working",
+    ]);
+    // Silent interactive Codex replaced Claude; one read fails.
+    expect(view({ ...wrapper, status: working }, [["codex"]])).toEqual([
+      "codex",
+      "unknown",
+    ]);
+    expect(view({ ...wrapper, status: working }, null)).toEqual([
+      "codex",
+      "unknown",
+    ]);
+    expect(view({ ...wrapper, status: working }, [["codex"]])).toEqual([
+      "codex",
+      "unknown",
+    ]);
+  });
+
   test("the agent that left keeps the desk's name, not an older reporter's", () => {
     const view = watched();
     const wrapper = { foreground: fg(["bash", "run.sh"]) };
