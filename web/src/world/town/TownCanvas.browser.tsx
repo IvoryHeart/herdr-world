@@ -673,6 +673,14 @@ const binState = () => ({
   },
 });
 worldBridge.call = async (method, params) => {
+  if (method === "world.core.move") {
+    moves.push({ method, params: { ...params } });
+    return {
+      status: "moved",
+      tab_id: "moved-core-tab",
+      workspace_id: "moved-core-room",
+    };
+  }
   if (method.startsWith("world.bin.")) {
     if (method === "world.bin.add") binAdds.push(params ?? {});
     return binState();
@@ -1036,7 +1044,7 @@ function coreTopology(): WorldRuntimeConnection {
   ] as const;
   const tabs: Tab[] = desks.map(([tab_id, panes], index) => ({
     tab_id,
-    workspace_id,
+    workspace_id: index === 2 ? "core-other-room" : workspace_id,
     number: index + 1,
     label: ["shell", "agent", "pair"][index]!,
     focused: index === 0,
@@ -1048,7 +1056,7 @@ function coreTopology(): WorldRuntimeConnection {
       ([address, agent]): Pane => ({
         pane_id: address,
         terminal_id: address,
-        workspace_id,
+        workspace_id: tab_id === "core-pair" ? "core-other-room" : workspace_id,
         tab_id,
         // Of the pair, the second pane holds focus: a tap opens it.
         focused: address === "t4",
@@ -1078,10 +1086,20 @@ function coreTopology(): WorldRuntimeConnection {
           number: 1,
           label: "Core room",
           focused: true,
-          pane_count: panes.length,
-          tab_count: tabs.length,
+          pane_count: 2,
+          tab_count: 2,
           active_tab_id: "core-shell",
           agent_status: "working",
+        } as Workspace,
+        {
+          workspace_id: "core-other-room",
+          number: 2,
+          label: "Core second room",
+          focused: false,
+          pane_count: 2,
+          tab_count: 1,
+          active_tab_id: "core-pair",
+          agent_status: "unknown",
         } as Workspace,
       ],
       tabs,
@@ -1515,6 +1533,7 @@ async function run() {
       check,
       waitFor,
       requestCount: () => moves.length,
+      lastRequest: () => moves[moves.length - 1],
     });
     root.unmount();
     await settle();

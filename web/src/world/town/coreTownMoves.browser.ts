@@ -16,11 +16,15 @@ export async function checkCoreDesks(
     check,
     waitFor,
     requestCount,
+    lastRequest,
   }: {
     phone: boolean;
     check(ok: unknown, message: string): void;
     waitFor(predicate: () => boolean, message: string): Promise<void>;
     requestCount(): number;
+    lastRequest():
+      | { method: string; params: Record<string, unknown> }
+      | undefined;
   },
 ) {
   const canvasHost = host.querySelector(".town-canvas-host canvas")!
@@ -102,9 +106,9 @@ export async function checkCoreDesks(
   )!;
   check(Boolean(agent), "no core agent target to drag");
   const destination = desk("core-pair")!;
-  const refusals = () =>
-    [...host.querySelectorAll(".town-toast-error")].filter((toast) =>
-      toast.textContent?.includes("not supported for herdr-core"),
+  const successes = () =>
+    [...host.querySelectorAll(".town-toast-ok")].filter((toast) =>
+      toast.textContent?.endsWith(" moved"),
     );
   const drag = async (from: HTMLElement, id: number) => {
     const center = (target: HTMLElement) => {
@@ -128,7 +132,7 @@ export async function checkCoreDesks(
         }),
       );
     const before = requestCount();
-    const refusedBefore = refusals().length;
+    const movedBefore = successes().length;
     point("pointerdown", start);
     if (phone) {
       await waitFor(
@@ -148,13 +152,23 @@ export async function checkCoreDesks(
     point("pointermove", end);
     point("pointerup", end);
     await waitFor(
-      () => refusals().length > refusedBefore,
-      "core drop did not visibly explain why it was refused",
+      () => successes().length > movedBefore,
+      "core drop did not report a completed move",
     );
-    check(requestCount() === before, "a refused core move sent a TUI request");
+    check(
+      requestCount() === before + 1,
+      "core drop did not send exactly one move request",
+    );
+    const request = lastRequest();
+    check(
+      request?.method === "world.core.move" &&
+        request.params.connection_id === "core" &&
+        request.params.connection_generation === 5,
+      "core drop did not use its exact core connection and generation",
+    );
     check(
       !host.querySelector('[role="dialog"]'),
-      "a refused core move opened a confirmation",
+      "a core move opened a false room-closing confirmation",
     );
   };
   await drag(agent, pointer++);

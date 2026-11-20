@@ -84,14 +84,14 @@ async function setup() {
   const desk = (index: number) => model.desks.get(agent(index).deskKey!)!;
   const toasts: [string, string][] = [];
   const confirmations: unknown[] = [];
-  const requests: string[] = [];
+  const requests: { method: string; params: unknown }[] = [];
   const deskPins: Record<string, DeskPins[string]> = {};
-  bridge.call = async (method) => {
-    requests.push(method);
-    throw new Error("Unsupported core moves must send no RPC");
+  bridge.call = async (method, params) => {
+    requests.push({ method, params });
+    return { status: "moved", tab_id: "moved", workspace_id: "target" };
   };
   bridge.connection = ((id: string) => {
-    requests.push(id);
+    requests.push({ method: id, params: null });
     throw new Error("A core move must never use the TUI connection client");
   }) as typeof bridge.connection;
   const actions = townMoveActions({
@@ -124,7 +124,7 @@ async function setup() {
   };
 }
 
-test("a live core agent can be picked up and its desk drop reports a visible refusal", async () => {
+test("a live core agent lifts and moves through its exact core connection and generation", async () => {
   const s = await setup();
   const agent = s.agent(0);
   expect(agent.canOpenInSpaces).toBe(false);
@@ -137,30 +137,46 @@ test("a live core agent can be picked up and its desk drop reports a visible ref
     s.model,
   );
   expect(target.key).toBe(s.desk(1).key);
-  expect(await s.actions.runAgentMove(agent.key, target.key!)).toBe("returned");
+  expect(await s.actions.runAgentMove(agent.key, target.key!)).toBe("moved");
   expect(s.toasts[s.toasts.length - 1]).toEqual([
-    "error",
-    expect.stringContaining(
-      "not moved: Moving agents between desks or rooms is not supported for herdr-core yet.",
-    ),
+    "ok",
+    expect.stringContaining("moved"),
   ]);
-  expect(s.requests).toEqual([]);
+  expect(s.requests).toEqual([
+    {
+      method: "world.core.move",
+      params: {
+        connection_id: "box",
+        connection_generation: 3,
+        kind: "pane",
+        pane_id: "t1",
+        tab_id: "desk-t2",
+      },
+    },
+  ]);
 });
 
-test("a core agent dropped into another room refuses before asking to close its source room", async () => {
+test("a core agent moves across rooms without a false room-closing warning", async () => {
   const s = await setup();
   expect(await s.actions.runAgentMove(s.agent(2).key, s.desk(0).key)).toBe(
-    "returned",
+    "moved",
   );
   expect(s.confirmations).toEqual([]);
-  expect(s.toasts[s.toasts.length - 1]).toEqual([
-    "error",
-    expect.stringContaining("not supported for herdr-core"),
+  expect(s.requests).toEqual([
+    {
+      method: "world.core.move",
+      params: {
+        connection_id: "box",
+        connection_generation: 3,
+        kind: "pane",
+        pane_id: "t3",
+        tab_id: "desk-t1",
+      },
+    },
   ]);
-  expect(s.requests).toEqual([]);
 });
 
-test("a core desk lifts and visibly refuses both a room move and native desk reordering", async () => {
+test("a core desk moves to a room; unavailable native desk ordering has a specific refusal", async () => {
   const s = await setup();
   const desk = s.desk(2);
   const drag = townDragFor({ kind: "desk", key: desk.key }, s.model, "room");
@@ -169,20 +185,28 @@ test("a core desk lifts and visibly refuses both a room move and native desk reo
   expect(
     townDropTarget(drag!, { kind: "room", key: room }, s.model),
   ).toMatchObject({ key: room, action: "move" });
-  expect(await s.actions.runDeskMove(desk.key, room)).toBe("returned");
+  expect(await s.actions.runDeskMove(desk.key, room)).toBe("moved");
   expect(s.confirmations).toEqual([]);
-  expect(s.toasts[s.toasts.length - 1]).toEqual([
-    "error",
-    expect.stringContaining("not supported for herdr-core"),
+  expect(s.requests).toEqual([
+    {
+      method: "world.core.move",
+      params: {
+        connection_id: "box",
+        connection_generation: 3,
+        kind: "desk",
+        tab_id: "desk-t3",
+        workspace_id: "source",
+      },
+    },
   ]);
   expect(await s.actions.runDeskReorder(s.desk(0).key, s.desk(1).key)).toBe(
     "returned",
   );
   expect(s.toasts[s.toasts.length - 1]).toEqual([
     "error",
-    expect.stringContaining("not supported for herdr-core"),
+    expect.stringContaining("herdr-core does not expose desk ordering"),
   ]);
-  expect(s.requests).toEqual([]);
+  expect(s.requests).toHaveLength(1);
 });
 
 test("stale core agents and desks cannot be picked up", async () => {
@@ -199,17 +223,28 @@ test("stale core agents and desks cannot be picked up", async () => {
   ).toBeNull();
 });
 
-test("grouping a core desk across rooms refuses before changing team membership", async () => {
+test("grouping a core desk across rooms now moves it to its teammate", async () => {
   const s = await setup();
-  expect(await s.actions.teams.runGroupDesk(s.desk(2).key, s.desk(0).key)).toBe(
-    "returned",
-  );
-  expect(s.confirmations).toEqual([]);
-  expect(s.toasts[s.toasts.length - 1]).toEqual([
-    "error",
-    expect.stringContaining("not supported for herdr-core"),
-  ]);
-  expect(s.requests).toEqual([]);
+  const store = sharedBoardStore();
+  const patch = store.patch;
+  const writes: BoardOp[][] = [];
+  store.patch = async (ops) => {
+    writes.push(ops);
+    return null;
+  };
+  try {
+    expect(
+      await s.actions.teams.runGroupDesk(s.desk(2).key, s.desk(0).key),
+    ).toBe("moved");
+    expect(s.confirmations).toEqual([]);
+    expect(writes.flat().some((op) => op.op === "group.join")).toBe(true);
+    expect(s.requests[0]).toMatchObject({
+      method: "world.core.move",
+      params: { kind: "desk" },
+    });
+  } finally {
+    store.patch = patch;
+  }
 });
 
 test("core pinned desks still reorder their saved seats without native moves", async () => {

@@ -1,3 +1,4 @@
+import { moveCore } from "../herdr-core/town-move";
 import { isLocalCoreAddress } from "../../../shared/coreAddress";
 import { profileLaunch } from "../agent/profile-launch";
 import { coreHarnessNames } from "../herdr-core/harness";
@@ -199,6 +200,16 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
             },
           },
         );
+        invalidate();
+        return reply(result);
+      }
+      case "world.core.move": {
+        const result = await moveCore(lease, core.topology, {
+          kind: p.kind === "desk" ? "desk" : "pane",
+          tab_id: String(p.tab_id ?? ""),
+          pane_id: String(p.pane_id ?? ""),
+          workspace_id: String(p.workspace_id ?? ""),
+        });
         invalidate();
         return reply(result);
       }

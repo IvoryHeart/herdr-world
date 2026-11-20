@@ -99,8 +99,7 @@ export function townDragFor(
     hit.kind === "desk" ? hit.key : hit.kind === "pane" ? hit.deskKey : null;
   const desk = deskKey ? model.desks.get(deskKey) : undefined;
   // A pinned desk moves too, among its room's pinned seats (townDropTarget).
-  // Live core desks lift too: unsupported native moves report their reason
-  // through the same move actions instead of silently ignoring the gesture.
+  // Live core desks use the same gestures and their own placement adapter.
   if (!desk || (!desk.canOpenInSpaces && !desk.coreOpen) || desk.stale)
     return null;
   return {
