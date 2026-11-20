@@ -1,11 +1,13 @@
 /**
  * The post office's art (#760), in Town's pixel style and palette: a red
  * brick house under the center's slate, cream stone trim, a striped awning
- * over a lit door, a red pillar box, and at the door a plank sorting yard
- * with an empty mail trolley. Pull requests are the warehouse's
- * (TownWarehouse.tsx), so the post office holds none. Painted once and
- * shared; the renderer places the house and the yard as two outdoor
- * sprites.
+ * over a lit door, a red pillar box, pigeonholes behind the windows, and at
+ * the door a plank sorting yard with the mail trolley. It carries mail, not
+ * cargo (#1105): the letters (questions agents asked you) and the trolley's
+ * load (your answers on their way) are the DOM layer's
+ * (TownPostOffice.tsx), drawn with the letter painted here. Pull requests
+ * are the warehouse's (TownWarehouse.tsx). Painted once and shared; the
+ * renderer places the house and the yard as two outdoor sprites.
  */
 
 import { TOWN_TILE as T } from "./townLayout";
@@ -14,6 +16,7 @@ import {
   TOWN_POST_WIDTH,
   TOWN_POST_YARD_ROWS,
 } from "./townPostLot";
+import { TOWN_LETTER_SIZE } from "./townPostModel";
 import {
   TOWN_OUTLINE,
   townCanvas,
@@ -33,9 +36,11 @@ const GOLD = "#e8c75a";
 const WOOD = "#9b6a3f";
 const WOOD_DARK = "#6e4a2e";
 const WOOD_EDGE = "#3b2414";
+const LETTER = "#fbf6e8";
 
 let house: TownCanvas | null = null;
 let yard: TownCanvas | null = null;
+const letterUrls = new Map<string, string>();
 
 type Paint = ReturnType<typeof painter>;
 
@@ -120,8 +125,15 @@ function paintHouse(W: number, H: number) {
     rect(x + 13, eave + 14, 2, 22, STONE_DARK);
     rect(x, eave + 23, 28, 1, STONE_DARK);
     rect(x - 4, eave + 38, 36, 3, STONE);
-    // The counter behind the glass, empty: parcels are the yard's alone.
-    rect(x, eave + 31, 28, 2, WOOD_DARK);
+    // Pigeonholes behind the glass, a letter in some of them.
+    rect(x, eave + 29, 28, 7, WOOD_DARK);
+    for (let i = 0; i < 6; i += 1) {
+      const px = x + 1 + i * 4 + (i > 2 ? 3 : 0);
+      for (const py of [eave + 30, eave + 33]) {
+        rect(px, py, 3, 2, WOOD_EDGE);
+        if ((i + py) % 3 === 0) rect(px, py, 3, 2, LETTER);
+      }
+    }
   }
 
   // The door under a striped awning, lit from inside.
@@ -171,7 +183,8 @@ function paintYard(W: number, H: number) {
       rect(x, y, 6, 10, WOOD_DARK);
       rect(x, y, 6, 2, townShade(WOOD_DARK, 0.25));
     }
-  // The mail trolley at the right end: a red cart on two wheels.
+  // The mail trolley at the right end: a red cart on two wheels, loaded
+  // with your answers on their way (TownPostOffice.tsx).
   const cx = W - 30;
   rect(cx, 18, 22, 20, POST_RED);
   rect(cx, 18, 22, 3, townShade(POST_RED, 0.25));
@@ -201,4 +214,38 @@ function slateRoof(p: Paint, x: number, y: number, w: number, h: number) {
       g.fillRect(xx, y + r, 1, 4);
   rect(x, y, w, 2, townShade(SLATE, 0.3));
   rect(x, y + h - 2, w, 2, townShade(SLATE, -0.45));
+}
+
+/**
+ * A letter, TOWN_LETTER_SIZE: a cream envelope with its flap, sealed in red
+ * wax, or grey wax when the service could not verify who wrote it.
+ */
+export function paintTownLetter(verified: boolean): TownCanvas {
+  const { w: W, h: H } = TOWN_LETTER_SIZE;
+  const { canvas, rect, disc } = painter(W, H);
+  rect(0, 0, W, H, TOWN_OUTLINE);
+  rect(1, 1, W - 2, H - 2, LETTER);
+  rect(1, H - 2, W - 2, 1, STONE_SHADE);
+  // The flap: two lines from the top corners down to the seal.
+  for (let i = 0; i < 5; i += 1) {
+    rect(1 + i, 1 + i, 1, 1, STONE_DARK);
+    rect(W - 2 - i, 1 + i, 1, 1, STONE_DARK);
+  }
+  disc(W / 2, 5, 2, verified ? POST_RED : "#8a8f99");
+  return canvas;
+}
+
+/** A letter's art as an image URL, drawn once; empty without a canvas (tests). */
+export function townLetterUrl(verified: boolean) {
+  const key = verified ? "sealed" : "unverified";
+  let value = letterUrls.get(key);
+  if (value === undefined) {
+    try {
+      value = paintTownLetter(verified).toDataURL();
+    } catch {
+      value = "";
+    }
+    letterUrls.set(key, value);
+  }
+  return value;
 }

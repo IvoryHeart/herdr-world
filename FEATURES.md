@@ -498,7 +498,24 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     The `?scene=town-scale` preview replaces every economy reader with labelled
     test data for its synthetic buildings, including the Town board and Spend lens.
   - Town's **post office** stands on the first street left of the town
-    center, on a phone as on a wide screen; it no longer holds pull requests.
+    center, on a phone as on a wide screen, and carries messages, never
+    cargo (pull requests are crates in the warehouse; releases are ships).
+    Each open question for you (from `herdr-world ask`) is a letter in its
+    yard, oldest first; a letter from a caller World could not verify has a
+    grey seal. Its red sign counts the mail without hovering, such as "2
+    letters · 1 to send · 1 to check" (on a phone, a narrow plate with a
+    count per row), or says "No mail". Hover or focus a
+    letter for "Letter from orbit: …"; click or tap it for a card with the
+    question, its answer choices, its age and **Answer in Needs you**. Click
+    the sign to open Needs you at the oldest letter. Answers on their way to
+    an agent ride the mail trolley by the door, red when one needs checking
+    (delivery uncertain or refused); click it to open the Outbox. More
+    letters than the yard holds make a "+N" bundle that lists the rest. For
+    trying it without real questions, open World with `?townPostFixture`
+    (four synthetic letters, one unverified, and three answers on the
+    trolley), `?townPostFixture=many` (a bundle) or `?townPostFixture=empty`
+    (no mail); the page drops the parameter at once, only the post office
+    uses it, and a test letter's card has nothing to answer.
   - Town's **warehouse** stands on the shore at the first street's end, by
     the harbour, its yard on the pavement: your open pull requests (opened by
     you, waiting on your review or assigned to you) as crates in its yard,
@@ -1027,8 +1044,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
     click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
     a readable zoom and pulses it; choosing it again, or **Enter** a second
-    time, opens it as selecting does. Town's own places are found too: "post
-    office" (or "pull requests") lists the **Post office**, and choosing it
+    time, opens it as selecting does. Town's own places are found too:
+    "warehouse" (or "pull requests") lists the **Warehouse**, and choosing it
     moves the camera there; choosing it again only shows it again. A result Town does not draw, such as
     an agent at a table its room folds away, opens at once and counts as
     off-screen. Under **Town calm motion** or reduced motion the camera jumps
@@ -1637,7 +1654,7 @@ read, it refuses and asks you to check again rather than acting on the new
 one. **Add or edit hosts…** opens the same profile editor as **Hosts → Manage
 connections**. Nothing here is required; every request goes from the World
 service, never from the browser. A World element missing what it needs (the
-closed post office, Work's empty lens, Town with no hosts) offers **Connect**,
+closed warehouse, Work's empty lens, Town with no hosts) offers **Connect**,
 which opens this screen at that row.
 
 The **Vault** tab shows where World keeps the tokens integrations need
@@ -1675,8 +1692,8 @@ each source's state, switch it off or configure it under **Settings**.
   `herdr-world agent-checkout --pr`, and to a ticket whose key its branch names
   (for example `abc-12-fix-login` and `ABC-12`). Its Town desk shows the badge
   on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), its Board tab
-  card shows the same badge, and Board's Work lens names it on the card. Town's post office shows every open pull
-  request for you as a parcel, including those whose agent has gone. A link holds only for the agent session and
+  card shows the same badge, and Board's Work lens names it on the card. Town's warehouse shows every open pull
+  request for you as a crate, including those whose agent has gone. A link holds only for the agent session and
   Herdr runtime it was made in.
 - **Your open pull requests** get a card in Work with CI on the head (a dot
   per check), each explicitly attributed rev agent's latest `RESULT #N: …`
