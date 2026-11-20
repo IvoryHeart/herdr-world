@@ -16,6 +16,9 @@
  * - Every response also carries World's frame policy: browsers enforce
  *   both policies, so the IDE can frame only its own origin whatever its
  *   own policy allows.
+ * - The workbench's own WebSocket handshake carries the token too: VS Code
+ *   reads it from the cookie it never gets, so World fills it into the
+ *   first message of each IDE socket (`withConnectionToken`).
  */
 
 import type { IdeProviderId } from "./providers";
@@ -247,6 +250,8 @@ export type IdeSocketData = {
   instanceId: string;
   upstreamUrl: string;
   upstreamHeaders: Record<string, string>;
+  /** Filled into the workbench's handshake; never sent to the browser. */
+  handshakeToken: string | null;
 };
 
 /** The upstream URL and headers for a browser WebSocket upgrade. */
@@ -254,7 +259,11 @@ export function ideSocketTarget(
   req: Request,
   url: URL,
   upstream: IdeUpstream,
-): { upstreamUrl: string; upstreamHeaders: Record<string, string> } {
+): {
+  upstreamUrl: string;
+  upstreamHeaders: Record<string, string>;
+  handshakeToken: string | null;
+} {
   const headers = upstreamRequestHeaders(req.headers, upstream);
   headers.delete("sec-websocket-protocol");
   const record: Record<string, string> = {};
@@ -264,7 +273,52 @@ export function ideSocketTarget(
   return {
     upstreamUrl: `ws+unix://${upstream.socketPath}:${upstreamPath(upstream, url.pathname)}${url.search}`,
     upstreamHeaders: record,
+    handshakeToken: upstream.token,
   };
+}
+
+/** VS Code's protocol header: type u8, id u32, ack u32, length u32. */
+const PROTOCOL_HEADER_BYTES = 13;
+const CONTROL_MESSAGE = 2;
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+/**
+ * The workbench opens every remote socket with a control message
+ * `{"type":"auth","auth":<token>,…}`, the token read from the `vscode-tkn`
+ * cookie. World keeps that cookie from the browser (the token stays on
+ * World's side), so the browser sends a placeholder and the server would
+ * refuse it ("auth mismatch"). Put the real token in; anything else passes
+ * unchanged.
+ */
+export function withConnectionToken(
+  data: string | ArrayBufferLike | Uint8Array,
+  token: string,
+): string | ArrayBufferLike | Uint8Array {
+  if (typeof data === "string") return data;
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  if (bytes.length <= PROTOCOL_HEADER_BYTES || bytes[0] !== CONTROL_MESSAGE)
+    return data;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(9) !== bytes.length - PROTOCOL_HEADER_BYTES) return data;
+  let message: unknown;
+  try {
+    message = JSON.parse(decoder.decode(bytes.subarray(PROTOCOL_HEADER_BYTES)));
+  } catch {
+    return data;
+  }
+  if (
+    !message ||
+    typeof message !== "object" ||
+    (message as { type?: unknown }).type !== "auth"
+  )
+    return data;
+  const body = encoder.encode(JSON.stringify({ ...message, auth: token }));
+  const out = new Uint8Array(PROTOCOL_HEADER_BYTES + body.length);
+  out.set(bytes.subarray(0, 9));
+  new DataView(out.buffer).setUint32(9, body.length);
+  out.set(body, PROTOCOL_HEADER_BYTES);
+  return out;
 }
 
 type BrowserSocket = {
@@ -282,6 +336,7 @@ export class IdeSocketBridge {
   private upstream: WebSocket | null = null;
   private pending: (string | ArrayBufferLike | Uint8Array)[] = [];
   private closed = false;
+  private first = true;
 
   constructor(
     private readonly browser: BrowserSocket,
@@ -317,6 +372,11 @@ export class IdeSocketBridge {
 
   message(data: string | ArrayBufferLike | Uint8Array) {
     if (this.closed) return;
+    const token = this.browser.data.handshakeToken;
+    if (this.first) {
+      this.first = false;
+      if (token) data = withConnectionToken(data, token);
+    }
     const upstream = this.upstream;
     if (upstream?.readyState === WebSocket.OPEN) upstream.send(data as string);
     else this.pending.push(data);

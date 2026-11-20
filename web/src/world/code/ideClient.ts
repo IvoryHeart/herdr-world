@@ -45,6 +45,11 @@ export type IdeProviderStatus = {
    * vscode-cdn.net: the workbench works in World, those panels stay blank.
    */
   webviewsInWorld: boolean;
+  /**
+   * True for Microsoft's VS Code: its workbench connects only from HTTPS or
+   * localhost (it signs with crypto.subtle), never a plain-HTTP address.
+   */
+  needsSecurePage: boolean;
   enabled: boolean;
   trustedAt: string | null;
   termsAcceptedAt: string | null;
@@ -190,6 +195,7 @@ function parseProvider(value: unknown): IdeProviderStatus | null {
         : "",
     detection: parseDetection(value.detection),
     webviewsInWorld: value.webviewsInWorld === true,
+    needsSecurePage: value.needsSecurePage === true,
     enabled: value.enabled === true,
     trustedAt: text(value.trustedAt) ? value.trustedAt : null,
     termsAcceptedAt: text(value.termsAcceptedAt) ? value.termsAcceptedAt : null,
@@ -376,6 +382,7 @@ const FIXTURE_PROVIDERS = (
             configured: false,
           },
     webviewsInWorld: false,
+    needsSecurePage: true,
     enabled: false,
     trustedAt: null,
     termsAcceptedAt: null,
@@ -401,6 +408,7 @@ const FIXTURE_PROVIDERS = (
             configured: false,
           },
     webviewsInWorld: true,
+    needsSecurePage: false,
     enabled,
     trustedAt: enabled ? new Date(0).toISOString() : null,
     termsAcceptedAt: enabled ? new Date(0).toISOString() : null,
@@ -418,6 +426,7 @@ const FIXTURE_PROVIDERS = (
       configured: false,
     },
     webviewsInWorld: false,
+    needsSecurePage: false,
     enabled: false,
     trustedAt: null,
     termsAcceptedAt: null,

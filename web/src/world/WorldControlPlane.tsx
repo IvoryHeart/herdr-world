@@ -372,6 +372,10 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   const openTerminalById = openInspectorTerminalById;
   const openNodeById = (id: string, signal?: AbortSignal) =>
     openTerminalById(id, signal, world, null);
+  // The launcher offers every host's rooms, so what it started opens from
+  // the unfiltered World even while Hosts hides that host.
+  const openLaunchedNodeById = (id: string) =>
+    openTerminalById(id, undefined, aggregateWorld, null);
 
   // Stable identities for the memoized views; each always calls the
   // current handler, so a view never acts on an older selection or host.
@@ -440,7 +444,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     >
       <AgentDialogs
         world={aggregateWorld}
-        onOpenNode={(nodeId) => void openNodeById(nodeId)}
+        onOpenNode={(nodeId) => void openLaunchedNodeById(nodeId)}
         pinned={aggregatePinned}
       />
       {active && (view === "town" || view === "board" || view === "desk") ? (
@@ -557,17 +561,11 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                       onCloseReading={stableCloseDeskReading}
                     />
                   ) : view === "code" ? (
-                    <Suspense
-                      fallback={
-                        <div className="world-view-loading">Loading Code…</div>
-                      }
-                    >
-                      <CodeView
-                        world={world}
-                        onOpenAgent={stableOpenAgentChat}
-                        onOpenTerminal={stableOpenTerminalById}
-                      />
-                    </Suspense>
+                    <CodeView
+                      world={world}
+                      onOpenAgent={stableOpenAgentChat}
+                      onOpenTerminal={stableOpenTerminalById}
+                    />
                   ) : view === "town" ? (
                     <Suspense
                       fallback={

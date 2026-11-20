@@ -200,6 +200,12 @@ function IdeProviderRow({
           terminals, Git and debugging work.
         </p>
       ) : null}
+      {provider.needsSecurePage ? (
+        <p className="ide-provider-reason">
+          It opens only when World is on HTTPS, or at localhost on the computer
+          World runs on.
+        </p>
+      ) : null}
       <div className="ide-provider-actions">
         {canEnable(provider) ? (
           <button
@@ -378,9 +384,10 @@ export function IdeEnableDialog({
             )}
             {!window.isSecureContext ? (
               <li>
-                <strong>This address isn't secure.</strong> Open World over
-                HTTPS or on this computer's own address (localhost) for
-                webviews, previews and the clipboard to work.
+                <strong>This address isn't secure.</strong>{" "}
+                {provider.needsSecurePage
+                  ? `${provider.label} won't open from it. Open World over HTTPS or at localhost on the computer World runs on.`
+                  : "Open World over HTTPS or on this computer's own address (localhost) for webviews, previews and the clipboard to work."}
               </li>
             ) : null}
           </ul>

@@ -121,6 +121,7 @@ function fakeClient() {
       configured: false,
     },
     webviewsInWorld: false,
+    needsSecurePage: true,
     enabled: false,
     trustedAt: null,
     termsAcceptedAt: null,
@@ -142,6 +143,7 @@ function fakeClient() {
       configured: false,
     },
     webviewsInWorld: true,
+    needsSecurePage: false,
     enabled,
     trustedAt: null,
     termsAcceptedAt: null,
@@ -221,7 +223,7 @@ function fakeClient() {
       return () => listeners.delete(listener);
     },
   };
-  return { client, state, changed };
+  return { client, state, changed, vscode };
 }
 
 const box = (selector: string) => $(selector)?.getBoundingClientRect();
@@ -564,6 +566,59 @@ async function run() {
     "reattaching names the same connection and folder",
   );
   flushSync(() => root.unmount());
+
+  // Microsoft's VS Code on a plain-HTTP address: World says why and what to
+  // do instead of a workbench that waits forever, even when it runs.
+  localStorage.clear();
+  const plain = createRoot(host);
+  const ready: IdeInstance = {
+    id: "browserFixture0003",
+    provider: "vscode",
+    connectionId: "local",
+    folder: "/srv/example/api",
+    state: "ready",
+    url: "/ide/browserFixture0003/",
+    startedAt: new Date().toISOString(),
+  };
+  const insecureClient: IdeClient = {
+    ...fake.client,
+    status: async () => ({
+      providers: [{ ...fake.vscode, enabled: true }],
+      instances: [ready],
+      localConnections: ["local"],
+    }),
+  };
+  flushSync(() =>
+    plain.render(
+      <CodeView
+        world={world}
+        client={insecureClient}
+        secure={false}
+        onOpenAgent={() => {}}
+        onOpenTerminal={() => {}}
+      />,
+    ),
+  );
+  await until(
+    () => $(".code-view")?.getAttribute("data-state") === "insecure-page",
+    "VS Code on a plain-HTTP page shows why it can't open",
+  );
+  const insecureText = $(".code-view-panel")?.textContent ?? "";
+  check(
+    insecureText.includes("needs a secure address") &&
+      insecureText.includes("HTTPS") &&
+      insecureText.includes("tailscale serve") &&
+      insecureText.includes("localhost"),
+    "the refusal says what to do: HTTPS or localhost",
+  );
+  check(
+    !$(".code-view-frame") &&
+      !$('a.code-view-bar-action[target="_blank"]') &&
+      !button("Open in Visual Studio Code") &&
+      Boolean(button("Stop")),
+    "no workbench or New tab that would wait forever; Stop stays",
+  );
+  flushSync(() => plain.unmount());
 
   // Settings shows the same rows.
   const settings = createRoot(host);

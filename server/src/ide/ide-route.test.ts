@@ -26,6 +26,16 @@ import { configureServerLogger } from "../utils/logger";
 beforeAll(() => configureServerLogger("error"));
 afterAll(() => configureServerLogger("info"));
 
+/** VS Code's protocol framing: type, id, ack, length, then the body. */
+function controlMessage(body: object) {
+  const json = new TextEncoder().encode(JSON.stringify(body));
+  const bytes = new Uint8Array(13 + json.length);
+  bytes[0] = 2;
+  new DataView(bytes.buffer).setUint32(9, json.length);
+  bytes.set(json, 13);
+  return bytes;
+}
+
 const PASSWORD = "world-service-test-password";
 
 function fakeIde(top: string, env: Record<string, string> = {}) {
@@ -113,6 +123,7 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
     });
     expect(vscode.enabled).toBe(false);
     expect(vscode.webviewsInWorld).toBe(false);
+    expect(vscode.needsSecurePage).toBe(true);
     // The local connection is one Code can open on this computer.
     expect(status.localConnections).toEqual([connection.id]);
 
@@ -413,6 +424,75 @@ test("a connection change closes the IDE's open sockets and its route", async ()
       instanceId: status.instances[0].id,
     });
     expect((await browser.call("world.ide.status")).instances).toEqual([]);
+    browser.close();
+  } finally {
+    await stopIdes(started.base).catch(() => {});
+    await started.service.stop();
+    rmSync(top, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("VS Code's workbench handshake reaches its server with the token the browser never had", async () => {
+  const top = mkdtempSync(join(tmpdir(), "hw-ide-route-"));
+  const root = join(top, "data");
+  const project = join(top, "project");
+  mkdirSync(project, { recursive: true });
+  const started = await startService(root);
+  try {
+    const cookie = await login(started.base, PASSWORD);
+    const browser = await browserSocket(started.base, cookie);
+    const [connection] = (await browser.call("connections.list")).connections;
+    await browser.call("world.ide.configure", {
+      provider: "vscode",
+      binary: fakeIde(top),
+    });
+    await browser.call("world.ide.enable", {
+      provider: "vscode",
+      trust: true,
+      acceptTerms: true,
+    });
+    await browser.call("world.ide.open", {
+      provider: "vscode",
+      connectionId: connection.id,
+      generation: connection.generation,
+      folder: project,
+    });
+    const status = await until(
+      () => browser.call("world.ide.status"),
+      (value) => value.instances[0]?.state === "ready",
+    );
+    const url = `${started.base}${status.instances[0].url}`;
+    // The page never hands the browser the token VS Code would read.
+    const page = await fetch(url, { headers: { cookie } });
+    expect(page.status).toBe(200);
+    expect(
+      page.headers.getSetCookie().some((entry) => entry.includes("vscode-tkn")),
+    ).toBe(false);
+    // So the workbench opens its socket with a placeholder; World fills the
+    // token in and the server accepts it.
+    const Socket = WebSocket as unknown as new (
+      url: string,
+      options: Bun.WebSocketOptions,
+    ) => WebSocket;
+    const workbench = new Socket(
+      url.replace("http:", "ws:").replace(/\/$/, "/ws"),
+      { headers: { cookie } },
+    );
+    workbench.binaryType = "arraybuffer";
+    const handshake = new Promise<string>((resolve, reject) => {
+      workbench.onmessage = (event) => resolve(String(event.data));
+      workbench.onerror = () => reject(new Error("IDE socket failed"));
+    });
+    workbench.onopen = () =>
+      workbench.send(
+        controlMessage({
+          type: "auth",
+          auth: "00000000000000000000",
+          data: "x",
+        }),
+      );
+    expect(await handshake).toBe("auth:ok");
+    workbench.close();
     browser.close();
   } finally {
     await stopIdes(started.base).catch(() => {});

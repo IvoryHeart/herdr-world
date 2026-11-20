@@ -33,6 +33,14 @@ export type IdeProviderInfo = {
    * product's own files (#988). The rest of the workbench works.
    */
   webviewsInWorld: boolean;
+  /**
+   * Whether its workbench connects only from a secure page (HTTPS or
+   * localhost). Microsoft's VS Code signs its connection with code that
+   * needs the browser's crypto.subtle, which plain-HTTP LAN and Tailscale
+   * addresses don't have; its server then refuses the workbench. The open
+   * builds don't sign.
+   */
+  needsSecurePage: boolean;
 };
 
 export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
@@ -52,6 +60,7 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     ],
     setupUrl: "https://code.visualstudio.com/download",
     webviewsInWorld: false,
+    needsSecurePage: true,
   },
   "code-server": {
     id: "code-server",
@@ -60,6 +69,7 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     terms: [],
     setupUrl: "https://coder.com/docs/code-server/install",
     webviewsInWorld: true,
+    needsSecurePage: false,
   },
   openvscode: {
     id: "openvscode",
@@ -68,6 +78,7 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     terms: [],
     setupUrl: "https://github.com/gitpod-io/openvscode-server#getting-started",
     webviewsInWorld: false,
+    needsSecurePage: false,
   },
 };
 

@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { randomBytes } from "node:crypto";
 import {
+  appendFileSync,
   chmodSync,
   existsSync,
   mkdirSync,
@@ -137,6 +138,13 @@ test.if(hasSetsid())(
     expect(attached.values.get("state")).toBe("running");
     expect(attached.values.get("token")).toBe("secret-token-value");
     expect(attached.values.get("started")).toBe("2026-11-19T10:00:00.000Z");
+    expect(attached.values.get("downloads")).toBe("0");
+    // VS Code's CLI retrying the download of its web server, as it logs it.
+    appendFileSync(
+      join(h.root, ID, "log"),
+      "[10:00:01] info Downloading server 0123abcd\n".repeat(2),
+    );
+    expect((await h.attach()).values.get("downloads")).toBe("2");
     expect(
       (await h.attach({ worldId: "world-cccccccccccccccc" })).values.get(
         "state",

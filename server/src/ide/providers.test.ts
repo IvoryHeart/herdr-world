@@ -146,4 +146,8 @@ test("only code-server serves webviews inside World", () => {
   expect(IDE_PROVIDERS.vscode.webviewsInWorld).toBe(false);
   expect(IDE_PROVIDERS.openvscode.webviewsInWorld).toBe(false);
   expect(IDE_PROVIDERS["code-server"].webviewsInWorld).toBe(true);
+  // Only Microsoft's build signs its connection, which needs HTTPS.
+  expect(IDE_PROVIDERS.vscode.needsSecurePage).toBe(true);
+  expect(IDE_PROVIDERS.openvscode.needsSecurePage).toBe(false);
+  expect(IDE_PROVIDERS["code-server"].needsSecurePage).toBe(false);
 });

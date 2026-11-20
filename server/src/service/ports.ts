@@ -1,5 +1,6 @@
 import { productionAdapters } from "../adapters/registry";
-import { testConnectionSockets } from "../connections/profile-service";
+import { discoverHost, type DiscoverHost } from "../connections/host-discovery";
+import { testConnectionSockets } from "../connections/profile-probe";
 import type {
   createLegacyConnectionRuntime,
   LegacyConnectionRuntime,
@@ -42,6 +43,7 @@ export type HerdrRuntimeOptions = Parameters<
 /** Herdr, the one runtime: a connection runtime per connection generation. */
 export type HerdrAdapter = {
   createRuntime(options: HerdrRuntimeOptions): LegacyConnectionRuntime;
+  discoverHost?: DiscoverHost;
 };
 
 /** Adapters by kind, registered once by the composition root. */
@@ -49,6 +51,7 @@ export type WorldAdapters = { herdr: HerdrAdapter };
 
 /** The registry's Herdr adapter; its runtimes check both sockets once started. */
 export const herdrAdapter: HerdrAdapter = {
+  discoverHost: (host, existing) => discoverHost(host, existing),
   createRuntime(options) {
     const runtime = productionAdapters.herdr.createRuntime(options);
     return {
