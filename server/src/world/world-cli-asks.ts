@@ -1,3 +1,4 @@
+import { questionAskerKey } from "../../../shared/questionAsker";
 import { CliError } from "./world-cli-errors";
 import type { CliHost, WorldCliDeps } from "./world-cli";
 import { paneActor } from "./world-cli-actor";
@@ -29,7 +30,7 @@ const text = (
   return (value as string).trim();
 };
 
-/** A cause key and withdrawal belong to the verified asking occupant. */
+/** Creation idempotency stays scoped to the verified asking occupant. */
 function sameAsker(left: CliActor, right: CliActor) {
   return (
     left.verified &&
@@ -43,6 +44,22 @@ function sameAsker(left: CliActor, right: CliActor) {
     left.terminal_id === right.terminal_id &&
     left.agent_session_fingerprint === right.agent_session_fingerprint &&
     left.agent_session_id === right.agent_session_id
+  );
+}
+
+/** Closure changes only World storage; it never grants a runtime send lease. */
+function canWithdraw(left: CliActor, right: CliActor) {
+  const key = questionAskerKey(left);
+  // Legacy records without a stable terminal retain their stricter guard.
+  return key !== null
+    ? key === questionAskerKey(right)
+    : sameAsker(left, right);
+}
+
+function questionCap(message: string): never {
+  throw new CliError(
+    "question_cap",
+    `${message}; wait until a question closes before asking again`,
   );
 }
 
@@ -119,13 +136,13 @@ export async function handleWorldAsk(
         const retained = deps.ledger
           .get()
           .asks.filter(
-            (entry) => entry.key === key && sameAsker(entry.actor, actor),
+            (entry) => entry.key === key && canWithdraw(entry.actor, actor),
           )
           .reverse();
         ask = retained.find((entry) => !entry.withdrawn) ?? retained[0];
         if (!ask)
           return notFound(
-            "no retained question for this asking occupant and cause key",
+            "no retained question for this asking terminal and cause key",
           );
       } else {
         const id = text(params.id, "the question ID");
@@ -133,7 +150,7 @@ export async function handleWorldAsk(
         if (!ask) return notFound(`no question ${id}`);
       }
       const id = ask.id;
-      if (!sameAsker(ask.actor, actor))
+      if (!canWithdraw(ask.actor, actor))
         refused("only the verified asker can withdraw its question");
       if (ask.withdrawn) return ask;
       deps.publishLedger(
@@ -181,20 +198,19 @@ export async function handleWorldAsk(
       }
       const open = deps.ledger.openAsks().asks;
       if (open.length >= LEDGER_LIMITS.asks)
-        refused("too many open questions; wait for answers");
-      // Verified panes each have their own allowance; unverified callers,
+        questionCap("too many open questions");
+      // Verified terminals each have their own allowance; unverified callers,
       // whatever they claim, share one.
       const bucket = (entry: CliActor) =>
         entry.verified
-          ? `${entry.connection_id}\u0000${entry.pane_id}`
+          ? (questionAskerKey(entry) ??
+            `${entry.connection_id}\u0000${entry.pane_id}`)
           : "unverified";
       if (
         open.filter((entry) => bucket(entry.actor) === bucket(actor)).length >=
         LEDGER_LIMITS.asksPerActor
       )
-        refused(
-          `you have ${LEDGER_LIMITS.asksPerActor} open questions; wait for answers`,
-        );
+        questionCap(`you have ${LEDGER_LIMITS.asksPerActor} open questions`);
       const recipient = await deps.captureRecipient?.(asker);
       let id = await deps.ledger.nextId("q");
       let created = true;
@@ -216,13 +232,13 @@ export async function handleWorldAsk(
             }
             const pending = document.asks.filter((ask) => !askClosed(ask));
             if (pending.length >= LEDGER_LIMITS.asks)
-              refused("too many open questions; wait for answers");
+              questionCap("too many open questions");
             if (
               pending.filter((ask) => bucket(ask.actor) === bucket(actor))
                 .length >= LEDGER_LIMITS.asksPerActor
             )
-              refused(
-                `you have ${LEDGER_LIMITS.asksPerActor} open questions; wait for answers`,
+              questionCap(
+                `you have ${LEDGER_LIMITS.asksPerActor} open questions`,
               );
             document.asks.push({
               id,
@@ -340,10 +356,24 @@ export function dismissAsk(
   id: string,
   by: string,
   at: number,
+  allFromAsker = false,
 ) {
   return ledger.update((document) => {
     const ask = document.asks.find((entry) => entry.id === id);
     if (!ask) throw new CliError("not_found", `no question ${id}`);
+    if (allFromAsker) {
+      const key = questionAskerKey(ask.actor);
+      if (!key)
+        throw new CliError(
+          "refused",
+          "bulk dismissal needs a verified terminal",
+        );
+      for (const entry of document.asks) {
+        if (!askClosed(entry) && questionAskerKey(entry.actor) === key)
+          entry.dismissed = { at, by };
+      }
+      return;
+    }
     if (ask.withdrawn) throw new CliError("refused", `${id} was withdrawn`);
     if (ask.answer) throw new CliError("refused", `${id} is already answered`);
     ask.dismissed ??= { at, by };

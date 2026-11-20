@@ -3538,6 +3538,7 @@ export default function BoardView({
       <div
         ref={boardRef}
         data-surface={appearance.surface}
+        data-help="board.surface"
         style={boardAppearanceStyle(appearance)}
         className={`board${far ? " board-far" : ""}${pulses ? "" : " board-no-pulse"}${culling ? " board-culling" : ""}`}
         data-lens={lenses.view?.lens}

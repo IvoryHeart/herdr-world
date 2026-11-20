@@ -190,6 +190,31 @@ no control for it. Platform and harness limits apply across the table.
   are private to the user and reused for identical tap content; user settings
   stay untouched. If preparation fails, New agent reports an error before
   creating a tab or starting an agent. Windows keeps inline settings.
+- **Core agents run by wrappers and headless:** a core desk shows the agent
+  that runs in its terminal's foreground, as Herdr's TUI finds it: the
+  foreground program, else, on a core on this machine (Linux), the processes
+  in its foreground group, nearest first. So `bash run.sh` running
+  `claude -p … | tee log`, or `sh -c "claude …"`, shows Claude, looking as if
+  started directly; a plain shell running `git` or `bun test` stays a plain
+  terminal. A remote or macOS core reports only the foreground program, so a
+  wrapper there shows its agent only once the agent reports status itself.
+  A live headless run (`claude -p`, `codex exec`, `gemini -p`,
+  `opencode run` and the like) counts as working, report or none, unless it
+  asks you something. An interactive agent's status is its own report; with
+  none it stays unknown, never working. A working or waiting report from an
+  agent that has left the terminal (killed mid-turn, with a shell, editor or
+  empty wrapper in front) is stale: World shows it idle, so it walks to the
+  bar and its desk and room go dark. A report speaks only for the harness that
+  runs: when another harness replaces the one that reported, or a new process
+  starts after World saw the reporter exit, the newcomer is unknown (working,
+  if headless) until it reports itself. An agent World saw run inside a
+  still-running wrapper stays at that desk's terminal after it exits, idle, so
+  it walks to the bar between headless calls instead of vanishing; once the
+  wrapper ends and the shell is back, the desk is a plain terminal again. A
+  word that is an option's value never marks a run headless
+  (`codex -C exec` is interactive Codex in a folder named `exec`). A shell
+  function or alias piped into another command (`f | cat`) runs as a copy of
+  the shell; World looks inside it as it does a wrapper.
 - **Codex status on Linux core:** working/idle comes from Codex's native
   OSC 7501 reports, just as on macOS. If core publishes no status, World
   shows **unknown** even when Chat and Terminal work. World cannot recover
@@ -209,7 +234,14 @@ no control for it. Platform and harness limits apply across the table.
   again. See upstream questions Q3 and Q11 in the protocol questions above.
 - **Chat and asks:** transcript support depends on the
   [harness and platform](./docs/core-harnesses.md); input can still work without
-  a readable conversation. Verified local Linux asks can receive saved answers
+  a readable conversation. On Linux and macOS, core Chat can identify headless
+  `codex exec` and `claude -p` conversations from the foreground process's own
+  session record or unique writable transcript (or Claude session debug file).
+  SSH discovery runs on that agent's host. It never chooses the newest Claude
+  or Codex file in a directory: missing, unreadable or ambiguous process evidence
+  leaves Chat unavailable unless an explicit session reference is present.
+  Runs that disable session persistence have no transcript to read.
+  Verified local Linux asks can receive saved answers
   in their original session. Remote and unverified asks use `ask get` or `--wait`.
   `--owner-only` means only you can answer.
 - **Ranger:** on core it reads the current screen, not terminal scrollback or
@@ -342,6 +374,32 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   each time you reopen that part. **Upgrade &
   restart** still reloads once the restarted service is ready.
 
+## Help and what's new
+
+- **What can I do here?** opens World's help for the screen you are on: the
+  **?** beside the views (desktop), the views button's menu (phone),
+  **Menu → Help** (Settings at Help; the command box finds it too), Board's
+  **⋯ → Help** and Chat's **⋮** tools. Tabs: **What's new**, **Town**,
+  **Board**, **Chat** and **Everywhere**. Each entry has a picture of the real
+  control (phone or desktop, light or dark, as your screen), its steps, where
+  it lives and **Try**.
+- **Try** closes the help, switches to Town or Board when the entry lives
+  there, and rings the control for a moment. A control inside a closed menu
+  rings the button that opens it. When the control is not on this screen
+  (Chat's controls without an open Chat, a phone-only control on a desktop),
+  help reopens on that tab and says where to find it.
+- **What's new from the Town Master**: after an update, the greeting lists up
+  to four things new since the last version it showed in this browser, each
+  with a picture and **Try**, and a link to all of them in help. A first
+  visit shows **Start here**, the short first-run path, instead. Closing the
+  greeting marks them seen; turning the greeting off leaves them in
+  **Menu → Help → What's new**. Testing switch:
+  `?whatsNewSince=0.3.0` shows what is new after 0.3.0, `?whatsNewSince=new`
+  the first-run path; the address drops the parameter at once.
+- The same entries make [docs/HELP.md](docs/HELP.md) and the website's help
+  page. Help covers Town, Board, Chat and controls on every screen; other
+  views are not described there yet.
+
 ## Visual control plane
 
 Town, Board, Desk and Spaces are World's views. Office, Tree and Graph have been
@@ -435,7 +493,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens once the card is gone. **✕**, Escape, Back or a press outside closes it; tap
     the figure to open it again. Untick **Show this on start** at its foot,
     or switch **Menu → Settings → Greeting on start**, to stop it on this browser.
-    Your very first visit is greeted too, without a last time.
+    Your very first visit is greeted too, without a last time. The card also
+    carries [What's new](#help-and-whats-new) after an update, or **Start
+    here** on a first visit.
   - **Tab and app icon count**: in every view, while anything needs you, the
     browser tab reads `(N) Herdr World`, its icon carries a small yellow
     badge (the number up to 9, then `9+`), and an installed World shows the
@@ -790,15 +850,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Light is Town's status language. The button under **ALL** sets the time
     of day: it cycles **clock** (follows this device's time), **day**,
     **dusk** and **night**, and each browser keeps its choice. As the sky
-    darkens, rooms with someone working or waiting on you are lit and quiet
-    rooms stay dark; each desk throws its agent's state colour (blue-white
-    working, amber waiting on you, green done), and street lamps light the
-    roads. A reception whose building has someone waiting on you pulses amber
-    over its lobby by day and by night; under calm motion or reduced motion
-    the pulse holds as a steady mark. An agent or terminal with an open
-    question for you counts as waiting on you whatever its runtime status.
-    A failed host's cached building stays dark. Day leaves the town as
-    painted.
+    darkens, light follows where agents are: a room is lit while an agent
+    sits at a desk there working (or waiting on you at it) and is dark
+    otherwise; each desk throws its seated agent's state colour (blue-white
+    working, amber waiting on you, green done); the bar is lit while anyone
+    is at it; and street lamps light the roads. Light changes with the walk:
+    a desk and its room light when the agent sits down, and go dark as it
+    stands up for the bar or reception. An agent with no status report sits
+    at its desk unlit. A reception whose building has someone waiting on you
+    pulses amber over its lobby by day and by night; under calm motion or
+    reduced motion the pulse holds as a steady mark. An agent or terminal with
+    an open question for you counts as waiting on you whatever its runtime
+    status; a terminal with no agent throws amber from its desk. A failed
+    host's cached building stays dark. Day leaves the town as painted.
   - Town's overlays share one style: the Town board (and its phone chips),
     the zoom and time-of-day buttons, an agent's peek, toasts, and the hover
     cards of rooms, tables and fuel gauges are the same translucent dark
@@ -1276,7 +1340,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     including shell questions, while skipping stale hosts and shells without
     questions. It stays reachable in the Board menu when the controls need more space.
   - The Board **⋯** menu offers **Surface** (Follow theme, Whiteboard or
-    Blackboard), **Status colours…** and **Help**. Surface and status choices
+    Blackboard), **Status colours…** and **Help** (Board's help entries, each
+    with **Try**). Surface and status choices
     persist in this browser and stay separate from shared card colours;
     **Reset status colours** restores the chosen surface's defaults.
     Following a dark theme, Board takes Town's night: its ground, its agent
@@ -1479,7 +1544,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   question, **Mark reviewed** on finished work (it marks the report shown, says
   so if the mark could not be saved, and the item offers **Retry** if the report
   could not be read); a blocked agent has none. Every icon has a label and a
-  tooltip. A message longer than two lines shows **more** on its last line: it,
+  tooltip. When a verified terminal has several questions, **Dismiss all N
+  questions from [asker]** closes its whole open backlog in one step, across
+  pages and runtime restarts, without answering or closing another terminal's
+  questions. Failed saves stay visible for retry; unverified claims are not
+  grouped. Testing only: open `?questionBacklogFixture` (removed immediately)
+  for 20 synthetic Atlas questions and one Beacon question; dismiss Atlas and
+  Beacon stays. The fixture never contacts a runtime; reload to leave it.
+  A message longer than two lines shows **more** on its last line: it,
   or a tap on the text, shows the whole message in place with its links, and
   **less** clips it again. Keyboard focus entering the message reveals its
   links. Hovering the agent's name shows its card with
@@ -1610,8 +1682,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 **All** opens first and lists every kind under its heading; then one tab per
 kind: **Runtimes** (this computer's Herdr or herdr-core and each SSH host),
 **Sources** (GitHub, Jira and Usage metrics), **Agents** (World's skill for
-each harness, per host) and **Editors** once one is listed; last, the
-**Vault**. The kind tabs come from the registry's kinds, so a new kind gets
+each harness, per host) and **Editors** once one is listed; last, set apart
+with its key, the **Vault**. The kind tabs come from the registry's kinds, so a new kind gets
 its own tab; a kind with nothing in it has no tab, except Runtimes and
 Agents. Each tab shows how many rows it has and a warning mark when one is
 failing; the tabs stay on one row and scroll sideways on a phone. The screen
@@ -1629,8 +1701,14 @@ host's agent list. To try the screen with dozens of rows, open World with
 sample rows (hosts, trackers and an **Editors** tab) in every state until the
 page reloads. Sample rows have no action and give World nothing.
 
-Each row says what it gives World (terminals, agents, files, pull requests,
-tickets or usage) and its state:
+Each row leads with the product's mark where World has one (Herdr, GitHub,
+each agent) or a plain symbol (tickets, usage), says what it
+gives World (terminals, agents, files, pull requests, tickets or usage) and
+shows its state as a coloured chip; its actions stay on its right, on a phone
+too. A source's settings open under its row from the settings button
+(**Jira settings**). Each kind's own action sits on its heading in **All** and
+at the top of its tab: **Add or edit hosts…** for Runtimes, **Refresh
+Sources** for Sources.
 
 - **Connected**: in use now.
 - **Available**: ready to use; **Connect** switches it on at once.
@@ -1850,12 +1928,22 @@ when piped, with stable exit codes:
   pane's Herdr if World could not record it; it names the failure and exits 1.
   When no alert is confirmed yet, exit 6 (`not_delivered`) carries the recorded ID;
   `retrying: true` means the service will retry a temporary failure with backoff.
+  At 20 open questions per verified terminal (or the shared unverified
+  allowance), or 500 overall, new asks return `question_cap` (exit 3, HTTP 429)
+  and tell the caller to wait until a question closes. These refusals never
+  alert or chime, including repeated attempts; the CLI sends no fallback alert.
+  The allowance follows the terminal across runtime restarts.
   Closing the ask cancels a pending alert. Duplicates are possible after a lost
   reply or restart. JSON preserves `recorded` and Herdr's `notified` evidence
   (`null` for a repeated cause), including through `--wait`. Another verified agent (never
   the asker) may answer a question that is not marked `--owner-only`.
 - `ask withdraw ID` or `ask withdraw --key CAUSE`: the original verified asker
   withdraws a cleared cause, including when a creation reply lost its ask ID.
+  The same freshly verified connection and stable terminal can withdraw after
+  a runtime restart or session change, even when generation and occupant
+  fingerprint differ. Another terminal or connection cannot. Older records
+  without stable terminal identity retain their original stricter checks;
+  answer delivery and receipt authority still follow the original session.
   Answering or withdrawing removes its question marks. `--key` keeps repeated
   causes to one ask; after withdrawal a recurrence can create a fresh question.
   A waiting CLI returns `withdrawn` when its question was cancelled. Repeating
@@ -2600,13 +2688,20 @@ and herdr-core alike:
   records the actual service address, and the CLI uses that folder's own token.
   `HERDR_WORLD_URL` and `HERDR_WORLD_TOKEN` cannot redirect these edits, and a
   service owning another registry refuses them. A managed service bound to one
-  non-loopback address still needs `--restart` to save and restart; stop a
-  foreground process there before editing.
+  non-loopback address still needs `--restart`: it stops the service, saves
+  offline, then starts it again even if the edit is refused. Stop a foreground
+  process there before editing.
   An unreachable live owner, refused edit or unreadable HTTP reply names the
   target service and gives recovery steps, without an offline retry. Check that
   World's data folder, address and live catalogue before retrying, or stop it
-  before editing offline. With no live owner, edits are saved for the next start;
-  for older services without locks, the installed service's configured address
+  before editing offline. Offline commands serialize the whole read/edit/save,
+  so successful unrelated edits survive concurrent CLI commands. Service startup
+  and first-run discovery share that ownership; a starting or busy owner can
+  refuse an edit without writing. Ownership follows the registry even across
+  data folders, survives process pauses and releases automatically on process exit.
+  Keep the private `connections.json.ownership.sqlite` sidecar in place; never
+  delete or replace it to bypass a busy owner. With no live owner, edits are saved
+  for the next start; for older services without locks, the installed service's configured address
   is still checked. Validation errors exit 2; persistence and service failures exit 1.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.

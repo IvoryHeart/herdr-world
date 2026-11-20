@@ -132,6 +132,19 @@ export async function runHostConnectionCommand(args: {
   const target = connectionServiceTarget(context, setup);
   const serving =
     target.running || (target.managed && (await args.probe(target.access)));
+  const offline = <T>(operation: () => Promise<T>) =>
+    store.withOwnership(async () => {
+      // Startup may have claimed the registry since the first owner lookup.
+      const current = connectionServiceTarget(context, setup);
+      if (
+        current.running ||
+        (current.managed && (await args.probe(current.access)))
+      )
+        throw new Error(
+          "World started or is still serving; no offline edit was saved. Retry against its live catalogue or stop it first",
+        );
+      return operation();
+    });
   const { values, positionals } = parseCommandArgs(
     args.rest,
     {
@@ -160,8 +173,8 @@ export async function runHostConnectionCommand(args: {
         return EXIT_FAILURE;
       }
     } else
-      await offlineHosts(store, args.initial, args.discover).remove(
-        positionals[0],
+      await offline(() =>
+        offlineHosts(store, args.initial, args.discover).remove(positionals[0]),
       );
     if (values.json) printJson(context, { ok: true });
     else context.log(`Removed host ${positionals[0]}.`);
@@ -205,14 +218,16 @@ export async function runHostConnectionCommand(args: {
     }
     result = reply.result as typeof result;
   } else {
-    const hosts = offlineHosts(store, args.initial, args.discover);
     try {
-      result = {
-        host:
-          action === "add"
-            ? await hosts.add(host)
-            : await hosts.connect(positionals[0]),
-      };
+      result = await offline(async () => {
+        const hosts = offlineHosts(store, args.initial, args.discover);
+        return {
+          host:
+            action === "add"
+              ? await hosts.add(host)
+              : await hosts.connect(positionals[0]),
+        };
+      });
     } catch (error) {
       if ((error as Error).name === "ProfileInputError")
         throw new UsageError((error as Error).message);
