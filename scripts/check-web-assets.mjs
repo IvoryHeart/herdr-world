@@ -50,7 +50,10 @@ const maxFileCount = 212;
 // Apartments (#1011: the resident search/history dialog, its store and Town's
 // apartment building) add about 18.7 KB to lazy chunks; startup budgets are
 // unchanged.
-const maxTotalBytes = 15.5 * 1024 * 1024;
+// The Code view (#1009) fit main alone, but main's Apartments, post office
+// and help grew under it: 15.51 MiB together, so 15.6 MiB, startup budgets
+// unchanged (2026-11-20).
+const maxTotalBytes = 15.6 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two

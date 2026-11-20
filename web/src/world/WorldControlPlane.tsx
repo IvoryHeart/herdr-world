@@ -414,7 +414,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   const stableCloseDeskReading = useStableCallback(closeDeskReading);
   const stableSelectNode = useStableCallback(selectNode);
   const stableOpenTerminalById = useStableCallback(openTerminalById);
-  // Code's rail opens an agent on its Chat.
   const stableOpenAgentChat = useStableCallback((id: string) =>
     applySelection(id, "history"),
   );
