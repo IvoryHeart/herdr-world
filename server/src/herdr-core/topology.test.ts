@@ -432,7 +432,7 @@ describe("a working agent shows at its desk: reports checked against the process
   const watched = () => {
     const desks = new CoreDeskMemory();
     const firstSight = new CoreFirstSight();
-    return (fields: Partial<CoreMirrorTerminal>, group: string[][]) => {
+    return (fields: Partial<CoreMirrorTerminal>, group: string[][] | null) => {
       const pane = coreTopology([record(fields)], "test core", {
         firstSight,
         foregroundGroup: () => group,
@@ -496,6 +496,49 @@ describe("a working agent shows at its desk: reports checked against the process
     expect(view({ ...wrapper, status: working }, [["claude"]])).toEqual([
       "claude",
       "working",
+    ]);
+  });
+
+  test("a group World could not read is no evidence that the agent left", () => {
+    const view = watched();
+    const wrapper = { foreground: fg(["bash", "run.sh"]) };
+    const working = { state: "working", app: "claude" };
+    expect(view({ ...wrapper, status: working }, [["claude"]])).toEqual([
+      "claude",
+      "working",
+    ]);
+    // One failed host read: what World last saw stands.
+    expect(view({ ...wrapper, status: working }, null)).toEqual([
+      "claude",
+      "working",
+    ]);
+    expect(view({ ...wrapper, status: working }, [["claude"]])).toEqual([
+      "claude",
+      "working",
+    ]);
+    // Read again and empty: now it has left.
+    expect(view({ ...wrapper, status: working }, [])).toEqual([
+      "claude",
+      "idle",
+    ]);
+  });
+
+  test("the agent that left keeps the desk's name, not an older reporter's", () => {
+    const view = watched();
+    const wrapper = { foreground: fg(["bash", "run.sh"]) };
+    const working = { state: "working", app: "claude" };
+    expect(view({ ...wrapper, status: working }, [["claude"]])).toEqual([
+      "claude",
+      "working",
+    ]);
+    // Claude exited; silent interactive Codex replaced it, then exited too.
+    expect(view({ ...wrapper, status: working }, [["codex"]])).toEqual([
+      "codex",
+      "unknown",
+    ]);
+    expect(view({ ...wrapper, status: working }, [])).toEqual([
+      "codex",
+      "idle",
     ]);
   });
 

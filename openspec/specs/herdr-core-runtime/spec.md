@@ -258,6 +258,13 @@ reuses the pid and argv is refused.
 - **THEN** the desk keeps that agent, idle, so Town walks it to the bar; when
   another program leads the terminal, the desk is a plain terminal again
 
+#### Scenario: Unread group is no exit
+
+- **WHEN** World saw an agent inside a wrapper and one later read of the
+  wrapper's foreground group fails
+- **THEN** the desk keeps that agent and its report; only a group read without
+  it, or another program leading the terminal, counts as its exit
+
 ### Requirement: World-started core terminals and confirmed kills
 
 World SHALL start agents in core with an absolute host executable, no caller,
@@ -429,8 +436,11 @@ SHALL be stale, read idle, once no harness runs in the terminal's foreground.
 A report SHALL speak only for the harness running: one naming another
 harness, or left unchanged by a process World saw exit, SHALL count as no
 report. A harness World saw inside a wrapper SHALL stay the desk's agent,
-idle, after it exits while that wrapper leads the terminal. An option's value
-SHALL never mark an invocation headless.
+idle, after it exits while that wrapper leads the terminal; that departed
+harness, never an earlier reporter, SHALL name the desk. World SHALL count a
+process as exited only on evidence: a foreground group the host could not read
+SHALL keep what World last saw. An option's value SHALL never mark an
+invocation headless.
 World SHALL find a desk's agent as Herdr's TUI does: the foreground group's
 leader, else, where the host can read it (a core on this Linux machine), the
 nearest group member that is a harness; a shell or interpreter leading the

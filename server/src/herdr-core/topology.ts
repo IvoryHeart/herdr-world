@@ -153,7 +153,9 @@ export function coreAgentStatus(
 /**
  * The harness in a terminal: what runs in it now, else its report's, else
  * (World's memory of the desk) the one that just left it. A process that
- * runs there outranks a report, which may be a departed program's.
+ * runs there outranks a report, and a report a departed process left
+ * (`seen.stale`) names nobody: the agent that left keeps the desk's
+ * identity for its walk away, never an older reporter.
  */
 export function coreHarness(
   record: CoreMirrorTerminal,
@@ -162,7 +164,7 @@ export function coreHarness(
 ): string | null {
   const running = coreDeskProcess(record, group).running?.harness;
   if (running) return running;
-  const report = coreStatusReport(record);
+  const report = seen.stale ? null : coreStatusReport(record);
   const reported = harnessName(report?.app);
   if (reported) return reported;
   if (seen.left) return seen.left;
@@ -232,6 +234,8 @@ const NOTHING_SEEN: CoreDeskSeen = { left: null, stale: false };
  *   bar instead of vanishing, and is there between headless calls. A new
  *   foreground leader (the wrapper ended, a shell is back) forgets it, as a
  *   directly started agent is forgotten when it exits.
+ * - A process leaves only on evidence (`desk.gone`): a foreground group the
+ *   host could not read keeps what World last saw.
  * - The report standing when World saw the process leave is that process's:
  *   it is stale until the report changes, so a replacement that never
  *   reports is unknown (or, headless, working), never the departed one's
@@ -274,7 +278,8 @@ export class CoreDeskMemory {
           present: true,
           staleReport: null,
         });
-    } else if (seen?.present) {
+    } else if (seen?.present && desk.gone) {
+      // Only confirmed absence: a group World could not read is no evidence.
       seen.present = false;
       seen.staleReport = report;
     }
