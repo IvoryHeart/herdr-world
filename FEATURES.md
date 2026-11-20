@@ -257,9 +257,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   table and each pane a seat. A machine running both Herdr and herdr-core has one
   building and one reception holding both runtimes' rooms; the first runtime's
   rooms come first, and each room still acts on its own runtime. The building's
-  roof colour, reception and **Add room** belong to its first runtime. Add
-  `?townBuildings=runtime` to the URL to give each runtime its own building
-  instead, side by side and signed `<host> · Herdr` / `<host> · herdr-core`.
+  roof colour, reception and **Add room** belong to its first runtime.
+  **Settings → Town & views → Town buildings → One per runtime** gives each
+  runtime its own building instead, side by side and signed `<host> · Herdr` /
+  `<host> · herdr-core`; it is kept in this browser and **One per host** is the
+  default. `?townBuildings=runtime` or `?townBuildings=host` in the URL
+  overrides the setting for that page, to compare the two.
   Room positions, colours and pins are the same either way. Rooms resize as tabs open and close; expanded rooms stay expanded
   as they shrink, until folded. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table's

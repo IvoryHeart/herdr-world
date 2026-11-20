@@ -46,6 +46,10 @@ test("the flag picks a building per runtime; anything else, per host", () => {
   expect(townBuildingsMode("")).toBe("host");
   expect(townBuildingsMode("?townBuildings=host")).toBe("host");
   expect(townBuildingsMode("?view=town&townBuildings=runtime")).toBe("runtime");
+  // The Settings choice holds unless the page names a layout.
+  expect(townBuildingsMode("", "runtime")).toBe("runtime");
+  expect(townBuildingsMode("?townBuildings=other", "runtime")).toBe("runtime");
+  expect(townBuildingsMode("?townBuildings=host", "runtime")).toBe("host");
 });
 
 test("a building per host holds every runtime's rooms", () => {

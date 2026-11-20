@@ -1298,8 +1298,11 @@ holding several runtimes' rooms SHALL show one reception queuing every waiting
 agent of those runtimes, and its building-wide signs (roof colour, reception
 filter, Add room's default) SHALL read the host's first runtime. Every room,
 desk and agent SHALL keep its own runtime's connection ID and generation, so
-each action reaches the runtime that owns it. With the `townBuildings=runtime`
-query flag, Town SHALL instead keep one building per runtime; a host's
+each action reaches the runtime that owns it. One building per host SHALL be
+the default; a browser-local Town buildings setting SHALL offer one building
+per runtime, and a `townBuildings=host` or `townBuildings=runtime` query flag
+SHALL override that setting for the page. With one building per runtime,
+Town SHALL keep a building for each runtime; a host's
 buildings SHALL stand side by side, each signed with the host and its runtime
 when the host has more than one. Room keys SHALL NOT depend on the layout, so
 room spots, colours and pins survive either way. A desk SHALL be a table
@@ -1386,7 +1389,8 @@ supplies it.
 - **WHEN** this computer runs Herdr and herdr-core, each with rooms
 - **THEN** Town shows one building for this computer with both runtimes' rooms
   and one reception, and each room acts on its own runtime
-- **AND WHEN** Town opens with `?townBuildings=runtime`
+- **AND WHEN** the Town buildings setting is One per runtime, or Town opens
+  with `?townBuildings=runtime`
 - **THEN** it shows two buildings side by side, signed with the host and each
   runtime, with the same room spots, colours and pins
 

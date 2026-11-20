@@ -1,8 +1,9 @@
 /**
  * Town's buildings stand for hosts (#1047). By default a building is one
- * machine, holding the rooms of every runtime World holds there; with
- * `?townBuildings=runtime` each runtime keeps its own building, and a host's
- * buildings stand side by side under "Host · runtime" signs.
+ * machine, holding the rooms of every runtime World holds there; with the
+ * "Town buildings" setting on "One per runtime" (or `?townBuildings=runtime`)
+ * each runtime keeps its own building, and a host's buildings stand side by
+ * side under "Host · runtime" signs.
  *
  * Pure presentation over the office projection: rooms, desks and agents keep
  * their own runtime targets (connection ID and generation), so every action
@@ -24,15 +25,21 @@ import type {
   OfficeReception,
   OfficeRoom,
 } from "../herdrOfficeProjection";
+import type { TownBuildings } from "../officePreferences";
 import { officeReadModel, setOfficeReadModel } from "../officeReadModel";
 
-export type TownBuildingsMode = "host" | "runtime";
+export type TownBuildingsMode = TownBuildings;
 
-/** `?townBuildings=runtime` keeps a building per runtime; anything else, per host. */
-export function townBuildingsMode(search: string): TownBuildingsMode {
-  return new URLSearchParams(search).get("townBuildings") === "runtime"
-    ? "runtime"
-    : "host";
+/**
+ * The Town buildings setting, unless the page's `?townBuildings=host` or
+ * `?townBuildings=runtime` names a layout for comparing the two.
+ */
+export function townBuildingsMode(
+  search: string,
+  setting: TownBuildingsMode = "host",
+): TownBuildingsMode {
+  const flag = new URLSearchParams(search).get("townBuildings");
+  return flag === "runtime" || flag === "host" ? flag : setting;
 }
 
 type HostGroupShape = Pick<WorldHostGroup, "id" | "label" | "connectionIds"> & {

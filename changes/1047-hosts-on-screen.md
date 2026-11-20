@@ -8,6 +8,7 @@
 - List each host's runtimes under **Integrations → Runtimes**, with **Add a
   runtime**.
 - Give each machine one Town building holding all its runtimes' rooms;
-  `?townBuildings=runtime` keeps a building per runtime instead.
+  **Settings → Town & views → Town buildings** can keep a building per
+  runtime instead.
 - Name places by machine in Board, Desk, Needs you, search, **New room** and
   **New agent**, asking for the runtime only where a machine runs both.
