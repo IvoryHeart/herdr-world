@@ -12,6 +12,8 @@ import { goldenConnections, goldenUsage } from "./scene";
 import { bridge } from "../../../api";
 import { comparePixels } from "./pixels";
 import { setTownDaylightMode } from "../../town/townDaylight";
+import { setTownWeatherMode } from "../../town/townWeather";
+import { TOWN_GOLDEN_WEATHER } from "./weatherScenes";
 import "../../../styles/tokens.css";
 import "../../../styles/base.css";
 import "../../world.css";
@@ -91,8 +93,14 @@ async function prepare() {
 
   // Hold Town's time of day: following the clock would make the image depend
   // on the runner's time zone. Night shows the status lighting: lit and dark
-  // rooms, each desk's state light and a waiting reception.
-  setTownDaylightMode("night");
+  // rooms, each desk's state light and a waiting reception. Without a scene,
+  // Town follows the real weather, which this fixture never has: the image
+  // is Town without weather. A weather scene (?scene=) holds one weather.
+  const scene = TOWN_GOLDEN_WEATHER.find(
+    (s) => s.scene === new URLSearchParams(location.search).get("scene"),
+  );
+  setTownDaylightMode(scene?.time ?? "night");
+  setTownWeatherMode(scene?.weather ?? "real");
   const projection = projectWorldOffice(
     buildWorldObject(goldenConnections(), "host-0"),
     Date.now(),

@@ -28,7 +28,7 @@ test("puddles lie only on roads and squares, and few of them", () => {
   for (const p of puddles) {
     const ground =
       layout.ground[Math.floor(p.y / T) * layout.width + Math.floor(p.x / T)];
-    expect([TownGround.road, TownGround.plaza]).toContain(ground!);
+    expect([TownGround.road, TownGround.plaza] as number[]).toContain(ground!);
   }
   expect(townPuddles(layout)).toEqual(puddles);
 });
