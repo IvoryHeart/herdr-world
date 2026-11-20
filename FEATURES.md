@@ -1771,7 +1771,8 @@ resident: an ending World sees replaces the found record of that session.
   the town center ring, or from **Apartments** in Board's hub. All three read
   the same residents, and the ring and hub show how many live there.
 - A resident whose session runs again at a desk is hidden while it runs, and
-  returns when it stops. A transcript written in the last 10 minutes is left
+  returns when it stops, also when its terminal stays open with a shell. Its
+  newer end is recorded when that terminal closes. A transcript written in the last 10 minutes is left
   for a later pass, since its agent may still be running.
 - Search matches name, harness, project, folder, room, host, summary, report,
   `#42` or `PR 42`, repository and the day it ran or moved in (`2026-11-19`).
@@ -1791,7 +1792,8 @@ resident: an ending World sees replaces the found record of that session.
 - **Evict…**, then **Evict**, forgets a resident. Its transcript stays on the
   host, and a later pass does not bring it back; it returns only if it runs
   again and World sees it end. World keeps at most 5000 residents, whatever
-  their age; the longest asleep go first.
+  their age; the longest asleep go first. Running, recent, empty and evicted
+  transcripts take none of those places.
 - Limits: Kimi, Grok, Muse and Antigravity keep histories World does not look
   through, so their agents are recorded only when World sees them end. An
   agent whose host disconnects, restarts or changes runtime generation is not
