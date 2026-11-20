@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Pop-Up 3D · Town reimagined</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,800;1,9..144,800&family=Inter:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+  :root { --ink: #3b2f2a; --paper: #fffaf0; --accent: #c8553d; --chip: rgba(255,250,240,0.94); --chipInk: #3b2f2a; --line: rgba(60,30,10,.35); }
+  :root[data-theme="night"] { --chip: rgba(255,250,240,0.9); }
+  :root[data-theme="lumen"] { --chip: rgba(10,18,40,0.62); --chipInk: #d9f6ff; --accent: #7fe7ff; --line: rgba(143,233,255,.45); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a120c; font: 15px/1.4 Inter, system-ui, sans-serif; color: var(--chipInk); overscroll-behavior: none; }
+  #stage { position: fixed; inset: 0; transition: background .5s ease; }
+  #stage canvas { display: block; outline: none; }
+  /* paper grain and a soft vignette over the whole scene */
+  #grain { position: fixed; inset: 0; pointer-events: none; mix-blend-mode: multiply; opacity: .42; transition: opacity .4s; }
+  #vig { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(20,8,0,.45) 100%); }
+  :root[data-theme="lumen"] #vig { background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0,0,0,.6) 100%); }
+
+  .chip { background: var(--chip); color: var(--chipInk); border-radius: 14px; box-shadow: 3px 4px 0 var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  :root[data-theme="lumen"] .chip { box-shadow: 0 0 0 1px var(--line), 0 0 24px rgba(127,231,255,.15); font-family: "Space Grotesk", Inter, sans-serif; }
+  header { position: fixed; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; pointer-events: none; }
+  header > * { pointer-events: auto; }
+  .title { padding: 9px 14px 10px; transform: rotate(-1deg); }
+  .title a { color: inherit; text-decoration: none; font-size: 12.5px; opacity: .75; }
+  .title h1 { margin: 2px 0 0; font: 800 22px/1 Fraunces, Georgia, serif; }
+  :root[data-theme="lumen"] .title h1 { font-family: "Space Grotesk", sans-serif; letter-spacing: -.02em; }
+  .seg { display: flex; padding: 4px; gap: 2px; }
+  .seg button { font: 700 13px Inter, sans-serif; color: inherit; background: none; border: 0; border-radius: 10px; padding: 8px 11px; min-height: 40px; cursor: pointer; opacity: .75; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fffaf0; opacity: 1; }
+  :root[data-theme="lumen"] .seg button[aria-pressed="true"] { color: #04101e; }
+
+  .nav { position: fixed; right: 12px; bottom: max(14px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(3, 46px); gap: 6px; padding: 8px; }
+  .nav button { width: 46px; height: 46px; border-radius: 12px; border: 0; background: transparent; color: inherit; font: 700 20px Inter, sans-serif; cursor: pointer; display: grid; place-items: center; }
+  .nav button:hover { background: rgba(127,127,127,.15); }
+  .nav button small { font-size: 10px; display: block; line-height: 1; margin-top: 2px; opacity: .7; }
+  #compass { position: relative; }
+  #needle { width: 30px; height: 30px; transition: transform .05s linear; }
+  #snap[aria-pressed="false"] { opacity: .45; }
+
+  .hint { position: fixed; left: 12px; bottom: max(14px, env(safe-area-inset-bottom)); max-width: 360px; padding: 12px 14px 12px; font-size: 13.5px; transform: rotate(.6deg); }
+  .hint b { font-family: Fraunces, Georgia, serif; font-size: 15px; }
+  :root[data-theme="lumen"] .hint b { font-family: "Space Grotesk", sans-serif; }
+  .hint ul { margin: 6px 0 0; padding-left: 16px; }
+  .hint li { margin: 2px 0; }
+  .hint .x { position: absolute; top: 4px; right: 6px; border: 0; background: none; color: inherit; font-size: 18px; cursor: pointer; padding: 6px; }
+  .hint .touch { display: none; }
+  @media (pointer: coarse) { .hint .mouse { display: none; } .hint .touch { display: block; } }
+  #hintBtn { display: none; }
+  @media (max-width: 720px) {
+    header { flex-direction: column; }
+    .title h1 { font-size: 19px; }
+    .seg button { padding: 7px 9px; font-size: 12.5px; }
+    .hint { right: 12px; max-width: none; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 196px); font-size: 13px; }
+    .nav { grid-template-columns: repeat(3, 44px); }
+    .nav button { width: 44px; height: 44px; }
+  }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="grain"></div><div id="vig"></div>
+<header>
+  <div class="chip title"><a href="../">← Town, reimagined</a><h1>Pop-Up, in 3D</h1></div>
+  <div class="chip seg" role="group" aria-label="Theme">
+    <button data-theme="day" aria-pressed="true">Paper day</button>
+    <button data-theme="night" aria-pressed="false">Paper night</button>
+    <button data-theme="lumen" aria-pressed="false">Lumen skin</button>
+  </div>
+</header>
+<div class="chip nav" role="toolbar" aria-label="Navigate">
+  <button id="ql" title="Turn left 90° (Q)" aria-label="Turn left">⟲</button>
+  <button id="compass" title="Face north (reset heading)" aria-label="Reset heading"><svg id="needle" viewBox="0 0 30 30"><circle cx="15" cy="15" r="13" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".5"/><path d="M15 3 L19 15 L15 13 L11 15 Z" fill="#e05a45"/><path d="M15 27 L19 15 L15 17 L11 15 Z" fill="currentColor" opacity=".55"/></svg></button>
+  <button id="qr" title="Turn right 90° (E)" aria-label="Turn right">⟳</button>
+  <button id="zin" title="Zoom in (+)" aria-label="Zoom in">+</button>
+  <button id="tilt" title="Change tilt (T)" aria-label="Change tilt">◢</button>
+  <button id="zout" title="Zoom out (−)" aria-label="Zoom out">−</button>
+  <button id="snap" title="Snap turns to 45°" aria-pressed="true" aria-label="Snap rotation"><span>⊹<small>snap</small></span></button>
+  <button id="home" title="Whole town (R)" aria-label="Show the whole town">⌂</button>
+  <button id="hintBtn" title="How to move" aria-label="Show help">?</button>
+</div>
+<div class="chip hint" id="hint">
+  <button class="x" aria-label="Close help">×</button>
+  <b>Move around the town</b>
+  <ul class="mouse">
+    <li><b>Drag</b> to pan. <b>Right-drag</b> or <b>Shift-drag</b> to turn and tilt.</li>
+    <li><b>Scroll wheel</b> or <b>pinch</b> to zoom. Two-finger trackpad scroll pans.</li>
+    <li><b>Q / E</b> turn 90°. <b>T</b> tilt. <b>R</b> whole town. Double-click to dive in.</li>
+  </ul>
+  <ul class="touch">
+    <li><b>One finger</b> pans. <b>Pinch</b> zooms. <b>Twist two fingers</b> to turn.</li>
+    <li>Turns snap to the nearest 45° when you let go. Double-tap to dive in.</li>
+  </ul>
+</div>
+<script type="module">
+  import { createTown3D } from './town3d.js';
+  // grain overlay drawn once
+  const g = document.createElement('canvas'); g.width = g.height = 180; const x = g.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, 180, 180);
+  for (let i = 0; i < 2600; i++) { const v = 170 + Math.random() * 85; x.fillStyle = `rgb(${v},${v - 4},${v - 10})`; x.fillRect(Math.random() * 180, Math.random() * 180, 1 + Math.random() * 1.4, 1 + Math.random() * 1.4); }
+  const grainEl = document.getElementById('grain');
+  grainEl.style.backgroundImage = `url(${g.toDataURL()})`;
+
+  const needle = document.getElementById('needle');
+  const town = createTown3D(document.getElementById('stage'), {
+    onView: (c) => { needle.style.transform = `rotate(${(-c.theta * 180) / Math.PI + 45}deg)`; },
+    onTheme: (name) => {
+      document.documentElement.dataset.theme = name;
+      grainEl.style.opacity = name === 'lumen' ? '0.05' : name === 'night' ? '0.3' : '0.42';
+      document.querySelectorAll('[data-theme]').forEach((b) => b.tagName === 'BUTTON' && b.setAttribute('aria-pressed', String(b.dataset.theme === name)));
+    },
+  });
+  const c = town.controls;
+  document.querySelectorAll('button[data-theme]').forEach((b) => b.addEventListener('click', () => town.setTheme(b.dataset.theme)));
+  const on = (id, fn) => document.getElementById(id).addEventListener('click', fn);
+  on('ql', () => c.quarter(-1)); on('qr', () => c.quarter(1));
+  on('zin', () => c.zoomBy(0.72)); on('zout', () => c.zoomBy(1.38));
+  on('tilt', () => c.cycleTilt()); on('home', () => c.reset()); on('compass', () => c.north());
+  on('snap', (e) => { c.snap = !c.snap; e.currentTarget.setAttribute('aria-pressed', String(c.snap)); c.snapNow(); });
+  const hint = document.getElementById('hint'), hb = document.getElementById('hintBtn');
+  const hide = () => { hint.style.display = 'none'; hb.style.display = 'grid'; try { localStorage.setItem('popup3d-hint', '0'); } catch {} };
+  hint.querySelector('.x').addEventListener('click', hide);
+  hb.addEventListener('click', () => { hint.style.display = ''; hb.style.display = 'none'; });
+  try { if (localStorage.getItem('popup3d-hint') === '0') hide(); } catch {}
+  const q = new URLSearchParams(location.search);
+  if (q.get('theme')) town.setTheme(q.get('theme'));
+  if (q.get('turn')) c.goal.theta = c.cur.theta = Math.PI / 4 + Number(q.get('turn')) * Math.PI / 4;
+  if (q.get('zoom')) c.goal.dist = c.cur.dist = Number(q.get('zoom'));
+  if (q.get('at')) { const [ax, az] = q.get('at').split(',').map(Number); c.goal.x = c.cur.x = ax; c.goal.z = c.cur.z = az; }
+  if (q.get('tilt')) c.goal.phi = c.cur.phi = Number(q.get('tilt'));
+  if (q.get('nohint')) hide();
+</script>
+</body>
+</html>

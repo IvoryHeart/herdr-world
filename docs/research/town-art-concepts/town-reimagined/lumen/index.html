@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lumen · Town reimagined</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,800;1,9..144,400&family=Inter:wght@400;600&family=Space+Grotesk:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="../style.css">
+<style>
+  :root { --bg: #04050d; --fg: #e8f6ff; --muted: #8aa3c0; --accent: #7fe7ff; --card: rgba(120,200,255,0.05); --line: rgba(130,200,255,0.16); --display: "Space Grotesk", Inter, sans-serif; }
+  body { background: radial-gradient(1200px 600px at 70% -10%, rgba(80,120,255,.14), transparent 60%), radial-gradient(900px 500px at 0% 30%, rgba(255,90,200,.07), transparent 60%), var(--bg); }
+  h1 { letter-spacing: -0.04em; background: linear-gradient(90deg, #dff6ff, #7fe7ff 40%, #b98cff 75%, #ff9ad5); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .phone .ui .chip { position: absolute; top: 48px; left: 14px; display: flex; gap: 8px; align-items: center; padding: 7px 12px; border-radius: 999px; background: rgba(20,30,60,.45); backdrop-filter: blur(14px) saturate(1.6); -webkit-backdrop-filter: blur(14px) saturate(1.6); border: 1px solid rgba(160,230,255,.35); color: #e8f6ff; font: 600 12.5px "Space Grotesk", sans-serif; }
+  .phone .ui .chip i { width: 8px; height: 8px; border-radius: 50%; background: #ffbf3c; box-shadow: 0 0 10px #ffbf3c; }
+  .phone .ui .tabs { position: absolute; left: 14px; right: 14px; bottom: 16px; display: flex; justify-content: space-around; padding: 9px 6px; border-radius: 24px; background: rgba(20,30,60,.42); backdrop-filter: blur(16px) saturate(1.6); -webkit-backdrop-filter: blur(16px) saturate(1.6); border: 1px solid rgba(160,230,255,.28); font: 600 11px "Space Grotesk", sans-serif; color: #8aa3c0; }
+  .phone .ui .tabs span { display: grid; justify-items: center; gap: 2px; }
+  .phone .ui .tabs span b { font-size: 16px; line-height: 1; }
+  .phone .ui .tabs span.on { color: #7fe7ff; text-shadow: 0 0 12px rgba(127,231,255,.8); }
+  .phone .ui .peek { position: absolute; left: 14px; right: 14px; bottom: 84px; padding: 11px 13px; border-radius: 18px; background: rgba(40,28,6,.5); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,191,60,.55); color: #fff3d6; font: 600 13px/1.3 "Space Grotesk", sans-serif; box-shadow: 0 0 30px rgba(255,191,60,.25); }
+  .phone .ui .peek small { display: block; font: 400 11.5px Inter, sans-serif; color: #e6c98e; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="../">← Town, reimagined</a><nav><a href="../paper/">Pop-Up</a><a href="../paper-3d/">Pop-Up 3D</a><a href="../lumen/" aria-current="page">Lumen</a><a href="../cutaway/">Cutaway</a></nav></div>
+  <header class="intro">
+    <div class="kicker">Direction 2 of 3 · glass and light</div>
+    <h1>Lumen</h1>
+    <p class="tag">A town of glass and light floating in the dark. You can see into every building, and every agent is a small being of light.</p>
+    <p class="pitch">The town sits on a round mirror disc in the void, like a spatial widget you could set on your desk. Buildings are clear glass, so every room in a host's tower is visible at once. A busy floor glows in its project's colour and an empty one is just an outline. Agents are wisps whose state is how they glow: a steady pulse when working, orbiting sparks when thinking, and a column of amber light when they need you, so a question is visible from across town. The light-packets on the roads are traffic. The bus is a maglev circling the town hall. Releases leave port under sails of light. Questions fly as amber arcs to a post office crowned with orbiting envelopes. This is the material language of 2026: frosted glass, depth, emissive light, dark-mode native. It doubles as a dashboard, because brightness means activity and you read it the way you read a city from a plane at night.</p>
+    <div class="refs"><span>Monument Valley</span><span>Townscaper at night</span><span>Liquid-glass interfaces</span><span>Refik Anadol</span><span>TRON: Legacy</span><span>Mini Metro</span></div>
+  </header>
+
+  <section class="hero">
+    <h2>The whole town</h2>
+    <p class="lede">The town hall ziggurat is the hub, ringed by the maglev loop, with its live counters floating above. ATLAS and NIMBUS are glass towers with one floor per room. Around the hub sit the post office (top), the lounge and apartment pods (left), the memory library and the PR warehouse (front), and the sea with one release lane per project (right). A new host, <i>pine</i>, is being printed by a beam from the sky.</p>
+    <div class="frame"><canvas id="hero" data-view="hero"></canvas></div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Time of day"><button data-target="hero" data-set="time=day" aria-pressed="false">Pearl day</button><button data-target="hero" data-set="time=dusk" aria-pressed="false">Dusk</button><button data-target="hero" data-set="time=night" aria-pressed="true">Night</button></div>
+      <div class="seg" role="group" aria-label="Weather"><button data-target="hero" data-set="weather=clear" aria-pressed="true">Clear</button><button data-target="hero" data-set="weather=rain" aria-pressed="false">Rain</button><button data-target="hero" data-set="weather=snow" aria-pressed="false">Snow</button></div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <h2>The cast</h2>
+    <p class="lede">A teardrop of light with a visor. The harness shows in the colour and the halo: Claude has a ring of sparks, Codex a diamond, Gemini twin orbiting stars, and Rex a chevron. Each state is a different kind of light, so you can read it from far away.</p>
+    <div class="frame"><canvas id="sheet" data-view="sheet"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Close-ups</h2>
+    <p class="lede">Glass means no hidden rooms. A busy floor glows and has floating code panes, and an empty floor is an outline. Reception is a glass counter with light pads, where the queue stands oldest first.</p>
+    <div class="grid3">
+      <figure><div class="frame"><canvas data-view="office"></canvas></div><figcaption><b>ATLAS tower.</b> <i>world</i>, <i>crew</i> and <i>lab</i> are busy and <i>docs</i> is dark. Two amber beacons and one green ring wait at reception.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="hall" data-params='{"time":"day"}'></canvas></div><figcaption><b>Town hall in pearl daylight.</b> Counters orbit the ziggurat. The hiring portal (a new agent steps through) and the expenses hologram stand on the plaza.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="harbor" data-params='{"time":"dusk"}'></canvas></div><figcaption><b>Shipyard at dusk.</b> Each project's lane is a run of beacons. <i>world v2.1</i> is shipping. PR crates glow green, amber or red in a glass warehouse.</figcaption></figure>
+    </div>
+    <div class="grid3" style="margin-top:14px">
+      <figure><div class="frame"><canvas data-view="post"></canvas></div><figcaption><b>Post office.</b> Envelopes orbit the tower and the waiting ones burn amber. Each question's beacon arcs here, and the count floats on the roof.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="apartments"></canvas></div><figcaption><b>Lounge and apartments.</b> Idle agents drift around the lounge's magenta ring. Finished agents dim to embers in capsule pods, breathing slowly and ready to resume.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="hero" data-params='{"weather":"snow","time":"dusk"}'></canvas></div><figcaption><b>Snow at dusk.</b> Bokeh flakes and a low frost haze. The town reflects in the mirror floor.</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="night">
+    <h2>Night, in the rain</h2>
+    <p class="lede">Rain falls as light streaks and rings spread across the mirror floor. Walkers carry a small dome of light, and the beacons cut through the weather.</p>
+    <div class="frame"><canvas data-view="night" data-params='{"time":"night","weather":"rain"}'></canvas></div>
+  </section>
+
+  <section>
+    <h2>On a phone</h2>
+    <div class="phone-row">
+      <div class="phone"><div class="screen"><div class="island"></div><canvas data-view="phone" data-pan="xy"></canvas>
+        <div class="ui"><div class="chip"><i></i>3 for you · fuel 64%</div>
+          <div class="peek">maple asks: “Ship v2.1 tonight?”<small>world · ATLAS reception · tap to answer</small></div>
+          <div class="tabs"><span class="on"><b>◎</b>Town</span><span><b>✦</b>Needs you</span><span><b>▦</b>Board</span><span><b>≡</b>Menu</span></div></div>
+      </div></div>
+      <div class="notes">
+        <div><b>Light reads at any size</b><span>On a small screen a coloured glow is easier to see than a face. Amber always means you, and it's visible even zoomed out.</span></div>
+        <div><b>The chrome is glass too</b><span>The status chip, question card and tab bar are frosted panes over the world, the same material as the buildings.</span></div>
+        <div><b>Drag to look around</b><span>Portrait frames one tower and its reception. The glow of other towers at the screen edges hints at what's off-screen.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What's what</h2>
+    <table class="map">
+      <tr><td>Host arrives</td><td>A beam from the sky prints a glass tower layer by layer, with a progress label.</td></tr>
+      <tr><td>Room lit / dark</td><td>A floor that glows in its project colour with code panes, or just an outline.</td></tr>
+      <tr><td>Needs you</td><td>An amber column of light from the agent. Arcs carry the question to the post office, whose envelopes light up.</td></tr>
+      <tr><td>Bus</td><td>A maglev capsule circling the town hall on the ring road, its riders visible in the window band.</td></tr>
+      <tr><td>Day / night</td><td>Pearl daylight: frosted, pastel, soft. Night: an aurora sky, emissive glass and a mirror floor.</td></tr>
+      <tr><td>Rain / snow</td><td>Rain falls as light streaks with ripple rings on the floor. Snow is bokeh drift with a frost haze.</td></tr>
+    </table>
+  </section>
+  <footer><span>Concept art. Hand-drawn in Canvas 2D, nothing generated.</span><a href="../cutaway/">Next: Cutaway →</a></footer>
+</div>
+<script type="module">
+  import { mountPage } from '../lib.js';
+  import { createLumen } from './lumen.js';
+  mountPage(createLumen());
+</script>
+</body>
+</html>

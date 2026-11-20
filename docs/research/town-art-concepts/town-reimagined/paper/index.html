@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pop-Up · Town reimagined</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,800;1,9..144,400;1,9..144,800&family=Inter:wght@400;600&display=swap">
+<link rel="stylesheet" href="../style.css">
+<style>
+  :root { --bg: #2a1d15; --fg: #f6eddc; --muted: #c9b597; --accent: #f2b632; --card: rgba(255,240,210,0.05); --line: rgba(255,230,190,0.14); }
+  .phone .ui .chip { position: absolute; top: 48px; left: 14px; display: flex; gap: 6px; align-items: center; padding: 6px 10px 6px 8px; border-radius: 12px; background: #fffaf0; color: #3b2f2a; font: 800 13px Fraunces, Georgia, serif; box-shadow: 2px 3px 0 rgba(60,30,10,.35); transform: rotate(-2deg); }
+  .phone .ui .chip i { width: 18px; height: 18px; border-radius: 50%; background: #ffc93c; display: grid; place-items: center; font-style: normal; font-size: 12px; }
+  .phone .ui .tabs { position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; justify-content: space-around; padding: 8px 6px; border-radius: 18px; background: #fffaf0; box-shadow: 3px 4px 0 rgba(60,30,10,.35); font: 700 11.5px Fraunces, Georgia, serif; color: #6b5a48; }
+  .phone .ui .tabs span { display: grid; justify-items: center; gap: 1px; }
+  .phone .ui .tabs span b { font-size: 17px; line-height: 1; }
+  .phone .ui .tabs span.on { color: #c8553d; }
+  .phone .ui .peek { position: absolute; left: 14px; right: 14px; bottom: 82px; padding: 10px 12px; border-radius: 14px; background: #ffc93c; color: #3b2f2a; font: 700 13px/1.3 Fraunces, Georgia, serif; box-shadow: 3px 4px 0 rgba(60,30,10,.35); transform: rotate(1deg); }
+  .phone .ui .peek small { display: block; font: 400 12px Inter, sans-serif; opacity: .8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="../">← Town, reimagined</a><nav><a href="../paper/" aria-current="page">Pop-Up</a><a href="../paper-3d/">Pop-Up 3D</a><a href="../lumen/">Lumen</a><a href="../cutaway/">Cutaway</a></nav></div>
+  <header class="intro">
+    <div class="kicker">Direction 1 of 3 · papercraft diorama</div>
+    <h1>Pop-Up</h1>
+    <p class="tag">The town is a pop-up book open on your desk. Everything in it is cut, folded and glued by hand.</p>
+    <p class="pitch">Buildings are folded card. Rooms are open-top shoebox dioramas, so you look straight down into every desk. Agents are sticker cut-outs on fold stands. Questions fly to the post office as paper planes. The sea is a set of theatre wave strips sliding past each other, and a new host pops up off the page when you pull its tab. At night a reading lamp falls across the page and light glows through the paper. In 2026 everything on a screen is glossy and generated, so a world that looks handmade, with grain, shadows and slightly wonky cuts, reads as warm and trustworthy. It also suits a tool that watches over your crew.</p>
+    <div class="refs"><span>Tearaway</span><span>Lumino City</span><span>Paper Mario: The Origami King</span><span>Robert Sabuda pop-up books</span><span>Toy theatre</span><span>Risograph grain</span></div>
+  </header>
+
+  <section class="hero">
+    <h2>The whole town</h2>
+    <p class="lede">Two hosts (ATLAS and NIMBUS), each a folded facade over its rooms. The town hall stands on a doily plaza, the lounge sits bottom left, then the post office and apartments, the library, and the PR warehouse on the quay. The sea on the right page has one lane per project. A third host, <i>pine</i>, is popping up bottom left.</p>
+    <div class="frame"><canvas id="hero" data-view="hero"></canvas></div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Time of day"><button data-target="hero" data-set="time=day" aria-pressed="true">Day</button><button data-target="hero" data-set="time=dusk" aria-pressed="false">Dusk</button><button data-target="hero" data-set="time=night" aria-pressed="false">Night</button></div>
+      <div class="seg" role="group" aria-label="Weather"><button data-target="hero" data-set="weather=clear" aria-pressed="true">Clear</button><button data-target="hero" data-set="weather=rain" aria-pressed="false">Rain</button><button data-target="hero" data-set="weather=snow" aria-pressed="false">Snow</button></div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <h2>The cast</h2>
+    <p class="lede">One silhouette and four harnesses, told apart by colour and hat: a beret for Claude, a mortarboard for Codex, star antennae for Gemini, a crest for Rex. Each state has its own paper prop: a thought cloud on a wire, a yellow “?” pennant, a green check disc, a mug, an umbrella, and “z”s on threads.</p>
+    <div class="frame"><canvas id="sheet" data-view="sheet"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Close-ups</h2>
+    <p class="lede">A host's rooms are trays, two at ground level and two raised on a plinth behind them. A lit room has wallpaper in its project's colour, a paper lamp and glowing laptop screens. An empty room goes grey-blue. Reception is the counter in front, with its queue oldest first.</p>
+    <div class="grid3">
+      <figure><div class="frame"><canvas data-view="office"></canvas></div><figcaption><b>ATLAS office.</b> <i>world</i> and <i>crew</i> are busy, <i>lab</i> has one agent, <i>docs</i> is dark. Two questions and one finished agent wait at reception.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="post" data-params='{"time":"dusk"}'></canvas></div><figcaption><b>Lounge and post office at dusk.</b> String lights and a jukebox. The pigeonholes fill with each question, and the pillar box shows the Needs-you count.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="harbor"></canvas></div><figcaption><b>Shipyard.</b> Theatre wave strips, one pier and origami boat per project with its release on the hull. PRs are crates in the warehouse: green ready, amber in review, red failing.</figcaption></figure>
+    </div>
+    <div class="grid3" style="margin-top:14px">
+      <figure><div class="frame"><canvas data-view="hall"></canvas></div><figcaption><b>Town hall.</b> A clock tower, a HIRE banner where new agents start, and an easel with the day's expenses.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="apartments" data-params='{"time":"night"}'></canvas></div><figcaption><b>Apartments at night.</b> Finished agents sleep under quilts in their harness colour. They can be resumed, and empty units stay dark.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="office" data-params='{"weather":"snow"}'></canvas></div><figcaption><b>Snow day.</b> Hole-punch confetti falls and every rooftop and lawn turns to white card.</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="night">
+    <h2>Night, in the rain</h2>
+    <p class="lede">The page goes blue and the reading lamp comes on. Busy rooms glow through their paper and the boats show their mast lights. The rain falls as threads with paper droplets, and walkers carry umbrellas in their harness colour.</p>
+    <div class="frame"><canvas data-view="night" data-params='{"time":"night","weather":"rain"}'></canvas></div>
+  </section>
+
+  <section>
+    <h2>On a phone</h2>
+    <div class="phone-row">
+      <div class="phone"><div class="screen"><div class="island"></div><canvas data-view="phone" data-pan="xy"></canvas>
+        <div class="ui"><div class="chip"><i>!</i>2 · fuel 64%</div>
+          <div class="peek">maple asks: “Ship v2.1 tonight?”<small>world · ATLAS reception · tap to answer</small></div>
+          <div class="tabs"><span class="on"><b>⌂</b>Town</span><span><b>✉</b>Needs you</span><span><b>▦</b>Board</span><span><b>☰</b>Menu</span></div></div>
+      </div></div>
+      <div class="notes">
+        <div><b>Zoomed to a street, drag to pan</b><span>Portrait shows one block at a time, at the scale where stickers and nameplates read. Drag the phone screen to move along the page.</span></div>
+        <div><b>Things on the page only show state</b><span>The status chip and the question card are sticky notes, the same paper as the world, so the overlay feels like part of the book rather than chrome over it.</span></div>
+        <div><b>Big shapes, bold colour</b><span>Flat colour plus a white cut edge stays readable at 20 pixels. Harness colour alone identifies an agent, even half hidden behind a desk.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What's what</h2>
+    <table class="map">
+      <tr><td>Host arrives</td><td>A folded card hinged on the page rises when its pull tab slides out.</td></tr>
+      <tr><td>Room lit / dark</td><td>A paper lamp, warm floor, project wallpaper and glowing screens, or a grey-blue empty tray.</td></tr>
+      <tr><td>Needs you</td><td>A yellow “?” pennant. Paper planes fly to the post office, its pigeonholes fill, and the pillar box carries the count.</td></tr>
+      <tr><td>Bus</td><td>A card bus with brass split-pin wheels runs in a slot cut along the main street.</td></tr>
+      <tr><td>Day / night</td><td>A sun on a stick swaps for a moon. At night a reading lamp lights the page.</td></tr>
+      <tr><td>Rain / snow</td><td>Rain falls as blue threads with paper drops. Snow is hole-punch confetti that turns every roof and lawn white.</td></tr>
+    </table>
+  </section>
+  <footer><span>Concept art. Hand-drawn in Canvas 2D, nothing generated.</span><a href="../paper-3d/">Walk around it in 3D →</a></footer>
+</div>
+<script type="module">
+  import { mountPage } from '../lib.js';
+  import { createPaper } from './paper.js';
+  mountPage(createPaper());
+</script>
+</body>
+</html>

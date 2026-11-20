@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Town, reimagined</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,800;1,9..144,400;1,9..144,800&family=Inter:wght@400;600&family=Space+Grotesk:wght@400;600;700&family=Alfa+Slab+One&family=Comic+Neue:wght@700&family=Pacifico&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+  :root { --bg: #0f0d12; --fg: #f3eee6; --muted: #a39cab; --accent: #f2c14e; }
+  .cards { display: grid; gap: 22px; padding: 10px 0 20px; }
+  .card { display: grid; grid-template-columns: 1.5fr 1fr; gap: 0; border-radius: 22px; overflow: hidden; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--line); transition: transform .2s ease, border-color .2s ease; }
+  .card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,.3); }
+  .card .art { position: relative; aspect-ratio: 16 / 10; background: #000; }
+  .card .art canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .card .txt { padding: 26px 26px 24px; display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+  .card .num { font: 600 12px/1 var(--body); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .card h3 { margin: 0; font-size: clamp(34px, 5vw, 54px); line-height: .95; }
+  .card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .card .go { margin-top: 6px; font-weight: 600; font-size: 15px; }
+  .c1 h3 { font: 800 clamp(34px,5vw,54px)/.95 Fraunces, serif; color: #f6c96a; }
+  .c2 h3 { font: 700 clamp(34px,5vw,54px)/.95 "Space Grotesk", sans-serif; letter-spacing: -0.04em; background: linear-gradient(90deg,#dff6ff,#7fe7ff 40%,#b98cff 75%,#ff9ad5); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .c3 h3 { font: 400 clamp(34px,5vw,54px)/.95 "Alfa Slab One", serif; color: #fbe58a; }
+  .c1 { background: linear-gradient(135deg, rgba(240,180,100,.08), rgba(255,255,255,.02)); }
+  .c2 { background: linear-gradient(135deg, rgba(90,170,255,.1), rgba(255,255,255,.02)); }
+  .c3 { background: linear-gradient(135deg, rgba(251,229,138,.08), rgba(255,255,255,.02)); }
+  .feature { display: grid; gap: 6px; margin: 4px 0 22px; padding: 22px 24px; border-radius: 22px; text-decoration: none; color: #3b2f2a; background: #fffaf0 linear-gradient(135deg, rgba(242,193,78,.35), rgba(224,122,95,.25)); box-shadow: 5px 6px 0 rgba(242,193,78,.35); transform: rotate(-.4deg); transition: transform .2s; }
+  .feature:hover { transform: rotate(0deg) translateY(-2px); }
+  .feature b { font: 800 clamp(28px, 4.4vw, 44px)/1 Fraunces, serif; }
+  .feature .new { font: 700 12px Inter, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #c8553d; }
+  .feature .go { font-weight: 700; }
+  .brief { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 8px 0 0; }
+  .brief div { padding: 14px 16px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); font-size: 14.5px; color: var(--muted); }
+  .brief b { display: block; color: var(--fg); font: 700 16px Fraunces, serif; margin-bottom: 2px; }
+  @media (max-width: 760px) {
+    .card { grid-template-columns: 1fr; }
+    .card .txt { padding: 18px 18px 20px; }
+    .brief { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><span>Herdr World · concept art</span><nav><a href="paper/">Pop-Up</a><a href="paper-3d/">Pop-Up 3D</a><a href="lumen/">Lumen</a><a href="cutaway/">Cutaway</a></nav></div>
+  <header class="intro">
+    <div class="kicker">Town, reimagined · three 2.5D art directions</div>
+    <h1>Three towns.</h1>
+    <p class="tag">The same crew, the same buildings and the same states, drawn as three very different worlds.</p>
+    <p class="pitch">Each direction covers the whole cast: agents in every state, rooms lit and dark, reception, the lounge, the town hall, the post office, apartments, the library, the shipyard with a lane and ship per project and PRs as crates, roads and the bus, day and night, rain and snow, a new host arriving, and how it reads on a phone. Everything is live and drawn in code. No images are generated, and every scene animates.</p>
+  </header>
+  <a class="feature" href="paper-3d/"><span class="new">New · navigable prototype</span><b>Pop-Up, in 3D</b><span>The papercraft town as a real 3D scene. Turn it, tilt it, pan and pinch on mouse, trackpad or phone. Switch between Paper day, Paper night and a Lumen skin over the same world.</span><span class="go">Walk around it →</span></a>
+  <div class="cards">
+    <a class="card c1" href="paper/"><div class="art"><canvas data-dir="paper"></canvas></div><div class="txt"><div class="num">Direction 1 · papercraft diorama</div><h3>Pop-Up</h3><p>A pop-up book open on your desk. Folded-card buildings, open shoebox rooms, sticker agents, paper planes for questions, theatre-strip sea. Warm, tactile, handmade.</p><div class="go">Open Pop-Up →</div></div></a>
+    <a class="card c2" href="lumen/"><div class="art"><canvas data-dir="lumen"></canvas></div><div class="txt"><div class="num">Direction 2 · glass and light</div><h3>Lumen</h3><p>A glass town on a floating mirror disc. Agents are beings of light, and a question is a column of amber you can see from across town. Spatial, emissive, dark-mode native.</p><div class="go">Open Lumen →</div></div></a>
+    <a class="card c3" href="cutaway/"><div class="art"><canvas data-dir="cutaway"></canvas></div><div class="txt"><div class="num">Direction 3 · clean-line cross-section</div><h3>Cutaway</h3><p>The whole street sliced open like a picture book. Every room in view, questions in speech balloons, tubes to the post office, an airship bringing new hosts. The most legible of the three.</p><div class="go">Open Cutaway →</div></div></a>
+  </div>
+  <section>
+    <h2>How they differ</h2>
+    <div class="brief">
+      <div><b>Pop-Up: you look down into it</b>Isometric. Rooms are open-top trays, so you see desks from above. Character comes from the material: paper, shadow and grain.</div>
+      <div><b>Lumen: you look through it</b>Isometric glass. Every floor is visible through the walls, and state is light. It doubles as an ambient dashboard and is at its best at night.</div>
+      <div><b>Cutaway: you look across it</b>Side-on with parallax depth. Every room is visible at once with words in balloons, and on a phone it becomes a sideways strip.</div>
+    </div>
+  </section>
+  <footer><span>Synthetic hosts, agents and projects throughout.</span><span>Tip: each hero has Day / Dusk / Night and Clear / Rain / Snow.</span></footer>
+</div>
+<script type="module">
+  import { Stage } from './lib.js';
+  import { createPaper } from './paper/paper.js';
+  import { createLumen } from './lumen/lumen.js';
+  import { createCutaway } from './cutaway/cutaway.js';
+  const make = { paper: createPaper, lumen: createLumen, cutaway: createCutaway };
+  document.querySelectorAll('canvas[data-dir]').forEach((c, i) => {
+    const scene = make[c.dataset.dir]();
+    const params = { view: 'hero', time: c.dataset.dir === 'lumen' ? 'night' : c.dataset.dir === 'cutaway' ? 'dusk' : 'day' };
+    new Stage(c, (ctx, w, h, t, s) => scene.render(ctx, w, h, t, s.params, s), { params, fps: 24, offset: i * 5 });
+  });
+</script>
+</body>
+</html>

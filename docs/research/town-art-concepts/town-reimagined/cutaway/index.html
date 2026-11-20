@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cutaway · Town reimagined</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,700;0,9..144,800;1,9..144,400&family=Inter:wght@400;600&family=Alfa+Slab+One&family=Comic+Neue:wght@700&family=Pacifico&display=swap">
+<link rel="stylesheet" href="../style.css">
+<style>
+  :root { --bg: #fbf3df; --fg: #1f1b2b; --muted: #5d566e; --accent: #c8553d; --card: #fffdf5; --line: #1f1b2b; --display: "Alfa Slab One", Georgia, serif; color-scheme: light; }
+  h1 { font-weight: 400; letter-spacing: 0; }
+  .tag { font-family: "Comic Neue", sans-serif; font-style: normal; font-weight: 700; }
+  section h2 { font-weight: 400; }
+  .frame { border-radius: 4px; box-shadow: 6px 6px 0 #1f1b2b; border: 2.5px solid #1f1b2b; }
+  .hero .frame { aspect-ratio: 2.35 / 1; }
+  .night .frame { aspect-ratio: 2.35 / 1; }
+  .notes div, .refs span { border: 2px solid #1f1b2b; box-shadow: 3px 3px 0 #1f1b2b; }
+  .notes b { font-family: "Alfa Slab One", serif; font-weight: 400; }
+  .seg { border: 2px solid #1f1b2b; background: #fffdf5; }
+  .seg button { color: #1f1b2b; }
+  .seg button[aria-pressed="true"] { background: #1f1b2b; color: #fbe58a; }
+  .top nav a { border: 2px solid #1f1b2b; }
+  table.map td { border-top: 2px solid rgba(31,27,43,.2); }
+  .phone .ui .chip { position: absolute; top: 48px; left: 12px; padding: 5px 10px; background: #fbe58a; border: 2px solid #1f1b2b; font: 700 13px "Comic Neue", sans-serif; color: #1f1b2b; box-shadow: 2px 2px 0 #1f1b2b; }
+  .phone .ui .tabs { position: absolute; left: 10px; right: 10px; bottom: 14px; display: flex; justify-content: space-around; padding: 7px 4px; background: #fffdf5; border: 2.5px solid #1f1b2b; box-shadow: 3px 3px 0 #1f1b2b; font: 700 11.5px "Comic Neue", sans-serif; color: #5d566e; }
+  .phone .ui .tabs span { display: grid; justify-items: center; }
+  .phone .ui .tabs span b { font-size: 16px; line-height: 1.1; }
+  .phone .ui .tabs span.on { color: #c8553d; }
+  .phone .ui .peek { position: absolute; left: 12px; right: 40px; bottom: 78px; padding: 10px 14px; border-radius: 50% / 40%; background: #fff6d6; border: 2.5px solid #1f1b2b; font: 700 13px/1.25 "Comic Neue", sans-serif; color: #1f1b2b; text-align: center; }
+  .phone .ui .peek small { display: block; font: 700 11px "Comic Neue", sans-serif; color: #5d566e; }
+  .phone .ui .peek::after { content: ""; position: absolute; left: 40px; bottom: -14px; border: 8px solid transparent; border-top: 12px solid #1f1b2b; }
+  @media (max-width: 760px) { .hero .frame, .night .frame { aspect-ratio: 4 / 5; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="../">← Town, reimagined</a><nav><a href="../paper/">Pop-Up</a><a href="../paper-3d/">Pop-Up 3D</a><a href="../lumen/">Lumen</a><a href="../cutaway/" aria-current="page">Cutaway</a></nav></div>
+  <header class="intro">
+    <div class="kicker">Direction 3 of 3 · clean-line cross-section</div>
+    <h1>Cutaway</h1>
+    <p class="tag">The whole street sliced open like a picture book, so every room, desk and agent is in view at once.</p>
+    <p class="pitch">Town becomes one long side-on cross-section in the clean-line comic tradition: flat colour, confident outlines, hatched cut walls and mesas drifting by in parallax. Nothing is hidden. Each host is a building with a floor per room. Reception is the ground floor, where waiting agents stand with speech balloons that contain the actual question. Pneumatic tubes under the street carry those questions to the post office. A new host arrives by airship, lowered onto an empty lot. The sea at the end of the street has a ship per project, the lighthouse sweeps the town at night, and fish swim past the release cables. This is the editorial-illustration revival of the 2020s, and it is the most legible option: on a phone the cutaway becomes a strip you scroll sideways, like reading a comic.</p>
+    <div class="refs"><span>Richard Scarry's Busytown</span><span>Hergé ligne claire</span><span>Moebius</span><span>Sable</span><span>Fallout Shelter</span><span>Chris Ware cutaways</span></div>
+  </header>
+
+  <section class="hero">
+    <h2>The whole street</h2>
+    <p class="lede">From left: <i>pine</i> arriving by airship, the apartments, the lounge, ATLAS (reception plus <i>world</i>, <i>crew</i>, <i>lab</i> and <i>docs</i>), the post office, the town hall (hiring and expenses), NIMBUS, the library with its memory archive below, the PR warehouse, then the quay, the sea and a ship per project. The question tubes run under the street. On a phone the view drifts along the street.</p>
+    <div class="frame"><canvas id="hero" data-view="hero" data-pan="x"></canvas></div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Time of day"><button data-target="hero" data-set="time=day" aria-pressed="true">Day</button><button data-target="hero" data-set="time=dusk" aria-pressed="false">Dusk</button><button data-target="hero" data-set="time=night" aria-pressed="false">Night</button></div>
+      <div class="seg" role="group" aria-label="Weather"><button data-target="hero" data-set="weather=clear" aria-pressed="true">Clear</button><button data-target="hero" data-set="weather=rain" aria-pressed="false">Rain</button><button data-target="hero" data-set="weather=snow" aria-pressed="false">Snow</button></div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <h2>The cast</h2>
+    <p class="lede">Profile figures in long coats. The harness shows in the coat colour and the hat: a fedora for Claude, a ball cap for Codex, a twin-bobble beanie for Gemini, a spiky hood for Rex. States are comic grammar everyone already reads: a thought cloud, a speech balloon, Z's, a stamped page.</p>
+    <div class="frame"><canvas id="sheet" data-view="sheet"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Close-ups</h2>
+    <p class="lede">Lit rooms have wallpaper and a skirting board in the project colour, a lamp and glowing screens. A dark room is navy and says “empty”. The section walls are hatched like an architect's drawing.</p>
+    <div class="grid3">
+      <figure><div class="frame"><canvas data-view="office"></canvas></div><figcaption><b>ATLAS.</b> Each room is a floor and the elevator runs up the side. At reception, the speech balloons show the real questions, oldest first.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="hall" data-params='{"weather":"snow"}'></canvas></div><figcaption><b>Post office and town hall in snow.</b> Pigeonholes and a Needs-you counter, the HIRING board with a new agent arriving, and the expenses chart over the town master's desk.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="harbor" data-params='{"time":"dusk"}'></canvas></div><figcaption><b>Harbour at dusk.</b> PR crates on warehouse racks, the crane, and a ship per project at three depths. <i>world v2.1</i> is heading out.</figcaption></figure>
+    </div>
+    <div class="grid3" style="margin-top:14px">
+      <figure><div class="frame"><canvas data-view="apartments" data-params='{"time":"night"}'></canvas></div><figcaption><b>Apartments at night.</b> Finished agents sleep under quilts in their harness colour. Empty flats stay dark.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="post"></canvas></div><figcaption><b>The question tubes.</b> Capsules shoot under the street from each reception to the post office.</figcaption></figure>
+      <figure><div class="frame"><canvas data-view="arrival" data-params='{"time":"dusk"}'></canvas></div><figcaption><b>Arrival.</b> An airship lowers <i>pine</i>, a ready-made block with its first room lit, onto the dashed lot at the edge of town.</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="night">
+    <h2>Night, in the rain</h2>
+    <p class="lede">Ink-line rain, puddle rings and umbrellas in harness colours. The street lamps pool light, the bus headlights cut across, and the lighthouse sweeps the whole street.</p>
+    <div class="frame"><canvas data-view="night" data-params='{"time":"night","weather":"rain"}' data-pan="x"></canvas></div>
+  </section>
+
+  <section>
+    <h2>On a phone</h2>
+    <div class="phone-row">
+      <div class="phone"><div class="screen"><div class="island"></div><canvas data-view="phone" data-pan="x"></canvas>
+        <div class="ui"><div class="chip">! 3 for you · fuel 64%</div>
+          <div class="peek">maple: “Ship v2.1 tonight?”<small>ATLAS reception · tap to answer</small></div>
+          <div class="tabs"><span class="on"><b>⌂</b>Town</span><span><b>✉</b>Needs you</span><span><b>▦</b>Board</span><span><b>☰</b>Menu</span></div></div>
+      </div></div>
+      <div class="notes">
+        <div><b>A strip you scroll sideways</b><span>Portrait shows one or two buildings at full height. Swipe to walk the street, like turning comic panels. Here it drifts by itself.</span></div>
+        <div><b>Words, not icons</b><span>Balloons carry the question text, plaques carry room names, and signs carry hosts. Nothing needs a legend.</span></div>
+        <div><b>Ink survives small sizes</b><span>Outlines keep every figure distinct against busy interiors, even at 25 pixels tall.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What's what</h2>
+    <table class="map">
+      <tr><td>Host arrives</td><td>An airship lowers a building module onto an empty lot, then lifts away.</td></tr>
+      <tr><td>Room lit / dark</td><td>A floor with project-colour wallpaper, a lamp and glowing screens, or a navy floor marked “empty”.</td></tr>
+      <tr><td>Needs you</td><td>A speech balloon with the real question. A capsule shoots through the tubes to the post office, whose counter and pigeonholes fill.</td></tr>
+      <tr><td>Bus</td><td>A yellow town-loop bus with riders in the windows, pausing at the stop by the town hall.</td></tr>
+      <tr><td>Day / night</td><td>A poster sun, then a moon, stars, lit windows, street-lamp pools and a lighthouse sweep.</td></tr>
+      <tr><td>Rain / snow</td><td>Rain falls as ink lines with puddle rings and umbrellas. Snow is outlined flakes, with snow caps on every roof.</td></tr>
+    </table>
+  </section>
+  <footer><span>Concept art. Hand-drawn in Canvas 2D, nothing generated.</span><a href="../">Back to the gallery →</a></footer>
+</div>
+<script type="module">
+  import { mountPage } from '../lib.js';
+  import { createCutaway } from './cutaway.js';
+  mountPage(createCutaway());
+</script>
+</body>
+</html>
