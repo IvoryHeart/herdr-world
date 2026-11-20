@@ -16,7 +16,9 @@ import {
   waitForBrowserFixture,
   waitForChromePort,
 } from "../browserChrome";
+import { InputDriver } from "./browserAcceptanceFixture";
 import { buildWorldBrowserBundle } from "./testing/browserBundles";
+import { chromeRenderingFlags } from "./testing/chromeRendering";
 import { connectCapture } from "./testing/connectCapture";
 
 const chrome =
@@ -37,8 +39,25 @@ const VIEWPORTS = [
   { name: "portrait", width: 1440, height: 2560, mobile: false },
 ] as const;
 
-/** A core host: the builder has a sub-agent that ends with it and one that outlives it. */
-async function coreSnapshot() {
+/** Terminals a start leaves on the host: a shell (t9) and an agent (t10). */
+const STARTED = {
+  t9: { address: "t9", labels: {}, argv: ["/bin/sh"], state: "live", pid: 19 },
+  t10: {
+    address: "t10",
+    labels: {},
+    argv: ["claude"],
+    state: "live",
+    pid: 20,
+    turn: 0,
+    status: { state: "idle", app: "claude-code" },
+  },
+} as const;
+
+/**
+ * A core host: the builder has a sub-agent that ends with it and one that
+ * outlives it; `started` adds what a start left.
+ */
+async function coreSnapshot(started: readonly (keyof typeof STARTED)[] = []) {
   const placed = (tab: string, where: string) => ({
     "herdr.space": "fx-web",
     "herdr.tab": tab,
@@ -88,6 +107,7 @@ async function coreSnapshot() {
       pid: 14,
     },
     { address: "t5", labels: {}, argv: ["/bin/sh"], state: "live", pid: 15 },
+    ...started.map((address) => STARTED[address]),
   ];
   const mirror = new CoreMirror();
   const sight = new CoreFirstSight();
@@ -247,3 +267,118 @@ for (const scene of ["launcher", "bin"] as const)
     },
     120000,
   );
+
+// One click on a core room's + and one on Terminal open the started shell's
+// window; one on + and one on Claude open the started agent's (#1075).
+test.skipIf(!chrome).each([1440, 390])(
+  "core control: one click starts a core terminal and opens its window at %ipx",
+  async (width) => {
+    const dir = await mkdtemp(join(tmpdir(), "core-control-start-"));
+    const { assets } = await buildWorldBrowserBundle("CoreControl", dir);
+    const snapshots = new Map<string, string>();
+    for (const started of [[], ["t9"], ["t9", "t10"]] as const)
+      snapshots.set(
+        started.join(","),
+        JSON.stringify(await coreSnapshot(started)),
+      );
+    const result = Promise.withResolvers<string[]>();
+    const requested = Promise.withResolvers<void>();
+    const profile = join(dir, "profile"),
+      log = join(dir, "chrome.log");
+    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let socket: WebSocket | undefined;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        const url = new URL(request.url);
+        const path = url.pathname;
+        if (path === "/result") {
+          result.resolve(await request.json());
+          return new Response("ok");
+        }
+        if (path === "/snapshot")
+          return new Response(
+            snapshots.get(url.searchParams.get("started") ?? ""),
+          );
+        if (path === "/viewport-ready") {
+          const port = await waitForChromePort(child!, profile, log);
+          const targets = (await (
+            await fetch(`http://127.0.0.1:${port}/json/list`)
+          ).json()) as { type: string; webSocketDebuggerUrl: string }[];
+          socket = new WebSocket(
+            targets.find((target) => target.type === "page")!
+              .webSocketDebuggerUrl,
+          );
+          await new Promise<void>((resolve, reject) => {
+            socket!.onopen = () => resolve();
+            socket!.onerror = () => reject(new Error("CDP connection failed"));
+          });
+          const driver = new InputDriver(socket);
+          await driver.call("Emulation.setEmulatedMedia", {
+            features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+          });
+          await driver.call("Emulation.setDeviceMetricsOverride", {
+            width,
+            height: width === 390 ? 844 : 1000,
+            deviceScaleFactor: 1,
+            mobile: width === 390,
+          });
+          await driver.call("Emulation.setTouchEmulationEnabled", {
+            enabled: width === 390,
+          });
+          return new Response(String(width));
+        }
+        if (path === "/") requested.resolve();
+        const asset =
+          path === "/"
+            ? Bun.file(join(dir, "CoreControl/index.html"))
+            : assets.get(path);
+        if (asset) return new Response(asset);
+        if (path.startsWith("/world/") || path.endsWith(".svg")) {
+          const file = Bun.file(
+            join(import.meta.dir, "../../public", path.slice(1)),
+          );
+          if (await file.exists()) return new Response(file);
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+    try {
+      child = Bun.spawn(
+        [
+          chrome!,
+          "--headless=new",
+          "--remote-debugging-port=0",
+          "--window-size=1440,1000",
+          "--enable-webgl",
+          ...(await chromeRenderingFlags(chrome!)),
+          "--disable-dev-shm-usage",
+          "--no-first-run",
+          "--no-default-browser-check",
+          `--user-data-dir=${profile}`,
+          `${server.url.href}?scene=start`,
+        ],
+        { stdout: "ignore", stderr: Bun.file(log) },
+      );
+      const exited = child.exited.then(async (code) => {
+        throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
+      });
+      expect(
+        await waitForBrowserFixture(
+          requested.promise,
+          result.promise,
+          exited,
+          `Core control start at ${width}px`,
+          BROWSER_STARTUP_TIMEOUT_MS,
+        ),
+      ).toEqual([]);
+    } finally {
+      socket?.close();
+      await stopChrome(child);
+      server.stop(true);
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+  120000,
+);
