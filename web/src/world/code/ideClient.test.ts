@@ -75,6 +75,11 @@ describe("parseIdeStatus", () => {
         providers: [{ id: "code-server", webviewsInWorld: true }],
       }).providers[0]!.webviewsInWorld,
     ).toBe(true);
+    expect(status.providers[0]!.needsSecurePage).toBe(false);
+    expect(
+      parseIdeStatus({ providers: [{ id: "vscode", needsSecurePage: true }] })
+        .providers[0]!.needsSecurePage,
+    ).toBe(true);
   });
 
   test("anything else is an empty status", () => {

@@ -110,11 +110,14 @@ export default function CodeView({
   onOpenAgent,
   onOpenTerminal,
   client: clientProp,
+  secure = window.isSecureContext,
 }: {
   world: WorldObject;
   onOpenAgent: (id: string) => unknown;
   onOpenTerminal: (id: string) => unknown;
   client?: IdeClient;
+  /** Whether this page is HTTPS or localhost; tests try a plain-HTTP one. */
+  secure?: boolean;
 }) {
   const client = useMemo(() => clientProp ?? pageIdeClient(), [clientProp]);
   const ide = useIdeStatus(client);
@@ -167,6 +170,13 @@ export default function CodeView({
       )
     : undefined;
   const refusal = project ? refusals[project.key] : undefined;
+  // Microsoft's VS Code can't connect from a plain-HTTP address: World
+  // says so instead of a workbench that waits forever.
+  const insecureFor = (id: string | undefined) =>
+    secure
+      ? undefined
+      : providers.find((entry) => entry.id === id && entry.needsSecurePage);
+  const insecure = insecureFor(instance?.provider ?? provider?.id);
 
   useEffect(() => {
     if (instance?.state !== "ready") return;
@@ -232,9 +242,12 @@ export default function CodeView({
     );
 
   const readyVisited = instances.filter(
-    (entry) => entry.state === "ready" && visited.includes(entry.id),
+    (entry) =>
+      entry.state === "ready" &&
+      visited.includes(entry.id) &&
+      !insecureFor(entry.provider),
   );
-  const showingFrame = instance?.state === "ready";
+  const showingFrame = instance?.state === "ready" && !insecure;
 
   return (
     <div
@@ -289,7 +302,7 @@ export default function CodeView({
         ) : provider ? (
           <span className="code-view-provider-label">{provider.label}</span>
         ) : null}
-        {instance?.state === "ready" ? (
+        {showingFrame ? (
           <a
             className="code-view-bar-action"
             href={instance.url}
@@ -423,6 +436,7 @@ export default function CodeView({
     if (!ide.status) return "loading";
     if (!project) return "no-project";
     if (!provider) return refusal ? "refused" : "integration";
+    if (insecure) return "insecure-page";
     if (instance) return instance.state;
     if (refusal) return "refused";
     return "closed";
@@ -481,6 +495,7 @@ export default function CodeView({
           </p>
         </div>
       );
+    if (insecure) return <InsecurePage label={insecure.label} />;
     if (instance?.state === "starting")
       return (
         <div className="code-view-starting" role="status">
@@ -603,7 +618,7 @@ export default function CodeView({
           )}
           Open in {provider.label}
         </button>
-        {!window.isSecureContext ? (
+        {!secure ? (
           <p className="code-view-note">
             This address isn't secure, so VS Code's webviews, previews and
             clipboard may not work. Open World over HTTPS or at localhost on
@@ -618,6 +633,25 @@ export default function CodeView({
       </div>
     );
   }
+}
+
+function InsecurePage({ label }: { label: string }) {
+  return (
+    <div className="code-view-refusal" data-code="insecure-page">
+      <h2>{label} needs a secure address</h2>
+      <p role="alert">
+        Microsoft's VS Code connects only from a page served over HTTPS, or at
+        localhost on the computer World runs on. This page is plain HTTP at{" "}
+        {window.location.host}, so it would never finish opening.
+      </p>
+      <p>
+        Open World over HTTPS instead: give World a certificate, or put it
+        behind an HTTPS proxy such as <code>tailscale serve</code>. On the
+        computer World runs on, localhost works too. code-server and OpenVSCode
+        Server work on this address.
+      </p>
+    </div>
+  );
 }
 
 function groupByHost(projects: CodeProject[]) {

@@ -1910,12 +1910,22 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   keeps one origin and never rewrites the IDE's files, so those panels stay
   blank inside World; the row says so. Editing, terminals, Git, search and
   debugging work. code-server serves its webviews itself, so they work.
+- **Secure address.** Microsoft's VS Code connects only from a page on HTTPS
+  or at localhost: it signs its connection with browser cryptography that a
+  plain-HTTP LAN or Tailscale address doesn't have, and its server refuses
+  the workbench otherwise. Its row says so. On a plain-HTTP address the Code
+  view shows **Visual Studio Code needs a secure address** instead of the
+  workbench, even for a server that already runs, and says what to do: open
+  World over [HTTPS](docs/DEPLOYMENT.md#native-https) (its own certificate or
+  an HTTPS proxy such as `tailscale serve`), or at localhost on World's
+  computer. **Stop** stays. code-server and OpenVSCode Server work on plain
+  HTTP.
 - **Enable gate.** **Enable…** opens a dialog that says the IDE runs on the
   computer each project is on, that it and its extensions get full access to
   those computers and to World (it runs on World's page and address), where
   extensions come from (Microsoft's Marketplace or Open VSX), and, on a plain
   HTTP LAN address, that webviews, previews and the clipboard need HTTPS or
-  localhost. **Enable** stays off until the trust box (and any licence box the
+  localhost (for Microsoft's VS Code, that it won't open from there). **Enable** stays off until the trust box (and any licence box the
   IDE has) is ticked. Nothing starts on enable.
 - **Layout.** One thin bar holds the project picker, its host and folder, the
   IDE, **New tab**, **Stop**, **Servers** and the rail toggle; the workbench fills the rest
@@ -1937,7 +1947,9 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   `ssh` command starts the host's IDE, and an OpenSSH socket forward connects
   it to a private socket on World's computer; no TCP port opens on either side.
   The access token travels on the SSH session's input, never on a command line,
-  and stays in the server's folder (mode 0600). Either way the workbench is
+  and stays in the server's folder (mode 0600); the browser never holds it.
+  World adds it to the workbench's requests and to the first message of each
+  of its WebSockets, where VS Code's handshake expects it. Either way the workbench is
   framed from `/ide/<id>/` on World's own origin, behind World's sign-in;
   World's own Content Security Policy is unchanged and the IDE keeps its own,
   with World's frame rule added (frames only from World's own address).
@@ -1945,7 +1957,11 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   World refuses them (403) for pages and WebSockets. **New tab** opens the same
   address. Switching projects keeps a loaded workbench in memory, hidden. The
   first VS Code start on a host downloads VS Code's web server there, about a
-  minute.
+  minute. VS Code retries a failed download without saying why; when World
+  sees it retry, it stops waiting and says the download needs about 1 GB free
+  in the home folder and access to update.code.visualstudio.com. A download
+  still under way when World's three-minute wait ends says to open again in a
+  minute. Either way the server keeps running until **Stop**.
 - **Lifetime.** An IDE server runs until you stop it, so builds, terminals,
   tasks and extensions in it keep going. Leaving Code, closing the browser,
   World stopping, restarting or updating, the SSH link dropping and the host

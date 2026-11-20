@@ -9,8 +9,11 @@
   opens an IDE on a desktop. The workbench fills the view under one thin bar;
   the rail of the project's agents and terminals folds away and starts folded
   on narrow windows. Stock VS Code's webviews (Markdown preview, some
-  extension panels) stay blank inside World. Each IDE is an integration (also
-  in Settings → Integrations): detected when installed, with a download link
+  extension panels) stay blank inside World, and Microsoft's VS Code opens
+  only when World is on HTTPS or localhost: on a plain-HTTP address the view
+  says so and what to do instead of waiting. When VS Code can't download its
+  web server, World stops waiting and says what it needs. Each IDE is an
+  integration (also in Settings → Integrations): detected when installed, with a download link
   and program path when not, and a trust and licence dialog before first
   enable. World starts a server only when you click Open and reuses it per
   project folder. A server keeps running, with its terminals and tasks,
