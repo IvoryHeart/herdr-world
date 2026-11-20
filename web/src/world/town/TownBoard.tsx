@@ -140,6 +140,7 @@ export function TownBoard({
         type="button"
         className="town-board-chip"
         data-help="town.board-chip"
+        data-help-opens="town.focus"
         aria-expanded={open}
         aria-controls="town-board"
         aria-label={`Town board: ${focusLabel ? `${focusLabel}; ` : ""}${summary}`}

@@ -45,7 +45,7 @@ export function useTownFocusLabel() {
 /** The board's Focus section: start one, or the time left and End now. */
 export function TownFocusSection() {
   return (
-    <section className="town-focus" aria-label="Focus">
+    <section className="town-focus" aria-label="Focus" data-help="town.focus">
       <div className="focus-title">FOCUS</div>
       <FocusControls />
     </section>
