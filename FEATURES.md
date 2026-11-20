@@ -3,6 +3,64 @@
 A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
 [Install it](./README.md#quick-start) or follow the [tutorial](./docs/TUTORIAL.md).
 
+## Shipyard
+
+- `herdr-world shipyard list|show` and the same-origin
+  [Shipyard API](docs/shipyard-api.md) read GitHub releases, tags, workflow health
+  on the observed main commit and merged changes waiting after the release
+  baseline. All authors count; membership follows the commit graph, not dates.
+- Channels are stable or prerelease. Drafts and bare tags do not count as shipped.
+  Missing, stale, diverged or shortened data stays explicit; it never means
+  “nothing waiting” or permission to release. The existing GitHub Sources switch
+  and service user's `gh` sign-in apply. Reads share a bounded cache and deadline.
+- Running World listeners report their versions, ports and known source branches
+  in a private local registry. Isolated previews can opt into one shared registry;
+  expired reports are stale and have no open action. Only fresh loopback reports
+  provide navigation URLs, usable from the service machine. No remote host or
+  port discovery runs, and agent runtimes are not treated as World deployments.
+- V1 provides navigation links only: no release/tag creation or deployment
+  changes. `herdr-world shipyard demo --scenario stale|limited --json` exercises
+  synthetic rare states without a service or credentials.
+- **Town harbour**: a wide Town ends at its right-most edge in the sea, which
+  runs on off the map. The streets end at a stone promenade; one shipping lane
+  per project crosses the water from it, each in its own colour (eight colours
+  that repeat), named on a board with its flag at the pier's root. Projects are
+  the repositories the Shipyard suggests (up to eight) plus the one chosen in **Work →
+  Releases**, which comes first. On a lane, the hull on the slipway is the next
+  release, with the count of merged pull requests waiting for it (`200+` when
+  shortened, `?` unknown); the latest three releases are ships moored along the
+  pier, newest first, prereleases with orange hulls and a green pennant while a
+  World on this computer runs that version. The lighthouse at the pier's head
+  is main's checks (green passing, red failing, yellow running, grey unknown).
+  The Shipyard sign counts projects and those with main failing or out of date.
+  A board or hull opens that project in **Work → Releases**; a ship opens its
+  release card with **All releases**. A new release sails in once, only in its
+  own lane, and is announced; the first read and a repository change stay
+  still. More projects than the sea holds (about thirteen on a one-building
+  town) end in a **+N more** lane listing the rest by name and state; each opens
+  in **Work → Releases**. Stale data fades a lane, greys its lamp and says
+  **Out of date**; so does a failed read of that one project, keeping its
+  last ships, and a failed read of World itself, and then every
+  running World reads as stopped reporting without **Open**. GitHub off or no
+  repository leaves an empty sea and says how to go on. A phone or portrait
+  Town has the same harbour right of its stacked buildings: drag or pinch to
+  reach it, or tap the **Shipyard** signpost on the town center's left wing
+  (a dot per project in its colour and lamp, and an arrow), which flies to
+  the sea with the promenade and a whole pier across the screen. Calm Town
+  and reduced motion stop the bobbing and
+  sailing. Open pull requests are the warehouse's, not the harbour's.
+- **Work → Releases** (Board's Work lens and Town's harbour): main's checks,
+  waiting changes, shipped releases and running Worlds, with links to GitHub
+  and **Open** only for fresh loopback Worlds (usable on the service machine).
+  Waiting changes list the merged pull requests the commit graph proves and
+  the total commit count; World does not guess which commits were pushed
+  directly. The repository select, including **Another repository…**, is remembered per
+  browser. **Read GitHub again** forces one bounded refresh.
+- Testing only: `?shipyardFixture` (or `=failing|stale|limited|off|empty|offline`)
+  shows synthetic data without GitHub, three projects; `=many` shows sixteen,
+  more lanes than a town's sea holds. The page drops the parameter at once.
+  `offline` answers once, then fails every read as if World stopped answering.
+
 ## Runtime support
 
 A host is this computer or one exact OpenSSH alias / `user@host` destination.
@@ -132,6 +190,31 @@ no control for it. Platform and harness limits apply across the table.
   are private to the user and reused for identical tap content; user settings
   stay untouched. If preparation fails, New agent reports an error before
   creating a tab or starting an agent. Windows keeps inline settings.
+- **Core agents run by wrappers and headless:** a core desk shows the agent
+  that runs in its terminal's foreground, as Herdr's TUI finds it: the
+  foreground program, else, on a core on this machine (Linux), the processes
+  in its foreground group, nearest first. So `bash run.sh` running
+  `claude -p … | tee log`, or `sh -c "claude …"`, shows Claude, looking as if
+  started directly; a plain shell running `git` or `bun test` stays a plain
+  terminal. A remote or macOS core reports only the foreground program, so a
+  wrapper there shows its agent only once the agent reports status itself.
+  A live headless run (`claude -p`, `codex exec`, `gemini -p`,
+  `opencode run` and the like) counts as working, report or none, unless it
+  asks you something. An interactive agent's status is its own report; with
+  none it stays unknown, never working. A working or waiting report from an
+  agent that has left the terminal (killed mid-turn, with a shell, editor or
+  empty wrapper in front) is stale: World shows it idle, so it walks to the
+  bar and its desk and room go dark. A report speaks only for the harness that
+  runs: when another harness replaces the one that reported, or a new process
+  starts after World saw the reporter exit, the newcomer is unknown (working,
+  if headless) until it reports itself. An agent World saw run inside a
+  still-running wrapper stays at that desk's terminal after it exits, idle, so
+  it walks to the bar between headless calls instead of vanishing; once the
+  wrapper ends and the shell is back, the desk is a plain terminal again. A
+  word that is an option's value never marks a run headless
+  (`codex -C exec` is interactive Codex in a folder named `exec`). A shell
+  function or alias piped into another command (`f | cat`) runs as a copy of
+  the shell; World looks inside it as it does a wrapper.
 - **Codex status on Linux core:** working/idle comes from Codex's native
   OSC 7501 reports, just as on macOS. If core publishes no status, World
   shows **unknown** even when Chat and Terminal work. World cannot recover
@@ -151,7 +234,14 @@ no control for it. Platform and harness limits apply across the table.
   again. See upstream questions Q3 and Q11 in the protocol questions above.
 - **Chat and asks:** transcript support depends on the
   [harness and platform](./docs/core-harnesses.md); input can still work without
-  a readable conversation. Verified local Linux asks can receive saved answers
+  a readable conversation. On Linux and macOS, core Chat can identify headless
+  `codex exec` and `claude -p` conversations from the foreground process's own
+  session record or unique writable transcript (or Claude session debug file).
+  SSH discovery runs on that agent's host. It never chooses the newest Claude
+  or Codex file in a directory: missing, unreadable or ambiguous process evidence
+  leaves Chat unavailable unless an explicit session reference is present.
+  Runs that disable session persistence have no transcript to read.
+  Verified local Linux asks can receive saved answers
   in their original session. Remote and unverified asks use `ask get` or `--wait`.
   `--owner-only` means only you can answer.
 - **Ranger:** on core it reads the current screen, not terminal scrollback or
@@ -211,7 +301,7 @@ Every service call requires an immutable connection ID and observed generation
 require `--yes`. Conflicts preserve the current file; an unknown write outcome
 requires a fresh read. Nothing retries a write automatically. Contents stay on
 the owning host and in private responses, without a World content cache, index,
-Board copy or telemetry. No new visual surface is included in this data delivery.
+Board copy or telemetry. The Library (below) is the browser's view of this data.
 
 The Unix host needs Python 3; Windows, symlinks, hardlinks, special/binary/non-UTF-8
 files and non-Markdown entries refuse. Discovery stops at 32 projects, 128 agents,
@@ -220,6 +310,48 @@ is literal and case-insensitive, with a 2 MiB scan budget and 100 results. Parti
 results say `truncated`, skipped reads are counted, and each host request has a
 15-second deadline. `herdr-world memory demo --json` creates and cleans up an
 isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
+
+### The Library
+
+- Open it from Town's **library**, right of the town center on the first street,
+  from the town center's ring (**Library**), from Board's hub (**Library**, on the
+  selected agent or workspace), from an agent window's settings (**Memory**)
+  or from Settings (**Agents** → **Library (memory)**, or search "memory").
+  On a phone the library folds to a book sign on the town center's left wing.
+  The library's sign counts files, stale files and shared files across up to four
+  hosts, read at most every five minutes; it never shows contents.
+- The left column (a picker on a phone) chooses a reader: everything on a host,
+  a project or an agent. An agent leads with what it would load: files read at
+  start, files read when needed and files skipped, shadowed ("Hidden by another
+  file") or empty. Discovery cannot prove what a running agent already loaded.
+- Shelves group files by source, `MEMORY.md` first. Each file shows its size, its
+  age (stale after 30 days) and who else reads it. Refused sources and files say
+  why; a missing instruction file offers **Create** and a missing memory folder
+  (a fresh project) offers **Add the first note**, which creates the folder;
+  harnesses World cannot read
+  say so; truncated lists and searches say they show the first ones only.
+- Opening a book reads it fresh from its host. **Edit** then **Save** writes it
+  with the revision you read. If the file changed meanwhile, the save is refused,
+  your text stays and **Load latest** shows theirs. When World can't tell whether a
+  write landed, it reads the file again: if the host has your text it says
+  Saved; otherwise your text stays on the revision you started from, so saving
+  again is refused if anyone else changed the file. **Delete** asks
+  first, focused on its button, with **Keep it**; deleting a topic says if
+  `MEMORY.md` still lists it. **+** on a shelf adds a note, reminding you to add
+  Claude topics to `MEMORY.md`. Reload the harness to pick up changes.
+- **Search** runs on submit over the chosen reader's files; tap a match to open it.
+  Choosing another reader or host drops a search still under way.
+- The Library stays on the host it opened on or you picked. If that host
+  disconnects, it says the host's memory is unavailable and offers the other
+  hosts; it never shows another host's agent in its place.
+  Escape, system Back or the close button closes the Library; on a phone a book
+  shows one pane with its own **Back** to the shelves. Opening the Library reads
+  the host again. File contents are never cached; only the sign's counts are.
+- To try it without real memory, open World with `?memoryFixture`: a synthetic
+  host with two projects, four agents, shared, stale, shadowed, empty, missing and
+  refused files. The page drops the parameter at once; edits stay in the page.
+  Saving text that contains `[uncertain]` acts out a write whose outcome is
+  unknown while someone else edits the file.
 
 ## World update notifications
 
@@ -241,6 +373,32 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   **Reload** notice appears instead of the page reloading itself, and again
   each time you reopen that part. **Upgrade &
   restart** still reloads once the restarted service is ready.
+
+## Help and what's new
+
+- **What can I do here?** opens World's help for the screen you are on: the
+  **?** beside the views (desktop), the views button's menu (phone),
+  **Menu → Help** (Settings at Help; the command box finds it too), Board's
+  **⋯ → Help** and Chat's **⋮** tools. Tabs: **What's new**, **Town**,
+  **Board**, **Chat** and **Everywhere**. Each entry has a picture of the real
+  control (phone or desktop, light or dark, as your screen), its steps, where
+  it lives and **Try**.
+- **Try** closes the help, switches to Town or Board when the entry lives
+  there, and rings the control for a moment. A control inside a closed menu
+  rings the button that opens it. When the control is not on this screen
+  (Chat's controls without an open Chat, a phone-only control on a desktop),
+  help reopens on that tab and says where to find it.
+- **What's new from the Town Master**: after an update, the greeting lists up
+  to four things new since the last version it showed in this browser, each
+  with a picture and **Try**, and a link to all of them in help. A first
+  visit shows **Start here**, the short first-run path, instead. Closing the
+  greeting marks them seen; turning the greeting off leaves them in
+  **Menu → Help → What's new**. Testing switch:
+  `?whatsNewSince=0.3.0` shows what is new after 0.3.0, `?whatsNewSince=new`
+  the first-run path; the address drops the parameter at once.
+- The same entries make [docs/HELP.md](docs/HELP.md) and the website's help
+  page. Help covers Town, Board, Chat and controls on every screen; other
+  views are not described there yet.
 
 ## Visual control plane
 
@@ -275,7 +433,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Claude gets its own gauge within about a minute of the first answer from an
     agent started from World's launcher: its status line passes Claude Code's 5 h and week windows to
     World, and the agent's status line looks as before. World shows Claude Code's
-    own figure, which can trail claude.ai by about a point. When Claude refused
+    own figure, which can trail claude.ai by about a point. Concurrent tap
+    writers keep the highest comparable reading until reset, even if one pauses
+    before publication. Only confirmed process death permits lock recovery;
+    contention or unknown liveness skips a reading after about half a second
+    and still runs the user's status command. When Claude refused
     work at its limit, the gauge reads **reached, resets …** instead of a level.
     Every row stays inside the board at its desktop, phone and Board widths: a
     longer value takes room from its bar, **reached, resets …** wraps, and a
@@ -331,7 +493,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens once the card is gone. **✕**, Escape, Back or a press outside closes it; tap
     the figure to open it again. Untick **Show this on start** at its foot,
     or switch **Menu → Settings → Town master greeting**, to stop it on this browser.
-    Your very first visit is greeted too, without a last time.
+    Your very first visit is greeted too, without a last time. The card also
+    carries [What's new](#help-and-whats-new) after an update, or **Start
+    here** on a first visit.
   - **Tab and app icon count**: in every view, while anything needs you, the
     browser tab reads `(N) Herdr World`, its icon carries a small yellow
     badge (the number up to 9, then `9+`), and an installed World shows the
@@ -387,44 +551,63 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     a phone, explains each caveat in full, including usage tied to no pane or
     room ("unattributed", already in the totals) and a limited detail list. The boards re-read usage about once a minute and when the page
     regains focus; when re-reads fail, the last figures stay for at most five
-    minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard folds to a sign in the town
-    center's corner and each reception's expenses to a sign in its title;
-    tap one to open it. Zoomed in to desks, the boards are put away with
+    minutes and never past UTC midnight, then the boards read "out of date". On a phone the billboard stands above the town center as
+    on a wide screen; each reception's expenses fold to a sign in its title
+    (a phone keeps only a few rows of yard above each building for its
+    reception board); tap one to open it. Zoomed in to desks, the boards are put away with
     reception. At every zoom the reception boards keep clear of the town
-    center, the post office, the billboard and each other: a board that would
-    cover one slides aside the least it can while staying over its building,
-    else it hangs lower, below the center or the board in its way.
+    center, the post office, the warehouse, the billboard and each other: a
+    board that would cover one slides aside the least it can while staying
+    over its building, else it hangs lower, below the center or the board in its way.
     The `?scene=town-scale` preview replaces every economy reader with labelled
     test data for its synthetic buildings, including the Town board and Spend lens.
   - Town's **post office** stands on the first street left of the town
-    center, its sorting yard on the pavement: your open pull requests (opened by you, waiting on your
-    review or assigned to you) as parcels in its sorting yard, ready to merge
-    first. Its sign counts them without hovering, such as "2 ready · 1
-    failing · 3 waiting", adding unknown and draft when there are some. A
-    parcel's tag shows its state: green ready to merge, red CI failing on its
-    head, amber waiting (for CI, a review, a fix or GitHub), a grey crate for
-    unknown and a pale letter for a draft. It reads the GitHub source and the
-    pull request card's merge rules, so stale or partial detail is unknown,
-    never ready. Hover or focus a parcel for "#123 title", its repository and
-    its state in words; tap it for the same pull request card the desk badge
-    opens (**Details**, **Merge…** and the rest). A merged parcel is carried
-    off the yard (with calm or reduced motion it just goes); a closed one
-    fades. More than the yard holds make a "+N" pile that opens the rest as a
-    list. Click the post office's sign, or **All pull requests** at the top of
-    the pile's list or the phone sign's list, to open Board's **Work** lens
-    over Town: every pull request in the same columns, with the Tickets tab,
-    each card's actions and the same Escape, Back or press-outside close. An
-    agent on a card opens as tapping it in Town does. With the GitHub source off, signed out or not yet answered, the
-    post office is closed and says to connect GitHub in **Integrations** (its sign opens them), with no
-    parcels and no counts; when a refresh fails it keeps the last list as
-    unknown and says GitHub is out of date. On a phone it folds to a sign on
-    the town center's right wing, in view at home zoom (a red pillar box and coloured ready,
-    failing and waiting counts) that opens the parcels as a list. For trying it without real pull
-    requests, open World with `?townPostFixture` (synthetic pull requests in
-    every state; ten seconds later the first ready one merges),
-    `?townPostFixture=many` (a pile) or `?townPostFixture=off` (signed out);
-    the page drops the parameter at once and only the post office and the
-    Work lens it opens use it.
+    center, on a phone as on a wide screen: Town's place for what is
+    addressed to you. Its red sign on the roof counts, without hovering,
+    what **Needs you** lists, by kind with the shared marks: "? 2 questions",
+    "! 1 blocked", "✓ 3 to review", and "✉ 1 to check" for saved answers
+    waiting in the Outbox; with none it reads "Nothing for you", and its rim
+    turns gold while a question or a blocked agent waits. Click it, or focus
+    it and press Enter, to open the same **Needs you** tab as the top bar's
+    counter, where you answer, withdraw and reach the Outbox as usual; it is
+    not a second inbox. It counts the hosts the Hosts filter shows, as Needs
+    you does. It holds no pull requests: those are the warehouse's. On a
+    phone the sign folds to a smaller red plate across the house's front, in
+    view at home zoom, with the marks and numbers only; tap it for Needs you.
+  - Town's **warehouse** stands on the shore at the first street's end, by
+    the harbour, its yard on the pavement: your open pull requests (opened by
+    you, waiting on your review or assigned to you) as crates in its yard,
+    ready to merge first. Its sign counts them without hovering, such as "2
+    ready · 1 failing · 3 waiting", adding unknown and draft when there are
+    some. A crate's straps and stencil show its state: green ready to merge,
+    red CI failing on its head, amber waiting (for CI, a review, a fix or
+    GitHub), grey for unknown and loose planks on a pallet for a draft. It
+    reads the GitHub source and the pull request card's merge rules, so stale
+    or partial detail is unknown, never ready. Hover or focus a crate for
+    "#123 title", its repository and its state in words; tap it for the same
+    pull request card the desk badge opens (**Details**, **Merge…** and the
+    rest). A merged crate is carried off toward the quay for the next release
+    (with calm or reduced motion it just goes); a closed one fades. More than
+    the yard holds make a "+N" pile that opens the rest as a list. Click the
+    warehouse's sign, or **All pull requests** at the top of the pile's list
+    or the phone sign's list, to open Board's **Work** lens over Town: every
+    pull request in the same columns, with the Tickets tab, each card's
+    actions and the same Escape, Back or press-outside close. An agent on a
+    card opens as tapping it in Town does. With the GitHub source off, signed
+    out or not yet answered, the warehouse is closed and says to connect
+    GitHub in **Integrations** (its sign opens them), with no crates and no
+    counts; when a refresh fails it keeps the last list as unknown and says
+    GitHub is out of date. On a phone it stands on the harbour's shore too,
+    and a sign on the town center's right wing, in view at home zoom (a crate
+    and "PRs", no counts: the post office counts what needs you), opens the
+    crates as a list with their counts. Searching Town for "warehouse" (or
+    "pull requests") lists the **Warehouse** and choosing it takes the map
+    there, on a phone or a wide screen. For trying it without
+    real pull requests, open World with `?townWarehouseFixture` (synthetic
+    pull requests in every state; ten seconds later the first ready one
+    merges), `?townWarehouseFixture=many` (a pile) or
+    `?townWarehouseFixture=off` (signed out); the page drops the parameter at
+    once and only the warehouse and the Work lens it opens use it.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
@@ -672,15 +855,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Light is Town's status language. The button under **ALL** sets the time
     of day: it cycles **clock** (follows this device's time), **day**,
     **dusk** and **night**, and each browser keeps its choice. As the sky
-    darkens, rooms with someone working or waiting on you are lit and quiet
-    rooms stay dark; each desk throws its agent's state colour (blue-white
-    working, amber waiting on you, green done), and street lamps light the
-    roads. A reception whose building has someone waiting on you pulses amber
-    over its lobby by day and by night; under calm motion or reduced motion
-    the pulse holds as a steady mark. An agent or terminal with an open
-    question for you counts as waiting on you whatever its runtime status.
-    A failed host's cached building stays dark. Day leaves the town as
-    painted.
+    darkens, light follows where agents are: a room is lit while an agent
+    sits at a desk there working (or waiting on you at it) and is dark
+    otherwise; each desk throws its seated agent's state colour (blue-white
+    working, amber waiting on you, green done); the bar is lit while anyone
+    is at it; and street lamps light the roads. Light changes with the walk:
+    a desk and its room light when the agent sits down, and go dark as it
+    stands up for the bar or reception. An agent with no status report sits
+    at its desk unlit. A reception whose building has someone waiting on you
+    pulses amber over its lobby by day and by night; under calm motion or
+    reduced motion the pulse holds as a steady mark. An agent or terminal with
+    an open question for you counts as waiting on you whatever its runtime
+    status; a terminal with no agent throws amber from its desk. A failed
+    host's cached building stays dark. Day leaves the town as painted.
   - Town's overlays share one style: the Town board (and its phone chips),
     the zoom and time-of-day buttons, an agent's peek, toasts, and the hover
     cards of rooms, tables and fuel gauges are the same translucent dark
@@ -919,7 +1106,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
     click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
     a readable zoom and pulses it; choosing it again, or **Enter** a second
-    time, opens it as selecting does. A result Town does not draw, such as
+    time, opens it as selecting does. Town's own places are found too: "post
+    office" (or "pull requests") lists the **Post office**, and choosing it
+    moves the camera there; choosing it again only shows it again. A result Town does not draw, such as
     an agent at a table its room folds away, opens at once and counts as
     off-screen. Under **Town calm motion** or reduced motion the camera jumps
     and nothing pulses. **Escape** (in the box, on a result or on the map),
@@ -1156,7 +1345,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     including shell questions, while skipping stale hosts and shells without
     questions. It stays reachable in the Board menu when the controls need more space.
   - The Board **⋯** menu offers **Surface** (Follow theme, Whiteboard or
-    Blackboard), **Status colours…** and **Help**. Surface and status choices
+    Blackboard), **Status colours…** and **Help** (Board's help entries, each
+    with **Try**). Surface and status choices
     persist in this browser and stay separate from shared card colours;
     **Reset status colours** restores the chosen surface's defaults.
     Following a dark theme, Board takes Town's night: its ground, its agent
@@ -1225,9 +1415,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     device since Board opened; a drawing changed elsewhere since is left
     alone, with a notice. A move, resize or text edit of a drawing someone
     changed elsewhere meanwhile is refused with the same notice and their
-    version stays; typed text reopens on their version, so nothing typed is
-    lost. Drawings are saved with the board on the World
-    service (at most 1,000; a stroke keeps at most 2,000 points, simplified
+    version stays; typed text reopens on their version. If you have already
+    started another text edit, it stays open and the refused drafts reopen in
+    turn when you finish it, so nothing typed is lost. Drawings are saved with
+    the board on the World service (at most 1,000; a stroke keeps at most 2,000 points, simplified
     as it is drawn) and are visual only: an arrow never sends anything to an
     agent. Issues and pull requests are reached through their agent's tab
     card. A phone shows drawings but has no drawing tools; drawings there
@@ -1363,13 +1554,21 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   question, **Mark reviewed** on finished work (it marks the report shown, says
   so if the mark could not be saved, and the item offers **Retry** if the report
   could not be read); a blocked agent has none. Every icon has a label and a
-  tooltip. A message longer than two lines shows **more** on its last line: it,
+  tooltip. When a verified terminal has several questions, **Dismiss all N
+  questions from [asker]** closes its whole open backlog in one step, across
+  pages and runtime restarts, without answering or closing another terminal's
+  questions. Failed saves stay visible for retry; unverified claims are not
+  grouped. Testing only: open `?questionBacklogFixture` (removed immediately)
+  for 20 synthetic Atlas questions and one Beacon question; dismiss Atlas and
+  Beacon stays. The fixture never contacts a runtime; reload to leave it.
+  A message longer than two lines shows **more** on its last line: it,
   or a tap on the text, shows the whole message in place with its links, and
   **less** clips it again. Keyboard focus entering the message reveals its
   links. Hovering the agent's name shows its card with
   the latest message. An answered question folds to one line until the tab
   closes. It shows a page of 30 items; **Show … more** and **Show the … before**
-  turn the page, and every opener turns to its item's page. Town's reception
+  turn the page, and every opener turns to its item's page. Town's post
+  office sign opens it too. Town's reception
   letters, Desk's **Answer** and the **!**/**✓** badge on a Board card open it at
   that item. When Town has saved answers to check, **✉ Outbox** at the foot opens
   Town's Summary there. It replaces Town's Needs you rail.
@@ -1554,8 +1753,8 @@ escaping paths are refused.
 **All** opens first and lists every kind under its heading; then one tab per
 kind: **Runtimes** (this computer's Herdr or herdr-core and each SSH host),
 **Sources** (GitHub, Jira and Usage metrics), **Agents** (World's skill for
-each harness, per host) and **Editors** once one is listed; last, the
-**Vault**. The kind tabs come from the registry's kinds, so a new kind gets
+each harness, per host) and **Editors** once one is listed; last, set apart
+with its key, the **Vault**. The kind tabs come from the registry's kinds, so a new kind gets
 its own tab; a kind with nothing in it has no tab, except Runtimes and
 Agents. Each tab shows how many rows it has and a warning mark when one is
 failing; the tabs stay on one row and scroll sideways on a phone. The screen
@@ -1573,8 +1772,14 @@ host's agent list. To try the screen with dozens of rows, open World with
 sample rows (hosts, trackers and an **Editors** tab) in every state until the
 page reloads. Sample rows have no action and give World nothing.
 
-Each row says what it gives World (terminals, agents, files, pull requests,
-tickets or usage) and its state:
+Each row leads with the product's mark where World has one (Herdr, GitHub,
+each agent) or a plain symbol (tickets, usage), says what it
+gives World (terminals, agents, files, pull requests, tickets or usage) and
+shows its state as a coloured chip; its actions stay on its right, on a phone
+too. A source's settings open under its row from the settings button
+(**Jira settings**). Each kind's own action sits on its heading in **All** and
+at the top of its tab: **Add or edit hosts…** for Runtimes, **Refresh
+Sources** for Sources.
 
 - **Connected**: in use now.
 - **Available**: ready to use; **Connect** switches it on at once.
@@ -1629,8 +1834,8 @@ each source's state, switch it off or configure it under **Settings**.
   `herdr-world agent-checkout --pr`, and to a ticket whose key its branch names
   (for example `abc-12-fix-login` and `ABC-12`). Its Town desk shows the badge
   on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), its Board tab
-  card shows the same badge, and Board's Work lens names it on the card. Town's post office shows every open pull
-  request for you as a parcel, including those whose agent has gone. A link holds only for the agent session and
+  card shows the same badge, and Board's Work lens names it on the card. Town's warehouse shows every open pull
+  request for you as a crate, including those whose agent has gone. A link holds only for the agent session and
   Herdr runtime it was made in.
 - **Your open pull requests** get a card in Work with CI on the head (a dot
   per check), each explicitly attributed rev agent's latest `RESULT #N: …`
@@ -1794,12 +1999,22 @@ when piped, with stable exit codes:
   pane's Herdr if World could not record it; it names the failure and exits 1.
   When no alert is confirmed yet, exit 6 (`not_delivered`) carries the recorded ID;
   `retrying: true` means the service will retry a temporary failure with backoff.
+  At 20 open questions per verified terminal (or the shared unverified
+  allowance), or 500 overall, new asks return `question_cap` (exit 3, HTTP 429)
+  and tell the caller to wait until a question closes. These refusals never
+  alert or chime, including repeated attempts; the CLI sends no fallback alert.
+  The allowance follows the terminal across runtime restarts.
   Closing the ask cancels a pending alert. Duplicates are possible after a lost
   reply or restart. JSON preserves `recorded` and Herdr's `notified` evidence
   (`null` for a repeated cause), including through `--wait`. Another verified agent (never
   the asker) may answer a question that is not marked `--owner-only`.
 - `ask withdraw ID` or `ask withdraw --key CAUSE`: the original verified asker
   withdraws a cleared cause, including when a creation reply lost its ask ID.
+  The same freshly verified connection and stable terminal can withdraw after
+  a runtime restart or session change, even when generation and occupant
+  fingerprint differ. Another terminal or connection cannot. Older records
+  without stable terminal identity retain their original stricter checks;
+  answer delivery and receipt authority still follow the original session.
   Answering or withdrawing removes its question marks. `--key` keeps repeated
   causes to one ask; after withdrawal a recurrence can create a fresh question.
   A waiting CLI returns `withdrawn` when its question was cancelled. Repeating
@@ -2542,13 +2757,20 @@ and herdr-core alike:
   records the actual service address, and the CLI uses that folder's own token.
   `HERDR_WORLD_URL` and `HERDR_WORLD_TOKEN` cannot redirect these edits, and a
   service owning another registry refuses them. A managed service bound to one
-  non-loopback address still needs `--restart` to save and restart; stop a
-  foreground process there before editing.
+  non-loopback address still needs `--restart`: it stops the service, saves
+  offline, then starts it again even if the edit is refused. Stop a foreground
+  process there before editing.
   An unreachable live owner, refused edit or unreadable HTTP reply names the
   target service and gives recovery steps, without an offline retry. Check that
   World's data folder, address and live catalogue before retrying, or stop it
-  before editing offline. With no live owner, edits are saved for the next start;
-  for older services without locks, the installed service's configured address
+  before editing offline. Offline commands serialize the whole read/edit/save,
+  so successful unrelated edits survive concurrent CLI commands. Service startup
+  and first-run discovery share that ownership; a starting or busy owner can
+  refuse an edit without writing. Ownership follows the registry even across
+  data folders, survives process pauses and releases automatically on process exit.
+  Keep the private `connections.json.ownership.sqlite` sidecar in place; never
+  delete or replace it to bypass a busy owner. With no live owner, edits are saved
+  for the next start; for older services without locks, the installed service's configured address
   is still checked. Validation errors exit 2; persistence and service failures exit 1.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.

@@ -10,6 +10,7 @@ import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import { officePresentationKey } from "../officeSelection";
 import type { WorldObject } from "../worldObject";
 import { worldSearchResults, type WorldSearchResult } from "../worldSearch";
+import { townLandmarkKey, townLandmarkResults } from "./townSearch";
 
 /**
  * A search result's Town key: rooms, tables, agents and buildings are keyed
@@ -22,6 +23,18 @@ export function townSearchKey(
   return result.kind === "terminal"
     ? (officePresentationKey(office, result.id) ?? result.id)
     : result.id;
+}
+
+/**
+ * Town's results: its landmarks (the warehouse) and World's nodes, names
+ * before places before task summaries.
+ */
+export function townSearchResults(world: WorldObject, query: string) {
+  // A stable sort keeps landmarks first within a rank.
+  return [
+    ...townLandmarkResults(query),
+    ...worldSearchResults(world, query),
+  ].sort((a, b) => a.rank - b.rank);
 }
 
 /** Where Escape ends Town's search: its results and the map. */
@@ -41,7 +54,7 @@ export function useTownSearch(
 ) {
   const [query, setQuery] = useState("");
   const results = useMemo(
-    () => worldSearchResults(world, query),
+    () => townSearchResults(world, query),
     [query, world],
   );
   const [active, setActive] = useState<{ query: string; id: string } | null>(
@@ -83,10 +96,13 @@ export function useTownSearch(
     [open, keys, chosenKey, chosenAt],
   );
 
-  /** Show a result on the map, or open it when chosen again. True if opened. */
+  /**
+   * Show a result on the map, or open it when chosen again (a landmark is
+   * shown again). True if opened.
+   */
   const choose = (result: WorldSearchResult) => {
     setActive({ query, id: result.id });
-    if (chosen?.id === result.id) {
+    if (chosen?.id === result.id && result.kind !== "landmark") {
       void onSelect(result.nodeId);
       return true;
     }
@@ -170,7 +186,8 @@ export function useTownSearch(
       onOffscreen: setOffscreen,
       onUnmapped: (key: string) => {
         // Nothing to show on the map: open it as selecting does.
-        if (chosen?.key === key) void onSelect(chosen.nodeId);
+        if (chosen?.key === key && !townLandmarkKey(key))
+          void onSelect(chosen.nodeId);
       },
     },
   };

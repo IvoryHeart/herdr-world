@@ -48,6 +48,8 @@ export type DataPaths = {
   agentProfiles: string;
   webPush: string;
   sourceSecrets: string;
+  /** Local listening World reports; previews may explicitly share this folder. */
+  instanceRegistry: string;
   sessionSecret: string;
   /** Ranger's folder. */
   assistant: string;
@@ -68,6 +70,8 @@ export function resolveDataPaths(
   const settings = override("SETTINGS_PATH");
   return {
     root,
+    instanceRegistry:
+      override("INSTANCE_REGISTRY_DIR") ?? join(root, "instances"),
     settings: settings ?? join(root, "settings.json"),
     connections: override("CONNECTIONS_PATH") ?? join(root, "connections.json"),
     board: override("BOARD_PATH") ?? join(root, "boards", "board.json"),

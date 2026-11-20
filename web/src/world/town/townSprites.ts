@@ -71,9 +71,11 @@ export function townCanvas(width: number, height: number) {
 
 /**
  * Add a one-pixel outline by stamping the sprite's silhouette at four offsets
- * beneath it. Pure compositing: no pixel readback from the canvas.
+ * beneath it. Pure compositing: no pixel readback from the canvas. Buildings
+ * (the town center, the post office) outline their painted layer the same
+ * way, so they stand in the agents' and desks' style.
  */
-function outline(canvas: TownCanvas, color = TOWN_OUTLINE) {
+export function townOutline(canvas: TownCanvas, color = TOWN_OUTLINE) {
   const [silhouette, s] = townCanvas(canvas.width, canvas.height);
   s.drawImage(canvas, 0, 0);
   s.globalCompositeOperation = "source-in";
@@ -111,7 +113,7 @@ export function townSprite(
           context.fillRect(cx + x + 1, cy + y + 1, 1, 1);
   };
   draw(rect, disc);
-  return outlineColor ? outline(canvas, outlineColor) : canvas;
+  return outlineColor ? townOutline(canvas, outlineColor) : canvas;
 }
 
 export function townFlip(source: TownCanvas) {

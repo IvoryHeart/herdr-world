@@ -186,6 +186,11 @@ export class WorldAsksStore {
     return this.close("world.ask.dismiss", { id });
   }
 
+  /** One owner action closes the verified terminal's backlog across restarts. */
+  dismissAsker(id: string): Promise<string | null> {
+    return this.close("world.ask.dismiss", { id, all_from_asker: true });
+  }
+
   private async close(method: string, params: Record<string, unknown>) {
     const epoch = this.epoch;
     try {

@@ -49,6 +49,7 @@ const POLL_MS = 20_000;
 const CODE_EXIT: Record<string, number> = {
   usage: WORLD_EXIT.usage,
   refused: WORLD_EXIT.refused,
+  question_cap: WORLD_EXIT.refused,
   not_found: WORLD_EXIT.not_found,
   unavailable: WORLD_EXIT.failure,
   not_delivered: WORLD_EXIT.not_delivered,
@@ -129,7 +130,7 @@ function alertOwner(
   alert: OwnerAlert,
 ): Reply {
   if (reply.ok || reply.recorded === true) return reply;
-  if (reply.code === "usage")
+  if (reply.code === "usage" || reply.code === "question_cap")
     return { ...reply, recorded: false, notified: null };
   const who =
     reply.actor?.label ??
@@ -159,7 +160,7 @@ export type WorldCliTransport = (
 ) => Promise<Reply>;
 
 /** Where the service listens and the CLI token it takes, as the CLI sees them. */
-function serviceEndpoint(context: CliContext) {
+export function serviceEndpoint(context: CliContext) {
   const env = context.runtime.env;
   let base = env.HERDR_WORLD_URL?.replace(/\/+$/, "");
   let token = env.HERDR_WORLD_TOKEN;

@@ -40,6 +40,7 @@ import {
 } from "./command";
 import {
   connectionRegistryPath,
+  changeConnectionServiceState,
   type ListenerProbe,
   probeUrl,
   probeListener,
@@ -111,7 +112,7 @@ it admits these changes live: auto-connect profiles connect, removed profiles
 disconnect, and the default changes without restarting other connections or
 browser sessions. On loopback, --restart remains available but is no longer needed
 for the installed service; omit it for a development or preview World.
-A service bound to one non-loopback address needs --restart to save and restart;
+A service bound to one non-loopback address needs --restart to stop, save and start;
 stop a foreground process on that address before editing.
 HERDR_WORLD_DATA_DIR selects the World's data folder. Its live instance lock
 records the service address; edits go there with that folder's own CLI token.
@@ -119,8 +120,12 @@ HERDR_WORLD_URL and HERDR_WORLD_TOKEN cannot redirect connection edits, and a
 service owning a different registry refuses them. If the owner cannot be reached
 or refuses, no offline write is attempted: check that World's address, data
 folder and live catalogue before retrying, or stop it before editing offline.
-With no live owner, edits are saved for the next start. Older services without
-an instance lock are checked at the installed service's configured address.
+With no live owner, edits hold registry ownership from read through save. Concurrent
+successful edits accumulate; startup and discovery use the same ownership. A busy
+or uncertain owner refuses the edit without writing. Process exit releases ownership;
+never delete or replace connections.json.ownership.sqlite to force an edit.
+Older services without an instance lock are checked at the installed service's
+configured address.
 SSH tests need a running remote Herdr and non-interactive SSH authentication.
 
 Testing only: connections add runtime-fixture.example --preview-empty saves an
@@ -436,205 +441,244 @@ export function createConnectionsCommand(
             );
             return EXIT_FAILURE;
           }
+          // A running service retains a catalogue snapshot. Stop it before
+          // taking offline ownership, then start it after releasing ownership.
+          if (changeConnectionServiceState(context, "stop") !== EXIT_OK)
+            return EXIT_FAILURE;
           restartAfterSave = true;
         }
       }
-      const registry = store.load();
-      // Copy: the explicit default is listed but must never reach a save.
-      const profiles: ManagedConnectionProfile[] = registry
-        ? [...registry.profiles]
-        : [implicitDefault(context, setup)];
-      const defaultId = explicitOverride(setup)
-        ? STARTUP_DEFAULT_CONNECTION_ID
-        : (registry?.default_connection_id ?? STARTUP_DEFAULT_CONNECTION_ID);
-      if (registry && explicitOverride(setup))
-        profiles.unshift(implicitDefault(context, setup));
+      const fromSnapshot = async () => {
+        if (edit) {
+          // Startup may have won since the first owner lookup. Recheck only
+          // after ownership, before reading any snapshot. Never switch to an
+          // offline write after a live request, or guess past a starting owner.
+          const target = connectionServiceTarget(context, setup);
+          if (
+            target.running ||
+            (target.managed && (await probe(target.access)))
+          )
+            throw new Error(
+              "World started or is still serving; no offline edit was saved. Retry against its live catalogue or stop it first",
+            );
+        }
+        const registry = store.load();
+        // Copy: the explicit default is listed but must never reach a save.
+        const profiles: ManagedConnectionProfile[] = registry
+          ? [...registry.profiles]
+          : [implicitDefault(context, setup)];
+        const defaultId = explicitOverride(setup)
+          ? STARTUP_DEFAULT_CONNECTION_ID
+          : (registry?.default_connection_id ?? STARTUP_DEFAULT_CONNECTION_ID);
+        if (registry && explicitOverride(setup))
+          profiles.unshift(implicitDefault(context, setup));
 
-      if (action === "list") {
-        const { values } = parseCommandArgs(rest, {
-          json: { type: "boolean" },
-        });
-        if (values.json) {
-          printJson(context, {
-            path: store.path,
-            default_connection_id: defaultId,
-            hosts: offlineHosts(store, profiles).list(),
-            profiles: profiles.map((profile) => ({
-              ...profile,
-              default: profile.id === defaultId,
-              saved: profile.id !== STARTUP_DEFAULT_CONNECTION_ID,
-            })),
+        if (action === "list") {
+          const { values } = parseCommandArgs(rest, {
+            json: { type: "boolean" },
           });
+          if (values.json) {
+            printJson(context, {
+              path: store.path,
+              default_connection_id: defaultId,
+              hosts: offlineHosts(store, profiles).list(),
+              profiles: profiles.map((profile) => ({
+                ...profile,
+                default: profile.id === defaultId,
+                saved: profile.id !== STARTUP_DEFAULT_CONNECTION_ID,
+              })),
+            });
+            return EXIT_OK;
+          }
+          context.log(displayPath(store.path, context.runtime));
+          if (!registry)
+            context.log(
+              "No saved profiles; Herdr World uses the default local connection.",
+            );
+          printHosts(context, offlineHosts(store, profiles).list());
           return EXIT_OK;
         }
-        context.log(displayPath(store.path, context.runtime));
-        if (!registry)
-          context.log(
-            "No saved profiles; Herdr World uses the default local connection.",
+
+        if (action === "test") {
+          const { values, positionals } = parseCommandArgs(
+            rest,
+            { json: { type: "boolean" } },
+            Number.POSITIVE_INFINITY,
           );
-        printHosts(context, offlineHosts(store, profiles).list());
-        return EXIT_OK;
-      }
-
-      if (action === "test") {
-        const { values, positionals } = parseCommandArgs(
-          rest,
-          { json: { type: "boolean" } },
-          Number.POSITIVE_INFINITY,
-        );
-        const selected = positionals.length
-          ? positionals.map((id) => {
-              const profile = profiles.find((entry) => entry.id === id);
-              if (!profile) throw new UsageError(`unknown connection: ${id}`);
-              return profile;
-            })
-          : profiles;
-        const results = await Promise.all(
-          selected.map(async (profile) => {
-            try {
-              if (isCoreProfile(profile))
-                throw new Error(
-                  "herdr-core connections are tested from the Connections page",
-                );
-              const result = await test(profile);
-              return {
-                id: profile.id,
-                ok: true,
-                version: result.version,
-                protocol: result.protocol,
-              };
-            } catch (error) {
-              return {
-                id: profile.id,
-                ok: false,
-                error: (error as Error).message,
-              };
+          const selected = positionals.length
+            ? positionals.map((id) => {
+                const profile = profiles.find((entry) => entry.id === id);
+                if (!profile) throw new UsageError(`unknown connection: ${id}`);
+                return profile;
+              })
+            : profiles;
+          const results = await Promise.all(
+            selected.map(async (profile) => {
+              try {
+                if (isCoreProfile(profile))
+                  throw new Error(
+                    "herdr-core connections are tested from the Connections page",
+                  );
+                const result = await test(profile);
+                return {
+                  id: profile.id,
+                  ok: true,
+                  version: result.version,
+                  protocol: result.protocol,
+                };
+              } catch (error) {
+                return {
+                  id: profile.id,
+                  ok: false,
+                  error: (error as Error).message,
+                };
+              }
+            }),
+          );
+          if (values.json) printJson(context, { results });
+          else
+            for (const result of results) {
+              context.log(
+                result.ok
+                  ? `ok    ${result.id}  Herdr ${result.version ?? "(unknown version)"}, protocol ${result.protocol}`
+                  : `fail  ${result.id}  ${result.error}`,
+              );
             }
-          }),
-        );
-        if (values.json) printJson(context, { results });
-        else
-          for (const result of results) {
-            context.log(
-              result.ok
-                ? `ok    ${result.id}  Herdr ${result.version ?? "(unknown version)"}, protocol ${result.protocol}`
-                : `fail  ${result.id}  ${result.error}`,
-            );
-          }
-        return results.every((result) => result.ok) ? EXIT_OK : EXIT_FAILURE;
-      }
-
-      if (action === "add" || action === "remove" || action === "set-default") {
-        const { id, values: flagValues } = edit!;
-        let next: PersistedConnectionRegistry | null;
-        if (action === "add") {
-          const profile = edit!.profile!;
-          if (profiles.some((entry) => entry.id === id))
-            throw new UsageError(`connection already exists: ${id}`);
-          if (registry) {
-            next = {
-              ...registry,
-              version: CONNECTION_PROFILE_FILE_VERSION,
-              profiles: [...registry.profiles, profile],
-            };
-          } else if (explicitOverride(setup)) {
-            if (isCoreProfile(profile))
-              throw new UsageError(
-                "add a Herdr connection before a herdr-core one",
-              );
-            next = {
-              version: CONNECTION_PROFILE_FILE_VERSION,
-              default_connection_id: profile.id,
-              profiles: [profile],
-            };
-          } else if (
-            isCoreProfile(profile) &&
-            !(await herdrInstalled(implicitDefault(context, setup)))
-          ) {
-            // Like the web UI: no Herdr TUI, so no Local profile; core is
-            // the default (#935).
-            next = {
-              version: CONNECTION_PROFILE_FILE_VERSION,
-              default_connection_id: profile.id,
-              profiles: [profile],
-            };
-          } else {
-            // Like the web UI, keep the implicit local server as a saved profile.
-            const implicit = implicitDefault(context, setup);
-            const seed: ConnectionProfile = {
-              id: id === "local" ? "localhost" : "local",
-              label: "Local",
-              type: "local",
-              control_socket_path: implicit.control_socket_path,
-              client_socket_path: implicit.client_socket_path,
-              auto_connect: true,
-            };
-            next = {
-              version: CONNECTION_PROFILE_FILE_VERSION,
-              default_connection_id: seed.id,
-              profiles: [seed, profile],
-            };
-          }
-          if (flagValues.default === true) {
-            if (explicitOverride(setup))
-              throw new UsageError(
-                "explicit Herdr settings in the service config remain the default connection",
-              );
-            next.default_connection_id = profile.id;
-          }
-        } else {
-          if (
-            !registry ||
-            id === STARTUP_DEFAULT_CONNECTION_ID ||
-            !registry.profiles.some((entry) => entry.id === id)
-          )
-            throw new UsageError(`no saved connection: ${id}`);
-          if (action === "set-default") {
-            if (explicitOverride(setup))
-              throw new UsageError(
-                "explicit Herdr settings in the service config remain the default connection",
-              );
-            next = {
-              ...registry,
-              version: CONNECTION_PROFILE_FILE_VERSION,
-              default_connection_id: id,
-            };
-          } else {
-            if (
-              registry.default_connection_id === id &&
-              !explicitOverride(setup)
-            )
-              throw new UsageError(
-                "cannot remove the default connection; choose another default first",
-              );
-            const remaining = registry.profiles.filter(
-              (entry) => entry.id !== id,
-            );
-            // Without explicit Herdr settings the last profile is always the
-            // default, so only an explicit override can clear the registry.
-            next = remaining.length
-              ? {
-                  ...registry,
-                  version: CONNECTION_PROFILE_FILE_VERSION,
-                  profiles: remaining,
-                  ...(registry.hosts
-                    ? { hosts: forgetHostRuntime(registry.hosts, id) }
-                    : {}),
-                  default_connection_id:
-                    registry.default_connection_id === id
-                      ? remaining[0].id
-                      : registry.default_connection_id,
-                }
-              : null;
-          }
+          return results.every((result) => result.ok) ? EXIT_OK : EXIT_FAILURE;
         }
 
-        if (next) await store.save(next);
-        else await store.clear();
-        return finishEdit(context, action, id, restartAfterSave);
-      }
+        if (
+          action === "add" ||
+          action === "remove" ||
+          action === "set-default"
+        ) {
+          const { id, values: flagValues } = edit!;
+          let next: PersistedConnectionRegistry | null;
+          if (action === "add") {
+            const profile = edit!.profile!;
+            if (profiles.some((entry) => entry.id === id))
+              throw new UsageError(`connection already exists: ${id}`);
+            if (registry) {
+              next = {
+                ...registry,
+                version: CONNECTION_PROFILE_FILE_VERSION,
+                profiles: [...registry.profiles, profile],
+              };
+            } else if (explicitOverride(setup)) {
+              if (isCoreProfile(profile))
+                throw new UsageError(
+                  "add a Herdr connection before a herdr-core one",
+                );
+              next = {
+                version: CONNECTION_PROFILE_FILE_VERSION,
+                default_connection_id: profile.id,
+                profiles: [profile],
+              };
+            } else if (
+              isCoreProfile(profile) &&
+              !(await herdrInstalled(implicitDefault(context, setup)))
+            ) {
+              // Like the web UI: no Herdr TUI, so no Local profile; core is
+              // the default (#935).
+              next = {
+                version: CONNECTION_PROFILE_FILE_VERSION,
+                default_connection_id: profile.id,
+                profiles: [profile],
+              };
+            } else {
+              // Like the web UI, keep the implicit local server as a saved profile.
+              const implicit = implicitDefault(context, setup);
+              const seed: ConnectionProfile = {
+                id: id === "local" ? "localhost" : "local",
+                label: "Local",
+                type: "local",
+                control_socket_path: implicit.control_socket_path,
+                client_socket_path: implicit.client_socket_path,
+                auto_connect: true,
+              };
+              next = {
+                version: CONNECTION_PROFILE_FILE_VERSION,
+                default_connection_id: seed.id,
+                profiles: [seed, profile],
+              };
+            }
+            if (flagValues.default === true) {
+              if (explicitOverride(setup))
+                throw new UsageError(
+                  "explicit Herdr settings in the service config remain the default connection",
+                );
+              next.default_connection_id = profile.id;
+            }
+          } else {
+            if (
+              !registry ||
+              id === STARTUP_DEFAULT_CONNECTION_ID ||
+              !registry.profiles.some((entry) => entry.id === id)
+            )
+              throw new UsageError(`no saved connection: ${id}`);
+            if (action === "set-default") {
+              if (explicitOverride(setup))
+                throw new UsageError(
+                  "explicit Herdr settings in the service config remain the default connection",
+                );
+              next = {
+                ...registry,
+                version: CONNECTION_PROFILE_FILE_VERSION,
+                default_connection_id: id,
+              };
+            } else {
+              if (
+                registry.default_connection_id === id &&
+                !explicitOverride(setup)
+              )
+                throw new UsageError(
+                  "cannot remove the default connection; choose another default first",
+                );
+              const remaining = registry.profiles.filter(
+                (entry) => entry.id !== id,
+              );
+              // Without explicit Herdr settings the last profile is always the
+              // default, so only an explicit override can clear the registry.
+              next = remaining.length
+                ? {
+                    ...registry,
+                    version: CONNECTION_PROFILE_FILE_VERSION,
+                    profiles: remaining,
+                    ...(registry.hosts
+                      ? { hosts: forgetHostRuntime(registry.hosts, id) }
+                      : {}),
+                    default_connection_id:
+                      registry.default_connection_id === id
+                        ? remaining[0].id
+                        : registry.default_connection_id,
+                  }
+                : null;
+            }
+          }
 
-      throw new UsageError(`unknown connections action: ${action}`);
+          if (next) await store.save(next);
+          else await store.clear();
+          return EXIT_OK;
+        }
+
+        throw new UsageError(`unknown connections action: ${action}`);
+      };
+      if (!edit) return fromSnapshot();
+      let startCode = EXIT_OK;
+      let code: number;
+      try {
+        code = await store.withOwnership(fromSnapshot);
+      } finally {
+        // Even a validation/persistence refusal must restart a service that this
+        // command stopped. Never start it while our registry lock is held.
+        if (restartAfterSave)
+          startCode = changeConnectionServiceState(context, "start");
+      }
+      if (code !== EXIT_OK) return code;
+      finishEdit(context, action, edit.id, false);
+      if (restartAfterSave && startCode === EXIT_OK)
+        context.log("Restarted the service.");
+      return startCode;
     },
   };
 }

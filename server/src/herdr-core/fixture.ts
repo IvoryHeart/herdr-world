@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeCore } from "./testing/fake-core";
 import { checkCoreOnlyFirstRun } from "./first-run-fixture";
+import { headlessFixture } from "./headless-fixture";
 
 /** The connection the fixture adds; its runtime kind is herdr-core. */
 export const CORE_FIXTURE_CONNECTION_ID = "core-fixture";
@@ -242,7 +243,8 @@ export function createCoreFixture(
   let ticker: ReturnType<typeof setInterval> | null = null;
   let ticks = 0;
   let paneStep = 0;
-  let scenario: "default" | "alphabet" | "first-run" = "default";
+  let scenario: "default" | "alphabet" | "first-run" | "headless" = "default";
+  let headless: Awaited<ReturnType<typeof headlessFixture>> | null = null;
   let firstRunDefault: string | null = null;
   const status = (): CoreFixtureStatus => {
     const size = FIXTURE_PANE_SIZES[paneStep];
@@ -307,7 +309,12 @@ export function createCoreFixture(
       };
     },
     async start(value: unknown = "default"): Promise<CoreFixtureStatus> {
-      if (value !== "default" && value !== "alphabet" && value !== "first-run")
+      if (
+        value !== "default" &&
+        value !== "alphabet" &&
+        value !== "first-run" &&
+        value !== "headless"
+      )
         throw new Error("unknown core fixture scenario");
       const service = profiles();
       const existing = fixtureProfile(service);
@@ -373,6 +380,8 @@ export function createCoreFixture(
         paneStep = 0;
         scenario = value;
         agents = populate(fake, repo, root, scenario === "alphabet");
+        if (scenario === "headless")
+          headless = await headlessFixture(fake, root, agents);
         scout = agents.scout;
         fake.onTyped = () => {
           if (fake && agents)
@@ -486,6 +495,8 @@ export function createCoreFixture(
     },
     async remove(): Promise<CoreFixtureStatus> {
       stop();
+      await headless?.stop();
+      headless = null;
       const service = profiles();
       const existing = fixtureProfile(service);
       const owner = ownership(existing);
@@ -505,6 +516,7 @@ export function createCoreFixture(
     },
     dispose(): void {
       stop();
+      void headless?.stop();
       if (root) rmSync(root, { recursive: true, force: true });
     },
   };
