@@ -19,7 +19,8 @@ type Profiles = Pick<
   // biome-ignore lint/suspicious/noExplicitAny: any runtime type lists alike.
   ConnectionProfileService<any>,
   "list" | "coreList"
->;
+> &
+  Partial<Pick<ConnectionProfileService, "hosts">>;
 
 /** The registry's inputs from the service's existing owners. */
 export function serviceIntegrationsInputs(args: {
@@ -32,6 +33,9 @@ export function serviceIntegrationsInputs(args: {
   now: () => number;
 }): IntegrationsInputs {
   return {
+    ...(args.profiles.hosts
+      ? { hosts: () => args.profiles.hosts!.integrations() }
+      : {}),
     runtimes: () => [
       ...args.profiles.list().map(
         (item): RuntimeInput => ({

@@ -4,6 +4,7 @@ import type {
   ReadyRuntimeLease,
 } from "../connections/manager";
 import type { ConnectionId, ConnectionStatus } from "../connections/types";
+import type { WorldHost } from "../../../shared/hosts";
 
 /** Which runtime a World connection observes. Absent means Herdr (TUI). */
 export type WorldRuntimeKind = "herdr" | "herdr-core";
@@ -34,10 +35,11 @@ type Observed = ConnectionRuntime & { operations: RuntimeReader };
 export function worldRuntimeRegistry<
   Tui extends Observed,
   Core extends Observed,
->(tui: Manager<Tui>, core: Manager<Core>) {
+>(tui: Manager<Tui>, core: Manager<Core>, hosts?: () => WorldHost[]) {
   const owner = (id: ConnectionId) =>
     tui.has(id) ? tui : core.has(id) ? core : null;
   return {
+    ...(hosts ? { hosts } : {}),
     list(): WorldRuntimeStatus[] {
       return [
         ...tui.list(),

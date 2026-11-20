@@ -17,6 +17,14 @@ import {
   supportsLiveConnectionChanges,
 } from "./connection-service";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
+import type { DiscoverHost } from "../connections/host-discovery";
+import { forgetHostRuntime } from "../connections/hosts";
+import {
+  hostArgumentIsLegacy,
+  offlineHosts,
+  printHosts,
+  runHostConnectionCommand,
+} from "./host-connections";
 import { HerdrClient } from "../bridge/herdr-client";
 import { detectHerdrSetup } from "../herdr/bootstrap";
 import {
@@ -48,13 +56,17 @@ export interface ConnectionsDependencies {
   apply?: typeof applyLiveConnectionChange;
   /** Whether this computer has the Herdr TUI; `herdr status`'s detection. */
   herdrInstalled?: (implicit: StartupLocalProfile) => Promise<boolean>;
+  discoverHost?: DiscoverHost;
 }
 
 function connectionsHelp(): string {
-  return `List, test and edit saved Herdr connection profiles.
+  return `List hosts and discover their installed runtimes.
 
 Usage:
   herdr-world connections list [--json]
+  herdr-world connections add <ssh destination> [--label <text>] [--windows] [--json]
+  herdr-world connections add --local [--json]
+  herdr-world connections discover <host id> [--json]
   herdr-world connections test [<id>...] [--json]
   herdr-world connections add <id> --ssh <destination> [ssh options] [common options]
   herdr-world connections add <id> --control-socket <path> --client-socket <path>
@@ -64,7 +76,16 @@ Usage:
   herdr-world connections remove <id> [--restart]
   herdr-world connections set-default <id> [--restart]
 
-Common add options:
+Adding a host needs no runtime choice. World finds every registered runtime
+(herdr-core and Herdr TUI today), connects each and reports its rooms. Discovery
+repeats when a host connects or with discover. With none installed, the saved
+host lists installation choices; installation is always your action. Once any
+runtime is found, additional runtime choices belong to that host in Integrations.
+The host catalogue groups this computer and each exact SSH destination; runtime
+connection IDs and generations remain separate. Offline discovery saves for the
+next start and cannot connect rooms until World runs.
+
+Legacy runtime profile options (retained for existing scripts):
   --label <text>     display name (default: the id)
   --auto-connect     connect at startup and at once on a running World
   --default          make it the default connection
@@ -101,6 +122,9 @@ folder and live catalogue before retrying, or stop it before editing offline.
 With no live owner, edits are saved for the next start. Older services without
 an instance lock are checked at the installed service's configured address.
 SSH tests need a running remote Herdr and non-interactive SSH authentication.
+
+Testing only: connections add runtime-fixture.example --preview-empty saves an
+empty preview host, with no SSH or installation. Remove it with its printed host ID.
 `;
 }
 
@@ -143,22 +167,6 @@ function implicitDefault(
     client_socket_path: sockets.clientSocketPath,
     auto_connect: true,
   };
-}
-
-function describe(profile: ManagedConnectionProfile): string {
-  if (isCoreProfile(profile)) {
-    const where =
-      profile.type === "ssh"
-        ? ` ${profile.ssh_destination}${profile.remote_platform === "windows" ? " (Windows)" : ""}`
-        : "";
-    return `${profile.type === "ssh" ? "ssh  " : "local"}  herdr-core${where} (session ${profile.core_session})`;
-  }
-  if (profile.type === "local") return `local  ${profile.control_socket_path}`;
-  const remote =
-    profile.remote_platform === "windows"
-      ? ` (Windows${profile.remote_session ? `, session ${profile.remote_session}` : ""})`
-      : "";
-  return `ssh    ${profile.ssh_destination}${remote}`;
 }
 
 function finishEdit(
@@ -271,8 +279,8 @@ export function createConnectionsCommand(
       ).state !== "missing");
   return {
     name: "connections",
-    summary: "list, test and edit Herdr connection profiles",
-    actions: ["list", "test", "add", "remove", "set-default"],
+    summary: "list hosts, discover runtimes and edit connections",
+    actions: ["list", "test", "add", "discover", "remove", "set-default"],
     flags: [
       "--json",
       "--ssh",
@@ -287,19 +295,68 @@ export function createConnectionsCommand(
       "--windows",
       "--herdr-path",
       "--session",
+      "--local",
     ],
     help: connectionsHelp,
     async run(args, context) {
-      const action = args[0];
-      if (wantsHelp(args) || action === undefined) {
+      const implicitList = args[0] === undefined || args[0].startsWith("--");
+      const action = implicitList ? "list" : args[0];
+      if (wantsHelp(args)) {
         context.log(connectionsHelp());
         return EXIT_OK;
       }
-      const rest = args.slice(1);
+      const rest = implicitList ? args : args.slice(1);
       const setup = readServiceSetup(context.runtime);
       const store = new ConnectionProfileStore({
         path: connectionRegistryPath(context.runtime, setup.env),
       });
+      if (
+        action === "discover" ||
+        (action === "remove" && rest[0]?.startsWith("host-")) ||
+        (action === "add" && !hostArgumentIsLegacy(rest))
+      ) {
+        return runHostConnectionCommand({
+          action,
+          rest,
+          context,
+          setup,
+          store,
+          initial: explicitOverride(setup)
+            ? []
+            : [implicitDefault(context, setup)],
+          probe,
+          apply: dependencies.apply,
+          discover: dependencies.discoverHost,
+        });
+      }
+      if (action === "list") {
+        const target = connectionServiceTarget(context, setup);
+        const serving =
+          target.running || (target.managed && (await probe(target.access)));
+        if (serving && supportsLiveConnectionChanges(target)) {
+          const { values } = parseCommandArgs(rest, {
+            json: { type: "boolean" },
+          });
+          const reply = await (dependencies.apply ?? applyLiveConnectionChange)(
+            context,
+            target,
+            "list",
+            { registry_path: store.path },
+          );
+          if (!reply.ok) {
+            context.error(reply.error ?? "host catalogue unavailable");
+            return EXIT_FAILURE;
+          }
+          if (values.json) printJson(context, reply.result);
+          else
+            printHosts(
+              context,
+              (reply.result as { hosts: Parameters<typeof printHosts>[1] })
+                .hosts,
+            );
+          return EXIT_OK;
+        }
+      }
       let edit:
         | {
             id: string;
@@ -401,6 +458,7 @@ export function createConnectionsCommand(
           printJson(context, {
             path: store.path,
             default_connection_id: defaultId,
+            hosts: offlineHosts(store, profiles).list(),
             profiles: profiles.map((profile) => ({
               ...profile,
               default: profile.id === defaultId,
@@ -414,19 +472,7 @@ export function createConnectionsCommand(
           context.log(
             "No saved profiles; Herdr World uses the default local connection.",
           );
-        const width = Math.max(...profiles.map((profile) => profile.id.length));
-        for (const profile of profiles) {
-          const flags = [
-            profile.id === defaultId ? "default" : "",
-            profile.auto_connect ? "auto-connect" : "",
-            profile.id === STARTUP_DEFAULT_CONNECTION_ID
-              ? "from service config"
-              : "",
-          ].filter(Boolean);
-          context.log(
-            `${profile.id === defaultId ? "*" : " "} ${profile.id.padEnd(width)}  ${describe(profile)}  ${profile.label}${flags.length ? `  [${flags.join(", ")}]` : ""}`,
-          );
-        }
+        printHosts(context, offlineHosts(store, profiles).list());
         return EXIT_OK;
       }
 
@@ -571,6 +617,9 @@ export function createConnectionsCommand(
                   ...registry,
                   version: CONNECTION_PROFILE_FILE_VERSION,
                   profiles: remaining,
+                  ...(registry.hosts
+                    ? { hosts: forgetHostRuntime(registry.hosts, id) }
+                    : {}),
                   default_connection_id:
                     registry.default_connection_id === id
                       ? remaining[0].id

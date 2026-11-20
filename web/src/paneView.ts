@@ -96,7 +96,7 @@ export function togglePaneView(connectionId: string | null, paneId: string) {
   );
 }
 
-function subscribe(listener: () => void): () => void {
+export function subscribePaneView(listener: () => void): () => void {
   listeners.add(listener);
   // Another window's choice shows here too.
   const unsubscribe = subscribeLocalStorage((key) => {
@@ -116,9 +116,11 @@ export function usePaneView(
   connectionId: string | null,
   paneId: string | null | undefined,
 ): PaneView {
-  return useSyncExternalStore(subscribe, () => paneView(connectionId, paneId));
+  return useSyncExternalStore(subscribePaneView, () =>
+    paneView(connectionId, paneId),
+  );
 }
 
 export function useDefaultPaneView(): PaneView {
-  return useSyncExternalStore(subscribe, defaultPaneView);
+  return useSyncExternalStore(subscribePaneView, defaultPaneView);
 }

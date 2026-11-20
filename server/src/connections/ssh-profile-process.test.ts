@@ -3,6 +3,7 @@ import { afterEach, expect, test } from "bun:test";
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -274,7 +275,7 @@ function processIsAlive(pid: number): boolean {
 
 test("production bridge supervises two independent SSH profile tunnels", async () => {
   if (process.platform === "win32") return;
-  const root = join(tmpdir(), `herdr-gui-ssh-process-${crypto.randomUUID()}`);
+  const root = mkdtempSync(join(tmpdir(), "ssh-"));
   roots.push(root);
   const bin = join(root, "bin");
   const state = join(root, "state");

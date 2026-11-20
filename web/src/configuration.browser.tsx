@@ -48,6 +48,51 @@ const click = (label: string) => {
   element.focus();
   flushSync(() => element.click());
 };
+// Settings: its category tabs, a choice row, and its pages.
+const tab = (label: string) => {
+  const found = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(
+      '.settings-home-tabs [role="tab"]',
+    ),
+  ).find((element) => element.firstChild?.textContent === label);
+  if (!found) throw new Error(`Missing Settings tab: ${label}`);
+  return found;
+};
+const choose = (setting: string, option: string) => {
+  const found = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(
+      `[role="group"][aria-label="${setting}"] button`,
+    ),
+  ).find((element) => element.textContent === option);
+  if (!found) throw new Error(`Missing ${setting} option: ${option}`);
+  flushSync(() => found.click());
+};
+const focusable = (root: Element) =>
+  Array.from(
+    root.querySelectorAll<HTMLElement>(
+      "button:not(:disabled):not([tabindex='-1']), input:not(:disabled), select:not(:disabled), a[href]",
+    ),
+  ).filter((element) => element.getClientRects().length > 0);
+const settingsPageLoaded = () =>
+  !!document.querySelector(".settings-page") &&
+  !document.querySelector(".settings-page > .settings-home-empty");
+/** Opens a page of Settings from its list, at All when its tab is not open. */
+const openPage = async (title: string) => {
+  if (document.querySelector(".settings-page")) click("Back to Settings");
+  if (!document.querySelector(`.settings-home [aria-label="Open ${title}"]`))
+    flushSync(() => tab("All").click());
+  click(`Open ${title}`);
+  await waitFor(settingsPageLoaded);
+};
+/** Leaves a page for the list, so the page's settings unmount. */
+const backToList = () => click("Back to Settings");
+const closeSettings = () => click("Close Settings");
+const openSettings = async () => {
+  click("Menu");
+  click("Settings");
+  await waitFor(() => !!document.querySelector(".settings-home"));
+  return document.querySelector<HTMLElement>(".settings-home")!;
+};
 const configurationTest = { click, loadingRace: false };
 Object.assign(window, { configurationTest });
 const fetchResult = window.fetch.bind(window);
@@ -453,10 +498,6 @@ function Harness() {
   document.documentElement.style.setProperty(
     "--config-sheet-max-height",
     `min(calc(78dvh / ${scale / 100}), calc(640px / ${scale / 100}))`,
-  );
-  document.documentElement.style.setProperty(
-    "--config-sheet-expanded-max-height",
-    `calc(90dvh / ${scale / 100})`,
   );
   return (
     <OperationalContext.Provider value={worldViewContext}>
@@ -874,43 +915,26 @@ async function run() {
   flushSync(render);
   click("Menu");
   await settle();
-  const originalOpen = window.open;
-  const openedLinks: Array<
-    [string | URL | undefined, string | undefined, string | undefined]
-  > = [];
-  window.open = (url, target, features) => {
-    openedLinks.push([url, target, features]);
-    return null;
-  };
-  try {
-    for (const [label, url] of [
-      ["Tutorial", "https://herdr.world/tutorial/"],
-      [
-        "Features and shortcuts",
-        "https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md",
-      ],
-      [
-        "Troubleshooting",
-        "https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#troubleshooting",
-      ],
-      ["Report an issue", "https://github.com/IvoryHeart/herdr-world/issues"],
-    ]) {
-      click(label!);
-      check(
-        !document.getElementById("herdr-world-config-menu"),
-        `${label} left the menu open`,
-      );
-      check(
-        JSON.stringify(openedLinks[openedLinks.length - 1]) ===
-          JSON.stringify([url, "_blank", "noopener,noreferrer"]),
-        `${label} opened an incorrect or unsafe destination`,
-      );
-      click("Menu");
-      await settle();
-    }
-  } finally {
-    window.open = originalOpen;
-  }
+  // The Menu holds the few things people do every day; Settings holds the rest.
+  for (const label of ["Settings", "Find or act", "Zen mode", "Help"])
+    check(
+      (() => {
+        try {
+          return !!button(label);
+        } catch {
+          return false;
+        }
+      })(),
+      `the Menu has no ${label} row`,
+    );
+  // Help's own description names the tutorial; no row is titled with it.
+  for (const label of ["Configuration", "Reload page", "Tutorial"])
+    check(
+      !Array.from(
+        document.querySelectorAll("#herdr-world-config-menu strong"),
+      ).some((element) => element.textContent === label),
+      `the Menu still lists ${label}`,
+    );
   check(
     !Array.from(document.querySelectorAll("button")).some((element) =>
       element.textContent?.includes("Log out"),
@@ -960,138 +984,47 @@ async function run() {
       document.documentElement.dataset.theme = theme;
       const menu = document.querySelector<HTMLElement>(".config-dropdown")!;
       const handle = menu.querySelector(".mobile-sheet-handle")!;
+      const content = menu.querySelector(".config-dropdown-content")!;
       await Promise.all(
         menu
           .getAnimations({ subtree: true })
           .map((animation) => animation.finished.catch(() => {})),
       );
-      const compactRect = menu.getBoundingClientRect();
-      for (const label of [
-        "Configuration",
-        "Changelog",
-        "Reload page",
-        "Check for updates",
-        "Connection details",
-        "Log out",
-      ]) {
-        const original = button(label);
-        const rect = original.getBoundingClientRect();
+      const rect = menu.getBoundingClientRect();
+      for (const label of ["Settings", "Find or act", "Help", "Log out"]) {
+        const row = button(label);
         check(
-          getComputedStyle(original).visibility === "visible" &&
-            (rect.bottom <= compactRect.bottom ||
-              menu.querySelector(".config-dropdown-content")!.scrollHeight >
-                menu.querySelector(".config-dropdown-content")!.clientHeight),
-          `default menu hides original action: ${label}`,
+          getComputedStyle(row).visibility === "visible" &&
+            (row.getBoundingClientRect().bottom <= rect.bottom ||
+              content.scrollHeight > content.clientHeight),
+          `${theme}: the Menu hides ${label}`,
         );
-      }
-      const moreButton = menu.querySelector(".mobile-sheet-more button")!;
-      check(
-        getComputedStyle(moreButton).visibility === "hidden",
-        "compact menu did not hide quick settings",
-      );
-      await swipe(handle, 0, -15);
-      check(
-        !menu.classList.contains("is-expanded"),
-        "short drag expanded menu",
-      );
-      await swipe(handle, 60, -10);
-      check(
-        !menu.classList.contains("is-expanded"),
-        "horizontal drag expanded menu",
-      );
-      await swipe(handle, 0, -60, true);
-      check(
-        !menu.classList.contains("is-expanded"),
-        `${theme}: accidental menu expansion`,
-      );
-      check(
-        Math.abs(menu.getBoundingClientRect().height - compactRect.height) < 1,
-        `cancelled expansion did not spring back: ${compactRect.height} -> ${menu.getBoundingClientRect().height}`,
-      );
-      const expandingFrames = await swipe(button("Configuration"), 0, -60);
-      check(
-        expandingFrames.some((frame) => frame.top < compactRect.top) &&
-          Math.abs(
-            compactRect.top -
-              expandingFrames[expandingFrames.length - 1].top -
-              Math.min(
-                60,
-                menu.getBoundingClientRect().height - compactRect.height,
-              ),
-          ) < 4,
-        `${theme}: menu expansion did not follow the finger`,
-      );
-      check(
-        menu.classList.contains("is-expanded") &&
-          menu.getBoundingClientRect().height > compactRect.height &&
-          getComputedStyle(moreButton).visibility === "visible" &&
-          getComputedStyle(menu.querySelector(".config-item-copy span")!)
-            .display === "none",
-        `${theme}: expansion must reveal buttons, not descriptions`,
-      );
-      const content = menu.querySelector(".config-dropdown-content")!;
-      if (content.scrollHeight > content.clientHeight) {
-        content.scrollTop = content.scrollHeight;
-        const scrollTop = content.scrollTop;
-        await swipe(handle, 0, -60, true);
-        check(
-          Math.abs(content.scrollTop - scrollTop) < 1,
-          "measuring sheet heights discarded the scroll position",
-        );
-        content.scrollTop = 0;
       }
       await swipe(handle, 0, -60);
       check(
-        menu.classList.contains("is-expanded"),
-        "swipe generated a collapsing click",
+        menu.isConnected &&
+          Math.abs(menu.getBoundingClientRect().top - rect.top) < 1 &&
+          Math.abs(menu.getBoundingClientRect().height - rect.height) < 1,
+        `${theme}: an upward drag moved or resized the Menu`,
       );
-      const expandedTop = menu.getBoundingClientRect().top;
-      await swipe(button("Configuration"), 0, 60, true);
-      check(
-        menu.classList.contains("is-expanded"),
-        "cancelled drag collapsed the menu",
-      );
-      const collapsingFrames = await swipe(button("Configuration"), 0, 60);
-      check(
-        Math.abs(
-          collapsingFrames[collapsingFrames.length - 1].top -
-            expandedTop -
-            Math.min(60, compactRect.top - expandedTop),
-        ) < 2,
-        "menu collapse did not follow the finger",
-      );
+      await swipe(button("Settings"), 0, 60, true);
       check(
         menu.isConnected &&
-          !menu.classList.contains("is-expanded") &&
-          Math.abs(menu.getBoundingClientRect().height - compactRect.height) <
-            1,
-        "expanded menu did not stop at its initial height",
+          Math.abs(menu.getBoundingClientRect().top - rect.top) < 1,
+        `${theme}: a cancelled drag did not spring back`,
       );
       check(
-        !document.querySelector(".configuration-modal"),
-        "drag activated the Configuration button",
+        !document.querySelector(".settings-home, .configuration-loading-modal"),
+        "a drag opened Settings",
       );
-      button("Connection details").scrollIntoView({ block: "nearest" });
-      await swipe(button("Connection details"), 0, 0);
-      check(
-        button("Connection details").getAttribute("aria-expanded") === "true",
-        "tap after drag did not activate a menu button",
-      );
-      await swipe(button("Connection details"), 0, 0);
-      check(
-        button("Connection details").getAttribute("aria-expanded") === "false",
-        "menu tap did not toggle connection details",
-      );
-      menu.querySelector(".config-dropdown-content")!.scrollTop = 0;
       const closingFrames = await swipe(
         menu.querySelector(".config-summary")!,
         0,
         60,
       );
       check(
-        Math.abs(
-          closingFrames[closingFrames.length - 1].top - compactRect.top - 60,
-        ) < 2,
+        Math.abs(closingFrames[closingFrames.length - 1].top - rect.top - 60) <
+          2,
         "menu dismissal did not follow the finger",
       );
       check(
@@ -1099,28 +1032,17 @@ async function run() {
         "swipe down did not close menu and restore focus",
       );
       click("Menu");
-      check(
-        !document.querySelector(".config-dropdown.is-expanded"),
-        "menu did not reopen compact",
-      );
-      const reopenedMenu = document.querySelector(".config-dropdown")!;
-      await key(button("Show more menu options"), "Enter");
-      check(
-        !!document.querySelector(".config-dropdown.is-expanded"),
-        "keyboard could not expand menu",
-      );
-      click("Show fewer menu options");
+      // Tap where the row rests, not where the opening sheet passes.
       await Promise.all(
-        reopenedMenu
+        document
+          .getElementById("herdr-world-config-menu")!
           .getAnimations({ subtree: true })
           .map((animation) => animation.finished.catch(() => {})),
       );
-      check(
-        Math.abs(
-          reopenedMenu.getBoundingClientRect().height - compactRect.height,
-        ) < 1,
-        "keyboard collapse did not restore compact height",
-      );
+      await swipe(button("Zen mode"), 0, 0);
+      // The Menu closes with an exit animation after the tap's click.
+      await waitFor(() => !document.getElementById("herdr-world-config-menu"));
+      click("Menu");
     }
   } else if (!viewportSmoke) {
     check(
@@ -1134,38 +1056,41 @@ async function run() {
     root.unmount();
     return;
   }
-  click("Configuration");
+  click("Settings");
   // Lazy mounting exposes the DOM before the dialog's focus effect runs.
   // Wait for focus before dispatching keys, or that effect can steal it back.
   await waitFor(
     () =>
       !configurationTest.loadingRace &&
       !!document
-        .querySelector(".configuration-modal")
+        .querySelector(".settings-home")
         ?.contains(document.activeElement),
   );
-  let dialog = document.querySelector<HTMLElement>(".configuration-modal")!;
+  let dialog = document.querySelector<HTMLElement>(".settings-home")!;
   check(
     dialog.contains(document.activeElement),
-    "Configuration did not receive focus",
-  );
-  button("Appearance").focus();
-  await key(button("Appearance"), "ArrowRight");
-  check(
-    button("Behavior").getAttribute("aria-selected") === "true",
-    "arrow key did not select Behavior",
+    "Settings did not receive focus",
   );
   check(
-    document.activeElement === button("Behavior"),
+    !document.getElementById("herdr-world-config-menu"),
+    "Settings left the Menu open",
+  );
+  tab("All").focus();
+  await key(tab("All"), "ArrowRight");
+  check(
+    tab("Appearance").getAttribute("aria-selected") === "true",
+    "arrow key did not select Appearance",
+  );
+  check(
+    document.activeElement === tab("Appearance"),
     "tab keyboard navigation lost focus",
   );
-  click("Appearance");
-  for (const theme of ["dark", "light"]) {
-    click(`Use ${theme} theme`);
-    for (const tab of document.querySelectorAll<HTMLElement>(
-      ".configuration-tabs [aria-selected='false']",
+  for (const theme of ["Dark", "Light"]) {
+    choose("Theme", theme);
+    for (const item of document.querySelectorAll<HTMLElement>(
+      ".settings-home-tabs [aria-selected='false']",
     )) {
-      const style = getComputedStyle(tab);
+      const style = getComputedStyle(item);
       check(
         parseFloat(style.borderTopWidth) > 0 &&
           style.borderTopStyle !== "none" &&
@@ -1184,24 +1109,27 @@ async function run() {
   check(
     getChatTextScale() === null &&
       !!document.querySelector(
-        '[aria-label="Chat text size follows the terminal, currently 100%"]',
+        '[aria-label="Follow the terminal, currently Terminal · 100%"]',
       ),
     "Chat text must start linked to the terminal font size",
   );
-  click("Increase Chat text size");
+  click("Increase chat text size");
   await settle();
   check(
     getChatTextScale() === 105,
     `Chat text did not unlink (${getChatTextScale()})`,
   );
-  click("Link Chat text size to the terminal, currently 105%");
+  click("Follow the terminal, currently 105%");
   await settle();
   check(
     getChatTextScale() === null,
     "Chat text did not link to the terminal again",
   );
-  for (let i = 0; i < (innerWidth <= 320 ? 10 : 5); i++)
-    click("Increase interface scale");
+  for (let i = 0; i < (innerWidth <= 320 ? 10 : 5); i++) {
+    const increase = button("Increase interface size");
+    if (increase.disabled) break;
+    click("Increase interface size");
+  }
   await settle();
   const rect = dialog.getBoundingClientRect();
   check(
@@ -1209,16 +1137,16 @@ async function run() {
       rect.right <= innerWidth + 1 &&
       rect.bottom <= innerHeight + 1 &&
       rect.top >= 0,
-    "scaled configuration exceeds viewport",
+    "scaled Settings exceeds viewport",
   );
   check(
     dialog.scrollWidth <= dialog.clientWidth + 1,
-    "configuration overflows horizontally",
+    "Settings overflows horizontally",
   );
   if (mobile) {
     check(
       Math.abs(rect.bottom - innerHeight) <= 1 && rect.left === 0,
-      "Configuration is not a bottom drawer",
+      "Settings is not a bottom drawer",
     );
     const content = dialog.querySelector<HTMLElement>(
       ".configuration-content",
@@ -1240,42 +1168,63 @@ async function run() {
   } else {
     check(
       rect.left > 0 && rect.bottom < innerHeight,
-      "desktop Configuration became a drawer",
+      "desktop Settings became a drawer",
     );
   }
   if (viewportSmoke) {
     root.unmount();
     return;
   }
-  const firstControl = button(
-    mobile ? "Dismiss Configuration" : "Close Configuration",
+  const controls = focusable(dialog);
+  const firstControl = controls[0];
+  const lastControl = controls[controls.length - 1];
+  check(
+    firstControl === button(mobile ? "Dismiss Settings" : "Close Settings"),
+    "Settings does not start with its close control",
   );
-  const lastControl = button(mobile ? "Layout" : "Done");
   lastControl.focus();
   await key(lastControl, "Tab");
-  check(document.activeElement === firstControl, "Tab escaped Configuration");
+  check(document.activeElement === firstControl, "Tab escaped Settings");
   await key(firstControl, "Tab", true);
+  check(document.activeElement === lastControl, "Shift+Tab escaped Settings");
+  flushSync(() => tab("Agents").click());
   check(
-    document.activeElement === lastControl,
-    "Shift+Tab escaped Configuration",
+    button("Open agents as a chat").getAttribute("aria-checked") === "false",
+    "default pane view lost during Settings migration",
   );
-  click("Layout");
+  click("Open agents as a chat");
+  check(
+    button("Open agents as a chat").getAttribute("aria-checked") === "true",
+    "Settings did not update the pane view",
+  );
+  click("Open agents as a chat");
+  flushSync(() => tab("Keyboard").click());
+  check(
+    button("Vim keys in agent chats").getAttribute("aria-checked") === "false",
+    "default Vim preference lost during Settings migration",
+  );
+  click("Vim keys in agent chats");
+  check(
+    button("Vim keys in agent chats").getAttribute("aria-checked") === "true",
+    "Settings did not update the Vim preference",
+  );
+  click("Vim keys in agent chats");
+  flushSync(() => tab("All").click());
+  click("Open Layout");
   await waitFor(
     () =>
       !configurationTest.loadingRace &&
       !!document.querySelector("[aria-label='Layout Preferences']"),
   );
   check(
-    dialog.getClientRects().length === 0,
-    "parent dialog remains visible behind nested settings",
+    !document.querySelector(".settings-home"),
+    "Settings remains open behind the Layout dialog",
   );
   await key(document.activeElement!, "Escape");
-  await waitFor(() => dialog.getClientRects().length > 0);
-  check(
-    document.activeElement === button("Layout"),
-    "returning from Layout lost the trigger focus",
-  );
-  click("Connection");
+  await waitFor(() => !!document.querySelector(".settings-home"));
+  dialog = document.querySelector<HTMLElement>(".settings-home")!;
+  await waitFor(() => document.activeElement === button("Open Layout"));
+  await openPage("Automatic tab renaming");
   await waitFor(() => !button("Automatic tab renaming").disabled);
   check(
     button("Automatic tab renaming").getAttribute("aria-checked") === "true",
@@ -1287,6 +1236,7 @@ async function run() {
       button("Automatic tab renaming").getAttribute("aria-checked") === "false",
   );
   check(autoRenameSettings.alpha === false, "auto-rename preference not saved");
+  await openPage("Terminal transport");
   await waitFor(
     () =>
       button("Terminal incremental transport").getAttribute("aria-disabled") ===
@@ -1366,14 +1316,14 @@ async function run() {
         helpRect.top + helpRect.height / 2,
       ),
     ),
-    "help popover is hidden behind Configuration",
+    "help popover is hidden behind Settings",
   );
   await key(helpContent, "Escape");
   await waitFor(() => !document.querySelector(".configuration-help-content"));
   await settle();
   check(
     dialog.isConnected && document.activeElement === help,
-    "closing help closed Configuration or lost focus",
+    "closing help closed Settings or lost focus",
   );
   click("Terminal incremental transport");
   await waitFor(
@@ -1387,23 +1337,22 @@ async function run() {
   );
   check(
     dialog.contains(document.activeElement),
-    "saving moved focus out of Configuration",
+    "saving moved focus out of Settings",
   );
-  click(
-    document.documentElement.dataset.layout === "mobile"
-      ? "Close Configuration"
-      : "Done",
-  );
+  closeSettings();
   await settle();
   check(
     document.activeElement === button("Menu"),
-    "closing Configuration did not restore Menu focus",
+    "closing Settings did not restore Menu focus",
   );
-  click("Menu");
-  click("Configuration");
-  await waitFor(() => !!document.querySelector(".configuration-modal"));
-  dialog = document.querySelector<HTMLElement>(".configuration-modal")!;
-  click("Connection");
+  dialog = await openSettings();
+  await openPage("Automatic tab renaming");
+  await waitFor(() => !button("Automatic tab renaming").disabled);
+  check(
+    button("Automatic tab renaming").getAttribute("aria-checked") === "false",
+    "reopening discarded the auto-rename preference",
+  );
+  await openPage("Terminal transport");
   await waitFor(
     () =>
       button("Terminal incremental transport").getAttribute("aria-disabled") ===
@@ -1413,11 +1362,6 @@ async function run() {
     button("Terminal incremental transport").getAttribute("aria-checked") ===
       "false",
     "reopening discarded the saved preference",
-  );
-  await waitFor(() => !button("Automatic tab renaming").disabled);
-  check(
-    button("Automatic tab renaming").getAttribute("aria-checked") === "false",
-    "reopening discarded the auto-rename preference",
   );
   failSave = true;
   click("Terminal incremental transport");
@@ -1466,9 +1410,9 @@ async function run() {
   const updatesBeforeLoadFailure = calls.filter(
     (call) => call.method === "settings.terminal_transport.update",
   ).length;
-  click("Appearance");
+  backToList();
   failRead = true;
-  click("Connection");
+  await openPage("Terminal transport");
   await waitFor(() => !!document.querySelector("[role='alert']"));
   failRead = false;
   click("Retry");
@@ -1486,8 +1430,8 @@ async function run() {
   pendingRead = new Promise((resolve) => {
     resolveRead = resolve;
   });
-  click("Appearance");
-  click("Connection");
+  backToList();
+  await openPage("Terminal transport");
   await settle();
   check(
     button("Terminal incremental transport").getAttribute("aria-disabled") ===
@@ -1522,7 +1466,7 @@ async function run() {
     !calls.some((call) => call.method.startsWith("integration.")),
     "integrations were fetched before opening their tab",
   );
-  click("Integrations");
+  await openPage("Integrations");
   await integrationsScreen(dialog);
   await waitFor(
     () => document.querySelectorAll(".agent-integrations-list li").length === 4,
@@ -1726,8 +1670,8 @@ async function run() {
   const beforeTabRemount = mutationCount();
   click("Install Antigravity CLI integration");
   const listsBeforeTabRemount = integrationLists();
-  click("Appearance");
-  click("Integrations");
+  backToList();
+  await openPage("Integrations");
   await settle();
   check(
     button("Refresh integrations").getAttribute("aria-disabled") === "true" &&
@@ -1769,22 +1713,15 @@ async function run() {
   const beforeDialogRemount = mutationCount();
   click("Uninstall Antigravity CLI integration");
   const listsBeforeDialogRemount = integrationLists();
-  click(
-    document.documentElement.dataset.layout === "mobile"
-      ? "Close Configuration"
-      : "Done",
-  );
-  await waitFor(() => !document.querySelector(".configuration-modal"));
-  click("Menu");
-  click("Configuration");
-  await waitFor(() => !!document.querySelector(".configuration-modal"));
-  dialog = document.querySelector<HTMLElement>(".configuration-modal")!;
-  click("Integrations");
+  closeSettings();
+  await waitFor(() => !document.querySelector(".settings-home"));
+  dialog = await openSettings();
+  await openPage("Integrations");
   await settle();
   check(
     button("Refresh integrations").getAttribute("aria-disabled") === "true" &&
       integrationLists() === listsBeforeDialogRemount,
-    "reopened Configuration did not await its in-flight mutation",
+    "reopened Settings did not await its in-flight mutation",
   );
   flushSync(() =>
     document
@@ -1811,7 +1748,7 @@ async function run() {
         .querySelector('[role="alert"]')
         ?.textContent?.includes("Mutation failed after dialog remount") &&
       integrationLists() === listsBeforeDialogRemount + 1,
-    "reopened Configuration lost the failed mutation or did not reload status",
+    "reopened Settings lost the failed mutation or did not reload status",
   );
   click("Refresh integrations");
   await waitFor(
@@ -1837,7 +1774,7 @@ async function run() {
   const hiddenChange = Promise.withResolvers<unknown>();
   integrationChange = hiddenChange.promise;
   click("Install Antigravity CLI integration");
-  click("Appearance");
+  backToList();
   integrationChange = null;
   antigravity.state = "current";
   hiddenChange.resolve({
@@ -1845,7 +1782,7 @@ async function run() {
     details: { messages: ["Completed while unmounted"] },
   });
   await settle();
-  click("Integrations");
+  await openPage("Integrations");
   await waitFor(
     () =>
       button("Refresh integrations").getAttribute("aria-disabled") === "false",
@@ -1867,25 +1804,17 @@ async function run() {
     integrationChange = hiddenFailure.promise;
     click("Install Antigravity CLI integration");
     const writes = mutationCount();
-    click(
-      closeDialog
-        ? document.documentElement.dataset.layout === "mobile"
-          ? "Close Configuration"
-          : "Done"
-        : "Appearance",
-    );
+    if (closeDialog) closeSettings();
+    else backToList();
     integrationChange = null;
     hiddenFailure.reject(new Error("Mutation failed while unmounted"));
     await settle();
     if (closeDialog) {
-      click("Menu");
-      click("Configuration");
-      await waitFor(() => !!document.querySelector(".configuration-modal"));
-      dialog = document.querySelector<HTMLElement>(".configuration-modal")!;
+      dialog = await openSettings();
     }
     // A failed status refresh must not discard the mutation failure either.
     integrationLoadFailure = closeDialog;
-    click("Integrations");
+    await openPage("Integrations");
     await waitFor(
       () =>
         button("Refresh integrations").getAttribute("aria-disabled") ===
@@ -2033,14 +1962,22 @@ async function run() {
       document.querySelectorAll(".agent-integrations-list li").length === 4 &&
       !document.querySelector('[role="alert"]'),
   );
+  // Escape leaves a page for the list, then closes Settings.
   await key(button("Refresh integrations"), "Escape");
   await settle();
   check(
-    !document.querySelector(".configuration-modal") &&
+    !document.querySelector(".settings-page") &&
+      document.activeElement === button("Open Integrations"),
+    "Escape did not return from the page to its row",
+  );
+  await key(document.activeElement!, "Escape");
+  await settle();
+  check(
+    !document.querySelector(".settings-home") &&
       document.activeElement === button("Menu"),
     "Escape did not close and restore focus",
   );
-  // Open Configuration from a World view: with nothing selected, and with a
+  // Open Settings from a World view: with nothing selected, and with a
   // selection on another host at a runtime generation that is not current.
   // Integrations still loads the active connection it names.
   for (const context of [
@@ -2050,10 +1987,8 @@ async function run() {
     worldViewContext = context;
     flushSync(render);
     const before = integrationLists("alpha");
-    click("Menu");
-    click("Configuration");
-    await waitFor(() => !!document.querySelector(".configuration-modal"));
-    click("Integrations");
+    await openSettings();
+    await openPage("Integrations");
     await waitFor(
       () =>
         document.querySelectorAll(".agent-integrations-list li").length === 4 &&
@@ -2071,42 +2006,55 @@ async function run() {
           .textContent!.includes("Local test"),
       `Integrations opened from a World view (${JSON.stringify(context)}) did not load the active connection`,
     );
-    click(
-      document.documentElement.dataset.layout === "mobile"
-        ? "Close Configuration"
-        : "Done",
-    );
-    await waitFor(() => !document.querySelector(".configuration-modal"));
+    closeSettings();
+    await waitFor(() => !document.querySelector(".settings-home"));
   }
   worldViewContext = null;
   flushSync(render);
-  if (mobile) {
-    for (const tab of [
-      "Appearance",
-      "Behavior",
-      "Connection",
-      "Integrations",
+  // Help is a category of Settings; its rows open their pages in a new tab.
+  const originalOpen = window.open;
+  const openedLinks: Array<
+    [string | URL | undefined, string | undefined, string | undefined]
+  > = [];
+  window.open = (url, target, features) => {
+    openedLinks.push([url, target, features]);
+    return null;
+  };
+  try {
+    for (const [label, url] of [
+      ["Tutorial", "https://herdr.world/tutorial/"],
+      [
+        "Features and shortcuts",
+        "https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md",
+      ],
+      [
+        "Troubleshooting",
+        "https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#troubleshooting",
+      ],
+      ["Report an issue", "https://github.com/IvoryHeart/herdr-world/issues"],
     ]) {
       click("Menu");
-      click("Show more menu options");
-      const menu = document.querySelector(".config-dropdown")!;
-      await Promise.all(
-        menu
-          .getAnimations({ subtree: true })
-          .map((animation) => animation.finished.catch(() => {})),
-      );
-      click(tab);
-      await waitFor(() => !!document.querySelector(".configuration-modal"));
+      click("Help");
+      await waitFor(() => !!document.querySelector(".settings-home"));
       check(
-        button(tab).getAttribute("aria-selected") === "true",
-        `quick setting did not open ${tab}`,
+        tab("Help").getAttribute("aria-selected") === "true",
+        "Help did not open Settings at Help",
       );
-      click(
-        document.documentElement.dataset.layout === "mobile"
-          ? "Close Configuration"
-          : "Done",
+      click(label!);
+      check(
+        !document.querySelector(".settings-home"),
+        `${label} left Settings open`,
+      );
+      check(
+        JSON.stringify(openedLinks[openedLinks.length - 1]) ===
+          JSON.stringify([url, "_blank", "noopener,noreferrer"]),
+        `${label} opened an incorrect or unsafe destination`,
       );
     }
+  } finally {
+    window.open = originalOpen;
+  }
+  if (mobile) {
     for (const reducedMotion of [false, true]) {
       await input("Emulation.setEmulatedMedia", {
         features: [
@@ -2116,12 +2064,7 @@ async function run() {
           },
         ],
       });
-      click("Menu");
-      click("Configuration");
-      await waitFor(() => !!document.querySelector(".configuration-modal"));
-      const drawer = document.querySelector<HTMLElement>(
-        ".configuration-modal",
-      )!;
+      const drawer = await openSettings();
       await Promise.all(
         drawer.getAnimations().map((animation) => animation.finished),
       );
@@ -2132,22 +2075,24 @@ async function run() {
         "drawer did not honor motion preference",
       );
       const surface = reducedMotion
-        ? button("Dismiss Configuration")
+        ? button("Dismiss Settings")
         : drawer.querySelector(".configuration-content")!;
       await swipe(surface, 0, 60, true);
       check(
         drawer.isConnected &&
           Math.abs(drawer.getBoundingClientRect().top - top) < 1,
-        "cancelled swipe did not restore Configuration position",
+        "cancelled swipe did not restore Settings position",
       );
       const frames = await swipe(surface, 0, 60);
       check(
         Math.abs(frames[frames.length - 1].top - top - 60) < 2,
-        "scaled Configuration did not follow the finger",
+        "scaled Settings did not follow the finger",
       );
+      // Settings returns focus to Menu on the frame after it closes.
+      await waitFor(() => !document.querySelector(".settings-home"));
+      await settle();
       check(
-        !document.querySelector(".configuration-modal") &&
-          document.activeElement === button("Menu"),
+        document.activeElement === button("Menu"),
         "drawer dismissal did not restore Menu focus",
       );
     }

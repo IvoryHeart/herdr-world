@@ -27,7 +27,7 @@ export function setComposerVimKeys(on: boolean) {
   for (const listener of listeners) listener();
 }
 
-function subscribe(listener: () => void): () => void {
+export function subscribeComposerVimKeys(listener: () => void): () => void {
   listeners.add(listener);
   // Another window's choice applies here too.
   const unsubscribe = subscribeLocalStorage((key) => {
@@ -40,5 +40,9 @@ function subscribe(listener: () => void): () => void {
 }
 
 export function useComposerVimKeys(): boolean {
-  return useSyncExternalStore(subscribe, composerVimKeys, () => false);
+  return useSyncExternalStore(
+    subscribeComposerVimKeys,
+    composerVimKeys,
+    () => false,
+  );
 }

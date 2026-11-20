@@ -1,4 +1,5 @@
 import { herdrAdapter } from "../adapters/herdr";
+import { createMemoryHost } from "../memory/host";
 import { createTuiPassThrough } from "../adapters/herdr-runtime";
 import type { Clock, Scheduler } from "../service/ports";
 import {
@@ -954,6 +955,11 @@ export function createLegacyConnectionRuntime(args: {
     remotePlatform,
     sshHost,
     runProcessWithCodeTimeout,
+    memoryHost: createMemoryHost({
+      sshHost,
+      remotePlatform,
+      run: runProcessWithInputTimeout,
+    }),
     herdr,
     tui,
     operations,
