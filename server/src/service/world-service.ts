@@ -70,6 +70,7 @@ import { serializeWorldInvalidation } from "../world/invalidation";
 import { WorldUsageService } from "../usage/service";
 import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
+import { createFocusService, FOCUS_SETTINGS_KEY } from "../world/focus";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
 import { createRuntimeMemoryService } from "../memory/runtime-service";
@@ -148,9 +149,27 @@ async function compose(
   const snapshotAdmission = new WorldSnapshotAdmission();
   /** Town moves run one at a time per connection (see world/desk-move). */
   const townMoveQueues = new Map<string, ReturnType<typeof createMoveQueue>>();
+  // The owner's focus session; its publisher exists once browsers can listen.
+  let publishFocusChanged: (revision: number) => void = () => {};
+  const focus = createFocusService({
+    clock,
+    scheduler,
+    load: async () => (await settings.read()).custom[FOCUS_SETTINGS_KEY],
+    save: async (state) => {
+      await settings.update((current) => ({
+        ...current,
+        custom: { ...current.custom, [FOCUS_SETTINGS_KEY]: state },
+      }));
+    },
+    publish: (revision) => publishFocusChanged(revision),
+    log: (message) => logger.warn(message),
+  });
+  await focus.start();
   const webPush = createWebPushService({
     path: paths.webPush,
     warn: (message) => logger.warn(message),
+    // Held while the owner focuses; the recap tells what came in.
+    held: () => focus.held(),
   });
   const { officeObservability, handleOfficeObservability } =
     await createUsageTelemetry(settings, () => clock.now(), logger);
@@ -242,6 +261,7 @@ async function compose(
   let worldUsage: WorldUsageService | null = null;
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
+  publishFocusChanged = revisionPublisher("world_focus_changed", "world-focus");
   // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
   const {
     profiles,
@@ -789,6 +809,7 @@ async function compose(
     }),
     ...terminalMarks,
     bin,
+    focus,
     worldCli,
     worldSnapshots,
     worldUsage,
@@ -976,6 +997,7 @@ async function compose(
     deskWatches.stop();
     connectionProfiles.stopSupervision();
     webPush.stop();
+    focus.stop();
     await worldCli.stop();
     await bin.stop();
     // Drop browser sockets as a process exit does; pages reconnect.

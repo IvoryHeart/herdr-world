@@ -109,6 +109,8 @@ export type RpcServices = {
   worldSnapshots: ObservedSnapshots | null;
   worldUsage?: import("../usage/service").WorldUsageService;
   worldMemory?: import("../memory/service").MemoryService;
+  /** The owner's focus session (world.focus.*). */
+  focus?: import("../world/focus").FocusService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;
