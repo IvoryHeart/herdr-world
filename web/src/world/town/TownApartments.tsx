@@ -1,6 +1,10 @@
 import { memo } from "react";
 import { openApartments } from "../apartments/apartmentsStore";
 import { useApartments } from "../apartments/useApartments";
+import {
+  townApartmentsCount,
+  useTownApartmentsArrivals,
+} from "./townApartmentsArrivals";
 import { townApartmentsLot } from "./townApartmentsLot";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
 import "./townApartmentsSign.css";
@@ -8,7 +12,8 @@ import "./townApartmentsSign.css";
 /**
  * The apartment building's sign (#1011): how many finished agents live
  * there, opening Apartments to search, read and resume them. A town too
- * small for the building opens it from the town center instead.
+ * small for the building opens it from the town center instead. Each agent
+ * the bus brings counts as it walks in at the door, and the count pops.
  */
 export const TownApartments = memo(function TownApartments({
   layout,
@@ -16,9 +21,10 @@ export const TownApartments = memo(function TownApartments({
   layout: TownLayout;
 }) {
   const { residents, verified } = useApartments();
+  const { pending, now } = useTownApartmentsArrivals();
   const lot = townApartmentsLot(layout);
   if (!lot) return null;
-  const count = residents.length;
+  const count = townApartmentsCount(residents, pending, now);
   const text = count
     ? `${count} resident${count === 1 ? "" : "s"}`
     : verified
@@ -29,6 +35,7 @@ export const TownApartments = memo(function TownApartments({
       type="button"
       className="town-apartments-sign"
       data-empty={count ? undefined : true}
+      data-count={count}
       style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 6 }}
       aria-label={`Apartments: ${count ? text : "no residents yet"}. Open Apartments`}
       onPointerDown={(event) => event.stopPropagation()}
@@ -40,7 +47,13 @@ export const TownApartments = memo(function TownApartments({
       <span className="town-apartments-title" aria-hidden="true">
         APARTMENTS
       </span>
-      <span className="town-apartments-count" aria-hidden="true">
+      <span
+        // A new key each count replays its pop as one more moves in.
+        key={count}
+        className="town-apartments-count"
+        data-pop={pending.length ? "" : undefined}
+        aria-hidden="true"
+      >
         {text}
       </span>
     </button>
