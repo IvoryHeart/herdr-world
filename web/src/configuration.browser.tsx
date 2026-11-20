@@ -9,6 +9,11 @@ import { ConfigMenu } from "./components/ConfigMenu";
 import type { AgentIntegration } from "./components/AgentIntegrationsSettings";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { __storeTesting, OperationalContext, store } from "./store";
+import { worldSourcesStore } from "./world/worldSources";
+import {
+  integrationsFixtureEnabled,
+  resetIntegrationsFixture,
+} from "./integrationsFixture";
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -119,6 +124,142 @@ const key = async (element: Element, value: string, shiftKey = false) => {
     });
   await settle();
 };
+// The Integrations registry and its owners, as the World service reports them.
+const sourceRequests: Array<{ id: string; body: Record<string, unknown> }> = [];
+const worldSources = [
+  {
+    id: "github",
+    label: "GitHub",
+    enabled: true,
+    state: "connected",
+    detail: "Signed in.",
+    checkedAt: 1,
+    lastSuccessAt: 1,
+    itemCount: 2,
+    config: { kind: "github", mergedDays: 7 },
+  },
+  {
+    id: "jira",
+    label: "Jira",
+    enabled: false,
+    state: "disabled",
+    detail: "Off.",
+    checkedAt: 1,
+    lastSuccessAt: null,
+    itemCount: 0,
+    config: { kind: "jira", site: "", email: "", jql: "", tokenSet: false },
+  },
+];
+const runtimeRow = (
+  id: string,
+  label: string,
+  lifecycle: string,
+  runtimeGeneration: number,
+) => ({
+  id: `runtime:${id}`,
+  kind: "runtime",
+  type: "herdr",
+  label,
+  provides: ["terminals", "agents", "files"],
+  state: lifecycle === "ready" ? "connected" : "available",
+  detail: lifecycle === "ready" ? "Herdr · Ready" : "Herdr · Disconnected",
+  settings: [],
+  control: "connection",
+  connection: {
+    id,
+    generation: runtimeGeneration,
+    transport: id === "alpha" ? "local" : "ssh",
+    lifecycle,
+  },
+});
+let betaRuntimeGeneration = 4;
+const integrationsSnapshot = () => ({
+  observedAt: 1,
+  integrations: [
+    runtimeRow("alpha", "Alpha", "ready", 1),
+    runtimeRow("beta", "Beta", "disconnected", betaRuntimeGeneration),
+    ...worldSources.map((source) => ({
+      id: `source:${source.id}`,
+      kind: "source",
+      type: source.id,
+      label: source.label,
+      provides: [source.id === "github" ? "pull_requests" : "tickets"],
+      state: source.enabled
+        ? "connected"
+        : source.id === "jira"
+          ? "needs_connect"
+          : "available",
+      detail: source.detail,
+      settings: [],
+      control: "source",
+    })),
+    {
+      id: "source:metrics",
+      kind: "source",
+      type: "prometheus",
+      label: "Usage metrics",
+      provides: ["usage"],
+      state: "needs_connect",
+      detail: "Add a Prometheus URL to show usage and cost.",
+      settings: [],
+      control: "metrics",
+    },
+  ],
+  vault: {
+    backend: "file",
+    label: "Private file",
+    detail: "Readable only by the user that runs World.",
+    secrets: [
+      { name: "jira.token", label: "Jira API token", usedBy: "source:jira" },
+    ],
+  },
+});
+let registryReads = 0;
+const worldFetch = (url: string, init?: RequestInit) => {
+  if (url === "/api/world/integrations") {
+    registryReads++;
+    return Response.json(integrationsSnapshot());
+  }
+  if (url === "/api/world/sources" || url.startsWith("/api/world/sources?"))
+    return Response.json({
+      observedAt: 1,
+      refreshing: false,
+      sources: worldSources,
+      items: [],
+      links: [],
+      actions: [],
+    });
+  const source = /^\/api\/world\/sources\/(github|jira)$/u.exec(url)?.[1];
+  if (source && init?.method === "PUT") {
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    sourceRequests.push({ id: source, body });
+    const entry = worldSources.find((item) => item.id === source)!;
+    if (typeof body.enabled === "boolean") {
+      entry.enabled = body.enabled;
+      entry.state = body.enabled ? "connected" : "disabled";
+    }
+    return Response.json({
+      observedAt: 2,
+      refreshing: false,
+      sources: worldSources,
+      items: [],
+      links: [],
+      actions: [],
+    });
+  }
+  if (url === "/api/world/observability/configuration")
+    return Response.json({
+      providerId: "prometheus",
+      configured: false,
+      endpoint: null,
+      source: "none",
+      health: "unavailable",
+      healthReason: null,
+      observedAt: 1,
+      lastSuccessAt: null,
+    });
+  return null;
+};
 let authRequired = false;
 let logoutAttempts = 0;
 let pendingLogout: Promise<Response> | null = null;
@@ -134,6 +275,8 @@ Object.defineProperty(window, "fetch", {
       );
       return pendingLogout ?? new Response(null, { status: 500 });
     }
+    const world = worldFetch(url, init);
+    if (world) return world;
     return Response.json({
       version: "0.9.1",
       protocol: 22,
@@ -202,8 +345,16 @@ window.confirm = (message) => {
 // they answer empty so their alerts never mix with the agent rows'.
 let worldIntegrationLists = 0;
 const bridgeCall = bridge.call.bind(bridge);
+const worldConnectionCalls: Array<{ method: string; id: unknown }> = [];
 bridge.call = ((method: string, ...rest: unknown[]) => {
   if (method === "world.integration.list") worldIntegrationLists++;
+  if (method === "connections.connect" || method === "connections.disconnect") {
+    worldConnectionCalls.push({
+      method,
+      id: (rest[0] as { id?: unknown } | undefined)?.id,
+    });
+    return Promise.resolve({});
+  }
   if (method.startsWith("world.integration."))
     return Promise.resolve({ integrations: [] });
   if (method.startsWith("world.ide."))
@@ -348,6 +499,335 @@ const selectConnection = (id: string) => {
   );
   flushSync(render);
 };
+const integrationRow = (id: string) =>
+  document.querySelector<HTMLElement>(`[data-integration="${id}"]`);
+const kindTab = (kind: string) =>
+  document.querySelector<HTMLButtonElement>(
+    `.integrations-tabs [role="tab"][data-kind="${kind}"]`,
+  );
+const kindTabs = () =>
+  Array.from(
+    document.querySelectorAll<HTMLElement>('.integrations-tabs [role="tab"]'),
+    (tab) => tab.dataset.kind,
+  ).join(",");
+const tabCount = (kind: string) =>
+  kindTab(kind)?.querySelector(".integrations-tab-count")?.textContent;
+const openKind = (kind: string) => {
+  const tab = kindTab(kind);
+  if (!tab) throw new Error(`Missing Integrations tab: ${kind}`);
+  flushSync(() => tab.click());
+};
+const kindGroups = () =>
+  Array.from(
+    document.querySelectorAll<HTMLElement>(".integrations-kind:not([hidden])"),
+    (group) => group.dataset.kind,
+  ).join(",");
+const rowStates = () =>
+  JSON.stringify(
+    Object.fromEntries(
+      Array.from(
+        document.querySelectorAll<HTMLElement>(".integration-row"),
+        (row) => [row.dataset.integration, row.dataset.state],
+      ),
+    ),
+  );
+const searchIntegrations = (value: string) => {
+  const input = document.querySelector<HTMLInputElement>(
+    'input[aria-label="Search integrations"]',
+  )!;
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!.call(input, value);
+  flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
+};
+// One screen, one tab per kind the registry reports, lists every runtime and
+// source with its state and one action, and the vault by names only.
+async function integrationsScreen(dialog: Element) {
+  await waitFor(() => !!integrationRow("runtime:alpha"));
+  check(
+    kindTabs() === "all,runtime,source,harness,vault",
+    `Integrations tabs are not All, the registry's kinds and Vault: ${kindTabs()}`,
+  );
+  // All opens first and lists every kind under its heading; the Agents list
+  // counts the agents it shows on its host.
+  // Pi, Claude Code and Antigravity CLI; Future Agent is not detected.
+  await waitFor(() => tabCount("harness") !== undefined);
+  check(
+    tabCount("harness") === "3",
+    `the Agents tab does not count its listed agents: ${tabCount("harness")}`,
+  );
+  check(
+    kindTab("all")!.getAttribute("aria-selected") === "true" &&
+      tabCount("all") === "8" &&
+      tabCount("runtime") === "2" &&
+      tabCount("source") === "3" &&
+      tabCount("vault") === "1",
+    `All is not open or tabs do not count their rows: ${tabCount("all")}`,
+  );
+  check(
+    kindGroups() === "runtime,source,harness,vault" &&
+      document.querySelectorAll(".agent-integrations-list li").length === 4 &&
+      !integrationRow("harness:claude"),
+    `All does not list every kind once: ${kindGroups()}`,
+  );
+  openKind("runtime");
+  check(
+    rowStates() ===
+      JSON.stringify({
+        "runtime:alpha": "connected",
+        "runtime:beta": "available",
+      }),
+    `Runtimes tab rows or states are wrong: ${rowStates()}`,
+  );
+  check(
+    integrationRow("runtime:alpha")!.textContent!.includes(
+      "Gives World terminals, agents, files.",
+    ),
+    "a runtime row does not say what it provides",
+  );
+  // The vault is its own tab: the tokens it holds by name and who uses them.
+  openKind("vault");
+  const token = dialog.querySelector('[data-secret="jira.token"]');
+  check(
+    !dialog.querySelector(".integration-row[data-integration]") &&
+      !!token?.textContent?.includes("Jira API token") &&
+      token.textContent.includes("Used by Jira."),
+    "the Vault tab does not name what it holds",
+  );
+  openKind("runtime");
+  check(
+    dialog.scrollWidth <= dialog.clientWidth + 1,
+    "the Integrations screen overflows the viewport",
+  );
+
+  // A runtime row acts on the exact connection it showed.
+  click("Connect Beta");
+  await waitFor(() => worldConnectionCalls.length === 1);
+  check(
+    worldConnectionCalls[0].method === "connections.connect" &&
+      worldConnectionCalls[0].id === "beta",
+    "Connect did not connect that runtime",
+  );
+  await waitFor(() => !button("Connect Beta").disabled);
+  betaRuntimeGeneration++;
+  click("Connect Beta");
+  await waitFor(
+    () =>
+      !!dialog
+        .querySelector('[role="alert"]')
+        ?.textContent?.includes("changed since this list was read"),
+  );
+  check(
+    worldConnectionCalls.length === 1,
+    "a replaced runtime was acted on from a stale row",
+  );
+
+  // Sources switch off at once; one that needs settings opens them instead.
+  openKind("source");
+  check(
+    rowStates() ===
+      JSON.stringify({
+        "source:github": "connected",
+        "source:jira": "needs_connect",
+        "source:metrics": "needs_connect",
+      }),
+    `Sources tab rows or states are wrong: ${rowStates()}`,
+  );
+  await waitFor(() => !button("Disconnect GitHub").disabled);
+  click("Disconnect GitHub");
+  await waitFor(() => sourceRequests.length === 1);
+  check(
+    sourceRequests[0].id === "github" &&
+      sourceRequests[0].body.enabled === false,
+    "Disconnect did not switch GitHub off",
+  );
+  await waitFor(
+    () => integrationRow("source:github")?.dataset.state === "available",
+  );
+  click("Connect GitHub");
+  await waitFor(() => sourceRequests.length === 2);
+  check(
+    sourceRequests[1].body.enabled === true,
+    "Connect did not switch GitHub on",
+  );
+  await waitFor(() => !button("Connect Jira").disabled);
+  click("Connect Jira");
+  await waitFor(
+    () => !!dialog.querySelector('form[aria-label="Jira settings"]'),
+  );
+  check(
+    sourceRequests.length === 2,
+    "Connect Jira acted before its settings were filled in",
+  );
+  click("Jira settings");
+  check(
+    !dialog.querySelector('form[aria-label="Jira settings"]'),
+    "Jira settings did not close",
+  );
+  click("Connect Usage metrics");
+  await waitFor(
+    () => !!dialog.querySelector('form[aria-label="Usage metrics settings"]'),
+  );
+  click("Usage metrics settings");
+
+  // The service refreshes sources on its own: a refresh that finishes while
+  // the screen is open moves the row without another registry read, both to
+  // a failure and back to connected.
+  await waitFor(
+    () => integrationRow("source:github")?.dataset.state === "connected",
+  );
+  const github = worldSources.find((item) => item.id === "github")!;
+  // A poll already on its way carries the old answer; the next one is new.
+  const refreshSources = async () => {
+    await worldSourcesStore.refresh();
+    await worldSourcesStore.refresh();
+  };
+  const reads = registryReads;
+  github.state = "error";
+  github.detail = "Sign-in expired.";
+  await refreshSources();
+  await waitFor(
+    () =>
+      integrationRow("source:github")?.dataset.state === "error" &&
+      integrationRow("source:github")!.textContent!.includes(
+        "Sign-in expired.",
+      ),
+  );
+  github.state = "connected";
+  github.detail = "Signed in.";
+  await refreshSources();
+  await waitFor(
+    () => integrationRow("source:github")?.dataset.state === "connected",
+  );
+  check(
+    registryReads === reads,
+    "a source refresh needed another registry read to reach the screen",
+  );
+
+  // Search always covers everything: typing opens All with every match,
+  // the vault's tokens too, and each tab counts its matches.
+  check(
+    kindTab("source")!.getAttribute("aria-selected") === "true",
+    "the Sources tab is not open before searching",
+  );
+  searchIntegrations("jira");
+  await waitFor(() => tabCount("harness") === "0");
+  check(
+    kindTab("all")!.getAttribute("aria-selected") === "true" &&
+      kindGroups() === "source,vault" &&
+      rowStates() === JSON.stringify({ "source:jira": "needs_connect" }) &&
+      !!dialog.querySelector('[data-secret="jira.token"]') &&
+      tabCount("all") === "1" &&
+      tabCount("source") === "1" &&
+      tabCount("runtime") === "0" &&
+      tabCount("vault") === "1",
+    `search did not cover every integration: ${kindGroups()} ${rowStates()}`,
+  );
+  searchIntegrations("pi");
+  await waitFor(() => tabCount("harness") === "1");
+  check(
+    kindGroups().split(",").includes("harness") &&
+      document.querySelectorAll(".agent-integrations-list li").length === 1,
+    `All search did not find an agent: ${kindGroups()}`,
+  );
+  // A tab narrows the results; an empty one points at the tabs that match.
+  searchIntegrations("ssh");
+  openKind("source");
+  const empty = dialog.querySelector(".integrations-empty");
+  check(
+    !!empty?.textContent?.includes("No sources match “ssh”.") &&
+      !dialog.querySelector(".integration-row"),
+    "an empty search did not say so",
+  );
+  click("Runtimes (1)");
+  check(
+    kindTab("runtime")!.getAttribute("aria-selected") === "true" &&
+      rowStates() === JSON.stringify({ "runtime:beta": "available" }),
+    `a match in another tab could not be reached: ${rowStates()}`,
+  );
+  searchIntegrations("");
+  openKind("all");
+  searchIntegrations("nothing like this");
+  await waitFor(() => tabCount("harness") === "0");
+  check(
+    kindGroups() === "" &&
+      !!dialog
+        .querySelector(".integrations-empty")
+        ?.textContent?.includes("Nothing matches “nothing like this”."),
+    `a search with no match anywhere did not say so: ${kindGroups()}`,
+  );
+  searchIntegrations("");
+
+  // Dozens of rows and a new kind (the preview fixture): the kind gets its
+  // own tab, the tabs scroll on one row, and search still narrows.
+  history.replaceState(history.state, "", "?integrationsFixture");
+  resetIntegrationsFixture();
+  check(
+    integrationsFixtureEnabled() && !location.search.includes("integrations"),
+    "the integrations fixture switch was not consumed at once",
+  );
+  searchIntegrations("sample");
+  check(
+    kindTabs() === "all,runtime,source,harness,ide,vault" &&
+      kindTab("all")!.getAttribute("aria-selected") === "true" &&
+      tabCount("runtime") === "14" &&
+      tabCount("source") === "18" &&
+      tabCount("ide") === "8",
+    `a new kind did not get its own counted tab: ${kindTabs()}`,
+  );
+  const tabs = dialog.querySelector<HTMLElement>(".integrations-tabs")!;
+  check(
+    dialog.scrollWidth <= dialog.clientWidth + 1 &&
+      new Set(
+        Array.from(tabs.children, (tab) =>
+          Math.round(tab.getBoundingClientRect().top),
+        ),
+      ).size === 1,
+    "many kinds overflow the screen or wrap the tabs",
+  );
+  openKind("ide");
+  searchIntegrations("sample error");
+  check(
+    rowStates() ===
+      JSON.stringify({
+        "ide:sample-04": "error",
+        "ide:sample-08": "error",
+      }) && !dialog.querySelector(".integration-row button"),
+    `search by status failed or sample rows can act: ${rowStates()}`,
+  );
+  resetIntegrationsFixture();
+  history.replaceState(history.state, "", location.pathname);
+  searchIntegrations("");
+  check(
+    kindTabs() === "all,runtime,source,harness,vault" &&
+      kindTab("all")!.getAttribute("aria-selected") === "true",
+    "a kind that left kept its tab open",
+  );
+
+  // Agents keep their per-host list; the same search narrows it.
+  openKind("harness");
+  await waitFor(
+    () => document.querySelectorAll(".agent-integrations-list li").length === 4,
+  );
+  searchIntegrations("pi");
+  openKind("harness");
+  check(
+    document.querySelectorAll(".agent-integrations-list li").length === 1 &&
+      document
+        .querySelector(".agent-integrations-list li")!
+        .textContent!.includes("Pi"),
+    "search did not narrow the agent list",
+  );
+  searchIntegrations("nothing like this");
+  check(
+    !!dialog
+      .querySelector(".agent-integrations-settings")
+      ?.textContent?.includes("No agent matches"),
+    "an agent search with no match did not say so",
+  );
+  searchIntegrations("");
+}
 async function run() {
   const viewportSmoke = new URLSearchParams(location.search).has(
     "viewportSmoke",
@@ -1025,6 +1505,7 @@ async function run() {
     "integrations were fetched before opening their tab",
   );
   click("Integrations");
+  await integrationsScreen(dialog);
   await waitFor(
     () => document.querySelectorAll(".agent-integrations-list li").length === 4,
   );

@@ -160,6 +160,7 @@ export async function replayEffectRecovery(
   const open = () =>
     effectFixture(directory, recovery, {
       incarnation: `effect-incarnation-${incarnation}`,
+      sync: false,
       version,
       now: wall,
       runner,

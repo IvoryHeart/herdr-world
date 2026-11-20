@@ -1,6 +1,6 @@
 name: World latency trend
 
-# Input delays of the dense World browser suites, measured one suite per quiet
+# Input delays of the dense World browser suites, measured one suite at a time on each quiet
 # runner with the pinned test Chrome, and set beside recent main runs on the
 # same CPU model. It reports and never blocks: CI's World shards assert what
 # does not depend on the runner, and no branch rule requires this workflow.
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
     measure:
-        name: Measure ${{ matrix.suite }}
+        name: Measure ${{ matrix.suites }}
         if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'latency-trend')
         runs-on: ubuntu-latest
         timeout-minutes: 20
@@ -31,11 +31,12 @@ jobs:
             fail-fast: false
             # worldLatencyTrendSuites in scripts/world-browser-suites.ts
             matrix:
-                suite:
-                    - ProductionContexts.board
-                    - ProductionContexts.town
-                    - ProductionContexts.animated
-                    - ConcurrentContexts
+                # Paired by observed execution time: about three minutes each.
+                # All four suites still run; fewer runner requests reduce the
+                # main-push burst without coupling measurement to PR delivery.
+                suites:
+                    - ProductionContexts.board ProductionContexts.animated
+                    - ProductionContexts.town ConcurrentContexts
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -53,17 +54,20 @@ jobs:
               run: bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"
             - name: Record the runner's CPU model
               run: echo "WORLD_LATENCY_TREND_CPU=$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1)" >> "$GITHUB_ENV"
-            - name: Wait for the runner to go quiet
-              run: bun scripts/wait-for-quiet.ts
             - name: Measure, one case at a time
               env:
-                  WORLD_LATENCY_TREND_FILE: ${{ runner.temp }}/latency/${{ matrix.suite }}.jsonl
+                  WORLD_LATENCY_SUITES: ${{ matrix.suites }}
               run: |
+                  set -euo pipefail
                   mkdir -p "$RUNNER_TEMP/latency"
-                  bun scripts/run-world-tests.ts "web/src/world/${{ matrix.suite }}.test.ts" --parallel=1 --max-concurrency=1
+                  for suite in $WORLD_LATENCY_SUITES; do
+                    bun scripts/wait-for-quiet.ts
+                    WORLD_LATENCY_TREND_FILE="$RUNNER_TEMP/latency/$suite.jsonl" \
+                      bun scripts/run-world-tests.ts "web/src/world/$suite.test.ts" --parallel=1 --max-concurrency=1
+                  done
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
-                  name: latency-${{ matrix.suite }}
+                  name: latency-${{ strategy.job-index }}
                   path: ${{ runner.temp }}/latency
                   if-no-files-found: error
                   retention-days: 30

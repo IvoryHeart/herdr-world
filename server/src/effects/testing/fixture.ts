@@ -5,6 +5,7 @@ import { declare, object, policies } from "../../verbs/declaration";
 import { productionEffectVerb } from "../contracts";
 import { createEffectStore } from "../../storage/effect-client";
 import { openWorldWriter } from "../../storage/world-writer";
+import { openWithoutSqliteSync } from "../../testing/sqlite-no-sync";
 import type {
   StorageRequest,
   EffectRecovery,
@@ -29,6 +30,8 @@ export function effectFixture(
     commit?: (phase: "before-commit" | "after-commit") => void;
     runner?: typeof createEffectRunner;
     writer?: typeof openWorldWriter;
+    /** Logical trace replay opts out; process-kill fixtures keep FULL sync. */
+    sync?: boolean;
   } = {},
 ) {
   const incarnation = options.incarnation ?? "effect-incarnation-one";
@@ -55,17 +58,20 @@ export function effectFixture(
       return { cancel: () => jobs.delete(callback) };
     },
   };
-  const writer = (options.writer ?? openWorldWriter)(
-    join(root, "world.sqlite"),
-    join(root, "legacy.json"),
-    now,
-    incarnation,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    lookup,
-  );
+  const openWriter = () =>
+    (options.writer ?? openWorldWriter)(
+      join(root, "world.sqlite"),
+      join(root, "legacy.json"),
+      now,
+      incarnation,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      lookup,
+    );
+  const writer =
+    options.sync === false ? openWithoutSqliteSync(openWriter) : openWriter();
   const request = async <T>(request: StorageRequest): Promise<T> => {
     const result = writer.batch([{ ticket: 1, request }], clock.now())[0]!;
     if (result.error) throw new Error(result.error);
@@ -74,24 +80,32 @@ export function effectFixture(
   const store = createEffectStore(request, () => {});
   const source = new Database(join(root, "receiver.sqlite"), { strict: true });
   source.exec(
-    "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS applied(id INTEGER PRIMARY KEY AUTOINCREMENT,key TEXT NOT NULL,handle TEXT,status TEXT NOT NULL)",
+    `PRAGMA synchronous=${options.sync === false ? "OFF" : "FULL"}; PRAGMA journal_mode=WAL;`,
   );
-  for (const [key, value] of Object.entries({
-    authorized: "1",
-    authorizations: "0",
-    precondition: "1",
-    binding: "attached",
-    terminal: "terminal-one",
-    generation: "1",
-    calls: "0",
-    probes: "0",
-    finds: "0",
-    attaches: "0",
-    permanent: "0",
-  }))
-    source
-      .query("INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO NOTHING")
-      .run(key, value);
+  // Initial fixture state is one transaction, before any tested operation.
+  // Runtime writes retain their real boundaries and selected durability;
+  // process-kill fixtures keep FULL sync by default.
+  source.transaction(() => {
+    source.exec(
+      "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS applied(id INTEGER PRIMARY KEY AUTOINCREMENT,key TEXT NOT NULL,handle TEXT,status TEXT NOT NULL)",
+    );
+    for (const [key, value] of Object.entries({
+      authorized: "1",
+      authorizations: "0",
+      precondition: "1",
+      binding: "attached",
+      terminal: "terminal-one",
+      generation: "1",
+      calls: "0",
+      probes: "0",
+      finds: "0",
+      attaches: "0",
+      permanent: "0",
+    }))
+      source
+        .query("INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO NOTHING")
+        .run(key, value);
+  })();
   const read = (key: string) =>
     (
       source.query("SELECT value FROM settings WHERE key=?").get(key) as {

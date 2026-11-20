@@ -1,0 +1,263 @@
+/* Configuration → Integrations: one tab per kind, one row per integration. */
+.integrations-settings {
+  display: grid;
+  gap: 18px;
+  padding: 4px 0;
+}
+
+.integrations-intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.integrations-group {
+  display: grid;
+  gap: 8px;
+}
+
+.integrations-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.integrations-search > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+
+.integrations-search:focus-within {
+  border-color: var(--accent);
+}
+
+/* Kinds sit on one row that scrolls sideways, so more kinds never push the
+   list down or wrap into a second bar on a phone. */
+.integrations-tabs {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 8px;
+}
+
+.integrations-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.integrations-tabs > button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.integrations-tabs > button[aria-selected="true"] {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+}
+
+.integrations-tab-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--border-soft);
+  font-size: 11px;
+  text-align: center;
+}
+
+.integrations-tab-alert {
+  color: #efad9c;
+}
+
+.integrations-empty {
+  display: grid;
+  gap: 8px;
+}
+
+.integrations-empty > p {
+  margin: 0;
+}
+
+.integrations-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.integrations-settings [hidden] {
+  display: none;
+}
+
+/* All: one block per kind, each under its heading with a count. */
+.integrations-kind {
+  display: grid;
+  gap: 8px;
+}
+
+.integrations-kind + .integrations-kind {
+  padding-top: 10px;
+}
+
+.integrations-kind > h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-strong);
+}
+
+.integrations-group > .settings-helper,
+.integrations-kind > .settings-helper {
+  margin: 0;
+}
+
+.integrations-kind > button,
+.integrations-group > button {
+  justify-self: start;
+}
+
+.integrations-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.integration-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  font-size: 12px;
+}
+
+.integration-row + .integration-row {
+  border-top: 1px solid var(--border-soft);
+}
+
+.integration-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.integration-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.integration-row-title > svg {
+  color: var(--muted);
+}
+
+.integration-row-title > strong {
+  color: var(--text-strong);
+}
+
+.integration-row-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.integration-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.integration-state[data-state="connected"] {
+  border-color: color-mix(in srgb, #54c88b 45%, var(--border-soft));
+  color: #83d9aa;
+}
+
+.integration-state[data-state="error"] {
+  border-color: color-mix(in srgb, #ef9b85 45%, var(--border-soft));
+  color: #efad9c;
+}
+
+.integration-state[data-state="available"] {
+  color: var(--text);
+}
+
+.integration-row-detail,
+.integration-row-provides,
+.integrations-empty {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.integration-row-provides {
+  font-size: 11px;
+}
+
+.integration-fields {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.integration-fields textarea {
+  width: 100%;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.integration-field-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.integration-field-actions {
+  justify-content: space-between;
+}
+
+@media (max-width: 560px) {
+  .integration-row-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

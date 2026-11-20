@@ -355,7 +355,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     over Town: every pull request in the same columns, with the Tickets tab,
     each card's actions and the same Escape, Back or press-outside close. An
     agent on a card opens as tapping it in Town does. With the GitHub source off, signed out or not yet answered, the
-    post office is closed and says to connect GitHub in **Sources**, with no
+    post office is closed and says to connect GitHub in **Integrations** (its sign opens them), with no
     parcels and no counts; when a refresh fails it keeps the last list as
     unknown and says GitHub is out of date. On a phone it folds to a sign on
     the town center's right wing, in view at home zoom (a red pillar box and coloured ready,
@@ -1398,16 +1398,69 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
+### Integrations
+
+**Menu → Integrations** lists everything World reads from or works through.
+**All** opens first and lists every kind under its heading; then one tab per
+kind: **Runtimes** (this computer's Herdr or herdr-core and each SSH host),
+**Sources** (GitHub, Jira and Usage metrics), **Agents** (World's skill for
+each harness, per host) and **Editors** once one is listed; last, the
+**Vault**. The kind tabs come from the registry's kinds, so a new kind gets
+its own tab; a kind with nothing in it has no tab, except Runtimes and
+Agents. Each tab shows how many rows it has and a warning mark when one is
+failing; the tabs stay on one row and scroll sideways on a phone. The screen
+reopens on the tab you last used, or on the row an element's **Connect**
+asked for.
+
+**Search** always searches every integration and the vault, by name, status
+(`error`, `needs connect`), transport (`ssh`), what a row gives (`tickets`)
+or a token's name: typing opens **All** with every match under its kind, and
+the counts become match counts. Picking a tab then narrows the results to
+that kind; a tab with no match names the tabs that have some
+(**Runtimes (1)**) and offers **Clear search**. Agents match within the
+host's agent list. To try the screen with dozens of rows, open World with
+`?integrationsFixture`: the page drops the parameter and the screen adds 40
+sample rows (hosts, trackers and an **Editors** tab) in every state until the
+page reloads. Sample rows have no action and give World nothing.
+
+Each row says what it gives World (terminals, agents, files, pull requests,
+tickets or usage) and its state:
+
+- **Connected**: in use now.
+- **Available**: ready to use; **Connect** switches it on at once.
+- **Needs connect**: needs settings first; **Connect** opens them (Jira's site,
+  email and token, or the Prometheus URL).
+- **Error**: World tried and failed; the row says why.
+
+A source row follows its source while the screen is open: a check that
+finishes or fails after the screen opened changes the row at once.
+
+**Connect** and **Disconnect** apply at once. A runtime row acts on the exact
+connection it showed: if that connection was replaced since the list was
+read, it refuses and asks you to check again rather than acting on the new
+one. **Add or edit hosts…** opens the same profile editor as **Hosts → Manage
+connections**. Nothing here is required; every request goes from the World
+service, never from the browser. A World element missing what it needs (the
+closed post office, Work's empty lens, Town with no hosts) offers **Connect**,
+which opens this screen at that row.
+
+The **Vault** tab shows where World keeps the tokens integrations need
+(today only the Jira API token): an owner-only file in World's data
+directory. It lists each token by name with the integration that uses it,
+never its value. A token is entered in its integration's settings and is
+write-only from the browser; links, symlinks or unreadable files are refused. There is no OS keychain backend yet. The registry is read-only
+at `GET /api/world/integrations`; editors join it as they land.
+
 ### Sources: GitHub and Jira
 
 World reads your pull requests and tickets itself; there is nothing else to
-install, and every source is on by default. Open **Settings → Sources** to see
-each source's state, switch it off or configure it.
+install, and every source is on by default. Open **Settings → Integrations** to see
+each source's state, switch it off or configure it under **Settings**.
 
 - **GitHub** uses the GitHub CLI signed in as the user that runs World (`gh
   auth login`): open pull requests you opened, were asked to review or are
   assigned, pull requests you opened that were merged in the last 7 days
-  (change the window in **Settings → Sources**, 1 to 90 days) and issues
+  (change the window in **Settings → Integrations**, 1 to 90 days) and issues
   assigned to you, each with review state, checks and mergeability. World
   stores no GitHub credentials. Work's **Merged** and **Done** columns group
   cards by the day each was merged or resolved, newest day open; tap an older
@@ -1415,7 +1468,7 @@ each source's state, switch it off or configure it.
   minute per refresh, after your open PR action details. If history is
   shortened, World keeps its last complete list, reports the oldest merge
   date actually observed (or no confirmed date), and asks you to shorten the
-  window in **Settings → Sources**; partial history does not authorize actions.
+  window in **Settings → Integrations**; partial history does not authorize actions.
 - **Jira Cloud** needs a site, your account email and an API token. The token
   stays in World's private storage on the service and is never shown again;
   changing the site or email removes it, so enter the token again with them.
@@ -1458,7 +1511,8 @@ each source's state, switch it off or configure it.
   opens from the pull request's badge on its agent's Town desk (a sheet on a
   phone).
 - A source that is not signed in or configured says how to connect it (Work
-  shows a quiet **Set up** button for one you never set up); the views work
+  shows a quiet **Connect** button for one you never set up, which opens
+  Integrations at that source); the views work
   without it. The service refreshes at most once a minute while a visible
   browser tab shows sources, answers at once with what it has while a refresh
   runs, and the browser never contacts GitHub or Jira.
@@ -2378,11 +2432,19 @@ and herdr-core alike:
   runtime and open contexts. Other connections and browser sessions stay open.
   Choose another default before removing the current one; explicit service
   Herdr settings still pin the process default. `--restart` remains optional
-  on loopback. A managed service bound to one non-loopback address still needs
-  `--restart` to save and restart; stop a foreground process there before editing.
-  With no listener answering, edits are saved for the next start, including when
-  a managed service is starting or unreachable. Validation errors exit 2;
-  persistence and service failures exit 1, without an offline retry of a live edit.
+  on loopback for the installed service; omit it for a development or preview
+  World. `HERDR_WORLD_DATA_DIR` selects the data folder; its live instance lock
+  records the actual service address, and the CLI uses that folder's own token.
+  `HERDR_WORLD_URL` and `HERDR_WORLD_TOKEN` cannot redirect these edits, and a
+  service owning another registry refuses them. A managed service bound to one
+  non-loopback address still needs `--restart` to save and restart; stop a
+  foreground process there before editing.
+  An unreachable live owner, refused edit or unreadable HTTP reply names the
+  target service and gives recovery steps, without an offline retry. Check that
+  World's data folder, address and live catalogue before retrying, or stop it
+  before editing offline. With no live owner, edits are saved for the next start;
+  for older services without locks, the installed service's configured address
+  is still checked. Validation errors exit 2; persistence and service failures exit 1.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
 - **herdr-core connections.** Open **Hosts → Manage connections → Add
