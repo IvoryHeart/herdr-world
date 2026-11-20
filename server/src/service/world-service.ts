@@ -13,9 +13,8 @@ import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
 import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { authTokenPrintCommand } from "../config/auth-token";
-import type { DataPaths } from "../config/data-paths";
 import { acquireInstanceLock } from "../config/instance-lock";
-import type { ServerConfig } from "../config/server-config";
+import { publishInstanceAddress } from "./instance-address";
 import { listenerSessionSecret } from "../config/session-secret";
 import { startupConnectionSettings } from "../connections/profile-creation";
 import {
@@ -71,6 +70,7 @@ import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
+import { createRuntimeMemoryService } from "../memory/runtime-service";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
 import { AgentActivityCache } from "../world/agent-activity-cache";
@@ -78,22 +78,11 @@ import { DeskWatches } from "../world/desk-watches";
 import { readDeskWatch } from "../world/desk-watch-read";
 import { createBrowserClients, summarizeHerdrEvent } from "./clients";
 import { listen } from "./listener";
-import type { Clock, Scheduler, WorldAdapters } from "./ports";
+import type { WorldServiceDeps } from "./ports";
 import { createRpcDispatcher } from "./rpc-dispatch";
-import type { OpenStorage, WorldStorage } from "./storage";
+import type { WorldStorage } from "./storage";
 
-/** Everything a World service takes from its process; nothing else is global. */
-export type WorldServiceDeps = {
-  config: ServerConfig;
-  /** The data folder this service owns from creation until stop. */
-  paths: DataPaths;
-  clock: Clock;
-  scheduler: Scheduler;
-  storage: OpenStorage;
-  adapters: WorldAdapters;
-  /** After an installed update: end the process so its supervisor restarts it. */
-  scheduleProcessExit(): void;
-};
+export type { WorldServiceDeps } from "./ports";
 
 export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 
@@ -133,7 +122,7 @@ async function compose(
   deps: WorldServiceDeps,
   storage: WorldStorage,
   sessionSecret: string,
-  releaseDataFolder: () => void,
+  releaseDataFolder: ReturnType<typeof acquireInstanceLock>,
 ) {
   const { config, paths, clock, scheduler, adapters } = deps;
   const logger = serverLogger;
@@ -265,6 +254,7 @@ async function compose(
   );
 
   const worldCli = createWorldCliService({
+    memory: () => rpcServices.worldMemory!,
     core: () => coreCallers,
     board,
     ledger: () => storage.ledger(),
@@ -406,6 +396,7 @@ async function compose(
   const observedConnections = worldRuntimeRegistry(
     connectionManager,
     core.manager,
+    () => connectionProfiles.hosts.list(),
   );
   const agentActivity = new AgentActivityCache({
     clock,
@@ -682,6 +673,7 @@ async function compose(
     store: storage.connections,
     changed: publishConnectionsChanged,
     bootstrap: connectionBootstrap,
+    discoverHost: deps.adapters.herdr.discoverHost,
     createRuntime: runtimeFactoryForProfile,
     // The setup card's lookup; a ready implicit local server is Herdr (#935).
     noHerdrTui: () =>
@@ -801,6 +793,11 @@ async function compose(
     worldSnapshots,
     worldUsage,
     worldUsageAnalytics: worldUsage.analytics,
+    worldMemory: createRuntimeMemoryService({
+      tui: () => connectionManager,
+      core: coreRpc,
+      now: () => clock.now(),
+    }),
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
@@ -888,6 +885,7 @@ async function compose(
             connectionCli: {
               profiles: connectionProfiles,
               registryPath: paths.connections,
+              snapshot: () => worldSnapshots!.snapshot(),
             },
             settings,
             update,
@@ -907,6 +905,7 @@ async function compose(
           });
         },
       });
+      publishInstanceAddress(releaseDataFolder, config, server);
       worldCli.start();
       forwards.listeningOn(server.port ?? config.port);
       return {

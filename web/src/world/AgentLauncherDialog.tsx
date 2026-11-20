@@ -238,17 +238,12 @@ export function AgentLauncherDialog({
           from: initial.from ?? "elsewhere",
         });
       if (!mounted.current) return;
-      // A ready agent opens and the dialog closes; anything else stays
-      // here with its reason and a way to open the tab. World has no
-      // terminal stream for a core agent yet: it arrives in Town instead,
-      // with any note core's start left for the person.
-      if (terminalId && target.runtime === "herdr-core") {
-        if (result.message)
-          store.notify({ kind: "info", message: result.message });
-        dismiss();
-        return;
-      }
+      // A ready agent opens and the dialog closes, on Herdr and herdr-core
+      // alike (core keeps any note its start left for the person); anything
+      // else stays here with its reason and a way to open the tab.
       if (terminalId) {
+        if (target.runtime === "herdr-core" && result.message)
+          store.notify({ kind: "info", message: result.message });
         onOpen({
           connectionId: target.connectionId,
           runtimeGeneration: target.generation,
@@ -301,6 +296,13 @@ export function AgentLauncherDialog({
         });
         if (result.status !== "started" && result.status !== "sent")
           throw new Error(result.message ?? "herdr-core did not start it");
+        // Its window opens once World shows it, as a Herdr tab's does.
+        if (result.terminal_id)
+          onOpen({
+            connectionId: target.connectionId,
+            runtimeGeneration: target.generation,
+            terminalId: result.terminal_id,
+          });
       } else
         await store.createQualifiedTab(
           {

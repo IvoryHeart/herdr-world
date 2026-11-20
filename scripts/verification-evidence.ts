@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { lstat, readFile, readlink } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
-import { sha256 } from "./verification-setup";
+import { lockedQuintVersion, sha256 } from "./verification-setup";
 
 export type InputFingerprint = {
   path: string;
@@ -124,7 +124,8 @@ export async function validateEvidence(
     "Verification source changed since execution",
   );
   assert(
-    manifest.tools.quint === "0.33.0" && manifest.tools.checker === "0.62.1",
+    manifest.tools.quint === lockedQuintVersion &&
+      manifest.tools.checker === "0.62.1",
     "Unpinned verifier",
   );
   assert(

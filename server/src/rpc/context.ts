@@ -109,6 +109,7 @@ export type RpcServices = {
   worldSnapshots: ObservedSnapshots | null;
   worldUsage?: import("../usage/service").WorldUsageService;
   worldUsageAnalytics?: import("../usage/analytics").WorldUsageAnalyticsService;
+  worldMemory?: import("../memory/service").MemoryService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;

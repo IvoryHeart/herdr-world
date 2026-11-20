@@ -13,7 +13,7 @@ when redistributing that checker. No checker binary is committed or shipped here
 | @grpc/grpc-js@1.14.6 | Apache-2.0 |
 | @grpc/proto-loader@0.8.1 | Apache-2.0 |
 | @grpc/proto-loader@0.7.15 | Apache-2.0 |
-| @informalsystems/quint@0.33.0 | Apache 2.0 |
+| @informalsystems/quint@0.33.1 | Apache 2.0 |
 | @isaacs/fs-minipass@4.0.1 | ISC |
 | @js-sdsl/ordered-map@4.4.2 | MIT |
 | @octokit/endpoint@9.0.6 | MIT |
@@ -38,7 +38,7 @@ when redistributing that checker. No checker binary is committed or shipped here
 | @types/lodash.clonedeep@4.5.0 | MIT |
 | @types/node@26.6.5 | MIT |
 | @types/seedrandom@3.0.8 | MIT |
-| adm-zip@0.5.18 | MIT |
+| adm-zip@0.6.1 | MIT |
 | ansi-regex@5.0.1 | MIT |
 | ansi-styles@4.3.0 | MIT |
 | antlr4ts@0.5.0-alpha.4 | BSD-3-Clause |

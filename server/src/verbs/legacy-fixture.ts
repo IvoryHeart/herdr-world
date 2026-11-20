@@ -66,6 +66,9 @@ export async function legacyOutcomes(factory = createWorldCli) {
   }[] = [];
   for (const verified of [true, false])
     for (const command of WORLD_CLI_COMMANDS) {
+      // Memory was added after the frozen pre-registry baseline. Its admission
+      // and effects are covered by memory/routing.test.ts and cli/memory.test.ts.
+      if (command.startsWith("memory ")) continue;
       const root = mkdtempSync(join(tmpdir(), "verb-compatibility-"));
       try {
         const effects: string[] = [];

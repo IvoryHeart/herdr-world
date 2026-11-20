@@ -141,21 +141,32 @@ describe("Herdr World release boundary", () => {
     }
   });
 
-  test("the publish workflow enforces the boundary and installs only Herdr World", async () => {
-    const workflow = await readFile(
-      new URL("../.github/workflows/release.yml", import.meta.url),
+  test("release boundary is enforced before sealing and public assets are digest-checked", async () => {
+    const workflow = YAML.parse(
+      await readFile(
+        new URL("../.github/workflows/release.yml", import.meta.url),
+        "utf8",
+      ),
+    );
+    const archives = workflow.jobs.archives.steps
+      .map((step) => step.run ?? "")
+      .join("\n");
+    expect(archives).toContain(
+      'node scripts/check-release-assets.mjs "$RELEASE_VERSION"',
+    );
+    expect(archives).toContain("cp scripts/install-herdr-world.sh dist/");
+    expect(archives).toContain("dist --published");
+    const publisher = await readFile(
+      new URL("./publish-github-release.mjs", import.meta.url),
       "utf8",
     );
-    const publish = workflow.slice(workflow.indexOf("  publish:"));
-    expect(publish).toContain(
-      'node scripts/check-release-assets.mjs "${GITHUB_REF_NAME#v}"',
-    );
-    expect(publish).toContain("scripts/install-herdr-world.sh");
-    expect(publish).not.toContain("herdr-gui");
-    expect(publish).toContain("--latest");
+    expect(publisher).toContain('"download"');
+    expect(publisher).toContain("manifest.files");
+    expect(publisher).toContain('"--latest"');
+    expect(publisher).not.toContain("herdr-gui");
   });
 
-  test("downstream channels consume the published release assets on retries", async () => {
+  test("all channels consume the retained verified bundle on publish retries", async () => {
     const workflow = YAML.parse(
       await readFile(
         new URL("../.github/workflows/release.yml", import.meta.url),
@@ -163,20 +174,24 @@ describe("Herdr World release boundary", () => {
       ),
     );
     const jobs = workflow.jobs;
-    expect(jobs["published-archives"].needs).toBe("publish");
-    expect(jobs["npm-stage"].needs).toBe("published-archives");
-    expect(jobs["homebrew-formula"].needs).toBe("published-archives");
-    const published = jobs["published-archives"].steps
-      .map((step) => step.run ?? "")
-      .join("\n");
-    expect(published).toContain("gh release download");
-    expect(published).not.toContain("--pattern");
-    expect(published).toContain("dist --published");
     for (const name of ["npm-stage", "homebrew-formula"]) {
+      expect(jobs[name].needs).toContain("archives");
       const download = jobs[name].steps.find((step) =>
         step.uses?.includes("actions/download-artifact"),
       );
-      expect(download.with.name).toBe("published-archives");
+      expect(download.with.name).toBe("verified-archives");
+    }
+    for (const name of ["publish", "npm-publish", "homebrew-pr"]) {
+      expect(jobs[name].needs).toContain("verify");
+      const download = jobs[name].steps.find((step) =>
+        step.uses?.includes("actions/download-artifact"),
+      );
+      expect(download.with.name).toBe("verified-release");
+      expect(
+        jobs[name].steps.some((step) =>
+          step.run?.includes("release-bundle.mjs verify"),
+        ),
+      ).toBe(true);
     }
   });
 

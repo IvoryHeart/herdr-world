@@ -1,4 +1,6 @@
 import { planBoardPatch } from "./board-plan";
+import type { MemoryAction } from "../../../shared/memory";
+import { runMemoryCli } from "./world-cli-memory";
 import { StorageOutcomeUnknown } from "../storage/world-protocol";
 import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
 import { commandEvidence } from "../verbs/evidence";
@@ -14,15 +16,21 @@ import {
 import { handleWorldAsk } from "./world-cli-asks";
 export { answerAsk, ASK_WAIT_MAX_MS, dismissAsk } from "./world-cli-asks";
 import { teamMembers } from "../../../shared/groups";
-import {
-  GROUP_CLI_COMMANDS,
-  runGroupCommand,
-  type GroupMoveRequest,
-} from "./world-cli-groups";
+import { runGroupCommand, type GroupMoveRequest } from "./world-cli-groups";
 import { CliError } from "./world-cli-errors";
 import { usage, refused, notFound } from "./world-cli-errors";
-import type { WorldCliRequest, WorldCliResponse } from "./world-cli-protocol";
-export type { WorldCliRequest, WorldCliResponse } from "./world-cli-protocol";
+import {
+  WORLD_CLI_COMMANDS,
+  type WorldCliCommand,
+  type WorldCliRequest,
+  type WorldCliResponse,
+} from "./world-cli-protocol";
+export {
+  WORLD_CLI_COMMANDS,
+  type WorldCliCommand,
+  type WorldCliRequest,
+  type WorldCliResponse,
+} from "./world-cli-protocol";
 import type { GroupWorkSources } from "../../../shared/groupViews";
 export { CliError, type CliErrorCode } from "./world-cli-errors";
 import { randomUUID } from "node:crypto";
@@ -76,6 +84,11 @@ import {
  */
 
 export type WorldCliDeps = {
+  memory?(
+    action: MemoryAction,
+    params: Record<string, unknown>,
+    recheck: () => void,
+  ): Promise<unknown>;
   board: Pick<BoardStorePort, "get" | "patch" | "patchIf">;
   ledger: LedgerStore;
   /** Only a durable committed store may issue this receipt. */
@@ -116,33 +129,6 @@ export type WorldCliDeps = {
   /** Aborted when the service stops: calls that wait return early. */
   signal?: AbortSignal;
 };
-
-/** The commands the endpoint accepts, as the CLI spells them. */
-export const WORLD_CLI_COMMANDS = [
-  ...GROUP_CLI_COMMANDS,
-  "whoami",
-  "ls",
-  "usage",
-  "history",
-  "undo",
-  "board card move",
-  "board card pin",
-  "board card unpin",
-  "board card group",
-  "board card ungroup",
-  "colour set",
-  "colour reset",
-  "town desk move",
-  "ask",
-  "ask get",
-  "ask acknowledge",
-  "ask answer",
-  "ask withdraw",
-  "result",
-  "result ls",
-  "spawned-by",
-] as const;
-export type WorldCliCommand = (typeof WORLD_CLI_COMMANDS)[number];
 
 /* ---------- Identity ---------- */
 
@@ -634,6 +620,8 @@ export function createWorldCli(deps: WorldCliDeps) {
     host: CliHost | undefined,
     recheck: () => void,
   ): Promise<unknown> {
+    if (command.startsWith("memory "))
+      return runMemoryCli(deps.memory, command, params, recheck);
     const record = recordWithDeps.bind(null, completion);
     const patchBoard = patchBoardWithDeps.bind(null, deps);
     const changeBoard = changeBoardWithDeps.bind(null, deps);
@@ -687,8 +675,9 @@ export function createWorldCli(deps: WorldCliDeps) {
         return actor;
       case "ls": {
         const snapshot = await deps.snapshot();
-        return snapshot.connections.map((connection) => ({
+        const connections = snapshot.connections.map((connection) => ({
           connection_id: connection.connection_id,
+          connection_generation: connection.generation,
           label: connection.label,
           current: connection.actionable && !connection.stale,
           workspaces: (connection.snapshot?.workspaces ?? []).map((ws) => ({
@@ -709,6 +698,21 @@ export function createWorldCli(deps: WorldCliDeps) {
               })),
           })),
         }));
+        return snapshot.hosts
+          ? {
+              hosts: snapshot.hosts.map((host) => ({
+                ...host,
+                runtimes: host.runtimes.map((runtime) => ({
+                  ...runtime,
+                  ...connections.find(
+                    (connection) =>
+                      connection.connection_id === runtime.connection_id,
+                  ),
+                })),
+              })),
+              connections,
+            }
+          : connections;
       }
       case "history": {
         const by = typeof params.actor === "string" ? params.actor : "";

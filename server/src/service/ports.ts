@@ -1,5 +1,9 @@
+import type { DataPaths } from "../config/data-paths";
+import type { ServerConfig } from "../config/server-config";
+import type { OpenStorage } from "./storage";
 import { productionAdapters } from "../adapters/registry";
-import { testConnectionSockets } from "../connections/profile-service";
+import { discoverHost, type DiscoverHost } from "../connections/host-discovery";
+import { testConnectionSockets } from "../connections/profile-probe";
 import type {
   createLegacyConnectionRuntime,
   LegacyConnectionRuntime,
@@ -42,6 +46,7 @@ export type HerdrRuntimeOptions = Parameters<
 /** Herdr, the one runtime: a connection runtime per connection generation. */
 export type HerdrAdapter = {
   createRuntime(options: HerdrRuntimeOptions): LegacyConnectionRuntime;
+  discoverHost?: DiscoverHost;
 };
 
 /** Adapters by kind, registered once by the composition root. */
@@ -49,6 +54,7 @@ export type WorldAdapters = { herdr: HerdrAdapter };
 
 /** The registry's Herdr adapter; its runtimes check both sockets once started. */
 export const herdrAdapter: HerdrAdapter = {
+  discoverHost: (host, existing) => discoverHost(host, existing),
   createRuntime(options) {
     const runtime = productionAdapters.herdr.createRuntime(options);
     return {
@@ -62,4 +68,17 @@ export const herdrAdapter: HerdrAdapter = {
       },
     };
   },
+};
+
+/** Everything a World service takes from its process; nothing else is global. */
+export type WorldServiceDeps = {
+  config: ServerConfig;
+  /** The data folder this service owns from creation until stop. */
+  paths: DataPaths;
+  clock: Clock;
+  scheduler: Scheduler;
+  storage: OpenStorage;
+  adapters: WorldAdapters;
+  /** After an installed update: end the process so its supervisor restarts it. */
+  scheduleProcessExit(): void;
 };
