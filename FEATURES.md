@@ -1071,17 +1071,26 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     before it pulls in). The bin floats at the bottom of the screen and
     lights up during a drag, so a phone needs only a short drag, and the town
     does not scroll while the drag rests on it. A red
-    double-decker comes every four minutes on a
-    fixed schedule when someone is waiting: it comes in, slows to each stop
-    with riders, waits about ten seconds, speeds up and drives off the map,
-    and only then do its riders' agents close; its riders show in its
-    windows. Agents put in the bin while
+    double-decker lives at Apartments' stop, on the last street by a
+    footpath down to the building's door (its green house sign marks it),
+    and sets off every four minutes on a fixed schedule when someone is
+    waiting. It drives only the town's roads, by the nearest way round the
+    stops with riders and back, never off the map: it turns its corners,
+    slows to each stop and waits there about ten seconds with its door open
+    while its riders step on, and its riders show in its windows the whole
+    way (in its side windows, or its front and back windows on a road up
+    or down the screen). Back at
+    Apartments it opens its door, its riders step off one by one and walk in,
+    and the sign counts each as it goes in; the last is in just as the trip
+    ends, which is when their agents close. Where the town is too small for
+    the building, the bus stops at the town center's door instead, which
+    opens Apartments. Agents put in the bin while
     the bus is out wait for the next one. Tapping the bus stops it where it
     is and opens the tray (nothing closes while it stands); **Let the bus
     go**, or closing the tray, sends it on. The bin (always shown in Town and on Board, in other views while
     it holds agents; on a phone, also a stop or the bus in Town) opens the
-    tray: who waits, the time to the next bus, **Put back** (until the bus
-    has left the screen, even after boarding; it walks back to its desk) and
+    tray: who waits, the time to the next bus, **Put back** (until the trip
+    ends, even after boarding; it walks back to its desk from its stop) and
     **Close now**. A pinned desk's or pinned tab's last agent cannot go
     in the bin, and its close never takes a pinned tab's last pane. Closes are qualified by host
     and runtime: a host that restarts keeps its agents, and restarting World
@@ -1876,7 +1885,10 @@ resident: an ending World sees replaces the found record of that session.
 
 - Open it from the green **APARTMENTS** sign on the sandstone block in Town's
   park beside the town center (left of the plaza, or right when there is no
-  room; a town too small for it hides the building), from **Apartments** in
+  room; a town too small for it hides the building), where the bus brings
+  binned agents to its door and the sign's count goes up as each walks in
+  (see **Bin and bus** under [Visual control plane](#visual-control-plane)),
+  from **Apartments** in
   the town center ring, or from **Apartments** in Board's hub. All three read
   the same residents, and the ring and hub show how many live there.
 - A resident whose session runs again at a desk is hidden while it runs, and

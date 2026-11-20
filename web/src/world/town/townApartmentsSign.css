@@ -48,3 +48,25 @@
 .town-apartments-count {
   font-weight: 600;
 }
+
+/* One more moved in: the count pops (townApartmentsArrivals.ts). */
+.town-apartments-count[data-pop] {
+  animation: town-apartments-pop 0.45s ease-out;
+}
+@keyframes town-apartments-pop {
+  0% {
+    scale: 1;
+  }
+  35% {
+    scale: 1.35;
+    color: #ffd166;
+  }
+  100% {
+    scale: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .town-apartments-count[data-pop] {
+    animation: none;
+  }
+}
