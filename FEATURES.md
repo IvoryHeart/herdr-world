@@ -563,17 +563,32 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     test data for its synthetic buildings, including the Town board and Spend lens.
   - Town's **post office** stands on the first street left of the town
     center, on a phone as on a wide screen: Town's place for what is
-    addressed to you. Its red sign on the roof counts, without hovering,
-    what **Needs you** lists, by kind with the shared marks: "? 2 questions",
-    "! 1 blocked", "✓ 3 to review", and "✉ 1 to check" for saved answers
-    waiting in the Outbox; with none it reads "Nothing for you", and its rim
-    turns gold while a question or a blocked agent waits. Click it, or focus
-    it and press Enter, to open the same **Needs you** tab as the top bar's
-    counter, where you answer, withdraw and reach the Outbox as usual; it is
-    not a second inbox. It counts the hosts the Hosts filter shows, as Needs
-    you does. It holds no pull requests: those are the warehouse's. On a
-    phone the sign folds to a smaller red plate across the house's front, in
-    view at home zoom, with the marks and numbers only; tap it for Needs you.
+    addressed to you, messages and never cargo (pull requests are crates in
+    the warehouse; releases are ships). Its red sign on the roof counts,
+    without hovering, what **Needs you** lists, by kind with the shared
+    marks: "? 2 questions", "! 1 blocked", "✓ 3 to review", and "✉ 1 to
+    check" for saved answers waiting in the Outbox; with none it reads
+    "Nothing for you", and its rim turns gold while a question or a blocked
+    agent waits. Click it, or focus it and press Enter, to open the same
+    **Needs you** tab as the top bar's counter, where you answer, withdraw
+    and reach the Outbox as usual; it is not a second inbox. It counts the
+    hosts the Hosts filter shows, as Needs you does. On a phone the sign
+    folds to a smaller red plate across the house's front, in view at home
+    zoom, with the marks and numbers only; tap it for Needs you. Each open
+    question for you (from `herdr-world ask`) is a letter in its yard,
+    oldest first; a letter from a caller World could not verify has a grey
+    seal. Hover or focus a letter for "Letter from orbit: …"; click or tap
+    it for a card with the question, its answer choices, its age and
+    **Answer in Needs you**, which opens Needs you at that question.
+    Answers on their way to an agent ride the mail trolley by the door, red
+    when one needs checking (delivery uncertain or refused); click it to
+    open the Outbox. More letters than the yard holds make a "+N" bundle
+    that lists the rest. For trying it without real questions, open World
+    with `?townPostFixture` (four synthetic letters, one unverified, and
+    three answers on the trolley; the sign counts them), `?townPostFixture=many`
+    (a bundle) or `?townPostFixture=empty` (no mail); the page drops the
+    parameter at once, only the post office uses it, and a test letter's
+    card has nothing to answer.
   - Town's **warehouse** stands on the shore at the first street's end, by
     the harbour, its yard on the pavement: your open pull requests (opened by
     you, waiting on your review or assigned to you) as crates in its yard,
@@ -1107,8 +1122,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
     click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
     a readable zoom and pulses it; choosing it again, or **Enter** a second
-    time, opens it as selecting does. Town's own places are found too: "post
-    office" (or "pull requests") lists the **Post office**, and choosing it
+    time, opens it as selecting does. Town's own places are found too:
+    "warehouse" (or "pull requests") lists the **Warehouse**, and choosing it
     moves the camera there; choosing it again only shows it again. A result Town does not draw, such as
     an agent at a table its room folds away, opens at once and counts as
     off-screen. Under **Town calm motion** or reduced motion the camera jumps
@@ -1732,7 +1747,7 @@ read, it refuses and asks you to check again rather than acting on the new
 one. **Add or edit hosts…** opens the same profile editor as **Hosts → Manage
 connections**. Nothing here is required; every request goes from the World
 service, never from the browser. A World element missing what it needs (the
-closed post office, Work's empty lens, Town with no hosts) offers **Connect**,
+closed warehouse, Work's empty lens, Town with no hosts) offers **Connect**,
 which opens this screen at that row.
 
 The **Vault** tab shows where World keeps the tokens integrations need
