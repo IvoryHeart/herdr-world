@@ -11,6 +11,7 @@ import {
 } from "./townCenter";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import { TOWN_RECEPTION_LIFT } from "./townBoardPlacement";
+import { TOWN_LIBRARY_ROOM } from "./townLibraryLot";
 import { TOWN_POST_ROOM } from "./townPostLot";
 import { townEase } from "./townTransition";
 
@@ -40,12 +41,15 @@ export type TownZoomLimits = {
 
 /**
  * Tiles from the town's left edge past the side road of the last host's
- * building or the town center, whichever stands further right.
+ * building or the town center (with a wide town's library), whichever
+ * stands further right.
  */
 export function townHostsWidth(layout: TownLayout) {
   if (!layout.buildings.length) return layout.width;
+  // A wide town's library stands right of the center (townLibraryLot.ts).
+  const civic = layout.formFactor === "narrow" ? 0 : TOWN_LIBRARY_ROOM;
   const right = Math.max(
-    layout.center.x + layout.center.w,
+    layout.center.x + layout.center.w + civic,
     ...layout.buildings.map((b) => b.x + b.w),
   );
   // The side road right of the last lot, and a tile of verge.

@@ -37,6 +37,7 @@ import type { ActiveFilePreviewSelection } from "../components/FilePreviewConten
 import { lazyWithReload } from "../lazyWithReload";
 import { InspectorLoadingShell } from "../components/InspectorLoadingShell";
 import { ThemeScope } from "../themeScope";
+import { AgentMemoryLink } from "./memory/AgentMemoryLink";
 import { InspectorPaneMap } from "../components/InspectorPaneMap";
 import {
   OperationalContext,
@@ -888,11 +889,17 @@ function InspectorResources({
                       disabled={presentationStale}
                     >
                       {conversation.context.kind === "agent" ? (
-                        <AgentInspectorActions
-                          conversation={conversation}
-                          workspaceIds={workspaces.map((w) => w.workspace_id)}
-                          disabled={presentationStale}
-                        />
+                        <>
+                          <AgentInspectorActions
+                            conversation={conversation}
+                            workspaceIds={workspaces.map((w) => w.workspace_id)}
+                            disabled={presentationStale}
+                          />
+                          <AgentMemoryLink
+                            connectionId={conversation.connectionId}
+                            agentId={conversation.paneId}
+                          />
+                        </>
                       ) : null}
                     </TerminalAppearanceEditor>
                   ) : undefined
