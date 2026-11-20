@@ -116,6 +116,36 @@ The usage read SHALL report, per qualified host, the newest subscription-limit o
 - **WHEN** a Codex rollout on a host records token counts with primary and secondary rate-limit windows
 - **THEN** that host's limits list both windows from its newest such record, attributed to the Codex session log
 
+#### Scenario: Multiple Claude sessions report one reset window
+
+- **WHEN** Claude taps report comparable percentages with the same reset time
+- **THEN** the host observation retains the highest percentage for that window;
+  a later reset replaces an earlier window and an older reset cannot restore it
+- **AND** absent reset evidence remains incomparable rather than an invented
+  monotonic window; contention may skip an optional reading
+
+The stale-lock publication counterexample in
+[Q55](../../../verification/contracts/claude-tap-lock.md) is a known violation
+of this requirement, tracked by issue #1086; its diagnostic is not safety proof.
+
+#### Scenario: Unix TUI Claude launch prepares settings
+
+- **WHEN** World launches Claude through a Unix TUI shell
+- **THEN** it prepares only its generated tap settings as a private,
+  content-addressed file on the selected local or SSH host over a non-PTY
+  process and passes a short `--settings` path; user settings stay unchanged
+- **AND** preparation or path validation failure prevents tab creation and
+  agent launch; retry can reuse a complete prepared file, while concurrent
+  equal-content preparations publish the same complete content atomically
+- **AND** Windows retains inline settings and core retains its native argv path
+
+#### Scenario: Usage-limit stop and stale fuel display
+
+- **WHEN** a current transcript reports a usage-limit refusal or a limit reading ages
+- **THEN** a stopped agent's out-of-fuel explanation derives from that current
+  refusal, and a gauge older than fifteen minutes shows its age; the existing
+  three-hour and reset rules still determine staleness, and missing is never full
+
 #### Scenario: Claude sessions outside World report through the installed tap
 - **WHEN** the user explicitly installs the Claude World integration and starts a new Claude session without a project status line override
 - **THEN** the chained status line records the same numeric limits as the per-launch tap and preserves the previous command's input and output; uninstall restores unchanged settings byte for byte, including absence, while preserving intervening user edits

@@ -793,7 +793,7 @@ export function layoutTown(
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
 
-  const post = formFactor === "narrow" ? null : townPostLotBeside(center);
+  const post = townPostLotBeside(center);
   const observatory =
     formFactor === "narrow" ? null : townObservatoryLotBeside(center);
   const lamps: TownPoint[] = [];
@@ -807,10 +807,7 @@ export function layoutTown(
       if (underCenter) continue;
       // The post office's yard fronts it too (townPostLot.ts).
       const underPost =
-        post &&
-        ry === center.street &&
-        tx >= post.x - 1 &&
-        tx <= post.x + post.w;
+        ry === center.street && tx >= post.x - 1 && tx <= post.x + post.w;
       if (underPost) continue;
       // So does the observatory's door (townObservatoryLot.ts).
       const underObservatory =

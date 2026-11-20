@@ -40,8 +40,7 @@ export {
 
 /**
  * Where a narrow town's folded observatory sign hangs, in world pixels: on
- * the center's left wing, level with the folded post office on its right,
- * inside a phone's home view.
+ * the center's left wing, inside a phone's home view.
  */
 export function townObservatoryFoldAt(center: TownCenterLot) {
   return {

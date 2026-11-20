@@ -242,11 +242,8 @@ function reservedLand(layout: TownLayout) {
     const sy = Math.floor(stop.wait.y / T);
     reserve(sx - 2, sy - 5, sx + 3, sy + 2);
   }
-  const post = townPostLot(layout);
-  if (post) {
-    const lot = townPostReserve(post);
-    reserve(lot.x0, lot.y0, lot.x1, lot.y1);
-  }
+  const post = townPostReserve(townPostLot(layout));
+  reserve(post.x0, post.y0, post.x1, post.y1);
   const observatory = townObservatoryLot(layout);
   if (observatory) {
     const lot = townObservatoryReserve(observatory);
