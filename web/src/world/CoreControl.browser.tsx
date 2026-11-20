@@ -114,7 +114,7 @@ async function run() {
         <AgentLauncherDialog
           world={world}
           initial={{}}
-          onOpen={() => failures.push("a core terminal has no World window")}
+          onOpen={() => failures.push("nothing opens before a start")}
           onEditProfiles={() => {}}
           onClose={() => {
             closed += 1;
