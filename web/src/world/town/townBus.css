@@ -390,6 +390,40 @@
       #3b3b3b 88%
     );
 }
+/*
+ * Its riders through those windows, head and shoulders, so one aboard stays
+ * in sight on a side road too: facing us coming down, backs going up.
+ */
+.town-bus-end-window {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  display: flex;
+  justify-content: center;
+  width: 20px;
+  height: 9px;
+  overflow: hidden;
+  translate: -50% 0;
+}
+.town-bus-end-lower {
+  top: 26px;
+  height: 8px;
+}
+.town-bus[data-facing="up"] .town-bus-end-window {
+  top: 6px;
+  width: 16px;
+  height: 7px;
+}
+.town-bus[data-facing="up"] .town-bus-end-lower {
+  top: 24px;
+  width: 12px;
+  height: 5px;
+}
+.town-bus-end-passenger {
+  position: static;
+  flex: none;
+  margin: 1px -3px 0;
+}
 .town-bus[data-facing="up"][data-braking] .town-bus-end {
   box-shadow:
     0 3px 0 -1px rgb(0 0 0 / 0.35),

@@ -29,7 +29,8 @@ async function whileDrawing(condition: () => boolean, message: string) {
 /**
  * Town's bus in a real Town, its trip held still at each moment (a stopped
  * bus's clock stands): it waits parked at Apartments, drives out to the
- * rider's stop and opens its door there, carries the rider in its window,
+ * rider's stop and opens its door there, carries the rider in sight in its
+ * windows the whole way (side on, or front and back on a side road),
  * comes back to the same spot, and the rider walks in to Apartments, whose
  * sign counts one more. `setBin` sets the fake service's bin, null for its
  * own empty one.
@@ -123,6 +124,9 @@ export async function checkTownBusTrip(
     let away = 0;
     let doorsAway = false;
     let aboardMoving = false;
+    // Seconds the rider was aboard with no window showing it.
+    const unseen: number[] = [];
+    const facings = new Set<string>();
     const seen = new Set<string>();
     const sample = async (ms: number) => {
       await show(ms, true);
@@ -136,11 +140,21 @@ export async function checkTownBusTrip(
       if (moved > 40 && bus()!.hasAttribute("data-doors")) doorsAway = true;
       const ride = person()?.dataset.ride ?? "gone";
       seen.add(ride);
-      if (
-        ride === "aboard" &&
-        host.querySelector(".town-bus-passenger[data-boarded]")
-      )
-        aboardMoving = true;
+      if (ride === "aboard") {
+        // In sight in a window of the side it shows, whichever way it faces.
+        const shown = [
+          ...host.querySelectorAll<HTMLElement>(
+            ".town-bus-passenger[data-boarded]",
+          ),
+        ].some(
+          (node) =>
+            node.getClientRects().length > 0 &&
+            getComputedStyle(node).visibility === "visible",
+        );
+        if (shown) aboardMoving = true;
+        else unseen.push(ms / 1000);
+        facings.add(bus()!.dataset.facing ?? "");
+      }
       return ride;
     };
     let last = "queue";
@@ -155,6 +169,14 @@ export async function checkTownBusTrip(
     check(away > 40, "the bus never drove out to the rider's stop");
     check(doorsAway, "the bus never opened its door away from Apartments");
     check(aboardMoving, "the rider never showed in the bus's window");
+    check(
+      !unseen.length,
+      `the rider vanished aboard at ${unseen.join(", ")} s (facing ${[...facings].join(", ")})`,
+    );
+    check(
+      facings.has("up") || facings.has("down"),
+      "the trip never took a side road, so the end windows went untested",
+    );
     for (const ride of ["queue", "boarding", "aboard", "alighting"])
       check(seen.has(ride), `the rider was never seen ${ride}`);
 

@@ -184,6 +184,11 @@ export function paintTownRider(
 const SPRITE = { width: 14, height: 20 };
 /** Seats shown in the bus's windows: upstairs, then downstairs. */
 const SEATS = [4, 3] as const;
+/**
+ * Riders seen through its front or back windows on a side road: two
+ * upstairs, two downstairs, so a rider never drops out of sight aboard.
+ */
+const END_SEATS = [2, 2] as const;
 
 /** A clock that ticks each second while `running`. */
 function useSecondClock(running: boolean) {
@@ -258,6 +263,7 @@ export const TownBusLayer = memo(function TownBusLayer({
   const bus = useRef<HTMLButtonElement>(null);
   const riderRefs = useRef(new Map<string, HTMLElement>());
   const passengerRefs = useRef(new Map<string, HTMLCanvasElement>());
+  const endRefs = useRef(new Map<string, HTMLCanvasElement>());
   const walks = useRef(new Map<string, TownRiderOuting>());
   const homeRefs = useRef(new Map<string, HTMLElement>());
   const moreRefs = useRef(new Map<string, HTMLElement>());
@@ -393,6 +399,8 @@ export const TownBusLayer = memo(function TownBusLayer({
       const e = elapsed === null ? null : elapsed / 1000;
       let busy = elapsed !== null && !bin.bus.stopped;
       const element = bus.current;
+      // Riders face the way it drives: towards us coming down a side road.
+      let endDir: TownDirection = "down";
       if (element) {
         const pose = !terminus
           ? null
@@ -405,6 +413,7 @@ export const TownBusLayer = memo(function TownBusLayer({
           element.style.setProperty("--tilt", `${pose.tilt.toFixed(2)}deg`);
           if (element.dataset.facing !== pose.facing)
             element.dataset.facing = pose.facing;
+          if (pose.facing === "up") endDir = "up";
           element.toggleAttribute("data-doors", pose.doors);
           element.toggleAttribute("data-moving", pose.moving && !still);
           element.toggleAttribute("data-braking", pose.braking);
@@ -530,6 +539,13 @@ export const TownBusLayer = memo(function TownBusLayer({
           if (passenger.hasAttribute("data-boarded") !== seen)
             passenger.toggleAttribute("data-boarded", seen);
         }
+        const ahead = endRefs.current.get(id);
+        if (ahead) {
+          paintTownRider(ahead, look, endDir, 0);
+          const seen = ride === "aboard";
+          if (ahead.hasAttribute("data-boarded") !== seen)
+            ahead.toggleAttribute("data-boarded", seen);
+        }
       }
       // A "+N" board counts only those still in the queue, and comes down
       // with the last of them, so the stop empties as the bus takes it.
@@ -596,6 +612,24 @@ export const TownBusLayer = memo(function TownBusLayer({
         width={SPRITE.width}
         height={SPRITE.height}
         style={{ left: 2 + seat * (deck ? 13 : 11) }}
+      />
+    )),
+  );
+  const [endUpper, endLower] = END_SEATS;
+  const endSeats = [
+    passengers.slice(0, endUpper),
+    passengers.slice(endUpper, endUpper + endLower),
+  ].map((deckRiders) =>
+    deckRiders.map((rider) => (
+      <canvas
+        key={rider.entry.id}
+        ref={(node) => {
+          if (node) endRefs.current.set(rider.entry.id, node);
+          else endRefs.current.delete(rider.entry.id);
+        }}
+        className="town-bus-passenger town-bus-end-passenger"
+        width={SPRITE.width}
+        height={SPRITE.height}
       />
     )),
   );
@@ -744,7 +778,12 @@ export const TownBusLayer = memo(function TownBusLayer({
           <span className="town-bus-wheel" />
           <span className="town-bus-wheel town-bus-wheel-back" />
         </span>
-        <span className="town-bus-end" aria-hidden="true" />
+        <span className="town-bus-end" aria-hidden="true">
+          <span className="town-bus-end-window">{endSeats[0]}</span>
+          <span className="town-bus-end-window town-bus-end-lower">
+            {endSeats[1]}
+          </span>
+        </span>
       </button>
     </div>
   );

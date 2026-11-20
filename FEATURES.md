@@ -815,7 +815,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     waiting. It drives only the town's roads, by the nearest way round the
     stops with riders and back, never off the map: it turns its corners,
     slows to each stop and waits there about ten seconds with its door open
-    while its riders step on, and its riders show in its windows. Back at
+    while its riders step on, and its riders show in its windows the whole
+    way (in its side windows, or its front and back windows on a road up
+    or down the screen). Back at
     Apartments it opens its door, its riders step off one by one and walk in,
     and the sign counts each as it goes in; the last is in just as the trip
     ends, which is when their agents close. Where the town is too small for
