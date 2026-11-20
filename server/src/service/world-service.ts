@@ -64,6 +64,7 @@ import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBinService } from "./bin-service";
+import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
@@ -98,8 +99,6 @@ export type WorldServiceDeps = {
 };
 
 export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
-
-const DRAIN_TIMEOUT_MS = 2_000; // Wait for requests already running at stop.
 
 /**
  * Claim the data folder, open storage and build one World service. Nothing
@@ -800,31 +799,9 @@ async function compose(
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
-  // Requests and socket messages still running; stop waits for them.
-  const inFlight = new Set<Promise<unknown>>();
-  function track<T>(work: Promise<T>): Promise<T> {
-    inFlight.add(work);
-    void work.then(
-      () => inFlight.delete(work),
-      () => inFlight.delete(work),
-    );
-    return work;
-  }
-  function drained(): Promise<void> {
-    if (!inFlight.size) return Promise.resolve();
-    return new Promise((resolve) => {
-      const timer = scheduler.schedule(() => {
-        logger.warn("World stopped with requests still running", {
-          requests: inFlight.size,
-        });
-        resolve();
-      }, DRAIN_TIMEOUT_MS);
-      void Promise.allSettled([...inFlight]).then(() => {
-        timer.cancel();
-        resolve();
-      });
-    });
-  }
+  const { track, drained } = inFlightWork(scheduler, (requests) =>
+    logger.warn("World stopped with requests still running", { requests }),
+  );
 
   /** Dispose Ranger if it was started; stopping keeps a new one from starting. */
   async function disposeAssistant() {
