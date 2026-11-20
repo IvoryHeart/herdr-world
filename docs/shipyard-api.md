@@ -133,8 +133,10 @@ The shared compile-time model is `shared/shipyard.ts`. Consumers map (`web/src/w
   **not** evaluate branch protection or authorize shipping. No runs, unknown
   conclusions or a shortened workflow window cannot produce `pass`.
 - Waiting cargo → `data.waiting.pullRequests`; use `complete` and `state`
-  before displaying totals or “nothing waiting”. `commits` also exposes direct
-  commits with no associated PR. This is all-author repository data, independent
+  before displaying totals or “nothing waiting”. `commits` lists every commit in
+  the comparison; it does not say how a commit reached main (a PR merged with a
+  merge commit also brings its feature commits), so never call the commits
+  outside `mergeSha` direct pushes. This is all-author repository data, independent
   of Sources' personal PR filters and merged-days window.
 - Release ships → `data.releases.items` (`stable`/`prerelease`, publication date,
   version and safe URL). Drafts are excluded; bare tags are separate evidence.
@@ -171,7 +173,7 @@ PRs targeting main whose merge commit is in that comparison are waiting. A
 moved tag is observed at read time; this does not attest historical tag integrity.
 Divergence reports `diverged`. Missing GitHub permissions or comparison data
 reports `unavailable`. Shortened commit/PR associations report `limited`. Dates
-never determine membership. A complete zero-PR list can still contain direct
+never determine membership. A complete zero-PR list can still contain
 commits; use `aheadBy` too.
 
 Each source read has a 60-second total deadline, 10 seconds per request and a
