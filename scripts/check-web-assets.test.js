@@ -64,7 +64,7 @@ describe("initial web asset budget", () => {
   test("keeps grammar groups out of unrelated feature dependency graphs", () => {
     const manifest = {
       settings: {
-        name: "ConfigurationDialog",
+        name: "SettingsHome",
         file: "settings.js",
         imports: ["shared"],
       },
@@ -82,7 +82,7 @@ describe("initial web asset budget", () => {
         ...manifest,
         shared: { file: "shared.js", imports: ["grammar"] },
       }),
-    ).toThrow("ConfigurationDialog eagerly loads syntax grammar asset");
+    ).toThrow("SettingsHome eagerly loads syntax grammar asset");
     expect(() =>
       assertLazyGrammarAssets({
         ...manifest,

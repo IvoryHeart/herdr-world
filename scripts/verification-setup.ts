@@ -10,6 +10,10 @@ import {
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import checker from "../tools/quint/checker.json";
+import tooling from "../tools/quint/package.json";
+
+export const lockedQuintVersion =
+  tooling.dependencies["@informalsystems/quint"];
 import { runVerificationProcess } from "./verification-process";
 
 export const verificationRoot = resolve(import.meta.dir, "..");
@@ -56,7 +60,7 @@ export async function assertVerificationInstalled() {
       "utf8",
     ),
   );
-  if (manifest.version !== "0.33.0")
+  if (manifest.version !== lockedQuintVersion)
     throw new Error(
       "Install the locked Quint tooling with bun run verification:setup",
     );

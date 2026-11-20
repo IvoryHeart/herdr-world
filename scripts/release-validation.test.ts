@@ -116,7 +116,7 @@ test("release packages and labeled previews share one verification and image", (
       step.run?.startsWith("scripts/verify-release-package.sh "),
     );
   expect(verification(release)?.run).toBe(
-    'scripts/verify-release-package.sh "${GITHUB_REF_NAME#v}" "${{ matrix.platform }}"',
+    'scripts/verify-release-package.sh "$RELEASE_VERSION" "${{ matrix.platform }}"',
   );
   expect(verification(preview)?.run).toBe(
     'scripts/verify-release-package.sh "0.0.0-rc.$GITHUB_RUN_NUMBER" "${{ matrix.platform }}"',
@@ -141,9 +141,13 @@ test("Release checks missing and existing external Herdr through the installed l
     script.indexOf("brew install --formula"),
   );
   expect(script).not.toContain("brew info --json=v2 herdr");
-  const before = script.indexOf("ruby scripts/check-homebrew-runtime.rb");
+  const before = script.indexOf(
+    "ruby tap/.github/scripts/check-homebrew-runtime.rb",
+  );
   const reinstall = script.indexOf("brew reinstall --formula");
-  const after = script.lastIndexOf("ruby scripts/check-homebrew-runtime.rb");
+  const after = script.lastIndexOf(
+    "ruby tap/.github/scripts/check-homebrew-runtime.rb",
+  );
   expect(before).toBeGreaterThan(script.indexOf("brew install --formula"));
   expect(reinstall).toBeGreaterThan(before);
   expect(after).toBeGreaterThan(reinstall);
@@ -189,4 +193,83 @@ test("Homebrew native acceptance covers both Macs against the published 0.3.5 Fo
     expect(source).toContain("mktemp -d /tmp/hw.XXXXXX");
     expect(source).toContain("trap 'rm -rf \"$fixture_home\"' EXIT");
   }
+});
+
+// No channel may become public until every artifact and native tap input passes.
+test("every publisher waits for every release verification job", () => {
+  const workflow = readWorkflow("release.yml");
+  const ancestors = (name: string): string[] => {
+    const job = workflow.jobs[name]!;
+    expect(job).toBeDefined();
+    expect(job["continue-on-error"] ?? false).toBe(false);
+    return [job.needs ?? []]
+      .flat()
+      .flatMap((dependency) => [dependency, ...ancestors(dependency)]);
+  };
+  for (const publisher of ["publish", "npm-publish", "homebrew-pr"]) {
+    const required = ancestors(publisher);
+    for (const verification of [
+      "package",
+      "archives",
+      "npm-stage",
+      "homebrew-formula",
+      "homebrew-smoke",
+      "verify",
+    ]) {
+      expect(required).toContain(verification);
+    }
+  }
+  for (const verification of [
+    "archives",
+    "npm-stage",
+    "homebrew-formula",
+    "homebrew-smoke",
+    "verify",
+  ]) {
+    const required = ancestors(verification);
+    for (const publisher of ["publish", "npm-publish", "homebrew-pr"])
+      expect(required).not.toContain(publisher);
+  }
+});
+
+test("dispatch rehearses the full graph and all publishers check sealed input", () => {
+  const workflow = readWorkflow("release.yml") as Workflow & {
+    on: { workflow_dispatch: { inputs: { dry_run: { default: boolean } } } };
+  };
+  expect(workflow.on.workflow_dispatch.inputs.dry_run.default).toBe(true);
+  for (const name of [
+    "package",
+    "archives",
+    "npm-stage",
+    "homebrew-formula",
+    "homebrew-smoke",
+    "verify",
+  ]) {
+    expect(workflow.jobs[name]?.if).toBeUndefined();
+  }
+  for (const name of ["publish", "npm-publish", "homebrew-pr"]) {
+    const job = workflow.jobs[name]!;
+    expect(job.if).toBe("needs.validate.outputs.dry_run == 'false'");
+    const steps = job.steps!;
+    const check = steps.findIndex((step) =>
+      step.run?.includes("release-bundle.mjs verify"),
+    );
+    expect(check).toBeGreaterThan(-1);
+    expect(check).toBeLessThan(steps.length - 1);
+    expect(steps.map((step) => step.run ?? "").join("\n")).not.toContain(
+      "npm pack",
+    );
+  }
+  const prepare = workflow.jobs["homebrew-formula"]!.steps!.map(
+    (step) => step.run ?? "",
+  ).join("\n");
+  expect(prepare).toContain("check-homebrew-formula-stage.rb");
+  expect(prepare).toContain('--dry-run "$PWD/tap"');
+  expect(workflow.jobs["homebrew-pr"]!.steps!.at(-1)?.run).toContain(
+    '--prepared "$PWD/candidate/tap"',
+  );
+  expect(workflow.jobs["publication-status"]?.if).toBe("always()");
+  expect(
+    readWorkflow("publish-release.yml").jobs.publish!.steps!.at(-1)?.run,
+  ).toContain("-f dry_run=false");
 });

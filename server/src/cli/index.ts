@@ -30,6 +30,7 @@ import { createUpdateCommand, rollbackCommand } from "./update";
 import { urlCommand } from "./url";
 import { worldCommands } from "./world";
 import { WORLD_SKILL } from "./world-skill";
+import { createShipyardCommand } from "./shipyard";
 
 // The existing command families keep their own parsers, help and exit codes;
 // the router only adds dispatch, discovery and completion metadata.
@@ -99,6 +100,7 @@ export function cliCommands(): CliCommand[] {
     createConnectionsCommand(),
     createWeatherCommand(),
     createPushCommand(),
+    createShipyardCommand(),
     createUpdateCommand(),
     rollbackCommand,
     ...worldCommands(),

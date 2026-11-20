@@ -1,6 +1,5 @@
-# Workflows pin actions by commit SHA; this keeps those pins current with one
-# grouped pull request a week. Package updates stay manual: a changed
-# dependency graph also needs `bun run notices:generate`.
+# Bun workspaces share one root lock; npm's isolated Quint lock is independent.
+# Security groups are explicit and are not throttled by version-update limits.
 version: 2
 updates:
     - package-ecosystem: github-actions
@@ -9,6 +8,33 @@ updates:
           interval: weekly
       groups:
           actions:
+              patterns: ["*"]
+          actions-security:
+              applies-to: security-updates
+              patterns: ["*"]
+      commit-message:
+          prefix: ci
+    - package-ecosystem: bun
+      directory: /
+      schedule:
+          interval: weekly
+      groups:
+          application:
+              patterns: ["*"]
+          application-security:
+              applies-to: security-updates
+              patterns: ["*"]
+      commit-message:
+          prefix: deps
+    - package-ecosystem: npm
+      directory: /tools/quint
+      schedule:
+          interval: weekly
+      groups:
+          verification:
+              patterns: ["*"]
+          verification-security:
+              applies-to: security-updates
               patterns: ["*"]
       commit-message:
           prefix: ci

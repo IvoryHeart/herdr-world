@@ -168,6 +168,7 @@ test("JavaScript globals and duplicate parameters remain checked", () => {
   ).toEqual(["error:eslint(no-redeclare)"]);
 });
 
+// Ten real linter startups can exceed five seconds in the concurrent unit lane.
 test("generated assets, binaries and workspace dependencies stay ignored", () => {
   for (const path of [
     ".pages-dist/fixture.js",
@@ -183,7 +184,7 @@ test("generated assets, binaries and workspace dependencies stay ignored", () =>
   ]) {
     expect(lint("debugger;", path)).toEqual([]);
   }
-});
+}, 30_000);
 
 test("effect and storage core time uses injected ports, including globalThis access", () => {
   for (const path of [
@@ -213,4 +214,4 @@ test("effect and storage core time uses injected ports, including globalThis acc
       "server/src/effects/fixture.test.ts",
     ),
   ).toEqual([]);
-});
+}, 30_000);

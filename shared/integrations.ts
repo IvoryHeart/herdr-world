@@ -150,6 +150,20 @@ export type VaultStatus = {
 };
 
 export type IntegrationsSnapshot = {
+  /** Per-host runtime choices; adding another runtime is an explicit action. */
+  hosts?: {
+    host_id: string;
+    label: string;
+    runtimes: {
+      connection_id: string;
+      kind: string;
+      version: string | null;
+      installed: boolean;
+      state: string;
+      generation: number;
+    }[];
+    available_runtimes: { kind: string; label: string }[];
+  }[];
   observedAt: number;
   integrations: IntegrationEntry[];
   vault: VaultStatus;

@@ -1,5 +1,50 @@
 # Consumer and alternative evidence decisions
 
+## Host ownership and runtime discovery (Q02, Q03, Q10)
+
+Hosts group existing runtime owners; they do not introduce a downstream lease or
+operation target. Host mutations share the profile service's admission queue.
+Missing runtimes consume the existing manager stop/retirement transitions, and
+rediscovery retains their IDs while advancing generations. The runtime-control,
+runtime-drain and observation-base models/replays remain mandatory and unchanged.
+A new host state machine would duplicate these fences without modeling the real
+SSH/platform boundary, so no additional Quint model is selected.
+
+`host-service.test.ts` exercises migration with preserved IDs, empty host durability,
+independent runtime failure, removal/rediscovery, partial probe failure, host removal
+and shutdown while discovery awaits. Native process composition tests also retain
+live saved endpoints when their executable is off PATH, including Ranger restart
+and profile CRUD; executable absence cannot retire an admitted live runtime. `host-discovery.test.ts` checks every fixed
+POSIX/PowerShell argv, destination refusals before process invocation, bounded
+version probing and registration of another provider. `host-snapshots.test.ts`
+retains actual cached topology while one runtime loses its generation and also
+exhausts the sixteen two-runtime lifecycle combinations for host grouping and
+per-runtime actionability. `service/host-connections.test.ts` runs real authenticated
+RPC, CLI admission, aggregate observation, `ls`, rediscovery and the Integrations
+registry with synthetic external runtimes. `cli/host-connections.test.ts` covers
+offline persistence and no offline fallback after refused live admission.
+
+The lifecycle repair additionally exhausts all eight combinations of saved host
+policy and two per-runtime auto-connect flags, and all four combinations of which
+runtime automatically recovers and whether its sibling was explicitly stopped.
+Real profile-service calls and a controlled retry scheduler check the actual
+connection intent, lifecycle state and retry eligibility, including newly found
+siblings. Persistence/reload checks cover both directions of auto-connect edits;
+deferred-start and discovery schedules cover queued Disconnect, temporary absence,
+explicit endpoint retry, host-wide reconnection and a failed catalogue write before
+later hosts. These are direct finite composition checks of host admission policy;
+the manager's generation/lease transition system is unchanged. Extending Quint's
+manager model would not exercise the distinct profile settings, filesystem failure
+or scheduler callbacks that caused these regressions. The full gate remains
+required for the Q02 owner change, alongside these consumer checks.
+
+These finite and composition checks cover the added host projection and admission
+boundary; the full verification gate covers unchanged lease/observation ordering.
+They do not certify real SSH keys, remote operating systems or arbitrary future
+runtime protocols. Existing native transport and platform checks retain those
+claims and prerequisites. Browser host grouping is outside this change; keeping
+all legacy connection IDs preserves existing resource and filter keys.
+
 ## SQLite attention candidate
 
 The [World storage contract](contracts/world-storage.md) supplements Q29 with a
@@ -148,7 +193,7 @@ or a claim about arbitrary concurrent workspace/transport schedules.
 | Q31 Files/uploads/previews | Real filesystem/upload/path tests exercise traversal, native cwd, publication and cancellation using owned synthetic fixtures. | Filesystem permissions, symlink/path and upload semantics require implementation/platform evidence; no universal filesystem or remote atomicity claim. |
 | Q33 Git actions/auto-sync | Real Git repositories and process tests exercise dirty-tree refusal, fetch/merge failures, qualified actions and synchronization. | Git/network/platform behavior and uncommitted user changes are not represented by an abstract branch flag. |
 | Q34 Worktree create/remove/hooks | Real worktree/hook tests exercise fetch-before-create, failed fetch, one in-flight removal and retry after failure. | Native Git/filesystem/hook execution is required; shared-operation examples are bounded integration evidence, not all concurrent worktree schedules. |
-| Q35 Settings/private-file publication | Owned filesystem and fresh-process tests exercise private namespaces, permissions, settings publication and durable secrets. | Actual rename/fsync/permission behavior remains platform-dependent; unsupported power-loss guarantees are not inferred. |
+| Q35 Settings/private-file publication | Owned filesystem and fresh-process tests exercise private namespaces, permissions, settings publication and durable secrets. Instance-lock tests cover atomic bound-address publication and read-only live/dead discovery; two isolated services prove connection edits use only the selected registry owner and token, reject mismatched registry paths and retain offline writes after owner shutdown. A finite HTTP/transport matrix checks refusal and unconfirmed admission without offline fallback. | Actual rename/fsync/permission behavior remains platform-dependent; unsupported power-loss guarantees are not inferred. |
 | Q36 Herdr setup/service/update | Real setup/update/service tests exercise verified assets, replacement failures, request budgets and installation ownership. Native compiled plugin fixtures with isolated homes and no Bun exercise every frozen verb and canonical service routing; system installer fixtures reject corrupt/mismatched releases and restore binaries on failed launcher promotion. Explicit persistent setup has CLI/confirmed-HTTP bootstrap tests and per-platform registration-only command traces; running setup never activates or replaces the live process. | OS service managers and downloaded artifacts require supported-platform CI/live evidence; environment-gated checks must report prerequisites/skips. |
 | Q38 Optional metrics/cache work | Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration. | Metrics do not grant operation authority; provider availability and network deadlines are observed integration behavior. |
 | Q39 Renderer and lazy-module lifetime | Real rendering-resource and browser/lazy-module tests exercise graphics destruction, shared texture ownership and reload/lifetime behavior. The Town idle-draw case uses native WebGL context loss/restoration with controlled visibility and test time to check repaint after sleep, deferred hidden recovery, return to sleep and disposal. | GPU/browser/URL behavior requires the actual implementation; arbitrary device/driver failure schedules are excluded. |
