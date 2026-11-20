@@ -23,6 +23,8 @@ let filter: TownReceptionFilter | null = null;
 /** The last value the server confirmed, restored when a write fails. */
 let confirmed: TownReceptionFilter = TOWN_RECEPTION_DEFAULT;
 let revision = 0;
+// Confirm successful saves even while a newer optimistic edit is pending.
+let confirmedRevision = 0;
 const listeners = new Set<() => void>();
 
 function cached(): TownReceptionFilter {
@@ -50,7 +52,7 @@ export function townReceptionFilter(): TownReceptionFilter {
 
 /** The server's value: on connecting, and whenever another browser saves. */
 export function adoptTownReceptionFilter(stored: unknown) {
-  revision += 1;
+  confirmedRevision = ++revision;
   confirmed = parseTownReceptionFilter(stored);
   publish(confirmed);
 }
@@ -73,7 +75,10 @@ export async function saveTownReceptionFilter(next: TownReceptionFilter) {
   try {
     // The default is stored as nothing, so a reset leaves no trace.
     await write(townReceptionIsDefault(next) ? undefined : next);
-    if (current === revision) confirmed = next;
+    if (current > confirmedRevision) {
+      confirmedRevision = current;
+      confirmed = next;
+    }
   } catch (error) {
     if (current === revision) publish(confirmed);
     throw error;

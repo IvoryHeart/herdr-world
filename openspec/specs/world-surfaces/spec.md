@@ -8,6 +8,178 @@ and exclusive ownership of each qualified terminal.
 
 ## Requirements
 
+### Requirement: Read-only integrations registry over existing owners
+
+World SHALL expose one Integrations screen and read-only registry for runtime
+connections, local harness skills, Sources, metrics and vault availability.
+Rows SHALL project their existing owner's status and control route, retaining
+connection ID and generation for runtime controls. Reading the registry SHALL
+NOT install, enable or start integrations. A failing owner SHALL omit its rows
+without hiding healthy owners; source refresh remains owned by Sources.
+
+#### Scenario: One owner fails during registry observation
+
+- **WHEN** a provider cannot supply its integration status
+- **THEN** other owners' rows remain available and the failure grants no fallback
+  control authority over another connection or provider
+
+### Requirement: Private named integration vault
+
+Integration tokens SHALL remain in the service's private named vault. Browser
+status SHALL expose only supported secret names, labels and their consumers,
+never stored values. The file backend SHALL use atomic replacement and private
+permissions, refuse unsafe read targets and preserve supported legacy Jira-token
+reads across format migration. An unreadable vault SHALL report that tokens
+must be set again, and a closed storage owner SHALL refuse further writes.
+
+#### Scenario: Legacy token or unavailable vault
+
+- **WHEN** the vault contains the old Jira token format or cannot be read safely
+- **THEN** the old supported token can be used and rewritten in the named format,
+  or status explains unavailability without disclosing a token value
+
+### Requirement: Shared Town and Board fact projections
+
+Town and Board SHALL offer Attention, Idle time, Spend, Pull requests, Quests and
+Harness lenses from the same qualified facts. Missing data SHALL remain distinct
+from zero. Choosing a lens SHALL change presentation without changing agent
+state or placement. Town search SHALL mark and frame admitted matches while
+retaining navigation to them; offscreen attention arrows and Next SHALL open
+the same qualified agent as the shared attention list. Working-agent thought
+bubbles SHALL use current reported work, without inventing work for unknown agents.
+
+#### Scenario: A fact is unavailable or a host becomes stale
+
+- **WHEN** a lens has no current usage, activity or linked-work fact for an entity
+- **THEN** its mark explains missing or stale data rather than asserting zero,
+  and the lens supplies no additional operation authority
+
+### Requirement: Town economy and pull-request projections
+
+Town SHALL show today's numeric usage and estimated cost at city, host, room
+and desk scope from the shared usage response and UTC windows. Stale readings
+SHALL be left out of fresh totals; partial coverage, missing hosts and pricing
+limits SHALL remain explicit. Unattributed usage already included in the city
+total SHALL NOT be added a second time or guessed onto a room. Boards SHALL
+offer a short caveat line with the full explanations available on hover or focus.
+The post office SHALL project the user's open pull requests from Sources and
+open the existing pull-request card; it SHALL NOT own another source poll,
+readiness rule or merge authority. Closed/unconfigured/error Sources SHALL
+remain distinguishable from an empty successful result.
+
+#### Scenario: A merged pull request leaves the post office
+
+- **WHEN** a subsequent admitted Sources observation reports a displayed PR merged
+- **THEN** its parcel leaves the open yard and its card and merge history use the
+  same source identity, without treating an absent or failed observation as a merge
+
+### Requirement: Return recaps use observed history
+
+After at least thirty minutes away, World MAY show Since you left in Town and
+Board. The away window SHALL use the most recent known owner sighting across
+this browser and the service's in-memory sightings from other devices; after
+service restart or failure, browser-local history SHALL remain the fallback.
+Recap lines SHALL derive only from timestamped asks, blocked/finished work,
+review records and merged PR observations within that window. Opening items or
+dismissing a recap SHALL be browser-local and SHALL NOT answer asks or review work.
+
+#### Scenario: Another browser was recently active
+
+- **WHEN** this browser returns after thirty minutes but the service saw the owner recently elsewhere
+- **THEN** it does not invent an away interval covering that recent activity
+
+#### Scenario: A waiting item is answered or reviewed
+
+- **WHEN** an item in the recap is resolved through its ordinary action
+- **THEN** its waiting recap count disappears without rewriting source history
+
+### Requirement: Reception filters move bodies without changing attention
+
+Town SHALL keep one shared default reception-mark filter with optional overrides
+by connection ID. Blocked, asking and finished marks MAY each be admitted or
+left at their desk. This preference SHALL be persisted by World's UI settings
+and adopted across devices; a browser cache SHALL yield to service state.
+Failed optimistic writes SHALL restore the last confirmed value unless a newer
+local edit or service publication has superseded them. Reception choices SHALL
+NOT change agent facts, room counts, Board/Desk lanes or Needs you counts.
+
+#### Scenario: An earlier save succeeds while a later save is pending
+
+- **WHEN** save A succeeds while a newer local save B is pending, and B then fails
+- **THEN** the browser restores A as the last confirmed preference
+- **AND** an older acknowledgement cannot supersede a newer confirmed save or service publication
+
+#### Scenario: A newer service preference overtakes a failed save
+
+- **WHEN** a browser's pending save fails after a newer preference is adopted
+- **THEN** the old failure does not restore the superseded preference
+
+### Requirement: Durable Town room placement
+
+Town room positions SHALL live in the shared Board layout, keyed by qualified
+workspace card identity. Drag, neighbour move and Tidy rooms SHALL change layout
+within the host's building without moving native workspaces or agents. Tidy's
+Undo SHALL use current admitted layout and refuse unsafe conflicts rather than
+overwriting another device's intervening changes. Existing layout-ID inheritance
+and serialized Board persistence SHALL apply to room positions too.
+
+#### Scenario: Another device edits room placement
+
+- **WHEN** one browser saves positions or attempts Undo after another edit
+- **THEN** other devices adopt the saved layout and a conflicting conditional
+  Undo reports the conflict without silently restoring obsolete positions
+
+### Requirement: Closure queues keep presentation separate from execution
+
+Town's bin and scheduled bus SHALL display the shared qualified close intents
+and their deadline, including a bounded waiting queue at the bus stop. Leaving
+the view SHALL NOT cancel or duplicate execution. Undo before dispatch SHALL
+cancel the intent through its ordinary state-conditioned effect rule; uncertain
+native closure SHALL remain uncertain rather than being automatically replayed.
+
+#### Scenario: Reconnect while an agent waits for closure
+
+- **WHEN** a browser reconnects or switches views before the shared close deadline
+- **THEN** it observes the existing intent and remaining deadline without creating another close
+
+### Requirement: Notification projections and restoration preserve authority
+
+The browser tab and supported app badge SHALL reflect the shared Needs you count,
+including questions as separate items. Hidden-page title updates SHALL use that
+same count. Toast dismissal SHALL NOT answer or close the underlying durable item.
+Notification restoration SHALL reconcile the saved preference, actual browser
+permission and push subscription; passive restoration SHALL wait for a visible,
+active document, and lack of permission SHALL NOT be shown as successful delivery.
+
+#### Scenario: Repeated dismissal or permission refusal
+
+- **WHEN** a toast is dismissed repeatedly or a browser refuses notification permission
+- **THEN** durable Needs you work remains intact and the UI retains the actual
+  notification state rather than fabricating successful enablement
+
+### Requirement: Observational terminal opening
+
+Opening World or retaining a hidden TUI attachment SHALL NOT resize an existing
+native pane. An active terminal presentation MAY resize its exact qualified pane
+under the established attachment/focus rules; observing a pane, restoring a
+window or mounting an offscreen client SHALL NOT by itself acquire resize authority.
+
+#### Scenario: Hidden app client connects
+
+- **WHEN** World connects its hidden app client before presenting a terminal
+- **THEN** it uses the runtime's current viewport and sends no browser-default resize
+
+### Requirement: Safe rendered Markdown destinations
+
+Rendered Markdown links SHALL reject unsafe schemes after browser-equivalent
+normalization, including embedded controls and encoded whitespace. Rendering a
+label SHALL NOT turn a rejected destination into an executable browser URL.
+
+#### Scenario: Obfuscated script scheme
+
+- **WHEN** Markdown contains a browser-normalized scripting destination
+- **THEN** the renderer omits the unsafe href while preserving readable content
+
 ### Requirement: Optional observations
 Observability providers SHALL remain optional. The service SHALL mediate bounded transport
 and the browser SHALL NOT receive provider credentials.
@@ -3402,9 +3574,12 @@ revision, beneath strings and cards, and SHALL never send anything to an agent.
 Pan and zoom SHALL be unchanged. A move, resize, end drag or text edit SHALL
 be saved against the drawing revision it began from: when the drawing changed
 elsewhere meanwhile, the edit SHALL be refused with a reason and the newer
-drawing kept, and a refused text edit SHALL reopen on the newer drawing with
-the typed text. A moved arrow SHALL let go of its targets from the ends it is
-drawn at. Undo and redo SHALL cover this browser's
+drawing kept, and a refused text edit SHALL retain the typed text and reopen on
+the newer drawing. If another text editor is already open when the refusal
+arrives, it SHALL keep its current text and the refused draft SHALL wait until
+that editor finishes; multiple refused drafts SHALL each remain available in
+turn, including separate drafts for the same drawing. A moved arrow SHALL let go
+of its targets from the ends it is drawn at. Undo and redo SHALL cover this browser's
 drawing changes and SHALL refuse, with a reason, to revert a drawing someone
 changed since. On a phone, drawings SHALL be shown but not editable, and notes
 keep working.
@@ -3418,6 +3593,13 @@ keep working.
 
 - **WHEN** the user is typing a drawing's text and another client saves a new text, colour and place for it
 - **THEN** finishing the edit keeps the other client's drawing, says why, and reopens the editor on it with the typed text
+
+#### Scenario: Text refusal arrives while editing another drawing
+
+- **WHEN** a user finishes text A, starts typing text B, and A's save is refused because another client changed A
+- **THEN** World explains the refusal and keeps B's editor and typed text unchanged
+- **AND** finishing B reopens A's refused draft with its typed text on the newer drawing
+- **AND** if B is also refused, its draft stays available after A finishes
 
 #### Scenario: Undo after another edit
 
