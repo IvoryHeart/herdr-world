@@ -149,7 +149,15 @@ export async function mutateImplementation(
                         : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
-  if (name === "connection-registry") {
+  if (name === "claude-tap-lock") {
+    const guard =
+      "(ports.kill ?? process.kill)(owner, 0);\n        return false;";
+    assert.equal(original.split(guard).length, 2, "tap liveness guard changed");
+    contents = original.replace(
+      guard,
+      "(ports.kill ?? process.kill)(owner, 0);\n        return true;",
+    );
+  } else if (name === "connection-registry") {
     const guard = "this.mutationQueue.then(async () => {";
     assert.equal(
       original.split(guard).length,
