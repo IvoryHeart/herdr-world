@@ -44,7 +44,6 @@ const state = (revision: number, count = 1) => ({
   revision,
   residents: fixtureResidents(NOW).slice(0, count),
   capacity: 500,
-  retention_ms: 90 * 24 * 60 * 60 * 1000,
 });
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 

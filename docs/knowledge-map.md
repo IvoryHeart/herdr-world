@@ -25,7 +25,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Effect recovery and deadlines | [Contract](../openspec/specs/world-effects/spec.md) | [Source](../server/src/effects/runner.ts) | [Tests](../server/src/effects/recovery-matrix.test.ts) |
 | Saved answer delivery | [Contract](../openspec/specs/ask-answer-delivery/spec.md) | [Source](../server/src/world/ask-recipient.ts) | [Tests](../server/src/storage/answer-delivery-crash.test.ts) |
 | Agent bin and scheduled close | [Contract](../openspec/specs/world-effects/spec.md) | [Source](../shared/bin.ts) | [Tests](../server/src/world/bin.test.ts) |
-| Apartments (finished agents) | [Contract](../FEATURES.md#apartments-finished-agents) | [Source](../server/src/world/apartments.ts) | [Tests](../server/src/world/apartments.test.ts) |
+| Apartments (agents not running) | [Contract](../FEATURES.md#apartments-finished-agents) | [Source](../server/src/world/apartments.ts), [census](../server/src/world/apartment-census.ts) | [Tests](../server/src/world/apartments.test.ts), [census](../server/src/world/apartment-census.test.ts) |
 | Runtime adapter registry | [Contract](../openspec/specs/world-adapters/spec.md) | [Source](../server/src/adapters/registry.ts) | [Tests](../server/src/adapters/conformance.test.ts) |
 | Connection profiles and leases | [Contract](../openspec/specs/runtime-federation/spec.md) | [Source](../server/src/connections/manager.ts) | [Tests](../server/src/connections/manager.test.ts) |
 | Live connection CLI | [Contract](../openspec/specs/runtime-federation/spec.md#scenario-cli-edits-connections-while-world-serves) | [Source](../server/src/cli/connections.ts) | [Tests](../server/src/service/connections-cli.test.ts) |

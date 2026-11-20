@@ -2,6 +2,7 @@ import type { ApartmentLink } from "../../../shared/apartments";
 import type { WorldSourcesSnapshot } from "../../../shared/worldSources";
 import type { AgentSessionFileAccess } from "../agent/session-file-access";
 import type { ApartmentsPort } from "../storage/apartments";
+import { ApartmentCensus } from "../world/apartment-census";
 import { readApartmentHistory } from "../world/apartment-history";
 import { type ApartmentTenant, WorldApartments } from "../world/apartments";
 import type { Complete, Fresh } from "../world/snapshot-observers";
@@ -84,23 +85,26 @@ export function createApartmentsService<Core extends CoreLease>(deps: {
     }
     return found;
   };
+  const host = (
+    id: string,
+  ): { label: string; runtime: "herdr" | "herdr-core" } => {
+    const tui = deps.tui();
+    if (tui.has(id))
+      return {
+        label: tui.list().find((status) => status.id === id)?.label ?? id,
+        runtime: "herdr",
+      };
+    const core = deps.core();
+    return {
+      label:
+        core?.manager.list().find((status) => status.id === id)?.label ?? id,
+      runtime: "herdr-core",
+    };
+  };
   const apartments = new WorldApartments({
     port: deps.port,
     now: deps.now,
-    host: (id) => {
-      const tui = deps.tui();
-      if (tui.has(id))
-        return {
-          label: tui.list().find((status) => status.id === id)?.label ?? id,
-          runtime: "herdr",
-        };
-      const core = deps.core();
-      return {
-        label:
-          core?.manager.list().find((status) => status.id === id)?.label ?? id,
-        runtime: "herdr-core",
-      };
-    },
+    host,
     // The session Chat knows for a live core agent: a linked Codex session,
     // Claude's process record or the launch arguments. Herdr (TUI) rows
     // carry their own.
@@ -130,15 +134,34 @@ export function createApartmentsService<Core extends CoreLease>(deps: {
     publish: deps.publish,
     log: deps.log,
   });
+  // Every agent not running now, from the histories each host keeps.
+  const census = deps.port
+    ? new ApartmentCensus({
+        files,
+        host,
+        residents: () => deps.port?.list() ?? [],
+        live: () => apartments.liveSessions(),
+        found: (residents) => apartments.found(residents),
+        now: deps.now,
+        log: deps.log,
+      })
+    : null;
 
   return {
     apartments,
+    census,
     /** A snapshot's fresh observer that also tells Apartments who is at a desk. */
     fresh(observer: Fresh): Fresh {
       return (...args) => {
         observer(...args);
         apartments.fresh(...args);
+        census?.request(args[0]);
       };
+    },
+    /** Before World's storage closes: no more census or move-ins. */
+    async stop() {
+      await census?.stop();
+      await apartments.stop();
     },
     /** A complete pane list's observer that also moves ended agents out. */
     complete(observer: Complete): Complete {

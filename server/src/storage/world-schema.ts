@@ -17,7 +17,7 @@ import { worldIdsMigration } from "./world-ids";
 import { worldBoardMigration, worldRoomPinsMigration } from "./world-board";
 import { runtimeStatusMigration } from "./runtime-status";
 import { coreTopologyMigration } from "./core-topology";
-import { apartmentsMigration } from "./apartments";
+import { apartmentSessionsMigration, apartmentsMigration } from "./apartments";
 import { worldProfilesMigration } from "./world-profiles";
 import { worldBindingsMigration } from "./world-bindings";
 import { assertSafeDataPath } from "../config/data-paths";
@@ -101,6 +101,7 @@ export const worldMigrations = [
   worldRoomPinsMigration,
   coreTopologyMigration,
   apartmentsMigration,
+  apartmentSessionsMigration,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */

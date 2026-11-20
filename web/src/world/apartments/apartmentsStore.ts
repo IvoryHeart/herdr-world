@@ -1,7 +1,9 @@
 import type { BridgeControlMsg, ConnectionStatus } from "../../api";
 import {
+  APARTMENT_MOVE_OUTS,
   type ApartmentHistory,
   type ApartmentLink,
+  type ApartmentMoveOut,
   type ApartmentResident,
   type ApartmentState,
   EMPTY_APARTMENTS,
@@ -56,7 +58,7 @@ function residentOf(value: unknown): ApartmentResident | null {
     first === null ||
     moved === null ||
     (value.runtime !== "herdr" && value.runtime !== "herdr-core") ||
-    (value.move_out !== "ended" && value.move_out !== "retired")
+    !APARTMENT_MOVE_OUTS.includes(value.move_out as ApartmentMoveOut)
   )
     return null;
   return {
@@ -72,7 +74,7 @@ function residentOf(value: unknown): ApartmentResident | null {
     terminal_id: terminal,
     first_seen_at: first,
     moved_out_at: moved,
-    move_out: value.move_out,
+    move_out: value.move_out as ApartmentMoveOut,
     summary: text(value.summary),
     last_report: text(value.last_report),
     links: (Array.isArray(value.links) ? value.links : [])
@@ -96,7 +98,6 @@ export function parseApartmentState(value: unknown): ApartmentState | null {
       .map(residentOf)
       .filter((item): item is ApartmentResident => item !== null),
     capacity: time(value.capacity) ?? EMPTY_APARTMENTS.capacity,
-    retention_ms: time(value.retention_ms) ?? EMPTY_APARTMENTS.retention_ms,
   };
 }
 
