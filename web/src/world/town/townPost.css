@@ -106,7 +106,7 @@
   image-rendering: pixelated;
 }
 
-/* A narrow town's fold on the town center's right wing. */
+/* A narrow town's fold across the post office's front. */
 .town-world .town-post-fold {
   position: absolute;
   display: inline-flex;

@@ -28,7 +28,6 @@ import {
   townWarehouseState,
 } from "./townWarehouseModel";
 import { townHarbourLot } from "./townHarbour";
-import { townHarbourFoldAt } from "./townHarbourLot";
 import { TOWN_HARBOUR_ROOM, townWarehouseReserve } from "./townHarbourLot";
 import { townPostLotBeside, townPostReserve } from "./townPostLot";
 import {
@@ -328,14 +327,10 @@ test.each([
     expect(sign.x + 50).toBeLessThanOrEqual(width - inset.right);
     expect(sign.y - 15).toBeGreaterThanOrEqual(inset.top);
     expect(sign.y + 15).toBeLessThanOrEqual(height - inset.bottom);
-    // On the center's left wing under the Shipyard's sign, clear of its
-    // plaque and doors in the middle; the right wing is the post office's.
+    // On the center's front, clear of its plaque and doors in the middle.
     const center = layout.center;
-    const shipyard = townHarbourFoldAt(center, T);
-    expect(at.x).toBe(shipyard.x);
-    expect(at.y - shipyard.y).toBeGreaterThanOrEqual(30);
-    expect(at.x - 50).toBeGreaterThan(center.x * T);
-    expect(at.x + 50).toBeLessThan((center.x + center.w / 2) * T - 24);
+    expect(at.x).toBeLessThan((center.x + center.w) * T);
+    expect(at.x - 50).toBeGreaterThan((center.x + center.w / 2) * T + 24);
     expect(at.y).toBeLessThan((center.y + center.h) * T);
   },
 );

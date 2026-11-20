@@ -505,9 +505,9 @@ function CrateMark() {
 }
 
 /**
- * On a narrow town: a sign on the town center's left wing, under the
- * Shipyard's, inside a phone's home view (townWarehouseFoldAt), opening the
- * warehouse as a list with its counts, or how to connect GitHub.
+ * On a narrow town: a sign on the town center's right wing, inside a
+ * phone's home view (townWarehouseFoldAt), opening the warehouse as a list
+ * with its counts, or how to connect GitHub.
  */
 function FoldedSign({
   center,
@@ -540,7 +540,7 @@ function FoldedSign({
         >
           <CrateMark />
           {/* No counts here: the list inside has them, and the post office
-              on the right wing counts what Needs you (#1098). */}
+              beside the center counts what Needs you (#1098). */}
           <span>
             {office.status === "open"
               ? office.stale

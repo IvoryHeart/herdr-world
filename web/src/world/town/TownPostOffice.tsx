@@ -81,7 +81,7 @@ function CountedSign({
  * Needs you's items by kind without hovering (questions, blocked agents,
  * finished work to review) and the Outbox's answers to check; clicking it,
  * or Enter on it, opens Needs you, the same list as the top bar's counter.
- * A narrow town folds it to a sign on the town center's right wing.
+ * A narrow town folds it to a smaller sign across its house's front.
  */
 export const TownPostOffice = memo(function TownPostOffice({
   layout,
@@ -93,9 +93,8 @@ export const TownPostOffice = memo(function TownPostOffice({
 }) {
   const source = useContext(TownPostContext);
   const folded = layout.formFactor === "narrow";
-  const at = folded
-    ? townPostFoldAt(layout.center)
-    : townPostSignAt(townPostLotBeside(layout.center));
+  const lot = townPostLotBeside(layout.center);
+  const at = folded ? townPostFoldAt(lot) : townPostSignAt(lot);
   /** Keyboard focus on an off-screen sign pans it into view. */
   const reveal = (event: FocusEvent<HTMLElement>) => {
     const handle = renderer.current;

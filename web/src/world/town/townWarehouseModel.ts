@@ -9,10 +9,10 @@ import type {
   WorkItem,
   WorldSourcesSnapshot,
 } from "../../../../shared/worldSources";
-import type { TownCenterLot } from "./townCenter";
+import { TOWN_CENTER_FRIEZE_Y, type TownCenterLot } from "./townCenter";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import { townHarbourLot } from "./townHarbour";
-import { townHarbourFoldAt, type TownWarehouseLot } from "./townHarbourLot";
+import type { TownWarehouseLot } from "./townHarbourLot";
 
 /**
  * Town's warehouse (#1028; the post office's pull requests until then,
@@ -279,18 +279,18 @@ export function townWarehouseLot(layout: TownLayout): TownWarehouseLot {
 
 /**
  * Where a narrow town's folded warehouse sign hangs, in world pixels: on
- * the town center's left wing under the Shipyard's sign (townHarbourFoldAt),
- * both the harbour's. The right wing is the post office's
- * (townPostModel.ts). A phone's home view keeps the center from just above
- * its plaque down, so the sign stays in view there.
+ * the town center's right wing, under its windows and level with the doors.
+ * A phone's home view keeps the center from just above its plaque down, so
+ * the sign stays in view there; the roofs and tower above it are cropped.
  */
 export function townWarehouseFoldAt(center: TownCenterLot) {
-  const shipyard = townHarbourFoldAt(center, TOWN_TILE);
-  return { x: shipyard.x, y: shipyard.y + TOWN_WAREHOUSE_FOLD_GAP };
+  return {
+    // Far enough in that a phone whose center stands right of the post
+    // office (townLots.ts) keeps the whole sign on screen.
+    x: (center.x + center.w) * TOWN_TILE - 80,
+    y: center.y * TOWN_TILE + TOWN_CENTER_FRIEZE_Y + 40,
+  };
 }
-
-/** World pixels between the Shipyard's folded sign and the warehouse's. */
-export const TOWN_WAREHOUSE_FOLD_GAP = 32;
 
 /** Slot `index`'s top-left in the yard, in pixels. */
 export function townWarehouseSlot(index: number) {

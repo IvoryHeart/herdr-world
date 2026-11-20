@@ -72,6 +72,7 @@ import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
+import { createRuntimeMemoryService } from "../memory/runtime-service";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
 import { AgentActivityCache } from "../world/agent-activity-cache";
@@ -266,6 +267,7 @@ async function compose(
   );
 
   const worldCli = createWorldCliService({
+    memory: () => rpcServices.worldMemory!,
     core: () => coreCallers,
     board,
     ledger: () => storage.ledger(),
@@ -401,6 +403,7 @@ async function compose(
   const observedConnections = worldRuntimeRegistry(
     connectionManager,
     core.manager,
+    () => connectionProfiles.hosts.list(),
   );
   const agentActivity = new AgentActivityCache({
     clock,
@@ -673,6 +676,7 @@ async function compose(
     store: storage.connections,
     changed: publishConnectionsChanged,
     bootstrap: connectionBootstrap,
+    discoverHost: deps.adapters.herdr.discoverHost,
     createRuntime: runtimeFactoryForProfile,
     // The setup card's lookup; a ready implicit local server is Herdr (#935).
     noHerdrTui: () =>
@@ -788,6 +792,11 @@ async function compose(
     worldCli,
     worldSnapshots,
     worldUsage,
+    worldMemory: createRuntimeMemoryService({
+      tui: () => connectionManager,
+      core: coreRpc,
+      now: () => clock.now(),
+    }),
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
@@ -875,6 +884,7 @@ async function compose(
             connectionCli: {
               profiles: connectionProfiles,
               registryPath: paths.connections,
+              snapshot: () => worldSnapshots!.snapshot(),
             },
             settings,
             update,

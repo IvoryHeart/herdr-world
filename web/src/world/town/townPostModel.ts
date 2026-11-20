@@ -9,7 +9,6 @@
 
 import type { AgentMarkKind } from "../agentMarks";
 import type { NeedsYouItem } from "../needsYou";
-import { TOWN_CENTER_FRIEZE_Y, type TownCenterLot } from "./townCenter";
 import { TOWN_TILE } from "./townLayout";
 import type { TownPostLot } from "./townPostLot";
 
@@ -117,14 +116,19 @@ export function townPostSignAt(lot: TownPostLot) {
 }
 
 /**
- * Where a narrow town's folded post office hangs, in world pixels: on the
- * town center's right wing, under its windows and level with the doors,
- * inside a phone's home view (the roofs above it are cropped there). The
- * harbour's signs share the left wing (townHarbourLot.ts).
+ * Where a narrow town's folded post office hangs, in world pixels: across
+ * its own house's cornice, under the roof and over the "POST" fascia. A
+ * phone stands the post office beside the town center (#1033), and its
+ * home view keeps the house from just above the eaves down, so the sign
+ * stays in view; the center's wings hold the harbour's, the library's and
+ * the warehouse's signs.
  */
-export function townPostFoldAt(center: TownCenterLot) {
+export function townPostFoldAt(lot: TownPostLot) {
   return {
-    x: (center.x + center.w) * TOWN_TILE - 60,
-    y: center.y * TOWN_TILE + TOWN_CENTER_FRIEZE_Y + 40,
+    x: (lot.x + lot.w / 2) * TOWN_TILE,
+    y: lot.y * TOWN_TILE + TOWN_POST_FOLD_Y,
   };
 }
+
+/** World pixels from the house's top to the folded sign: the cornice. */
+export const TOWN_POST_FOLD_Y = 40;

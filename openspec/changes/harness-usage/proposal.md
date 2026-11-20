@@ -1,6 +1,10 @@
 ## Delivery state
 
-Implementation delivered; acceptance evidence still to reconcile: review and gate coverage for the later subscription-limit, context-fill and installed Claude-tap additions beyond the base numeric-reader acceptance in #642.
+Implementation delivered; the November audit retains this change because
+later limits/context/tap acceptance is not established by base PR #642 alone,
+and the new stale-lock counterexample violates the window-maxima contract.
+Q55 and issue #1086 record the actual 20 → 23 → 22 trace; this is unfinished
+repair/acceptance, not an unsynchronized delivered requirement.
 
 Delivered requirements are synchronized into [the current contract](../../specs/world-usage/spec.md).
 No unsynchronized requirement delta remains in this record; unfinished tasks

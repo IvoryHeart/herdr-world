@@ -69,6 +69,7 @@ test("CI and release jobs install once from the workspace root", () => {
     "world-browser.yml",
     "behavioral-verification.yml",
     "installer-upgrade.yml",
+    "dependency-security.yml",
   ]) {
     const workflow = Bun.YAML.parse(
       readFileSync(new URL(`.github/workflows/${file}`, root), "utf8"),
@@ -108,6 +109,7 @@ test("CI and release jobs install once from the workspace root", () => {
       }
       // Native Windows installer/compatibility tests use only Bun and Node builtins.
       const noBunInstall =
+        (file === "dependency-security.yml" && name === "queue") ||
         (file === "installer-upgrade.yml" && name === "baseline") ||
         (file === "ci.yml" &&
           [
@@ -133,7 +135,14 @@ test("CI and release jobs install once from the workspace root", () => {
           ].includes(name));
       expect(installs).toHaveLength(noBunInstall ? 0 : 1);
       if (!noBunInstall) {
-        expect(installs[0]?.run).toBe("bun install --frozen-lockfile");
+        const audit =
+          (file === "ci.yml" && name === "dependency-security") ||
+          (file === "dependency-security.yml" && name === "audit");
+        expect(installs[0]?.run).toBe(
+          audit
+            ? "bun install --frozen-lockfile --ignore-scripts"
+            : "bun install --frozen-lockfile",
+        );
         expect(installs[0]?.["working-directory"]).toBeUndefined();
       }
     }

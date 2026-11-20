@@ -77,7 +77,7 @@ export async function applyLiveConnectionChange(
   target: ConnectionServiceTarget,
   command: string,
   params: Record<string, unknown>,
-): Promise<{ ok: boolean; code?: string; error?: string }> {
+): Promise<{ ok: boolean; code?: string; error?: string; result?: unknown }> {
   const base = new URL(probeUrl(target.access));
   if (!supportsLiveConnectionChanges(target))
     throw new Error(
@@ -149,5 +149,5 @@ export async function applyLiveConnectionChange(
     throw new Error(
       `${status}: ${reply === undefined ? "unreadable reply" : "the service did not confirm the connection change"}`,
     );
-  return { ok: true };
+  return { ok: true, ...("result" in reply ? { result: reply.result } : {}) };
 }

@@ -44,12 +44,10 @@ const maxFileCount = 212;
 // grew under it to 13 KB of headroom; 15.3 MiB carries both, initial budgets
 // unchanged (2026-11-19). The lazy #1035 Settings adds about 35 KiB
 // on top of it (15.31 MiB together, so 15.4 MiB on 2026-11-20).
-// The Shipyard harbour (#1028: per-project lanes, ships, the warehouse's
-// crates, all in Town's lazy chunk, and the Releases tab) went 9 KB over;
-// 15.33 MiB carried it with about 22 KB of headroom, initial budgets
-// unchanged (2026-11-20); main's 15.4 MiB (#1035) now carries both, and the
-// Town post office's repaint (#1098, about 7 KB, Town's lazy chunk) with them.
-const maxTotalBytes = 15.4 * 1024 * 1024;
+// The Town harbour and warehouse (#1028) fit main alone, but main's Library
+// (#1082) grew under it: 15.42 MiB together, so 15.5 MiB, initial budgets
+// unchanged (2026-11-20).
+const maxTotalBytes = 15.5 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
@@ -110,13 +108,13 @@ export function assertLazyGrammarAssets(manifest) {
   );
   // The World shell may embed WorkspaceInspectorHost in its Office view;
   // validate it when Vite emits a standalone feature chunk, while requiring
-  // the general settings dialog that remains lazy.
-  for (const name of ["ConfigurationDialog", "WorkspaceInspectorHost"]) {
+  // Settings, which remains lazy.
+  for (const name of ["SettingsHome", "WorkspaceInspectorHost"]) {
     const entries = Object.keys(manifest).filter(
       (key) => manifest[key].name === name,
     );
     if (!entries.length) {
-      if (name === "ConfigurationDialog") {
+      if (name === "SettingsHome") {
         throw new Error(`Missing Vite feature chunk: ${name}`);
       }
       continue;

@@ -3,6 +3,7 @@ import { needsYouCount, type NeedsYouItem } from "../needsYou";
 import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { TownCamera } from "./townCamera";
 import { townHarbourFoldAt } from "./townHarbourLot";
+import { townLibraryFoldAt } from "./townLibraryLot";
 import { layoutTown, TOWN_SHAPES, TOWN_TILE as T } from "./townLayout";
 import {
   TOWN_POST_EMPTY,
@@ -69,31 +70,42 @@ test.each([
   ["three single-desk rooms, small phone", [1, 1, 1], 360, 640],
   ["a tall building", [6, 4, 3, 2], 390, 844],
 ] as const)(
-  "a narrow town folds it to a sign on the center's right wing, in a phone's home view (%s)",
+  "a narrow town folds it to a sign across its own house, in a phone's home view (%s)",
   (_, rooms, width, height) => {
     const { layout } = layoutTown(town([...rooms]), TOWN_SHAPES.phone);
     const viewport = townViewport(width, height, { left: 0, right: 0 });
     const camera = new TownCamera();
     camera.viewport = viewport;
     new TownSceneCamera(new Map(), () => {}).attach(camera, layout, viewport);
-    const at = townPostFoldAt(layout.center);
+    const lot = townPostLotBeside(layout.center);
+    const at = townPostFoldAt(lot);
     const sign = camera.toScreen(at.x, at.y);
-    // About 100 by 30 pixels around its point, inside the chrome's insets.
+    // A folded sign keeps its screen size near home zoom (--iz, up to 1.6):
+    // the post office's is up to about 138 by 28 pixels with all four
+    // counts, the wings' signs about 100 by 28.
+    const z = camera.z;
+    const scale = z * Math.min(1.6, Math.max(0.55, 1 / z));
     const { inset } = viewport;
-    expect(sign.x - 50).toBeGreaterThanOrEqual(inset.left);
-    expect(sign.x + 50).toBeLessThanOrEqual(width - inset.right);
-    expect(sign.y - 15).toBeGreaterThanOrEqual(inset.top);
-    expect(sign.y + 15).toBeLessThanOrEqual(height - inset.bottom);
-    // The right wing, clear of the plaque and doors in the middle; the
-    // harbour's two signs share the left wing.
+    expect(sign.x - 69 * scale).toBeGreaterThanOrEqual(inset.left);
+    expect(sign.y - 14 * scale).toBeGreaterThanOrEqual(inset.top);
+    expect(sign.y + 14 * scale).toBeLessThanOrEqual(height - inset.bottom);
+    // On the post office's front, under its roof and above its yard.
+    expect(at.x).toBeGreaterThan(lot.x * T);
+    expect(at.x).toBeLessThan((lot.x + lot.w) * T);
+    expect(at.y).toBeGreaterThan(lot.y * T);
+    expect(at.y).toBeLessThan(lot.yardY * T);
+    // Clear of the signs on the town center's wings.
     const center = layout.center;
-    expect(at.x).toBeLessThan((center.x + center.w) * T);
-    expect(at.x - 50).toBeGreaterThan((center.x + center.w / 2) * T + 24);
-    expect(at.y).toBeLessThan((center.y + center.h) * T);
     for (const other of [
       townHarbourFoldAt(center, T),
+      townLibraryFoldAt(center, T),
       townWarehouseFoldAt(center),
-    ])
-      expect(at.x - other.x).toBeGreaterThan(100);
+    ]) {
+      const there = camera.toScreen(other.x, other.y);
+      const apart =
+        Math.abs(sign.x - there.x) > (69 + 50) * scale ||
+        Math.abs(sign.y - there.y) > 28 * scale;
+      expect(apart).toBe(true);
+    }
   },
 );

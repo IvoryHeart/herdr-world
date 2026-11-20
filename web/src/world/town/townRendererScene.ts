@@ -32,6 +32,11 @@ import {
   paintTownWarehouseYard,
 } from "./townHarbourArt";
 import { townPostLotBeside } from "./townPostLot";
+import { townLibraryLot } from "./townLibraryLot";
+import {
+  paintTownLibraryHouse,
+  paintTownLibraryYard,
+} from "./townLibraryPaint";
 import { paintTownPostHouse, paintTownPostYard } from "./townPostPaint";
 import {
   paintTownFacade,
@@ -219,11 +224,9 @@ export function townOutdoor(
     (center.y + center.h) * T,
   );
   // The post office left of the center: its house, its yard on the street.
-  if (layout.formFactor !== "narrow") {
-    const post = townPostLotBeside(center);
-    add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
-    add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
-  }
+  const post = townPostLotBeside(center);
+  add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
+  add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
   // The harbour at the town's right edge: the warehouse on the shore, its
   // yard on the first street, and a pier for every lane out to sea.
   const harbour = townHarbourLot(layout);
@@ -237,6 +240,22 @@ export function townOutdoor(
       pier.x,
       pier.y - TOWN_PIER_ART.deck,
       pier.y,
+    );
+  }
+  // The library right of the center: its hall, its reading garden.
+  const library = townLibraryLot(layout);
+  if (library) {
+    add(
+      paintTownLibraryHouse(),
+      library.x * T,
+      library.y * T,
+      library.yardY * T,
+    );
+    add(
+      paintTownLibraryYard(),
+      library.x * T,
+      library.yardY * T,
+      library.yardY * T,
     );
   }
   return outdoorItems;
