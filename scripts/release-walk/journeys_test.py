@@ -13,6 +13,10 @@ from processes import Events
 from world import World
 
 
+def cli_response(entries):
+    return SimpleNamespace(stdout=json.dumps(dict(ok=True, result=dict(hosts=[], connections=entries))))
+
+
 class JourneyTests(unittest.TestCase):
     def listed_agents(self):
         agents, rows, entries = [], [], []
@@ -50,8 +54,8 @@ class JourneyTests(unittest.TestCase):
                 # A CLI call takes a separate snapshot, after terminal input
                 # invalidation. Only a real pushed update permits another read.
                 world.messages.add(dict(method='world.changed'))
-                return SimpleNamespace(stdout=json.dumps(pending))
-            return SimpleNamespace(stdout=json.dumps(entries))
+                return cli_response(pending)
+            return cli_response(entries)
         with patch('journeys.run', side_effect=cli) as command:
             listing(world, agents)
         self.assertEqual(world.snapshot.call_count, 2)
@@ -63,7 +67,7 @@ class JourneyTests(unittest.TestCase):
         agents, rows, entries = self.listed_agents()
         entries[1]['workspaces'][0]['tabs'][0]['panes'].clear()
         world = self.listing_world(rows)
-        with patch('journeys.run', return_value=SimpleNamespace(stdout=json.dumps(entries))) as command:
+        with patch('journeys.run', return_value=cli_response(entries)) as command:
             with self.assertRaisesRegex(AssertionError, 'herdr-core/codex: herdr-world ls omitted a runtime agent'):
                 listing(world, agents)
         self.assertEqual(world.snapshot.call_count, 1)
@@ -74,6 +78,23 @@ class JourneyTests(unittest.TestCase):
         world = self.listing_world(rows)
         with patch('journeys.run', return_value=SimpleNamespace(stdout=json.dumps(entries))):
             listing(world, agents)
+
+    def test_listing_accepts_current_host_catalogue_and_previous_cli_array(self):
+        agents, rows, entries = self.listed_agents()
+        for result in (dict(hosts=[], connections=entries), entries):
+            world = self.listing_world(rows)
+            with self.subTest(result_type=type(result).__name__), patch(
+                    'journeys.run', return_value=SimpleNamespace(stdout=json.dumps(dict(ok=True, result=result)))):
+                listing(world, agents)
+
+    def test_listing_rejects_missing_or_invalid_connections_in_cli_catalogue(self):
+        agents, rows, entries = self.listed_agents()
+        for result in (dict(hosts=entries), dict(connections=None), dict(hosts=entries, connections=[])):
+            world = self.listing_world(rows)
+            with self.subTest(result=result), patch(
+                    'journeys.run', return_value=SimpleNamespace(stdout=json.dumps(dict(ok=True, result=result)))):
+                with self.assertRaisesRegex(AssertionError, 'herdr-world ls'):
+                    listing(world, agents)
 
     def test_listing_requires_all_agents_in_one_aggregate_and_cli_observation(self):
         agents, rows, entries = self.listed_agents()
@@ -86,8 +107,8 @@ class JourneyTests(unittest.TestCase):
         def cli(*args):
             if world.snapshot.call_count == 1:
                 world.messages.add(dict(method='world.changed'))
-                return SimpleNamespace(stdout=json.dumps(entries))
-            return SimpleNamespace(stdout=json.dumps(pending_entries))
+                return cli_response(entries)
+            return cli_response(pending_entries)
         with patch('journeys.run', side_effect=cli) as command:
             with self.assertRaisesRegex(AssertionError, 'herdr-core/codex: herdr-world ls omitted a runtime agent'):
                 listing(world, agents)
@@ -126,7 +147,7 @@ class JourneyTests(unittest.TestCase):
             current_rows, current_entries = copy.deepcopy((rows, entries))
             mutate(current_rows, current_entries)
             world = self.listing_world(current_rows)
-            with self.subTest(case=mutate.__name__), patch('journeys.run', return_value=SimpleNamespace(stdout=json.dumps(current_entries))):
+            with self.subTest(case=mutate.__name__), patch('journeys.run', return_value=cli_response(current_entries)):
                 with self.assertRaisesRegex(AssertionError, 'aggregate|herdr-world ls'):
                     listing(world, agents)
 
@@ -143,6 +164,26 @@ class JourneyTests(unittest.TestCase):
         self.assertNotIn('workspace_id', result)
 
     def test_upgrade_saves_both_pinned_runtime_profiles_before_unpinned_restart(self):
+        self.upgrade_saved_profiles()
+
+    def test_upgrade_allows_new_host_metadata_but_preserves_every_saved_field(self):
+        def add_hosts(document):
+            document['hosts'] = [dict(id='local', discovered=[])]
+        self.upgrade_saved_profiles(add_hosts)
+        def lose_profile(document):
+            document['profiles'].pop()
+        def change_endpoint(document):
+            document['profiles'][0]['control_socket_path'] = 'another-synthetic.sock'
+        def change_default(document):
+            document['default_connection_id'] = 'walk-tui'
+        def remove_default(document):
+            document.pop('default_connection_id')
+        for mutate, reason in ((lose_profile, 'upgrade'), (change_endpoint, 'upgrade'),
+                               (change_default, 'default runtime'), (remove_default, 'default runtime')):
+            with self.subTest(case=mutate.__name__), self.assertRaisesRegex(AssertionError, reason):
+                self.upgrade_saved_profiles(mutate)
+
+    def upgrade_saved_profiles(self, mutate_candidate=None):
         with tempfile.TemporaryDirectory(prefix='walk-upgrade-') as directory:
             root = Path(directory)
             fixture = Fixture(root, root / 'tools', SimpleNamespace(path=root / 'events.sock'))
@@ -162,6 +203,10 @@ class JourneyTests(unittest.TestCase):
                     tui = next(item for item in profiles if item['id'] == 'walk-tui')
                     self.assertEqual(tui['control_socket_path'], startup['control_socket_path'])
                     self.assertEqual(tui['client_socket_path'], startup['client_socket_path'])
+                if Path(binary).read_text() == 'candidate-binary' and mutate_candidate:
+                    document = json.loads(saved.read_text())
+                    mutate_candidate(document)
+                    saved.write_text(json.dumps(document))
                 world = MagicMock(cookie='session=synthetic')
                 world.__enter__.return_value = world
                 world.ready.side_effect = lambda runtime: dict(connection_id='walk-core' if runtime == 'herdr-core' else

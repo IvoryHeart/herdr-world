@@ -160,6 +160,14 @@ staleness and actionability; topology SHALL remain indexed by connection ID.
 `herdr-world connections` SHALL list hosts and runtimes. `herdr-world ls` SHALL
 return hosts with their runtimes and rooms, retaining the per-connection projection.
 
+The packaged-release consumer is `scripts/release-walk/journeys.py`: its listing
+journey checks that projection and the aggregate for every launched agent's
+connection, generation, room and pane/terminal binding. Its upgrade journey permits
+new host catalogue metadata while requiring every previously saved registry field
+to remain exact. `scripts/release-walk.test.ts` feeds real service/CLI output into
+the listing consumer; `scripts/release-walk/journeys_test.py` covers migration and
+rejected omissions or identity changes. Native Linux/macOS walks remain required.
+
 #### Scenario: Both runtimes on this computer
 - **WHEN** herdr-core and the Herdr TUI are installed on this computer
 - **THEN** World discovers and connects both under one host, without asking for a runtime

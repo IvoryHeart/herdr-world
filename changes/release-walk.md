@@ -26,3 +26,8 @@
 - Wait for pushed topology changes after release-walk prompt input before
   asserting aggregate/CLI listing, requiring all agents together and naming the
   affected runtime and harness when the bounded wait fails.
+- Read runtime listings from the current CLI host catalogue as well as the
+  previous connection array. Regress the journey against real service and CLI
+  output so a listing format change cannot hide behind hand-written fixtures.
+  Permit new host-discovery metadata during upgrade while preserving every
+  previously saved connection field and default.

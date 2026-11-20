@@ -194,7 +194,11 @@ def listing(world, agents):
     def read():
         rows = world.snapshot()
         cli = json.loads(run([world.binary, 'ls', '--json'], {**world.env, 'HERDR_WORLD_URL': world.base}).stdout)
-        return rows, cli.get('result') if isinstance(cli, dict) else cli
+        result = cli.get('result') if isinstance(cli, dict) else cli
+        # Current CLI results group runtimes by host and retain topology under
+        # connections. Previous releases returned the connection array itself.
+        entries = result.get('connections') if isinstance(result, dict) else result
+        return rows, entries
 
     def complete(observation):
         nonlocal last_failure
@@ -305,6 +309,11 @@ def upgrade(walk, candidate, baseline, fixture):
         assert world.request('/', cookie=invalid_cookie).status in (401, 403), 'upgrade accepted an invalid browser session'
         default_connection(world, 'herdr-core')
         world.ready('herdr')
-        assert json.loads((settings.parent / 'connections.json').read_text()) == saved, 'upgrade changed the saved connection profiles'
+        upgraded = json.loads((settings.parent / 'connections.json').read_text())
+        # Host discovery adds catalogue metadata to older registries. Every
+        # previously saved field, including profiles/default, must stay exact.
+        if 'hosts' not in saved:
+            upgraded.pop('hosts', None)
+        assert upgraded == saved, 'upgrade changed the saved connection profiles'
         kept = json.loads(settings.read_text())
         assert kept['title_suffix'] == 'Release walk preserved' and kept['custom']['releaseWalk'], 'upgrade lost settings'

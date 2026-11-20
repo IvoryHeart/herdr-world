@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { createTestCli } from "../server/src/cli/test-context";
+import { runWorldCommand } from "../server/src/cli/world";
+import { BoardStore } from "../server/src/world/board-store";
+import { createWorldCli } from "../server/src/world/world-cli";
+import { WorldLedger } from "../server/src/world/world-ledger";
 import { isReleaseWalkInput } from "./validation-scope";
 
 test("release walk fixture, recorder and receipt regressions pass", () => {
@@ -19,8 +25,100 @@ test("release walk fixture, recorder and receipt regressions pass", () => {
       stderr: "pipe",
     },
   );
-  expect(result.stderr.toString()).toContain("Ran 20 tests");
+  expect(result.stderr.toString()).toContain("Ran 23 tests");
   expect(result.exitCode).toBe(0);
+});
+
+test("listing journey consumes JSON emitted by the current service and CLI", async () => {
+  const cli = createTestCli();
+  try {
+    const connections = ["herdr", "herdr-core"].map((runtime) => ({
+      connection_id: runtime,
+      label: runtime,
+      source: "test",
+      is_default: runtime === "herdr",
+      state: "ready" as const,
+      generation: 1,
+      snapshot_generation: 1,
+      stale: false,
+      actionable: true,
+      snapshot: {
+        workspaces: [{ workspace_id: `${runtime}-room` }],
+        tabs: [{ tab_id: `${runtime}-tab`, workspace_id: `${runtime}-room` }],
+        panes: ["claude", "codex"].map((kind) => ({
+          workspace_id: `${runtime}-room`,
+          tab_id: `${runtime}-tab`,
+          pane_id: `${runtime}-${kind}-pane`,
+          terminal_id: `${runtime}-${kind}-terminal`,
+          agent: kind,
+        })),
+        agents: ["claude", "codex"].map((kind) => ({
+          pane_id: `${runtime}-${kind}-pane`,
+        })),
+        coverage: {} as never,
+        watch_admission: {} as never,
+      },
+    }));
+    const service = createWorldCli({
+      board: new BoardStore(join(cli.home, "board.json")),
+      ledger: new WorldLedger(join(cli.home, "ledger.json")),
+      hosts: () => [],
+      defaultConnectionId: () => "herdr",
+      snapshot: async () => ({
+        revision: 1,
+        observed_at: 1,
+        hosts: [],
+        connections,
+      }),
+      publishBoard() {},
+      publishLedger() {},
+    });
+    expect(
+      await runWorldCommand("ls", ["--json"], cli.context, (command, params) =>
+        service.handle({ command, params }, null),
+      ),
+    ).toBe(0);
+    const agents = connections.flatMap((connection) =>
+      connection.snapshot.panes.map((pane) => ({
+        connection: {
+          connection_id: connection.connection_id,
+          generation: connection.generation,
+        },
+        runtime: connection.connection_id,
+        kind: pane.agent,
+        workspace_id: pane.workspace_id,
+        result: pane,
+      })),
+    );
+    const check = Bun.spawnSync(
+      [
+        "python3",
+        "-c",
+        `
+import json, sys
+from types import SimpleNamespace
+from unittest.mock import patch
+sys.path.insert(0, 'scripts/release-walk')
+from journeys_test import JourneyTests
+from journeys import listing
+value = json.load(sys.stdin)
+world = JourneyTests().listing_world(value['rows'])
+with patch('journeys.run', return_value=SimpleNamespace(stdout=value['stdout'])):
+    listing(world, value['agents'])
+`,
+      ],
+      {
+        stdin: Buffer.from(
+          JSON.stringify({ rows: connections, agents, stdout: cli.output[0] }),
+        ),
+        stderr: "pipe",
+      },
+    );
+    expect(check.stderr.toString()).toBe("");
+    expect(check.exitCode).toBe(0);
+  } finally {
+    cli.cleanup();
+  }
 });
 
 test("request builders and walk implementation select native release acceptance", () => {
