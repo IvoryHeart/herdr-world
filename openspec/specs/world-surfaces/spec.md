@@ -3389,6 +3389,36 @@ shown on the note when they are reported; World SHALL NOT invent them.
 - **WHEN** the user selects a string and chooses Cut string
 - **THEN** the string is removed and the note and card stay where they are
 
+### Requirement: Board drawing
+
+On desktop the user SHALL be able to draw on Board to brainstorm: freehand pen
+strokes, rectangles, ellipses, diamonds, text, and arrows whose ends attach to a
+drawing, a note or a card. A tool palette SHALL offer select, the drawing
+tools, a note, colour, fill, undo, redo and delete. The user SHALL be able to
+select, move, resize, recolour, label and delete drawings. Attached arrow ends
+SHALL follow their targets; when a target is gone the end SHALL stay at its last
+saved point. Drawings SHALL be saved with the Board document, each with its own
+revision, beneath strings and cards, and SHALL never send anything to an agent.
+Pan and zoom SHALL be unchanged. Undo and redo SHALL cover this browser's
+drawing changes and SHALL refuse, with a reason, to revert a drawing someone
+changed since. On a phone, drawings SHALL be shown but not editable, and notes
+keep working.
+
+#### Scenario: Draw and connect
+
+- **WHEN** the user draws a rectangle and an arrow from it to a card, then moves the card
+- **THEN** the arrow end follows the card and both drawings survive a reload
+
+#### Scenario: Undo after another edit
+
+- **WHEN** another client changes a drawing after the user's last change to it
+- **THEN** Undo leaves it as it is and says why
+
+#### Scenario: Drawings on a phone
+
+- **WHEN** Board opens on a phone
+- **THEN** saved drawings are shown, no drawing tools appear and drawings do not take the pointer
+
 ### Requirement: Board persistence and identity
 
 The World service SHALL persist board layout, pins, folds, notes and strings as
