@@ -211,7 +211,7 @@ test("a service refuses a folder another live service in this process holds", as
   const first = await startTestService(root);
   try {
     await expect(startTestService(root)).rejects.toThrow(
-      `is in use by World (pid ${process.pid}, port 0)`,
+      `is in use by World (pid ${process.pid}, port ${first.service.port})`,
     );
     // The refused start changed nothing: the first service still serves.
     expect((await fetch(`${first.base}/api/health`)).status).toBe(401);

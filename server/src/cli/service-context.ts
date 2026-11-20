@@ -67,6 +67,7 @@ export function connectionRegistryPath(
   env: Record<string, string>,
 ): string {
   return (
+    worldEnv("CONNECTIONS_PATH", runtime.env) ??
     worldEnv("CONNECTIONS_PATH", env) ??
     join(runtimeDataRoot(runtime, env), "connections.json")
   );
