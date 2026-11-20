@@ -71,22 +71,39 @@ export function townApartmentsCount(
   );
 }
 
-/** The arrivals, and a clock that ticks when the oldest stops counting. */
+/**
+ * The next moment an arrival seen by `now` stops counting, or undefined when
+ * none will (demo riders, or every deadline already passed).
+ */
+export function townArrivalNextExpiry(
+  pending: readonly TownArrival[],
+  now: number,
+) {
+  let next: number | undefined;
+  for (const arrival of pending) {
+    if (arrival.demo) continue;
+    const end = arrival.at + TOWN_ARRIVAL_MS;
+    if (end > now && (next === undefined || end < next)) next = end;
+  }
+  return next;
+}
+
+/**
+ * The arrivals, and a clock that ticks as each one stops counting. The clock
+ * rearms after every tick, so riders arriving moments apart each expire on
+ * their own deadline.
+ */
 export function useTownApartmentsArrivals() {
   const pending = useSyncExternalStore(subscribe, read, read);
   const [now, setNow] = useState(() => performance.now());
   useEffect(() => {
-    setNow(performance.now());
-    const ends = pending
-      .filter((arrival) => !arrival.demo)
-      .map((arrival) => arrival.at + TOWN_ARRIVAL_MS)
-      .filter((end) => end > performance.now());
-    if (!ends.length) return;
+    const next = townArrivalNextExpiry(pending, now);
+    if (next === undefined) return;
     const timer = setTimeout(
       () => setNow(performance.now()),
-      Math.min(...ends) - performance.now() + 20,
+      Math.max(0, next - performance.now() + 20),
     );
     return () => clearTimeout(timer);
-  }, [pending]);
+  }, [pending, now]);
   return { pending, now };
 }

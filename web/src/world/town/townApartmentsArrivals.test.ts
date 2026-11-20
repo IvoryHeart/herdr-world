@@ -5,6 +5,7 @@ import {
   townApartmentsArrive,
   townApartmentsCount,
   townApartmentsPending,
+  townArrivalNextExpiry,
 } from "./townApartmentsArrivals";
 
 const resident = (terminal: string) => ({
@@ -54,4 +55,21 @@ test("a rider arrives once however often Town sees it walk in", () => {
   ]);
   resetTownApartmentsArrivals();
   expect(townApartmentsPending()).toEqual([]);
+});
+
+test("the sign's clock next ticks at the earliest deadline still ahead", () => {
+  const pending = [
+    arrival("a", 1_000),
+    arrival("b", 1_700),
+    arrival("d", 0, true),
+  ];
+  expect(townArrivalNextExpiry(pending, 1_800)).toBe(1_000 + TOWN_ARRIVAL_MS);
+  // After the first deadline, the second one: the clock rearms.
+  expect(townArrivalNextExpiry(pending, 1_020 + TOWN_ARRIVAL_MS)).toBe(
+    1_700 + TOWN_ARRIVAL_MS,
+  );
+  // Demo riders never expire; nothing left to wait for.
+  expect(townArrivalNextExpiry(pending, 1_720 + TOWN_ARRIVAL_MS)).toBe(
+    undefined,
+  );
 });
