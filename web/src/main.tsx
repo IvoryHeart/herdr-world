@@ -21,12 +21,21 @@ if (paneChatFixture) {
 }
 const PaneChatFixture = React.lazy(() => import("./testing/PaneChatFixture"));
 const titleSpinnerFixture = previewUrl.searchParams.has("titleSpinnerFixture");
-if (titleSpinnerFixture) {
+const boardTextConflictFixture = previewUrl.searchParams.has(
+  "boardTextConflictFixture",
+);
+if (titleSpinnerFixture || boardTextConflictFixture) {
   previewUrl.searchParams.delete("titleSpinnerFixture");
+  previewUrl.searchParams.delete("boardTextConflictFixture");
   history.replaceState(history.state, "", previewUrl);
 }
 const WorldFoundationApp = React.lazy(
   () => import("./world/WorldFoundationApp"),
+);
+const BoardTextConflictFixture = React.lazy(() =>
+  import("./world/BoardView").then((module) => ({
+    default: module.BoardTextConflictFixture,
+  })),
 );
 
 class ErrorBoundary extends React.Component<
@@ -67,7 +76,9 @@ coreFixtureEnabled();
 coreInstallFake();
 integrationsFixtureEnabled();
 const stopInstanceNameSync =
-  titleSpinnerFixture || paneChatFixture ? () => {} : initializeInstanceName();
+  titleSpinnerFixture || paneChatFixture || boardTextConflictFixture
+    ? () => {}
+    : initializeInstanceName();
 if (import.meta.hot) import.meta.hot.dispose(stopInstanceNameSync);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -78,6 +89,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <PaneChatFixture />
         ) : titleSpinnerFixture ? (
           <TitleSpinnerFixture />
+        ) : boardTextConflictFixture ? (
+          <BoardTextConflictFixture />
         ) : (
           <WorldFoundationApp />
         )}

@@ -9,19 +9,19 @@ import {
 import { openIntegrations } from "../../integrations";
 import { PullRequestCard } from "../PullRequestCard";
 import { BadgePopover } from "./DeskWorkBadge";
-import type { TownCenterLot } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
 import {
   TOWN_POST_SLOTS,
   TOWN_POST_YARD_ROWS,
   townPostCountParts,
-  townPostFoldAt,
   townPostLabel,
   townPostLot,
   townPostName,
   townPostOffice,
+  townPostSignAt,
   townPostSignText,
   townPostSlot,
+  type TownPostLot,
   type TownPostOffice as Office,
   type TownPostParcel,
 } from "./townPost";
@@ -121,7 +121,7 @@ function useExpiry(snapshot: WorldSourcesSnapshot) {
   }, [snapshot, tick]);
 }
 
-/** The counts in words, for names and the folded sign. */
+/** The counts in words, for the sign's name. */
 function spoken(office: Office) {
   if (office.status !== "open" || office.stale) return townPostSignText(office);
   return townPostCountParts(office.counts)
@@ -131,20 +131,15 @@ function spoken(office: Office) {
     .join(", ");
 }
 
-const FOLDED_WAITING = {
-  loading: "…",
-  off: "closed",
-  closed: "closed",
-} as const;
-
 /**
  * Town's post office (#760): your open pull requests as parcels in its
  * sorting yard beside the town center, ready to merge first, each opening the pull
  * request card the desk badge opens. Its sign counts them without hovering.
- * On a narrow (stacked) town it folds to a sign on the town center that
- * opens the same parcels as a list, as the city billboard folds. Its sign,
- * and "All pull requests" in its lists, open Board's Work lens over Town
- * (#887): every pull request as the same kanban.
+ * On a wide town its sign, and "All pull requests" in its lists, open
+ * Board's Work lens over Town (#887): every pull request as the same kanban.
+ * A phone's stacked town stands the same building and yard (#1033); there
+ * its sign says what the counts are and opens the parcels as a list, with
+ * "All pull requests" at its top, since a phone's parcels are small to tap.
  */
 export const TownPostOffice = memo(function TownPostOffice({
   layout,
@@ -190,9 +185,7 @@ export const TownPostOffice = memo(function TownPostOffice({
     )
       return;
     const lot = townPostLot(layout);
-    const at = lot
-      ? { x: (lot.x + lot.w / 2) * T, y: lot.yardY * T }
-      : townPostFoldAt(layout.center);
+    const at = { x: (lot.x + lot.w / 2) * T, y: lot.yardY * T };
     handle.camera.flyTo(at.x, at.y, handle.camera.z, 0.4);
     handle.invalidate("focus");
   };
@@ -210,19 +203,7 @@ export const TownPostOffice = memo(function TownPostOffice({
         )
       : null;
   const lot = townPostLot(layout);
-  if (!lot)
-    return (
-      <>
-        <FoldedSign
-          center={layout.center}
-          office={office}
-          onOpen={openCard}
-          onOpenWork={openWork}
-          onFocus={reveal}
-        />
-        {card}
-      </>
-    );
+  const listed = layout.formFactor === "narrow";
   const parcels = office.status === "open" ? office.parcels : [];
   const shown = parcels.slice(0, yardSlots(parcels.length));
   const pile = parcels.slice(shown.length);
@@ -232,30 +213,42 @@ export const TownPostOffice = memo(function TownPostOffice({
   const work = office.status === "open" ? openWork : undefined;
   return (
     <>
-      <button
-        type="button"
-        className="town-post-sign"
-        data-quiet={quiet || undefined}
-        style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 34 }}
-        aria-label={`Post office: ${spoken(office)}${work ? ". Open all pull requests" : ""}`}
-        title={quiet && office.status === "closed" ? office.detail : undefined}
-        onPointerDown={(event) => event.stopPropagation()}
-        onFocus={reveal}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (connect) openSourcesSettings();
-          else if (work) work();
-          else
-            yardRef.current
-              ?.querySelector<HTMLElement>(".town-post-parcel")
-              ?.focus();
-        }}
-      >
-        <span className="town-post-sign-title" aria-hidden="true">
-          POST OFFICE
-        </span>
-        <SignCounts office={office} />
-      </button>
+      {listed ? (
+        <ListedSign
+          lot={lot}
+          office={office}
+          onOpen={openCard}
+          onOpenWork={openWork}
+          onFocus={reveal}
+        />
+      ) : (
+        <button
+          type="button"
+          className="town-post-sign"
+          data-quiet={quiet || undefined}
+          style={signStyle(lot)}
+          aria-label={`Post office: ${spoken(office)}${work ? ". Open all pull requests" : ""}`}
+          title={
+            quiet && office.status === "closed" ? office.detail : undefined
+          }
+          onPointerDown={(event) => event.stopPropagation()}
+          onFocus={reveal}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (connect) openSourcesSettings();
+            else if (work) work();
+            else
+              yardRef.current
+                ?.querySelector<HTMLElement>(".town-post-parcel")
+                ?.focus();
+          }}
+        >
+          <span className="town-post-sign-title" aria-hidden="true">
+            POST OFFICE
+          </span>
+          <SignCounts office={office} />
+        </button>
+      )}
       <div
         ref={yardRef}
         className="town-post-yard"
@@ -435,7 +428,7 @@ function AllPullRequests({
   );
 }
 
-/** Parcels as rows: the folded sign's and the pile's list. */
+/** Parcels as rows: a phone sign's and the pile's list. */
 function ParcelList({
   parcels,
   onOpen,
@@ -469,24 +462,30 @@ function ParcelList({
   );
 }
 
-/** The red pillar box painted by the house door, as the folded sign's mark. */
+/** The red pillar box painted by the house door, the list's mark. */
 function PostBox() {
   return <span className="town-post-box" aria-hidden="true" />;
 }
 
+const signStyle = (lot: TownPostLot) => {
+  const at = townPostSignAt(lot);
+  return { left: at.x, top: at.y };
+};
+
 /**
- * On a narrow town: a sign on the town center's right wing, inside a phone's
- * home view (townPostFoldAt), opening the post office as a list, or how to
- * connect GitHub.
+ * A phone's sign, under the house's eave as on a wide town: it names the
+ * post office and what its counts are (pull requests), and opens them as a
+ * list with "All pull requests", or how to connect GitHub. Closed or signed
+ * out, it still reads as the post office, closed.
  */
-function FoldedSign({
-  center,
+function ListedSign({
+  lot,
   office,
   onOpen,
   onOpenWork,
   onFocus,
 }: {
-  center: TownCenterLot;
+  lot: TownPostLot;
   office: Office;
   onOpen(key: string, anchor: HTMLElement | null): void;
   onOpenWork: (() => void) | null;
@@ -494,34 +493,28 @@ function FoldedSign({
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement | null>(null);
-  const at = townPostFoldAt(center);
+  const quiet = office.status !== "open";
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           ref={trigger}
           type="button"
-          className="town-post-fold"
-          style={{ left: at.x, top: at.y }}
-          aria-label={`Post office: ${spoken(office)}. Open`}
-          title="Post office"
+          className="town-post-sign"
+          data-listed="true"
+          data-quiet={quiet || undefined}
+          style={signStyle(lot)}
+          aria-label={`Post office, pull requests: ${spoken(office)}. Open`}
           onPointerDown={(event) => event.stopPropagation()}
           onFocus={onFocus}
         >
-          <PostBox />
-          {office.status === "open" && !office.stale ? (
-            <span className="town-post-fold-counts">
-              {(["ready", "failing", "waiting"] as const).map((state) => (
-                <b key={state} data-state={state}>
-                  {office.counts[state]}
-                </b>
-              ))}
-            </span>
-          ) : (
-            <span>
-              {office.status === "open" ? "old" : FOLDED_WAITING[office.status]}
-            </span>
-          )}
+          <span className="town-post-sign-title" aria-hidden="true">
+            POST OFFICE
+          </span>
+          <span className="town-post-sign-what" aria-hidden="true">
+            pull requests
+          </span>
+          <SignCounts office={office} />
         </button>
       </PopoverTrigger>
       <PopoverContent
