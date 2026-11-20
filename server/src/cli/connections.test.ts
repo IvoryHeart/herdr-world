@@ -415,6 +415,9 @@ describe("herdr-world connections", () => {
     expect(await connections(["--help"])).toBe(EXIT_OK);
     expect(cli.output.join("\n")).toContain("admits these changes live");
     expect(cli.output.join("\n")).toContain("no longer needed");
+    expect(cli.output.join("\n")).toContain("HERDR_WORLD_DATA_DIR");
+    expect(cli.output.join("\n")).toContain("instance lock");
+    expect(cli.output.join("\n")).toContain("cannot redirect connection edits");
     expect(cli.output.join("\n")).toMatch(
       /--auto-connect\s+connect at startup and at once on a running World/,
     );

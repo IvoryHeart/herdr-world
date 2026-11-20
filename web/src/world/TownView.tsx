@@ -72,7 +72,6 @@ import type {
   WorldConversationAnchors,
 } from "./worldConnectorGeometry";
 import { OfficeCanvasCallout } from "./OfficeCanvasCallout";
-export { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
 import type { OfficeAgent } from "./herdrOfficeProjection";
 import {
   EMPTY_OFFICE_OBSERVABILITY,

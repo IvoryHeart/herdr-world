@@ -24,6 +24,28 @@ reviewed `package-lock.json`, outside application workspaces. Install it with
 `bun run verification:setup`; do not add checker binaries to the application or
 replace its lock with an unlocked global dependency.
 
+Dependabot groups updates for all manifests: the root/web/server Bun workspace
+and lock, isolated Quint npm manifest and lock, and Actions. Security updates
+remain enabled independently of weekly version updates. Maintainers own alerts;
+shipped high/critical findings must be fixed or excepted before the next release,
+and development-only alerts within a week. Run `bun run security:check` after a
+dependency change; see [SECURITY.md](SECURITY.md#dependency-alerts-and-ownership)
+for the shipping boundary, response policy and exact expiring exception format.
+`bun run security:check --demo-vulnerable` demonstrates an advisory failure using
+synthetic input, without editing files or installing vulnerable code.
+
+Same-repository Dependabot PRs receive automatic maintenance from trusted base
+policy: refreshed notices, a generated fragment when the shipped graph changes,
+or a specific `Changelog: none` reason for development/Actions-only updates, plus
+PR-body documentation metadata. The preparation job runs with a read-only token,
+disables dependency lifecycle scripts and never executes candidate scripts. A
+separate write job checks out only trusted policy, validates the allowed output
+paths and current head, commits generated docs to the bot branch, then explicitly
+dispatches CI because token-created commits do not start workflows automatically.
+Human PR policies, independent review and protection remain required. If a bot
+update changes tool semantics or models, take ownership of its failing gate;
+automation does not weaken verification or approve/merge a PR.
+
 Behavioral verification CI uses Node 24.19.0 and Eclipse Temurin JDK
 21.0.13+9 (Linux x64). The shards and aggregate install that exact Java build
 through a commit-pinned `actions/setup-java`, reusing its runner tool cache when

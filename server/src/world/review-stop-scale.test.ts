@@ -11,12 +11,25 @@ import {
   deskMetadataBytes,
 } from "../../../shared/deskState";
 import { reviewStopFixture } from "./testing/review-stop-fixture";
+import { seedReviewStops } from "./testing/review-stop-seed";
 
 test("scale sources-10: current stops, both browser consumers and SQLite retain frame headroom", async () => {
   const shape = shapes.find((shape) => shape.id === "sources-10")!;
   const hosts = buildShape(shape),
     f = await reviewStopFixture();
   try {
+    await f.seedStore((writer) => {
+      for (const [i, host] of hosts.entries())
+        seedReviewStops(
+          writer,
+          `source-${i}`,
+          host.panes.map((pane) => ({
+            ...pane,
+            agent_status: "done",
+          })),
+          1001,
+        );
+    });
     for (const [i, host] of hosts.entries()) {
       const panes = host.panes.map((pane) => ({
         ...pane,

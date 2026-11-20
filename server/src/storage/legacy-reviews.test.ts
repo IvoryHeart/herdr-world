@@ -444,16 +444,16 @@ test("real post-resolution capacity refusal restores the archived receipt and ev
     2000,
     "migration-capacity",
   );
-  const write = (input: ReturnType<typeof terminalMarkInput>) =>
+  const writeMany = (inputs: ReturnType<typeof terminalMarkInput>[]) =>
     writer.batch(
-      [
-        {
-          ticket: 1,
-          request: { type: "terminal-mark", operation: { type: "put", input } },
-        },
-      ],
+      inputs.map((input, ticket) => ({
+        ticket,
+        request: { type: "terminal-mark", operation: { type: "put", input } },
+      })),
       2000,
-    )[0]!;
+    );
+  const write = (input: ReturnType<typeof terminalMarkInput>) =>
+    writeMany([input])[0]!;
   const rows = () =>
     writer.read().terminalMarks!.filter((row) => row.kind === "desk");
   const bytes = () => terminalMarkStorageBytes(rows());
@@ -461,30 +461,30 @@ test("real post-resolution capacity refusal restores the archived receipt and ev
     const padding = Array.from({ length: 100 }, (_, i) =>
       terminalMarkInput("desk", `padding-${i}`),
     );
-    for (const input of padding)
-      expect(
-        write({
-          ...input,
-          body: { ...input.body, reviewed_stop: "x", opened_at: null },
-        }).error,
-      ).toBeUndefined();
+    for (const reply of writeMany(
+      padding.map((input) => ({
+        ...input,
+        body: { ...input.body, reviewed_stop: "x", opened_at: null },
+      })),
+    ))
+      expect(reply.error).toBeUndefined();
     const length =
       Math.floor((DESK_METADATA_MAX_BYTES - bytes()) / padding.length) + 1;
     const update = (i: number, length: number) => {
       const row = rows().find(
         (row) => row.binding.evidence.terminals[0] === `padding-${i}`,
       )!;
-      return write({
+      return {
         ...padding[i]!,
         id: row.id,
         revision: row.revision,
         body: { ...row.body, reviewed_stop: "x".repeat(length) },
-      });
+      };
     };
-    for (let i = 0; i < padding.length; i++)
-      expect(update(i, length).error).toBeUndefined();
+    for (const reply of writeMany(padding.map((_, i) => update(i, length))))
+      expect(reply.error).toBeUndefined();
     expect(
-      update(0, length + DESK_METADATA_MAX_BYTES - bytes() - 8).error,
+      write(update(0, length + DESK_METADATA_MAX_BYTES - bytes() - 8)).error,
     ).toBeUndefined();
     expect(bytes()).toBe(DESK_METADATA_MAX_BYTES - 8);
     const before = writer.read().terminalMarks!,

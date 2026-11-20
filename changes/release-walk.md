@@ -21,3 +21,5 @@
 - Prepare private upgrade state, explicitly save the pinned TUI connection's
   endpoints before upgrading, and give each service lifecycle a valid isolated
   listener port so native acceptance reaches the intended journeys.
+- Preserve channel rehearsal and the all-channel verification barrier alongside
+  pre-tag walk authorization and reuse of the approved Unix release archives.

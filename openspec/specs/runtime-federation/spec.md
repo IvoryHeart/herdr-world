@@ -62,9 +62,27 @@ with that World service rather than connecting to independently deployed bridges
 - **THEN** `--restart` retains save-and-restart for an active managed service
 - **AND** the CLI refuses offline writes while a foreground process serves there
 
-#### Scenario: No configured listener answers a CLI edit
-- **WHEN** no listener answers, including while a managed service is starting or unreachable
+#### Scenario: CLI targets a separate World data folder
+- **WHEN** a local caller selects `HERDR_WORLD_DATA_DIR` for a development or preview World
+- **THEN** a live instance lock selects that folder's recorded listener address
+  and the CLI authenticates with that folder's own signing state
+- **AND** `HERDR_WORLD_URL` and `HERDR_WORLD_TOKEN` cannot redirect connection edits;
+  the service refuses any request whose registry path differs from its own
+- **AND** `--restart` for a live instance other than the configured installed service
+  is refused before mutation, without restarting the installed service
+
+#### Scenario: A registry's live owner is unavailable or refuses a CLI edit
+- **WHEN** a live lock holder cannot be reached, refuses admission, or sends a
+  non-JSON, invalid or unsuccessful HTTP reply
+- **THEN** the CLI names the service, explains the failure and tells the caller
+  to check that World's data folder and live catalogue, or stop it before offline editing
+- **AND** no JSON parser error reaches the caller and no offline save is attempted
+
+#### Scenario: No live service owns the selected data folder
+- **WHEN** no live instance lock holds the folder, and no legacy configured
+  listener answers for the installed service's own folder
 - **THEN** the CLI retains its existing offline save behavior without restarting the service
+- **AND** a separate unowned folder does not probe or change the installed World
 
 #### Scenario: A second bridge targets the same runtime
 - **WHEN** another managed profile or World process attempts to own the same Herdr client socket

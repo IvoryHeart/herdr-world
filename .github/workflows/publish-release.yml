@@ -131,4 +131,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.authorize.outputs.tag }}
         run: |
-          gh workflow run "Release" --ref "$TAG" -f publish_run_id="$GITHUB_RUN_ID"
+          gh workflow run "Release" --ref "$TAG" -f dry_run=false -f publish_run_id="$GITHUB_RUN_ID"

@@ -210,7 +210,9 @@ test("systemd acceptance blocks the existing native gate and release publication
   );
   expect(ci.jobs.delivery.name).toBe("Delivery checks");
   expect(ci.jobs.delivery.needs).toContain("installer-upgrade");
-  expect(release.jobs.publish.needs).toBe("package");
+  for (const publisher of ["publish", "npm-publish", "homebrew-pr"]) {
+    expect(release.jobs[publisher].needs).toContain("package");
+  }
   const releaseInstall = release.jobs.package.steps.find((item: any) =>
     item.run?.includes("test:install-linux"),
   );

@@ -108,3 +108,40 @@ test("tag creation follows exact-revision walk approval; publication reuses test
     "${{ needs.validate.outputs.walk_run_id }}",
   );
 });
+
+test("channel rehearsals cannot publish or replace approved Unix release bytes", () => {
+  const release = workflow("release");
+  expect(release.on.push).toBeUndefined();
+  expect(release.on.workflow_dispatch.inputs.dry_run.default).toBe(true);
+  const validate = release.jobs.validate;
+  const metadata = validate.steps.findIndex(
+    (step: any) => step.id === "metadata",
+  );
+  const gate = validate.steps.findIndex((step: any) => step.id === "walk");
+  expect(gate).toBeGreaterThan(metadata);
+  expect(validate.steps[gate].env.DRY_RUN).toBe(
+    "${{ steps.metadata.outputs.dry_run }}",
+  );
+  expect(validate.steps[gate].run).toContain('if [ "$DRY_RUN" = true ]; then');
+  expect(validate.steps[gate].run).toContain(
+    'else\n  bun scripts/release-walk-gate.ts publication "$GITHUB_SHA" "${GITHUB_REF_NAME#v}" "$PUBLISH_RUN_ID"',
+  );
+  const steps = release.jobs.package.steps;
+  const rehearsal = steps.find(
+    (step: any) => step.name === "Build Unix channel rehearsal package",
+  );
+  expect(rehearsal.if).toBe(
+    "needs.validate.outputs.dry_run == 'true' && !startsWith(matrix.platform, 'windows-')",
+  );
+  const approved = steps.find(
+    (step: any) =>
+      step.with?.name === "release-walk-package-${{ matrix.platform }}",
+  );
+  expect(approved.if).toBe(
+    "needs.validate.outputs.dry_run == 'false' && !startsWith(matrix.platform, 'windows-')",
+  );
+  for (const name of ["publish", "npm-publish", "homebrew-pr"])
+    expect(release.jobs[name].if).toBe(
+      "needs.validate.outputs.dry_run == 'false'",
+    );
+});

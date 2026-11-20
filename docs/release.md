@@ -103,6 +103,27 @@ same PR as its fix. If the walk exposes a product bug, file an issue and identif
 the failing journey with that issue number, at most until the next release.
 Known failures remain failed journeys and block release; never turn them into skips.
 
+## Dependency security gate
+
+Maintainers own the dependency alert queue. Shipped high/critical advisories must
+be fixed or excepted with a reviewed reason and expiry before the next release;
+development-only alerts must be resolved or explicitly mitigated/tracked within
+one week. See [the dependency security policy](../SECURITY.md#dependency-alerts-and-ownership).
+
+Run `bun run security:check` before preparing a release. Protected Delivery checks
+audit PRs, a daily main workflow queues shipped high/critical findings as
+`crew:ready` issues with `Priority: high`, and Release validation reruns the audit
+before any GitHub/npm/Homebrew publication. Pages also audits before deployment.
+This live registry check cannot be replaced by a previously green CI result.
+Fixable high/critical findings in the potentially shipped server/web runtime
+closure block publication. Tooling-only findings are reported without blocking
+the release, and no-fix findings still receive queue ownership. Output names each
+package, advisory and first published newer unaffected stable version.
+
+Exceptions in `security/dependency-exceptions.json` bind one exact package/version
+and GHSA URL to a reason and UTC expiry date; expired entries fail closed.
+Registry failures also fail closed. Do not disable the gate to publish.
+
 ## Pre-merge installer upgrades
 
 Every CI run with code changes calls `.github/workflows/installer-upgrade.yml`, and
@@ -347,7 +368,7 @@ release's generated Formula.
    # PUBLISH_RUN_ID is the successful pre-tag authorization run for this SHA.
    git tag -a vX.Y.Z-rc.N -m "Herdr World X.Y.Z-rc.N" "$release_sha"
    git push origin refs/tags/vX.Y.Z-rc.N
-   gh workflow run Release --ref vX.Y.Z-rc.N -f publish_run_id=PUBLISH_RUN_ID
+   gh workflow run Release --ref vX.Y.Z-rc.N -f dry_run=false -f publish_run_id=PUBLISH_RUN_ID
    ```
 
    Tag pushes alone do not publish. Release requires the retained authorization
@@ -365,21 +386,33 @@ release's generated Formula.
    before any platform package builds. Prepare Release validates its generated
    working tree in one checkout with one file worker and retains the complete World
    suite; its World cases run one at a time.
-   Release reuses the four tested Unix archives and builds the two Windows archives,
-   checks their contents and formats, then publishes archives, checksums, update
-   manifests and `install-herdr-world.sh` as a GitHub release. It downloads the
-   complete published asset set and verifies the installer, archive bytes, checksums
-   and update metadata before staging npm packages and a Homebrew
-   Formula, including on retries. It then publishes the six npm platform packages
-   followed by `@ivoryheart/herdr-world`. RCs use GitHub prerelease status,
-   npm's `next` tag and the `herdr-world-rc` Formula. Stable releases become GitHub
-   Latest, use npm's `latest` tag and update the `herdr-world` Formula. The workflow
-   opens a ready PR in `IvoryHeart/homebrew-tap` with the Formula and matching
-   `scripts/check-homebrew-runtime.rb` and `scripts/homebrew-tap-workflow.yml`
-   copied to the tap's `.github/scripts/check-homebrew-runtime.rb` and
-   `.github/workflows/herdr-world.yml`. Retries compare all three files before
-   reusing a branch or PR, so the tap runs that release's acceptance check rather
-   than a separately maintained copy. Merge it after independent review.
+   Release reuses the four Unix archives that passed the pre-tag walk and builds
+   the two Windows archives, then verifies all six platform archives, their aliases,
+   checksums, update manifests and installer. Before any publication it packs all
+   seven npm tarballs and smoke-installs the launcher, generates the stable or RC
+   Homebrew Formula, syntax-checks it and stage-checks it against all four Unix
+   archives, and generates the tap patch and exact PR title/body. Both Mac runners
+   install and reinstall using the local candidate archives with the same digests,
+   run `brew test` and check runtime bootstrap/preservation. Only the smoke Formula's
+   archive transport changes to local file URLs; the original public-URL Formula
+   and matching tap acceptance script/workflow remain the publication input.
+
+   Every publisher explicitly depends on every verification job. Once all pass,
+   `verified-release` retains archives, installer, npm tarballs, Formula, tap
+   acceptance inputs, PR patch/title/body, release notes and a SHA-256 manifest
+   bound to the source commit and version. Each publisher downloads this same
+   immutable artifact and verifies its file inventory and digests before writing.
+   A verification failure publishes nothing. GitHub uploads into a draft, compares
+   downloaded assets with the verified digests, then makes it public. npm publishes
+   the six platform packages followed by `@ivoryheart/herdr-world`, checking existing
+   versions' SHA-512 integrity on retries. The tap publisher copies the retained
+   Formula and acceptance inputs and opens the retained PR body, without regenerating
+   artifacts. Retries reject changed content.
+
+   RCs use GitHub prerelease status, npm's `next` tag and `herdr-world-rc`.
+   Stable releases become GitHub Latest, use npm's `latest` tag and update
+   `herdr-world`. Homebrew publication opens a ready PR in `IvoryHeart/homebrew-tap`;
+   independent review and merge are still required to make that channel installable.
 5. Verify the installer, npm installation with optional dependencies, Homebrew
    installation after the tap PR merges, and Herdr plugin download/start/status/url
    flow against the published assets. For stable releases, also verify the project-site
@@ -408,21 +441,71 @@ A successful branch
 push does not prove PR creation access: if `createPullRequest` reports
 `Resource not accessible by personal access token`, correct that token's repository
 access and PR permissions in GitHub settings. Workflow changes cannot grant token
-permissions. A failed downstream publish can be rerun for the same
-tag: npm skips byte-identical versions and rejects changed content.
+permissions. A failed downstream publish can be resumed for the same tag with the retained
+verified bundle; see recovery below.
 
 Do not move a tag that has published anything, or build final artifacts from an
 unreviewed worktree. If a published RC artifact is wrong, prepare `X.Y.Z-rc.(N+1)` on
 a new reviewed release commit. Prepare the stable `X.Y.Z` only after testing the candidate across the
 supported platforms.
 
-Rerunning a failed tag workflow uses the code and workflow from that tag, so
-retrying it does not pick up a fix merged to `main`. When Release failed before
-publishing anything, reuse the version rather than skipping it: confirm no GitHub
-release exists for the tag and npm has neither the launcher nor any platform
-package at that version, delete the tag, merge the reviewed fix, then tag the same
-version on the new merge commit as in step 3. Once any asset or package has
-published, prepare a new version instead.
+## Rehearse every channel before tagging
+
+In **Actions → Release → Run workflow**, select `main` (or the candidate branch),
+leave **dry_run** checked, enter `0.3.6` in **version**, and click **Run workflow**.
+The command equivalent is:
+
+```bash
+gh workflow run release.yml --ref main -f dry_run=true -f version=0.3.6
+```
+
+Dispatch defaults to a dry run, including on tag refs. Publication dispatches must
+explicitly pass `-f dry_run=false -f publish_run_id=PUBLISH_RUN_ID` on the matching
+reviewed tag using its successful pre-tag authorization; **Publish Release**
+does this automatically when **create_tag** is enabled. Tag pushes alone do not
+publish. A dry-run
+version overrides the build version without modifying tracked release metadata;
+missing final release notes are replaced with an explicitly dry-run note. Final
+publication still requires reviewed metadata, release notes and stable changelog.
+
+A rehearsal runs the complete validation, six builds, npm packing/install check,
+Formula syntax/stage checks, tap change/PR generation and both native Homebrew
+checks. Read **Publication status and recovery** and download `verified-release`
+from the run's **Artifacts** section to inspect `tap/pr.patch`, `tap/pr-body.md`,
+`tap/Formula/` and `manifest.json`. No tag, GitHub release, npm package, tap commit,
+branch or PR is created. This read-only tap generation uses the workflow token;
+it does not prove the separate tap publication token's write permissions.
+Channel rehearsal does not replace the required real-runtime release walk or
+produce its receipts. Publication still reuses the exact Unix archives approved
+before tagging, alongside the channel verification barrier.
+
+## Resume a partial publication without rebuilding
+
+Publication spans independent services and cannot be atomic after the verification
+barrier. If GitHub, npm or tap publication fails, **Publication status and recovery**
+queries the services and lists GitHub's draft/public state and asset count, each npm
+package's publication state, and the tap branch/PR/merge state. Failed lookups are
+reported as unknown. The summary prints the exact command for that run:
+
+```bash
+gh run rerun RUN_ID --failed --repo IvoryHeart/herdr-world
+```
+
+The Actions equivalent is **Re-run jobs → Re-run failed jobs**. This reruns failed
+publishers and their dependents, reusing successful verification jobs and the same
+`verified-release` artifact. Do not choose **Re-run all jobs**: that rebuilds rather
+than resuming the verified candidate. Fix external permissions/availability first.
+Artifacts are retained for 30 days; resume before they expire. A partial GitHub
+upload remains a draft and retries upload only missing assets after checking
+existing bytes. Existing public GitHub assets, npm versions and tap branch content
+must match the retained input; mismatches stop recovery without overwriting them.
+
+A rerun uses the workflow and code from the original ref, so it cannot pick up a
+code fix merged afterward. When verification failed before publishing anything,
+fix and rehearse again. For a tag already pushed, confirm no public GitHub release,
+npm version or tap proposal exists before deleting it and reusing that version on
+the reviewed fix as in step 3. Once anything has published, never move the tag:
+resume the original bytes, or prepare a new version if those bytes are wrong.
 
 Pages deployment runs from `main` and requires a working installer on the
 published stable Latest release. Candidates do not deploy the replacement site.
