@@ -100,6 +100,7 @@ For recent contract gaps and evidence boundaries, see the
 | Distribution and releases | [Contract](../openspec/specs/distribution-boundaries/spec.md) | [Source](../scripts/prepare-release.ts) | [Tests](../scripts/prepare-release.test.ts) |
 | PR evidence capture | [Contract](SCREENSHOTS.md#pr-screenshot-viewports) | [Source](../web/src/world/useDrawReadiness.ts) | [Tests](../web/src/world/drawReadiness.test.ts) |
 | Delivery gate and test selection | [Contract](../CONTRIBUTING.md) | [Source](../.githooks/pre-push) | [Tests](../scripts/affected.test.ts) |
+| Repository privacy guard | [Rule and exceptions](../CONTRIBUTING.md#privacy-before-publication) | [Scanner](../scripts/check-privacy.ts), [allowlist](../scripts/privacy-allowlist.ts), [CI](../.github/workflows/privacy.yml) | [Detection and Git history](../scripts/check-privacy.test.ts), [CI and hook wiring](../scripts/privacy-workflow.test.ts) |
 | Reviewed work | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/useReviewedWork.ts) | [Tests](../web/src/world/useReviewedWork.test.ts) |
 | Desk review RPC | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/rpc/desk.ts) | [Tests](../server/src/rpc/desk.test.ts) |
 | Browser startup | [Contract](foundation-guide.md#browser-startup-and-test-isolation) | [Source](../web/src/main.tsx) | [Tests](../web/src/appStartup.browser.test.ts) |

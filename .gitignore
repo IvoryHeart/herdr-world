@@ -10,6 +10,14 @@ dist
 *.key
 *.pem
 
+# Owner-only credentials, state and research (never copy into tracked docs).
+**/password
+**/session-secret.json
+**/world.sqlite*
+**/runtime-*/
+**/*.local.md
+research-local/
+
 # Generated build artifacts
 .pages-dist
 web/dist

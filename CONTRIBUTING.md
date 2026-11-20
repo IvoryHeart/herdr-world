@@ -125,10 +125,43 @@ push. Native platform lanes remain responsible for their OS-specific behavior.
 Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook checks formatting and lint without
 writing files, and its `pre-push` hook runs the applicable check. Before that gate,
-the hook checks the complete PR's changelog, knowledge-map, spec and verification
+the hook scans all pushed refs for private material and checks the complete PR's
+changelog, knowledge-map, spec and verification
 impact policy. It reads an existing PR description, or `HERDR_WORLD_PR_BODY=<file>` for the intended description
 before a first push. Non-documentation PRs need the two impact lines even with a
 changelog fragment and knowledge-map update. API errors cannot supply an exemption.
+
+### Privacy before publication
+
+Run `bun run check:privacy` after committing and before every push, especially
+when copying anything out of `.agents/` into tracked paths. The command scans
+each commit introduced since `origin/main`; `bun run check:privacy --range
+<base-ref> <head-ref>` selects another range. The pre-push hook scans every actual
+pushed ref, before policy and delivery checks, including docs and merge shortcuts.
+The independent **Privacy guard** CI check runs on every branch push and PR,
+including branches without a PR and pushes that skip local hooks.
+
+The guard checks added lines in every introduced commit, so deleting a leak in a
+later commit of the same push does not hide it. It rejects private/CGNAT IPv4,
+Tailscale IPv6 and `*.ts.net` hosts, absolute home paths, plausible login tokens
+and session secrets, literal World passwords, and non-reserved email addresses.
+It prints file, line and rule only; matched values and Git error details are
+suppressed. Missing required history fails the check. Renames scan their added
+content; existing unchanged lines and deletions are outside the scan.
+
+Use RFC 5737/3849 documentation addresses and reserved domains such as
+`example.com` and `.invalid` for fixtures. The small value-level allowlist in
+`scripts/privacy-allowlist.ts` permits explicit placeholders, repeated-character
+credentials and synthetic home usernames; changing it requires review. There
+are no per-file exclusions or inline bypasses. Keep credentials, runtime state,
+`*.local.md` notes and owner-only material in gitignored paths; `research-local/`
+is the owner-only research folder. Ignore rules do not remove already tracked files.
+
+CI detects a publication violation after a push; it cannot undo disclosure. If
+the guard flags committed private data, remove it from the unpublished commits
+before pushing and rotate any exposed credential through the owner.
+
+### PR impact assessment
 
 Use two plain lines without bold labels in every non-documentation PR:
 
