@@ -1,0 +1,140 @@
+/* The post office's sign (TownPostOffice.tsx), in Town's pixel skin: a red
+   enamel plate with cream lettering, like the pillar box at the door,
+   counting what Needs you lists with the shared agent marks. */
+
+/* The sign stands on the ridge at the roof's right end and grows up and
+   left over the lawn, keeping a readable size as the town zooms. */
+.town-world .town-post-sign {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 96px;
+  padding: 3px 7px 4px;
+  color: #fbf1dc;
+  background: #9c1e24;
+  border: 2px solid #1c1722;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1px #d4454a,
+    0 2px 0 #1c1722;
+  transform: translate(-100%, -100%) scale(clamp(0.5, var(--iz), 2.4));
+  transform-origin: 100% 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  image-rendering: pixelated;
+}
+
+/* Anything waiting on you lights the plate's rim gold. */
+.town-world .town-post-sign[data-waiting] {
+  box-shadow:
+    inset 0 0 0 1px #e8c75a,
+    0 2px 0 #1c1722;
+}
+
+.town-world .town-post-sign:focus-visible,
+.town-world .town-post-fold:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+.town-post-sign-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #ffd166;
+}
+
+/* Counts wrap, so the sign stays about the house's width. */
+.town-post-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1px 6px;
+  width: max-content;
+  max-width: 180px;
+  font-weight: 600;
+  white-space: normal;
+  text-align: center;
+}
+
+.town-post-counts > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.town-post-counts .agent-mark {
+  /* The marks' colours on Town's own background, light or dark theme. */
+  color: #1c1722;
+  box-shadow: 0 0 0 1px #1c1722;
+}
+
+.town-post-counts [data-kind="none"] {
+  font-weight: 400;
+  color: #f0d6c4;
+}
+
+.town-post-letter {
+  color: #ffe9c2;
+}
+
+/* A pillar box: the sign's and the fold's mark. */
+.town-post-mark {
+  position: relative;
+  flex: none;
+  display: inline-block;
+  width: 8px;
+  height: 12px;
+  background:
+    linear-gradient(#1c1722, #1c1722) 1px 4px / 6px 1px no-repeat,
+    linear-gradient(#e8c75a, #e8c75a) 2px 7px / 4px 2px no-repeat,
+    #d4252b;
+  border: 1px solid #1c1722;
+  border-radius: 4px 4px 1px 1px;
+  image-rendering: pixelated;
+}
+
+/* A narrow town's fold on the town center's right wing. */
+.town-world .town-post-fold {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 6px;
+  color: #fbf1dc;
+  background: #9c1e24;
+  border: 2px solid #1c1722;
+  border-radius: 4px;
+  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.town-world .town-post-fold[data-waiting] {
+  box-shadow: inset 0 0 0 1px #e8c75a;
+}
+
+.town-world .town-post-fold .town-post-counts {
+  gap: 4px;
+  max-width: none;
+  font-weight: 700;
+}

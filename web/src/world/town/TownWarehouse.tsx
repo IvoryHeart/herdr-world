@@ -139,6 +139,14 @@ function spoken(office: Office) {
     .join(", ");
 }
 
+/** The folded sign in words: what it holds, not how many. */
+function foldedSpoken(office: Office) {
+  if (office.status !== "open") return townWarehouseSignText(office);
+  return office.stale
+    ? "your pull requests, GitHub out of date"
+    : "your pull requests";
+}
+
 const FOLDED_WAITING = {
   loading: "…",
   off: "closed",
@@ -500,9 +508,9 @@ function CrateMark() {
 }
 
 /**
- * On a narrow town: a sign on the town center's right wing, inside a phone's
- * home view (townWarehouseFoldAt), opening the warehouse as a list, or how to
- * connect GitHub.
+ * On a narrow town: a sign on the town center's left wing, under the
+ * Shipyard's, inside a phone's home view (townWarehouseFoldAt), opening the
+ * warehouse as a list with its counts, or how to connect GitHub.
  */
 function FoldedSign({
   center,
@@ -528,25 +536,21 @@ function FoldedSign({
           type="button"
           className="town-warehouse-fold"
           style={{ left: at.x, top: at.y }}
-          aria-label={`Warehouse: ${spoken(office)}. Open`}
+          aria-label={`Warehouse: ${foldedSpoken(office)}. Open`}
           title="Warehouse"
           onPointerDown={(event) => event.stopPropagation()}
           onFocus={onFocus}
         >
           <CrateMark />
-          {office.status === "open" && !office.stale ? (
-            <span className="town-warehouse-fold-counts">
-              {(["ready", "failing", "waiting"] as const).map((state) => (
-                <b key={state} data-state={state}>
-                  {office.counts[state]}
-                </b>
-              ))}
-            </span>
-          ) : (
-            <span>
-              {office.status === "open" ? "old" : FOLDED_WAITING[office.status]}
-            </span>
-          )}
+          {/* No counts here: the list inside has them, and the post office
+              on the right wing counts what Needs you (#1098). */}
+          <span>
+            {office.status === "open"
+              ? office.stale
+                ? "PRs · old"
+                : "PRs"
+              : FOLDED_WAITING[office.status]}
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent

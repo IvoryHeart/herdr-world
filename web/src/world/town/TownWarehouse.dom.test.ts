@@ -255,11 +255,18 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     const fold = office.host.querySelector<HTMLButtonElement>(
       ".town-warehouse-fold",
     )!;
+    // The town center's wing shows no pull request counts (#1098): the
+    // list inside has them.
     expect(fold.getAttribute("aria-label")).toBe(
-      "Warehouse: 1 ready to merge, 0 failing, 0 waiting, 1 draft. Open",
+      "Warehouse: your pull requests. Open",
     );
+    expect(fold.textContent).toBe("PRs");
     // A crate marks the folded sign, as crates stand in the yard.
     expect(fold.querySelector(".town-warehouse-mark")).not.toBeNull();
+    await act(async () => fold.click());
+    expect(
+      document.querySelector(".town-warehouse-popover-counts")?.textContent,
+    ).toBe("1 ready · 0 failing · 0 waiting · 1 draft");
     await office.close();
   });
 
