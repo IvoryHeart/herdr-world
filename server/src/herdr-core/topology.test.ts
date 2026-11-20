@@ -2,14 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CoreEventLine } from "./client";
-import { harnessName, harnessOfArgv } from "./harness";
+import { harnessInvocation, harnessName, harnessOfArgv } from "./harness";
 import { CoreMirror, type CoreMirrorTerminal } from "./mirror";
 import type { CoreRecording } from "./testing/capture-core";
 import {
   CORE_UNPLACED_WORKSPACE,
   CoreFirstSight,
   coreAgentStatus,
+  coreDeskProcess,
+  coreDeskStatus,
   coreHarness,
+  coreHidesAgent,
   coreRuntimeReader,
   coreTopology,
 } from "./topology";
@@ -234,6 +237,160 @@ describe("harnesses: every one herdr-core and herdr support", () => {
       coreHarness(record({ status: { state: "working", app: "MyBot" } })),
     ).toBe("mybot");
     expect(coreHarness(record({ status: { state: "working" } }))).toBe("agent");
+  });
+});
+
+describe("a working agent shows at its desk: reports checked against the process", () => {
+  const fg = (argv: string[]) => ({
+    pid: 40,
+    name: argv[0]!.split("/").pop()!,
+    argv,
+  });
+  /** What one terminal shows, with the host's read of its foreground group. */
+  const desk = (
+    fields: Partial<CoreMirrorTerminal>,
+    group: string[][] | null = null,
+  ) => {
+    const terminal = record(fields);
+    const topology = coreTopology([terminal], "test core", {
+      firstSight: new CoreFirstSight(),
+      foregroundGroup: group ? () => group : undefined,
+    });
+    const pane = topology.panes[0]!;
+    return [pane.agent ?? null, pane.agent_status];
+  };
+
+  test("headless invocations are told apart from interactive ones", () => {
+    const run = (argv: string[]) => harnessInvocation(argv);
+    expect(run(["claude", "-p", "fix the tests"])).toEqual({
+      harness: "claude",
+      headless: true,
+    });
+    expect(run(["claude", "--print=json"])?.headless).toBe(true);
+    expect(run(["claude", "--print", "hi"])?.headless).toBe(true);
+    expect(run(["codex", "exec", "fix it"])?.headless).toBe(true);
+    expect(run(["codex", "-m", "o3", "exec", "fix it"])?.headless).toBe(true);
+    expect(run(["node", "/opt/codex.js", "exec", "x"])?.headless).toBe(true);
+    expect(run(["opencode", "run", "x"])?.headless).toBe(true);
+    // A prompt word is not a subcommand; an interactive session is not headless.
+    expect(run(["codex", "fix", "exec"])?.headless).toBe(false);
+    expect(run(["claude"])).toEqual({ harness: "claude", headless: false });
+    expect(run(["claude", "--", "-p"])?.headless).toBe(false);
+    expect(run(["git", "status"])).toBeNull();
+  });
+
+  test("a headless run starts: the desk works with no report at all", () => {
+    expect(desk({ foreground: fg(["claude", "-p", "go"]) })).toEqual([
+      "claude",
+      "working",
+    ]);
+    // A question it asks still needs you.
+    expect(
+      desk({
+        foreground: fg(["claude", "-p", "go"]),
+        status: { state: "blocked", app: "claude" },
+      }),
+    ).toEqual(["claude", "blocked"]);
+  });
+
+  test("a wrapper's agent is found in the foreground group, nearest first", () => {
+    // bash run.sh runs `claude -p … | tee log` with job control off.
+    const wrapper = { foreground: fg(["bash", "run.sh"]) };
+    expect(
+      desk(wrapper, [
+        ["claude", "-p", "go"],
+        ["tee", "log"],
+      ]),
+    ).toEqual(["claude", "working"]);
+    expect(
+      desk({ foreground: fg(["sh", "-c", "claude; echo done"]) }, [["claude"]]),
+    ).toEqual(["claude", "unknown"]);
+    expect(
+      coreDeskProcess(record(wrapper), [["git", "log"], ["claude"]]),
+    ).toEqual({ running: { harness: "claude", headless: false }, gone: false });
+    // Without the group, World cannot see inside the wrapper.
+    expect(desk(wrapper)).toEqual([null, "unknown"]);
+    expect(coreHidesAgent(record(wrapper))).toBe(true);
+  });
+
+  test("a plain shell's short-lived child is not an agent", () => {
+    expect(
+      desk({ foreground: fg(["bash", "run.sh"]) }, [["git", "status"]]),
+    ).toEqual([null, "unknown"]);
+    expect(desk({ foreground: fg(["bun", "test"]) })).toEqual([
+      null,
+      "unknown",
+    ]);
+    expect(desk({ foreground: fg(["git", "status"]) })).toEqual([
+      null,
+      "unknown",
+    ]);
+    expect(coreHidesAgent(record({ foreground: fg(["git", "status"]) }))).toBe(
+      false,
+    );
+    expect(coreHidesAgent(record({ foreground: fg(["claude"]) }))).toBe(false);
+    // An interactive shell puts each job in its own group: nothing hides there.
+    for (const argv of [["bash"], ["-zsh"], ["zsh", "-i"], ["fish", "-l"]])
+      expect(coreHidesAgent(record({ foreground: fg(argv) }))).toBe(false);
+    for (const argv of [
+      ["bash", "-c", "x"],
+      ["zsh", "-ic", "x"],
+      ["node", "a.js"],
+    ])
+      expect(coreHidesAgent(record({ foreground: fg(argv) }))).toBe(true);
+  });
+
+  test("killed mid-turn: a stale working report leaves the desk", () => {
+    const stale = { state: "working", app: "claude" };
+    // The wrapper is back in front and its group holds no agent.
+    expect(
+      desk({ foreground: fg(["bash", "run.sh"]), status: stale }, [
+        ["sleep", "5"],
+      ]),
+    ).toEqual(["claude", "idle"]);
+    // Something that cannot hide an agent leads the terminal.
+    expect(
+      desk({ foreground: fg(["vim", "notes.md"]), status: stale }),
+    ).toEqual(["claude", "idle"]);
+    expect(
+      desk(
+        {
+          foreground: fg(["bash", "run.sh"]),
+          status: { state: "blocked", app: "claude" },
+        },
+        [],
+      ),
+    ).toEqual(["claude", "idle"]);
+    // Back at an interactive shell (core on Windows does not clear it).
+    expect(desk({ foreground: fg(["pwsh"]), status: stale })).toEqual([
+      "claude",
+      "idle",
+    ]);
+    // A wrapper World cannot look inside (a remote core) keeps the report.
+    expect(desk({ foreground: fg(["bash", "run.sh"]), status: stale })).toEqual(
+      ["claude", "working"],
+    );
+    // A program that names no known harness is its own evidence.
+    expect(
+      desk({
+        foreground: fg(["mybot"]),
+        status: { state: "working", app: "MyBot" },
+      }),
+    ).toEqual(["mybot", "working"]);
+  });
+
+  test("an interactive agent's status is its own report; none is unknown", () => {
+    const claude = { foreground: fg(["claude"]) };
+    expect(
+      desk({ ...claude, status: { state: "idle", app: "claude" } }),
+    ).toEqual(["claude", "idle"]);
+    expect(
+      desk({ ...claude, status: { state: "working", app: "claude" } }),
+    ).toEqual(["claude", "working"]);
+    expect(desk(claude)).toEqual(["claude", "unknown"]);
+    expect(
+      coreDeskStatus(record(claude), coreDeskProcess(record(claude))),
+    ).toBe("unknown");
   });
 });
 

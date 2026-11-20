@@ -5,7 +5,13 @@ import type {
   WorkspaceRow,
 } from "../adapters/runtime-ports";
 import { CoreUnavailableError } from "./client";
-import { harnessName, harnessOfArgv } from "./harness";
+import {
+  harnessInvocation,
+  harnessName,
+  mayWrapHarness,
+  type HarnessInvocation,
+} from "./harness";
+import type { ForegroundGroupReader } from "./process-group";
 import type { CoreMirror, CoreMirrorTerminal } from "./mirror";
 import { coreSpawnedBy, coreSummaryOf } from "./labels";
 import { coreRecipientToken } from "./recipient";
@@ -31,8 +37,10 @@ import { coreTurn, isFavourite, sharedSeen } from "./shared-state";
  *   everything else shares one room. Sub-agents join their parent's room.
  * - Only live terminals on this core. Linked machines' terminals (`m/tN`)
  *   are discovery only and never become actionable rows.
- * - Status is core's, never inferred: a program's OSC 7501 word, with
- *   Herdr's shared seen rule (`herdr.seen`) deciding done versus idle.
+ * - Status is core's OSC 7501 word, with Herdr's shared seen rule
+ *   (`herdr.seen`) deciding done versus idle, checked against the process
+ *   (`coreDeskStatus`): a live headless run works, and a report whose
+ *   harness has gone from the terminal is stale.
  */
 export const CORE_UNPLACED_WORKSPACE = "hc:unplaced";
 /** World's main room of a core: where unplaced terminals show. */
@@ -143,17 +151,92 @@ export function coreAgentStatus(
 }
 
 /** The harness in a terminal: its report, else what runs in it now. */
-export function coreHarness(record: CoreMirrorTerminal): string | null {
+export function coreHarness(
+  record: CoreMirrorTerminal,
+  group: readonly (readonly string[])[] | null = null,
+): string | null {
   const report = coreStatusReport(record);
   const reported = harnessName(report?.app);
   if (reported) return reported;
-  const foreground = object(record.foreground);
-  const running = foreground
-    ? (harnessOfArgv(foreground.argv) ?? harnessName(foreground.name))
-    : harnessOfArgv(record.argv);
+  const running = coreDeskProcess(record, group).running?.harness;
   if (running) return running;
   // A program that speaks 7501 is an agent even if no list names it.
   return report ? (report.app?.toLowerCase() ?? "agent") : null;
+}
+
+/** What the terminal's processes show of an agent, as evidence. */
+export type CoreDeskProcess = {
+  /** The harness running in the foreground: its leader, else the group member nearest it. */
+  running: HarnessInvocation | null;
+  /**
+   * No harness runs there, for certain: the group was read, or its leader
+   * (not a shell or interpreter) cannot be hiding one.
+   */
+  gone: boolean;
+};
+
+/**
+ * The agent process in a terminal's foreground, as Herdr's TUI finds it
+ * (the job's leader first, then its other processes): `group` lists the
+ * leader's group members, nearest first, when the host could read them.
+ */
+export function coreDeskProcess(
+  record: CoreMirrorTerminal,
+  group: readonly (readonly string[])[] | null = null,
+): CoreDeskProcess {
+  const foreground = object(record.foreground);
+  if (!foreground) {
+    const running = harnessInvocation(record.argv);
+    return { running, gone: false };
+  }
+  const leader =
+    harnessInvocation(foreground.argv) ??
+    (harnessName(foreground.name)
+      ? { harness: harnessName(foreground.name)!, headless: false }
+      : null);
+  if (leader) return { running: leader, gone: false };
+  for (const argv of group ?? []) {
+    const member = harnessInvocation(argv);
+    if (member) return { running: member, gone: false };
+  }
+  return { running: null, gone: group !== null || !mayWrapHarness(foreground) };
+}
+
+/**
+ * A desk's status: its program's report checked against the process. A
+ * headless run (`claude -p`, `codex exec`) works for as long as it lives,
+ * report or none. A known harness's working or waiting report from a process
+ * that has left the terminal is stale: it reads idle, so the agent leaves its
+ * desk. Otherwise the report decides, and with none the status is unknown.
+ */
+export function coreDeskStatus(
+  record: CoreMirrorTerminal,
+  desk: CoreDeskProcess,
+  firstSight: number | null = null,
+): CoreAgentStatus {
+  const reported = coreAgentStatus(record, firstSight);
+  if (desk.running?.headless && reported !== "blocked") return "working";
+  if (
+    desk.gone &&
+    harnessName(coreStatusReport(record)?.app) &&
+    (reported === "working" || reported === "blocked")
+  )
+    return "idle";
+  return reported;
+}
+
+/**
+ * Whether a terminal's foreground leader is a shell or interpreter that may
+ * run an agent in its group, out of core's sight: World then reads the
+ * group on the host, and again while it leads.
+ */
+export function coreHidesAgent(record: CoreMirrorTerminal): boolean {
+  const foreground = object(record.foreground);
+  return Boolean(
+    foreground &&
+      mayWrapHarness(foreground) &&
+      !coreDeskProcess(record).running,
+  );
 }
 
 type Placement =
@@ -315,6 +398,8 @@ export type CoreTopologyOptions = {
   coreId?: string;
   occupancy?(address: string): number | null;
   now?: number;
+  /** The host's read of a foreground group, for a core on this machine. */
+  foregroundGroup?: ForegroundGroupReader;
 };
 
 export function coreTopology(
@@ -330,7 +415,10 @@ export function coreTopology(
     coreId = world?.core_id ?? "",
     now = Date.now(),
     occupancy,
-  } = "turn" in options ? { firstSight: options } : options;
+    foregroundGroup,
+  }: CoreTopologyOptions = "turn" in options
+    ? { firstSight: options }
+    : options;
   const local = terminals
     .filter(
       (record) =>
@@ -417,8 +505,19 @@ export function coreTopology(
         focused: false,
       });
     const report = coreStatusReport(record);
-    const harness = coreHarness(record);
     const foreground = object(record.foreground);
+    const group =
+      foregroundGroup && typeof foreground?.pid === "number"
+        ? foregroundGroup(
+            foreground.pid,
+            Array.isArray(foreground.argv) &&
+              typeof foreground.argv[0] === "string"
+              ? foreground.argv[0]
+              : undefined,
+          )
+        : null;
+    const desk = coreDeskProcess(record, group);
+    const harness = coreHarness(record, group);
     const cwd = text(record.cwd, 4096);
     const foregroundCwd = text(foreground?.cwd, 4096);
     // Spawn stamps (M7): core's own parent for a child it started, else
@@ -446,7 +545,7 @@ export function coreTopology(
           }
         : {}),
       agent_status: harness
-        ? coreAgentStatus(record, firstSight.turn(record.address))
+        ? coreDeskStatus(record, desk, firstSight.turn(record.address))
         : "unknown",
     };
     // The program at this address, as a verified core caller's asks name it
@@ -536,6 +635,7 @@ export type CoreReadModelSource = {
   world?(): CoreTopologyDocument | null;
   coreId?(): string | null;
   now?(): number;
+  foregroundGroup?: ForegroundGroupReader;
 };
 
 /**
@@ -552,6 +652,7 @@ export function coreReadModel(source: CoreReadModelSource): CoreTopology {
     coreId: source.coreId?.() ?? undefined,
     now: source.now?.(),
     occupancy: (address) => source.mirror.occupancy(address),
+    foregroundGroup: source.foregroundGroup,
   });
 }
 

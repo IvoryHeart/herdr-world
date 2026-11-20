@@ -75,11 +75,61 @@ export function harnessName(name: unknown): string | null {
 }
 
 /**
+ * How each harness is told to run one task and exit (headless): a flag, or a
+ * subcommand. Such a run exists only while it works, so a live headless
+ * process is a working agent even when it reports no status.
+ */
+const HEADLESS: Record<string, { flags?: string[]; commands?: string[] }> = {
+  claude: { flags: ["-p", "--print"] },
+  codex: { commands: ["exec", "e"] },
+  gemini: { flags: ["-p", "--prompt"] },
+  qwen: { flags: ["-p", "--prompt"] },
+  cursor: { flags: ["-p", "--print"] },
+  copilot: { flags: ["-p", "--prompt"] },
+  pi: { flags: ["-p", "--print"] },
+  amp: { flags: ["-x", "--execute"] },
+  opencode: { commands: ["run"] },
+  crush: { commands: ["run"] },
+  droid: { commands: ["exec"] },
+};
+
+function headless(harness: string, args: readonly string[]): boolean {
+  const rule = HEADLESS[harness];
+  if (!rule) return false;
+  const end = args.indexOf("--");
+  const words = end < 0 ? args : args.slice(0, end);
+  if (rule.flags)
+    return words.some((word) =>
+      rule.flags!.some(
+        (flag) =>
+          word === flag ||
+          (flag.startsWith("--") && word.startsWith(`${flag}=`)),
+      ),
+    );
+  // A subcommand is the first plain word, a flag's value aside.
+  for (const [i, word] of words.entries()) {
+    if (word.startsWith("-")) continue;
+    if (rule.commands?.includes(word)) return true;
+    const previous = words[i - 1];
+    if (previous?.startsWith("-") && !previous.includes("=")) continue;
+    return false;
+  }
+  return false;
+}
+
+/** A harness command line: which harness, and whether it runs headless. */
+export type HarnessInvocation = { harness: string; headless: boolean };
+
+/**
  * The harness a command line runs, looking through the user's shell wrapper
  * (`zsh -ic '"$@"; exec "$0" -i' zsh claude`) and script interpreters
- * (`node …/codex.js`), as Herdr's desktop app does.
+ * (`node …/codex.js`), as Herdr's desktop app does, and whether it runs one
+ * task headless (`claude -p`, `codex exec`).
  */
-export function harnessOfArgv(argv: unknown, depth = 0): string | null {
+export function harnessInvocation(
+  argv: unknown,
+  depth = 0,
+): HarnessInvocation | null {
   if (!Array.isArray(argv) || depth > 2) return null;
   const words = argv.filter((word): word is string => typeof word === "string");
   const first = words[0];
@@ -92,16 +142,57 @@ export function harnessOfArgv(argv: unknown, depth = 0): string | null {
     words[1].endsWith("c") &&
     words[2]?.includes('"$@"')
   )
-    return harnessOfArgv(words.slice(4), depth + 1);
+    return harnessInvocation(words.slice(4), depth + 1);
+  const found = (harness: string | null, at: number) =>
+    harness
+      ? { harness, headless: headless(harness, words.slice(at + 1)) }
+      : null;
   if (INTERPRETERS.has(program)) {
-    for (const word of words.slice(1)) {
-      if (word.startsWith("-")) continue;
-      const found = harnessName(word.replace(/\.(?:[cm]?js|ts|py|rb)$/, ""));
-      if (found) return found;
+    for (const [i, word] of words.entries()) {
+      if (i === 0 || word.startsWith("-")) continue;
+      const invocation = found(
+        harnessName(word.replace(/\.(?:[cm]?js|ts|py|rb)$/, "")),
+        i,
+      );
+      if (invocation) return invocation;
     }
     return null;
   }
-  return harnessName(program);
+  return found(harnessName(program), 0);
+}
+
+/** The harness a command line runs (see `harnessInvocation`). */
+export function harnessOfArgv(argv: unknown): string | null {
+  return harnessInvocation(argv)?.harness ?? null;
+}
+
+/**
+ * Whether a foreground program could be running a harness out of sight: a
+ * shell or interpreter leading its process group (`bash run.sh`,
+ * `sh -c "claude …"`) can have the harness as a member of that group. An
+ * interactive shell cannot: its jobs get their own groups (job control),
+ * and core clears a program's report when one is back in front (its
+ * `shell_root` rule, matched here).
+ */
+export function mayWrapHarness(foreground: {
+  name?: unknown;
+  argv?: unknown;
+}): boolean {
+  const argv = Array.isArray(foreground.argv) ? foreground.argv : [];
+  const names = [argv[0], foreground.name].filter(
+    (name): name is string => typeof name === "string",
+  );
+  const shell = names.some((name) => SHELLS.has(base(name)));
+  if (!shell) return names.some((name) => INTERPRETERS.has(base(name)));
+  return argv
+    .slice(1)
+    .some(
+      (arg) =>
+        typeof arg !== "string" ||
+        (!arg.startsWith("-") && !arg.startsWith("+")) ||
+        /^--commands?(=|$)/.test(arg) ||
+        (/^-[^-]/.test(arg) && arg.slice(1).includes("c")),
+    );
 }
 
 /** Every harness World recognises in core (Herdr's and the desktop app's). */

@@ -50,10 +50,15 @@ import {
 } from "./stream";
 import {
   CoreFirstSight,
+  coreHidesAgent,
   coreRuntimeReader,
   coreTopology,
   nextCoreSummaryExpiry,
 } from "./topology";
+import {
+  type ForegroundGroupReader,
+  localForegroundGroups,
+} from "./process-group";
 import type { CoreTopologyDocument } from "./layout";
 import {
   type CoreAlert,
@@ -103,6 +108,13 @@ export type CoreRuntimeOptions = {
   livenessTimeoutMs?: number;
   publishDelayMs?: number;
   now?: () => number;
+  /**
+   * Reads a foreground group's members on the host (process-group.ts). By
+   * default a local core on Linux has one; a remote core has none.
+   */
+  foregroundGroups?: ForegroundGroupReader | null;
+  /** How often a wrapper's group is read again while one leads a terminal. */
+  groupRefreshMs?: number;
 };
 
 export type CoreConnectionRuntime = ConnectionRuntime & {
@@ -356,6 +368,15 @@ export function createCoreConnectionRuntime(
   // Connections page: World re-reads whenever its own rows would differ.
   let lastReadModel = "";
   let expiryTimer: ReturnType<typeof setTimeout> | null = null;
+  // Core sends no event when a wrapper's agent starts or ends inside its
+  // group, so World reads the group again while a wrapper leads a terminal.
+  const foregroundGroup =
+    options.foregroundGroups === undefined
+      ? options.local
+        ? localForegroundGroups()
+        : undefined
+      : (options.foregroundGroups ?? undefined);
+  let groupTimer: ReturnType<typeof setTimeout> | null = null;
   const layout = () =>
     epoch ? (options.layout?.(epoch.coreId) ?? null) : null;
   const readModelChanged = () => {
@@ -369,8 +390,24 @@ export function createCoreConnectionRuntime(
         coreId: epoch?.coreId,
         occupancy: (address) => mirror.occupancy(address),
         now: at,
+        foregroundGroup,
       }),
     );
+    if (groupTimer) clearTimeout(groupTimer);
+    groupTimer = null;
+    if (
+      foregroundGroup &&
+      !failed &&
+      !stopped &&
+      terminals.some(
+        (record) =>
+          !record.remote && record.state === "live" && coreHidesAgent(record),
+      )
+    )
+      groupTimer = setTimeout(
+        readModelChanged,
+        options.groupRefreshMs ?? 1_000,
+      );
     // A summary disappears when it expires, with no event to say so.
     if (expiryTimer) clearTimeout(expiryTimer);
     expiryTimer = null;
@@ -651,6 +688,7 @@ export function createCoreConnectionRuntime(
     abort.abort(new Error("connection runtime retired"));
     if (liveness) clearInterval(liveness);
     if (expiryTimer) clearTimeout(expiryTimer);
+    if (groupTimer) clearTimeout(groupTimer);
     if (!failed) withdraw();
     client?.close("connection runtime retired");
     notify();
@@ -688,6 +726,7 @@ export function createCoreConnectionRuntime(
       world: layout,
       coreId: () => epoch?.coreId ?? null,
       now,
+      foregroundGroup,
     }),
     readScreen,
     layout,
