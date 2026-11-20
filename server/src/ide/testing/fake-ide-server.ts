@@ -2,7 +2,10 @@
  * A stand-in for `code-tunnel serve-web` in tests: the same flags, a
  * connection-token cookie check, upstream cookies on `Path=/` and an echo
  * WebSocket. `FAKE_IDE_DOWNLOADS=<n>` answers 202 to the first n requests,
- * as VS Code's CLI does while it downloads its web server.
+ * as VS Code's CLI does while it downloads its web server. A socket whose
+ * first message is VS Code's `auth` control message gets `auth:ok`, or
+ * `auth:mismatch` when it lacks the connection token, as the real server
+ * checks it.
  *
  * Given code-server's `--socket` instead, it serves at its root with no
  * token, and answers `/proxy/<port>` and `/absproxy/<port>` (HTTP and
@@ -97,6 +100,13 @@ Bun.serve({
   },
   websocket: {
     message(ws, message) {
+      if (typeof message !== "string" && message[0] === 2) {
+        const auth = JSON.parse(new TextDecoder().decode(message.subarray(13)));
+        if (auth.type === "auth") {
+          ws.send(token && auth.auth !== token ? "auth:mismatch" : "auth:ok");
+          return;
+        }
+      }
       ws.send(`echo:${message}`);
     },
   },

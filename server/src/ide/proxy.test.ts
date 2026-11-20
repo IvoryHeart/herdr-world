@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { ideBlockedPath } from "./providers";
 import {
   IDE_FRAME_POLICY,
+  IdeSocketBridge,
+  type IdeSocketData,
   type IdeUpstream,
   ideResponseHeaders,
   parseIdeRoute,
@@ -9,6 +11,7 @@ import {
   scopeIdeLocation,
   upstreamPath,
   upstreamRequestHeaders,
+  withConnectionToken,
 } from "./proxy";
 
 const ID = "AbCdEfGhIjKlMnOpQrStUv";
@@ -149,4 +152,95 @@ test("code-server's port proxies are never forwarded, however the path is spelle
     expect(ideBlockedPath("code-server", rest)).toBe(false);
   // VS Code's own server has no port proxy; its paths pass as they are.
   expect(ideBlockedPath("vscode", "/proxy/3000/")).toBe(false);
+});
+
+/** VS Code's protocol framing: type, id, ack, length, then the body. */
+function frame(type: number, body: string, id = 7, ack = 3) {
+  const json = new TextEncoder().encode(body);
+  const bytes = new Uint8Array(13 + json.length);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = type;
+  view.setUint32(1, id);
+  view.setUint32(5, ack);
+  view.setUint32(9, json.length);
+  bytes.set(json, 13);
+  return bytes;
+}
+
+function unframe(data: unknown) {
+  const bytes = new Uint8Array(data as Uint8Array);
+  const view = new DataView(bytes.buffer, bytes.byteOffset);
+  return {
+    type: bytes[0],
+    id: view.getUint32(1),
+    ack: view.getUint32(5),
+    length: view.getUint32(9),
+    body: new TextDecoder().decode(bytes.subarray(13)),
+  };
+}
+
+test("the workbench's auth handshake gets the token the browser never sees", () => {
+  const auth = frame(
+    2,
+    JSON.stringify({ type: "auth", auth: "00000000000000000000", data: "c" }),
+  );
+  const out = unframe(withConnectionToken(auth, "secret-token"));
+  expect(out).toMatchObject({ type: 2, id: 7, ack: 3 });
+  expect(out.length).toBe(new TextEncoder().encode(out.body).length);
+  expect(JSON.parse(out.body)).toEqual({
+    type: "auth",
+    auth: "secret-token",
+    data: "c",
+  });
+  // A token-less handshake (the auth key left out) gets one too.
+  expect(
+    JSON.parse(
+      unframe(
+        withConnectionToken(
+          frame(2, JSON.stringify({ type: "auth", data: "c" })).buffer,
+          "secret-token",
+        ),
+      ).body,
+    ).auth,
+  ).toBe("secret-token");
+});
+
+test("anything but VS Code's auth control message passes unchanged", () => {
+  const regular = frame(1, JSON.stringify({ type: "auth", auth: "x" }));
+  expect(withConnectionToken(regular, "t")).toBe(regular);
+  const other = frame(2, JSON.stringify({ type: "connectionType" }));
+  expect(withConnectionToken(other, "t")).toBe(other);
+  const notJson = frame(2, "{nope");
+  expect(withConnectionToken(notJson, "t")).toBe(notJson);
+  // A length that doesn't match is someone else's framing.
+  const truncated = frame(2, JSON.stringify({ type: "auth" })).subarray(0, 20);
+  expect(withConnectionToken(truncated, "t")).toBe(truncated);
+  expect(withConnectionToken("text", "t")).toBe("text");
+});
+
+test("the bridge fills the token into the first message only", () => {
+  const sent: unknown[] = [];
+  const data: IdeSocketData = {
+    kind: "ide",
+    sessionToken: null,
+    instanceId: ID,
+    upstreamUrl: "ws+unix:///tmp/ide.sock:/",
+    upstreamHeaders: {},
+    handshakeToken: "secret-token",
+  };
+  const upstream = {
+    readyState: WebSocket.OPEN,
+    send: (message: unknown) => sent.push(message),
+    close() {},
+  } as unknown as WebSocket;
+  const bridge = new IdeSocketBridge(
+    { data, send() {}, close() {} },
+    () => upstream,
+  );
+  bridge.open();
+  const auth = JSON.stringify({ type: "auth", auth: "0000", data: "c" });
+  bridge.message(frame(2, auth));
+  bridge.message(frame(2, auth));
+  expect(JSON.parse(unframe(sent[0]).body).auth).toBe("secret-token");
+  expect(JSON.parse(unframe(sent[1]).body).auth).toBe("0000");
 });
