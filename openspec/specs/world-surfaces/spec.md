@@ -103,6 +103,12 @@ Failed optimistic writes SHALL restore the last confirmed value unless a newer
 local edit or service publication has superseded them. Reception choices SHALL
 NOT change agent facts, room counts, Board/Desk lanes or Needs you counts.
 
+#### Scenario: An earlier save succeeds while a later save is pending
+
+- **WHEN** save A succeeds while a newer local save B is pending, and B then fails
+- **THEN** the browser restores A as the last confirmed preference
+- **AND** an older acknowledgement cannot supersede a newer confirmed save or service publication
+
 #### Scenario: A newer service preference overtakes a failed save
 
 - **WHEN** a browser's pending save fails after a newer preference is adopted

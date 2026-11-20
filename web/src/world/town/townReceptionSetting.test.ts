@@ -77,6 +77,11 @@ test("all 24 two-save completion and service-publication schedules fence stale f
         saveTownReceptionFilter(first).catch(() => {}),
         saveTownReceptionFilter(second).catch(() => {}),
       ];
+      // A successful A is already saved when B fails only in these schedules.
+      const rollback =
+        (failureMask & 1) === 0 && order.indexOf(0) < order.indexOf(1)
+          ? first
+          : TOWN_RECEPTION_DEFAULT;
       let adopted = false;
       let latestFailed = false;
       for (const event of order) {
@@ -92,14 +97,49 @@ test("all 24 two-save completion and service-publication schedules fence stale f
           if (event === 1 && fails) latestFailed = true;
         }
         expect(townReceptionFilter()).toEqual(
-          adopted
-            ? authoritative
-            : latestFailed
-              ? TOWN_RECEPTION_DEFAULT
-              : second,
+          adopted ? authoritative : latestFailed ? rollback : second,
         );
       }
+      // A late acknowledgement must not replace an adopted service value.
+      connectTownReceptionFilter(async () => {
+        throw new Error("synthetic follow-up refusal");
+      });
+      await expect(saveTownReceptionFilter(second)).rejects.toThrow(
+        "synthetic follow-up refusal",
+      );
+      expect(townReceptionFilter()).toEqual(authoritative);
     }
+  connectTownReceptionFilter(null);
+  adoptTownReceptionFilter(null);
+});
+
+test("older successful acknowledgements cannot replace a newer confirmed save", async () => {
+  adoptTownReceptionFilter(null);
+  const first = withTownReceptionMarks(TOWN_RECEPTION_DEFAULT, "synthetic-a", [
+    "ask",
+  ]);
+  const second = withTownReceptionMarks(TOWN_RECEPTION_DEFAULT, "synthetic-b", [
+    "blocked",
+  ]);
+  const pending = [
+    Promise.withResolvers<void>(),
+    Promise.withResolvers<void>(),
+  ];
+  let request = 0;
+  connectTownReceptionFilter(() => pending[request++]!.promise);
+  const firstSave = saveTownReceptionFilter(first);
+  const secondSave = saveTownReceptionFilter(second);
+  pending[1]!.resolve();
+  await secondSave;
+  pending[0]!.resolve();
+  await firstSave;
+  connectTownReceptionFilter(async () => {
+    throw new Error("synthetic follow-up refusal");
+  });
+  await expect(saveTownReceptionFilter(first)).rejects.toThrow(
+    "synthetic follow-up refusal",
+  );
+  expect(townReceptionFilter()).toEqual(second);
   connectTownReceptionFilter(null);
   adoptTownReceptionFilter(null);
 });

@@ -3,6 +3,11 @@
 - Reconcile November architecture contracts, active OpenSpec lifecycles and
   verification ownership, with an audit of all 85 first-parent source changes.
 
+### Fixed
+
+- Restore the last successfully saved Town reception filter when a newer
+  optimistic save fails, including when the earlier save finished while it was pending.
+
 ### Known issues
 
 - Concurrent offline connection edits can acknowledge success while losing an
