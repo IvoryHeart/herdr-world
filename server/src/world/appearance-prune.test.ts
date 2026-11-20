@@ -1,8 +1,6 @@
-import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { BoardStore, type BoardBacking } from "./board-store";
+import { expect, test } from "bun:test";
+import { memoryBacking } from "../testing/memory-backing";
+import { BoardStore, emptyBoardDocument } from "./board-store";
 import { afterHerdrClose } from "./board-closing";
 import {
   pruneSnapshotAppearance,
@@ -10,11 +8,6 @@ import {
 } from "./appearance-prune";
 import { appearanceKey } from "../../../shared/appearance";
 import type { WorldSnapshotResult } from "./snapshot";
-const roots: string[] = [];
-afterEach(() => {
-  for (const root of roots.splice(0))
-    rmSync(root, { recursive: true, force: true });
-});
 const tab = {
   connection_id: "alpha",
   kind: "tab" as const,
@@ -29,9 +22,7 @@ const pane = {
   witness: ["terminal-1"],
 };
 function fixture() {
-  const root = mkdtempSync(join(tmpdir(), "appearance-prune-"));
-  roots.push(root);
-  return new BoardStore(join(root, "board.json"));
+  return new BoardStore(memoryBacking(emptyBoardDocument()));
 }
 function snapshot(patch: Record<string, unknown> = {}): WorldSnapshotResult {
   return {
@@ -199,13 +190,7 @@ test("long-lived close churn does not exhaust the bounded appearance store", asy
   // Exercise all 1,030 real capacity/prune cycles through the production store.
   // Disk durability has separate tests; per-cycle fsyncs make this capacity
   // regression depend on host disk contention instead of close semantics.
-  let saved = fixture().get();
-  const backing: BoardBacking = {
-    read: () => saved,
-    commit: (next) => {
-      saved = structuredClone(next);
-    },
-  };
+  const backing = memoryBacking(emptyBoardDocument());
   const board = new BoardStore(backing);
   for (let index = 0; index < 1030; index++) {
     const witness = [`terminal-${index}`];

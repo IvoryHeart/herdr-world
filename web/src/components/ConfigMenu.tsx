@@ -7,8 +7,6 @@ import {
   Download,
   ExternalLink,
   Focus,
-  Activity,
-  GitPullRequest,
   Keyboard,
   LogOut,
   Palette,
@@ -30,6 +28,10 @@ import { isStaleBuild, useBuildFreshness } from "../buildFreshness";
 import { worldLocalStorage } from "../browserStorage";
 import { openSounds } from "../chimes/chimeHost";
 import { logoutBrowserSession } from "../api";
+import {
+  type OpenIntegrationsDetail,
+  WORLD_INTEGRATIONS_EVENT,
+} from "../integrations";
 import { connectionHttpPath } from "../connectionHttp";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { shortcutLabel, useShortcutPreferences } from "../shortcutPreferences";
@@ -90,9 +92,7 @@ type ConfigMenuProps = ConfigurationProps & {
   /** False where Zen would change nothing, such as a phone's terminal. */
   zenAvailable?: boolean;
   onZenModeChange: (zenMode: boolean) => void;
-  onOpenOfficeMetrics?: () => void;
   onOpenAgentProfiles?: () => void;
-  onOpenSources?: () => void;
   onShowShortcuts: () => void;
 };
 
@@ -100,9 +100,7 @@ export function ConfigMenu({
   zenMode,
   zenAvailable = true,
   onZenModeChange,
-  onOpenOfficeMetrics,
   onOpenAgentProfiles,
-  onOpenSources,
   onShowShortcuts,
   ...configuration
 }: ConfigMenuProps) {
@@ -139,6 +137,7 @@ export function ConfigMenu({
   const [expanded, setExpanded] = useState(false);
   const [configurationTab, setConfigurationTab] =
     useState<ConfigurationTab | null>(null);
+  const [integrationsFocus, setIntegrationsFocus] = useState<string>();
   const [connectionDetailsOpen, setConnectionDetailsOpen] = useState(false);
   const [officePreferences, setOfficePreferences] = useState(() =>
     readOfficePreferences(worldLocalStorage),
@@ -197,18 +196,41 @@ export function ConfigMenu({
     configuration,
     zen: { on: zenMode, available: zenAvailable, set: onZenModeChange },
     mobile: layout.mobile,
-    openConfiguration: setConfigurationTab,
+    openConfiguration: (tab) => {
+      setIntegrationsFocus(undefined);
+      setConfigurationTab(tab);
+    },
     panels: {
       shortcuts: onShowShortcuts,
       "agent-profiles": onOpenAgentProfiles,
       sounds: openSounds,
-      sources: onOpenSources,
-      metrics: onOpenOfficeMetrics,
+      // Sources and metrics are rows of the Integrations screen (#1026).
+      sources: () => {
+        setIntegrationsFocus("source:github");
+        setConfigurationTab("Integrations");
+      },
+      metrics: () => {
+        setIntegrationsFocus("source:metrics");
+        setConfigurationTab("Integrations");
+      },
       runtime: openRuntime,
     },
     onOpen: () => setOpen(false),
     triggerRef,
   });
+
+  // A World element without what it needs opens Integrations at its row.
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const focus = (event as CustomEvent<OpenIntegrationsDetail>).detail
+        ?.focus;
+      setOpen(false);
+      setIntegrationsFocus(focus);
+      setConfigurationTab("Integrations");
+    };
+    window.addEventListener(WORLD_INTEGRATIONS_EVENT, onOpen);
+    return () => window.removeEventListener(WORLD_INTEGRATIONS_EVENT, onOpen);
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -705,30 +727,17 @@ export function ConfigMenu({
                         }}
                       />
                     ) : null}
-                    {onOpenSources ? (
-                      <ConfigMenuItem
-                        icon={<GitPullRequest size={15} />}
-                        label="Sources"
-                        className="config-menu-item-row"
-                        description="GitHub pull requests and Jira tickets beside your agents"
-                        onClick={() => {
-                          setOpen(false);
-                          onOpenSources();
-                        }}
-                      />
-                    ) : null}
-                    {onOpenOfficeMetrics ? (
-                      <ConfigMenuItem
-                        icon={<Activity size={15} />}
-                        label="OTEL economy metrics"
-                        className="config-menu-item-row"
-                        description="Connect Prometheus to show cost on the Town board"
-                        onClick={() => {
-                          setOpen(false);
-                          onOpenOfficeMetrics();
-                        }}
-                      />
-                    ) : null}
+                    <ConfigMenuItem
+                      icon={<Plug size={15} />}
+                      label="Integrations"
+                      className="config-menu-item-row"
+                      description="Runtimes, GitHub, Jira, usage metrics and agents"
+                      onClick={() => {
+                        setOpen(false);
+                        setIntegrationsFocus(undefined);
+                        setConfigurationTab("Integrations");
+                      }}
+                    />
                   </div>
                   <div className="config-section">
                     <div className="config-title">Help & updates</div>
@@ -884,6 +893,7 @@ export function ConfigMenu({
                               label={name}
                               onClick={() => {
                                 setOpen(false);
+                                setIntegrationsFocus(undefined);
                                 setConfigurationTab(name);
                               }}
                             />
@@ -915,6 +925,7 @@ export function ConfigMenu({
                 <ConfigurationDialog
                   {...configuration}
                   initialTab={configurationTab}
+                  integrationsFocus={integrationsFocus}
                   onClose={closeConfiguration}
                 />
               </Suspense>

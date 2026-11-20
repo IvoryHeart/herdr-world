@@ -64,7 +64,7 @@ export type TownPostCounts = Record<TownPostState, number>;
 export type TownPostOffice =
   /** No source has answered yet: nothing to say. */
   | { status: "loading" }
-  /** The GitHub source is switched off in Sources. */
+  /** The GitHub source is switched off in Integrations. */
   | { status: "off" }
   /** Signed out, not installed or never reached; `detail` says what to do. */
   | { status: "closed"; detail: string }
@@ -225,7 +225,7 @@ export function townPostSignText(office: TownPostOffice) {
     case "off":
       return "Closed · GitHub source is off";
     case "closed":
-      return "Closed · connect GitHub in Sources";
+      return "Closed · connect GitHub in Integrations";
     case "open":
       return office.stale
         ? `GitHub out of date · ${office.parcels.length} unknown`

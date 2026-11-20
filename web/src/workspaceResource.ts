@@ -57,11 +57,8 @@ export const WORKSPACE_INSPECTOR_REQUEST_EVENT =
 export const WORKSPACE_INSPECTOR_CLOSE_EVENT =
   "herdr-world:workspace-inspector-close";
 export const WORLD_TERMINAL_POP_OUT_EVENT = "herdr-world:terminal-pop-out";
-export const WORLD_OBSERVABILITY_SETTINGS_EVENT =
-  "herdr-world:observability-settings";
 export const WORLD_OBSERVABILITY_UPDATED_EVENT =
   "herdr-world:observability-updated";
-export const WORLD_SOURCES_SETTINGS_EVENT = "herdr-world:sources-settings";
 export const WORKSPACE_ANNOTATION_REQUEST_EVENT =
   "herdr-world:workspace-annotation-request";
 

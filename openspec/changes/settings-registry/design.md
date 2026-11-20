@@ -68,9 +68,9 @@ settings" opens the Configuration dialog tabs. "Config" = the Configuration dial
 | keyboard.option-as-alt | Option key as Alt | Config → Behavior (macOS only) |
 | keyboard.phone-keys | Phone terminal keys | Config → Behavior |
 | keyboard.find | Find or act (Cmd+K) | Keyboard shortcut; top bar search |
-| integrations.sources | Sources | Menu → Sources dialog |
-| integrations.metrics | Economy metrics (OTEL) | Menu → OTEL economy metrics dialog |
-| integrations.agents | Agent integrations | Config → Integrations |
+| integrations.sources | Sources (GitHub, Jira) | Menu → Integrations, or Config → Integrations (#1026) |
+| integrations.metrics | Economy metrics (OTEL) | Menu → Integrations, or Config → Integrations (#1026) |
+| integrations.agents | Agent integrations | Menu → Integrations, or Config → Integrations |
 | integrations.hosts | Hosts and connections | Top bar Hosts → Manage connections (phone: view menu) |
 | integrations.terminal-transport | Terminal transport | Config → Connection |
 | integrations.branch-sync | Automatic branch updates | Config → Connection |

@@ -19,6 +19,7 @@ import {
 } from "../server/src/assistant/tasks";
 import type { LegacyConnectionRuntime } from "../server/src/connections/runtime";
 import { observe } from "./observations";
+import { openWithoutSqliteSync } from "../server/src/testing/sqlite-no-sync";
 import type { TraceState } from "./replay";
 export type RecoveryState = {
   captured: boolean;
@@ -107,7 +108,9 @@ export async function replayRangerRecovery(
   const taskId = "00000000-0000-4000-8000-000000000001";
   const date = "2026-10-01T00:00:00Z";
   try {
-    storage = openReplayStorage(directory, openStorage);
+    storage = openWithoutSqliteSync(() =>
+      openReplayStorage(directory, openStorage),
+    );
     for (const state of states) {
       const expected = state.recovery;
       switch (state.op) {
@@ -171,6 +174,7 @@ export async function replayRangerRecovery(
         case "failedSave": {
           const database = new Database(join(directory, "tasks.sqlite"));
           try {
+            database.exec("PRAGMA synchronous=OFF");
             database.exec(
               "CREATE TRIGGER IF NOT EXISTS synthetic_rejected_write BEFORE INSERT ON tasks WHEN NEW.title = 'Synthetic rejected' BEGIN SELECT RAISE(ABORT, 'synthetic rejected transaction'); END;",
             );
@@ -196,7 +200,9 @@ export async function replayRangerRecovery(
           storage = undefined;
           break;
         case "reopen":
-          storage = openStorage(directory, validateSavedTasks);
+          storage = openWithoutSqliteSync(() =>
+            openStorage(directory, validateSavedTasks),
+          );
           saved = storage.load();
           targets = saved.tasks[0]!.targets;
           break;

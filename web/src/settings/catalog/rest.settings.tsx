@@ -157,7 +157,7 @@ defineSettings("integrations", [
     category: "integrations",
     title: "Sources",
     description: "Where World reads work items from",
-    words: ["github", "issues", "pull requests", "feeds"],
+    words: ["github", "jira", "tickets", "issues", "pull requests", "feeds"],
     icon: <Waypoints size={15} />,
     scope: "world",
     open: (host) => host.openPanel("sources"),
