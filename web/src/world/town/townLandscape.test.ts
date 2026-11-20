@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
 import { townBusRoute } from "./townBus";
 import { townGroundPlan, townWildPlan } from "./townGroundPlan";
+import { townHarbourLot } from "./townHarbour";
 import {
   TOWN_BILLBOARD_VERGE,
   TOWN_LANDSCAPE_SEED,
+  TOWN_LAND_OBJECT_REACH,
   TOWN_LAND_PERIOD,
   TownLand,
   townLandscape,
@@ -41,6 +43,10 @@ function town(hosts: Record<string, number[]>): TownInput {
     ),
   };
 }
+
+/** A wide town's first sea column; the sea runs on past the map's edge. */
+const coastOf = (layout: TownLayout) =>
+  townHarbourLot(layout)?.coast ?? Infinity;
 
 /** The land a test looks at: the town and a wide margin of map beyond it. */
 const BEYOND = 40;
@@ -171,15 +177,17 @@ test("nothing generated stands on a building, road, lot, stop or the verge", () 
     const { layout } = layoutTown(town(hosts), shape);
     const land = townLandscape(layout);
     const zones = exclusionZones(layout);
+    const coast = coastOf(layout);
     let objects = 0;
     for (const [x, y] of tilesOf(layout)) {
       const object = land.objectAt(x, y);
+      // Reserved land is left a meadow; the harbour's water stays the sea.
       if (zones.has(`${x},${y}`))
         expect([name, x, y, land.surface(x, y)]).toEqual([
           name,
           x,
           y,
-          TownLand.meadow,
+          x >= coast ? TownLand.sea : TownLand.meadow,
         ]);
       if (!object) continue;
       objects += 1;
@@ -246,7 +254,18 @@ test("past its wild line a town's land is the wild land, which repeats", () => {
     expect(line.y1).toBeGreaterThanOrEqual(layout.height + 8);
     for (const edge of [line.x0, line.y0, line.x1, line.y1])
       expect(Math.abs(edge % 12)).toBe(0);
+    // A wide town's sea runs on past the line, off the map's right edge.
+    const coast = coastOf(layout);
     for (const [x, y] of tilesOf(layout, BEYOND)) {
+      if (x >= coast) {
+        expect([x, y, land.surface(x, y)]).toEqual([x, y, TownLand.sea]);
+        continue;
+      }
+      // Nothing on the shore reaches over the quay into the water.
+      if (x >= coast - TOWN_LAND_OBJECT_REACH.right) {
+        expect(land.objectAt(x, y)).toBeNull();
+        continue;
+      }
       const outside =
         x < line.x0 || y < line.y0 || x >= line.x1 || y >= line.y1;
       if (outside) same(land, wild, x, y, x, y);
@@ -292,11 +311,17 @@ test("each street runs on beyond the town as a lane, and nothing grows on it", (
   for (const [, shape, hosts] of cases) {
     const { layout } = layoutTown(town(hosts), shape);
     const land = townLandscape(layout);
+    // A wide town's streets end at the harbour on its right: the sea there.
+    const atSea = coastOf(layout) < Infinity;
     for (const road of layout.roads) {
       // At the edge the lane continues the street's three lanes exactly.
-      for (const x of [-1, -3, layout.width, layout.width + 2])
+      const edges = atSea ? [-1, -3] : [-1, -3, layout.width, layout.width + 2];
+      for (const x of edges)
         for (let y = road + 1; y < road + 4; y += 1)
           expect(land.surface(x, y)).toBe(TownLand.lane);
+      if (atSea)
+        for (let y = road + 1; y < road + 4; y += 1)
+          expect(land.surface(layout.width, y)).toBe(TownLand.sea);
       // It ends at the wild line.
       const line = townWildLine(layout);
       for (let y = road - 6; y < road + 10; y += 1)
@@ -382,6 +407,10 @@ test("growth regenerates only the land next to what changed", () => {
         [...a.roads, ...b.roads].some(
           (r) => y >= r - 3 - 16 && y <= r + 6 + 16,
         );
+      // A wider town moves its coast out: the sea between the old and new
+      // coasts became land, or the land the sea.
+      const seaMoved = (x: number) =>
+        x >= Math.min(coastOf(a), coastOf(b)) - 16 && coastOf(a) !== coastOf(b);
       const landA = townLandscape(a);
       const landB = townLandscape(b);
       let same = 0;
@@ -402,7 +431,8 @@ test("growth regenerates only the land next to what changed", () => {
           const byLane = [...lanes].some(
             (r) => y >= r - 3 - 16 && y <= r + 6 + 16,
           );
-          const near = reach.has(`${x},${y}`) || byLane || laneGrew(x, y);
+          const near =
+            reach.has(`${x},${y}`) || byLane || laneGrew(x, y) || seaMoved(x);
           expect([x, y, near]).toEqual([x, y, true]);
         }
       // Most of the land stays put.

@@ -574,6 +574,83 @@ const searchIntegrations = (value: string) => {
   )!.set!.call(input, value);
   flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
 };
+// The screen's look, on All: every row leads with its product's mark in one
+// tile, keeps its actions beside its copy down to phone width, kind tabs stay
+// quieter than Configuration's own section buttons, the Vault sits apart at
+// the end, and each kind's own action sits on its heading.
+function integrationsLayout(dialog: Element) {
+  const rect = (element: Element | null | undefined) =>
+    element?.getBoundingClientRect();
+  for (const row of dialog.querySelectorAll<HTMLElement>(
+    ".integration-row[data-integration]",
+  )) {
+    const icon = row.querySelector<HTMLElement>(":scope > .integration-icon");
+    const tile = rect(icon);
+    const copy = rect(row.querySelector(":scope > .integration-row-copy"));
+    const actions = rect(
+      row.querySelector(":scope > .integration-row-actions"),
+    );
+    check(
+      !!tile && icon?.offsetWidth === 27 && !!copy && tile.right <= copy.left,
+      `${row.dataset.integration} has no icon tile before its copy`,
+    );
+    if (innerWidth > 350 && actions && copy && actions.width)
+      check(
+        actions.left >= copy.right - 1 &&
+          actions.top < copy.bottom &&
+          actions.bottom > copy.top,
+        `${row.dataset.integration} actions left its row's side: ${JSON.stringify({ actions, copy })}`,
+      );
+  }
+  check(
+    !!integrationRow("runtime:alpha")?.querySelector(
+      '.integration-icon img[src="/herdr-icon.png"]',
+    ) &&
+      integrationRow("source:github")?.querySelector(
+        ".integration-icon svg title",
+      )?.textContent === "Github",
+    "Herdr and GitHub rows do not show their own marks",
+  );
+  const tab = kindTab("runtime")!;
+  check(
+    !tab.querySelector("svg") &&
+      getComputedStyle(tab).borderTopWidth === "0px" &&
+      getComputedStyle(tab).borderBottomWidth !== "0px",
+    "kind tabs are not quiet underlined tabs",
+  );
+  const tabs = Array.from(
+    dialog.querySelectorAll<HTMLElement>(".integrations-tabs [role='tab']"),
+  );
+  const vault = kindTab("vault")!;
+  check(
+    tabs[tabs.length - 1] === vault &&
+      !!vault.querySelector("svg") &&
+      (innerWidth <= 600 ||
+        vault.getBoundingClientRect().left -
+          tabs[tabs.length - 2].getBoundingClientRect().right >
+          8),
+    "the Vault tab does not sit apart from the kinds",
+  );
+  const hosts = Array.from(dialog.querySelectorAll("button")).find(
+    (button) => button.textContent === "Add or edit hosts…",
+  );
+  check(
+    !!hosts?.closest(
+      '.integrations-kind[data-kind="runtime"] .integrations-kind-head',
+    ),
+    "Add or edit hosts… is not on the Runtimes heading",
+  );
+  const intro = dialog.querySelector(".integrations-intro")!;
+  const help = dialog.querySelector(
+    '.integrations-kind[data-kind="vault"] .integrations-help',
+  );
+  check(
+    !!help &&
+      getComputedStyle(help).fontSize === getComputedStyle(intro).fontSize,
+    "the Vault's help is not set like the screen's other help text",
+  );
+}
+
 // One screen, one tab per kind the registry reports, lists every runtime and
 // source with its state and one action, and the vault by names only.
 async function integrationsScreen(dialog: Element) {
@@ -604,6 +681,7 @@ async function integrationsScreen(dialog: Element) {
       !integrationRow("harness:claude"),
     `All does not list every kind once: ${kindGroups()}`,
   );
+  integrationsLayout(dialog);
   openKind("runtime");
   check(
     rowStates() ===

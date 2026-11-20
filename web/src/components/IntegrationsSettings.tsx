@@ -1,10 +1,21 @@
+import githubIcon from "@lobehub/icons-static-svg/icons/github.svg?raw";
 import {
+  Bot,
+  CircleAlert,
   CircleCheck,
   CircleDashed,
-  CircleOff,
+  Gauge,
+  Inbox,
   KeyRound,
+  LayoutGrid,
+  type LucideIcon,
   RefreshCw,
   Search,
+  Server,
+  Settings2,
+  SquareCode,
+  SquareTerminal,
+  Ticket,
   TriangleAlert,
 } from "lucide-react";
 import {
@@ -63,11 +74,67 @@ type Action = {
 
 function StateIcon({ state }: { state: IntegrationEntry["state"] }) {
   if (state === "connected")
-    return <CircleCheck size={14} aria-hidden="true" />;
-  if (state === "error") return <TriangleAlert size={14} aria-hidden="true" />;
+    return <CircleCheck size={12} aria-hidden="true" />;
+  if (state === "error") return <TriangleAlert size={12} aria-hidden="true" />;
   if (state === "available")
-    return <CircleDashed size={14} aria-hidden="true" />;
-  return <CircleOff size={14} aria-hidden="true" />;
+    return <CircleDashed size={12} aria-hidden="true" />;
+  return <CircleAlert size={12} aria-hidden="true" />;
+}
+
+/** Each kind's icon: on its tab, its heading in All and rows without a mark. */
+const KIND_ICONS: Record<IntegrationKind, LucideIcon> = {
+  runtime: SquareTerminal,
+  source: Inbox,
+  harness: Bot,
+  ide: SquareCode,
+};
+
+function TabIcon({ tab }: { tab: Tab }) {
+  const Icon =
+    tab === "all" ? LayoutGrid : tab === "vault" ? KeyRound : KIND_ICONS[tab];
+  return <Icon size={14} aria-hidden="true" />;
+}
+
+/**
+ * The product's own mark where World ships one (Herdr, GitHub); otherwise a
+ * plain symbol for what it is (tickets, usage), then the kind's icon. An
+ * unknown type never borrows another product's mark.
+ */
+function IntegrationIcon({ entry }: { entry: IntegrationEntry }) {
+  let mark: ReactNode;
+  if (
+    entry.kind === "runtime" &&
+    (entry.type === "herdr" || entry.type === "herdr-core")
+  )
+    mark = <img src="/herdr-icon.png" alt="" width={26} height={26} />;
+  else if (entry.kind === "source" && entry.type === "github")
+    mark = (
+      <span
+        className="integration-icon-svg"
+        // A bundled brand mark, not data from the service.
+        dangerouslySetInnerHTML={{ __html: githubIcon }}
+      />
+    );
+  else {
+    const Icon =
+      entry.kind === "source" && entry.type === "jira"
+        ? Ticket
+        : entry.control === "metrics"
+          ? Gauge
+          : entry.kind === "runtime" && entry.connection?.transport === "ssh"
+            ? Server
+            : KIND_ICONS[entry.kind];
+    mark = <Icon size={16} aria-hidden="true" />;
+  }
+  return (
+    <span
+      className="integration-icon"
+      data-type={entry.type}
+      aria-hidden="true"
+    >
+      {mark}
+    </span>
+  );
 }
 
 function IntegrationRow({
@@ -97,7 +164,8 @@ function IntegrationRow({
       data-state={entry.state}
       aria-label={entry.label}
     >
-      <div className="integration-row-head">
+      <IntegrationIcon entry={entry} />
+      <div className="integration-row-copy">
         <span className="integration-row-title">
           <strong>{entry.label}</strong>
           <span className="integration-state" data-state={entry.state}>
@@ -105,39 +173,44 @@ function IntegrationRow({
             {INTEGRATION_STATE_LABELS[entry.state]}
           </span>
         </span>
-        <span className="integration-row-actions">
-          {onToggleSettings ? (
-            <button
-              type="button"
-              className="ghost"
-              aria-expanded={expanded}
-              aria-label={`${entry.label} settings`}
-              onClick={onToggleSettings}
-            >
-              Settings
-            </button>
-          ) : null}
-          {action ? (
-            <button
-              type="button"
-              disabled={busy}
-              aria-label={`${action.label} ${entry.label}`}
-              aria-describedby={
-                entry.type === "weather" ? "weather-consent" : undefined
-              }
-              onClick={() => onAction(action)}
-            >
-              {action.label}
-            </button>
-          ) : null}
-        </span>
+        <p className="integration-row-detail">{entry.detail}</p>
+        {provides ? (
+          <p className="integration-row-provides">Gives World {provides}.</p>
+        ) : null}
+        {entry.type === "weather" ? <WeatherConsent /> : null}
       </div>
-      <p className="integration-row-detail">{entry.detail}</p>
-      {provides ? (
-        <p className="integration-row-provides">Gives World {provides}.</p>
+      <span className="integration-row-actions">
+        {onToggleSettings ? (
+          <button
+            type="button"
+            className="integration-icon-button"
+            aria-expanded={expanded}
+            aria-label={`${entry.label} settings`}
+            title={`${entry.label} settings`}
+            onClick={onToggleSettings}
+          >
+            <Settings2 size={15} aria-hidden="true" />
+          </button>
+        ) : null}
+        {action ? (
+          <button
+            type="button"
+            className="integration-action"
+            data-action={action.label === "Connect" ? "connect" : "disconnect"}
+            disabled={busy}
+            aria-label={`${action.label} ${entry.label}`}
+            aria-describedby={
+              entry.type === "weather" ? "weather-consent" : undefined
+            }
+            onClick={() => onAction(action)}
+          >
+            {action.label}
+          </button>
+        ) : null}
+      </span>
+      {expanded && children ? (
+        <div className="integration-row-settings">{children}</div>
       ) : null}
-      {entry.type === "weather" ? <WeatherConsent /> : null}
-      {expanded ? children : null}
     </li>
   );
 }
@@ -478,7 +551,7 @@ export function IntegrationsSettings({
     kind === "runtime" ? (
       <button
         type="button"
-        className="ghost integrations-hosts"
+        className="ghost integrations-extra integrations-hosts"
         onClick={() => setHostsOpen(true)}
       >
         Add or edit hosts…
@@ -486,7 +559,7 @@ export function IntegrationsSettings({
     ) : kind === "source" && snapshot ? (
       <button
         type="button"
-        className="ghost"
+        className="ghost integrations-extra"
         disabled={busy !== null}
         onClick={() =>
           void run(
@@ -496,13 +569,13 @@ export function IntegrationsSettings({
           )
         }
       >
-        <RefreshCw size={14} aria-hidden="true" /> Refresh Sources
+        <RefreshCw size={13} aria-hidden="true" /> Refresh Sources
       </button>
     ) : null;
 
   const vaultBody = vault ? (
     <>
-      <p className="settings-helper">
+      <p className="integrations-help">
         {vault.label}. {vault.detail} Each token is entered in its integration's
         settings; World never shows one back.
       </p>
@@ -514,18 +587,20 @@ export function IntegrationsSettings({
               className="integration-row"
               data-secret={secret.name}
             >
-              <div className="integration-row-head">
+              <span className="integration-icon" aria-hidden="true">
+                <KeyRound size={15} aria-hidden="true" />
+              </span>
+              <div className="integration-row-copy">
                 <span className="integration-row-title">
-                  <KeyRound size={14} aria-hidden="true" />
                   <strong>{secret.label}</strong>
                 </span>
+                <p className="integration-row-detail">
+                  Used by{" "}
+                  {rows.find((entry) => entry.id === secret.usedBy)?.label ??
+                    secret.usedBy}
+                  .
+                </p>
               </div>
-              <p className="integration-row-detail">
-                Used by{" "}
-                {rows.find((entry) => entry.id === secret.usedBy)?.label ??
-                  secret.usedBy}
-                .
-              </p>
             </li>
           ))}
         </ul>
@@ -565,12 +640,16 @@ export function IntegrationsSettings({
   );
 
   const heading = (kind: IntegrationKind) => (
-    <h3>
-      {INTEGRATION_KIND_LABELS[kind]}
-      {count(kind) === null ? null : (
-        <span className="integrations-tab-count">{count(kind)}</span>
-      )}
-    </h3>
+    <div className="integrations-kind-head">
+      <h3>
+        <TabIcon tab={kind} />
+        {INTEGRATION_KIND_LABELS[kind]}
+        {count(kind) === null ? null : (
+          <span className="integrations-tab-count">{count(kind)}</span>
+        )}
+      </h3>
+      {terms.length ? null : kindExtras(kind)}
+    </div>
   );
   const group = (kind: IntegrationKind) => (
     <section
@@ -585,7 +664,6 @@ export function IntegrationsSettings({
       ) : (
         <p className="integrations-empty">{PANELS[kind]?.empty}</p>
       )}
-      {terms.length ? null : kindExtras(kind)}
     </section>
   );
 
@@ -599,7 +677,7 @@ export function IntegrationsSettings({
   if (active === "harness") agentsShown = "tab";
   else if (!snapshot)
     before = listError ? null : (
-      <p className="settings-helper">Checking integrations…</p>
+      <p className="integrations-help">Checking integrations…</p>
     );
   else if (active === "vault") before = vaultBody;
   else if (active === "all") {
@@ -622,9 +700,13 @@ export function IntegrationsSettings({
             data-kind="vault"
             aria-label={TAB_LABELS.vault}
           >
-            <h3>
-              <KeyRound size={14} aria-hidden="true" /> {TAB_LABELS.vault}
-            </h3>
+            <div className="integrations-kind-head">
+              <h3>
+                <TabIcon tab="vault" />
+                {TAB_LABELS.vault}
+                <span className="integrations-tab-count">{secrets.length}</span>
+              </h3>
+            </div>
             {vaultBody}
           </section>
         ) : null}
@@ -665,13 +747,15 @@ export function IntegrationsSettings({
   ) : null;
   const help =
     active === "all" || active === "vault" ? undefined : PANELS[active]?.help;
+  const panelExtras =
+    active === "all" || active === "vault" ? null : kindExtras(active);
 
   return (
     <div ref={root} className="integrations-settings">
       <p className="integrations-intro">
-        What World reads from and works through. Nothing here is required: each
-        one adds to what World shows, and the World service makes every request;
-        the browser never contacts these services.
+        What World reads from and works through. Each one is optional and adds
+        to what World shows; the World service makes every request, never the
+        browser.
       </p>
       {listError ? (
         <p className="modal-error" role="alert">
@@ -737,10 +821,8 @@ export function IntegrationsSettings({
                 select(tabs[next], true);
               }}
             >
-              {each === "vault" ? (
-                <KeyRound size={12} aria-hidden="true" />
-              ) : null}
-              {label}
+              {each === "vault" ? <TabIcon tab="vault" /> : null}
+              <span className="integrations-tab-label">{label}</span>
               {n === null ? null : (
                 <span className="integrations-tab-count" aria-hidden="true">
                   {n}
@@ -764,11 +846,15 @@ export function IntegrationsSettings({
         aria-labelledby={`integrations-tab-${active}`}
         data-kind={active}
       >
-        {help ? <p className="settings-helper">{help}</p> : null}
+        {help || panelExtras ? (
+          <div className="integrations-panel-head">
+            {help ? <p className="integrations-help">{help}</p> : null}
+            {panelExtras}
+          </div>
+        ) : null}
         {before}
         {agentsBlock}
         {after}
-        {active !== "all" && active !== "vault" ? kindExtras(active) : null}
       </section>
 
       {error ? (
