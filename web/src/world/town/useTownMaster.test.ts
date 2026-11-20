@@ -1,5 +1,4 @@
 import { expect, mock, test } from "bun:test";
-import type { OfficeAgent } from "../herdrOfficeProjection";
 
 if (process.env.TOWN_MASTER_DOM !== "1") {
   test("Town master lookup and docking in an isolated DOM", async () => {
@@ -29,147 +28,66 @@ if (process.env.TOWN_MASTER_DOM !== "1") {
   const { act, createElement } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { useTownMaster } = await import("./useTownMaster");
-  const named = (key: string, agentName = "firstmate") =>
-    ({ key, agentName, displayLabel: agentName }) as OfficeAgent;
-  const longRoster = (prefix: string) => [
-    ...Array.from({ length: 600 }, (_, i) => ({
-      agent: named(`${prefix}-worker-${i}`, "worker"),
-    })),
-    { agent: named(`${prefix}-master`) },
-  ];
-  function controlledTasks() {
-    const before = Object.getOwnPropertyDescriptor(globalThis, "scheduler");
-    const pending: (() => void)[] = [];
-    Object.defineProperty(globalThis, "scheduler", {
-      configurable: true,
-      value: {
-        postTask(task: () => void) {
-          return new Promise<void>((resolve) =>
-            pending.push(() => {
-              task();
-              resolve();
-            }),
-          );
-        },
-      },
-    });
-    return {
-      pending,
-      release() {
-        for (const task of pending.splice(0)) task();
-      },
-      restore() {
-        if (before) Object.defineProperty(globalThis, "scheduler", before);
-        else Reflect.deleteProperty(globalThis, "scheduler");
-      },
-    };
-  }
-  function mounted(dock: (key: string) => void) {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const root = createRoot(host);
-    let live = true;
-    function Probe(props: {
-      roster: readonly { agent: OfficeAgent }[];
-      mobile: boolean;
-      name: string;
-    }) {
-      useTownMaster(props.roster, props.name, props.mobile, dock);
-      return null;
-    }
-    return {
-      async render(
-        roster: readonly { agent: OfficeAgent }[],
-        mobile = false,
-        name = "firstmate",
-      ) {
-        await act(async () =>
-          root.render(createElement(Probe, { roster, mobile, name })),
-        );
-      },
-      async close() {
-        if (!live) return;
-        live = false;
-        await act(async () => root.unmount());
-        host.remove();
-      },
-    };
-  }
-  test("mobile Town does not search the complete roster", async () => {
-    const roster = new Proxy([], {
-      get() {
-        throw new Error("mobile Town searched the complete roster");
-      },
-    });
+  type WorldObject = import("../worldObject").WorldObject;
+  type TerminalKey = import("../agentProfiles").TerminalKey;
+  const leaf = (id: string, connectionId = "alpha", extra = {}) => ({
+    id,
+    kind: "agent",
+    connectionId,
+    terminalId: "same-terminal",
+    stale: false,
+    capabilities: { openSpaces: true },
+    ...extra,
+  });
+  test("docking follows the synced holder across observations and never its namesake", async () => {
     const dock = mock<(key: string) => void>(() => {});
-    function Probe() {
-      useTownMaster(roster, "firstmate", true, dock);
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    function Probe({
+      leaves,
+      holder,
+      mobile,
+    }: {
+      leaves: unknown[];
+      holder: TerminalKey | null;
+      mobile: boolean;
+    }) {
+      useTownMaster({ leaves } as WorldObject, holder, mobile, dock);
       return null;
     }
-    const host = document.createElement("div");
-    document.body.append(host);
-    const root = createRoot(host);
+    const holder = { connection_id: "alpha", terminal_id: "same-terminal" };
+    const render = (
+      leaves: unknown[],
+      role: TerminalKey | null = holder,
+      mobile = false,
+    ) =>
+      act(async () =>
+        root.render(createElement(Probe, { leaves, holder: role, mobile })),
+      );
     try {
-      await act(async () => root.render(createElement(Probe)));
+      await render([leaf("namesake", "beta")]);
       expect(dock).not.toHaveBeenCalled();
+      await render([leaf("stale", "alpha", { stale: true })]);
+      expect(dock).not.toHaveBeenCalled();
+      await render([leaf("shell", "alpha", { kind: "terminal" })]);
+      expect(dock).not.toHaveBeenCalled();
+      await render([leaf("phone")], holder, true);
+      expect(dock).not.toHaveBeenCalled();
+      await render([leaf("master")], null);
+      expect(dock).not.toHaveBeenCalled();
+      await render([leaf("master"), leaf("namesake", "beta")]);
+      expect(dock.mock.calls).toEqual([["master"]]);
+      await render([leaf("master")]);
+      expect(dock.mock.calls).toEqual([["master"]]);
+      await render([leaf("next", "beta")], {
+        ...holder,
+        connection_id: "beta",
+      });
+      expect(dock.mock.calls).toEqual([["master"], ["next"]]);
+      await render([leaf("master")]);
+      expect(dock.mock.calls).toEqual([["master"], ["next"]]);
     } finally {
       await act(async () => root.unmount());
-      host.remove();
     }
   });
-  test("a docked master stays closed across subsequent observations", async () => {
-    const dock = mock<(key: string) => void>(() => {});
-    const view = mounted(dock);
-    try {
-      await view.render([{ agent: named("once-master") }]);
-      expect(dock.mock.calls).toEqual([["once-master"]]);
-      await view.render([{ agent: named("once-master") }]);
-      expect(dock.mock.calls).toEqual([["once-master"]]);
-    } finally {
-      await view.close();
-    }
-  });
-  test("a newer roster retires the pending master lookup", async () => {
-    const tasks = controlledTasks();
-    const dock = mock<(key: string) => void>(() => {});
-    const view = mounted(dock);
-    try {
-      await view.render(longRoster("old-roster"));
-      expect(tasks.pending.length).toBeGreaterThan(0);
-      expect(dock).not.toHaveBeenCalled();
-      await view.render([{ agent: named("current-roster-master") }]);
-      await act(async () => tasks.release());
-      expect(dock.mock.calls).toEqual([["current-roster-master"]]);
-    } finally {
-      await view.close();
-      tasks.restore();
-    }
-  });
-  test.each(["mobile", "name", "unmount"])(
-    "%s changes retire a pending master lookup",
-    async (mode) => {
-      const tasks = controlledTasks();
-      const dock = mock<(key: string) => void>(() => {});
-      const view = mounted(dock);
-      try {
-        const roster = longRoster(mode);
-        await view.render(roster);
-        expect(tasks.pending.length).toBeGreaterThan(0);
-        if (mode === "unmount") await view.close();
-        else
-          await view.render(
-            roster,
-            mode === "mobile",
-            mode === "name" ? "worker" : "firstmate",
-          );
-        await act(async () => tasks.release());
-        expect(dock.mock.calls).toEqual(
-          mode === "name" ? [[`${mode}-worker-0`]] : [],
-        );
-      } finally {
-        await view.close();
-        tasks.restore();
-      }
-    },
-  );
 }

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { worldLocalStorage } from "../../browserStorage";
+import { useSyncExternalStore } from "react";
+import { subscribeLocalStorage, worldLocalStorage } from "../../browserStorage";
 import {
   BOARD_APPEARANCE_KEY,
   boardAppearance,
@@ -16,30 +16,53 @@ function read() {
   }
 }
 
-export function useBoardAppearance() {
-  const [appearance, setAppearance] = useState(read);
-  useEffect(() => {
-    const changed = () =>
-      setAppearance((current) => {
-        const next = read();
-        return JSON.stringify(current) === JSON.stringify(next)
-          ? current
-          : next;
-      });
-    window.addEventListener("storage", changed);
-    return () => window.removeEventListener("storage", changed);
-  }, []);
-  const change = (next: BoardAppearance) => {
-    const validated = boardAppearance(next);
-    setAppearance(validated);
-    try {
-      worldLocalStorage.setItem(
-        BOARD_APPEARANCE_KEY,
-        JSON.stringify(validated),
-      );
-    } catch {
-      /* Browser storage can be unavailable; keep this page's choice. */
-    }
+let current: BoardAppearance | null = null;
+const listeners = new Set<() => void>();
+let unlisten: (() => void) | undefined;
+let pageOnly = false;
+
+export const boardAppearanceSnapshot = () => (current ??= read());
+
+function publish(next: BoardAppearance) {
+  if (JSON.stringify(boardAppearanceSnapshot()) === JSON.stringify(next))
+    return;
+  current = next;
+  for (const listener of listeners) listener();
+}
+
+export function setBoardAppearance(next: BoardAppearance) {
+  const admitted = boardAppearance(next);
+  // Load the previous value before persisting, so subscribers see the change.
+  boardAppearanceSnapshot();
+  try {
+    worldLocalStorage.setItem(BOARD_APPEARANCE_KEY, JSON.stringify(admitted));
+    pageOnly = false;
+  } catch {
+    pageOnly = true;
+    // Storage refused: keep the page's choice.
+  }
+  publish(admitted);
+}
+
+export function subscribeBoardAppearance(listener: () => void) {
+  if (!listeners.size) {
+    // Reconcile changes made in another tab while there were no readers.
+    if (!pageOnly) publish(read());
+    unlisten = subscribeLocalStorage((key) => {
+      if (key === null || key === BOARD_APPEARANCE_KEY) publish(read());
+    });
+  }
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size) unlisten?.();
   };
-  return { appearance, change };
+}
+
+export function useBoardAppearance() {
+  const appearance = useSyncExternalStore(
+    subscribeBoardAppearance,
+    boardAppearanceSnapshot,
+  );
+  return { appearance, change: setBoardAppearance };
 }

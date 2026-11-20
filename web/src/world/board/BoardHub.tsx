@@ -13,12 +13,12 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { worldLocalStorage } from "../../browserStorage";
+import { useLayoutPreferences } from "../../layoutPreferences";
+import { useTownMaster } from "../town/useTownMaster";
 import { useLayer } from "../../layerStack";
 import { store } from "../../store";
 import { requestAgentLaunch, useAgentProfiles } from "../agentProfiles";
 import { agentName } from "../deskAgentLabels";
-import { readOfficePreferences } from "../officePreferences";
 import type { TownCenterAction } from "../town/TownCenterMenu";
 import {
   launchAction,
@@ -84,7 +84,6 @@ export function boardHubActions({
   world,
   selectedId,
   holder,
-  name,
   openChat,
   onOpenSummary,
   onNewWorkspace,
@@ -94,9 +93,7 @@ export function boardHubActions({
   selectedId: string | null;
   /** The agent given the Town master role, if any. */
   holder: { connection_id: string; terminal_id: string } | null;
-  /** Menu → Town master, trimmed. */
-  name: string;
-  openChat(nodeId: string): void;
+  openChat(nodeId: string, focus?: boolean): void;
   /** Go to Town with its summary open. */
   onOpenSummary(): void;
   onNewWorkspace(): void;
@@ -142,7 +139,7 @@ export function boardHubActions({
           }
         : null,
     ),
-    townMasterAction({ world, roster, holder, name, openChat, toast }),
+    townMasterAction({ world, roster, holder, openChat, toast }),
     needsYouAction(),
     summaryAction(onOpenSummary, "in Town"),
     profilesAction(),
@@ -173,19 +170,20 @@ export function BoardHub({
   world: WorldObject;
   selectedId: string | null;
   /** Open an agent's Chat, by its node ID. */
-  openChat(nodeId: string): void;
+  openChat(nodeId: string, focus?: boolean): void;
   /** Go to Town with its summary open. */
   onOpenSummary(): void;
   onNewWorkspace(): void;
 }) {
   const holder = useAgentProfiles().document?.town_master ?? null;
+  const { mobile } = useLayoutPreferences();
+  useTownMaster(world, holder, mobile, (key) => openChat(key, false));
   // The Town Master's greeting opens at the hub on wide screens.
   const greetingAnchor = useGreetingAnchor();
   const actions = boardHubActions({
     world,
     selectedId,
     holder,
-    name: readOfficePreferences(worldLocalStorage).townMaster.trim(),
     openChat,
     onOpenSummary,
     onNewWorkspace,

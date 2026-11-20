@@ -1,19 +1,25 @@
-/**
- * Board's settings in the one registry (#1035). Board keeps its surface,
- * status colours and pulses in its own settings menu, read when Board opens;
- * until they gain a shared store (a later slice), Settings and the command
- * box find them here and open Board's menu or dialog, where they change.
- */
+/** Board controls share their stores with Settings and the command box. */
 
 import { Activity, Palette, Presentation } from "lucide-react";
 import { defineSettings } from "../../settings/registry";
+import {
+  boardAppearanceSnapshot,
+  setBoardAppearance,
+  subscribeBoardAppearance,
+} from "./useBoardAppearance";
+import {
+  boardPulses,
+  setBoardPulses,
+  subscribeBoardPulses,
+} from "./boardPulses";
+import type { BoardSurface } from "./boardAppearance";
 import { openViewControl } from "../../settings/viewControls";
 
 const ON_BOARD = "Board: the ⋮ Board settings button";
 
 defineSettings("board", [
   {
-    kind: "panel",
+    kind: "setting",
     id: "board.surface",
     category: "town",
     title: "Board surface",
@@ -29,7 +35,21 @@ defineSettings("board", [
     icon: <Presentation size={15} />,
     scope: "browser",
     alsoOn: ON_BOARD,
-    open: () => openViewControl("board", "board.settings"),
+    subscribe: subscribeBoardAppearance,
+    control: {
+      type: "choice",
+      options: [
+        { value: "theme", label: "Follow theme" },
+        { value: "whiteboard", label: "Whiteboard" },
+        { value: "blackboard", label: "Blackboard" },
+      ],
+      get: () => boardAppearanceSnapshot().surface,
+      set: (_host, value) =>
+        setBoardAppearance({
+          ...boardAppearanceSnapshot(),
+          surface: value as BoardSurface,
+        }),
+    },
   },
   {
     kind: "panel",
@@ -45,7 +65,7 @@ defineSettings("board", [
     open: () => openViewControl("board", "board.colours"),
   },
   {
-    kind: "panel",
+    kind: "setting",
     id: "board.pulses",
     category: "town",
     title: "Board status pulses",
@@ -54,6 +74,11 @@ defineSettings("board", [
     icon: <Activity size={15} />,
     scope: "browser",
     alsoOn: ON_BOARD,
-    open: () => openViewControl("board", "board.settings"),
+    subscribe: subscribeBoardPulses,
+    control: {
+      type: "toggle",
+      get: boardPulses,
+      set: (_host, on) => setBoardPulses(on),
+    },
   },
 ]);
