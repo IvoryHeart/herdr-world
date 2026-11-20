@@ -4,31 +4,24 @@ import "./MobileSheetHandle.css";
 
 export function MobileSheetHandle({
   label,
-  expanded,
-  onExpand,
-  onCollapse,
   onClose,
   onClick,
 }: {
   label: string;
-  expanded?: boolean;
-  onExpand?: () => void;
-  onCollapse?: () => void;
   onClose: () => void;
   onClick?: () => void;
 }) {
   const button = useRef<HTMLButtonElement>(null);
   const activate = useRef<() => void>(() => {});
-  const actions = useRef({ expanded, onExpand, onCollapse, onClose, onClick });
+  const actions = useRef({ onClose, onClick });
   useLayoutEffect(() => {
-    actions.current = { expanded, onExpand, onCollapse, onClose, onClick };
+    actions.current = { onClose, onClick };
   });
 
   useEffect(() => {
     const handle = button.current!;
     const sheet = handle.parentElement!;
     let animation: Animation | null = null;
-    let sizeAnimation: Animation | null = null;
     const duration = () =>
       matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200;
     let dragged = false;
@@ -37,13 +30,12 @@ export function MobileSheetHandle({
       y: number;
       scale: number;
       height: number;
-      heights: { compact: number; expanded: number } | null;
       scrollUp: boolean;
       scrollDown: boolean;
       claimed: boolean;
     } | null = null;
     const clearStyles = () => {
-      sheet.classList.remove("is-dragging", "is-resizing");
+      sheet.classList.remove("is-dragging");
       sheet.style.removeProperty("transform");
       sheet.style.removeProperty("height");
       sheet.style.removeProperty("max-height");
@@ -52,34 +44,10 @@ export function MobileSheetHandle({
       start = null;
       clearStyles();
     };
-    const settle = (action?: () => void) => {
-      const scale = sheet.getBoundingClientRect().width / sheet.offsetWidth;
-      const from = sheet.getBoundingClientRect().height / scale;
-      const transform = getComputedStyle(sheet).transform;
-      sizeAnimation?.cancel();
+    // A tap on the handle runs its action in place, with no drag left over.
+    const settle = (action: () => void) => {
       reset();
-      if (action) flushSync(action);
-      if (!actions.current.onExpand) return;
-      const to = sheet.getBoundingClientRect().height / scale;
-      sheet.classList.add("is-resizing");
-      sheet.style.height = `${to}px`;
-      sheet.style.maxHeight = "none";
-      const pending = sheet.animate(
-        [
-          { height: `${from}px`, transform },
-          { height: `${to}px`, transform: "none" },
-        ],
-        { duration: duration(), easing: "ease-out" },
-      );
-      sizeAnimation = pending;
-      void pending.finished.then(
-        () => {
-          if (sizeAnimation !== pending) return;
-          sizeAnimation = null;
-          clearStyles();
-        },
-        () => {},
-      );
+      flushSync(action);
     };
     const close = () => {
       if (animation) return;
@@ -135,7 +103,6 @@ export function MobileSheetHandle({
         scrollDown,
         claimed: false,
         height: 0,
-        heights: null,
       };
     };
     const move = (x: number, y: number) => {
@@ -148,9 +115,7 @@ export function MobileSheetHandle({
         if (
           Math.abs(dx) >= Math.abs(dy) ||
           (dy > 0 && start.scrollDown) ||
-          (dy < 0 &&
-            start.scrollUp &&
-            (!actions.current.onExpand || actions.current.expanded))
+          (dy < 0 && start.scrollUp)
         ) {
           dragged = true;
           reset();
@@ -160,36 +125,16 @@ export function MobileSheetHandle({
         start.height = sheet.getBoundingClientRect().height / start.scale;
         const content = sheet.querySelector(".config-dropdown-content");
         const scrollTop = content?.scrollTop ?? 0;
-        sizeAnimation?.cancel();
-        sizeAnimation = null;
         clearStyles();
         sheet.style.animation = "none";
-        if (actions.current.onExpand) {
-          sheet.classList.remove("is-expanded");
-          const compact = sheet.getBoundingClientRect().height / start.scale;
-          sheet.classList.add("is-expanded");
-          const expanded = sheet.getBoundingClientRect().height / start.scale;
-          sheet.classList.toggle("is-expanded", !!actions.current.expanded);
-          start.heights = { compact, expanded };
-        }
         sheet.classList.add("is-dragging");
         sheet.style.height = `${start.height}px`;
         sheet.style.maxHeight = "none";
         if (content) content.scrollTop = scrollTop;
       }
       dragged = true;
-      const { expanded, onExpand, onCollapse } = actions.current;
-      if (
-        start.heights &&
-        ((dy < 0 && onExpand && !expanded) ||
-          (dy > 0 && onCollapse && expanded))
-      ) {
-        sheet.style.height = `${Math.max(start.heights.compact, Math.min(start.heights.expanded, start.height - dy / start.scale))}px`;
-        sheet.style.removeProperty("transform");
-      } else {
-        sheet.style.height = `${start.height}px`;
-        sheet.style.transform = `translateY(${(dy > 0 ? dy : dy * 0.15) / start.scale}px)`;
-      }
+      sheet.style.height = `${start.height}px`;
+      sheet.style.transform = `translateY(${(dy > 0 ? dy : dy * 0.15) / start.scale}px)`;
       return true;
     };
     const finish = (x: number, y: number) => {
@@ -197,32 +142,13 @@ export function MobileSheetHandle({
         const dy = y - start.y,
           dx = x - start.x;
         if (Math.hypot(dx, dy) > 10) dragged = true;
-        if (
-          start.claimed &&
-          Math.abs(dy) >= 40 &&
-          Math.abs(dy) > Math.abs(dx)
-        ) {
-          if (dy > 0) {
-            if (actions.current.expanded && actions.current.onCollapse) {
-              settle(actions.current.onCollapse);
-              return;
-            }
-            close();
-          } else if (actions.current.onExpand) {
-            settle(actions.current.onExpand);
-            return;
-          }
-        } else if (start.claimed && actions.current.onExpand) {
-          settle();
-          return;
-        }
+        if (start.claimed && dy >= 40 && Math.abs(dy) > Math.abs(dx)) close();
       }
       reset();
     };
     const cancel = () => {
       dragged = true;
-      if (start?.claimed && actions.current.onExpand) settle();
-      else if (start) reset();
+      if (start) reset();
     };
     const touchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1) return cancel();
@@ -280,7 +206,6 @@ export function MobileSheetHandle({
     handle.addEventListener("lostpointercapture", lostCapture);
     sheet.addEventListener("click", clickCapture, true);
     return () => {
-      sizeAnimation?.cancel();
       animation?.cancel();
       reset();
       sheet.removeEventListener("touchstart", touchStart);
@@ -302,7 +227,6 @@ export function MobileSheetHandle({
       type="button"
       className="mobile-sheet-handle"
       aria-label={label}
-      aria-expanded={expanded}
       onClick={() => activate.current()}
     >
       <span />

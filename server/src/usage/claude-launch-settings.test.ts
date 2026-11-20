@@ -17,6 +17,40 @@ import { runProcessWithCodeTimeout } from "../utils/process-utils";
 
 const runtime = { kind: "bun" as const, path: process.execPath };
 
+(process.platform === "win32" ? test.skip : test).each(["before", "after"])(
+  "failed acknowledgement %s tap publication allows a complete retry",
+  async (boundary) => {
+    const home = mkdtempSync(join(tmpdir(), "tap-retry-"));
+    const run = (argv: string[], timeout: number) =>
+      runProcessWithCodeTimeout(argv, timeout, {
+        env: { ...process.env, HOME: home },
+      });
+    try {
+      await expect(
+        claudeLaunchTapArgs({
+          runtime,
+          windows: false,
+          run: async (argv, timeout) => {
+            if (boundary === "after") await run(argv, timeout);
+            return {
+              code: 1,
+              stdout: "",
+              stderr: "synthetic failed acknowledgement",
+            };
+          },
+        }),
+      ).rejects.toThrow("No agent was started");
+      const args = await claudeLaunchTapArgs({ runtime, windows: false, run });
+      expect(readFileSync(args[1]!, "utf8")).toBe(claudeTapArgs(runtime)[1]!);
+      expect(readdirSync(dirname(args[1]!))).toEqual([
+        args[1]!.slice(dirname(args[1]!).length + 1),
+      ]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  },
+);
+
 test("Windows keeps the inline tap without preparing a Unix settings file", async () => {
   expect(
     await claudeLaunchTapArgs({

@@ -11,16 +11,43 @@ import "./styles/base.css";
 import "./styles/vendor.css";
 import { OverlayScrollbarLayer } from "./components/OverlayScrollbarLayer";
 import TitleSpinnerFixture from "./testing/TitleSpinnerFixture";
+import ClaudeTapLockFixture from "./testing/ClaudeTapLockFixture";
 
 // Testing-only preview: consume the switch before view routing rewrites the URL.
 const previewUrl = new URL(location.href);
+const questionBacklogFixture = previewUrl.searchParams.has(
+  "questionBacklogFixture",
+);
 const titleSpinnerFixture = previewUrl.searchParams.has("titleSpinnerFixture");
-if (titleSpinnerFixture) {
+const claudeTapLockFixture = previewUrl.searchParams.has(
+  "claudeTapLockFixture",
+);
+const boardTextConflictFixture = previewUrl.searchParams.has(
+  "boardTextConflictFixture",
+);
+if (
+  titleSpinnerFixture ||
+  claudeTapLockFixture ||
+  boardTextConflictFixture ||
+  questionBacklogFixture
+) {
+  previewUrl.searchParams.delete("questionBacklogFixture");
+  previewUrl.searchParams.delete("claudeTapLockFixture");
   previewUrl.searchParams.delete("titleSpinnerFixture");
+  previewUrl.searchParams.delete("boardTextConflictFixture");
   history.replaceState(history.state, "", previewUrl);
 }
 const WorldFoundationApp = React.lazy(
   () => import("./world/WorldFoundationApp"),
+);
+const BoardTextConflictFixture = React.lazy(() =>
+  import("./world/BoardView").then((module) => ({
+    default: module.BoardTextConflictFixture,
+  })),
+);
+
+const QuestionBacklogFixture = React.lazy(
+  () => import("./testing/QuestionBacklogFixture"),
 );
 
 class ErrorBoundary extends React.Component<
@@ -60,16 +87,30 @@ initializeShortcutPreferences();
 coreFixtureEnabled();
 coreInstallFake();
 integrationsFixtureEnabled();
-const stopInstanceNameSync = titleSpinnerFixture
-  ? () => {}
-  : initializeInstanceName();
+const stopInstanceNameSync =
+  titleSpinnerFixture ||
+  claudeTapLockFixture ||
+  boardTextConflictFixture ||
+  questionBacklogFixture
+    ? () => {}
+    : initializeInstanceName();
 if (import.meta.hot) import.meta.hot.dispose(stopInstanceNameSync);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <React.Suspense fallback={null}>
-        {titleSpinnerFixture ? <TitleSpinnerFixture /> : <WorldFoundationApp />}
+        {questionBacklogFixture ? (
+          <QuestionBacklogFixture />
+        ) : titleSpinnerFixture ? (
+          <TitleSpinnerFixture />
+        ) : claudeTapLockFixture ? (
+          <ClaudeTapLockFixture />
+        ) : boardTextConflictFixture ? (
+          <BoardTextConflictFixture />
+        ) : (
+          <WorldFoundationApp />
+        )}
       </React.Suspense>
       <OverlayScrollbarLayer />
     </ErrorBoundary>

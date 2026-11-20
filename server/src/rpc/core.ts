@@ -1,4 +1,5 @@
 import { moveCore } from "../herdr-core/town-move";
+import { apartmentResumeLaunch } from "../world/apartment-resume";
 import { isLocalCoreAddress } from "../../../shared/coreAddress";
 import { profileLaunch } from "../agent/profile-launch";
 import { coreHarnessNames } from "../herdr-core/harness";
@@ -166,15 +167,22 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
         if (profileId && !profile)
           throw new CoreOperationRefused("That profile no longer exists.");
         const shell = p.shell === true;
+        const resume =
+          typeof p.resume_resident === "string" ? p.resume_resident : null;
         const launch = shell
           ? null
-          : profileLaunch(profile ?? null, {
-              kind: String(p.kind ?? ""),
-              label: String(p.label ?? "")
-                .trim()
-                .slice(0, 64),
-              text: String(p.text ?? "").slice(0, 16_000),
-            });
+          : resume
+            ? apartmentResumeLaunch(
+                rpc.services.apartments?.apartments.get(resume),
+                connectionId,
+              )
+            : profileLaunch(profile ?? null, {
+                kind: String(p.kind ?? ""),
+                label: String(p.label ?? "")
+                  .trim()
+                  .slice(0, 64),
+                text: String(p.text ?? "").slice(0, 16_000),
+              });
         const host = core.host(connectionId);
         const result = await launchCore(
           lease,

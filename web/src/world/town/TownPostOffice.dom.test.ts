@@ -44,26 +44,22 @@ if (process.env.TOWN_POST_DOM !== "1") {
       configurable: true,
       writable: true,
     });
+  // The shared asks, reviewed-work and Outbox stores never reach a service here.
+  globalThis.fetch = (() => new Promise<Response>(() => {})) as never;
   const { act, createElement } = await import("react");
   const { createRoot } = await import("react-dom/client");
-  const { fixturePullRequest } = await import("../testing/pullRequestFixture");
-  const { worldSourcesStore } = await import("../worldSources");
-  const { WORLD_INTEGRATIONS_EVENT } = await import("../../integrations");
   const { layoutTown, TOWN_SHAPES } = await import("./townLayout");
-  const { TownPostOffice, TOWN_POST_LEAVE_MS } = await import(
-    "./TownPostOffice"
+  const { TownPostOffice, TownPostProvider } = await import("./TownPostOffice");
+  const { AnswerOutboxContext } = await import("./answerOutbox");
+  const { WorldAsksStore } = await import("../worldAsks");
+  const { WorldAnswerDeliveriesStore } = await import(
+    "../worldAnswerDeliveries"
   );
-  const { TownOpenWorkContext, TownWorkLens } = await import("./TownWorkLens");
-  const { fixtureWorld } = await import("../board/boardFixture");
-  const { PULL_REQUEST_LANES } = await import(
-    "../../../../shared/worldSources"
-  );
-  type Snapshot =
-    import("../../../../shared/worldSources").WorldSourcesSnapshot;
-  type Item = import("../../../../shared/worldSources").WorkItem;
-
-  // The store never reaches a service here; tests publish what it read.
-  worldSourcesStore.useFetch(() => new Promise<Response>(() => {}));
+  const { needsYouState, resetNeedsYouForTest } = await import("../needsYou");
+  const { TOWN_POST_SLOTS } = await import("./townPostModel");
+  type Source = import("./TownPostOffice").TownPostSource;
+  type Leaf = import("../worldObject").WorldLeafObject;
+  type WorldAsk = import("../worldAsks").WorldAsk;
 
   const town = (narrow: boolean) =>
     layoutTown(
@@ -74,63 +70,28 @@ if (process.env.TOWN_POST_DOM !== "1") {
       narrow ? TOWN_SHAPES.phone : TOWN_SHAPES.wide,
     ).layout;
 
-  function source(
-    state: "connected" | "not_connected" | "disabled",
-    detail = "Up to date",
-  ) {
-    return {
-      id: "github" as const,
-      label: "GitHub",
-      enabled: state !== "disabled",
-      state,
-      detail,
-      checkedAt: Date.now(),
-      lastSuccessAt: state === "connected" ? Date.now() : null,
-      itemCount: 0,
-      config: { kind: "github" as const, mergedDays: 7 },
-    };
-  }
-
-  const publish = (
-    items: Item[],
-    state: Parameters<typeof source>[0] = "connected",
-    detail?: string,
-  ) =>
-    act(async () =>
-      worldSourcesStore.publishSettled({
-        observedAt: Date.now(),
-        refreshing: false,
-        sources: [source(state, detail)],
-        items,
-        links: [],
-        actions: [],
-      } satisfies Snapshot),
-    );
-
-  /** Mounts the post office; `work` stands for Town's Work lens. */
-  async function mount(narrow = false, work: (() => void) | null = null) {
+  async function mountSign(source: Source | null, narrow = false) {
     const host = document.createElement("div");
     host.className = "town-world";
     document.body.append(host);
     const root = createRoot(host);
+    const office = createElement(TownPostOffice, {
+      layout: town(narrow),
+      renderer: { current: null },
+    });
     await act(async () =>
       root.render(
-        createElement(
-          TownOpenWorkContext.Provider,
-          { value: work },
-          createElement(TownPostOffice, {
-            layout: town(narrow),
-            renderer: { current: null },
-          }),
-        ),
+        source
+          ? createElement(TownPostProvider, { source, children: office })
+          : office,
       ),
     );
     return {
-      host,
-      sign: () => host.querySelector<HTMLButtonElement>(".town-post-sign"),
-      parcels: () => [
-        ...host.querySelectorAll<HTMLButtonElement>("button.town-post-parcel"),
-      ],
+      sign: host.querySelector<HTMLButtonElement>("button")!,
+      counts: () =>
+        [...host.querySelectorAll<HTMLElement>(".town-post-counts > span")].map(
+          (span) => [span.dataset.kind, span.textContent],
+        ),
       async close() {
         await act(async () => root.unmount());
         host.remove();
@@ -138,249 +99,289 @@ if (process.env.TOWN_POST_DOM !== "1") {
     };
   }
 
-  test("signed out, it is quiet and says how to connect: no parcels, no zeros", async () => {
-    await publish([], "not_connected", "Sign in with gh auth login.");
-    const office = await mount();
-    const sign = office.sign()!;
-    expect(sign.getAttribute("aria-label")).toBe(
-      "Post office: Closed · connect GitHub in Integrations",
-    );
-    expect(sign.title).toBe("Sign in with gh auth login.");
-    expect(sign.textContent).not.toMatch(/\d/);
-    expect(office.parcels()).toEqual([]);
-    let opened = 0;
-    const onSettings = () => (opened += 1);
-    window.addEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
-    await act(async () => sign.click());
-    window.removeEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
-    expect(opened).toBe(1);
-    await publish([fixturePullRequest(9)], "disabled");
-    expect(office.sign()!.textContent).toContain("GitHub source is off");
-    expect(office.parcels()).toEqual([]);
-    await office.close();
-  });
-
-  test("parcels stand ready first and open the pull request card; a merged one is posted", async () => {
-    const items = [
-      fixturePullRequest(3, { checks: "pending", updatedAt: 9 }),
-      fixturePullRequest(1, { title: "Synthetic ready change" }),
-      fixturePullRequest(2, { checks: "fail", lane: "fixing" }),
-    ];
-    await publish(items);
-    const office = await mount();
-    expect(office.sign()!.getAttribute("aria-label")).toBe(
-      "Post office: 1 ready to merge, 1 failing, 1 waiting",
-    );
-    expect(
-      [...office.sign()!.querySelectorAll("[data-state]")].map(
-        (part) => part.textContent,
-      ),
-    ).toEqual(["1 ready", "1 failing", "1 waiting"]);
-    const parcels = office.parcels();
-    expect(parcels.map((parcel) => parcel.dataset.state)).toEqual([
-      "ready",
-      "failing",
-      "waiting",
-    ]);
-    expect(parcels[0]!.getAttribute("aria-label")).toBe(
-      "#1 Synthetic ready change, example-org/web-app, ready to merge. Open pull request",
-    );
-    expect(parcels[0]!.textContent).toContain("#1 Synthetic ready change");
-    // Its sign takes keyboard users into the yard.
-    await act(async () => office.sign()!.click());
-    expect(document.activeElement).toBe(parcels[0]!);
-    await act(async () => parcels[0]!.click());
-    const dialog = document.querySelector('[role="dialog"]')!;
-    expect(dialog.getAttribute("aria-label")).toBe(
-      "Pull request example-org/web-app#1",
-    );
-    expect(dialog.querySelector(".pr-card")).not.toBeNull();
-    expect(dialog.textContent).toContain("Merge…");
-
-    // GitHub reports it merged: it leaves the yard, carried off.
-    await publish([{ ...items[1]!, lane: "merged" }, items[0]!, items[2]!]);
-    expect(office.parcels().map((parcel) => parcel.dataset.state)).toEqual([
-      "failing",
-      "waiting",
-    ]);
-    const leaving = office.host.querySelector<HTMLElement>("[data-leaving]")!;
-    expect(leaving.dataset.leaving).toBe("posted");
-    expect(leaving.getAttribute("aria-hidden")).toBe("true");
-    expect(office.host.querySelector('[role="status"]')!.textContent).toBe(
-      "#1 Synthetic ready change merged.",
-    );
-    // The card stays on the merged pull request.
-    expect(document.querySelector('[role="dialog"] .pr-card')).not.toBeNull();
-    await act(
-      () =>
-        new Promise((resolve) => setTimeout(resolve, TOWN_POST_LEAVE_MS + 50)),
-    );
-    expect(office.host.querySelector("[data-leaving]")).toBeNull();
-    // A closed pull request just goes.
-    await publish([items[0]!]);
-    expect(
-      office.host.querySelector<HTMLElement>("[data-leaving]")!.dataset.leaving,
-    ).toBe("gone");
-    await office.close();
-  });
-
-  test("more than the yard holds make a pile with its count", async () => {
-    await publish(
-      Array.from({ length: 30 }, (_, index) =>
-        fixturePullRequest(index + 1, { checks: "pending" }),
-      ),
-    );
-    const office = await mount();
-    expect(office.parcels().length).toBe(20);
-    const pile =
-      office.host.querySelector<HTMLButtonElement>(".town-post-pile")!;
-    expect(pile.textContent).toBe("+10");
-    expect(pile.getAttribute("aria-label")).toBe("10 more pull requests");
-    await office.close();
-  });
-
-  test("a narrow town folds it to a sign on the town center", async () => {
-    await publish([
-      fixturePullRequest(1),
-      fixturePullRequest(2, { draft: true }),
-    ]);
-    const office = await mount(true);
-    expect(office.sign()).toBeNull();
-    expect(office.parcels()).toEqual([]);
-    const fold =
-      office.host.querySelector<HTMLButtonElement>(".town-post-fold")!;
-    expect(fold.getAttribute("aria-label")).toBe(
-      "Post office: 1 ready to merge, 0 failing, 0 waiting, 1 draft. Open",
-    );
-    // A pillar box marks the folded sign, as one stands by the house door.
-    expect(fold.querySelector(".town-post-box")).not.toBeNull();
-    await office.close();
-  });
-
-  test("in Town, its sign and both lists open every pull request in the Work lens", async () => {
-    await publish(
-      Array.from({ length: 30 }, (_, index) =>
-        fixturePullRequest(index + 1, { checks: "pending" }),
-      ),
-    );
-    let opened = 0;
-    const work = () => {
-      opened += 1;
-    };
-    const office = await mount(false, work);
-    const sign = office.sign()!;
-    expect(sign.getAttribute("aria-label")).toBe(
-      "Post office: 0 ready to merge, 0 failing, 30 waiting. Open all pull requests",
-    );
-    await act(async () => sign.click());
-    expect(opened).toBe(1);
-    // The pile's list leads with every pull request, not only its own.
-    await act(async () =>
-      office.host.querySelector<HTMLButtonElement>(".town-post-pile")!.click(),
-    );
-    const pileList = document.querySelector(".town-post-popover")!;
-    const all = pileList.querySelector<HTMLButtonElement>(".town-post-all")!;
-    expect(pileList.firstElementChild).toBe(all);
-    expect(all.textContent).toBe("All pull requests");
-    await act(async () => all.click());
-    expect(opened).toBe(2);
-    expect(document.querySelector(".town-post-popover")).toBeNull();
-    await office.close();
-
-    // On a phone the folded sign's list offers it too.
-    const folded = await mount(true, work);
-    await act(async () =>
-      folded.host.querySelector<HTMLButtonElement>(".town-post-fold")!.click(),
-    );
-    await act(async () =>
-      document
-        .querySelector<HTMLButtonElement>(".town-post-popover .town-post-all")!
-        .click(),
-    );
-    expect(opened).toBe(3);
-    await folded.close();
-
-    // Without GitHub, the sign still says how to connect and opens Integrations.
-    await publish([], "not_connected", "Sign in with gh auth login.");
-    const closed = await mount(false, work);
-    let settings = 0;
-    const onSettings = () => {
-      settings += 1;
-    };
-    window.addEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
-    expect(closed.sign()!.getAttribute("aria-label")).toBe(
-      "Post office: Closed · connect GitHub in Integrations",
-    );
-    await act(async () => closed.sign()!.click());
-    window.removeEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
-    expect([settings, opened]).toEqual([1, 3]);
-    await closed.close();
-  });
-
-  test("before GitHub answers, the sign does not open the Work lens", async () => {
-    // A cold page: the first sources request has not returned any source.
-    await act(async () =>
-      worldSourcesStore.publishSettled({
-        observedAt: Date.now(),
-        refreshing: true,
-        sources: [],
-        items: [],
-        links: [],
-        actions: [],
-      } satisfies Snapshot),
-    );
-    let opened = 0;
-    const office = await mount(false, () => {
-      opened += 1;
+  test("its sign counts what is addressed to you, by kind, and opens Needs you", async () => {
+    resetNeedsYouForTest();
+    const office = await mountSign({
+      counts: { asks: 2, needs: 1, done: 3, outbox: 1 },
     });
-    const sign = office.sign()!;
-    expect(sign.getAttribute("aria-label")).not.toContain(
-      "Open all pull requests",
+    expect(office.sign.className).toBe("town-post-sign");
+    expect(office.sign.hasAttribute("data-waiting")).toBe(true);
+    expect(office.sign.textContent).toStartWith("POST OFFICE");
+    // The shared agent marks, as Needs you and the desks show them.
+    expect(office.counts()).toEqual([
+      ["asks", "?2 questions"],
+      ["needs", "!1 blocked"],
+      ["done", "✓3 to review"],
+      ["outbox", "✉1 to check"],
+    ]);
+    expect(office.sign.getAttribute("aria-label")).toBe(
+      "Post office: 2 questions for you, 1 agent blocked, 3 finished to review, 1 answer to check. Open Needs you",
     );
-    await act(async () => sign.click());
-    expect(opened).toBe(0);
+    // No pull requests: those are the warehouse's.
+    expect(office.sign.textContent).not.toMatch(/ready|failing|PR|pull/i);
+    expect(needsYouState().open).toBe(false);
+    await act(async () => office.sign.click());
+    expect(needsYouState().open).toBe(true);
     await office.close();
   });
 
-  test("Town's Work lens is Board's kanban, over the post office's pull requests", async () => {
-    await publish([
-      fixturePullRequest(1, { title: "Synthetic ready change" }),
-      fixturePullRequest(2, { checks: "fail", lane: "fixing" }),
+  test("with nothing for you, it says so and does not light up", async () => {
+    const office = await mountSign({
+      counts: { asks: 0, needs: 0, done: 0, outbox: 0 },
+    });
+    expect(office.counts()).toEqual([["none", "Nothing for you"]]);
+    expect(office.sign.hasAttribute("data-waiting")).toBe(false);
+    expect(office.sign.getAttribute("aria-label")).toBe(
+      "Post office: nothing for you. Open Needs you",
+    );
+    await office.close();
+  });
+
+  test("a narrow town folds it to a sign of marks and numbers", async () => {
+    resetNeedsYouForTest();
+    const office = await mountSign(
+      { counts: { asks: 0, needs: 2, done: 1, outbox: 0 } },
+      true,
+    );
+    expect(office.sign.className).toBe("town-post-fold");
+    expect(office.counts()).toEqual([
+      ["needs", "!2"],
+      ["done", "✓1"],
     ]);
+    // Keyboard: a button, so Enter and Space open it as a click does.
+    expect(office.sign.type).toBe("button");
+    await act(async () => office.sign.click());
+    expect(needsYouState().open).toBe(true);
+    await office.close();
+  });
+
+  test("in Town it counts Needs you's own items in Town's world", async () => {
+    const leaf = (id: string, status: Leaf["status"]) =>
+      ({
+        id,
+        kind: "agent",
+        nativeId: `w1:${id}`,
+        connectionId: "local",
+        generation: 1,
+        label: `${id}-claude`,
+        agentName: id,
+        status,
+        stale: false,
+        actionable: true,
+        lastActivityAt: 1,
+        terminalId: `terminal-${id}`,
+        pane: { pane_id: `w1:${id}` },
+        stateLabels: {},
+      }) as unknown as Leaf;
+    const leaves = [
+      leaf("one", "blocked"),
+      leaf("two", "blocked"),
+      leaf("three", "working"),
+    ];
+    const office = await mountSign({
+      world: { leaves, nodeById: new Map(leaves.map((l) => [l.id, l])) },
+    });
+    expect(office.counts()).toEqual([["needs", "!2 blocked"]]);
+    await office.close();
+  });
+
+  test("drawn alone, it is a sign without counts", async () => {
+    const office = await mountSign(null);
+    expect(office.counts()).toEqual([]);
+    expect(office.sign.getAttribute("aria-label")).toBe(
+      "Post office: Needs you. Open Needs you",
+    );
+    await office.close();
+  });
+
+  const ask = (index: number, verified = true): WorldAsk => ({
+    id: `q-${index}`,
+    at: Date.now() - (100 - index) * 60_000,
+    actor: verified
+      ? { label: `agent-${index}`, verified, name: `agent-${index}` }
+      : { label: "unknown", verified, pane_id: `p-${index}` },
+    question: `Deploy build ${index} now?`,
+    options: ["Deploy", "Wait"],
+    owner_only: false,
+  });
+
+  /** The World ledger, as the service would answer: open asks and counts. */
+  function stores(asks: WorldAsk[], waiting = 0, checks = 0) {
+    const client = {
+      call: async (method: string) =>
+        method === "world.asks.get"
+          ? { revision: 1, asks }
+          : {
+              revision: 1,
+              incarnation: "test",
+              counts: { waiting, checks, connections: {} },
+              deliveries: [],
+              next: null,
+            },
+      onControl: () => () => {},
+      onStatus: () => () => {},
+    };
+    return {
+      asksStore: new WorldAsksStore(client),
+      deliveries: new WorldAnswerDeliveriesStore(client),
+    };
+  }
+
+  async function mount(
+    narrow: boolean,
+    data: ReturnType<typeof stores>,
+    outbox: () => void = () => {},
+  ) {
+    resetNeedsYouForTest();
     const host = document.createElement("div");
+    host.className = "town-world";
     document.body.append(host);
     const root = createRoot(host);
-    let closed = 0;
     await act(async () =>
       root.render(
-        createElement(TownWorkLens, {
-          world: fixtureWorld([]),
-          onSelectAgent: () => {},
-          onClose: () => {
-            closed += 1;
-          },
-        }),
+        createElement(
+          AnswerOutboxContext.Provider,
+          { value: outbox },
+          createElement(TownPostOffice, {
+            layout: town(narrow),
+            renderer: { current: null },
+            ...data,
+          }),
+        ),
       ),
     );
-    const lens = host.querySelector<HTMLElement>(".work-lens.town-work")!;
-    expect(
-      [...lens.querySelectorAll<HTMLElement>(".work-lens-column")].map(
-        (column) => column.dataset.lane,
-      ),
-    ).toEqual([...PULL_REQUEST_LANES]);
-    expect(
-      lens.querySelector('.work-lens-column[data-lane="fixing"]')!.textContent,
-    ).toContain("#2");
-    expect(lens.textContent).toContain("Synthetic ready change");
-    // Keys carry on in the lens, not the sign beneath it.
-    expect(document.activeElement?.textContent).toBe("Pull requests");
-    await act(async () =>
-      lens
-        .querySelector<HTMLButtonElement>('[aria-label="Close Work"]')!
-        .click(),
+    // The stores answer on the next turn.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    return {
+      host,
+      letters: () => [
+        ...host.querySelectorAll<HTMLButtonElement>(
+          "button.town-post-envelope",
+        ),
+      ],
+      trolley: () =>
+        host.querySelector<HTMLButtonElement>(".town-post-trolley"),
+      async close() {
+        await act(async () => root.unmount());
+        host.remove();
+        for (const node of document.body.querySelectorAll(
+          ".town-badge-popover, [data-radix-popper-content-wrapper]",
+        ))
+          node.remove();
+      },
+    };
+  }
+
+  const click = (element: Element | null | undefined) =>
+    act(async () => {
+      (element as HTMLElement).click();
+    });
+
+  test("each question is a letter; its card shows the question and answers in Needs you", async () => {
+    const view = await mount(false, stores([ask(1), ask(2, false)]));
+    try {
+      const letters = view.letters();
+      expect(
+        letters.map((letter) => letter.getAttribute("aria-label")),
+      ).toEqual([
+        "Letter from agent-1: Deploy build 1 now?. Open letter",
+        "Letter from p-2 (unverified): Deploy build 2 now?. Open letter",
+      ]);
+      expect(letters[1]?.hasAttribute("data-unverified")).toBe(true);
+      await click(letters[0]);
+      const card = document.querySelector<HTMLElement>(
+        '.town-badge-popover[aria-label="Letter from agent-1"]',
+      );
+      expect(card?.querySelector(".town-post-card-question")?.textContent).toBe(
+        "Deploy build 1 now?",
+      );
+      expect(
+        [...(card?.querySelectorAll(".town-post-card-options li") ?? [])].map(
+          (option) => option.textContent,
+        ),
+      ).toEqual(["Deploy", "Wait"]);
+      const answer = [...(card?.querySelectorAll("button") ?? [])].find(
+        (button) => button.textContent === "Answer in Needs you",
+      );
+      await click(answer);
+      expect(needsYouState().request.itemKey).toBe("ask:q-1");
+      expect(document.querySelector(".town-badge-popover")).toBeNull();
+    } finally {
+      await view.close();
+    }
+  });
+
+  test("the trolley carries answers on their way and opens the Outbox", async () => {
+    let opened = 0;
+    const view = await mount(false, stores([], 1, 1), () => (opened += 1));
+    try {
+      expect(view.letters()).toHaveLength(0);
+      expect(view.trolley()?.textContent).toBe("2");
+      expect(view.trolley()?.hasAttribute("data-check")).toBe(true);
+      expect(view.trolley()?.getAttribute("aria-label")).toBe(
+        "Mail trolley: 1 answer to send, 1 answer to check. Open Outbox",
+      );
+      await click(view.trolley());
+      expect(opened).toBe(1);
+    } finally {
+      await view.close();
+    }
+  });
+
+  test("with no mail the yard is empty", async () => {
+    const view = await mount(false, stores([]));
+    try {
+      expect(view.letters()).toHaveLength(0);
+      expect(view.trolley()).toBeNull();
+    } finally {
+      await view.close();
+    }
+  });
+
+  test("more letters than the yard holds make a bundle that lists the rest", async () => {
+    const count = TOWN_POST_SLOTS + 4;
+    const view = await mount(
+      false,
+      stores(Array.from({ length: count }, (_, index) => ask(index))),
     );
-    expect(closed).toBe(1);
-    await act(async () => root.unmount());
-    host.remove();
+    try {
+      expect(view.letters()).toHaveLength(TOWN_POST_SLOTS - 1);
+      const bundle = view.host.querySelector(".town-post-bundle");
+      expect(bundle?.textContent).toBe("+5");
+      await click(bundle);
+      const rows = [
+        ...document.querySelectorAll<HTMLButtonElement>(".town-post-row"),
+      ];
+      expect(rows).toHaveLength(5);
+      await click(rows[0]);
+      expect(
+        document.querySelector(
+          `.town-badge-popover[aria-label="Letter from agent-${TOWN_POST_SLOTS - 1}"]`,
+        ),
+      ).not.toBeNull();
+    } finally {
+      await view.close();
+    }
+  });
+
+  test("a narrow town has the same yard beside its folded sign", async () => {
+    let opened = 0;
+    const view = await mount(true, stores([ask(1)], 1, 0), () => (opened += 1));
+    try {
+      expect(view.host.querySelector(".town-post-fold")).not.toBeNull();
+      expect(view.letters()).toHaveLength(1);
+      await click(view.trolley());
+      expect(opened).toBe(1);
+      await click(view.letters()[0]);
+      expect(
+        document.querySelector(
+          '.town-badge-popover[aria-label="Letter from agent-1"]',
+        ),
+      ).not.toBeNull();
+    } finally {
+      await view.close();
+    }
   });
 }

@@ -21,6 +21,18 @@ import {
 import { SourcesService, type StoredSourceSettings } from "./service";
 
 const dirs: string[] = [];
+
+test("Shipyard inherits the GitHub settings switch and reset generation", async () => {
+  const { service } = setup({
+    settings: { github: { enabled: true }, jira: { enabled: false } },
+  });
+  const first = service.shipyardSource();
+  expect(first.enabled).toBe(true);
+  await service.configureGitHub({ enabled: false });
+  expect(service.shipyardSource().enabled).toBe(false);
+  expect(service.shipyardSource().generation).toBeGreaterThan(first.generation);
+});
+
 afterEach(() => {
   for (const dir of dirs.splice(0))
     rmSync(dir, { recursive: true, force: true });

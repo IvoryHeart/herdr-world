@@ -1,10 +1,8 @@
-import { coreWitnesses } from "./herdr-core-runtime";
+import { runTapLockVerification } from "./claude-tap-lock-verification";
+import { composedCases, replayTracesPerSeed } from "./composed-cases";
+import { runRegistryVerification } from "./connection-registry-verification";
 import { runCoreVerification } from "./herdr-core-verification";
-import {
-  runSeenVerification,
-  seenMismatches,
-  seenWitnesses,
-} from "./herdr-core-seen";
+import { runSeenVerification } from "./herdr-core-seen";
 import { replayEffectRecovery } from "./effect-recovery";
 import { verificationModels } from "./models";
 import {
@@ -64,16 +62,7 @@ const artifacts = relative(root, output);
 const cli = quintCli;
 const cancellation = new AbortController();
 const cases = [
-  {
-    name: "herdr-core-runtime",
-    witnesses: coreWitnesses,
-    mismatches: ["core.state"],
-  },
-  {
-    name: "herdr-core-seen",
-    witnesses: seenWitnesses,
-    mismatches: seenMismatches,
-  },
+  ...composedCases,
   {
     name: "binding-resolution",
     witnesses: [
@@ -385,17 +374,7 @@ const cases = [
   },
 ] as const;
 type CommandResult = { code: number; ms: number; log: string; args: string[] };
-function replayTracesPerSeed(name: Model) {
-  if (name === "effect-recovery") return 500;
-  return [
-    "binding-resolution",
-    "browser-preparation",
-    "chunk-credits",
-    "creation-flow",
-  ].includes(name)
-    ? 500
-    : 100;
-}
+
 const commands: CommandResult[] = [];
 let commandPublication = Promise.resolve();
 let activeLabel = "setup";
@@ -700,6 +679,25 @@ export async function runReviewedQuintModels(
     );
     const results = [];
     for (const item of runCases) {
+      if (
+        item.name === "claude-tap-lock" ||
+        item.name === "connection-registry"
+      ) {
+        const verify =
+          item.name === "claude-tap-lock"
+            ? runTapLockVerification
+            : runRegistryVerification;
+        const result = await verify({
+          root,
+          output,
+          artifacts,
+          command,
+          mutate: () => implementationMutation(item.name),
+        });
+        results.push(result);
+        console.log(JSON.stringify(result));
+        continue;
+      }
       if (item.name === "herdr-core-runtime") {
         const result = await runCoreVerification({
           root,
@@ -1283,7 +1281,7 @@ export async function runReviewedQuintModels(
     );
     cancellation.signal.throwIfAborted();
     console.log(
-      "All selected finite models verified; scoped replays and negative controls passed.",
+      "All selected verification cases completed; inspect per-case safety verdicts and known counterexamples.",
     );
     console.log(`Evidence: ${artifacts}`);
   } catch (error) {

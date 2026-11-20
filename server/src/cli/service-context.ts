@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { readAuthToken } from "../config/auth-token";
 import { assertSafeDataPath, dataRoot } from "../config/data-paths";
 import { worldEnv } from "../config/environment";
@@ -241,6 +241,39 @@ export function restartRunningService(context: CliContext): number | null {
     error: context.error,
   });
   return typeof code === "number" ? code : 1;
+}
+
+/** Stop before an offline catalogue edit; start only after ownership is released. */
+export function changeConnectionServiceState(
+  context: CliContext,
+  action: "stop" | "start",
+): number {
+  const setup = readServiceSetup(context.runtime);
+  const { definition, taskName } = setup.paths;
+  if (setup.platform === "systemd")
+    return context.runCommand([
+      "systemctl",
+      "--user",
+      action,
+      basename(definition),
+    ]);
+  if (setup.platform === "windows-task") {
+    if (!taskName) throw new Error("cannot determine the World task name");
+    return context.runCommand([
+      "schtasks.exe",
+      action === "stop" ? "/End" : "/Run",
+      "/TN",
+      taskName,
+    ]);
+  }
+  if (context.runtime.uid === undefined)
+    throw new Error("cannot determine the current user id for launchd");
+  const domain = `gui/${context.runtime.uid}`;
+  return context.runCommand(
+    action === "stop"
+      ? ["launchctl", "bootout", `${domain}/${basename(definition, ".plist")}`]
+      : ["launchctl", "bootstrap", domain, definition],
+  );
 }
 
 /** The address a local client uses to reach the configured listener. */

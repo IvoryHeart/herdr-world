@@ -52,17 +52,20 @@ import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
 import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
-import { storedSourceSettings, withSourceSettings } from "../sources/http";
-import { CheckoutResolver } from "../sources/links";
-import { readSourceSecrets, writeSourceSecrets } from "../sources/secrets";
+import { composeSources, runSourceProcess } from "../sources/composition";
+import { ShipyardService } from "../shipyard/service";
+import { ShipyardInstances } from "../shipyard/instances";
+import { shipyardInstanceIdentity } from "../shipyard/identity";
+import { createShipyardHttp } from "../shipyard/http";
 import { withIntegrations } from "../integrations/http";
-import { SourcesService } from "../sources/service";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
+import { createApartmentsService } from "./apartments-service";
 import { createBinService } from "./bin-service";
+import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
@@ -71,6 +74,7 @@ import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
+import { createRuntimeMemoryService } from "../memory/runtime-service";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
 import { AgentActivityCache } from "../world/agent-activity-cache";
@@ -97,9 +101,6 @@ export type WorldServiceDeps = {
 
 export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 
-/** How long stop waits for requests that were running when it began. */
-const DRAIN_TIMEOUT_MS = 2_000;
-
 /**
  * Claim the data folder, open storage and build one World service. Nothing
  * listens or connects until `start()`; `stop()` drains and releases it all.
@@ -121,6 +122,7 @@ export async function createWorldService(deps: WorldServiceDeps) {
     throw error;
   }
   try {
+    await storage.connections.acquireServiceOwnership();
     return await compose(deps, storage, sessionSecret, releaseDataFolder);
   } catch (error) {
     await storage.close().catch(() => {});
@@ -265,6 +267,7 @@ async function compose(
   );
 
   const worldCli = createWorldCliService({
+    memory: () => rpcServices.worldMemory!,
     core: () => coreCallers,
     board,
     ledger: () => storage.ledger(),
@@ -306,8 +309,19 @@ async function compose(
     connections: () => connectionManager,
     publish: revisionPublisher("world_bin_changed", "world-bin"),
     log: (message) => logger.warn(message),
+    retiring: (entries) => apartments.apartments.retire(entries),
   });
   void bin.start();
+  /** Apartments: the records finished agents leave (shared/apartments.ts). */
+  const apartments = createApartmentsService({
+    port: storage.apartments,
+    now: () => clock.now(),
+    tui: () => connectionManager,
+    core: () => coreRpc,
+    sources: () => worldSources.current(),
+    publish: revisionPublisher("world_apartments_changed", "world-apartments"),
+    log: (message) => logger.warn(message),
+  });
 
   const {
     observe: observeHost,
@@ -361,6 +375,7 @@ async function compose(
         !["error", "disconnected"].includes(status.state),
       );
       bin.connectionStatus(status);
+      apartments.apartments.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -467,8 +482,8 @@ async function compose(
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    ownedBy(connectionManager, observeHost),
-    ownedBy(connectionManager, observeTerminalSettings),
+    apartments.fresh(ownedBy(connectionManager, observeHost)),
+    apartments.complete(ownedBy(connectionManager, observeTerminalSettings)),
     serviceIncarnation,
   );
 
@@ -688,40 +703,10 @@ async function compose(
     },
   });
 
-  // Built-in sources (GitHub, Jira). On by default; each runs only while a
-  // browser asks and keeps its credentials in private service storage.
-  const runSourceProcess = async (argv: string[], timeoutMs: number) => {
-    try {
-      return await runProcessWithCodeTimeout(argv, timeoutMs, {
-        env: {
-          ...process.env,
-          GH_PROMPT_DISABLED: "1",
-          GIT_TERMINAL_PROMPT: "0",
-          NO_COLOR: "1",
-        },
-      });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT")
-        return { code: 127, stdout: "", stderr: "" };
-      throw error;
-    }
-  };
-  const worldSources = new SourcesService({
-    settings: await settings
-      .read()
-      .then(storedSourceSettings)
-      .catch(() => ({})),
-    persistSettings: async (sources) => {
-      await settings.update((current) => withSourceSettings(current, sources));
-    },
-    secrets: {
-      read: () => readSourceSecrets(paths.sourceSecrets),
-      write: (secrets) => {
-        if (!storageOpen) throw new Error("World storage is closed");
-        writeSourceSecrets(secrets, paths.sourceSecrets);
-      },
-    },
-    run: runSourceProcess,
+  const worldSources = await composeSources({
+    settings,
+    paths,
+    storageOpen: () => storageOpen,
     topology: async () =>
       worldSnapshots ? (await worldSnapshots.snapshot()).connections : [],
     runtimeOwners: () =>
@@ -732,7 +717,7 @@ async function compose(
             ? [{ connection_id: id, generation }]
             : [],
         ),
-    resolver: new CheckoutResolver(runSourceProcess, (connectionId) => {
+    hostOf: (connectionId) => {
       if (connectionId === STARTUP_DEFAULT_CONNECTION_ID && config.sshHost)
         return { kind: "ssh", destination: config.sshHost };
       const profile = connectionProfiles
@@ -742,7 +727,7 @@ async function compose(
       if (profile?.type === "ssh" && profile.remote_platform !== "windows")
         return { kind: "ssh", destination: profile.ssh_destination };
       return null;
-    }),
+    },
     now: () => clock.now(),
   });
   const handleWorldSources = withIntegrations(worldSources, {
@@ -751,6 +736,24 @@ async function compose(
     vaultPath: paths.sourceSecrets,
     now: () => clock.now(),
   });
+  const shipyardInstances = new ShipyardInstances(
+    paths.instanceRegistry,
+    paths.root,
+    () => clock.now(),
+    scheduler,
+  );
+  const shipyardIdentity = await shipyardInstanceIdentity(
+    serviceIncarnation,
+    config.appVersion,
+    clock.now(),
+  );
+  const shipyard = new ShipyardService({
+    run: runSourceProcess,
+    source: () => worldSources.shipyardSource(),
+    instances: () => shipyardInstances.read(),
+    now: () => clock.now(),
+  });
+  const shipyardHttp = createShipyardHttp(shipyard);
 
   worldUsage = new WorldUsageService({
     incarnation: serviceIncarnation,
@@ -798,37 +801,21 @@ async function compose(
     }),
     ...terminalMarks,
     bin,
+    apartments,
     worldCli,
     worldSnapshots,
     worldUsage,
+    worldMemory: createRuntimeMemoryService({
+      tui: () => connectionManager,
+      core: coreRpc,
+      now: () => clock.now(),
+    }),
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
-  // Requests and socket messages still running; stop waits for them.
-  const inFlight = new Set<Promise<unknown>>();
-  function track<T>(work: Promise<T>): Promise<T> {
-    inFlight.add(work);
-    void work.then(
-      () => inFlight.delete(work),
-      () => inFlight.delete(work),
-    );
-    return work;
-  }
-  function drained(): Promise<void> {
-    if (!inFlight.size) return Promise.resolve();
-    return new Promise((resolve) => {
-      const timer = scheduler.schedule(() => {
-        logger.warn("World stopped with requests still running", {
-          requests: inFlight.size,
-        });
-        resolve();
-      }, DRAIN_TIMEOUT_MS);
-      void Promise.allSettled([...inFlight]).then(() => {
-        timer.cancel();
-        resolve();
-      });
-    });
-  }
+  const { track, drained } = inFlightWork(scheduler, (requests) =>
+    logger.warn("World stopped with requests still running", { requests }),
+  );
 
   /** Dispose Ranger if it was started; stopping keeps a new one from starting. */
   async function disposeAssistant() {
@@ -895,6 +882,7 @@ async function compose(
             herdrSetup,
             officeObservability: handleOfficeObservability,
             sources: handleWorldSources,
+            shipyard: { service: shipyard, http: shipyardHttp },
             track,
             stopping: () => stopping,
           }),
@@ -909,6 +897,12 @@ async function compose(
         },
       });
       publishInstanceAddress(releaseDataFolder, config, server);
+      shipyardInstances.start(
+        shipyardIdentity,
+        server.port ?? config.port,
+        config.host,
+        !!config.tls,
+      );
       worldCli.start();
       forwards.listeningOn(server.port ?? config.port);
       return {
@@ -966,6 +960,8 @@ async function compose(
     // Admit nothing new: requests get 503 while the port stays bound, and no
     // reconnect, push, Ranger start or wait for an answer begins.
     stopping = true;
+    shipyard.close();
+    shipyardInstances.stop();
     const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
     deskWatches.stop();
@@ -989,6 +985,9 @@ async function compose(
       await drained();
     } finally {
       try {
+        // Finished agents seen so far are written before storage closes;
+        // a history census still reading stops.
+        await apartments.stop();
         await closeTerminalMarks();
         storageOpen = false;
         await storage.close();

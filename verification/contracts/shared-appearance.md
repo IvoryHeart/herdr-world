@@ -4,7 +4,7 @@
 
 The source is the shared terminal appearance and terminal colour requirements in
 `openspec/specs/world-surfaces/spec.md`, derived before implementation in
-`openspec/changes/shared-appearance/specs/world-surfaces/spec.md`.
+`openspec/specs/world-surfaces/spec.md`.
 
 Allowed: current tab colour/status edits, native tab renames, independent pane
 avatars, per-field resets, continuing split witnesses, positive move/compensation

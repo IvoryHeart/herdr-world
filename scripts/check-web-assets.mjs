@@ -29,16 +29,37 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // usage-metrics and connection-manager modules with World's views, so they
 // become their own small chunks (+3 files after removing the two retired
 // dialogs, no new bytes on the initial load).
-const maxFileCount = 193;
+// #1035 Settings (one registry and one search) loads as two lazy
+// chunks and a stylesheet; its catalog shares small stores with Town, chat and
+// the command box, which split into chunks of their own (+6 files and about
+// 35 KiB, with no initial load, on 2026-11-20). Retiring the Configuration
+// dialog split its tabs into lazy Settings pages (Runtime, connection,
+// Integrations, instance name, speech, worktree command) with their
+// stylesheets: +12 files and fewer total bytes (212 files, 15.3 MiB).
+const maxFileCount = 212;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
 // The Integrations screen (#1008, +17 KB) fit main alone, but main
 // grew under it to 13 KB of headroom; 15.3 MiB carries both, initial budgets
-// unchanged (2026-11-19).
-const maxTotalBytes = 15.3 * 1024 * 1024;
+// unchanged (2026-11-19). The lazy #1035 Settings adds about 35 KiB
+// on top of it (15.31 MiB together, so 15.4 MiB on 2026-11-20).
+// The Town harbour and warehouse (#1028) fit main alone, but main's Library
+// (#1082) grew under it: 15.42 MiB together, so 15.5 MiB, initial budgets
+// unchanged (2026-11-20).
+// Apartments (#1011: the resident search/history dialog, its store and Town's
+// apartment building) add about 18.7 KB to lazy chunks; startup budgets are
+// unchanged.
+const maxTotalBytes = 15.5 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
+// Help pictures (#1025, web/public/help/) are generated per help entry at two
+// sizes and two themes, and load only when a help card is shown. They have
+// their own budget so that adding help never competes with code for bytes:
+// 50 files and 1.0 MiB for 13 entries on 2026-11-20.
+export const HELP_PICTURE_DIRECTORY = "help";
+const maxHelpPictureFiles = 240;
+const maxHelpPictureBytes = 5 * 1024 * 1024;
 const maxInitialJsBytes = 660 * 1024;
 const maxInitialJsGzipBytes = 202 * 1024;
 const maxInitialCssBytes = 196 * 1024;
@@ -97,13 +118,13 @@ export function assertLazyGrammarAssets(manifest) {
   );
   // The World shell may embed WorkspaceInspectorHost in its Office view;
   // validate it when Vite emits a standalone feature chunk, while requiring
-  // the general settings dialog that remains lazy.
-  for (const name of ["ConfigurationDialog", "WorkspaceInspectorHost"]) {
+  // Settings, which remains lazy.
+  for (const name of ["SettingsHome", "WorkspaceInspectorHost"]) {
     const entries = Object.keys(manifest).filter(
       (key) => manifest[key].name === name,
     );
     if (!entries.length) {
-      if (name === "ConfigurationDialog") {
+      if (name === "SettingsHome") {
         throw new Error(`Missing Vite feature chunk: ${name}`);
       }
       continue;
@@ -157,7 +178,11 @@ export function assertNoRuntimeCode(name, text) {
     throw new Error(`${name} compiles code at run time (eval or Function)`);
 }
 
-export async function collectAssetStats(root = publicRoot) {
+/** Counts the bundle, leaving out the help pictures' own folder. */
+export async function collectAssetStats(
+  root = publicRoot,
+  exclude = [HELP_PICTURE_DIRECTORY],
+) {
   const directories = [root];
   let fileCount = 0;
   let totalBytes = 0;
@@ -168,6 +193,7 @@ export async function collectAssetStats(root = publicRoot) {
     for (const entry of entries) {
       const path = `${directory}/${entry.name}`;
       if (entry.isDirectory()) {
+        if (directory === root && exclude.includes(entry.name)) continue;
         directories.push(path);
         continue;
       }
@@ -182,6 +208,10 @@ export async function collectAssetStats(root = publicRoot) {
 
 async function checkAssets() {
   const { fileCount, totalBytes } = await collectAssetStats(publicRoot);
+  const help = await collectAssetStats(
+    `${publicRoot}/${HELP_PICTURE_DIRECTORY}`,
+    [],
+  ).catch(() => ({ fileCount: 0, totalBytes: 0 }));
   let manifest;
   try {
     manifest = JSON.parse(
@@ -216,6 +246,8 @@ async function checkAssets() {
   const checks = [
     ["files", fileCount, maxFileCount, 1, "files"],
     ["total", totalBytes, maxTotalBytes, 1024 * 1024, "MiB"],
+    ["help pictures", help.fileCount, maxHelpPictureFiles, 1, "files"],
+    ["help pictures", help.totalBytes, maxHelpPictureBytes, 1024 * 1024, "MiB"],
     ["initial JS", jsBytes, maxInitialJsBytes, 1024, "KiB"],
     ["initial JS gzip", jsGzipBytes, maxInitialJsGzipBytes, 1024, "KiB"],
     ["initial CSS", cssBytes, maxInitialCssBytes, 1024, "KiB"],

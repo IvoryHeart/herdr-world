@@ -18,6 +18,30 @@ afterEach(() => {
     rmSync(root, { recursive: true, force: true });
 });
 
+test.each(["before", "after"])(
+  "discovery save failure %s publication retries from persisted authority",
+  async (boundary) => {
+    const args = fixture();
+    const save = args.store.save.bind(args.store);
+    let calls = 0;
+    args.store.save = async (registry) => {
+      calls++;
+      if (boundary === "after") await save(registry);
+      throw new Error("synthetic interrupted startup");
+    };
+    await expect(initializeConnectionProfiles(args)).rejects.toThrow(
+      "synthetic interrupted startup",
+    );
+    expect(args.store.load() === null).toBe(boundary === "before");
+    args.store.save = save;
+    const retried = await initializeConnectionProfiles(args);
+    expect(retried.defaultConnectionId).toBe("core-local");
+    expect(args.store.load()).toEqual(retried.persistedRegistry);
+    expect(await initializeConnectionProfiles(args)).toEqual(retried);
+    expect(calls).toBe(1);
+  },
+);
+
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "world-first-run-"));
   roots.push(root);
