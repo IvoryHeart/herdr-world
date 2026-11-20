@@ -30,7 +30,11 @@ auto-sync runtime status and Board state. One in-process worker
 owns it; SQLite uses WAL and `synchronous=FULL`. Responses acknowledge a durable
 commit. Grouping up to 32 operations or 5 ms reduces synchronization frequency;
 these settings do not promise a particular response latency on every platform.
-Configuration, connections and secrets remain private files.
+Configuration, connections and secrets remain private files. The version-3
+`connections.json` stores hosts with runtime discovery records alongside the
+existing runtime profiles. Local profiles and identical SSH destinations group
+without renaming runtime IDs. See [host discovery and API](host-connections.md)
+for CLI use, migration and rollback constraints.
 
 Usage analytics saves bounded numeric daily status history in private
 `usage-activity.json` beside `world.sqlite`. Include it in an instance backup to
@@ -514,7 +518,7 @@ reopening are separate; this setup behavior does not verify macOS login recovery
 A failed Homebrew bootstrap warns and leaves World available for SSH or browser
 setup. Repair a broken default-path executable before retrying. For managed
 TUI installations, use their package manager; World never replaces a shim or
-downgrades a newer binary. **Menu → Runtime** offers **Upgrade Herdr** or
+downgrades a newer binary. **Menu → Settings → Herdr and connection details** offers **Upgrade Herdr** or
 **Update Herdr integrations** when the local TUI needs them.
 
 What the upgrade does:
@@ -719,7 +723,7 @@ their Herdr supports stays available. Log in is not offered there.
 
 The Town board can show token use and reported cost from a Prometheus-compatible
 HTTP API. It does not supply Board notes, strings or agent status. Open
-**Menu → Integrations**, choose **Usage metrics → Connect** and save an HTTP or HTTPS
+**Menu → Settings → Integrations**, choose **Usage metrics → Connect** and save an HTTP or HTTPS
 base URL, or set the service startup default:
 
 ```bash
@@ -947,10 +951,10 @@ public Host and configure `--public-origin` when proxying to loopback.
 
 1. Open World over trusted HTTPS. On iOS/iPadOS 16.4 or newer, open the installed
    Home Screen PWA.
-2. Open **Menu → Behavior & automation → Task notifications**, enable alerts,
-   grant browser permission, and choose **Agent needs input** and/or
-   **Task completed**.
-3. Confirm **Background push** enrollment. If an existing browser only has local
+2. Open **Menu → Settings → Notifications & sounds**, turn on **Task
+   notifications**, grant browser permission, and choose **Notify when a task
+   needs you** and/or **Notify when a task finishes**.
+3. Confirm the row reads **On · Background push**. If an existing browser only has local
    alerts, toggle notifications off and on to enroll it again.
 
 Server delivery is enabled by default; each browser profile needs its own
@@ -1142,7 +1146,7 @@ another port with `--port`; do not run two shells for one installation.
 Open **Ranger** in the desktop toolbar or mobile controls. Connect a model provider
 using Ranger credentials, explicit Pi credentials, or a custom model endpoint.
 Use the gear button in the Ranger panel for model credentials and workspace
-permissions. **Menu → Configuration → Integrations** manages agent integration
+permissions. **Menu → Settings → Integrations** manages agent integration
 scripts on the selected Herdr host; it is separate from Ranger model setup.
 Allow specific workspaces in Ranger settings before asking it to read status,
 terminal output, agent history or Git changes. New installations allow no

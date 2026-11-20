@@ -22,7 +22,10 @@ const ackPolicy = policies({
 });
 const outputs = {
   whoami: object({ label: Type.String(), verified: Type.Boolean() }),
-  ls: Type.Array(object()),
+  ls: Type.Union([
+    Type.Array(object()),
+    object({ hosts: Type.Array(object()), connections: Type.Array(object()) }),
+  ]),
   history: Type.Array(object()),
   "result ls": Type.Array(object()),
   "group list": Type.Array(object()),
