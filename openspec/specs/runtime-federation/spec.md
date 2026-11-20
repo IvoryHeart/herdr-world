@@ -7,9 +7,31 @@ concurrent independently qualified operational contexts and fair bounded aggrega
 
 ## Requirements
 
+### Requirement: Serialized live catalogue edits
+
+CLI and Settings edits admitted by a running World SHALL use one serialized
+read-modify-save-publication queue. A successful edit SHALL survive a later
+unrelated successful edit. A failed persistence operation SHALL leave the
+preceding catalogue intact, report failure and permit later queue admission;
+retry SHALL derive its change from the latest committed catalogue. The persisted
+default SHALL always name a retained profile. Runtime generation and cleanup
+fences remain independently required.
+
+#### Scenario: Settings save overlaps a CLI edit
+
+- **WHEN** a Settings edit is requested while a CLI add, remove or default save is pending, or in the reverse order
+- **THEN** both successful edits appear in memory and on disk after settlement,
+  with one persistence owner and no restart of unaffected sibling runtimes
+
+#### Scenario: A failed live request
+
+- **WHEN** live admission or persistence fails
+- **THEN** the CLI reports the failure without attempting an offline file write,
+  and the next admitted edit reads the latest committed service catalogue
+
 ### Requirement: Runtime authority
 Herdr SHALL own structural topology, agent lifecycle and terminal streams. One World service SHALL
-own the saved connection catalogue and SHALL isolate each local or SSH Herdr connection in its own
+own the saved host catalogue and its runtime connection profiles, and SHALL isolate each runtime connection in its own
 runtime, transport, subscription, cache and reconnect generation. The browser SHALL communicate
 with that World service rather than connecting to independently deployed bridges.
 
@@ -108,6 +130,106 @@ with that World service rather than connecting to independently deployed bridges
 - **AND** permanent, permission, protocol and unclassified failures do not acquire indefinite retries
 - **AND** disconnect, removal, replacement, generation retirement and shutdown cancel old retry work;
   explicit Reconnect remains available and failed topology remains non-actionable until freshly observed
+
+### Requirement: Hosts own independently discovered runtime connections
+
+A host SHALL be this computer or one exact OpenSSH alias / `user@host` destination.
+Adding a host SHALL require no runtime selection. A registered provider SHALL own
+presence/version probes and the default connection profile for its runtime. World
+SHALL discover all registered providers on host connection and explicit rediscovery,
+and SHALL connect every found runtime independently, subject to the per-runtime
+connection intent below. Discovery SHALL NOT install
+or start a runtime, probe installation requirements, or persist secrets or SSH options.
+SSH discovery SHALL use only fixed, bounded, noninteractive read-only probes.
+
+A successfully discovered empty host SHALL remain saved and report the registered
+installation choices. Once any runtime is found, ordinary host responses SHALL NOT
+suggest installing siblings; the Integrations API SHALL retain additional choices
+per host. Failed probes SHALL be incomplete evidence, not evidence of absence.
+Successful siblings SHALL still connect when another provider probe fails.
+Saved endpoints SHALL be admitted through their original runtime transports;
+a live qualified runtime SHALL remain found even when executable lookup misses.
+
+Each runtime SHALL retain its immutable connection ID, independent generation and
+owning manager. Host identity SHALL NOT grant downstream operation authority or
+select a fallback runtime. Missing runtimes SHALL retire their leases and retain
+stale, non-actionable topology. Reachable siblings SHALL remain independently live.
+Existing profiles SHALL be grouped by local machine or exact SSH destination without
+rewriting IDs, native resource bindings, room positions, pins, colours or saved filter
+ticks. Rediscovery SHALL reuse historical runtime IDs. Different aliases SHALL NOT
+be assumed equivalent. Explicit startup overrides SHALL retain their pinned behavior.
+
+Existing per-connection auto-connect settings SHALL remain authoritative after host
+migration; a nonempty host's auto-connect flag SHALL reflect whether any member
+profile enables it. Startup SHALL attempt only the saved default and auto-connect
+profiles, plus newly discovered runtimes on eligible hosts. Empty hosts SHALL retain
+their saved auto-connect policy. Saved startup targets SHALL start independently
+before discovery; a host discovery or persistence failure SHALL NOT prevent other
+hosts from starting or reject whole-service startup.
+
+Automatic rediscovery and per-connection Connect SHALL preserve each existing
+runtime's connection intent. Explicit Disconnect SHALL cancel that runtime's intent
+and retries; sibling reconnection SHALL NOT restore them. Temporary discovery
+absence SHALL suspend retries without cancelling intent. Explicit host Connect or
+rediscovery SHALL authorize connecting every found runtime on that host.
+Per-connection Connect SHALL attempt its exact saved endpoint even when earlier
+discovery reported absence, and SHALL report its connection failure to the caller.
+
+The snapshot and connection-list APIs SHALL add a host catalogue containing runtime
+kind, version, lifecycle and immutable connection ID, retaining the existing
+per-connection arrays. Host snapshot runtime entries SHALL carry their own generation,
+staleness and actionability; topology SHALL remain indexed by connection ID.
+`herdr-world connections` SHALL list hosts and runtimes. `herdr-world ls` SHALL
+return hosts with their runtimes and rooms, retaining the per-connection projection.
+
+#### Scenario: Both runtimes on this computer
+- **WHEN** herdr-core and the Herdr TUI are installed on this computer
+- **THEN** World discovers and connects both under one host, without asking for a runtime
+- **AND** their rooms and agents retain separate connection-qualified identities
+
+#### Scenario: Existing runtime outside standard executable locations
+- **WHEN** a saved runtime endpoint is reachable but its executable is off PATH
+- **THEN** its original transport admits that runtime under its existing connection ID
+- **AND** binary absence alone does not retire its lease or suggest installation
+
+#### Scenario: Empty host and later installation
+- **WHEN** a newly added SSH destination has no registered runtime
+- **THEN** the host remains saved with installation choices and no automatic installation
+- **AND** after a runtime is installed, explicit rediscovery finds it without re-adding the host
+- **AND** ordinary host results stop suggesting other runtimes while Integrations retains choices
+
+#### Scenario: One runtime is unavailable or removed
+- **WHEN** one runtime on a multi-runtime host becomes unreachable or disappears
+- **THEN** the host is degraded and its reachable sibling remains live and actionable
+- **AND** the unavailable runtime's retained rooms are stale and non-actionable
+- **AND** a later rediscovery reuses its ID with a new runtime generation
+
+#### Scenario: Discovery cannot authenticate or one provider fails
+- **WHEN** a fixed SSH probe fails or returns an invalid response
+- **THEN** World reports incomplete discovery without claiming the runtime is absent
+- **AND** successful providers still connect using only their own identities
+
+#### Scenario: Legacy per-runtime catalogue migrates
+- **WHEN** existing local profiles or profiles for the same SSH destination are loaded
+- **THEN** they appear under one host without renaming their runtime IDs or preferences
+- **AND** unrelated destinations and explicit startup overrides remain distinct
+
+#### Scenario: Auto-connect edited after migration
+- **WHEN** an existing profile's auto-connect setting changes after its host is saved
+- **THEN** the next startup honors the updated per-profile setting and derives the host flag from its members
+- **AND** a sibling with auto-connect disabled is not started merely because its host is eligible
+- **AND** the saved default retains its existing startup behavior
+
+#### Scenario: Sibling reconnect after explicit disconnect
+- **WHEN** a person disconnects one runtime and another runtime on the host reconnects
+- **THEN** discovery repeats and newly found runtimes connect, while the explicitly disconnected runtime stays stopped with retries disabled
+- **AND** per-connection Connect affects only its target and preserves sibling connection intent
+- **AND** explicit host Connect or rediscovery may reconnect all found runtimes
+
+#### Scenario: Catalogue cannot be persisted during startup
+- **WHEN** discovery of one host fails to persist its catalogue
+- **THEN** other saved startup targets have independently been attempted and later hosts still discover and connect
+- **AND** the failed host reports a bounded discovery error while whole-service startup continues
 
 ### Requirement: Return bounded aggregate observation with host-local progress
 

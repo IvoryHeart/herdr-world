@@ -130,7 +130,7 @@ describe("connection profile validation", () => {
 
   test("rejects unsupported versions, duplicates, and missing defaults", () => {
     expect(() =>
-      validateConnectionRegistry({ ...registry(), version: 3 }),
+      validateConnectionRegistry({ ...registry(), version: 99 }),
     ).toThrow("unsupported connection registry version");
     expect(() =>
       validateConnectionRegistry({

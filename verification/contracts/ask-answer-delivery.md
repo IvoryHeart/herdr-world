@@ -1,6 +1,6 @@
 # Saved answer delivery consumer
 
-Requirements: `openspec/changes/ask-answer-delivery/specs/ask-answer-delivery/spec.md`
+Requirements: `openspec/specs/ask-answer-delivery/spec.md`
 and the declared `world.ask.deliver-answer` verb in the World effects contract.
 This supplements Q29; independent mapping review and CI acceptance remain required.
 

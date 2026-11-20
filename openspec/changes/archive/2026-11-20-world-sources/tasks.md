@@ -1,0 +1,36 @@
+## Delivery state
+
+Delivered; the November audit reconciles the original #267 findings against
+current source and the passing Sources consumer suites. In particular, branch
+inference now requires a known matching head repository (`links.ts`), with the
+missing-head regression in `links.test.ts`; settings epochs, token/site changes,
+qualification and badge equality retain their direct tests. Historical review
+5624492359 was partial, not clean acceptance. PR #653's clean follow-up reviews
+5788630408/5788703732 and merged Delivery checks cover bounded history. The
+current audit supplies the remaining source/detail/action regression evidence;
+its independent PR review remains the handoff boundary.
+
+Delivered requirements are synchronized into [the current contract](../../../specs/world-surfaces/spec.md#requirement-built-in-sources).
+No unsynchronized requirement delta or unfinished implementation remains.
+
+## 1. Service
+
+- [x] 1.1 Add the GitHub source over bounded `gh api graphql` requests; verify role merging, lanes, malformed nodes, missing or signed-out `gh` and redacted failures with synthetic responses.
+- [x] 1.2 Add the Jira Cloud source; verify site, email, token and JQL validation, Basic authentication, status-category lanes, assigned versus watched roles and rejected credentials or filters.
+- [x] 1.3 Add private source credentials storage and the sources service with demand-driven, bounded refresh, settings in `settings.json` and HTTP routes; verify the token never reaches responses or settings.
+- [x] 1.4 Link items to agent panes through reported pull requests and checkout branches on their own connection; verify repository matching, stale and unsupported hosts, SSH lookups, caching and lookup bounds.
+- [x] 1.5 Separate open searches at fifty PRs each, read own-PR action details first, and bound merged history to 400 under the existing minute; verify measured-cost fake clocks, 400/401 boundaries, one count check, observed-date/fallback errors, failed-page retention and action fences in source consumer tests.
+- [x] 1.6 Prefer a later MERGED observation over OPEN while preserving roles; verify the between-request race and absence of open-only detail on the merged item.
+
+## 2. Browser
+
+- [x] 2.1 Decode the snapshot defensively and share one poll across views; add the Sources settings dialog and its settings menu entry.
+- [x] 2.2 Add Board's Work lens; verify lanes, ticket grouping, external links and the jump to a linked agent in the Board browser fixture.
+- [x] 2.3 Add Town desk badges on nameplates; verify a linked desk shows its badge and link in the Town browser fixture.
+- [x] 2.4 Read every PR merged in a configurable window (default seven days) page by page, and group history columns by day; verify paging, its bounds and failure, the window setting and 150 merged PRs in the Board fixture.
+
+- [x] 2.5 Read the user's open pull requests in detail, compute readiness and needs-you reasons, and add the pull request card with merge, close and mark ready behind confirm sheets; verify parsing of real reviewer phrasings, bounds and caching, verb argv and refusals (no bypass, head moved), the route's validation and the card in the Board fixture.
+
+## 3. Documentation
+
+- [x] 3.1 Update README, FEATURES, the tutorial, deployment, security notes, the knowledge map and the changelog.

@@ -37,7 +37,13 @@ synthetic input, without editing files or installing vulnerable code.
 Same-repository Dependabot PRs receive automatic maintenance from trusted base
 policy: refreshed notices, a generated fragment when the shipped graph changes,
 or a specific `Changelog: none` reason for development/Actions-only updates, plus
-PR-body documentation metadata. The preparation job runs with a read-only token,
+PR-body documentation metadata and reasoned `Spec impact:` / `Verification impact:`
+lines for routine version updates. Notice generation follows workspace dependency
+paths, including development, optional and peer dependencies, but stops at
+OS/CPU-specific packages. Their exclusive transitive dependencies are excluded;
+packages also reachable through a portable path remain required. Every expected
+portable package must still be installed at its locked version, or preparation
+fails. The preparation job runs with a read-only token,
 disables dependency lifecycle scripts and never executes candidate scripts. A
 separate write job checks out only trusted policy, validates the allowed output
 paths and current head, commits generated docs to the bot branch, then explicitly
@@ -119,10 +125,42 @@ push. Native platform lanes remain responsible for their OS-specific behavior.
 Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook checks formatting and lint without
 writing files, and its `pre-push` hook runs the applicable check. Before that gate,
-the hook checks the complete PR's fragment and knowledge-map policy. It reads an
-existing PR description, or `HERDR_WORLD_PR_BODY=<file>` for the intended description
-before a first push. Without a description, the fragment and knowledge-map update
-must satisfy the rules themselves. API errors cannot supply an exemption.
+the hook checks the complete PR's changelog, knowledge-map, spec and verification
+impact policy. It reads an existing PR description, or `HERDR_WORLD_PR_BODY=<file>` for the intended description
+before a first push. Non-documentation PRs need the two impact lines even with a
+changelog fragment and knowledge-map update. API errors cannot supply an exemption.
+
+Use two plain lines without bold labels in every non-documentation PR:
+
+```text
+Spec impact: <updated spec path or OpenSpec change name, or none — reason>
+Verification impact: <updated model, adapter, coverage owner or named check path, or none — reason>
+```
+
+Good examples:
+
+```text
+Spec impact: none — Contributor tooling leaves product contracts unchanged.
+Verification impact: scripts/check-pr-body.test.ts — Policy input and diff regression cases.
+```
+
+Bad examples (each lacks a reason):
+
+```text
+Spec impact: none
+Verification impact: none
+```
+
+`bun run check:pr-body <file>` checks the committed PR diff, as pre-push and CI do.
+Spec claims name a changed path, spec directory or OpenSpec change name. Verification
+claims name a changed model, adapter, coverage owner or test/check path. An untouched
+claim fails. `Spec impact: none` fails when `openspec/specs/` or `openspec/changes/`
+changes; `Verification impact: none` fails when `quint/`, `verification/` or an owner
+in `verification/coverage.json` changes (including files under directory owners).
+These are cheap consistency checks: reviewers still judge whether a `none` is true
+and whether the evidence is sufficient. Ordinary documentation retains its exemption;
+dependency-bot PRs and merge-only pushes retain their existing policy paths.
+
 Use focused checks
 only for a specific question while developing. For a code push, the hook runs
 `bun run check:changed` against the remote branch (or `origin/main` for a new

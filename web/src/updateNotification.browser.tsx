@@ -114,11 +114,24 @@ const root = createRoot(
 const menu = () => document.querySelector<HTMLButtonElement>(".menu-button");
 const toast = () =>
   document.querySelector('[aria-label="Dismiss update notification"]');
+// The manual check is a Settings command (This World), not a Menu row.
 const manualCheck = () =>
-  Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
-    (button) =>
-      button.querySelector("strong")?.textContent === "Check for updates",
+  document.querySelector<HTMLButtonElement>(
+    '.settings-home button[aria-label="Check for updates"]',
   );
+const settingsItem = () =>
+  Array.from(
+    document.querySelectorAll<HTMLButtonElement>(
+      ".config-dropdown .config-menu-item",
+    ),
+  ).find((button) => button.textContent?.includes("Settings"));
+async function openManualCheck() {
+  if (!document.querySelector(".config-dropdown")) menu()!.click();
+  await until(settingsItem);
+  settingsItem()!.click();
+  await until(manualCheck);
+  return manualCheck()!;
+}
 async function settleMenu() {
   await Promise.all(
     document
@@ -527,9 +540,7 @@ async function run() {
     dismissedUpdateVersion: null,
   });
   await until(() => menu()?.getAttribute("aria-label") === "Menu");
-  menu()!.click();
-  await until(manualCheck);
-  manualCheck()!.click();
+  (await openManualCheck()).click();
   await until(() => store.get().notice?.message === "Update check complete");
   check(
     !toast() && store.get().notice?.detail?.includes(latest),
@@ -593,16 +604,15 @@ async function run() {
       getComputedStyle(reason).visibility !== "hidden",
     "Blocked channel reason is not visibly rendered",
   );
-  const recheck = manualCheck();
-  check(recheck && !recheck.disabled, "Blocked channel has no manual recheck");
   reason?.scrollIntoView({ block: "nearest" });
   await settleMenu();
   await nativeFetch("/capture/update-notification?state=blocked", {
     method: "POST",
   });
+  const recheck = await openManualCheck();
+  check(!recheck.disabled, "Blocked channel has no manual recheck");
   available = false;
-  if (recheck) recheck.click();
-  else await store.checkForUpdate();
+  recheck.click();
   await until(() => !document.querySelector(".menu-update-dot"));
   check(!upgrade(), "Current installation still offers upgrade");
 

@@ -1,0 +1,33 @@
+{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": { "name": "fixture-root", "devDependencies": { "tool": "1" } },
+    "web": { "name": "fixture-web", "dependencies": { "app": "1" } },
+    "server": { "name": "fixture-server", "dependencies": { "@fixture/consumer": "1" } }
+  },
+  "packages": {
+    "app": ["app@1.0.0", "", {
+      "dependencies": { "shared": "1" },
+      "optionalDependencies": { "binding": "1", "portable-optional": "1" }
+    }],
+    "binding": ["binding@1.0.0", "", {
+      "cpu": "none",
+      "dependencies": { "@fixture/support": "2" }
+    }],
+    "@fixture/support": ["@fixture/support@2.0.0-beta.2", "", {
+      "dependencies": { "leaf": "1", "shared": "1" }
+    }],
+    "leaf": ["leaf@1.0.0", "", {
+      "peerDependencies": { "@fixture/support": "2" }
+    }],
+    "shared": ["shared@1.0.0", "", {}],
+    "portable-optional": ["portable-optional@1.0.0", "", {}],
+    "tool": ["tool@1.0.0", "", { "dependencies": { "tool-leaf": "1" } }],
+    "tool-leaf": ["tool-leaf@1.0.0", "", {}],
+    "@fixture/consumer": ["@fixture/consumer@1.0.0", "", {
+      "dependencies": { "shared": "2" }
+    }],
+    "@fixture/consumer/shared": ["shared@2.0.0", "", {}],
+    "fixture-web": ["fixture-web@workspace:web"]
+  }
+}
