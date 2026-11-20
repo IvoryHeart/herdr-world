@@ -45,6 +45,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Town view | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/TownView.tsx) | [Tests](../web/src/world/town/TownCanvas.test.ts) |
 | Board view | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/BoardView.tsx) | [Tests](../web/src/world/board/boardModel.test.ts) |
 | Board attention and moves | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/board/boardAttention.ts) | [Tests](../web/src/world/BoardView.test.ts) |
+| Board drawing | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/board/BoardSketch.tsx) | [Tests](../web/src/world/board/boardSketchGeometry.test.ts) |
 | Town reception filter | [Contract](../FEATURES.md#visual-control-plane) | [Source](../web/src/world/town/townReceptionFilter.ts) | [Tests](../web/src/world/town/townReceptionFilter.test.ts) |
 | World search | [Contract](../FEATURES.md#visual-control-plane) | [Source](../web/src/world/worldSearch.ts) | [Tests](../web/src/world/worldSearch.test.ts) |
 | Command box | [Contract](../FEATURES.md#visual-control-plane) | [Source](../web/src/components/CommandCombobox.tsx) | [Tests](../web/src/commandBoxKey.dom.test.ts) |

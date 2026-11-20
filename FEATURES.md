@@ -1208,6 +1208,30 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     possibly delivered to another agent. Check the pane before sending again.
     A note offers **Start an agent** in a chosen workspace: World starts the
     agent in a new tab and sends the note once it is ready.
+  - Drawing (desktop): the tools on Board's left edge draw beside the live
+    cards, on the same pan and zoom, beneath cards and strings. **Pen** draws
+    freehand (it stays chosen; Escape puts it down); **Rectangle**,
+    **Ellipse** and **Diamond** drag out a shape or, with a click, draw one at
+    a standard size; **Text** places text where you click; **Arrow** drags
+    from one place to another, and an end dropped on a card, a note or a
+    drawing attaches to it and follows it as it moves; **Note** places a
+    note. With **Select**, click a drawing to select it, drag it to move it
+    (a moved arrow lets go of what it was attached to), drag a corner to
+    resize it or an arrow's end to re-attach it, and double-click a shape or text
+    to type its label. The colour dots and **Fill** change the selected
+    drawing, or the next one. Delete or Backspace (or the bin button) deletes
+    the selection; an arrow attached to it stays where it pointed. Undo
+    (Ctrl/⌘+Z) and redo (Ctrl/⌘+Shift+Z or Ctrl+Y) cover drawings made on this
+    device since Board opened; a drawing changed elsewhere since is left
+    alone, with a notice. A move, resize or text edit of a drawing someone
+    changed elsewhere meanwhile is refused with the same notice and their
+    version stays; typed text reopens on their version, so nothing typed is
+    lost. Drawings are saved with the board on the World
+    service (at most 1,000; a stroke keeps at most 2,000 points, simplified
+    as it is drawn) and are visual only: an arrow never sends anything to an
+    agent. Issues and pull requests are reached through their agent's tab
+    card. A phone shows drawings but has no drawing tools; drawings there
+    take no touches, and double-tapping empty board still makes a note.
   - Town's room and agent actions are in a selected card's bar too: a
     workspace offers **Rename…** and **Close…** with Town's dialogs and
     confirmation; workspaces and tabs offer **Herdr order ‹ Earlier / Later
