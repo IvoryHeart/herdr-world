@@ -13,6 +13,7 @@ import { bridge, type ConnectionClient } from "./api";
 import { notifyWorldAsk } from "./store/notifications";
 import { handlePreferenceStorageChange } from "./store/updates";
 import { worldLocalStorage } from "./browserStorage";
+import { resetFocusForTests } from "./world/focus";
 import {
   TASK_NOTIFICATIONS_KEY,
   TASK_NOTIFICATION_PREFERENCES_KEY,
@@ -351,6 +352,67 @@ describe("task notification transport", () => {
             }),
           }),
         );
+      },
+    );
+  });
+
+  test("a focus session that begins while the worker is prepared still holds the notice (#1131)", async () => {
+    const active = registration();
+    let ready: (value: unknown) => void = () => {};
+    const getRegistration = () => new Promise((resolve) => (ready = resolve));
+    await withBrowser(
+      { navigator: { serviceWorker: { getRegistration } } },
+      async () => {
+        __storeTesting.replaceState({
+          ...store.get(),
+          taskNotificationsEnabled: true,
+          taskNotificationBusy: false,
+          taskNotificationTransport: "push",
+          taskNotificationPreferences: { completed: true, blocked: true },
+          activeConnectionId: "alpha",
+          connections: [
+            {
+              id: "beta",
+              label: "Example",
+              source: "test",
+              is_default: false,
+              state: "ready",
+              generation: 2,
+            },
+          ],
+        });
+        try {
+          notifyWorldAsk({
+            id: "q-focus",
+            at: 1,
+            question: "Which design?",
+            options: [],
+            owner_only: true,
+            actor: {
+              label: "Example",
+              verified: true,
+              connection_id: "beta",
+              connection_generation: 2,
+              workspace_id: "w1",
+              pane_id: "w1:p1",
+              terminal_id: "original-terminal",
+              agent: "codex",
+              agent_session_id: "original-session",
+            },
+          });
+          const now = Date.now();
+          resetFocusForTests({
+            revision: 1,
+            now,
+            session: { id: "focus-a", started_at: now, ends_at: now + 60_000 },
+            last: null,
+          });
+          ready(active);
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          expect(active.showNotification).not.toHaveBeenCalled();
+        } finally {
+          resetFocusForTests();
+        }
       },
     );
   });

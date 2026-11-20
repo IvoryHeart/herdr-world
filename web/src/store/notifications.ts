@@ -227,7 +227,9 @@ function maybeShowBrowserTaskNotification(
     title,
     { body, tag, ...(silent ? { silent: true } : {}) },
     target,
+    // Focus may begin while the worker is still being prepared (#1131).
     () =>
+      !focusHeld() &&
       state.taskNotificationsEnabled &&
       version === taskNotificationPreferenceVersion &&
       (scope === null || taskNotificationTargetIsCurrent(state, scope)),

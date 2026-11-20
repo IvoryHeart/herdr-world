@@ -24,7 +24,8 @@ type Saved = Omit<FocusState, "now">;
  * The session is saved before it is acknowledged or published, so a service
  * restart restores it: a session whose time passed while the service was down
  * ends as "expired" at its own end time. If saving fails the change is
- * refused and nothing changes. Whether it is held is judged by the clock on
+ * refused and nothing changes; a failed expiry is retried, waiting up to a
+ * minute between tries. Whether it is held is judged by the clock on
  * every call, so a late timer never lets a notification through after the
  * end time, or holds one before it.
  */
@@ -52,19 +53,32 @@ export function createFocusService(deps: {
       ? saved.session
       : null;
 
-  function arm() {
+  /** Expiry saves that failed in a row; each retry waits longer, up to 1 min. */
+  let failures = 0;
+
+  function arm(wait?: number) {
     timer?.cancel();
     timer = null;
     const ends = saved.session?.ends_at;
     if (stopped || ends == null) return;
     // Re-arm at most a minute ahead: timers stop while the machine sleeps.
-    const wait = Math.min(60_000, Math.max(0, ends - deps.clock.now()));
+    const delay =
+      wait ?? Math.min(60_000, Math.max(0, ends - deps.clock.now()));
     timer = deps.scheduler.schedule(() => {
       timer = null;
-      void expire().catch((error) =>
-        deps.log?.(`Focus could not end on time: ${String(error)}`),
+      void expire().then(
+        () => {
+          failures = 0;
+        },
+        (error) => {
+          failures += 1;
+          deps.log?.(`Focus could not end on time: ${String(error)}`);
+          // A failed save changed nothing, so try again until it is kept;
+          // a change made meanwhile has already armed its own timer.
+          if (!timer) arm(Math.min(60_000, 1_000 * 2 ** (failures - 1)));
+        },
       );
-    }, wait);
+    }, delay);
   }
 
   /** One change at a time, saved before it applies. */

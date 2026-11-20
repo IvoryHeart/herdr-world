@@ -45,7 +45,7 @@ function fixture(saved: unknown = undefined) {
     published,
     advance,
     timers,
-    failSaves: () => void (failSave = true),
+    failSaves: (on = true) => void (failSave = on),
   };
 }
 
@@ -130,6 +130,47 @@ describe("focus session", () => {
     expect(f.focus.held()).toBe(false);
     expect(f.focus.get().revision).toBe(0);
     expect(f.published).toEqual([]);
+  });
+
+  test("an expiry whose save fails is retried, backing off, until it is kept", async () => {
+    const f = fixture();
+    await f.focus.start();
+    await f.focus.begin(1);
+    f.failSaves();
+    await f.advance(MINUTE);
+    // Nothing changed, but notifications are no longer held.
+    expect(f.focus.held()).toBe(false);
+    expect(f.focus.get()).toMatchObject({ revision: 1, last: null });
+    await f.advance(1_000);
+    await f.advance(1_999);
+    expect(f.focus.get().revision).toBe(1);
+    expect(f.published).toEqual([1]);
+    // Storage recovers; the next retry (2 s after the second failure) ends it.
+    f.failSaves(false);
+    await f.advance(1);
+    expect(f.focus.get()).toMatchObject({
+      revision: 2,
+      session: null,
+      last: { id: "focus-1", reason: "expired", ended_at: 1_000_000 + MINUTE },
+    });
+    expect(f.published).toEqual([1, 2]);
+    expect(f.timers.filter((timer) => !timer.cancelled)).toEqual([]);
+  });
+
+  test("retries wait at most a minute and stop once the session is ended", async () => {
+    const f = fixture();
+    await f.focus.start();
+    await f.focus.begin(1);
+    f.failSaves();
+    await f.advance(MINUTE);
+    for (let i = 0; i < 8; i++) await f.advance(MINUTE);
+    const pending = f.timers.filter((timer) => !timer.cancelled);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]!.at - f.clock.at).toBeLessThanOrEqual(MINUTE);
+    f.failSaves(false);
+    await f.focus.end();
+    expect(f.focus.get().last).toMatchObject({ reason: "expired" });
+    expect(f.timers.filter((timer) => !timer.cancelled)).toEqual([]);
   });
 
   test("lengths outside 1–720 whole minutes are refused", async () => {
