@@ -7,6 +7,25 @@ shared app state and recovery while preserving each runtime's authority.
 
 ## Requirements
 
+### Requirement: Account-shell launch environment
+
+Unix core agent discovery and launch SHALL enter the selected host's supported
+interactive account shell, with login startup on macOS, so its tool environment
+applies directly. World SHALL NOT collect and copy that environment. Unsupported
+shells SHALL retain direct execution and Windows SHALL retain native launching.
+Profile arguments and prompts SHALL remain literal arguments across shell entry.
+
+#### Scenario: Tools installed by shell startup
+
+- **WHEN** a supported account shell adds a harness or tool to its environment
+- **THEN** discovery and the launched core agent can use that tool on that host,
+  without exporting its environment to World or another connection
+
+#### Scenario: Unsupported account shell
+
+- **WHEN** the account shell cannot parse the supported exec form
+- **THEN** launch uses direct execution with the same literal arguments
+
 ### Requirement: Full coexisting runtime support
 
 World SHALL support herdr-core read-write beside the TUI runtime, select installed
@@ -72,6 +91,13 @@ and service/runtime/occupant fences at admission, dispatch and publication.
   saves only `core-local` as its default and connects using `HC_SESSION` or `default`
 - **AND** discovery never starts core or alters its login item; saved defaults
   and explicit startup choices remain authoritative on subsequent starts
+
+#### Scenario: Discovery persistence fails and startup is retried
+
+- **WHEN** saving the discovered profile fails
+- **THEN** startup reports failure rather than publishing an unsaved default;
+  retry reloads persisted state first, retaining any completed save and any
+  subsequently saved or explicit choice before considering discovery again
 
 #### Scenario: Confirmed install from World
 

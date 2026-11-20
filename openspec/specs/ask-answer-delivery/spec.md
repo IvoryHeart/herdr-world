@@ -5,13 +5,27 @@
 Deliver one stored ask answer to its verified original asker while preserving
 retrieval, explicit authority and honest uncertain-effect recovery.
 
-Implementation delivered; acceptance evidence still to reconcile: complete
-affected unit/browser/platform and behavioral gates and independent review
-under [task 4.2](../../changes/ask-answer-delivery/tasks.md). These requirements
-record the implemented contract; final acceptance remains pending. No Herdr
-exactly-once delivery or downstream deduplication is claimed.
+Delivered in PR #589; the [November audit](../../../verification/architecture-audit-2026-11.md)
+reconciles its clean follow-up review, merged Delivery checks and current crash
+consumers. No Herdr exactly-once delivery or downstream deduplication is claimed.
 
 ## Requirements
+
+### Requirement: Answer attachments retain their upload authority
+
+An owner MAY attach files or screenshots to an answer. The answer SHALL carry
+their temporary stored paths as plain text under `Attached files:`, identically
+for saved retrieval and automatic delivery. Uploads SHALL use the placed asker's
+qualified connection, or that same saved connection's current ready runtime
+when unplaced. Only an asker with no connection placement MAY use a ready local
+World connection. A known unavailable remote host SHALL NOT fall back locally.
+Existing upload limits, retention and answer-length limits SHALL apply.
+
+#### Scenario: Attachment upload or answer validation fails
+
+- **WHEN** an upload fails, the asker's host is unavailable, or the combined answer exceeds its bound
+- **THEN** the answer is not submitted as though all attachments succeeded;
+  the owner sees the failure and can retry or remove the attachment
 
 ### Requirement: A distinct state-conditioned answer verb
 

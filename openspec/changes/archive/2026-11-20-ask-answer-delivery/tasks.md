@@ -1,10 +1,13 @@
 ## Delivery state
 
-Implementation delivered; acceptance evidence still to reconcile: task 4.2 complete affected unit/browser/platform and behavioral gates plus independent review.
+Delivered and reconciled in the November audit. PR #589 clean follow-up review
+[5721306688](https://github.com/IvoryHeart/herdr-world/pull/589#pullrequestreview-5721306688)
+resolved both findings; merged-head [Delivery checks](https://github.com/IvoryHeart/herdr-world/actions/runs/41169833246/job/124446292458)
+passed. Current real SQLite crash, dispatcher and attachment consumers were rerun
+in #1057; the audit PR retains its own full gate and independent review.
 
-Delivered requirements are synchronized into [the current contract](../../specs/ask-answer-delivery/spec.md).
-No unsynchronized requirement delta remains in this record; unfinished tasks
-and acceptance above keep the change active.
+Delivered requirements are synchronized into [the current contract](../../../specs/ask-answer-delivery/spec.md).
+All delivered requirements are synchronized; this record is ready for archival.
 
 ## 1. Contract and interaction
 
@@ -27,4 +30,4 @@ and acceptance above keep the change active.
 ## 4. Delivery evidence and guidance
 
 - [x] 4.1 Update current specs, Q29 consumer mapping, CLI skill, tutorial/features and operator guidance; verify site build and explicit limitations for dismissals and legacy records.
-- [ ] 4.2 Run complete affected unit/browser/platform and behavioral gates, obtain independent review and deliver one ready PR when publication is authorized; record exact evidence without claiming Herdr deduplication.
+- [x] 4.2 Run complete affected unit/browser/platform and behavioral gates, obtain independent review and deliver one ready PR when publication is authorized; record exact evidence without claiming Herdr deduplication.
