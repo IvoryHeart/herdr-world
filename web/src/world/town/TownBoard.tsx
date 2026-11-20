@@ -1,5 +1,5 @@
 import { usageStopText } from "../../../../shared/usageStop";
-import { Activity } from "lucide-react";
+import { Activity, Hourglass } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   formatOfficeCost,
@@ -37,6 +37,25 @@ import {
 import { TownExpenseCaveats } from "./TownExpenseCaveats";
 
 /**
+ * Working agents whose sessions have not moved (townQuietWork.ts), under the
+ * board's Busy count: "2 quiet 10 m+", which finds the first one.
+ */
+export type TownBoardQuiet = {
+  count: number;
+  minutes: number;
+  onFind(anchor: { x: number; y: number }): void;
+};
+
+/**
+ * What Town shows of its quiet working agents (useTownQuiet.ts): their keys,
+ * for the hourglass, and the board's line while any are quiet.
+ */
+export type TownQuietMarks = {
+  keys: ReadonlySet<string>;
+  board?: TownBoardQuiet;
+};
+
+/**
  * The Town board counts the whole town from the Town summary (townSummary.ts):
  * every building's agents, whichever rooms and desks the scene has admitted.
  */
@@ -45,8 +64,10 @@ export function TownBoard({
   usageStore,
   onOpenSummary,
   sinceYouLeft,
+  quiet,
 }: {
   counts: TownSummary["counts"];
+  quiet?: TownBoardQuiet;
   usageStore?: TownUsageStore;
   onOpenSummary?: () => void;
   /** "Since you left" after a return: on the sign, and under the phone chip. */
@@ -172,7 +193,29 @@ export function TownBoard({
           ) : null}
         </div>
         {sinceYouLeft?.board}
-        <TownBoardCounts counts={counts} />
+        <TownBoardCounts
+          counts={counts}
+          busyNote={
+            quiet && quiet.count > 0 ? (
+              <button
+                type="button"
+                className="town-board-quiet"
+                aria-label={`Find the ${quiet.count} working ${
+                  quiet.count === 1 ? "agent" : "agents"
+                } with no progress for ${quiet.minutes} minutes or more`}
+                title="Working, but the session has not moved"
+                onClick={(event) => {
+                  const box = event.currentTarget.getBoundingClientRect();
+                  close();
+                  quiet.onFind({ x: box.right, y: box.top + box.height / 2 });
+                }}
+              >
+                <Hourglass size={11} aria-hidden="true" />
+                {quiet.count} quiet {quiet.minutes} m+
+              </button>
+            ) : null
+          }
+        />
         <p className="town-board-population">
           {population}
           {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
@@ -222,12 +265,20 @@ export function TownBoard({
  * The board's agent numbers, one short word per column: busy, waiting, done
  * and quiet. Only a waiting count above zero takes the attention colour.
  */
-function TownBoardCounts({ counts }: { counts: TownSummaryCounts }) {
+function TownBoardCounts({
+  counts,
+  busyNote = null,
+}: {
+  counts: TownSummaryCounts;
+  /** A line under Busy: the quiet working agents and their find. */
+  busyNote?: ReactNode;
+}) {
   return (
     <dl className="town-board-counts">
       <div>
         <dt>Busy</dt>
         <dd>{counts.working}</dd>
+        {busyNote ? <dd className="town-board-note">{busyNote}</dd> : null}
       </div>
       <div data-status="blocked" data-attention={counts.needsYou > 0}>
         <dt>Waiting</dt>

@@ -114,6 +114,26 @@ NOT change agent facts, room counts, Board/Desk lanes or Needs you counts.
 - **WHEN** a browser's pending save fails after a newer preference is adopted
 - **THEN** the old failure does not restore the superseded preference
 
+### Requirement: Quiet working agents are marked, not acted on
+
+Town SHALL mark an agent as quiet when Herdr reports it working and its last
+activity time is at least the browser's threshold old (ten minutes by default;
+a setting offers other values or off). An agent without a last activity time
+SHALL NOT be marked. A quiet agent SHALL stay seated with its room's working
+light on, stop its working animation and show a static mark; its card SHALL say
+how long it has been quiet and when it last moved. The Town board SHALL count
+quiet agents under its working count, and that count SHALL open the first one
+with Next stepping through those still quiet. The mark SHALL clear when the
+activity time is again younger than the threshold. Marking SHALL NOT change agent
+facts, counts, placement or attention, and SHALL NOT nudge, interrupt or
+restart the agent or add a runtime call.
+
+#### Scenario: A quiet agent moves again
+
+- **WHEN** a working agent last active 23 minutes ago under a ten-minute
+  threshold reports a new activity time
+- **THEN** its mark, card line and board count clear, and Next skips it
+
 ### Requirement: Durable Town room placement
 
 Town room positions SHALL live in the shared Board layout, keyed by qualified

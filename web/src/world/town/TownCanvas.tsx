@@ -1,6 +1,6 @@
 import { useDrawReadiness } from "../useDrawReadiness";
 import "../worldAsks.css";
-import { TownBoard } from "./TownBoard";
+import { TownBoard, type TownQuietMarks } from "./TownBoard";
 import {
   TownTeamsLayer,
   TownWorldLayer,
@@ -117,6 +117,7 @@ export function TownCanvas({
   receptionHeldKeys = NO_KEYS,
   receptionTakes = townReceptionTakesAll,
   onFindHeld,
+  quiet = { keys: NO_KEYS },
   onActivateAsk,
   quests = NO_QUESTS,
   steps,
@@ -197,6 +198,7 @@ export function TownCanvas({
     keys: readonly string[],
     anchor: { x: number; y: number },
   ) => void;
+  quiet?: TownQuietMarks;
   onActivateAsk?: (nodeId: string) => void;
   /** Quest progress by agent key, marked over each agent's desk. */
   quests?: ReadonlyMap<string, TownQuestMark>;
@@ -340,6 +342,7 @@ export function TownCanvas({
     completionSeenKeys,
     summonedKeys: deskKeys,
     askingKeys,
+    quietKeys: quiet.keys,
     awayKeys,
     arrivingKeys,
     receptionHeldKeys,
@@ -504,6 +507,7 @@ export function TownCanvas({
     completionSeenKeys: latest.current.completionSeenKeys,
     summonedKeys: latest.current.summonedKeys,
     askingKeys: latest.current.askingKeys,
+    quietKeys: latest.current.quietKeys,
     awayKeys: latest.current.awayKeys,
     arrivingKeys: latest.current.arrivingKeys,
     heldKeys: latest.current.receptionHeldKeys,
@@ -615,6 +619,7 @@ export function TownCanvas({
     completionSeenKeys,
     deskKeys,
     askingKeys,
+    quiet.keys,
     awayKeys,
     arrivingKeys,
     receptionHeldKeys,
@@ -913,6 +918,7 @@ export function TownCanvas({
             hud={hud}
             foldedActivity={foldedActivity}
             askingKeys={askingKeys}
+            quietKeys={quiet.keys}
             receptionHeldKeys={receptionHeldKeys}
             receptionTakes={receptionTakes}
             onFindHeld={onFindHeld}
@@ -970,6 +976,7 @@ export function TownCanvas({
       <TownLensBoard lens={lens} hover={hover} selected={selectedKey}>
         <TownBoard
           counts={summary.counts}
+          quiet={quiet.board}
           onOpenSummary={onOpenSummary}
           sinceYouLeft={sinceYouLeft}
         />

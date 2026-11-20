@@ -6,7 +6,9 @@ import { townHash } from "./townSprites";
  * follows both. An agent in the reception overflow crowd curses, then
  * snores, whatever it waits for: the crowd itself is the signal. An agent
  * whose state is unknown is confused, not asleep. An agent out of fuel
- * (stopped on its usage limit) shows an empty fuel can and a clock.
+ * (stopped on its usage limit) shows an empty fuel can and a clock. A
+ * working agent whose session has not moved (townQuietWork.ts) shows an
+ * hourglass at its seat instead of typing.
  */
 export function townBubbleKind(
   status: string,
@@ -18,6 +20,7 @@ export function townBubbleKind(
   typingFrame: number,
   mood: TownCrowdMood | null = null,
   fuel = false,
+  quiet = false,
 ) {
   if (mood === "grumble") return "curse";
   if (mood === "nap") return "sleep";
@@ -28,6 +31,7 @@ export function townBubbleKind(
   if (status === "blocked") return "blocked";
   if (asking) return "ask";
   if (status === "done" && !seen) return "done";
+  if (quiet && status === "working" && mode === "seat") return "quiet";
   if ((level === "room" || level === "desk") && status === "unknown")
     return "confused";
   if (level === "desk" && status === "idle" && mode === "stand") return "idle";

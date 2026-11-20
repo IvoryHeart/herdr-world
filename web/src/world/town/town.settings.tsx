@@ -10,6 +10,7 @@ import {
   Bug,
   Focus,
   Hand,
+  Hourglass,
   Layers,
   MessageSquare,
   SunMoon,
@@ -32,6 +33,7 @@ import {
   type TownDaylightMode,
   townDaylightMode,
 } from "./townDaylight";
+import { TOWN_QUIET_MINUTES } from "./townQuietWork";
 
 const preferences = () => readOfficePreferences(worldLocalStorage);
 
@@ -109,6 +111,38 @@ defineSettings("town", [
       type: "toggle",
       get: () => preferences().townCalm,
       set: (_host, on) => updatePreferences({ townCalm: on }),
+    },
+  },
+  {
+    kind: "setting",
+    id: "town.quiet-agents",
+    category: "town",
+    title: "Quiet working agents",
+    description:
+      "Mark a working agent whose session has not moved for this long",
+    words: [
+      "quiet",
+      "stuck",
+      "hung",
+      "stalled",
+      "no progress",
+      "hourglass",
+      "threshold",
+      "idle working",
+    ],
+    icon: <Hourglass size={15} />,
+    scope: "browser",
+    subscribe: subscribePreferences,
+    control: {
+      type: "choice",
+      options: TOWN_QUIET_MINUTES.map((minutes) =>
+        minutes === 0
+          ? { value: "0", label: "Off", words: ["never", "disable"] }
+          : { value: String(minutes), label: `${minutes} minutes` },
+      ),
+      get: () => String(preferences().townQuietMinutes),
+      set: (_host, value) =>
+        updatePreferences({ townQuietMinutes: Number(value) }),
     },
   },
   {
