@@ -29,15 +29,6 @@ instead states why in its PR description:
 Changelog: none — <specific reason>
 ```
 
-A fragment with `### Added` adds something users can find, so the PR also
-declares its help in a `*.help.ts` file beside the feature (see
-[docs/HELP.md](../docs/HELP.md) and `web/src/help/helpEntry.ts`), or states why
-it needs none:
-
-```text
-Help: none — <specific reason>
-```
-
 Stable release preparation (`bun run release:prepare`) appends the fragments to
 the Unreleased section of `CHANGELOG.md`, grouped by heading and ordered by file
 name, then deletes them. `bun run changelog:assemble` does the same step on its

@@ -42,25 +42,12 @@
   border-radius: 10px;
   box-shadow: var(--shadow-lg);
   font-size: 13px;
-  /* Recap, What's new and an update can outgrow a short screen: the card
-     stays on screen and scrolls, with its header (and Close) kept in view. */
-  max-height: calc(100vh - 16px);
-  max-height: calc(100dvh - 16px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
   animation: town-master-greeting-in 0.2s ease-out;
 }
 .town-master-greeting header {
-  position: sticky;
-  /* The card's top padding, so the header sits flush when scrolled. */
-  top: -10px;
-  z-index: 1;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: -10px;
-  padding-top: 10px;
-  background: var(--panel);
 }
 .town-master-greeting h2 {
   flex: 1 1 auto;
@@ -139,54 +126,6 @@
   cursor: pointer;
 }
 
-/* What's new / Start here (help declarations, web/src/help/). */
-.town-master-greeting-news {
-  display: grid;
-  gap: 6px;
-}
-.town-master-greeting-news li {
-  display: grid;
-  grid-template-columns: 80px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-}
-.town-master-greeting-news img {
-  width: 80px;
-  height: 50px;
-  object-fit: cover;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--panel-2);
-}
-.town-master-greeting-news li span {
-  display: grid;
-  min-width: 0;
-}
-.town-master-greeting-news small {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  color: var(--muted);
-  font-size: 11px;
-}
-.town-master-greeting .town-master-greeting-news li button,
-.town-master-greeting-help {
-  padding: 2px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent) 58%, var(--border));
-  border-radius: 6px;
-  background: var(--accent-soft);
-  color: var(--text-strong);
-  font: inherit;
-  cursor: pointer;
-}
-.town-master-greeting-help {
-  justify-self: start;
-  border-color: transparent;
-  background: none;
-  color: var(--accent);
-}
-
 /* Phones: a sheet from the bottom, with Back. */
 .town-master-greeting.is-sheet {
   left: 0;
@@ -199,14 +138,6 @@
   border-width: 1px 0 0;
   border-radius: 14px 14px 0 0;
   font-size: 14px;
-  /* The town stays visible above the sheet. */
-  max-height: calc(100vh - 48px);
-  max-height: calc(100dvh - 48px);
-}
-.town-master-greeting.is-sheet header {
-  top: -4px;
-  margin-top: -4px;
-  padding-top: 4px;
 }
 .town-master-greeting.is-sheet > :not(header) {
   margin-left: 12px;

@@ -156,24 +156,6 @@ if (process.env.WORLD_VIEW_PICKER_TEST !== "1") {
     expect($('[role="dialog"]')).toBeNull();
   });
 
-  test("Try finds every help control in the phone's corner menu through its button", async () => {
-    await act(() => root.render(<Harness mobile />));
-    const fab = $(".world-view-picker-fab")!;
-    const opens = fab.dataset.helpOpens?.split(/\s+/) ?? [];
-    await click(fab);
-    const marked = Array.from(
-      $('[role="menu"]')!.querySelectorAll<HTMLElement>("[data-help]"),
-      (item) => item.dataset.help!,
-    );
-    expect(marked).toEqual(
-      expect.arrayContaining(["world.phone-hosts", "world.command-box"]),
-    );
-    expect(button("Find or act", $('[role="menu"]')!)?.dataset.help).toBe(
-      "world.command-box",
-    );
-    for (const control of marked) expect(opens).toContain(control);
-  });
-
   test("Tab out of the phone's Hosts panel closes it", async () => {
     await act(() => root.render(<Harness mobile />));
     const panel = () => $(".world-view-picker-hosts");

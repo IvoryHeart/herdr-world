@@ -208,13 +208,6 @@ committing.
 | Desktop Board | `herdr-world-desktop-board.png` | One host at 1120 × 700 CSS pixels, drawn at 1.5× |
 | Mobile Town | `herdr-world-mobile-town.png` | Town at 390 × 844 with a touch screen |
 
-### Help pictures
-
-Help pictures (`web/public/help/`) are generated from the help declarations
-with the same synthetic scene; see
-[Help that ships with a feature](../CONTRIBUTING.md#help-that-ships-with-a-feature).
-They are never captured or edited by hand.
-
 ### Chat, Spaces, Files and Changes
 
 These need a real Herdr runtime and real agents: Chat shows an agent's own

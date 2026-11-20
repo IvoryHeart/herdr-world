@@ -67,8 +67,6 @@ import { closeTopLayer } from "../layerStack";
 import "./worldFonts.css";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldViewPicker } from "./WorldViewPicker";
-import { HelpPanelHost } from "../help/HelpPanelHost";
-import { applyWhatsNewSwitch } from "../help/greetingNews";
 import { withWorldViews } from "./worldCommandBox";
 import { NeedsYouCounter } from "./NeedsYouTab";
 import { needsYouInTopbar } from "./needsYou";
@@ -82,9 +80,6 @@ import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
 export default function WorldFoundationApp() {
   useWorldAsks();
   const [view, setViewState] = useState<WorldView>(initialView);
-  // The `?whatsNewSince=` testing switch leaves the address before anything
-  // reads it (help/whatsNew.ts).
-  useState(applyWhatsNewSwitch);
   const { mobile } = useLayoutPreferences();
   const creationIntentRevision = useRef(0);
   const spaces = useSpacesTabWindowArrangement(view === "spaces");
@@ -641,7 +636,6 @@ export default function WorldFoundationApp() {
         />
         {spaces.renderWindows}
       </div>
-      <HelpPanelHost view={view} mobile={mobile} onView={setView} />
       {mobile && view !== "spaces" && !canReturnToView && !zenActive ? (
         <WorldMobileNav view={view} onSelect={setView} />
       ) : null}

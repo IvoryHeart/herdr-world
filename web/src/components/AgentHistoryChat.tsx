@@ -241,7 +241,6 @@ const ChatBubble = memo(function ChatBubble({
           <button
             type="button"
             className={`agent-history-copy agent-history-speak${speaking ? " is-speaking" : ""}`}
-            data-help="chat.speak"
             disabled={!speech.supported || !entry.text.trim()}
             aria-label={
               speaking ? "Stop speaking message" : "Speak assistant message"

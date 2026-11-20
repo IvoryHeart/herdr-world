@@ -24,9 +24,6 @@ follow it, check what it changed, and then pick it up from your phone.
 
 This page is only reading material: World itself runs on your computer.
 
-Looking for one feature? [Help](./HELP.md) shows what each screen can do,
-with pictures. In World, press ? beside the views for the same help.
-
 ## 1. Get started
 
 <a id="start"></a>

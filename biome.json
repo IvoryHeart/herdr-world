@@ -6,11 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": [
-      "**",
-      "!server/src/public-files.gen.ts",
-      "!web/src/help/pictures.json"
-    ]
+    "includes": ["**", "!server/src/public-files.gen.ts"]
   },
   "formatter": {
     "enabled": true,

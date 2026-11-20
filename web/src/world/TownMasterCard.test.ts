@@ -4,8 +4,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { SinceYouLeftLine } from "./sinceYouLeft";
 import type { UpdateInfo } from "../store/types";
-import { HELP_ENTRIES } from "../help/entries";
-import { whatsNew, type WhatsNew } from "../help/whatsNew";
 import {
   helloLine,
   TownMasterGreetingCard,
@@ -44,7 +42,6 @@ const card = (props: {
   lines?: SinceYouLeftLine[];
   update?: UpdateInfo | null;
   onStart?: boolean;
-  whatsNew?: WhatsNew | null;
 }) =>
   new DOMParser().parseFromString(
     renderToStaticMarkup(
@@ -54,7 +51,6 @@ const card = (props: {
         lines: props.lines ?? lines,
         update: props.update ?? null,
         onStart: props.onStart ?? true,
-        whatsNew: props.whatsNew ?? null,
         onClose: () => {},
         onLine: () => {},
         onUpdate: () => {},
@@ -122,33 +118,4 @@ test("hello names when you were last here", () => {
     /^Hello! You were last here at \S+.*\.$/u,
   );
   expect(helloLine(null, now)).toBe("Hello!");
-});
-
-test("after an update the card shows what is new, each with a picture and Try", () => {
-  const news = whatsNew("0.3.0", true, HELP_ENTRIES)!;
-  const html = card({ whatsNew: news });
-  const group = html.querySelector('[aria-label="What\'s new"]');
-  expect(group?.querySelector("h3")?.textContent).toBe("What's new");
-  const items = [...(group?.querySelectorAll("li") ?? [])];
-  expect(items).toHaveLength(Math.min(4, news.entries.length));
-  for (const [index, item] of items.entries()) {
-    const entry = news.entries[index]!;
-    expect(item.querySelector("img")?.getAttribute("src")).toMatch(
-      new RegExp(`^/help/${entry.id.replace(".", "\\.")}\\.`),
-    );
-    expect(item.querySelector("button")?.getAttribute("aria-label")).toBe(
-      `Try ${entry.title}`,
-    );
-  }
-  expect(html.querySelector(".town-master-greeting-help")?.textContent).toBe(
-    `All ${news.entries.length} in Help ›`,
-  );
-});
-
-test("a new user gets Start here instead", () => {
-  const html = card({ whatsNew: whatsNew(null, false, HELP_ENTRIES) });
-  expect(html.querySelector(".town-master-greeting-news h3")?.textContent).toBe(
-    "Start here",
-  );
-  expect(card({}).querySelector(".town-master-greeting-news")).toBeNull();
 });

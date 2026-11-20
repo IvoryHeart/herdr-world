@@ -81,7 +81,6 @@ const STATIC = [
   "build",
   "build:site",
   "spec:check",
-  "help:check",
 ].map((script) => ["bun", "run", script]);
 
 function trackedTests() {

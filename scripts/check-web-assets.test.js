@@ -3,15 +3,11 @@ import {
   assertLazyGrammarAssets,
   assertLazyPdfAssets,
   assertNoRuntimeCode,
-  collectAssetStats,
   DEVTOOLS_MARKER,
   devtoolsAssets,
   initialAssetFiles,
   pdfAssetFiles,
 } from "./check-web-assets.mjs";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { DEVTOOLS_MARKER as SOURCE_MARKER } from "../web/src/world/devtools/trace";
 
 describe("release web assets carry no development tools", () => {
@@ -180,24 +176,4 @@ describe("PDF.js loads only when a PDF is opened", () => {
       assertNoRuntimeCode("a.js", "new FunctionBasedShading(a);vm.eval(b)"),
     ).not.toThrow();
   });
-});
-
-test("help pictures count against their own budget, not the bundle's", async () => {
-  const root = mkdtempSync(join(tmpdir(), "web-assets-"));
-  try {
-    mkdirSync(join(root, "assets"));
-    mkdirSync(join(root, "help"));
-    writeFileSync(join(root, "assets/app.js"), "1234");
-    writeFileSync(join(root, "help/town.zoom.phone.dark.webp"), "12345678");
-    expect(await collectAssetStats(root)).toEqual({
-      fileCount: 1,
-      totalBytes: 4,
-    });
-    expect(await collectAssetStats(join(root, "help"), [])).toEqual({
-      fileCount: 1,
-      totalBytes: 8,
-    });
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
 });

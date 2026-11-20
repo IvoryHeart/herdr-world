@@ -1,6 +1,5 @@
 import { EllipsisVertical } from "lucide-react";
 import { useState, type Ref } from "react";
-import { openHelp } from "../../help/helpEvents";
 import {
   mobileTerminalShortcutOption,
   type MobileTerminalShortcut,
@@ -66,15 +65,6 @@ export function ChatComposerTools({
           disabled={!commandsAvailable}
         >
           Browse commands <kbd>/</kbd>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setOpen(false);
-            openHelp("chat");
-          }}
-        >
-          What can I do here?
         </button>
         {keys.length ? (
           // The popover stays open so a menu can be walked key by key.
