@@ -122,6 +122,9 @@ folder and live catalogue before retrying, or stop it before editing offline.
 With no live owner, edits are saved for the next start. Older services without
 an instance lock are checked at the installed service's configured address.
 SSH tests need a running remote Herdr and non-interactive SSH authentication.
+
+Testing only: connections add runtime-fixture.example --preview-empty saves an
+empty preview host, with no SSH or installation. Remove it with its printed host ID.
 `;
 }
 
@@ -328,29 +331,31 @@ export function createConnectionsCommand(
       }
       if (action === "list") {
         const target = connectionServiceTarget(context, setup);
-        const serving = target.running || (target.managed && await probe(target.access));
+        const serving =
+          target.running || (target.managed && (await probe(target.access)));
         if (serving && supportsLiveConnectionChanges(target)) {
-        const { values } = parseCommandArgs(rest, {
-          json: { type: "boolean" },
-        });
-        const reply = await (dependencies.apply ?? applyLiveConnectionChange)(
-          context,
-          target,
-          "list",
-          { registry_path: store.path },
-        );
-        if (!reply.ok) {
-          context.error(reply.error ?? "host catalogue unavailable");
-          return EXIT_FAILURE;
-        }
-        if (values.json) printJson(context, reply.result);
-        else
-          printHosts(
+          const { values } = parseCommandArgs(rest, {
+            json: { type: "boolean" },
+          });
+          const reply = await (dependencies.apply ?? applyLiveConnectionChange)(
             context,
-            (reply.result as { hosts: Parameters<typeof printHosts>[1] }).hosts,
+            target,
+            "list",
+            { registry_path: store.path },
           );
-        return EXIT_OK;
-      }
+          if (!reply.ok) {
+            context.error(reply.error ?? "host catalogue unavailable");
+            return EXIT_FAILURE;
+          }
+          if (values.json) printJson(context, reply.result);
+          else
+            printHosts(
+              context,
+              (reply.result as { hosts: Parameters<typeof printHosts>[1] })
+                .hosts,
+            );
+          return EXIT_OK;
+        }
       }
       let edit:
         | {

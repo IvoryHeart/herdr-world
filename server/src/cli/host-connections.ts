@@ -21,10 +21,7 @@ import {
   UsageError,
   type CliContext,
 } from "./command";
-import {
-  type ListenerProbe,
-  type ServiceSetup,
-} from "./service-context";
+import { type ListenerProbe, type ServiceSetup } from "./service-context";
 
 /** Offline discovery shares the service provider seam and private atomic store. */
 export function offlineHosts(
@@ -133,7 +130,8 @@ export async function runHostConnectionCommand(args: {
 }): Promise<number> {
   const { action, context, setup, store } = args;
   const target = connectionServiceTarget(context, setup);
-  const serving = target.running || (target.managed && await args.probe(target.access));
+  const serving =
+    target.running || (target.managed && (await args.probe(target.access)));
   const { values, positionals } = parseCommandArgs(
     args.rest,
     {

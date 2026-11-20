@@ -19,8 +19,8 @@ After at least one runtime is found, host responses offer no sibling installatio
 suggestions; the Integrations registry retains the additional choices per host.
 
 When World is offline, these commands discover and save for the next start, report
-runtime state as disconnected and cannot list live rooms. Live edits use World's
-configured loopback service and its local token; a rejected or unconfirmed reply
+runtime state as disconnected and cannot list live rooms. Live edits use the selected data folder's live
+instance address and CLI token; agent URL/token overrides cannot redirect them, and a rejected or unconfirmed reply
 never falls back to writing the catalogue. Legacy runtime-specific `add --core`,
 `add --ssh` and explicit socket flags remain supported for scripts and installers.
 Explicit startup socket/session/SSH overrides continue to pin their runtime; use
