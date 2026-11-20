@@ -941,7 +941,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   0.7 seconds apart. Agents already in Town, a reload, a failed or uncertain
   start and returning to Town never play it. With reduced motion the agent is
   at its desk at once with a still highlight that fades. A confirmed start closes the launcher and opens
-  the new agent's or terminal's window once World shows it, on Herdr TUI and herdr-core hosts alike; an uncertain
+  the new agent's or terminal's window once World shows it, on Herdr TUI and herdr-core hosts alike, even when Hosts hides that host; an uncertain
   attempt keeps its explanation and disables start choices. Open its existing
   tab or close the launcher before another attempt. A definite failure lets
   you retry, log in or edit profiles.

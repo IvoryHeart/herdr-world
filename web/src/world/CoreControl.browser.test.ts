@@ -39,9 +39,19 @@ const VIEWPORTS = [
   { name: "portrait", width: 1440, height: 2560, mobile: false },
 ] as const;
 
-/** Terminals a start leaves on the host: a shell (t9) and an agent (t10). */
+/**
+ * Terminals a start leaves on the host: a shell (t9), an agent (t10) and a
+ * second shell started while the Hosts filter hides the host (t11).
+ */
 const STARTED = {
   t9: { address: "t9", labels: {}, argv: ["/bin/sh"], state: "live", pid: 19 },
+  t11: {
+    address: "t11",
+    labels: {},
+    argv: ["/bin/sh"],
+    state: "live",
+    pid: 21,
+  },
   t10: {
     address: "t10",
     labels: {},
@@ -55,9 +65,13 @@ const STARTED = {
 
 /**
  * A core host: the builder has a sub-agent that ends with it and one that
- * outlives it; `started` adds what a start left.
+ * outlives it; `started` adds what a start left. `beta` adds a second core
+ * host with one shell, for a Hosts filter that hides the first.
  */
-async function coreSnapshot(started: readonly (keyof typeof STARTED)[] = []) {
+async function coreSnapshot(
+  started: readonly (keyof typeof STARTED)[] = [],
+  beta = false,
+) {
   const placed = (tab: string, where: string) => ({
     "herdr.space": "fx-web",
     "herdr.tab": tab,
@@ -109,18 +123,43 @@ async function coreSnapshot(started: readonly (keyof typeof STARTED)[] = []) {
     { address: "t5", labels: {}, argv: ["/bin/sh"], state: "live", pid: 15 },
     ...started.map((address) => STARTED[address]),
   ];
-  const mirror = new CoreMirror();
-  const sight = new CoreFirstSight();
-  mirror.baseline(1, terminals);
-  sight.observe("c0ffee", terminals);
-  const runtime = {
-    operations: coreRuntimeReader({
-      mirror,
-      actionable: true,
-      coreName: () => "fixture-host",
-      firstSight: sight,
-    }),
+  const reader = (
+    coreId: string,
+    name: string,
+    hosted: readonly Record<string, unknown>[],
+  ) => {
+    const mirror = new CoreMirror();
+    const sight = new CoreFirstSight();
+    mirror.baseline(1, hosted as never);
+    sight.observe(coreId, hosted as never);
+    return {
+      operations: coreRuntimeReader({
+        mirror,
+        actionable: true,
+        coreName: () => name,
+        firstSight: sight,
+      }),
+    };
   };
+  const runtimes = new Map([
+    ["core-fixture", reader("c0ffee", "fixture-host", terminals)],
+    ...(beta
+      ? [
+          [
+            "core-beta",
+            reader("beta0", "beta-host", [
+              {
+                address: "b1",
+                labels: {},
+                argv: ["/bin/sh"],
+                state: "live",
+                pid: 31,
+              },
+            ]),
+          ] as const,
+        ]
+      : []),
+  ]);
   const none = {
     list: () => [],
     has: () => false,
@@ -130,24 +169,28 @@ async function coreSnapshot(started: readonly (keyof typeof STARTED)[] = []) {
     readyRuntimeLease: () => null,
   };
   const core = {
-    list: () => [
-      {
-        id: "core-fixture",
-        label: "Fixture core",
+    list: () =>
+      [...runtimes.keys()].map((id) => ({
+        id,
+        label: id === "core-beta" ? "Beta core" : "Fixture core",
         source: "local-profile",
         is_default: false,
         state: "ready" as const,
         generation: 1,
-      },
-    ],
-    has: (id: string) => id === "core-fixture",
-    status: () => core.list()[0]!,
-    readyRuntimeLease: () => ({
-      connectionId: "core-fixture",
-      generation: 1,
-      runtime,
-      isCurrent: () => true,
-    }),
+      })),
+    has: (id: string) => runtimes.has(id),
+    status: (id: string) => core.list().find((status) => status.id === id)!,
+    readyRuntimeLease: (id: string) => {
+      const runtime = runtimes.get(id);
+      return runtime
+        ? {
+            connectionId: id,
+            generation: 1,
+            runtime,
+            isCurrent: () => true,
+          }
+        : null;
+    },
   };
   const service = new WorldSnapshotService(
     worldRuntimeRegistry(none as never, core as never),
@@ -269,17 +312,23 @@ for (const scene of ["launcher", "bin"] as const)
   );
 
 // One click on a core room's + and one on Terminal open the started shell's
-// window; one on + and one on Claude open the started agent's (#1075).
+// window; one on + and one on Claude open the started agent's; a start in a
+// room the Hosts filter hides still opens its window (#1075).
 test.skipIf(!chrome).each([1440, 390])(
   "core control: one click starts a core terminal and opens its window at %ipx",
   async (width) => {
     const dir = await mkdtemp(join(tmpdir(), "core-control-start-"));
     const { assets } = await buildWorldBrowserBundle("CoreControl", dir);
     const snapshots = new Map<string, string>();
-    for (const started of [[], ["t9"], ["t9", "t10"]] as const)
+    for (const started of [
+      [],
+      ["t9"],
+      ["t9", "t10"],
+      ["t9", "t10", "t11"],
+    ] as const)
       snapshots.set(
         started.join(","),
-        JSON.stringify(await coreSnapshot(started)),
+        JSON.stringify(await coreSnapshot(started, true)),
       );
     const result = Promise.withResolvers<string[]>();
     const requested = Promise.withResolvers<void>();

@@ -34,9 +34,14 @@ console.error = (...args: unknown[]) => {
 
 const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
 /** What World observes (`?scene=start`): before, then after each start. */
-const observed: { snapshot: unknown; started: Map<string, unknown> } = {
+const observed: {
+  snapshot: unknown;
+  started: Map<string, unknown>;
+  launched: boolean;
+} = {
   snapshot: null,
   started: new Map(),
+  launched: false,
 };
 const controls = new Set<(control: Record<string, unknown>) => void>();
 /** What world.core.kill_plan answers: the builder and its dying sub-agent. */
@@ -83,7 +88,9 @@ Object.assign(bridge, {
     if (method === "world.core.launch") {
       // A shell is t9, an agent t10; the service invalidates World's
       // observation before it answers, as world.core.launch does.
-      const address = params.shell === true ? "t9" : "t10";
+      const address =
+        params.shell !== true ? "t10" : observed.launched ? "t11" : "t9";
+      if (params.shell === true) observed.launched = true;
       if (observed.started.has(address)) {
         observed.snapshot = observed.started.get(address);
         for (const listener of controls)
@@ -127,14 +134,18 @@ Object.assign(bridge, {
 async function startScene() {
   const width = Number(await (await fetch("/viewport-ready")).text());
   check(window.innerWidth === width, `viewport ${window.innerWidth}/${width}`);
-  const [before, shell, agent] = await Promise.all(
-    ["/snapshot", "/snapshot?started=t9", "/snapshot?started=t9,t10"].map(
-      async (path) => (await fetch(path)).json(),
-    ),
+  const [before, shell, agent, hidden] = await Promise.all(
+    [
+      "/snapshot",
+      "/snapshot?started=t9",
+      "/snapshot?started=t9,t10",
+      "/snapshot?started=t9,t10,t11",
+    ].map(async (path) => (await fetch(path)).json()),
   );
   observed.snapshot = before;
   observed.started.set("t9", shell);
   observed.started.set("t10", agent);
+  observed.started.set("t11", hidden);
   const [
     { __storeTesting, emptyServerSessionState, store },
     { worldRuntimeStore },
@@ -142,6 +153,8 @@ async function startScene() {
     { initializeShortcutPreferences },
     { quietGreetingForTest },
     { default: WorldFoundationApp },
+    { writeHostsFilter },
+    { requestAgentLaunch, WORLD_AGENT_LAUNCH_EVENT },
   ] = await Promise.all([
     import("../store"),
     import("./runtimeStore"),
@@ -149,7 +162,14 @@ async function startScene() {
     import("../shortcutPreferences"),
     import("./townMasterGreeting"),
     import("./WorldFoundationApp"),
+    import("./hostsFilter"),
+    import("./agentProfiles"),
   ]);
+  // The core room a + asks the launcher for, to ask again once hidden.
+  let room: Record<string, unknown> | undefined;
+  window.addEventListener(WORLD_AGENT_LAUNCH_EVENT, (event) => {
+    room ??= (event as CustomEvent<Record<string, unknown>>).detail;
+  });
   // The Town Master's greeting would sit over what this presses.
   quietGreetingForTest();
   history.replaceState(null, "", "/");
@@ -173,9 +193,19 @@ async function startScene() {
         generation: 1,
         is_default: true,
       },
+      {
+        id: "core-beta",
+        label: "Beta core",
+        source: "local-profile",
+        state: "ready",
+        generation: 1,
+        is_default: false,
+      },
     ],
   });
   await worldRuntimeStore.refresh();
+  // Hosts shows the fixture core first; beta is hidden until the last start.
+  writeHostsFilter(["core-fixture"]);
   const root = document.createElement("div");
   document.body.append(root);
   createRoot(root).render(<WorldFoundationApp />);
@@ -235,6 +265,30 @@ async function startScene() {
   check(
     calls.filter((c) => c.method === "world.core.launch").length === 2,
     "one click started one agent",
+  );
+  // Hosts now shows only beta; the launcher still offers the hidden host's room,
+  // and a start there opens its window from the unfiltered World.
+  const seats = () => document.querySelectorAll(".town-new-seat").length;
+  const shown = seats();
+  writeHostsFilter(["core-beta"]);
+  await until(() => seats() !== shown, "the Hosts filter hides the core");
+  check(room?.connectionId === "core-fixture", "the + asked for the core room");
+  requestAgentLaunch(room ?? {});
+  const card = () =>
+    document.querySelector<HTMLButtonElement>(
+      ".agent-launcher-card:not(:disabled)",
+    ) ?? undefined;
+  await until(card, "the launcher on the hidden host's room");
+  card()!.click();
+  await until(
+    () => windowOf("t11"),
+    "the shell started on a hidden host opens its window",
+  );
+  const launches = calls.filter((c) => c.method === "world.core.launch");
+  check(
+    launches.length === 3 &&
+      launches[2]!.params.connection_id === "core-fixture",
+    `one click started the hidden host's shell: ${JSON.stringify(launches[launches.length - 1]?.params)}`,
   );
 }
 
