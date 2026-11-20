@@ -36,7 +36,11 @@ const maxFileCount = 193;
 // The Integrations screen (#1008, +17 KB) fit main alone, but main
 // grew under it to 13 KB of headroom; 15.3 MiB carries both, initial budgets
 // unchanged (2026-11-19).
-const maxTotalBytes = 15.3 * 1024 * 1024;
+// The Usage screens (#1029: Budget, Runs at once, Tokens and Breakdown, with
+// the testing fixture) load with Town's lazy chunk and took the total 7.6 KB
+// past 15.3 MiB; 15.35 MiB carries them, initial budgets unchanged
+// (2026-11-20).
+const maxTotalBytes = 15.35 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;

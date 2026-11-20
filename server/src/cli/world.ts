@@ -614,7 +614,7 @@ function human(command: string, reply: Reply): string {
       `Usage ${usage.window.kind} by ${usage.group_by} (observed subtotals; gaps remain unknown)`,
       ...usage.rows.map(
         (r) =>
-          `${r.dimension ?? "unattributed"}: active ${number(r.active_ms.value)} ms, waiting ${number(r.waiting_on_you_ms.value)} ms, tokens ${number(r.total_tokens.value)}, reported USD ${number(r.reported_cost_usd.value)}, PRs opened ${number(r.prs_opened.value)}, merged ${number(r.prs_merged.value)}${r.run ? `, ${r.run.harness} ${r.run.role ?? "unknown role"}, branch ${r.run.branch ?? "unknown"}, calls ${r.run.calls}, largest prompt ${number(r.run.max_prompt_tokens)}` : ""}`,
+          `${r.dimension ?? "unattributed"}: active ${number(r.active_ms.value)} ms, waiting ${number(r.waiting_on_you_ms.value)} ms, tokens ${number(r.total_tokens.value)}, reported USD ${number(r.reported_cost_usd.value)}, PRs opened ${number(r.prs_opened.value)}, merged ${number(r.prs_merged.value)}${r.run ? `, ${r.run.harness} ${r.run.role ?? "unknown role"}, branch ${r.run.branch ?? "unknown"}, calls ${number(r.run.calls)}, largest prompt ${number(r.run.max_prompt_tokens)}` : ""}`,
       ),
       ...(usage.coverage.truncated
         ? ["Coverage truncated; totals include omitted groups."]

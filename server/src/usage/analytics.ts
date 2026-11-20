@@ -12,7 +12,13 @@ import {
 } from "../../../shared/usageAnalytics";
 import type { WorldSourcesSnapshot } from "../../../shared/worldSources";
 import type { WorldSnapshotResult } from "../world/snapshot";
-import { analyticsAgentId, UsageActivity } from "./activity";
+import {
+  analyticsAgentId,
+  identity as activityIdentity,
+  type ActivityRow,
+  UsageActivity,
+} from "./activity";
+import { joinUsageSpans } from "../../../shared/usageSpans";
 import { usageDigest } from "./host";
 import { agentSessionOf } from "../agent/checkout-context";
 import { agentCheckoutSessionFingerprint } from "../herdr/agent-checkout";
@@ -78,11 +84,7 @@ type Fact = {
   identity: UsageAnalyticsIdentity;
   day: string;
   usage?: WorldUsageSnapshot["entities"][number];
-  activity?: {
-    active_ms: number;
-    waiting_on_you_ms: number;
-    observed_ms: number;
-  };
+  activity?: ActivityRow;
   pr?: { key: string; event: "opened" | "merged" };
 };
 const metric = (value: number | null, partial = true): UsageMetric => ({
@@ -304,7 +306,54 @@ export class WorldUsageAnalyticsService {
       }));
     for (const row of this.options.activity.read(now))
       if (Date.parse(row.day) >= from && Date.parse(row.day) < until)
-        facts.push({ day: row.day, identity: row, activity: row });
+        facts.push({
+          day: row.day,
+          identity: activityIdentity(row),
+          activity: row,
+        });
+    // An agent and its transcript run are one run: link them while both are
+    // current (the newest run in the agent's pane), and keep the link.
+    const newestRun = new Map<string, { run: string; at: number }>();
+    for (const fact of facts)
+      if (fact.usage?.run_id && fact.identity.agent_id) {
+        const prior = newestRun.get(fact.identity.agent_id);
+        if (!prior || fact.usage.last_at > prior.at)
+          newestRun.set(fact.identity.agent_id, {
+            run: fact.usage.run_id,
+            at: fact.usage.last_at,
+          });
+      }
+    for (const [agent, { run }] of newestRun)
+      this.options.activity.linkRun(agent, run);
+    // A run's pull request: only a link the agent's own session validates,
+    // naming exactly one pull request (docs/usage-analytics.md).
+    for (const [key, identity] of identities) {
+      const run = identity.agent_id
+        ? this.options.activity.runOf(identity.agent_id)
+        : null;
+      if (!run) continue;
+      const proof = sessionProof.get(key);
+      const linked = new Set(
+        work.links
+          .filter(
+            (l) =>
+              proof &&
+              l.sessionFingerprint === proof &&
+              targetKey(l.connectionId, l.generation, l.paneId) === key,
+          )
+          .map((l) => l.itemKey)
+          .filter((itemKey) =>
+            work.items.some(
+              (item) =>
+                item.key === itemKey &&
+                item.source === "github" &&
+                item.kind === "pull_request",
+            ),
+          ),
+      );
+      if (linked.size === 1)
+        this.options.activity.linkItem(run, [...linked][0]!);
+    }
     // Count a PR once globally. Multiple current agents cannot prove authorship.
     const seenPr = new Set<string>();
     for (const item of work.items) {
@@ -367,7 +416,11 @@ export class WorldUsageAnalyticsService {
       const i = fact.identity;
       const dimension =
         group === "run"
-          ? (fact.usage?.run_id ?? null)
+          ? (fact.usage?.run_id ??
+            (fact.activity && i.agent_id
+              ? (this.options.activity.runOf(i.agent_id) ??
+                `world:${i.agent_id}`)
+              : null))
           : group === "day"
             ? fact.day
             : group === "agent"
@@ -413,7 +466,15 @@ export class WorldUsageAnalyticsService {
         identity: b.identity,
         ...metrics(b.facts),
         ...(group === "run" && b.dimension
-          ? { run: runDetail(b.facts, b.identity, usage, work) }
+          ? {
+              run: runDetail(
+                b.facts,
+                b.identity,
+                usage,
+                work,
+                this.options.activity.itemOf(b.dimension),
+              ),
+            }
           : {}),
       }));
     // Empty UTC buckets are unknown, never fabricated measured zeros.
@@ -500,48 +561,88 @@ export class WorldUsageAnalyticsService {
     return response;
   }
 }
-/** A run's detail from its own usage rows, current context and work links. */
+/**
+ * Responses at most this far apart are one span of work. It matches the host
+ * reader's own joining (projection.ts), and joins a run's days.
+ */
+const RUN_SPAN_GAP_MS = 10 * 60_000;
+/**
+ * A run's detail from its own usage rows, World's measured activity, current
+ * context and work links. A run with no usage rows is World's measurement
+ * alone: calls and prompts are unknown.
+ */
 function runDetail(
   facts: Fact[],
   identity: UsageAnalyticsIdentity | null,
   usage: WorldUsageSnapshot,
   work: WorldSourcesSnapshot,
+  linkedItem: string | null,
 ): UsageAnalyticsRun {
   const rows = facts.flatMap((f) => (f.usage ? [f.usage] : []));
+  const activity = facts.flatMap((f) => (f.activity ? [f.activity] : []));
   const models = new Map<string, number>();
-  const hours = new Map<string, number>();
   let prompt: number | null = null;
   for (const row of rows) {
     models.set(row.model, (models.get(row.model) ?? 0) + row.total_tokens);
-    if (row.hours !== undefined)
-      hours.set(row.day, ((hours.get(row.day) ?? 0) | row.hours) >>> 0);
     if (row.max_prompt_tokens !== undefined)
       prompt = Math.max(prompt ?? 0, row.max_prompt_tokens);
   }
-  const newest = rows.reduce((a, b) => (b.last_at > a.last_at ? b : a));
+  const spans = joinUsageSpans([
+    ...joinUsageSpans(
+      rows.flatMap((r) => r.spans ?? []),
+      RUN_SPAN_GAP_MS,
+      Infinity,
+    ),
+    ...activity.flatMap((a) => a.spans ?? []),
+  ]);
+  const newest = rows.length
+    ? rows.reduce((a, b) => (b.last_at > a.last_at ? b : a))
+    : null;
+  const harness =
+    newest?.harness ?? activity.find((a) => a.harness)?.harness ?? "unknown";
   const branch = rows.find((r) => r.branch)?.branch ?? null;
   const role = rows.find((r) => r.role)?.role ?? null;
-  const pr = branch
-    ? work.items
-        .filter(
-          (item) =>
-            item.source === "github" &&
-            item.kind === "pull_request" &&
-            item.branch === branch,
+  const pullRequests = work.items.filter(
+    (item) => item.source === "github" && item.kind === "pull_request",
+  );
+  // A session-validated link names the pull request. A branch alone names it
+  // only when one pull request in the catalogue has that head branch: the
+  // same branch in two repositories stays unknown, never the latest.
+  const linked = linkedItem
+    ? (pullRequests.find((item) => item.key === linkedItem) ?? {
+        key: linkedItem,
+        number: Number(/#(\d+)$/.exec(linkedItem)?.[1]) || undefined,
+      })
+    : undefined;
+  const byBranch = branch
+    ? pullRequests.filter((item) => item.branch === branch)
+    : [];
+  const pr = linked ?? (byBranch.length === 1 ? byBranch[0] : undefined);
+  const attribution = linked
+    ? "link"
+    : pr
+      ? "branch"
+      : byBranch.length > 1
+        ? "ambiguous"
+        : "none";
+  const context =
+    identity?.pane_id && newest
+      ? usage.contexts?.find(
+          (c) =>
+            c.connection_id === identity.connection_id &&
+            c.connection_generation === identity.connection_generation &&
+            c.pane_id === identity.pane_id &&
+            c.harness === newest.harness,
         )
-        .sort((a, b) => b.updatedAt - a.updatedAt)[0]
-    : undefined;
-  const context = identity?.pane_id
-    ? usage.contexts?.find(
-        (c) =>
-          c.connection_id === identity.connection_id &&
-          c.connection_generation === identity.connection_generation &&
-          c.pane_id === identity.pane_id &&
-          c.harness === newest.harness,
-      )
-    : undefined;
+      : undefined;
+  const times = [
+    ...rows.flatMap((r) => [r.first_at, r.last_at]),
+    ...spans.flat(),
+  ];
+  const midnight = Date.parse(facts[0]!.day);
   return {
-    harness: newest.harness,
+    source: rows.length ? "session-log" : "world",
+    harness,
     models: [...models.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([model]) => model)
@@ -549,13 +650,13 @@ function runDetail(
     role,
     branch,
     pull_request: pr ? { key: pr.key, number: pr.number ?? null } : null,
-    calls: rows.reduce((s, r) => s + r.responses, 0),
-    first_at: Math.min(...rows.map((r) => r.first_at)),
-    last_at: Math.max(...rows.map((r) => r.last_at)),
+    attribution,
+    calls: rows.length ? rows.reduce((s, r) => s + r.responses, 0) : null,
+    // Older activity rows carry no spans: their day stands in for the times.
+    first_at: times.length ? Math.min(...times) : midnight,
+    last_at: times.length ? Math.max(...times) : midnight,
     max_prompt_tokens: prompt,
-    hours: [...hours.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([day, mask]) => ({ day, mask })),
+    spans,
     context: context
       ? {
           used_tokens: context.used_tokens,

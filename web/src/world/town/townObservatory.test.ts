@@ -55,10 +55,12 @@ test("the sign shows each harness's 5 h and week used, reset times and who is at
         `18% · ${townResetTime(NOW + 48 * HOUR)}`,
       ],
     ],
+    // A harness World reads no budget of, at work: shown, with no reading.
+    ["Cursor", 1, ["no reading", "no reading"]],
   ]);
-  // The live runs light the windows: Claude's two, then Codex's one.
+  // The live runs light the windows: Claude's two, Codex's one, Cursor's one.
   expect(townObservatoryLit(observatory.atWork)).toEqual({
-    lit: ["claude", "claude", "codex"],
+    lit: ["claude", "claude", "codex", "cursor"],
     more: 0,
   });
   expect(townObservatorySpoken(observatory)).toStartWith(
@@ -108,6 +110,7 @@ test("with nothing observed, an agent at work still shows its harness as unknown
   expect(more.atWork).toEqual([
     { harness: "claude", count: 5 },
     { harness: "codex", count: 1 },
+    { harness: "cursor", count: 1 },
   ]);
 });
 

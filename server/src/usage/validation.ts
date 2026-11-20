@@ -1,10 +1,12 @@
 import type { HostUsage } from "./collector";
 import type { LimitObservation } from "./projection";
 import { USAGE_RUN_ROLES, type UsageRunRole } from "../../../shared/usage";
+import { USAGE_TOKEN_HARNESSES } from "../../../shared/usageHarnesses";
+import { validUsageSpans } from "../../../shared/usageSpans";
 
 /** Never let a remote projection smuggle text, paths, invalid counts or unbounded rows. */
 export function validateHostUsage(raw: any): HostUsage {
-  const harnesses = ["claude", "codex", "pi", "gemini"];
+  const harnesses: readonly string[] = USAGE_TOKEN_HARNESSES;
   const states = ["available", "partial", "missing", "stale", "unavailable"];
   const digest = (v: unknown) =>
     typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
@@ -64,10 +66,7 @@ export function validateHostUsage(raw: any): HostUsage {
     )
       throw new Error("Invalid reported cost");
     if (
-      (r.hours !== undefined &&
-        (!Number.isSafeInteger(r.hours) ||
-          r.hours < 0 ||
-          r.hours >= 2 ** 24)) ||
+      (r.spans !== undefined && !validUsageSpans(r.spans, 48)) ||
       (r.max_prompt_tokens !== undefined && !count(r.max_prompt_tokens)) ||
       (r.role !== undefined &&
         r.role !== null &&
@@ -106,7 +105,13 @@ export function validateHostUsage(raw: any): HostUsage {
       ...(r.reported_cost_usd !== undefined
         ? { reported_cost_usd: r.reported_cost_usd as number | null }
         : {}),
-      ...(r.hours !== undefined ? { hours: r.hours as number } : {}),
+      ...(r.spans !== undefined
+        ? {
+            spans: (r.spans as [number, number][]).map(
+              ([from, to]): [number, number] => [from, to],
+            ),
+          }
+        : {}),
       ...(r.max_prompt_tokens !== undefined
         ? { max_prompt_tokens: r.max_prompt_tokens as number }
         : {}),

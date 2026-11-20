@@ -1,12 +1,15 @@
 import type { WorldUsageAnalytics } from "../../../../shared/usageAnalytics";
-import { usageLiveByHarness, usageRuns } from "../usage/usageModel";
+import {
+  usageHarnessName,
+  usageLiveByHarness,
+  usageRuns,
+} from "../usage/usageModel";
 import type { UsageReadState } from "../usage/usageStore";
 import { TOWN_CENTER_FRIEZE_Y, type TownCenterLot } from "./townCenter";
 import { TOWN_TILE } from "./townLayout";
 import {
   townFuelGauges,
   townFuelNotes,
-  townHarnessName,
   townResetTime,
   type TownFuelWindow,
 } from "./townLimits";
@@ -194,7 +197,7 @@ function noReading(
 ): TownObservatoryDial {
   return {
     harness,
-    name: townHarnessName(harness as never),
+    name: usageHarnessName(harness),
     cells: WINDOWS.map(({ label }) => ({ kind: "none", label })),
     stale: false,
     atWork: atWork.find((l) => l.harness === harness)?.count ?? 0,

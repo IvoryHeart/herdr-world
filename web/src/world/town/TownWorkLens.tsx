@@ -89,7 +89,7 @@ export function useTownLenses(
 ) {
   const [shown, setShown] = useState(false);
   const openWork = useCallback(() => setShown(true), []);
-  const usage = useTownUsage();
+  const usage = useTownUsage(world);
   const work = shown ? (
     <TownWorkLens
       world={world}

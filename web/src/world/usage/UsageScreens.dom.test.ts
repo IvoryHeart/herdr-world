@@ -141,7 +141,7 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
       [
         ...view.host.querySelectorAll<HTMLElement>(".town-observatory-light"),
       ].map((light) => light.dataset.harness),
-    ).toEqual(["claude", "claude", "codex"]);
+    ).toEqual(["claude", "claude", "codex", "cursor"]);
     await act(async () => sign.click());
     expect(opened).toEqual(["budget"]);
     await view.close();
@@ -155,7 +155,8 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
     const fold = view.host.querySelector<HTMLButtonElement>(
       ".town-observatory-fold",
     )!;
-    expect(fold.textContent).toBe("Claude 71%Codex 18%");
+    // Cursor keeps no budget World reads: its dial says so, never zero.
+    expect(fold.textContent).toBe("Claude 71%Codex 18%Cursor ?");
     await act(async () => fold.click());
     expect(opened).toEqual(["budget"]);
     await view.close();
@@ -165,7 +166,7 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
     fixture("reached");
     let view = await mount(observatory(true, () => {}));
     expect(view.host.querySelector(".town-observatory-fold")!.textContent).toBe(
-      "Claude limitCodex 18%",
+      "Claude limitCodex 18%Cursor ?",
     );
     await view.close();
     fixture("empty");
@@ -207,7 +208,8 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
 
     await act(async () => tab("Runs at once").click());
     expect(lens.dataset.tab).toBe("runs");
-    expect(lens.querySelectorAll(".usage-chart").length).toBe(2);
+    // One chart per harness this week, Cursor and OpenCode from World's time.
+    expect(lens.querySelectorAll(".usage-chart").length).toBe(4);
     const toggle = [...lens.querySelectorAll("button")].find(
       (button) => button.textContent === "Show as table",
     )!;
@@ -223,9 +225,56 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
     expect(lens.textContent).toContain("Heaviest this week");
     expect(lens.querySelector('[aria-label="Tokens by role"]')).not.toBeNull();
     expect(lens.textContent).toContain("By item#101");
-    expect(lens.textContent).toContain("active 30 h");
     // A fixer going in circles stands out.
     expect(lens.querySelector(".usage-flag")).not.toBeNull();
+    // A harness World reads no log of: its time, and plainly no tokens.
+    expect(lens.textContent).toContain(
+      "tokens and cost not available for this harness",
+    );
+
+    await act(async () => tab("Breakdown").click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(lens.dataset.tab).toBe("breakdown");
+    const heads = () =>
+      [...lens.querySelectorAll(".usage-breakdown-table thead th")].map(
+        (th) => th.textContent,
+      );
+    expect(heads()).toEqual([
+      "Agent",
+      "At work",
+      "Waiting on you",
+      "Tokens",
+      "Cost",
+      "PRs opened / merged",
+    ]);
+    // Without World's agents to name them, earlier agents say so.
+    expect(lens.textContent).toContain("Earlier agent");
+    const cursorRow = [
+      ...lens.querySelectorAll(".usage-breakdown-table tbody tr"),
+    ].find((tr) => tr.textContent?.includes("25 min"))!;
+    expect(cursorRow.textContent).toContain("unknown");
+    expect(lens.textContent).toContain("est. $");
+    expect(lens.textContent).toContain("Cursor tokens and cost not available");
+    for (const [name, head] of [
+      ["Room", "Room"],
+      ["Day", "Day"],
+      ["Project", "Project"],
+    ]) {
+      const button = [
+        ...lens.querySelectorAll<HTMLButtonElement>(".usage-group button"),
+      ].find((b) => b.textContent === name)!;
+      await act(async () => button.click());
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+      expect(heads()[0]).toBe(head);
+    }
+    expect(
+      lens.querySelector(".usage-breakdown-table tfoot")!.textContent,
+    ).toContain("This week");
 
     await act(async () =>
       lens
@@ -242,7 +291,8 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
       createElement(UsageLens, { initialTab: "tokens", onClose: () => {} }),
     );
     const lens = view.host.querySelector(".usage-lens")!;
-    expect(lens.textContent).toContain("Tokens are unknown.");
+    expect(lens.textContent).toContain("No runs this week");
+    expect(lens.textContent).not.toMatch(/\b0 tokens/);
     await view.close();
   });
 

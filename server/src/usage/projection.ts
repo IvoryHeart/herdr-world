@@ -8,8 +8,11 @@ export type NumericUsageRow = {
   first_at: number;
   last_at: number;
   reported_cost_usd?: number | null;
-  /** UTC hours of `day` with at least one response: bit h is hour h. */
-  hours?: number;
+  /**
+   * When the run was going that day: [from, to] spans joining responses at
+   * most ten minutes apart, at most 48, sorted.
+   */
+  spans?: [number, number][];
   /** The largest single prompt (input plus cached tokens) that day. */
   max_prompt_tokens?: number;
   /** The run's role from its first prompt's fixed vocabulary (usageRole). */
@@ -514,7 +517,7 @@ export function createUsageProjection(
               responses: 0,
               first_at: e.at,
               last_at: e.at,
-              hours: 0,
+              spans: [],
               max_prompt_tokens: 0,
               role: role as UsageRunRole | null,
               branch,
@@ -530,8 +533,30 @@ export function createUsageProjection(
         costs.set(key, cost);
         row.first_at = Math.min(row.first_at, e.at);
         row.last_at = Math.max(row.last_at, e.at);
-        row.hours = (row.hours! | (1 << new Date(e.at).getUTCHours())) >>> 0;
+        row.spans!.push([e.at, e.at]);
         row.max_prompt_tokens = Math.max(row.max_prompt_tokens!, e.prompt);
+      }
+      // Responses at most ten minutes apart are one span of work; past 48
+      // spans the closest neighbours join. (Inline: this code runs on hosts.)
+      for (const row of rows.values()) {
+        const spans: [number, number][] = [];
+        for (const [at] of row.spans!.sort((a, b) => a[0] - b[0])) {
+          const last = spans[spans.length - 1];
+          if (last && at - last[1] <= 600_000) last[1] = Math.max(last[1], at);
+          else spans.push([at, at]);
+        }
+        while (spans.length > 48) {
+          let best = 1;
+          for (let i = 2; i < spans.length; i++)
+            if (
+              spans[i]![0] - spans[i - 1]![1] <
+              spans[best]![0] - spans[best - 1]![1]
+            )
+              best = i;
+          spans[best - 1]![1] = spans[best]![1];
+          spans.splice(best, 1);
+        }
+        row.spans = spans;
       }
       for (const [key, cost] of costs)
         if (cost.known) {

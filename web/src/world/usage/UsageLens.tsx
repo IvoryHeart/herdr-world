@@ -13,6 +13,8 @@ import "./usageLens.css";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { WorldUsageAnalytics } from "../../../../shared/usageAnalytics";
 import { useLayer } from "../../layerStack";
+import type { WorldObject } from "../worldObject";
+import { UsageBreakdown } from "./UsageBreakdown";
 import {
   townFuelGauges,
   townFuelNotes,
@@ -27,12 +29,12 @@ import {
   usageByRole,
   usageConcurrency,
   usageCount,
-  usageDuration,
   usageHarnessName,
   usageHourLabel,
   usagePaces,
   usagePaceText,
   usageRoleLabel,
+  usageRunFacts,
   usageRuns,
   usageWeekPeaks,
   type UsageConcurrency,
@@ -42,27 +44,32 @@ import {
 } from "./usageModel";
 import { useUsageAnalytics, type UsageReadState } from "./usageStore";
 
-export type UsageTab = "budget" | "runs" | "tokens";
+export type UsageTab = "budget" | "runs" | "tokens" | "breakdown";
 const TABS: [UsageTab, string][] = [
   ["budget", "Budget"],
   ["runs", "Runs at once"],
   ["tokens", "Tokens"],
+  ["breakdown", "Breakdown"],
 ];
 
 /**
  * Usage (#1029): where time, tokens and budget go, per harness, role, item
- * and run, from `world.usage.analytics` (docs/usage-analytics.md). Town's
- * observatory opens it. It is a layer: Escape, Back or a press outside
- * closes it. Numbers it has no reading for say "unknown".
+ * and run, and per agent, project, room and day, from `world.usage.analytics`
+ * (docs/usage-analytics.md). Town's observatory opens it. It is a layer:
+ * Escape, Back or a press outside closes it. Numbers it has no reading for
+ * say "unknown". `world` names agents and rooms; without it they are
+ * "Earlier agent" and "Earlier room".
  */
 export function UsageLens({
   initialTab = "budget",
   onClose,
   anchor,
+  world,
 }: {
   initialTab?: UsageTab;
   onClose(): void;
   anchor?: () => Element | null;
+  world?: WorldObject;
 }) {
   const sectionRef = useRef<HTMLElement | null>(null);
   useLayer(true, onClose, {
@@ -71,7 +78,6 @@ export function UsageLens({
   });
   const [tab, setTab] = useState<UsageTab>(initialTab);
   const state = useUsageAnalytics("run", "7d");
-  const projects = useUsageAnalytics("project", "7d", tab === "tokens");
   const now = useNow();
   useEffect(() => {
     sectionRef.current
@@ -116,7 +122,7 @@ export function UsageLens({
         role="tabpanel"
         aria-labelledby={`usage-tab-${tab}`}
       >
-        <UsageBody tab={tab} state={state} projects={projects} now={now} />
+        <UsageBody tab={tab} state={state} now={now} world={world} />
       </div>
     </section>
   );
@@ -135,13 +141,13 @@ function useNow() {
 function UsageBody({
   tab,
   state,
-  projects,
   now,
+  world,
 }: {
   tab: UsageTab;
   state: UsageReadState;
-  projects: UsageReadState;
   now: number;
+  world?: WorldObject;
 }) {
   if (state.status !== "ready")
     return (
@@ -154,7 +160,9 @@ function UsageBody({
   const { data } = state;
   if (tab === "budget") return <BudgetTab data={data} now={now} />;
   if (tab === "runs") return <RunsTab data={data} />;
-  return <TokensTab data={data} projects={projects} />;
+  if (tab === "breakdown")
+    return <UsageBreakdown runs={usageRuns(data)} world={world} />;
+  return <TokensTab data={data} />;
 }
 
 // ── Budget ──────────────────────────────────────────────────────────────
@@ -298,14 +306,17 @@ function RunsTab({ data }: { data: WorldUsageAnalytics }) {
   if (!runs.length)
     return (
       <p className="work-lens-note">
-        No runs this week: the harness logs show none, or none could be read.
+        No runs this week: World saw no agent at work and no harness log shows
+        one.
       </p>
     );
   return (
     <div className="usage-runs">
       <p className="usage-lead">
-        Runs that answered in each hour of the last 24, split into building
-        (worker, fixer) and reviewing or checking (reviewer, checker).
+        The most runs going at the same moment in each hour of the last 24,
+        split into building (worker, fixer) and reviewing or checking (reviewer,
+        checker). A run is going from one response to the next while they are at
+        most ten minutes apart, and while World sees its agent working.
       </p>
       <Legend />
       {at.harnesses.map((harness) => (
@@ -476,13 +487,7 @@ function HourTable({ at }: { at: UsageConcurrency }) {
 
 // ── Tokens ──────────────────────────────────────────────────────────────
 
-function TokensTab({
-  data,
-  projects,
-}: {
-  data: WorldUsageAnalytics;
-  projects: UsageReadState;
-}) {
+function TokensTab({ data }: { data: WorldUsageAnalytics }) {
   const runs = useMemo(() => usageRuns(data), [data]);
   const roles = useMemo(() => usageByRole(runs), [runs]);
   const items = useMemo(() => usageByItem(runs).slice(0, 12), [runs]);
@@ -491,8 +496,8 @@ function TokensTab({
   if (!runs.length)
     return (
       <p className="work-lens-note">
-        No runs this week: the harness logs show none, or none could be read.
-        Tokens are unknown.
+        No runs this week: World saw no agent at work and no harness log shows
+        one. Time per agent, project, room and day is under Breakdown.
       </p>
     );
   return (
@@ -576,7 +581,6 @@ function TokensTab({
             </li>
           ))}
         </ul>
-        <ProjectList state={projects} />
       </section>
     </div>
   );
@@ -598,8 +602,7 @@ function RunCard({ run }: { run: UsageRunView }) {
         {run.item.label} · {usageRoleLabel(run.role).toLowerCase()} · {run.name}
       </p>
       <p className="usage-run-facts">
-        {usageCount(run.tokens)} tokens · {run.calls} calls · largest prompt{" "}
-        {usageCount(run.maxPrompt)}
+        {usageRunFacts(run)}
         {run.context
           ? ` · context ${
               run.context.percent === null
@@ -615,39 +618,5 @@ function RunCard({ run }: { run: UsageRunView }) {
         </p>
       ) : null}
     </li>
-  );
-}
-
-function ProjectList({ state }: { state: UsageReadState }) {
-  if (state.status !== "ready") return null;
-  const { data } = state;
-  const label = (id: string | null) =>
-    id === null
-      ? "No project"
-      : (data.projects.find((p) => p.id === id)?.label ?? "Earlier project");
-  const rows = [...data.rows].sort(
-    (a, b) => (b.total_tokens.value ?? -1) - (a.total_tokens.value ?? -1),
-  );
-  if (!rows.length) return null;
-  return (
-    <>
-      <h3>By project</h3>
-      <ul className="usage-items">
-        {rows.slice(0, 8).map((row) => (
-          <li key={row.key}>
-            <span className="usage-item-label">{label(row.dimension)}</span>
-            <span className="usage-item-tokens">
-              {usageCount(row.total_tokens.value)}
-            </span>
-            <span className="usage-item-roles">
-              active{" "}
-              {row.active_ms.value === null
-                ? "unknown"
-                : usageDuration(row.active_ms.value)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </>
   );
 }

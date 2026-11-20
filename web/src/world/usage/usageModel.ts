@@ -14,6 +14,7 @@ import {
   townWindowLabel,
 } from "../town/townLimits";
 import { usageLimitExpired } from "../../../../shared/usage";
+import { usageReadsTokens } from "../../../../shared/usageHarnesses";
 
 /**
  * The Usage screens' model: pure reads of one `world.usage.analytics` answer
@@ -246,9 +247,18 @@ export type UsageRunView = {
   role: UsageRunRole | null;
   work: UsageWork;
   item: UsageItem;
+  /** `world`: World's own measurement only, so no calls or tokens. */
+  source: "session-log" | "world";
+  /** World can count this harness's tokens at all (the reader seam). */
+  tokensReadable: boolean;
   /** Its counted tokens; null when unknown. */
   tokens: number | null;
-  calls: number;
+  calls: number | null;
+  /** Time World saw it at work and waiting on you; null when not seen. */
+  activeMs: number | null;
+  waitingMs: number | null;
+  /** When it was going: sorted [from, to] spans. */
+  spans: [number, number][];
   maxPrompt: number | null;
   context: {
     used: number;
@@ -286,7 +296,15 @@ export const USAGE_CALLS_MULTIPLE = 3;
 
 export function usageItem(
   run: NonNullable<UsageAnalyticsRow["run"]>,
+  key = "",
 ): UsageItem {
+  // Several pull requests share its branch: name none, and join no other run.
+  if (run.attribution === "ambiguous" && run.branch)
+    return {
+      key: `run:${key}`,
+      label: `${run.branch} (pull request unknown)`,
+      number: null,
+    };
   if (run.pull_request)
     return {
       key: run.pull_request.key,
@@ -310,12 +328,19 @@ export function median(values: readonly number[]) {
     : (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
-/** The answer's runs with item, live state and waste flags, heaviest first. */
+/**
+ * The answer's runs with item, live state and waste flags, heaviest first.
+ * World's measurement alone stands for a run only for a harness whose logs
+ * World cannot read: for the others it is an agent World could not join to
+ * its log run, whose work that run already counts.
+ */
 export function usageRuns(data: WorldUsageAnalytics): UsageRunView[] {
   const runs: UsageRunView[] = [];
   for (const row of data.rows) {
     const run = row.run;
     if (!run || row.dimension === null) continue;
+    const tokensReadable = usageReadsTokens(run.harness);
+    if (run.source === "world" && tokensReadable) continue;
     const context = run.context
       ? {
           used: run.context.used_tokens,
@@ -337,9 +362,14 @@ export function usageRuns(data: WorldUsageAnalytics): UsageRunView[] {
       name: usageHarnessName(run.harness),
       role: run.role,
       work: usageWork(run.role),
-      item: usageItem(run),
+      item: usageItem(run, row.key),
+      source: run.source,
+      tokensReadable,
       tokens: row.total_tokens.value,
       calls: run.calls,
+      activeMs: row.active_ms.value,
+      waitingMs: row.waiting_on_you_ms.value,
+      spans: run.spans,
       maxPrompt: run.max_prompt_tokens,
       context,
       firstAt: run.first_at,
@@ -368,6 +398,7 @@ export function usageRuns(data: WorldUsageAnalytics): UsageRunView[] {
   const typical = new Map<string, number>();
   const byKind = new Map<string, number[]>();
   for (const run of runs) {
+    if (run.calls === null) continue;
     const kind = `${run.harness}:${run.role ?? ""}`;
     byKind.set(kind, [...(byKind.get(kind) ?? []), run.calls]);
   }
@@ -375,7 +406,12 @@ export function usageRuns(data: WorldUsageAnalytics): UsageRunView[] {
     if (calls.length >= 3) typical.set(kind, median(calls)!);
   for (const run of runs) {
     const base = typical.get(`${run.harness}:${run.role ?? ""}`);
-    if (base && run.calls >= USAGE_CALLS_MULTIPLE * base && run.calls >= 20)
+    if (
+      base &&
+      run.calls !== null &&
+      run.calls >= USAGE_CALLS_MULTIPLE * base &&
+      run.calls >= 20
+    )
       run.flags.push(
         `${run.calls} calls, ${Math.round(run.calls / base)}× a typical ${
           run.role ?? "unknown-role"
@@ -415,7 +451,10 @@ export function usageRunForPane(
 export type UsageHour = {
   /** The hour's start (a UTC hour boundary). */
   start: number;
-  /** Runs active in the hour, per harness and work. */
+  /**
+   * Per harness, the runs going at the busiest moment of the hour, split by
+   * work: the most that overlapped, never a count of the hour's runs.
+   */
   counts: Map<string, Record<UsageWork, number>>;
 };
 
@@ -436,13 +475,46 @@ const emptyWork = (): Record<UsageWork, number> => ({
 });
 
 /**
- * Runs that answered in each of the last `span` hours (ending with the
- * current hour), from each run's per-day hour marks. A run counts once per
- * hour however many calls it made.
+ * The most runs going at one moment within [from, until), per work: a sweep
+ * over each run's spans. Spans are closed, so runs that touch overlap.
+ */
+export function usagePeakAtOnce(
+  runs: readonly Pick<UsageRunView, "spans" | "work">[],
+  from: number,
+  until: number,
+): Record<UsageWork, number> | null {
+  const events: [number, 0 | 1, UsageWork][] = [];
+  for (const run of runs)
+    for (const [a, b] of run.spans)
+      if (a < until && b >= from) {
+        events.push([Math.max(a, from), 0, run.work]);
+        events.push([Math.min(b, until), 1, run.work]);
+      }
+  if (!events.length) return null;
+  // Starts before ends at one instant: closed spans that touch overlap.
+  events.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  const now = emptyWork();
+  let best: Record<UsageWork, number> | null = null;
+  let bestTotal = 0;
+  for (const [, end, work] of events) {
+    now[work] += end ? -1 : 1;
+    const total = now.building + now.checking + now.other;
+    if (!end && total > bestTotal) {
+      bestTotal = total;
+      best = { ...now };
+    }
+  }
+  return best;
+}
+
+/**
+ * Runs going at once in each of the last `span` hours (ending with the
+ * current hour): per harness, the busiest moment of each hour, from each
+ * run's spans of work.
  */
 export function usageConcurrency(
   runs: readonly UsageRunView[],
-  data: Pick<WorldUsageAnalytics, "rows" | "observed_at">,
+  data: Pick<WorldUsageAnalytics, "observed_at">,
   span = 24,
 ): UsageConcurrency {
   const end = Math.floor(data.observed_at / HOUR_MS) * HOUR_MS;
@@ -451,28 +523,18 @@ export function usageConcurrency(
     start: first + i * HOUR_MS,
     counts: new Map(),
   }));
-  const byKey = new Map(runs.map((run) => [run.key, run]));
-  const harnesses = new Set<string>();
-  for (const row of data.rows) {
-    const run = byKey.get(row.key);
-    if (!run || !row.run) continue;
-    harnesses.add(run.harness);
-    for (const { day, mask } of row.run.hours) {
-      const midnight = Date.parse(day);
-      if (!Number.isFinite(midnight)) continue;
-      for (let h = 0; h < 24; h++) {
-        if (!(mask & (1 << h))) continue;
-        const index = (midnight + h * HOUR_MS - first) / HOUR_MS;
-        const hour = hours[index];
-        if (!hour) continue;
-        const counts = hour.counts.get(run.harness) ?? emptyWork();
-        counts[run.work] += 1;
-        hour.counts.set(run.harness, counts);
-      }
+  const byHarness = new Map<string, UsageRunView[]>();
+  for (const run of runs)
+    byHarness.set(run.harness, [...(byHarness.get(run.harness) ?? []), run]);
+  for (const [harness, list] of byHarness) {
+    const recent = list.filter((run) => run.spans.some(([, b]) => b >= first));
+    for (const hour of hours) {
+      const peak = usagePeakAtOnce(recent, hour.start, hour.start + HOUR_MS);
+      if (peak) hour.counts.set(harness, peak);
     }
   }
   const order = (h: string) => (h === "claude" ? 0 : h === "codex" ? 1 : 2);
-  const list = [...harnesses].sort(
+  const list = [...byHarness.keys()].sort(
     (a, b) => order(a) - order(b) || a.localeCompare(b),
   );
   const peaks = new Map<string, { count: number; start: number }>();
@@ -487,10 +549,10 @@ export function usageConcurrency(
   return { hours, harnesses: list, peaks, max };
 }
 
-/** The whole window's busiest hour per harness, from every day's marks. */
+/** The whole window's busiest hour per harness. */
 export function usageWeekPeaks(
   runs: readonly UsageRunView[],
-  data: Pick<WorldUsageAnalytics, "rows" | "observed_at" | "window">,
+  data: Pick<WorldUsageAnalytics, "observed_at" | "window">,
 ) {
   const span = Math.max(
     1,
@@ -546,7 +608,9 @@ export function usageByRole(runs: readonly UsageRunView[]): UsageRoleTotal[] {
         runs: list.length,
         tokens: known.length ? known.reduce((a, b) => a + b, 0) : null,
         perRun: median(known),
-        callsPerRun: median(list.map((run) => run.calls)),
+        callsPerRun: median(
+          list.flatMap((run) => (run.calls === null ? [] : [run.calls])),
+        ),
       },
     ];
   });
@@ -607,3 +671,26 @@ export const usageHourLabel = (at: number) => hourFormat.format(at);
 /** Whole days of the answer's window, for "this week" wording. */
 export const usageWindowDays = (data: WorldUsageAnalytics) =>
   Math.max(1, Math.round((data.window.until - data.window.from) / DAY_MS));
+
+/** A run's numbers, saying plainly what its harness does not expose. */
+export function usageRunFacts(run: UsageRunView) {
+  if (run.source === "world")
+    return [
+      run.activeMs === null
+        ? "at work unknown"
+        : `at work ${usageDuration(run.activeMs)}`,
+      run.waitingMs ? `waited on you ${usageDuration(run.waitingMs)}` : null,
+      run.tokensReadable
+        ? "tokens unknown: no log run joined"
+        : "tokens and cost not available for this harness",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  return [
+    `${usageCount(run.tokens)} tokens`,
+    run.calls === null ? null : `${run.calls} calls`,
+    `largest prompt ${usageCount(run.maxPrompt)}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}

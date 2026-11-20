@@ -386,13 +386,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     windows used and when each resets, such as "40% · Wed 14:00", or
     "limit · 12:40" when the harness refused work; a window with under 15%
     left is orange. A badge beside each name counts its agents at work, and a
-    tower window lights per agent at work (warm for Claude, cool for Codex;
-    "+N" past eight): Town's working agents, or the runs that answered in
-    the last ten minutes where those are more. A harness with no reading
-    says "no reading", never 0%; an old reading is dimmed "out of date".
+    tower window lights per agent at work (warm for Claude, cool for Codex,
+    pale for any other harness; "+N" past eight): Town's working agents, or
+    the runs that answered in the last ten minutes where those are more. A
+    harness with no reading, including one at work whose budget World cannot
+    read (such as Cursor), says "no reading", never 0%; an old reading is dimmed "out of date".
     On a phone it folds to a night-blue sign with a telescope on the town
     center's left wing, such as "Claude 71% Codex 18%". Either sign opens
-    **Usage**, a lens over Town with three tabs (Escape, Back, the close
+    **Usage**, a lens over Town with four tabs (Escape, Back, the close
     button or a press outside closes it):
     - **Budget**: each harness's windows with a meter, a line where even use
       would be now and the pace in words: "On track to be used by the
@@ -401,20 +402,36 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
       early in the window to tell" in its first tenth, or "Limit reached".
       Each card says how many are at work and when and where the reading
       was seen.
-    - **Runs at once**: per harness, the runs that answered in each hour of
-      the last 24, stacked into building (worker, fixer) and reviewing or
-      checking (reviewer, checker), with the week's busiest hour and **Show
-      as table** for the same numbers.
+    - **Runs at once**: per harness, the most runs going at the same moment
+      in each hour of the last 24, stacked into building (worker, fixer) and
+      reviewing or checking (reviewer, checker), with the week's busiest
+      hour and **Show as table** for the same numbers. A run is going while
+      its responses are at most ten minutes apart and while World sees its
+      agent working; two short runs at 12:05 and 12:30 are one at once.
     - **Tokens**: the runs answering now and the week's heaviest, each with
       role, item, tokens, calls, largest prompt and context fill; tokens by
-      role (with the typical run and calls) and by item or pull request; and
-      by project. A fixer's second or later round on one item, a context
-      85% full or a run with several times its role's typical calls is
-      flagged in words.
+      role (with the typical run and calls) and by item or pull request. A
+      fixer's second or later round on one item, a context 85% full or a
+      run with several times its role's typical calls is flagged in words.
+      A run of a harness World reads no log of (Cursor, OpenCode and others)
+      shows its time at work and waiting, and "tokens and cost not available
+      for this harness".
+    - **Breakdown**: the last seven days by **Agent**, **Project**, **Room**
+      or **Day**, with time at work, time waiting on you, tokens, cost (the
+      harness's reported cost, else "est." from list prices) and pull
+      requests opened and merged, and a total row. "unknown" means no
+      reading; "(partly read)" means some sources were not readable. Agents
+      and rooms no longer open read "Earlier agent" and "Earlier room".
+      Under the table, **What World can read** names, per harness at work
+      this week, whether its tokens come from its session logs or only
+      World's time is known, and whether pull requests could be read.
     Every number comes from [usage analytics](./docs/usage-analytics.md):
     each API response counts once, roles are read from a run's first prompt
     (unknown when it names none), and what the logs do not show says
-    "unknown" instead of an estimate. The read refreshes at most every 30
+    "unknown" instead of an estimate. A run's pull request comes from a work
+    link its own agent session confirmed, or its branch when exactly one pull
+    request has it; a branch shared by pull requests in several
+    repositories reads "(pull request unknown)". The read refreshes at most every 30
     seconds; after five minutes of failed re-reads the sign says "Usage
     unavailable". For trying rare states, open World with `?usageFixture`
     (two harnesses at work), `?usageFixture=reached` (Claude's 5-hour limit
@@ -632,7 +649,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     "Fixer · #101 · 12M tokens · 228 calls · largest prompt 176k", with a
     warning line for what may be waste ("fixer round 3 on #101", "context
     86% full"). In the peek the line opens Usage's **Tokens** tab. A pane
-    with no run in the read says "This run: usage unknown".
+    with no run in the read says "This run: usage unknown". An agent of a
+    harness World reads no log of shows its time instead, such as "at work
+    40 min · tokens and cost not available for this harness".
   - Zoomed into a room, each working agent shows a thought bubble over its
     head with a glyph for the step it runs now: a pencil for editing files,
     a test tube for tests, a prompt for a command, a magnifier for reading or

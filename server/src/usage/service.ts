@@ -13,6 +13,8 @@ import type { OfficeObservabilitySnapshot } from "../world/observability";
 import type { RuntimeUsage } from "./host";
 import { estimateUsage, parseUsagePrices, tokenTotal } from "./totals";
 import { usageDigest } from "./host";
+import { USAGE_TOKEN_HARNESSES } from "../../../shared/usageHarnesses";
+import { joinUsageSpans } from "../../../shared/usageSpans";
 import type { Scheduler } from "../service/ports";
 import { usageScope } from "./lifetime";
 import { codexIdsFromTitle } from "../agent/session-resolver";
@@ -89,7 +91,7 @@ const unavailable = (): RuntimeUsage => ({
   bindings: [],
   unsupported: [],
   truncated: false,
-  sources: ["claude", "codex", "pi", "gemini"].map((harness) => ({
+  sources: USAGE_TOKEN_HARNESSES.map((harness) => ({
     harness,
     state: "unavailable",
   })),
@@ -497,7 +499,7 @@ export class WorldUsageService {
               row.session_key,
             ]),
           )}`,
-          ...(row.hours !== undefined ? { hours: row.hours } : {}),
+          ...(row.spans !== undefined ? { spans: row.spans } : {}),
           ...(row.max_prompt_tokens !== undefined
             ? { max_prompt_tokens: row.max_prompt_tokens }
             : {}),
@@ -541,8 +543,8 @@ export class WorldUsageService {
       row.first_at = Math.min(...candidates.map((e) => e.first_at));
       row.last_at = Math.max(...candidates.map((e) => e.last_at));
       row.observation_span_ms = row.last_at - row.first_at;
-      if (candidates.some((e) => e.hours !== undefined))
-        row.hours = candidates.reduce((m, e) => (m | (e.hours ?? 0)) >>> 0, 0);
+      if (candidates.some((e) => e.spans !== undefined))
+        row.spans = joinUsageSpans(candidates.flatMap((e) => e.spans ?? []));
       if (candidates.some((e) => e.max_prompt_tokens !== undefined))
         row.max_prompt_tokens = Math.max(
           ...candidates.map((e) => e.max_prompt_tokens ?? 0),

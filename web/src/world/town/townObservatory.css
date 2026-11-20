@@ -7,6 +7,8 @@
 .town-world .town-observatory-lights {
   --obs-claude: #ffd27a;
   --obs-codex: #9fe3ff;
+  /* Any other harness: a warm white, never Claude's or Codex's colour. */
+  --obs-other: #e8e2f4;
   --obs-warn: #ff8a5c;
   --obs-ink: #f3ecd8;
   --obs-soft: #b9c2dd;
@@ -96,6 +98,9 @@
 .town-observatory-name b[data-harness="codex"] {
   background: var(--obs-codex);
 }
+.town-observatory-name b:not([data-harness="claude"], [data-harness="codex"]) {
+  background: var(--obs-other);
+}
 .town-observatory-cell {
   display: grid;
   gap: 1px;
@@ -155,6 +160,10 @@
 .town-observatory-light[data-harness="codex"] {
   background: var(--obs-codex);
   box-shadow: 0 0 10px 2px color-mix(in srgb, var(--obs-codex) 55%, transparent);
+}
+.town-observatory-light:not([data-harness="claude"], [data-harness="codex"]) {
+  background: var(--obs-other);
+  box-shadow: 0 0 10px 2px color-mix(in srgb, var(--obs-other) 55%, transparent);
 }
 .town-observatory-more {
   position: absolute;

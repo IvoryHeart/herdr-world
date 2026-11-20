@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useState } from "react";
 import { UsageLens, type UsageTab } from "../usage/UsageLens";
+import type { WorldObject } from "../worldObject";
 
 /**
  * Opens the Usage screens over Town (#1029). Town provides it; without it (a
@@ -14,12 +15,20 @@ export const useOpenTownUsage = () => useContext(TownOpenUsageContext);
 const anchor = () =>
   document.querySelector(".town-observatory-sign, .town-observatory-fold");
 
-/** Town's Usage screens: the observatory's opener and, while open, the lens. */
-export function useTownUsage() {
+/**
+ * Town's Usage screens: the observatory's opener and, while open, the lens.
+ * `world` names agents and rooms in the breakdown.
+ */
+export function useTownUsage(world?: WorldObject) {
   const [tab, setTab] = useState<UsageTab | null>(null);
   const open = useCallback((next: UsageTab = "budget") => setTab(next), []);
   const lens = tab ? (
-    <UsageLens initialTab={tab} anchor={anchor} onClose={() => setTab(null)} />
+    <UsageLens
+      initialTab={tab}
+      anchor={anchor}
+      world={world}
+      onClose={() => setTab(null)}
+    />
   ) : null;
   return { open, lens };
 }

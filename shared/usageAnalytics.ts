@@ -51,6 +51,12 @@ export type UsageAnalyticsIdentity = {
  * worked and when. Numbers only; the role is a fixed word, never prompt text.
  */
 export type UsageAnalyticsRun = {
+  /**
+   * `session-log`: the harness's own session log, with World's measured
+   * activity joined in; `world`: World's measurement alone (time at work,
+   * waiting), so calls, tokens and cost are not available for it.
+   */
+  source: "session-log" | "world";
   harness: string;
   /** Models it used, most tokens first. */
   models: string[];
@@ -58,16 +64,27 @@ export type UsageAnalyticsRun = {
   role: UsageRunRole | null;
   /** The checkout branch the harness recorded; null when unknown. */
   branch: string | null;
-  /** The work catalogue's pull request whose head is that branch. */
+  /**
+   * Its pull request: from a work link its own agent session validated, or
+   * the only catalogue pull request whose head is its branch.
+   */
   pull_request: { key: string; number: number | null } | null;
-  /** API responses, each counted once. */
-  calls: number;
+  /**
+   * How `pull_request` was found; `ambiguous` when several pull requests
+   * (in different repositories) share its branch, so none is named.
+   */
+  attribution: "link" | "branch" | "ambiguous" | "none";
+  /** API responses, each counted once; null for World's measurement alone. */
+  calls: number | null;
   first_at: number;
   last_at: number;
   /** The largest single prompt; null from a service that did not read it. */
   max_prompt_tokens: number | null;
-  /** UTC hours with at least one response, per UTC day: bit h is hour h. */
-  hours: { day: string; mask: number }[];
+  /**
+   * When it was going: responses at most ten minutes apart, joined with the
+   * spans World saw its agent working. Sorted, bounded [from, to] pairs.
+   */
+  spans: [number, number][];
   /** Its pane's current context, when it is running in a pane now. */
   context: { used_tokens: number; window_tokens: number | null } | null;
 };

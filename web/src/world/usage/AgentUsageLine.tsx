@@ -1,8 +1,8 @@
 import { AlertTriangle } from "lucide-react";
 import { useMemo } from "react";
 import {
-  usageCount,
   usageRoleLabel,
+  usageRunFacts,
   usageRunForPane,
   usageRuns,
 } from "./usageModel";
@@ -17,7 +17,8 @@ export type AgentUsagePane = {
 
 /**
  * An agent's run on its cards (#1029): its role and item, tokens, calls and
- * largest prompt this run, and what may be waste (a fixer's third round, a
+ * largest prompt this run (for a harness World reads no log of, its time at
+ * work and that tokens are not available), and what may be waste (a fixer's third round, a
  * near-full context). It shares the Usage screens' one run read; while that
  * read is not in it says nothing, and a pane with no run read says
  * "unknown", never a guess. `onOpen` makes it a button to the Usage screens.
@@ -41,10 +42,7 @@ export function AgentUsageLine({
       <span className="agent-usage-facts">
         {run.role ? `${usageRoleLabel(run.role)} · ` : ""}
         {run.item.key === "none" ? "" : `${run.item.label} · `}
-        {usageCount(run.tokens)} tokens · {run.calls} calls
-        {run.maxPrompt !== null
-          ? ` · largest prompt ${usageCount(run.maxPrompt)}`
-          : ""}
+        {usageRunFacts(run)}
       </span>
       {run.flags.map((flag) => (
         <span key={flag} className="agent-usage-flag">
@@ -61,7 +59,7 @@ export function AgentUsageLine({
       type="button"
       className="agent-usage"
       title="Open Usage"
-      aria-label={`This run's usage: ${run ? `${usageCount(run.tokens)} tokens, ${run.calls} calls${run.flags.length ? `, ${run.flags.join(", ")}` : ""}` : "unknown"}. Open Usage`}
+      aria-label={`This run's usage: ${run ? `${usageRunFacts(run)}${run.flags.length ? `, ${run.flags.join(", ")}` : ""}` : "unknown"}. Open Usage`}
       onClick={onOpen}
     >
       {body}

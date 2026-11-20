@@ -130,18 +130,44 @@ distinct projects. Unresolved/non-Git checkouts remain unattributed. A historica
 project ID can outlive the currently observed project labels.
 
 A run is one harness session on one transcript host, across its days and
-models. `group_by:"run"` rows are heaviest first and carry `run`: harness,
-models (most tokens first), `role`, `branch`, `pull_request` (the work
-catalogue's PR whose head is that branch, or null), `calls` (API responses,
-each counted once), `first_at`/`last_at`, `max_prompt_tokens` (largest single
-prompt, input plus cache), `hours` (per UTC day, bit h set when the run
-answered in hour h) and `context` (its pane's current context fill, only while
-it runs in a pane). `role` is one of `worker`, `fixer`, `reviewer`, `checker`
-or `scout`, read from the run's first prompt (`builder` reads as worker; a
-`/review` command as reviewer) and null when that prompt names none. The prompt
-text is matched and dropped; it is never stored or published. `branch` is the
-checkout branch the harness log records, never `HEAD`. Older services omit the
-run detail; consumers show it as unknown.
+models. `group_by:"run"` rows are heaviest first and carry `run`: `source`,
+harness, models (most tokens first), `role`, `branch`, `pull_request`,
+`attribution`, `calls` (API responses, each counted once), `first_at`/`last_at`,
+`max_prompt_tokens` (largest single prompt, input plus cache), `spans` and
+`context` (its pane's current context fill, only while it runs in a pane).
+`role` is one of `worker`, `fixer`, `reviewer`, `checker` or `scout`, read from
+the run's first prompt (`builder` reads as worker; a `/review` command as
+reviewer) and null when that prompt names none. The prompt text is matched and
+dropped; it is never stored or published. `branch` is the checkout branch the
+harness log records, never `HEAD`. Older services omit the run detail;
+consumers show it as unknown.
+
+`spans` are sorted, bounded `[from, to]` millisecond pairs: when the run was
+going. Responses at most ten minutes apart join into one span (the host reader
+keeps at most 48 per run and day), and the spans World saw the run's agent
+`working` join in, so a long call between two responses still counts. Runs at
+once is the overlap of these spans, never a count of runs that answered
+somewhere in an hour.
+
+Every harness World supports gets World's own measurement: time `working` and
+`blocked` (waiting on you) per agent, and runs. The reader seam
+([`shared/usageHarnesses.ts`](../shared/usageHarnesses.ts)) names the
+harnesses whose session logs World also reads tokens from: today Claude,
+Codex, Pi and Gemini. An agent World saw while its pane held a transcript run
+is joined to that run (the newest run in its pane), and the link is kept with
+the activity history. An agent of any other harness is a run of its own, keyed
+`world:<agent ID>`, with `source:"world"`: `calls`, `max_prompt_tokens` and
+token and cost metrics are `null` (not available), never zero, while
+`active_ms`, `waiting_on_you_ms` and `spans` come from World's measurement.
+
+`pull_request` comes from a work link the agent's own session validated (the
+link's session fingerprint matches the pane's current agent session) naming
+exactly one GitHub pull request; that link is kept with the run
+(`attribution:"link"`). Otherwise the branch names a pull request only when
+exactly one in the work catalogue has that head branch
+(`attribution:"branch"`). When several repositories' pull requests share the
+branch, `pull_request` is null and `attribution` is `ambiguous`: World never
+picks the most recently updated. `none` means no evidence.
 
 For a character card, query `group_by:"agent"` with its qualified pane filter,
 or `group_by:"run"` and match the row's qualified pane identity.

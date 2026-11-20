@@ -43,8 +43,11 @@ export type UsageEntity = UsageTarget & {
    * services.
    */
   run_id?: string;
-  /** UTC hours of `day` with at least one response: bit h is hour h. */
-  hours?: number;
+  /**
+   * When the run was going that day: sorted [from, to] spans joining its
+   * responses at most ten minutes apart (bounded).
+   */
+  spans?: [number, number][];
   /** The largest single prompt (input plus cached tokens) of the row. */
   max_prompt_tokens?: number;
   /** The role the run's first prompt names, from a fixed vocabulary. */

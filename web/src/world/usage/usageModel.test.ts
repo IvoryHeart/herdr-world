@@ -7,6 +7,8 @@ import {
   usageConcurrency,
   usageCount,
   usagePaces,
+  usagePeakAtOnce,
+  usageRunFacts,
   usageRunForPane,
   usageRuns,
   usageWindowPace,
@@ -72,7 +74,8 @@ test("runs: items, fixer rounds, near-full context and heavy calls stand out", (
   });
   expect(runs[0]!.flags).toContain("fixer round 3 on #101");
   expect(runs[0]!.flags).toContain("context 86% full");
-  expect(runs.filter((r) => r.live)).toHaveLength(3);
+  // Three log runs and a Cursor agent World sees at work.
+  expect(runs.filter((r) => r.live)).toHaveLength(4);
   const items = usageByItem(runs);
   expect(items[0]).toMatchObject({ item: { label: "#101" }, fixerRounds: 3 });
   expect(items[items.length - 1]?.item.label).not.toBe("#101");
@@ -95,12 +98,12 @@ test("runs: items, fixer rounds, near-full context and heavy calls stand out", (
   ).toBe(runs[0]!.key);
 });
 
-test("runs at once: each run counts once per hour, split by harness and work", () => {
+test("runs at once: the busiest moment of each hour, split by harness and work", () => {
   const data = usageFixture(now, "busy", { group_by: "run", window: "7d" });
   const runs = usageRuns(data);
   const at = usageConcurrency(runs, data);
   expect(at.hours).toHaveLength(24);
-  expect(at.harnesses).toEqual(["claude", "codex"]);
+  expect(at.harnesses).toEqual(["claude", "codex", "cursor", "opencode"]);
   const current = at.hours[at.hours.length - 1]!;
   expect(current.counts.get("claude")).toEqual({
     building: 1,
@@ -112,7 +115,81 @@ test("runs at once: each run counts once per hour, split by harness and work", (
     checking: 0,
     other: 0,
   });
+  expect(current.counts.get("cursor")).toEqual({
+    building: 0,
+    checking: 0,
+    other: 1,
+  });
   expect(at.max).toBeGreaterThanOrEqual(2);
+});
+
+test("runs at once counts overlap, not runs that answered somewhere in the hour", () => {
+  const h = Date.parse("2026-11-20T12:00:00Z");
+  const run = (from: number, to: number, work = "building" as const) => ({
+    spans: [[h + from * 60_000, h + to * 60_000]] as [number, number][],
+    work,
+  });
+  // 12:05–12:06 and 12:30–12:31 never overlap: one at once, not two.
+  expect(usagePeakAtOnce([run(5, 6), run(30, 31)], h, h + HOUR)).toEqual({
+    building: 1,
+    checking: 0,
+    other: 0,
+  });
+  // Overlapping runs count together; one touching the next counts too.
+  expect(
+    usagePeakAtOnce(
+      [run(5, 40), run(40, 50, "checking" as never)],
+      h,
+      h + HOUR,
+    ),
+  ).toEqual({ building: 1, checking: 1, other: 0 });
+  expect(usagePeakAtOnce([run(5, 40), run(30, 31)], h, h + HOUR)).toEqual({
+    building: 2,
+    checking: 0,
+    other: 0,
+  });
+  // A long run is going in every hour it spans, not only where it answered.
+  const long = [run(-90, 70)];
+  expect(usagePeakAtOnce(long, h - HOUR, h)?.building).toBe(1);
+  expect(usagePeakAtOnce(long, h, h + HOUR)?.building).toBe(1);
+  expect(usagePeakAtOnce(long, h + HOUR, h + 2 * HOUR)).toEqual({
+    building: 1,
+    checking: 0,
+    other: 0,
+  });
+  expect(usagePeakAtOnce(long, h + 2 * HOUR, h + 3 * HOUR)).toBeNull();
+});
+
+test("a harness World reads no log of shows its time; tokens are not available, never zero", () => {
+  const data = usageFixture(now, "busy", { group_by: "run", window: "7d" });
+  const runs = usageRuns(data);
+  const cursor = runs.find((r) => r.harness === "cursor")!;
+  expect(cursor).toMatchObject({
+    source: "world",
+    tokensReadable: false,
+    tokens: null,
+    calls: null,
+    waitingMs: 25 * 60_000,
+    live: true,
+  });
+  expect(cursor.activeMs).toBeGreaterThan(0);
+  expect(usageRunFacts(cursor)).toContain(
+    "tokens and cost not available for this harness",
+  );
+  expect(usageRunFacts(cursor)).not.toMatch(/\b0 tokens/);
+  // An agent of a harness World reads, but no log run joined: its time is in
+  // the breakdown, never a second run beside its log run.
+  const claude = {
+    ...data,
+    rows: data.rows.map((row) =>
+      row.run?.harness === "cursor"
+        ? { ...row, run: { ...row.run, harness: "claude" } }
+        : row,
+    ),
+  };
+  expect(usageRuns(claude).some((r) => r.source === "world" && r.live)).toBe(
+    false,
+  );
 });
 
 test("empty reads are unknown, never zero", () => {

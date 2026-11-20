@@ -262,7 +262,7 @@ test("seven UTC days are retained with exclusive upper bound and no content seri
   expect(JSON.stringify(reader.finish())).not.toContain("PRIVATE_SENTINEL");
 });
 
-test("a run keeps its hours, largest prompt, branch and first-prompt role, never the text", () => {
+test("a run keeps its spans, largest prompt, branch and first-prompt role, never the text", () => {
   const reader = createUsageProjection("claude", now);
   const user = (content: unknown, extra: object = {}) =>
     reader.accept({
@@ -299,7 +299,11 @@ test("a run keeps its hours, largest prompt, branch and first-prompt role, never
   expect(result.rows).toHaveLength(1);
   expect(result.rows[0]).toMatchObject({
     responses: 2,
-    hours: (1 << 3) | (1 << 17),
+    // Responses far apart are separate spans; the repeated one counts once.
+    spans: [
+      [Date.parse("2026-10-31T03:10:00Z"), Date.parse("2026-10-31T03:10:00Z")],
+      [Date.parse("2026-10-31T17:40:00Z"), Date.parse("2026-10-31T17:40:00Z")],
+    ],
     max_prompt_tokens: 405,
     role: "fixer",
     branch: "crew/42",

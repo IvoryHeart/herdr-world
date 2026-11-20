@@ -92,3 +92,80 @@ test("invalid numeric history is explicit and never leaks its contents", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+test("rows keep the harness and when it worked; run and item links survive restart", () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-history-"));
+  const day = Date.parse("2026-11-19T10:00:00Z");
+  const run = `run_${"b".repeat(64)}`;
+  try {
+    const path = join(dir, "history.json"),
+      first = new UsageActivity(path);
+    // Working 10:00–10:00:30, a short gap, then 10:00:40–10:01:00: one span;
+    // idle time between is not working time.
+    for (const t of [0, 10_000, 20_000, 30_000])
+      first.observe("a", 1, [{ ...pane, agent: "cursor" }], day + t);
+    first.observe(
+      "a",
+      1,
+      [{ ...pane, agent: "cursor", agent_status: "idle" }],
+      day + 31_000,
+    );
+    for (const t of [40_000, 50_000, 60_000])
+      first.observe("a", 1, [{ ...pane, agent: "cursor" }], day + t);
+    first.invalidate("a", day + 60_000);
+    const [row] = first.read(day + 120_000);
+    expect(row).toMatchObject({
+      harness: "cursor",
+      spans: [[day, day + 60_000]],
+    });
+    first.linkRun(row!.agent_id!, run);
+    first.linkRun(row!.agent_id!, "run_not-a-digest");
+    first.linkItem(run, "github:pr:example/web#3");
+    first.close(day + 120_000);
+    const second = new UsageActivity(path);
+    expect(second.history).toBe("available");
+    expect(second.runOf(row!.agent_id!)).toBe(run);
+    expect(second.itemOf(run)).toBe("github:pr:example/web#3");
+    expect(second.read(day + 120_000)[0]).toMatchObject({
+      harness: "cursor",
+      spans: [[day, day + 60_000]],
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+test("malformed spans, harness names or links make history unavailable", () => {
+  const dir = mkdtempSync(join(tmpdir(), "usage-history-"));
+  try {
+    const path = join(dir, "history.json");
+    const row = {
+      connection_id: "a",
+      connection_generation: 1,
+      agent_id: `agent_${"c".repeat(64)}`,
+      pane_id: "p1",
+      workspace_id: "w1",
+      project_id: null,
+      day: "2026-11-19",
+      active_ms: 1,
+      waiting_on_you_ms: 0,
+      observed_ms: 1,
+    };
+    for (const bad of [
+      { rows: [{ ...row, spans: [[2, 1]] }] },
+      { rows: [{ ...row, harness: "PRIVATE HISTORY SENTINEL" }] },
+      { rows: [row], links: { runs: [["x", "y"]], items: [] } },
+      {
+        rows: [row],
+        links: { runs: [], items: [[`run_${"d".repeat(64)}`, 7]] },
+      },
+    ]) {
+      writeFileSync(path, JSON.stringify({ version: 1, ...bad }));
+      const activity = new UsageActivity(path);
+      expect(activity.history).toBe("unavailable");
+      expect(activity.read(Date.parse("2026-11-19T12:00:00Z"))).toEqual([]);
+    }
+    writeFileSync(path, JSON.stringify({ version: 1, rows: [row] }));
+    expect(new UsageActivity(path).history).toBe("available");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

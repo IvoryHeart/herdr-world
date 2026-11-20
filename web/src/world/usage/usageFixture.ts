@@ -73,11 +73,24 @@ const known = (value: number): UsageMetric => ({
 });
 const unknown: UsageMetric = { value: null, coverage: "unknown" };
 
-function metrics(tokens: number | null, active: number | null = null) {
+type Extra = {
+  waiting?: number | null;
+  cost?: number | null;
+  opened?: number | null;
+  merged?: number | null;
+};
+
+function metrics(
+  tokens: number | null,
+  active: number | null = null,
+  extra: Extra = {},
+) {
+  const maybe = (value: number | null | undefined) =>
+    value === null || value === undefined ? unknown : known(value);
   return {
     active_ms: active === null ? unknown : known(active),
-    waiting_on_you_ms: unknown,
-    observed_ms: active ?? 0,
+    waiting_on_you_ms: maybe(extra.waiting),
+    observed_ms: (active ?? 0) + (extra.waiting ?? 0),
     tokens:
       tokens === null
         ? null
@@ -90,14 +103,14 @@ function metrics(tokens: number | null, active: number | null = null) {
           },
     total_tokens: tokens === null ? unknown : known(tokens),
     reported_cost_usd: unknown,
-    estimated_cost_usd: unknown,
-    prs_opened: unknown,
-    prs_merged: unknown,
+    estimated_cost_usd: maybe(extra.cost),
+    prs_opened: maybe(extra.opened),
+    prs_merged: maybe(extra.merged),
   } satisfies UsageAnalyticsMetrics;
 }
 
 type Run = {
-  harness: "claude" | "codex";
+  harness: string;
   role: UsageRunRole | null;
   pr?: number;
   branch?: string;
@@ -108,6 +121,11 @@ type Run = {
   calls: number;
   prompt: number;
   context?: [number, number];
+  /** World's measurement alone: a harness whose logs World cannot read. */
+  world?: boolean;
+  /** Minutes it waited on you. */
+  waiting?: number;
+  room?: 1 | 2;
 };
 
 /** A week of synthetic crew runs, newest last. */
@@ -254,19 +272,30 @@ const RUNS: Run[] = [
     prompt: 176_000,
     context: [172_000, 200_000],
   },
+  {
+    harness: "cursor",
+    role: null,
+    from: 5,
+    to: 0,
+    tokens: 0,
+    calls: 0,
+    prompt: 0,
+    world: true,
+    waiting: 25,
+    room: 2,
+  },
+  {
+    harness: "opencode",
+    role: null,
+    from: 28,
+    to: 26,
+    tokens: 0,
+    calls: 0,
+    prompt: 0,
+    world: true,
+    room: 2,
+  },
 ];
-
-function masks(start: number, end: number) {
-  const days = new Map<string, number>();
-  for (let at = Math.floor(start / HOUR) * HOUR; at <= end; at += HOUR) {
-    const day = new Date(at).toISOString().slice(0, 10);
-    days.set(
-      day,
-      ((days.get(day) ?? 0) | (1 << new Date(at).getUTCHours())) >>> 0,
-    );
-  }
-  return [...days].map(([day, mask]) => ({ day, mask }));
-}
 
 function limits(now: number, mode: UsageFixtureMode): UsageLimit[] {
   if (mode === "empty") return [];
@@ -335,33 +364,46 @@ export function usageFixture(
     const first = now - run.from * HOUR - 7 * 60_000;
     const last = now - run.to * HOUR - (run.to ? 3 * 60_000 : 60_000);
     const live = run.to === 0;
+    const waiting = run.waiting === undefined ? null : run.waiting * 60_000;
+    const active = (run.from - run.to) * HOUR - (waiting ?? 0);
     return {
-      key: `run_fixture_${index}`,
-      dimension: `run_fixture_${index}`,
+      key: run.world ? `world:fixture-agent-${index}` : `run_fixture_${index}`,
+      dimension: run.world
+        ? `world:fixture-agent-${index}`
+        : `run_fixture_${index}`,
       identity: {
         connection_id: CONNECTION,
         connection_generation: 1,
-        agent_id: live ? `fixture-agent-${index}` : null,
+        agent_id: `fixture-agent-${index}`,
         pane_id: live ? `fixture-pane-${index}` : null,
-        workspace_id: null,
+        workspace_id: `fixture-room-${run.room ?? 1}`,
         project_id: "project_fixture",
       },
-      ...metrics(run.tokens, (run.from - run.to) * HOUR),
+      ...(run.world
+        ? metrics(null, active, { waiting })
+        : metrics(run.tokens, active, {
+            waiting: waiting ?? 0,
+            cost: Math.round(run.tokens * 0.6) / 1_000_000,
+            opened: run.role === "worker" && run.pr ? 1 : null,
+            merged: run.role === "worker" && run.pr ? Number(run.to > 0) : null,
+          })),
       run: {
+        source: run.world ? ("world" as const) : ("session-log" as const),
         harness: run.harness,
-        models: [
-          run.harness === "claude" ? "synthetic-claude" : "synthetic-codex",
-        ],
+        models: run.world
+          ? []
+          : [run.harness === "claude" ? "synthetic-claude" : "synthetic-codex"],
         role: run.role,
         branch: run.pr ? `crew/${run.pr}` : (run.branch ?? null),
         pull_request: run.pr
           ? { key: `github:pr:example-org/web-app#${run.pr}`, number: run.pr }
           : null,
-        calls: run.calls,
+        attribution: run.pr ? ("link" as const) : ("none" as const),
+        calls: run.world ? null : run.calls,
         first_at: first,
         last_at: last,
-        max_prompt_tokens: run.prompt,
-        hours: masks(first, last),
+        max_prompt_tokens: run.world ? null : run.prompt,
+        spans: [[first, last] as [number, number]],
         context: run.context
           ? { used_tokens: run.context[0], window_tokens: run.context[1] }
           : null,
@@ -369,12 +411,39 @@ export function usageFixture(
     };
   });
   const inWindow = runRows.filter((row) => row.run!.last_at >= from);
-  const sum = (rows: UsageAnalyticsRow[]) =>
-    rows.length
-      ? rows.reduce((s, r) => s + (r.total_tokens.value ?? 0), 0)
-      : null;
-  const active = (rows: UsageAnalyticsRow[]) =>
-    rows.length ? rows.reduce((s, r) => s + (r.active_ms.value ?? 0), 0) : null;
+  const add = (
+    rows: UsageAnalyticsRow[],
+    key: keyof UsageAnalyticsMetrics,
+  ): number | null => {
+    const known = rows.flatMap((r) => {
+      const metric = r[key] as UsageMetric;
+      return metric.value === null ? [] : [metric.value];
+    });
+    return known.length ? known.reduce((a, b) => a + b, 0) : null;
+  };
+  const merged = (rows: UsageAnalyticsRow[]) => {
+    const tokens = add(rows, "total_tokens");
+    return metrics(tokens, add(rows, "active_ms"), {
+      waiting: add(rows, "waiting_on_you_ms"),
+      cost: add(rows, "estimated_cost_usd"),
+      opened: add(rows, "prs_opened"),
+      merged: add(rows, "prs_merged"),
+    });
+  };
+  const byKey = (
+    keyOf: (row: UsageAnalyticsRow) => string,
+    identityOf: (row: UsageAnalyticsRow) => UsageAnalyticsRow["identity"],
+  ) => {
+    const groups = new Map<string, UsageAnalyticsRow[]>();
+    for (const row of inWindow)
+      groups.set(keyOf(row), [...(groups.get(keyOf(row)) ?? []), row]);
+    return [...groups].map(([key, list]) => ({
+      key,
+      dimension: key,
+      identity: identityOf(list[0]!),
+      ...merged(list),
+    }));
+  };
   let rows: UsageAnalyticsRow[];
   if (group === "run") rows = inWindow;
   else if (group === "day") {
@@ -388,20 +457,29 @@ export function usageFixture(
         key: name,
         dimension: name,
         identity: null,
-        ...metrics(sum(list), active(list)),
+        ...(list.length ? merged(list) : metrics(null)),
       });
     }
-  } else
-    rows = inWindow.length
-      ? [
-          {
-            key: "project_fixture",
-            dimension: group === "project" ? "project_fixture" : "fixture",
-            identity: null,
-            ...metrics(sum(inWindow), active(inWindow)),
-          },
-        ]
-      : [];
+  } else if (group === "agent")
+    rows = byKey(
+      (r) => r.identity!.agent_id!,
+      (r) => ({ ...r.identity!, workspace_id: null, project_id: null }),
+    );
+  else if (group === "room")
+    rows = byKey(
+      (r) => JSON.stringify([CONNECTION, 1, r.identity!.workspace_id]),
+      (r) => ({
+        ...r.identity!,
+        agent_id: null,
+        pane_id: null,
+        project_id: null,
+      }),
+    );
+  else
+    rows = byKey(
+      () => "project_fixture",
+      () => null,
+    );
   return {
     version: 1,
     incarnation: "usage-fixture",
@@ -409,7 +487,7 @@ export function usageFixture(
     window: { kind: window, from, until },
     retention_days: 7,
     group_by: group,
-    total: metrics(sum(inWindow), active(inWindow)),
+    total: inWindow.length ? merged(inWindow) : metrics(null),
     rows: rows.map(({ run, ...row }) =>
       group === "run" ? { ...row, run } : row,
     ),
