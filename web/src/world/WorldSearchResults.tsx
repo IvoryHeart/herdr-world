@@ -16,6 +16,7 @@ const KIND_WORDS: Record<WorldSearchKind, string> = {
   table: "Table",
   agent: "Agent",
   terminal: "Terminal",
+  landmark: "Town",
 };
 
 /** One result: what it is, its name and status, where it is, and why. */

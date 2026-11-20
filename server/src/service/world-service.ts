@@ -50,12 +50,12 @@ import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
 import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
-import { storedSourceSettings, withSourceSettings } from "../sources/http";
-import { CheckoutResolver } from "../sources/links";
-import { readSourceSecrets, writeSourceSecrets } from "../sources/secrets";
+import { composeSources, runSourceProcess } from "../sources/composition";
+import { ShipyardService } from "../shipyard/service";
+import { ShipyardInstances } from "../shipyard/instances";
+import { shipyardInstanceIdentity } from "../shipyard/identity";
+import { createShipyardHttp } from "../shipyard/http";
 import { withIntegrations } from "../integrations/http";
-import { SourcesService } from "../sources/service";
-import { runSourceProcess } from "../sources/process";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
@@ -89,10 +89,7 @@ export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 /** How long stop waits for requests that were running when it began. */
 const DRAIN_TIMEOUT_MS = 2_000;
 
-/**
- * Claim the data folder, open storage and build one World service. Nothing
- * listens or connects until `start()`; `stop()` drains and releases it all.
- */
+/** Claim storage and compose; start() listens/connects, stop() drains/releases. */
 export async function createWorldService(deps: WorldServiceDeps) {
   const { config, paths } = deps;
   // One live World per data folder; nothing in it is written before this.
@@ -127,9 +124,8 @@ async function compose(
   const { config, paths, clock, scheduler, adapters } = deps;
   const logger = serverLogger;
   const settings = storage.settings;
-  // Set when stop begins: nothing new is admitted or started after it.
+  // Stop fences admission/startup; storage closure fences writes to the folder.
   let stopping = false;
-  // Cleared when storage closes: no write may reach the folder after it.
   let storageOpen = true;
   const serviceIncarnation = storage.incarnation ?? randomUUID();
   const snapshotAdmission = new WorldSnapshotAdmission();
@@ -688,24 +684,10 @@ async function compose(
     },
   });
 
-  // Built-in sources (GitHub, Jira). On by default; each runs only while a
-  // browser asks and keeps its credentials in private service storage.
-  const worldSources = new SourcesService({
-    settings: await settings
-      .read()
-      .then(storedSourceSettings)
-      .catch(() => ({})),
-    persistSettings: async (sources) => {
-      await settings.update((current) => withSourceSettings(current, sources));
-    },
-    secrets: {
-      read: () => readSourceSecrets(paths.sourceSecrets),
-      write: (secrets) => {
-        if (!storageOpen) throw new Error("World storage is closed");
-        writeSourceSecrets(secrets, paths.sourceSecrets);
-      },
-    },
-    run: runSourceProcess,
+  const worldSources = await composeSources({
+    settings,
+    paths,
+    storageOpen: () => storageOpen,
     topology: async () =>
       worldSnapshots ? (await worldSnapshots.snapshot()).connections : [],
     runtimeOwners: () =>
@@ -716,7 +698,7 @@ async function compose(
             ? [{ connection_id: id, generation }]
             : [],
         ),
-    resolver: new CheckoutResolver(runSourceProcess, (connectionId) => {
+    hostOf: (connectionId) => {
       if (connectionId === STARTUP_DEFAULT_CONNECTION_ID && config.sshHost)
         return { kind: "ssh", destination: config.sshHost };
       const profile = connectionProfiles
@@ -726,7 +708,7 @@ async function compose(
       if (profile?.type === "ssh" && profile.remote_platform !== "windows")
         return { kind: "ssh", destination: profile.ssh_destination };
       return null;
-    }),
+    },
     now: () => clock.now(),
   });
   const handleWorldSources = withIntegrations(worldSources, {
@@ -735,6 +717,24 @@ async function compose(
     vaultPath: paths.sourceSecrets,
     now: () => clock.now(),
   });
+  const shipyardInstances = new ShipyardInstances(
+    paths.instanceRegistry,
+    paths.root,
+    () => clock.now(),
+    scheduler,
+  );
+  const shipyardIdentity = await shipyardInstanceIdentity(
+    serviceIncarnation,
+    config.appVersion,
+    clock.now(),
+  );
+  const shipyard = new ShipyardService({
+    run: runSourceProcess,
+    source: () => worldSources.shipyardSource(),
+    instances: () => shipyardInstances.read(),
+    now: () => clock.now(),
+  });
+  const shipyardHttp = createShipyardHttp(shipyard);
 
   worldUsage = composeWorldUsage({
     connectionManager,
@@ -892,6 +892,7 @@ async function compose(
             herdrSetup,
             officeObservability: handleOfficeObservability,
             sources: handleWorldSources,
+            shipyard: { service: shipyard, http: shipyardHttp },
             track,
             stopping: () => stopping,
           }),
@@ -906,6 +907,12 @@ async function compose(
         },
       });
       publishInstanceAddress(releaseDataFolder, config, server);
+      shipyardInstances.start(
+        shipyardIdentity,
+        server.port ?? config.port,
+        config.host,
+        !!config.tls,
+      );
       worldCli.start();
       forwards.listeningOn(server.port ?? config.port);
       return {
@@ -913,11 +920,8 @@ async function compose(
         connected: startTask!.catch(() => {}),
       };
     },
-    /**
-     * Drain and release everything, closing the listener last; safe to call
-     * more than once. A process about to exit passes `keepListener`, so the
-     * port stays bound until its exit: launchd's restart waits for the port
-     * to free before it starts the next process (service-manager.ts).
+    /** Drain/release once, listener last. keepListener binds until process exit:
+     * launchd waits for the port to free before restarting (service-manager.ts).
      */
     async stop(options: { keepListener?: boolean } = {}): Promise<void> {
       stopTask ??= stopService();
@@ -960,9 +964,10 @@ async function compose(
   }
 
   async function stopService() {
-    // Admit nothing new: requests get 503 while the port stays bound, and no
-    // reconnect, push, Ranger start or wait for an answer begins.
+    // Refuse requests (503), reconnects, pushes, Ranger starts and new answer waits.
     stopping = true;
+    shipyard.close();
+    shipyardInstances.stop();
     const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
     deskWatches.stop();
@@ -973,9 +978,7 @@ async function compose(
     // Drop browser sockets as a process exit does; pages reconnect.
     for (const ws of [...browsers.clients]) ws.terminate();
     try {
-      // Stop what in-flight work waits on: Ranger, then every runtime, which
-      // also fails the Herdr calls still waiting. Startup then settles
-      // fenced, and so does every request, within a bound.
+      // Stop Ranger then runtimes, failing pending Herdr calls; fenced startup/requests settle.
       await forwards.stop();
       await disposeAssistant();
       await connectionManager.stopAll();
