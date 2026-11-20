@@ -162,6 +162,39 @@ for (const hold of ["snapshot", "save", "receipt"]) {
     expect(ids(f)).toEqual(["alpha", "beta", "gamma"]);
   }, 20_000);
 }
+// Main's host verbs and the legacy profile verbs mutate the same registry.
+for (const hostFirst of [false, true]) {
+  test(`real offline host and profile edits accumulate with ${hostFirst ? "host" : "profile"} ownership first`, async () => {
+    const f = fixture();
+    await seed(f);
+    const hostArgs = ["add", "runtime-fixture.example", "--preview-empty"];
+    const a = launch(f, {
+      mode: "edit",
+      args: hostFirst ? hostArgs : add("beta"),
+      hold: "snapshot",
+    });
+    await a.event("snapshot");
+    const b = launch(f, {
+      mode: "edit",
+      args: hostFirst ? add("beta") : hostArgs,
+    });
+    await b.event("cli-attempt");
+    a.release();
+    expect(await a.exited).toBe(0);
+    expect(await b.exited).toBe(0);
+    expect(ids(f)).toEqual(["alpha", "beta"]);
+    expect(
+      f.store
+        .load()
+        ?.hosts?.some(
+          (host) =>
+            host.type === "ssh" &&
+            host.ssh_destination === "runtime-fixture.example",
+        ),
+    ).toBe(true);
+  }, 20_000);
+}
+
 test("a paused offline owner is never stolen after the contender's wait expires", async () => {
   const f = fixture();
   await seed(f);

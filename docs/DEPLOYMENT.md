@@ -30,7 +30,11 @@ auto-sync runtime status and Board state. One in-process worker
 owns it; SQLite uses WAL and `synchronous=FULL`. Responses acknowledge a durable
 commit. Grouping up to 32 operations or 5 ms reduces synchronization frequency;
 these settings do not promise a particular response latency on every platform.
-Configuration, connections and secrets remain private files.
+Configuration, connections and secrets remain private files. The version-3
+`connections.json` stores hosts with runtime discovery records alongside the
+existing runtime profiles. Local profiles and identical SSH destinations group
+without renaming runtime IDs. See [host discovery and API](host-connections.md)
+for CLI use, migration and rollback constraints.
 
 At startup, World checks `boards/world-ledger.json` (or the configured
 `HERDR_WORLD_LEDGER_PATH`). Before importing a changed file, it makes a private,

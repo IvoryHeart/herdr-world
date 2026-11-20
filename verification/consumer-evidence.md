@@ -1,5 +1,50 @@
 # Consumer and alternative evidence decisions
 
+## Host ownership and runtime discovery (Q02, Q03, Q10)
+
+Hosts group existing runtime owners; they do not introduce a downstream lease or
+operation target. Host mutations share the profile service's admission queue.
+Missing runtimes consume the existing manager stop/retirement transitions, and
+rediscovery retains their IDs while advancing generations. The runtime-control,
+runtime-drain and observation-base models/replays remain mandatory and unchanged.
+A new host state machine would duplicate these fences without modeling the real
+SSH/platform boundary, so no additional Quint model is selected.
+
+`host-service.test.ts` exercises migration with preserved IDs, empty host durability,
+independent runtime failure, removal/rediscovery, partial probe failure, host removal
+and shutdown while discovery awaits. Native process composition tests also retain
+live saved endpoints when their executable is off PATH, including Ranger restart
+and profile CRUD; executable absence cannot retire an admitted live runtime. `host-discovery.test.ts` checks every fixed
+POSIX/PowerShell argv, destination refusals before process invocation, bounded
+version probing and registration of another provider. `host-snapshots.test.ts`
+retains actual cached topology while one runtime loses its generation and also
+exhausts the sixteen two-runtime lifecycle combinations for host grouping and
+per-runtime actionability. `service/host-connections.test.ts` runs real authenticated
+RPC, CLI admission, aggregate observation, `ls`, rediscovery and the Integrations
+registry with synthetic external runtimes. `cli/host-connections.test.ts` covers
+offline persistence and no offline fallback after refused live admission.
+
+The lifecycle repair additionally exhausts all eight combinations of saved host
+policy and two per-runtime auto-connect flags, and all four combinations of which
+runtime automatically recovers and whether its sibling was explicitly stopped.
+Real profile-service calls and a controlled retry scheduler check the actual
+connection intent, lifecycle state and retry eligibility, including newly found
+siblings. Persistence/reload checks cover both directions of auto-connect edits;
+deferred-start and discovery schedules cover queued Disconnect, temporary absence,
+explicit endpoint retry, host-wide reconnection and a failed catalogue write before
+later hosts. These are direct finite composition checks of host admission policy;
+the manager's generation/lease transition system is unchanged. Extending Quint's
+manager model would not exercise the distinct profile settings, filesystem failure
+or scheduler callbacks that caused these regressions. The full gate remains
+required for the Q02 owner change, alongside these consumer checks.
+
+These finite and composition checks cover the added host projection and admission
+boundary; the full verification gate covers unchanged lease/observation ordering.
+They do not certify real SSH keys, remote operating systems or arbitrary future
+runtime protocols. Existing native transport and platform checks retain those
+claims and prerequisites. Browser host grouping is outside this change; keeping
+all legacy connection IDs preserves existing resource and filter keys.
+
 ## SQLite attention candidate
 
 The [World storage contract](contracts/world-storage.md) supplements Q29 with a

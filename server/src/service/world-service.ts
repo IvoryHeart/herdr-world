@@ -97,8 +97,7 @@ export type WorldServiceDeps = {
 
 export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 
-/** How long stop waits for requests that were running when it began. */
-const DRAIN_TIMEOUT_MS = 2_000;
+const DRAIN_TIMEOUT_MS = 2_000; // Wait for requests already running at stop.
 
 /**
  * Claim the data folder, open storage and build one World service. Nothing
@@ -121,8 +120,6 @@ export async function createWorldService(deps: WorldServiceDeps) {
     throw error;
   }
   try {
-    // Offline snapshots and discovery must finish before the service loads its
-    // catalogue. Keep ownership until storage.close() fences the final write.
     await storage.connections.acquireServiceOwnership();
     return await compose(deps, storage, sessionSecret, releaseDataFolder);
   } catch (error) {
@@ -403,6 +400,7 @@ async function compose(
   const observedConnections = worldRuntimeRegistry(
     connectionManager,
     core.manager,
+    () => connectionProfiles.hosts.list(),
   );
   const agentActivity = new AgentActivityCache({
     clock,
@@ -675,6 +673,7 @@ async function compose(
     store: storage.connections,
     changed: publishConnectionsChanged,
     bootstrap: connectionBootstrap,
+    discoverHost: deps.adapters.herdr.discoverHost,
     createRuntime: runtimeFactoryForProfile,
     // The setup card's lookup; a ready implicit local server is Herdr (#935).
     noHerdrTui: () =>
@@ -889,6 +888,7 @@ async function compose(
             connectionCli: {
               profiles: connectionProfiles,
               registryPath: paths.connections,
+              snapshot: () => worldSnapshots!.snapshot(),
             },
             settings,
             update,
