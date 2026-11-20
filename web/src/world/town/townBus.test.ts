@@ -29,6 +29,7 @@ import { TownGround, type TownShape } from "./townLayout";
 import { TOWN_WALK_SPEED } from "./townActors";
 import { layoutTown, TOWN_SHAPES, TOWN_TILE as T } from "./townLayout";
 import type { TownModel } from "./townModel";
+import { townHarbourLot } from "./townHarbour";
 
 const town = (hosts: Record<string, number[]>) => ({
   hosts: Object.keys(hosts).map((key, displayOrder) => ({ key, displayOrder })),
@@ -113,7 +114,9 @@ test("every road crossing has a stop, and the bus passes each on its way off the
           expect(stop).toBeDefined();
           expect(stop!.wait.x).toBeGreaterThan(0);
         }
-      // Every street is driven edge to edge, from off the map to off it.
+      // Every street is driven edge to edge: from off the map's left edge to
+      // off its right, or to a wide town's promenade, where it turns away.
+      const streetEnd = townHarbourLot(layout)?.streetEnd;
       expect(route.legs.map((leg) => leg.y)).toEqual(
         [...new Set(layout.roads)]
           .sort((a, b) => a - b)
@@ -121,7 +124,10 @@ test("every road crossing has a stop, and the bus passes each on its way off the
       );
       for (const leg of route.legs)
         for (const end of [leg.from, leg.to])
-          expect(end < 0 || end > layout.width * T).toBe(true);
+          expect(
+            end < 0 ||
+              (streetEnd ? end >= (streetEnd - 3) * T : end > layout.width * T),
+          ).toBe(true);
       for (const stop of route.stops) {
         expect(stop.at).toBeGreaterThan(0);
         expect(stop.at).toBeLessThan(route.length);

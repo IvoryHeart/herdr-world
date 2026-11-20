@@ -74,9 +74,15 @@ const TILE_VARIANTS: Record<number, number> = {
   [TownLand.bed]: 3,
   [TownLand.gravel]: 3,
   [TownLand.lawn]: 2,
+  [TownLand.sea]: 8,
 };
 /** Kinds whose drawing has edges where they meet another kind. */
-const EDGED = new Set<number>([TownLand.trail, TownLand.lane, TownLand.water]);
+const EDGED = new Set<number>([
+  TownLand.trail,
+  TownLand.lane,
+  TownLand.water,
+  TownLand.sea,
+]);
 
 /**
  * A landscape tile of `kind` other than meadow (townPaint.ts draws meadow as
@@ -92,7 +98,8 @@ export function townLandTile(
 ): TownCanvas {
   const count = TILE_VARIANTS[kind] ?? TILE_VARIANTS[TownLand.lawn]!;
   const bucket = ((variant % count) + count) % count;
-  const edges = EDGED.has(kind) ? same : 0;
+  // The sea only ever meets the land on its left, at the quay.
+  const edges = !EDGED.has(kind) ? 0 : kind === TownLand.sea ? same & 8 : same;
   return tile(`land:${kind}:${bucket}:${edges}`, (g) =>
     paintTownLandTile(g, kind, bucket, edges),
   );
@@ -145,6 +152,9 @@ export function paintTownLandTile(
       if (!(same & 2)) g.fillRect(T - 1, 0, 1, T);
       if (!(same & 4)) g.fillRect(0, T - 1, T, 1);
       if (!(same & 8)) g.fillRect(0, 0, 1, T);
+      return;
+    case TownLand.sea:
+      paintSea(g, bucket, !(same & 8));
       return;
     case TownLand.bed:
       g.fillStyle = "#7a5638";
@@ -328,4 +338,57 @@ export function paintTownLandObjects(
         break;
     }
   }
+}
+
+/**
+ * Open sea (#1028): deep water in two tones with wave crests that line up
+ * from tile to tile, and where it meets the land a dressed-stone quay wall
+ * with its shadow on the water and a line of foam.
+ */
+function paintSea(g: CanvasRenderingContext2D, bucket: number, quay: boolean) {
+  g.fillStyle = "#2d6a9a";
+  g.fillRect(0, 0, T, T);
+  // Long swells: a darker trough row and a lighter face row per tile.
+  g.fillStyle = "#28608d";
+  g.fillRect(0, (bucket * 5) % T, T, 2);
+  g.fillStyle = "#3474a6";
+  g.fillRect(0, (bucket * 5 + 7) % T, T, 1);
+  const random = townRandom(bucket * 37 + 11);
+  // Wave crests: a short bright line with a shadow under it.
+  for (let i = 0; i < 2; i += 1) {
+    const x = (random() * 11) | 0;
+    const y = 2 + ((random() * 12) | 0);
+    const w = 3 + ((random() * 3) | 0);
+    g.fillStyle = "#4b8fc2";
+    g.fillRect(x, y + 1, w + 1, 1);
+    g.fillStyle = "#79b6df";
+    g.fillRect(x + 1, y, w - 1, 1);
+  }
+  if (bucket === 3 || bucket === 6) {
+    g.fillStyle = "#d4ecf7";
+    g.fillRect(4 + bucket, 5 + (bucket % 4), 2, 1);
+  }
+  speckle(g, bucket * 19 + 3, 3, ["#3a7db0", "#24597f"]);
+  if (!quay) return;
+  // The quay wall: stone courses with mortar, coping on top, its foot
+  // in the water, a shadow off its face and foam where waves meet it.
+  g.fillStyle = "#8f8a82";
+  g.fillRect(0, 0, 5, T);
+  g.fillStyle = "#a9a49a";
+  g.fillRect(0, 0, 1, T);
+  g.fillStyle = "#6c675f";
+  for (const y of [0, 8]) g.fillRect(0, y, 5, 1);
+  g.fillRect(2, 1, 1, 7);
+  g.fillRect(4, 9, 1, 7);
+  g.fillStyle = "#7c776f";
+  g.fillRect(1, 4, 1, 1);
+  g.fillRect(3, 12, 1, 1);
+  g.fillStyle = "#4e5a5e";
+  g.fillRect(5, 0, 1, T);
+  g.fillStyle = "#24557c";
+  g.fillRect(6, 0, 2, T);
+  g.fillStyle = "#e3f2f8";
+  for (const y of [2, 7, 11, 14]) g.fillRect(6 + (y % 2), y, 2, 1);
+  g.fillStyle = "#b9dcef";
+  for (const y of [4, 9]) g.fillRect(8, y, 1, 1);
 }

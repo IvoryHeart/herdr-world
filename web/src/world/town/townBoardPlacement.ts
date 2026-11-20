@@ -1,5 +1,5 @@
 /**
- * Town's boards keep off the town center, the post office and each other
+ * Town's boards keep off the town center, the post office, the warehouse and each other
  * (#790). A reception board stands above its building's front door and the
  * city billboard above the center, but boards keep their screen size while
  * the town zooms, so whether one covers its neighbours depends on the zoom:
@@ -13,6 +13,9 @@
 
 import { TOWN_CITY_BOARD_GAP, townCityBoardScale } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
+import { townHarbourLot } from "./townHarbour";
+import { townWarehouseReserve } from "./townHarbourLot";
+import { townLibraryLotBeside, townLibraryReserve } from "./townLibraryLot";
 import { townPostLotBeside, townPostReserve } from "./townPostLot";
 
 /** A rectangle in world pixels, x1 and y1 exclusive. */
@@ -107,7 +110,10 @@ export function townPlaceBoards(
   return offsets;
 }
 
-/** The town center's lot, the post office's and the billboard, in world pixels. */
+/**
+ * The town center's lot, the post office's, the library's, the warehouse's
+ * and the billboard, in world pixels.
+ */
 export function townBoardObstacles(
   layout: TownLayout,
   /** The billboard's size in screen pixels; null when folded or unmeasured. */
@@ -123,13 +129,19 @@ export function townBoardObstacles(
       y1: center.street * T,
     },
   ];
-  const post = townPostReserve(townPostLotBeside(center));
-  boxes.push({
-    x0: post.x0 * T,
-    x1: post.x1 * T,
-    y0: post.y0 * T,
-    y1: post.y1 * T,
-  });
+  for (const lot of [
+    townPostReserve(townPostLotBeside(center)),
+    townWarehouseReserve(townHarbourLot(layout).warehouse),
+    ...(layout.formFactor !== "narrow"
+      ? [townLibraryReserve(townLibraryLotBeside(center))]
+      : []),
+  ])
+    boxes.push({
+      x0: lot.x0 * T,
+      x1: lot.x1 * T,
+      y0: lot.y0 * T,
+      y1: lot.y1 * T,
+    });
   if (city) {
     const scale = townCityBoardScale(z);
     const mid = (center.x + center.w / 2) * T;
