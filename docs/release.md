@@ -43,6 +43,9 @@ intentionally pins the process default. Listing checks the requested rooms and
 the observed pane/terminal identities, since TUI launch replies omit room IDs.
 Upgrade permits newly discovered host catalogue metadata in an older registry;
 every previously saved field, including the profiles and default, must stay exact.
+Automatic discovery of existing runtimes keeps a legacy registry unchanged;
+host metadata remains in memory until an explicit host discovery or a newly
+discovered runtime persists the migration.
 After prompt input, listing waits for server-pushed topology changes until both
 the aggregate and CLI contain every launched agent in the same observation.
 It checks the CLI result's `connections` array when the result includes the host
@@ -51,6 +54,11 @@ feeds the real service and CLI output into the journey to keep this consumer ali
 It never accumulates partial passes or retries on a timer. A missing agent,
 stale topology or changed runtime generation still fails the bounded wait;
 the failure names the runtime and harness and the last unmet assertion.
+Listing failures also print bounded booleans for the aggregate's pane, room and
+harness binding. For the unchanged isolated core generation, one native read
+reports liveness, exit code and whether the foreground matches the harness.
+Diagnostics never print arguments, paths or transcripts and cannot turn a failure
+into a pass or replace its original reason.
 The older pre-0.2.4 cookie migration remains covered by installer acceptance below.
 
 The walk installs pinned, real `claude` and `codex` executables, signed out.

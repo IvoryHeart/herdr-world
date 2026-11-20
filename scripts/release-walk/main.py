@@ -75,7 +75,7 @@ def main(config):
                     with walk.journey(f'Prompt reaches input: {agent["runtime"]}/{agent["kind"]}'):
                         input_reaches(world, fixture, agent)
                 with walk.journey('Every runtime is listed'):
-                    listing(world, agents)
+                    listing(world, agents, fixture)
             with walk.journey('Previous release upgrade'), Fixture(root / 'upgrade', tool_dir, telemetry) as fixture:
                 upgrade(walk, candidate, baseline, fixture)
             services(walk, candidate, baseline, root, config['disposable'])

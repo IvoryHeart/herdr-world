@@ -145,6 +145,11 @@ their saved auto-connect policy. Saved startup targets SHALL start independently
 before discovery; a host discovery or persistence failure SHALL NOT prevent other
 hosts from starting or reject whole-service startup.
 
+When automatic startup or reconnect discovery finds only existing runtimes and
+the saved registry has no host catalogue, World SHALL expose discovery metadata
+in memory without rewriting the saved registry or its schema version. An explicit
+host discovery or a newly discovered runtime SHALL persist the host migration.
+
 Automatic rediscovery and per-connection Connect SHALL preserve each existing
 runtime's connection intent. Explicit Disconnect SHALL cancel that runtime's intent
 and retries; sibling reconnection SHALL NOT restore them. Temporary discovery

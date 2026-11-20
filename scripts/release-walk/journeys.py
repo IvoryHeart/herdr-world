@@ -187,9 +187,10 @@ def input_reaches(world, fixture, agent):
                            reason='prompt text never reached the real harness input')
 
 
-def listing(world, agents):
+def listing(world, agents, fixture=None):
     reason = 'aggregate/CLI listing never converged'
     last_failure = 'listing was not observed'
+    last_rows = []
 
     def read():
         rows = world.snapshot()
@@ -201,7 +202,8 @@ def listing(world, agents):
         return rows, entries
 
     def complete(observation):
-        nonlocal last_failure
+        nonlocal last_failure, last_rows
+        last_rows = observation[0]
         try:
             assert_listing(*observation, agents)
             return True
@@ -217,7 +219,41 @@ def listing(world, agents):
     except AssertionError as error:
         if str(error) != reason:
             raise
+        if fixture is not None:
+            listing_diagnostics(last_rows, agents, fixture)
         raise AssertionError(f'{reason}: {last_failure}') from None
+
+
+def listing_diagnostics(rows, agents, fixture):
+    """One failure-only read of the isolated core; never emit argv or paths."""
+    for agent in agents:
+        connection = next((row for row in rows if row['connection_id'] == agent['connection']['connection_id']), None)
+        snapshot = (connection or {}).get('snapshot') or {}
+        pane = next((item for item in snapshot.get('panes', [])
+                     if item['pane_id'] == agent['result']['pane_id']), None)
+        evidence = dict(runtime=agent['runtime'], harness=agent['kind'],
+                        generation_matches=bool(connection and connection['generation'] == agent['connection']['generation']),
+                        pane_present=pane is not None,
+                        room_matches=bool(pane and pane.get('workspace_id') == agent['workspace_id']),
+                        terminal_matches=bool(pane and pane.get('terminal_id') == agent['result']['terminal_id']),
+                        harness_matches=bool(pane and pane.get('agent') == agent['kind']))
+        if agent['runtime'] == 'herdr-core' and evidence['generation_matches']:
+            try:
+                result = run([fixture.tools / 'core/herdr-core', 'get', '--json', agent['result']['terminal_id']],
+                             fixture.env, check=False, timeout=10)
+                assert result.returncode == 0
+                record = json.loads(result.stdout)
+                state = record.get('state')
+                foreground = record.get('foreground')
+                code = record.get('exit_code')
+                evidence.update(native_state=state if state in ('live', 'finished') else 'other',
+                                native_exit_code=code if isinstance(code, int) else None,
+                                native_foreground_present=isinstance(foreground, dict),
+                                native_foreground_name_matches=bool(isinstance(foreground, dict) and
+                                    foreground.get('name') == agent['kind']))
+            except Exception:
+                evidence['native_read'] = 'unavailable'
+        print('Listing diagnostic: ' + json.dumps(evidence, sort_keys=True), flush=True)
 
 
 def assert_listing(rows, entries, agents):

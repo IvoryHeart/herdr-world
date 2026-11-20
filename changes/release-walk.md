@@ -7,6 +7,10 @@
 
 ### Fixed
 
+- Preserve legacy connection registries during automatic discovery of existing
+  runtimes; expose metadata in memory until an explicit host discovery or a new
+  runtime commits the migration. Keep release-walk assertions and add bounded,
+  private-data-free native diagnostics when runtime listing fails.
 - Preserve the real harness's foreground process identity while recording the
   release walk, so runtime detection can see the launched agent. Refuse existing
   World services installed under alternate labels before service journeys.

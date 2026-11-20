@@ -1,5 +1,7 @@
 """Regress walk requests against the product's real response shapes."""
 import copy
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -78,6 +80,48 @@ class JourneyTests(unittest.TestCase):
         world = self.listing_world(rows)
         with patch('journeys.run', return_value=SimpleNamespace(stdout=json.dumps(entries))):
             listing(world, agents)
+
+    def test_failed_listing_keeps_assertions_and_reads_native_core_once_without_private_data(self):
+        agents, rows, entries = self.listed_agents()
+        rows[1]['snapshot']['panes'][0].pop('agent')
+        fixture = SimpleNamespace(tools=Path('/synthetic/tools'), env={'HC_SESSION': 'isolated'})
+        for state, code in (('live', None), ('finished', 1)):
+            native = dict(state=state, exit_code=code, argv=['private-argument'],
+                          cwd='/private-path', foreground=dict(name='codex', argv=['private-argument']))
+            output = io.StringIO()
+            with self.subTest(state=state), contextlib.redirect_stdout(output), patch(
+                    'journeys.run', side_effect=[cli_response(entries), SimpleNamespace(returncode=0, stdout=json.dumps(native))]) as command:
+                with self.assertRaisesRegex(AssertionError, 'herdr-core/codex: aggregate omitted the launched agent from its runtime room'):
+                    listing(self.listing_world(rows), agents, fixture)
+            self.assertEqual(command.call_count, 2)
+            self.assertEqual(command.call_args.args, ([fixture.tools / 'core/herdr-core', 'get', '--json',
+                                                       agents[1]['result']['terminal_id']], fixture.env))
+            evidence = [json.loads(line.removeprefix('Listing diagnostic: ')) for line in output.getvalue().splitlines()]
+            self.assertEqual(evidence[1]['native_state'], state)
+            self.assertEqual(evidence[1]['native_exit_code'], code)
+            self.assertTrue(evidence[1]['room_matches'])
+            self.assertFalse(evidence[1]['harness_matches'])
+            self.assertNotIn('private', output.getvalue())
+
+    def test_listing_diagnostic_failure_cannot_replace_original_journey_failure(self):
+        agents, rows, entries = self.listed_agents()
+        rows[1]['snapshot']['panes'].clear()
+        fixture = SimpleNamespace(tools=Path('/synthetic/tools'), env={})
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), patch('journeys.run', side_effect=[cli_response(entries), RuntimeError('private-path')]):
+            with self.assertRaisesRegex(AssertionError, 'herdr-core/codex: aggregate omitted the launched agent from its runtime room'):
+                listing(self.listing_world(rows), agents, fixture)
+        self.assertIn('"native_read": "unavailable"', output.getvalue())
+        self.assertNotIn('private', output.getvalue())
+
+    def test_listing_diagnostics_do_not_read_native_core_for_a_changed_generation(self):
+        agents, rows, entries = self.listed_agents()
+        rows[1]['generation'] += 1
+        fixture = SimpleNamespace(tools=Path('/synthetic/tools'), env={})
+        with contextlib.redirect_stdout(io.StringIO()), patch('journeys.run', return_value=cli_response(entries)) as command:
+            with self.assertRaisesRegex(AssertionError, 'aggregate runtime generation changed'):
+                listing(self.listing_world(rows), agents, fixture)
+        self.assertEqual(command.call_count, 1)
 
     def test_listing_accepts_current_host_catalogue_and_previous_cli_array(self):
         agents, rows, entries = self.listed_agents()
