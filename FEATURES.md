@@ -213,6 +213,31 @@ host zones and workspace cards read it (below).
   each time you reopen that part. **Upgrade &
   restart** still reloads once the restarted service is ready.
 
+## Help and what's new
+
+- **What can I do here?** opens World's help for the screen you are on: the
+  **?** beside the views (desktop), the views button's menu (phone),
+  **Menu → Help & updates**, Board's **⋯ → Help** and Chat's **⋮** tools.
+  Tabs: **What's new**, **Town**, **Board**, **Chat** and **Everywhere**. Each
+  entry has a picture of the real control (phone or desktop, light or dark, as
+  your screen), its steps, where it lives and **Try**.
+- **Try** closes the help, switches to Town or Board when the entry lives
+  there, and rings the control for a moment. A control inside a closed menu
+  rings the button that opens it. When the control is not on this screen
+  (Chat's controls without an open Chat, a phone-only control on a desktop),
+  help reopens on that tab and says where to find it.
+- **What's new from the Town Master**: after an update, the greeting lists up
+  to four things new since the last version it showed in this browser, each
+  with a picture and **Try**, and a link to all of them in help. A first
+  visit shows **Start here**, the short first-run path, instead. Closing the
+  greeting marks them seen; turning the greeting off leaves them in
+  **Menu → Help & updates → What's new**. Testing switch:
+  `?whatsNewSince=0.3.0` shows what is new after 0.3.0, `?whatsNewSince=new`
+  the first-run path; the address drops the parameter at once.
+- The same entries make [docs/HELP.md](docs/HELP.md) and the website's help
+  page. Help covers Town, Board, Chat and controls on every screen; other
+  views are not described there yet.
+
 ## Visual control plane
 
 Town, Board, Desk and Spaces are World's views. Office, Tree and Graph have been
@@ -302,7 +327,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     opens once the card is gone. **✕**, Escape, Back or a press outside closes it; tap
     the figure to open it again. Untick **Show this on start** at its foot,
     or switch **Menu → Town Master greeting**, to stop it on this browser.
-    Your very first visit is greeted too, without a last time.
+    Your very first visit is greeted too, without a last time. The card also
+    carries [What's new](#help-and-whats-new) after an update, or **Start
+    here** on a first visit.
   - **Tab and app icon count**: in every view, while anything needs you, the
     browser tab reads `(N) Herdr World`, its icon carries a small yellow
     badge (the number up to 9, then `9+`), and an installed World shows the
@@ -1126,7 +1153,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     including shell questions, while skipping stale hosts and shells without
     questions. It stays reachable in the Board menu when the controls need more space.
   - The Board **⋯** menu offers **Surface** (Follow theme, Whiteboard or
-    Blackboard), **Status colours…** and **Help**. Surface and status choices
+    Blackboard), **Status colours…** and **Help** (Board's help entries, each
+    with **Try**). Surface and status choices
     persist in this browser and stay separate from shared card colours;
     **Reset status colours** restores the chosen surface's defaults.
     Following a dark theme, Board takes Town's night: its ground, its agent

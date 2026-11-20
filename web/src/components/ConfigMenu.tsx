@@ -26,6 +26,8 @@ import {
   Volume2,
   Hand,
   Inbox,
+  CircleHelp,
+  Sparkles,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { isStaleBuild, useBuildFreshness } from "../buildFreshness";
@@ -63,6 +65,7 @@ import { HerdrSetupCard } from "./HerdrSetupCard";
 import { MobileSheetHandle } from "./MobileSheetHandle";
 import "./ConfigMenu.css";
 import { useLayer } from "../layerStack";
+import { helpTabForPath, openHelp } from "../help/helpEvents";
 import { DEVTOOLS } from "../world/devtools/flag";
 import { WORLD_OPEN_UPDATE_MENU_EVENT } from "../world/townMasterGreeting";
 import { requestTrace, traceRemembered } from "../world/devtools/trace";
@@ -603,6 +606,24 @@ export function ConfigMenu({
               </div>
               <div className="config-section">
                 <div className="config-title">Help & updates</div>
+                <ConfigMenuItem
+                  icon={<CircleHelp size={15} />}
+                  label="What can I do here?"
+                  description="What each screen offers, with Try"
+                  onClick={() => {
+                    setOpen(false);
+                    openHelp(helpTabForPath(window.location.pathname));
+                  }}
+                />
+                <ConfigMenuItem
+                  icon={<Sparkles size={15} />}
+                  label="What's new"
+                  description="New in World, with pictures"
+                  onClick={() => {
+                    setOpen(false);
+                    openHelp("new");
+                  }}
+                />
                 {[
                   {
                     label: "Tutorial",

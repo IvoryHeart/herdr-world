@@ -1,8 +1,16 @@
 import { ArrowLeft } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import { CloseButton } from "../components/CloseButton";
+import {
+  greetingNews,
+  greetingNewsSeen,
+  helpPictureLook,
+} from "../help/greetingNews";
+import { helpPictureUrl, type HelpEntry } from "../help/helpEntry";
+import { openHelp, tryHelp } from "../help/helpEvents";
+import type { WhatsNew } from "../help/whatsNew";
 import { useLayer } from "../layerStack";
 import { useStoreSelector } from "../store";
 import type { UpdateInfo } from "../store/types";
@@ -45,6 +53,10 @@ export default function TownMasterGreetingLayer({
   const [onStart, setOnStart] = useState(
     () => readOfficePreferences(worldLocalStorage).townGreeting,
   );
+  // What is new since the last news shown here (or, for a new user, where
+  // to start): fixed for the card's life, and seen once it closes.
+  const [news] = useState(() => greetingNews(here !== null));
+  useEffect(() => (news ? () => greetingNewsSeen() : undefined), [news]);
   const close = () => greeting.close();
   // Escape, Back on a phone and a press outside close it; the anchor (the
   // figure) toggles it instead.
@@ -61,6 +73,15 @@ export default function TownMasterGreetingLayer({
       hello={helloLine(here, now)}
       lines={lines}
       update={update}
+      whatsNew={news}
+      onTry={(entry) => {
+        close();
+        tryHelp(entry.id);
+      }}
+      onHelp={() => {
+        close();
+        openHelp(news?.kind === "start" ? "town" : "new");
+      }}
       onStart={onStart}
       onClose={close}
       onLine={(line) => {
@@ -99,6 +120,9 @@ export function TownMasterGreetingCard({
   hello,
   lines,
   update,
+  whatsNew = null,
+  onTry = () => {},
+  onHelp = () => {},
   onStart,
   onClose,
   onLine,
@@ -111,6 +135,10 @@ export function TownMasterGreetingCard({
   hello: string;
   lines: readonly SinceYouLeftLine[];
   update: UpdateInfo | null;
+  /** What is new in World, or a new user's first steps (whatsNew.ts). */
+  whatsNew?: WhatsNew | null;
+  onTry?(entry: HelpEntry): void;
+  onHelp?(): void;
   onStart: boolean;
   onClose(): void;
   onLine(line: SinceYouLeftLine): void;
@@ -166,6 +194,14 @@ export function TownMasterGreetingCard({
           <p>Nothing new since you left.</p>
         )}
       </div>
+      {whatsNew ? (
+        <GreetingWhatsNew
+          news={whatsNew}
+          mobile={mobile}
+          onTry={onTry}
+          onHelp={onHelp}
+        />
+      ) : null}
       {news ? (
         <p className="town-master-greeting-update">
           <span>{news}</span>
@@ -185,6 +221,64 @@ export function TownMasterGreetingCard({
         </label>
       </footer>
     </section>
+  );
+}
+
+/** "What's new" or "Start here": a picture, a title and Try for each. */
+function GreetingWhatsNew({
+  news,
+  mobile,
+  onTry,
+  onHelp,
+}: {
+  news: WhatsNew;
+  mobile: boolean;
+  onTry(entry: HelpEntry): void;
+  onHelp(): void;
+}) {
+  const look = helpPictureLook(mobile);
+  const heading = news.kind === "start" ? "Start here" : "What's new";
+  return (
+    <div
+      className="town-master-greeting-news"
+      aria-label={heading}
+      role="group"
+    >
+      <h3>{heading}</h3>
+      <ul>
+        {news.entries.slice(0, 4).map((entry) => (
+          <li key={entry.id}>
+            <img
+              src={helpPictureUrl(entry, look.size, look.theme)}
+              alt=""
+              width={80}
+              height={50}
+              loading="lazy"
+            />
+            <span>
+              <strong>{entry.title}</strong>
+              <small>{entry.summary}</small>
+            </span>
+            <button
+              type="button"
+              aria-label={`Try ${entry.title}`}
+              onClick={() => onTry(entry)}
+            >
+              Try
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        className="town-master-greeting-help"
+        onClick={onHelp}
+      >
+        {news.entries.length > 4
+          ? `All ${news.entries.length} in Help ›`
+          : "What can I do here? ›"}
+      </button>
+    </div>
   );
 }
 
@@ -241,6 +335,7 @@ export function TownMasterFigure() {
       ref={anchor}
       type="button"
       className="town-master-figure"
+      data-help="town.master"
       aria-label="Town Master"
       title="Town Master"
       aria-haspopup="dialog"
