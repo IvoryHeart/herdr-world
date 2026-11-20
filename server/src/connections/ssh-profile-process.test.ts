@@ -11,7 +11,10 @@ import {
 import * as net from "node:net";
 import { join } from "node:path";
 import { BinReader, BinWriter, encodeFrame } from "../bridge/bincode";
-import type { SshConnectionProfile } from "./profiles";
+import {
+  REMOTE_SOCKET_PATH_MAX_BYTES,
+  type SshConnectionProfile,
+} from "./profiles";
 import { createInProcessSsh } from "./testing/inProcessSsh";
 
 const password = "profile-test-password";
@@ -183,6 +186,26 @@ async function fakeHerdr(
   return { controlPath, renderPath };
 }
 
+// The profile registry refuses long remote socket paths, and the test runner's
+// TMPDIR is already nested (`<TMPDIR>/hwt-XXXXXX`). Fixture names stay short so
+// longer temp roots such as /dev/shm or /run/user/<uid> still fit; when one does
+// not, say so plainly instead of failing later on a profile missing from the
+// catalog.
+function assertRemoteSocketPathsFit(
+  ...remotes: { controlPath: string; renderPath: string }[]
+): void {
+  for (const path of remotes.flatMap((remote) => [
+    remote.controlPath,
+    remote.renderPath,
+  ])) {
+    const bytes = Buffer.byteLength(path, "utf8");
+    if (bytes > REMOTE_SOCKET_PATH_MAX_BYTES)
+      throw new Error(
+        `fixture socket path is ${bytes} bytes, over the ${REMOTE_SOCKET_PATH_MAX_BYTES}-byte profile limit; TMPDIR is too long: ${path}`,
+      );
+  }
+}
+
 function sshProfile(
   id: string,
   destination: string,
@@ -283,6 +306,7 @@ test("production bridge supervises two independent SSH profile tunnels", async (
   mkdirSync(state, { recursive: true, mode: 0o700 });
   const alphaRemote = await fakeHerdr(root, "ssh-alpha");
   const betaRemote = await fakeHerdr(root, "ssh-beta");
+  assertRemoteSocketPathsFit(alphaRemote, betaRemote);
   const fakeHome = join(
     tmpdir(),
     `hgui-legacy-${crypto.randomUUID().slice(0, 8)}`,

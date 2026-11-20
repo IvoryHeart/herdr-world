@@ -122,6 +122,7 @@ export async function createWorldService(deps: WorldServiceDeps) {
     throw error;
   }
   try {
+    await storage.connections.acquireServiceOwnership();
     return await compose(deps, storage, sessionSecret, releaseDataFolder);
   } catch (error) {
     await storage.close().catch(() => {});

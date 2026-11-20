@@ -322,30 +322,6 @@
   gap: 6px;
 }
 
-.town-warehouse-fold-counts {
-  display: inline-flex;
-  gap: 3px;
-}
-
-.town-warehouse-fold-counts b {
-  min-width: 12px;
-  padding: 0 2px;
-  color: #1c1722;
-  border-radius: 2px;
-  text-align: center;
-}
-
-.town-warehouse-fold-counts [data-state="ready"] {
-  background: #5fbf5a;
-}
-.town-warehouse-fold-counts [data-state="failing"] {
-  background: #d4252b;
-  color: #fff;
-}
-.town-warehouse-fold-counts [data-state="waiting"] {
-  background: #ffd166;
-}
-
 /* The folded sign's and the pile's list. */
 .popover-content.town-warehouse-popover {
   z-index: 6100;

@@ -43,8 +43,10 @@ The audit also found a **real counterexample**: Q55's stale tap owner can publis
 after its ownership check was superseded (#1086). The repaired canonical case requires
 positive TLC exploration and actual filesystem conformance; live-owner stealing
 remains a rejected fault control. Q55 records that repaired evidence separately
-from independent acceptance. Q54's offline CLI witness still records the unproved
-cross-process boundary (#1084). A completed gate does not approve known failures.
+from independent acceptance. Q54's offline CLI witness now requires preservation;
+[registry ownership](contracts/connection-registry.md#saved-connection-registry-ownership)
+adds independent-process and startup consumers for #1084. A completed gate does
+not approve known failures.
 
 - `pending`: assessed but additional executable evidence or its mapping is unfinished.
 - `modeled`: a maintained model has a real implementation adapter and explicit scope.
