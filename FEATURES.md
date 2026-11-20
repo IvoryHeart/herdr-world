@@ -257,10 +257,17 @@ edit and delete harness memory on its owning local or SSH connection. Claude
 instructions, rules and project/subagent memory, Codex instructions and v1/v2
 Markdown memory, and Pi instructions share one model for TUI and core. Documented
 instruction/memory candidates also cover OpenCode, GitHub Copilot CLI, Cursor,
-Qwen Code, Droid, Kimi, oh-my-pi, Kilo, Hermes, Qoder CLI, Antigravity CLI, Grok, Devin and Mastra Code
-([sources and limits](./docs/memory-api.md#discovery-and-load-evidence)). Sources
+Qwen Code, Droid, Kimi, oh-my-pi, Kilo, Hermes, Qoder CLI, Antigravity CLI, Grok,
+Devin, Mastra Code, Amp, Cline, Gemini CLI, Kiro, Maki, PiG, Crush, Command Code,
+Prime Agent, DeepSeek Harness and Muse Code
+([sources and limits](./docs/memory-api.md#discovery-and-load-evidence)). The
+[real-install audit](./docs/memory-install-audit.md) records all 30 launcher names,
+tested versions and remaining barriers. Sources
 show current project/agent sharing; entries show bytes, modification time, a
-30-day age hint and per-harness default load candidates or shadowing. Unknown
+30-day age hint and per-harness default load candidates or shadowing. Empty entries
+stay on their shelves but are skipped in startup lists. Pi/PiG/Prime/Maki/Muse/Command
+Code, Kilo and Mastra alternatives follow their default precedence; native oh-my-pi
+context wins at the same directory depth. Unknown
 harnesses and missing/refused sources are explicit. Discovery cannot prove what
 an already running agent loaded; per-process overrides, imports, trust, custom
 fallback names and project settings can change that. Reload in the harness after
@@ -275,7 +282,7 @@ the owning host and in private responses, without a World content cache, index,
 Board copy or telemetry. The Library (below) is the browser's view of this data.
 
 The Unix host needs Python 3; Windows, symlinks, hardlinks, special/binary/non-UTF-8
-files and non-Markdown entries refuse. Cursor/oh-my-pi `.mdc` rules are readable
+files and non-Markdown entries refuse. Cursor/oh-my-pi/Crush `.mdc` rules are readable
 and searchable with those same protections; editing remains limited to `.md`. Discovery stops at 32 projects, 128 agents,
 256 sources and 512 entries, four directory levels, and 256 KiB per file. Search
 is literal and case-insensitive, with a 2 MiB scan budget and 100 results. Partial

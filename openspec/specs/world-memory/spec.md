@@ -14,7 +14,11 @@ unsupported harnesses and incomplete discovery SHALL be explicit in the API.
 Only observed agents with a registered memory adapter SHALL contribute sources;
 empty projects and unsupported harnesses SHALL NOT synthesize sources. New
 adapters SHALL cite maker documentation for their default paths and loading
-semantics. Supported harnesses with missing files SHALL retain missing candidates.
+semantics. The capability registry SHALL cover documented local Markdown memory
+for launcher harnesses, including core-only names; exclusions SHALL have a
+documented reason. Default filename/location precedence SHALL be shared by API
+load evidence and the Library. Empty entries SHALL remain browsable but SHALL
+NOT count as startup context. Supported harnesses with missing files SHALL retain missing candidates.
 
 #### Scenario: Shared project memory
 - **WHEN** two live agents have the same project memory directory
@@ -27,6 +31,26 @@ semantics. Supported harnesses with missing files SHALL retain missing candidate
 #### Scenario: Documented OpenCode instructions
 - **WHEN** a project's observed agent uses OpenCode
 - **THEN** its project `AGENTS.md` and owning-host user instructions are described as startup candidates through the same CLI/API model
+
+#### Scenario: Installed harness alternatives
+- **WHEN** a Pi, Prime Agent, PiG, Maki, Muse, Command Code, Kilo or Mastra reader has competing default instruction files
+- **THEN** all managed candidates remain browsable and only the preferred files contribute to its startup list
+
+#### Scenario: Ancestor filename precedence
+- **WHEN** an OpenCode or Kilo agent starts below a root `AGENTS.md` and a deeper `CLAUDE.md` exists
+- **THEN** the deeper fallback remains browsable but is shadowed in its startup list
+
+#### Scenario: Native oh-my-pi context
+- **WHEN** `.omp/AGENTS.md` and standalone `AGENTS.md` exist at the same directory depth
+- **THEN** native context is a startup candidate and the standalone file is shadowed for oh-my-pi
+
+#### Scenario: Empty generated index
+- **WHEN** an installed harness creates an empty `MEMORY.md`
+- **THEN** the entry remains on its shelf and is skipped in the startup list
+
+#### Scenario: Conditional steering
+- **WHEN** Cline rules declare `paths` or Kiro steering declares a non-always inclusion mode
+- **THEN** those rules are on-demand candidates while baseline rules are startup candidates
 
 #### Scenario: No supported reader
 - **WHEN** a project has only unsupported harnesses, only shells, or no agents
@@ -59,7 +83,7 @@ unchanged. An uncertain transport outcome SHALL NOT be retried automatically.
 - **THEN** admission or the service refuses before filesystem mutation
 
 #### Scenario: Browse-only rule format
-- **WHEN** a Cursor or oh-my-pi rule uses `.mdc`
+- **WHEN** a Cursor, oh-my-pi or Crush rule uses `.mdc`
 - **THEN** World can list, read and search it with the existing file/byte/connection protections, but refuses management outside the existing `.md` boundary
 
 ### Requirement: Shared CLI and API contract

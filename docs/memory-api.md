@@ -68,7 +68,7 @@ connection ID. IDs are not capabilities: each call discovers ownership anew.
 | --- | --- |
 | Claude | User `CLAUDE.md` and rules; ancestor `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md` and `AGENTS.md` fallback candidates; project `.claude/rules`; project auto-memory `MEMORY.md` and topic files; project/user named subagent memory directories |
 | Codex | User and repository-root-to-cwd `AGENTS.override.md`/`AGENTS.md`; Markdown under `memories` and `memories_v2` |
-| Pi | User and ancestor `AGENTS.md` |
+| Pi | User and ancestor `AGENTS.md`/`AGENTS.MD`/`CLAUDE.md`/`CLAUDE.MD` (first existing per directory); `~/.pi/agent` and cwd `.pi` `SYSTEM.md`/`APPEND_SYSTEM.md` |
 | OpenCode (`opencode`) | Global `~/.config/opencode/AGENTS.md` and ancestor `AGENTS.md`; documented Claude compatibility fallbacks |
 | GitHub Copilot CLI (`copilot`) | Personal `copilot-instructions.md` and `instructions/**/*.instructions.md`; ancestor `AGENTS.md`, `CLAUDE.md`, `.claude/CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`; root/cwd `.github/instructions` |
 | Cursor (`cursor`) | Root `AGENTS.md` and `CLAUDE.md`; `.cursor/rules/**/*.mdc` (plain `.md` rules are ignored) |
@@ -83,6 +83,19 @@ connection ID. IDs are not capabilities: each call discovers ownership anew.
 | Devin (`devin`) | User `~/.config/devin` and workspace `AGENTS.md`, `AGENTS.local.md`, `AGENT.md`, project `CLAUDE.md` and user Claude compatibility; observed subdirectory candidates load on demand |
 | Mastra Code (`mastracode`) | Project root, `.claude`, `.mastracode` and user `.claude`, `.mastracode`, `.config/claude`, `.config/mastracode` instruction candidates; first location wins, `AGENTS.md` before `CLAUDE.md` |
 | Grok (`grok`) | User `.grok` and ancestor compatible instruction filenames; `.grok/rules` and `.claude/rules` Markdown candidates |
+| Amp (`amp`) | XDG config `amp/AGENTS.md` and `AGENTS.md`, Linux `/etc/ampcode/AGENTS.md`, ancestor `AGENTS.md` |
+| Cline (`cline`) | User `.agents/AGENTS.md`, `.cline/rules`, `Documents/Cline/Rules`, `Cline/Rules`; project `AGENTS.md`, `.clinerules` and `.cline/rules` Markdown directories |
+| Gemini CLI (`gemini`) | User `.gemini/GEMINI.md` and repository-root-to-cwd `GEMINI.md`; JIT subtrees, configured filenames and opaque auto-memory project stores are not expanded |
+| Kiro (`kiro`) | User/project `.kiro/steering` Markdown and project `AGENTS.md`; default/always rules start with the session, other inclusion modes are on demand |
+| Maki (`maki`) | User XDG `maki/AGENTS.md`; root-to-cwd ordered Markdown instruction alternatives plus additive `AGENTS.local.md` |
+| PiG (`pig`) | User XDG `pig/agent` and ancestor context, with `AGENTS.override.md` before the Pi instruction variants; `pig diagnose` reports the installed root |
+| Crush (`crush`) | Project default context filenames (`AGENTS.md`, `CRUSH.md`, `CLAUDE.md`, `GEMINI.md` and documented case/local variants), `.github/copilot-instructions.md`, `.cursor/rules` |
+| Command Code (`command-code`) | User `.commandcode/AGENTS.md`; project `AGENTS.md` before `.commandcode/AGENTS.md`; observed deeper cwd alternatives load on access |
+| Prime Agent (`prime-agent`) | User `.prime/agent` and ancestor Pi-style instruction alternatives, first existing filename per directory |
+| DeepSeek Harness (`dsh-tui`) | User `.dsh/AGENTS.md`, `.agents/AGENTS.md`; root-to-cwd `AGENTS.md`, `CLAUDE.md` and their local overlays |
+| Muse Code (`muse`) | Root-to-cwd `AGENTS.md`, `CLAUDE.md`, `.agents/AGENTS.md`, `.claude/CLAUDE.md`, first existing location per directory; trust gates project context |
+
+The [real-install audit](memory-install-audit.md) inventories every launcher harness, release versions, local-loader evidence and authentication/install barriers. Its acceptance command compares the production memory list/read service with the Library model using independently captured vendor results; it starts no World server. A package version or a synthetic fixture alone is not a real-install memory check.
 
 Only observed agents whose harness has an adapter contribute sources. A project
 with no such agent has no sources, even if an `AGENTS.md` exists on disk. Empty
@@ -120,9 +133,9 @@ trust policy, interpret path-scoped rules, or toggle memory. `warnings` preserve
 these limits. Unknown harnesses appear in `unsupported`. Nonempty Codex overrides
 shadow the matching `AGENTS.md`; Claude instructions can shadow its fallback.
 `entry.harness_loads` reports this separately for each harness sharing a file.
-OpenCode's `AGENTS.md` shadows its same-scope Claude fallback. Rule
+OpenCode and Kilo select a project filename across the whole ancestor chain before trying a fallback filename: an ancestor `AGENTS.md` also shadows a deeper `CLAUDE.md`. User `AGENTS.md` shadows the same-scope Claude compatibility fallback. Rule
 folders describe conditional loading; bounded scalar frontmatter recognizes
-Cursor/oh-my-pi `alwaysApply`, Qwen `paths` and Antigravity `trigger` without
+Cursor/oh-my-pi `alwaysApply`, Qwen/Cline `paths`, Kiro `inclusion` and Antigravity `trigger` without
 interpreting globs or expanding imports. Other rule applicability stays with the
 harness. `load` is the coarse default timing; `harness_loads` refines it. Claude
 topic files are on demand, while `MEMORY.md` is a startup candidate. Nested subagent
@@ -131,8 +144,10 @@ folders remain on demand; their configuration determines the actual reader.
 Harness load budgets differ from World's editing budget: Codex's default
 instruction chain is 32 KiB, and Claude's auto-memory index has a 200-line/25 KB
 startup limit. Larger entries can be editable here without being fully loaded.
+Empty entries remain browsable but do not count as startup context. Pi/Prime/PiG/Maki/Muse/Command Code, Kilo and Mastra alternatives show default shadowing; native oh-my-pi context shadows standalone instructions at the same depth. Project Pi `SYSTEM.md` replaces the user system prompt while append files accumulate.
+
 Codex generated recall can overwrite manual edits. Databases, transcripts,
-binary stores and skills are outside this v1's Markdown model. `.mdc` rules are
+binary stores and skills are outside this v1's Markdown model. Cursor/oh-my-pi/Crush `.mdc` rules are
 readable and searchable with the same limits and filesystem refusals, but remain
 read-only in the CLI/API/Library; management still accepts only `.md`. Cursor
 rules offer no Markdown creation action because Cursor ignores that extension.
@@ -149,7 +164,7 @@ Each adapter cites its maker's documentation in its code comment. Letta's
 [MemFS](https://docs.letta.com/configuration/memory) requires agent-owned memory
 identity not present in observed topology; no filesystem adapter is invented.
 Mastra Code observational memory is database-backed and excluded; its documented
-Markdown instructions are supported. Third-party memory systems remain outside
+Markdown instructions are supported. Ollama uses model-owned Modelfile/system configuration, not automatically loaded project Markdown memory; it also has no filesystem adapter. Third-party memory systems remain outside
 this slice.
 
 ## RPC calls for #1027

@@ -369,7 +369,9 @@ export class MemoryService {
       params.path,
       action === "read" &&
         source.kind === "rules" &&
-        source.harnesses.some((h) => h === "cursor" || h === "omp"),
+        source.harnesses.some(
+          (h) => h === "cursor" || h === "omp" || h === "crush",
+        ),
     );
     if (source.shape === "file" && relative !== path.basename(source.path))
       throw new MemoryError(

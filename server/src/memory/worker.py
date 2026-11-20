@@ -53,7 +53,7 @@ def relative(value, rule=False):
 
 
 def target(source, path):
-    relative(path, source['kind'] == 'rules' and any(h in source['harnesses'] for h in ('cursor', 'omp')))
+    relative(path, source['kind'] == 'rules' and any(h in source['harnesses'] for h in ('cursor', 'omp', 'crush')))
     if source['shape'] == 'file':
         if path != os.path.basename(source['path']):
             refuse('refused', 'Entry is outside this instruction source')
@@ -174,7 +174,7 @@ def environment(paths):
 def rule_name(source, name):
     harnesses = source['harnesses']
     if source['kind'] == 'rules' and name.lower().endswith('.mdc'):
-        return any(h in harnesses for h in ('cursor', 'omp'))
+        return any(h in harnesses for h in ('cursor', 'omp', 'crush'))
     if source['kind'] == 'rules' and harnesses == ['copilot']:
         return name.lower().endswith('.instructions.md')
     # Cursor's rules system ignores plain .md files; other adapters accept them.
@@ -183,7 +183,7 @@ def rule_name(source, name):
 
 def rule_loads(source, path, info):
     # Read only bounded rule metadata; never interpret YAML tags, imports or globs.
-    harnesses = [h for h in source['harnesses'] if h in ('cursor', 'omp', 'qwen', 'antigravity-cli')]
+    harnesses = [h for h in source['harnesses'] if h in ('cursor', 'omp', 'qwen', 'antigravity-cli', 'cline', 'kiro')]
     if source['kind'] != 'rules' or not harnesses or info.st_size > LIMITS['file_bytes']:
         return {}
     try:
@@ -201,8 +201,11 @@ def rule_loads(source, path, info):
     modes = {}
     for harness in harnesses:
         startup = always
-        if harness == 'qwen':
+        if harness in ('qwen', 'cline'):
             startup = not re.search(r'(?m)^paths\s*:', front)
+        elif harness == 'kiro':
+            inclusion = re.search(r"(?m)^inclusion:\s*['\"]?([\w]+)['\"]?\s*(?:\#.*)?$", front)
+            startup = os.path.basename(path) == 'AGENTS.md' or not inclusion or inclusion.group(1) == 'always'
         elif harness == 'antigravity-cli':
             startup = bool(re.search(r"(?m)^trigger:\s*['\"]?always_on['\"]?\s*(?:\#.*)?$", front))
         modes[harness] = {'mode': 'startup-candidate' if startup else 'on-demand'}

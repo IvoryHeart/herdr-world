@@ -1,5 +1,20 @@
 import { posix as path } from "node:path";
 import type { MemoryEntry, MemorySource } from "../../../shared/memory";
+import {
+  CONTEXT_FILENAMES,
+  MAKI_FILENAMES,
+  MUSE_FILENAMES,
+} from "./registry-adapters";
+
+const alternatives: Record<string, string[]> = {
+  pi: CONTEXT_FILENAMES,
+  "prime-agent": CONTEXT_FILENAMES,
+  pig: ["AGENTS.override.md", ...CONTEXT_FILENAMES],
+  maki: MAKI_FILENAMES,
+  muse: MUSE_FILENAMES,
+  "command-code": ["AGENTS.md", ".commandcode/AGENTS.md"],
+  kilo: ["AGENTS.md", "CLAUDE.md", "CONTEXT.md"],
+};
 
 /** Default precedence only. Runtime controls and custom settings remain unproven. */
 export function memoryLoadEvidence(
@@ -28,7 +43,99 @@ export function memoryLoadEvidence(
         MemoryEntry["harness_loads"][typeof harness]
       >["mode"] = ruleLoads?.[harness]?.mode ?? entry.load;
       let reason: string | undefined;
-      if (source.kind === "instructions" && entry.size === 0) mode = "empty";
+      if (entry.size === 0) mode = "empty";
+      const names =
+        harness === "mastracode"
+          ? (source.scope === "user"
+              ? [
+                  ".claude",
+                  ".mastracode",
+                  ".config/claude",
+                  ".config/mastracode",
+                ]
+              : ["", ".claude", ".mastracode"]
+            ).flatMap((dir) =>
+              ["AGENTS.md", "CLAUDE.md"].map((name) =>
+                dir ? `${dir}/${name}` : name,
+              ),
+            )
+          : alternatives[harness];
+      const name = names
+        ?.filter((name) => source.path.endsWith(`/${name}`))
+        .sort((a, b) => b.length - a.length)[0];
+      if (name && source.kind === "instructions") {
+        const root = source.path.slice(0, -name.length);
+        const preferred = names!.slice(0, names!.indexOf(name)).find((name) => {
+          const candidate = sources.find(
+            (s) => s.path === root + name && s.harnesses.includes(harness),
+          );
+          // These harnesses select by existence, including an empty primary.
+          return (
+            candidate &&
+            entries.some(
+              (e) => e.source_id === candidate.id && e.state === "available",
+            )
+          );
+        });
+        if (preferred) {
+          mode = "shadowed";
+          reason = `${preferred} takes precedence in this directory`;
+        }
+      }
+      if (
+        harness === "pi" &&
+        source.scope === "user" &&
+        path.basename(source.path) === "SYSTEM.md" &&
+        sources.some(
+          (s) =>
+            s.harnesses.includes("pi") &&
+            s.scope === "project" &&
+            s.path.endsWith("/.pi/SYSTEM.md") &&
+            present.has(s.path),
+        )
+      ) {
+        mode = "shadowed";
+        reason = "Project .pi/SYSTEM.md replaces the global system prompt";
+      }
+      if (
+        harness === "omp" &&
+        source.scope === "project" &&
+        path.basename(source.path) === "AGENTS.md" &&
+        !source.path.endsWith("/.omp/AGENTS.md") &&
+        present.has(path.join(path.dirname(source.path), ".omp/AGENTS.md"))
+      ) {
+        mode = "shadowed";
+        reason =
+          "Native .omp/AGENTS.md takes precedence at this directory depth";
+      }
+      if (
+        (harness === "opencode" || harness === "kilo") &&
+        source.scope === "project" &&
+        source.kind === "instructions"
+      ) {
+        // These loaders search the whole ancestor chain for one filename before
+        // trying the next filename, rather than choosing a fallback per directory.
+        const order =
+          harness === "kilo" ? alternatives.kilo! : ["AGENTS.md", "CLAUDE.md"];
+        const earlier = order.slice(
+          0,
+          order.indexOf(path.basename(source.path)),
+        );
+        const preferred = sources.find(
+          (candidate) =>
+            candidate.scope === "project" &&
+            candidate.harnesses.includes(harness) &&
+            earlier.includes(path.basename(candidate.path)) &&
+            source.agent_ids.every((id) => candidate.agent_ids.includes(id)) &&
+            entries.some(
+              (e) => e.source_id === candidate.id && e.state === "available",
+            ),
+        );
+        if (preferred) {
+          mode = "shadowed";
+          reason = `${path.basename(preferred.path)} takes precedence across the instruction chain`;
+        }
+      }
       if (
         harness === "codex" &&
         source.kind === "instructions" &&
@@ -63,12 +170,12 @@ export function memoryLoadEvidence(
         }
       }
       if (
-        harness === "opencode" &&
+        (harness === "opencode" || harness === "kilo") &&
         path.basename(source.path) === "CLAUDE.md"
       ) {
         const primary = sources.find(
           (candidate) =>
-            candidate.harnesses.includes("opencode") &&
+            candidate.harnesses.includes(harness) &&
             candidate.scope === source.scope &&
             path.basename(candidate.path) === "AGENTS.md" &&
             (source.scope === "user" ||
@@ -82,8 +189,7 @@ export function memoryLoadEvidence(
           )
         ) {
           mode = "shadowed";
-          reason =
-            "OpenCode AGENTS.md takes precedence over its CLAUDE.md fallback";
+          reason = `${harness === "opencode" ? "OpenCode" : "Kilo"} AGENTS.md takes precedence over its CLAUDE.md fallback`;
         }
       }
       entry.harness_loads[harness] = { mode, ...(reason ? { reason } : {}) };

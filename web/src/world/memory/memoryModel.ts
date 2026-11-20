@@ -43,6 +43,17 @@ const HARNESS_LABELS: Record<string, string> = {
   grok: "Grok",
   devin: "Devin",
   mastracode: "Mastra Code",
+  amp: "Amp",
+  cline: "Cline",
+  gemini: "Gemini CLI",
+  kiro: "Kiro",
+  maki: "Maki",
+  pig: "PiG",
+  crush: "Crush",
+  "command-code": "Command Code",
+  "prime-agent": "Prime Agent",
+  "dsh-tui": "DeepSeek Harness",
+  muse: "Muse Code",
 };
 
 export function harnessLabel(harness: string | null | undefined) {
