@@ -5,6 +5,7 @@ import type {
   TerminalRow,
   WorkspaceRow,
 } from "../adapters/runtime-ports";
+import { createMemoryHost } from "../memory/host";
 import { createWorktreeGit } from "../agent/worktree-git";
 import { createAgentWorktree } from "../agent/worktree";
 import { bindSshCommand } from "../bridge/ssh-sessions";
@@ -378,6 +379,11 @@ export function createCoreHostRuntime(args: {
     sshHost,
     runProcessWithCodeTimeout,
     readSettings,
+    memoryHost: createMemoryHost({
+      sshHost,
+      remotePlatform,
+      run: runProcessWithInputTimeout,
+    }),
     operations,
     resources,
     files,

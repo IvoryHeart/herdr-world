@@ -21,6 +21,7 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Harness usage and estimates | [Contract](../openspec/specs/world-usage/spec.md) | [Source](../server/src/usage/projection.ts) | [Tests](../server/src/usage/projection.test.ts) |
 | Integrations registry, screen and vault | [Contract](../FEATURES.md#integrations) | [Registry](../server/src/integrations/registry.ts), [vault](../server/src/integrations/vault.ts), [screen](../web/src/components/IntegrationsSettings.tsx) | [Tests](../server/src/integrations/registry.test.ts), [browser](../web/src/configuration.browser.tsx) |
 | Harness integrations | [Contract](../openspec/specs/world-harness-integration/spec.md) | [Source](../server/src/cli/integration.ts) | [Tests](../server/src/cli/integration.test.ts) |
+| Agent and project memory data/API | [Contract](../openspec/specs/world-memory/spec.md), [API and CLI](memory-api.md) | [Model](../shared/memory.ts), [service/adapters](../server/src/memory/service.ts), [host worker](../server/src/memory/worker.py) | [Filesystem tests](../server/src/memory/service.test.ts), [routing tests](../server/src/memory/routing.test.ts), [CLI tests](../server/src/cli/memory.test.ts) |
 | World IDs and bindings | [Contract](../openspec/specs/world-identity/spec.md) | [Source](../server/src/storage/world-ids.ts) | [Tests](../server/src/world/binding-resolution.test.ts) |
 | Durable asks/results and attention | [Contract](../openspec/specs/world-storage/spec.md) | [Source](../server/src/storage/world-storage.ts) | [Tests](../server/src/storage/world-storage-crash.test.ts) |
 | Effect recovery and deadlines | [Contract](../openspec/specs/world-effects/spec.md) | [Source](../server/src/effects/runner.ts) | [Tests](../server/src/effects/recovery-matrix.test.ts) |
@@ -44,9 +45,11 @@ Use the [foundation guide](foundation-guide.md) for data flows and detailed rout
 | Town view | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/TownView.tsx) | [Tests](../web/src/world/town/TownCanvas.test.ts) |
 | Board view | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/BoardView.tsx) | [Tests](../web/src/world/board/boardModel.test.ts) |
 | Board attention and moves | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/board/boardAttention.ts) | [Tests](../web/src/world/BoardView.test.ts) |
+| Board drawing | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/board/BoardSketch.tsx) | [Tests](../web/src/world/board/boardSketchGeometry.test.ts) |
 | Town reception filter | [Contract](../FEATURES.md#visual-control-plane) | [Source](../web/src/world/town/townReceptionFilter.ts) | [Tests](../web/src/world/town/townReceptionFilter.test.ts) |
 | World search | [Contract](../FEATURES.md#visual-control-plane) | [Source](../web/src/world/worldSearch.ts) | [Tests](../web/src/world/worldSearch.test.ts) |
 | Command box | [Contract](../FEATURES.md#visual-control-plane) | [Source](../web/src/components/CommandCombobox.tsx) | [Tests](../web/src/commandBoxKey.dom.test.ts) |
+| Settings home, registry and search | [Contract](../openspec/specs/world-surfaces/spec.md) | [Registry](../web/src/settings/registry.ts), [search](../web/src/settings/search.ts), [home](../web/src/settings/SettingsHome.tsx) | [Tests](../web/src/settings/settings.dom.test.ts) |
 | Town lenses | [Contract](../FEATURES.md#visual-control-plane) | [Source](../web/src/world/town/townLens.ts) | [Tests](../web/src/world/town/townLens.test.ts) |
 | Room actions and moves | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/TownView.tsx) | [Tests](../web/src/world/officeRoomActions.test.ts) |
 | Shared terminal appearance | [Contract](../openspec/specs/world-surfaces/spec.md) | [Source](../web/src/world/TerminalAppearanceEditor.tsx) | [Tests](../server/src/rpc/appearance.test.ts) |

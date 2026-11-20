@@ -1,0 +1,318 @@
+/* Settings (#1035): the Integrations screen's family (#1008): search, then
+   tabs with counts, then rows. */
+
+.configuration-modal.settings-home {
+  width: min(760px, 100%);
+  /* A fixed height, so the screen does not jump while a search narrows. */
+  height: min(820px, calc(100dvh / var(--ui-scale, 1) - 36px));
+}
+
+/* The list's parts step aside while a page shows. */
+.settings-home [hidden] {
+  display: none !important;
+}
+
+/* A page inside Settings: Back, its title, then the page's own rows. */
+.settings-home .settings-page-head {
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-home .settings-page-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-page-back {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  min-height: 32px;
+  padding: 0 10px 0 4px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.settings-home-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--input-bg);
+  color: var(--muted);
+}
+
+.settings-home-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.settings-home-search input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0;
+  border: none;
+  outline: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.settings-home-search input:focus {
+  box-shadow: none;
+}
+
+.settings-home-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding-bottom: 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-soft);
+  scrollbar-width: none;
+  /* The last tabs fade, so a clipped row reads as one that scrolls. */
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+
+.settings-home-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-home-tabs button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.settings-home-tabs button[data-empty]:not([aria-selected="true"]) {
+  opacity: 0.45;
+}
+
+.settings-home-tabs button[aria-selected="true"] {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+}
+
+.settings-home-tab-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--border-soft);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.settings-home-group h3 {
+  margin: 14px 8px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.settings-home-row {
+  border-radius: 8px;
+  scroll-margin: 40px;
+  transition: background 600ms ease-out;
+}
+
+.settings-home-row.is-highlighted {
+  background: var(--accent-soft);
+  transition: none;
+}
+
+.configuration-modal .settings-home-row .settings-home-also,
+.configuration-modal .settings-home-row .settings-home-meta {
+  font-size: 10.5px;
+}
+
+.configuration-modal .settings-home-row .settings-home-also {
+  color: var(--text);
+}
+
+.settings-home-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.settings-home-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--input-bg);
+}
+
+.settings-home-choice button {
+  min-height: 26px;
+  padding: 0 9px;
+  border-color: transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.settings-home-choice button:hover {
+  color: var(--text);
+}
+
+.settings-home-choice button.is-active {
+  border-color: var(--border);
+  background: var(--panel-2);
+  color: var(--text-strong);
+}
+
+.settings-home-choice button.is-matched:not(.is-active) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.settings-home-select,
+.settings-home-text {
+  height: 30px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.settings-home-select {
+  max-width: 160px;
+}
+
+.settings-home-text {
+  width: 180px;
+}
+
+.settings-home-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 30px;
+  padding: 0 8px 0 10px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.settings-home-go.is-danger {
+  color: var(--danger-text);
+}
+
+.settings-home-kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10.5px;
+}
+
+.settings-home-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10.5px;
+  opacity: 0.55;
+}
+
+.settings-home-row:hover .settings-home-link,
+.settings-home-link:focus-visible {
+  opacity: 1;
+}
+
+.settings-home-empty {
+  margin: 24px 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (pointer: coarse) {
+  .settings-page-back {
+    min-height: 40px;
+  }
+
+  .settings-home-link,
+  .settings-home-go {
+    min-width: 40px;
+    min-height: 40px;
+    opacity: 1;
+  }
+
+  .settings-home-choice button {
+    min-height: 36px;
+  }
+}
+
+/* Phone: a full-height sheet; wide controls take their own line. */
+:where(html[data-layout="mobile"]) {
+  .configuration-modal.settings-home {
+    height: calc(100dvh / var(--ui-scale, 1) - 12px);
+    max-height: none;
+  }
+
+  .settings-home .settings-home-row[data-wide] {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .settings-home .settings-home-row[data-wide] > .settings-home-control {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+  }
+
+  .settings-home .settings-home-text {
+    flex: 1;
+    width: auto;
+  }
+}
+
+@media (max-width: 500px) {
+  .settings-home .settings-home-row[data-wide] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-home .settings-home-row[data-wide] > .settings-home-control {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+  }
+}
