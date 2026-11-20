@@ -37,7 +37,13 @@ synthetic input, without editing files or installing vulnerable code.
 Same-repository Dependabot PRs receive automatic maintenance from trusted base
 policy: refreshed notices, a generated fragment when the shipped graph changes,
 or a specific `Changelog: none` reason for development/Actions-only updates, plus
-PR-body documentation metadata. The preparation job runs with a read-only token,
+PR-body documentation metadata and reasoned `Spec impact:` / `Verification impact:`
+lines for routine version updates. Notice generation follows workspace dependency
+paths, including development, optional and peer dependencies, but stops at
+OS/CPU-specific packages. Their exclusive transitive dependencies are excluded;
+packages also reachable through a portable path remain required. Every expected
+portable package must still be installed at its locked version, or preparation
+fails. The preparation job runs with a read-only token,
 disables dependency lifecycle scripts and never executes candidate scripts. A
 separate write job checks out only trusted policy, validates the allowed output
 paths and current head, commits generated docs to the bot branch, then explicitly
