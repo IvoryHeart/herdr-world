@@ -574,6 +574,29 @@ function townBusStopSign(waiting: boolean) {
   });
 }
 
+/**
+ * Apartments' bus stop, where every bus ends: the stop sign's pole under a
+ * green flag with a white house, the colour of Apartments' front door.
+ */
+function townBusTerminusSign() {
+  const { width, height } = TOWN_BUS_STOP_SIGN;
+  const pole = "#3b3b3b";
+  const flag = "#2f7d4f";
+  const mark = "#ffffff";
+  return townSprite(width, height, (R) => {
+    R(10, 20, 3, height - 20, pole);
+    R(0, 0, width, 20, pole);
+    R(1, 1, width - 2, 18, flag);
+    // A house: roof stepped up to a ridge, walls, and a door in them.
+    R(11, 3, 2, 1, mark);
+    R(9, 4, 6, 1, mark);
+    R(7, 5, 10, 1, mark);
+    R(5, 6, 14, 1, mark);
+    R(7, 7, 10, 9, mark);
+    R(11, 11, 2, 5, flag);
+  });
+}
+
 export function buildTownSprites() {
   const tableOf = (W: number, w: string) =>
     townSprite(W, 32, (R) => {
@@ -726,6 +749,7 @@ export function buildTownSprites() {
     }),
     busStop: townBusStopSign(false),
     busStopWaiting: townBusStopSign(true),
+    busTerminus: townBusTerminusSign(),
     bench: townSprite(24, 12, (R) => {
       R(0, 0, 24, 3, "#8a5a3c");
       R(0, 4, 24, 3, "#a06a45");
