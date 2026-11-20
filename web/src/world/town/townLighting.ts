@@ -1,19 +1,25 @@
 /**
  * Town's light is its status language. The scene is multiplied by a
  * half-resolution lightmap: the sky's ambient colour (townDaylight.ts) plus
- * every light in town, which shows as the sky darkens. A room with work in it
- * is lit and a quiet one stays dark; each desk throws its agent's state
- * colour (blue-white working, amber waiting, green done); street lamps and the
- * town center light the streets. A reception with someone waiting on you
- * pulses amber over its lobby by day and by night; under calm or reduced
- * motion the pulse holds as a steady mark.
+ * every light in town, which shows as the sky darkens. Light follows where
+ * agents are, not where they are going: a desk throws its seated agent's
+ * state colour (blue-white working, amber waiting, green done); a room is lit
+ * while an agent sits at a desk there working or waiting on you, and dark
+ * otherwise; the bar is lit while anyone is at it. An agent walking to its
+ * desk lights it when it sits down, and its desk and room go dark as it
+ * stands up to leave. Street lamps and the town center light the streets. A
+ * reception with someone waiting on you pulses amber over its lobby by day
+ * and by night; under calm or reduced motion the pulse holds as a steady
+ * mark.
  *
  * An agent with an open question for you waits on you whatever its runtime
- * status says: its desk throws amber, its room is lit and its reception
- * pulses, as Town's reception and attention list already treat it.
+ * status says: its reception pulses, as Town's reception and attention list
+ * already treat it, and if it stays at its desk the desk throws amber and its
+ * room is lit. A plain terminal (no agent to walk) asking a question throws
+ * amber from its desk.
  *
- * `townLightPlan` decides what is lit from the town and its open questions;
- * the Pixi side only draws it.
+ * `townLightPlan` decides what is lit from the town, its open questions and
+ * where its agents are (`townPresence`); the Pixi side only draws it.
  */
 
 import {
@@ -26,6 +32,7 @@ import {
   Texture,
 } from "pixi.js";
 import type { OfficePaneDevice } from "../herdrOfficeProjection";
+import type { TownActor } from "./townActors";
 import type { TownSky } from "./townDaylight";
 import {
   TOWN_LOBBY_HEIGHT,
@@ -97,25 +104,107 @@ const townDeskLightOf = (
     ? "blocked"
     : model.agents.get(device.agentKey!)?.semanticStatus;
 
-/** The light a desk throws: its most urgent agent's state, or none. */
+/** Whether a device is an agent Town draws: one that walks. */
+const walks = (model: TownModel, device: OfficePaneDevice) =>
+  Boolean(device.agentKey && model.agents.has(device.agentKey));
+
+/**
+ * The light a desk throws: its most urgent present occupant's state, or
+ * none. An agent counts while seated there (`presence`); without a presence,
+ * every agent counts as if it had arrived.
+ */
 export function townDeskLight(
   model: TownModel,
   deskKey: string,
   asking: TownAsking,
+  presence?: TownPresence,
 ): TownDeskLight | null {
-  let rank = -1;
-  for (const device of model.desks.get(deskKey)?.paneDevices ?? [])
-    rank = Math.max(
-      rank,
-      RANK.indexOf(townDeskLightOf(model, device, asking) as TownDeskLight),
-    );
-  return RANK[rank] ?? null;
+  return townDeskLighting(model, deskKey, asking, presence).light;
 }
 
-/** Whether a room has work in it: someone working or waiting on you. */
-export function townRoomLit(model: TownModel, roomKey: string) {
-  const counts = model.roomCounts.get(roomKey);
-  return Boolean(counts && counts.working + counts.blocked > 0);
+/** A desk's light, and whether a seated agent there lights its room. */
+function townDeskLighting(
+  model: TownModel,
+  deskKey: string,
+  asking: TownAsking,
+  presence?: TownPresence,
+) {
+  let rank = -1;
+  let room = false;
+  for (const device of model.desks.get(deskKey)?.paneDevices ?? []) {
+    const agent = walks(model, device);
+    if (agent && presence && !presence.seated.has(device.agentKey!)) continue;
+    const state = townDeskLightOf(model, device, asking) as TownDeskLight;
+    rank = Math.max(rank, RANK.indexOf(state));
+    room ||= agent && (state === "working" || state === "blocked");
+  }
+  return { light: RANK[rank] ?? null, room };
+}
+
+/** Where agents are now (`townPresence`). */
+export type TownPresence = {
+  /** Agents seated at their own desk: arrived, not walking to or from it. */
+  seated: ReadonlySet<string>;
+  /** Hosts with someone standing at the bar. */
+  atBar: ReadonlySet<string>;
+  /** Equal for equal presences. */
+  key: string;
+};
+
+/**
+ * Where agents are now, for Town's lights: a light changes when its agent
+ * arrives, not when it sets off.
+ */
+export function townPresence(actors: Iterable<TownActor>): TownPresence {
+  const seated = new Set<string>();
+  const atBar = new Set<string>();
+  for (const actor of actors)
+    if (actor.mode === "seat" && actor.goal?.kind === "seat")
+      seated.add(actor.key);
+    else if (actor.mode === "stand" && actor.goal?.kind === "lounge")
+      atBar.add(actor.hostKey);
+  return {
+    seated,
+    atBar,
+    key: `${[...seated].sort().join("\n")}\0${[...atBar].sort().join("\n")}`,
+  };
+}
+
+/**
+ * Relights from the town, its open questions and where its agents are now
+ * (`town`, null before the first scene), but only when one of them changed,
+ * as when an agent sat down, stood up or reached or left the bar: lights
+ * change as agents arrive, not as they set off. An unchanged plan draws
+ * nothing new either (lighting.sync compares).
+ */
+export function townRelighter(
+  lighting: { sync(plan: TownLightPlan): void },
+  town: () =>
+    | readonly [
+        TownLayout,
+        TownModel,
+        TownAsking | undefined,
+        Iterable<TownActor>,
+      ]
+    | null,
+) {
+  let last: [TownLayout, TownModel, TownAsking | undefined, string] | null =
+    null;
+  return () => {
+    const now = town();
+    if (!now) return;
+    const [layout, model, asking, actors] = now;
+    const presence = townPresence(actors);
+    if (
+      last?.[0] === layout &&
+      last[1] === model &&
+      last[2] === asking &&
+      last[3] === presence.key
+    )
+      return;
+    last = [layout, model, asking, presence.key];
+    lighting.sync(townLightPlan(layout, model, asking, presence));
+  };
 }
 
 /** Everything lit in the town as it stands now. */
@@ -123,6 +212,7 @@ export function townLightPlan(
   layout: TownLayout,
   model: TownModel,
   asking: TownAsking = NO_ASKS,
+  presence?: TownPresence,
 ): TownLightPlan {
   const plan: TownLightPlan = { areas: [], points: [], waiting: [] };
   // Hosts with someone waiting on you at reception: a blocked agent, or an
@@ -173,14 +263,26 @@ export function townLightPlan(
         color: TOWN_WAITING_AMBER,
         power: 1,
       });
+    // The bar is lit while anyone is at it.
+    const lounge = building.lounge;
+    if (presence?.atBar.has(building.hostKey))
+      plan.areas.push({
+        x: lounge.x * T + 2,
+        y: lounge.y * T + 2,
+        w: lounge.w * T - 4,
+        h: lounge.h * T - 4,
+        feather: 18,
+        color: WARM,
+        power: 0.6,
+      });
     for (const room of building.rooms) {
-      let lit = townRoomLit(model, room.key);
+      let lit = false;
       for (const cell of room.cells) {
-        const light =
-          cell.deskKey && townDeskLight(model, cell.deskKey, asking);
+        if (!cell.deskKey) continue;
+        const desk = townDeskLighting(model, cell.deskKey, asking, presence);
+        lit ||= desk.room;
+        const light = desk.light;
         if (!light) continue;
-        // An open question at a desk lights its room as a blocked agent does.
-        lit ||= light === "blocked";
         const table = townDeskTable(cell.seats);
         plan.points.push({
           x: (cell.x + 1) * T + table.x + table.w / 2,

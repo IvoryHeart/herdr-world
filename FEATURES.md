@@ -190,6 +190,31 @@ no control for it. Platform and harness limits apply across the table.
   are private to the user and reused for identical tap content; user settings
   stay untouched. If preparation fails, New agent reports an error before
   creating a tab or starting an agent. Windows keeps inline settings.
+- **Core agents run by wrappers and headless:** a core desk shows the agent
+  that runs in its terminal's foreground, as Herdr's TUI finds it: the
+  foreground program, else, on a core on this machine (Linux), the processes
+  in its foreground group, nearest first. So `bash run.sh` running
+  `claude -p … | tee log`, or `sh -c "claude …"`, shows Claude, looking as if
+  started directly; a plain shell running `git` or `bun test` stays a plain
+  terminal. A remote or macOS core reports only the foreground program, so a
+  wrapper there shows its agent only once the agent reports status itself.
+  A live headless run (`claude -p`, `codex exec`, `gemini -p`,
+  `opencode run` and the like) counts as working, report or none, unless it
+  asks you something. An interactive agent's status is its own report; with
+  none it stays unknown, never working. A working or waiting report from an
+  agent that has left the terminal (killed mid-turn, with a shell, editor or
+  empty wrapper in front) is stale: World shows it idle, so it walks to the
+  bar and its desk and room go dark. A report speaks only for the harness that
+  runs: when another harness replaces the one that reported, or a new process
+  starts after World saw the reporter exit, the newcomer is unknown (working,
+  if headless) until it reports itself. An agent World saw run inside a
+  still-running wrapper stays at that desk's terminal after it exits, idle, so
+  it walks to the bar between headless calls instead of vanishing; once the
+  wrapper ends and the shell is back, the desk is a plain terminal again. A
+  word that is an option's value never marks a run headless
+  (`codex -C exec` is interactive Codex in a folder named `exec`). A shell
+  function or alias piped into another command (`f | cat`) runs as a copy of
+  the shell; World looks inside it as it does a wrapper.
 - **Codex status on Linux core:** working/idle comes from Codex's native
   OSC 7501 reports, just as on macOS. If core publishes no status, World
   shows **unknown** even when Chat and Terminal work. World cannot recover
@@ -784,15 +809,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Light is Town's status language. The button under **ALL** sets the time
     of day: it cycles **clock** (follows this device's time), **day**,
     **dusk** and **night**, and each browser keeps its choice. As the sky
-    darkens, rooms with someone working or waiting on you are lit and quiet
-    rooms stay dark; each desk throws its agent's state colour (blue-white
-    working, amber waiting on you, green done), and street lamps light the
-    roads. A reception whose building has someone waiting on you pulses amber
-    over its lobby by day and by night; under calm motion or reduced motion
-    the pulse holds as a steady mark. An agent or terminal with an open
-    question for you counts as waiting on you whatever its runtime status.
-    A failed host's cached building stays dark. Day leaves the town as
-    painted.
+    darkens, light follows where agents are: a room is lit while an agent
+    sits at a desk there working (or waiting on you at it) and is dark
+    otherwise; each desk throws its seated agent's state colour (blue-white
+    working, amber waiting on you, green done); the bar is lit while anyone
+    is at it; and street lamps light the roads. Light changes with the walk:
+    a desk and its room light when the agent sits down, and go dark as it
+    stands up for the bar or reception. An agent with no status report sits
+    at its desk unlit. A reception whose building has someone waiting on you
+    pulses amber over its lobby by day and by night; under calm motion or
+    reduced motion the pulse holds as a steady mark. An agent or terminal with
+    an open question for you counts as waiting on you whatever its runtime
+    status; a terminal with no agent throws amber from its desk. A failed
+    host's cached building stays dark. Day leaves the town as painted.
   - Town's overlays share one style: the Town board (and its phone chips),
     the zoom and time-of-day buttons, an agent's peek, toasts, and the hover
     cards of rooms, tables and fuel gauges are the same translucent dark
