@@ -7,8 +7,10 @@ import { type IdeProviderId, isIdeProviderId } from "./providers";
  * The owner's IDE choices for this World's own computer (`ide.json` in the
  * data folder): which installed provider is enabled, when its terms and the
  * full-access trust were accepted, and an optional program path per
- * provider, and this World's random ID, which marks the IDE servers it
- * started on each host. Nothing here is a secret; tokens live only in the
+ * provider, this World's random ID, which marks the IDE servers it
+ * started on each host, and the servers it started that may still run, so
+ * that none goes unseen after a restart even when its host is no longer one
+ * of World's connections. Nothing here is a secret; tokens live only in the
  * private folder of a running server.
  */
 export type IdeProviderSetting = {
@@ -22,17 +24,71 @@ export type IdeProviderSetting = {
   binary?: string;
 };
 
+/**
+ * One IDE server World started and hasn't seen stop: kept until Stop
+ * succeeds, its host shows it is gone, or the person forgets one World
+ * can no longer reach.
+ */
+export type IdeServerRecord = {
+  id: string;
+  provider: IdeProviderId;
+  connection_id: string;
+  /** The SSH destination it runs on; absent on World's own computer. */
+  ssh_destination?: string;
+  host_label: string;
+  folder: string;
+  started_at: string;
+};
+
 export type IdeSettings = {
   version: 1;
   providers: Partial<Record<IdeProviderId, IdeProviderSetting>>;
   /** Set when World first starts an IDE server; never changes after. */
   world_id?: string;
+  servers?: IdeServerRecord[];
 };
 
 const WORLD_ID = /^[A-Za-z0-9_-]{16,64}$/;
+const SERVER_ID = /^[A-Za-z0-9_-]{16,64}$/;
+const MAX_PATH = 4096;
+const MAX_TEXT = 1024;
+const MAX_SERVERS = 256;
+
+const line = (value: unknown, max = MAX_TEXT): value is string =>
+  typeof value === "string" &&
+  value.length > 0 &&
+  value.length <= max &&
+  !/[\u0000-\u001f\u007f]/.test(value);
+
+function parseServer(value: unknown): IdeServerRecord | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.id !== "string" ||
+    !SERVER_ID.test(record.id) ||
+    !isIdeProviderId(record.provider) ||
+    !line(record.connection_id) ||
+    !line(record.host_label) ||
+    !line(record.folder, MAX_PATH) ||
+    !isAbsolute(record.folder) ||
+    !line(record.started_at) ||
+    (record.ssh_destination !== undefined && !line(record.ssh_destination))
+  )
+    return null;
+  return {
+    id: record.id,
+    provider: record.provider,
+    connection_id: record.connection_id,
+    ...(typeof record.ssh_destination === "string"
+      ? { ssh_destination: record.ssh_destination }
+      : {}),
+    host_label: record.host_label,
+    folder: record.folder,
+    started_at: record.started_at,
+  };
+}
 
 const EMPTY: IdeSettings = { version: 1, providers: {} };
-const MAX_PATH = 4096;
 
 function parseSetting(value: unknown): IdeProviderSetting | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -72,12 +128,18 @@ export function parseIdeSettings(text: string): IdeSettings {
       const setting = parseSetting(entry);
       if (setting) providers[id] = setting;
     }
+    const servers = Array.isArray(value.servers)
+      ? value.servers
+          .slice(0, MAX_SERVERS)
+          .flatMap((entry) => parseServer(entry) ?? [])
+      : [];
     return {
       version: 1,
       providers,
       ...(typeof value.world_id === "string" && WORLD_ID.test(value.world_id)
         ? { world_id: value.world_id }
         : {}),
+      ...(servers.length ? { servers } : {}),
     };
   } catch {
     return structuredClone(EMPTY);

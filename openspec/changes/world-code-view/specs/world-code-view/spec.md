@@ -192,13 +192,26 @@ only to its own server for the same provider and folder, under the connection's
 current generation, and a concurrent second start for the same folder SHALL find
 the first instead of starting another.
 
-Only an explicit person action SHALL stop a World-started server: Stop, disabling
-its provider or removing its connection, each after saying that everything
-running in it ends. Stopping SHALL end the server's whole process tree on its
-host, including descendants re-parented out of it. A stop that cannot reach the
-host SHALL leave the server listed with the reason. Every World-started server
-that still runs SHALL be listed per host and folder with since-when and Stop,
-including servers found after a restart.
+Only the person pressing Stop on that server SHALL stop a World-started server,
+after saying that everything running in it ends. Nothing else SHALL stop one:
+not closing the view, World restarting or updating, a dropped connection, the
+server limit, an idle period, disabling its provider or removing its host's
+connection. Disabling a provider or removing a connection with servers still
+running SHALL list them first, each with Stop as a separate, explicit choice.
+At the server limit World SHALL refuse another start and show the running ones;
+it SHALL NOT stop one to make room. Stopping SHALL end the server's whole process
+tree on its host, including descendants re-parented out of it. A stop that
+cannot reach the host SHALL leave the server listed with the reason.
+
+Every World-started server not known to have ended SHALL be listed per host and
+folder with since-when and Stop, and counted against the limit. World SHALL keep
+that list durably, so a restart lists every server before any host answers,
+including servers on a host World no longer has a connection for. A start whose
+answer is lost SHALL count as possibly running, not failed. A server whose SSH
+connection was removed SHALL be listed as running but unreachable from World,
+with the command that stops it on that host; World SHALL NOT reach it through
+another connection, and SHALL drop it from the list only when the person
+forgets it.
 
 #### Scenario: Close a project using an external server
 
@@ -233,4 +246,19 @@ including servers found after a restart.
 #### Scenario: Start reply lost
 
 - **WHEN** a start may have succeeded but its result is unknown
-- **THEN** World reports uncertainty and reconciles that captured instance before any retry instead of launching duplicate servers or switching hosts
+- **THEN** World lists and counts it as possibly running, reports uncertainty and reconciles that captured instance before any retry instead of launching duplicate servers or switching hosts
+
+#### Scenario: Disable or remove with servers running
+
+- **WHEN** the owner disables an IDE provider or removes a connection while servers World started for it run
+- **THEN** the confirmation lists them with Stop for each, confirming stops none of them, and they stay listed until stopped
+
+#### Scenario: Removed SSH host after a restart
+
+- **WHEN** World restarts after the SSH connection of a running server was removed
+- **THEN** the server is listed and counted as running but unreachable from World, with the command that stops it on its host, and only Forget takes it off the list
+
+#### Scenario: Server limit reached
+
+- **WHEN** the owner opens another project while the limit of servers runs
+- **THEN** World refuses the start, offers the running servers, and stops none of them

@@ -212,6 +212,7 @@
   "rpc:world.ide.configure": "allow deny deny deny deny deny",
   "rpc:world.ide.open": "allow deny deny deny deny deny",
   "rpc:world.ide.stop": "allow deny deny deny deny deny",
+  "rpc:world.ide.forget": "allow deny deny deny deny deny",
   "rpc:world.presence.seen": "allow deny deny deny deny deny",
   "rpc:world.profiles.delete": "allow deny deny deny deny deny",
   "rpc:world.profiles.get": "allow deny deny deny deny deny",

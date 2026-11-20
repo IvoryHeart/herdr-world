@@ -26,6 +26,7 @@ import {
   ideUsesConnectionToken,
 } from "./providers";
 import { IDE_TOKEN_COOKIE, type IdeUpstream, ideBasePath } from "./proxy";
+import type { IdeServerRecord } from "./settings";
 
 /**
  * The IDE servers World started (#1009): at most one per (connection, host,
@@ -34,7 +35,10 @@ import { IDE_TOKEN_COOKIE, type IdeUpstream, ideBasePath } from "./proxy";
  * forward) and detaches again when the Code view's connection reconnects,
  * SSH drops or World stops, without stopping it. After a restart World
  * lists the servers on each host, checks they are its own, and reattaches.
- * Only Stop, disabling the provider or removing the connection ends one.
+ * Only a person pressing Stop ends one: not the cap, not disabling the
+ * provider, not removing the connection. World keeps the ones it started
+ * in a durable inventory until Stop succeeds or the host shows them gone,
+ * so none runs unseen after a restart, even on a host it can't reach.
  */
 export type IdeInstanceState =
   /** Attaching, or waiting for the server to answer. */
@@ -53,6 +57,8 @@ export type IdeInstanceView = {
   generation: number;
   /** The SSH destination it runs on; absent on World's own computer. */
   sshDestination?: string;
+  /** The host's name when World last reached it. */
+  hostLabel: string;
   folder: string;
   state: IdeInstanceState;
   /** The same-origin address the Code view frames. */
@@ -69,7 +75,6 @@ export type IdeInstanceView = {
 
 type Instance = IdeInstanceView & {
   key: string;
-  hostLabel: string;
   upstream: IdeUpstream | null;
   forward: IdeForwardChild | null;
   /** Bumped on every attach, detach and stop: a stale wait gives up. */
@@ -101,6 +106,17 @@ export type IdeInstanceOptions = {
   /** The host's SIGTERM grace before SIGKILL; tests shorten it. */
   stopGraceMs?: number;
   onChange?: () => void;
+  /**
+   * Where World keeps the servers it started across restarts. Without it
+   * the list lives only as long as World.
+   */
+  inventory?: IdeInventory;
+};
+
+/** The durable list of servers World started and hasn't seen end. */
+export type IdeInventory = {
+  read(): IdeServerRecord[];
+  write(records: IdeServerRecord[]): void;
 };
 
 export type IdeOpenRequest = {
@@ -164,6 +180,15 @@ export function plainExitReason(lines: string[], code: number | null) {
   return `The IDE server stopped${code === null ? "" : ` (exit ${code})`}${suffix}`;
 }
 
+/** Exit codes a start script gives only before it launches anything. */
+function definiteStartFailure(code: number | null) {
+  return (
+    code === HOST_EXIT.dir ||
+    code === HOST_EXIT.token ||
+    code === HOST_EXIT.folder
+  );
+}
+
 function hostFailure(code: number | null, hostLabel: string, remote: boolean) {
   if (code === HOST_EXIT.dir)
     return `World couldn't use its private folder on ${hostLabel}.`;
@@ -200,7 +225,80 @@ export class IdeInstances {
     this.startTimeoutMs = options.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS;
     this.maxInstances = options.maxInstances ?? DEFAULT_MAX_INSTANCES;
     this.stopGraceMs = options.stopGraceMs ?? HOST_STOP_GRACE_MS;
-    this.onChange = options.onChange ?? (() => {});
+    const onChange = options.onChange ?? (() => {});
+    this.onChange = () => {
+      this.persist();
+      onChange();
+    };
+    this.restore();
+  }
+
+  /** Last inventory written, to write only when it changes. */
+  private persisted = "";
+
+  /**
+   * The servers World started before it restarted: listed as running but
+   * not attached until World reaches their host again.
+   */
+  private restore() {
+    const records = this.options.inventory?.read() ?? [];
+    for (const record of records) {
+      if (this.byId.has(record.id)) continue;
+      const ssh = record.ssh_destination
+        ? { destination: record.ssh_destination }
+        : undefined;
+      this.byId.set(record.id, {
+        id: record.id,
+        key: instanceKey(
+          record.connection_id,
+          hostOf(ssh),
+          record.provider,
+          record.folder,
+        ),
+        provider: record.provider,
+        connectionId: record.connection_id,
+        generation: -1,
+        ...(ssh ? { sshDestination: ssh.destination } : {}),
+        hostLabel: record.host_label,
+        folder: record.folder,
+        state: "detached",
+        reason: `World hasn't reached ${record.host_label} since it started again; it runs there until you stop it.`,
+        url: `${ideBasePath(record.id)}/`,
+        startedAt: record.started_at,
+        upstream: null,
+        forward: null,
+        epoch: 0,
+      });
+    }
+    this.persisted = JSON.stringify(this.records());
+  }
+
+  /** Every server that may still run: all but those known to have ended. */
+  private records(): IdeServerRecord[] {
+    return [...this.byId.values()]
+      .filter((entry) => entry.state !== "failed")
+      .map((entry) => ({
+        id: entry.id,
+        provider: entry.provider,
+        connection_id: entry.connectionId,
+        ...(entry.sshDestination
+          ? { ssh_destination: entry.sshDestination }
+          : {}),
+        host_label: entry.hostLabel,
+        folder: entry.folder,
+        started_at: entry.startedAt,
+      }))
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  }
+
+  private persist() {
+    const inventory = this.options.inventory;
+    if (!inventory) return;
+    const records = this.records();
+    const text = JSON.stringify(records);
+    if (text === this.persisted) return;
+    inventory.write(records);
+    this.persisted = text;
   }
 
   private get localHostRoot(): IdeHostRoot {
@@ -448,23 +546,29 @@ export class IdeInstances {
       timeoutMs: HOST_RUN_TIMEOUT_MS,
     });
     const { values } = parseHostLines(result.stdout);
-    const outcome = values.get("result");
+    const outcome =
+      values.get("result") === "started" || values.get("result") === "running"
+        ? values.get("result")
+        : undefined;
     if (outcome === "started") instance.startedAt = startedAt;
     // Detached or stopping meanwhile: what started runs on, listed.
     if (!this.wanted(instance, epoch)) return;
-    if (result.code === null && request.ssh) {
-      // It may have started before SSH gave up: keep it listed.
+    if (!outcome) {
+      if (definiteStartFailure(result.code)) {
+        // The script refused before it launched anything.
+        this.fail(
+          instance,
+          hostFailure(result.code, instance.hostLabel, Boolean(request.ssh)),
+        );
+        return;
+      }
+      // No answer: the reply may be all that was lost (SSH dropping after
+      // the launch, a timeout). It may run, so it stays listed and counted
+      // until its host shows it gone or Stop ends it.
       this.setState(
         instance,
         "detached",
-        hostFailure(result.code, instance.hostLabel, true),
-      );
-      return;
-    }
-    if (result.code !== 0 || !outcome) {
-      this.fail(
-        instance,
-        hostFailure(result.code, instance.hostLabel, Boolean(request.ssh)),
+        `World lost its answer from ${instance.hostLabel} while starting it, so it may be running there. Open it to check, or Stop it.`,
       );
       return;
     }
@@ -738,6 +842,9 @@ export class IdeInstances {
       if (
         (result.code === 0 && (outcome === "stopped" || outcome === "gone")) ||
         // It had already exited: only its record is left on the host.
+        // `failed` only ever comes from the host's own evidence (an exit
+        // code, its folder gone) or a start refused before launching; an
+        // unanswered start stays `detached`.
         (instance.state === "failed" && outcome !== "foreign")
       ) {
         this.byId.delete(id);
@@ -757,7 +864,20 @@ export class IdeInstances {
     });
   }
 
-  /** Stop every one that matches: disable and connection removal. */
+  /**
+   * Stops listing one World can't reach any more, after the person stopped
+   * it by hand on its host. Nothing on the host changes.
+   */
+  forget(id: string) {
+    const instance = this.byId.get(id);
+    if (!instance || instance.stopping || this.busy(instance.key)) return false;
+    this.release(instance);
+    this.byId.delete(id);
+    this.onChange();
+    return true;
+  }
+
+  /** Stop every one that matches (tests clean up with it). */
   async stopWhere(match: (instance: IdeInstanceView) => boolean) {
     const matching = [...this.byId.values()].filter((entry) =>
       match(view(entry)),
@@ -871,6 +991,7 @@ function view(instance: Instance): IdeInstanceView {
     ...(instance.sshDestination
       ? { sshDestination: instance.sshDestination }
       : {}),
+    hostLabel: instance.hostLabel,
     folder: instance.folder,
     state: instance.state,
     url: instance.url,

@@ -171,8 +171,16 @@ function fakeClient() {
     },
     disable: async () => {
       state.enabled = false;
-      // As the service: disabling stops its servers completely.
-      state.instances = [];
+      // As the service: disabling stops none; they stay listed, detached.
+      state.instances = state.instances.map((entry) =>
+        entry.state === "failed"
+          ? entry
+          : {
+              ...entry,
+              state: "detached",
+              reason: "code-server is disabled; it still runs.",
+            },
+      );
       return status();
     },
     configure: async () => status(),
@@ -201,6 +209,10 @@ function fakeClient() {
     },
     stop: async (id) => {
       state.stops.push(id);
+      state.instances = state.instances.filter((entry) => entry.id !== id);
+      return status();
+    },
+    forget: async (id) => {
       state.instances = state.instances.filter((entry) => entry.id !== id);
       return status();
     },
@@ -571,7 +583,7 @@ async function run() {
     ) === true,
     "Settings lists the IDE servers that still run",
   );
-  // Disable stops them: it says so before it does.
+  // Disable stops none: it lists them first, each with its own Stop.
   button(
     "Disable",
     $('[aria-label="IDE integrations"] [data-provider="code-server"]')!,
@@ -579,9 +591,12 @@ async function run() {
   await until(
     () =>
       $(".modal[role=dialog]")?.textContent?.includes(
-        "Disabling code-server stops its IDE server.",
+        "Its IDE server keeps running and stays listed until you stop it.",
+      ) === true &&
+      $(".modal[role=dialog] .ide-server-list")?.textContent?.includes(
+        "/srv/example/docs",
       ) === true,
-    "Disable warns that it stops the running server",
+    "Disable lists the running server, which it does not stop",
   );
   const disableActions = [
     ...document.querySelectorAll<HTMLButtonElement>(".modal-actions button"),
@@ -590,10 +605,11 @@ async function run() {
   await until(
     () =>
       !fake.state.enabled &&
-      $(".ide-servers")?.textContent?.includes("No IDE servers are running") ===
-        true,
-    "confirming Disable stops its servers",
+      !$(".modal[role=dialog]") &&
+      $(".ide-servers")?.textContent?.includes("/srv/example/docs") === true,
+    "confirming Disable keeps its servers running and listed",
   );
+  check(fake.state.stops.length === 0, "Disable stopped a server");
   flushSync(() => settings.unmount());
 }
 

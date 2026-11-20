@@ -370,6 +370,9 @@ export default function CodeView({
               status={ide.status}
               hostLabel={hostLabel}
               onStop={stop}
+              onForget={async (entry) =>
+                ide.apply(await client.forget(entry.id))
+              }
               onShow={(entry) => {
                 const target = projectOf(entry);
                 if (target) choose(target.key);
@@ -450,7 +453,11 @@ export default function CodeView({
             click away. Enable one to start.
           </p>
           {refusal && project ? (
-            <Refusal refusal={refusal} onRetry={() => void open(project)} />
+            <Refusal
+              refusal={refusal}
+              onRetry={() => void open(project)}
+              onShowServers={() => setServersOpen(true)}
+            />
           ) : null}
           {openError ? (
             <p className="code-view-error" role="alert">
@@ -558,7 +565,13 @@ export default function CodeView({
         </div>
       );
     if (refusal)
-      return <Refusal refusal={refusal} onRetry={() => void open(project)} />;
+      return (
+        <Refusal
+          refusal={refusal}
+          onRetry={() => void open(project)}
+          onShowServers={() => setServersOpen(true)}
+        />
+      );
     return (
       <div className="code-view-closed">
         <h2>{project.label}</h2>
@@ -620,9 +633,12 @@ function groupByHost(projects: CodeProject[]) {
 function Refusal({
   refusal,
   onRetry,
+  onShowServers,
 }: {
   refusal: IdeRefusal;
   onRetry: () => void;
+  /** The cap: World stops none to make room; show the running ones. */
+  onShowServers: () => void;
 }) {
   return (
     <div className="code-view-refusal" data-code={refusal.code}>
@@ -634,6 +650,11 @@ function Refusal({
             : "World can't open this project here"}
       </h2>
       <p role="alert">{refusal.message}</p>
+      {refusal.code === "limit" ? (
+        <button type="button" onClick={onShowServers}>
+          Show running servers
+        </button>
+      ) : null}
       {refusal.code === "stale" ||
       refusal.code === "limit" ||
       refusal.code === "missing" ? (

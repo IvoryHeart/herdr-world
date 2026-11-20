@@ -7,8 +7,9 @@
  * shows that state from synthetic data instead of the service's:
  * `missing` (no IDE installed), `detected` (installed, not enabled),
  * `ssh` (starting on an SSH host), `downloading` (first start), `failed`
- * (the server exited) or `restored` (World restarted and found two IDE
- * servers it had started, one here and one on an SSH host, still running).
+ * (the server exited) or `restored` (World restarted and found the IDE
+ * servers it had started still running: one here, one on an SSH host, and
+ * one on a host whose connection was removed, which World can't reach).
  * Nothing is detected, started or stored.
  * The page drops the parameter at once; the switch lasts until a reload.
  */
@@ -69,6 +70,15 @@ export type IdeInstance = {
   stopping?: boolean;
   /** Set when the IDE runs on the project's SSH host. */
   sshDestination?: string;
+  /** The host's name when World last reached it. */
+  hostLabel?: string;
+  /**
+   * Why World can't reach its host any more (its connection was removed):
+   * it still runs there, can't be stopped from World, and `stopByHand` is
+   * what to run on that host. Forget then takes it off the list.
+   */
+  unreachable?: string;
+  stopByHand?: string;
 };
 
 export type IdeStatus = {
@@ -109,6 +119,8 @@ export type IdeClient = {
   configure(provider: IdeProviderId, binary: string | null): Promise<IdeStatus>;
   open(request: IdeOpenRequest): Promise<IdeOpenResult>;
   stop(instanceId: string): Promise<IdeStatus>;
+  /** Stops listing one World can't reach, once it was stopped by hand. */
+  forget(instanceId: string): Promise<IdeStatus>;
   /** Calls back when the service says status or servers changed. */
   subscribe(changed: () => void): () => void;
 };
@@ -213,6 +225,9 @@ export function parseIdeInstance(value: unknown): IdeInstance | null {
     ...(text(value.sshDestination)
       ? { sshDestination: value.sshDestination }
       : {}),
+    ...(text(value.hostLabel) ? { hostLabel: value.hostLabel } : {}),
+    ...(text(value.unreachable) ? { unreachable: value.unreachable } : {}),
+    ...(text(value.stopByHand) ? { stopByHand: value.stopByHand } : {}),
   };
 }
 
@@ -283,6 +298,8 @@ export const serviceIdeClient: IdeClient = {
     parseIdeOpenResult(await bridge.call("world.ide.open", request)),
   stop: async (instanceId) =>
     parseIdeStatus(await bridge.call("world.ide.stop", { instanceId })),
+  forget: async (instanceId) =>
+    parseIdeStatus(await bridge.call("world.ide.forget", { instanceId })),
   subscribe: (changed) =>
     bridge.onControl((control) => {
       if (control.type === "world_ide_changed") changed();
@@ -448,8 +465,15 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
         kind === "missing" ? "missing" : "detected",
         false,
       );
-      instances = instances.filter(
-        (instance) => instance.provider !== "code-server",
+      // As the service: its servers keep running, listed, until Stop.
+      instances = instances.map((instance) =>
+        instance.state === "ready" || instance.state === "starting"
+          ? {
+              ...instance,
+              state: "detached",
+              reason: "code-server is disabled; it still runs.",
+            }
+          : instance,
       );
       changed();
       return status();
@@ -506,7 +530,16 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
       return { ok: true, instance };
     },
     stop: async (instanceId) => {
-      instances = instances.filter((instance) => instance.id !== instanceId);
+      instances = instances.filter(
+        (instance) => instance.id !== instanceId || instance.unreachable,
+      );
+      changed();
+      return status();
+    },
+    forget: async (instanceId) => {
+      instances = instances.filter(
+        (instance) => instance.id !== instanceId || !instance.unreachable,
+      );
       changed();
       return status();
     },
@@ -543,8 +576,24 @@ const RESTORED = (): IdeInstance[] => {
       url: "/ide/fixtureRestoredRemote0/",
       startedAt: earlier(26),
       sshDestination: "devbox.example",
+      hostLabel: "devbox",
       reason:
         "SSH to devbox.example dropped; the IDE still runs there. Open it to reconnect.",
+    },
+    {
+      id: "fixtureRestoredGone000",
+      provider: "code-server",
+      connectionId: "fixture-removed",
+      folder: "/srv/example/old-service",
+      state: "detached",
+      url: "/ide/fixtureRestoredGone000/",
+      startedAt: earlier(50),
+      sshDestination: "oldbox.example",
+      hostLabel: "oldbox",
+      unreachable:
+        "Its connection was removed, so World can't reach oldbox to stop it. It runs there until you stop it by hand.",
+      stopByHand:
+        'd="${XDG_STATE_HOME:-$HOME/.local/state}/herdr-world/ide/fixtureRestoredGone000"; kill -TERM -- -"$(cat "$d/pid")" && rm -rf "$d"',
     },
   ];
 };

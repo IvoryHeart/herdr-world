@@ -3,8 +3,8 @@ import type { BridgeRpcContext } from "./context";
 /**
  * The Code view's installed IDEs (world.ide.*): detection and the enable
  * gate, the owner's program path, and World-owned servers per project
- * folder. Starting is always an explicit open; nothing here installs or
- * downloads an IDE.
+ * folder. Starting is always an explicit open and stopping an explicit
+ * Stop; nothing here installs or downloads an IDE.
  */
 export async function handleIdeRpc(rpc: BridgeRpcContext): Promise<void> {
   const { id, method, sendError, sendReply } = rpc;
@@ -42,6 +42,7 @@ export async function handleIdeRpc(rpc: BridgeRpcContext): Promise<void> {
       );
       return;
     } else if (method === "world.ide.stop") await ide.stop(params.instanceId);
+    else if (method === "world.ide.forget") ide.forget(params.instanceId);
     else throw new Error(`unknown IDE method: ${method}`);
     sendReply({ id, result: await ide.status() }, method);
   } catch (error) {

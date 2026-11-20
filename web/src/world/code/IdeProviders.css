@@ -212,3 +212,28 @@
   align-items: center;
   gap: 5px;
 }
+.ide-server-by-hand {
+  display: grid;
+  gap: 4px;
+}
+.ide-server-by-hand code {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.ide-server-ask {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+.ide-server-ask > span:first-child {
+  color: var(--text);
+}
+.ide-server-what .ide-provider-actions {
+  justify-content: flex-start;
+}

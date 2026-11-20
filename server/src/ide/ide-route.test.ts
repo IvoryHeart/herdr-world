@@ -278,7 +278,7 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
   }
 }, 30_000);
 
-test("a failing IDE says why, and disable stops running servers", async () => {
+test("a failing IDE says why, and disable leaves running servers to Stop", async () => {
   const top = mkdtempSync(join(tmpdir(), "hw-ide-route-"));
   const root = join(top, "data");
   const project = join(top, "project");
@@ -327,7 +327,17 @@ test("a failing IDE says why, and disable stops running servers", async () => {
     );
     await browser.call("world.ide.disable", { provider: "code-server" });
     const after = await browser.call("world.ide.status");
-    expect(after.instances).toEqual([]);
+    // Disabling stops none: the server stays listed until Stop.
+    expect(after.instances).toEqual([
+      expect.objectContaining({
+        id: failed.instances[0].id,
+        state: "detached",
+      }),
+    ]);
+    await browser.call("world.ide.stop", {
+      instanceId: failed.instances[0].id,
+    });
+    expect((await browser.call("world.ide.status")).instances).toEqual([]);
     expect(
       after.providers.find(
         (entry: { id: string }) => entry.id === "code-server",

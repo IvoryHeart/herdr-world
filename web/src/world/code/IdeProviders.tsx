@@ -8,7 +8,7 @@ import type {
   IdeProviderStatus,
   IdeStatus,
 } from "./ideClient";
-import { ideStopEnds, runningIdeServers } from "./IdeServers";
+import { IdeServerList, runningIdeServers } from "./IdeServers";
 import "./IdeProviders.css";
 
 const errorText = (cause: unknown) =>
@@ -81,7 +81,7 @@ export function IdeProviderList({
             busy={busy !== null}
             onEnable={() => setGate(provider)}
             onDisable={() =>
-              // Disabling stops its servers: say so first when any run.
+              // Its servers keep running: list them first, with Stop each.
               serversOf(provider.id)
                 ? setDisabling(provider)
                 : disable(provider)
@@ -104,11 +104,26 @@ export function IdeProviderList({
         title={`Disable ${disabling?.label ?? "the IDE"}`}
         message={
           disabling
-            ? `Disabling ${disabling.label} stops ${disablingCount === 1 ? "its IDE server" : `its ${disablingCount} IDE servers`}. ${ideStopEnds(disablingCount)}`
+            ? `Nothing more opens with ${disabling.label}.${disablingCount ? ` ${disablingCount === 1 ? "Its IDE server keeps running and stays listed until you stop it." : `Its ${disablingCount} IDE servers keep running and stay listed until you stop them.`} Stop any you no longer need here first; disabling stops none.` : ""}`
             : ""
         }
-        confirmLabel="Disable and stop"
-        danger
+        details={
+          disabling ? (
+            <IdeServerList
+              status={status}
+              inline
+              only={(instance) => instance.provider === disabling.id}
+              empty="None of its IDE servers runs now."
+              onStop={async (instance) =>
+                onStatus(await client.stop(instance.id))
+              }
+              onForget={async (instance) =>
+                onStatus(await client.forget(instance.id))
+              }
+            />
+          ) : null
+        }
+        confirmLabel="Disable"
         onClose={() => setDisabling(null)}
         onConfirm={() => {
           if (disabling) disable(disabling);

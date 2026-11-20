@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { parseHostLines } from "./host";
 import { type IdeForward, type IdeHostRun, systemHostRun } from "./hosts";
 import { IdeInstances, type IdeOpenRequest } from "./instances";
+import type { IdeServerRecord } from "./settings";
 import {
   hasSetsid,
   type ProcessTreeStandIn,
@@ -323,16 +324,143 @@ test("Stop that can't reach the host keeps the server listed with why", async ()
     state: "detached",
     reason: expect.stringContaining("It still runs there"),
   });
-  // Unreachable on the first start: nothing runs; Stop just forgets it.
+  // No answer to the first start: World can't tell whether it runs, so it
+  // stays listed until the host shows it gone.
+  let answer: "none" | "gone" = "none";
   const failing = new IdeInstances({
     localRoot: join(h.top, "data2"),
     worldId: () => WORLD,
-    run: async () => ({ code: 255, stdout: "", stderr: "" }),
+    run: async () =>
+      answer === "none"
+        ? { code: 255, stdout: "", stderr: "" }
+        : { code: 0, stdout: "root=/x\nresult=gone\n", stderr: "" },
   });
   expect(await failing.discover({ ssh })).toBe(false);
-  const failed = await failing.open(h.request({ connectionId: "box", ssh }));
-  expect(failed.state).toBe("failed");
-  expect(failed.reason).toContain("couldn't reach devbox");
-  expect(await failing.stop(failed.id)).toEqual({ ok: true });
+  const unsure = await failing.open(h.request({ connectionId: "box", ssh }));
+  expect(unsure.state).toBe("detached");
+  expect(unsure.reason).toContain("may be running there");
+  expect((await failing.stop(unsure.id)).ok).toBe(false);
+  expect(failing.list()).toHaveLength(1);
+  answer = "gone";
+  expect(await failing.stop(unsure.id)).toEqual({ ok: true });
   expect(failing.list()).toEqual([]);
+});
+
+test.if(hasSetsid())(
+  "a start whose answer is lost stays listed and counted until Stop reaches its host and ends every process",
+  async () => {
+    const h = setup();
+    const ssh = { destination: "dev@devbox.example.test", hostLabel: "devbox" };
+    const remote = systemHostRun({ PATH: "/usr/bin:/bin", HOME: h.host });
+    let reachable = true;
+    let loseNextAnswer = true;
+    const world = new IdeInstances({
+      localRoot: join(h.top, "data"),
+      worldId: () => WORLD,
+      // The start really runs on the "host"; only its answer is lost, as
+      // when SSH drops right after the launch (ssh exits 255).
+      run: async (_target, script, options) => {
+        if (!reachable) return { code: 255, stdout: "", stderr: "" };
+        const result = await remote({ kind: "local" }, script, options);
+        if (loseNextAnswer && script.includes("result=started")) {
+          loseNextAnswer = false;
+          return { code: 255, stdout: "", stderr: "" };
+        }
+        return result;
+      },
+      forward: () => ({ exited: new Promise(() => {}), kill() {} }),
+      probe: async () => null,
+      sleep: (ms) => Bun.sleep(Math.min(ms, 20)),
+      stopGraceMs: 300,
+      maxInstances: 1,
+    });
+    worlds.push(world);
+    const opened = await world.open(h.request({ connectionId: "box", ssh }));
+    const pids = await h.standIn.started();
+    expect(world.get(opened.id)).toMatchObject({
+      state: "detached",
+      reason: expect.stringContaining("may be running there"),
+    });
+    // It counts against the cap: World refuses another, stops nothing.
+    await expect(
+      world.open(
+        h.request({ connectionId: "box", ssh, folder: join(h.top, "other") }),
+      ),
+    ).rejects.toThrow("at most 1");
+    expect(h.standIn.survivors()).toHaveLength(3);
+
+    // Stop that can't reach the host proves nothing: it stays listed.
+    reachable = false;
+    expect((await world.stop(opened.id)).ok).toBe(false);
+    expect(world.get(opened.id)?.state).toBe("detached");
+    expect(h.standIn.survivors()).toHaveLength(3);
+
+    reachable = true;
+    expect(await world.stop(opened.id)).toEqual({ ok: true });
+    expect(world.list()).toEqual([]);
+    expect([pids.launcher, pids.server, pids.shell].filter(alive)).toEqual([]);
+  },
+  30_000,
+);
+
+test("World keeps the servers it started across a restart, also on a host it no longer reaches", async () => {
+  const h = setup();
+  let saved: IdeServerRecord[] = [];
+  const inventory = {
+    read: () => saved,
+    write: (records: IdeServerRecord[]) => {
+      saved = records;
+    },
+  };
+  const asked: string[] = [];
+  const make = () =>
+    new IdeInstances({
+      localRoot: join(h.top, "data"),
+      worldId: () => WORLD,
+      run: async (target) => {
+        asked.push(target.kind === "ssh" ? target.destination : "local");
+        return { code: 0, stdout: "root=/x\nresult=started\n", stderr: "" };
+      },
+      forward: (_destination, _remote, localSocket) => {
+        writeFileSync(localSocket, "");
+        return { exited: new Promise(() => {}), kill() {} };
+      },
+      probe: async () => 200,
+      sleep: async () => {},
+      maxInstances: 1,
+      inventory,
+    });
+  const first = make();
+  const ssh = { destination: "dev@old.example.test", hostLabel: "old box" };
+  const opened = await first.open(h.request({ connectionId: "box", ssh }));
+  await until(() => first.get(opened.id)?.state === "ready", "ready");
+  expect(saved).toEqual([
+    expect.objectContaining({
+      id: opened.id,
+      ssh_destination: ssh.destination,
+      host_label: "old box",
+    }),
+  ]);
+  first.closeAll();
+
+  asked.length = 0;
+  const second = make();
+  // Listed before World reaches (or ever again asks) its host.
+  expect(second.list()).toEqual([
+    expect.objectContaining({
+      id: opened.id,
+      state: "detached",
+      sshDestination: ssh.destination,
+      hostLabel: "old box",
+      startedAt: opened.startedAt,
+    }),
+  ]);
+  await expect(
+    second.open(h.request({ connectionId: "local-b" })),
+  ).rejects.toThrow("at most 1");
+  expect(asked).toEqual([]);
+  // Forgetting (after a stop by hand) is the only way off the list
+  // without its host.
+  expect(second.forget(opened.id)).toBe(true);
+  expect(saved).toEqual([]);
 });

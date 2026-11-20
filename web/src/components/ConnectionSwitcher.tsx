@@ -51,7 +51,10 @@ import {
   isActuallyTabbable,
 } from "./dialogFocus";
 import { ConfirmDialog } from "./ModalDialogs";
-import { useRemoveConnectionMessage } from "./useRemoveConnectionMessage";
+import {
+  RemoveConnectionIdeServers,
+  removeConnectionMessage,
+} from "./RemoveConnectionIdeServers";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import "./ConnectionSwitcher.css";
 
@@ -407,7 +410,6 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
   > | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
-  const removeMessage = useRemoveConnectionMessage(removeTarget);
   const requestToken = useRef(0);
   const mounted = useRef(false);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -935,7 +937,16 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
         <ConfirmDialog
           open={!!removeTarget}
           title="Remove Connection"
-          message={removeMessage}
+          message={
+            removeTarget
+              ? removeConnectionMessage(removeTarget.label)
+              : "Remove this connection?"
+          }
+          details={
+            removeTarget ? (
+              <RemoveConnectionIdeServers connectionId={removeTarget.id} />
+            ) : null
+          }
           confirmLabel="Remove"
           danger
           onClose={() => setRemoveTarget(null)}

@@ -202,12 +202,20 @@ is derived from World, connection, host, provider and folder, so a second start
 for the folder finds the first (an atomic `mkdir` claim) and a later World
 rediscovers and verifies it before reattaching. Every process the server starts
 inherits the nonce in its environment, so Stop and the supervisor end the whole
-tree, including terminals re-parented out of it. Only Stop, disable and removing
-the connection stop a server, each after warning that its running tasks end;
-external instances are detached, never killed. Every World-started server that
-still runs is listed with since-when and Stop. Explicit stop never ends Herdr
-agents. Partial start/reply loss is uncertain:
-reconcile the captured instance before retry, avoid duplicate server processes.
+tree, including terminals re-parented out of it. Only the person pressing Stop on
+a server stops it, after warning that its running tasks end. Disabling the
+provider and removing the connection only detach: their confirmations list the
+servers with Stop for each, and the servers stay listed. The limit refuses a
+new start and never stops one. External instances are detached, never killed.
+World keeps the servers it started in `ide.json` (id, provider, connection,
+SSH destination, host name, folder, start time) and drops one only when Stop
+succeeds, its host shows it gone, or the person forgets one it can no longer
+reach; a restart lists every one before any host answers. A removed SSH
+connection's servers are unreachable from World: listed, counted, never reached
+through another connection, with a by-hand stop command for their host.
+Explicit stop never ends Herdr agents. Partial start/reply loss is uncertain:
+listed and counted as possibly running, not failed; reconcile the captured
+instance before retry, avoid duplicate server processes.
 No automatic restart across a retired connection or silently open ports on LAN.
 
 ## Risks / Trade-offs

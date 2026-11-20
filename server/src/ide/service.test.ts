@@ -20,7 +20,8 @@ import { type IdeSettingsStore, memoryIdeSettingsStore } from "./settings";
  * World attaches to an IDE server per connection generation: a reconnect
  * or a change of host detaches it (its route and open sockets close) and
  * the server runs on; World reattaches when the connection is back, also
- * after a restart. Only Stop, disable or removing the connection stops it.
+ * after a restart. Only Stop stops it: disabling the provider or removing
+ * the connection leaves it running and listed.
  * The host scripts run for real under the local `sh`; the IDE is a fake
  * program that makes its socket and sleeps.
  */
@@ -251,7 +252,7 @@ test("a connection change while detection is pending starts no server", async ()
   expect(h.service.instances.list()).toEqual([]);
 });
 
-test("a change to SSH detaches the server; Open attaches again; removing the connection stops it", async () => {
+test("a change to SSH detaches the server; Open attaches again; removing the connection leaves it running", async () => {
   const h = harness();
   const first = await h.open();
   const [pid] = h.launched();
@@ -274,20 +275,97 @@ test("a change to SSH detaches the server; Open attaches again; removing the con
   expect(h.outcomes).toEqual(["started"]);
   expect(alive(pid)).toBe(true);
 
-  expect(await h.service.connectionRemoved("local-a")).toEqual([]);
-  expect(h.service.instances.list()).toEqual([]);
+  h.set([]);
+  h.service.connectionRemoved("local-a");
+  expect(h.state(first.id)).toBe("detached");
+  expect(alive(pid)).toBe(true);
+  // On World's own computer it stays stoppable.
+  const [listed] = (await h.service.status()).instances;
+  expect(listed).toMatchObject({ id: first.id, state: "detached" });
+  expect(listed.unreachable).toBeUndefined();
+  expect(await h.service.stop(first.id)).toEqual({ ok: true });
   expect(alive(pid)).toBe(false);
 });
 
-test("disable stops its servers completely; a new program path doesn't", async () => {
+test("disable leaves its servers running and listed; only Stop ends them", async () => {
   const h = harness();
   const instance = await h.open();
   const [pid] = h.launched();
   await h.service.configure("code-server", h.at.program);
   expect(h.state(instance.id)).toBe("ready");
   await h.service.disable("code-server");
-  expect(h.service.instances.list()).toEqual([]);
+  expect(h.state(instance.id)).toBe("detached");
+  expect(h.service.upstream(instance.id)).toBeNull();
+  expect(h.service.instances.get(instance.id)?.reason).toContain("disabled");
+  // Not reattached while disabled, also after a status read.
+  await h.service.status({ refresh: true });
+  expect(h.state(instance.id)).toBe("detached");
+  expect(alive(pid)).toBe(true);
+  expect(await h.service.stop(instance.id)).toEqual({ ok: true });
   expect(alive(pid)).toBe(false);
+});
+
+test("a removed SSH host's servers stay listed as unreachable, with how to stop them by hand, across a restart", async () => {
+  const at = scratch();
+  const remoteDetect: IdeServiceDeps["remoteDetect"] = async (
+    _destination,
+    provider,
+  ) => ({
+    provider,
+    state: "detected",
+    path: at.program,
+    version: "1.0.0",
+    configured: false,
+  });
+  const before = harness({ at, remoteDetect });
+  before.set([SSH_CONNECTION]);
+  const result = await before.service.open({
+    provider: "code-server",
+    connectionId: "ssh-b",
+    generation: 4,
+    folder: at.project,
+  });
+  if (!result.ok) throw new Error(result.refusal.message);
+  await until(() => before.launched().length === 1, "launched");
+  const [pid] = before.launched();
+  before.set([]);
+  before.service.connectionRemoved("ssh-b");
+  before.service.closeAll();
+
+  // A restarted World, without that connection: still listed, still
+  // counted, never reached through another connection.
+  const after = harness({ at, settings: before.settings, remoteDetect });
+  after.set([LOCAL]);
+  const [listed] = (await after.service.status()).instances;
+  // Read before toMatchObject, which swaps matched fields for matchers.
+  const byHandCommand = listed.stopByHand ?? "";
+  expect(listed).toMatchObject({
+    id: result.instance.id,
+    state: "detached",
+    sshDestination: SSH_CONNECTION.sshDestination,
+    hostLabel: "devbox",
+    unreachable: expect.stringContaining("connection was removed"),
+    stopByHand: expect.stringContaining(
+      `herdr-world/ide/${result.instance.id}`,
+    ),
+  });
+  expect(after.scripts.some((entry) => entry.target !== "local")).toBe(false);
+  const refused = await after.service.stop(result.instance.id);
+  expect(refused).toMatchObject({ ok: false });
+  expect(alive(pid)).toBe(true);
+
+  // The hand command, run on the "host", ends it; then forget it.
+  const byHand = await systemHostRun({ PATH: "/usr/bin:/bin", HOME: at.host })(
+    { kind: "local" },
+    byHandCommand,
+    { timeoutMs: 10_000 },
+  );
+  expect(byHand.stderr).toBe("");
+  expect(byHand.code).toBe(0);
+  await until(() => !alive(pid), "stopped by hand");
+  expect(after.service.forget(result.instance.id)).toEqual({ ok: true });
+  expect((await after.service.status()).instances).toEqual([]);
+  expect(after.settings.read().servers).toBeUndefined();
 });
 
 test("a restarted World lists the servers the last one started and reattaches", async () => {

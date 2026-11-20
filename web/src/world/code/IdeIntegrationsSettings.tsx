@@ -41,6 +41,7 @@ export function IdeIntegrationsSettings({ client }: { client?: IdeClient }) {
           <IdeServerList
             status={status}
             onStop={async (instance) => apply(await ide.stop(instance.id))}
+            onForget={async (instance) => apply(await ide.forget(instance.id))}
           />
         </>
       ) : (

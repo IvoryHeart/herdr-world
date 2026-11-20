@@ -354,6 +354,21 @@ export function hostStopScript(
   ].join("\n");
 }
 
+/**
+ * What a person runs on the SSH host to stop one server World can no longer
+ * reach (its connection was removed): it ends the
+ * supervisor's process group, which holds the server and what it started
+ * there, then removes World's folder for it. Terminals the IDE opened in
+ * sessions of their own may need closing too.
+ */
+export function hostStopByHand(id: string) {
+  validHostId(id);
+  // `-s TERM --` works in dash, bash and zsh alike. Without a group of its
+  // own (a host with neither setsid nor perl) only the supervisor gets the
+  // signal, and the IDE under it needs ending by name.
+  return `d="${REMOTE_IDE_ROOT}/${id}"; p=$(cat "$d/pid") && { kill -s TERM -- "-$p" 2>/dev/null || kill -s TERM "$p"; } && rm -rf "$d"`;
+}
+
 /** `key=value` lines into a map; later keys win, `log=` lines collect. */
 export function parseHostLines(stdout: string) {
   const values = new Map<string, string>();

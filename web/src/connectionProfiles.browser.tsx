@@ -260,21 +260,36 @@ async function run() {
     await waitFor(
       () => !!document.querySelector('[aria-label="Remove Connection"]'),
     );
+    // Removing stops no IDE server: it lists the one World started there,
+    // with its own Stop, since World can't reach it once removed.
     await waitFor(
       () =>
         !!document
           .querySelector('[aria-label="Remove Connection"]')
           ?.textContent?.includes(
-            "It stops the IDE server World started on it",
+            "This IDE server World started on it keeps running.",
           ),
     );
+    const removeDialog = document.querySelector<HTMLElement>(
+      '[aria-label="Remove Connection"]',
+    )!;
     check(
-      Boolean(
-        document
-          .querySelector('[aria-label="Remove Connection"]')
-          ?.textContent?.includes("its terminals, tasks"),
-      ),
-      `${theme}: removal didn't say what ends with the IDE server`,
+      Boolean(removeDialog.textContent?.includes("/srv/example/api")),
+      `${theme}: removal didn't name the running IDE server`,
+    );
+    click(
+      removeDialog.querySelector<HTMLButtonElement>(
+        '[aria-label="Stop the IDE for /srv/example/api"]',
+      )!,
+    );
+    check(
+      Boolean(removeDialog.textContent?.includes("its terminals, tasks")),
+      `${theme}: Stop didn't say what ends with the IDE server`,
+    );
+    click(button("Keep", removeDialog));
+    check(
+      !calls.includes("world.ide.stop"),
+      `${theme}: Keep stopped the IDE server`,
     );
     click(
       button(

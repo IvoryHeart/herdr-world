@@ -513,6 +513,12 @@ export const rpcVerbs = [
   ),
   rpc("world.ide.open", "reconcilable", "world", object({ folder: text })),
   rpc("world.ide.stop", "reconcilable", "world", object({ instanceId: text })),
+  rpc(
+    "world.ide.forget",
+    "reconcilable",
+    "world",
+    object({ instanceId: text }),
+  ),
   // The owner's last sighting across browsers, for "Since you left".
   rpc("world.presence.seen", "reconcilable", "world"),
   rpc("world.profiles.delete", "reconcilable", "world"),

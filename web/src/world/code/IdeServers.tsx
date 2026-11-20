@@ -45,6 +45,13 @@ export function ideSince(startedAt: string, now = new Date()) {
       });
 }
 
+const stateLabel = (instance: IdeInstance) =>
+  instance.stopping
+    ? "Stopping…"
+    : instance.unreachable
+      ? "Running, unreachable from World"
+      : STATE_LABELS[instance.state];
+
 const STATE_LABELS: Record<IdeInstance["state"], string> = {
   ready: "Open in World",
   starting: "Starting",
@@ -52,34 +59,61 @@ const STATE_LABELS: Record<IdeInstance["state"], string> = {
   failed: "Stopped",
 };
 
+/** Said before Forget: World only stops listing it. */
+const ideForgetSays = (instance: IdeInstance) =>
+  `World stops listing it; nothing on ${ideServerHost(instance)} changes. Forget it once you have stopped it there by hand.`;
+
 /**
  * Every IDE server World started that still runs, per host and folder, with
- * since-when and Stop. Stop asks first, saying what ends with it.
+ * since-when and Stop. Stop asks first, saying what ends with it. One on a
+ * host World can no longer reach shows how to stop it by hand there, and
+ * Forget instead of Stop.
  */
 export function IdeServerList({
   status,
   hostLabel = ideServerHost,
   onStop,
+  onForget,
   onShow,
+  only,
+  inline = false,
+  empty = "No IDE servers are running.",
 }: {
   status: IdeStatus;
   /** The host's name as the caller shows it. */
   hostLabel?: (instance: IdeInstance) => string;
   onStop: (instance: IdeInstance) => Promise<unknown> | unknown;
+  /** Stops listing an unreachable one. */
+  onForget?: (instance: IdeInstance) => Promise<unknown> | unknown;
   /** Brings its project to the front, where the caller can. */
   onShow?: (instance: IdeInstance) => void;
+  /** List only these. */
+  only?: (instance: IdeInstance) => boolean;
+  /** Confirm in the row instead of a dialog (inside another dialog). */
+  inline?: boolean;
+  empty?: string;
 }) {
   const [confirm, setConfirm] = useState<IdeInstance | null>(null);
+  const [asking, setAsking] = useState<{
+    id: string;
+    action: "stop" | "forget";
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const servers = runningIdeServers(status);
-  const stop = async (instance: IdeInstance) => {
+  const servers = runningIdeServers(status).filter(
+    (instance) => !only || only(instance),
+  );
+  const act = async (
+    instance: IdeInstance,
+    action: (instance: IdeInstance) => Promise<unknown> | unknown,
+  ) => {
     setError(null);
     try {
-      await onStop(instance);
+      await action(instance);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   };
+  const stop = (instance: IdeInstance) => act(instance, onStop);
   return (
     <div className="ide-servers">
       {servers.length ? (
@@ -102,16 +136,59 @@ export function IdeServerList({
                     {since ? ` · since ${since}` : ""}
                   </span>
                   <span className="ide-server-state">
-                    {instance.stopping
-                      ? "Stopping…"
-                      : STATE_LABELS[instance.state]}
+                    {stateLabel(instance)}
                   </span>
-                  {instance.reason && instance.state === "detached" ? (
+                  {instance.unreachable ? (
+                    <>
+                      <span className="ide-server-reason">
+                        {instance.unreachable}
+                      </span>
+                      {instance.stopByHand ? (
+                        <span className="ide-server-by-hand">
+                          To stop it, run this on {ideServerHost(instance)}:
+                          <code>{instance.stopByHand}</code>
+                        </span>
+                      ) : null}
+                    </>
+                  ) : instance.reason && instance.state === "detached" ? (
                     <span className="ide-server-reason">{instance.reason}</span>
+                  ) : null}
+                  {asking?.id === instance.id ? (
+                    <span className="ide-server-ask" role="group">
+                      <span>
+                        {asking.action === "stop"
+                          ? `Stop it? ${ideStopEnds()}`
+                          : `Forget it? ${ideForgetSays(instance)}`}
+                      </span>
+                      <span className="ide-provider-actions">
+                        <button
+                          type="button"
+                          className="ghost"
+                          onClick={() => setAsking(null)}
+                        >
+                          Keep
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => {
+                            setAsking(null);
+                            void act(
+                              instance,
+                              asking.action === "stop"
+                                ? onStop
+                                : (onForget ?? (() => undefined)),
+                            );
+                          }}
+                        >
+                          {asking.action === "stop" ? "Stop" : "Forget"}
+                        </button>
+                      </span>
+                    </span>
                   ) : null}
                 </div>
                 <div className="ide-provider-actions">
-                  {onShow ? (
+                  {onShow && !instance.unreachable ? (
                     <button
                       type="button"
                       className="ghost"
@@ -120,21 +197,39 @@ export function IdeServerList({
                       Show
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    disabled={instance.stopping}
-                    aria-label={`Stop the IDE for ${displayFolder(instance.folder)}`}
-                    onClick={() => setConfirm(instance)}
-                  >
-                    <Square size={12} aria-hidden /> Stop…
-                  </button>
+                  {instance.unreachable ? (
+                    onForget ? (
+                      <button
+                        type="button"
+                        aria-label={`Forget the IDE for ${displayFolder(instance.folder)}`}
+                        onClick={() =>
+                          setAsking({ id: instance.id, action: "forget" })
+                        }
+                      >
+                        Forget…
+                      </button>
+                    ) : null
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={instance.stopping}
+                      aria-label={`Stop the IDE for ${displayFolder(instance.folder)}`}
+                      onClick={() =>
+                        inline
+                          ? setAsking({ id: instance.id, action: "stop" })
+                          : setConfirm(instance)
+                      }
+                    >
+                      <Square size={12} aria-hidden /> Stop…
+                    </button>
+                  )}
                 </div>
               </li>
             );
           })}
         </ul>
       ) : (
-        <p className="ide-provider-reason">No IDE servers are running.</p>
+        <p className="ide-provider-reason">{empty}</p>
       )}
       {error ? (
         <p className="ide-providers-error" role="alert">

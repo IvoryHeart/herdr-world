@@ -1903,23 +1903,37 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   folder records which World, connection, IDE and project folder it is for;
   World reuses only its own servers for the same IDE and folder, and two starts
   for the same folder at once start one.
-- **Stop.** Only **Stop**, disabling the IDE and removing the connection stop
-  servers, and each says first that everything running in them ends: terminals,
-  tasks, debug sessions and extensions. Stopping ends everything that server
-  started, on World's computer or the SSH host: VS Code's launcher, its separate
-  server, extension hosts and terminal shells, even ones in their own session
-  whose parent already exited. They get SIGTERM, then SIGKILL after five
-  seconds. If the host can't be reached, the server stays listed with why and
-  **Stop** can be tried again. A server that exits on its own has what it
-  started ended the same way. Other IDE servers and Herdr agents are untouched.
+- **Stop.** Only **Stop** on that server stops it, after saying that
+  everything running in it ends: terminals, tasks, debug sessions and
+  extensions. Stopping ends everything that server started, on World's
+  computer or the SSH host: VS Code's launcher, its separate server, extension
+  hosts and terminal shells, even ones in their own session whose parent
+  already exited. They get SIGTERM, then SIGKILL after five seconds. If the
+  host can't be reached, the server stays listed with why and **Stop** can be
+  tried again. A server that exits on its own has what it started ended the
+  same way. Other IDE servers and Herdr agents are untouched.
+- **Disable and Remove stop nothing.** Disabling an IDE that has servers
+  running lists them in its confirmation, each with its own **Stop…**;
+  disabling stops none, and they stay listed (open one again by enabling the
+  IDE). **Remove** on a connection lists the IDE servers World started there
+  the same way while it checks, and removing stops none. A removed SSH
+  host's servers stay listed as **Running, unreachable from World**, with the
+  command that stops one when run on that host; **Forget…** takes one off the
+  list once it is stopped (Forget stops nothing). A removed local
+  connection's servers stay stoppable from World.
 - **Nothing runs unseen.** **Servers** in Code's bar (with their count) and
   Settings → Integrations → **Running IDE servers** list every IDE server World
   started that still runs, per host and folder, with since-when, state and
-  **Stop…**; after a restart World finds them on its own computer and on each
-  SSH host once that connection is ready. **Show** brings that project to the
-  front.
+  **Stop…**. World keeps that list in its data folder, so after a restart every
+  server is listed at once, also on a host World no longer reaches; it
+  reattaches to them on its own computer, and on each SSH host once that
+  connection is ready. A start whose answer from the SSH host was lost stays
+  listed and counted as possibly running until the host shows otherwise.
+  **Show** brings that project to the front.
 - **Limits and refusals.** At most four servers run or wait to be reattached at
-  once; a fifth is refused (**Too many IDEs are running**): stop one first. A
+  once, unreachable ones included; a fifth is refused (**Too many IDEs are
+  running**) with **Show running servers**, and World never stops one to make
+  room. A
   start that does not answer within three minutes is left running and shown as
   not attached (**Open** tries again, **Stop** ends it); a server that exits
   shows its last error line (or, for SSH, whether SSH failed, the folder is
@@ -1934,8 +1948,8 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   session.
 - **Preview states.** For trying the screens without an IDE, add
   `?ideFixture=missing`, `detected`, `ssh` (starting on an SSH host),
-  `downloading`, `failed` or `restored` (two servers found running after a
-  restart, one on an SSH host) to a World address; World removes it at once and
+  `downloading`, `failed` or `restored` (servers listed after a restart: one
+  here, one on an SSH host, one on a removed SSH host) to a World address; World removes it at once and
   shows synthetic integration state until the next reload.
 
 ## Workspace Inspector

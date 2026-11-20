@@ -16,11 +16,13 @@
   project folder. A server keeps running, with its terminals and tasks,
   when you close the view, World restarts or updates, or the SSH link
   drops; World finds it again and reattaches. Code and Settings →
-  Integrations list every running IDE server with since-when and Stop. Only
-  Stop, disabling the IDE or removing its connection stops one, after a
-  warning, and that ends its whole process tree on World's computer or the
-  SSH host, terminals that left the tree included. code-server's port
-  proxies are off.
+  Integrations list every running IDE server with since-when and Stop, also
+  after a restart and on a host whose connection was removed (with the
+  command to stop it there). Only pressing Stop on a server stops it, after
+  a warning, and that ends its whole process tree on World's computer or the
+  SSH host, terminals that left the tree included; disabling the IDE,
+  removing the connection or reaching the limit of four stops none.
+  code-server's port proxies are off.
 
 ### Removed
 

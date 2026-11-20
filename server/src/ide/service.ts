@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { statSync } from "node:fs";
 import { isAbsolute, normalize } from "node:path";
+import { hostStopByHand } from "./host";
 import {
   type IdeInstanceOptions,
   IdeInstances,
@@ -42,9 +43,20 @@ export type IdeProviderStatus = IdeProviderInfo & {
   binary: string | null;
 };
 
+/**
+ * A server as the Code view lists it. `unreachable` says why World can no
+ * longer reach its host (its connection was removed or now points at
+ * another host): it still runs there, World can't stop it, and
+ * `stopByHand` is what to run on that host instead.
+ */
+export type IdeServerView = IdeInstanceView & {
+  unreachable?: string;
+  stopByHand?: string;
+};
+
 export type IdeStatus = {
   providers: IdeProviderStatus[];
-  instances: IdeInstanceView[];
+  instances: IdeServerView[];
   /** Connections on World's own computer; the rest run the IDE on their SSH host. */
   localConnections: string[];
 };
@@ -78,7 +90,7 @@ export type IdeServiceDeps = {
   /** Test doubles for host scripts, forwards and probes. */
   instanceOptions?: Omit<
     Partial<IdeInstanceOptions>,
-    "localRoot" | "worldId" | "onChange"
+    "localRoot" | "worldId" | "onChange" | "inventory"
   >;
   now?: () => Date;
   /** Detection is a few `--version` calls; repeat at most this often. */
@@ -128,6 +140,15 @@ export class IdeService {
       localRoot: deps.localRoot,
       worldId: () => this.worldId(),
       onChange: deps.onChange,
+      inventory: {
+        read: () => deps.settings.read().servers ?? [],
+        write: (servers) =>
+          deps.settings.update((current) => {
+            if (servers.length) current.servers = servers;
+            else delete current.servers;
+            return current;
+          }),
+      },
     });
   }
 
@@ -196,7 +217,31 @@ export class IdeService {
         );
       },
     );
-    return { providers, instances: this.instances.list(), localConnections };
+    return {
+      providers,
+      instances: this.instances.list().map((instance) => this.listed(instance)),
+      localConnections,
+    };
+  }
+
+  private listed(instance: IdeInstanceView): IdeServerView {
+    const unreachable = this.unreachable(instance);
+    return unreachable
+      ? { ...instance, unreachable, stopByHand: hostStopByHand(instance.id) }
+      : instance;
+  }
+
+  /**
+   * Why World can't reach the host of a server it started, or null: an SSH
+   * server whose connection was removed. World never reaches it through
+   * another connection. While the connection exists, Stop goes to the
+   * destination the server was started on, even if the connection now
+   * points elsewhere. A server on World's own computer is always reachable.
+   */
+  private unreachable(instance: IdeInstanceView): string | null {
+    if (!instance.sshDestination || instance.state === "failed") return null;
+    if (this.deps.connection(instance.connectionId)) return null;
+    return `Its connection was removed, so World can't reach ${instance.hostLabel} to stop it. It runs there until you stop it by hand.`;
   }
 
   /**
@@ -234,8 +279,9 @@ export class IdeService {
   }
 
   /**
-   * Disable and stop its servers completely; the recorded consent stays
-   * for re-enable.
+   * Disable: nothing more opens with it, and World detaches from its
+   * servers. They keep running, listed, until the person stops each one.
+   * The recorded consent stays for re-enable.
    */
   async disable(provider: unknown) {
     if (!isIdeProviderId(provider)) throw new Error("unknown IDE provider");
@@ -245,7 +291,10 @@ export class IdeService {
         current.providers[provider] = { ...previous, enabled: false };
       return current;
     });
-    await this.instances.stopWhere((entry) => entry.provider === provider);
+    this.instances.detachWhere(
+      (entry) => entry.provider === provider,
+      `${IDE_PROVIDERS[provider].label} is disabled; it still runs. Stop it, or enable ${IDE_PROVIDERS[provider].label} again to open it.`,
+    );
     this.deps.onChange?.();
   }
 
@@ -396,24 +445,54 @@ export class IdeService {
     return detection;
   }
 
-  /** Stop one completely: the server and every process it started. */
+  /**
+   * Stop one completely: the server and every process it started. The only
+   * way World ends a server, and only on its host's own connection.
+   */
   stop(instanceId: unknown): Promise<IdeStopResult> {
     if (typeof instanceId !== "string")
       return Promise.resolve({ ok: false, reason: "Choose a server." });
+    const instance = this.instances.get(instanceId);
+    const unreachable = instance && this.unreachable(instance);
+    if (unreachable) return Promise.resolve({ ok: false, reason: unreachable });
     return this.instances.stop(instanceId);
   }
 
-  /** A connection was removed: stop the servers started for it. */
+  /**
+   * Stop listing a server World can't reach, once the person stopped it by
+   * hand. Refused for one World can still stop.
+   */
+  forget(instanceId: unknown): IdeStopResult {
+    if (typeof instanceId !== "string")
+      return { ok: false, reason: "Choose a server." };
+    const instance = this.instances.get(instanceId);
+    if (!instance) return { ok: true };
+    if (!this.unreachable(instance))
+      return {
+        ok: false,
+        reason: "World can still reach this server: Stop it instead.",
+      };
+    this.instances.forget(instanceId);
+    return { ok: true };
+  }
+
+  /**
+   * A connection was removed. Its servers keep running and stay listed:
+   * on World's own computer still with Stop, on an SSH host as
+   * unreachable, with how to stop them by hand.
+   */
   connectionRemoved(connectionId: unknown) {
-    if (typeof connectionId !== "string") return Promise.resolve([]);
+    if (typeof connectionId !== "string") return;
     this.sshDiscovered = new Set(
       [...this.sshDiscovered].filter(
         (key) => !key.startsWith(`${connectionId}\u0000`),
       ),
     );
-    return this.instances.stopWhere(
+    this.instances.detachWhere(
       (entry) => entry.connectionId === connectionId,
+      "Its connection was removed; it still runs.",
     );
+    this.deps.onChange?.();
   }
 
   private enabled(provider: IdeProviderId) {
