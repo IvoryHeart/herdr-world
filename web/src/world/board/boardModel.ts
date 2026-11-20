@@ -7,7 +7,7 @@ import type {
   WorldObject,
   WorldSpaceObject,
 } from "../worldObject";
-import { yieldWorldTask } from "../worldObject";
+import { isLiveNode, yieldWorldTask } from "../worldObject";
 import { DEVTOOLS } from "../devtools/flag";
 import { countWorldWork } from "../devtools/renderer";
 import { cardKey, tabCardKey } from "../../../../shared/terminalColor";
@@ -143,7 +143,9 @@ function projectHost(host: WorldHostObject): HostProjection {
       generation: host.generation,
       label: host.label,
       connectionState: host.connection.state,
-      stale: host.stale || !host.actionable,
+      // A live herdr-core host is view-only, never actionable, yet current:
+      // its zone is drawn live, as Town draws it, not offered a Reconnect.
+      stale: !isLiveNode(host),
       workspaceKeys: [],
     };
     const workspaceIds = new Set(host.spaces.map((space) => space.nativeId));
