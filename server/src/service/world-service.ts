@@ -55,10 +55,7 @@ import { createWebPushService } from "../notifications/web-push";
 import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
 import { composeSources, runSourceProcess } from "../sources/composition";
-import { ShipyardService } from "../shipyard/service";
-import { ShipyardInstances } from "../shipyard/instances";
-import { shipyardInstanceIdentity } from "../shipyard/identity";
-import { createShipyardHttp } from "../shipyard/http";
+import { composeShipyard } from "../shipyard/composition";
 import { withIntegrations } from "../integrations/http";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
@@ -730,24 +727,16 @@ async function compose(
     vaultPath: paths.sourceSecrets,
     now: () => clock.now(),
   });
-  const shipyardInstances = new ShipyardInstances(
-    paths.instanceRegistry,
-    paths.root,
-    () => clock.now(),
-    scheduler,
-  );
-  const shipyardIdentity = await shipyardInstanceIdentity(
-    serviceIncarnation,
-    config.appVersion,
-    clock.now(),
-  );
-  const shipyard = new ShipyardService({
+  const shipyard = await composeShipyard({
+    directory: paths.instanceRegistry,
+    dataRoot: paths.root,
+    incarnation: serviceIncarnation,
+    version: config.appVersion,
     run: runSourceProcess,
     source: () => worldSources.shipyardSource(),
-    instances: () => shipyardInstances.read(),
     now: () => clock.now(),
+    scheduler,
   });
-  const shipyardHttp = createShipyardHttp(shipyard);
 
   worldUsage = new WorldUsageService({
     incarnation: serviceIncarnation,
@@ -905,7 +894,7 @@ async function compose(
             officeObservability: handleOfficeObservability,
             sources: handleWorldSources,
             ide,
-            shipyard: { service: shipyard, http: shipyardHttp },
+            shipyard,
             track,
             stopping: () => stopping,
           }),
@@ -920,12 +909,7 @@ async function compose(
         },
       });
       publishInstanceAddress(releaseDataFolder, config, server);
-      shipyardInstances.start(
-        shipyardIdentity,
-        server.port ?? config.port,
-        config.host,
-        !!config.tls,
-      );
+      shipyard.start(server.port ?? config.port, config.host, !!config.tls);
       worldCli.start();
       forwards.listeningOn(server.port ?? config.port);
       return {
@@ -983,8 +967,7 @@ async function compose(
     // Admit nothing new: requests get 503 while the port stays bound, and no
     // reconnect, push, Ranger start or wait for an answer begins.
     stopping = true;
-    shipyard.close();
-    shipyardInstances.stop();
+    shipyard.stop();
     const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
     deskWatches.stop();
