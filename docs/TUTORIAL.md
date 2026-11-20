@@ -241,11 +241,11 @@ room starts a new tab or agent there.
 1. Drag an agent you no longer need onto the **bin** at the bottom of the
    screen, or choose **⋯ → Put in bin** in its window.
 2. The agent walks out to the nearest bus stop. Nothing is closed yet.
-3. Every four minutes a red bus collects whoever is waiting. World closes
-   those agents only once it has driven off.
+3. Every four minutes a red bus collects whoever is waiting and drives them
+   to Apartments. World closes those agents only once they have walked in.
 
 Changed your mind? Open the tray from the bin and choose **Put back** before
-the bus leaves. **Close now** skips the wait.
+they walk into Apartments. **Close now** skips the wait.
 
 **You are done when:** you can find an agent, see what it is doing and open
 its window.

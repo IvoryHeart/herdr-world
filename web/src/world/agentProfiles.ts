@@ -253,6 +253,8 @@ export async function launchAgent(
     text: string;
     /** The agent that started this one; the service stamps the spawn. */
     parent?: { paneId: string; terminalId?: string };
+    /** Resume this Apartments resident instead (its harness's own resume). */
+    resumeResident?: string;
   },
 ): Promise<LaunchOutcome> {
   if (target.runtime === "herdr-core")
@@ -268,6 +270,9 @@ export async function launchAgent(
       kind: choice.kind ?? "",
       label: choice.label,
       text: choice.text,
+      ...(choice.resumeResident
+        ? { resume_resident: choice.resumeResident }
+        : {}),
       ...(choice.parent
         ? {
             parent_pane_id: choice.parent.paneId,

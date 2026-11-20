@@ -5,6 +5,7 @@ export type Fresh = (
   panes: readonly Row[],
   observedAt: number,
   agents: readonly Row[],
+  topology?: { workspaces?: readonly Row[]; tabs?: readonly Row[] },
 ) => void;
 export type Complete = (
   connectionId: string,

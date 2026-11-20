@@ -369,7 +369,7 @@ describe("one Chat for both runtimes", () => {
       .find((item) => item.agent === "claude")!
       .write(project);
     await rename(written, join(project, `${id}.jsonl`));
-    const { call } = await setup("claude", "idle", false, {
+    const { call, host, t } = await setup("claude", "idle", false, {
       ...files,
       findClaudeSessionForProcess: async () => id,
     });
@@ -378,6 +378,10 @@ describe("one Chat for both runtimes", () => {
       messages: Array<{ text: string }>;
     };
     expect(shown.status).toBe("ok");
+    // Apartments keeps the same session for the agent once it finishes.
+    expect(await host.agentSessions().knownSession(t, "claude")).toMatchObject({
+      id,
+    });
     expect(shown.messages.map((m) => m.text)).toEqual(
       expect.arrayContaining([QUESTION, ANSWER]),
     );
@@ -398,13 +402,18 @@ describe("one Chat for both runtimes", () => {
         payload: { id, cwd: "/work/demo" },
       })}\n${await readFile(written, "utf8")}`,
     );
-    const { w, t, call, recipient } = await setup("codex", "idle", false, {
-      ...files,
-      findCodexSessionById: async (asked) =>
-        asked === id
-          ? { path, mtimeMs: (await stat(path)).mtimeMs, identity: "fixture" }
-          : null,
-    });
+    const { w, t, call, recipient, host } = await setup(
+      "codex",
+      "idle",
+      false,
+      {
+        ...files,
+        findCodexSessionById: async (asked) =>
+          asked === id
+            ? { path, mtimeMs: (await stat(path)).mtimeMs, identity: "fixture" }
+            : null,
+      },
+    );
     const before = (await call("agent_conversation.get")) as {
       status: string;
       unavailable: { reason: string; detail: string };
@@ -435,11 +444,16 @@ describe("one Chat for both runtimes", () => {
     };
     expect(shown.status).toBe("ok");
     expect(shown.messages.length).toBeGreaterThan(0);
+    const known = await host.agentSessions().knownSession(t, "codex");
+    expect(known).toMatchObject({ id });
     // Linking reads; it types nothing.
     expect(sends(w)).toEqual([]);
     // Another program in the terminal does not inherit the link.
     w.fake.replaceWithShell(t);
     await w.settle();
+    const after = await host.agentSessions().knownSession(t, "codex");
+    expect(after?.id).toBeNull();
+    expect(after?.holder).not.toBe(known?.holder);
     await expect(call("agent_conversation.get")).resolves.not.toMatchObject({
       status: "ok",
     });
