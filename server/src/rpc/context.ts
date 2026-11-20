@@ -103,6 +103,8 @@ export type RpcServices = {
   worldWatchlist: WorldWatchlistRegistry;
   /** The agent bin; absent without World storage's effect outbox. */
   bin?: import("../service/bin-service").BinService;
+  /** Finished agents' records; absent in tests without World storage. */
+  apartments?: import("../service/apartments-service").ApartmentsService;
   worldDesk: DeskService["registry"];
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;
