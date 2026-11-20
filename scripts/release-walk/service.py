@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import socket
 from processes import run
 from world import PASSWORD
 
@@ -44,16 +45,23 @@ def services(walk, candidate, baseline, root, disposable):
     else:
         assert run(query, env, check=False).returncode == 113, 'Service install and uninstall: disposable account already has a loaded World service or lacks a GUI user manager'
     config.parent.mkdir(parents=True, exist_ok=True)
-    text = (f'HOST=127.0.0.1\nPORT=0\nOPEN_BROWSER=0\nHERDR_WORLD_PASSWORD={PASSWORD}\n'
-            f'HERDR_WORLD_DATA_DIR={root / "world-service"}\n'
-            f'HERDR_SOCKET_PATH={root / "absent-control.sock"}\n'
-            f'HERDR_CLIENT_SOCKET_PATH={root / "absent-render.sock"}\n')
-    config.write_text(text)
-    config.chmod(0o600)
     try:
         for name, binary in [('Service install and uninstall', candidate),
                              ('Previous release service uninstall', baseline)]:
             with walk.journey(name):
+                # The native installer requires a concrete nonzero port. Ask
+                # the OS for an unused loopback port, independently per install
+                # so a retiring launchd process cannot hold the next one's port.
+                with socket.socket() as listener:
+                    listener.bind(('127.0.0.1', 0))
+                    port = listener.getsockname()[1]
+                assert port not in (8787, 8788), 'service fixture received a reserved World port'
+                text = (f'HOST=127.0.0.1\nPORT={port}\nOPEN_BROWSER=0\nHERDR_WORLD_PASSWORD={PASSWORD}\n'
+                        f'HERDR_WORLD_DATA_DIR={root / "world-service"}\n'
+                        f'HERDR_SOCKET_PATH={root / "absent-control.sock"}\n'
+                        f'HERDR_CLIENT_SOCKET_PATH={root / "absent-render.sock"}\n')
+                config.write_text(text)
+                config.chmod(0o600)
                 run([binary, 'service', 'install'], env)
                 assert definition.is_file(), 'service install did not create its native definition'
                 assert run(query, env, check=False).returncode == 0, 'native service did not start'

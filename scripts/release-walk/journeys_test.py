@@ -1,7 +1,9 @@
 """Regress walk requests against the product's real response shapes."""
 import copy
 import json
+import os
 from pathlib import Path
+import stat
 from types import SimpleNamespace
 import tempfile
 import unittest
@@ -80,7 +82,7 @@ class JourneyTests(unittest.TestCase):
         self.assertEqual(agent['result'], result)
         self.assertNotIn('workspace_id', result)
 
-    def test_upgrade_changes_saved_default_only_after_removing_process_pin(self):
+    def test_upgrade_saves_both_pinned_runtime_profiles_before_unpinned_restart(self):
         with tempfile.TemporaryDirectory(prefix='walk-upgrade-') as directory:
             root = Path(directory)
             fixture = Fixture(root, root / 'tools', SimpleNamespace(path=root / 'events.sock'))
@@ -89,21 +91,37 @@ class JourneyTests(unittest.TestCase):
             candidate.write_text('candidate-binary')
             saved = root / 'world/connections.json'
             started = []
+            startup = dict(id='startup-default', type='local',
+                           control_socket_path=str(root / 'tui-control.sock'),
+                           client_socket_path=str(root / 'tui-render.sock'))
             def world_process(binary, home, env, cookie=None):
                 started.append((Path(binary).read_text(), dict(env), cookie))
+                if 'HERDR_SESSION' not in env:
+                    profiles = json.loads(saved.read_text())['profiles']
+                    self.assertEqual({item['id'] for item in profiles}, {'walk-tui', 'walk-core'})
+                    tui = next(item for item in profiles if item['id'] == 'walk-tui')
+                    self.assertEqual(tui['control_socket_path'], startup['control_socket_path'])
+                    self.assertEqual(tui['client_socket_path'], startup['client_socket_path'])
                 world = MagicMock(cookie='session=synthetic')
                 world.__enter__.return_value = world
-                world.ready.side_effect = lambda runtime: dict(connection_id='walk-core' if runtime == 'herdr-core' else 'local')
+                world.ready.side_effect = lambda runtime: dict(connection_id='walk-core' if runtime == 'herdr-core' else
+                                                               'startup-default' if 'HERDR_SESSION' in env else 'walk-tui')
                 def rpc(method, params=None):
                     if method == 'connections.create':
-                        saved.write_text(json.dumps(dict(default_connection_id='local', profiles=[
-                            dict(id='local', control_socket_path='isolated-tui.sock'), params['profile']])))
+                        # An explicit session pins a read-only startup profile.
+                        # Creating core does not implicitly save that TUI profile.
+                        document = json.loads(saved.read_text()) if saved.exists() else dict(
+                            default_connection_id=params['profile']['id'], profiles=[])
+                        document['profiles'].append(params['profile'])
+                        saved.write_text(json.dumps(document))
                     if method == 'connections.set_default':
                         assert 'HERDR_SESSION' not in env, 'explicit session pins the process default'
                         document = json.loads(saved.read_text())
                         document['default_connection_id'] = params['id']
                         saved.write_text(json.dumps(document))
                     if method == 'connections.list':
+                        if 'HERDR_SESSION' in env:
+                            return dict(default_connection_id=startup['id'], connections=[startup])
                         return json.loads(saved.read_text())
                 world.rpc.side_effect = rpc
                 world.request.return_value.status = 401
@@ -117,6 +135,29 @@ class JourneyTests(unittest.TestCase):
                 self.assertEqual(env['HC_SESSION'], fixture.env['HC_SESSION'])
                 self.assertEqual(cookie, 'session=synthetic')
             self.assertIn('HERDR_SESSION', fixture.env)
+
+    def test_upgrade_prepares_private_settings_for_the_real_connection_store(self):
+        with tempfile.TemporaryDirectory(prefix='walk-upgrade-') as directory:
+            root = Path(directory)
+            fixture = Fixture(root, root / 'tools', SimpleNamespace(path=root / 'events.sock'))
+            baseline, candidate = root / 'baseline', root / 'candidate'
+            baseline.write_text('baseline')
+            candidate.write_text('candidate')
+            class SetupInspected(Exception):
+                pass
+            def inspect(*args, **kwargs):
+                if os.name != 'nt':
+                    self.assertEqual(stat.S_IMODE((root / 'world').stat().st_mode), 0o700)
+                    self.assertEqual(stat.S_IMODE((root / 'world/settings.json').stat().st_mode), 0o600)
+                raise SetupInspected()
+            # A normal umask made the old fixture create a 0755 directory; the
+            # real ConnectionProfileStore rejects that overridden data folder.
+            previous = os.umask(0o022)
+            try:
+                with patch('journeys.World', side_effect=inspect), self.assertRaises(SetupInspected):
+                    upgrade(Mock(), candidate, baseline, fixture)
+            finally:
+                os.umask(previous)
 
 
 if __name__ == '__main__':

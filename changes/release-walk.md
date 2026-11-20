@@ -18,3 +18,6 @@
   and release the explicit session pin before testing a saved default upgrade.
   Hold Windows installer fixture locks until the installer exits so slow binary
   copies cannot expire the simulated lock before cleanup.
+- Prepare private upgrade state, explicitly save the pinned TUI connection's
+  endpoints before upgrading, and give each service lifecycle a valid isolated
+  listener port so native acceptance reaches the intended journeys.

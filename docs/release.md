@@ -12,7 +12,8 @@ Node/npm, Python with venv, GitHub CLI and a working user service manager. The
 service journey uses the account's real systemd/launchd manager, so a temporary
 HOME alone is insufficient. The walk refuses existing World service definitions
 (including alternate systemd/launchd labels) or configuration. It uses loopback
-port 0, private World data, a named Herdr session and a separate core session/state
+port 0 for direct listeners and an OS-assigned nonzero loopback port for each
+native service install, private World data, a named Herdr session and a separate core session/state
 folder with a short private runtime directory so macOS holder sockets fit the
 native path limit; it never attaches to an owner's runtime. There are no browser
 journeys.
@@ -33,7 +34,10 @@ journey checks the global default ID from the browser connection catalogue,
 preserves the TUI default and adds core through the same connection API
 as the selector. Upgrade checks keep saved connection profiles and the default,
 settings, password login, anonymous refusal and the existing signed-in session.
-It first saves the isolated runtime profiles, then restarts the previous binary
+It prepares the upgrade data folder with mode `0700` and settings with mode `0600`,
+then explicitly saves both isolated runtime profiles, including the TUI's observed
+socket paths: a pinned startup connection is read-only and is not automatically
+persisted when adding core. It then restarts the previous binary
 without `HERDR_SESSION` before changing the saved default: an explicit session
 intentionally pins the process default. Listing checks the requested rooms and
 the observed pane/terminal identities, since TUI launch replies omit room IDs.

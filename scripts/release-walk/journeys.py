@@ -246,15 +246,23 @@ def upgrade(walk, candidate, baseline, fixture):
     binary = fixture.root / 'upgrade-world'
     shutil.copy2(baseline, binary)
     settings = fixture.root / 'world/settings.json'
-    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     settings.write_text(json.dumps(dict(version=1, title_suffix='Release walk preserved', repositories={},
                                        workspace_auto_sync={}, custom={'releaseWalk': True})))
+    settings.chmod(0o600)
     with fixture.world(binary) as world:
-        world.ready('herdr')
+        tui = world.ready('herdr')
+        catalogue = world.rpc('connections.list')
+        startup = next((item for item in catalogue['connections'] if item['id'] == tui['connection_id']), None)
+        assert startup and startup['type'] == 'local', 'upgrade did not identify its isolated TUI connection'
+        # HERDR_SESSION pins a read-only startup connection. Saving another
+        # profile does not migrate it; explicitly save its observed endpoints.
+        world.rpc('connections.create', {'profile': dict(id='walk-tui', label='Release walk TUI', type='local',
+                  control_socket_path=startup['control_socket_path'], client_socket_path=startup['client_socket_path'],
+                  auto_connect=True)})
         fixture.connect_core(world)
         cookie = world.cookie
-    # Saving core also persists the isolated TUI's socket paths. Restart the
-    # baseline using those profiles: HERDR_SESSION deliberately pins a process
+    # Restart the baseline using both saved profiles: HERDR_SESSION pins a process
     # default and would refuse changing it through the connection selector.
     env = {key: value for key, value in fixture.env.items() if key != 'HERDR_SESSION'}
     with World(binary, fixture.root, env, cookie) as world:
