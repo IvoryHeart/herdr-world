@@ -5,6 +5,14 @@ import { basename, join, resolve } from "node:path";
 import { sshCommandArgv, sshReadCommandArgv } from "../bridge/ssh-command";
 import type { SessionFile } from "./session-types";
 import {
+  type CensusFile,
+  listLocalCensusFiles,
+  parseRemoteCensus,
+  parseRemotePrefixes,
+  REMOTE_CENSUS_COMMAND,
+  remotePrefixesCommand,
+} from "./session-census-files";
+import {
   processTranscriptCommand,
   processTranscriptSession,
   type ProcessAgentSession,
@@ -88,6 +96,13 @@ export type AgentSessionFileAccess = {
   listCodexThreadBatch?(
     cwds: readonly string[],
   ): Promise<Map<string, CodexDaemonThread[] | null>>;
+  /** Every transcript the host's harnesses keep (session-census-files.ts). */
+  listCensusFiles?(): Promise<CensusFile[]>;
+  /** The first bytes of several transcripts; unreadable ones are left out. */
+  readPrefixes?(
+    paths: readonly string[],
+    byteLimit: number,
+  ): Promise<Map<string, Uint8Array>>;
   /** The one transcript whose ID starts with `prefix`, if exactly one does. */
   findCodexSessionByPrefix(
     prefix: string,
@@ -259,6 +274,21 @@ export const localAgentSessionFiles: CompleteAgentSessionFileAccess = {
   },
   findCodexSessionById: findLocalCodexSession,
   findCodexSessionByPrefix: findLocalCodexSessionByPrefix,
+  listCensusFiles: listLocalCensusFiles,
+  async readPrefixes(paths, byteLimit) {
+    const read = new Map<string, Uint8Array>();
+    for (const path of paths) {
+      try {
+        read.set(
+          path,
+          await localAgentSessionFiles.readPrefix(path, byteLimit),
+        );
+      } catch {
+        // Gone or unreadable: the census skips it.
+      }
+    }
+    return read;
+  },
   listCodexThreads: listCodexDaemonThreads,
   listCodexThreadBatch: listCodexDaemonThreadBatch,
 };
@@ -721,6 +751,35 @@ done
           );
         throw error;
       }
+    },
+    async listCensusFiles() {
+      return parseRemoteCensus(
+        (
+          await runRemote(REMOTE_CENSUS_COMMAND, SESSION_READ_TIMEOUT_MS)
+        ).toString("utf8"),
+      );
+    },
+    async readPrefixes(paths, byteLimit) {
+      // Plain transcripts in one request; compressed ones are expanded
+      // one by one, as Chat reads them.
+      const plain = paths.filter((path) => !path.endsWith(".zst"));
+      const read = plain.length
+        ? parseRemotePrefixes(
+            plain,
+            await runRemote(
+              remotePrefixesCommand(plain, byteLimit, args.shQuote),
+              SESSION_READ_TIMEOUT_MS,
+            ),
+          )
+        : new Map<string, Uint8Array>();
+      for (const path of paths.filter((path) => path.endsWith(".zst"))) {
+        try {
+          read.set(path, await this.readPrefix(path, byteLimit));
+        } catch {
+          // Unreadable: the census skips it.
+        }
+      }
+      return read;
     },
     async readDownloadBody(path) {
       const bytes = await runRemote(`set -eu\ncat ${args.shQuote(path)}`);
