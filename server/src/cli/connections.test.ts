@@ -227,7 +227,7 @@ describe("herdr-world connections", () => {
   test("rejects invalid profiles as usage errors", async () => {
     cli = createTestCli();
     cli.writeConfig("");
-    expect(await connections(["add", "x"])).toBe(EXIT_USAGE);
+    expect(await connections(["add", "x", "--local"])).toBe(EXIT_USAGE);
     expect(
       await connections(["add", "x", "--windows", "--control-socket", "/a"]),
     ).toBe(EXIT_USAGE);
