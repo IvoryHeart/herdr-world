@@ -2040,11 +2040,25 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   …** (its download page) and **Use a program path…** (an absolute path to an
   executable on World's computer). The same rows are in Settings →
   Integrations, where the refresh button looks again.
-- **Webviews.** Stock VS Code and OpenVSCode Server load webviews (Markdown
-  preview and some extension panels) from another site, vscode-cdn.net. World
-  keeps one origin and never rewrites the IDE's files, so those panels stay
-  blank inside World; the row says so. Editing, terminals, Git, search and
-  debugging work. code-server serves its webviews itself, so they work.
+- **Webviews.** Markdown preview and extension panels (GitLens, Copilot
+  Chat and the like) work in all three IDEs, from World's own address. Stock
+  VS Code and OpenVSCode Server would load them from another site,
+  vscode-cdn.net, which World's one-origin frame rule keeps out. World instead
+  sets VS Code's own `webviewEndpoint` option in the workbench page it
+  forwards, pointing at the IDE's webview host page under `/ide/<id>/`, and
+  serves that one file,
+  `out/vs/workbench/contrib/webview/browser/pre/index.html`, with one edit:
+  its parent check, which wants a vscode-cdn.net hostname made from the
+  parent's address, becomes "the parent is on this page's own address", and
+  the page's script hash in its security policy is recomputed to match. The
+  page still hands its channel only to a parent on that address, the rest of
+  its policy is the IDE's own, and no other IDE file is changed. If either
+  page doesn't look as World expects (another VS Code layout), World forwards
+  it unchanged and those panels stay blank. Webview files show in the browser
+  as `vscode-resource.vscode-cdn.net` addresses; the webview's own service
+  worker answers them inside the browser, so nothing is fetched from that
+  site. Webviews need a secure address (HTTPS or localhost). code-server
+  serves its webviews itself and is left as it is.
 - **Secure address.** Microsoft's VS Code connects only from a page on HTTPS
   or at localhost: it signs its connection with browser cryptography that a
   plain-HTTP LAN or Tailscale address doesn't have, and its server refuses

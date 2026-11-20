@@ -25,15 +25,6 @@ export type IdeProviderInfo = {
   /** Where to install it when it is missing. */
   setupUrl: string;
   /**
-   * Whether its webviews (Markdown preview, extension panels) load inside
-   * World. code-server serves them under its own route. Stock VS Code and
-   * OpenVSCode Server frame them from `*.vscode-cdn.net`, the template in
-   * their product.json; World's frame policy keeps those frames out, since
-   * the Code view never admits another origin and World never rewrites the
-   * product's own files (#988). The rest of the workbench works.
-   */
-  webviewsInWorld: boolean;
-  /**
    * Whether its workbench connects only from a secure page (HTTPS or
    * localhost). Microsoft's VS Code signs its connection with code that
    * needs the browser's crypto.subtle, which plain-HTTP LAN and Tailscale
@@ -41,6 +32,15 @@ export type IdeProviderInfo = {
    * builds don't sign.
    */
   needsSecurePage: boolean;
+  /**
+   * Whether World serves its webview host page (Markdown preview, extension
+   * panels) on World's origin. Stock VS Code and OpenVSCode Server frame it
+   * from `*.vscode-cdn.net`, which World's frame rule keeps out, so World
+   * points their workbench at the IDE's own copy under `/ide/<id>/` and
+   * makes that page's parent check same-origin (webview-host.ts, #1053).
+   * code-server already serves its webviews itself.
+   */
+  rehostsWebviews: boolean;
 };
 
 export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
@@ -59,8 +59,8 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
       },
     ],
     setupUrl: "https://code.visualstudio.com/download",
-    webviewsInWorld: false,
     needsSecurePage: true,
+    rehostsWebviews: true,
   },
   "code-server": {
     id: "code-server",
@@ -68,8 +68,8 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     marketplace: "Open VSX",
     terms: [],
     setupUrl: "https://coder.com/docs/code-server/install",
-    webviewsInWorld: true,
     needsSecurePage: false,
+    rehostsWebviews: false,
   },
   openvscode: {
     id: "openvscode",
@@ -77,8 +77,8 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     marketplace: "Open VSX",
     terms: [],
     setupUrl: "https://github.com/gitpod-io/openvscode-server#getting-started",
-    webviewsInWorld: false,
     needsSecurePage: false,
+    rehostsWebviews: true,
   },
 };
 

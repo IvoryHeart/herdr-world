@@ -35,7 +35,10 @@ import {
   type createAuthHandlers,
   unauthenticatedLoginRedirect,
 } from "../http/auth";
-import { browserRequestAdmissionError } from "../http/browser-admission";
+import {
+  browserOriginOf,
+  browserRequestAdmissionError,
+} from "../http/browser-admission";
 import type { createHerdrSetupHandlers } from "../http/herdr-setup";
 import { handleInstanceSettings } from "../http/instance-settings";
 import { parseRpcMeta } from "../http/rpc-meta";
@@ -213,7 +216,12 @@ export function listen(deps: ListenerDeps) {
         return undefined;
       return new Response("websocket upgrade failed", { status: 400 });
     }
-    return proxyIdeHttp(req, url, upstream);
+    return proxyIdeHttp(
+      req,
+      url,
+      upstream,
+      browserOriginOf(req, url, config.publicOrigin),
+    );
   }
 
   async function handleConnectionHttpRequest(

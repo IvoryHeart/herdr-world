@@ -67,6 +67,12 @@ extension parity based only on Marketplace availability.
 - **WHEN** an installed Microsoft provider requires a CDN webview origin incompatible with World's current policy
 - **THEN** embedding remains blocked with the compatibility reason and explicit handoff; no automatic CSP exception or Open VSX substitution occurs
 
+#### Scenario: Stock webviews served on World's origin
+
+- **WHEN** stock VS Code or OpenVSCode Server would frame its webview host page from `*.vscode-cdn.net`
+- **THEN** World sets the workbench's own `webviewEndpoint` option to the IDE's copy of that page under `/ide/<id>/`, and serves that one page (`out/vs/workbench/contrib/webview/browser/pre/index.html`) with only its hostname-hash parent check replaced by a same-origin parent check and its CSP script hash recomputed after the replaced hash is proved to be the original script's
+- **AND** the page still hands its message port only to a parent on World's origin, the rest of its CSP and every other product file are unchanged, World's own origin and CSP policy are unchanged, and a page World cannot match is forwarded unchanged so webviews stay blank
+
 #### Scenario: First enable grants broad authority
 
 - **WHEN** the owner enables a compatible installed server
