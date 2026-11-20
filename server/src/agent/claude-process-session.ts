@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
  * Claude Code's own record of the session one process runs, for Chat on a
  * runtime that reports no session (herdr-core).
  *
- * Claude Code registers every interactive process in
+ * Claude Code registers interactive processes (and headless processes in newer releases) in
  * `${CLAUDE_CONFIG_DIR:-~/.claude}/sessions/<pid>.json` with its `pid`, the
  * `sessionId` it runs now (rewritten on every switch: `/clear`, `/resume`)
  * and `procStart`, the process's start time as the OS reports it: field 22

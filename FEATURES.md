@@ -234,7 +234,14 @@ no control for it. Platform and harness limits apply across the table.
   again. See upstream questions Q3 and Q11 in the protocol questions above.
 - **Chat and asks:** transcript support depends on the
   [harness and platform](./docs/core-harnesses.md); input can still work without
-  a readable conversation. Verified local Linux asks can receive saved answers
+  a readable conversation. On Linux and macOS, core Chat can identify headless
+  `codex exec` and `claude -p` conversations from the foreground process's own
+  session record or unique writable transcript (or Claude session debug file).
+  SSH discovery runs on that agent's host. It never chooses the newest Claude
+  or Codex file in a directory: missing, unreadable or ambiguous process evidence
+  leaves Chat unavailable unless an explicit session reference is present.
+  Runs that disable session persistence have no transcript to read.
+  Verified local Linux asks can receive saved answers
   in their original session. Remote and unverified asks use `ask get` or `--wait`.
   `--owner-only` means only you can answer.
 - **Ranger:** on core it reads the current screen, not terminal scrollback or
