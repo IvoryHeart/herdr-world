@@ -201,10 +201,15 @@ cache is keyed by its committed lock and revalidated by setup; it contains no ru
 evidence. A failure before execution can have no manifest: upload warns in that
 case, while the primary step stays red and aggregation still refuses missing evidence.
 
-Browser shards run at most two independent files concurrently, each with private
-profiles, ports, RPC state and result gates. HostsFilter Town frame cases remain
-serial within their file, and DOM cases retain their existing concurrency;
-the Town cases retain every viewport/assertion and the original 45-second hang guard.
+World browser shards run full scenes one file at a time. Two simultaneous
+SwiftShader scenes competed for hosted-runner CPUs and caused progressive-control,
+focus and capture-fencing failures. The explicit lightweight DOM/transport list in
+`scripts/world-browser-suites.ts` runs two files concurrently in a separate batch;
+new suites default to isolation. Cases within each World file remain serial.
+Each case keeps private profiles, ports, RPC state and result gates, and retains
+every viewport, assertion and existing deadline. Both batches publish distinct
+JUnit/timing artifacts; a failed batch stops the runner. Web browser shards retain
+two-file concurrency.
 Pages reuses film media only with an exact render-input cache key, with no fallback
 prefix. A cache miss still renders the full film. Main latency measurements retain
 all four suites, paired over two quiet runners with a fresh quiet check before
@@ -260,7 +265,9 @@ architecture also enter each model key.
 
 On a PR, an exact model-cache hit is validated against current fingerprints,
 canonical group membership, complete original manifests, current tools and the
-successful enforced resource record. Missing, malformed or changed evidence runs
+successful enforced resource record. Cache saving and aggregation read actual
+`resources.json` reports, excluding readiness-only cancellation-control directories;
+each group must still have exactly one valid enforced report. Missing, malformed or changed evidence runs
 the entire group afresh. Restore/publication errors cannot silently combine
 partial and fresh evidence. Original manifests and resource accounting remain in
 an `origin.json` artifact. Aggregation checks restored artifacts against that

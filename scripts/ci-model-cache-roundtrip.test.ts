@@ -49,6 +49,12 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
       "quint/model.qnt",
       "web/unrelated.ts",
     ]);
+    // A real constrained run leaves a cancellation-control readiness directory
+    // alongside the supervisor's resource reports. It is not shard evidence.
+    await write(
+      ".agents/verification/resources/cancellation-control/ready.json",
+      [123],
+    );
     const sourceRevision = git("rev-parse", "HEAD");
     for (const index of [1, 2, 3]) {
       const key = await modelCacheKey(root, index);
@@ -110,6 +116,28 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
           manifest: path,
         },
       );
+      if (index === 1) {
+        const resourcePath = `.agents/verification/resources/original-${index}/resources.json`;
+        const resource = await readFile(resolve(root, resourcePath), "utf8");
+        await rm(resolve(root, resourcePath));
+        await expect(modelCache(root, "save", index)).rejects.toThrow(
+          "Missing or duplicate fresh resource proof",
+        );
+        await write(resourcePath, resource);
+        await write(
+          ".agents/verification/resources/duplicate/resources.json",
+          resource,
+        );
+        await expect(modelCache(root, "save", index)).rejects.toThrow(
+          "Missing or duplicate fresh resource proof",
+        );
+        await rm(resolve(root, ".agents/verification/resources/duplicate"), {
+          recursive: true,
+        });
+        await write(resourcePath, "malformed");
+        await expect(modelCache(root, "save", index)).rejects.toThrow();
+        await write(resourcePath, resource);
+      }
       await modelCache(root, "save", index);
     }
     await rm(resolve(root, ".agents/verification"), { recursive: true });

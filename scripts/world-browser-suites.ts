@@ -44,6 +44,24 @@ export const worldBrowserShards = balanceShards(
 ).map((shard) => shard.map((name) => `web/src/world/${name}.test.ts`));
 
 export const worldBrowserSuites = worldBrowserShards.flat();
+
+// Full scenes compete for the same software-rendering CPUs on hosted runners.
+// Only these bounded DOM/transport suites are admitted to parallel file workers;
+// new suites default to isolation until their resource use is understood.
+export const worldBrowserParallelSuites = [
+  "AnswerDeliveries.browser",
+  "CoreControl.browser",
+  "CoreSharedState.browser",
+  "CoreTerminalWatch.browser",
+  "CoreViewOnly.browser",
+  "NeedsYouCard.browser",
+  "WorldNavigatorWorktree",
+  "WorldViewErrorBoundary",
+  "groups/GroupsWindow",
+  "useSpacesTabWindowArrangement.browser",
+  "windows/WindowFrame",
+  "windows/WorldPanel",
+].map((name) => `web/src/world/${name}.test.ts`);
 export const worldBrowserIgnorePattern = ignorePattern(worldBrowserSuites);
 
 /**

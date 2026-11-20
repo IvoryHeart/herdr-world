@@ -165,6 +165,16 @@ async function fixture(
 test("distributed acceptance requires every model, current source/tools and every enforced resource record", async () => {
   await fixture(async (root, manifests) => {
     const signal = new AbortController().signal;
+    await mkdir(
+      resolve(root, ".agents/verification/resources/cancellation-control"),
+    );
+    await writeFile(
+      resolve(
+        root,
+        ".agents/verification/resources/cancellation-control/ready.json",
+      ),
+      "[123]",
+    );
     await aggregateCIShards(root, signal);
     const aggregate = (
       await readdir(resolve(root, ".agents/verification/runs"))
@@ -196,7 +206,23 @@ test("distributed acceptance requires every model, current source/tools and ever
       await writeFile(resourcePath, JSON.stringify({ ...resource, ...fault }));
       await expect(aggregateCIShards(root, signal)).rejects.toThrow();
     }
+    await rm(resourcePath);
+    await expect(aggregateCIShards(root, signal)).rejects.toThrow(
+      "Missing or duplicate shard resource accounting",
+    );
+    await writeFile(resourcePath, "malformed");
+    await expect(aggregateCIShards(root, signal)).rejects.toThrow();
     await writeFile(resourcePath, JSON.stringify(resource));
+    const duplicate = resolve(root, ".agents/verification/resources/duplicate");
+    await mkdir(duplicate);
+    await writeFile(
+      resolve(duplicate, "resources.json"),
+      JSON.stringify(resource),
+    );
+    await expect(aggregateCIShards(root, signal)).rejects.toThrow(
+      "Missing or duplicate shard resource accounting",
+    );
+    await rm(duplicate, { recursive: true });
     const [path, manifest] = [...manifests][0]!;
     for (const wrong of [
       { ...manifest, sourceRevision: "c".repeat(40) },

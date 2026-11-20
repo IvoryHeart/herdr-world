@@ -1,3 +1,4 @@
+import { readVerificationResources } from "./verification-resources";
 import assert from "node:assert/strict";
 import { balanceShards } from "./balance-shards";
 import timings from "./verification-timings.json";
@@ -226,22 +227,7 @@ export async function aggregateCIShards(
     process.env.GITHUB_RUN_ID || "local",
     Number(process.env.GITHUB_RUN_ATTEMPT || 1),
   );
-  const resourceRecords = await Promise.all(
-    (await readdir(resolve(root, ".agents/verification/resources"))).map(
-      async (name) =>
-        JSON.parse(
-          await readFile(
-            resolve(
-              root,
-              ".agents/verification/resources",
-              name,
-              "resources.json",
-            ),
-            "utf8",
-          ),
-        ),
-    ),
-  );
+  const resourceRecords = await readVerificationResources(root);
   const records = [];
   const accounting: unknown[] = [];
   const identity = await source(root, signal);

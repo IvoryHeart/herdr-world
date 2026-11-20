@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { appendFileSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { readVerificationResources } from "./verification-resources";
 import { contentKey } from "./ci-content-key";
 import { verificationShard, type Shard } from "./ci-verification";
 import type {
@@ -240,22 +241,10 @@ export async function modelCache(root: string, action: string, index: number) {
   const shard = JSON.parse(
     await readFile(resolve(root, path), "utf8"),
   ) as Shard;
-  const resources = await Promise.all(
-    (await readdir(resolve(root, ".agents/verification/resources"))).map(
-      async (name) =>
-        JSON.parse(
-          await readFile(
-            resolve(
-              root,
-              `.agents/verification/resources/${name}/resources.json`,
-            ),
-            "utf8",
-          ),
-        ),
-    ),
-  );
-  const resource = resources.find((item) => item.manifest === path);
-  assert(resource, "Missing fresh resource proof");
+  const resources = await readVerificationResources(root);
+  const matching = resources.filter((item) => item.manifest === path);
+  assert.equal(matching.length, 1, "Missing or duplicate fresh resource proof");
+  const resource = matching[0]!;
   const bundle: ModelBundle = {
     schema: 1,
     ...key,
