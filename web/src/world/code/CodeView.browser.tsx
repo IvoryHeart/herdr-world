@@ -584,6 +584,7 @@ async function run() {
     "Settings lists the IDE servers that still run",
   );
   // Disable stops none: it lists them first, each with its own Stop.
+  const stopsBeforeDisable = fake.state.stops.length;
   button(
     "Disable",
     $('[aria-label="IDE integrations"] [data-provider="code-server"]')!,
@@ -609,7 +610,10 @@ async function run() {
       $(".ide-servers")?.textContent?.includes("/srv/example/docs") === true,
     "confirming Disable keeps its servers running and listed",
   );
-  check(fake.state.stops.length === 0, "Disable stopped a server");
+  check(
+    fake.state.stops.length === stopsBeforeDisable,
+    "Disable stopped a server",
+  );
   flushSync(() => settings.unmount());
 }
 

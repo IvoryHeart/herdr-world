@@ -117,7 +117,7 @@ function functions(stopGraceMs: number) {
     "  return 0",
     "}",
     "nonce_of() { sed -n 's/^nonce=//p' \"$1/record\" 2>/dev/null; }",
-    // starting: claimed, not launched yet; running; exited: nothing left.
+    // starting: claimed, its launch not yet marked; running; exited: nothing left.
     "state_of() {",
     '  if [ ! -f "$1/pid" ]; then echo starting',
     '  elif [ -n "$(marked "$(nonce_of "$1")")" ]; then echo running',
@@ -267,7 +267,13 @@ export function hostStartScript(start: IdeHostStart) {
         ]
       : []),
     `HERDR_WORLD_IDE="$n" "$@" sh -c ${shQuote(supervisor(stopGraceMs))} hw-ide "$d" "$n" ${command} </dev/null >>"$d/log" 2>&1 &`,
-    'printf "%s\\n" "$!" > "$d/pid"',
+    "p=$!",
+    // Until the launch carries its mark (fork to exec), a second start
+    // would read a written PID with no marked process as exited and take
+    // the folder over: write the PID once it is marked or has ended (a
+    // zombie too: this script is its parent and never waits for it).
+    'i=0; while [ -z "$(marked "$n")" ] && [ $i -lt 25 ]; do case "$(ps -o stat= -p "$p" 2>/dev/null)" in ""|*Z*) break ;; esac; nap; i=$((i + 1)); done',
+    'printf "%s\\n" "$p" > "$d/pid"',
     "echo result=started",
   ].join("\n");
 }
@@ -429,4 +435,32 @@ export function parseHostList(stdout: string): IdeHostRecord[] {
     if (index > 0) current[line.slice(0, index)] = line.slice(index + 1);
   }
   return records;
+}
+
+export function plainExitReason(lines: string[], code: number | null) {
+  const last = [...lines]
+    .reverse()
+    .find((line) => /error|fail|denied|unable|not /i.test(line));
+  const suffix = last ? `: ${last.trim().slice(0, 240)}` : ".";
+  return `The IDE server stopped${code === null ? "" : ` (exit ${code})`}${suffix}`;
+}
+
+/** Exit codes a start script gives only before it launches anything. */
+export const definiteStartFailure = (code: number | null) =>
+  [HOST_EXIT.dir, HOST_EXIT.token, HOST_EXIT.folder].some((c) => c === code);
+
+export function hostFailure(
+  code: number | null,
+  hostLabel: string,
+  remote: boolean,
+) {
+  if (code === HOST_EXIT.dir)
+    return `World couldn't use its private folder on ${hostLabel}.`;
+  if (code === HOST_EXIT.token)
+    return `World couldn't hand the IDE its access token on ${hostLabel}.`;
+  if (code === HOST_EXIT.folder)
+    return `The project folder doesn't exist on ${hostLabel}.`;
+  if (remote && (code === 255 || code === null))
+    return `World couldn't reach ${hostLabel} over SSH. Check the connection, then try again.`;
+  return `World couldn't run its IDE helper on ${hostLabel}${code === null ? "" : ` (exit ${code})`}.`;
 }

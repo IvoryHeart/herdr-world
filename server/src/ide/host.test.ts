@@ -208,7 +208,11 @@ test.if(hasSetsid())(
     ]);
     expect(
       results
-        .map((result) => parseHostLines(result.stdout).values.get("result"))
+        .map(
+          (result) =>
+            parseHostLines(result.stdout).values.get("result") ??
+            `no result (exit ${result.code}): ${result.stderr.trim()}`,
+        )
         .sort(),
     ).toEqual(["running", "started"]);
     const pids = await h.standIn.started();

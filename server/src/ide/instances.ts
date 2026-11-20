@@ -2,15 +2,17 @@ import { createHash, randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
-  HOST_EXIT,
+  definiteStartFailure,
   HOST_STOP_GRACE_MS,
   hostAttachScript,
+  hostFailure,
   hostListScript,
   hostStartScript,
   hostStopScript,
   type IdeHostRoot,
   parseHostLines,
   parseHostList,
+  plainExitReason,
 } from "./host";
 import {
   type IdeForward,
@@ -139,6 +141,9 @@ const DEFAULT_MAX_INSTANCES = 4;
 const HOST_RUN_TIMEOUT_MS = 30_000;
 /** While waiting to answer, look on the host this often for an early exit. */
 const HOST_CHECK_MS = 3_000;
+/** Another start mid-launch on the host: how often and long to look again. */
+const STARTING_LOOK_MS = 200;
+const STARTING_LOOKS = 25;
 
 export const systemIdeProbe: IdeProbe = async (upstream) => {
   try {
@@ -170,30 +175,6 @@ function instanceKey(
   folder: string,
 ) {
   return [connectionId, host, provider, folder].join("\u0000");
-}
-
-export function plainExitReason(lines: string[], code: number | null) {
-  const last = [...lines]
-    .reverse()
-    .find((line) => /error|fail|denied|unable|not /i.test(line));
-  const suffix = last ? `: ${last.trim().slice(0, 240)}` : ".";
-  return `The IDE server stopped${code === null ? "" : ` (exit ${code})`}${suffix}`;
-}
-
-/** Exit codes a start script gives only before it launches anything. */
-const definiteStartFailure = (code: number | null) =>
-  [HOST_EXIT.dir, HOST_EXIT.token, HOST_EXIT.folder].some((c) => c === code);
-
-function hostFailure(code: number | null, hostLabel: string, remote: boolean) {
-  if (code === HOST_EXIT.dir)
-    return `World couldn't use its private folder on ${hostLabel}.`;
-  if (code === HOST_EXIT.token)
-    return `World couldn't hand the IDE its access token on ${hostLabel}.`;
-  if (code === HOST_EXIT.folder)
-    return `The project folder doesn't exist on ${hostLabel}.`;
-  if (remote && (code === 255 || code === null))
-    return `World couldn't reach ${hostLabel} over SSH. Check the connection, then try again.`;
-  return `World couldn't run its IDE helper on ${hostLabel}${code === null ? "" : ` (exit ${code})`}.`;
 }
 
 export class IdeInstances {
@@ -577,11 +558,13 @@ export class IdeInstances {
   /**
    * Checks the server on its host is this World's and still runs, then
    * attaches. `gone` when nothing is there; `done` otherwise (attached,
-   * or detached or failed with why).
+   * or detached or failed with why). One still starting there (another
+   * start launching it) is looked at again for a few seconds first.
    */
   private async attach(
     instance: Instance,
     generation: number,
+    tries = 0,
   ): Promise<"done" | "gone"> {
     const epoch = instance.epoch;
     const result = await this.run(
@@ -626,6 +609,11 @@ export class IdeInstances {
       }
       this.connect(instance, values.get("root") ?? "", token, generation);
       return "done";
+    }
+    if (state === "starting" && tries < STARTING_LOOKS) {
+      await this.sleep(STARTING_LOOK_MS);
+      if (!this.wanted(instance, epoch)) return "done";
+      return this.attach(instance, generation, tries + 1);
     }
     if (state === "starting") {
       this.setState(
