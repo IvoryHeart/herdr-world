@@ -116,10 +116,9 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           // windows paint far more pixels in software, and each topology
           // change glides over drawn frames; CI runners differ by about 1.5x
           // (the 1080x1920 slow-frame case took 54 s to 80 s on main, and the
-          // 1440x900 typical case 40 s on CI against 20 s locally). The
-          // typical case also holds the bus at each second of a whole trip
-          // (townBusTrip.browser.ts), two frames apiece: 30 s locally at
-          // 1440px, 105 s with Chrome on two cores.
+          // 1440x900 typical case, which runs every desktop check, 40 s on
+          // CI against 20 s locally). The bus trip (townBusTrip.browser.ts)
+          // runs in the phone typical case only (#1183).
           scale === "extended" ||
             scale === "protected" ||
             scale === "max" ||

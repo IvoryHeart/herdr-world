@@ -1546,6 +1546,11 @@ async function run() {
   }
   if (scale === "typical" && mode === "test") {
     await checkTownCenter(host, check, waitFor);
+  }
+  // The bus layer draws the same trip at any window size, so one typical
+  // case checks it: the phone one, whose frames cost the least to draw
+  // (the rider's walk out of its building is paced by drawn frames, #1183).
+  if (scale === "typical" && mode === "test" && phone) {
     const [connection] = base.connections;
     // A blocked agent queues at reception, a few steps from its building's
     // front door: its walk out is short whatever the frame rate
