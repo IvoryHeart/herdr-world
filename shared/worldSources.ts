@@ -102,6 +102,8 @@ export type WorkItem = {
   status: string;
   roles: WorkRole[];
   updatedAt: number;
+  /** Source creation timestamp, absent from older cached observations. */
+  createdAt?: number;
   /** When it finished: a pull request merged, a Done ticket resolved. */
   finishedAt?: number;
   /** Pull requests only. */

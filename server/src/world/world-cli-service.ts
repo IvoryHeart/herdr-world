@@ -55,6 +55,7 @@ export function createWorldCliService(deps: {
     snapshot(params: Record<string, never>): Promise<WorldSnapshotResult>;
   } | null;
   sources?(): Promise<WorldSourcesSnapshot>;
+  usage?(params: Record<string, unknown>): Promise<unknown>;
   townMoveQueues: TownMoveContext["queues"];
   publishBoard(revision: number): void;
   /** Send one control line to every connected page. */
@@ -302,6 +303,7 @@ export function createWorldCliService(deps: {
       return snapshots.snapshot({});
     },
     sources: deps.sources,
+    usage: deps.usage,
     groupMove: (request, recheck) => {
       const lease = deps.connections().readyRuntimeLease(request.connection_id);
       if (

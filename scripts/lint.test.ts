@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, test as bunTest } from "bun:test";
 import {
   copyFileSync,
   mkdirSync,
@@ -9,6 +9,12 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+// Each test launches the real linter for several fixtures. Bound the whole
+// subprocess batch separately from Bun's five-second in-process default.
+function test(name: string, run: () => void) {
+  bunTest(name, run, 30_000);
+}
 
 const root = new URL("../", import.meta.url);
 const directory = mkdtempSync(join(tmpdir(), "roamgate-lint-"));
@@ -102,7 +108,6 @@ test("dependency warnings retain scope and existing ESLint suppressions", () => 
   ).toEqual(["warning:diagnostic"]);
 });
 
-// Eleven real linter startups need the same bounded budget as nearby fixtures.
 test("lint preserves recommended TypeScript rules and ESLint option defaults", () => {
   for (const [source, rule] of [
     ["const _unused = 1;", "eslint(no-unused-vars)"],
@@ -140,7 +145,7 @@ export const value = 1 < 2;
 export type Anything = any;
 export type Empty = {};`),
   ).toEqual([]);
-}, 30_000);
+});
 
 test("JavaScript globals and duplicate parameters remain checked", () => {
   expect(
@@ -169,7 +174,6 @@ test("JavaScript globals and duplicate parameters remain checked", () => {
   ).toEqual(["error:eslint(no-redeclare)"]);
 });
 
-// Ten real linter startups can exceed five seconds in the concurrent unit lane.
 test("generated assets, binaries and workspace dependencies stay ignored", () => {
   for (const path of [
     ".pages-dist/fixture.js",
@@ -185,7 +189,7 @@ test("generated assets, binaries and workspace dependencies stay ignored", () =>
   ]) {
     expect(lint("debugger;", path)).toEqual([]);
   }
-}, 30_000);
+});
 
 test("effect and storage core time uses injected ports, including globalThis access", () => {
   for (const path of [
@@ -215,4 +219,4 @@ test("effect and storage core time uses injected ports, including globalThis acc
       "server/src/effects/fixture.test.ts",
     ),
   ).toEqual([]);
-}, 30_000);
+});

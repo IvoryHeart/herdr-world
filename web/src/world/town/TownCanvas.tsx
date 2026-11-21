@@ -97,7 +97,6 @@ import type { OfficeAgent } from "../officeProjectionTypes";
 
 export type { PlaceColorChoice, TownRoomActions } from "./townRoomActions";
 import type { TownRoomActions } from "./townRoomActions";
-
 /** Camera kept across Office visits within one page session. */
 const savedCameras = new Map<string, { x: number; y: number; z: number }>();
 const NO_COLORS: TerminalColors = {};
@@ -977,6 +976,7 @@ export function TownCanvas({
       <TownLensBoard lens={lens} hover={hover} selected={selectedKey}>
         <TownBoard
           counts={summary.counts}
+          harnesses={summary.harnesses}
           onOpenSummary={onOpenSummary}
           sinceYouLeft={sinceYouLeft}
         />
