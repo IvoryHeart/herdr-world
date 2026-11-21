@@ -13,10 +13,8 @@ import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
 import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { authTokenPrintCommand } from "../config/auth-token";
-import type { DataPaths } from "../config/data-paths";
 import { acquireInstanceLock } from "../config/instance-lock";
 import { publishInstanceAddress } from "./instance-address";
-import type { ServerConfig } from "../config/server-config";
 import { listenerSessionSecret } from "../config/session-secret";
 import { startupConnectionSettings } from "../connections/profile-creation";
 import {
@@ -69,7 +67,7 @@ import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
-import { WorldUsageService } from "../usage/service";
+import { composeWorldUsage, type ComposedWorldUsage } from "./usage-analytics";
 import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
@@ -82,22 +80,11 @@ import { DeskWatches } from "../world/desk-watches";
 import { readDeskWatch } from "../world/desk-watch-read";
 import { createBrowserClients, summarizeHerdrEvent } from "./clients";
 import { listen } from "./listener";
-import type { Clock, Scheduler, WorldAdapters } from "./ports";
+import type { WorldServiceDeps } from "./ports";
 import { createRpcDispatcher } from "./rpc-dispatch";
-import type { OpenStorage, WorldStorage } from "./storage";
+import type { WorldStorage } from "./storage";
 
-/** Everything a World service takes from its process; nothing else is global. */
-export type WorldServiceDeps = {
-  config: ServerConfig;
-  /** The data folder this service owns from creation until stop. */
-  paths: DataPaths;
-  clock: Clock;
-  scheduler: Scheduler;
-  storage: OpenStorage;
-  adapters: WorldAdapters;
-  /** After an installed update: end the process so its supervisor restarts it. */
-  scheduleProcessExit(): void;
-};
+export type { WorldServiceDeps } from "./ports";
 
 export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 
@@ -140,9 +127,8 @@ async function compose(
   const { config, paths, clock, scheduler, adapters } = deps;
   const logger = serverLogger;
   const settings = storage.settings;
-  // Set when stop begins: nothing new is admitted or started after it.
+  // Stop fences admission/startup; storage closure fences writes to the folder.
   let stopping = false;
-  // Cleared when storage closes: no write may reach the folder after it.
   let storageOpen = true;
   const serviceIncarnation = storage.incarnation ?? randomUUID();
   const snapshotAdmission = new WorldSnapshotAdmission();
@@ -239,7 +225,7 @@ async function compose(
 
   const readyConnectionGenerations = new Map<string, number>();
   let worldSnapshots: ObservedSnapshots | null = null;
-  let worldUsage: WorldUsageService | null = null;
+  let worldUsage: ComposedWorldUsage | null = null;
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
   // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
@@ -280,6 +266,10 @@ async function compose(
     connections: () => connectionManager,
     snapshots: () => worldSnapshots,
     sources: async () => worldSources.current(),
+    usage: async (params) => {
+      if (!worldUsage) throw new Error("Usage analytics is unavailable");
+      return worldUsage.analytics.get(params);
+    },
     townMoveQueues,
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
@@ -347,6 +337,8 @@ async function compose(
     connectionGeneration: number,
     kind?: "late" | "activity",
   ) {
+    if (kind !== "late" && kind !== "activity")
+      worldUsage?.activity.invalidate(connectionId, clock.now());
     const revision = worldSnapshots?.invalidate(connectionId, kind);
     if (revision === undefined) return;
     const line = serializeWorldInvalidation(
@@ -483,7 +475,11 @@ async function compose(
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    apartments.fresh(ownedBy(connectionManager, observeHost)),
+    apartments.fresh((id, generation, panes, at, agents) => {
+      if (connectionManager.has(id))
+        observeHost(id, generation, panes, at, agents);
+      worldUsage?.activity.observeFresh(id, generation, panes, at, agents);
+    }),
     apartments.complete(ownedBy(connectionManager, observeTerminalSettings)),
     serviceIncarnation,
   );
@@ -756,14 +752,21 @@ async function compose(
   });
   const shipyardHttp = createShipyardHttp(shipyard);
 
-  worldUsage = new WorldUsageService({
-    incarnation: serviceIncarnation,
-    connections: connectionManager,
-    topology: () => worldSnapshots!.snapshot({}),
-    prices: async () => (await settings.read()).custom.world_usage_prices_v1,
-    telemetry: () => officeObservability.snapshot(),
-    now: () => clock.now(),
+  worldUsage = composeWorldUsage({
+    connectionManager,
+    core,
+    coreRpc,
+    connectionProfiles,
+    observedConnections,
+    worldSnapshots,
+    worldSources,
+    settings,
+    officeObservability,
+    clock,
     scheduler,
+    serviceIncarnation,
+    config,
+    dataRoot: paths.root,
   });
   const rpcServices: RpcServices = {
     clock,
@@ -806,6 +809,7 @@ async function compose(
     worldCli,
     worldSnapshots,
     worldUsage,
+    worldUsageAnalytics: worldUsage.analytics,
     worldMemory: createRuntimeMemoryService({
       tui: () => connectionManager,
       core: coreRpc,
@@ -911,11 +915,8 @@ async function compose(
         connected: startTask!.catch(() => {}),
       };
     },
-    /**
-     * Drain and release everything, closing the listener last; safe to call
-     * more than once. A process about to exit passes `keepListener`, so the
-     * port stays bound until its exit: launchd's restart waits for the port
-     * to free before it starts the next process (service-manager.ts).
+    /** Drain/release once, listener last. keepListener binds until process exit:
+     * launchd waits for the port to free before restarting (service-manager.ts).
      */
     async stop(options: { keepListener?: boolean } = {}): Promise<void> {
       stopTask ??= stopService();
@@ -958,8 +959,7 @@ async function compose(
   }
 
   async function stopService() {
-    // Admit nothing new: requests get 503 while the port stays bound, and no
-    // reconnect, push, Ranger start or wait for an answer begins.
+    // Refuse requests (503), reconnects, pushes, Ranger starts and new answer waits.
     stopping = true;
     shipyard.close();
     shipyardInstances.stop();
@@ -973,9 +973,7 @@ async function compose(
     // Drop browser sockets as a process exit does; pages reconnect.
     for (const ws of [...browsers.clients]) ws.terminate();
     try {
-      // Stop what in-flight work waits on: Ranger, then every runtime, which
-      // also fails the Herdr calls still waiting. Startup then settles
-      // fenced, and so does every request, within a bound.
+      // Stop Ranger then runtimes, failing pending Herdr calls; fenced startup/requests settle.
       await forwards.stop();
       await disposeAssistant();
       await connectionManager.stopAll();

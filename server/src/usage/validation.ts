@@ -1,9 +1,12 @@
 import type { HostUsage } from "./collector";
 import type { LimitObservation } from "./projection";
+import { USAGE_RUN_ROLES, type UsageRunRole } from "../../../shared/usage";
+import { USAGE_TOKEN_HARNESSES } from "../../../shared/usageHarnesses";
+import { validUsageSpans } from "../../../shared/usageSpans";
 
 /** Never let a remote projection smuggle text, paths, invalid counts or unbounded rows. */
 export function validateHostUsage(raw: any): HostUsage {
-  const harnesses = ["claude", "codex", "pi", "gemini"];
+  const harnesses: readonly string[] = USAGE_TOKEN_HARNESSES;
   const states = ["available", "partial", "missing", "stale", "unavailable"];
   const digest = (v: unknown) =>
     typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
@@ -53,6 +56,27 @@ export function validateHostUsage(raw: any): HostUsage {
       !r.tokens
     )
       throw new Error("Invalid usage row");
+    if (
+      r.reported_cost_usd !== undefined &&
+      r.reported_cost_usd !== null &&
+      (typeof r.reported_cost_usd !== "number" ||
+        !Number.isFinite(r.reported_cost_usd) ||
+        r.reported_cost_usd < 0 ||
+        r.reported_cost_usd > 1e12)
+    )
+      throw new Error("Invalid reported cost");
+    if (
+      (r.spans !== undefined && !validUsageSpans(r.spans, 48)) ||
+      (r.max_prompt_tokens !== undefined && !count(r.max_prompt_tokens)) ||
+      (r.role !== undefined &&
+        r.role !== null &&
+        !(USAGE_RUN_ROLES as readonly unknown[]).includes(r.role)) ||
+      (r.branch !== undefined &&
+        r.branch !== null &&
+        (typeof r.branch !== "string" ||
+          !/^[a-zA-Z0-9][a-zA-Z0-9_./+-]{0,119}$/.test(r.branch)))
+    )
+      throw new Error("Invalid usage run detail");
     const tokens = {
       input: r.tokens.input,
       cache_read: r.tokens.cache_read,
@@ -78,6 +102,21 @@ export function validateHostUsage(raw: any): HostUsage {
       last_at: r.last_at as number,
       partial: r.partial as boolean,
       tokens,
+      ...(r.reported_cost_usd !== undefined
+        ? { reported_cost_usd: r.reported_cost_usd as number | null }
+        : {}),
+      ...(r.spans !== undefined
+        ? {
+            spans: (r.spans as [number, number][]).map(
+              ([from, to]): [number, number] => [from, to],
+            ),
+          }
+        : {}),
+      ...(r.max_prompt_tokens !== undefined
+        ? { max_prompt_tokens: r.max_prompt_tokens as number }
+        : {}),
+      ...(r.role !== undefined ? { role: r.role as UsageRunRole | null } : {}),
+      ...(r.branch !== undefined ? { branch: r.branch as string | null } : {}),
     };
   });
   if (

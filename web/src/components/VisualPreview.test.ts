@@ -22,6 +22,7 @@ for (const fixture of [
   "StatusBadges",
   "InspectorPaneMap",
   "../world/town/TownBoard",
+  "../world/usage/UsageLens",
 ]) {
   // A fixture may live beside its component; the page loads its bundle by name.
   const name = basename(fixture);

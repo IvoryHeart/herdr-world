@@ -39,6 +39,8 @@ import {
   paintTownLibraryHouse,
   paintTownLibraryYard,
 } from "./townLibraryPaint";
+import { townObservatoryLot } from "./townObservatoryLot";
+import { paintTownObservatory } from "./townObservatoryPaint";
 import { paintTownPostHouse, paintTownPostYard } from "./townPostPaint";
 import {
   paintTownFacade,
@@ -275,6 +277,15 @@ export function townOutdoor(
       library.yardY * T,
     );
   }
+  // The observatory right of the library, its door on the street.
+  const observatory = townObservatoryLot(layout);
+  if (observatory)
+    add(
+      paintTownObservatory(),
+      observatory.x * T,
+      observatory.y * T,
+      (observatory.y + observatory.h) * T,
+    );
   // The apartment building beside the plaza, where finished agents live on.
   const apartments = townApartmentsLot(layout);
   if (apartments)
