@@ -1,4 +1,3 @@
-import type { HostCatalogueEntry } from "../hostGroups";
 import {
   type EndpointAvailability,
   type EndpointAdvertisement,
@@ -72,11 +71,6 @@ export interface State extends ServerSessionState {
    * World's lists and choices (`worldHosts`), never Herdr (TUI) connections.
    */
   coreConnections?: CoreConnectionProfileSummary[];
-  /**
-   * The machines of the same catalogue reply, each grouping its runtime
-   * connections (`worldHostGroups`). Absent from an older service's reply.
-   */
-  hostCatalogue?: HostCatalogueEntry[];
   /** A validated catalogue has been admitted on the current transport. */
   catalogueReady: boolean;
   defaultConnectionId: string;

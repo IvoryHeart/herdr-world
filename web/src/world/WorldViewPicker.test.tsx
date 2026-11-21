@@ -55,10 +55,10 @@ if (process.env.WORLD_VIEW_PICKER_TEST !== "1") {
   const { WorldViewPicker } = await import("./WorldViewPicker");
   const { HostsControl } = await import("./HostsControl");
   const { useHostsFilter } = await import("./hostsFilter");
-  const { worldHostGroups } = await import("../hostGroups");
+  const { worldHosts } = await import("../worldHosts");
   const { worldLocalStorage } = await import("../browserStorage");
 
-  const hosts = worldHostGroups({
+  const hosts = worldHosts({
     connections: ["alpha", "beta"].map((id) => ({
       id,
       label: `Synthetic ${id}`,
@@ -72,9 +72,9 @@ if (process.env.WORLD_VIEW_PICKER_TEST !== "1") {
   // The same wiring as WorldFoundationApp: one filter feeds the corner menu
   // and the topbar's Hosts control.
   function Harness({ mobile }: { mobile: boolean }) {
-    const filter = useHostsFilter(hosts.flatMap((host) => host.connectionIds));
+    const filter = useHostsFilter(hosts.map(({ id }) => id));
     const control = {
-      hosts,
+      connections: hosts,
       ids: filter.ids,
       explanation: filter.explanation,
       onChange: filter.setIds,
@@ -132,7 +132,7 @@ if (process.env.WORLD_VIEW_PICKER_TEST !== "1") {
 
     await click($<HTMLInputElement>('input[aria-label="Synthetic beta"]'));
     expect(saved()).toBe('["alpha"]');
-    expect(topbarLabel()).toBe("1 host");
+    expect(topbarLabel()).toBe("1 hosts");
     expect(
       $<HTMLInputElement>('input[aria-label="Synthetic beta"]')?.checked,
     ).toBe(false);
@@ -142,7 +142,7 @@ if (process.env.WORLD_VIEW_PICKER_TEST !== "1") {
     expect($(".world-view-picker-hosts")).toBeNull();
     await click($(".world-view-picker-fab"));
     expect(button("Hosts", $('[role="menu"]')!)?.textContent).toBe(
-      "Hosts1 host",
+      "Hosts1 hosts",
     );
     await click(button("Hosts", $('[role="menu"]')!));
     await click(button("All hosts", $(".world-view-picker-hosts")!));

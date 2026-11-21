@@ -2,11 +2,7 @@ import {
   applyGitStatusPush,
   gitStatusPushesDuringRefresh,
 } from "./store/refresh";
-import {
-  changedCoreHosts,
-  changedHostCatalogue,
-  refreshBridgeStatus,
-} from "./store/catalogue";
+import { changedCoreHosts, refreshBridgeStatus } from "./store/catalogue";
 import {
   holdFocusedOwner,
   refreshHeldOwners,
@@ -489,8 +485,6 @@ export function applyConnectionCatalog(
   // Hosts only (no TUI session follows); every path below publishes them.
   const coreConnections = changedCoreHosts(state.coreConnections, result);
   if (coreConnections) state = { ...state, coreConnections };
-  const hostCatalogue = changedHostCatalogue(state.hostCatalogue, result);
-  if (hostCatalogue) state = { ...state, hostCatalogue };
   catalogReadyForConnection = true;
   bridge.setConnectionRuntimeGenerations(connections);
   const nextActive = connections.find(
@@ -549,8 +543,7 @@ export function applyConnectionCatalog(
     !sessionsChanged &&
     defaultConnectionId === state.defaultConnectionId
   ) {
-    if (readinessChanged || coreConnections || hostCatalogue)
-      set({ catalogueReady: true });
+    if (readinessChanged || coreConnections) set({ catalogueReady: true });
     if (!nextActive)
       selectConnectionNow(preferredConnectionId(defaultConnectionId, state));
     return true;

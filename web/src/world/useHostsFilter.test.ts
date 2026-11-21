@@ -60,7 +60,7 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
   const { worldLocalStorage } = await import("../browserStorage");
   const { store, __storeTesting, useStoreSelector } = await import("../store");
   const { bridge } = await import("../api");
-  const { worldHostGroups } = await import("../hostGroups");
+  const { worldHosts } = await import("../worldHosts");
   const previous = store.get();
   const previousCall = bridge.call;
   const connections = ["alpha", "beta", "offline"].map((id) => ({
@@ -75,15 +75,14 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
   let filter: ReturnType<typeof useHostsFilter>;
   function Harness() {
     // Same production selectors and hook inputs as WorldFoundationApp.
-    const catalogue = useStoreSelector(worldHostGroups);
+    const catalogue = useStoreSelector(worldHosts);
     const ready = useStoreSelector((state) => state.catalogueReady);
     filter = useHostsFilter(
-      catalogue.flatMap((host) => host.connectionIds),
+      catalogue.map(({ id }) => id),
       ready,
-      catalogue.map((host) => host.connectionIds),
     );
     return createElement(HostsControl, {
-      hosts: catalogue,
+      connections: catalogue,
       ids: filter.ids,
       explanation: filter.explanation,
       onChange: filter.setIds,
@@ -139,10 +138,14 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
       expect(filter.ids).toEqual(empty ? null : ["beta"]);
       expect(saved()).toBe(empty ? "null" : '["beta"]');
       expect(filter.explanation).toBe(
-        empty ? "Some selected hosts were removed. Showing All hosts." : "",
+        empty
+          ? "Some selected host profiles were removed. Showing All hosts."
+          : "",
       );
       expect(document.querySelector('[role="status"]')?.textContent ?? "").toBe(
-        empty ? "Some selected hosts were removed. Showing All hosts." : "",
+        empty
+          ? "Some selected host profiles were removed. Showing All hosts."
+          : "",
       );
       expect(store.get().activeConnectionId).toBe("alpha");
     },
@@ -157,7 +160,7 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
     expect(filter.ids).toEqual(["beta"]);
     expect(saved()).toBe('["beta"]');
     expect(filter.explanation).toBe(
-      "Some selected hosts were removed. Showing the remaining selected hosts.",
+      "Some selected host profiles were removed. Showing the remaining selected hosts.",
     );
     await act(() => root.unmount());
     root = createRoot(document.getElementById("root")!);
@@ -201,7 +204,9 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
       'input[aria-label="Synthetic core"]',
     );
     expect(row?.checked).toBe(true);
-    expect(row?.parentElement?.textContent).toBe("Synthetic core · ready");
+    expect(row?.parentElement?.textContent).toBe(
+      "Synthetic core · herdr-core · ready",
+    );
     // Ticking a Herdr host keeps the core host selected beside it.
     await act(async () =>
       document
@@ -210,11 +215,11 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
     );
     expect(saved()).toBe('["core-synthetic","alpha"]');
     // A refresh with the same catalogue keeps the host list's identity.
-    const before = worldHostGroups(store.get());
+    const before = worldHosts(store.get());
     await act(async () => {
       expect(await store.refreshConnections()).toBe(true);
     });
-    expect(worldHostGroups(store.get())).toBe(before);
+    expect(worldHosts(store.get())).toBe(before);
     // The page's bridge.status poll from a service that sends no core field says
     // nothing about core hosts: the host stays listed and selected.
     bridge.call = (async () => ({ connections })) as typeof bridge.call;
@@ -222,7 +227,7 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
       expect(await store.refreshConnections()).toBe(true);
     });
     expect(filter.ids).toEqual(["core-synthetic", "alpha"]);
-    expect(worldHostGroups(store.get())).toBe(before);
+    expect(worldHosts(store.get())).toBe(before);
     // A removed core profile prunes like a removed Herdr profile.
     bridge.call = (async () => ({
       connections,
@@ -232,68 +237,6 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
       expect(await store.refreshConnections()).toBe(true);
     });
     expect(filter.ids).toEqual(["alpha"]);
-  });
-
-  test("a host with two runtimes is one row; an old runtime tick selects it whole", async () => {
-    await mount('["core-synthetic"]');
-    const core = {
-      id: "core-synthetic",
-      label: "Synthetic core",
-      type: "local",
-      runtime: "herdr-core",
-      state: "ready",
-      generation: 3,
-      core_session: "",
-      core_state_dir: "",
-      observation: null,
-    };
-    const host = (id: string, label: string, ids: string[]) => ({
-      host_id: id,
-      label,
-      type: id === "host-local" ? "local" : "ssh",
-      ...(id === "host-local" ? {} : { ssh_destination: label }),
-      auto_connect: true,
-      connection_ids: ids,
-      state: "ready",
-      discovery: "complete",
-      runtimes: [],
-      installable_runtimes: [],
-    });
-    bridge.call = (async () => ({
-      connections,
-      core_connections: [core],
-      hosts: [
-        host("host-local", "This computer", ["alpha", "core-synthetic"]),
-        host("host-beta", "beta.example.test", ["beta"]),
-        host("host-offline", "offline.example.test", ["offline"]),
-      ],
-    })) as typeof bridge.call;
-    await act(async () => {
-      expect(await store.refreshConnections()).toBe(true);
-    });
-    // The host's other runtime joins the stored tick; nothing is pruned.
-    expect(filter.ids).toEqual(["core-synthetic", "alpha"]);
-    expect(filter.explanation).toBe("");
-    await act(async () =>
-      (
-        document.querySelector('button[aria-label="Hosts"]') as HTMLElement
-      ).click(),
-    );
-    const boxes = [
-      ...document.querySelectorAll<HTMLInputElement>(
-        '.world-hosts-menu input[type="checkbox"]',
-      ),
-    ];
-    expect(boxes.map((box) => box.getAttribute("aria-label"))).toEqual([
-      "This computer",
-      "beta.example.test",
-      "offline.example.test",
-    ]);
-    expect(boxes.map((box) => box.checked)).toEqual([true, false, false]);
-    // Unticking the machine hides both of its runtimes: All hosts.
-    await act(async () => boxes[0]!.click());
-    expect(saved()).toBe("null");
-    expect(filter.ids).toBeNull();
   });
 
   test("empty explicit selection means All hosts without changing operational ownership", async () => {

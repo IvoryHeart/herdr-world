@@ -107,8 +107,8 @@ button). Views open full-screen; choose **Exit Zen** to show the menu bars.
 
 **Hosts** sits in the top bar; on a phone, it is also in the corner button's
 menu. It starts at **All hosts**. Choose fewer to narrow what you see; this
-never disconnects anything; each computer is one row, whatever runs on it.
-**Manage connections** adds a computer over SSH or reconnects one. A disconnected host stays visible, marked
+never disconnects anything. **Manage connections** adds a computer over SSH or
+reconnects one. A disconnected host stays visible, marked
 **Disconnected · Reconnect**.
 
 ### Keep World up to date
@@ -710,10 +710,8 @@ World runs on your computer (Linux or macOS) and controls a runtime on another.
 1. Check that plain `ssh workbox` works, where `workbox` is an alias in your
    `~/.ssh/config`. Keep ports, jump hosts and keys there.
 2. Start the Herdr TUI or run `hc server start` on that computer.
-3. Open **Hosts → Manage connections → Add host** and enter `workbox` (tick
-   **This is a Windows machine** if it is). World finds what runs there and connects.
-   If it finds nothing, open **Settings → Integrations → Runtimes** and choose
-   **Add a runtime** under `workbox`.
+3. Open **Hosts → Manage connections**. Add an **SSH** profile for the TUI,
+   or **Add herdr-core → Unix SSH / Windows SSH** for core; connect to `workbox`.
 4. Open the remote project and run `pwd` to confirm the folder.
 
 **You are done when:** your browser controls the remote terminal and files.
