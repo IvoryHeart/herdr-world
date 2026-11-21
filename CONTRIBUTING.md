@@ -577,8 +577,10 @@ green main run at or after the red commit closes the issue and its revert PR.
 The **Web asset headroom** status on a PR projects its web asset delta onto
 current main and fails if together they would exceed the bundle budgets in
 `scripts/check-web-assets.mjs`; it warns above 95 %. Every push to main re-judges
-open PRs, so a PR that fit an older main turns red once main has grown. Trim, or
-raise the budget in a reviewed change, before merging.
+open PRs, so a PR that fit an older main turns red once main has grown. A
+stacked PR that merged newer main than its base branch has is measured against
+that base with the same main merged in, so main's growth is not counted twice.
+Trim, or raise the budget in a reviewed change, before merging.
 
 Source files may not regrow. `bun run check:size` (part of `check` and the
 static lane) allows at most 1000 lines per non-test source file; larger files are
