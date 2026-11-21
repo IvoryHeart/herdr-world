@@ -194,10 +194,6 @@ share their worker's cancellation, and name the failed command in diagnostics.
 This tolerates cold tooling under the enforced two-CPU quota without changing
 model deadlines, the complete-run deadline or the hard memory/CPU limits.
 
-The resource preflight's live cgroup tests use the isolated test wrapper without
-Chrome warmup. Only selections that can run browser suites warm Chrome in CI;
-an unrelated browser startup must not consume the preflight's 45-second budget.
-
 Failed runs retain completed command progress and the failing model/phase in the
 incomplete manifest. A curated diagnostic directory contains failure metadata,
 checker/replay log tails, the selected request and relevant counterexample/trace.

@@ -192,30 +192,3 @@ test("core room reads are browser-only and grant no other actor authority", () =
     ).toThrow("denied");
   }
 });
-
-test("Town core moves require a scoped destination and a local native pane ID", () => {
-  const verb = registeredVerb("rpc", "world.core.move");
-  const browser: Admission = { ...admitted(), actor: "browser" };
-  const target = { connection_id: "core-example", connection_generation: 3 };
-  for (const pane_id of ["t1", "t1b", "t6kf3jk5"])
-    admitVerb(
-      verb,
-      { ...target, kind: "pane", pane_id, tab_id: "desk" },
-      browser,
-    );
-  admitVerb(
-    verb,
-    { ...target, kind: "desk", tab_id: "desk", workspace_id: "room" },
-    browser,
-  );
-  for (const fields of [
-    { kind: "pane", pane_id: "remote/t1", tab_id: "desk" },
-    { kind: "pane", pane_id: "agent-name", tab_id: "desk" },
-    { kind: "pane", pane_id: "t1" },
-    { kind: "desk", tab_id: "desk" },
-    { kind: "room", tab_id: "desk", workspace_id: "room" },
-  ])
-    expect(() => admitVerb(verb, { ...target, ...fields }, browser)).toThrow(
-      "invalid parameters",
-    );
-});

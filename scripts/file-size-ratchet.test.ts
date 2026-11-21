@@ -241,42 +241,6 @@ test("a branch that restores a lowered ceiling fails in the proposed merge", () 
   });
 });
 
-test("CI compares a main PR with its event base when main advances and shrinks", () => {
-  withRatchetRepo(({ root, git, run }) => {
-    writeFileSync(join(root, "inherited.ts"), "// inherited\n".repeat(1007));
-    git("add", ".");
-    git("commit", "-qm", "base with inherited growth");
-    const base = git("rev-parse", "HEAD");
-    git("checkout", "-qb", "topic");
-    writeFileSync(join(root, "topic.md"), "unrelated\n");
-    git("add", ".");
-    git("commit", "-qm", "topic change");
-    git("checkout", "-q", "main");
-    writeFileSync(join(root, "inherited.ts"), "// inherited\n".repeat(1005));
-    git("commit", "-qam", "later main shrinks");
-    git("update-ref", "refs/remotes/origin/main", "HEAD");
-    git("checkout", "-q", "topic");
-    const ci = () =>
-      spawnSync(process.execPath, ["scripts/file-size-ratchet.ts"], {
-        cwd: root,
-        encoding: "utf8",
-        env: {
-          ...process.env,
-          GITHUB_BASE_REF: "main",
-          HERDR_WORLD_RATCHET_TARGET: base,
-        },
-      });
-    expect(ci().status).toBe(0);
-    // Growth introduced by the PR still fails against the immutable base.
-    writeFileSync(join(root, "inherited.ts"), "// inherited\n".repeat(1008));
-    const growth = ci();
-    expect(growth.status).toBe(1);
-    expect(growth.stderr).toContain("inherited.ts has 1008 lines");
-    // Local checks still compare with current main.
-    expect(run().status).toBe(1);
-  });
-});
-
 test("a stale stacked base is checked against main, including CI's actual merge commit", () => {
   withRatchetRepo(({ root, git, policy, run }) => {
     git("checkout", "-qb", "stack");

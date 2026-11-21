@@ -72,14 +72,10 @@ const releaseSlot = usesBrowser
   : () => {};
 const directory = createRunTemp();
 const env = isolatedTestEnv(directory, process.env, selection.live);
-// Warm browser selections once; unit/live resource controls must not spend
-// their own deadlines starting an unrelated browser. Nested runners inherit it.
+// Once per CI job: nested runners inherit the flag.
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
-const warm =
-  usesBrowser &&
-  process.env.CI === "true" &&
-  process.env.HERDR_CHROME_WARM !== "1";
+const warm = process.env.CI === "true" && process.env.HERDR_CHROME_WARM !== "1";
 if (warm && chrome) await warmChrome(chrome, { env });
 
 try {

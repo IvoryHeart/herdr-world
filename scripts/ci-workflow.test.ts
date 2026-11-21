@@ -598,11 +598,6 @@ test("the ratchet checks the proposed merge into the exact PR target", () => {
       HERDR_WORLD_RATCHET_TARGET: "${{ github.event.pull_request.base.sha }}",
     },
   });
-  expect(
-    workflow.jobs.static.steps.find((step) =>
-      step.uses?.startsWith("actions/checkout@"),
-    )?.with,
-  ).toMatchObject({ ref: "${{ github.sha }}", "fetch-depth": 0 });
 });
 
 test("release validation passes the full non-PR plan to the shared browser workflow", async () => {

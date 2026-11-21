@@ -50,7 +50,7 @@ export {
 /**
  * The writes World makes, each built from a typed verb below: start a
  * program (`terminal.run`), end one (`terminal.kill`) and set labels (the
- * shared `herdr.seen`/`herdr.pinned`, and placement at launch or on a Town move). None is
+ * shared `herdr.seen`/`herdr.pinned`, and placement at launch). None is
  * required for observation: on a core without one, that action fails and
  * World keeps observing. World's own float shells (`float-shell.ts`) also
  * view theirs (`terminal.attach`). Agent input uses native send/keys

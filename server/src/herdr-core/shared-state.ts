@@ -3,7 +3,7 @@ import type { CoreMirrorTerminal } from "./mirror";
 /**
  * What Herdr's clients share through terminal labels (desktop app
  * `docs/labels.md`): the last turn a person looked at, and the favourite.
- * This shared-state path writes only these two keys, through the rules below.
+ * World writes only these two keys, and only through the rules below.
  *
  * - `herdr.seen=<turn>`: raise-only. A missing label is not 0. Another
  *   client's "mark unread" is the one lower write (`turn - 1`).
@@ -19,7 +19,7 @@ import type { CoreMirrorTerminal } from "./mirror";
 export const SEEN_LABEL = "herdr.seen";
 export const PINNED_LABEL = "herdr.pinned";
 
-/** The shared-state changes; launch and explicit moves also set placement. */
+/** The only label changes World ever sends. */
 export type SharedLabelChange =
   | { readonly [SEEN_LABEL]: string }
   | { readonly [PINNED_LABEL]: "1" | "" };
