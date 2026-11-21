@@ -1,3 +1,6 @@
+import type { DataPaths } from "../config/data-paths";
+import type { ServerConfig } from "../config/server-config";
+import type { OpenStorage } from "./storage";
 import { productionAdapters } from "../adapters/registry";
 import { discoverHost, type DiscoverHost } from "../connections/host-discovery";
 import { testConnectionSockets } from "../connections/profile-probe";
@@ -65,4 +68,17 @@ export const herdrAdapter: HerdrAdapter = {
       },
     };
   },
+};
+
+/** Everything a World service takes from its process; nothing else is global. */
+export type WorldServiceDeps = {
+  config: ServerConfig;
+  /** The data folder this service owns from creation until stop. */
+  paths: DataPaths;
+  clock: Clock;
+  scheduler: Scheduler;
+  storage: OpenStorage;
+  adapters: WorldAdapters;
+  /** After an installed update: end the process so its supervisor restarts it. */
+  scheduleProcessExit(): void;
 };
