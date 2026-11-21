@@ -39,7 +39,15 @@ async function run(
       file,
       "--parallel=1",
     ],
-    { cwd: root, env, stdout: "pipe", stderr: "pipe" },
+    {
+      cwd: root,
+      // A scratch probe outside the repository counts as a possible browser
+      // selection, so in CI each nested runner would start Chrome cold inside
+      // this test's 5 s budget. These probes never open a browser.
+      env: { ...env, HERDR_CHROME_WARM: "1" },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
   );
   const [code, out, err] = await Promise.all([
     child.exited,
