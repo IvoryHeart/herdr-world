@@ -1835,7 +1835,10 @@ are the contract for the separate Board presentation follow-up; this delivery
 adds no new Board picker or visual controls.
 
 New elements persist locally with titles, positions, source references and
-revision conflicts. Memory reads project files/directories (`MEMORY.md` by
+revision conflicts. Upgrades preserve existing Board and Apartments records,
+including early Board previews that shared schema version 14 with Apartments.
+Recovery uses the normal private backup and atomic migration transaction.
+Memory reads project files/directories (`MEMORY.md` by
 default); saved logs/transcripts remain readable without their original pane.
 There is no memory/apartment model yet. Documents hold inline text or read a
 project file. URL/PR/issue links are inert HTTP(S) targets: no automatic fetch or
