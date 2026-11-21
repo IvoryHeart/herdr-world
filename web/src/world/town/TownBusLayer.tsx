@@ -1,5 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { binBusClock, type WorldBin } from "../bin/binStore";
+import {
+  binBusClock,
+  binBusCountdown,
+  binBusLabel,
+  type WorldBin,
+} from "../bin/binStore";
+import { useBinSecondClock } from "../bin/binSecondClock";
 import { openWorldBin } from "../bin/worldBinEvents";
 import { useWorldBin, worldBinStore } from "../bin/useWorldBin";
 import {
@@ -14,7 +20,6 @@ import {
   townRiderReturns,
   townRiderWalk,
   townRiderWalkBack,
-  townStopClock,
   townWalkAlong,
   townWalkLength,
   type TownBinRider,
@@ -31,6 +36,7 @@ import {
 import {
   townBusDemoBin,
   townBusDemoNext,
+  townBusDemoShown,
   townBusDemoStart,
 } from "./townBusDemo";
 import { townApartmentsArrive } from "./townApartmentsArrivals";
@@ -93,6 +99,11 @@ export function useTownBin(model: TownModel, layout: TownLayout) {
     () => (demo === null ? null : townBusDemoBin(model, demo, demoNow)),
     [demo, model, demoNow],
   );
+  useEffect(() => {
+    if (!demoBin) return;
+    townBusDemoShown.set(demoBin);
+    return () => townBusDemoShown.set(null);
+  }, [demoBin]);
   const bin = demoBin ?? served;
   const route = useMemo(() => townBusRoute(layout), [layout]);
   const placed = useMemo(
@@ -190,18 +201,6 @@ const SEATS = [4, 3] as const;
  */
 const END_SEATS = [2, 2] as const;
 
-/** A clock that ticks each second while `running`. */
-function useSecondClock(running: boolean) {
-  const [now, setNow] = useState(() => performance.now());
-  useEffect(() => {
-    if (!running) return;
-    setNow(performance.now());
-    const timer = setInterval(() => setNow(performance.now()), 1000);
-    return () => clearInterval(timer);
-  }, [running]);
-  return now;
-}
-
 /**
  * One trip as this page draws it, kept for the whole trip so the bus never
  * jumps when a rider is put back: the stops it halts at and its riders in
@@ -225,9 +224,9 @@ function haltsOf(route: TownBusRoute, keys: string) {
  * is street furniture the canvas draws (townRendererScene.ts); here a stop
  * is its tap and drop area over that sign and its queue. A binned agent
  * leaves by its front door as the same character, walking as it walks
- * indoors, to the stop nearest its room, where a clock shows the time to
- * the next bus. The bus lives at Apartments' stop. While the service says a
- * trip is out, it drives the town's roads on the trip's clock, the nearest
+ * indoors, to the stop nearest its room, where a clock shows the bin's own
+ * countdown to the next bus (binBusCountdown, on the shared second clock).
+ * The bus lives at Apartments' stop. While the service says a trip is out, it drives the town's roads on the trip's clock, the nearest
  * way past each stop where someone waits (townBusDrive.ts): it pulls away,
  * turns its corners, slows and stops, opens its doors while they step aboard
  * (and ride in its windows), and drives back to Apartments, where they step
@@ -284,7 +283,7 @@ export const TownBusLayer = memo(function TownBusLayer({
     () => new Set(waitingKey ? waitingKey.split("\n") : []),
     [waitingKey],
   );
-  const now = useSecondClock(riders.length > 0);
+  const now = useBinSecondClock(riders.length > 0);
   const { terminus } = route;
   const walkS = terminus ? townWalkLength(terminus.walk) / TOWN_WALK_SPEED : 0;
   const plan = useRef<TownTripPlan>({ trip: null, keys: new Set(), order: [] });
@@ -326,25 +325,6 @@ export const TownBusLayer = memo(function TownBusLayer({
     (a, b) =>
       plan.current.order.indexOf(a.entry.id) -
       plan.current.order.indexOf(b.entry.id),
-  );
-  // The next trip halts where those not yet riding wait.
-  const later = riders.filter((rider) => !rider.entry.riding);
-  const nextKey = [...new Set(later.map((rider) => rider.stop.key))]
-    .sort()
-    .join("\n");
-  const nextTimeline = useMemo(
-    () =>
-      terminus
-        ? townBusTimeline(
-            route.graph,
-            terminus.halt,
-            haltsOf(route, nextKey),
-            later.length,
-            walkS,
-            bin.bus.trip_ms,
-          )
-        : null,
-    [route, terminus, nextKey, later.length, walkS, bin.bus.trip_ms],
   );
   const busClock = binBusClock(bin, now);
   const onTrip = busClock.elapsed !== null;
@@ -639,15 +619,8 @@ export const TownBusLayer = memo(function TownBusLayer({
       {route.stops.map((stop) => {
         const queue = waiting.get(stop.key) ?? [];
         const count = queue.length;
-        const clock = count
-          ? townStopClock({
-              ...busClock,
-              stopped: bin.bus.stopped,
-              riding: queue.some((rider) => rider.entry.riding),
-              halt: timeline?.halts.get(stop.key)?.at,
-              nextHalt: nextTimeline?.halts.get(stop.key)?.at,
-            })
-          : null;
+        // The bin's countdown, from the same timetable at the same instant.
+        const clock = count ? binBusCountdown(bin, now) : null;
         const { shown, more, front } = townQueueShape(stop, count);
         const last = queue.find((rider) => rider.counted);
         // The stop's drop area runs from its sign along its whole queue.
@@ -673,7 +646,9 @@ export const TownBusLayer = memo(function TownBusLayer({
             tabIndex={count ? 0 : -1}
             aria-hidden={count ? undefined : true}
             aria-label={
-              count ? `Bus stop, ${count} waiting, bus ${clock}` : undefined
+              count
+                ? `Bus stop, ${count} waiting, ${binBusLabel(bin, now)}`
+                : undefined
             }
             // Dropping an agent here (its sign or its queue) puts it in the bin.
             data-bin-drop=""

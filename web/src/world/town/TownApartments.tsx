@@ -34,6 +34,7 @@ export const TownApartments = memo(function TownApartments({
     <button
       type="button"
       className="town-apartments-sign"
+      data-help="town.apartments"
       data-empty={count ? undefined : true}
       data-count={count}
       style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 6 }}

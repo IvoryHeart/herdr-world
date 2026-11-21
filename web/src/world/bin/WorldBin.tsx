@@ -1,5 +1,11 @@
 import { Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { useLayer } from "../../layerStack";
 import { setBinDock } from "./binDock";
 import { store } from "../../store";
@@ -15,6 +21,8 @@ import {
   type CoreKillPlan,
 } from "../coreControl";
 import { confirmCoreKill } from "../CoreKillConfirm";
+import { useBinSecondClock } from "./binSecondClock";
+import { townBusDemoShown } from "../town/townBusDemo";
 import { useWorldBin, worldBinStore } from "./useWorldBin";
 import { WORLD_BIN_OPEN_EVENT } from "./worldBinEvents";
 import "./bin.css";
@@ -119,18 +127,6 @@ const OUTCOME: Record<string, string> = {
   uncertain: "May have closed",
 };
 
-/** A clock that ticks each second while `running`. */
-function useSecondClock(running: boolean) {
-  const [now, setNow] = useState(() => performance.now());
-  useEffect(() => {
-    if (!running) return;
-    setNow(performance.now());
-    const timer = setInterval(() => setNow(performance.now()), 1000);
-    return () => clearInterval(timer);
-  }, [running]);
-  return now;
-}
-
 /**
  * The bin in every view: a chip while it holds agents (always in Town and on
  * Board, where agents are dragged onto it), and its tray (from the chip, or
@@ -150,10 +146,18 @@ export function WorldBin({
   dock?: ReactNode;
 }) {
   const bin = useWorldBin();
+  // ?townBusDemo: Town's stops show the demo's local bus, so Town's chip and
+  // tray count down from it too; the tray still lists the service's bin.
+  const demo = useSyncExternalStore(
+    townBusDemoShown.subscribe,
+    townBusDemoShown.get,
+    townBusDemoShown.get,
+  );
+  const timetable = town && demo ? demo : bin;
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const held = bin.entries.length + bin.closing.length;
-  const now = useSecondClock(open || held > 0);
+  const held = timetable.entries.length + timetable.closing.length;
+  const now = useBinSecondClock(open || held > 0);
   const tray = useRef<HTMLElement>(null);
   const chip = useRef<HTMLButtonElement>(null);
   useLayer(open, () => setOpen(false), {
@@ -175,7 +179,7 @@ export function WorldBin({
   }, [open]);
   const act = (run: () => Promise<string | null>) =>
     void run().then((failed) => setError(failed));
-  const bus = town ? binBusLabel(bin, now) : binCloseLabel(bin, now);
+  const bus = town ? binBusLabel(timetable, now) : binCloseLabel(bin, now);
   if (!held && !open && !always) return null;
   const chipButton =
     held || always ? (
@@ -247,7 +251,7 @@ export function WorldBin({
               <X size={16} />
             </button>
           </header>
-          {held ? (
+          {bin.entries.length + bin.closing.length ? (
             <ul>
               {bin.entries.map((entry) => (
                 <li key={entry.id} data-bin-entry={entry.id}>

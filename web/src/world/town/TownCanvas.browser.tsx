@@ -24,7 +24,7 @@ import {
   checkOverviewRoomHover,
   checkTownRoomPlates,
 } from "./townRoomPlates.browser";
-import { checkTownCenter } from "./townCenter.browser";
+import { checkApartmentsTry, checkTownCenter } from "./townCenter.browser";
 import { checkTownBusTrip } from "./townBusTrip.browser";
 import type { BinState } from "../../../../shared/bin";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
@@ -4133,6 +4133,10 @@ async function run() {
     diagnostics.topologyGaps === 0,
     `${diagnostics.topologyGaps} frames after topology changes were missing ${diagnostics.lastTopologyGap}`,
   );
+
+  // Help's Try moves the camera, so it is the last look at this town.
+  if (scale === "typical" && mode === "test")
+    await checkApartmentsTry(host, check, waitFor);
 
   // StrictMode mounts twice; exactly one renderer and canvas must survive.
   check(
