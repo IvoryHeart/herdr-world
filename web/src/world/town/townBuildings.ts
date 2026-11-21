@@ -12,6 +12,12 @@
  * first runtime's host key, which does not depend on runtime state, so rooms
  * do not move between buildings when a runtime drops; building-wide signs
  * (reception filter, answer delivery, expenses) read that runtime.
+ *
+ * Two profiles of one runtime endpoint (say the startup configuration's
+ * "Default" and a saved "local" on the same Herdr socket) report the same
+ * workspaces. Town shows that endpoint's rooms once, from one connection:
+ * a live one first, then a writable one, then the host's first (#1189). The
+ * other connection keeps its identity and stays in Hosts and Integrations.
  */
 
 import type { WorldHostGroup } from "../../hostGroups";
@@ -43,10 +49,13 @@ export function townBuildingsMode(
 }
 
 type HostGroupShape = Pick<WorldHostGroup, "id" | "label" | "connectionIds"> & {
-  runtimes: readonly Pick<
+  runtimes: readonly (Pick<
     WorldHostGroup["runtimes"][number],
     "id" | "runtime"
-  >[];
+  > &
+    Partial<
+      Pick<WorldHostGroup["runtimes"][number], "endpoint" | "readOnly">
+    >)[];
 };
 
 type Plan = {
@@ -57,8 +66,43 @@ type Plan = {
   /** Room order offset by office host key, so a host's runtimes stay apart. */
   orderOffset: Map<string, number>;
   labelOf: Map<string, string>;
+  /** Office host keys whose endpoint another connection already shows. */
+  hidden: Set<string>;
   signature: string;
 };
+
+/**
+ * One connection per runtime endpoint: the host's members, without those a
+ * better connection to the same endpoint already shows.
+ */
+function oncePerEndpoint(
+  group: HostGroupShape,
+  members: OfficeHost[],
+  hidden: Set<string>,
+): OfficeHost[] {
+  const runtimeOf = (host: OfficeHost) =>
+    group.runtimes.find(({ id }) => id === host.connectionId);
+  const better = (a: OfficeHost, b: OfficeHost) =>
+    a.stale !== b.stale
+      ? !a.stale
+      : Boolean(runtimeOf(a)?.readOnly) !== Boolean(runtimeOf(b)?.readOnly)
+        ? !runtimeOf(a)?.readOnly
+        : false;
+  const shown = new Map<string, OfficeHost>();
+  for (const host of members) {
+    const endpoint = runtimeOf(host)?.endpoint;
+    if (!endpoint) continue;
+    const current = shown.get(endpoint);
+    if (!current) shown.set(endpoint, host);
+    else if (better(host, current)) {
+      hidden.add(current.key);
+      shown.set(endpoint, host);
+    } else hidden.add(host.key);
+  }
+  return hidden.size
+    ? members.filter((host) => !hidden.has(host.key))
+    : members;
+}
 
 /** Rooms of a host's later runtimes follow its first runtime's rooms. */
 const RUNTIME_ORDER_STRIDE = 1_000_000;
@@ -89,6 +133,7 @@ function plan(
   const buildingOf = new Map<string, string>();
   const orderOffset = new Map<string, number>();
   const labelOf = new Map<string, string>();
+  const hidden = new Set<string>();
   const hosts: OfficeHost[] = [];
   const push = (host: OfficeHost) =>
     hosts.push(
@@ -112,8 +157,10 @@ function plan(
     const group = item;
     const rank = (host: OfficeHost) =>
       group.connectionIds.indexOf(host.connectionId);
-    const members = [...present.get(group.id)!].sort(
-      (a, b) => rank(a) - rank(b),
+    const members = oncePerEndpoint(
+      group,
+      [...present.get(group.id)!].sort((a, b) => rank(a) - rank(b)),
+      hidden,
     );
     if (mode === "runtime") {
       for (const host of members) {
@@ -161,8 +208,9 @@ function plan(
     [...buildingOf],
     [...labelOf],
     [...orderOffset],
+    [...hidden],
   ]);
-  return { buildingOf, hosts, orderOffset, labelOf, signature };
+  return { buildingOf, hosts, orderOffset, labelOf, hidden, signature };
 }
 
 /**
@@ -210,7 +258,7 @@ export function createTownBuildings() {
 
 function apply(
   office: HerdrOfficeProjection,
-  { buildingOf, hosts, orderOffset, labelOf }: Plan,
+  { buildingOf, hosts, orderOffset, labelOf, hidden }: Plan,
   cache: {
     agents: WeakMap<OfficeAgent, OfficeAgent>;
     desks: WeakMap<OfficeDesk, OfficeDesk>;
@@ -225,6 +273,7 @@ function apply(
   );
   if (
     !renamed &&
+    !hidden.size &&
     hosts.length === office.hosts.length &&
     hosts.every((host, index) => host === office.hosts[index]) &&
     ![...buildingOf].some(([key]) => moved(key))
@@ -274,9 +323,11 @@ function apply(
           roomAgents: item.roomAgents.map(agent),
         }))
       : item;
+  const shown = <T>(items: T[], hostKey: (item: T) => string) =>
+    hidden.size ? items.filter((item) => !hidden.has(hostKey(item))) : items;
   // One reception per building, its queue the queues of its runtimes.
   const receptions = new Map<string, OfficeReception>();
-  for (const reception of office.receptions) {
+  for (const reception of shown(office.receptions, (item) => item.hostKey)) {
     const key = building(reception.hostKey);
     const existing = receptions.get(key);
     const waiting = reception.waitingAgents.map(agent);
@@ -298,10 +349,10 @@ function apply(
   const result: HerdrOfficeProjection = {
     ...office,
     hosts,
-    rooms: office.rooms.map(room),
+    rooms: shown(office.rooms, (item) => item.hostKey).map(room),
     receptions: [...receptions.values()],
-    barAgents: office.barAgents.map(agent),
-    roomRoster: office.roomRoster.map((entry) =>
+    barAgents: shown(office.barAgents, (item) => item.hostKey).map(agent),
+    roomRoster: shown(office.roomRoster, (item) => item.hostKey).map((entry) =>
       moved(entry.hostKey) || renamed
         ? {
             ...entry,
@@ -310,25 +361,27 @@ function apply(
           }
         : entry,
     ),
-    deskRoster: office.deskRoster.map((entry) =>
-      moved(entry.desk.hostKey) || renamed
-        ? {
-            ...entry,
-            desk: desk(entry.desk),
-            hostLabel: label(entry.desk.hostKey, entry.hostLabel),
-          }
-        : entry,
+    deskRoster: shown(office.deskRoster, (item) => item.desk.hostKey).map(
+      (entry) =>
+        moved(entry.desk.hostKey) || renamed
+          ? {
+              ...entry,
+              desk: desk(entry.desk),
+              hostLabel: label(entry.desk.hostKey, entry.hostLabel),
+            }
+          : entry,
     ),
-    paneRoster: office.paneRoster.map((entry) =>
-      moved(entry.device.hostKey) || renamed
-        ? {
-            ...entry,
-            device: device(entry.device),
-            hostLabel: label(entry.device.hostKey, entry.hostLabel),
-          }
-        : entry,
+    paneRoster: shown(office.paneRoster, (item) => item.device.hostKey).map(
+      (entry) =>
+        moved(entry.device.hostKey) || renamed
+          ? {
+              ...entry,
+              device: device(entry.device),
+              hostLabel: label(entry.device.hostKey, entry.hostLabel),
+            }
+          : entry,
     ),
-    roster: office.roster.map((entry) =>
+    roster: shown(office.roster, (item) => item.hostKey).map((entry) =>
       moved(entry.hostKey) || renamed
         ? {
             ...entry,

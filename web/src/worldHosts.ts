@@ -21,6 +21,8 @@ export type WorldHost = {
   generation: number;
   /** Equal for profiles of one runtime endpoint, which count as one host. */
   endpoint: string;
+  /** A profile World cannot edit, such as the startup configuration's. */
+  readOnly?: true;
 };
 
 function tuiEndpoint(connection: ConnectionSummary): string {
@@ -93,6 +95,7 @@ export function worldHosts(sources: HostSources): WorldHost[] {
       state: connection.state,
       generation: connection.generation,
       endpoint: tuiEndpoint(connection),
+      ...(connection.read_only ? { readOnly: true as const } : {}),
     })),
     ...(sources.coreConnections ?? [])
       .filter(({ id }) => !tuiIds.has(id))

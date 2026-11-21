@@ -57,6 +57,16 @@ test("automatic and saved connections to the same local runtime count once", () 
   ];
   expect(hostCount(connections)).toBe(2);
   expect(hostCount(connections.slice(0, 1))).toBe(1);
+  // Town shows such a pair once, preferring the connection World can edit.
+  const [automatic, saved] = worldHosts({
+    connections: [
+      connection("startup-default", { read_only: true }),
+      connection("local", { read_only: false }),
+    ],
+  });
+  expect(automatic!.readOnly).toBe(true);
+  expect(saved!.readOnly).toBeUndefined();
+  expect(automatic!.endpoint).toBe(saved!.endpoint);
 });
 
 test("distinct local endpoints and disconnected hosts remain counted", () => {

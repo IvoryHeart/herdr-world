@@ -460,6 +460,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   `<host> · herdr-core`; it is kept in this browser and **One per host** is the
   default. `?townBuildings=runtime` or `?townBuildings=host` in the URL
   overrides the setting for that page, to compare the two.
+  When two connections reach the same Herdr socket (the startup **Default**
+  and a saved profile, say), Town shows its workspaces once, from the
+  writable connection, or from the other while that one is down; both stay
+  listed under **Manage connections**.
   Room positions, colours and pins are the same either way. Rooms resize as tabs open and close; expanded rooms stay expanded
   as they shrink, until folded. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table's

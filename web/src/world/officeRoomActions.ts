@@ -56,13 +56,17 @@ export function officeCreationActionState(
   };
 }
 
+/**
+ * The room's space, found by its runtime identity (connection ID,
+ * generation, workspace ID). Not by `room.hostKey`: Town's buildings group a
+ * machine's runtimes, so a room's host key names its building (#1189).
+ */
 export function officeSpaceForRoom(
   world: WorldObject,
-  room: Pick<OfficeRoom, "hostKey" | "workspaceRef">,
+  room: Pick<OfficeRoom, "workspaceRef">,
 ): WorldSpaceObject | null {
   const space = world.nodeById.get(room.workspaceRef.worldId);
   return space?.kind === "space" &&
-    space.parentId === room.hostKey &&
     space.connectionId === room.workspaceRef.connectionId &&
     space.generation === room.workspaceRef.generation &&
     space.nativeId === room.workspaceRef.nativeId
@@ -72,7 +76,7 @@ export function officeSpaceForRoom(
 
 export function officeRoomActionCapabilities(
   world: WorldObject,
-  room: Pick<OfficeRoom, "hostKey" | "workspaceRef" | "stale">,
+  room: Pick<OfficeRoom, "workspaceRef" | "stale">,
 ): OfficeRoomActionCapabilities {
   return spaceRoomActionCapabilities(
     officeSpaceForRoom(world, room),

@@ -1,6 +1,7 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { fixtureHost, fixtureWorld } from "../board/boardFixture";
 import { projectWorldOffice } from "../herdrOfficeProjection";
+import { officeRoomActionCapabilities } from "../officeRoomActions";
 import { officeReadModel } from "../officeReadModel";
 import { createTownBuildings, townBuildingsMode } from "./townBuildings";
 import { townModelFromProjection } from "./townModel";
@@ -131,4 +132,116 @@ test("the same office keeps its buildings; unknown hosts stay as they are", () =
   expect(buildings(office, groups, "host")).toBe(first);
   // Without host groups (no catalogue yet), each runtime keeps its building.
   expect(createTownBuildings()(office, [], "host")).toBe(office);
+});
+
+test("every room in a host building keeps its runtime's room controls", () => {
+  // Three runtimes on one machine (#1189): rooms of the second and third
+  // stand in the first's building and must still rename, close and move.
+  const world = fixtureWorld([
+    fixtureHost("tui", [{ label: "Web", tabs: [] }]),
+    fixtureHost("core", [{ label: "Core", tabs: [] }]),
+    fixtureHost("other", [{ label: "Other", tabs: [] }]),
+  ]);
+  const machine = [
+    {
+      id: "host-local",
+      label: "This computer",
+      connectionIds: ["tui", "core", "other"],
+      runtimes: [
+        { id: "tui", runtime: "herdr" as const },
+        { id: "core", runtime: "herdr-core" as const },
+        { id: "other", runtime: "herdr" as const },
+      ],
+    },
+  ];
+  const projected = projectWorldOffice(world, 0);
+  const controls = (mode: "host" | "runtime") =>
+    Object.fromEntries(
+      createTownBuildings()(projected, machine, mode).rooms.map((room) => [
+        room.key,
+        officeRoomActionCapabilities(world, room),
+      ]),
+    );
+  const byHost = controls("host");
+  expect(byHost).toEqual(controls("runtime"));
+  expect(Object.values(byHost)).toHaveLength(3);
+  for (const capabilities of Object.values(byHost)) {
+    expect(capabilities.rename).toBe(true);
+    expect(capabilities.close).toBe(true);
+  }
+});
+
+describe("two connections to one Herdr socket", () => {
+  const socket = JSON.stringify(["local", "/tmp/herdr.sock", "/tmp/c.sock"]);
+  const twice = (options: { localStale?: boolean } = {}) =>
+    projectWorldOffice(
+      fixtureWorld([
+        fixtureHost("startup-default", [
+          { label: "Web", tabs: [{ label: "Build", panes: [["blocked"]] }] },
+        ]),
+        fixtureHost(
+          "local",
+          [{ label: "Web", tabs: [{ label: "Build", panes: [["blocked"]] }] }],
+          { stale: options.localStale },
+        ),
+        fixtureHost("core", [{ label: "Core", tabs: [] }]),
+      ]),
+      0,
+    );
+  const machine = [
+    {
+      id: "host-local",
+      label: "This computer",
+      connectionIds: ["startup-default", "local", "core"],
+      runtimes: [
+        {
+          id: "startup-default",
+          runtime: "herdr" as const,
+          endpoint: socket,
+          readOnly: true as const,
+        },
+        { id: "local", runtime: "herdr" as const, endpoint: socket },
+        { id: "core", runtime: "herdr-core" as const, endpoint: "core" },
+      ],
+    },
+  ];
+  const connectionsOf = (town: ReturnType<typeof twice>) => ({
+    rooms: town.rooms.map((room) => room.workspaceRef.connectionId),
+    receptions: town.receptions.flatMap((reception) =>
+      reception.waitingAgents.map((agent) => agent.currentPaneRef.connectionId),
+    ),
+    roster: town.roster.map((entry) => entry.agent.currentPaneRef.connectionId),
+  });
+
+  test("give one set of rooms, from the writable connection", () => {
+    const town = createTownBuildings()(twice(), machine, "host");
+    expect(town.hosts.map(({ displayLabel }) => displayLabel)).toEqual([
+      "This computer",
+    ]);
+    expect(connectionsOf(town)).toEqual({
+      rooms: ["local", "core"],
+      receptions: ["local"],
+      roster: ["local"],
+    });
+    const byRuntime = createTownBuildings()(twice(), machine, "runtime");
+    expect(
+      byRuntime.hosts.map(({ connectionId, displayLabel }) => [
+        connectionId,
+        displayLabel,
+      ]),
+    ).toEqual([
+      ["local", "This computer · Herdr"],
+      ["core", "This computer · herdr-core"],
+    ]);
+    expect(connectionsOf(byRuntime).rooms).toEqual(["local", "core"]);
+  });
+
+  test("show the live connection while the writable one is down", () => {
+    const town = createTownBuildings()(
+      twice({ localStale: true }),
+      machine,
+      "host",
+    );
+    expect(connectionsOf(town).rooms).toEqual(["startup-default", "core"]);
+  });
 });
