@@ -31,6 +31,11 @@
   outline-offset: 2px;
 }
 
+/* Help's Try rings the sign (town.help.ts): it shows above a parked bus. */
+.town-world .town-apartments-sign[data-help-spotlight] {
+  z-index: 5;
+}
+
 .town-world .town-apartments-sign[data-empty] {
   opacity: 0.85;
 }

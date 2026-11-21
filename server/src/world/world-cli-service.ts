@@ -14,7 +14,8 @@ import {
 import { randomBytes } from "node:crypto";
 import { handleWorldCliEndpoint } from "../http/world-cli-endpoint";
 import { answerAsk, CliError, createWorldCli, dismissAsk } from "./world-cli";
-import { type LedgerStore } from "./world-ledger";
+import { type CliActor, type LedgerStore } from "./world-ledger";
+import { handleAskPeerRequest, type AskPeers } from "./ask-peers";
 import { createAttentionDispatcher } from "./attention-dispatch";
 import type {
   StoragePorts,
@@ -60,6 +61,14 @@ export function createWorldCliService(deps: {
   publishBoard(revision: number): void;
   /** Send one control line to every connected page. */
   broadcast(line: string): void;
+  /**
+   * Owner questions held by other World instances on the same runtime
+   * (#1152), and the runtime keys a new local question is recorded with.
+   */
+  peers?(): AskPeers | null;
+  askRuntimes?(asker: CliActor): string[];
+  /** This World's name, as alerts and sibling Worlds show it. */
+  homeName?(): string;
 }) {
   const board: TownMoveContext["board"] = {
     get: () => deps.board().get(),
@@ -134,7 +143,15 @@ export function createWorldCliService(deps: {
   };
   // This query includes attention evidence as well as domain mutations.
   let queryRevision = ledger().get().revision;
-  const openAsks = () => ({ ...ledger().openAsks(), revision: queryRevision });
+  const openAsks = () => {
+    const local = ledger().openAsks();
+    const peers = deps.peers?.()?.list() ?? [];
+    return {
+      ...local,
+      asks: [...local.asks, ...peers],
+      revision: queryRevision,
+    };
+  };
   /** Pages fetch the open questions only when `asks` says they changed. */
   const publishLedger = (revision: number, asks = false, wake = true) => {
     queryRevision = Math.max(queryRevision + 1, revision);
@@ -188,6 +205,7 @@ export function createWorldCliService(deps: {
       },
       changed: () => publishLedger(ledger().get().revision, true, false),
       log: (message) => console.warn(message),
+      homeName: deps.homeName,
     });
   }
   if (deps.attention && deps.scheduler)
@@ -221,6 +239,7 @@ export function createWorldCliService(deps: {
         }
       : undefined,
     captureRecipient: deps.attention ? recipients.capture : undefined,
+    askRuntimes: deps.askRuntimes,
     acknowledgeAnswer: async (id, occurrence, attempt, actor, recheck) => {
       const entry = (await deps.attention?.().forRecord(id))?.find(
         (entry) => entry.kind === ANSWER_DELIVERY_VERB.name,
@@ -361,6 +380,25 @@ export function createWorldCliService(deps: {
     signal: stopped.signal,
     incarnation,
   });
+  /** The owner answers or dismisses a question this World holds. */
+  async function closeAsOwner(
+    id: string,
+    close: { answer: string } | { allFromAsker: boolean },
+  ) {
+    try {
+      publishLedger(
+        await ("answer" in close
+          ? recordAnswer
+            ? recordAnswer(id, close.answer, { kind: "owner" })
+            : answerAsk(ledger(), id, close.answer, "owner", now())
+          : dismissAsk(ledger(), id, "owner", now(), close.allFromAsker)),
+        true,
+      );
+      if ("answer" in close) publishDelivery();
+    } catch (error) {
+      throw error instanceof CliError ? new Error(error.message) : error;
+    }
+  }
   return {
     /** A page's question method; undefined when `method` is not one. */
     async rpc(method: string, params: unknown): Promise<unknown> {
@@ -439,25 +477,21 @@ export function createWorldCliService(deps: {
             ? "an answer needs a question ID and text"
             : "a dismissal needs a question ID",
         );
-      try {
-        publishLedger(
-          await (method === "world.ask.answer"
-            ? recordAnswer
-              ? recordAnswer(p.id, answer, { kind: "owner" })
-              : answerAsk(ledger(), p.id, answer, "owner", now())
-            : dismissAsk(
-                ledger(),
-                p.id,
-                "owner",
-                now(),
-                p.all_from_asker === true,
-              )),
-          true,
-        );
-        if (method === "world.ask.answer") publishDelivery();
-      } catch (error) {
-        throw error instanceof CliError ? new Error(error.message) : error;
+      const peers = deps.peers?.();
+      if (peers?.owns(p.id)) {
+        // Another World holds this question: it closes it, exactly once.
+        if (method === "world.ask.answer") {
+          peers.refuseAlertAnswer(p.id);
+          await peers.answer(p.id, answer);
+        } else await peers.dismiss(p.id, p.all_from_asker === true);
+        return openAsks();
       }
+      await closeAsOwner(
+        p.id,
+        method === "world.ask.answer"
+          ? { answer }
+          : { allFromAsker: p.all_from_asker === true },
+      );
       return openAsks();
     },
     /** `/api/world/cli`, for `herdr-world` on this machine. */
@@ -496,6 +530,27 @@ export function createWorldCliService(deps: {
             ...(notification.retrying ? { retrying: true } : {}),
           };
         },
+      });
+    },
+    /** Sibling questions changed: pages fetch the open questions again. */
+    peersChanged: () => publishLedger(ledger().get().revision, true, false),
+    /** `/api/world/ask-peers`: a sibling World reads or closes questions held here. */
+    peerHttp(req: Request, ip: string | undefined) {
+      const peers = deps.peers?.();
+      if (!peers) return new Response("not found", { status: 404 });
+      return handleAskPeerRequest(req, ip, {
+        authorized: (header) => peers.authorized(header),
+        open: () =>
+          ledger()
+            .openAsks()
+            .asks.map((ask) => ({
+              ask,
+              // Captured when asked; a question from before #1152 has none
+              // and stays in this World only.
+              runtimes: ask.runtimes ?? [],
+            })),
+        answer: (id, answer) => closeAsOwner(id, { answer }),
+        dismiss: (id, allFromAsker) => closeAsOwner(id, { allFromAsker }),
       });
     },
     start: () => {

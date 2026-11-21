@@ -71,6 +71,33 @@ const sameOwner = (
 
 const moveTimeoutMs = 90_000;
 
+/** Core derives unpinned app desk order from terminal addresses, not tab.move. */
+function coreOrderRefusal(): TownMoveOutcome {
+  return {
+    status: "refused",
+    reason: "unsupported",
+    message:
+      "herdr-core does not expose desk ordering. Pin desks to arrange their seats in Town.",
+  };
+}
+
+async function requestCoreMove(
+  target: { connectionId: string; generation: number },
+  params: Record<string, unknown>,
+): Promise<TownMoveOutcome> {
+  return parseOutcome(
+    await bridge.call(
+      "world.core.move",
+      {
+        connection_id: target.connectionId,
+        connection_generation: target.generation,
+        ...params,
+      },
+      moveTimeoutMs,
+    ),
+  );
+}
+
 function parseOutcome(result: unknown): TownMoveOutcome {
   const value = result as Partial<TownMoveOutcome> & Record<string, unknown>;
   if (
@@ -99,6 +126,12 @@ export async function requestDeskMove(
       reason: "other_host",
       message: "Desks move only within one host.",
     };
+  if (desk.coreOpen)
+    return requestCoreMove(desk.tabRef, {
+      kind: "desk",
+      tab_id: desk.tabRef.nativeId,
+      workspace_id: room.workspaceRef.nativeId,
+    });
   const client = bridge.connection(
     desk.tabRef.connectionId,
     desk.tabRef.generation,
@@ -136,6 +169,7 @@ export async function requestDeskReorder(
       reason: "other_room",
       message: "Desks reorder only within one room.",
     };
+  if (desk.coreOpen) return coreOrderRefusal();
   return requestTabReorder(
     desk.tabRef,
     desk.tabRef.nativeId,
@@ -171,6 +205,44 @@ export async function requestRoomOrder(
 }
 
 /**
+ * A building's rooms split by the runtime that owns them, in reading order.
+ * A building per host (#1047) can hold the rooms of every runtime on the
+ * machine, but each runtime keeps its own room spots and workspace order.
+ */
+export function townRoomsByRuntime<
+  Room extends Pick<OfficeRoom, "workspaceRef">,
+>(rooms: readonly Room[]): Room[][] {
+  const groups = new Map<string, Room[]>();
+  for (const room of rooms) {
+    const id = room.workspaceRef.connectionId;
+    const group = groups.get(id);
+    if (group) group.push(room);
+    else groups.set(id, [room]);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * Put a building's rooms in order in each runtime that owns some of them,
+ * each on its own connection and generation. A stale runtime's rooms keep
+ * Herdr's order until it is back; the first refusal is the outcome.
+ */
+export async function requestBuildingRoomOrder(
+  rooms: readonly OfficeRoom[],
+): Promise<TownRoomMoveOutcome> {
+  const outcomes = await Promise.all(
+    townRoomsByRuntime(rooms)
+      .filter((group) => !group[0]!.stale)
+      .map(requestRoomOrder),
+  );
+  return (
+    outcomes.find((outcome) => outcome.status !== "moved") ?? {
+      status: "moved",
+    }
+  );
+}
+
+/**
  * Move one agent pane to another desk. The service reads the destination's
  * full layout and joins the pane next to its last pane, so crowded desks
  * (more panes than Town draws) land correctly.
@@ -186,6 +258,12 @@ export async function requestAgentMove(
       reason: "other_host",
       message: "Agents move only within one host.",
     };
+  if (device.coreOpen)
+    return requestCoreMove(device.paneRef, {
+      kind: "pane",
+      pane_id: device.paneRef.nativeId,
+      tab_id: desk.tabRef.nativeId,
+    });
   const client = bridge.connection(
     device.paneRef.connectionId,
     device.paneRef.generation,

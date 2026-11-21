@@ -15,7 +15,7 @@ import {
   Wind,
 } from "lucide-react";
 import { useLayer } from "../../layerStack";
-import { openIntegrations } from "../../integrations";
+import { openSettings } from "../../settings/host";
 import type { WeatherSnapshot } from "../../../../shared/weather";
 import {
   setTownDaylightMode,
@@ -89,7 +89,9 @@ export function townRealWeatherLine(
  * The sky button under ALL, and its panel: follow your clock or hold a time
  * of day, follow the real weather at the Weather source's place, hold one
  * weather, or show none. Each browser keeps its choices (townDaylight.ts,
- * townWeather.ts). The button's icon shows the weather Town shows, or the
+ * townWeather.ts). The place and the source are not set here: the panel
+ * links to their row in Settings (integrations.weather), which Settings
+ * search and the command box find too. The button's icon shows the weather Town shows, or the
  * time of day without weather.
  */
 export function TownSkyControl() {
@@ -214,7 +216,7 @@ export function TownSkyControl() {
             className="town-sky-settings"
             onClick={() => {
               setOpen(false);
-              openIntegrations("source:weather");
+              openSettings("integrations.weather");
             }}
           >
             <Settings size={15} aria-hidden="true" />

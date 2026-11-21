@@ -102,10 +102,14 @@ found runtimes; newly discovered runtimes connect during automatic discovery too
 
 `herdr-world ls` returns hosts with their runtimes and rooms; `connections` lists
 host/runtime kind, version and state. Existing per-connection API arrays and legacy
-runtime-specific CLI add flags remain available. The current browser Hosts and
-Manage connections screens still present runtime entries; their host grouping is
-a separate screen change. See [host connections](docs/host-connections.md) for the
-API shape and migration rules.
+runtime-specific CLI add flags remain available. In the browser, **Hosts** and
+**Manage connections** show one row per machine; **Add host** asks only for the
+SSH name (and whether it is Windows), then World looks for runtimes and connects
+what it finds. A host with none says so and lists what can be installed; a host
+with one is not asked about the others. **Settings → Integrations → Runtimes**
+lists each host's runtimes with **Add a runtime**. A runtime profile with its own
+sockets or session is still added by hand under **Runtime profile by hand**. See
+[host connections](docs/host-connections.md) for the API shape and migration rules.
 
 herdr-core is primary for new agents when installed and connected. Choose a
 Herdr TUI room to launch there instead.
@@ -171,6 +175,17 @@ no control for it. Platform and harness limits apply across the table.
   its core rooms separately from Herdr apps and cannot rename or close an
   app-created room. Linked-machine core terminals are observations, not
   directly controllable desks.
+- **Town moves on core:** dragging a live core agent onto another desk moves
+  it there; dragging its desk to another room moves every terminal at that
+  desk. Moves patch `herdr.space`, `herdr.tab` and `where` without restarting
+  programs, and update World's placement when it owns the desk. App spaces
+  accept moves too. World-owned rooms stay when emptied; moving out of an app
+  space does not close it in Herdr's app. Cross-room team joins can move the
+  desk. A missing `terminal.label` capability, stale host or vanished target
+  has a specific visible reason. A partial or uncertain move is reported and
+  never retried automatically. Core has no native desk-order operation;
+  unpinned reordering explains that limit, while pinned desks retain World's
+  saved ordering among their room's pinned seats.
 - **Core agent environment (Unix):** New agent finds and starts the harness
   through the core host's `$SHELL` (`/bin/sh` when unset): interactive on Linux,
   login and interactive on macOS. Supported shells are sh, bash, zsh, dash,
@@ -402,7 +417,9 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   control (phone or desktop, light or dark, as your screen), its steps, where
   it lives and **Try**.
 - **Try** closes the help, switches to Town or Board when the entry lives
-  there, and rings the control for a moment. A control inside a closed menu
+  there, and rings the control for a moment. A Town control off camera (the
+  Apartments sign below a phone's first view) is flown into view at the same
+  zoom; Town itself never scrolls. A control inside a closed menu
   rings the button that opens it. When the control is not on this screen
   (Chat's controls without an open Chat, a phone-only control on a desktop),
   help reopens on that tab and says where to find it.
@@ -425,8 +442,17 @@ retired: `/office` opens Town, and `/graph` and `/tree` open Board. Board and
 these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 - **Town** is the default view (`/town`); the root URL opens it too.
-  Each host is a building, each workspace a room, each tab a team table and each
-  pane a seat. Rooms resize as tabs open and close; expanded rooms stay expanded
+  Each host (machine) is a building, each workspace a room, each tab a team
+  table and each pane a seat. A machine running both Herdr and herdr-core has one
+  building and one reception holding both runtimes' rooms; the first runtime's
+  rooms come first, and each room still acts on its own runtime. The building's
+  roof colour, reception and **Add room** belong to its first runtime.
+  **Settings → Town & views → Town buildings → One per runtime** gives each
+  runtime its own building instead, side by side and signed `<host> · Herdr` /
+  `<host> · herdr-core`; it is kept in this browser and **One per host** is the
+  default. `?townBuildings=runtime` or `?townBuildings=host` in the URL
+  overrides the setting for that page, to compare the two.
+  Room positions, colours and pins are the same either way. Rooms resize as tabs open and close; expanded rooms stay expanded
   as they shrink, until folded. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table's
   nameplate shows its sole agent's Herdr name when exactly one named agent
@@ -741,6 +767,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     each row and a side road to its right. A matching road runs down the left
     of each row's first building, so the town is bounded by roads on both
     sides; its crossings have bus stops like every other.
+  - A host entering the town (added in **Manage connections** or ticked in
+    **Hosts**) arrives: its neighbours, the roads and the camera make room,
+    then its building rises out of its lot in a puff of dust, springs a
+    little past its height and settles, its reception and plaques appearing
+    as it stands. A host leaving (removed or unticked) stretches up, sinks
+    into its lot in dust, and the town closes the gap. Each building rises
+    or sinks in under a second, and can be used at once. Several hosts at
+    once rise or sink one after another, a moment apart. A building that is
+    changed, moved or removed while it rises carries on from its height. A
+    host that only disconnects keeps its building, and opening or reloading
+    Town shows the buildings already there with no arrival. Reduced motion swaps buildings at once, with no
+    movement; calm motion raises no dust.
   - The land around the town is generated: woods with pines, meadows, hedged
     flower gardens and orchards, ponds with reeds, winding footpaths, and each
     street running on beyond the town as a country lane. It fills the whole
@@ -767,8 +805,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town says so; with neither set it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
     **New room** (disabled with the reason when no room can be created). With
-    no room open, New room asks for the **Destination host**, herdr-core hosts
-    included (`· herdr-core`); an empty core room name becomes "Room". Arrow
+    no room open, New room asks for the **Destination host** by machine name;
+    a **Runtime** choice (Herdr or herdr-core, starting at the open room's or the
+    first ready one) appears only when that machine runs both. An empty core
+    room name becomes "Room". Arrow
     keys, Home and End move around the ring; Escape, a press outside, the
     centre **✕** or **Back** on a phone closes it.
   - **Lenses** colour the whole map by one fact, as strategy games' map
@@ -967,8 +1007,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     weather** (the default; it follows the [Weather source](#weather-source)
     and shows its current reading, such as `Rain 7° · Example City`, or why
     there is none), one held condition (**Clear**, **Cloud**, **Rain**,
-    **Snow**, **Fog**, **Storm** or **Wind**), or **No weather**. **Weather
-    place and source…** opens the Weather source in Settings → Integrations.
+    **Snow**, **Fog**, **Storm** or **Wind**), or **No weather**. The panel
+    holds no place or source settings of its own: **Weather place and
+    source…** opens that row in Settings (Integrations → Sources → Weather).
     Each browser keeps both choices; the button shows the weather Town is
     showing, or the time of day when there is none. As the sky
     darkens, light follows where agents are: a room is lit while an agent
@@ -1656,10 +1697,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   **Hosts** (in the top bar; on a phone in Zen, in the corner view menu too)
   defaults to All hosts and persists an explicit host set independently
   of **Manage connections**; both places show and change one filter per
-  browser. It lists every connection of either runtime,
-  Herdr's first; a herdr-core connection reads `<name> · herdr-core · <state>`
-  and is counted, selected and remembered like a Herdr host (profiles of one
-  runtime endpoint count once). Filtering preserves open resources and terminals;
+  browser. It lists one row and one tick per machine: a host's runtimes are
+  not told apart there, and ticking a host shows all of them (a saved filter
+  of runtime IDs reads as their hosts). Before the host catalogue loads, or for
+  a runtime no host holds, a runtime shows as its own row. Board, Desk,
+  Needs you, search and **New agent** name places by machine; they add
+  `· Herdr` or `· herdr-core` only where a machine runs both. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
 - **Needs you** in the top bar (in the view picker in Zen, including on a phone;
@@ -1704,6 +1747,24 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   grouped. Testing only: open `?questionBacklogFixture` (removed immediately)
   for 20 synthetic Atlas questions and one Beacon question; dismiss Atlas and
   Beacon stays. The fixture never contacts a runtime; reload to leave it.
+  Worlds started with the same `HERDR_WORLD_INSTANCE_REGISTRY_DIR` and attached
+  to the same runtime show each other's open questions (up to 60 per World,
+  from up to 8 Worlds, refreshed every 5 seconds and on each question alert),
+  marked **Asked in [World]** with a link. Answering or dismissing one there
+  closes it in the World that holds it, which records exactly one answer and
+  delivers it to the asker; a second answer, from any World, is refused as
+  closed. A question stays with the runtime it was asked on, even if that saved
+  connection is later edited to target another. A long question is shortened
+  in the alert so its World's name always arrives. Places, IDs and attachments
+  stay with that World. When it stops, its
+  questions leave the others at the next read (a failed read keeps them 15
+  seconds); answering then says it is not running. An alert whose question this
+  World cannot read (no shared registry, an older World, or another runtime)
+  shows as **Asked in [World]** with a link when known, no answer field, and
+  **Hide alert**; up to 20 are kept until World restarts. Testing only: open
+  `?siblingQuestionsFixture` (removed immediately) for one local question, one
+  held by another World, and two alert-only entries; answering an alert-only
+  entry is refused.
   A message longer than two lines shows **more** on its last line: it,
   or a tap on the text, shows the whole message in place with its links, and
   **less** clips it again. Keyboard focus entering the message reveals its
@@ -1834,7 +1895,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 **Menu → Settings → Integrations** lists everything World reads from or works through.
 **All** opens first and lists every kind under its heading; then one tab per
-kind: **Runtimes** (this computer's Herdr or herdr-core and each SSH host),
+kind: **Runtimes** (one heading per machine, listing the Herdr and herdr-core
+runtimes found on it, each with **Add a runtime**: herdr-core installs from
+there after a confirmation, Herdr is installed and started on the machine, and
+**Look again** looks for runtimes and connects what it finds; a machine with
+none says **No runtime found on this host.**),
 **Sources** (GitHub, Jira, Weather and Usage metrics), **Agents** (World's skill for
 each harness, per host) and **Editors** once one is listed; last, set apart
 with its key, the **Vault**. The kind tabs come from the registry's kinds, so a new kind gets
@@ -2456,7 +2521,8 @@ also find by typing its name.
   connection; when Cmd+K cannot act, its commands leave Settings.
 - The search finds a setting by its name, its words and its choices:
   **lighting** and **night** find Town's time of day, **font size** finds the
-  terminal, interface and chat sizes, **sounds** finds sound on this device.
+  terminal, interface and chat sizes, **sounds** finds sound on this device,
+  **weather** finds the Weather source's place and on/off.
   The control in the result changes the setting at once.
 - **Cmd+K** (`Ctrl+K`) finds the same settings and commands. A choice offers
   each option (**night** → **Town time of day: Night**), a switch offers
@@ -2950,8 +3016,8 @@ and herdr-core alike:
   must be private (0700). Windows needs PowerShell and SSH key login; the
   pipe must be accessible only to your account, SYSTEM and Administrators.
   Start core without elevation so the SSH account can open it.
-  The card shows the version and live terminals. **Hosts** filters core and
-  Herdr TUI buildings together. A stale core keeps its last topology for
+  The card shows the version and live terminals. **Hosts** shows core and the
+  Herdr TUI of one machine as one host. A stale core keeps its last topology for
   reference and refuses actions until fresh observation succeeds.
 - **Core-only setup.** Without the Herdr TUI installed, the first core
   connection becomes the default and Town shows only its building. With the
@@ -3252,8 +3318,10 @@ command per file. Stalled sessions end through keepalives. See
 ## Weather source
 
 - **Optional and shared:** Weather is off by default. Open Settings → Integrations
-  → Sources → Weather → Settings to configure it; **Connect** turns it on and
-  **Disconnect** turns it off. Only turning it on permits Open-Meteo requests.
+  → Sources → Weather → Settings to configure it, or search Settings or Cmd+K
+  for **weather** (or **location**) to reach **Weather place and source**, the
+  row Town's sky button links to (`?setting=integrations.weather`).
+  **Connect** turns it on and **Disconnect** turns it off. Only turning it on permits Open-Meteo requests.
   A typed place name goes to its geocoding service; city-level coordinates go to its weather service. No account
   or key; the free API is for non-commercial use.
 - **One location:** type a city/country or latitude, longitude. Typed input always

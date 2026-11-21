@@ -44,7 +44,42 @@ export type WorldAsk = {
   withdrawn?: { at: number };
   answer?: { text: string; at: number; by: string; occurrence?: string };
   dismissed?: { at: number; by: string };
+  /**
+   * Another World instance on the same runtime holds this question (#1152):
+   * answering here closes it there. `url` is null when that World's address
+   * is unknown.
+   */
+  home?: {
+    name: string;
+    url: string | null;
+    port?: number;
+    tls?: boolean;
+    /** That World listens on every interface, so this page's host reaches it. */
+    any?: boolean;
+  };
+  /** Only the alert reached this World: the question is answered in `home`. */
+  alert_only?: true;
 };
+
+/**
+ * A link to the World that holds a question: by this page's own host when
+ * that World listens on every interface (a phone reaches it too), else its
+ * loopback address.
+ */
+export function askHomeHref(
+  home: NonNullable<WorldAsk["home"]>,
+  location: Pick<Location, "hostname"> = window.location,
+) {
+  if (home.any && home.port) {
+    // Browsers already bracket an IPv6 hostname ("[::1]"); bracket a bare one.
+    const host =
+      location.hostname.includes(":") && !location.hostname.startsWith("[")
+        ? `[${location.hostname}]`
+        : location.hostname;
+    return `${home.tls ? "https" : "http"}://${host}:${home.port}/`;
+  }
+  return home.url;
+}
 
 /**
  * Who asked, without World's places: Herdr's agent name, else how the

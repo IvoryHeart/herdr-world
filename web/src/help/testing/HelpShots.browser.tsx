@@ -3,7 +3,8 @@
  * Board or an agent's Chat with the website's synthetic scene
  * (web/src/world/testing/site-shots/), World's view picker over it, in one
  * size and theme. `window.helpShots.show(control, press)` presses what opens
- * the control, rings it as Try does and returns where it is; `hide()` undoes
+ * the control or brings it into view, rings it as Try does and returns where
+ * it is; `hide()` undoes
  * that. Nothing contacts World, Herdr or GitHub.
  *
  *   ?scene=town|board|chat&theme=light|dark&phone=1
@@ -29,6 +30,9 @@ import {
   SiteTown,
   siteTownScene,
 } from "../../world/testing/site-shots/siteStage";
+import { worldHostGroups } from "../../hostGroups";
+import { setApartmentsClient } from "../../world/apartments/useApartments";
+import { fixtureApartmentsClient } from "../../world/testing/apartmentsFixture";
 import { WorldViewPicker } from "../../world/WorldViewPicker";
 import type { WorldView } from "../../world/worldViewRouting";
 import { findHelpTarget } from "../helpTry";
@@ -111,6 +115,9 @@ installSiteBridge(async (method, params) => {
   return {};
 });
 quietGreetingForTest();
+// Town's Apartments sign counts synthetic residents rather than waiting.
+if (scene === "town")
+  setApartmentsClient(fixtureApartmentsClient(Date.parse(AT)));
 
 const frame = () => new Promise<number>((r) => requestAnimationFrame(r));
 const frames = async (count: number) => {
@@ -132,24 +139,21 @@ async function settle(limit = 8000) {
 
 const view: WorldView = scene === "board" ? "board" : "town";
 const hosts = {
-  connections: [
-    {
-      id: "site-host-0",
-      label: "studio",
-      runtime: "herdr" as const,
+  hosts: worldHostGroups({
+    connections: [
+      ["site-host-0", "studio"],
+      ["site-host-1", "buildbox"],
+    ].map(([id, label]) => ({
+      id: id!,
+      label: label!,
+      source: "site",
+      is_default: id === "site-host-0",
       state: "ready" as const,
       generation: 1,
-      endpoint: "site-host-0",
-    },
-    {
-      id: "site-host-1",
-      label: "buildbox",
-      runtime: "herdr" as const,
-      state: "ready" as const,
-      generation: 1,
-      endpoint: "site-host-1",
-    },
-  ],
+      type: "ssh" as const,
+    })),
+    coreConnections: [],
+  }),
   ids: null,
   explanation: "",
   onChange: noAction,
@@ -222,6 +226,18 @@ const town = scene === "town" ? siteTownScene() : null;
 const boardStore = scene === "board" ? siteBoardStore() : null;
 const boardWorld = scene === "board" ? siteBoardWorld() : null;
 
+/** Shown and inside the screen: a Town sign can be out of the camera's view. */
+function onScreen(element: Element | null) {
+  const box = element?.getClientRects()[0];
+  return (
+    !!box &&
+    box.right > 0 &&
+    box.bottom > 0 &&
+    box.left < innerWidth &&
+    box.top < innerHeight
+  );
+}
+
 let pressed: HTMLElement[] = [];
 let ringed: HTMLElement | null = null;
 
@@ -247,10 +263,7 @@ const helpShots = {
    * returns its box, or null when it is not there.
    */
   async show(control: string, press: readonly string[] = []) {
-    if (
-      !document.querySelector(`[data-help="${control}"]`)?.getClientRects()
-        .length
-    )
+    if (!onScreen(document.querySelector(`[data-help="${control}"]`))) {
       for (const selector of press) {
         const button = document.querySelector<HTMLElement>(selector);
         if (!button) continue;
@@ -258,6 +271,9 @@ const helpShots = {
         pressed.push(button);
         await frames(20);
       }
+      // A camera press (Town's ALL) flies before the control is in view.
+      if (pressed.length && scene === "town") await settle();
+    }
     const target = findHelpTarget(control);
     if (!target) return null;
     ringed = target;

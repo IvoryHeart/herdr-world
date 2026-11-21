@@ -1,8 +1,9 @@
 /**
  * Town's edge arrows and Next (townEdgeArrows.ts, townNext.ts) for the
  * canvas: the marked agents, the arrows each drawn frame, the camera trips
- * with their pulse, and N / Shift+N on a desktop. Only the camera moves and
- * Needs you opens; agents stay where they are.
+ * with their pulse, N / Shift+N on a desktop, and help's Try to a control
+ * off camera (useTownHelpReveal.ts). Only the camera moves and Needs you
+ * opens; agents stay where they are.
  */
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
@@ -37,6 +38,7 @@ import {
 } from "./townNext";
 import { townReceptionMark } from "./townReceptionFilter";
 import type { TownRendererHandle } from "./townRenderer";
+import { useTownHelpReveal } from "./useTownHelpReveal";
 
 /** Needs you's items in its order, each with its agent's leaf ID and mark. */
 export type TownNeedsYouOrder = () => readonly {
@@ -72,6 +74,7 @@ export function useTownEdgeNav(
   rendererRef: RefObject<TownRendererHandle | null>,
   hostRef: RefObject<HTMLElement | null>,
 ) {
+  useTownHelpReveal(hostRef, rendererRef);
   // Agents with a mark (! ? ✓) as Town draws them; reviewed work is already
   // idle in Town's projection. Edge arrows point at those off screen, and at
   // finished work Needs you lists for review (edgeMarked below).

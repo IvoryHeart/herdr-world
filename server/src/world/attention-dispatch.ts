@@ -1,4 +1,5 @@
 import { createEffectRunner, type EffectDriver } from "../effects/runner";
+import { askAlertBody } from "./ask-peers";
 import type {
   EffectEntry,
   EffectStore,
@@ -38,6 +39,8 @@ export function createAttentionDispatcher(deps: {
   incarnation: string;
   changed(): void;
   log(message: string): void;
+  /** This World's name: the alert says where the question lives (#1152). */
+  homeName?(): string;
 }) {
   const outcome = (entry: EffectEntry | null): AlertOutcome => ({
     shown: entry?.state === "delivered",
@@ -128,7 +131,9 @@ export function createAttentionDispatcher(deps: {
         "notification.show",
         {
           title: `${ask.actor.name ?? ask.actor.label} asks`,
-          body: `${ask.question} (${ask.id})`,
+          body: deps.homeName
+            ? askAlertBody(ask.question, ask.id, deps.homeName())
+            : `${ask.question} (${ask.id})`,
           sound: "request",
         },
         () => {

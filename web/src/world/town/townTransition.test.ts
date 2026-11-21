@@ -5,8 +5,17 @@ import { TOWN_LAND_OBJECT_REACH, townWildLine } from "./townLandscape";
 import { layoutTown, TOWN_TILE as T, type TownLayout } from "./townLayout";
 import { townBakeDirty, townBakeKeys } from "./scene/townSceneBake";
 import {
+  TOWN_HOST_GLIDE_SECONDS,
+  TOWN_HOST_RISE_DELAY,
+  TOWN_HOST_RISE_SECONDS,
+  TOWN_HOST_STAGGER,
   TOWN_TRANSITION_SECONDS,
   townBuildingRect,
+  townHostPlan,
+  townRiseProgress,
+  townRisePose,
+  townSinkPose,
+  townTransitionSeconds,
   townCrossfadeAlpha,
   townEase,
   townGroundChunks,
@@ -335,4 +344,128 @@ test("the ground stops past the wild line; the repeated wild fills the rest", ()
   expect(covered({ x: -9000, y: 0, w: 100, h: 100 })).toBe(1);
   // Inside the land, nothing.
   expect(covered({ x: land.x + 10, y: land.y + 10, w: 400, h: 300 })).toBe(0);
+});
+
+test("a host entering or leaving the town rises or sinks; nothing else does", () => {
+  const three = layoutTown(input(["a", "b", "c"]), "wide").layout;
+  const two = layoutTown(input(["a", "c"]), "wide").layout;
+  // Opening Town (no town drawn before) and changes that keep the same
+  // hosts (a desk, a room, a host that only disconnected) plan nothing and
+  // keep the usual pace.
+  expect(townHostPlan(null, three)).toBeNull();
+  expect(townHostPlan(three, three)).toBeNull();
+  const busier = layoutTown(
+    {
+      ...input(["a", "b", "c"]),
+      rooms: [
+        ...input(["a", "b", "c"]).rooms,
+        { key: "b/2", hostKey: "b", order: 2, deskKeys: ["b/2/0"] },
+      ],
+    },
+    "wide",
+  ).layout;
+  expect(townHostPlan(three, busier)).toBeNull();
+  expect(townTransitionSeconds(three, busier)).toBe(TOWN_TRANSITION_SECONDS);
+  // Unticked: b sinks at once, the rest close its gap at the host pace.
+  const gone = townHostPlan(three, two)!;
+  expect([...gone.sink]).toEqual([["b", 0]]);
+  expect(gone.rise.size).toBe(0);
+  expect(gone.seconds).toBe(TOWN_HOST_GLIDE_SECONDS);
+  expect(townTransitionSeconds(three, two)).toBe(TOWN_HOST_GLIDE_SECONDS);
+  expect(TOWN_HOST_GLIDE_SECONDS).toBeGreaterThan(TOWN_TRANSITION_SECONDS);
+  // Ticked again: its neighbours start to make room before it rises.
+  const back = townHostPlan(two, three)!;
+  expect([...back.rise]).toEqual([["b", TOWN_HOST_RISE_DELAY]]);
+  expect(back.sink.size).toBe(0);
+  // On a phone too, where the buildings stand one above another.
+  const narrow = townHostPlan(
+    layoutTown(input(["a"]), "narrow").layout,
+    layoutTown(input(["a", "b"]), "narrow").layout,
+  )!;
+  expect([...narrow.rise.keys()]).toEqual(["b"]);
+  // Several at once go one after another in reading order, and a long list
+  // is not a parade: the sixth and later start with the fifth.
+  const many = ["h0", "h1", "h2", "h3", "h4", "h5", "h6"];
+  const town = layoutTown(input(many), "wide").layout;
+  const several = townHostPlan(layoutTown(input([]), "wide").layout, town)!;
+  const order = [...town.buildings]
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .map((b) => b.hostKey);
+  expect(
+    order.map((key) =>
+      Math.round(
+        (several.rise.get(key)! - TOWN_HOST_RISE_DELAY) / TOWN_HOST_STAGGER,
+      ),
+    ),
+  ).toEqual([0, 1, 2, 3, 4, 4, 4]);
+  // Some leave while others arrive in one change.
+  const swapped = townHostPlan(
+    three,
+    layoutTown(input(["a", "c", "d"]), "wide").layout,
+  )!;
+  expect([...swapped.sink.keys()]).toEqual(["b"]);
+  expect([...swapped.rise.keys()]).toEqual(["d"]);
+});
+
+test("a rising building breaks ground flat, springs past its height and stands", () => {
+  const start = townRisePose(0);
+  expect(start.sy).toBe(0);
+  expect(start.alpha).toBe(0);
+  expect(start.sx).toBeGreaterThan(1);
+  const heights = Array.from(
+    { length: 101 },
+    (_, i) => townRisePose(i / 100).sy,
+  );
+  // It overshoots a little, once, then settles.
+  const top = Math.max(...heights);
+  expect(top).toBeGreaterThan(1.03);
+  expect(top).toBeLessThan(1.12);
+  expect(heights.every((h) => h >= 0)).toBe(true);
+  expect(townRisePose(1)).toEqual({ sx: 1, sy: 1, alpha: 1 });
+  expect(townRisePose(0.3).alpha).toBe(1);
+  // The leaving one stretches up first, then sinks and fades out.
+  expect(townSinkPose(0)).toEqual({ sx: 1, sy: 1, alpha: 1 });
+  expect(townSinkPose(0.1).sy).toBeGreaterThan(1);
+  expect(townSinkPose(0.6).sy).toBeLessThan(1);
+  expect(townSinkPose(0.6).alpha).toBe(1);
+  expect(townSinkPose(1).sy).toBe(0);
+  expect(townSinkPose(1).alpha).toBe(0);
+  for (let v = 0.2; v < 1; v += 0.1)
+    expect(townSinkPose(v + 0.1).sy).toBeLessThanOrEqual(townSinkPose(v).sy);
+});
+
+test("a rising building waits for its neighbours to start, and its plaques come last", () => {
+  const rise = TOWN_HOST_RISE_DELAY + TOWN_HOST_STAGGER;
+  const motion = {
+    dx: 0,
+    dy: 0,
+    enter: true,
+    crossfade: false,
+    t: 0,
+    rise,
+    seconds: rise + TOWN_HOST_RISE_SECONDS,
+  };
+  const at = (seconds: number) => ({
+    ...motion,
+    t: Math.min(1, seconds / motion.seconds),
+  });
+  expect(townRiseProgress(at(rise / 2))).toBe(0);
+  expect(townRiseProgress(at(rise + TOWN_HOST_RISE_SECONDS / 2))).toBeCloseTo(
+    0.5,
+  );
+  expect(townRiseProgress(at(motion.seconds))).toBe(1);
+  // Its reception, sign and plaques stay hidden while it is low and are
+  // plain once it stands; it never moves sideways.
+  expect(townMotionPose(at(rise + 0.2 * TOWN_HOST_RISE_SECONDS))).toEqual({
+    x: 0,
+    y: 0,
+    alpha: 0,
+  });
+  expect(townMotionPose(at(motion.seconds))).toEqual({ x: 0, y: 0, alpha: 1 });
+  // The whole arrival is short: under a second and a half, staggered.
+  expect(motion.seconds).toBeLessThan(1.5);
+  // A building that does not rise is not asked how far up it is.
+  expect(
+    townRiseProgress({ dx: 0, dy: 0, enter: true, crossfade: false, t: 0.5 }),
+  ).toBeNull();
 });

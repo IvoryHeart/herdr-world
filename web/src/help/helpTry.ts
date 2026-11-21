@@ -62,10 +62,22 @@ export function waitForHelpTarget(
 
 export const HELP_SPOTLIGHT_MS = 2400;
 
-/** Rings the control for a moment, scrolls it into view and focuses it. */
+/**
+ * Asked of the control's view before Try scrolls: a view that moves its own
+ * camera (Town) brings the control into view and cancels the event, since
+ * scrolling its clipped container would tear the controls from the scene.
+ */
+export const HELP_REVEAL_EVENT = "herdr-world:help-reveal";
+
+/** Rings the control for a moment, brings it into view and focuses it. */
 export function spotlightHelpTarget(element: HTMLElement) {
   element.setAttribute("data-help-spotlight", "");
-  element.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  const reveal = new Event(HELP_REVEAL_EVENT, {
+    bubbles: true,
+    cancelable: true,
+  });
+  if (element.dispatchEvent(reveal))
+    element.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   if (element.matches("button, a[href], input, textarea, select, [tabindex]"))
     element.focus({ preventScroll: true });
   window.setTimeout(
