@@ -62,6 +62,8 @@ export function useTownQuiet(
   return {
     /** Quiet agents' keys, the same set while nobody's quiet changes. */
     keys,
+    /** When each quiet agent last moved, for the time beside its hourglass. */
+    since,
     /** The board's "2 quiet 10 m+" line and its find, while any are quiet. */
     board,
     /** The card's "No progress for 23 m (last 14:02)", or null. */

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   TOWN_QUIET_DEFAULT_MINUTES,
+  townQuietAge,
   townQuietAgents,
   townQuietMinutes,
   townQuietSame,
@@ -99,4 +100,11 @@ test("the hover text says how long and when", () => {
   expect(townQuietText(now - 120 * MINUTE, now)).toMatch(
     /^No progress for 2 h \(/,
   );
+});
+
+test("the mark's number is how long the agent has gone quiet", () => {
+  expect(townQuietAge(now - 23 * MINUTE - 30_000, now)).toBe("23m");
+  expect(townQuietAge(now - 65 * MINUTE, now)).toBe("1h 05m");
+  // A clock behind the session file never shows a negative time.
+  expect(townQuietAge(now + MINUTE, now)).toBe("0m");
 });

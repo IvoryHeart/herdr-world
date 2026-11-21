@@ -3,8 +3,9 @@
  * session has not moved for a while. Its last activity is its session
  * file's modification time (`last_activity_at`); an agent without one is
  * never quiet, so nothing is guessed. Town keeps a quiet agent seated with
- * its working light on, stills its typing and marks it with an hourglass;
- * the Town board counts them under Busy. The look clears the moment the
+ * its working light on, stills its typing and marks it with an hourglass
+ * and how long it has gone quiet, beside its step's running time; the Town
+ * board counts them under Busy. The look clears the moment the
  * session moves again.
  */
 
@@ -38,6 +39,16 @@ export function townQuietSince(
     return null;
   if (lastActivityAt <= 0) return null;
   return now - lastActivityAt >= minutes * MINUTE ? lastActivityAt : null;
+}
+
+/**
+ * How long a quiet agent has gone quiet, for the mark beside its hourglass:
+ * "23m" or "1h 05m", as the step bubble writes its step's time.
+ */
+export function townQuietAge(since: number, now: number): string {
+  const quiet = Math.max(0, Math.floor((now - since) / MINUTE));
+  if (quiet < 60) return `${quiet}m`;
+  return `${Math.floor(quiet / 60)}h ${String(quiet % 60).padStart(2, "0")}m`;
 }
 
 /** "No progress for 23 m (last 14:02)", with the hour in the reader's clock. */

@@ -48,10 +48,13 @@ export type TownBoardQuiet = {
 
 /**
  * What Town shows of its quiet working agents (useTownQuiet.ts): their keys,
- * for the hourglass, and the board's line while any are quiet.
+ * for the hourglass, when each last moved, for its time, and the board's
+ * line while any are quiet.
  */
 export type TownQuietMarks = {
   keys: ReadonlySet<string>;
+  /** When each quiet agent last moved, for the time beside its hourglass. */
+  since?: ReadonlyMap<string, number>;
   board?: TownBoardQuiet;
 };
 

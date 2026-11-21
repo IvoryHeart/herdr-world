@@ -54,7 +54,24 @@ test("the overflow crowd curses then snores over any status, and unknown is conf
 });
 
 test("a quiet working agent shows an hourglass at its seat instead of typing", () => {
-  for (const level of ["overview", "room", "desk"])
+  // From the room level the step bubble carries the hourglass and its time
+  // (TownStepBubble), so the canvas neither types nor repeats it.
+  for (const level of ["room", "desk"])
+    expect(
+      townBubbleKind(
+        "working",
+        false,
+        false,
+        level,
+        "seat",
+        true,
+        1,
+        null,
+        false,
+        true,
+      ),
+    ).toBeNull();
+  for (const level of ["overview"])
     expect(
       townBubbleKind(
         "working",

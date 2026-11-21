@@ -499,8 +499,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     reception boards are put away, tap a building's reception lobby to bring
     its board and sign back; any other tap or zoom level puts it away again.
   - A working agent whose session has not moved for 10 minutes looks quiet:
-    it stays seated with its room's working light on, its hands stop typing
-    and an hourglass hangs over it instead of its step bubble. Its card says
+    it stays seated with its room's working light on and its hands stop
+    typing. From the room level its step bubble adds an hourglass with how
+    long it has gone quiet, such as "23m", and keeps the step's running time
+    beside it; zoomed further out the hourglass shows alone. Its card says
     how long, such as "No progress for 23 m (last 14:02)". The Town board adds
     a line under **Busy**, such as "2 quiet 10 m+": it opens the first quiet
     agent's card and **Next ›** steps through the rest. The time comes from

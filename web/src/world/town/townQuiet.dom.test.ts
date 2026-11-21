@@ -56,6 +56,14 @@ if (process.env.TOWN_QUIET_DOM !== "1") {
     expect(code).toBe(0);
   }, 15_000);
 } else {
+  const { mock } = await import("bun:test");
+  // The glyphs are painted on a canvas, which the test DOM lacks.
+  mock.module("./townQuietGlyph", () => ({
+    townQuietGlyphUrl: () => "data:image/png;base64,",
+  }));
+  mock.module("./townStepArt", () => ({
+    townStepGlyphUrl: () => "data:image/png;base64,",
+  }));
   const { act } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { useTownQuiet } = await import("./useTownQuiet");
@@ -132,6 +140,61 @@ if (process.env.TOWN_QUIET_DOM !== "1") {
     await render();
     expect(quiet.keys.size).toBe(0);
     expect(quiet.board).toBeUndefined();
+    await act(async () => root.unmount());
+    host.remove();
+  });
+
+  test("a quiet agent's bubble carries how long it has gone quiet and its step's time", async () => {
+    const { TownStepBubble } = await import("./TownStepBubble");
+    const { TownStepStore } = await import("./townStepStore");
+    const { TownHud } = await import("./scene/townHud");
+    const hud = new TownHud({
+      now: () => 0,
+      wall: () => now,
+      after: () => () => {},
+    });
+    const steps = new TownStepStore();
+    // A short command step, not yet long enough for its own amber time.
+    steps.set(
+      new Map([
+        ["a", { kind: "command", since: now - 4 * MINUTE, task: null }],
+      ]),
+    );
+    const bubble = (agentKey: string, quietSince: number | null) =>
+      createElement(TownStepBubble, {
+        steps,
+        quietSince,
+        hud,
+        agentKey,
+        top: true,
+        x: 20,
+        selected: false,
+        renderer: { current: null },
+        pennants: new Set<HTMLElement>(),
+      });
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const show = (...nodes: ReturnType<typeof bubble>[]) =>
+      act(async () => root.render(nodes));
+
+    // Working and moving: the step's glyph alone, no hourglass.
+    await show(bubble("a", null));
+    expect(host.querySelector(".town-step-quiet")).toBeNull();
+    expect(host.querySelector(".town-step-age")).toBeNull();
+
+    // Quiet: the hourglass with its time, and the step's running time.
+    await show(bubble("a", now - 23 * MINUTE));
+    const quiet = host.querySelector(".town-step")!;
+    expect(quiet.getAttribute("data-quiet")).toBe("23m");
+    expect(quiet.querySelector(".town-step-quiet")?.textContent).toBe("23m");
+    expect(quiet.querySelector(".town-step-quiet-glyph")).not.toBeNull();
+    expect(quiet.querySelector(".town-step-age")?.textContent).toBe("4m");
+
+    // A quiet agent with no step: the hourglass and its time alone.
+    await show(bubble("b", now - 65 * MINUTE));
+    expect(host.querySelector(".town-step-glyph")).toBeNull();
+    expect(host.querySelector(".town-step-quiet")?.textContent).toBe("1h 05m");
     await act(async () => root.unmount());
     host.remove();
   });

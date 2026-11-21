@@ -918,7 +918,7 @@ export function TownCanvas({
             hud={hud}
             foldedActivity={foldedActivity}
             askingKeys={askingKeys}
-            quietKeys={quiet.keys}
+            quiet={quiet.since}
             receptionHeldKeys={receptionHeldKeys}
             receptionTakes={receptionTakes}
             onFindHeld={onFindHeld}
