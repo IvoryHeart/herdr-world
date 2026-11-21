@@ -93,6 +93,7 @@ function Fixture({ world }: { world: WorldObject }) {
             asks: [],
             finished: [],
             hosts: [],
+            harnesses: [],
             spend: { available: false },
           }}
           now={1}

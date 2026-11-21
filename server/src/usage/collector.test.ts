@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collectHarnessUsage, type CollectorCache } from "./collector";
 import { createUsageProjection } from "./projection";
+import { USAGE_TOKEN_HARNESSES } from "../../../shared/usageHarnesses";
 import {
   usageDigest,
   usageHostProgram,
@@ -317,6 +318,46 @@ test("remote projection validation rejects malformed numeric values and strips e
   expect(() =>
     validateHostUsage({ ...base, rows: [{ tokens: { input: -1 } }] }),
   ).toThrow();
+  const row = {
+    harness: "claude",
+    session_key: "a".repeat(64),
+    file_keys: [],
+    model: "synthetic",
+    day: "2026-11-19",
+    responses: 1,
+    first_at: Date.parse("2026-11-19T01:00:00Z"),
+    last_at: Date.parse("2026-11-19T02:00:00Z"),
+    partial: false,
+    tokens: {
+      input: 1,
+      cache_read: 0,
+      cache_write: 0,
+      output: 1,
+      reasoning: 0,
+    },
+    role: "fixer",
+    branch: "crew/42",
+    spans: [
+      [Date.parse("2026-11-19T01:00:00Z"), Date.parse("2026-11-19T02:00:00Z")],
+    ],
+    max_prompt_tokens: 1,
+  };
+  expect(validateHostUsage({ ...base, rows: [row] }).rows[0]).toMatchObject({
+    role: "fixer",
+    branch: "crew/42",
+  });
+  for (const bad of [
+    { role: "You are PRIVATE_SENTINEL" },
+    { branch: "/home/PRIVATE_SENTINEL" },
+    { branch: "a b" },
+    { spans: [[2, 1]] },
+    { spans: [[1, 2, "PRIVATE_SENTINEL"]] },
+    { spans: Array.from({ length: 49 }, (_, i) => [i, i]) },
+    { max_prompt_tokens: -1 },
+  ])
+    expect(() =>
+      validateHostUsage({ ...base, rows: [{ ...row, ...bad }] }),
+    ).toThrow();
 });
 
 test("ordinary inventory cannot crowd out an exact bound file and discloses its cap", async () => {
@@ -993,3 +1034,18 @@ test.each(["file", "parent", "json", "compressed"])(
     if (kind === "parent") expect(closed).toBeGreaterThan(0);
   },
 );
+
+test("the host reader looks for exactly the harnesses the reader seam names", async () => {
+  // The collector runs on the host as a stringified program, so it keeps its
+  // own list; this ties it to the one seam every other part reads.
+  const result = await collectHarnessUsage({ now }, createUsageProjection, {
+    fs,
+    home: await fixture(),
+    env: {},
+    join,
+    hash: usageDigest,
+  });
+  expect(result.sources.map((s) => s.harness).sort()).toEqual(
+    [...USAGE_TOKEN_HARNESSES].sort(),
+  );
+});

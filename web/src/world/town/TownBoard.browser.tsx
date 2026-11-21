@@ -4,7 +4,7 @@ import type { UsageLimit, WorldUsageSnapshot } from "../../../../shared/usage";
 import { townUsageFixture } from "../testing/usageFixture";
 import { TownBoard } from "./TownBoard";
 import { TownFuel } from "./TownFuelGauge";
-import { townFuelGauges } from "./townLimits";
+import { townFuelGauges, townFuelNotes } from "./townLimits";
 import "../../styles/tokens.css";
 import "../../styles/base.css";
 import "../worldFonts.css";
@@ -74,7 +74,8 @@ bridge.call = (async (method: string) =>
     : null) as typeof bridge.call;
 
 // Other rows the board can show: a limit reached with its reset time, a low
-// window and an old reading's age. These get their own sign.
+// window, an aged reading ("as of …", dimmed) whose 5 h window was not
+// reported, and a harness with no reading yet. These get their own sign.
 const otherGauges = townFuelGauges(
   [
     limit("codex", {
@@ -113,9 +114,14 @@ createRoot(host).render(
     onOpenSummary={() => {}}
   />,
 );
+const otherNotes = townFuelNotes(
+  [limit("codex", { state: "missing", source: null, observed_at: null })],
+  [],
+  ["codex"],
+);
 createRoot(signHost).render(
   <div className="town-board" data-open="true">
-    <TownFuel gauges={otherGauges} now={now} />
+    <TownFuel gauges={otherGauges} notes={otherNotes} now={now} />
   </div>,
 );
 
@@ -249,6 +255,27 @@ async function run() {
     failures.push(`unexpected fuel values: ${values.join(", ")}`);
   if (!sign!.querySelector(".town-fuel-reached"))
     failures.push("the second sign shows no reached limit");
+  if (!sign!.querySelector('button[data-aged="true"]'))
+    failures.push("the second sign shows no aged reading");
+  if (!sign!.querySelector(".town-fuel-age")?.textContent?.startsWith("as of "))
+    failures.push("the aged reading does not read as of its time");
+  if (
+    sign!.querySelector(".town-fuel-missing")?.textContent !== "— not reported"
+  )
+    failures.push("the second sign shows no unreported window");
+  if (
+    ![...sign!.querySelectorAll(".town-fuel-unavailable")].some(
+      (row) => row.textContent === "no reading yet",
+    )
+  )
+    failures.push("the second sign does not name Codex with no reading");
+  // A gauge with three rows keeps every row beside its name.
+  const name = sign!.querySelector(".town-fuel-name")!.getBoundingClientRect();
+  for (const row of sign!
+    .querySelector(".town-fuel-gauge")!
+    .querySelectorAll(".town-fuel-window"))
+    if (row.getBoundingClientRect().left < name.right)
+      failures.push(`fuel row "${row.textContent}" sits under its name`);
   for (const width of [236, 240, 260]) {
     board!.style.width = sign!.style.width = `${width}px`;
     checkInside(board!, `board at ${width}px`);

@@ -69,7 +69,8 @@ The fixture contains only synthetic hosts, four rooms, sixteen desks and mixed
 working, blocked, finished and idle agents, and the harbour shows the synthetic
 `ready` Shipyard pipeline read in memory. Its usage read is synthetic and
 carries only context readings: two agents at 90% and 95% look tired at their
-desks (a sweat drop), and the expense boards show no data. Town's time of day
+desks (a sweat drop), the expense boards show no data and the observatory
+reads "Usage unavailable". Town's time of day
 is held at night, so the image never depends on the runner's clock or time zone
 and shows the status lighting. It does not start
 World or Herdr, contact a runtime, or capture a user's browser. The surrounding World shell, rail,
