@@ -8,6 +8,7 @@ import {
 } from "./conversationRead";
 import type { WorldLeafObject } from "./worldObject";
 import { viewOnlyMessage } from "./viewOnly";
+import { AgentUsageLine } from "./usage/AgentUsageLine";
 
 /**
  * An agent's latest message as Chat reads it (never terminal text), the
@@ -100,6 +101,15 @@ export function AgentHoverCard({
         <b>{name}</b>
         <small>{where}</small>
       </header>
+      {leaf.kind === "agent" ? (
+        <AgentUsageLine
+          pane={{
+            connectionId: leaf.connectionId,
+            generation: leaf.generation,
+            paneId: leaf.pane.pane_id,
+          }}
+        />
+      ) : null}
       <div className="town-peek-screen" aria-label="Latest message">
         <AgentLatestMessage
           conversation={read.conversation}

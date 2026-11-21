@@ -1,3 +1,5 @@
+import { MEMORY_ACTIONS } from "../../../shared/memory";
+import { GROUP_CLI_COMMANDS } from "./world-cli-groups";
 import type { CliActor } from "./world-ledger";
 import type { Evidence } from "../verbs/types";
 import type { CliErrorCode } from "./world-cli-errors";
@@ -28,3 +30,31 @@ export type WorldCliResponse = (
   retrying?: boolean;
   notified?: { shown: boolean; reason: string } | null;
 };
+
+/** The commands the endpoint accepts, as the CLI spells them. */
+export const WORLD_CLI_COMMANDS = [
+  ...MEMORY_ACTIONS.map((action) => `memory ${action}` as const),
+  ...GROUP_CLI_COMMANDS,
+  "whoami",
+  "ls",
+  "usage",
+  "history",
+  "undo",
+  "board card move",
+  "board card pin",
+  "board card unpin",
+  "board card group",
+  "board card ungroup",
+  "colour set",
+  "colour reset",
+  "town desk move",
+  "ask",
+  "ask get",
+  "ask acknowledge",
+  "ask answer",
+  "ask withdraw",
+  "result",
+  "result ls",
+  "spawned-by",
+] as const;
+export type WorldCliCommand = (typeof WORLD_CLI_COMMANDS)[number];

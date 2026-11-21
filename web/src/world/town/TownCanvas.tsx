@@ -91,14 +91,14 @@ import "./townTeams.css";
 import { TownEdgeOverlay, TownPulseRing } from "./TownEdgeLayer";
 import { useTownEdgeNav, type TownNeedsYouOrder } from "./useTownEdgeNav";
 import { TownLensBoard, TownLensLayer, useTownLenses } from "./TownLenses";
+import { setTownRealWeather } from "./townWeather";
+import { unavailableWeather } from "../../../../shared/weather";
 import type { OfficeAgent } from "../officeProjectionTypes";
 
 export type { PlaceColorChoice, TownRoomActions } from "./townRoomActions";
 import type { TownRoomActions } from "./townRoomActions";
-
 /** Camera kept across Office visits within one page session. */
 const savedCameras = new Map<string, { x: number; y: number; z: number }>();
-
 const NO_COLORS: TerminalColors = {};
 const NO_RELATIONS = { relations: [], places: new Map() };
 const NO_PINS: DeskPins = {};
@@ -239,6 +239,11 @@ export function TownCanvas({
   );
   const captureHolding = useRef(false);
   const sources = useWorldSources();
+  // Town's sky reads the real weather from here (townWeather.ts).
+  useEffect(
+    () => setTownRealWeather(sources.weather ?? unavailableWeather("disabled")),
+    [sources.weather],
+  );
   // The town's shape follows its container, measured on every resize.
   const [shape, setShape] = useState<TownShape>(() =>
     typeof window !== "undefined"
@@ -360,14 +365,12 @@ export function TownCanvas({
   };
   const latest = useRef(current);
   latest.current = current;
-
   const placedRoomActions = useTownRoomMoves(
     roomActions,
     model,
     layout,
     rendererRef,
   );
-
   const anchorFrame = useRef<(() => void) | null>(null);
   const reportAnchors = () => {
     const { onAnchorChange: report, onSelectedAnchorChange: reportSelected } =
@@ -406,7 +409,6 @@ export function TownCanvas({
       reportRef.current();
     });
   };
-
   const levelRef = useRef<TownLevel>("overview");
   const [layers] = useState(() => new TownBuildingLayers());
   const signFrame = () => rendererRef.current?.invalidate("building-sign");
@@ -479,9 +481,7 @@ export function TownCanvas({
       scheduleAnchors();
   };
   const onFrameRef = useRef(onFrame);
-
   onFrameRef.current = onFrame;
-
   const viewport = () => {
     const host = hostRef.current!;
     return townViewport(
