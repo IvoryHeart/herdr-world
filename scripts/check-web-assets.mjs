@@ -56,6 +56,8 @@ const maxFileCount = 212;
 // unchanged.
 // The combined Usage/harbour/Apartments merge measures 15.55 MiB; 15.6 MiB
 // carries those lazy features together, with startup budgets unchanged.
+// Resident avatars (#1069) share Town's sprites in lazy Apartments chunks;
+// main measures 15.503 MiB within the same 15.6 MiB total (2026-11-20).
 const maxTotalBytes = 15.6 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };

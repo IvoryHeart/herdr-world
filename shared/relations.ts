@@ -4,6 +4,12 @@ import {
   type Group,
   type GroupChange,
 } from "./groups";
+import {
+  inheritedColorKey,
+  resolveTerminalColor,
+  tabCardKey,
+  type TerminalTab,
+} from "./terminalColor";
 
 /**
  * Which terminals know each other, and why. A relation is between two
@@ -420,4 +426,44 @@ export function closedRelations(
       teamMembers(group).filter(closed),
     ),
   };
+}
+
+/** Where a terminal is on its host (its room and table). */
+export type TerminalPlace = TerminalTab & { paneId: string };
+
+/**
+ * The saved colours plus each spawned tab's inherited one: a tab with no
+ * colour of its own shows its parent's tab colour (inheritedColorKey). A
+ * chosen colour always wins, and a parent in the same tab adds nothing.
+ */
+export function withInheritedColors<C extends string>(
+  colors: Readonly<Record<string, C>>,
+  relations: readonly Relation[],
+  places: ReadonlyMap<string, TerminalPlace>,
+): Readonly<Record<string, C>> {
+  const parentTabs = new Map<string, TerminalPlace>();
+  const tabs = new Map<string, TerminalPlace>();
+  for (const [child, parent] of spawnParents(relations)) {
+    const from = places.get(terminalKey(parent));
+    const to = places.get(child);
+    if (!from || !to || from.connectionId !== to.connectionId) continue;
+    if (from.tabId === to.tabId) continue;
+    const key = tabCardKey(to.connectionId, to.tabId, to.workspaceIds);
+    if (colors[key] || parentTabs.has(key)) continue;
+    parentTabs.set(key, from);
+    tabs.set(key, to);
+  }
+  if (!parentTabs.size) return colors;
+  const out: Record<string, C> = { ...colors };
+  const resolving = new Set<string>();
+  const resolve = (key: string): void => {
+    const parent = parentTabs.get(key);
+    if (!parent || out[inheritedColorKey(key)] || resolving.has(key)) return;
+    resolving.add(key);
+    // The parent may itself be spawned: settle its colour first.
+    resolve(tabCardKey(parent.connectionId, parent.tabId, parent.workspaceIds));
+    out[inheritedColorKey(key)] = resolveTerminalColor(out, parent).color as C;
+  };
+  for (const key of parentTabs.keys()) resolve(key);
+  return out;
 }
