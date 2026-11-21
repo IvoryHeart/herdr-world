@@ -1,9 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { fixtureHost, fixtureWorld } from "../board/boardFixture";
-import { projectWorldOffice } from "../herdrOfficeProjection";
+import {
+  projectWorldOffice,
+  TOWN_PRESENTATION_BOUNDS,
+} from "../herdrOfficeProjection";
 import { officeRoomActionCapabilities } from "../officeRoomActions";
 import { officeReadModel } from "../officeReadModel";
-import { createTownBuildings, townBuildingsMode } from "./townBuildings";
+import {
+  createTownBuildings,
+  hiddenEndpointHosts,
+  townBuildingsMode,
+} from "./townBuildings";
 import { townModelFromProjection } from "./townModel";
 import { layoutTown } from "./townLayout";
 
@@ -243,5 +250,45 @@ describe("two connections to one Herdr socket", () => {
       "host",
     );
     expect(connectionsOf(town).rooms).toEqual(["startup-default", "core"]);
+  });
+
+  test("leave the hidden connection's rooms out of Town's room limit", () => {
+    // Both connections report the same 80 workspaces; Town admits 128 rooms.
+    const spaces = Array.from({ length: 80 }, (_, index) => ({
+      label: `Space ${index + 1}`,
+      tabs: [],
+    }));
+    const world = fixtureWorld([
+      fixtureHost("startup-default", spaces),
+      fixtureHost("local", spaces),
+    ]);
+    const hidden = hiddenEndpointHosts(
+      world.hosts.map((host) => ({
+        key: host.id,
+        connectionId: host.connectionId,
+        stale: host.stale,
+      })),
+      machine,
+    );
+    expect([...hidden]).toEqual([
+      world.hosts.find((host) => host.connectionId === "startup-default")!.id,
+    ]);
+    const office = projectWorldOffice(
+      world,
+      0,
+      null,
+      TOWN_PRESENTATION_BOUNDS,
+      undefined,
+      undefined,
+      null,
+      undefined,
+      hidden,
+    );
+    const town = createTownBuildings()(office, machine, "host");
+    expect(town.rooms).toHaveLength(80);
+    expect(
+      new Set(town.rooms.map((room) => room.workspaceRef.connectionId)),
+    ).toEqual(new Set(["local"]));
+    expect(office.coverage.omittedRooms).toBe(0);
   });
 });

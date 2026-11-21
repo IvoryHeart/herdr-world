@@ -12,7 +12,11 @@ import { countWorldWork } from "../devtools/renderer";
 import type { WorldObject } from "../worldObject";
 import { worldHostGroups } from "../../hostGroups";
 import { useStoreSelector } from "../../store";
-import { createTownBuildings, townBuildingsMode } from "./townBuildings";
+import {
+  createTownBuildings,
+  hiddenEndpointHosts,
+  townBuildingsMode,
+} from "./townBuildings";
 import { worldLocalStorage } from "../../browserStorage";
 import {
   readOfficePreferences,
@@ -104,6 +108,25 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       );
   }, []);
   const buildingsMode = townBuildingsMode(buildingsFlag, buildingsSetting);
+  // Choose one connection per runtime endpoint before bounded room admission,
+  // so a duplicate connection's rooms take no Town capacity (#1189).
+  const hiddenKey = [
+    ...hiddenEndpointHosts(
+      world.hosts.map((host) => ({
+        key: host.id,
+        connectionId: host.connectionId,
+        // As the office projection reads a host's staleness.
+        stale: host.stale || host.hostState === "offline-stale",
+      })),
+      hostGroups,
+    ),
+  ]
+    .sort()
+    .join("\n");
+  const hiddenHosts = useMemo(
+    () => new Set(hiddenKey ? hiddenKey.split("\n") : []),
+    [hiddenKey],
+  );
   const observedOffice = useMemo((): HerdrOfficeProjection => {
     if (DEVTOOLS) countWorldWork("office.project");
     const office = projectOffice(
@@ -114,6 +137,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       expandedRooms,
       roomFocus?.roomKey ?? null,
       expandedDeskLimits,
+      hiddenHosts,
     );
     return buildings(office, hostGroups, buildingsMode);
   }, [
@@ -126,6 +150,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
     pinnedTabs,
     expandedRooms,
     expandedDeskLimits,
+    hiddenHosts,
     roomFocus?.roomKey,
   ]);
   const focusRoom = useCallback(

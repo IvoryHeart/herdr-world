@@ -1496,7 +1496,8 @@ when the host has more than one. A room SHALL offer the same room actions
 in either layout. When two of a host's connections reach the same runtime
 endpoint, Town SHALL show that endpoint's rooms once, from one connection:
 a live one first, then a writable one, then the host's first; both
-connections keep their identities. Room keys SHALL NOT depend on the layout, so
+connections keep their identities, and the other connection's rooms SHALL
+take no part of Town's bounded room capacity. Room keys SHALL NOT depend on the layout, so
 room spots, colours and pins survive either way. A desk SHALL be a table
 with one seat per admitted pane up to four drawn seats, sized to its panes: a
 one-pane desk SHALL be a solo desk, a two-pane desk a small table with one seat on

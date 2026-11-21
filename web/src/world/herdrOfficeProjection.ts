@@ -140,6 +140,7 @@ export function createOfficeProjector(
   let previousExpanded: ReadonlySet<string> = NO_EXPANDED_ROOMS;
   let previousPinned: ReadonlySet<string> = NO_PINNED_TABS;
   let previousDeskLimits: ReadonlyMap<string, number> = NO_DESK_LIMITS;
+  let previousHidden: ReadonlySet<string> = NO_HIDDEN_HOSTS;
   const intern = <T extends { key: string }>(next: T[], prior: T[]) => {
     const byKey = new Map(prior.map((item) => [item.key, item]));
     const result = next.map((item) => {
@@ -159,6 +160,7 @@ export function createOfficeProjector(
     expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
     preferredRoomKey: string | null = null,
     expandedDeskLimits: ReadonlyMap<string, number> = NO_DESK_LIMITS,
+    hiddenHosts: ReadonlySet<string> = NO_HIDDEN_HOSTS,
   ): HerdrOfficeProjection => {
     let next: HerdrOfficeProjection | null = null;
     const inputs = previous && projectionInputs.get(previous);
@@ -171,7 +173,9 @@ export function createOfficeProjector(
       expandedDeskLimits.size === previousDeskLimits.size &&
       [...expandedDeskLimits].every(
         ([key, limit]) => previousDeskLimits.get(key) === limit,
-      );
+      ) &&
+      hiddenHosts.size === previousHidden.size &&
+      [...hiddenHosts].every((key) => previousHidden.has(key));
     if (
       previous &&
       inputs &&
@@ -225,11 +229,13 @@ export function createOfficeProjector(
       const selectedHosts = new Set(
         hosts.filter((host) => host.selected).map((host) => host.key),
       );
-      const candidates = [...inputs.allRooms].sort(
-        (a, b) =>
-          Number(b.source.id === selectedSpaceId) -
-            Number(a.source.id === selectedSpaceId) || compareRooms(a, b),
-      );
+      const candidates = inputs.allRooms
+        .filter(({ host }) => !hiddenHosts.has(host.key))
+        .sort(
+          (a, b) =>
+            Number(b.source.id === selectedSpaceId) -
+              Number(a.source.id === selectedSpaceId) || compareRooms(a, b),
+        );
       const rooms = boundedWithPriority(
         candidates,
         bounds.rooms,
@@ -239,7 +245,9 @@ export function createOfficeProjector(
           entry.room.key === preferredRoomKey,
       ).sort(compareRooms);
       const receptions = boundedWithPriority(
-        hosts,
+        hiddenHosts.size
+          ? hosts.filter(({ key }) => !hiddenHosts.has(key))
+          : hosts,
         bounds.receptionDesks,
         (host) => host.selected,
       );
@@ -303,6 +311,7 @@ export function createOfficeProjector(
         expandedRooms,
         preferredRoomKey,
         expandedDeskLimits,
+        hiddenHosts,
       );
     if (previous && next.rooms !== previous.rooms) {
       // Compare content once at projection admission, never once per canvas frame.
@@ -317,6 +326,7 @@ export function createOfficeProjector(
     previousExpanded = expandedRooms;
     previousPinned = pinnedTabs;
     previousDeskLimits = new Map(expandedDeskLimits);
+    previousHidden = hiddenHosts;
     previous = next;
     return next;
   };
@@ -324,6 +334,7 @@ export function createOfficeProjector(
 
 const NO_PINNED_TABS: ReadonlySet<string> = new Set();
 const NO_DESK_LIMITS: ReadonlyMap<string, number> = new Map();
+const NO_HIDDEN_HOSTS: ReadonlySet<string> = new Set();
 
 /**
  * `pinnedTabs` holds the tab card keys of Town's pinned desks (useDeskPins.ts):
@@ -342,6 +353,12 @@ export function projectWorldOffice(
   preferredRoomKey: string | null = null,
   /** Current incremental expansion target for each expanded room. */
   expandedDeskLimits: ReadonlyMap<string, number> = NO_DESK_LIMITS,
+  /**
+   * Hosts (keys) another connection to the same runtime endpoint already
+   * shows (Town, #1189). Their rooms, reception and bar agents take no
+   * bounded capacity; rosters keep them for the caller to filter.
+   */
+  hiddenHosts: ReadonlySet<string> = NO_HIDDEN_HOSTS,
 ): HerdrOfficeProjection {
   const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
   const selectedSpaceId =
@@ -385,8 +402,11 @@ export function projectWorldOffice(
         Number(left.source.id === selectedSpaceId) || compareRooms(left, right),
   );
   // Selection reserves bounded capacity; it does not change room placement.
+  const shownRoomCandidates = hiddenHosts.size
+    ? roomCandidates.filter(({ host }) => !hiddenHosts.has(host.key))
+    : roomCandidates;
   const presentedRooms = boundedWithPriority(
-    roomCandidates,
+    shownRoomCandidates,
     bounds.rooms,
     ({ host }) => host.selected,
     ({ source, room }) =>
@@ -437,8 +457,11 @@ export function projectWorldOffice(
     );
   });
   const roomByKey = new Map(rooms.map((room) => [room.key, room]));
+  const shownHosts = hiddenHosts.size
+    ? hosts.filter(({ key }) => !hiddenHosts.has(key))
+    : hosts;
   const receptions = boundedWithPriority(
-    hosts,
+    shownHosts,
     bounds.receptionDesks,
     ({ selected }) => selected,
   ).map((host): OfficeReception => {
@@ -480,13 +503,16 @@ export function projectWorldOffice(
       ),
     };
   });
+  const barCandidates = preparedBarAgents.has(world)
+    ? priorityCandidates(
+        preparedBarAgents.get(world)!,
+        selectedAgent?.destination === "bar" ? selectedAgent : undefined,
+      )
+    : allAgents.filter(({ destination }) => destination === "bar");
   const barAgents = boundedSorted(
-    preparedBarAgents.has(world)
-      ? priorityCandidates(
-          preparedBarAgents.get(world)!,
-          selectedAgent?.destination === "bar" ? selectedAgent : undefined,
-        )
-      : allAgents.filter(({ destination }) => destination === "bar"),
+    hiddenHosts.size
+      ? barCandidates.filter(({ hostKey }) => !hiddenHosts.has(hostKey))
+      : barCandidates,
     bounds.barAgents,
     (left, right) =>
       selectedFirst(left, right) || compareBarAgents(left, right),
@@ -583,7 +609,10 @@ export function projectWorldOffice(
     (count, reception) => count + reception.waitingAgents.length,
     0,
   );
-  const omittedRooms = Math.max(0, world.coverage.spaces - rooms.length);
+  const shownSpaces =
+    world.coverage.spaces -
+    (roomCandidates.length - shownRoomCandidates.length);
+  const omittedRooms = Math.max(0, shownSpaces - rooms.length);
   const renderedDesks = rooms.reduce(
     (count, room) => count + room.desks.length,
     0,
@@ -628,7 +657,10 @@ export function projectWorldOffice(
       omittedRooms,
       omittedDesks: Math.max(0, world.coverage.tabs - renderedDesks),
       omittedRoomAgents: Math.max(0, totalRoomAgents - renderedRoomAgents),
-      omittedReceptionDesks: Math.max(0, hosts.length - bounds.receptionDesks),
+      omittedReceptionDesks: Math.max(
+        0,
+        shownHosts.length - bounds.receptionDesks,
+      ),
       omittedWaitingAgents: Math.max(
         0,
         totalWaitingAgents - renderedWaitingAgents,
@@ -637,13 +669,13 @@ export function projectWorldOffice(
     },
     presentationBounds: {
       ...bounds,
-      totalRooms: world.coverage.spaces,
+      totalRooms: shownSpaces,
       renderedRooms: rooms.length,
       totalDesks: world.coverage.tabs,
       renderedDesks,
       totalRoomAgents,
       renderedRoomAgents,
-      totalReceptionDesks: hosts.length,
+      totalReceptionDesks: shownHosts.length,
       renderedReceptionDesks: receptions.length,
       totalWaitingAgents,
       renderedWaitingAgents,

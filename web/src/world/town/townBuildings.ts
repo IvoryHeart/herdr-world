@@ -71,37 +71,46 @@ type Plan = {
   signature: string;
 };
 
+type EndpointHost = Pick<OfficeHost, "key" | "connectionId" | "stale">;
+
 /**
- * One connection per runtime endpoint: the host's members, without those a
- * better connection to the same endpoint already shows.
+ * One connection per runtime endpoint: the keys of hosts a better connection
+ * to the same endpoint already shows. Town passes these to the office
+ * projection before bounded admission, so a duplicate connection's rooms take
+ * no room capacity (#1189), and removes them again when it lays buildings out.
  */
-function oncePerEndpoint(
-  group: HostGroupShape,
-  members: OfficeHost[],
-  hidden: Set<string>,
-): OfficeHost[] {
-  const runtimeOf = (host: OfficeHost) =>
-    group.runtimes.find(({ id }) => id === host.connectionId);
-  const better = (a: OfficeHost, b: OfficeHost) =>
-    a.stale !== b.stale
-      ? !a.stale
-      : Boolean(runtimeOf(a)?.readOnly) !== Boolean(runtimeOf(b)?.readOnly)
-        ? !runtimeOf(a)?.readOnly
-        : false;
-  const shown = new Map<string, OfficeHost>();
-  for (const host of members) {
-    const endpoint = runtimeOf(host)?.endpoint;
-    if (!endpoint) continue;
-    const current = shown.get(endpoint);
-    if (!current) shown.set(endpoint, host);
-    else if (better(host, current)) {
-      hidden.add(current.key);
-      shown.set(endpoint, host);
-    } else hidden.add(host.key);
+export function hiddenEndpointHosts(
+  hosts: readonly EndpointHost[],
+  groups: readonly HostGroupShape[],
+): Set<string> {
+  const hidden = new Set<string>();
+  for (const group of groups) {
+    const runtimeOf = (host: EndpointHost) =>
+      group.runtimes.find(({ id }) => id === host.connectionId);
+    const better = (a: EndpointHost, b: EndpointHost) =>
+      a.stale !== b.stale
+        ? !a.stale
+        : Boolean(runtimeOf(a)?.readOnly) !== Boolean(runtimeOf(b)?.readOnly)
+          ? !runtimeOf(a)?.readOnly
+          : false;
+    const rank = (host: EndpointHost) =>
+      group.connectionIds.indexOf(host.connectionId);
+    const members = hosts
+      .filter((host) => rank(host) >= 0)
+      .sort((a, b) => rank(a) - rank(b));
+    const shown = new Map<string, EndpointHost>();
+    for (const host of members) {
+      const endpoint = runtimeOf(host)?.endpoint;
+      if (!endpoint) continue;
+      const current = shown.get(endpoint);
+      if (!current) shown.set(endpoint, host);
+      else if (better(host, current)) {
+        hidden.add(current.key);
+        shown.set(endpoint, host);
+      } else hidden.add(host.key);
+    }
   }
-  return hidden.size
-    ? members.filter((host) => !hidden.has(host.key))
-    : members;
+  return hidden;
 }
 
 /** Rooms of a host's later runtimes follow its first runtime's rooms. */
@@ -112,12 +121,14 @@ function plan(
   groups: readonly HostGroupShape[],
   mode: TownBuildingsMode,
 ): Plan {
+  const hidden = hiddenEndpointHosts(office.hosts, groups);
   const groupOf = new Map<string, HostGroupShape>();
   for (const group of groups)
     for (const id of group.connectionIds) groupOf.set(id, group);
   const present = new Map<string, OfficeHost[]>();
   const order: (HostGroupShape | OfficeHost)[] = [];
   for (const host of office.hosts) {
+    if (hidden.has(host.key)) continue;
     const group = groupOf.get(host.connectionId);
     if (!group) {
       order.push(host);
@@ -133,7 +144,6 @@ function plan(
   const buildingOf = new Map<string, string>();
   const orderOffset = new Map<string, number>();
   const labelOf = new Map<string, string>();
-  const hidden = new Set<string>();
   const hosts: OfficeHost[] = [];
   const push = (host: OfficeHost) =>
     hosts.push(
@@ -157,10 +167,8 @@ function plan(
     const group = item;
     const rank = (host: OfficeHost) =>
       group.connectionIds.indexOf(host.connectionId);
-    const members = oncePerEndpoint(
-      group,
-      [...present.get(group.id)!].sort((a, b) => rank(a) - rank(b)),
-      hidden,
+    const members = [...present.get(group.id)!].sort(
+      (a, b) => rank(a) - rank(b),
     );
     if (mode === "runtime") {
       for (const host of members) {
