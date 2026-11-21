@@ -5,7 +5,7 @@ import type {
   OfficeRoom,
 } from "../herdrOfficeProjection";
 import { TOWN_PINNED_HINT } from "./townDrag";
-import { canMoveDeskToRoom } from "./townRuntimeMove";
+import { canMoveDeskToRoom } from "./townMoveEligibility";
 import type { TownMoveResult } from "./townMoves";
 import type { townTeamActions, TownMenuEntry } from "./townTeamActions";
 

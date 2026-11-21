@@ -1,7 +1,7 @@
 import type { TownLevel } from "./townCamera";
 import type { TownHit } from "./townHitTest";
 import type { TownModel } from "./townModel";
-import { canHandoffDesk, canMoveDeskToRoom } from "./townRuntimeMove";
+import { canHandoffDesk, canMoveDeskToRoom } from "./townMoveEligibility";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import {
   townRoomPlacement,

@@ -76,7 +76,9 @@ The existing latest-core smoke command discovers this live suite as well.
 read-retirement combinations for the core metadata reader, including a trap
 against using the TUI manager. `townRuntimeMove.test.ts` checks the browser's
 exact source/destination route and outcome mapping. These consumers supplement
-the unchanged handoff fault matrix and lease/fence models; no new concurrency
+the unchanged handoff fault matrix and lease/fence models. Town scene eligibility
+remains a pure module (`townMoveEligibility.ts`); its RPC adapter is outside the
+scene model graph and the scene-boundary check enforces that separation. No new concurrency
 owner or recovery transition is introduced by selecting another room.
 
 The matrix is exhaustive over its listed fault axes, not arbitrary external

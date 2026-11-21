@@ -5,7 +5,8 @@
  */
 
 import { bridge } from "../../api";
-import { needsAgentHandoff, requestRuntimeDeskMove } from "./townRuntimeMove";
+import { needsAgentHandoff } from "./townMoveEligibility";
+import { requestRuntimeDeskMove } from "./townRuntimeMove";
 import { deskReorderIndex } from "../../../../shared/tabOrder";
 export { deskReorderIndex };
 import {

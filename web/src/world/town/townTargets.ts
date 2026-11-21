@@ -6,7 +6,7 @@ import type {
 } from "../herdrOfficeProjection";
 import { TOWN_TILE as T, townSeat, type TownLayout } from "./townLayout";
 import type { TownModel } from "./townModel";
-import { canHandoffDesk } from "./townRuntimeMove";
+import { canHandoffDesk } from "./townMoveEligibility";
 
 export type TownTarget = {
   key: string;

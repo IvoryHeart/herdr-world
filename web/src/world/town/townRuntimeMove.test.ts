@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { bridge } from "../../api";
 import type { OfficeDesk, OfficeRoom } from "../herdrOfficeProjection";
 import { requestDeskMove } from "./townMoves";
-import { canMoveDeskToRoom } from "./townRuntimeMove";
+import { canMoveDeskToRoom } from "./townMoveEligibility";
 
 const room = (connectionId: string, core = false) =>
   ({

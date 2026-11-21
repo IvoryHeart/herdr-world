@@ -65,6 +65,7 @@ linux.each([0, 7])(
         extracted = binary;
         expect(readFileSync(binary, "utf8")).toContain("exit 0");
         expect(suites.map((path) => basename(path))).toEqual([
+          "agent-moves.live.test.ts",
           "core.live.test.ts",
           "delivery.live.test.ts",
           "harnesses.live.test.ts",
