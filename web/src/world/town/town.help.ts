@@ -26,8 +26,8 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     summary:
       "Town follows your clock: rooms with work are lit, idle rooms go dark, and a reception waiting on you glows amber.",
     steps: [
-      "Press the clock under the zoom buttons.",
-      "Each press moves through your clock, day, dusk and night.",
+      "Press the sky button under ALL to open the Sky panel.",
+      "Under Time of day, choose Your clock, Day, Dusk or Night.",
     ],
     place: "town",
     where: "Town, under the zoom buttons on the right",

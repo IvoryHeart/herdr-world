@@ -4,6 +4,10 @@ import { basename, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import pin from "../tools/chrome/test-chrome.json";
 import { SWIFTSHADER_FLAGS } from "../web/src/world/testing/chromeRendering";
+import {
+  TOWN_GOLDEN_WEATHER,
+  TOWN_GOLDEN_WEATHER_VIEWPORTS,
+} from "../web/src/world/testing/town-golden/weatherScenes";
 
 /** Same five sizes as the existing PR capture helper (resumeVisualCapture). */
 export const townGoldenViewports = [
@@ -12,6 +16,23 @@ export const townGoldenViewports = [
   { name: "linux-half", width: 1280, height: 1440 },
   { name: "linux-wide", width: 2560, height: 1440 },
   { name: "portrait", width: 1440, height: 2560 },
+];
+/**
+ * Every capture: Town without weather at the five viewports (named for the
+ * viewport), then each weather scene at its viewports (`<scene>-<viewport>`).
+ */
+export const townGoldenCaptures: {
+  name: string;
+  scene: string | null;
+  width: number;
+  height: number;
+}[] = [
+  ...townGoldenViewports.map((v) => ({ ...v, scene: null })),
+  ...TOWN_GOLDEN_WEATHER.flatMap(({ scene }) =>
+    townGoldenViewports
+      .filter((v) => TOWN_GOLDEN_WEATHER_VIEWPORTS.includes(v.name))
+      .map((v) => ({ ...v, name: `${scene}-${v.name}`, scene })),
+  ),
 ];
 const root = resolve(import.meta.dir, "..");
 const fixture = join(root, "web/src/world/testing/town-golden");
@@ -159,7 +180,7 @@ export async function runTownGolden(options: {
     );
     await Bun.write(
       join(directory, "summary.md"),
-      `Town golden images: **${failures.length ? "FAIL" : "PASS"}** — ${receipts.length}/${runs * 5} captures, ${runs} run(s), zero pixel tolerance.\n\n${failures.map((f) => "- " + f).join("\n")}\n`,
+      `Town golden images: **${failures.length ? "FAIL" : "PASS"}** — ${receipts.length}/${runs * townGoldenCaptures.length} captures, ${runs} run(s), zero pixel tolerance.\n\n${failures.map((f) => "- " + f).join("\n")}\n`,
     );
   };
   const server = Bun.serve({
@@ -220,7 +241,7 @@ export async function runTownGolden(options: {
           throw new Error(
             `Use pinned Chrome ${pin.version}; received ${browserVersion}`,
           );
-        for (const viewport of townGoldenViewports) {
+        for (const viewport of townGoldenCaptures) {
           const { targetId } = await cdp.command("Target.createTarget", {
             url: "about:blank",
           });
@@ -250,7 +271,9 @@ export async function runTownGolden(options: {
               source:
                 'window.goldenLoaded = new Promise(resolve => addEventListener("load", resolve, { once: true }));',
             });
-            await command("Page.navigate", { url: server.url.href });
+            const url = new URL(server.url.href);
+            if (viewport.scene) url.searchParams.set("scene", viewport.scene);
+            await command("Page.navigate", { url: url.href });
             const evaluate = async (expression: string) => {
               const result = await command("Runtime.evaluate", {
                 expression,
@@ -297,8 +320,8 @@ export async function runTownGolden(options: {
             );
             receipts.push({
               run,
-              ...viewport,
               ...scene,
+              ...viewport,
               changedPixels: comparison.changed,
               pngSha256: createHash("sha256").update(bytes).digest("hex"),
             });
@@ -324,7 +347,7 @@ export async function runTownGolden(options: {
           }
         }
         console.info(
-          `[town-golden] run ${run}/${runs}: five viewports captured`,
+          `[town-golden] run ${run}/${runs}: ${townGoldenCaptures.length} captures`,
         );
       } finally {
         cdp?.close();

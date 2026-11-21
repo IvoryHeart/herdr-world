@@ -1,17 +1,19 @@
 /**
  * Town's time of day. It follows this device's clock, or holds the day, dusk
- * or night the user picked with the button under the zoom controls; the
+ * or night the user picked in the sky menu under the zoom controls; the
  * choice is kept per browser. The renderer's lighting (townLighting.ts) reads
  * the sky: how the scene is tinted and how strongly lamps and rooms light it.
  * Its atmosphere (townAtmosphere.ts) reads the sun: where buildings' shadows
  * fall and how strongly, and how much cloud shadow drifts over the land.
+ * Weather (townWeather.ts) changes the same sky: it greys and darkens it,
+ * hides the sun, and adds rain, snow, wind, fog and wet or snowy ground.
  */
 
 import { worldLocalStorage } from "../../browserStorage";
 
 export type TownDaylightMode = "clock" | "day" | "dusk" | "night";
 
-/** The button's cycle, in order. */
+/** The sky menu's time choices, in order. */
 export const TOWN_DAYLIGHT_MODES: readonly TownDaylightMode[] = [
   "clock",
   "day",
@@ -53,12 +55,6 @@ export function setTownDaylightMode(next: TownDaylightMode) {
   for (const listener of listeners) listener();
 }
 
-/** The mode after `current` in the button's cycle. */
-export const townNextDaylightMode = (current: TownDaylightMode) =>
-  TOWN_DAYLIGHT_MODES[
-    (TOWN_DAYLIGHT_MODES.indexOf(current) + 1) % TOWN_DAYLIGHT_MODES.length
-  ]!;
-
 export function subscribeTownDaylight(listener: () => void) {
   listeners.add(listener);
   return () => {
@@ -97,7 +93,30 @@ export type TownSky = {
   /** Where a building's shadow falls from it, in world pixels. */
   shadowX: number;
   shadowY: number;
+  /** How strongly cloud shadows show on the land; the sun's, without weather. */
+  clouds: number;
+  /** How fast clouds drift, as a multiple of a still day's. */
+  wind: number;
+  /** Falling rain and snow, and wind gusts over the ground, 0–1 each. */
+  rain: number;
+  snow: number;
+  gusts: number;
+  /** Still weather on the ground: a wet street, snow lying, fog, 0–1 each. */
+  wet: number;
+  cover: number;
+  fog: number;
 };
+
+/** A sky without weather: what each weather field is when none shows. */
+export const TOWN_NO_WEATHER = {
+  wind: 1,
+  rain: 0,
+  snow: 0,
+  gusts: 0,
+  wet: 0,
+  cover: 0,
+  fog: 0,
+} as const;
 
 /** [hour, ambient colour, lights, sun]; the sky eases between neighbours. */
 const KEYS: readonly (readonly [number, number, number, number])[] = [
@@ -131,20 +150,30 @@ export function townSky(hour: number): TownSky {
   // always falling a little toward the viewer.
   const day = Math.min(1, Math.max(0, (h - 6) / 14));
   const length = 9 + 30 * ((day - 0.5) * 2) ** 2;
+  const sun = mix(a[3], b[3], s);
   return {
     r: channel(16),
     g: channel(8),
     b: channel(0),
     lights: mix(a[2], b[2], s),
-    sun: mix(a[3], b[3], s),
+    sun,
     shadowX: (day - 0.5) * 2 * length,
     shadowY: 5 + length * 0.35,
+    clouds: sun,
+    ...TOWN_NO_WEATHER,
   };
 }
 
 /** Whether the sky leaves the scene exactly as painted (full daylight). */
 export const townSkyIsClear = (sky: TownSky) =>
   sky.lights <= 0.001 && sky.r >= 0.999 && sky.g >= 0.999 && sky.b >= 0.999;
+
+/** Shadows are measured in world pixels, wind as a multiple, the rest 0–1. */
+const SKY_UNIT: Partial<Record<keyof TownSky, number>> = {
+  shadowX: 40,
+  shadowY: 40,
+  wind: 4,
+};
 
 /**
  * One frame of the sky easing toward `target` after a change of mode;
@@ -156,9 +185,10 @@ export function townSkyToward(current: TownSky, target: TownSky, dt: number) {
   let far = 0;
   for (const key of Object.keys(target) as (keyof TownSky)[]) {
     next[key] = current[key] + (target[key] - current[key]) * k;
-    // Shadows are measured in world pixels, the rest from 0 to 1.
-    const unit = key === "shadowX" || key === "shadowY" ? 40 : 1;
-    far = Math.max(far, Math.abs(target[key] - next[key]) / unit);
+    far = Math.max(
+      far,
+      Math.abs(target[key] - next[key]) / (SKY_UNIT[key] ?? 1),
+    );
   }
   return far < 0.004
     ? { sky: target, moving: false }

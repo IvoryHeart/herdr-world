@@ -13,11 +13,15 @@ import {
   type TownHostExpenses,
 } from "../town/townExpenses";
 import {
+  townFuelClock,
   townFuelGauge,
+  townFuelNotes,
+  townFuelRows,
   townReachedText,
   townResetTime,
   townSeenAge,
   type TownFuelGauge,
+  type TownFuelNote,
 } from "../town/townLimits";
 import { townIdleWords } from "../town/townLens";
 import type { TownPlaceEconomy } from "../town/townPlaceUsage";
@@ -78,16 +82,27 @@ export function boardCountsText(counts: TownSummaryCounts): string {
     : "no agents";
 }
 
-/** One harness's limits: "Claude 5 h 60% left · week 80% left · seen 3 min ago". */
+/**
+ * One harness's limits: "Claude 5 h 60% left · week 80% left · seen 3 min
+ * ago", a window the reading left out as "5 h not reported", and an aged
+ * reading as "as of 09:24 (46 min ago)", as Town's gauge reads them.
+ */
 export function boardFuelText(gauge: TownFuelGauge, now: number): string {
   const windows = gauge.stale
     ? ["stale"]
-    : gauge.windows.map((w) =>
-        w.reached
+    : townFuelRows(gauge).map((row) => {
+        if (row.kind === "missing") return `${row.label} not reported`;
+        const w = row.window;
+        return w.reached
           ? `${townReachedText(w)}${w.resetsAt === null ? "" : `, resets ${townResetTime(w.resetsAt)}`}`
-          : `${w.label} ${w.left}% left${w.low ? " (low)" : ""}`,
-      );
-  return `${gauge.name} ${windows.join(" · ")} · seen ${townSeenAge(gauge.observedAt, now)}`;
+          : `${w.label} ${w.left}% left${w.low ? " (low)" : ""}`;
+      });
+  const seen = townSeenAge(gauge.observedAt, now);
+  return `${gauge.name} ${windows.join(" · ")} · ${
+    gauge.aged
+      ? `as of ${townFuelClock(gauge.observedAt)} (${seen})`
+      : `seen ${seen}`
+  }`;
 }
 
 /** A host's limits as gauges, those with numbers to show. */
@@ -103,6 +118,31 @@ export function boardHostGauges(
       return gauge ? [gauge] : [];
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * A host's harnesses without a gauge, named as Town's sign names them: one
+ * that keeps no readable limits, or one with agents on this host
+ * (`harnesses`) and no reading from it yet.
+ */
+export function boardHostFuelNotes(
+  limits: readonly UsageLimit[],
+  connectionId: string,
+  gauges: readonly TownFuelGauge[],
+  harnesses: readonly string[],
+): TownFuelNote[] {
+  return townFuelNotes(
+    limits.filter((limit) => limit.connection_id === connectionId),
+    gauges,
+    harnesses,
+  );
+}
+
+/** "Codex no reading yet" or "Codex limits not available", for one line. */
+export function boardFuelNoteText(note: TownFuelNote): string {
+  return note.kind === "no-reading"
+    ? `${note.name} no reading yet`
+    : `${note.name} limits not available`;
 }
 
 export type BoardAgentNow = {

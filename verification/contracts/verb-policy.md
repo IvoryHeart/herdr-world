@@ -19,10 +19,14 @@ spawn claims; a retired runtime sending; memory-only success labelled stored.
 - `server/src/verbs/policy.test.ts`: every registry entry × six actors equals the
   independently recorded policy table; production literal browser calls are
   registered. Interactive input, Chat sends and pane answers remain opaque.
-- `server/src/verbs/compatibility.test.ts`: all 31 existing CLI commands × both
+- `server/src/verbs/compatibility.test.ts`: historical CLI commands × both
   CLI actors retain pre-registry success/refusal codes and native effects. The
   fixture was recorded by executing the base implementation's `world-cli.ts`
   against the same synthetic topology, not by reading the new registry.
+  Deliberate later additions extend that fixture independently: `usage` succeeds
+  for both CLI actors with no native effect. `cli/usage.test.ts` and
+  `rpc/usage.test.ts` exercise the actual analytics query/refusal boundary;
+  the explicit policy table permits only the corresponding CLI/browser reads.
 - `server/src/verbs/admission.test.ts`: TypeBox inputs/results, conditional flags,
   browser-only confirmation, current authorization/capabilities/preconditions.
 - `server/src/verbs/dispatch.test.ts`: actual dispatcher refuses before native
