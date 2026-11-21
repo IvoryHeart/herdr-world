@@ -1727,6 +1727,24 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   grouped. Testing only: open `?questionBacklogFixture` (removed immediately)
   for 20 synthetic Atlas questions and one Beacon question; dismiss Atlas and
   Beacon stays. The fixture never contacts a runtime; reload to leave it.
+  Worlds started with the same `HERDR_WORLD_INSTANCE_REGISTRY_DIR` and attached
+  to the same runtime show each other's open questions (up to 60 per World,
+  from up to 8 Worlds, refreshed every 5 seconds and on each question alert),
+  marked **Asked in [World]** with a link. Answering or dismissing one there
+  closes it in the World that holds it, which records exactly one answer and
+  delivers it to the asker; a second answer, from any World, is refused as
+  closed. A question stays with the runtime it was asked on, even if that saved
+  connection is later edited to target another. A long question is shortened
+  in the alert so its World's name always arrives. Places, IDs and attachments
+  stay with that World. When it stops, its
+  questions leave the others at the next read (a failed read keeps them 15
+  seconds); answering then says it is not running. An alert whose question this
+  World cannot read (no shared registry, an older World, or another runtime)
+  shows as **Asked in [World]** with a link when known, no answer field, and
+  **Hide alert**; up to 20 are kept until World restarts. Testing only: open
+  `?siblingQuestionsFixture` (removed immediately) for one local question, one
+  held by another World, and two alert-only entries; answering an alert-only
+  entry is refused.
   A message longer than two lines shows **more** on its last line: it,
   or a tap on the text, shows the whole message in place with its links, and
   **less** clips it again. Keyboard focus entering the message reveals its
