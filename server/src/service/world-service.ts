@@ -1,3 +1,4 @@
+import { composeBoardData } from "./board-element-sources";
 import { weatherCliHandler } from "../weather/cli";
 import { findHerdrBinary } from "../herdr/bootstrap";
 import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
@@ -61,7 +62,6 @@ import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { afterHerdrClose } from "../world/board-closing";
-import { createBoardRecipientRecorder } from "./board-recipients";
 import { createApartmentsService } from "./apartments-service";
 import { createBinService } from "./bin-service";
 import { inFlightWork } from "./in-flight";
@@ -246,12 +246,13 @@ async function compose(
     "world_board_changed",
     "world-board",
   );
-  const bindBoardRecipients = createBoardRecipientRecorder(
-    () => connectionManager,
+  const { boardElements, bindBoardRecipients } = composeBoardData({
     board,
-    publishBoardChanged,
-  );
+    publish: publishBoardChanged,
+    sources: () => ({ connectionManager, coreControl: coreRpc }),
+  });
   const worldCli = createWorldCliService({
+    elements: boardElements,
     memory: () => rpcServices.worldMemory!,
     core: () => coreCallers,
     board,
@@ -807,6 +808,7 @@ async function compose(
     worldCli,
     worldSnapshots,
     worldUsage,
+    boardElements,
     worldUsageAnalytics: worldUsage.analytics,
     worldMemory: createRuntimeMemoryService({
       tui: () => connectionManager,

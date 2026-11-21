@@ -38,6 +38,7 @@ function scopeResponse(root: string, real = false) {
   return { HOOK_SCOPE_SHA: sha, HOOK_SCOPE_EXIT: docs ? "0" : "1" };
 }
 
+// Real Git/shell subprocesses can exceed Bun's five-second unit-test default.
 test("pre-push checks what changed and blocks a failed check", () => {
   const root = mkdtempSync(join(tmpdir(), "pre-push-hook-"));
   const argsPath = join(root, "bun-args");
@@ -104,7 +105,7 @@ test("pre-push checks what changed and blocks a failed check", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
+}, 30_000);
 
 test("pre-push compares with the pushed branch, and uses the docs gate only after a code gate", () => {
   const root = mkdtempSync(join(tmpdir(), "pre-push-docs-"));

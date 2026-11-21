@@ -1830,6 +1830,38 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
+### Board element data and agent CLI
+
+The Board data API has one built-in registry for existing host, workspace, tab,
+pane, sticky note, string and work kinds plus memory, saved log, document and link
+references. `herdr-world board element types|list|put|delete|read` and authenticated
+`world.board.elements.*` RPC share the same service. [API calls and examples](docs/board-elements-api.md)
+are the contract for the separate Board presentation follow-up; this delivery
+adds no new Board picker or visual controls.
+
+New elements persist locally with titles, positions, source references and
+revision conflicts. Upgrades preserve existing Board and Apartments records,
+including early Board previews that shared schema version 14 with Apartments.
+Recovery uses the normal private backup and atomic migration transaction.
+Memory reads project files/directories (`MEMORY.md` by
+default); saved logs/transcripts remain readable without their original pane.
+There is no memory/apartment model yet. Documents hold inline text or read a
+project file. URL/PR/issue links are inert HTTP(S) targets: no automatic fetch or
+iframe HTML. Removing an element leaves source content intact. Element edits
+have no CLI history/undo; existing sticky note and card behavior is unchanged.
+
+Project reads explicitly name the saved connection's current generation through
+shared TUI/core Files handlers. `herdr-world ls --json` returns each connection's
+`generation`, `connection_id`, `current` status and workspace IDs; choose a
+`current: true` row and pass its `generation` to `board element read --generation`.
+Refresh the listing after a generation refusal. Offline/stale sources never use
+another host.
+Paths stay project-relative, including symlink checks; errors omit absolute
+roots. Missing/binary sources are unavailable and retired reads are refused.
+Limits: 500 elements, 16,000-character inline text, 64 KiB source text, 32 directory
+entries, eight concurrent source reads, plus existing Board/writer limits.
+Truncation is explicit. Non-HTTP(S)/credential URLs and escaping paths are refused.
+
 ### Integrations
 
 **Menu → Settings → Integrations** lists everything World reads from or works through.

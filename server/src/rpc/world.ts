@@ -1,3 +1,4 @@
+import { handleBoardElementsRpc } from "./board-elements";
 import { handleApartmentsRpc } from "./apartments";
 import { planBoardPatch } from "../world/board-plan";
 import { parseObservationBase } from "../world/observation-v1";
@@ -220,6 +221,8 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     }
     return;
   }
+  if (method.startsWith("world.board.elements."))
+    return handleBoardElementsRpc(rpc);
   if (method === "world.board.get") {
     try {
       const document = board().get();
