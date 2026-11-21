@@ -6,7 +6,7 @@ import subprocess
 from types import SimpleNamespace
 import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 import service
 from service import services
 
@@ -82,9 +82,8 @@ class ServiceTests(unittest.TestCase):
 
 class LaunchdExitTests(unittest.TestCase):
     def queue(self):
-        queue = MagicMock()
-        queue.__enter__.return_value = queue
-        return queue
+        # select.kqueue has close/control, but no context-manager protocol.
+        return Mock(spec_set=['close', 'control'])
 
     def native_events(self, queue):
         return patch.multiple('service.select', kqueue=MagicMock(return_value=queue),
@@ -104,7 +103,7 @@ class LaunchdExitTests(unittest.TestCase):
                 wait()
             self.assertEqual(queue.control.call_args_list[-1].args, (None, 1, 30))
             self.assertEqual(queue.control.call_count, 2)
-            queue.__exit__.assert_called_once()
+            queue.close.assert_called_once_with()
 
     def test_no_exit_event_fails_without_retrying_the_manager(self):
         queue = self.queue()
@@ -113,6 +112,15 @@ class LaunchdExitTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, 'service uninstall left the native service running'):
                 wait()
             self.assertEqual(queue.control.call_count, 2)
+        queue.close.assert_called_once_with()
+
+    def test_registration_error_closes_queue_and_preserves_cause(self):
+        queue = self.queue()
+        queue.control.side_effect = ProcessLookupError('synthetic process exited before subscription')
+        with self.native_events(queue), self.assertRaisesRegex(ProcessLookupError, 'exited before subscription'):
+            with service.launchd_exit_watch('\tpid = 123\n'):
+                self.fail('uninstall must not run after a failed subscription')
+        queue.close.assert_called_once_with()
 
     def test_unrelated_or_error_event_cannot_prove_exit(self):
         for event in (SimpleNamespace(ident=999, filter=-5, flags=0, fflags=0x80000000),

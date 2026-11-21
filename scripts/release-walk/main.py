@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import sys
 from assets import executable, published, tools
-from contract import PAIRS, Walk, digest, validate_receipt
+from contract import PAIRS, Walk, digest, print_failure, validate_receipt
 from journeys import Fixture, check_signed_out, default_connection, room, launch, input_reaches, listing, chat_reply, upgrade
 from processes import Telemetry, run
 from service import services, service_guard
@@ -101,6 +101,5 @@ if __name__ == '__main__':
     try:
         main(json.loads(Path(sys.argv[1]).read_text()))
     except Exception as error:
-        reason = str(error) if isinstance(error, (AssertionError, RuntimeError)) else type(error).__name__ + ' during setup or cleanup'
-        print('FAIL release walk: ' + reason, file=sys.stderr, flush=True)
+        print_failure('release walk', error)
         sys.exit(1)

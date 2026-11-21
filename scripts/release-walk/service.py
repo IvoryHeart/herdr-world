@@ -18,7 +18,8 @@ def launchd_exit_watch(printed):
     match = re.search(r'^\tpid = ([1-9][0-9]*)$', printed, re.MULTILINE)
     assert match, 'native service did not start: launchd job has no running process'
     pid = int(match[1])
-    with select.kqueue() as queue:
+    # Unlike epoll, Python's kqueue has close() but no context-manager protocol.
+    with contextlib.closing(select.kqueue()) as queue:
         queue.control([select.kevent(pid, filter=select.KQ_FILTER_PROC,
                                      flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
                                      fflags=select.KQ_NOTE_EXIT)], 0, 0)

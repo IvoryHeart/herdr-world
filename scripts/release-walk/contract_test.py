@@ -1,7 +1,11 @@
+import contextlib
 import copy
+import io
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -71,6 +75,42 @@ class ReceiptTests(unittest.TestCase):
             self.assertIn('not-run', [item['status'] for item in report['journeys']])
             with self.assertRaises(AssertionError):
                 validate_receipt(report)
+
+    def test_failed_journey_prints_exception_message_and_traceback_without_locals(self):
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / 'artifact'
+            artifact.write_bytes(b'synthetic artifact')
+            walk = Walk('ci', 'a' * 40, '0.3.6', artifact, artifact, 'v0.3.5')
+            output = io.StringIO()
+            with contextlib.redirect_stderr(output), self.assertRaisesRegex(TypeError, 'synthetic kqueue cause'):
+                with walk.journey('Service install and uninstall'):
+                    private_local = 'synthetic private local value'
+                    try:
+                        raise OSError('synthetic original cause')
+                    except OSError as error:
+                        raise TypeError('synthetic kqueue cause') from error
+            diagnostic = output.getvalue()
+            self.assertIn('FAIL Service install and uninstall: TypeError: synthetic kqueue cause', diagnostic)
+            self.assertIn('Traceback (most recent call last):', diagnostic)
+            self.assertIn('contract_test.py', diagnostic)
+            self.assertIn('OSError: synthetic original cause', diagnostic)
+            self.assertNotIn(str(Path(__file__).resolve().parent), diagnostic)
+            self.assertNotIn(private_local, diagnostic)
+            self.assertEqual(walk.report['journeys'], [dict(name='Service install and uninstall', status='fail',
+                                                          reason='TypeError during journey')])
+
+    def test_setup_failure_prints_original_exception_and_traceback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'config.json'
+            config.write_text('[]')  # Invalid config fails before any runtime or service is touched.
+            result = subprocess.run([sys.executable, 'scripts/release-walk/main.py', str(config)],
+                                    text=True, capture_output=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('FAIL release walk: TypeError: list indices must be integers or slices, not str', result.stderr)
+            self.assertIn('Traceback (most recent call last):', result.stderr)
+            self.assertIn('main.py', result.stderr)
+            self.assertIn('in main', result.stderr)
+            self.assertNotIn(str(Path.cwd()), result.stderr)
 
     def test_runtime_environment_cannot_inherit_owner_routes_or_credentials(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {

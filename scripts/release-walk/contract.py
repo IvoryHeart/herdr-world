@@ -2,8 +2,11 @@
 import contextlib
 import hashlib
 import json
+from pathlib import Path
 import platform
 import re
+import sys
+import traceback
 
 HARNESS_VERSIONS = {'claude': '2.1.328', 'codex': '0.170.0'}
 CORE_VERSION = '0.1.21'
@@ -75,6 +78,22 @@ def validate_publication(reports, signed, sha, version):
     assert re.fullmatch(r'[a-f0-9]{64}', control['binary_sha256']), 'Missing v0.3.5 binary digest'
 
 
+def print_failure(name, error):
+    print(f'FAIL {name}: {type(error).__name__}: {error}', file=sys.stderr, flush=True)
+    # Preserve the exception and its chain without dumping locals or absolute
+    # source paths. Raw diagnostics belong in the log, never in public receipts.
+    detail = traceback.TracebackException.from_exception(error, capture_locals=False)
+    pending = [detail]
+    while pending:
+        current = pending.pop()
+        for frame in current.stack:
+            frame.filename = Path(frame.filename).name
+        pending.extend(cause for cause in (current.__cause__, current.__context__)
+                       if cause is not None)
+        pending.extend(getattr(current, 'exceptions', None) or [])
+    print(''.join(detail.format()), file=sys.stderr, end='', flush=True)
+
+
 class Walk:
     def __init__(self, mode, commit, version, archive, binary, baseline):
         machine = {'x86_64': 'x64', 'aarch64': 'arm64', 'arm64': 'arm64'}[platform.machine()]
@@ -96,10 +115,10 @@ class Walk:
             item['status'] = 'pass'
             print(f'PASS {name}', flush=True)
         except Exception as error:
-            # Errors intentionally use fixed reasons. Raw process logs and paths stay private.
+            # Keep the receipt's bounded reason separate from console diagnostics.
             reason = str(error) if isinstance(error, (AssertionError, RuntimeError)) else type(error).__name__ + ' during journey'
             item['reason'] = reason
-            print(f'FAIL {name}: {reason}', flush=True)
+            print_failure(name, error)
             raise
 
     def write(self, path):
