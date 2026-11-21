@@ -56,6 +56,10 @@ import {
   useWorldSources,
   worldSourcesStore,
 } from "../world/worldSources";
+import {
+  WeatherConsent,
+  WeatherSourceSettings,
+} from "../world/WeatherSourceSettings";
 import type { AgentMatches } from "./AgentIntegrationsSettings";
 import { ConnectionManagerDialog } from "./ConnectionSwitcher";
 import { RuntimeHosts } from "./IntegrationsHosts";
@@ -174,6 +178,7 @@ function IntegrationRow({
         {provides ? (
           <p className="integration-row-provides">Gives World {provides}.</p>
         ) : null}
+        {entry.type === "weather" ? <WeatherConsent /> : null}
       </div>
       <span className="integration-row-actions">
         {onToggleSettings ? (
@@ -195,6 +200,9 @@ function IntegrationRow({
             data-action={action.label === "Connect" ? "connect" : "disconnect"}
             disabled={busy}
             aria-label={`${action.label} ${entry.label}`}
+            aria-describedby={
+              entry.type === "weather" ? "weather-consent" : undefined
+            }
             onClick={() => onAction(action)}
           >
             {action.label}
@@ -227,7 +235,7 @@ const PANELS: Partial<
       "No runtime yet. Add this computer or an SSH host to see terminals and agents.",
   },
   source: {
-    help: "Pull requests, tickets and usage beside your agents, on Board's Work lens and Town.",
+    help: "Pull requests, tickets and usage beside your agents, plus optional local weather.",
   },
   // Agents keep their per-host install flow (the host picked in Connection).
   harness: { always: true, custom: true },
@@ -436,6 +444,15 @@ export function IntegrationsSettings({
       );
     const status = sourceStatus(entry.type);
     if (!status) return null;
+    if (status.config.kind === "weather")
+      return (
+        <WeatherSourceSettings
+          settings={status.config}
+          weather={sources.weather}
+          busy={pending}
+          run={run}
+        />
+      );
     return status.id === "github" ? (
       <GitHubSourceFields source={status} busy={pending} run={run} />
     ) : (

@@ -135,9 +135,10 @@ prompt instead of a character.
    are working, waiting or done, and what the room cost today.
 3. For Herdr TUI agents, zoom to a desk to read its current step, such as
    **Run the login tests · tests 3m**. Core agents show their reported status.
-4. Press the time-of-day button below **ALL** to cycle **clock**, **day**,
-   **dusk** and **night**. Lit rooms have activity; amber reception light
-   means someone needs you. Your browser remembers the choice.
+4. Press the sky button below **ALL** and pick **Night** under **Time of
+   day**. Lit rooms have activity; amber reception light means someone needs
+   you. Under **Weather**, pick **Rain**, then **No weather** to clear it.
+   Your browser remembers both choices.
 
 On a phone, buildings stack vertically; tap wherever this guide says hover.
 Use **Town calm motion** or your device's reduced-motion setting for still light.

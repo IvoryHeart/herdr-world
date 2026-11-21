@@ -56,6 +56,8 @@ export async function openWorldLedger(
     board?: string;
   },
   ports: StoragePorts,
+  /** Aborting before the open settles closes the database and rejects. */
+  signal?: AbortSignal,
 ): Promise<WorldLedgerStorage> {
   const incarnation = randomBytes(16).toString("base64url");
   const client = await openWorldClient(
@@ -67,6 +69,7 @@ export async function openWorldLedger(
     paths.profiles,
     paths.settings,
     paths.board,
+    signal,
   );
   let document = client.snapshot.document;
   const byRecord = new Map<string, AttentionEntry[]>();

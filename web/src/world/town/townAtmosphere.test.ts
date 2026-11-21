@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   TOWN_ATMOSPHERE_MAX_RATE,
+  TOWN_WEATHER_RATE,
   townAtmospherePlan,
   townAtmosphereRate,
   townCloudAt,
@@ -153,5 +154,27 @@ test("drift redraws once per screen pixel, capped, and never without motion", ()
   // Nothing drifts in a sky with neither sun nor full night.
   expect(townAtmosphereRate({ ...night, sun: 0, lights: 0.5 }, 1, true)).toBe(
     0,
+  );
+});
+
+test("falling weather redraws at its own rate, still weather at the drift's, none without motion", () => {
+  const rain = { ...day, rain: 0.8, wet: 1 };
+  const snow = { ...day, snow: 0.8, cover: 1 };
+  const fog = { ...day, sun: 0, clouds: 0, fog: 0.8, wind: 0.6 };
+  expect(townAtmosphereRate(rain, 0.3, true)).toBe(TOWN_WEATHER_RATE);
+  expect(townAtmosphereRate({ ...day, gusts: 0.5 }, 1, true)).toBe(
+    TOWN_WEATHER_RATE,
+  );
+  expect(townAtmosphereRate(snow, 1, true)).toBe(TOWN_ATMOSPHERE_MAX_RATE);
+  expect(townAtmosphereRate(fog, 1, true)).toBeGreaterThan(0);
+  expect(townAtmosphereRate(fog, 1, true)).toBeLessThan(
+    TOWN_ATMOSPHERE_MAX_RATE,
+  );
+  // Calm or reduced motion: the weather holds still and nothing redraws.
+  for (const sky of [rain, snow, fog])
+    expect(townAtmosphereRate(sky, 1, false)).toBe(0);
+  // Wind drives clouds faster.
+  expect(townAtmosphereRate({ ...day, wind: 4 }, 0.3, true)).toBeGreaterThan(
+    townAtmosphereRate(day, 0.3, true),
   );
 });

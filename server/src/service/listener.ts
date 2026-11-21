@@ -1,3 +1,4 @@
+import { WEATHER_CLI_PATH, handleWeatherCliEndpoint } from "../weather/cli";
 import { handleCoreFileHttpRequest } from "./core-files-http";
 import {
   CONNECTIONS_CLI_PATH,
@@ -94,6 +95,7 @@ export type ListenerDeps = {
   herdrSetup: ReturnType<typeof createHerdrSetupHandlers>;
   officeObservability: ReturnType<typeof createOfficeObservabilityHttpHandler>;
   sources: ReturnType<typeof createSourcesHttpHandler>;
+  weatherCli?: Parameters<typeof handleWeatherCliEndpoint>[2]["handle"];
   shipyard: {
     service: ShipyardService;
     http: ReturnType<typeof createShipyardHttp>;
@@ -345,6 +347,13 @@ export function listen(deps: ListenerDeps) {
         ...deps.connectionCli,
         serverPort: server.port ?? config.port,
         bearerAuth,
+      });
+    }
+    if (url.pathname === WEATHER_CLI_PATH && deps.weatherCli) {
+      return handleWeatherCliEndpoint(req, server.requestIP(req), {
+        serverPort: server.port ?? config.port,
+        bearerAuth,
+        handle: deps.weatherCli,
       });
     }
     if (url.pathname === SHIPYARD_CLI_PATH) {
