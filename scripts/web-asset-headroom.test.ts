@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
+  alignStackedBase,
   CONTEXT,
   judge,
   mainDescription,
@@ -62,8 +66,9 @@ test("the workflow judges PRs and re-judges them on every main push", async () =
   const runs = workflow.jobs.headroom.steps.map((step: any) => step.run);
   expect(runs).toContain("bun scripts/web-asset-headroom.ts pr");
   expect(runs).toContain("bun scripts/web-asset-headroom.ts main");
-  // The PR job compares the merge with its first parent, the base.
-  expect(workflow.jobs.headroom.steps[0].with["fetch-depth"]).toBe(2);
+  // The PR job compares the merge with its first parent, the base, and needs
+  // main's history to align a stacked base.
+  expect(workflow.jobs.headroom.steps[0].with["fetch-depth"]).toBe(0);
   // The job must not share the status's name, or requiring that name could
   // be satisfied by a job that exited 0.
   expect(workflow.jobs.headroom.name).not.toBe(CONTEXT);
@@ -73,6 +78,68 @@ test("the workflow judges PRs and re-judges them on every main push", async () =
   expect(pr.env.PR_FROM_FORK).toContain(
     "head.repo.full_name != github.repository",
   );
+  expect(pr.env.PR_BASE_REF).toContain("pull_request.base.ref");
+});
+
+test("a stacked PR that merged newer main is measured without main's growth", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "headroom-stack-"));
+  const run = async (...args: string[]) => {
+    const child = Bun.spawn(
+      [
+        "git",
+        "-c",
+        "user.name=test",
+        "-c",
+        "user.email=test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ],
+      { cwd: dir, stdout: "pipe", stderr: "pipe" },
+    );
+    const out = await new Response(child.stdout).text();
+    expect(await child.exited).toBe(0);
+    return out.trim();
+  };
+  const commit = async (file: string, message: string) => {
+    await Bun.write(join(dir, file), message);
+    await run("add", file);
+    await run("commit", "--quiet", "-m", message);
+  };
+  try {
+    await run("init", "--quiet", "-b", "main");
+    await commit("app.ts", "root");
+    await run("checkout", "--quiet", "-b", "parent");
+    await commit("parent.ts", "parent PR");
+    await commit("app.ts", "parent edit");
+    await run("checkout", "--quiet", "main");
+    await commit("asset.ts", "main grows");
+    // Both sides changed app.ts: alignment still succeeds, with main's side.
+    await commit("app.ts", "main edit");
+    await run("checkout", "--quiet", "-b", "stacked", "parent");
+    await commit("test.ts", "stacked PR");
+    await run("merge", "--quiet", "--no-edit", "-X", "theirs", "main");
+    const prHead = await run("rev-parse", "HEAD");
+
+    // The base branch lacks main's newer commit: it is merged in.
+    await run("checkout", "--quiet", "--detach", "parent");
+    expect(
+      await alignStackedBase({ cwd: dir, prHead, mainRef: "main" }),
+    ).toStartWith("base aligned with main");
+    expect(await Bun.file(join(dir, "asset.ts")).exists()).toBe(true);
+    expect(await Bun.file(join(dir, "test.ts")).exists()).toBe(false);
+    expect(await Bun.file(join(dir, "app.ts")).text()).toBe("main edit");
+
+    // A base that already has it, like a PR against main, is left alone.
+    await run("checkout", "--quiet", "--detach", "main");
+    const before = await run("rev-parse", "HEAD");
+    expect(
+      await alignStackedBase({ cwd: dir, prHead, mainRef: "main" }),
+    ).toStartWith("base kept");
+    expect(await run("rev-parse", "HEAD")).toBe(before);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("main advancing before the PR's last post cannot leave a stale pass", async () => {
