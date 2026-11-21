@@ -374,6 +374,7 @@ export async function createTownRenderer(
     onBuilt: () => {
       dimDirty = true;
     },
+    dust: (x, y, width) => dragEffects.dust(x, y, width),
   });
   const buildingByHost = topology.byHost;
   // Binned agents' seats fade and crumble until the bus takes them.
@@ -907,16 +908,15 @@ export async function createTownRenderer(
       model = nextModel;
       layout = nextLayout;
       state = nextState;
-      topology.setKeys(nextKeys);
       camera.calm = nextState.calm;
-      // Bake again only what changed: the ground when the town's size or a
-      // building's rectangle changed, and the changed, new and gone
-      // buildings. What was drawn stays until its replacement is drawn in
-      // the next frame, then glides or fades (townTransition.ts); carried
-      // desks and rooms land in place.
+      // Bake again only what changed (the ground for a new town size or
+      // building rectangle; changed, new and gone buildings). What was drawn
+      // stays until its replacement is drawn, then glides, fades, rises or
+      // sinks (townTransition.ts); carried desks and rooms land in place.
       const { bake } = dirty;
       const instant =
         dirty.first || camera.reducedMotion || dragEffects.active();
+      topology.begin(nextKeys, instant);
       if (bake.scene) {
         topology.startGround(instant);
         stats.sceneRenders += 1;

@@ -18,6 +18,7 @@ import {
   townShapeKey,
 } from "../townLayout";
 import { townModelFromProjection } from "../townModel";
+import { TOWN_HOST_GLIDE_SECONDS } from "../townTransition";
 import type { TownTarget } from "../townTargets";
 import { office, town as townOf, working } from "./townScene.fixture";
 import {
@@ -566,13 +567,17 @@ test("a host hidden beside the viewed room keeps the room in place, never jumpin
   // The camera stays where it was drawn, then glides with the room.
   expect([camera.x, camera.y]).toEqual([from.x, from.y]);
   let worst = 0;
-  for (let frame = 0; frame < 60 && camera.moving; frame += 1) {
+  let frames = 0;
+  for (; frames < 120 && camera.moving; frames += 1) {
     const prev = camera.x;
     camera.update(1 / 60);
     worst = Math.max(worst, Math.abs(camera.x - prev) * camera.z);
   }
   // No frame steps more than an eased glide's share.
   expect(worst).toBeLessThan(Math.abs(from.x - camera.x) * camera.z * 0.2);
+  // A host leaving sets the pace: the camera glides as long as the
+  // buildings closing its gap (townHostPlan).
+  expect(frames).toBe(Math.round(TOWN_HOST_GLIDE_SECONDS * 60));
   const after = camera.toScreen((moved.x + 1) * T, (moved.y + 1) * T);
   expect(after.x).toBeCloseTo(before.x, 0);
   expect(after.y).toBeCloseTo(before.y, 0);

@@ -33,6 +33,10 @@ export type TownRendererDiagnostics = {
   groundReused: number;
   /** Buildings that glided, faded in or faded out after a topology change. */
   transitions: number;
+  /** Arriving hosts' buildings that rose out of their lots (townHostPlan). */
+  hostArrivals: number;
+  /** Leaving hosts' buildings that sank into their lots. */
+  hostDepartures: number;
   /**
    * Buildings baked again over their old drawing, whose interior and desks
    * crossfade in (an added or closed desk fades rather than pops).
@@ -127,6 +131,8 @@ export function diagnostics(): TownRendererDiagnostics {
     groundPainted: 0,
     groundReused: 0,
     transitions: 0,
+    hostArrivals: 0,
+    hostDepartures: 0,
     crossfades: 0,
     topologyGaps: 0,
     lastTopologyGap: null,
