@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { townGoldenCaptures } from "./town-golden";
 
 const sourcePath = "web/src/world/town/town.css";
 
@@ -24,10 +25,11 @@ export function verifyVisualControl(
   mutantExit: number,
   restored: Report,
   restoredExit: number,
+  captures = townGoldenCaptures.length,
 ) {
   if (
     mutantExit === 0 ||
-    mutant.receipts.length !== 5 ||
+    mutant.receipts.length !== captures ||
     !mutant.failures.length ||
     !mutant.failures.every((f) =>
       /^Run 1, [\w-]+: \d+ pixels differ$/.test(f),
@@ -35,16 +37,16 @@ export function verifyVisualControl(
     !mutant.receipts.every((r) => r.changedPixels > 0)
   )
     throw new Error(
-      "Mutant must fail specifically on changed pixels at all five viewports",
+      "Mutant must fail specifically on changed pixels at every capture",
     );
   if (
     restoredExit !== 0 ||
     restored.failures.length ||
-    restored.receipts.length !== 5 ||
+    restored.receipts.length !== captures ||
     restored.receipts.some((r) => r.changedPixels !== 0)
   )
     throw new Error(
-      "Restored production source must match all five stored goldens",
+      "Restored production source must match every stored golden",
     );
   if (
     [...mutant.receipts, ...restored.receipts].some(
@@ -180,7 +182,7 @@ export async function runTownVisualControl(directory: string) {
       );
     await writeFile(
       join(output, "summary.md"),
-      "Production Town visual negative control: **PASS**. One-CSS-pixel zoom-control move (right: 16px to 17px) exited nonzero on changed pixels at all five viewports; restored source matched unchanged goldens. See control.json, both child reports/logs and mutant mismatch PNGs.\n",
+      "Production Town visual negative control: **PASS**. One-CSS-pixel zoom-control move (right: 16px to 17px) exited nonzero on changed pixels at every capture; restored source matched unchanged goldens. See control.json, both child reports/logs and mutant mismatch PNGs.\n",
     );
   } finally {
     restore();

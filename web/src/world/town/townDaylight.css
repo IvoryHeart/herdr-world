@@ -1,8 +1,93 @@
-/* The time-of-day button under Town's zoom controls (TownZoomControls). Its
-   icon says the mode; the colour stays neutral, as amber is for what needs
-   you (townOverlay.css). */
+/* The sky button under Town's zoom controls (TownSkyControl). Its icon says
+   the weather or time of day shown; the colour stays neutral, as amber is
+   for what needs you (townOverlay.css). */
 .town-zoom-daylight {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.town-zoom .town-zoom-daylight[aria-expanded="true"] {
+  background: var(--town-glass-fill-hover);
+}
+
+/* The sky panel opens beside the camera group, on Town's glass. */
+.town-sky {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(300px, calc(100vw - 92px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--town-glass-text);
+  background: var(--town-glass);
+  border: 1px solid var(--town-glass-line);
+  border-radius: var(--town-glass-radius);
+  box-shadow: var(--town-glass-shadow);
+}
+
+.town-sky-heading {
+  font: var(--town-glass-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--town-glass-muted);
+  padding: 2px 2px 0;
+}
+
+.town-sky-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.town-zoom .town-sky button {
+  width: auto;
+  height: auto;
+  min-height: 44px;
+  padding: 5px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font: 500 11px / 1.15 var(--town-ui-font, system-ui, sans-serif);
+  text-align: center;
+}
+
+.town-zoom .town-sky button[aria-checked="true"] {
+  background: var(--town-glass-fill-hover);
+  border-color: var(--town-glass-text);
+}
+
+/* Real weather spans the row, with what it is doing now. */
+.town-zoom .town-sky .town-sky-option[data-value="real"] {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.town-sky-option small {
+  margin-left: auto;
+  color: var(--town-glass-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.town-zoom .town-sky .town-sky-settings {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  min-height: 36px;
 }

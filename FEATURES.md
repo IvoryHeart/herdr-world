@@ -969,9 +969,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
     **Town calm motion** reduces ambient animation.
-  - Light is Town's status language. The button under **ALL** sets the time
-    of day: it cycles **clock** (follows this device's time), **day**,
-    **dusk** and **night**, and each browser keeps its choice. As the sky
+  - Light is Town's status language. The sky button under **ALL** opens a
+    small **Sky** panel. **Time of day** is **Your clock** (follows this
+    device's time), **Day**, **Dusk** or **Night**. **Weather** is **Real
+    weather** (the default; it follows the [Weather source](#weather-source)
+    and shows its current reading, such as `Rain 7° · Example City`, or why
+    there is none), one held condition (**Clear**, **Cloud**, **Rain**,
+    **Snow**, **Fog**, **Storm** or **Wind**), or **No weather**. **Weather
+    place and source…** opens the Weather source in Settings → Integrations.
+    Each browser keeps both choices; the button shows the weather Town is
+    showing, or the time of day when there is none. As the sky
     darkens, light follows where agents are: a room is lit while an agent
     sits at a desk there working (or waiting on you at it) and is dark
     otherwise; each desk throws its seated agent's state colour (blue-white
@@ -986,14 +993,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     status; a terminal with no agent throws amber from its desk. A failed
     host's cached building stays dark. Day leaves the town as painted.
   - Town's overlays share one style: the Town board (and its phone chips),
-    the zoom and time-of-day buttons, an agent's peek, toasts, and the hover
+    the zoom and sky buttons, the Sky panel, an agent's peek, toasts, and the hover
     cards of rooms, tables and fuel gauges are the same translucent dark
     panel, with one border, corner, shadow, type and spacing in World's light
     and dark themes, readable over a white roof or the night. Their titles,
     borders, buttons and focus rings are neutral. Amber in them marks only
     what needs you: a **Waiting** count above zero, a waiting agent's peek,
     the first answer to an agent's question and a **low** fuel gauge. The
-    time-of-day button keeps one neutral colour at dusk and night.
+    sky button keeps one neutral colour at dusk and night.
   - The time of day also gives the town depth. By day each building casts a
     sun shadow that swings from left in the morning to right in the evening,
     short at noon and long toward dawn and dusk, and faint cloud shadows drift
@@ -1006,6 +1013,26 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     redraws only as often as they move a screen pixel, at most 12 times a
     second. Rugs are woven with a bound edge, and room walls shade the floor
     along their foot.
+  - Weather follows the same rules. Clouds thicken and dim the sun; rain
+    falls at a slant with a wet street and puddles on roads and the plaza;
+    snow falls slowly and lies on the ground; fog veils the land in drifting
+    banks; wind speeds the clouds and blows streaks across the town; a
+    storm adds heavy rain, a dark sky and a soft, rare lightning flash. Light
+    real weather still shows clearly, and a held condition shows at moderate
+    strength. Rain, snow and wind streaks fall over the whole visible map,
+    buildings and trees included, at every zoom and scroll position; wet and
+    snowy ground and fog lie under the buildings and cover all the land on
+    screen, the forest around the town included, with no edge. Status light stays above
+    the weather, and dark weather lights rooms, desk colours and lamps as
+    dusk would, so lit rooms, desk colours, the amber reception pulse and the
+    post office read in a storm. Rain, snow and wind streaks keep the same
+    density on screen at every zoom, with a fixed cap (a phone shows a little
+    more than its share so it never looks patchy), and redraw at most 20
+    times a second (snow 12). Under calm motion or reduced motion nothing falls or flashes:
+    the street stays wet, snow lies, fog and cloud hold still, and nothing
+    redraws for the weather. With **No weather**, or when real weather is
+    off, unavailable or expired, Town looks exactly as it does without
+    weather.
   - Zoomed into a room or desk, every agent that needs you outside the view
     gets an arrow on the view's edge pointing at it, with its mark (**!**,
     **?** or **✓**); arrows pointing the same way or at one building merge
@@ -1814,7 +1841,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 **Menu → Settings → Integrations** lists everything World reads from or works through.
 **All** opens first and lists every kind under its heading; then one tab per
 kind: **Runtimes** (this computer's Herdr or herdr-core and each SSH host),
-**Sources** (GitHub, Jira and Usage metrics), **Agents** (World's skill for
+**Sources** (GitHub, Jira, Weather and Usage metrics), **Agents** (World's skill for
 each harness, per host) and **Editors** once one is listed; last, set apart
 with its key, the **Vault**. The kind tabs come from the registry's kinds, so a new kind gets
 its own tab; a kind with nothing in it has no tab, except Runtimes and
@@ -1836,7 +1863,7 @@ page reloads. Sample rows have no action and give World nothing.
 
 Each row leads with the product's mark where World has one (Herdr, GitHub,
 each agent) or a plain symbol (tickets, usage), says what it
-gives World (terminals, agents, files, pull requests, tickets or usage) and
+gives World (terminals, agents, files, pull requests, tickets, weather or usage) and
 shows its state as a coloured chip; its actions stay on its right, on a phone
 too. A source's settings open under its row from the settings button
 (**Jira settings**). Each kind's own action sits on its heading in **All** and
@@ -1871,8 +1898,9 @@ at `GET /api/world/integrations`; editors join it as they land.
 ### Sources: GitHub and Jira
 
 World reads your pull requests and tickets itself; there is nothing else to
-install, and every source is on by default. Open **Settings → Integrations** to see
-each source's state, switch it off or configure it under **Settings**.
+install. These two work sources are on by default. Open **Settings → Integrations**
+to see each source's state, switch it off or configure it under **Settings**.
+The separate [Weather source](#weather-source) is off by default.
 
 - **GitHub** uses the GitHub CLI signed in as the user that runs World (`gh
   auth login`): open pull requests you opened, were asked to review or are
@@ -3226,3 +3254,31 @@ independent. Background reads leave command slots available for interactive work
 Git status refreshes in the background, and large untracked-file lists avoid a
 command per file. Stalled sessions end through keepalives. See
 [SSH setup and operator controls](docs/DEPLOYMENT.md#ssh-command-sharing-and-port-forwards).
+
+## Weather source
+
+- **Optional and shared:** Weather is off by default. Open Settings → Integrations
+  → Sources → Weather → Settings to configure it; **Connect** turns it on and
+  **Disconnect** turns it off. Only turning it on permits Open-Meteo requests.
+  A typed place name goes to its geocoding service; city-level coordinates go to its weather service. No account
+  or key; the free API is for non-commercial use.
+- **One location:** type a city/country or latitude, longitude. Typed input always
+  wins over the optional browser fallback. **Use browser location** requests
+  permission once only when pressed; no automatic prompt, tracking or watch.
+  Coordinates are rounded to 0.1° before storage/sending. Settings are service-owned
+  and shared across devices, including a remote browser.
+- **Bounded observations:** current model conditions and at most six upcoming
+  hours, cached in memory. Demand-driven refresh at most every 15 minutes per
+  configuration, including Refresh Sources; six-second total deadline, 32 KiB per
+  response. Reads never wait. Failure clears weather; cached conditions expire
+  after 30 minutes. World keeps running with weather unavailable.
+- **Limits/refusals:** one place, first geocoding match, no long forecasts, custom
+  provider hosts, keys, multiple locations or Town drawings. Invalid coordinates,
+  over-120-character/control-character text and unknown settings refuse before
+  saving. Disabling aborts pending reads; their late results cannot return.
+- **API/CLI:** a small normalized value (condition, relative intensity, Celsius,
+  local day/night, valid/read time or unavailable) is in the Sources store and
+  `GET /api/world/weather`. `herdr-world weather [--json]`, `weather location
+  "City"`, `weather on|off` share settings; CLI reads alone may wait six seconds.
+  [Weather guide](docs/weather.md) describes fields, attribution, precision,
+  cache/outage behavior and a development-only unavailable fixture.
