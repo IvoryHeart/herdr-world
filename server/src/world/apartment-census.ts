@@ -172,6 +172,9 @@ export function foundResident(
     last_report: null,
     links: [],
     session_id: found.session_id,
+    // World never saw it live, so it kept no look: the window shows the
+    // nearest avatar (same harness, else World's default).
+    appearance: null,
   };
 }
 
