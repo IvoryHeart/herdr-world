@@ -57,7 +57,12 @@ export function HistoryTerminalComposer({
         throw new Error(
           "The terminal connection changed. Reopen History to send.",
         );
-      await sendTerminalComposerText(client, pane.pane_id, text, true);
+      await sendTerminalComposerText(
+        client,
+        { paneId: pane.pane_id, agent: pane.agent },
+        text,
+        true,
+      );
       if (current.current !== identity || !client.isCurrent()) return;
       if (timer.current !== null) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
@@ -67,7 +72,7 @@ export function HistoryTerminalComposer({
           refresh.current();
       }, 1000);
     },
-    [client, identity, open, pane.pane_id],
+    [client, identity, open, pane.pane_id, pane.agent],
   );
   return (
     <AgentHistoryComposer

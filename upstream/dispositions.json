@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "2b16e991eeb2e90f55c948e249acaef1497d5254",
+  "source": "bf3879f930ca37419d28cbdf746c8797c5d1530f",
   "changes": [
     {
       "commit": "447f7196b9a23979b026d6b79619836d3337cc06",
@@ -24,11 +24,12 @@
         ".github/workflows/release.yml",
         "docs/upstream-follow-ups.md#world-workflow-controls",
         "docs/upstream-follow-ups.md#assessment-for-source-57327a0d-20-october-2026",
-        "docs/upstream-follow-ups.md#assessment-for-source-1a81c5da-20-october-2026"
+        "docs/upstream-follow-ups.md#assessment-for-source-1a81c5da-20-october-2026",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
       ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync; manually assess upstream action security fixes and required platform changes.",
-      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
       "commit": "20cb447a808a1e09359cef4f4fb632a385d4485e",
@@ -563,11 +564,12 @@
       "evidence": [
         "docs/upstream-follow-ups.md#world-workflow-controls",
         "docs/upstream-follow-ups.md#assessment-for-source-57327a0d-20-october-2026",
-        "docs/upstream-follow-ups.md#assessment-for-source-1a81c5da-20-october-2026"
+        "docs/upstream-follow-ups.md#assessment-for-source-1a81c5da-20-october-2026",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
       ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync and relevant action security or platform change.",
-      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
       "commit": "3d95be35d72b7498c2e66fbf2b68b3c2b8c395da",
@@ -938,11 +940,12 @@
       "reason": "Deferred to one dedicated mobile PR after this one (firstmate-2 ruling, 2026-11-05). It ports this change onto World's MobileControls and layer Back order and includes an owner phone try comparing upstream's bottom bar with World's in-flow Message input. No code here.",
       "evidence": [
         "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
-        "web/src/components/MobileControls.tsx"
+        "web/src/components/MobileControls.tsx",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
       ],
       "followUp": "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
       "revisitWhen": "The dedicated mobile PR and its owner phone try; otherwise every source sync.",
-      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
       "commit": "498eb6ee68382baa13c0c12a1a5240caa4a06650",
@@ -1013,21 +1016,25 @@
       "reason": "Deferred to one dedicated mobile PR after this one (firstmate-2 ruling, 2026-11-05). It ports this change onto World's MobileControls and layer Back order and includes an owner phone try comparing upstream's bottom bar with World's in-flow Message input. No code here.",
       "evidence": [
         "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
-        "web/src/components/MobileControls.tsx"
+        "web/src/components/MobileControls.tsx",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
       ],
       "followUp": "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
       "revisitWhen": "The dedicated mobile PR and its owner phone try; otherwise every source sync.",
-      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
       "commit": "52cbea927a0cc58d4a895e900db784e0340e821f",
       "title": "Make Chat the mobile entry point (#491)",
       "status": "divergent",
       "reason": "Town stays the phone's default view (owner direction); Chat remains one tap away and is not made the mobile entry point.",
-      "evidence": ["docs/upstream-follow-ups.md#mobile-entry-point"],
+      "evidence": [
+        "docs/upstream-follow-ups.md#mobile-entry-point",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
+      ],
       "followUp": "docs/upstream-follow-ups.md#mobile-entry-point",
       "revisitWhen": "Every source sync, or when the owner changes the phone's default view.",
-      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
       "commit": "22ee302fa1e6d4ba0ece55defcaf9d57e22b3f00",
@@ -1036,11 +1043,12 @@
       "reason": "Deferred to one dedicated mobile PR after this one (firstmate-2 ruling, 2026-11-05). It ports this change onto World's MobileControls and layer Back order and includes an owner phone try comparing upstream's bottom bar with World's in-flow Message input. No code here.",
       "evidence": [
         "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
-        "web/src/components/MobileControls.tsx"
+        "web/src/components/MobileControls.tsx",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
       ],
       "followUp": "docs/upstream-follow-ups.md#mobile-navigation-and-history-input",
       "revisitWhen": "The dedicated mobile PR and its owner phone try; otherwise every source sync.",
-      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
       "commit": "6a7b7a48b7b01ce1b7bdbe203d4d0ef9f4bcbcad",
@@ -1113,10 +1121,13 @@
       "title": "chore(deps): bump the actions group with 2 updates (#504)",
       "status": "divergent",
       "reason": "Retain World-owned workflow controls; this action update targets Roamgate's CodeQL workflow, which does not exist in World, and requires separate trusted control review.",
-      "evidence": ["docs/upstream-follow-ups.md#world-workflow-controls"],
+      "evidence": [
+        "docs/upstream-follow-ups.md#world-workflow-controls",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
+      ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync and relevant action security or platform change.",
-      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
       "commit": "666886b40b77c47e7b6509d0e16b297de89b6c4e",
@@ -1218,16 +1229,19 @@
     {
       "commit": "f4367c30ff7f3932beb13de6dae7193517a2b282",
       "title": "chore(deps): bump @pierre/diffs from 1.5.1 to 1.6.1 (#508)",
-      "status": "deferred",
-      "reason": "@pierre/diffs 1.6's diff worker bundles both highlighter backends and a second copy of World's curated grammars: +56 files and +1.9 MiB, beyond World's 180-file and web total budgets. World stays on 1.5.x and raises no budget (firstmate-2 ruling, 2026-11-05).",
+      "status": "adapted",
+      "reason": "Owner authorized adopting @pierre/diffs ^1.6.1 (locked 1.6.1) on 20 November 2026. World retains curated Shiki 4.6 grammars via shiki/langs, compiles out worker-side loaders for pre-resolved inputs, and increases only total/file asset budgets for remaining lazy backend/theme assets.",
       "evidence": [
-        "docs/upstream-follow-ups.md#diff-worker-dependency-update",
         "web/package.json",
-        "docs/packaging.md"
+        "bun.lock",
+        "web/vite.config.ts",
+        "web/src/diffViewer.browser.tsx",
+        "docs/packaging.md",
+        "docs/upstream-follow-ups.md#diff-worker-dependency-update"
       ],
-      "followUp": "docs/upstream-follow-ups.md#diff-worker-dependency-update",
-      "revisitWhen": "Every source sync; adopt when the worker fits World's file and total web budgets or the owner changes them.",
-      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
       "commit": "0c40d6f3b28803e799684601a77433b95608f2e8",
@@ -1284,11 +1298,12 @@
       "reason": "Upstream's Recently opened sort keeps a per-browser open history (agentRecency.v1). World keeps no activity history in the browser, its own agentRecency.ts is service-backed, and the service records no opened signal (firstmate-2 ruling, 2026-11-05). No code.",
       "evidence": [
         "docs/upstream-follow-ups.md#recently-opened-agent-sort",
-        "web/src/agentRecency.ts"
+        "web/src/agentRecency.ts",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
       ],
       "followUp": "docs/upstream-follow-ups.md#recently-opened-agent-sort",
       "revisitWhen": "Every source sync, or when the service records owner opens as part of the World model.",
-      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
       "commit": "47e227a5ab1a1b84076d5fb96e50482a5bcdf6d6",
@@ -1631,10 +1646,13 @@
       "title": "Track which agents the user has seen, apart from Herdr's focus (#544)",
       "status": "divergent",
       "reason": "World's reviewed record and Desk marks are its attention model; a separate agent-seen store would add a second, conflicting notion of seen.",
-      "evidence": ["docs/upstream-follow-ups.md#agent-seen-tracking"],
+      "evidence": [
+        "docs/upstream-follow-ups.md#agent-seen-tracking",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
+      ],
       "followUp": "docs/upstream-follow-ups.md#agent-seen-tracking",
       "revisitWhen": "Every source sync, or when the owner changes World's attention model.",
-      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
       "commit": "5aa1cfeba4e6193aea35e9197d7db1c4b110d3d3",
@@ -1659,11 +1677,12 @@
         "https://github.com/IvoryHeart/herdr-world/pull/636",
         "server/src/bridge/ssh-forward.test.ts",
         "server/src/bridge/forward-rpc.test.ts",
-        "docs/upstream-follow-ups.md#browser-port-forward-controls"
+        "docs/upstream-follow-ups.md#browser-port-forward-controls",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
       ],
       "followUp": "docs/upstream-follow-ups.md#browser-port-forward-controls",
       "revisitWhen": "The next web or mobile integration PR, otherwise every source sync.",
-      "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     },
     {
       "commit": "3ac987bc021073b7ff299e078ae106587e297c60",
@@ -1792,6 +1811,292 @@
       "followUp": null,
       "revisitWhen": null,
       "reviewedFor": "2b16e991eeb2e90f55c948e249acaef1497d5254"
+    },
+    {
+      "commit": "8f28e05b45a1d75f138facb88bb2de5bc9c6d1ac",
+      "title": "Release 0.8.14",
+      "status": "adapted",
+      "reason": "Retain World release identity rather than Roamgate release metadata.",
+      "evidence": [
+        "package.json",
+        "server/package.json",
+        "web/package.json",
+        "herdr-plugin.toml"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "ded99da2f6ccf8ed3fa85ae29e27011598ec4b04",
+      "title": "Reject markdown links a browser reads as script or another origin (#567)",
+      "status": "adapted",
+      "reason": "World already carries the markdown URL hardening; retain its stronger controls and workspace-link regressions.",
+      "evidence": [
+        "web/src/components/markdown.tsx",
+        "web/src/components/markdown.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "ad7e38abd780923aeccdf1dc4584c2b9f79e3aa7",
+      "title": "Let Ranger use the workspaces it creates, in that turn and chat (#568)",
+      "status": "adapted",
+      "reason": "Extend the creating chat and turn using captured World leases and mention guards, without global task grants.",
+      "evidence": [
+        "server/src/assistant/scope-extension.ts",
+        "server/src/assistant/service.test.ts",
+        "server/src/assistant/core-actions.ts",
+        "server/src/assistant/context.core.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "5bfab3afe0600ed94629bf6c8ecf9e8eb3652dea",
+      "title": "Keep a Ranger task's all-workspaces scope and run notices on restart (#569)",
+      "status": "adapted",
+      "reason": "Keep all-workspace intent and run notices in World schema v4, with stricter validation and atomic migration.",
+      "evidence": [
+        "server/src/assistant/task-storage.ts",
+        "server/src/assistant/task-storage.test.ts",
+        "server/src/assistant/tasks.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "43e280adc1db3466c31b8e2b493f5f319ccdb73c",
+      "title": "Run a Ranger task over its workspaces still open (#570)",
+      "status": "adapted",
+      "reason": "Fresh fixed-task runs omit closed original workspaces with notices while still refusing revoked permissions.",
+      "evidence": [
+        "server/src/assistant/task-scope-recovery.ts",
+        "server/src/assistant/service.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "464bae10d49146f6f4c3adbfd135f97b0bae7f5b",
+      "title": "Run a Ranger task again after its Herdr restarted (#571)",
+      "status": "adapted",
+      "reason": "Fresh runs reidentify original workspaces after a server restart; interrupted turns retain World recovery authority.",
+      "evidence": [
+        "server/src/assistant/task-scope-recovery.ts",
+        "server/src/assistant/context.test.ts",
+        "server/src/assistant/service.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "0cd2dcd88d00ed295373d9de1167eeab552b4826",
+      "title": "Show agent panes as a chat (#562)",
+      "status": "adapted",
+      "reason": "Pane chat, images, commands, artifacts and optional Vim retain World bounded History, captured clients, memory drafts, top bar and existing phone navigation; unused theme registry assets are pruned within current budgets.",
+      "evidence": [
+        "web/src/components/usePaneChat.tsx",
+        "web/src/components/terminalViewState.ts",
+        "web/src/components/AgentHistoryDrawer.paneChatFocus.test.tsx",
+        "server/src/rpc/agent.ts",
+        "server/src/rpc/core-host.ts",
+        "patches/@pierre%2Ftheming@1.0.2.patch"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "f2fc34cd9b57138a3c7da32f37f2c4d714ed0eb6",
+      "title": "chore(deps-dev): bump the tooling group with 2 updates (#574)",
+      "status": "adopted",
+      "reason": "Upgrade compatible Biome and oxlint tooling while preserving World hooks and controls.",
+      "evidence": ["package.json", "biome.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "8dbdbba72e2c6ebf0f47514894e71f11321058b5",
+      "title": "chore(deps): bump @lobehub/icons-static-svg from 1.98.0 to 1.101.0 (#575)",
+      "status": "adopted",
+      "reason": "Adopt the compatible icon dependency update.",
+      "evidence": ["web/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "83793495e9481800037155b37c3bf589aa800878",
+      "title": "chore(deps): bump lucide-react from 1.61.0 to 1.65.0 (#576)",
+      "status": "adopted",
+      "reason": "Adopt the compatible Lucide update.",
+      "evidence": ["web/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "f9e07866ba3cc39cc3483b2b4405628af4ffd63c",
+      "title": "chore(deps): bump @pierre/highlights from 0.2.0 to 0.3.0 (#573)",
+      "status": "adapted",
+      "reason": "World uses the Shiki WASM backend in diffs 1.6.1, which pins its optional Highlights backend to 0.2.0. Roamgate's separate 0.3.0 Highlights package has no direct World consumer; Shiki 4.6 is adopted.",
+      "evidence": [
+        "web/package.json",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "0270fa82ec96d9e9a534ef7499f5e6c33e9e73ba",
+      "title": "Name default tabs from their bound agent sessions (#566)",
+      "status": "adapted",
+      "reason": "Automatic naming stays owned by each runtime; manual rename paths mark ownership and disposal suppresses late effects.",
+      "evidence": [
+        "server/src/connections/tab-auto-rename.ts",
+        "server/src/connections/agent-tab-title.ts",
+        "server/src/connections/runtime.ts",
+        "server/src/rpc/appearance.ts",
+        "server/src/connections/tab-auto-rename.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "29885e06a33695f666be3e2fcfd92760c8e0448b",
+      "title": "chore(deps): bump the xterm-core-fit group with 2 updates (#572)",
+      "status": "adopted",
+      "reason": "Upgrade the compatible xterm core/fit pair while retaining World attachment and input guards.",
+      "evidence": ["web/package.json", "web/src/components/TerminalView.tsx"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "35963875e6a0d2eb7dfaa49e94dcee5f0d740019",
+      "title": "Release 0.8.15 (#579)",
+      "status": "adapted",
+      "reason": "Retain World release versions and packaging identity.",
+      "evidence": [
+        "package.json",
+        "server/package.json",
+        "web/package.json",
+        "herdr-plugin.toml"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "ea023972a1d64ecd523ab487c8ad0c488d4758f5",
+      "title": "Enumerate namespaced storage keys in one pass (#586)",
+      "status": "adapted",
+      "reason": "Expose one-pass keys() enumeration inside the World-only browser namespace, without migrating upstream storage or persisting drafts.",
+      "evidence": [
+        "web/src/browserStorage.ts",
+        "web/src/browserStorage.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "f20dbd8f694c177dca4e249ae0a03fafcf96ec62",
+      "title": "feat(composer): support configurable terminal submit keys",
+      "status": "adapted",
+      "reason": "Support configured submit keys through captured World clients and preserve typed-text failure receipts without replay.",
+      "evidence": [
+        "web/src/terminalComposerSend.ts",
+        "web/src/terminalComposer.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "67034323a690734c172053329e2eeee71b59fc4d",
+      "title": "fix(composer): format submit key tests",
+      "status": "adopted",
+      "reason": "Retain submit-key regression intent and format with World staged delivery.",
+      "evidence": ["web/src/terminalComposer.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "ef56cb525652f29bba7ca2ebfd711de87f3491be",
+      "title": "feat(composer): choose the terminal submit key per agent",
+      "status": "adapted",
+      "reason": "Select the key per reported agent in pane and History input; shells retain Enter.",
+      "evidence": [
+        "web/src/terminalSubmitKey.ts",
+        "web/src/components/HistoryTerminalComposer.tsx",
+        "web/src/terminalSubmitKey.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "b31b3411b177feb4e863e2109a8d9e2cab0d4746",
+      "title": "chore(deps): bump the syntax-highlighting group with 3 updates",
+      "status": "adapted",
+      "reason": "Upgrade Shiki core and grammars while preserving the curated World language graph and both diff appearances.",
+      "evidence": [
+        "web/package.json",
+        "web/src/shiki.ts",
+        "patches/@pierre%2Ftheming@1.0.2.patch"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "12250f855a608843be8e22bd84a4bc7df7cfd44d",
+      "title": "chore(deps): bump @lobehub/icons-static-svg from 1.101.0 to 1.102.0",
+      "status": "adopted",
+      "reason": "Adopt the later compatible icon dependency update.",
+      "evidence": ["web/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "83cdf1bbc41b628aca1eb9b3fdf4eb023dfb3ae6",
+      "title": "chore(deps): bump typebox from 1.3.37 to 1.4.4",
+      "status": "adopted",
+      "reason": "Adopt typebox 1.4.4 within World verb input/output contracts.",
+      "evidence": [
+        "server/package.json",
+        "server/src/verbs/rpc.ts",
+        "bun.lock"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
+    },
+    {
+      "commit": "bf3879f930ca37419d28cbdf746c8797c5d1530f",
+      "title": "chore(deps): bump the actions group with 2 updates",
+      "status": "divergent",
+      "reason": "The change only updates Roamgate CodeQL init/analyze; World has no such job and retains its established workflow controls.",
+      "evidence": [
+        "docs/upstream-follow-ups.md#world-workflow-controls",
+        "docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
+      "revisitWhen": "Every source sync; a maintainer may adopt equivalent workflow updates through trusted control review.",
+      "reviewedFor": "bf3879f930ca37419d28cbdf746c8797c5d1530f"
     }
   ]
 }

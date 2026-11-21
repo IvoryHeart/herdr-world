@@ -1,3 +1,20 @@
+import { useTerminalChatFocus } from "./useTerminalChatFocus";
+import { TerminalPaneToolbar } from "./TerminalPaneToolbar";
+import { connectionClientScopeKey } from "../useConnectionClient";
+import {
+  b64toText,
+  useDelayedFlag,
+  terminalDensity,
+  isApplePlatform,
+  shouldAvoidVirtualKeyboard,
+  isEditableElement,
+  isSafariBrowser,
+  trimCopiedLinePadding,
+  useTerminalChatState,
+} from "./terminalViewState";
+import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
+
+import { setPaneView, togglePaneView, usePaneView } from "../paneView";
 import {
   readTerminalInputMode,
   rememberTerminalInputMode,
@@ -17,7 +34,7 @@ import {
   uploadTerminalFile,
   type UploadProgress,
 } from "../terminalImageUpload";
-import { PaneDragHandle, PaneMoveMenu } from "./PaneMoveMenu";
+import { PaneDragHandle } from "./PaneMoveMenu";
 import { paneAgentName } from "../agentName";
 import { MobileTerminalIdentity } from "./MobileControls";
 import { useSystemBack } from "../systemBack";
@@ -33,15 +50,7 @@ import {
 import { FitAddon } from "@xterm/addon-fit";
 import { type ITheme, Terminal } from "@xterm/xterm";
 import { installTerminalCompositionRepair } from "../terminalComposition";
-import {
-  Columns2,
-  Grid2X2,
-  SquareTerminal,
-  Maximize2,
-  Minimize2,
-  Rows2,
-  X,
-} from "lucide-react";
+import { Grid2X2, SquareTerminal } from "lucide-react";
 import {
   type CSSProperties,
   useCallback,
@@ -58,9 +67,9 @@ import {
   type TerminalReviewAnnotation,
   terminalAnnotationTitle,
 } from "../annotations";
-import { TERMINAL_FONT_FAMILY, terminalFontOptions } from "../appearance";
+import { TERMINAL_FONT_FAMILY } from "../appearance";
 import { isMobileLayout, LAYOUT_CHANGE_EVENT } from "../layoutPreferences";
-import { detectShortcutPlatform } from "../shortcutBindings";
+
 import {
   getShortcutSnapshot,
   shortcutMatches,
@@ -111,8 +120,8 @@ import {
   terminalComposerDraftKey,
   terminalComposerScopeGeneration,
   terminalComposerDraftPaneIds,
-  sendTerminalComposerText,
 } from "../terminalComposer";
+import { sendTerminalComposerText } from "../terminalComposerSend";
 import {
   registerTerminalConnectionDisposer,
   type TerminalConnectionIdentity,
@@ -218,20 +227,6 @@ import "./TerminalView.css";
 
 const SYSTEM_CLIPBOARD = "c" as ClipboardSelectionType;
 
-function b64toBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
-}
-function b64toText(b64: string): string | null {
-  try {
-    return new TextDecoder().decode(b64toBytes(b64));
-  } catch {
-    return null;
-  }
-}
-
 const CLIPBOARD_READ_TIMEOUT_MS = 2000;
 const TERMINAL_EVICTION_WINDOW_MS = 60_000;
 const TERMINAL_EVICTION_MAX_RETRIES = 3;
@@ -242,47 +237,6 @@ const TERMINAL_TOUCH_TAP_SLOP_PX = 8;
 // and leaves again is more distracting than a terminal that stays briefly
 // blank, and a switch is still perceived as immediate far past this point.
 const TERMINAL_LOADING_SPINNER_DELAY_MS = 500;
-
-/** True only once `pending` has held continuously for `delayMs`. */
-function useDelayedFlag(pending: boolean, delayMs: number): boolean {
-  const [elapsed, setElapsed] = useState(false);
-  useEffect(() => {
-    if (!pending) {
-      setElapsed(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setElapsed(true), delayMs);
-    return () => window.clearTimeout(timer);
-  }, [delayMs, pending]);
-  return pending && elapsed;
-}
-
-function terminalDensity(terminalFontScale: number) {
-  const compact = typeof window !== "undefined" && isMobileLayout();
-  return terminalFontOptions(compact, terminalFontScale);
-}
-
-function isApplePlatform() {
-  return detectShortcutPlatform() === "mac";
-}
-
-function shouldAvoidVirtualKeyboard() {
-  return isMobileLayout() || window.matchMedia("(any-pointer: coarse)").matches;
-}
-
-function isEditableElement(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  return ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
-}
-
-function isSafariBrowser() {
-  return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-}
-
-function trimCopiedLinePadding(text: string) {
-  return text.replace(/[ \t]+(?=\r?\n|$)/g, "");
-}
 
 export type TerminalWorkspaceFileRequest = {
   connectionId: string;
@@ -547,6 +501,18 @@ export function TerminalView({
     selectedPaneInLayout ?? s.layout?.focused_pane_id ?? null;
   const isActivePane = !!pane && (!paneId || pane.pane_id === activePaneId);
   const canShowAgentHistory = isActivePane && paneHasAgentHistory(pane);
+  // An agent pane can show its conversation as a chat instead of its
+  // terminal, which keeps running underneath.
+  const chatAvailable = !!pane && paneHasAgentHistory(pane);
+  const chatShown =
+    usePaneView(s.activeConnectionId, pane?.pane_id) === "chat" &&
+    chatAvailable;
+  const { agentPrompt, agentActivity, chatShownRef } = useTerminalChatState(
+    termRef,
+    chatShown,
+    pane?.agent_status,
+    connectionClientScopeKey(connectionClient, pane?.pane_id),
+  );
   const canClosePane = !!pane && paneCanClose(s.panes, pane.pane_id);
   const paneZoomed =
     s.layout?.zoomed === true && s.layout.focused_pane_id === pane?.pane_id;
@@ -836,6 +802,7 @@ export function TerminalView({
   const focusTerminalSoon = useCallback(
     (reason?: "output") => {
       if (
+        chatShownRef.current ||
         !isActivePaneRef.current ||
         composerEditingRef.current ||
         touchSelectionRef.current?.active === true
@@ -888,6 +855,11 @@ export function TerminalView({
       });
     },
     [connectionClient, container],
+  );
+  const { chatLayerRef, paneToolbarRef, focusChatSoon } = useTerminalChatFocus(
+    connectionClient,
+    isActivePaneRef,
+    chatShownRef,
   );
   const focusEndpoint = useCallback(() => {
     focusTerminalEndpoint(connectionClient, paneTerminalIdRef.current);
@@ -944,8 +916,10 @@ export function TerminalView({
     [terminalIdentity],
   );
   useEffect(() => {
-    if (isActivePane) focusTerminalSoon();
-  }, [focusTerminalSoon, isActivePane]);
+    if (!isActivePane) return;
+    if (chatShown) focusChatSoon();
+    else focusTerminalSoon();
+  }, [focusChatSoon, focusTerminalSoon, isActivePane, chatShown]);
   useEffect(() => watchTerminalOverlayPointer(document), []);
   useEffect(() => {
     const rememberTerminalFocus = () => {
@@ -998,6 +972,25 @@ export function TerminalView({
     setAgentHistoryOpen,
   ]);
 
+  useEffect(() => {
+    if (!isActivePane || !chatAvailable || !pane) return;
+    const paneId = pane.pane_id;
+    const onKey = (e: KeyboardEvent) => {
+      if (
+        e.defaultPrevented ||
+        !shortcutMatches(e, "pane.chat") ||
+        document.querySelector(".modal-backdrop, .command-popover")
+      )
+        return;
+      e.preventDefault();
+      e.stopPropagation();
+      togglePaneView(s.activeConnectionId, paneId);
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", onKey, { capture: true });
+  }, [chatAvailable, isActivePane, pane, s.activeConnectionId]);
+
   const blurTerminalInput = () => {
     termRef.current?.textarea?.blur();
   };
@@ -1006,6 +999,7 @@ export function TerminalView({
     const term = termRef.current;
     if (
       !term ||
+      chatShownRef.current ||
       composerEditingRef.current ||
       !connectionClient.isCurrent() ||
       !isActivePaneRef.current ||
@@ -3494,8 +3488,18 @@ export function TerminalView({
     };
   }, [store]);
 
-  const submitTerminalComposer = (text: string, submit: boolean) =>
-    sendTerminalComposerText(connectionClient, paneIdRef.current, text, submit);
+  const submitTerminalComposer = (text: string, submit: boolean) => {
+    const targetPaneId = paneIdRef.current ?? "";
+    const agent = store
+      .get()
+      .panes.find((candidate) => candidate.pane_id === targetPaneId)?.agent;
+    return sendTerminalComposerText(
+      connectionClient,
+      { paneId: targetPaneId, agent },
+      text,
+      submit,
+    );
+  };
   const uploadComposerImage = (file: File, onProgress?: UploadProgress) =>
     uploadTerminalImage(connectionClient, file, onProgress);
   const uploadComposerFile = (file: File, onProgress?: UploadProgress) =>
@@ -3928,11 +3932,14 @@ export function TerminalView({
           layout={s.layout}
           onPointerDown={preventPaneActionFocus}
         />
-        <div className="terminal-main">
+        <div className={`terminal-main${chatShown ? " is-chat" : ""}`}>
           <div
             ref={containerRef}
             className="terminal-view"
             data-terminal-owner={connectionClient.connectionId}
+            // Under a chat, the terminal must never take the keyboard: what
+            // is typed would go to the agent unseen.
+            inert={chatShown || undefined}
             tabIndex={-1}
             onFocus={(event) => {
               if (event.target === event.currentTarget) focusTerminalInput();
@@ -3943,8 +3950,43 @@ export function TerminalView({
             active={isActivePane}
             element={container}
           />
+          {chatShown ? (
+            <div className="terminal-chat-layer" ref={chatLayerRef}>
+              <AgentHistoryDrawer
+                pane={pane}
+                open
+                embedded
+                paneChat={{
+                  prompt: agentPrompt,
+                  activity: agentActivity,
+                  active: isActivePane,
+                  onShowTerminal: () => {
+                    setPaneView(s.activeConnectionId, pane.pane_id, "terminal");
+                    focusTerminalSoon();
+                  },
+                  onKeys: (text) => {
+                    void connectionClient
+                      .call("pane.send_text", { pane_id: pane.pane_id, text })
+                      .catch((error) =>
+                        store.notify({
+                          kind: "error",
+                          message: "Terminal input failed",
+                          detail: String(error),
+                        }),
+                      );
+                  },
+                  composerTarget:
+                    isMobileLayout() && isActivePane ? mobileInputTarget : null,
+                }}
+                onOpenChange={() => {}}
+              />
+            </div>
+          ) : null}
 
-          {!isMobileLayout() && touchHandles.length === 0 && isActivePane ? (
+          {!isMobileLayout() &&
+          touchHandles.length === 0 &&
+          isActivePane &&
+          !chatShown ? (
             <div
               className="terminal-mobile-input-actions"
               aria-label="Terminal input"
@@ -4063,6 +4105,7 @@ export function TerminalView({
         {visible &&
         touchHandles.length === 0 &&
         !composerShortcutsVisible &&
+        !chatShown &&
         showMobileKeys &&
         hasMobileShortcuts ? (
           <div
@@ -4140,87 +4183,30 @@ export function TerminalView({
             </div>
           </div>
         ) : null}
-        {isMobileLayout() && mobileInputTarget
-          ? isActivePane
-            ? createPortal(terminalComposer, mobileInputTarget)
-            : null
-          : visible && isActivePane && (isMobileLayout() || composerOpen)
-            ? terminalComposer
-            : null}
-        <div
-          className="terminal-pane-toolbar"
-          aria-label="Pane actions"
-          ref={(element) => {
-            element?.toggleAttribute(
-              "inert",
-              s.status !== "connected" || !connectionClient.isCurrent(),
-            );
+        {chatShown
+          ? null
+          : isMobileLayout() && mobileInputTarget
+            ? isActivePane
+              ? createPortal(terminalComposer, mobileInputTarget)
+              : null
+            : visible && isActivePane && (isMobileLayout() || composerOpen)
+              ? terminalComposer
+              : null}
+        <TerminalPaneToolbar
+          {...{
+            s,
+            pane,
+            store,
+            connectionClient,
+            paneZoomed,
+            canClosePane,
+            preventPaneActionFocus,
+            paneToolbarRef,
+            chatAvailable,
+            chatShown,
+            setClosePaneRequested,
           }}
-        >
-          {s.endpointAvailability[pane.terminal_id] &&
-          store.terminalScrollReason(pane.terminal_id) ? (
-            <span
-              className="muted"
-              role="status"
-              title={store.terminalScrollReason(pane.terminal_id) ?? undefined}
-            >
-              History unavailable: pane.scroll not advertised
-            </span>
-          ) : null}
-          {!paneZoomed ? (
-            <>
-              <button
-                type="button"
-                className="terminal-pane-action"
-                title="Split pane right"
-                aria-label="Split pane right"
-                onPointerDown={preventPaneActionFocus}
-                onClick={() => store.splitPane(pane.pane_id, "right")}
-              >
-                <Columns2 size={14} />
-              </button>
-              <button
-                type="button"
-                className="terminal-pane-action"
-                title="Split pane down"
-                aria-label="Split pane down"
-                onPointerDown={preventPaneActionFocus}
-                onClick={() => store.splitPane(pane.pane_id, "down")}
-              >
-                <Rows2 size={14} />
-              </button>
-              <PaneMoveMenu
-                paneId={pane.pane_id}
-                layout={s.layout}
-                onPointerDown={preventPaneActionFocus}
-              />
-            </>
-          ) : null}
-          {canClosePane || paneZoomed ? (
-            <button
-              type="button"
-              className="terminal-pane-action"
-              title={paneZoomed ? "Restore pane" : "Maximize pane"}
-              aria-label={paneZoomed ? "Restore pane" : "Maximize pane"}
-              onPointerDown={preventPaneActionFocus}
-              onClick={() => store.zoomPane(pane.pane_id)}
-            >
-              {paneZoomed ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </button>
-          ) : null}
-          {canClosePane ? (
-            <button
-              type="button"
-              className="terminal-pane-action is-danger"
-              title="Close pane"
-              aria-label="Close pane"
-              onPointerDown={preventPaneActionFocus}
-              onClick={() => setClosePaneRequested(true)}
-            >
-              <X size={14} />
-            </button>
-          ) : null}
-        </div>
+        />
         {s.connectionPaused ? (
           <div className="terminal-loading" role="status" aria-live="polite">
             <span className="terminal-loading-dot" />
@@ -4252,7 +4238,7 @@ export function TerminalView({
               Reload app
             </button>
           </div>
-        ) : terminalLoadingSpinner || pasteLoading ? (
+        ) : (terminalLoadingSpinner && !chatShown) || pasteLoading ? (
           <div className="terminal-loading" role="status" aria-live="polite">
             <span className="terminal-loading-dot" />
             <span>{pasteLoading ? "Pasting..." : "Loading terminal"}</span>

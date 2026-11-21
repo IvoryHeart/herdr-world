@@ -60,6 +60,7 @@ function fixture() {
                   generation: 3,
                   isCurrent: () => current,
                   runtime: {
+                    tabAutoRenamer: { markManualRename: () => {} },
                     ...herdrRuntimeFixture({
                       call: async (method: string) => {
                         calls.push(method);

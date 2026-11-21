@@ -78,6 +78,8 @@ export const rpcVerbs = [
     "runtime",
     object({ pane_id: text }),
   ),
+  rpc("agent_commands.get", "read", "runtime", object({ pane_id: text })),
+  rpc("agent_artifacts.get", "read", "runtime", object({ pane_id: text })),
   rpc("agent_history.entry", "read", "runtime"),
   rpc("agent_history.get", "read", "runtime"),
   rpc("agent_quest.list", "read", "runtime"),
@@ -187,6 +189,13 @@ export const rpcVerbs = [
   rpc("plugin.action.invoke", "opaque", "runtime"),
   rpc("popup.close", "reconcilable", "runtime"),
   rpc("settings.get", "read", "runtime"),
+  rpc("settings.agent_auto_rename.get", "read", "runtime"),
+  rpc(
+    "settings.agent_auto_rename.update",
+    "reconcilable",
+    "runtime",
+    object({ enabled: Type.Boolean() }),
+  ),
   rpc("settings.terminal_transport.get", "read", "runtime"),
   rpc(
     "settings.terminal_transport.update",

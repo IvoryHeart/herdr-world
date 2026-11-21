@@ -20,6 +20,8 @@ export function handleAgentRpc(
       method === "agent_quest.list" ||
       method === "agent_history.get" ||
       method === "agent_history.entry" ||
+      method === "agent_commands.get" ||
+      method === "agent_artifacts.get" ||
       method === "agent_session.get" ||
       method === "agent_turn.get" ||
       method === "agent_checkout.get" ||
@@ -130,6 +132,17 @@ async function dispatchAgentRpc(
       sendReply({ id, result }, "agent-history-entry");
     } catch (e) {
       sendError("agent-history-entry-error", e);
+    }
+    return;
+  }
+  if (method === "agent_commands.get" || method === "agent_artifacts.get") {
+    try {
+      const result = await (method === "agent_commands.get"
+        ? connection.agentSessions.readCommands(params ?? {})
+        : connection.agentSessions.readArtifacts(params ?? {}));
+      sendReply({ id, result }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
     }
     return;
   }

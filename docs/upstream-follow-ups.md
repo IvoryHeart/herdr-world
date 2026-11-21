@@ -120,15 +120,19 @@ sync and when such a signal exists.
 
 ## Diff worker dependency update
 
-Status: deferred (firstmate-2 ruling, 5 November 2026), proposed for review.
-Source: Roamgate f4367c30 (#508), `@pierre/diffs` 1.5 to 1.6.
-Owner: the integrator of each source sync.
+Status: resolved by the owner-authorized #1017 repair, 20 November 2026.
+Source: Roamgate f4367c30 (#508), `@pierre/diffs` 1.5 to 1.6.1.
+Owner: the integrator of this source sync.
 
-Pierre 1.6's diff worker bundles both highlighter backends and a second copy of
-World's curated grammars: 56 more asset files and 1.9 MiB more, beyond the 180-file
-limit and the web total budget in [packaging](packaging.md). World stays on 1.5.x,
-and no budget is raised for it. Re-check at every source sync; adopt when the worker
-fits the budgets or the budgets change.
+The owner accepted the upgrade and its lazy asset cost. World now takes the
+`^1.6.1` range (locked 1.6.1) with Shiki 4.6.0. The main-thread language resolver
+uses World's curated registry; the worker receives pre-resolved grammars/themes
+and compiles out its unreachable loaders. This avoids the full Shiki language
+bundle and duplicate worker grammar assets. Remaining backend/theme assets need
+290 files / 16.5 MiB of total headroom, including the delta on current main;
+startup budgets and available diff appearances stay unchanged. Production Vite
+browser fixtures cover the curated resolver and actual Shiki worker on desktop
+and phone. The previous 5 November deferral is superseded by this owner decision.
 
 ## Browser port-forward controls
 
@@ -217,3 +221,36 @@ New proposals for review: deferred #482, #489 and #493 (one mobile PR), #508
 (diff worker budget) and #546's browser controls; divergent #491 (mobile entry
 point), #504 (workflow controls), #518 (Recently opened) and #544 (seen tracking).
 Source after 2b16e991, including v0.8.14 and v0.8.15, is not part of this record.
+
+## Assessment for source bf3879f93 (19 November 2026)
+
+The 22 commits after `2b16e991` were reconsidered together with all eleven carried
+exceptions. World still owns workflow controls: `bf3879f93` updates only Roamgate's
+CodeQL init/analyze pins from 4.39.1 to 4.39.3; World has no CodeQL job to update.
+The existing maintainer-owned control review remains the acceptance path.
+
+The dedicated mobile-navigation/History-input work remains deferred. Pane chat is
+adapted to World's existing in-flow input, managed-window navigation and visible
+top bar; it does not adopt upstream's chat zen/topbar removal. Town remains the
+phone entry. No new independent seen store or browser open-history signal exists,
+so the seen and Recently opened divergences retain their acceptance conditions.
+
+The owner subsequently authorized the 1.6.1 diff worker upgrade and asset cost
+on 20 November. It is now adopted with World's curated main-thread grammars,
+pre-resolved worker inputs and bounded total/file budget adjustment (see above).
+Diffs 1.6.1 pins its optional Highlights backend to 0.2.0; Roamgate's separate
+0.3.0 package is not a direct World dependency. World uses Shiki WASM 4.6.
+The new pane-chat/Vim features
+initially exceeded the asset budget; pruning unused dependency theme registrations
+preserves every diff appearance World offers. The subsequent accepted diff
+upgrade raises only total/file budgets as recorded above. Browser forwarding
+controls remain the separately tracked web
+follow-up: this range adds no controls that satisfy their loopback and qualification
+acceptance. Existing service forwarding stays intact.
+
+React remains 19.3.1 with World's diagnostic patch; this range changes neither
+React nor its patch target. The completed Bun-free installation decision has no
+new installer or service changes to assess. The diff-worker exception is
+explicitly resolved by the owner's instruction; other standing exceptions remain
+open, and no upstream feature is labelled adopted solely because it is a merge
+ancestor. The PR supplies conflict ownership and an exact re-merge reconstruction.

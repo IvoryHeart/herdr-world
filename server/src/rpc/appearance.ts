@@ -106,6 +106,10 @@ export async function handleAppearanceRpc(
       sendReply({ id, result: { document } }, method);
     } else {
       // This native operation never creates a World-owned shadow label.
+      lease.runtime.tabAutoRenamer.markManualRename(
+        target.native_id,
+        String(params?.label).trim(),
+      );
       await call("tab.rename", {
         tab_id: target.native_id,
         label: String(params?.label).trim(),

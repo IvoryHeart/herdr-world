@@ -6,10 +6,11 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate source: main after v0.8.13, `2b16e991eeb2e90f55c948e249acaef1497d5254`
-  (1 November 2026). This integration records that exact commit as a Git merge
-  parent, following v0.8.8 `b84ccd53db19701308a8bfb4a7002db1e4559490`. Later
-  source, including v0.8.14 and v0.8.15, is not integrated.
+- Roamgate source: main after v0.8.15,
+  `bf3879f930ca37419d28cbdf746c8797c5d1530f` (source commit 9 November 2026;
+  synchronized 19 November 2026). The integration merge records that exact
+  commit as its second parent, following `2b16e991eeb2e90f55c948e249acaef1497d5254`.
+  Both fetches used `--no-tags`; no Roamgate release tags are imported.
 - Security dependency updates cherry-picked earlier,
   [DOMPurify 3.4.17](https://github.com/powerfooI/roamgate/commit/2c67731651ade2592c798687636cd0a486547fb4)
   and [undici 8.12.3](https://github.com/powerfooI/roamgate/commit/f428337b9ed6b85687d030a60a03adfab32651d8),
@@ -109,6 +110,34 @@ tracking (#544); #504 stays under World's workflow controls. The ledger classifi
 all 69 commits, and the
 [assessment](docs/upstream-follow-ups.md#assessment-for-source-2b16e991-1-november-2026)
 re-reviews the standing workflow and React divergences.
+
+The refresh through `bf3879f93` adopts pane chat with screen-derived questions and
+working status, Claude commands, artifact links and bounded attached-image previews,
+optional Vim editing, per-agent terminal submit keys, automatic default-tab titles,
+and one-pass namespaced storage enumeration. Ranger-created workspaces join their
+own chat and captured turn; fixed tasks run over still-open original workspaces,
+with omission/restart notices and fresh-run identity checks. World retains its
+schema-v4 task storage and already-delivered markdown URL hardening. Compatible
+Biome, oxlint, icon, xterm, Shiki and typebox updates land without downgrading World
+dependencies. A version-scoped Pierre theme-registry patch excludes theme presets
+World never offers, keeping both existing diff appearances. The owner-authorized
+20 November repair adopts Roamgate's `@pierre/diffs` `^1.6.1` range (locked 1.6.1),
+with Shiki 4.6.0 and the corresponding Pierre theming 1.0.2 patch. Diffs 1.6's
+main-thread `shiki/langs` resolver uses World's curated lazy registry, and its
+worker build removes unreachable grammar/theme loaders. Remaining lazy backend
+and theme assets require a bounded increase to 290 files / 16.5 MiB to retain
+headroom on current main; startup budgets stay unchanged.
+
+World's top app bar, Town entry, memory-only drafts, bounded History window,
+connection-qualified image/RPC access, React diagnostic patch, packaging and release
+identity remain. The existing mobile navigation and browser
+forwarding deferrals are carried, together with the seen/recency divergences.
+The new CodeQL-only action update stays outside World's controls; no `.github` or
+`.codex` changes are included. Diffs 1.6.1 pins its optional Highlights backend to
+0.2.0; World continues to use Shiki WASM, so Roamgate's separate Highlights 0.3.0
+update is not a direct dependency. Every incoming commit and outstanding decision is
+accounted for in the ledger and the
+[19 November assessment](docs/upstream-follow-ups.md#assessment-for-source-bf3879f93-19-november-2026).
 
 World retains its identity, local/SSH connection ownership, same-origin access,
 session-bound push revocation, aggregate visual views, isolated browser storage,

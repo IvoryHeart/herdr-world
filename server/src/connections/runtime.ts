@@ -87,6 +87,8 @@ import {
   createWorktreeRemovalRuntime,
 } from "../worktree/remove";
 import { createAgentStatusSubscriptionLoop } from "./agent-status-subscription";
+import { createTabAutoRenamer } from "./tab-auto-rename";
+import { createAgentTabTitleReader } from "./agent-tab-title";
 import { sanitizeConnectionError } from "./manager";
 import {
   createEventSubscriptionLoop,
@@ -392,6 +394,7 @@ export function createLegacyConnectionRuntime(args: {
       files.resolveWorkspaceGitRoot({ workspace_id: workspaceId }),
     workspaceAutoSyncIsRunning: workspaceAutoSync.isRunning,
     onWorkspaceAutoSyncSettingsChanged: workspaceAutoSync.settingsChanged,
+    onAgentAutoRenameSettingsChanged: () => tabAutoRenamer.settingsChanged(),
     onTerminalTransportSettingsChanged: (enabled) => {
       if (disposed) return;
       terminalBridge.refreshSurfaceCodecs();
@@ -753,11 +756,26 @@ export function createLegacyConnectionRuntime(args: {
   });
 
   const paneActivity = createPaneActivityClassifier();
+  const tabAutoRenamer = createTabAutoRenamer({
+    herdr,
+    getAgentTitleForPane: createAgentTabTitleReader({
+      herdrCall: (method, params) => herdr.call(method, params, 5000),
+      readSummary: agentSessions.readSummary,
+      sshHost: config.sshHost,
+      remotePlatform,
+      run: runBinaryProcessWithTimeout,
+    }),
+    isEnabled: async () =>
+      (await readSettings()).auto_rename_agent_tabs !== false,
+    pollIntervalMs: 30_000,
+    log: (message) => logger.debug(message, { connection: identity.id }),
+  });
   const onHerdrEvent = (event: unknown) => {
     taskEvents.handleHerdrEvent(event);
     lastStepTurns.handleHerdrEvent(event);
     agentStatusSubscriptions.handleHerdrEvent(event);
     agentSessions.conversationWatch.herdrEvent();
+    tabAutoRenamer.handleHerdrEvent(event);
     if ((event as { event?: string })?.event === "workspace.focused")
       terminalBridge.refreshPopupObserverFocus();
     args.onEvent(event, identity, paneActivity.classify(event));
@@ -875,6 +893,7 @@ export function createLegacyConnectionRuntime(args: {
     }
     subscriptionLoop.start();
     agentStatusSubscriptions.start();
+    tabAutoRenamer.start();
     herdrNotifications?.start();
   }
 
@@ -889,6 +908,7 @@ export function createLegacyConnectionRuntime(args: {
     herdr.close();
     const usageStop = usage.close();
     handleTerminalUpload.stopCleanup();
+    tabAutoRenamer.dispose();
     herdr.off("event", onHerdrEvent);
     herdr.off("error", onHerdrError);
     agentSessions.conversationWatch.stop();
@@ -966,6 +986,7 @@ export function createLegacyConnectionRuntime(args: {
     usage,
     agentCheckout,
     agentWorktree,
+    tabAutoRenamer,
     recoveryIdentity,
     taskNotificationSource,
     startTransport,

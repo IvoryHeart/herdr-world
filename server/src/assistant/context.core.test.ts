@@ -355,6 +355,10 @@ describe("Ranger over herdr-core workspaces", () => {
     });
     const result = await prepared.execute(() => true);
     expect(result.status).toBe("succeeded");
+    expect(result.created).toMatchObject({
+      connection_id: coreRef.connection_id,
+      workspace_id: expect.any(String),
+    });
     expect(git(repo, "worktree", "list")).toContain(
       join(directory, "feature-x"),
     );

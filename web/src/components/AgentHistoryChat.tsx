@@ -1,3 +1,6 @@
+import { senderProps } from "./historySenderProps";
+import { type BubbleProps, sameBubble } from "./HistoryChatBubbles";
+import { UserText, OutboxBubble } from "./HistoryChatBubbles";
 import {
   Fragment,
   memo,
@@ -18,6 +21,7 @@ import {
   ChevronRight,
   CircleSlash,
   Copy,
+  ExternalLink,
   Square,
   Volume2,
   Wrench,
@@ -27,6 +31,7 @@ import { useChatSpeech } from "../useChatSpeech";
 import { copyTextWithFeedback } from "../copyText";
 import { formatUiDateTime } from "../uiLocale";
 import { HISTORY_PREVIEW_CHARS } from "./AgentHistoryCard";
+import type { OutboxMessage } from "./chatOutbox";
 import {
   historyEntryLabel,
   isToolContentPending,
@@ -53,7 +58,8 @@ import {
 } from "./historyDecoration";
 import { useHistoryCatchUp } from "./useHistoryCatchUp";
 import { RECEIPT_MEMORY_NOTE } from "./chat/pendingSends";
-import { chatRows, type ChatRow } from "./chat/chatSenders";
+import { chatRows } from "./chat/chatSenders";
+
 import "./AgentHistoryChat.css";
 
 // Treat the list as pinned while the reader is within this distance of the
@@ -64,6 +70,7 @@ const OLDER_THRESHOLD_PX = 240;
 
 const EMPTY_LOADING: ReadonlySet<string> = new Set();
 const noop = () => {};
+const NO_OUTBOX: readonly OutboxMessage[] = [];
 
 const ChatBubble = memo(function ChatBubble({
   entry,
@@ -77,22 +84,9 @@ const ChatBubble = memo(function ChatBubble({
   from = null,
   fromKind = "agent",
   continued = false,
-}: {
-  entry: HistoryEntry;
-  sequence: number;
-  /** The transcript's sender name; null outside the wide transcript. */
-  from?: string | null;
-  fromKind?: ChatRow["sender"]["kind"];
-  /** Continues the previous message's sender, so its name is not repeated. */
-  continued?: boolean;
-  highlighted: boolean;
-  /** Has the same words as a message Chat sent: matched, not proven. */
-  matched?: "words" | "order" | null;
-  decorate?: HistoryDecorator;
-  decorationToken?: unknown;
-  speech: ReturnType<typeof useChatSpeech>;
-  onOpen: (entry: HistoryEntry) => void;
-}) {
+  imageUrl,
+  images,
+}: BubbleProps) {
   // A compaction summary is long and written by Claude Code, not the user:
   // one line, with the summary a tap away.
   if (entry.compact_summary)
@@ -180,7 +174,11 @@ const ChatBubble = memo(function ChatBubble({
       ) : null}
       <div className="agent-history-chat-bubble">
         {entry.role === "user" ? (
-          <p>{preview}</p>
+          imageUrl || images?.length ? (
+            <UserText text={preview} imageUrl={imageUrl} images={images} />
+          ) : (
+            <p>{preview}</p>
+          )
         ) : (
           <MarkdownPreview
             text={preview}
@@ -268,7 +266,7 @@ const ChatBubble = memo(function ChatBubble({
       {decoration?.after}
     </article>
   );
-});
+}, sameBubble);
 
 // Opening a block fetches small arguments so each row can show a headline;
 // larger payloads (e.g. whole-file writes) wait until their step is opened.
@@ -528,6 +526,14 @@ function ToolBlock({
   onToggle: () => void;
   onOpen: (entry: HistoryEntry) => void;
 }) {
+  // The pages these calls published, the latest version of each.
+  const artifacts = [
+    ...new Map(
+      entries.flatMap((entry) =>
+        entry.artifact ? [[entry.artifact.url, entry.artifact] as const] : [],
+      ),
+    ).values(),
+  ];
   const [open, setOpen] = useState(false);
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
   const toggleStep = useCallback(
@@ -620,6 +626,26 @@ function ToolBlock({
           ) : null}
         </span>
       </button>
+      {artifacts.length ? (
+        <div className="agent-history-chat-artifacts">
+          {artifacts.map((artifact) => (
+            <a
+              key={artifact.url}
+              className="agent-history-chat-artifact"
+              href={artifact.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={artifact.url}
+            >
+              <ExternalLink size={12} aria-hidden="true" />
+              <span>{artifact.title}</span>
+              <span className="agent-history-chat-artifact-version">
+                {artifact.version ? `v${artifact.version}` : "New"}
+              </span>
+            </a>
+          ))}
+        </div>
+      ) : null}
       {open ? (
         <ul id={listId} className="agent-history-chat-tools-list">
           {steps.map((step) => (
@@ -644,7 +670,11 @@ function ToolBlock({
 
 // The drawer owns the scroll and content refs so its minimap can track and
 // jump to bubbles through their data-sequence, as it does for timeline cards.
-export function AgentHistoryChat({
+// Memoized: the pane around it re-renders on every pane update (status,
+// activity), several times a second while the agent works, and a long
+// conversation is too costly to render each time; its props only change
+// with the history.
+export const AgentHistoryChat = memo(function AgentHistoryChat({
   items,
   listRef,
   contentRef,
@@ -666,6 +696,11 @@ export function AgentHistoryChat({
   placed,
   countNewAgentMessages = false,
   transcript,
+  outbox = NO_OUTBOX,
+  onRetrySend,
+  onDiscardSend,
+  imageUrl,
+  attachedImages,
 }: {
   countNewAgentMessages?: boolean;
   /**
@@ -704,6 +739,14 @@ export function AgentHistoryChat({
   speechActive?: boolean;
   speechScopeKey?: string;
   onOpen: (entry: HistoryEntry) => void;
+  /** Messages sent that the transcript does not show yet, oldest first. */
+  outbox?: readonly OutboxMessage[];
+  onRetrySend?: (message: OutboxMessage) => void;
+  onDiscardSend?: (message: OutboxMessage) => void;
+  /** Where an image the user uploaded loads from; none shows the path. */
+  imageUrl?: (path: string) => string;
+  /** The images messages carried, loaded, by entry id. */
+  attachedImages?: ReadonlyMap<string, readonly string[]>;
 }) {
   const speech = useChatSpeech(speechActive, speechScopeKey);
   const followRef = useRef(true);
@@ -814,6 +857,15 @@ export function AgentHistoryChat({
       onLoadOlder();
   };
 
+  // A message just sent is shown where the conversation goes on.
+  const lastOutboxId = outbox[outbox.length - 1]?.id;
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list || !lastOutboxId) return;
+    followRef.current = true;
+    list.scrollTop = list.scrollHeight;
+  }, [lastOutboxId, listRef]);
+
   // Re-pin after layout changes the list did not cause itself: the inspector
   // revealing a hidden view, a resized pane, or lazy markdown (diagrams,
   // images) growing a bubble after its first paint.
@@ -915,6 +967,8 @@ export function AgentHistoryChat({
               speech={speech}
               onOpen={onOpen}
               {...senderProps(rows?.get(item.entry.id), transcript?.agent)}
+              imageUrl={imageUrl}
+              images={attachedImages?.get(item.entry.id)}
             />
           ) : (
             <ToolBlock
@@ -930,22 +984,15 @@ export function AgentHistoryChat({
         ])}
         {placedRest()}
         {after}
+        {outbox.map((message) => (
+          <OutboxBubble
+            key={message.id}
+            message={message}
+            onRetry={onRetrySend}
+            onDiscard={onDiscardSend}
+          />
+        ))}
       </div>
     </div>
   );
-}
-
-function senderProps(row: ChatRow | undefined, agent: string | undefined) {
-  if (!row || agent === undefined) return {};
-  const { sender } = row;
-  return {
-    from:
-      sender.kind === "relayed"
-        ? sender.name
-        : sender.kind === "user"
-          ? "You"
-          : agent,
-    fromKind: sender.kind,
-    continued: row.continued,
-  };
-}
+});

@@ -48,6 +48,8 @@ const CORE_HOST_CALLS = {
       }),
   "agent_history.get": (host) => host.agentSessions().readHistoryRequest,
   "agent_history.entry": (host) => host.agentSessions().readEntry,
+  "agent_commands.get": (host) => host.agentSessions().readCommands,
+  "agent_artifacts.get": (host) => host.agentSessions().readArtifacts,
   "agent_session.get": (host) => host.agentSessions().readSummary,
   // A Codex session linked for reading, for the program the person saw.
   "agent_session.link_preview": (host) => (params) =>
