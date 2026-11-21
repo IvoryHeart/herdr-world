@@ -75,6 +75,7 @@
     "help:docs": "bun scripts/help-docs.ts --write",
     "help:pictures": "HELP_PICTURES=1 bun run test scripts/help-pictures.browser.test.ts",
     "check:pr-body": "bun scripts/check-pr-body.ts",
+    "check:privacy": "bun scripts/check-privacy.ts",
     "check:size": "bun scripts/file-size-ratchet.ts",
     "check:move": "bun scripts/move-check.ts",
     "changelog:assemble": "bun scripts/changelog-fragments.ts assemble",

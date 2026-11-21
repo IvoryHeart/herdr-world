@@ -5,14 +5,18 @@ import {
   WorldApartmentsStore,
   type WorldApartmentsState,
 } from "./apartmentsStore";
+import { apartmentsPreviewClient } from "./apartmentsPreview";
 
 export { openApartments, WORLD_APARTMENTS_EVENT } from "./apartmentsStore";
 
 let shared: WorldApartmentsStore | null = null;
 
-/** The page's one Apartments store, on World's bridge. */
+/**
+ * The page's one Apartments store, on World's bridge (or, for one load, the
+ * synthetic residents of apartmentsPreview.ts).
+ */
 export function worldApartmentsStore() {
-  shared ??= new WorldApartmentsStore(bridge);
+  shared ??= new WorldApartmentsStore(apartmentsPreviewClient(bridge));
   return shared;
 }
 

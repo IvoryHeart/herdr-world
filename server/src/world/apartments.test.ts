@@ -245,3 +245,85 @@ describe("finished agents move into apartments", () => {
     expect(published).toEqual([1, 2]);
   });
 });
+
+describe("a resident keeps the look it had in World", () => {
+  const LOOK = {
+    skin: "#f2c9a0",
+    hair: "#5a3825",
+    hair_style: "bun" as const,
+    outfit: "hoodie" as const,
+    shirt: "#59a86b",
+    pants: "#30404a",
+    accessory: "headset" as const,
+  };
+
+  test("its profile, look and colour are read while it lives and kept at move-in", async () => {
+    const asked: unknown[] = [];
+    let saved: typeof LOOK | null = LOOK;
+    const { apartments } = tracker({
+      appearance: (connectionId) => (pane) => {
+        asked.push({
+          connectionId,
+          ...pane,
+          workspace_ids: [...pane.workspace_ids],
+        });
+        return { profile_id: pane.profile_id, look: saved, color: "teal" };
+      },
+    });
+    const launched = pane("t1", {
+      tokens: {
+        world_terminal: "t1",
+        world_profile: "builder",
+        world_profile_name: "Builder",
+      },
+    });
+    apartments.fresh("local", 1, [launched], NOW - 60_000, agents, topology);
+    expect(asked).toEqual([
+      {
+        connectionId: "local",
+        pane_id: "p-t1",
+        terminal_id: "t1",
+        workspace_id: "w1",
+        tab_id: "tab1",
+        workspace_ids: ["w1"],
+        profile_id: "builder",
+      },
+    ]);
+    // Closing its terminal clears its saved avatar before the move-in is
+    // seen; the look read while it lived is the one it keeps.
+    saved = null;
+    apartments.complete("local", 1, []);
+    await apartments.settled();
+    expect(apartments.list().residents[0]?.appearance).toEqual({
+      profile_id: "builder",
+      look: LOOK,
+      color: "teal",
+    });
+  });
+
+  test("a failed read keeps the last look; no reader at all records none", async () => {
+    let fail = false;
+    const { apartments } = tracker({
+      appearance: () => {
+        if (fail) throw new Error("board unavailable");
+        return () => ({ profile_id: null, look: LOOK, color: null });
+      },
+    });
+    apartments.fresh("local", 1, [pane("t1")], NOW - 60_000, agents, topology);
+    fail = true;
+    apartments.fresh("local", 1, [pane("t1")], NOW - 1000, agents, topology);
+    apartments.complete("local", 1, []);
+    await apartments.settled();
+    expect(apartments.list().residents[0]?.appearance).toEqual({
+      profile_id: null,
+      look: LOOK,
+      color: null,
+    });
+
+    const plain = tracker();
+    plain.apartments.fresh("local", 1, [pane("t2")], NOW - 1000, [], topology);
+    plain.apartments.complete("local", 1, []);
+    await plain.apartments.settled();
+    expect(plain.apartments.list().residents[0]?.appearance).toBeNull();
+  });
+});

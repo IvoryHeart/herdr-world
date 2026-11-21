@@ -191,7 +191,103 @@ if (process.env.BOARD_FACTS_DOM !== "1") {
     expect(lines[1]).toBe(
       "Claude 5 h 76% left · week 78% left · seen just now",
     );
-    expect(lines[2]).toBe("Codex week 92% left · seen just now");
+    expect(lines[2]).toBe(
+      "Codex 5 h not reported · week 92% left · seen just now",
+    );
     act(() => root.unmount());
+  });
+
+  test("host and zone lines dim an aged reading and name a harness with no reading", () => {
+    const now = Date.now();
+    const usage = townUsageStore("7d") as unknown as {
+      set(state: unknown): void;
+    };
+    usage.set({
+      status: "ready",
+      receivedAt: now,
+      snapshot: {
+        version: 1,
+        observed_at: now,
+        window: { kind: "7d", from: now - 7 * 86_400_000, to: now },
+        rollups: [],
+        entities: [],
+        sources: [],
+        today: { rollups: [] },
+        limits: [
+          {
+            connection_id: "scene-nova",
+            connection_generation: 1,
+            harness: "claude",
+            state: "available",
+            source: "claude-status-line",
+            observed_at: now - 40 * 60_000,
+            reason: null,
+            reached: null,
+            windows: [
+              { window_minutes: 300, used_percent: 20, resets_at: null },
+              { window_minutes: 10080, used_percent: 18, resets_at: null },
+            ],
+          },
+          {
+            connection_id: "scene-nova",
+            connection_generation: 1,
+            harness: "codex",
+            state: "missing",
+            source: null,
+            observed_at: null,
+            reason: null,
+            reached: null,
+            windows: [],
+          },
+        ],
+      },
+    });
+    const nova = {
+      key: "h2",
+      connectionId: "scene-nova",
+      label: "nova",
+      stale: false,
+      counts,
+      harnesses: ["claude", "codex"],
+      rooms: [],
+    };
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    act(() =>
+      root.render([
+        createElement(BoardSummary, {
+          key: "summary",
+          summary: { ...summary, hosts: [nova] } as unknown as Summary,
+          onSelectAgent: () => {},
+        }),
+        createElement(BoardZoneFacts, { key: "facts", host: nova as never }),
+      ]),
+    );
+    const chip = host.querySelector<HTMLButtonElement>(".board-facts-chip")!;
+    act(() => chip.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    for (const lines of [
+      [...host.querySelectorAll(".board-facts-host-line")].slice(2),
+      [...host.querySelectorAll(".board-zone-facts > span")].slice(1),
+    ]) {
+      expect(lines).toHaveLength(2);
+      expect(lines[0]!.hasAttribute("data-aged")).toBe(true);
+      expect(lines[0]!.textContent).toMatch(/^Claude .* · as of /);
+      expect(lines[1]!.hasAttribute("data-missing")).toBe(true);
+      expect(lines[1]!.textContent).toBe("Codex no reading yet");
+      expect(lines[1]!.getAttribute("title")).toMatch(/Codex/);
+    }
+    act(() => root.unmount());
+  });
+
+  test("aged, stale and missing limits dim on host lines as on zone lines", async () => {
+    const css = await Bun.file(
+      new URL("./boardFacts.css", import.meta.url),
+    ).text();
+    const rule = css.match(/([^{}]+)\{\s*opacity: 0\.7;\s*\}/)?.[1] ?? "";
+    for (const state of ["data-stale", "data-aged", "data-missing"]) {
+      expect(rule).toContain(`.board-facts-host-line[${state}]`);
+      expect(rule).toContain(`.board-zone-facts [${state}]`);
+    }
   });
 }

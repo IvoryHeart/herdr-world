@@ -1,4 +1,4 @@
-import type { UsageTokens } from "../../../shared/usage";
+import type { UsageRunRole, UsageTokens } from "../../../shared/usage";
 
 export type NumericUsageRow = {
   day: string;
@@ -7,7 +7,20 @@ export type NumericUsageRow = {
   responses: number;
   first_at: number;
   last_at: number;
+  reported_cost_usd?: number | null;
+  /**
+   * When the run was going that day: [from, to] spans joining responses at
+   * most ten minutes apart, at most 48, sorted.
+   */
+  spans?: [number, number][];
+  /** The largest single prompt (input plus cached tokens) that day. */
+  max_prompt_tokens?: number;
+  /** The run's role from its first prompt's fixed vocabulary (usageRole). */
+  role?: UsageRunRole | null;
+  /** The checkout branch the harness recorded for the run. */
+  branch?: string | null;
 };
+
 /** A harness's own subscription-limit report: numbers and times only. */
 export type LimitObservation = {
   at: number;
@@ -48,8 +61,62 @@ export function createUsageProjection(
   hash = (value: string) => value,
 ) {
   type RecordValue = Record<string, any>;
-  type Event = { id: string; at: number; model: string; tokens: UsageTokens };
+  type Event = {
+    id: string;
+    at: number;
+    model: string;
+    tokens: UsageTokens;
+    cost?: number;
+    prompt: number;
+  };
   const events = new Map<string, Event>();
+  // A run's role: only the first prompt's own words, matched against a fixed
+  // vocabulary and dropped at once. Null when the first prompt names none.
+  let role: string | null = null,
+    roleRead = false,
+    branch: string | null = null;
+  const readRole = (text: unknown) => {
+    if (roleRead || typeof text !== "string") return;
+    const head = text.trimStart().slice(0, 400);
+    if (!head) return;
+    if (/^<command-name>\/(?:code-)?review\b/.test(head)) {
+      roleRead = true;
+      role = "reviewer";
+      return;
+    }
+    // Harness preambles (environment, instructions, command echoes) are
+    // not the person's first prompt.
+    if (head.startsWith("<") || head.startsWith("# AGENTS.md")) return;
+    roleRead = true;
+    const named = /\b(worker|builder|fixer|reviewer|checker|scout)\b/i.exec(
+      head,
+    )?.[1];
+    role = named
+      ? named.toLowerCase() === "builder"
+        ? "worker"
+        : named.toLowerCase()
+      : null;
+  };
+  const readBranch = (value: unknown) => {
+    if (
+      typeof value === "string" &&
+      value !== "HEAD" &&
+      /^[a-zA-Z0-9][a-zA-Z0-9_./+-]{0,119}$/.test(value)
+    )
+      branch = value;
+  };
+  const userText = (content: unknown): unknown =>
+    typeof content === "string"
+      ? content
+      : Array.isArray(content)
+        ? content.find(
+            (part) =>
+              part &&
+              typeof part === "object" &&
+              typeof part.text === "string" &&
+              (part.type === "text" || part.type === "input_text"),
+          )?.text
+        : undefined;
   const keys = [
     "input",
     "cache_read",
@@ -169,7 +236,14 @@ export function createUsageProjection(
           : null,
     };
   };
-  const remember = (id: any, at: number, name: any, tokens: UsageTokens) => {
+  const remember = (
+    id: any,
+    at: number,
+    name: any,
+    tokens: UsageTokens,
+    cost?: number,
+    prompt = tokens.input + tokens.cache_read + tokens.cache_write,
+  ) => {
     if (
       typeof id !== "string" ||
       !id ||
@@ -195,8 +269,20 @@ export function createUsageProjection(
       }
       for (const k of keys) tokens[k] = Math.max(prior.tokens[k], tokens[k]);
       at = Math.max(prior.at, at);
+      prompt = Math.max(prior.prompt, prompt);
     }
-    events.set(key, { id: key, at, model: normalized, tokens });
+    events.set(key, {
+      id: key,
+      at,
+      model: normalized,
+      tokens,
+      prompt,
+      ...(cost !== undefined
+        ? { cost: Math.max(prior?.cost ?? 0, cost) }
+        : prior?.cost !== undefined
+          ? { cost: prior.cost }
+          : {}),
+    });
   };
   const accept = (raw: unknown) => {
     const r = object(raw),
@@ -205,6 +291,9 @@ export function createUsageProjection(
     try {
       if (harness === "codex") {
         if (r.type === "session_meta" && identifier(p.id)) session = hash(p.id);
+        if (r.type === "session_meta") readBranch(object(p.git).branch);
+        if (r.type === "event_msg" && p.type === "user_message")
+          readRole(p.message);
         if (r.type === "turn_context") model = identifier(p.model) || "unknown";
         if (r.type !== "event_msg" || p.type !== "token_count") return;
         if (p.rate_limits) rateLimits(p.rate_limits, time(r.timestamp));
@@ -268,11 +357,23 @@ export function createUsageProjection(
             return;
           }
         }
-        remember(identity, time(r.timestamp), model, delta);
+        remember(
+          identity,
+          time(r.timestamp),
+          model,
+          delta,
+          undefined,
+          Number.isSafeInteger(latest.input_tokens)
+            ? latest.input_tokens
+            : delta.input + delta.cache_read,
+        );
         return;
       }
       if (harness === "claude") {
         if (identifier(r.sessionId)) session = hash(r.sessionId);
+        readBranch(r.gitBranch);
+        if (r.type === "user" && r.isMeta !== true && r.isSidechain !== true)
+          readRole(userText(m.content));
         if (r.type === "assistant") claudeRefusal(r, m);
         if (r.type !== "assistant" || !m.usage) return;
         const u = object(m.usage);
@@ -309,7 +410,19 @@ export function createUsageProjection(
           reasoning: 0,
         };
         const at = time(m.timestamp ?? r.timestamp);
-        remember(r.id, at, m.model, { ...tokens });
+        const cost = object(u.cost).total;
+        remember(
+          r.id,
+          at,
+          m.model,
+          { ...tokens },
+          typeof cost === "number" &&
+            Number.isFinite(cost) &&
+            cost >= 0 &&
+            cost <= 1e9
+            ? cost
+            : undefined,
+        );
         observeContext(
           at,
           m.model,
@@ -375,11 +488,14 @@ export function createUsageProjection(
           model,
           session,
           partial,
+          role,
+          branch,
         ]),
       );
     },
     finish(): SessionUsage {
       const rows = new Map<string, NumericUsageRow>();
+      const costs = new Map<string, { total: number; known: number }>();
       for (const e of events.values()) {
         if (e.at < start || e.at >= now) continue;
         const day = new Date(e.at).toISOString().slice(0, 10),
@@ -401,13 +517,53 @@ export function createUsageProjection(
               responses: 0,
               first_at: e.at,
               last_at: e.at,
+              spans: [],
+              max_prompt_tokens: 0,
+              role: role as UsageRunRole | null,
+              branch,
             }),
           );
         for (const k of keys) row.tokens[k] += e.tokens[k];
         row.responses++;
+        const cost = costs.get(key) ?? { total: 0, known: 0 };
+        if (e.cost !== undefined) {
+          cost.total += e.cost;
+          cost.known++;
+        }
+        costs.set(key, cost);
         row.first_at = Math.min(row.first_at, e.at);
         row.last_at = Math.max(row.last_at, e.at);
+        row.spans!.push([e.at, e.at]);
+        row.max_prompt_tokens = Math.max(row.max_prompt_tokens!, e.prompt);
       }
+      // Responses at most ten minutes apart are one span of work; past 48
+      // spans the closest neighbours join. (Inline: this code runs on hosts.)
+      for (const row of rows.values()) {
+        const spans: [number, number][] = [];
+        for (const [at] of row.spans!.sort((a, b) => a[0] - b[0])) {
+          const last = spans[spans.length - 1];
+          if (last && at - last[1] <= 600_000) last[1] = Math.max(last[1], at);
+          else spans.push([at, at]);
+        }
+        while (spans.length > 48) {
+          let best = 1;
+          for (let i = 2; i < spans.length; i++)
+            if (
+              spans[i]![0] - spans[i - 1]![1] <
+              spans[best]![0] - spans[best - 1]![1]
+            )
+              best = i;
+          spans[best - 1]![1] = spans[best]![1];
+          spans.splice(best, 1);
+        }
+        row.spans = spans;
+      }
+      for (const [key, cost] of costs)
+        if (cost.known) {
+          const row = rows.get(key)!;
+          row.reported_cost_usd =
+            cost.known === row.responses ? cost.total : null;
+        }
       const current: LimitObservation | null = limits;
       return {
         session,

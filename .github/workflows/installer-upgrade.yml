@@ -184,10 +184,23 @@ jobs:
             trap - EXIT
 
       - name: Retain compact installer evidence
+        id: installer_evidence
         if: always()
+        # A transient artifact-service DNS failure must not discard a completed
+        # native run. Retry once below; a second upload failure still fails CI.
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: installer-${{ matrix.platform }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/installer-report
           retention-days: 1
           if-no-files-found: warn
+      - name: Retry compact installer evidence upload
+        if: always() && steps.installer_evidence.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: installer-${{ matrix.platform }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/installer-report
+          retention-days: 1
+          if-no-files-found: warn
+          overwrite: true
