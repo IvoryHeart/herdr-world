@@ -91,8 +91,8 @@ export class TownScaleRuntime {
     private readonly now = () => Date.now(),
     private readonly answerWorkMs = SCENE_ANSWER_WORK_MS,
   ) {
-    this.connections = townScaleConnections();
     const loaded = this.now();
+    this.connections = townScaleConnections(loaded);
     // Every finished agent has a stop the service saw, so Mark reviewed can
     // name it; each finished a few minutes apart.
     let n = 0;

@@ -551,6 +551,31 @@ export function townFuelPaint(R: Rect) {
   R(11, 4, 1, 1, clock);
 }
 
+/**
+ * Working, but the session has not moved (#1130): an hourglass whose sand
+ * has run down. It stays still under calm or reduced motion too.
+ */
+export function townQuietPaint(R: Rect) {
+  const wood = "#8a5a3c";
+  const glass = "#8fa3b8";
+  const sand = "#d9a441";
+  R(3, 1, 5, 1, wood);
+  R(3, 8, 5, 1, wood);
+  R(3, 2, 1, 1, glass);
+  R(7, 2, 1, 1, glass);
+  R(4, 2, 3, 1, sand);
+  R(4, 3, 1, 1, glass);
+  R(6, 3, 1, 1, glass);
+  R(5, 3, 1, 1, sand);
+  R(5, 4, 1, 1, glass);
+  R(4, 5, 1, 1, glass);
+  R(6, 5, 1, 1, glass);
+  R(3, 6, 1, 2, glass);
+  R(7, 6, 1, 2, glass);
+  R(5, 6, 1, 1, sand);
+  R(4, 7, 3, 1, sand);
+}
+
 /** A bus stop sign's size in world pixels, without its outline. */
 export const TOWN_BUS_STOP_SIGN = { width: 24, height: 62 } as const;
 
@@ -854,6 +879,7 @@ export function buildTownSprites() {
           R(x, y, 1, 2, "#2f9e55");
       }),
       fuel: bubble(townFuelPaint, TOWN_FUEL_BUBBLE_WIDTH),
+      quiet: bubble(townQuietPaint),
       idle: bubble((R) => {
         R(3, 4, 5, 4, "#8a5a3c");
         R(8, 5, 1, 2, "#8a5a3c");

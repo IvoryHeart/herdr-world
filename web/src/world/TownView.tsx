@@ -59,6 +59,8 @@ import {
 import { requestTerminalComposer } from "./terminalComposerRequest";
 import { TownChooser } from "./town/TownChooser";
 import { TownPeek, townStatusText } from "./town/TownPeek";
+import { useTownQuiet } from "./town/useTownQuiet";
+import { useTownSummoned } from "./town/useTownSummoned";
 import {
   nextTownCall,
   townCalls,
@@ -349,22 +351,8 @@ export default function TownView({
     () => lazyIndex(office.roster, (entry) => entry.agent.key),
     [office.roster],
   );
-  // An agent the user opens walks back to its desk and stays there until its
-  // status changes; then Town places it by status again. Opening it does not
-  // mark its work as seen: Mark reviewed still does that.
-  const [summoned, setSummoned] = useState<ReadonlyMap<string, string>>(
-    () => new Map(),
-  );
-  useEffect(() => {
-    setSummoned((current) => {
-      let next: Map<string, string> | null = null;
-      for (const [key, status] of current)
-        if (agentByKey.get(key)?.agent.semanticStatus !== status)
-          (next ??= new Map(current)).delete(key);
-      return next ?? current;
-    });
-  }, [agentByKey]);
-  const summonedKeys = useMemo(() => new Set(summoned.keys()), [summoned]);
+  // Agents the user opened, back at their desks until their status changes.
+  const { summonedKeys, summon } = useTownSummoned(agentByKey);
   // Each agent's quest, marked over its desk by agent key.
   const agentQuests = deskReads.quests;
   // Working agents' current steps, read only for those Town shows at the
@@ -387,15 +375,6 @@ export default function TownView({
       townLeaf(world, agent.nodeId)?.lastActivityAt,
     [world],
   );
-  const summon = (key: string) => {
-    const status = agentByKey.get(key)?.agent.semanticStatus;
-    if (status)
-      setSummoned((current) =>
-        current.get(key) === status
-          ? current
-          : new Map(current).set(key, status),
-      );
-  };
   const calls = useMemo(
     () =>
       townCalls(office.roster, blockedSince.current, unseenCompletions, (key) =>
@@ -516,12 +495,16 @@ export default function TownView({
     peekTimer.current = window.setTimeout(() => setPeek(next), delay);
   };
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
-  // Reception's filter keeps some agents at their desks; find shows them (#501).
-  const reception = useTownReception(office, askingKeys, (key, anchor) => {
+  /** Find's card: held open on one agent until closed or stepped on. */
+  const showFound = (key: string, anchor: { x: number; y: number }) => {
     window.clearTimeout(peekTimer.current);
     holdPeek.current = true;
     setPeek({ key, anchor });
-  });
+  };
+  // Reception's filter keeps some agents at their desks; find shows them (#501).
+  const reception = useTownReception(office, askingKeys, showFound);
+  // Working agents whose sessions have not moved: marked, counted, found (#1130).
+  const quiet = useTownQuiet(office, activityAt, now, preferences, showFound);
   const hoverAgent = (
     key: string | null,
     anchor?: { x: number; y: number },
@@ -867,8 +850,10 @@ export default function TownView({
                   }
                 : null
             }
+            quiet={quiet.text(peekAgent.key)}
             onNext={
               reception.step(peekAgent.key, peek!.anchor) ??
+              quiet.step(peekAgent.key, peek!.anchor) ??
               (nextCall(peekAgent.key)
                 ? () => openAgent(nextCall(peekAgent.key)!.agent.key)
                 : null)
@@ -876,6 +861,7 @@ export default function TownView({
             onClose={() => {
               holdPeek.current = false;
               reception.clear();
+              quiet.clear();
               setPeek(null);
             }}
             onHold={(hold) => {
@@ -905,6 +891,7 @@ export default function TownView({
             receptionHeldKeys={reception.held}
             receptionTakes={reception.takes}
             onFindHeld={reception.find}
+            quiet={quiet}
             // A letter at reception: its question in Needs you.
             onActivateAsk={(nodeId) => openNeedsYou(needsYouLeafKey(nodeId))}
             quests={questMarks}
