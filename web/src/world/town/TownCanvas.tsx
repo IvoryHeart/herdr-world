@@ -91,14 +91,14 @@ import "./townTeams.css";
 import { TownEdgeOverlay, TownPulseRing } from "./TownEdgeLayer";
 import { useTownEdgeNav, type TownNeedsYouOrder } from "./useTownEdgeNav";
 import { TownLensBoard, TownLensLayer, useTownLenses } from "./TownLenses";
+import { setTownRealWeather } from "./townWeather";
+import { unavailableWeather } from "../../../../shared/weather";
 import type { OfficeAgent } from "../officeProjectionTypes";
 
 export type { PlaceColorChoice, TownRoomActions } from "./townRoomActions";
 import type { TownRoomActions } from "./townRoomActions";
-
 /** Camera kept across Office visits within one page session. */
 const savedCameras = new Map<string, { x: number; y: number; z: number }>();
-
 const NO_COLORS: TerminalColors = {};
 const NO_RELATIONS = { relations: [], places: new Map() };
 const NO_PINS: DeskPins = {};
@@ -237,6 +237,11 @@ export function TownCanvas({
   );
   const captureHolding = useRef(false);
   const sources = useWorldSources();
+  // Town's sky reads the real weather from here (townWeather.ts).
+  useEffect(
+    () => setTownRealWeather(sources.weather ?? unavailableWeather("disabled")),
+    [sources.weather],
+  );
   // The town's shape follows its container, measured on every resize.
   const [shape, setShape] = useState<TownShape>(() =>
     typeof window !== "undefined"

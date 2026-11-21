@@ -21,7 +21,9 @@ export async function openWorldClient(
   legacyProfiles?: string,
   legacySettings?: string,
   legacyBoard?: string,
+  signal?: AbortSignal,
 ) {
+  signal?.throwIfAborted();
   // Bun bundles import.meta.url relative to the executable's main entry, whose
   // sibling storage/ directory contains the separately embedded worker entry.
   const workerUrl = new URL(
@@ -132,12 +134,28 @@ export async function openWorldClient(
     at: ports.clock.now(),
     incarnation,
   });
+  // Abandoning a pending open still releases the database: the worker handles
+  // messages in order, so this close follows the open it is still running.
+  const abandon = () => {
+    if (failure || closed) return;
+    closed = exited.promise;
+    send({ type: "close" });
+    fail(
+      signal?.reason instanceof Error
+        ? signal.reason
+        : new Error("World storage open was abandoned"),
+    );
+  };
+  signal?.addEventListener("abort", abandon, { once: true });
   let snapshot: StorageSnapshot;
   try {
     snapshot = await ready.promise;
+    if (failure) throw failure;
   } catch (error) {
     await exited.promise;
     throw error;
+  } finally {
+    signal?.removeEventListener("abort", abandon);
   }
   return {
     snapshot,
