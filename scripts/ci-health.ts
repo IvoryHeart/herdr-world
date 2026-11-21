@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { collectHealth, type HealthData } from "./ci-health-github";
 import { deliveryLines, percentile } from "./ci-health-delivery";
+import { stackReport } from "./ci-health-stack";
 
 const minutes = (value: number | undefined) =>
   value === undefined ? "n/a" : `${(value / 60_000).toFixed(1)}m`;
@@ -142,6 +143,7 @@ if (import.meta.main) {
       options: {
         days: { type: "string", default: "3" },
         repo: { type: "string" },
+        "reference-run": { type: "string" },
       },
       strict: true,
     });
@@ -157,6 +159,10 @@ if (import.meta.main) {
         { encoding: "utf8", timeout: 30_000 },
       ).trim();
     const now = new Date();
+    if (values["reference-run"]) {
+      console.info(stackReport(repo, values["reference-run"]));
+      process.exit(0);
+    }
     const since = new Date(+now - days * 86_400_000);
     const data = collectHealth(repo, since);
     if (!configuredRepo) data.requests++;

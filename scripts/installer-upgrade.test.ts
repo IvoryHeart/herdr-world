@@ -508,6 +508,7 @@ test("installer upgrades run native released artifacts on every supported platfo
   expect(Object.keys(workflow.on)).toEqual([
     "workflow_call",
     "workflow_dispatch",
+    "schedule",
   ]);
   expect(workflow.permissions).toEqual({ contents: "read" });
   expect(job.strategy["fail-fast"]).toBe(false);
