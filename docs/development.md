@@ -90,8 +90,10 @@ CLI locates its token. Preview data and built assets stay untracked.
 To include several previews in Shipyard's local instance observations, set
 `HERDR_WORLD_INSTANCE_REGISTRY_DIR` to the same private directory in each
 listener's environment at startup. Without it, each isolated data folder keeps
-its own registry. This shares display observations only; credentials, storage
-and connections stay in each preview's own folder. Reports expire after 45
+its own registry. This shares display observations and, for previews attached
+to the same runtime, their open owner questions in Needs you (each World reads
+the others over loopback with a per-run token); credentials, storage and
+connections stay in each preview's own folder. Reports expire after 45
 seconds without renewal, and stale reports have no open link. See the
 [Shipyard API guide](shipyard-api.md#local-instance-registry) for bounds and CLI
 try commands. No discovery probes or additional servers are started by Shipyard.

@@ -108,3 +108,44 @@ SHALL retain retrieval semantics without being sent as invented answers.
 - **WHEN** the question is answered but its pane delivery is uncertain
 - **THEN** a bounded delivery notice remains available with evidence and user recovery
 - **AND** the question is not reopened or counted as unanswered
+
+### Requirement: Ask ownership across World instances
+
+The World instance that records an ask (its home) SHALL remain its only
+authority: its ledger accepts at most one answer or dismissal, and answer
+delivery SHALL use only the home's own qualified connection and generation.
+A herdr-core or Herdr runtime SHALL NOT hold the ask record.
+
+Other World instances on the same machine that share the home's local instance
+registry and at least one runtime (the same connection target) SHALL show the
+home's open asks for that runtime in Needs you, with the home's name. Each
+registry report SHALL carry a per-run peer token; the home SHALL serve its asks
+only over loopback, without a browser Origin, to that token, and only for the
+runtimes the requester names and shares. Shared asks SHALL NOT carry connection,
+pane, terminal or session identifiers, attachments or delivery evidence. An
+answer or dismissal from another instance SHALL be forwarded to the home, which
+applies it as the owner's; a refusal (already closed) SHALL be shown, not
+retried elsewhere.
+
+The owner alert SHALL name the home (`<question> (<id>, asked in <World>)`). An
+instance that receives an alert whose ask it cannot read SHALL show an
+alert-only entry naming the home, with a link when its registry reports that
+World, and SHALL NOT offer an answer there. Such entries are bounded, held in
+memory and closed by hiding them or once the home shares the ask.
+
+#### Scenario: Answered from another World
+
+- **WHEN** an agent asks through World A and the owner answers in World B on the same runtime
+- **THEN** B forwards the answer to A, A records it once and delivers it through its own connection
+- **AND** both Worlds stop listing the question
+- **WHEN** the owner answers in A and B at the same moment
+- **THEN** exactly one answer is recorded and the other is refused as closed
+
+#### Scenario: Home down, older or not shared
+
+- **WHEN** the home stops, its report leaves the registry
+- **THEN** other Worlds stop listing its asks at their next read and refuse to forward answers
+- **WHEN** a read fails while the home still reports
+- **THEN** the last list stays for at most 15 seconds, then leaves
+- **WHEN** an older home, or one with a separate registry, sends an alert
+- **THEN** other Worlds show an alert-only "asked in <World>" entry (or "another World") instead of nothing

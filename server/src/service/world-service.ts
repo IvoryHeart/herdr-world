@@ -73,6 +73,7 @@ import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
+import { createWorldAskPeers } from "./world-ask-peers";
 import { createRuntimeMemoryService } from "../memory/runtime-service";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
@@ -251,7 +252,16 @@ async function compose(
     board,
     publishBoardChanged,
   );
+  const askPeers = createWorldAskPeers({
+    titleSuffix: async () => (await settings.read()).title_suffix,
+    profiles: () => connectionProfiles.profilesById(),
+    coreIds: () => connectionProfiles.coreList().map((entry) => entry.id),
+    defaultId: () => connectionManager.defaultId(),
+  });
   const worldCli = createWorldCliService({
+    peers: askPeers.peers,
+    homeName: askPeers.homeName,
+    askRuntimes: askPeers.askRuntimes,
     memory: () => rpcServices.worldMemory!,
     core: () => coreCallers,
     board,
@@ -601,7 +611,8 @@ async function compose(
           clientLabel,
           markRpcError,
           taskNotificationSource: config.taskNotificationSource,
-          onTaskEvent: (event) =>
+          onTaskEvent: (event) => {
+            if (context.isCurrent()) askPeers.observeAlert(event);
             webPush.notify(
               connectionTaskPush(
                 event,
@@ -614,7 +625,8 @@ async function compose(
                 identity.label,
               ),
               context.isCurrent,
-            ),
+            );
+          },
           onEvent: (event, eventIdentity, kind) => {
             if (!context.isCurrent()) return;
             publishWorldInvalidation(
@@ -901,11 +913,24 @@ async function compose(
         },
       });
       publishInstanceAddress(releaseDataFolder, config, server);
+      const listenPort = server.port ?? config.port;
+      const asksReport = askPeers.start(listenPort, {
+        directory: paths.instanceRegistry,
+        selfId: shipyardInstances.id,
+        now: () => clock.now(),
+        scheduler,
+        any: ["0.0.0.0", "::"].includes(config.host),
+        isLocal: (id, question) =>
+          storage.ledger().ask(id)?.question === question,
+        changed: () => worldCli.peersChanged(),
+        log: (message) => logger.warn(message),
+      });
       shipyardInstances.start(
         shipyardIdentity,
-        server.port ?? config.port,
+        listenPort,
         config.host,
         !!config.tls,
+        asksReport,
       );
       worldCli.start();
       forwards.listeningOn(server.port ?? config.port);
@@ -963,6 +988,7 @@ async function compose(
     worldSources.weather.close();
     shipyard.close();
     shipyardInstances.stop();
+    askPeers.stop();
     const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
     deskWatches.stop();

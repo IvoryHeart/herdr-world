@@ -18,7 +18,7 @@ import { AgentHoverCard } from "./AgentHoverCard";
 import { leafOwner, useConversationRead } from "./conversationRead";
 import { chatClient } from "../coreRecipient";
 import { townAgo } from "./town/TownRail";
-import { askDeliveryMessage, type WorldAsk } from "./worldAsks";
+import { askDeliveryMessage, askHomeHref, type WorldAsk } from "./worldAsks";
 import type { WorldLeafObject } from "./worldObject";
 import { filesFromTerminalDrop, isNativeFileDrag } from "../terminalFileDrop";
 import {
@@ -82,7 +82,9 @@ export function NeedsYouMessage({
   const { leaf } = item;
   const core = leaf?.pane.runtime === "herdr-core";
   const name = itemName(item);
-  const unverified = item.kind === "asks" && !item.ask.actor.verified;
+  // An alert alone carries no pane to check; its home World checked it.
+  const unverified =
+    item.kind === "asks" && !item.ask.actor.verified && !item.ask.alert_only;
   const who = `${name}${unverified ? " (unverified)" : ""}`;
   const kind =
     item.kind === "asks"
@@ -370,14 +372,20 @@ function NeedsYouAsk({
     if (!problem) files.clear();
   };
   const notice = error ?? deliveryMessage;
+  const home = ask.home;
+  const homeHref = home ? askHomeHref(home) : null;
   return (
     <>
       {head(
         <button
           type="button"
           className="needs-you-icon"
-          aria-label={`Dismiss ${who}'s question without answering`}
-          title="Dismiss question"
+          aria-label={
+            ask.alert_only
+              ? `Hide ${who}'s alert`
+              : `Dismiss ${who}'s question without answering`
+          }
+          title={ask.alert_only ? "Hide alert" : "Dismiss question"}
           disabled={busy}
           onClick={() => void act(onDismiss)}
         >
@@ -391,7 +399,24 @@ function NeedsYouAsk({
           breaks
         />
       </NeedsYouText>
-      {options.length && !typing ? (
+      {home ? (
+        <small className="needs-you-home" data-needs-you-home={home.name}>
+          {"Asked in "}
+          {homeHref ? (
+            <a href={homeHref} target="_blank" rel="noopener noreferrer">
+              {home.name}
+            </a>
+          ) : (
+            <b>{home.name}</b>
+          )}
+          {ask.alert_only
+            ? homeHref
+              ? ". Open it to answer."
+              : ". This World cannot read it; answer it there."
+            : ". Your answer closes it there."}
+        </small>
+      ) : null}
+      {ask.alert_only ? null : options.length && !typing ? (
         <div
           className="needs-you-replies"
           role="group"

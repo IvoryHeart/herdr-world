@@ -252,6 +252,11 @@ export class ConnectionProfileService<
     });
   }
 
+  /** Configured profiles by connection ID, for runtime keys (#1152). */
+  profilesById(): Map<string, ManagedConnectionProfile> {
+    return new Map([...this.profiles].map(([id, e]) => [id, e.profile]));
+  }
+
   /** herdr-core connections with their observation, for the Connections page. */
   coreList(): CoreConnectionListItem[] {
     const core = this.args.core;
