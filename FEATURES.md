@@ -1223,7 +1223,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     [Apartments](#apartments-finished-agents).
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
-    reception and Board's host label. When the local connection is failing and
+    reception and Board's host label. A live herdr-core host is never stale
+    there: Board offers its **+** (New workspace) instead. When the local connection is failing and
     no host is ready, Town's stage also offers to set up a runtime. With no
     runtime installed it offers **Set up herdr-core** first and **Use the Herdr
     TUI instead** second; with Herdr installed but stopped it offers to start
