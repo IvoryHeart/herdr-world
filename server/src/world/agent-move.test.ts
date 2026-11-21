@@ -45,9 +45,11 @@ function side(id: string, panes: TerminalRow[], log: string[]): MoveSide {
     }),
     admit: async () => ({ admitted: `${id}-root-only` }),
     session: async () => "session-1",
+    shellBusy: async () => false,
     pinned: () => true,
     async start(request) {
-      log.push(`start ${id} ${request.args.join(" ")} in ${request.cwd}`);
+      const argv = [request.kind ?? "shell", ...request.args].join(" ");
+      log.push(`start ${id} ${argv} in ${request.cwd}`);
       return { tab_id: "c1:t5", pane_id: "c5", terminal_id: "c5" };
     },
     async close(pane, admitted) {
@@ -113,7 +115,7 @@ test("an idle agent resumes on the other runtime before its original closes", as
     target: { connection_id: "core", tab_id: "c1:t5", terminal_id: "c5" },
   });
   expect(log).toEqual([
-    "start core --resume session-1 in /synthetic/project",
+    "start core claude --resume session-1 in /synthetic/project",
     "pin core c5",
     "close tui p1 tui-root-only",
   ]);
@@ -157,6 +159,77 @@ test("a failed start closes only the partial new agent and keeps the original", 
   });
   expect(log).toEqual(["close core c5"]);
   expect(ops.some((op) => op.op === "agent.rehome")).toBe(false);
+});
+
+test("without a conversation to resume it asks, then starts fresh in the same folder", async () => {
+  const { deps, log, sides } = setup();
+  sides.tui!.session = async () => null;
+  expect(await moveAgentAcross(deps, { source, destination })).toEqual({
+    status: "confirm",
+    message:
+      "World can't find Ada's conversation, so it starts fresh there in the same folder. Its conversation won't continue. Move it anyway?",
+  });
+  expect(log).toEqual([]);
+  expect(
+    await moveAgentAcross(deps, { source, destination, fresh: true }),
+  ).toMatchObject({ status: "moved" });
+  expect(log).toEqual([
+    "start core claude in /synthetic/project",
+    "pin core c5",
+    "close tui p1 tui-root-only",
+  ]);
+});
+
+test("a plain terminal moves as a new shell once confirmed; a busy one is refused", async () => {
+  const { deps, log, sides, pane, ops } = setup();
+  delete pane.agent;
+  pane.agent_status = "unknown";
+  sides.tui!.rows = async () => ({
+    workspaces: ["w1", "c1"],
+    panes: [pane],
+    names: new Map(),
+  });
+  expect(await moveAgentAcross(deps, { source, destination })).toMatchObject({
+    status: "confirm",
+    message: expect.stringContaining("starts again as a new shell"),
+  });
+  sides.tui!.shellBusy = async () => true;
+  expect(
+    await moveAgentAcross(deps, { source, destination, fresh: true }),
+  ).toEqual({
+    status: "refused",
+    message: "This terminal is running a program. Let it finish, then move it.",
+  });
+  expect(log).toEqual([]);
+  sides.tui!.shellBusy = async () => false;
+  expect(
+    await moveAgentAcross(deps, { source, destination, fresh: true }),
+  ).toMatchObject({ status: "moved" });
+  expect(log[0]).toBe("start core shell in /synthetic/project");
+  expect(ops.at(-1)).toMatchObject({ op: "agent.rehome", from: source });
+});
+
+test("a Board that refuses the undo still drops the copy and says where the desk is", async () => {
+  const { deps, log, sides } = setup();
+  sides.tui!.close = async () => {
+    throw new Error("Refused.");
+  };
+  const patch = deps.board().patch;
+  let patches = 0;
+  deps.board = (() => ({
+    get: emptyBoardDocument,
+    patch: async (plan: never) => {
+      if (++patches > 2) throw new Error("storage unavailable");
+      return patch(plan);
+    },
+  })) as unknown as AgentMoveDeps["board"];
+  const result = await moveAgentAcross(deps, { source, destination });
+  expect(result).toEqual({
+    status: "refused",
+    message:
+      "Ada didn't close where it was: Refused. It still runs there. Its desk details stay on the new copy: storage unavailable.",
+  });
+  expect(log.at(-1)).toBe("close core c5");
 });
 
 test("rehoming carries colour, pin, strings and spawn links to the new address", () => {
@@ -322,7 +395,8 @@ test("a moved child keeps the colour it inherited from its parent", () => {
 
 test("every start, recheck, close and cleanup outcome leaves one owner of the desk and says what may still run", async () => {
   const starts = ["ready", "failed", "failed-partial"] as const;
-  const rechecks = ["same", "working"] as const;
+  // The original turns busy while the copy starts, or while it is pinned.
+  const rechecks = ["same", "working", "working-at-pin"] as const;
   const closes = ["ended", "uncertain", "refused", "failed-but-gone"] as const;
   const cleanups = ["ended", "uncertain", "throws"] as const;
   let runs = 0;
@@ -337,6 +411,10 @@ test("every start, recheck, close and cleanup outcome leaves one owner of the de
           sides.tui!.rows = async () => {
             const now = await rows();
             return { ...now, panes: original ? now.panes : [] };
+          };
+          sides.core!.pin = async () => {
+            if (recheck === "working-at-pin") pane.agent_status = "working";
+            return [];
           };
           sides.core!.start = async () => {
             if (start === "ready") {
@@ -391,7 +469,7 @@ test("every start, recheck, close and cleanup outcome leaves one owner of the de
           }
           runs++;
         }
-  expect(runs).toBe(72);
+  expect(runs).toBe(108);
 });
 
 describe("closing a herdr-core original (real kill path)", () => {

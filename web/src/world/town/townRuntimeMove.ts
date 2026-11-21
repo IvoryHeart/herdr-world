@@ -32,13 +32,13 @@ export function deskAgentAddress(
   };
 }
 
-/** A Board card's one agent as a handoff source (its key is its card key). */
+/** A Board card's one terminal as a handoff source (its key is its card key). */
 export function cardAgentAddress(
   tab: BoardTab,
   workspace: BoardWorkspace,
 ): AgentAddress | null {
   const [pane, ...more] = tab.panes;
-  if (!pane || more.length || !pane.isAgent || pane.leaf.stale) return null;
+  if (!pane || more.length || pane.leaf.stale) return null;
   return {
     connection_id: workspace.connectionId,
     generation: workspace.generation,
@@ -60,7 +60,8 @@ export const workspaceRoom = (workspace: BoardWorkspace) => ({
 
 /**
  * Hand an agent to a room on another runtime (world.agent.move): it resumes
- * there and its desk keeps its pin, colour and links.
+ * there and its desk keeps its pin, colour and links. With nothing to resume
+ * the service says so first; it starts fresh there only once confirmed.
  */
 export async function requestAgentHandoff(
   source: AgentAddress | null,
@@ -72,25 +73,40 @@ export async function requestAgentHandoff(
     };
   },
   call: typeof bridge.call = bridge.call.bind(bridge),
+  confirm: (message: string) => boolean = (message) => window.confirm(message),
 ): Promise<TownMoveOutcome> {
   if (!source)
     return {
       status: "refused",
       reason: "unsupported",
-      message: "Only a desk with one agent moves to another runtime.",
+      message: "Only a desk with one terminal moves to another runtime.",
     };
-  const result = (await call(
-    "world.agent.move",
-    {
-      source,
-      destination: {
-        connection_id: room.workspaceRef.connectionId,
-        generation: room.workspaceRef.generation,
-        workspace_id: room.workspaceRef.nativeId,
+  const move = (fresh: boolean) =>
+    call(
+      "world.agent.move",
+      {
+        source,
+        destination: {
+          connection_id: room.workspaceRef.connectionId,
+          generation: room.workspaceRef.generation,
+          workspace_id: room.workspaceRef.nativeId,
+        },
+        ...(fresh ? { fresh: true } : {}),
       },
-    },
-    180_000,
-  )) as AgentMoveOutcome;
+      180_000,
+    ) as Promise<AgentMoveOutcome>;
+  let result = await move(false);
+  if (result.status === "confirm") {
+    if (!confirm(result.message))
+      return { status: "refused", reason: "cancelled", message: "Not moved." };
+    result = await move(true);
+  }
+  if (result.status === "confirm")
+    return {
+      status: "refused",
+      reason: "unsupported",
+      message: result.message,
+    };
   return result.status === "moved"
     ? {
         status: "moved",

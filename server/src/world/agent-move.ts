@@ -48,11 +48,16 @@ export type MoveSide = {
   ): Promise<{ refusal: string } | { admitted: unknown }>;
   /** The harness session the agent at `pane` runs, if known. */
   session(pane: TerminalRow): Promise<string | null>;
+  /** True while a plain terminal runs a program other than its shell. */
+  shellBusy(pane: TerminalRow): Promise<boolean>;
   pinned(pane: TerminalRow, colorKey: string): boolean;
-  /** Start `kind` resumed and wait until it is ready for input. */
+  /**
+   * Start `kind` with `args` (a shell when null) and wait until it is ready
+   * for input.
+   */
   start(request: {
     workspaceId: string;
-    kind: string;
+    kind: string | null;
     label: string;
     args: string[];
     cwd?: string;
@@ -81,7 +86,6 @@ export type AgentMoveDeps = {
 
 export type AgentMoveResult = AgentMoveOutcome;
 
-const MOVABLE = new Set(["claude", "codex"]);
 const text = (value: unknown) => (typeof value === "string" ? value : "");
 const locks = new Set<string>();
 
@@ -93,23 +97,30 @@ const reason = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
 /** Why `pane` may not move now, with its agent's `name`. */
-function sourceRefusal(
+async function sourceRefusal(
+  side: MoveSide,
   rows: Awaited<ReturnType<MoveSide["rows"]>>,
   from: AgentAddress,
-): { pane: TerminalRow; name: string } | string {
+): Promise<{ pane: TerminalRow; name: string } | string> {
   const pane = rows.panes.find(
     (row) =>
       row.terminal_id === from.terminal_id && row.pane_id === from.pane_id,
   );
   if (!pane || pane.tab_id !== from.tab_id) return "That agent has gone.";
-  const name = rows.names.get(from.pane_id) || "agent";
+  const name =
+    rows.names.get(from.pane_id) || (pane.agent ? "agent" : "This terminal");
+  if (rows.panes.some((row) => row !== pane && row.tab_id === from.tab_id))
+    return "Only a desk with one terminal moves between runtimes.";
+  // A plain terminal is busy while it runs a program other than its shell.
+  if (!pane.agent)
+    return (await side.shellBusy(pane))
+      ? `${name} is running a program. Let it finish, then move it.`
+      : { pane, name };
   const status = text(pane.agent_status);
   if (status !== "idle" && status !== "done")
     return status === "blocked"
       ? `${name} is waiting for an answer. Answer it, then move it.`
       : `${name} is working. Let it finish, then move it.`;
-  if (rows.panes.some((row) => row !== pane && row.tab_id === from.tab_id))
-    return "Only a desk with one terminal moves between runtimes.";
   return { pane, name };
 }
 
@@ -129,8 +140,11 @@ async function discard(
 /**
  * Move an agent to a room on another runtime: start its harness there with
  * its conversation resumed, wait until it is ready, carry its desk (colour,
- * pin, links) over, then close the original. A busy agent is refused; a
- * failed start leaves the original running.
+ * pin, links) over, then close the original. Without a conversation to
+ * resume (a plain terminal, or a session World can't find) the move asks
+ * first (`confirm`), then starts the same harness fresh, or a new shell, in
+ * the same folder. A busy agent is refused; a failed start leaves the
+ * original running.
  */
 export async function moveAgentAcross(
   deps: AgentMoveDeps,
@@ -151,7 +165,7 @@ export async function moveAgentAcross(
     if (source!.machine !== target!.machine)
       refuse("Agents move between runtimes on the same machine only.");
     const rows = await source!.rows();
-    const admitted = sourceRefusal(rows, from);
+    const admitted = await sourceRefusal(source!, rows, from);
     if (typeof admitted === "string") refuse(admitted);
     const { pane, name } = admitted as Exclude<typeof admitted, string>;
     if (
@@ -159,16 +173,20 @@ export async function moveAgentAcross(
       from.color_key
     )
       refuse("That desk changed. Look again, then move.");
-    const kind = text(pane.agent);
-    if (!MOVABLE.has(kind))
-      refuse("Only Claude and Codex agents move between runtimes.");
+    const kind = text(pane.agent) || null;
     const closing = await source!.admit(pane);
     if ("refusal" in closing) refuse(closing.refusal);
-    const session = await source!.session(pane);
-    const args = session
-      ? apartmentResumeArgs({ harness: kind, session_id: session })
+    const session = kind ? await source!.session(pane) : null;
+    const resume = session
+      ? apartmentResumeArgs({ harness: kind!, session_id: session })
       : null;
-    if (!args) refuse(`World can't find ${name}'s conversation to resume.`);
+    if (!resume && !request.fresh)
+      return {
+        status: "confirm",
+        message: kind
+          ? `World can't find ${name}'s conversation, so it starts fresh there in the same folder. Its conversation won't continue. Move it anyway?`
+          : `${name} starts again as a new shell there in the same folder. What it ran and showed so far stays behind. Move it anyway?`,
+      };
     const pinned = source!.pinned(pane, from.color_key);
 
     // Keep the links Herdr's tokens show before the original closes.
@@ -200,7 +218,7 @@ export async function moveAgentAcross(
       workspaceId: to.workspace_id,
       kind,
       label: name.slice(0, 64),
-      args: args!,
+      args: resume ?? [],
       ...(to.cwd || cwd ? { cwd: to.cwd || cwd } : {}),
     });
     if ("message" in started) {
@@ -225,14 +243,25 @@ export async function moveAgentAcross(
             )
         ).revision,
       );
-    let moved: AgentAddress;
-    try {
-      // Starting can take a minute: the original must still be the agent
-      // admitted, idle and alone, or the new copy goes and the original stays.
-      const again = sourceRefusal(await source!.rows(), from);
+    // The original must still be what was admitted, idle and alone, right
+    // before it closes: starting can take a minute.
+    const recheck = async () => {
+      const again = await sourceRefusal(source!, await source!.rows(), from);
       if (typeof again === "string") refuse(again);
-      if (text((again as { pane: TerminalRow }).pane.agent) !== kind)
+      if ((text((again as { pane: TerminalRow }).pane.agent) || null) !== kind)
         refuse(`${name} changed. Look again, then move.`);
+    };
+    /** Put the desk back on the original; say so when the Board refused. */
+    const unhome = (to: AgentAddress) =>
+      rehome(to, from, []).then(
+        () => "",
+        (error: unknown) =>
+          ` Its desk details stay on the new copy: ${reason(error)}.`,
+      );
+    let moved: AgentAddress;
+    let rehomed = false;
+    try {
+      await recheck();
       const after = await target!.rows();
       moved = {
         connection_id: to.connection_id,
@@ -250,9 +279,12 @@ export async function moveAgentAcross(
       const pinOps = pinned ? await target!.pin(moved) : [];
       // The desk moves before the original closes, so its links outlive it.
       await rehome(from, moved, pinOps);
+      rehomed = true;
+      await recheck();
     } catch (error) {
+      const kept = rehomed ? await unhome(moved!) : "";
       refuse(
-        `${reason(error)} It still runs where it was.${await discard(target!, placed)}`,
+        `${reason(error)} It still runs where it was.${kept}${await discard(target!, placed)}`,
       );
       throw error;
     }
@@ -271,9 +303,9 @@ export async function moveAgentAcross(
         .catch(() => true);
       if (!still) return { status: "moved", target: moved };
       // The original stays: so do its desk and links.
-      await rehome(moved, from, []);
+      const kept = await unhome(moved);
       refuse(
-        `${name} didn't close where it was: ${reason(error)} It still runs there.${await discard(target!, placed)}`,
+        `${name} didn't close where it was: ${reason(error)} It still runs there.${kept}${await discard(target!, placed)}`,
       );
     }
     if (closed.uncertain)
@@ -339,9 +371,36 @@ export function moveSide(
           }
         return null;
       },
+      async shellBusy(pane) {
+        const info = (await call("pane.process_info", {
+          pane_id: text(pane.pane_id),
+        })) as { process_info?: Record<string, unknown> } | null;
+        const process = info?.process_info;
+        return (
+          !process ||
+          typeof process.shell_pid !== "number" ||
+          process.foreground_process_group_id !== process.shell_pid
+        );
+      },
       pinned: (_pane, colorKey) =>
         Boolean(services.board().get().layout.desk_pins[colorKey]),
       async start(request) {
+        if (request.kind === null) {
+          const made = (await call("tab.create", {
+            workspace_id: request.workspaceId,
+            label: request.label,
+            ...(request.cwd ? { cwd: request.cwd } : {}),
+          })) as {
+            tab?: { tab_id?: unknown };
+            root_pane?: { pane_id?: unknown; terminal_id?: unknown };
+          } | null;
+          const tab_id = text(made?.tab?.tab_id);
+          const pane_id = text(made?.root_pane?.pane_id);
+          const terminal_id = text(made?.root_pane?.terminal_id);
+          return tab_id && pane_id && terminal_id
+            ? { tab_id, pane_id, terminal_id }
+            : { message: "Herdr did not confirm the new tab." };
+        }
         const outcome = await launchAgent(call, {
           workspace_id: request.workspaceId,
           kind: request.kind,
@@ -388,6 +447,14 @@ export function moveSide(
         .knownSession(text(pane.terminal_id), text(pane.agent));
       return known?.id ?? null;
     },
+    async shellBusy(pane) {
+      // Busy while its foreground program is not the shell core started.
+      const record = lease.runtime.core.mirror
+        .terminals()
+        .find((t) => t.address === text(pane.terminal_id));
+      const foreground = record?.foreground as { pid?: unknown } | undefined;
+      return !record || (foreground?.pid ?? record.pid) !== record.pid;
+    },
     pinned: (pane) => pane.favourite === true,
     async start(request) {
       const outcome = await launchCore(
@@ -416,7 +483,10 @@ export function moveSide(
         );
         if (!pane)
           return { message: "It exited at once.", pane_id: outcome.pane_id };
-        if (pane.agent === request.kind && pane.agent_status === "idle")
+        if (
+          request.kind === null ||
+          (pane.agent === request.kind && pane.agent_status === "idle")
+        )
           return outcome;
         await sleep(1_000);
       }

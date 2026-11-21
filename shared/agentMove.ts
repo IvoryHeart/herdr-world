@@ -17,9 +17,13 @@ export type AgentMoveDestination = {
 export type AgentMoveRequest = {
   source: AgentAddress;
   destination: AgentMoveDestination;
+  /** Confirmed: start it fresh there when nothing can be resumed. */
+  fresh?: boolean;
 };
 export type AgentMoveOutcome =
   | { status: "moved"; target: AgentAddress }
   | { status: "refused"; message: string }
+  /** Nothing to resume: ask, then send again with `fresh`. */
+  | { status: "confirm"; message: string }
   /** The new copy runs, but the original may still run too. */
   | { status: "uncertain"; target: AgentAddress; message: string };

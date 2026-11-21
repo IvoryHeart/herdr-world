@@ -45,6 +45,7 @@ export async function handleAgentMoveRpc(rpc: BridgeRpcContext): Promise<void> {
         rpc.params?.destination,
         false,
       ) as AgentMoveRequest["destination"],
+      ...(rpc.params?.fresh === true ? { fresh: true } : {}),
     };
     const { services } = rpc;
     const result = await moveAgentAcross(

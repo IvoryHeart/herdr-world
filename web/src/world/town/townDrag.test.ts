@@ -117,10 +117,10 @@ test("a desk lands on another room of its host, never its own or another host's"
   expect(townDropTarget(drag, { kind: "room", key: "r1" }, m).key).toBeNull();
   // Its own desk is neither a slot nor a teammate.
   expect(townDropTarget(drag, { kind: "desk", key: "d1" }, m).key).toBeNull();
-  // Another runtime's room takes only a desk with one agent: it resumes there.
+  // Another runtime's room takes only a desk with one terminal.
   expect(townDropTarget(drag, { kind: "room", key: "r3" }, m)).toMatchObject({
     key: null,
-    label: "Only a desk with one agent moves to another runtime",
+    label: "Only a desk with one terminal moves to another runtime",
   });
   expect(townDropTarget(drag, null, m).key).toBeNull();
   const d1 = m.desks.get("d1")! as unknown as Record<string, unknown>;

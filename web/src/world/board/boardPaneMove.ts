@@ -35,7 +35,7 @@ export function boardPaneMoveReason({
         ? "The pane or tab changed. Try again."
         : cardAgentAddress(source, from)
           ? null
-          : "Only a card with one agent moves to another runtime.";
+          : "Only a card with one terminal moves to another runtime.";
   if (
     !pane.leaf.actionable ||
     pane.leaf.stale ||

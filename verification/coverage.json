@@ -3302,7 +3302,7 @@
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1184",
       "status": "alternative-evidence",
       "technique": "direct-serial-controller-matrix",
-      "assessment": "The controller awaits each port serially under a per-source service lock, so no internal completions interleave. A 72-outcome matrix (start, recheck, close, cleanup) checks desk ownership and reporting; a source changing during startup, a child started after admission and a lost kill reply run against the real core kill path.",
+      "assessment": "The controller awaits each port serially under a per-source service lock, so no internal completions interleave. A 108-outcome matrix (start, recheck during start or pinning, close, cleanup) checks desk ownership and reporting; a source changing during startup, a child started after admission and a lost kill reply run against the real core kill path.",
       "remaining": "Independent Worlds, service crash during a handoff and real harness startup are not proved; the owner check on a real Herdr TUI and herdr-core covers the native paths.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {

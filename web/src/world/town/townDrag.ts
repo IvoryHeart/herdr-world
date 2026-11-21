@@ -236,14 +236,14 @@ export function townDropTarget(
       return { key: null, label: TOWN_PINNED_HINT };
     }
     if (!room) return { key: null, label: `${drag.label}: drop on a room` };
-    // Another runtime's room takes a desk with one agent, which resumes there.
+    // Another runtime's room takes a desk with one terminal (world.agent.move).
     const desk = model.desks.get(drag.key);
     if (!desk || !canMoveDeskToRoom(desk, room))
       return {
         key: null,
         label:
           desk && needsAgentHandoff(desk, room)
-            ? "Only a desk with one agent moves to another runtime"
+            ? "Only a desk with one terminal moves to another runtime"
             : `${drag.label}: ${room.displayLabel} can't take it now`,
       };
     if (room.key === drag.from) {

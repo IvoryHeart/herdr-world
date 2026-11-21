@@ -2,6 +2,11 @@ import { expect, test } from "bun:test";
 import { fixtureHost, fixtureWorld } from "./boardFixture";
 import { projectBoard } from "./boardModel";
 import { moveBoardPane, type BoardPaneMoveRequest } from "./boardPaneMove";
+import {
+  cardAgentAddress,
+  requestAgentHandoff,
+  workspaceRoom,
+} from "../town/townRuntimeMove";
 
 function fixture() {
   const spaces = [
@@ -156,4 +161,36 @@ test("a one-agent card dropped on another runtime's tab resumes there", async ()
       },
     },
   ]);
+});
+
+test("with nothing to resume the move asks, and goes fresh only once confirmed", async () => {
+  const { model, request } = fixture();
+  const target = model.tabs.find(
+    (tab) => tab.hostKey !== request.target.hostKey,
+  )!;
+  const room = workspaceRoom(model.workspaceByKey.get(target.workspaceKey)!);
+  const source = cardAgentAddress(request.target, request.targetWorkspace);
+  const sent: unknown[] = [];
+  const call = (async (_method: string, params: { fresh?: boolean }) => {
+    sent.push(params.fresh ?? false);
+    return params.fresh
+      ? { status: "moved", target: { tab_id: "t9", workspace_id: "w9" } }
+      : {
+          status: "confirm",
+          message: "It starts fresh there. Move it anyway?",
+        };
+  }) as never;
+  const asked: string[] = [];
+  expect(
+    await requestAgentHandoff(source, room, call, (message) => {
+      asked.push(message);
+      return false;
+    }),
+  ).toEqual({ status: "refused", reason: "cancelled", message: "Not moved." });
+  expect(sent).toEqual([false]);
+  expect(
+    await requestAgentHandoff(source, room, call, () => true),
+  ).toMatchObject({ status: "moved", tab_id: "t9" });
+  expect(sent).toEqual([false, false, true]);
+  expect(asked).toEqual(["It starts fresh there. Move it anyway?"]);
 });

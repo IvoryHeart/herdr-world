@@ -185,22 +185,26 @@ no control for it. Platform and harness limits apply across the table.
   saved ordering among their room's pinned seats.
 - **Move agents between runtimes:** drag a desk into a room of the other
   runtime (Herdr TUI ↔ herdr-core), or choose **Move to…** on its Town peek,
-  in Town's **M** chooser (rooms marked "resumes there") or on its Board peek;
-  on Board, dropping a single-agent card on another runtime's tab works too.
-  World starts the agent's harness in that room with its conversation resumed
-  (`claude --resume`, `codex resume`) in the agent's folder, waits until it is
+  in Town's **M** chooser (rooms marked "another runtime") or on its Board
+  peek; on Board, dropping a single-terminal card on another runtime's tab
+  works too. World starts the agent's harness in that room with its
+  conversation resumed (`claude --resume`, `codex resume`) in the agent's
+  folder. With nothing to resume (a plain terminal, or an agent World cannot
+  find a conversation for) World first says the conversation won't continue;
+  once you confirm, it starts a new shell, or the same harness fresh, in the
+  same folder. It waits until the new one is
   ready, carries the desk's colour, pin, Board place, strings and spawn lines
   to the new desk, then closes the original. Moves within one runtime still
   use that runtime's own move and keep the agent running. A pinned desk can
   move only to the other runtime, where it stays pinned. Refused, with the
   reason, and nothing started: a working agent or one waiting for an answer,
-  a desk with more than one terminal, a harness other than Claude or Codex,
-  an agent World cannot find a conversation for, a core agent whose own
+  a plain terminal running a program, a desk with more than one terminal, a
+  core agent whose own
   spawned agents would end with it, a runtime on another machine, or a stale
   or reconnected host. If the new agent does not start within a minute, the
   half-started one is closed and the original keeps running. If the original
-  starts working, splits or starts agents of its own while the new one starts,
-  the new one is closed and the original stays, desk and all. When a runtime
+  starts working, splits or starts agents of its own before it closes, the new
+  one is closed and the original stays, desk and all. When a runtime
   does not confirm that an agent ended, World says which one may still be
   running instead of reporting a move.
 - **Core agent environment (Unix):** New agent finds and starts the harness

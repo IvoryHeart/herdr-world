@@ -59,7 +59,7 @@ export function townMoveMenu(
       detail:
         room.hostKey === desk?.hostKey
           ? `${room.observedDeskCount} desks`
-          : `${deps.office.hosts.find((host) => host.key === room.hostKey)?.displayLabel ?? "Another host"} · resumes there`,
+          : `${deps.office.hosts.find((host) => host.key === room.hostKey)?.displayLabel ?? "Another host"} · another runtime`,
       onChoose: () => {
         deps.close();
         void deps.runDeskMove(flow.deskKey, room.key);
