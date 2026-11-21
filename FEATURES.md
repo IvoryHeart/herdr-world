@@ -399,7 +399,9 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   control (phone or desktop, light or dark, as your screen), its steps, where
   it lives and **Try**.
 - **Try** closes the help, switches to Town or Board when the entry lives
-  there, and rings the control for a moment. A control inside a closed menu
+  there, and rings the control for a moment. A Town control off camera (the
+  Apartments sign below a phone's first view) is flown into view at the same
+  zoom; Town itself never scrolls. A control inside a closed menu
   rings the button that opens it. When the control is not on this screen
   (Chat's controls without an open Chat, a phone-only control on a desktop),
   help reopens on that tab and says where to find it.
