@@ -14,8 +14,12 @@ export async function discoverWorldBrowserEntries(
     .sort();
 }
 
-async function entryDirectory(entry: WorldBrowserEntry, root: string) {
-  if (!(await discoverWorldBrowserEntries()).includes(entry))
+async function entryDirectory(
+  entry: WorldBrowserEntry,
+  root: string,
+  source?: string,
+) {
+  if (!(await discoverWorldBrowserEntries(source)).includes(entry))
     throw new Error(`Unknown World browser entry: ${entry}`);
   return join(root, entry);
 }
@@ -30,10 +34,11 @@ export type WorldBrowserBundle = {
 export async function buildWorldBrowserBundle(
   entry: WorldBrowserEntry,
   root: string,
+  source = join(import.meta.dir, ".."),
 ): Promise<WorldBrowserBundle> {
-  const directory = await entryDirectory(entry, root);
+  const directory = await entryDirectory(entry, root, source);
   const build = await Bun.build({
-    entrypoints: [join(import.meta.dir, "..", `${entry}.browser.tsx`)],
+    entrypoints: [join(source, `${entry}.browser.tsx`)],
     outdir: directory,
     target: "browser",
     plugins: [

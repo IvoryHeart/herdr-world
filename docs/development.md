@@ -263,6 +263,15 @@ bun run check:delivery        # full local gate, including behavioral verificati
 ```
 
 Use `bun run test <path>` for every ordinary test, including focused cases.
+Feature discovery uses committed `server/src/features/index.gen.ts` and
+`web/src/features/index.gen.ts` indexes. After adding or removing a feature's
+`register.ts` or `mount.tsx` under those roots, run `bun run features:generate`.
+Each sorted line exports one module namespace; colliding export names are refused.
+`bun run features:check` checks membership (ignoring order) in the static lane.
+The `testing/probe` features are inert fixtures, imported only by tests. The proof
+in `scripts/features.test.ts` and `web/src/features/index.browser.test.ts` runs
+them through every build path, including a compiled probe after deleting sources.
+
 Use `bun run ci:health --days 3` for a read-only screen of recent CI and delivery
 numbers (`gh` authentication required). `--days` accepts 1–30 and `--repo owner/name`
 selects another accessible repository. Run it again after delivery to compare the
