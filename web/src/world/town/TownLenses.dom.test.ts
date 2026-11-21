@@ -51,7 +51,9 @@ if (process.env.TOWN_LENS_DOM !== "1") {
   const { townSearchLight } = await import("./townSearch");
   const { town, working } = await import("./scene/townScene.fixture");
 
+  const { townLensActions } = await import("./townLensStore");
   function mount(escapeTaken = false) {
+    townLensActions.close();
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);

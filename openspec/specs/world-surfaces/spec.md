@@ -4586,6 +4586,21 @@ World observes, and the newest assignment SHALL win.
 - World SHALL clear superseded claims where it holds a current lease.
 - Moving the role away from another live agent SHALL still ask the user first.
 
+**One Town master setting.** Settings SHALL show one Town master row, opening the
+synced agent picker. Town and Board SHALL dock only the exact connection and terminal
+holding that role, once per page visit on wide screens, without taking pane focus.
+No browser name or default FirstMate name SHALL substitute for an absent holder.
+
+**Retired browser-name migration.** An explicitly saved browser Town master name SHALL
+be imported once after profiles are loaded, only if no synced holder exists and a unique
+current agent matches its native name (or, without a native match, its shown label).
+Ambiguous, stale or unavailable candidates SHALL wait, without selecting another host.
+An existing synced holder SHALL win and retire the old preference. The browser SHALL
+consume the old key before sending a qualified assignment with replacement disabled;
+a refused storage write SHALL prevent dispatch. A failed or uncertain RPC SHALL report
+failure and SHALL NOT replay the legacy assignment. Other view-preference edits SHALL
+preserve the pending legacy name until it is consumed.
+
 **Migration.** World SHALL import each existing assignment once, when its connection is
 first observed complete on a ready runtime after this change. It SHALL:
 - drop an assignment whose terminal is absent from that observation;
@@ -5092,9 +5107,12 @@ SHALL change a setting or run a command from a result. Commands the command box
 offers SHALL be listed in the registry with the command box's admission: an action
 it refuses SHALL be shown disabled with its reason, it SHALL run only through the
 command box for the current connection, and the entries SHALL be withdrawn when the
-command box unmounts. A control that stays on a view SHALL be listed and SHALL open
-that view's control. An entry whose availability depends on another value SHALL
-appear or disappear as soon as that value changes. A dialog opened from a Settings
+command box unmounts. Board surface, Board status pulses and Town lens SHALL share
+subscribed browser stores with their view controls. Settings and command-box choices
+SHALL update an already open view in the same tab without a reload, and each row SHALL
+say where its view control also appears. Other controls that require their view SHALL
+be listed and SHALL open that view's control. An entry whose availability depends on
+another value SHALL appear or disappear as soon as that value changes. A dialog opened from a Settings
 row SHALL return to Settings at that row when it closes.
 
 `?setting=<entry id>` SHALL open Settings at that entry and `?setting=<category>` at
@@ -5107,6 +5125,15 @@ nothing.
 - **WHEN** a user searches Settings or the command box for "lighting" or "night"
 - **THEN** Town time of day is a result and choosing Night changes Town's lighting
   without opening Town's control
+
+#### Scenario: Change the open Board or Town from Settings search
+
+- **WHEN** the user chooses a Board surface, toggles Board status pulses or chooses
+  a Town lens from Settings or the command box
+- **THEN** the open view SHALL reflect that choice immediately in the same tab
+- **AND** changing the same control on the view SHALL update Settings's value
+- **AND** a fresh page SHALL start Town in Attention, remembering the last other lens
+  for L and the ring; a choice from Settings before Town mounts SHALL still apply
 
 #### Scenario: One command inventory
 

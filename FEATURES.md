@@ -516,7 +516,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town's setup card (**Start Herdr** or **Set up herdr-core**) is up, and
     opens once the card is gone. **✕**, Escape, Back or a press outside closes it; tap
     the figure to open it again. Untick **Show this on start** at its foot,
-    or switch **Menu → Settings → Town master greeting**, to stop it on this browser.
+    or switch **Menu → Settings → Greeting on start**, to stop it on this browser.
     Your very first visit is greeted too, without a last time. The card also
     carries [What's new](#help-and-whats-new) after an update, or **Start
     here** on a first visit.
@@ -759,9 +759,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the building's lounge and shows the center from its plaque down. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
     opens a ring of actions around its doors: **New agent** (World's launcher,
     preselecting the open room when it can start one there), **Town master**
-    (the role holder from **Settings → Chimes and who plays them**, else the
-    agent named in **Settings → Town master** when nobody holds the role, opened on Chat; a holder not in
-    Town says so; with neither set it opens **Sounds**),
+    (the synced role holder from **Settings → Town master**, opened on Chat;
+    a holder not in Town says so; with nobody assigned it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
     **New room** (disabled with the reason when no room can be created). With
     no room open, New room asks for the **Destination host**, herdr-core hosts
@@ -790,9 +789,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     one's share. Desks and agents with nothing to show stay plain. Screen readers
     hear each place's reading in its name. A lens changes only how Town is
     drawn: taps open what they always do, nothing moves, Escape or **✕**
-    returns Town exactly as it was, and Town always opens in **Attention**
-    (Town as usual). A search with a lens on outlines its matches over the
-    lens's colours, and ending it returns to the lens. The browser remembers
+    returns Town exactly as it was. A fresh page starts in **Attention**
+    (Town as usual); a lens chosen in Settings also applies before Town opens.
+    A search with a lens on outlines its matches over the lens's colours, and ending it returns to the lens. The browser remembers
     the last lens for `L` and **Lenses**. With `?scene=town-scale` every lens
     has synthetic data.
     Board offers the same lenses over its cards (see Board below).
@@ -877,10 +876,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.
-  - The Town master's chat (**Settings → Town master**, `firstmate` by default,
-    matched against the agent's Herdr name, then its label) opens docked on
-    Chat once per visit on wide screens, without moving the pane's focus;
-    the town center's **Town master** opens it on demand.
+  - The Town master's chat (**Settings → Town master**, the same synced role
+    in every browser) opens docked on Chat once per visit on wide screens in
+    Town and Board, without moving the pane's focus. The town center and
+    Board hub open it on demand. There is no default name or name fallback.
+    An explicitly saved browser name migrates once when it uniquely matches a
+    current agent and no synced holder exists; ambiguous or unavailable agents
+    wait. An existing holder wins. The old name is forgotten before the qualified
+    assignment attempt; a failure reports that you can choose an agent in Settings.
+    On a development preview, after clearing the synced role in Sounds, open
+    `/board?legacyTownMaster=<agent-name>` to exercise migration without editing
+    browser storage; the parameter removes itself and never clears an existing role.
   - Hovering an agent shows a small card as a preview: its latest message from
     Chat's conversation read model, rendered as Chat renders it (never terminal
     text; an unavailable conversation shows Chat's reason), a question when
@@ -2440,10 +2446,12 @@ also find by typing its name.
   **Automatic branch updates**) that returns to Settings at its row when
   closed. **Agent profiles** and **Chimes and who plays them** open their own
   windows.
-- Controls that stay on a view are rows too: **Board surface**, **Board status
-  colours** and **Board status pulses** switch to Board and open its settings
-  menu or colours; **Town lenses** switches to Town and opens the lens
-  chooser; **Hosts and connections** opens **Manage connections**.
+- **Board surface**, **Board status pulses** and **Town lenses** change in place
+  from Settings or Cmd+K and update an open view immediately, in the same tab.
+  Their view controls share the same values; these choices stay in this browser.
+  **Board status colours** opens Board's colours dialog; **Hosts and connections**
+  opens **Manage connections**. The one **Town master** row opens the synced agent
+  picker in **Sounds**; the separate **Greeting on start** switch is browser-only.
 - **This World** holds **Herdr and connection details** (Herdr version,
   upgrade or setup, connection address), **World name**, update checks,
   **Reload page** and **Log out**. **Help** opens the tutorial, this file,

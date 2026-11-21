@@ -1,3 +1,4 @@
+import { installTownMasterFixture } from "./testing/townMasterFixture";
 import {
   admissionClock,
   nextCreatedOpenerCompletion,
@@ -839,6 +840,7 @@ async function run() {
   store.init = () => {};
   bridge.connection = () => client;
   bridge.call = client.call;
+  const fixtureTownMaster = installTownMasterFixture();
   bridge.onStatus = (listener) => {
     listener("connected");
     return () => {};
@@ -2114,11 +2116,10 @@ async function run() {
   // The Town master's chat docks in the background: its window opens, but
   // the window on top and the selection stay as they were.
   const selectedBeforeMaster = store.get().selectedPaneId;
-  writeOfficePreferences(worldLocalStorage, {
-    ...readOfficePreferences(worldLocalStorage),
-    townMaster: "reviewer",
+  await fixtureTownMaster({
+    connection_id: "local",
+    terminal_id: "reviewer-terminal",
   });
-  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
   await until(
     () =>
       document.querySelector(
@@ -2134,11 +2135,7 @@ async function run() {
       store.get().selectedPaneId === selectedBeforeMaster,
     "the Town master's background open took the selection or the top",
   );
-  writeOfficePreferences(worldLocalStorage, {
-    ...readOfficePreferences(worldLocalStorage),
-    townMaster: "",
-  });
-  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await fixtureTownMaster(null);
   await setShellActionsOpen(false);
   await openAgent("Reviewer");
   await until(
