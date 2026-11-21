@@ -38,6 +38,11 @@ const root = resolve(import.meta.dir, "..");
 const fixture = join(root, "web/src/world/testing/town-golden");
 const goldenDirectory = join(fixture, "images");
 
+export const townGoldenBuildConfig = {
+  target: "browser",
+  loader: { ".woff2": "file" },
+} satisfies Partial<Bun.BuildConfig>;
+
 /** A request/event connection; every operation has a deadline, never a status loop. */
 export class Cdp {
   private next = 0;
@@ -201,10 +206,9 @@ export async function runTownGolden(options: {
   });
   try {
     const build = await Bun.build({
+      ...townGoldenBuildConfig,
       entrypoints: [join(fixture, "TownGolden.browser.tsx")],
       outdir: join(scratch, "bundle"),
-      target: "browser",
-      loader: { ".woff2": "file" },
     });
     if (!build.success)
       throw new AggregateError(build.logs, "Golden fixture build failed");
