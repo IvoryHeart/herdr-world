@@ -5,6 +5,16 @@
  * glides with the same timing (scene/townSceneCamera.ts) so what the user
  * was looking at stays in place. Under reduced motion every change is
  * instant, and still never shows a blank or half-drawn frame.
+ *
+ * A host entering or leaving the town (added or removed in Manage
+ * connections, ticked or unticked in Hosts) is a bigger event
+ * (townHostPlan): its neighbours, the roads and the camera take longer to
+ * make room or close the gap, a new host's building rises out of its lot
+ * once they have begun, springing a little past its height before it
+ * settles, and a leaving one stretches up, then sinks into its lot, both
+ * raising dust along their base. Several hosts at once go one after
+ * another. A host that only disconnects keeps its building; opening Town
+ * places the buildings it already has without either.
  */
 
 import { TOWN_LAND_OBJECT_REACH, townWildLine } from "./townLandscape";
@@ -18,6 +28,105 @@ export const townEase = (t: number) => {
   const x = Math.min(1, Math.max(0, t));
   return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 };
+
+/** Neighbours, roads and the camera making room for a host or closing its gap. */
+export const TOWN_HOST_GLIDE_SECONDS = 0.6;
+/** A new host's building starts to rise this long after its neighbours start to move. */
+export const TOWN_HOST_RISE_DELAY = 0.2;
+/** Seconds a new host's building takes to rise out of its lot. */
+export const TOWN_HOST_RISE_SECONDS = 0.6;
+/** Seconds a leaving host's building takes to sink into its lot. */
+export const TOWN_HOST_SINK_SECONDS = 0.5;
+/** Hosts that come or go together start this far apart, in reading order. */
+export const TOWN_HOST_STAGGER = 0.12;
+/** Past this many, the rest start with the last: a long list is not a parade. */
+const TOWN_HOST_STAGGER_STEPS = 4;
+
+/**
+ * The hosts that entered or left the town between two layouts, and when each
+ * one's building rises or sinks (seconds into the change). Null when the
+ * same hosts are there (or there was no town before: nothing replays).
+ */
+export type TownHostPlan = {
+  /** Seconds the neighbours, roads and camera take (TOWN_HOST_GLIDE_SECONDS). */
+  seconds: number;
+  /** Arriving hosts: when their building starts to rise. */
+  rise: ReadonlyMap<string, number>;
+  /** Leaving hosts: when their building starts to sink. */
+  sink: ReadonlyMap<string, number>;
+};
+
+type PlacedBuilding = { hostKey: string; x: number; y: number };
+const readingOrder = (a: PlacedBuilding, b: PlacedBuilding) =>
+  a.y - b.y || a.x - b.x;
+const staggered = (buildings: PlacedBuilding[], start: number) =>
+  new Map(
+    [...buildings]
+      .sort(readingOrder)
+      .map((building, index) => [
+        building.hostKey,
+        start + Math.min(index, TOWN_HOST_STAGGER_STEPS) * TOWN_HOST_STAGGER,
+      ]),
+  );
+
+export function townHostPlan(
+  previous: Pick<TownLayout, "buildings"> | null,
+  next: Pick<TownLayout, "buildings">,
+): TownHostPlan | null {
+  if (!previous || previous === next) return null;
+  const was = new Set(previous.buildings.map((b) => b.hostKey));
+  const now = new Set(next.buildings.map((b) => b.hostKey));
+  const arrived = next.buildings.filter((b) => !was.has(b.hostKey));
+  const left = previous.buildings.filter((b) => !now.has(b.hostKey));
+  if (!arrived.length && !left.length) return null;
+  return {
+    seconds: TOWN_HOST_GLIDE_SECONDS,
+    rise: staggered(arrived, TOWN_HOST_RISE_DELAY),
+    sink: staggered(left, 0),
+  };
+}
+
+/** Seconds a layout change's glides take: longer when hosts come or go. */
+export const townTransitionSeconds = (
+  previous: Pick<TownLayout, "buildings"> | null,
+  next: Pick<TownLayout, "buildings">,
+) => townHostPlan(previous, next)?.seconds ?? TOWN_TRANSITION_SECONDS;
+
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+
+/**
+ * A rising building `u` (0..1) of the way up: its height and width scale,
+ * about the middle of its base, and its opacity. It shoots up a little past
+ * its height (easing out with a spring) while narrow, then settles; it is
+ * wide and flat as it breaks ground.
+ */
+export function townRisePose(u: number) {
+  const x = clamp01(u) - 1;
+  // easeOutBack: 0 -> about 1.08 near u = 0.75 -> 1.
+  const sy = Math.max(0, 1 + 2.4 * x * x * x + 1.4 * x * x);
+  return {
+    sx: Math.min(1.2, Math.max(0.95, 1 + (1 - sy) * 0.25)),
+    sy: u >= 1 ? 1 : sy,
+    alpha: clamp01(u * 6),
+  };
+}
+
+/**
+ * A sinking building `v` (0..1) of the way down: it stretches up a little,
+ * then sinks into its lot, spreading as it flattens, and fades at the end.
+ */
+export function townSinkPose(v: number) {
+  const u = clamp01(v);
+  const sy =
+    u < 0.2
+      ? 1 + 0.05 * Math.sin((Math.PI * u) / 0.2)
+      : 1 - ((u - 0.2) / 0.8) ** 2;
+  return {
+    sx: Math.min(1.2, Math.max(0.95, 1 + (1 - sy) * 0.25)),
+    sy: u >= 1 ? 0 : sy,
+    alpha: u < 0.7 ? 1 : 1 - townEase((u - 0.7) / 0.3),
+  };
+}
 
 /** A building's motion: where it was drawn (px, relative to its new place) and how far along. */
 export type TownBuildingMotion = {
@@ -34,15 +143,59 @@ export type TownBuildingMotion = {
   crossfade: boolean;
   /** Progress, 0..1. */
   t: number;
+  /** Seconds the whole motion takes (TOWN_TRANSITION_SECONDS when unset). */
+  seconds?: number;
+  /**
+   * A host arriving: its building enters by rising out of its lot, for
+   * TOWN_HOST_RISE_SECONDS from this many seconds into the motion
+   * (townRisePose), instead of fading in. Negative when a rebake took over
+   * a rise already under way (townRiseCarried).
+   */
+  rise?: number;
+  /** A rising building has raised its dust. */
+  dusted?: boolean;
 };
 
-/** The drawn offset and opacity of a building in motion. */
+/** How far up a rising building is (0..1), or null for one that does not rise. */
+export function townRiseProgress(motion: TownBuildingMotion) {
+  if (motion.rise === undefined) return null;
+  // A motion lasts at least until its rise ends.
+  if (motion.t >= 1) return 1;
+  return townRiseAt(
+    motion.t * (motion.seconds ?? TOWN_TRANSITION_SECONDS),
+    motion.rise,
+  );
+}
+
+/** How far up (0..1) a building is `seconds` in, when its rise starts at `rise`. */
+export const townRiseAt = (seconds: number, rise: number) =>
+  clamp01((seconds - rise) / TOWN_HOST_RISE_SECONDS);
+
+/**
+ * When, from now, a building in motion starts (or started: negative) to
+ * rise, so a drawing that replaces it, or the one leaving as it is
+ * replaced, rises on from the same height. Null when it is not rising or
+ * already stands.
+ */
+export function townRiseCarried(motion: TownBuildingMotion) {
+  if (motion.rise === undefined) return null;
+  const start =
+    motion.rise - motion.t * (motion.seconds ?? TOWN_TRANSITION_SECONDS);
+  return start <= -TOWN_HOST_RISE_SECONDS ? null : start;
+}
+
+/**
+ * The drawn offset and opacity of a building in motion. A rising building's
+ * opacity is its plaques' and sign's (townBuildingLayers.ts): they appear
+ * as it reaches its height. Its own drawing follows townRisePose.
+ */
 export function townMotionPose(motion: TownBuildingMotion) {
   const e = townEase(motion.t);
+  const rise = townRiseProgress(motion);
   return {
     x: motion.dx * (1 - e) || 0,
     y: motion.dy * (1 - e) || 0,
-    alpha: motion.enter ? e : 1,
+    alpha: rise !== null ? townEase((rise - 0.6) / 0.4) : motion.enter ? e : 1,
   };
 }
 
