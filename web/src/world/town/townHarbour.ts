@@ -43,13 +43,30 @@ export function townHarbourLot(layout: TownLayout): TownHarbourLot {
 /** Released ships a lane moors; older releases are the Releases tab's. */
 export const TOWN_HARBOUR_BERTHS = 3;
 /** A berth's width in tiles: one ship and the water round it. */
-export const TOWN_BERTH_TILES = 5;
+export const TOWN_BERTH_TILES = 4.5;
 /** The pier's root before the slipway, in tiles: the lane's flag and sign. */
 const PIER_ROOT = 2;
+/**
+ * The pier's head past its last berth, in tiles: the lighthouse stands
+ * there, so no moored ship ever lies in front of it (#1148).
+ */
+export const TOWN_PIER_HEAD = 2;
 /** A ship's drawing with its outline, in pixels (townHarbourArt.ts). */
 export const TOWN_SHIP = { w: 68, h: 52 } as const;
 /** Rows of a ship's drawing below its waterline. */
 const SHIP_DRAFT = 3;
+/**
+ * The lighthouse's drawing (townHarbourArt.ts), in pixels: its size, its
+ * left edge from the pier's head end, its foot below the deck's top edge,
+ * and its lamp room's glass within it.
+ */
+export const TOWN_LIGHTHOUSE = {
+  w: 20,
+  h: 28,
+  right: 26,
+  foot: 0,
+  lamp: { x: 4, y: 4, w: 12, h: 5 },
+} as const;
 
 /**
  * The project colours, in lane order: Town's shirt palette (townSprites.ts),
@@ -78,7 +95,34 @@ export function townLanePierAt(lot: TownHarbourLot, lane: number) {
   return {
     x: lot.coast * T,
     y: townLanePier(lane) * T,
-    w: (PIER_ROOT + (TOWN_HARBOUR_BERTHS + 1) * TOWN_BERTH_TILES) * T,
+    w:
+      (PIER_ROOT +
+        (TOWN_HARBOUR_BERTHS + 1) * TOWN_BERTH_TILES +
+        TOWN_PIER_HEAD) *
+      T,
+  };
+}
+
+/**
+ * The lighthouse on lane `lane`'s pier head in world pixels, and its lamp:
+ * clear of every berth, and drawn above the ships (townHarbour.css), so
+ * main's red or green always shows.
+ */
+export function townLighthouseAt(lot: TownHarbourLot, lane: number) {
+  const pier = townLanePierAt(lot, lane);
+  const x = pier.x + pier.w - TOWN_LIGHTHOUSE.right;
+  const y = pier.y - TOWN_LIGHTHOUSE.h + TOWN_LIGHTHOUSE.foot;
+  return {
+    x,
+    y,
+    w: TOWN_LIGHTHOUSE.w,
+    h: TOWN_LIGHTHOUSE.h,
+    lamp: {
+      x: x + TOWN_LIGHTHOUSE.lamp.x,
+      y: y + TOWN_LIGHTHOUSE.lamp.y,
+      w: TOWN_LIGHTHOUSE.lamp.w,
+      h: TOWN_LIGHTHOUSE.lamp.h,
+    },
   };
 }
 

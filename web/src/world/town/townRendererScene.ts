@@ -21,15 +21,8 @@ import { townBusRoute } from "./townBus";
 import { paintTownCenter } from "./townCenterPaint";
 import { townApartmentsLot } from "./townApartmentsLot";
 import { paintTownApartments } from "./townApartmentsPaint";
+import { townHarbourLot } from "./townHarbour";
 import {
-  TOWN_PIER_BOLLARDS,
-  TOWN_PIER_SLIPWAY,
-  townHarbourLot,
-  townLanePierAt,
-} from "./townHarbour";
-import {
-  TOWN_PIER_ART,
-  paintTownPier,
   paintTownWarehouseHouse,
   paintTownWarehouseYard,
 } from "./townHarbourArt";
@@ -247,20 +240,11 @@ export function townOutdoor(
   add(paintTownPostHouse(), post.x * T, post.y * T, post.yardY * T);
   add(paintTownPostYard(), post.x * T, post.yardY * T, post.yardY * T);
   // The harbour at the town's right edge: the warehouse on the shore, its
-  // yard on the first street, and a pier for every lane out to sea.
-  const harbour = townHarbourLot(layout);
-  const house = harbour.warehouse;
+  // yard on the first street. Piers stand only for projects with releases,
+  // so the Shipyard's DOM layer draws them (TownShipyard.tsx).
+  const house = townHarbourLot(layout).warehouse;
   add(paintTownWarehouseHouse(), house.x * T, house.y * T, house.yardY * T);
   add(paintTownWarehouseYard(), house.x * T, house.yardY * T, house.yardY * T);
-  for (let lane = 0; lane < harbour.lanes; lane += 1) {
-    const pier = townLanePierAt(harbour, lane);
-    add(
-      paintTownPier(pier.w, TOWN_PIER_SLIPWAY, TOWN_PIER_BOLLARDS),
-      pier.x,
-      pier.y - TOWN_PIER_ART.deck,
-      pier.y,
-    );
-  }
   // The library right of the center: its hall, its reading garden.
   const library = townLibraryLot(layout);
   if (library) {

@@ -9,6 +9,7 @@ import {
   townLanePierAt,
   townLaneSignAt,
   townLanesShown,
+  townLighthouseAt,
   townProjectColor,
   TOWN_PROJECT_COLORS,
 } from "./townHarbour";
@@ -110,6 +111,47 @@ describe("town harbour", () => {
       below = pier.y + 8;
     }
   });
+
+  for (const shape of Object.keys(TOWN_SHAPES) as (keyof typeof TOWN_SHAPES)[])
+    test(`${shape}: no ship ever lies in front of a lighthouse (#1148)`, () => {
+      for (const [hosts, rooms] of SIZES) {
+        const lot = townHarbourLot(town(shape, hosts, rooms));
+        const ships: Box[] = [];
+        for (let lane = 0; lane < lot.lanes; lane += 1)
+          for (let berth = 0; berth <= TOWN_HARBOUR_BERTHS; berth += 1) {
+            const at = townBerthAt(lot, lane, berth);
+            // The ship and its tag below it, a bob's pixel included.
+            ships.push({
+              x0: at.x,
+              y0: at.y - 1,
+              x1: at.x + TOWN_SHIP.w,
+              y1: at.y + TOWN_SHIP.h + 14,
+            });
+          }
+        for (let lane = 0; lane < lot.lanes; lane += 1) {
+          const light = townLighthouseAt(lot, lane);
+          const tower = {
+            x0: light.x,
+            y0: light.y,
+            x1: light.x + light.w,
+            y1: light.y + light.h,
+          };
+          // On its own pier's head, inside the map: reachable on every
+          // form factor, a phone's included.
+          const pier = townLanePierAt(lot, lane);
+          expect(tower.x0).toBeGreaterThan(pier.x);
+          expect(tower.x1).toBeLessThanOrEqual(pier.x + pier.w);
+          expect(tower.x1).toBeLessThanOrEqual(lot.right * T);
+          expect(tower.y0).toBeGreaterThanOrEqual(0);
+          expect(tower.y1).toBeLessThanOrEqual(lot.bottom * T);
+          // The lamp is in the tower's glass.
+          expect(light.lamp.x).toBeGreaterThan(tower.x0);
+          expect(light.lamp.x + light.lamp.w).toBeLessThan(tower.x1);
+          expect(light.lamp.y).toBeGreaterThan(tower.y0);
+          for (const ship of ships) expect(overlaps(ship, tower)).toBe(false);
+        }
+      }
+    });
 
   test("many projects: shown lanes leave room for the +N lane", () => {
     const lot = townHarbourLot(town("wide", 1, 1));
