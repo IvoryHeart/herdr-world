@@ -191,6 +191,20 @@
   padding: 0 5px;
 }
 
+/* In a building of more than one runtime: the room's runtime, under its bar. */
+.town-room-card-runtime {
+  grid-row: 4;
+  grid-column: 1 / -1;
+  overflow: hidden;
+  font:
+    700 8px / 11px "Silkscreen",
+    ui-monospace,
+    monospace;
+  color: #b9c2b4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .town-room-card-meta {
   display: none;
   grid-row: 3;

@@ -661,7 +661,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                             touchAction: "none",
                           } as React.CSSProperties
                         }
-                        aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
+                        aria-label={`${label}${room.runtimeTag ? ` (${room.runtimeTag})` : ""}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
                         onPointerDown={(event) => {
                           cardPressTaken.current =
                             onRoomCardPress?.(
@@ -683,6 +683,11 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                         tabIndex={-1}
                       >
                         <span className="town-room-card-name">{label}</span>
+                        {room.runtimeTag ? (
+                          <span className="town-room-card-runtime">
+                            {room.runtimeTag}
+                          </span>
+                        ) : null}
                         {c.blocked ? (
                           <span className="town-room-card-badge">
                             !{c.blocked}
