@@ -33,7 +33,10 @@ import {
   townCenterEmblem,
   townCityBoardScale,
 } from "../townCenter";
-import { TOWN_TRANSITION_SECONDS } from "../townTransition";
+import {
+  TOWN_TRANSITION_SECONDS,
+  townTransitionSeconds,
+} from "../townTransition";
 
 /** Screen pixels kept above a reception board's foot for the board. */
 const RECEPTION_BOARD_ROOM = 260;
@@ -136,13 +139,15 @@ export class TownSceneCamera {
   /**
    * Frame the town's home view: every building, or the first on a phone.
    * `follow` (a town at home that changed) flies there in step with the
-   * buildings and still counts as home once it arrives.
+   * buildings, over `seconds` (longer when hosts came or went), and still
+   * counts as home once it arrives.
    */
   frameHome(
     layout: TownLayout,
     viewport: TownViewport,
     animate: boolean,
     follow = false,
+    seconds = TOWN_TRANSITION_SECONDS,
   ) {
     const camera = this.camera;
     const limits = camera?.limits;
@@ -173,7 +178,7 @@ export class TownSceneCamera {
           )
         : board;
       const y = top + (focus.y - viewport.inset.top) / limits.home;
-      if (follow) camera.flyTo(x, y, limits.home, TOWN_TRANSITION_SECONDS);
+      if (follow) camera.flyTo(x, y, limits.home, seconds);
       else if (animate) camera.flyTo(x, y, limits.home);
       else camera.jumpTo(x, y, limits.home);
     } else {
@@ -192,7 +197,7 @@ export class TownSceneCamera {
             );
       const span = townHomeSpan(layout, camera.boardHeights);
       const y = (span.top(limits.home) + span.bottom) / 2;
-      if (follow) camera.flyTo(x, y, limits.home, TOWN_TRANSITION_SECONDS);
+      if (follow) camera.flyTo(x, y, limits.home, seconds);
       else if (animate) camera.flyTo(x, y, limits.home);
       else camera.jumpTo(x, y, limits.home);
     }
@@ -276,7 +281,13 @@ export class TownSceneCamera {
       townGeometryKey(previous) !== townGeometryKey(layout)
     ) {
       // A town viewed whole stays whole as it grows or shrinks.
-      this.frameHome(layout, viewport, true, true);
+      this.frameHome(
+        layout,
+        viewport,
+        true,
+        true,
+        townTransitionSeconds(previous, layout),
+      );
     } else if (
       previous &&
       previous !== layout &&
@@ -288,7 +299,12 @@ export class TownSceneCamera {
     ) {
       const shift = townReflowShift(previous, layout, at);
       if (shift.x || shift.y || camera.x !== drawn.x || camera.y !== drawn.y) {
-        camera.glideBy(shift.x, shift.y, TOWN_TRANSITION_SECONDS, drawn);
+        camera.glideBy(
+          shift.x,
+          shift.y,
+          townTransitionSeconds(previous, layout),
+          drawn,
+        );
         this.invalidate("reflow");
       }
     }
