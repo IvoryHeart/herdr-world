@@ -587,7 +587,7 @@ selected host into visual surfaces; send terminal,
 resource and mutation work through the qualified focused-runtime path.
 
 See [architecture](ARCHITECTURE.md), [deployment](DEPLOYMENT.md) and the
-[knowledge map](knowledge-map.md).
+[capability lookup](agent-development.md#find-a-feature).
 
 The optional cost metrics provider is service-owned. For local testing, set
 `HERDR_WORLD_OTEL_PROMETHEUS_URL` on `dev:server` or use the cost metrics dialog;

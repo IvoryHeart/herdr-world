@@ -88,7 +88,7 @@ Your shells and agents
 2. Return to Town. **New agent** says **Starts in herdr-core**. You can keep
    a Herdr TUI connection too; choose its room for a TUI launch.
 
-See the [runtime support table](../FEATURES.md#runtime-support) for versions
+See the [runtime support table](../openspec/specs/herdr-core-runtime/notes.md#runtime-support) for versions
 and limits. Continue from your project shell above.
 
 ![Spaces showing synthetic workspaces, recognized agent states, and a live terminal](./images/herdr-world-desktop-spaces.png)
@@ -385,8 +385,8 @@ results, and ask you questions.
    it, and the agent carries on.
 
 The complete command list, and crew groups such as Pods and Teams, are in
-[the agent CLI reference](../FEATURES.md#agent-cli-herdr-world---skill) and
-[Groups](../FEATURES.md#groups).
+[the agent CLI reference](../openspec/specs/world-surfaces/needs-you/notes.md#agent-cli-herdr-world---skill) and
+[Groups](../openspec/specs/world-surfaces/groups/notes.md#groups).
 
 ## 4. Board and Desk
 
@@ -545,7 +545,7 @@ Ranger is World's assistant for questions about your workspaces.
    answer in progress, or Alt+Enter (**Option+Enter**) or **Queue** to send
    your message once it finishes.
 
-See [Ranger](../FEATURES.md#ranger-and-workspace-tools) for scheduled tasks and
+See [Ranger](../openspec/specs/workspace-assistant/notes.md#ranger-and-workspace-tools) for scheduled tasks and
 permissions.
 
 ## 6. Parallel work and your phone
@@ -566,7 +566,7 @@ its own worktree: a separate checkout and branch of the same repository.
 
 > A repository's `paseo.json` hooks run its own code when worktrees are created
 > or removed. If you do not trust them, turn them off under **Worktree hooks**
-> first. See [worktree hooks](../FEATURES.md#paseo-worktree-hooks).
+> first. See [worktree hooks](../openspec/specs/world-surfaces/inspector/notes.md#paseo-worktree-hooks).
 
 **You are done when:** each task has its own folder and its own changes to
 review.
@@ -833,7 +833,7 @@ you and read one part of its diff.
 
 ### Where to go next
 
-- [Features and shortcuts](../FEATURES.md): every control, limit and
+- [Features and shortcuts](../openspec/specs/world-surfaces/notes.md): every control, limit and
   shortcut.
 - [Installation and deployment](./DEPLOYMENT.md): installs, services,
   connections and settings.

@@ -55,7 +55,7 @@ in the PR description.
 Prepare the PR body in a local file after committing the candidate. Run
 `bun run check:pr-body <file>` (append the base ref for a stacked PR), then use
 that same file with `gh pr create --body-file <file>` to open one ready PR.
-The check shares CI's changelog, knowledge-map, spec and verification impact
+The check shares CI's changelog, source-coverage, spec and verification impact
 policies against the committed PR diff. Every non-documentation PR needs two
 plain lines without bold labels:
 

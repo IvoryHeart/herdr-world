@@ -191,13 +191,24 @@ test("CI and pre-push share inventory owners and use the immutable PR head", () 
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
   const owner = "server/src/owned/example.ts";
-  const spec = "openspec/specs/world-surfaces/town/spec.md";
+  const spec = "openspec/changes/example/specs/world-surfaces/town/spec.md";
   const body = `Spec impact: world-surfaces/town\nVerification impact: ${owner}\nChangelog: none — Only synthetic regression fixtures change.\n`;
   const event = join(root, "event.json");
   try {
     git("init", "-q");
     git("config", "user.name", "Example");
     git("config", "user.email", "example@example.invalid");
+    mkdirSync(join(root, "openspec/specs/world-surfaces/town"), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(root, "openspec/specs/world-surfaces/town/spec.md"),
+      "# Town\n",
+    );
+    writeFileSync(
+      join(root, "openspec/specs/world-surfaces/town/notes.md"),
+      "**Code:**\n\n- `server/src/owned/`\n",
+    );
     mkdirSync(join(root, "verification"));
     writeFileSync(
       join(root, "verification/coverage.json"),
@@ -317,7 +328,7 @@ test("push policy reads the intended description or existing PR, and never inven
 });
 
 const cli = fileURLToPath(new URL("./check-pr-body.ts", import.meta.url));
-test("draft descriptions enforce the same knowledge-map and changelog rules before PR creation", () => {
+test("draft descriptions enforce the same source-coverage and changelog rules before PR creation", () => {
   const root = mkdtempSync(join(tmpdir(), "pr-body-"));
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -346,13 +357,17 @@ test("draft descriptions enforce the same knowledge-map and changelog rules befo
     };
     const invalid = run("Knowledge map impact: unchanged\nChangelog: none\n");
     expect(invalid.status).toBe(1);
-    expect(invalid.stderr).toContain("Knowledge map impact:");
+    expect(invalid.stderr).toContain("web/src/world/example.ts");
     expect(invalid.stderr).toContain("Changelog:");
     expect(invalid.stderr).toContain("Spec impact:");
     expect(invalid.stderr).toContain("Verification impact:");
-    const reason =
-      "Knowledge map impact: unchanged — Existing ownership and entry points remain accurate.\n" +
-      noImpacts;
+    mkdirSync(join(root, "openspec/specs/example"), { recursive: true });
+    writeFileSync(join(root, "openspec/specs/example/spec.md"), "# Example\n");
+    writeFileSync(
+      join(root, "openspec/specs/example/notes.md"),
+      "**Code:**\n\n- `web/src/world/`\n",
+    );
+    const reason = noImpacts;
     expect(
       run(
         reason +

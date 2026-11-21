@@ -1,7 +1,7 @@
 # Agent and project memory: service contract
 
 Issue #1012 delivers the model, host readers, service, RPC and CLI. The browser's
-Library (issue #1027, [features](../FEATURES.md#the-library)) presents it in Town,
+Library (issue #1027, [features](../openspec/specs/world-memory/notes.md#the-library)) presents it in Town,
 Board and agent settings. Both Herdr TUI and herdr-core use the same calls.
 Types are in [`shared/memory.ts`](../shared/memory.ts); adapters are in
 [`server/src/memory/adapters.ts`](../server/src/memory/adapters.ts).

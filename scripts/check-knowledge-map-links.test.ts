@@ -22,7 +22,8 @@ function fixture(markdown: string) {
   const root = mkdtempSync(join(tmpdir(), "knowledge-links-"));
   roots.push(root);
   mkdirSync(join(root, "docs"));
-  writeFileSync(join(root, "docs/knowledge-map.md"), markdown);
+  mkdirSync(join(root, "openspec/specs/example"), { recursive: true });
+  writeFileSync(join(root, "openspec/specs/example/notes.md"), markdown);
   writeFileSync(
     join(root, "FEATURES.md"),
     '# Controls, `limits` & refusals\n## Controls, `limits` & refusals\n<a id="explicit"></a>\n',
@@ -35,11 +36,11 @@ test("resolves local files, directories, encoded paths, headings and explicit an
   const root = fixture(
     [
       "# Map",
-      "[rules](../FEATURES.md#controls-limits--refusals)",
-      "[duplicate](../FEATURES.md#controls-limits--refusals-1)",
-      "[anchor](../FEATURES.md#explicit) [directory](../docs/)",
-      "[encoded](a%20space.md#space) [self](#map)",
-      "[reference][rules]\n\n[rules]: ../FEATURES.md#explicit",
+      "[rules](../../../FEATURES.md#controls-limits--refusals)",
+      "[duplicate](../../../FEATURES.md#controls-limits--refusals-1)",
+      "[anchor](../../../FEATURES.md#explicit) [directory](../../../docs/)",
+      "[encoded](../../../docs/a%20space.md#space) [self](#map)",
+      "[reference][rules]\n\n[rules]: ../../../FEATURES.md#explicit",
       "[external](https://example.invalid/missing#anchor) [mail](mailto:dev@example.invalid)",
       "`[example](missing.ts)`\n```md\n[example](missing.md)\n```",
     ].join("\n"),
@@ -51,19 +52,19 @@ test("reports missing paths and fragments, including the wrong docs-relative FEA
   const root = fixture(
     [
       "[wrong root](FEATURES.md#controls)",
-      "[deleted](../web/completion-seen.ts)",
-      "[bad fragment](../FEATURES.md#missing)",
+      "[deleted](../../../web/completion-seen.ts)",
+      "[bad fragment](../../../FEATURES.md#missing)",
     ].join("\n"),
   );
   expect(checkKnowledgeMapLinks(root)).toEqual([
     "FEATURES.md#controls: missing path",
-    "../web/completion-seen.ts: missing path",
-    "../FEATURES.md#missing: missing fragment #missing",
+    "../../../web/completion-seen.ts: missing path",
+    "../../../FEATURES.md#missing: missing fragment #missing",
   ]);
 });
 
 test("CLI passes a valid map and check:docs rejects a planted broken link", () => {
-  const root = fixture("[rules](../FEATURES.md#explicit)\n");
+  const root = fixture("[rules](../../../FEATURES.md#explicit)\n");
   const run = () =>
     spawnSync(
       process.execPath,
@@ -71,7 +72,10 @@ test("CLI passes a valid map and check:docs rejects a planted broken link", () =
       { cwd: root, encoding: "utf8" },
     );
   expect(run().status).toBe(0);
-  writeFileSync(join(root, "docs/knowledge-map.md"), "[planted](missing.md)\n");
+  writeFileSync(
+    join(root, "openspec/specs/example/notes.md"),
+    "[planted](missing.md)\n",
+  );
   const scripts = JSON.parse(
     readFileSync(new URL("../package.json", import.meta.url), "utf8"),
   ).scripts;

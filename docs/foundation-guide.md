@@ -1,7 +1,7 @@
 # Foundation source guide
 
 This guide maps the implemented service and browser foundation. Start with the
-[knowledge map](knowledge-map.md) for a task-specific contract and test, then use
+[capability lookup](agent-development.md#find-a-feature) for a task-specific contract and test, then use
 this guide when a change crosses modules. [Architecture](ARCHITECTURE.md) records
 the detailed system boundaries; [deployment](DEPLOYMENT.md) records operator
 configuration. The application source is [derived from Roamgate](../UPSTREAM.md),
@@ -347,7 +347,7 @@ the [site workflow](../.github/workflows/pages.yml), [release workflows](../.git
 and their [script tests](../scripts/) when changing those paths.
 
 When behavior changes, update the affected [current OpenSpec contract](../openspec/specs/),
-this guide or the [knowledge map](knowledge-map.md) only where its ownership or
+this guide or the [capability lookup](agent-development.md#find-a-feature) only where its ownership or
 navigation changed. Use the OpenSpec change lifecycle for a new product decision;
 ordinary source repairs and documentation updates can amend current knowledge in
 the same PR. Keep historical specs as rationale.

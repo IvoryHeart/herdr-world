@@ -1,9 +1,9 @@
 # Architecture
 
 This document describes Herdr World's current system contracts. See
-[runtime support table](../FEATURES.md#runtime-support) and
+[runtime support table](../openspec/specs/herdr-core-runtime/notes.md#runtime-support) and
 [deployment guide](./DEPLOYMENT.md) for supported configurations;
-[FEATURES.md](../FEATURES.md) covers controls and shortcuts.
+[FEATURES.md](../openspec/specs/world-surfaces/notes.md) covers controls and shortcuts.
 
 ## Runtimes: Herdr TUI and herdr-core
 
@@ -839,7 +839,7 @@ used by another workspace for that checkout.
 
 The terminal stays mounted across Inspector views and geometry changes. Resource
 layout/preferences are separate from content caches. See
-[Workspace Inspector](../FEATURES.md#workspace-inspector) for controls and
+[Workspace Inspector](../openspec/specs/world-surfaces/inspector/notes.md#workspace-inspector) for controls and
 [History synchronization](./HISTORY.md) for session projection contracts.
 
 ## Filesystem browsing
