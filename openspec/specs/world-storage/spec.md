@@ -116,6 +116,17 @@ import on a later start. Historical import SHALL create no notification sends.
 Future schema upgrades SHALL take a private consistent SQLite backup first and
 reject a foreign application ID. Configuration and secrets SHALL remain files.
 
+#### Scenario: Board elements upgrade alongside Apartments
+- **WHEN** a database upgrades from the pre-Apartments release (schema 13) or
+  main's Apartments schemas (14 or 15)
+- **THEN** Apartments keep versions 14 and 15, Board elements use version 16,
+  and existing records remain intact
+- **AND WHEN** an early Board preview stamped schema 14 with `board_elements`
+  but without `apartment_residents`
+- **THEN** the backed-up upgrade transaction adds both Apartments migrations,
+  preserves the existing Board element rows and advances to the current schema
+- **AND** a failed upgrade rolls back that recovery and remains safe to retry
+
 #### Scenario: Legacy JSON remains after import
 - **WHEN** startup follows a completed import
 - **THEN** it uses SQLite, performs no import writes for unchanged legacy input,

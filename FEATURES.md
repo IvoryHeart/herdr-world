@@ -399,7 +399,9 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   control (phone or desktop, light or dark, as your screen), its steps, where
   it lives and **Try**.
 - **Try** closes the help, switches to Town or Board when the entry lives
-  there, and rings the control for a moment. A control inside a closed menu
+  there, and rings the control for a moment. A Town control off camera (the
+  Apartments sign below a phone's first view) is flown into view at the same
+  zoom; Town itself never scrolls. A control inside a closed menu
   rings the button that opens it. When the control is not on this screen
   (Chat's controls without an open Chat, a phone-only control on a desktop),
   help reopens on that tab and says where to find it.
@@ -964,8 +966,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     weather** (the default; it follows the [Weather source](#weather-source)
     and shows its current reading, such as `Rain 7° · Example City`, or why
     there is none), one held condition (**Clear**, **Cloud**, **Rain**,
-    **Snow**, **Fog**, **Storm** or **Wind**), or **No weather**. **Weather
-    place and source…** opens the Weather source in Settings → Integrations.
+    **Snow**, **Fog**, **Storm** or **Wind**), or **No weather**. The panel
+    holds no place or source settings of its own: **Weather place and
+    source…** opens that row in Settings (Integrations → Sources → Weather).
     Each browser keeps both choices; the button shows the weather Town is
     showing, or the time of day when there is none. As the sky
     darkens, light follows where agents are: a room is lit while an agent
@@ -1185,8 +1188,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     under labels and panels, and shrinking with the town as it zooms out (on
     a phone zoomed far out, the floating bin is the easier target). A
     countdown board over those
-    waiting counts down to the bus reaching that stop (**due** a few seconds
-    before it pulls in). The bin floats at the bottom of the screen and
+    waiting shows the bin's own countdown, from the one bus timetable: the
+    time until the next bus sets off from Apartments, **on its way** while a
+    trip is out and **stopped** while it stands. Every stop and the bin read
+    the same value at the same moment. The bin floats at the bottom of the screen and
     lights up during a drag, so a phone needs only a short drag, and the town
     does not scroll while the drag rests on it. A red
     double-decker lives at Apartments' stop, on the last street by a
@@ -1874,7 +1879,10 @@ The same registry and service serve agents:
 `herdr-world board element types|list|put|delete|read` and authenticated
 `world.board.elements.*` RPC ([API calls and examples](docs/board-elements-api.md)).
 New elements persist locally with titles, positions, source references and
-revision conflicts. There is no memory/apartment model yet. Element edits have
+revision conflicts. Upgrades preserve existing Board and Apartments records,
+including early Board previews that shared schema version 14 with Apartments.
+Recovery uses the normal private backup and atomic migration transaction.
+There is no memory/apartment model yet. Element edits have
 no CLI history/undo; existing sticky note and card behavior is unchanged.
 
 Project reads explicitly name the saved connection's current generation through
@@ -2516,7 +2524,8 @@ also find by typing its name.
   connection; when Cmd+K cannot act, its commands leave Settings.
 - The search finds a setting by its name, its words and its choices:
   **lighting** and **night** find Town's time of day, **font size** finds the
-  terminal, interface and chat sizes, **sounds** finds sound on this device.
+  terminal, interface and chat sizes, **sounds** finds sound on this device,
+  **weather** finds the Weather source's place and on/off.
   The control in the result changes the setting at once.
 - **Cmd+K** (`Ctrl+K`) finds the same settings and commands. A choice offers
   each option (**night** → **Town time of day: Night**), a switch offers
@@ -3312,8 +3321,10 @@ command per file. Stalled sessions end through keepalives. See
 ## Weather source
 
 - **Optional and shared:** Weather is off by default. Open Settings → Integrations
-  → Sources → Weather → Settings to configure it; **Connect** turns it on and
-  **Disconnect** turns it off. Only turning it on permits Open-Meteo requests.
+  → Sources → Weather → Settings to configure it, or search Settings or Cmd+K
+  for **weather** (or **location**) to reach **Weather place and source**, the
+  row Town's sky button links to (`?setting=integrations.weather`).
+  **Connect** turns it on and **Disconnect** turns it off. Only turning it on permits Open-Meteo requests.
   A typed place name goes to its geocoding service; city-level coordinates go to its weather service. No account
   or key; the free API is for non-commercial use.
 - **One location:** type a city/country or latitude, longitude. Typed input always

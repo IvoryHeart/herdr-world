@@ -34,6 +34,13 @@ no new external effect or recovery state machine.
 
 ## Concrete evidence
 
+- `storage/board-schema-upgrade.test.ts` pins main's Apartments versions 14/15
+  and Board elements at 16, upgrades release v13, main v14/v15, the collided
+  Board-only preview v14 and current v16, and checks row/backup preservation,
+  repeated production startup, rollback and retry. Unrecognized missing-table
+  damage still refuses. This is a single startup transaction; the finite schema
+  layouts and before/after-failure SQLite checks cover recovery without a new
+  concurrency model.
 - `storage/board-elements.test.ts` checks old-schema migration, mixed native/element
   atomic rollback/reopen, independent order permutations, per-element conflicts
   and delete/recreate stale-edit refusal. `rpc/board-elements.test.ts` checks
