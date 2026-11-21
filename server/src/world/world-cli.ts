@@ -1,9 +1,6 @@
-import {
-  BOARD_ELEMENT_CLI_COMMANDS,
-  runBoardElementCommand,
-} from "./world-cli-elements";
+import { runBoardElementCommand } from "./world-cli-elements";
 import { planBoardPatch } from "./board-plan";
-import { MEMORY_ACTIONS, type MemoryAction } from "../../../shared/memory";
+import type { MemoryAction } from "../../../shared/memory";
 import { runMemoryCli } from "./world-cli-memory";
 import { StorageOutcomeUnknown } from "../storage/world-protocol";
 import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
@@ -20,18 +17,25 @@ import {
 import { handleWorldAsk } from "./world-cli-asks";
 export { answerAsk, ASK_WAIT_MAX_MS, dismissAsk } from "./world-cli-asks";
 import { teamMembers } from "../../../shared/groups";
-import {
-  GROUP_CLI_COMMANDS,
-  runGroupCommand,
-  type GroupMoveRequest,
-} from "./world-cli-groups";
+import { runGroupCommand, type GroupMoveRequest } from "./world-cli-groups";
 import { CliError } from "./world-cli-errors";
 import { usage, refused, notFound } from "./world-cli-errors";
-import type { WorldCliRequest, WorldCliResponse } from "./world-cli-protocol";
-export type { WorldCliRequest, WorldCliResponse } from "./world-cli-protocol";
+import {
+  WORLD_CLI_COMMANDS,
+  type WorldCliCommand,
+  type WorldCliRequest,
+  type WorldCliResponse,
+} from "./world-cli-protocol";
+export {
+  WORLD_CLI_COMMANDS,
+  type WorldCliCommand,
+  type WorldCliRequest,
+  type WorldCliResponse,
+} from "./world-cli-protocol";
 import type { GroupWorkSources } from "../../../shared/groupViews";
 export { CliError, type CliErrorCode } from "./world-cli-errors";
 import { randomUUID } from "node:crypto";
+import { UsageQueryError } from "../usage/analytics";
 import { stampSpawn } from "../herdr/spawn-stamp";
 import {
   terminalKey,
@@ -116,6 +120,7 @@ export type WorldCliDeps = {
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
   elements?: import("./board-element-service").BoardElementService;
+  usage?(params: Record<string, unknown>): Promise<unknown>;
   groupMove?(request: GroupMoveRequest, recheck?: () => void): Promise<unknown>;
   publishBoard(revision: number): void;
   /** Tell World's pages; `asks` when a question was asked or answered. */
@@ -124,33 +129,7 @@ export type WorldCliDeps = {
   /** Aborted when the service stops: calls that wait return early. */
   signal?: AbortSignal;
 };
-/** The commands the endpoint accepts, as the CLI spells them. */
-export const WORLD_CLI_COMMANDS = [
-  ...MEMORY_ACTIONS.map((action) => `memory ${action}` as const),
-  ...GROUP_CLI_COMMANDS,
-  "whoami",
-  "ls",
-  "history",
-  "undo",
-  ...BOARD_ELEMENT_CLI_COMMANDS,
-  "board card move",
-  "board card pin",
-  "board card unpin",
-  "board card group",
-  "board card ungroup",
-  "colour set",
-  "colour reset",
-  "town desk move",
-  "ask",
-  "ask get",
-  "ask acknowledge",
-  "ask answer",
-  "ask withdraw",
-  "result",
-  "result ls",
-  "spawned-by",
-] as const;
-export type WorldCliCommand = (typeof WORLD_CLI_COMMANDS)[number];
+
 /* ---------- Identity ---------- */
 /* ---------- Targets ---------- */
 type Topology = {
@@ -678,6 +657,17 @@ export function createWorldCli(deps: WorldCliDeps) {
         );
       });
     switch (command) {
+      case "usage": {
+        if (!deps.usage)
+          throw new CliError("unavailable", "Usage analytics is unavailable");
+        try {
+          return await deps.usage(params);
+        } catch (error) {
+          if (error instanceof UsageQueryError)
+            throw new CliError("usage", error.message);
+          throw new CliError("unavailable", "Usage analytics is unavailable");
+        }
+      }
       case "whoami":
         return actor;
       case "ls": {

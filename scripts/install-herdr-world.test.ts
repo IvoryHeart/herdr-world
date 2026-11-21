@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { shQuote } from "../server/src/utils/process-utils";
+import { WORLD_SKILL_VERSION } from "../server/src/cli/integration";
 import { renderStandaloneBootstrap } from "./herdr-bootstrap";
 import {
   FIXTURE_CORE_VERSION,
@@ -619,4 +620,3 @@ process.exit(await runCli(process.argv.slice(2), context));
     expect(result.stderr.toString()).toContain("herdr upgrade --install");
   });
 });
-import { WORLD_SKILL_VERSION } from "../server/src/cli/integration";

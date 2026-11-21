@@ -1,3 +1,9 @@
+import {
+  normalizeWeatherSettings,
+  parseWeatherSnapshot,
+  unavailableWeather,
+} from "../../../shared/weather";
+import { takeWeatherUnavailablePreview } from "./weatherPreview";
 import { useSyncExternalStore } from "react";
 import {
   parsePullRequestDetailObservation,
@@ -43,6 +49,7 @@ const MAX_ACTIONS = 50;
 const LANES = new Set<string>([...PULL_REQUEST_LANES, ...TICKET_LANES]);
 
 export const EMPTY_WORLD_SOURCES: WorldSourcesSnapshot = {
+  weather: unavailableWeather("disabled"),
   observedAt: 0,
   refreshing: false,
   sources: [],
@@ -103,7 +110,7 @@ export async function runPullRequestVerb(
 export async function updateWorldSource(
   id: WorldSourceId,
   settings: Record<string, unknown>,
-  fetchImpl: FetchLike = fetch,
+  fetchImpl: FetchLike = worldSourcesStore.fetchImpl(),
 ): Promise<WorldSourcesSnapshot> {
   const response = await fetchImpl(`${SOURCES_PATH}/${id}`, {
     method: "PUT",
@@ -153,6 +160,7 @@ export function parseWorldSources(value: unknown): WorldSourcesSnapshot {
         : [],
     );
   return {
+    weather: parseWeatherSnapshot(data.weather),
     observedAt: number(data.observedAt),
     refreshing: data.refreshing === true,
     sources,
@@ -278,23 +286,35 @@ function parseStatus(value: unknown): WorldSourceStatus | null {
       entry.lastSuccessAt === null ? null : number(entry.lastSuccessAt),
     itemCount: number(entry.itemCount),
     config:
-      config.kind === "jira"
-        ? {
-            kind: "jira",
-            site: text(config.site),
-            email: text(config.email),
-            jql: text(config.jql) ?? "",
-            tokenSet: config.tokenSet === true,
-          }
-        : {
-            kind: "github",
-            mergedDays:
-              Number.isSafeInteger(config.mergedDays) &&
-              (config.mergedDays as number) > 0
-                ? (config.mergedDays as number)
-                : 7,
-          },
+      entry.id === "weather"
+        ? { kind: "weather", ...safeWeatherSettings(config) }
+        : config.kind === "jira"
+          ? {
+              kind: "jira",
+              site: text(config.site),
+              email: text(config.email),
+              jql: text(config.jql) ?? "",
+              tokenSet: config.tokenSet === true,
+            }
+          : {
+              kind: "github",
+              mergedDays:
+                Number.isSafeInteger(config.mergedDays) &&
+                (config.mergedDays as number) > 0
+                  ? (config.mergedDays as number)
+                  : 7,
+            },
   };
+}
+
+function safeWeatherSettings(config: Record<string, unknown>) {
+  const settings = { ...config };
+  delete settings.kind;
+  try {
+    return normalizeWeatherSettings(settings);
+  } catch {
+    return normalizeWeatherSettings({});
+  }
 }
 
 function parseItem(value: unknown): WorkItem | null {
@@ -305,7 +325,7 @@ function parseItem(value: unknown): WorkItem | null {
     !key ||
     !url ||
     !/^https:\/\//u.test(url) ||
-    !(WORLD_SOURCE_IDS as readonly unknown[]).includes(item.source) ||
+    !["github", "jira"].includes(item.source as string) ||
     !["pull_request", "issue", "ticket"].includes(item.kind as string) ||
     !LANES.has(item.lane as string)
   )
@@ -316,7 +336,7 @@ function parseItem(value: unknown): WorkItem | null {
     text(item[name]) ? { [name]: text(item[name]) } : {};
   return {
     key,
-    source: item.source as WorldSourceId,
+    source: item.source as WorkItem["source"],
     kind: item.kind as WorkItem["kind"],
     ref: text(item.ref) ?? key,
     title: text(item.title) ?? "",
@@ -373,6 +393,7 @@ type Listener = () => void;
  */
 class WorldSourcesStore {
   #snapshot = EMPTY_WORLD_SOURCES;
+  #weatherPreview = takeWeatherUnavailablePreview();
   #listeners = new Set<Listener>();
   #timer: ReturnType<typeof setTimeout> | null = null;
   #inFlight: Promise<void> | null = null;
@@ -395,6 +416,7 @@ class WorldSourcesStore {
   /** A settings response: newer than any request still on its way. */
   publishSettled(snapshot: WorldSourcesSnapshot) {
     this.#publish(++this.#requested, snapshot);
+    this.#schedule();
   }
 
   refresh(force = false) {
@@ -407,6 +429,17 @@ class WorldSourcesStore {
         this.#publish(sequence, {
           ...this.#snapshot,
           refreshing: false,
+          weather: unavailableWeather(),
+          sources: this.#snapshot.sources.map((source) =>
+            source.id === "weather" && source.enabled
+              ? {
+                  ...source,
+                  state: "error",
+                  detail:
+                    "Weather unavailable: World service could not be reached.",
+                }
+              : source,
+          ),
           items: this.#snapshot.items.map((item) =>
             qualifyPullRequestDetail(item, this.#snapshot.observedAt, false),
           ),
@@ -432,7 +465,21 @@ class WorldSourcesStore {
   #publish(sequence: number, snapshot: WorldSourcesSnapshot) {
     if (sequence < this.#published) return;
     this.#published = sequence;
-    this.#snapshot = snapshot;
+    this.#snapshot = this.#weatherPreview
+      ? {
+          ...snapshot,
+          weather: unavailableWeather(),
+          sources: snapshot.sources.map((source) =>
+            source.id === "weather"
+              ? {
+                  ...source,
+                  state: "error",
+                  detail: "Weather preview: unavailable (testing only).",
+                }
+              : source,
+          ),
+        }
+      : snapshot;
     for (const listener of this.#listeners) listener();
   }
 

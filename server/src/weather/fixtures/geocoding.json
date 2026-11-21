@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "id": 1,
+      "name": "Example City",
+      "latitude": 51.507351,
+      "longitude": -0.127758,
+      "admin1": "Example Region",
+      "country": "Example Country"
+    }
+  ],
+  "generationtime_ms": 0.5
+}
