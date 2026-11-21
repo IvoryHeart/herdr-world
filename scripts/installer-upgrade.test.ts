@@ -3,6 +3,7 @@ import { $ } from "bun";
 import {
   chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -12,8 +13,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ConnectionProfileStore } from "../server/src/connections/profiles";
 import {
   candidateVersion,
   releaseMirror,
@@ -26,6 +28,54 @@ import {
   command,
   createInstallerFixtureRoot,
 } from "./installer-upgrade";
+
+test("installer registry overrides support private startup ownership under an ordinary home", async () => {
+  const root = createInstallerFixtureRoot();
+  const home = join(root, "home");
+  mkdirSync(home, { mode: 0o755 });
+  if (process.platform !== "win32") chmodSync(home, 0o755);
+  const env = runtimeEnvironment(home);
+  const path = env.HERDR_WORLD_CONNECTIONS_PATH!;
+  const store = new ConnectionProfileStore({ path });
+  const reopened = new ConnectionProfileStore({ path });
+  try {
+    expect(env.HERDR_CONNECTIONS_PATH).toBe(path);
+    await store.acquireServiceOwnership();
+    expect(store.load()).toBeNull();
+    await expect(reopened.withOwnership(async () => {})).rejects.toThrow(
+      "busy",
+    );
+    const registry = {
+      version: 2 as const,
+      default_connection_id: "alpha",
+      profiles: [
+        {
+          id: "alpha",
+          label: "Alpha",
+          type: "local" as const,
+          runtime: "herdr-core" as const,
+          core_session: "default",
+          core_state_dir: "",
+          auto_connect: false,
+        },
+      ],
+    };
+    await store.save(registry);
+    await store.close();
+    await reopened.acquireServiceOwnership();
+    expect(reopened.load()).toEqual(registry);
+    if (process.platform !== "win32") {
+      expect(lstatSync(home).mode & 0o777).toBe(0o755);
+      expect(lstatSync(dirname(path)).mode & 0o777).toBe(0o700);
+      expect(lstatSync(path).mode & 0o777).toBe(0o600);
+      expect(lstatSync(`${path}.ownership.sqlite`).mode & 0o777).toBe(0o600);
+    }
+  } finally {
+    await store.close();
+    await reopened.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 const legacyCleanupError = (
   version = "0.2.6",

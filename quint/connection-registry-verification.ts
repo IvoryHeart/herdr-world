@@ -3,7 +3,6 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { replayRegistry, replayRegistryMatrix } from "./connection-registry";
 import type { ConnectionProfileService } from "../server/src/connections/profile-service";
-import { replayTapLockCounterexample } from "./claude-tap-lock";
 
 type Harness = {
   root: string;
@@ -84,31 +83,5 @@ export async function runRegistryVerification(h: Harness) {
     sampling: "exhaustive finite configurations; no seed-dependent omissions",
     sensitivity:
       "additional retained profile; both caller orders in every matrix",
-  };
-}
-
-export async function runTapLockExploration(h: Pick<Harness, "command">) {
-  const model = "quint/claude-tap-lock.qnt";
-  await h.command("claude-tap-lock-types", ["typecheck", model]);
-  await h.command(
-    "claude-tap-lock-known-counterexample",
-    [
-      "verify",
-      model,
-      "--main",
-      "claude_tap_lock",
-      "--backend",
-      "tlc",
-      "--invariant",
-      "safety",
-      "--verbosity",
-      "3",
-    ],
-    true,
-  );
-  return {
-    name: "claude-tap-lock",
-    verdict: "known product counterexample; safety remains unproved",
-    ...replayTapLockCounterexample(),
   };
 }

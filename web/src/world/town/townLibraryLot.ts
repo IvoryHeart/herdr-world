@@ -67,11 +67,18 @@ export function townLibraryLot(layout: {
 
 /**
  * On a narrow town: the folded sign's spot on the center's left wing, in
- * world pixels. The post office stands left of the center (townPostLot.ts).
+ * world pixels, below the Shipyard's signpost (townHarbourLot.ts). The post
+ * office stands left of the center (townPostLot.ts).
  */
 export function townLibraryFoldAt(center: TownCenterLot, tile: number) {
   return {
     x: center.x * tile + 60,
-    y: center.y * tile + TOWN_CENTER_FRIEZE_Y + 40,
+    y: center.y * tile + TOWN_CENTER_FRIEZE_Y + 40 + TOWN_FOLD_STACK,
   };
 }
+
+/**
+ * World pixels between signs stacked on the center's wing: two signs about
+ * 28 pixels high, each at up to 1.6 times that near home zoom (--iz).
+ */
+export const TOWN_FOLD_STACK = 46;

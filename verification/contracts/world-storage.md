@@ -80,3 +80,48 @@ checks and inspects the persisted SQLite family after close. Reception unit
 coverage retains question counts, shows failure/uncertainty and consumes a newer
 query revision for delivery-only evidence. Ordinary successful markup stays
 unchanged. Native/platform and independent review acceptance remain separate.
+
+
+## Question ownership and cap admission (#1128)
+
+Question closure belongs to the verified immutable connection plus stable
+terminal, not to the current occupant fingerprint. A freshly verified caller
+may close its terminal's old questions after generation/session replacement;
+another terminal, another connection or an unverified claim must fail. Closure
+changes only World-owned records. It grants no downstream operational lease,
+answer delivery or original-recipient acknowledgement authority. Cause-key
+creation deduplication remains occupant-scoped; withdrawal by key recovers the
+newest retained question for that cause on the verified terminal. Legacy
+records missing stable terminal identity retain their previous strict guard.
+
+State-model assessment: identity and ordering both matter. The existing Quint
+runtime-lease and binding models fence downstream sends; weakening those models
+to permit generation-independent runtime authority would be wrong. No new
+independent external effect is introduced here. All question-state changes
+linearize in the serialized ledger callback against current rows, so a finite
+exhaustive implementation sweep is the selected cheaper alternative to another
+Quint model. `world-question-ownership.test.ts` exercises all 128 combinations
+of verification, connection, terminal, pane, generation, session and fingerprint
+agreement for ID and key withdrawal (256 cases), plus all 120 permutations of
+restart, withdrawal, answer, owner bulk dismissal and cap admission. It compares
+every intermediate record with an independent open/closed-state oracle, checks
+rejected cross-terminal/process claims through real core caller resolution,
+and preserves other askers and saved answers.
+
+`question-backlog-storage.test.ts` retains the actual SQLite writer boundary:
+two asks suspended after the initial allowance check compete for one remaining
+slot, only one commits an attention intent, repeated cap refusals add no effects,
+and closure allows fresh admission. Reopen plus owner RPC checks one revision
+for an entire cross-generation backlog, pending-alert cancellation and other
+terminal isolation. `cli/world.test.ts` checks repeated cap errors never invoke
+Herdr fallback while unexpected failures still do; `http/world-cli-endpoint.test.ts`
+checks HTTP 429. `NeedsYouAskerActions.dom.test.ts` exercises the production
+control and store with a cross-generation 31-question backlog, isolation by
+terminal despite equal names, save failure and retry. The same synthetic fixture
+is available through `?questionBacklogFixture`, consumed before normal routing.
+
+These finite checks exhaust the serial orders and identity equality classes
+named above, not arbitrary external runtime replacement or process/filesystem
+failures. Existing current-generation, process-verification, SQLite crash and
+original-recipient answer suites remain required. Run the full verification
+gate and retain independent PR review; no prior model acceptance is extended.

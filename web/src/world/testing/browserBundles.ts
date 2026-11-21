@@ -14,7 +14,8 @@ export type WorldBrowserEntry =
   | "CoreFiles"
   | "QuestionCards"
   | "town/TownCanvas"
-  | "SharedViewCreation";
+  | "SharedViewCreation"
+  | "ApartmentsAvatars";
 export type WorldBrowserBundle = {
   directory: string;
   assets: Map<string, Blob>;

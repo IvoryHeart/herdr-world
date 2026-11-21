@@ -186,12 +186,14 @@ export function validateTrace(
       [3, 4, 6, 10].includes(domain.requestBound),
     "unsupported request domain",
   );
+  if (model === "claude-tap-lock")
+    throw new Error("Tap schedules use their dedicated replay validator");
   if (model === "herdr-core-runtime") return validateCoreTrace(value);
   if (model === "herdr-core-seen") return validateSeenTrace(value);
   if (model === "effect-recovery") return validateEffectTrace(value);
   if (model === "observation-base") return validateObservationTrace(value);
   if (model === "binding-resolution") return validateBindingTrace(value);
-  if (model === "connection-registry" || model === "claude-tap-lock")
+  if (model === "connection-registry")
     assert.fail(
       "Architecture audit uses direct exhaustive consumer schedules, not sampled traces",
     );

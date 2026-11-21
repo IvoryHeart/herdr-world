@@ -1,0 +1,180 @@
+.modal.apartments-dialog {
+  width: min(640px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.apartments-dialog h2,
+.apartments-dialog button,
+.apartments-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.apartments-search input {
+  flex: 1;
+  min-width: 0;
+}
+.apartments-muted,
+.apartments-dialog > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.apartments-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+/* A resident: its avatar beside what it did. */
+button.apartments-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 6px;
+  text-align: left;
+}
+.apartments-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.apartments-row-head,
+.apartments-row-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.apartments-row-head time {
+  margin-left: auto;
+}
+/* The Town character on its terminal colour, its harness icon in the corner,
+   as the Inspector shows a live agent. */
+.apartments-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 48px;
+  border-radius: 6px;
+  background: var(--agent-colour, var(--accent-soft));
+}
+.apartments-avatar[data-large] {
+  width: 54px;
+  height: 72px;
+  border-radius: 8px;
+}
+.apartments-avatar .profile-sprite {
+  image-rendering: pixelated;
+}
+/* Its harness's icon on the tile's corner, as small as a status badge. */
+.apartments-avatar-harness {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  line-height: 0;
+}
+.apartments-avatar-harness .agent-icon.is-compact {
+  width: 17px;
+  height: 17px;
+  flex-basis: 17px;
+  border-radius: 5px;
+}
+.apartments-avatar-harness .agent-icon.is-compact svg {
+  width: 12px;
+  height: 12px;
+}
+.apartments-avatar[data-large]
+  .apartments-avatar-harness
+  .agent-icon.is-compact {
+  width: 21px;
+  height: 21px;
+  flex-basis: 21px;
+}
+.apartments-avatar[data-large]
+  .apartments-avatar-harness
+  .agent-icon.is-compact
+  svg {
+  width: 15px;
+  height: 15px;
+}
+.apartments-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.apartments-detail-head > div {
+  min-width: 0;
+}
+.apartments-row-summary {
+  overflow: hidden;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.apartments-row-links span {
+  font-size: 11px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.apartments-detail {
+  display: grid;
+  gap: 12px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.apartments-detail :is(h2, h3, p, dl, dd, ul) {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+.apartments-detail h2 {
+  font-size: 18px;
+}
+.apartments-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+}
+.apartments-facts dt {
+  color: var(--muted);
+}
+.apartments-report {
+  white-space: pre-wrap;
+  max-height: 40dvh;
+  overflow-y: auto;
+}
+.apartments-resume {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.apartments-resume select {
+  flex: 1 1 180px;
+}
+button.apartments-resume-button {
+  border-color: var(--accent);
+}
+.apartments-error {
+  color: var(--danger-text);
+}
+.apartments-chat {
+  height: min(420px, 55dvh);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.apartments-chat > .agent-history-chat {
+  overflow-y: auto;
+}
+.apartments-evict {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}

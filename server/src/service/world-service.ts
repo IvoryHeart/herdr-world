@@ -63,7 +63,9 @@ import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
+import { createApartmentsService } from "./apartments-service";
 import { createBinService } from "./bin-service";
+import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
@@ -99,9 +101,6 @@ export type WorldServiceDeps = {
 
 export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 
-/** How long stop waits for requests that were running when it began. */
-const DRAIN_TIMEOUT_MS = 2_000;
-
 /**
  * Claim the data folder, open storage and build one World service. Nothing
  * listens or connects until `start()`; `stop()` drains and releases it all.
@@ -123,6 +122,7 @@ export async function createWorldService(deps: WorldServiceDeps) {
     throw error;
   }
   try {
+    await storage.connections.acquireServiceOwnership();
     return await compose(deps, storage, sessionSecret, releaseDataFolder);
   } catch (error) {
     await storage.close().catch(() => {});
@@ -309,9 +309,21 @@ async function compose(
     connections: () => connectionManager,
     publish: revisionPublisher("world_bin_changed", "world-bin"),
     log: (message) => logger.warn(message),
+    retiring: (entries) => apartments.apartments.retire(entries),
   });
   void bin.start();
-
+  /** Apartments: the records finished agents leave (shared/apartments.ts). */
+  const apartments = createApartmentsService({
+    port: storage.apartments,
+    now: () => clock.now(),
+    tui: () => connectionManager,
+    core: () => coreRpc,
+    sources: () => worldSources.current(),
+    board,
+    profiles: () => storage.profiles(),
+    publish: revisionPublisher("world_apartments_changed", "world-apartments"),
+    log: (message) => logger.warn(message),
+  });
   const {
     observe: observeHost,
     retire: retireTerminalMarks,
@@ -364,6 +376,7 @@ async function compose(
         !["error", "disconnected"].includes(status.state),
       );
       bin.connectionStatus(status);
+      apartments.apartments.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -470,8 +483,8 @@ async function compose(
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    ownedBy(connectionManager, observeHost),
-    ownedBy(connectionManager, observeTerminalSettings),
+    apartments.fresh(ownedBy(connectionManager, observeHost)),
+    apartments.complete(ownedBy(connectionManager, observeTerminalSettings)),
     serviceIncarnation,
   );
 
@@ -789,6 +802,7 @@ async function compose(
     }),
     ...terminalMarks,
     bin,
+    apartments,
     worldCli,
     worldSnapshots,
     worldUsage,
@@ -800,31 +814,9 @@ async function compose(
   };
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
-  // Requests and socket messages still running; stop waits for them.
-  const inFlight = new Set<Promise<unknown>>();
-  function track<T>(work: Promise<T>): Promise<T> {
-    inFlight.add(work);
-    void work.then(
-      () => inFlight.delete(work),
-      () => inFlight.delete(work),
-    );
-    return work;
-  }
-  function drained(): Promise<void> {
-    if (!inFlight.size) return Promise.resolve();
-    return new Promise((resolve) => {
-      const timer = scheduler.schedule(() => {
-        logger.warn("World stopped with requests still running", {
-          requests: inFlight.size,
-        });
-        resolve();
-      }, DRAIN_TIMEOUT_MS);
-      void Promise.allSettled([...inFlight]).then(() => {
-        timer.cancel();
-        resolve();
-      });
-    });
-  }
+  const { track, drained } = inFlightWork(scheduler, (requests) =>
+    logger.warn("World stopped with requests still running", { requests }),
+  );
 
   /** Dispose Ranger if it was started; stopping keeps a new one from starting. */
   async function disposeAssistant() {
@@ -994,6 +986,9 @@ async function compose(
       await drained();
     } finally {
       try {
+        // Finished agents seen so far are written before storage closes;
+        // a history census still reading stops.
+        await apartments.stop();
         await closeTerminalMarks();
         storageOpen = false;
         await storage.close();

@@ -4,7 +4,7 @@
  * and the post office make one place to act from at the top of the town.
  * Pure geometry with no layout import, so the lots can make room for it
  * (townLots.ts) and everything else reads it from the laid-out center
- * (townPost.ts).
+ * (townRendererScene.ts).
  */
 
 import type { TownCenterLot } from "./townCenter";

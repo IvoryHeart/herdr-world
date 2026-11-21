@@ -30,9 +30,9 @@ import {
 } from "../../web/src/world/town/townLayout";
 import {
   TOWN_POST_YARD_ROWS,
-  townPostLot,
-  townPostSlot,
-} from "../../web/src/world/town/townPost";
+  townPostLotBeside,
+} from "../../web/src/world/town/townPostLot";
+import { townWarehouseSlot } from "../../web/src/world/town/townWarehouseModel";
 import {
   paintTownPostHouse,
   paintTownPostYard,
@@ -54,6 +54,15 @@ import {
   townLookFor,
   townScreen,
 } from "../../web/src/world/town/townSprites";
+
+/**
+ * The 0.3.0 film's post office, which held the pull requests then: its lot
+ * left of the town center, and its parcels' slots, the yard grid the
+ * warehouse's crates now use.
+ */
+const townPostLot = (layout: ReturnType<typeof layoutTown>["layout"]) =>
+  layout.formFactor === "narrow" ? null : townPostLotBeside(layout.center);
+const townPostSlot = townWarehouseSlot;
 
 Object.assign(window, {
   HerdrTownArt: {

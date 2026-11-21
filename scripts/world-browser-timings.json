@@ -4,10 +4,12 @@
   "sourceNotes": {
     "refresh": "2026-11-19: six retained world-shard timings from full run 44600794516. Weights include setup and all assertions, not test speed thresholds.",
     "memory/MemoryLibrary.browser": "2026-11-20 local focused run: about 3 s per viewport, two viewports, bun run test web/src/world/memory/MemoryLibrary.browser.test.ts.",
-    "memory/MemoryLibraryLifecycle.browser": "2026-11-20 local focused run: about 2 s, one viewport, five scripted scenarios, bun run test web/src/world/memory/MemoryLibraryLifecycle.browser.test.ts."
+    "memory/MemoryLibraryLifecycle.browser": "2026-11-20 local focused run: about 2 s, one viewport, five scripted scenarios, bun run test web/src/world/memory/MemoryLibraryLifecycle.browser.test.ts.",
+    "ApartmentsAvatars.browser": "2026-11-20 local focused run: 3.06 s file duration, one fixture across phone and desktop, bun run test web/src/world/ApartmentsAvatars.browser.test.ts."
   },
   "seconds": {
     "AnswerDeliveries.browser": 3.251,
+    "ApartmentsAvatars.browser": 3.06,
     "BoardView": 85.314,
     "ConcurrentContexts": 28.233,
     "CoreControl.browser": 2.125,
