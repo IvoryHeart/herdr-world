@@ -19,6 +19,7 @@ import {
   WORLD_INTEGRATIONS_EVENT,
 } from "../integrations";
 import { detectShortcutPlatform } from "../shortcutBindings";
+import { OPEN_HELP_EVENT } from "../help/helpEvents";
 import type { ConfigurationProps } from "./configurationProps";
 import { publishSettingsHost, SETTINGS_OPEN_EVENT } from "./host";
 import { takeSettingsLink } from "./links";
@@ -118,11 +119,15 @@ export function useSettingsHome({
         focus: (event as CustomEvent<OpenIntegrationsDetail>).detail?.focus,
       });
     };
+    // Help (#1025) opens in place of Settings, so its Try reaches the view.
+    const onOpenHelp = () => setSettingsAt(null);
     window.addEventListener(SETTINGS_OPEN_EVENT, onOpenSettings);
     window.addEventListener(WORLD_INTEGRATIONS_EVENT, onOpenIntegrations);
+    window.addEventListener(OPEN_HELP_EVENT, onOpenHelp);
     return () => {
       window.removeEventListener(SETTINGS_OPEN_EVENT, onOpenSettings);
       window.removeEventListener(WORLD_INTEGRATIONS_EVENT, onOpenIntegrations);
+      window.removeEventListener(OPEN_HELP_EVENT, onOpenHelp);
     };
   }, [refreshSignedIn]);
 

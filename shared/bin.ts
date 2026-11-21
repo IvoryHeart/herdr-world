@@ -1,10 +1,10 @@
 /**
  * The agent bin and Town's bus. An agent put in the bin is held: nothing is
  * closed. A bus runs on one fixed schedule: every `BIN_BUS_INTERVAL_MS` it
- * sets off, everyone waiting boards, and it drives the whole route. When it
- * has left the map, `BIN_BUS_TRIP_MS` later, World records one durable close
+ * sets off, everyone waiting boards, and it drives them to Apartments. When
+ * the trip ends, `BIN_BUS_TRIP_MS` later, World records one durable close
  * intent per rider, which the effect runner dispatches under its recovery
- * rules. Until the bus has left the map, Put back takes an agent out again,
+ * rules. Until the trip ends, Put back takes an agent out again,
  * even one Town shows aboard, and the bus can be stopped where it is so
  * nothing closes until it is let go. Holding and the
  * trip are reversible staging in the service's memory: a reload keeps them
@@ -15,8 +15,8 @@
 export const BIN_BUS_INTERVAL_MS = 240_000;
 /**
  * How long a trip lasts; its riders close when it ends. Town fits the bus's
- * drive into it: it comes in, slows to each stop with riders, waits there
- * about 10 s, speeds up and leaves the map as the trip ends.
+ * drive into it: from Apartments by road to each stop with riders, where it
+ * waits about 10 s, and back, its riders walking in as the trip ends.
  */
 export const BIN_BUS_TRIP_MS = 120_000;
 
@@ -57,8 +57,8 @@ export type BinEntry = BinTarget & {
   label: string;
   view: BinView;
   /**
-   * The bus on the map takes it: it closes when the bus leaves, unless it is
-   * put back first. Town shows it boarding as the bus passes its stop.
+   * The bus out on its trip takes it: it closes when the trip ends, unless it
+   * is put back first. Town shows it boarding as the bus halts at its stop.
    */
   riding: boolean;
   /** Its tab is pinned: the close never takes the tab's last pane. */
@@ -86,9 +86,9 @@ export type BinBus = {
   trip_ms: number;
   /** Until the next bus sets off. */
   next_ms: number;
-  /** How long the bus on the map has driven, or null when none is out. */
+  /** How long the bus has been out on its trip, or null when none is out. */
   elapsed_ms: number | null;
-  /** The bus on the map was stopped: it stands, and nothing closes, until it goes. */
+  /** The bus out on its trip was stopped: it stands, and nothing closes, until it goes. */
   stopped: boolean;
   /** The trip on the map, counted from 1 in this service run, or null. */
   trip: number | null;

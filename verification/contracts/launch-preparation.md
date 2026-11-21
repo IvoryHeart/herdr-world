@@ -20,8 +20,9 @@ save. The two new `first-run.test.ts` cases cover failure before and after that
 publication and retry/reload. Existing cases cover saved, explicit, installed
 TUI, invalid registry, missing runtime, core lock/executable and platform choices.
 There are no independently completing runtime starts inside discovery. Multiple
-offline writers racing startup are a separate unproved protocol (#1084), not
-removed by assuming the initializer is globally exclusive.
+offline writers racing startup are covered separately by the
+[registry ownership protocol](connection-registry.md#saved-connection-registry-ownership)
+and its real-process consumers; initializer tests alone do not establish exclusion.
 
 The Unix TUI settings cache is a different file from the host-wide limits
 observation: it contains only generated, content-addressed immutable bytes.

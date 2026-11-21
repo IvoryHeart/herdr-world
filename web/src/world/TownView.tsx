@@ -175,7 +175,7 @@ export default function TownView({
   );
   const preferencesRef = useRef(preferences);
   const [roomDialog, setRoomDialog] = useState<TownRoomDialog | null>(null);
-  const workLens = useTownWork(world, onSelect); // The post office's Work.
+  const workLens = useTownWork(world, onSelect); // The warehouse's Work.
   // The one reviewed record, Desk's stop mark. Town sees only reviewed
   // records, so the service's stop notices do not re-render a busy Town.
   const work = useReviewedWork(undefined, false);
@@ -763,7 +763,7 @@ export default function TownView({
   const toolbar = <WorldViewToolbar viewLabel="Town" {...search.toolbar} />;
 
   return (
-    <TownContexts outbox={townSummary.openOutbox} openWork={workLens.open}>
+    <TownContexts outbox={townSummary.openOutbox} work={workLens}>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <WorldSearchResults
         world={world}
