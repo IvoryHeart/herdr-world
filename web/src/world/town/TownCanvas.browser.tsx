@@ -1991,6 +1991,11 @@ async function run() {
     diagnostics.level === "overview",
     `default level is ${diagnostics.level}, expected overview`,
   );
+  // Opening Town places the hosts it has: none rises out of its lot.
+  check(
+    diagnostics.hostArrivals === 0 && diagnostics.hostDepartures === 0,
+    `opening Town replayed ${diagnostics.hostArrivals} arrivals and ${diagnostics.hostDepartures} departures`,
+  );
   // Observing the same town again reconciles no agent and builds no
   // navigation; one agent's new status reconciles only its host's agents.
   {
@@ -3964,8 +3969,8 @@ async function run() {
   }
 
   // Turning a host off and on changes the town without a blank or
-  // half-drawn frame: the gone building fades out, the others glide to their
-  // new places with their plaques, and it fades back in.
+  // half-drawn frame: the gone building sinks into its lot, the others glide
+  // to their new places with their plaques, and it rises back out of it.
   {
     host
       .querySelector<HTMLButtonElement>(
@@ -3996,6 +4001,8 @@ async function run() {
     const transitions = diagnostics.transitions;
     const crossfades = diagnostics.crossfades;
     const reused = diagnostics.groundReused;
+    const departures = diagnostics.hostDepartures;
+    const arrivals = diagnostics.hostArrivals;
     const buildings = diagnostics.layout!.buildings;
     let followed = false;
     const watch = new MutationObserver(() => {
@@ -4039,6 +4046,11 @@ async function run() {
     check(
       diagnostics.transitions >= transitions + 4,
       `buildings did not fade when a host turned off and on (${diagnostics.transitions - transitions} transitions)`,
+    );
+    check(
+      diagnostics.hostDepartures === departures + 1 &&
+        diagnostics.hostArrivals === arrivals + 1,
+      `a host turned off and on did not sink once and rise once (${diagnostics.hostDepartures - departures} sank, ${diagnostics.hostArrivals - arrivals} rose)`,
     );
     // A building that moves is baked again: its interior and desks fade in
     // over its old drawing as both glide.
