@@ -13,7 +13,8 @@ export type WorldBrowserEntry =
   | "CoreSharedState"
   | "CoreFiles"
   | "QuestionCards"
-  | "BoardElements";
+  | "BoardElements"
+  | "ApartmentsAvatars";
 export type WorldBrowserBundle = {
   directory: string;
   assets: Map<string, Blob>;

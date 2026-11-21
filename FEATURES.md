@@ -1956,6 +1956,20 @@ resident: an ending World sees replaces the found record of that session.
   from **Apartments** in
   the town center ring, or from **Apartments** in Board's hub. All three read
   the same residents, and the ring and hub show how many live there.
+- Each resident shows its avatar, as Town and Inspector show a live agent:
+  its Town character on its terminal colour, with its harness's icon, in the
+  list (with its harness, project, room and host) and larger in the opened
+  resident. World keeps the avatar at move-in: the avatar chosen for its
+  pane, else its profile's look, else the character Town drew for it, and
+  the colour Town showed: its tab's, else (a spawned agent) its parent's
+  tab's, else its room's. Herdr TUI and herdr-core residents look the
+  same. A resident whose avatar was not kept (it moved in before World kept
+  avatars, or World found it in its harness's history) shows the nearest: its profile's look, else a profile of the same
+  harness, else World's default character; hovering the avatar says which.
+  Its colour then falls back to the plain tile.
+- `?apartments-preview=avatars` in the page's address shows synthetic
+  residents, one per avatar case, for that load only (the page removes it at
+  once; nothing is saved).
 - A resident whose session runs again at a desk is hidden while it runs, and
   returns when it stops, also when its terminal stays open with a shell. Its
   newer end is recorded when that terminal closes. A transcript written in the last 10 minutes is left

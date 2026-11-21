@@ -4,12 +4,15 @@ import { townLookOf } from "./agentProfiles";
 import {
   townCharacter,
   type TownDirection,
+  type TownLook,
   type TownPose,
 } from "./town/townSprites";
 
 /**
  * A profile's Town character, drawn with the same sprites as Town. With
  * `animate`, it walks on the spot, turns around and sits, as a live preview.
+ * A Town look (an agent without a profile, see town/townAppearance.ts) draws
+ * as it is.
  */
 export function ProfileSprite({
   look,
@@ -17,7 +20,7 @@ export function ProfileSprite({
   animate = false,
   label,
 }: {
-  look: AgentLook;
+  look: AgentLook | TownLook;
   scale?: number;
   animate?: boolean;
   label?: string;
@@ -27,7 +30,7 @@ export function ProfileSprite({
     const canvas = ref.current;
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
-    const town = townLookOf(look);
+    const town = "hair_style" in look ? townLookOf(look) : look;
     const draw = (dir: TownDirection, frame: number, pose: TownPose) => {
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.imageSmoothingEnabled = false;
