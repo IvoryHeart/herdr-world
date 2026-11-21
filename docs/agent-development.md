@@ -8,6 +8,21 @@ For source ownership use the [knowledge map](knowledge-map.md), then the
 rules and worktree creation live in [AGENTS.md](../AGENTS.md). The worktree helper
 rejects unsafe names and unknown refs; `bun run agent:worktree -- list` is read-only.
 
+## OpenSpec skills
+
+Use the repository's adapted skills:
+
+- [world-openspec-explore](../.agents/skills/world-openspec-explore/SKILL.md) to investigate.
+- [world-openspec-update-change](../.agents/skills/world-openspec-update-change/SKILL.md) to revise a plan.
+- [world-openspec-apply-change](../.agents/skills/world-openspec-apply-change/SKILL.md) to implement authorized tasks.
+- [world-openspec-sync-specs](../.agents/skills/world-openspec-sync-specs/SKILL.md) to synchronize delivered requirements.
+- [world-openspec-archive-change](../.agents/skills/world-openspec-archive-change/SKILL.md) to archive completed changes.
+
+These live in `.agents/skills/`; `.claude/skills/` links to the same files.
+The `.openspec-target` marker stays `agents`, the CLI's generation target.
+An `openspec update` can regenerate its own `openspec-*` skills without replacing
+our `world-openspec-*` adaptations. Keep the pinned CLI until its separate upgrade.
+
 ## Capture PR evidence
 
 Use the [capture helper and five-viewport recipe](SCREENSHOTS.md#pr-screenshot-viewports)

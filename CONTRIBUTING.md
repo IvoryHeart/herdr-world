@@ -195,7 +195,8 @@ Verification impact: none
 ```
 
 `bun run check:pr-body <file>` checks the committed PR diff, as pre-push and CI do.
-Spec claims name a changed path, spec directory or OpenSpec change name. Verification
+Spec claims name a changed path, spec directory, complete capability ID (including
+nested IDs such as `world-surfaces/town`) or OpenSpec change name. Verification
 claims name a changed model, adapter, coverage owner or test/check path. An untouched
 claim fails. `Spec impact: none` fails when `openspec/specs/` or `openspec/changes/`
 changes; `Verification impact: none` fails when `quint/`, `verification/` or an owner
@@ -203,6 +204,10 @@ in `verification/coverage.json` changes (including files under directory owners)
 These are cheap consistency checks: reviewers still judge whether a `none` is true
 and whether the evidence is sufficient. Ordinary documentation retains its exemption;
 dependency-bot PRs and merge-only pushes retain their existing policy paths.
+
+For OpenSpec work, use the adapted `world-openspec-*` skills in the
+[agent guide](docs/agent-development.md#openspec-skills). CLI-generated `openspec-*`
+skills do not carry this repository's authorization and delivery guidance.
 
 Use focused checks
 only for a specific question while developing. For a code push, the hook runs
