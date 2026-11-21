@@ -263,7 +263,11 @@ export default function CodeView({
       <header className="code-view-bar">
         <Code2 size={16} aria-hidden className="code-view-mark" />
         {projects.length ? (
-          <label className="code-view-project" htmlFor={selectId}>
+          <label
+            className="code-view-project"
+            htmlFor={selectId}
+            data-help="code.project"
+          >
             <span className="world-sr-only">Project</span>
             <select
               id={selectId}

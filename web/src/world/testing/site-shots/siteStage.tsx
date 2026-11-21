@@ -158,6 +158,11 @@ export function siteBoardStore() {
   });
 }
 
+/** Code's projects: every room on both hosts, grouped by host. */
+export function siteCodeWorld() {
+  return buildWorldObject(siteConnections());
+}
+
 /** Board shows one host, so its cards stay legible at a laptop's width. */
 export function siteBoardWorld() {
   return buildWorldObject(siteConnections().slice(0, 1), "site-host-0");

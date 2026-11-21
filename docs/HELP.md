@@ -16,6 +16,7 @@ Every World screen answers this too: press ? beside the views (on a phone, the v
 - [The town board as a chip](#town-board-chip)
 - [What's new from the Town Master](#town-master)
 - [Apartments: finished agents](#town-apartments)
+- [Your VS Code in World](#code-project)
 - [What can I do here?](#world-help)
 - [Hosts on a phone](#world-phone-hosts)
 
@@ -161,6 +162,23 @@ Write a note on the board, connect it to an agent, and send it when it is ready.
 3. Press Send when the note is ready.
 
 Where: Board, anywhere on the empty board. Since 0.2.6.
+
+## Code
+
+<a id="code-project"></a>
+
+### Your VS Code in World
+
+![Your VS Code in World](../web/public/help/code.project.desktop.light.webp)
+
+Code shows the VS Code installed on the computer a project is on, this one or an SSH host, inside World. The project's agents and terminals stay beside it.
+
+1. Choose Code beside the views; on a phone, in the views menu.
+2. Pick a project in the bar at the top.
+3. Press Open; the first time, enable an IDE there first.
+4. Use the button at the bar's right end to show or hide the project's agents and terminals.
+
+Where: Code, the project picker at the left of its top bar. Since 0.3.6.
 
 ## Chat
 
