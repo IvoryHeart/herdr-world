@@ -37,6 +37,8 @@ import {
   type TownMoveResult,
 } from "./townMoves";
 import { townTeamActions } from "./townTeamActions";
+import { needsAgentHandoff } from "./townMoveEligibility";
+import { deskAgentAddress, requestAgentHandoff } from "./townRuntimeMove";
 import { sharedTownJoinSeats, type TownJoinSeats } from "./townJoinSeats";
 
 /** The confirmation asked before a move closes its room. */
@@ -149,12 +151,26 @@ export function townMoveActions({
     setMovingKey(desk.key);
     toast("ok", `Moving ${desk.displayLabel} to ${room.displayLabel}…`);
     try {
-      const outcome = await requestDeskMove(
-        desk,
-        room,
-        allowCloseRoom,
-        inheritsColor(desk),
-      );
+      const outcome = needsAgentHandoff(desk, room)
+        ? await requestAgentHandoff(
+            deskAgentAddress(
+              desk,
+              source?.workspaceRef.nativeId ?? "",
+              office.roomRoster
+                .filter(
+                  (r) =>
+                    r.workspaceRef.connectionId === desk.tabRef.connectionId,
+                )
+                .map((r) => r.workspaceRef.nativeId),
+            ),
+            room,
+          )
+        : await requestDeskMove(
+            desk,
+            room,
+            allowCloseRoom,
+            inheritsColor(desk),
+          );
       const result = reportMove(
         desk.displayLabel,
         outcome,
@@ -320,13 +336,15 @@ export function townMoveActions({
         toast("error", `${label} not moved: ${conflict}`);
         return "returned";
       }
-      const outcome = await requestRoomOrder(rooms as OfficeRoom[]).catch(
-        (cause: unknown) => ({
-          status: "refused" as const,
-          reason: "failed",
-          message: String(cause),
-        }),
-      );
+      // A core room's place is World's own: core has no room order.
+      const outcome = await (room.coreOpen
+        ? Promise.resolve({ status: "moved" as const })
+        : requestRoomOrder(rooms as OfficeRoom[])
+      ).catch((cause: unknown) => ({
+        status: "refused" as const,
+        reason: "failed",
+        message: String(cause),
+      }));
       if (DEVTOOLS) trace.record("move", { label, status: outcome.status });
       if (outcome.status !== "moved")
         toast(

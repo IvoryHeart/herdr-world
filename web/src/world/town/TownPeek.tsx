@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  ArrowRightLeft,
   FolderOpen,
   SquareTerminal,
   Terminal as ShellIcon,
@@ -55,6 +56,7 @@ export function TownPeek({
   onTerminal,
   leaf = null,
   onFiles,
+  onMove = null,
   onNext,
   onClose,
   onHold,
@@ -100,6 +102,8 @@ export function TownPeek({
    * terminal World cannot open, but whose folder it can show.
    */
   onFiles?: (() => void) | null;
+  /** Move the agent's desk to another place or room, either runtime. */
+  onMove?: (() => void) | null;
   onNext: (() => void) | null;
   onClose(): void;
   onHold(hold: boolean): void;
@@ -253,6 +257,19 @@ export function TownPeek({
           >
             <FolderOpen size={15} aria-hidden="true" />
             <span>Files</span>
+          </button>
+        ) : null}
+        {onMove ? (
+          <button
+            type="button"
+            className="town-peek-terminal town-peek-move"
+            aria-label={`Move ${agent.displayLabel}'s desk`}
+            title="Move to another place or room, on this runtime or another"
+            disabled={agent.stale}
+            onClick={onMove}
+          >
+            <ArrowRightLeft size={15} aria-hidden="true" />
+            <span>Move to…</span>
           </button>
         ) : null}
         <button

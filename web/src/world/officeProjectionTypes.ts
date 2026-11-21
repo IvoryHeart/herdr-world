@@ -109,6 +109,8 @@ export type OfficeDesk = {
 };
 
 export type OfficeRoom = {
+  /** A live herdr-core room: desks move in through world.core.* or a handoff. */
+  coreOpen?: true;
   key: string;
   hostKey: string;
   workspaceRef: OfficeQualifiedTarget;

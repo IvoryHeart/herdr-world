@@ -42,6 +42,11 @@ import {
   type BoardWorkspace,
 } from "./boardModel";
 import { BoardPeek } from "./BoardPeek";
+import {
+  cardAgentAddress,
+  requestAgentHandoff,
+  workspaceRoom,
+} from "../town/townRuntimeMove";
 
 type Notify = (kind: "ok" | "error", text: string) => void;
 
@@ -469,6 +474,31 @@ export function useBoardHerdrActions({
       }}
     />
   );
+  // Move to…: a single-agent card goes to a room on another runtime.
+  const peekedFrom =
+    peeked && model.workspaceByKey.get(peeked.tab.workspaceKey);
+  const handoff = peekedFrom && cardAgentAddress(peeked.tab, peekedFrom);
+  const moveTo = handoff
+    ? model.workspaces
+        .filter((room) => room.connectionId !== handoff.connection_id)
+        .filter((room) => !room.stale)
+        .map((room) => ({
+          key: room.key,
+          label: `${room.label} · ${model.hostByKey.get(room.hostKey)?.label ?? ""}`,
+          onChoose() {
+            const name = boardAgentName(peeked!.pane);
+            setPeek(null);
+            notify("ok", `Moving ${name} to ${room.label}…`);
+            void requestAgentHandoff(handoff, workspaceRoom(room)).then(
+              (outcome) =>
+                outcome.status === "moved"
+                  ? notify("ok", `${name} moved to ${room.label}`)
+                  : notify("error", outcome.message),
+              (cause: unknown) => notify("error", String(cause)),
+            );
+          },
+        }))
+    : [];
   const overlay =
     peek && peeked ? (
       <BoardPeek
@@ -496,6 +526,7 @@ export function useBoardHerdrActions({
               }
             : undefined
         }
+        moveTo={moveTo}
         onClose={() => setPeek(null)}
         onHold={(held) => {
           hover.current.held = held;

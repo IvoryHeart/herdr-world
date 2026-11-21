@@ -1,6 +1,7 @@
 import type { TownLevel } from "./townCamera";
 import type { TownHit } from "./townHitTest";
 import type { TownModel } from "./townModel";
+import { canMoveDeskToRoom, needsAgentHandoff } from "./townMoveEligibility";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import {
   townRoomPlacement,
@@ -46,7 +47,8 @@ export function townRoomDrag(
   model: TownModel,
 ): TownDrag | null {
   const room = model.rooms.get(roomKey);
-  if (!room || !room.canOpenInSpaces || room.stale) return null;
+  if (!room || !(room.canOpenInSpaces || room.coreOpen) || room.stale)
+    return null;
   if (
     ![...model.rooms.values()].some(
       (other) => other.key !== room.key && other.hostKey === room.hostKey,
@@ -218,11 +220,32 @@ export function townDropTarget(
       if (room?.key === drag.from && hit?.kind === "room")
         if (groupedDesks.has(drag.key))
           return { key: room.key, label: "Leave the team", action: "ungroup" };
+      // To another runtime a pinned desk goes, pinned there.
+      const desk = model.desks.get(drag.key);
+      if (
+        room &&
+        desk &&
+        needsAgentHandoff(desk, room) &&
+        canMoveDeskToRoom(desk, room)
+      )
+        return {
+          key: room.key,
+          label: `${drag.label} to ${room.displayLabel}`,
+          action: "move",
+        };
       return { key: null, label: TOWN_PINNED_HINT };
     }
     if (!room) return { key: null, label: `${drag.label}: drop on a room` };
-    if (room.hostKey !== drag.hostKey)
-      return { key: null, label: "Desks move only within one host" };
+    // Another runtime's room takes a desk with one agent, which resumes there.
+    const desk = model.desks.get(drag.key);
+    if (!desk || !canMoveDeskToRoom(desk, room))
+      return {
+        key: null,
+        label:
+          desk && needsAgentHandoff(desk, room)
+            ? "Only a desk with one agent moves to another runtime"
+            : `${drag.label}: ${room.displayLabel} can't take it now`,
+      };
     if (room.key === drag.from) {
       const onto = slotDesk(hit, model);
       if (onto && onto.key !== drag.key && model.deskPins.has(onto.key))

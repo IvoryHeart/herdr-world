@@ -867,6 +867,15 @@ export default function TownView({
                   }
                 : null
             }
+            onMove={
+              peekAgent.deskKey
+                ? () => {
+                    holdPeek.current = false;
+                    setPeek(null);
+                    setMoveFlow({ step: "room", deskKey: peekAgent.deskKey! });
+                  }
+                : null
+            }
             onNext={
               reception.step(peekAgent.key, peek!.anchor) ??
               (nextCall(peekAgent.key)

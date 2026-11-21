@@ -53,6 +53,7 @@ function fixture() {
         publishBoardChanged: (rev: number) => notifications.push(rev),
         publishWorldInvalidation: () => {},
         connectionManager: {
+          has: (id: string) => id === "alpha",
           readyRuntimeLease: (id: string) =>
             id !== "alpha"
               ? null

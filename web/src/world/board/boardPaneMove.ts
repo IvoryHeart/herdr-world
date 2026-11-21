@@ -1,5 +1,10 @@
 import { bridge } from "../../api";
 import type { TownMoveOutcome } from "../town/townMoves";
+import {
+  cardAgentAddress,
+  requestAgentHandoff,
+  workspaceRoom,
+} from "../town/townRuntimeMove";
 import type { BoardPane, BoardTab, BoardWorkspace } from "./boardModel";
 
 export type BoardPaneMoveRequest = {
@@ -22,6 +27,15 @@ export function boardPaneMoveReason({
   targetWorkspace: to,
 }: BoardPaneMoveRequest): string | null {
   if (source.key === target.key) return "The pane is already in that tab.";
+  // Another runtime: the agent resumes there (world.agent.move).
+  if (from.connectionId !== to.connectionId)
+    return pane.leaf.stale || source.stale || from.stale || to.stale
+      ? "The host is unavailable. Wait for a fresh connection."
+      : source.workspaceKey !== from.key || target.workspaceKey !== to.key
+        ? "The pane or tab changed. Try again."
+        : cardAgentAddress(source, from)
+          ? null
+          : "Only a card with one agent moves to another runtime.";
   if (
     !pane.leaf.actionable ||
     pane.leaf.stale ||
@@ -63,11 +77,18 @@ export async function moveBoardPane(
       timeout?: number,
     ): Promise<unknown>;
   } = (id, generation) => bridge.connection(id, generation),
+  call: typeof bridge.call = bridge.call.bind(bridge),
 ): Promise<TownMoveOutcome> {
   const reason = boardPaneMoveReason(request);
   if (reason)
     return { status: "refused", reason: "unavailable", message: reason };
-  const { pane, target } = request;
+  const { pane, target, source, sourceWorkspace: from } = request;
+  if (from.connectionId !== request.targetWorkspace.connectionId)
+    return requestAgentHandoff(
+      cardAgentAddress(source, from),
+      workspaceRoom(request.targetWorkspace),
+      call,
+    );
   const result = await connect(
     pane.leaf.connectionId,
     pane.leaf.generation,

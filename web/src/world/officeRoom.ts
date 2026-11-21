@@ -149,6 +149,7 @@ export function* constructRoom(
       order: space.workspace.number,
       stale: space.stale,
       canOpenInSpaces: operational,
+      ...(space.coreControl && !space.stale ? { coreOpen: true as const } : {}),
     },
     desks,
     agents,

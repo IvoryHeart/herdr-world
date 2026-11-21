@@ -179,6 +179,22 @@ no control for it. Platform and harness limits apply across the table.
   never retried automatically. Core has no native desk-order operation;
   unpinned reordering explains that limit, while pinned desks retain World's
   saved ordering among their room's pinned seats.
+- **Move agents between runtimes:** drag a desk into a room of the other
+  runtime (Herdr TUI ↔ herdr-core), or choose **Move to…** on its Town peek,
+  in Town's **M** chooser (rooms marked "resumes there") or on its Board peek;
+  on Board, dropping a single-agent card on another runtime's tab works too.
+  World starts the agent's harness in that room with its conversation resumed
+  (`claude --resume`, `codex resume`) in the agent's folder, waits until it is
+  ready, carries the desk's colour, pin, Board place, strings and spawn lines
+  to the new desk, then closes the original. Moves within one runtime still
+  use that runtime's own move and keep the agent running. A pinned desk can
+  move only to the other runtime, where it stays pinned. Refused, with the
+  reason, and nothing started: a working agent or one waiting for an answer,
+  a desk with more than one terminal, a harness other than Claude or Codex,
+  an agent World cannot find a conversation for, a core agent whose own
+  spawned agents would end with it, a runtime on another machine, or a stale
+  or reconnected host. If the new agent does not start within a minute, the
+  half-started one is closed and the original keeps running.
 - **Core agent environment (Unix):** New agent finds and starts the harness
   through the core host's `$SHELL` (`/bin/sh` when unset): interactive on Linux,
   login and interactive on macOS. Supported shells are sh, bash, zsh, dash,

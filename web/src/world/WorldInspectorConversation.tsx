@@ -248,7 +248,8 @@ function InspectorResources({
         workspaces: core.snapshot?.workspaces ?? [],
         tabs: core.snapshot?.tabs ?? [],
         panes: core.snapshot?.panes ?? [],
-        status: coreLive ? hostTopology.status : ("disconnected" as const),
+        // Its own core's state, never the Herdr session's.
+        status: coreLive ? ("connected" as const) : ("disconnected" as const),
         catalogueReady: coreLive,
       }
     : hostTopology;
@@ -727,7 +728,7 @@ function InspectorResources({
   const presentationStale =
     status !== "connected" ||
     !catalogueReady ||
-    !baseConnectionClient.isCurrent();
+    (!core && !baseConnectionClient.isCurrent());
   // A worktree being re-read (its binding changed) holds only the views that
   // read it: Files, Changes and Commits. Chat and Terminal stay live; on Chat
   // nothing re-reads the worktree until one of those views opens.

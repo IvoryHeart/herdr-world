@@ -105,3 +105,55 @@ test("a missing move outcome stays uncertain instead of claiming rollback", asyn
     topology_known: false,
   });
 });
+
+test("a one-agent card dropped on another runtime's tab resumes there", async () => {
+  const { model, request } = fixture();
+  const source = request.target;
+  const sourceWorkspace = request.targetWorkspace;
+  const target = model.tabs.find((tab) => tab.hostKey !== source.hostKey)!;
+  const targetWorkspace = model.workspaceByKey.get(target.workspaceKey)!;
+  const calls: unknown[] = [];
+  const outcome = await moveBoardPane(
+    {
+      source,
+      target,
+      pane: source.panes[0]!,
+      sourceWorkspace,
+      targetWorkspace,
+    },
+    false,
+    () => {
+      throw new Error("must not move a pane");
+    },
+    async (method, params) => {
+      calls.push({ method, params });
+      return { status: "moved", target: { tab_id: "t9", workspace_id: "w9" } };
+    },
+  );
+  expect(outcome).toEqual({
+    status: "moved",
+    tab_id: "t9",
+    workspace_id: "w9",
+  });
+  expect(calls).toEqual([
+    {
+      method: "world.agent.move",
+      params: {
+        source: {
+          connection_id: "alpha",
+          generation: 1,
+          workspace_id: sourceWorkspace.nativeId,
+          tab_id: source.nativeId,
+          pane_id: source.panes[0]!.leaf.pane.pane_id,
+          terminal_id: source.panes[0]!.leaf.terminalId,
+          color_key: source.key,
+        },
+        destination: {
+          connection_id: "beta",
+          generation: 1,
+          workspace_id: targetWorkspace.nativeId,
+        },
+      },
+    },
+  ]);
+});

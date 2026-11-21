@@ -113,7 +113,7 @@ export function townRoomMoves(
       ?.rooms.find((placed) => {
         const room = model.rooms.get(placed.key);
         return (
-          room?.canOpenInSpaces &&
+          (room?.canOpenInSpaces || room?.coreOpen) &&
           !room.stale &&
           (canMoveRoom?.(placed.key) ?? true)
         );

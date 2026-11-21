@@ -164,6 +164,7 @@
   "rpc:worktree.list": "allow deny deny deny deny deny",
   "rpc:worktree.open": "allow deny deny deny deny deny",
   "rpc:worktree.remove": "allow deny deny deny deny deny",
+  "rpc:world.agent.move": "allow deny deny deny deny deny",
   "rpc:world.apartments.evict": "allow deny deny deny deny deny",
   "rpc:world.apartments.history": "allow deny deny deny deny deny",
   "rpc:world.apartments.list": "allow deny deny deny deny deny",
