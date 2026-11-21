@@ -196,11 +196,10 @@ function PhoneViewPicker({
           onKeyDown={onHostsKeyDown}
         >
           <HostsFilterOptions
-            hosts={hosts.hosts}
+            connections={hosts.connections}
             ids={hosts.ids}
             onChange={hosts.onChange}
             onManage={() => choose(manager.open)}
-            onClose={() => choose(() => undefined)}
           />
           {hosts.explanation ? <p role="status">{hosts.explanation}</p> : null}
         </div>
@@ -240,7 +239,7 @@ function PhoneViewPicker({
               <Server size={18} aria-hidden />
               Hosts
               <span className="world-view-picker-detail">
-                {hostsSelectionLabel(hosts.hosts, hosts.ids)}
+                {hostsSelectionLabel(hosts.connections, hosts.ids)}
               </span>
             </button>
           ) : null}

@@ -117,10 +117,11 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           // change glides over drawn frames; CI runners differ by about 1.5x
           // (the 1080x1920 slow-frame case took 54 s to 80 s on main, and the
           // 1440x900 typical case 40 s on CI against 20 s locally). The
-          // full bus trip (townBusTrip.browser.ts) now has its own case:
-          // combining it with typical's interactions took 109 s locally
-          // on two cores and exceeded this guard on CI. Keep all trip
-          // samples and the same deadlines in the independent cases.
+          // full bus trip (townBusTrip.browser.ts) has its own case:
+          // combined with typical's interactions, and waiting for drawn
+          // frames at every sampled second, it took 109 s locally on two
+          // cores and exceeded this guard on CI. It now samples without
+          // drawn frames (#1183).
           scale === "extended" ||
             scale === "protected" ||
             scale === "max" ||
