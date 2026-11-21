@@ -53,6 +53,11 @@ export function fixture() {
           `CODEX_HOME=${home}/.codex`,
           `CLAUDE_CONFIG_DIR=${home}/.claude`,
           `PI_CODING_AGENT_DIR=${home}/.pi/agent`,
+          `XDG_CONFIG_HOME=${home}/.config`,
+          `COPILOT_HOME=${home}/.copilot`,
+          `HERMES_HOME=${home}/.hermes`,
+          `QWEN_HOME=${home}/.qwen`,
+          `KIMI_CODE_HOME=${home}/.kimi-code`,
           "CLAUDE_CODE_PROJECT_DIR_NAME=",
           ...argv,
         ],
@@ -159,13 +164,12 @@ describe("memory on its real owning filesystem", () => {
     const agents = result.sources.find(
       (s) => s.path === join(f.repo, "AGENTS.md"),
     )!;
-    expect(agents.harnesses.sort()).toEqual(["claude", "codex", "pi"]);
+    expect(agents.harnesses.sort()).toEqual(["claude", "codex"]);
     expect(
       result.entries.find((e) => e.source_id === agents.id)?.harness_loads,
     ).toMatchObject({
       codex: { mode: "shadowed" },
       claude: { mode: "shadowed" },
-      pi: { mode: "startup-candidate" },
     });
     expect(JSON.stringify(result)).not.toContain("A past decision");
     const filtered = (await f.service.call("list", {
@@ -439,5 +443,159 @@ describe("memory on its real owning filesystem", () => {
     expect((await f.list()).sources.find((s) => s.path === custom)?.state).toBe(
       "available",
     );
+  });
+});
+
+test("new harnesses read real owning-host files, including browse-only MDC rules", async () => {
+  const f = fixture();
+  f.operations.listTerminals = async () => ({
+    panes: [
+      { pane_id: "p1", workspace_id: "w1", cwd: f.repo, agent: "opencode" },
+      { pane_id: "p2", workspace_id: "w2", cwd: f.repo, agent: "cursor" },
+      { pane_id: "p3", workspace_id: "w1", cwd: f.repo, agent: "copilot" },
+      { pane_id: "p4", workspace_id: "w1", cwd: f.repo, agent: "letta" },
+    ],
+  });
+  f.write(join(f.repo, "AGENTS.md"), "Project instructions\n");
+  f.write(join(f.repo, "CLAUDE.md"), "Fallback instructions\n");
+  f.write(
+    join(f.home, ".config/opencode/AGENTS.md"),
+    "Personal OpenCode instructions\n",
+  );
+  f.write(
+    join(f.repo, ".cursor/rules/style.mdc"),
+    "---\nalwaysApply: true\n---\nUse synthetic rule examples.\n",
+  );
+  f.write(join(f.repo, ".cursor/rules/ignored.md"), "Ignored by Cursor\n");
+  f.write(
+    join(f.repo, ".github/instructions/tests.instructions.md"),
+    "---\napplyTo: '**/*.test.ts'\n---\nSynthetic test rules.\n",
+  );
+  const listed = await f.list();
+  const user = listed.sources.find(
+    (s) => s.path === join(f.home, ".config/opencode/AGENTS.md"),
+  )!;
+  expect(user).toMatchObject({
+    state: "available",
+    agent_ids: ["p1"],
+    harnesses: ["opencode"],
+  });
+  const filtered = (await f.service.call("list", {
+    ...f.target,
+    harness: "opencode",
+  })) as MemoryCatalog;
+  expect(filtered.entries.some((e) => e.source_id === user.id)).toBe(true);
+  expect(filtered.sources.every((s) => s.harnesses.includes("opencode"))).toBe(
+    true,
+  );
+  const rule = listed.sources.find(
+    (s) => s.path === join(f.repo, ".cursor/rules"),
+  )!;
+  expect(
+    listed.entries.filter((e) => e.source_id === rule.id).map((e) => e.path),
+  ).toEqual(["style.mdc"]);
+  expect(
+    listed.entries.find((e) => e.source_id === rule.id)?.harness_loads.cursor
+      ?.mode,
+  ).toBe("startup-candidate");
+  const params = { ...f.target, source_id: rule.id, path: "style.mdc" };
+  const read = (await f.service.call("read", params)) as MemoryRead;
+  expect(read.content).toContain("synthetic rule");
+  const search = (await f.service.call("search", {
+    ...f.target,
+    query: "synthetic rule",
+  })) as MemorySearch;
+  expect(search.matches.some((m) => m.entry.path === "style.mdc")).toBe(true);
+  await expect(
+    f.service.call("update", {
+      ...params,
+      content: "changed",
+      revision: read.revision,
+      user_action: true,
+    }),
+  ).rejects.toMatchObject({ code: "invalid" });
+  // New rule formats get the same symlink and binary refusals as Markdown.
+  symlinkSync(join(f.repo, "AGENTS.md"), join(rule.path, "link.mdc"));
+  f.write(join(rule.path, "binary.mdc"), "bad\0rule");
+  await expect(
+    f.service.call("read", { ...params, path: "link.mdc" }),
+  ).rejects.toMatchObject({ code: "refused" });
+  await expect(
+    f.service.call("read", { ...params, path: "binary.mdc" }),
+  ).rejects.toMatchObject({ code: "refused" });
+  expect(listed.sources.every((s) => !s.agent_ids.includes("p4"))).toBe(true);
+});
+
+test.each([
+  ["qwen", ".qwen/rules", "md", "", "---\npaths: ['src/**']\n---\n"],
+  [
+    "omp",
+    ".omp/rules",
+    "mdc",
+    "---\nalwaysApply: true\n---\n",
+    "---\nalwaysApply: false\n---\n",
+  ],
+  [
+    "antigravity-cli",
+    ".agents/rules",
+    "md",
+    "---\ntrigger: always_on\n---\n",
+    "---\ntrigger: glob\nglobs: '*.ts'\n---\n",
+  ],
+])(
+  "%s distinguishes startup rules from rules read when needed",
+  async (harness, folder, extension, startup, conditional) => {
+    const f = fixture();
+    f.operations.listTerminals = async () => ({
+      panes: [
+        { pane_id: "p1", workspace_id: "w1", cwd: f.repo, agent: harness },
+      ],
+    });
+    f.write(
+      join(f.repo, folder, `baseline.${extension}`),
+      startup + "Baseline rules\n",
+    );
+    f.write(
+      join(f.repo, folder, `conditional.${extension}`),
+      conditional + "Conditional rules\n",
+    );
+    f.write(
+      join(f.repo, folder, `nested/extra.${extension}`),
+      startup + "Nested rules\n",
+    );
+    const listed = await f.list();
+    const source = listed.sources.find((s) => s.path === join(f.repo, folder))!;
+    const entries = listed.entries.filter((e) => e.source_id === source.id);
+    expect(
+      entries.find((e) => e.path === `baseline.${extension}`)?.harness_loads[
+        harness as "qwen" | "omp" | "antigravity-cli"
+      ]?.mode,
+    ).toBe("startup-candidate");
+    expect(
+      entries.find((e) => e.path === `conditional.${extension}`)?.harness_loads[
+        harness as "qwen" | "omp" | "antigravity-cli"
+      ]?.mode,
+    ).toBe("on-demand");
+    expect(entries.some((e) => e.path.includes("nested/"))).toBe(
+      harness !== "antigravity-cli",
+    );
+  },
+);
+
+test("Hermes USER.md is a startup memory snapshot, not an on-demand topic", async () => {
+  const f = fixture();
+  f.operations.listTerminals = async () => ({
+    panes: [
+      { pane_id: "p1", workspace_id: "w1", cwd: f.repo, agent: "hermes" },
+    ],
+  });
+  f.write(join(f.home, ".hermes/memories/USER.md"), "Synthetic preferences\n");
+  const listed = await f.list();
+  const source = listed.sources.find((s) =>
+    s.path.endsWith("/memories/USER.md"),
+  )!;
+  expect(listed.entries.find((e) => e.source_id === source.id)).toMatchObject({
+    load: "startup-candidate",
+    harness_loads: { hermes: { mode: "startup-candidate" } },
   });
 });

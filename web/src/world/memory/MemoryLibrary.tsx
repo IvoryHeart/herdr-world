@@ -1,3 +1,4 @@
+import { memoryHarness } from "../../../../shared/memory";
 import { RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -130,8 +131,12 @@ export function MemoryLibrary({
     if (!catalog || reader.kind === "all") return;
     const known =
       reader.kind === "project"
-        ? catalog.projects.some((p) => p.id === reader.id)
-        : catalog.agents.some((a) => a.id === reader.id);
+        ? catalog.agents.some(
+            (a) => a.project_id === reader.id && memoryHarness(a.harness),
+          )
+        : catalog.agents.some(
+            (a) => a.id === reader.id && memoryHarness(a.harness),
+          );
     if (known) return;
     const first = catalog.agents[0];
     setReader(

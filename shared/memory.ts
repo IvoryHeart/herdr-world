@@ -22,7 +22,64 @@ export const MEMORY_ACTIONS = [
   "delete",
 ] as const;
 export type MemoryAction = (typeof MEMORY_ACTIONS)[number];
-export type MemoryHarness = "claude" | "codex" | "pi";
+/** The adapter registry's browser-safe capability list; never infer support from a count. */
+export const MEMORY_HARNESSES = [
+  "claude",
+  "codex",
+  "pi",
+  "opencode",
+  "copilot",
+  "cursor",
+  "qwen",
+  "droid",
+  "kimi",
+  "omp",
+  "kilo",
+  "hermes",
+  "qodercli",
+  "antigravity-cli",
+  "grok",
+  "devin",
+  "mastracode",
+] as const;
+export type MemoryHarness = (typeof MEMORY_HARNESSES)[number];
+
+const MEMORY_HARNESS_ALIASES: Record<string, string> = {
+  "claude-code": "claude",
+  "pi-agent": "pi",
+  "pi-coding-agent": "pi",
+  "oh-my-pi": "omp",
+  "github-copilot": "copilot",
+  "cursor-agent": "cursor",
+  "kimi-code": "kimi",
+  kimicodecli: "kimi",
+  "kilo-code": "kilo",
+  "hermes-agent": "hermes",
+  qoder: "qodercli",
+  qoderclicn: "qodercli",
+  qodercn: "qodercli",
+  antigravity: "antigravity-cli",
+  agy: "antigravity-cli",
+  "grok-build": "grok",
+};
+
+export function memoryHarness(value: unknown): MemoryHarness | null {
+  if (typeof value !== "string") return null;
+  const name = value
+    .trim()
+    .split(/[\\/]/)
+    .pop()!
+    .replace(/\.exe$/i, "")
+    .toLowerCase();
+
+  const canonical = MEMORY_HARNESS_ALIASES[name] ?? name;
+  return MEMORY_HARNESSES.includes(canonical as MemoryHarness)
+    ? (canonical as MemoryHarness)
+    : null;
+}
+
+/** Rules in MDC format are browse-only; existing management accepts Markdown .md. */
+export const memoryEntryEditable = (name: string) => /\.md$/i.test(name);
 export type MemoryTarget = {
   connection_id: string;
   connection_generation: number;
@@ -118,3 +175,9 @@ export class MemoryError extends Error {
     this.name = "MemoryError";
   }
 }
+
+/** Cursor ignores .md rules; do not offer creation of an ineffective Markdown note. */
+export const memorySourceEditable = (
+  source: Pick<MemorySource, "kind" | "harnesses">,
+) =>
+  !(source.kind === "rules" && source.harnesses.every((h) => h === "cursor"));
