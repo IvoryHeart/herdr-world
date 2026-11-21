@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { balanceShards } from "./balance-shards";
-import world from "./world-browser-timings.json";
+import { worldBrowserSuites } from "./world-browser-suites";
 import models from "./verification-timings.json";
 import { verificationModels } from "../quint/models";
 import { townCanvasCases } from "../web/src/world/town/TownCanvas.cases";
@@ -30,7 +30,7 @@ test("every maintained model has a measured weight and each Town group is regist
   for (const group of Object.keys(townCanvasCases)) {
     const name =
       group === "baseline" ? "town/TownCanvas" : `town/TownCanvas.${group}`;
-    expect(Object.keys(world.seconds)).toContain(name);
+    expect(worldBrowserSuites).toContain(`web/src/world/${name}.test.ts`);
   }
 });
 

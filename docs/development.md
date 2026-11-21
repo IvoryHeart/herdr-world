@@ -452,8 +452,13 @@ installer loads a profile like the Chrome package's for the pinned binary, and
 then starts it headless once, so a browser that cannot start fails installation
 rather than every test. Locally it prints the two commands instead. No job retries a
 failed test. The [shard inventory](../scripts/world-browser-suites.ts) splits all
-World browser suites between the six shards; inventory checks reject missing or
-duplicate assignments. The required Delivery checks status succeeds only when
+World browser suites between the six shards, discovering `*.test.ts` and
+`*.test.tsx` files recursively under `web/src/world/` with the
+`// @world-browser-suite` marker or Chrome launch code. Measured weights in
+`scripts/world-browser-timings.json` are optional: new suites use ten seconds
+until measured, and stale weights add no suites. Shared bundle entries are
+discovered from `web/src/world/*.browser.tsx`. Inventory checks reject missing
+or duplicate assignments. The required Delivery checks status succeeds only when
 repository validation, every World shard and the web browser job pass.
 Markdown-only and exact-head reuse keep their existing shorter paths.
 Release packaging requires repository validation, all six shards and the web
