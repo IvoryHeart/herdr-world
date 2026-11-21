@@ -113,15 +113,18 @@ including cookies, CSP, frame-ancestors and Service-Worker-Allowed. A failed fra
 policy is a refusal, not licence to strip protections until the iframe loads.
 
 Official webviews may use a Microsoft CDN. A compatible distribution-supported,
-licence-permitted self-hosted configuration could pass; asset rewriting and blanket
-CDN/CSP allowances are not proposed. A separate origin/changed webview policy
-requires a reviewed change to the one-origin rule and revised architecture;
-the mock is not evidence that the current policy can deliver all official features.
+licence-permitted self-hosted configuration could pass; blanket CDN/CSP allowances
+are not proposed. A separate origin/changed webview policy requires a reviewed
+change to the one-origin rule and revised architecture; the mock is not evidence
+that the current policy can deliver all official features.
 Decided for #1038 (`docs/design/code-view/webview-origin.md`): stock VS Code and
-OpenVSCode embed with webviews blank and say so before Enable; World neither
-opens a second webview origin nor points the template at its own origin, which
-would give extension and document HTML World's authority. code-server stays the
-in-World choice for webviews.
+OpenVSCode webviews load from World's own origin. World sets the workbench's
+`webviewEndpoint` option to the IDE's webview host page under the instance route
+and edits only that page's parent check and CSP hash (#1053), falling back to
+blank webviews when the page does not match. Webview content is untrusted and
+runs with World's authority, as code-server's already does; the host page hands
+its port only to a same-origin parent. A second webview origin and desktop-only
+were rejected.
 Marketplace/Sync/extension sign-in may also require external HTTPS/popups;
 upstream's CSP includes unsafe-eval and blob workers. Enumerate actual origins and
 directives for the selected release; proxying its HTML alone does not satisfy the

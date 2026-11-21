@@ -59,31 +59,42 @@ IDE is not confined to the selected project and same-origin workbench/extension
 code shares World's browser authority. Failed licence, frame, worker,
 secure-context or origin compatibility SHALL block embedding with a concrete
 reason and an explicit desktop handoff option. World SHALL NOT silently relax
-its global origin/CSP policy, rewrite restricted product assets or assert desktop
-extension parity based only on Marketplace availability.
+its global origin/CSP policy, rewrite restricted product assets (apart from the
+one webview host page edit below) or assert desktop extension parity based only
+on Marketplace availability.
 
-Webviews are the one compatibility gap that does not block embedding. A provider
-whose webviews load from another origin (stock VS Code and OpenVSCode Server use
-`*.vscode-cdn.net` from their product configuration) SHALL embed with webviews
-unavailable, and World SHALL say so on the provider before Enable. World SHALL
-keep the IDE frame policy to its own origin and SHALL NOT admit the provider's
-webview origin, serve webviews from a second World origin, or point the
-provider's webview template or host page at a World route. A provider that
-serves webviews from its own route on World's origin (code-server) runs that
-content with World's authority, which its admission disclosure covers. A second,
-isolated webview origin requires a reviewed change to World's one-origin rule
-and an HTTPS name with wildcard certificate first. The decision and the
-trade-off of each option are recorded in `docs/design/code-view/webview-origin.md`.
+Webviews load from World's own origin. Stock VS Code and OpenVSCode Server take
+their webview origin (`*.vscode-cdn.net`) from their product configuration;
+World SHALL instead point the workbench's own `webviewEndpoint` option at the
+IDE's webview host page under the instance route and SHALL serve that page with
+only its host-name parent check made same-origin and its CSP script hash
+recomputed. World SHALL NOT admit the provider's webview origin, open a second
+World origin for webviews or change `product.json`, and its own origin and CSP
+policy SHALL stay unchanged. Webview content (extension panels, notebook outputs,
+previews of repository files) is untrusted and runs with World's browser
+authority, as code-server's self-hosted webviews already do; the admission
+disclosure of same-origin workbench/extension authority covers it. The host page
+SHALL hand its message port only to a parent on its own origin, and a page World
+cannot match exactly SHALL be forwarded unchanged so webviews stay blank. A
+second, isolated webview origin requires a reviewed change to World's one-origin
+rule and an HTTPS name with wildcard certificate first. The decision, its threat
+model and the rejected options are recorded in
+`docs/design/code-view/webview-origin.md`.
 
 #### Scenario: Official webviews require another origin
 
-- **WHEN** an installed stock VS Code or OpenVSCode Server provider loads its webviews from a CDN origin incompatible with World's current policy
-- **THEN** the provider row says before Enable that webviews such as Markdown preview stay blank inside World while editing, terminals, Git and debugging work, and the embedded workbench runs with those frames refused; no CSP exception, second origin, Open VSX substitution or rewritten webview template occurs
+- **WHEN** an installed stock VS Code or OpenVSCode Server provider names a CDN webview origin incompatible with World's current policy
+- **THEN** its webviews such as Markdown preview load from World's origin under the instance route, and embedding is not blocked for them; no CSP exception, second origin, `product.json` change or Open VSX substitution occurs
 
-#### Scenario: Webview template is never pointed at World
+#### Scenario: Another origin frames the webview host page
 
-- **WHEN** a stock VS Code or OpenVSCode Server provider is started or proxied by World
-- **THEN** its product configuration, webview template and webview host page reach the browser unchanged apart from World's own frame policy, so extension and document HTML never runs on World's origin through that provider
+- **WHEN** a page on another origin frames World's copy of the webview host page, naming itself or World as parent
+- **THEN** the page never hands it a message port, so it cannot drive a webview with World's authority
+
+#### Scenario: Webview host page World cannot match
+
+- **WHEN** a provider's workbench page or webview host page does not match the check and CSP hash World expects
+- **THEN** World forwards it unchanged, webviews stay blank, and the rest of the workbench keeps working
 
 #### Scenario: First enable grants broad authority
 
