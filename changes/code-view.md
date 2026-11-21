@@ -8,7 +8,8 @@
   private Unix socket; nothing opens a TCP port or another origin, and nothing
   opens an IDE on a desktop. The workbench fills the view under one thin bar;
   the rail of the project's agents and terminals folds away and starts folded
-  on narrow windows. Stock VS Code's webviews (Markdown preview, some
+  on narrow windows. VS Code's light or dark follows World's theme (or
+  the system's when World follows it) and switches live with it. Stock VS Code's webviews (Markdown preview, some
   extension panels) stay blank inside World, and Microsoft's VS Code opens
   only when World is on HTTPS or localhost: on a plain-HTTP address the view
   says so and what to do instead of waiting. When VS Code can't download its

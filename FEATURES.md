@@ -2378,6 +2378,13 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   their count while folded; an agent opens on its Chat, a terminal in the
   Inspector. The rail starts folded on windows narrower than 1100 px and then
   remembers your choice; on a phone it opens below the workbench.
+- **Theme.** VS Code's light or dark follows World's theme (Settings →
+  Appearance), or the system's when World follows the system, and switches
+  live when it changes. World turns on VS Code's **Auto Detect Color Scheme**
+  as a default on the workbench page; it writes nothing to your VS Code
+  settings, so VS Code's **Preferred Light/Dark Color Theme** pick the two
+  themes, and turning auto-detect off in your own settings keeps VS Code on
+  its own theme.
 - **Projects.** A project is a room's folder (its checkout, else its working
   directory) or the folder of an agent outside every room, per connection; the
   same folder on two connections is two projects. The picker groups them by

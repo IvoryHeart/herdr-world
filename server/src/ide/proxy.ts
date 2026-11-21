@@ -16,12 +16,19 @@
  * - Every response also carries World's frame policy: browsers enforce
  *   both policies, so the IDE can frame only its own origin whatever its
  *   own policy allows.
+ * - The workbench page gets World's theme defaults (`workbench-theme.ts`),
+ *   so VS Code's light/dark follows World's theme.
  * - The workbench's own WebSocket handshake carries the token too: VS Code
  *   reads it from the cookie it never gets, so World fills it into the
  *   first message of each IDE socket (`withConnectionToken`).
  */
 
 import type { IdeProviderId } from "./providers";
+import {
+  isPageRequest,
+  isWorkbenchPage,
+  themedWorkbenchBody,
+} from "./workbench-theme";
 
 export const IDE_ROUTE_PREFIX = "/ide/";
 const INSTANCE_ID = /^[A-Za-z0-9_-]{16,64}$/;
@@ -211,12 +218,16 @@ export async function proxyIdeHttp(
   upstream: IdeUpstream,
 ): Promise<Response> {
   const path = upstreamPath(upstream, url.pathname);
+  const requestHeaders = upstreamRequestHeaders(req.headers, upstream);
+  // A page comes back unencoded so World can add its theme defaults.
+  const page = isPageRequest(req.method, req.headers);
+  if (page) requestHeaders.set("accept-encoding", "identity");
   let response: Response;
   try {
     response = await fetch(`http://localhost${path}${url.search}`, {
       unix: upstream.socketPath,
       method: req.method,
-      headers: upstreamRequestHeaders(req.headers, upstream),
+      headers: requestHeaders,
       body:
         req.method === "GET" || req.method === "HEAD" ? undefined : req.body,
       redirect: "manual",
@@ -236,7 +247,18 @@ export async function proxyIdeHttp(
       headers: { "cache-control": "no-store" },
     });
   }
-  return new Response(req.method === "HEAD" ? null : response.body, {
+  let body: BodyInit | null = req.method === "HEAD" ? null : response.body;
+  if (body && page && isWorkbenchPage(req.method, response.headers)) {
+    try {
+      body = await themedWorkbenchBody(response.body);
+    } catch {
+      return new Response("The IDE server isn't answering.", {
+        status: 502,
+        headers: { "cache-control": "no-store" },
+      });
+    }
+  }
+  return new Response(body, {
     status: response.status,
     statusText: response.statusText,
     headers,
