@@ -143,8 +143,17 @@ original issue #1086 counterexample remains a rejected fault control.
 
 - **WHEN** a current transcript reports a usage-limit refusal or a limit reading ages
 - **THEN** a stopped agent's out-of-fuel explanation derives from that current
-  refusal, and a gauge older than fifteen minutes shows its age; the existing
+  refusal, and a gauge older than fifteen minutes shows its age; past its
+  source's short age (thirty minutes) its levels dim, it reads "as of" its
+  observation time and it never raises the low indicator alone; the existing
   three-hour and reset rules still determine staleness, and missing is never full
+
+#### Scenario: Fuel names what it cannot show
+- **WHEN** a current reading lacks one of its harness's windows, or a harness
+  has agents in Town and no reading from any host
+- **THEN** the gauge names the absent window as not reported, and Town names
+  the harness as having no reading yet, each with what refreshes it, rather
+  than leaving either out
 
 #### Scenario: Claude sessions outside World report through the installed tap
 - **WHEN** the user explicitly installs the Claude World integration and starts a new Claude session without a project status line override
