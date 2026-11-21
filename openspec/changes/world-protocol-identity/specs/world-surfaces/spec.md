@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Per-terminal settings live with the terminal
 
@@ -25,7 +25,8 @@ on the moved terminal.
 **Unreachable hosts.** A host that is unreachable or stale SHALL leave its terminals'
 settings unresolved, never cleared.
 
-**Profiles.** Profiles and chimes SHALL stay owned by each World.
+**Profiles.** Profiles and chimes SHALL stay owned by each World, persisted
+through its SQLite storage port. Current terminal assignments remain Herdr-owned.
 - A shared assignment SHALL resolve against this World's profiles.
 - An assignment naming a profile this World lacks SHALL show the recorded profile name
   with the default look.

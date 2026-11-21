@@ -29,8 +29,7 @@ import {
 import { HarnessReadinessSummary } from "./HarnessReadinessSummary";
 import { ProfileSprite } from "./ProfileSprite";
 import type { WorldObject } from "./worldObject";
-import { store, useStoreSelector } from "../store";
-import { hostOfRuntime, runtimeName, worldHostGroups } from "../hostGroups";
+import { store } from "../store";
 import { launchInCore } from "./coreControl";
 import { WorldLoader } from "./WorldLoader";
 import {
@@ -97,19 +96,6 @@ export function AgentLauncherDialog({
       }),
     [world.spaces, world.hosts],
   );
-  // Rooms name their machine; the runtime only where the host has two. With
-  // no host catalogue (an older service) a runtime is its own host, marked
-  // when it is herdr-core.
-  const hostGroups = useStoreSelector(worldHostGroups);
-  const roomPlace = (space: (typeof rooms)[number]) => {
-    const group = hostOfRuntime(hostGroups, space.connectionId);
-    if (!group?.entry)
-      return `${space.hostLabel}${space.coreControl ? " · herdr-core" : ""}`;
-    const runtime = group.runtimes.find(({ id }) => id === space.connectionId);
-    return group.runtimes.length > 1 && runtime
-      ? `${group.label} · ${runtimeName(runtime)}`
-      : group.label;
-  };
   const preferred = initial.profileId
     ? profiles.find((p) => p.id === initial.profileId)
     : undefined;
@@ -496,7 +482,8 @@ export function AgentLauncherDialog({
                   ) : null}
                   {rooms.map((space) => (
                     <option key={space.id} value={space.id}>
-                      {space.label} · {roomPlace(space)}
+                      {space.label} · {space.hostLabel}
+                      {space.coreControl ? " · herdr-core" : ""}
                     </option>
                   ))}
                 </select>

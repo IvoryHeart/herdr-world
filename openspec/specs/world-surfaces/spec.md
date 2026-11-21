@@ -1478,22 +1478,9 @@ SHALL NOT trigger an automatic repeated creation.
 
 ### Requirement: Town scene
 
-Town SHALL present a town in which each presented host (a machine: this
-computer or an SSH destination) is one building along a road, each admitted
-Herdr workspace of every runtime World holds on that host is a room on a carpet
-inside its building, and each admitted tab is a desk in its room. A building
-holding several runtimes' rooms SHALL show one reception queuing every waiting
-agent of those runtimes, and its building-wide signs (roof colour, reception
-filter, Add room's default) SHALL read the host's first runtime. Every room,
-desk and agent SHALL keep its own runtime's connection ID and generation, so
-each action reaches the runtime that owns it. One building per host SHALL be
-the default; a browser-local Town buildings setting SHALL offer one building
-per runtime, and a `townBuildings=host` or `townBuildings=runtime` query flag
-SHALL override that setting for the page. With one building per runtime,
-Town SHALL keep a building for each runtime; a host's
-buildings SHALL stand side by side, each signed with the host and its runtime
-when the host has more than one. Room keys SHALL NOT depend on the layout, so
-room spots, colours and pins survive either way. A desk SHALL be a table
+Town SHALL present a town in which each presented host is one building along a
+road, each admitted Herdr workspace of that host is a room on a carpet inside its
+building, and each admitted tab is a desk in its room. A desk SHALL be a table
 with one seat per admitted pane up to four drawn seats, sized to its panes: a
 one-pane desk SHALL be a solo desk, a two-pane desk a small table with one seat on
 each side, and three or four panes a four-seat team table; an agent pane SHALL show
@@ -1547,10 +1534,7 @@ choice of a current room before creation; an unqualified launcher entry MAY defa
 to an available room.
 
 A building for a host whose topology is cached after failure SHALL be visibly
-stale and its entities SHALL be non-actionable. A building holding several
-runtimes SHALL be stale only while all of them are; a room, desk or agent SHALL
-be stale and non-actionable exactly when its own runtime's topology is cached
-after failure, so a sibling runtime's failure leaves the others' rooms usable. Town SHALL NOT invent activity,
+stale and its entities SHALL be non-actionable. Town SHALL NOT invent activity,
 cost, completion or project data when no authoritative state or optional provider
 supplies it.
 
@@ -1572,22 +1556,6 @@ supplies it.
 - **THEN** its building is marked stale, its desks and agents cannot start
   operations, and other buildings remain fully usable
 
-#### Scenario: One machine runs two runtimes
-
-- **WHEN** this computer runs Herdr and herdr-core, each with rooms
-- **THEN** Town shows one building for this computer with both runtimes' rooms
-  and one reception, and each room acts on its own runtime
-- **AND WHEN** the Town buildings setting is One per runtime, or Town opens
-  with `?townBuildings=runtime`
-- **THEN** it shows two buildings side by side, signed with the host and each
-  runtime, with the same room spots, colours and pins
-
-#### Scenario: One of a machine's runtimes fails
-
-- **WHEN** herdr-core fails on a machine whose Herdr runtime stays connected
-- **THEN** the machine's building stands, herdr-core's rooms are stale and
-  non-actionable, and Herdr's rooms stay fully usable
-
 #### Scenario: No observation provider is configured
 
 - **WHEN** no optional provider supplies cost, activity or project data
@@ -1598,13 +1566,7 @@ supplies it.
 
 Town SHALL derive room order from Herdr's native workspace order and desk order
 from Herdr's tab list order within each workspace, which Herdr keeps when a tab
-moves (a tab's number is not its position). In a building holding several
-runtimes, the host's first runtime's rooms SHALL come first and each runtime's
-rooms SHALL keep their own native order. Moving or tidying a building's rooms
-SHALL save each runtime's room spots under that runtime only, and SHALL put
-each live runtime's workspaces in their new reading order on that runtime's own
-connection and generation; a stale runtime's native order SHALL be left until
-it returns, and no runtime SHALL be asked to order another's workspaces. Desk slot i of a room SHALL be the
+moves (a tab's number is not its position). Desk slot i of a room SHALL be the
 room's i-th drawn tab, in reading order, so a reorder in Herdr, Spaces or Town
 moves desks. A room's capacity SHALL step through a
 bounded set of grid sizes that always leaves at least one free desk spot, or two
@@ -1718,14 +1680,6 @@ waiting for that ambient quiet period.
 - **THEN** no room or building moves until the user lets go and pauses, and
   then the rooms below it in its column move down while the room in view stays
   where it was
-
-#### Scenario: Rooms of two runtimes move in one building
-
-- **WHEN** the user drags a room, moves it before or after a neighbour, or
-  tidies a building holding rooms of Herdr and herdr-core on one machine
-- **THEN** each runtime's room spots are saved under that runtime, each
-  runtime's workspaces are reordered on its own connection, and the move
-  succeeds without a refusal for mixing hosts
 
 #### Scenario: Tabs are reordered outside Town
 
@@ -5098,9 +5052,14 @@ it when it is not on this screen.
 Each declaration's pictures SHALL be generated from the synthetic scenes at
 phone and desktop sizes, in light and dark. The repository's help check SHALL
 fail, naming the entry, when an entry's control is no longer marked in any
-component or its pictures are missing or older than their inputs; and the PR
-description check SHALL fail when a change fragment adds something without a
-changed help declaration or a stated reason.
+component, pictures are missing, or pictures are orphaned. Stale picture input
+fingerprints SHALL warn without failing feature PRs. Feature PRs SHALL capture
+only entries they add or change; other UI changes SHALL leave pictures alone.
+After pushes to main, stale fingerprints SHALL cause one bot PR to regenerate
+pictures, their manifest and docs/HELP.md. The bot SHALL update that PR, label it
+for the owner's merge rule and dispatch its checks; it SHALL never push to main.
+The PR description check SHALL fail when a change fragment adds something
+without a changed help declaration or a stated reason.
 
 #### Scenario: A control is renamed
 
@@ -5111,7 +5070,19 @@ changed help declaration or a stated reason.
 
 - **WHEN** a stylesheet or component that the picture stage renders changes
   and the pictures are not regenerated
-- **THEN** the help check fails and names each entry whose picture is out of date
+- **THEN** the feature PR's help check warns and passes if structure is valid
+- **AND** the feature PR need not regenerate any pictures
+- **AND** after merge, the main workflow refreshes pictures in one bot PR
+
+#### Scenario: A new help entry has no picture
+
+- **WHEN** a feature declares a new help entry without its required pictures
+- **THEN** the help check fails and names the entry
+
+#### Scenario: The refresh PR merges
+
+- **WHEN** regenerated pictures and fingerprints merge to main
+- **THEN** the freshness check passes and no further refresh PR is created
 
 #### Scenario: What can I do here?
 

@@ -1,5 +1,5 @@
 ---
-name: openspec-sync-specs
+name: world-openspec-sync-specs
 description: Synchronize an implemented OpenSpec change's delta requirements into current capability specs.
 license: MIT
 metadata:

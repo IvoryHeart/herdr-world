@@ -102,14 +102,10 @@ found runtimes; newly discovered runtimes connect during automatic discovery too
 
 `herdr-world ls` returns hosts with their runtimes and rooms; `connections` lists
 host/runtime kind, version and state. Existing per-connection API arrays and legacy
-runtime-specific CLI add flags remain available. In the browser, **Hosts** and
-**Manage connections** show one row per machine; **Add host** asks only for the
-SSH name (and whether it is Windows), then World looks for runtimes and connects
-what it finds. A host with none says so and lists what can be installed; a host
-with one is not asked about the others. **Settings → Integrations → Runtimes**
-lists each host's runtimes with **Add a runtime**. A runtime profile with its own
-sockets or session is still added by hand under **Runtime profile by hand**. See
-[host connections](docs/host-connections.md) for the API shape and migration rules.
+runtime-specific CLI add flags remain available. The current browser Hosts and
+Manage connections screens still present runtime entries; their host grouping is
+a separate screen change. See [host connections](docs/host-connections.md) for the
+API shape and migration rules.
 
 herdr-core is primary for new agents when installed and connected. Choose a
 Herdr TUI room to launch there instead.
@@ -320,7 +316,10 @@ synthetic example offline, including an owner wait and a usage limit.
 The [memory service, API and CLI](./docs/memory-api.md) browse, search, read, add,
 edit and delete harness memory on its owning local or SSH connection. Claude
 instructions, rules and project/subagent memory, Codex instructions and v1/v2
-Markdown memory, and Pi instructions share one model for TUI and core. Sources
+Markdown memory, and Pi instructions share one model for TUI and core. Documented
+instruction/memory candidates also cover OpenCode, GitHub Copilot CLI, Cursor,
+Qwen Code, Droid, Kimi, oh-my-pi, Kilo, Hermes, Qoder CLI, Antigravity CLI, Grok, Devin and Mastra Code
+([sources and limits](./docs/memory-api.md#discovery-and-load-evidence)). Sources
 show current project/agent sharing; entries show bytes, modification time, a
 30-day age hint and per-harness default load candidates or shadowing. Unknown
 harnesses and missing/refused sources are explicit. Discovery cannot prove what
@@ -337,7 +336,8 @@ the owning host and in private responses, without a World content cache, index,
 Board copy or telemetry. The Library (below) is the browser's view of this data.
 
 The Unix host needs Python 3; Windows, symlinks, hardlinks, special/binary/non-UTF-8
-files and non-Markdown entries refuse. Discovery stops at 32 projects, 128 agents,
+files and non-Markdown entries refuse. Cursor/oh-my-pi `.mdc` rules are readable
+and searchable with those same protections; editing remains limited to `.md`. Discovery stops at 32 projects, 128 agents,
 256 sources and 512 entries, four directory levels, and 256 KiB per file. Search
 is literal and case-insensitive, with a 2 MiB scan budget and 100 results. Partial
 results say `truncated`, skipped reads are counted, and each host request has a
@@ -346,6 +346,12 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
 
 ### The Library
 
+- Library entries and the Town sign appear only for hosts, projects and agents
+  with an observed harness whose memory adapter exists. Unsupported harnesses
+  never appear as “0 memories”; an empty or unsupported-only project has no
+  Library entry. Supported harnesses still offer their missing files to create.
+  The [testing fixture](./docs/memory-api.md#discovery-and-load-evidence) includes
+  OpenCode and an unsupported-only project, plus a no-capable-host switch.
 - Open it from Town's **library**, right of the town center on the first street,
   from the town center's ring (**Library**), from Board's hub (**Library**, on the
   selected agent or workspace), from an agent window's settings (**Memory**)
@@ -361,8 +367,9 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   age (stale after 30 days) and who else reads it. Refused sources and files say
   why; a missing instruction file offers **Create** and a missing memory folder
   (a fresh project) offers **Add the first note**, which creates the folder;
-  harnesses World cannot read
-  say so; truncated lists and searches say they show the first ones only.
+  truncated lists and searches say they show the first ones only. Conditional
+  rule descriptions explain when the harness may read them; load candidates
+  are never receipts from a running session. MDC rule books are read-only.
 - Opening a book reads it fresh from its host. **Edit** then **Save** writes it
   with the revision you read. If the file changed meanwhile, the save is refused,
   your text stays and **Load latest** shows theirs. When World can't tell whether a
@@ -442,17 +449,8 @@ retired: `/office` opens Town, and `/graph` and `/tree` open Board. Board and
 these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 - **Town** is the default view (`/town`); the root URL opens it too.
-  Each host (machine) is a building, each workspace a room, each tab a team
-  table and each pane a seat. A machine running both Herdr and herdr-core has one
-  building and one reception holding both runtimes' rooms; the first runtime's
-  rooms come first, and each room still acts on its own runtime. The building's
-  roof colour, reception and **Add room** belong to its first runtime.
-  **Settings → Town & views → Town buildings → One per runtime** gives each
-  runtime its own building instead, side by side and signed `<host> · Herdr` /
-  `<host> · herdr-core`; it is kept in this browser and **One per host** is the
-  default. `?townBuildings=runtime` or `?townBuildings=host` in the URL
-  overrides the setting for that page, to compare the two.
-  Room positions, colours and pins are the same either way. Rooms resize as tabs open and close; expanded rooms stay expanded
+  Each host is a building, each workspace a room, each tab a team table and each
+  pane a seat. Rooms resize as tabs open and close; expanded rooms stay expanded
   as they shrink, until folded. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table's
   nameplate shows its sole agent's Herdr name when exactly one named agent
@@ -805,10 +803,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town says so; with neither set it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
     **New room** (disabled with the reason when no room can be created). With
-    no room open, New room asks for the **Destination host** by machine name;
-    a **Runtime** choice (Herdr or herdr-core, starting at the open room's or the
-    first ready one) appears only when that machine runs both. An empty core
-    room name becomes "Room". Arrow
+    no room open, New room asks for the **Destination host**, herdr-core hosts
+    included (`· herdr-core`); an empty core room name becomes "Room". Arrow
     keys, Home and End move around the ring; Escape, a press outside, the
     centre **✕** or **Back** on a phone closes it.
   - **Lenses** colour the whole map by one fact, as strategy games' map
@@ -1264,7 +1260,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     [Apartments](#apartments-finished-agents).
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
-    reception and Board's host label. When the local connection is failing and
+    reception and Board's host label. A live herdr-core host is never stale
+    there: Board offers its **+** (New workspace) instead. When the local connection is failing and
     no host is ready, Town's stage also offers to set up a runtime. With no
     runtime installed it offers **Set up herdr-core** first and **Use the Herdr
     TUI instead** second; with Herdr installed but stopped it offers to start
@@ -1697,12 +1694,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   **Hosts** (in the top bar; on a phone in Zen, in the corner view menu too)
   defaults to All hosts and persists an explicit host set independently
   of **Manage connections**; both places show and change one filter per
-  browser. It lists one row and one tick per machine: a host's runtimes are
-  not told apart there, and ticking a host shows all of them (a saved filter
-  of runtime IDs reads as their hosts). Before the host catalogue loads, or for
-  a runtime no host holds, a runtime shows as its own row. Board, Desk,
-  Needs you, search and **New agent** name places by machine; they add
-  `· Herdr` or `· herdr-core` only where a machine runs both. Filtering preserves open resources and terminals;
+  browser. It lists every connection of either runtime,
+  Herdr's first; a herdr-core connection reads `<name> · herdr-core · <state>`
+  and is counted, selected and remembered like a Herdr host (profiles of one
+  runtime endpoint count once). Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
 - **Needs you** in the top bar (in the view picker in Zen, including on a phone;
@@ -1895,11 +1890,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 **Menu → Settings → Integrations** lists everything World reads from or works through.
 **All** opens first and lists every kind under its heading; then one tab per
-kind: **Runtimes** (one heading per machine, listing the Herdr and herdr-core
-runtimes found on it, each with **Add a runtime**: herdr-core installs from
-there after a confirmation, Herdr is installed and started on the machine, and
-**Look again** looks for runtimes and connects what it finds; a machine with
-none says **No runtime found on this host.**),
+kind: **Runtimes** (this computer's Herdr or herdr-core and each SSH host),
 **Sources** (GitHub, Jira, Weather and Usage metrics), **Agents** (World's skill for
 each harness, per host) and **Editors** once one is listed; last, set apart
 with its key, the **Vault**. The kind tabs come from the registry's kinds, so a new kind gets
@@ -3016,8 +3007,8 @@ and herdr-core alike:
   must be private (0700). Windows needs PowerShell and SSH key login; the
   pipe must be accessible only to your account, SYSTEM and Administrators.
   Start core without elevation so the SSH account can open it.
-  The card shows the version and live terminals. **Hosts** shows core and the
-  Herdr TUI of one machine as one host. A stale core keeps its last topology for
+  The card shows the version and live terminals. **Hosts** filters core and
+  Herdr TUI buildings together. A stale core keeps its last topology for
   reference and refuses actions until fresh observation succeeds.
 - **Core-only setup.** Without the Herdr TUI installed, the first core
   connection becomes the default and Town shows only its building. With the

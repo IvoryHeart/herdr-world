@@ -2,7 +2,14 @@ Stage numbers follow the committee plan. Stage 2 (shared acquisition and the pol
 replacement) is the separate `shared-acquisition` change (PR #551). Each group ships in
 its own PR. That PR carries its docs, changelog fragment, coverage updates and complete
 required verification, and syncs the requirements it implements into the current specs
-with the `openspec-sync-specs` skill.
+with the `world-openspec-sync-specs` skill.
+
+## Delta baseline (2026-11-21)
+
+This change remains active for its unchecked stages. Requirements already present
+in current specs use MODIFIED and retain the current recovery, lifetime, storage
+and preparation contracts. ADDED is reserved for requirements not yet present;
+no completed stage is permission to archive the unfinished change.
 
 ## 1. Agree the design
 

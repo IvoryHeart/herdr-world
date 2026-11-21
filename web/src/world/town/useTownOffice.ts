@@ -10,14 +10,6 @@ import { useRoomPins } from "./townRoomPins";
 import { DEVTOOLS } from "../devtools/flag";
 import { countWorldWork } from "../devtools/renderer";
 import type { WorldObject } from "../worldObject";
-import { worldHostGroups } from "../../hostGroups";
-import { useStoreSelector } from "../../store";
-import { createTownBuildings, townBuildingsMode } from "./townBuildings";
-import { worldLocalStorage } from "../../browserStorage";
-import {
-  readOfficePreferences,
-  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
-} from "../officePreferences";
 
 /** Town reveals the first 24 native-order tabs, then 20 more per expansion. */
 export function useTownOffice(world: WorldObject, selectedId: string | null) {
@@ -83,30 +75,9 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       return next;
     });
   }, []);
-  const hostGroups = useStoreSelector(worldHostGroups);
-  const buildings = useMemo(() => createTownBuildings(), []);
-  // The Town buildings setting; the page flag, read once per mount, compares
-  // the two building layouts (#1047).
-  const [buildingsFlag] = useState(() => globalThis.location?.search ?? "");
-  const [buildingsSetting, setBuildingsSetting] = useState(
-    () => readOfficePreferences(worldLocalStorage).townBuildings,
-  );
-  useEffect(() => {
-    const refresh = () =>
-      setBuildingsSetting(
-        readOfficePreferences(worldLocalStorage).townBuildings,
-      );
-    window.addEventListener(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT, refresh);
-    return () =>
-      window.removeEventListener(
-        WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
-        refresh,
-      );
-  }, []);
-  const buildingsMode = townBuildingsMode(buildingsFlag, buildingsSetting);
   const observedOffice = useMemo((): HerdrOfficeProjection => {
     if (DEVTOOLS) countWorldWork("office.project");
-    const office = projectOffice(
+    return projectOffice(
       world,
       Date.now(),
       selectedId,
@@ -115,11 +86,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       roomFocus?.roomKey ?? null,
       expandedDeskLimits,
     );
-    return buildings(office, hostGroups, buildingsMode);
   }, [
-    buildings,
-    hostGroups,
-    buildingsMode,
     world,
     selectedId,
     projectOffice,

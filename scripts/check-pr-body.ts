@@ -42,9 +42,13 @@ function namesChangedPath(
             path.startsWith(`${name.replace(/\/$/, "")}/`)),
       ) ||
       (spec &&
-        names.has(
-          /^openspec\/(?:specs|changes)\/([^/]+)\//.exec(path)?.[1] ?? "",
-        )),
+        [
+          // Capability ids include every directory below specs/, including deltas.
+          /^openspec\/(?:specs|changes\/[^/]+\/specs)\/(.+)\/spec\.md$/.exec(
+            path,
+          )?.[1],
+          /^openspec\/changes\/([^/]+)\//.exec(path)?.[1],
+        ].some((name) => name !== undefined && names.has(name))),
   );
 }
 

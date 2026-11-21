@@ -213,9 +213,7 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
         title: "New workspace",
         detail: "Confirm a destination host",
         keywords: ["new", "create", "workspace", "room"],
-        disabledReason: hosts.some((host) =>
-          host.runtimes.some(({ state }) => state === "ready"),
-        )
+        disabledReason: hosts.some((host) => host.state === "ready")
           ? null
           : "No destination host is ready.",
         run: () => {

@@ -162,64 +162,9 @@ function parseVault(value: unknown): VaultStatus {
   };
 }
 
-type IntegrationHosts = NonNullable<IntegrationsSnapshot["hosts"]>;
-
-const choices = (value: unknown) =>
-  Array.isArray(value)
-    ? value.flatMap((choice) => {
-        const item = record(choice);
-        return item && text(item.kind)
-          ? [
-              {
-                kind: text(item.kind),
-                label: text(item.label) || text(item.kind),
-              },
-            ]
-          : [];
-      })
-    : [];
-
-/** Each machine's runtimes and the runtimes it could add (`available_runtimes`). */
-function parseHosts(value: unknown): IntegrationHosts | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.flatMap((each) => {
-    const host = record(each);
-    if (!host || !text(host.host_id)) return [];
-    return [
-      {
-        host_id: text(host.host_id),
-        label: text(host.label) || text(host.host_id),
-        runtimes: Array.isArray(host.runtimes)
-          ? host.runtimes.flatMap((runtime) => {
-              const item = record(runtime);
-              return item && text(item.connection_id)
-                ? [
-                    {
-                      connection_id: text(item.connection_id),
-                      kind: text(item.kind),
-                      version: text(item.version) || null,
-                      installed: item.installed !== false,
-                      state: text(item.state),
-                      generation:
-                        typeof item.generation === "number"
-                          ? item.generation
-                          : 0,
-                    },
-                  ]
-                : [];
-            })
-          : [],
-        available_runtimes: choices(host.available_runtimes),
-      },
-    ];
-  });
-}
-
 export function parseIntegrations(value: unknown): IntegrationsSnapshot {
   const snapshot = record(value);
-  const hosts = parseHosts(snapshot?.hosts);
   return {
-    ...(hosts ? { hosts } : {}),
     observedAt:
       typeof snapshot?.observedAt === "number" ? snapshot.observedAt : 0,
     integrations: Array.isArray(snapshot?.integrations)

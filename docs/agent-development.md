@@ -8,6 +8,21 @@ For source ownership use the [knowledge map](knowledge-map.md), then the
 rules and worktree creation live in [AGENTS.md](../AGENTS.md). The worktree helper
 rejects unsafe names and unknown refs; `bun run agent:worktree -- list` is read-only.
 
+## OpenSpec skills
+
+Use the repository's adapted skills:
+
+- [world-openspec-explore](../.agents/skills/world-openspec-explore/SKILL.md) to investigate.
+- [world-openspec-update-change](../.agents/skills/world-openspec-update-change/SKILL.md) to revise a plan.
+- [world-openspec-apply-change](../.agents/skills/world-openspec-apply-change/SKILL.md) to implement authorized tasks.
+- [world-openspec-sync-specs](../.agents/skills/world-openspec-sync-specs/SKILL.md) to synchronize delivered requirements.
+- [world-openspec-archive-change](../.agents/skills/world-openspec-archive-change/SKILL.md) to archive completed changes.
+
+These live in `.agents/skills/`; `.claude/skills/` links to the same files.
+The `.openspec-target` marker stays `agents`, the CLI's generation target.
+An `openspec update` can regenerate its own `openspec-*` skills without replacing
+our `world-openspec-*` adaptations. Keep the pinned CLI until its separate upgrade.
+
 ## Capture PR evidence
 
 Use the [capture helper and five-viewport recipe](SCREENSHOTS.md#pr-screenshot-viewports)
@@ -233,6 +248,13 @@ paths and preserve both behaviors. Do not repeatedly merge main solely to chase
 an unrelated red CI run: first identify the failed leaf job and whether main
 shares it. Branch age increases exposure, but overlapping changes cause the
 conflict; a very old branch can still merge cleanly when its files are separate.
+
+Feature PRs do not regenerate Help pictures for ordinary component changes.
+Stale fingerprints are warnings; main owns the full refresh through a bot PR.
+When adding or changing a help entry, use `HELP_PICTURES_IDS="<id>" bun run
+help:pictures` and commit only that entry's pictures and manifest record (plus
+`bun run help:docs` output when declarations change). Remove assets for deleted
+entries. See [Help contribution guidance](../CONTRIBUTING.md#help-that-ships-with-a-feature).
 
 ## Run an optional visible team
 

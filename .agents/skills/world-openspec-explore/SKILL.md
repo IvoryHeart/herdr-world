@@ -1,5 +1,5 @@
 ---
-name: openspec-explore
+name: world-openspec-explore
 description: Investigate a Herdr World design or OpenSpec change before deciding its implementation.
 license: MIT
 metadata:
