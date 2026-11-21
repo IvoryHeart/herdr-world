@@ -204,11 +204,39 @@ const parsePeerId = (id: string) => {
 const ALERT_PREFIX = "alert~";
 
 /**
+ * Herdr's notification decoder keeps at most this many characters of a body
+ * (`MAX_TEXT_CHARS` in bridge/semantic-notification.ts); World keeps the whole
+ * alert body within it so the routing suffix always arrives.
+ */
+export const ASK_ALERT_BODY_MAX = 400;
+
+/**
  * The owner alert World sends for a question: title `<agent> asks`, body
  * `<question> (<id>, asked in <World>)`. Older Worlds wrote `(<id>)` only.
+ * A long question is shortened, never the suffix: other Worlds read the ID
+ * and home from it.
  */
 export function askAlertBody(question: string, id: string, home: string) {
-  return `${question} (${id}, asked in ${home})`;
+  // Sliced as the registry report slices it, so the names still match.
+  const suffix = ` (${id}, asked in ${home.slice(0, ASK_PEER_LIMITS.name)})`;
+  const room = ASK_ALERT_BODY_MAX - suffix.length;
+  let text = question;
+  if (question.length > room) {
+    text = question.slice(0, Math.max(0, room - 1));
+    // Never leave half of a surrogate pair.
+    const last = text.charCodeAt(text.length - 1);
+    if (last >= 0xd800 && last <= 0xdbff) text = text.slice(0, -1);
+    text = `${text.trimEnd()}…`;
+  }
+  return `${text}${suffix}`;
+}
+
+/** A shortened alert question still names the same question. */
+export function sameAlertQuestion(alerted: string, question: string) {
+  const full = question.trim();
+  return alerted.endsWith("…")
+    ? full.startsWith(alerted.slice(0, -1))
+    : alerted === full;
 }
 
 export function parseAskAlert(
@@ -216,8 +244,10 @@ export function parseAskAlert(
   body: string | undefined,
 ): { asker: string; question: string; id: string; home: string | null } | null {
   if (!title?.endsWith(" asks") || !body) return null;
+  // The question is greedy, so the last ` (q-…` starts the suffix; a World
+  // name may hold parentheses ("release (stable)").
   const match =
-    /^([\s\S]*?) \((q[-a-z0-9]{1,40})(?:, asked in ([^()\n]{1,60}))?\)\s*$/u.exec(
+    /^([\s\S]*) \((q[-a-z0-9]{1,40})(?:, asked in ([^\n]{1,60}?))?\)\s*$/u.exec(
       body,
     );
   if (!match || !match[1]!.trim()) return null;
@@ -241,6 +271,14 @@ export function createAskPeers(deps: {
   scheduler: Scheduler;
   /** Fingerprints of the runtimes this World connects to. */
   runtimes(): string[];
+  /**
+   * Runtime fingerprints captured with this World's open questions: a
+   * question stays findable on the runtime it was asked on after a saved
+   * connection is edited to target another.
+   */
+  held?(): string[];
+  /** The `asks` block changed (a question on a new runtime): report it now. */
+  reportChanged?(): void;
   /** This World's name as alerts and siblings show it. */
   name(): string;
   /** Listens on every interface. */
@@ -257,6 +295,7 @@ export function createAskPeers(deps: {
   let homes = new Map<string, { at: number; home: AskHome; asks: PeerAsk[] }>();
   const alerts = new Map<string, PeerAsk>();
   let shown = "[]";
+  let reported = "";
   let inflight: Promise<void> | null = null;
   let queued: Promise<void> | null = null;
   let timer: { cancel(): void } | null = null;
@@ -299,6 +338,19 @@ export function createAskPeers(deps: {
       throw new Error(`${peer.asks.name} answered ${response.status}`);
     return reply;
   }
+
+  /**
+   * The runtimes of this World's open questions first, then the ones it
+   * connects to now: a question stays findable on the runtime it was asked on.
+   */
+  const report = (): AskPeerBlock => ({
+    name: deps.name().slice(0, ASK_PEER_LIMITS.name),
+    token,
+    runtimes: [...new Set([...(deps.held?.() ?? []), ...own()])]
+      .filter((entry) => FINGERPRINT.test(entry))
+      .slice(0, ASK_PEER_LIMITS.runtimes),
+    any: deps.any,
+  });
 
   const merged = (): PeerAsk[] => [
     ...[...homes.values()].flatMap((entry) => entry.asks),
@@ -345,6 +397,8 @@ export function createAskPeers(deps: {
       }),
     );
     homes = next;
+    if (reported && JSON.stringify(report()) !== reported)
+      deps.reportChanged?.();
     // An alert whose question now shows from its home needs no entry.
     for (const [key, alert] of alerts) {
       const id = key.slice(ALERT_PREFIX.length);
@@ -423,12 +477,11 @@ export function createAskPeers(deps: {
     owns: (id: string) =>
       id.startsWith(ALERT_PREFIX) || Boolean(parsePeerId(id)),
     /** The `asks` block for this World's registry report. */
-    report: (): AskPeerBlock => ({
-      name: deps.name().slice(0, ASK_PEER_LIMITS.name),
-      token,
-      runtimes: own(),
-      any: deps.any,
-    }),
+    report: () => {
+      const block = report();
+      reported = JSON.stringify(block);
+      return block;
+    },
     /** Whether a request carries this World's peer token. */
     authorized(header: string | null) {
       const given = Buffer.from(header?.replace(/^Bearer /, "") ?? "");
@@ -467,7 +520,7 @@ export function createAskPeers(deps: {
         merged().some(
           (ask) =>
             parsePeerId(ask.id)?.id === alert.id &&
-            ask.question === alert.question,
+            sameAlertQuestion(alert.question, ask.question),
         )
       )
         return;

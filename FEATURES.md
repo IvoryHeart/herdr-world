@@ -1705,7 +1705,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   marked **Asked in [World]** with a link. Answering or dismissing one there
   closes it in the World that holds it, which records exactly one answer and
   delivers it to the asker; a second answer, from any World, is refused as
-  closed. Places, IDs and attachments stay with that World. When it stops, its
+  closed. A question stays with the runtime it was asked on, even if that saved
+  connection is later edited to target another. A long question is shortened
+  in the alert so its World's name always arrives. Places, IDs and attachments
+  stay with that World. When it stops, its
   questions leave the others at the next read (a failed read keeps them 15
   seconds); answering then says it is not running. An alert whose question this
   World cannot read (no shared registry, an older World, or another runtime)

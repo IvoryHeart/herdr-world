@@ -68,6 +68,12 @@ export type LedgerAsk = {
   /** Only the owner, in World, may answer. */
   owner_only: boolean;
   recipient?: AnswerRecipient;
+  /**
+   * Fingerprints of the runtimes the question was asked on, captured when it
+   * was recorded (#1152): other Worlds on those runtimes show it, even after
+   * a saved connection is edited to target another runtime.
+   */
+  runtimes?: string[];
   answer?: { text: string; at: number; by: string; occurrence?: string };
   /** Closed by the owner without an answer; the asker's `--wait` ends. */
   dismissed?: { at: number; by: string };

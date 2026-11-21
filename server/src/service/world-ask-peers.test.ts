@@ -185,3 +185,78 @@ test("when the home stops, its questions leave the other World", async () => {
     sibling.page.call("world.ask.answer", { id: shown!.id, answer: "Yes" }),
   ).rejects.toThrow(/not running/);
 }, 30_000);
+
+test("a question stays on the runtime it was asked on after its connection is retargeted", async () => {
+  const root = mkdtempSync(join(tmpdir(), "world-ask-peers-retarget-"));
+  roots.push(root);
+  const registry = join(root, "instances");
+  const sockets = (name: string) => ({
+    control_socket_path: join(root, `${name}-control.sock`),
+    client_socket_path: join(root, `${name}-render.sock`),
+  });
+  const start = async (name: string, runtime: string) => {
+    const target = sockets(runtime);
+    const started = await startTestService(
+      join(root, name),
+      {
+        socketPath: target.control_socket_path,
+        clientSocketPath: target.client_socket_path,
+        // The home may make a saved connection its default.
+        hasExplicitSocketPath: name !== "home",
+        hasExplicitClientSocketPath: name !== "home",
+      },
+      { HERDR_WORLD_INSTANCE_REGISTRY_DIR: registry },
+    );
+    running.push(started);
+    await started.connected;
+    const page = await browserSocket(
+      started.base,
+      await login(started.base, PASSWORD),
+    );
+    return { started, page };
+  };
+  // The home starts on its own runtime and asks through a saved connection
+  // "studio" on runtime A, its default.
+  const home = await start("home", "home-only");
+  const onA = await start("on-a", "runtime-a");
+  const onB = await start("on-b", "runtime-b");
+  const studio = {
+    id: "studio",
+    label: "studio",
+    type: "local",
+    auto_connect: false,
+    ...sockets("runtime-a"),
+  };
+  await home.page.call("connections.create", { profile: studio });
+  await home.page.call("connections.set_default", { id: "studio" });
+  await ask(home.started, "Asked on runtime A?");
+  await until(
+    () => asks(onA.page),
+    (list) => list.length === 1,
+  );
+
+  // Editing studio to target runtime B does not move the open question.
+  // No Herdr listens behind these sockets, and editing the default
+  // reconnects it; make studio an ordinary saved connection first.
+  await home.page
+    .call("connections.set_default", { id: "startup-default" })
+    .catch(() => {});
+  await home.page.call("connections.disconnect", { id: "studio" });
+  await home.page.call("connections.update", {
+    id: "studio",
+    profile: { ...studio, ...sockets("runtime-b") },
+  });
+  const saved = (await home.page.call("connections.list")) as {
+    connections: { id: string; control_socket_path?: string }[];
+  };
+  expect(
+    saved.connections.find((entry) => entry.id === "studio")
+      ?.control_socket_path,
+  ).toBe(sockets("runtime-b").control_socket_path);
+  // Give both Worlds more than one read.
+  await Bun.sleep(6_000);
+  expect((await asks(onA.page)).map((entry) => entry.question)).toEqual([
+    "Asked on runtime A?",
+  ]);
+  expect(await asks(onB.page)).toEqual([]);
+}, 40_000);

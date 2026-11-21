@@ -2,13 +2,17 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { BinReader, BinWriter } from "../bridge/bincode";
+import { readSemanticNotification } from "../bridge/semantic-notification";
 import {
+  ASK_ALERT_BODY_MAX,
   ASK_PEER_LIMITS,
   askAlertBody,
   createAskPeers,
   handleAskPeerRequest,
   parseAskAlert,
   readAskPeers,
+  sameAlertQuestion,
 } from "./ask-peers";
 import type { LedgerAsk } from "./world-ledger";
 
@@ -82,6 +86,68 @@ test("the alert names the World that holds the question, and older alerts still 
   expect(parseAskAlert("crew-7 asks", "no id here")).toBeNull();
   expect(parseAskAlert("crew-7 asks", " (q-1)")).toBeNull();
   expect(parseAskAlert(undefined, undefined)).toBeNull();
+});
+
+/** An owner alert as Herdr delivers it, through World's production decoder. */
+function delivered(title: string, body: string) {
+  const w = new BinWriter();
+  w.variant(3); // custom
+  w.string(title);
+  w.option(body, (value) => w.string(value));
+  w.option(null, () => {}); // sound
+  for (let field = 0; field < 4; field++) w.option(null, () => {});
+  w.option(null, () => {}); // position
+  return readSemanticNotification(new BinReader(w.toBuffer()));
+}
+
+test("a long question keeps the alert's ID and home within Herdr's body limit", () => {
+  const home = "Herdr World · release";
+  for (const question of [
+    "x".repeat(401),
+    `${"Ship it? ".repeat(80)}`,
+    `${"y".repeat(330)}😀${"z".repeat(100)}`,
+  ]) {
+    const body = askAlertBody(question, "q-abc123", home);
+    expect(body.length).toBeLessThanOrEqual(ASK_ALERT_BODY_MAX);
+    const alert = delivered("crew-7 asks", body);
+    expect(alert.body).toBe(body);
+    const parsed = parseAskAlert(alert.title, alert.body ?? undefined);
+    expect(parsed).toMatchObject({ id: "q-abc123", home });
+    expect(parsed!.question.endsWith("…")).toBe(true);
+    // No half of a surrogate pair is left behind.
+    expect(parsed!.question).not.toMatch(/[\uD800-\uDBFF]…$/u);
+    // The shortened question still names the full one, here and at home.
+    expect(sameAlertQuestion(parsed!.question, question)).toBe(true);
+    expect(sameAlertQuestion(parsed!.question, "Something else?")).toBe(false);
+  }
+  // A question that fits is sent whole.
+  const fits = "q".repeat(300);
+  expect(
+    parseAskAlert("crew-7 asks", askAlertBody(fits, "q-1", home)),
+  ).toMatchObject({
+    question: fits,
+  });
+});
+
+test("every World name Settings accepts survives the alert", () => {
+  for (const home of [
+    "Herdr World · release (stable)",
+    "Herdr World · (a) (b)",
+    "Herdr World · ((",
+    "Herdr World · ))",
+    `Herdr World · ${"n".repeat(32)}`,
+  ]) {
+    const parsed = parseAskAlert(
+      "crew-7 asks",
+      askAlertBody("Ship it (now)?", "q-9", home),
+    );
+    expect(parsed).toEqual({
+      asker: "crew-7",
+      question: "Ship it (now)?",
+      id: "q-9",
+      home,
+    });
+  }
 });
 
 test("only fresh loopback reports with a valid asks block count as peers", () => {
@@ -392,6 +458,29 @@ test("an alert this World cannot resolve becomes an asked-in entry until hidden"
   );
 });
 
+test("an alert from a World whose name has parentheses links to it", async () => {
+  const directory = join(fresh("ask-peers-parens-"), "instances");
+  report(directory, HOME, {}, { name: "Herdr World · release (stable)" });
+  const { peers } = sibling(directory, () => ({
+    ok: true,
+    result: { asks: [] },
+  }));
+  await peers.observeAlert(
+    "crew-7 asks",
+    askAlertBody("Ship it?", "q-9", "Herdr World · release (stable)"),
+  );
+  expect(peers.list()).toMatchObject([
+    {
+      id: "alert~q-9",
+      alert_only: true,
+      home: {
+        name: "Herdr World · release (stable)",
+        url: "http://127.0.0.1:19100/",
+      },
+    },
+  ]);
+});
+
 test("an alert entry gives way when its home shares the question", async () => {
   const directory = join(fresh("ask-peers-supersede-"), "instances");
   report(directory, HOME);
@@ -434,4 +523,34 @@ test("alert-only entries are bounded", async () => {
   const ids = peers.list().map((entry) => entry.id);
   expect(ids).toHaveLength(ASK_PEER_LIMITS.alerts);
   expect(ids[0]).toBe("alert~q-5");
+});
+
+test("a World reports its open questions' runtimes and renews the report when they change", async () => {
+  const directory = join(fresh("ask-peers-held-"), "instances");
+  let held: string[] = [];
+  let renewed = 0;
+  const peers = createAskPeers({
+    directory,
+    selfId: SELF,
+    now: () => 10_000,
+    scheduler: { schedule: () => ({ cancel() {} }) },
+    runtimes: () => [RUNTIME],
+    held: () => held,
+    reportChanged: () => renewed++,
+    name: () => "Herdr World · main",
+    any: false,
+    isLocal: () => false,
+    changed: () => {},
+    fetch: (async () => Response.json({ ok: true })) as unknown as typeof fetch,
+  });
+  expect(peers.report().runtimes).toEqual([RUNTIME]);
+  await peers.refresh();
+  expect(renewed).toBe(0);
+  // A question asked on a runtime this World no longer connects to.
+  held = [OTHER_RUNTIME, RUNTIME, "not-a-fingerprint"];
+  await peers.refresh();
+  expect(renewed).toBe(1);
+  expect(peers.report().runtimes).toEqual([OTHER_RUNTIME, RUNTIME]);
+  await peers.refresh();
+  expect(renewed).toBe(1);
 });

@@ -258,6 +258,7 @@ async function compose(
     profiles: () => connectionProfiles.profilesById(),
     coreIds: () => connectionProfiles.coreList().map((entry) => entry.id),
     defaultId: () => connectionManager.defaultId(),
+    ledger: () => storage.ledger(),
   });
   const worldCli = createWorldCliService({
     peers: askPeers.peers,
@@ -890,9 +891,8 @@ async function compose(
         now: () => clock.now(),
         scheduler,
         any: ["0.0.0.0", "::"].includes(config.host),
-        isLocal: (id, question) =>
-          storage.ledger().ask(id)?.question === question,
         changed: () => worldCli.peersChanged(),
+        reportChanged: () => shipyardInstances.republish(),
         log: (message) => logger.warn(message),
       });
       shipyardInstances.start(

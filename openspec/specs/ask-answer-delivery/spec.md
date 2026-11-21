@@ -118,7 +118,12 @@ A herdr-core or Herdr runtime SHALL NOT hold the ask record.
 
 Other World instances on the same machine that share the home's local instance
 registry and at least one runtime (the same connection target) SHALL show the
-home's open asks for that runtime in Needs you, with the home's name. Each
+home's open asks for that runtime in Needs you, with the home's name. An ask's
+runtimes SHALL be captured when it is recorded (the asker's connection target,
+and the default Herdr target that alerts for a herdr-core or unplaced asker)
+and SHALL NOT follow later edits of saved connections; the home's report SHALL
+list the runtimes of its open asks as well as the ones it connects to. An ask
+recorded before this capture existed stays in its home only. Each
 registry report SHALL carry a per-run peer token; the home SHALL serve its asks
 only over loopback, without a browser Origin, to that token, and only for the
 runtimes the requester names and shares. Shared asks SHALL NOT carry connection,
@@ -127,7 +132,10 @@ answer or dismissal from another instance SHALL be forwarded to the home, which
 applies it as the owner's; a refusal (already closed) SHALL be shown, not
 retried elsewhere.
 
-The owner alert SHALL name the home (`<question> (<id>, asked in <World>)`). An
+The owner alert SHALL name the home (`<question> (<id>, asked in <World>)`)
+within Herdr's 400-character notification body: a long question is shortened
+with an ellipsis, never the ID or home, and any World name Settings accepts,
+parentheses included, SHALL be read back from the alert. An
 instance that receives an alert whose ask it cannot read SHALL show an
 alert-only entry naming the home, with a link when its registry reports that
 World, and SHALL NOT offer an answer there. Such entries are bounded, held in
@@ -140,6 +148,11 @@ memory and closed by hiding them or once the home shares the ask.
 - **AND** both Worlds stop listing the question
 - **WHEN** the owner answers in A and B at the same moment
 - **THEN** exactly one answer is recorded and the other is refused as closed
+
+#### Scenario: Connection edited after the ask
+
+- **WHEN** an agent asks through saved connection S on runtime A and S is then edited to target runtime B
+- **THEN** Worlds on A keep listing the question and Worlds only on B do not see it
 
 #### Scenario: Home down, older or not shared
 

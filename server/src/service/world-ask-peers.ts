@@ -1,12 +1,16 @@
 import { instanceDisplayName } from "../../../shared/instanceName";
 import type { ManagedConnectionProfile } from "../connections/profile-service";
 import { connectionRecoveryFingerprint } from "../connections/profiles";
-import { type AskPeers, createAskPeers } from "../world/ask-peers";
-import type { LedgerAsk } from "../world/world-ledger";
+import {
+  type AskPeers,
+  createAskPeers,
+  sameAlertQuestion,
+} from "../world/ask-peers";
+import type { CliActor, LedgerStore } from "../world/world-ledger";
 
 type PeerOptions = Omit<
   Parameters<typeof createAskPeers>[0],
-  "runtimes" | "name"
+  "runtimes" | "name" | "isLocal" | "held"
 >;
 
 /**
@@ -18,6 +22,8 @@ export function createWorldAskPeers(deps: {
   profiles(): Map<string, ManagedConnectionProfile>;
   coreIds(): string[];
   defaultId(): string;
+  /** This World's own questions. */
+  ledger(): Pick<LedgerStore, "ask" | "openAsks">;
 }) {
   let peers: AskPeers | null = null;
   let name = instanceDisplayName("");
@@ -39,16 +45,22 @@ export function createWorldAskPeers(deps: {
     peers: () => peers,
     homeName: () => name,
     /**
-     * A question shows wherever its alert does: the asker's runtime, and the
+     * The runtimes a new question belongs to, captured once when it is
+     * recorded: it shows wherever its alert does, the asker's runtime and the
      * default Herdr connection that alerts for a herdr-core or unplaced asker.
+     * Editing a saved connection later does not move the question.
      */
-    askRuntimes: (ask: LedgerAsk) => {
-      const asker = ask.actor.connection_id;
-      const core = !!asker && deps.coreIds().includes(asker);
+    askRuntimes: (asker: CliActor) => {
+      const connection = asker.connection_id;
+      const core = !!connection && deps.coreIds().includes(connection);
       return [
-        ...(asker ? [asker] : []),
-        ...(!asker || core ? [deps.defaultId()] : []),
-      ].flatMap(key);
+        ...new Set(
+          [
+            ...(connection ? [connection] : []),
+            ...(!connection || core ? [deps.defaultId()] : []),
+          ].flatMap(key),
+        ),
+      ];
     },
     /** An owner alert for a question another World may hold. */
     observeAlert(event: {
@@ -74,6 +86,17 @@ export function createWorldAskPeers(deps: {
         runtimes: () =>
           [...deps.profiles().values()].map(connectionRecoveryFingerprint),
         name: () => name,
+        // An alert for a question held here, possibly shortened.
+        isLocal: (id, question) => {
+          const local = deps.ledger().ask(id)?.question;
+          return local !== undefined && sameAlertQuestion(question, local);
+        },
+        // Open questions stay findable on the runtimes they were asked on.
+        held: () =>
+          deps
+            .ledger()
+            .openAsks()
+            .asks.flatMap((ask) => ask.runtimes ?? []),
       });
       peers = started;
       started.start();

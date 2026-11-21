@@ -100,6 +100,12 @@ export class ShipyardInstances {
       L.instanceLeaseMs / 3,
     );
   }
+  /** Renew the report now: its `extra` fields changed. */
+  republish() {
+    if (!this.#report) return;
+    this.#timer?.cancel();
+    this.#publish();
+  }
   stop() {
     this.#timer?.cancel();
     this.#timer = null;

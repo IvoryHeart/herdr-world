@@ -14,7 +14,7 @@ import {
 import { randomBytes } from "node:crypto";
 import { handleWorldCliEndpoint } from "../http/world-cli-endpoint";
 import { answerAsk, CliError, createWorldCli, dismissAsk } from "./world-cli";
-import { type LedgerAsk, type LedgerStore } from "./world-ledger";
+import { type CliActor, type LedgerStore } from "./world-ledger";
 import { handleAskPeerRequest, type AskPeers } from "./ask-peers";
 import { createAttentionDispatcher } from "./attention-dispatch";
 import type {
@@ -63,10 +63,10 @@ export function createWorldCliService(deps: {
   broadcast(line: string): void;
   /**
    * Owner questions held by other World instances on the same runtime
-   * (#1152), and the runtime keys of each local question for them.
+   * (#1152), and the runtime keys a new local question is recorded with.
    */
   peers?(): AskPeers | null;
-  askRuntimes?(ask: LedgerAsk): string[];
+  askRuntimes?(asker: CliActor): string[];
   /** This World's name, as alerts and sibling Worlds show it. */
   homeName?(): string;
 }) {
@@ -239,6 +239,7 @@ export function createWorldCliService(deps: {
         }
       : undefined,
     captureRecipient: deps.attention ? recipients.capture : undefined,
+    askRuntimes: deps.askRuntimes,
     acknowledgeAnswer: async (id, occurrence, attempt, actor, recheck) => {
       const entry = (await deps.attention?.().forRecord(id))?.find(
         (entry) => entry.kind === ANSWER_DELIVERY_VERB.name,
@@ -544,7 +545,9 @@ export function createWorldCliService(deps: {
             .openAsks()
             .asks.map((ask) => ({
               ask,
-              runtimes: deps.askRuntimes?.(ask) ?? [],
+              // Captured when asked; a question from before #1152 has none
+              // and stays in this World only.
+              runtimes: ask.runtimes ?? [],
             })),
         answer: (id, answer) => closeAsOwner(id, { answer }),
         dismiss: (id, allFromAsker) => closeAsOwner(id, { allFromAsker }),

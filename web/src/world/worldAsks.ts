@@ -71,9 +71,11 @@ export function askHomeHref(
   location: Pick<Location, "hostname"> = window.location,
 ) {
   if (home.any && home.port) {
-    const host = location.hostname.includes(":")
-      ? `[${location.hostname}]`
-      : location.hostname;
+    // Browsers already bracket an IPv6 hostname ("[::1]"); bracket a bare one.
+    const host =
+      location.hostname.includes(":") && !location.hostname.startsWith("[")
+        ? `[${location.hostname}]`
+        : location.hostname;
     return `${home.tls ? "https" : "http"}://${host}:${home.port}/`;
   }
   return home.url;

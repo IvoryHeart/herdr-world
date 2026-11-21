@@ -203,6 +203,10 @@ test("a link to another World uses this page's host only when that World listens
   expect(askHomeHref({ ...home, any: true }, { hostname: "::1" })).toBe(
     "http://[::1]:19100/",
   );
+  // Browsers report an IPv6 page host already bracketed.
+  expect(askHomeHref({ ...home, any: true }, { hostname: "[::1]" })).toBe(
+    "http://[::1]:19100/",
+  );
   expect(
     askHomeHref(
       { name: "another World", url: null },
