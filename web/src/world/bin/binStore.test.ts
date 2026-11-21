@@ -5,6 +5,7 @@ import type { WorldLeafObject } from "../worldObject";
 import {
   binAddRequest,
   binBusClock,
+  binBusCountdown,
   binBusLabel,
   binClockLabel,
   binCloseLabel,
@@ -210,6 +211,33 @@ test("only Town's bin speaks of a bus; elsewhere it says when it closes", () => 
   ])
     expect(label).not.toContain("bus");
   expect(binCloseLabel({ ...bin, verified: false }, 0)).toBe("bin unavailable");
+});
+
+test("Town's one countdown: time to the next bus, the same for every stop and rider", () => {
+  const bin = { ...state(), readAt: 0, verified: true };
+  expect(binBusCountdown(bin, 0)).toBe("1:00");
+  expect(binBusCountdown(bin, 4_500)).toBe("0:56");
+  // Who waits, and where, changes nothing: it is the timetable's clock.
+  const two = { ...bin, entries: [entry("a"), entry("b")] };
+  expect(binBusCountdown(two, 4_500)).toBe(binBusCountdown(bin, 4_500));
+  const trip = { ...bin.bus, next_ms: 170_000, elapsed_ms: 5_000 };
+  const out = { ...bin, entries: [entry("a", true), entry("b")], bus: trip };
+  expect(binBusCountdown(out, 0)).toBe("on its way");
+  expect(binBusCountdown({ ...out, bus: { ...trip, stopped: true } }, 0)).toBe(
+    "stopped",
+  );
+  // Past the trip's end, before the service says so: the next departure.
+  expect(binBusCountdown(out, 15_000)).toBe("2:35");
+  expect(binBusCountdown({ ...bin, verified: false }, 0)).toBeNull();
+  // The bin's label is the same countdown in words.
+  for (const [value, now] of [
+    [bin, 4_500],
+    [out, 0],
+    [out, 15_000],
+  ] as const)
+    expect(binBusLabel(value, now)).toMatch(
+      new RegExp(`^bus (in )?${binBusCountdown(value, now)}$`),
+    );
 });
 
 test("a pinned desk or a tab pinned in Spaces keeps its tab's last pane", () => {
