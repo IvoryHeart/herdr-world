@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import {
+  Blocks,
   Bot,
   Code2,
   ExternalLink,
@@ -25,6 +26,7 @@ import {
 import {
   type IdeClient,
   type IdeInstance,
+  type IdeProviderId,
   type IdeProviderStatus,
   type IdeRefusal,
   pageIdeClient,
@@ -98,6 +100,9 @@ function writeRailOpen(open: boolean) {
  */
 const usable = (provider: IdeProviderStatus) => provider.enabled;
 
+/** A refusal and the IDE it was for: another IDE chosen clears it. */
+type ProjectRefusal = { provider: IdeProviderId; refusal: IdeRefusal };
+
 /**
  * Code: the complete VS Code (or code-server / OpenVSCode Server) of the
  * host a project is on, World's own computer or an SSH host, filling the
@@ -149,11 +154,13 @@ export default function CodeView({
     project !== null && local.size > 0 && !local.has(project.connectionId);
   const [railOpen, setRailOpen] = useState(readRailOpen);
   const railId = useId();
-  const [refusals, setRefusals] = useState<Record<string, IdeRefusal>>({});
+  const [refusals, setRefusals] = useState<Record<string, ProjectRefusal>>({});
   const [opening, setOpening] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
   const [stopping, setStopping] = useState<IdeInstance | null>(null);
   const [serversOpen, setServersOpen] = useState(false);
+  // The IDE list (Enable, Disable, Connect): the way back from any failure.
+  const [idesOpen, setIdesOpen] = useState(false);
   const running = runningIdeServers(ide.status);
   // Ready workbenches shown this visit stay loaded while another project
   // is in front, so switching back does not reload VS Code.
@@ -167,14 +174,30 @@ export default function CodeView({
     enabledProviders.find((entry) => entry.id === providerChoice) ??
     enabledProviders[0] ??
     null;
-  const instance = project
-    ? instances.find(
+  // One server per IDE and folder. An IDE the owner picked shows its own
+  // server, or Open; else whichever one runs. Another IDE's failed server
+  // never stands in front of the IDE that would open.
+  const projectInstances = project
+    ? instances.filter(
         (entry) =>
           entry.connectionId === project.connectionId &&
           entry.folder === project.folder,
       )
-    : undefined;
-  const refusal = project ? refusals[project.key] : undefined;
+    : [];
+  const picked = provider !== null && provider.id === providerChoice;
+  const instance =
+    projectInstances.find(
+      (entry) => entry.state !== "failed" && entry.provider === provider?.id,
+    ) ??
+    (picked
+      ? undefined
+      : projectInstances.find((entry) => entry.state !== "failed")) ??
+    projectInstances.find((entry) => entry.provider === provider?.id);
+  const refused = project ? refusals[project.key] : undefined;
+  const refusal =
+    refused && refused.provider === provider?.id ? refused.refusal : undefined;
+  // Where the project is, as plainly as World knows it.
+  const computer = project ? computerName(project, local) : "";
   // Microsoft's VS Code can't connect from a plain-HTTP address: World
   // says so instead of a workbench that waits forever.
   const insecureFor = (id: string | undefined) =>
@@ -216,7 +239,7 @@ export default function CodeView({
       } else
         setRefusals((current) => ({
           ...current,
-          [target.key]: result.refusal,
+          [target.key]: { provider: using.id, refusal: result.refusal },
         }));
       await ide.reload();
     } catch (cause) {
@@ -224,6 +247,12 @@ export default function CodeView({
     } finally {
       setOpening(null);
     }
+  };
+
+  /** Opens the IDE list over the view; the failure stays beneath it. */
+  const chooseIde = () => {
+    setServersOpen(false);
+    setIdesOpen(true);
   };
 
   const stop = async (target: IdeInstance) => {
@@ -330,13 +359,31 @@ export default function CodeView({
             <span>Stop</span>
           </button>
         ) : null}
+        {ide.status ? (
+          <button
+            type="button"
+            className="code-view-bar-action"
+            aria-expanded={idesOpen}
+            title="Enable, disable or connect an IDE"
+            onClick={() => {
+              setServersOpen(false);
+              setIdesOpen(!idesOpen);
+            }}
+          >
+            <Blocks size={13} aria-hidden />
+            <span>IDEs</span>
+          </button>
+        ) : null}
         {running.length ? (
           <button
             type="button"
             className="code-view-bar-action"
             aria-expanded={serversOpen}
             title="IDE servers World started that still run"
-            onClick={() => setServersOpen(!serversOpen)}
+            onClick={() => {
+              setIdesOpen(false);
+              setServersOpen(!serversOpen);
+            }}
           >
             <Server size={13} aria-hidden />
             <span>Servers</span>
@@ -399,6 +446,27 @@ export default function CodeView({
             />
           </section>
         ) : null}
+        {idesOpen && ide.status ? (
+          <section
+            className="code-view-servers code-view-ides"
+            aria-label="IDEs"
+          >
+            <div className="code-view-servers-head">
+              <h2>IDEs</h2>
+              <CloseButton onClick={() => setIdesOpen(false)} />
+            </div>
+            <p className="code-view-muted">
+              Enable the one to open projects with. World never installs one:
+              each opens only on a computer where it is installed.
+            </p>
+            <IdeProviderList
+              status={ide.status}
+              client={client}
+              onStatus={ide.apply}
+              onEnabled={(id) => setProviderChoice(id)}
+            />
+          </section>
+        ) : null}
         <section className="code-view-stage" aria-label="IDE">
           {readyVisited.map((entry) => (
             <iframe
@@ -441,7 +509,7 @@ export default function CodeView({
   function stageState() {
     if (!ide.status) return "loading";
     if (!project) return "no-project";
-    if (!provider) return refusal ? "refused" : "integration";
+    if (!provider) return "integration";
     if (insecure) return "insecure-page";
     if (instance) return instance.state;
     if (refusal) return "refused";
@@ -472,13 +540,6 @@ export default function CodeView({
             right here in World. The project's agents and terminals stay one
             click away. Enable one to start.
           </p>
-          {refusal && project ? (
-            <Refusal
-              refusal={refusal}
-              onRetry={() => void open(project)}
-              onShowServers={() => setServersOpen(true)}
-            />
-          ) : null}
           {openError ? (
             <p className="code-view-error" role="alert">
               {openError}
@@ -488,6 +549,7 @@ export default function CodeView({
             status={ide.status}
             client={client}
             onStatus={ide.apply}
+            onEnabled={(id) => setProviderChoice(id)}
           />
         </div>
       );
@@ -501,7 +563,14 @@ export default function CodeView({
           </p>
         </div>
       );
-    if (insecure) return <InsecurePage label={insecure.label} />;
+    if (insecure)
+      return (
+        <InsecurePage
+          label={insecure.label}
+          computer={computer}
+          onChoose={chooseIde}
+        />
+      );
     if (instance?.state === "starting")
       return (
         <div className="code-view-starting" role="status">
@@ -573,24 +642,33 @@ export default function CodeView({
     if (instance?.state === "failed")
       return (
         <div className="code-view-failed">
-          <h2>{providerLabel(instance)} stopped</h2>
+          <h2>
+            {providerLabel(instance)} stopped on {computer}
+          </h2>
           <p role="alert">{instance.reason ?? "The server exited."}</p>
-          <button
-            type="button"
-            className="primary"
-            disabled={opening !== null || project.stale}
-            onClick={() => void open(project)}
-          >
-            Try again
-          </button>
+          <FailureActions
+            busy={opening !== null || project.stale}
+            onRetry={() => void open(project)}
+            onChoose={chooseIde}
+          />
+          {openError ? (
+            <p className="code-view-error" role="alert">
+              {openError}
+            </p>
+          ) : null}
         </div>
       );
     if (refusal)
       return (
         <Refusal
           refusal={refusal}
+          project={project}
+          computer={computer}
+          ideLabel={provider.label}
+          busy={opening !== null}
           onRetry={() => void open(project)}
           onShowServers={() => setServersOpen(true)}
+          onChoose={chooseIde}
         />
       );
     return (
@@ -632,20 +710,67 @@ export default function CodeView({
           </p>
         ) : null}
         {openError ? (
-          <p className="code-view-error" role="alert">
-            {openError}
-          </p>
+          <>
+            <p className="code-view-error" role="alert">
+              World couldn't open {provider.label} on {computer}: {openError}
+            </p>
+            <FailureActions onChoose={chooseIde} />
+          </>
         ) : null}
       </div>
     );
   }
 }
 
-function InsecurePage({ label }: { label: string }) {
+/**
+ * The way on from a failure: the same again, and back to the IDE list to
+ * choose another IDE or option. Try again is left out only where the screen
+ * already has it (Open) or where the same page can't succeed (plain HTTP).
+ */
+function FailureActions({
+  busy = false,
+  onRetry,
+  onChoose,
+}: {
+  busy?: boolean;
+  onRetry?: () => void;
+  onChoose?: () => void;
+}) {
+  return (
+    <div className="code-view-detached-actions">
+      {onRetry ? (
+        <button
+          type="button"
+          className="primary"
+          disabled={busy}
+          onClick={onRetry}
+        >
+          Try again
+        </button>
+      ) : null}
+      {onChoose ? (
+        <button type="button" onClick={onChoose}>
+          <Blocks size={13} aria-hidden /> Choose another IDE
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function InsecurePage({
+  label,
+  computer,
+  onChoose,
+}: {
+  label: string;
+  computer: string;
+  onChoose: () => void;
+}) {
   return (
     <div className="code-view-refusal" data-code="insecure-page">
       <h2>{label} needs a secure address</h2>
       <p role="alert">
+        It can run on {computer}, but this browser can't show it here.
         Microsoft's VS Code connects only from a page served over HTTPS, or at
         localhost on the computer World runs on. This page is plain HTTP at{" "}
         {window.location.host}, so it would never finish opening.
@@ -654,10 +779,19 @@ function InsecurePage({ label }: { label: string }) {
         Open World over HTTPS instead: give World a certificate, or put it
         behind an HTTPS proxy such as <code>tailscale serve</code>. On the
         computer World runs on, localhost works too. code-server and OpenVSCode
-        Server work on this address.
+        Server work on this address: choose one of them instead.
       </p>
+      <FailureActions onChoose={onChoose} />
     </div>
   );
+}
+
+/** Named so a phone user knows which computer: World's own, or the host's. */
+function computerName(project: CodeProject, local: Set<string>) {
+  if (!local.has(project.connectionId)) return project.hostLabel;
+  return /^(local|this computer)$/i.test(project.hostLabel)
+    ? "the computer World runs on"
+    : `${project.hostLabel}, the computer World runs on`;
 }
 
 function groupByHost(projects: CodeProject[]) {
@@ -672,13 +806,26 @@ function groupByHost(projects: CodeProject[]) {
 
 function Refusal({
   refusal,
+  project,
+  computer,
+  ideLabel,
+  busy,
   onRetry,
   onShowServers,
+  onChoose,
 }: {
   refusal: IdeRefusal;
+  project: CodeProject;
+  /** The project's computer, as plainly as World knows it. */
+  computer: string;
+  /** The IDE refused. */
+  ideLabel: string;
+  busy: boolean;
   onRetry: () => void;
   /** The cap: World stops none to make room; show the running ones. */
   onShowServers: () => void;
+  /** Opens the IDE list. */
+  onChoose: () => void;
 }) {
   return (
     <div className="code-view-refusal" data-code={refusal.code}>
@@ -686,22 +833,22 @@ function Refusal({
         {refusal.code === "limit"
           ? "Too many IDEs are running"
           : refusal.code === "missing"
-            ? "The IDE isn't installed there"
-            : "World can't open this project here"}
+            ? `${ideLabel} isn't installed on ${computer}`
+            : `World can't open ${project.label} in ${ideLabel} on ${computer}`}
       </h2>
       <p role="alert">{refusal.message}</p>
+      {refusal.code === "missing" ? (
+        <p className="code-view-muted">
+          World never installs an IDE. Install it on {project.hostLabel} and try
+          again, or choose another IDE.
+        </p>
+      ) : null}
       {refusal.code === "limit" ? (
         <button type="button" onClick={onShowServers}>
           Show running servers
         </button>
       ) : null}
-      {refusal.code === "stale" ||
-      refusal.code === "limit" ||
-      refusal.code === "missing" ? (
-        <button type="button" onClick={onRetry}>
-          Try again
-        </button>
-      ) : null}
+      <FailureActions busy={busy} onRetry={onRetry} onChoose={onChoose} />
     </div>
   );
 }
