@@ -3,6 +3,7 @@
   "units": "seconds; JUnit suite totals; Town groups sum their original testcase durations",
   "sourceNotes": {
     "ApartmentsAvatars.browser": "2026-11-20 local focused run: 3.06 s file duration, one fixture across phone and desktop, bun run test web/src/world/ApartmentsAvatars.browser.test.ts.",
+    "BoardElements.browser": "2026-11-20 local focused run: 2.1 s, one fixture with eleven scenarios, bun run test web/src/world/BoardElements.browser.test.ts.",
     "CoreControl.browser": "2026-11-11 local focused run: 1.10 s for the inherited launcher and bin consumers; registered alongside core input so the complete browser inventory includes both stacked suites.",
     "CoreSharedState.browser": "2026-11-11 local focused run: 4.39 s testcase duration, one end-to-end fixture with nine checks plus three dwell waits, bun run test web/src/world/CoreSharedState.browser.test.ts.",
     "CoreTerminalWatch.browser": "2026-11-11 local focused run: 1.02 s file duration, one fixture across the standard viewports, bun run test web/src/world/CoreTerminalWatch.browser.test.ts.",
@@ -14,6 +15,7 @@
   "seconds": {
     "AnswerDeliveries.browser": 10,
     "ApartmentsAvatars.browser": 3.06,
+    "BoardElements.browser": 2.1,
     "BoardView": 21.518,
     "ConcurrentContexts": 31.58,
     "CoreControl.browser": 1.05,

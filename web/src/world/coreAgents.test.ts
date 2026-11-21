@@ -22,6 +22,7 @@ import {
 import { viewOnlyMessage } from "./viewOnly";
 import { projectAgent } from "./officeAgent";
 import { projectWorldOffice } from "./herdrOfficeProjection";
+import { projectBoard } from "./board/boardModel";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import {
   worldInspectorContext,
@@ -422,6 +423,23 @@ describe("core agents in World's views", () => {
         opened.push(id);
       });
       expect(opened).toEqual(coreStale ? [] : [shell.nodeId]);
+    }
+  });
+
+  test("Board draws a live core host, its rooms and agents live, as Town does; a stale one stale", async () => {
+    for (const coreStale of [false, true]) {
+      const board = projectBoard(await worldOf(coreStale));
+      const host = board.hostByKey.get("box-core")!;
+      expect(host.stale).toBe(coreStale);
+      const rooms = board.workspaces.filter((w) => w.hostKey === "box-core");
+      const tabs = board.tabs.filter((t) => t.hostKey === "box-core");
+      expect(rooms.length).toBeGreaterThan(0);
+      expect(tabs.some((t) => t.panes.some((p) => p.isAgent))).toBe(true);
+      for (const card of [...rooms, ...tabs]) {
+        expect(card.stale).toBe(coreStale);
+        expect(card.actionable).toBe(false);
+        if (!coreStale) expect(card.viewOnly).toBeDefined();
+      }
     }
   });
 

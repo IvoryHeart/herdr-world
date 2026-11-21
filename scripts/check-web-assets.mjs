@@ -62,7 +62,11 @@ const maxFileCount = 212;
 // with main's Apartments and post-office work measures 16,270,139 bytes
 // (15.5164 MiB): 17,211 bytes above 15.5 MiB. Account for the combined
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
-const maxTotalBytes = 15.6 * 1024 * 1024;
+// Board's element screens (#1030: cards, Add to Board, the reader; +34 KB,
+// all in the lazy Board chunk) on a base with Usage and Weather (16,338,191
+// bytes) measure 16,372,209 bytes (15.614 MiB), so 15.7 MiB; file,
+// help-picture and startup budgets unchanged (2026-11-21).
+const maxTotalBytes = 15.7 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two

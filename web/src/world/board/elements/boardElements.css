@@ -1,0 +1,467 @@
+/* Board elements (memory, logs, docs, links), drawn as paper things beside
+   the sticky notes: a card-index drawer, a ruled ledger page, a sheet with a
+   folded corner and a luggage tag. Like notes they keep their own paper
+   colours on every surface, with the notes' ink. */
+.board-card.board-element {
+  --element-paper: #fbfaf6;
+  --element-edge: color-mix(in srgb, var(--note-ink, #29281f) 22%, transparent);
+  width: 208px;
+  min-height: 92px;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--element-edge);
+  border-radius: 4px;
+  background: var(--element-paper);
+  color: var(--note-ink, #29281f);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.board-element-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+.board-element-head svg {
+  flex: none;
+  opacity: 0.75;
+}
+.board-element-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-element-line,
+.board-element-place {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-element-line {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+.board-element-place {
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.board-element-agent {
+  font-family: inherit;
+  font-weight: 600;
+}
+.board-element-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.board-element-linkline {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: inherit;
+}
+.board-element-linkline span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Memory: a card-index drawer, its label on a tab and cards standing in it. */
+.board-card.board-element-memory {
+  --element-paper: #eadcb8;
+  margin-top: 12px;
+  padding-top: 14px;
+  border-radius: 3px 3px 8px 8px;
+  box-shadow:
+    0 -4px 0 -1px #f6efdc,
+    0 -8px 0 -2px #fbf7ec,
+    var(--board-shadow);
+}
+.board-element-drawer {
+  position: absolute;
+  top: -12px;
+  left: 14px;
+  padding: 0 8px;
+  border: 1px solid var(--element-edge);
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+  background: var(--element-paper);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 12px;
+  text-transform: uppercase;
+}
+.board-element-memory::after {
+  content: "";
+  position: absolute;
+  bottom: 7px;
+  left: 50%;
+  width: 36px;
+  height: 6px;
+  margin-left: -18px;
+  border: 1.5px solid
+    color-mix(in srgb, var(--note-ink, #29281f) 45%, transparent);
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+}
+.board-element-memory .board-element-place {
+  margin-bottom: 8px;
+}
+
+/* Log: a ruled ledger page with a red margin. */
+.board-card.board-element-log {
+  --element-paper: #fdfcf3;
+  padding-left: 24px;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 15px,
+      #e0786a 15px,
+      #e0786a 16.5px,
+      transparent 16.5px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 17px,
+      color-mix(in srgb, #5b8fc9 30%, transparent) 17px 18px
+    ),
+    var(--element-paper);
+  background-position:
+    0 0,
+    0 4px,
+    0 0;
+}
+
+/* Doc: a sheet with its corner folded down. */
+.board-card.board-element-document {
+  border-radius: 3px 18px 3px 3px;
+  background:
+    linear-gradient(
+      225deg,
+      transparent 0 12px,
+      color-mix(in srgb, var(--note-ink, #29281f) 14%, #fff) 12px 18px,
+      transparent 18px
+    ),
+    var(--element-paper);
+}
+
+/* Link: a luggage tag, its eyelet on the pointed end. */
+.board-card.board-element-link {
+  --element-paper: #f4e3c4;
+  min-height: 72px;
+  padding-left: 30px;
+  border: 0;
+  border-radius: 0 6px 6px 0;
+  clip-path: polygon(16px 0, 100% 0, 100% 100%, 16px 100%, 0 50%);
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, #000 22%, transparent));
+}
+.board-element-eyelet {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 9px;
+  height: 9px;
+  margin-top: -5px;
+  border: 2px solid
+    color-mix(in srgb, var(--note-ink, #29281f) 40%, transparent);
+  border-radius: 50%;
+  background: var(--board-bg, #fff);
+}
+
+.board-card.board-element-offline {
+  opacity: 0.6;
+  border-style: dashed;
+}
+.board-element-offline-mark {
+  font-weight: 700;
+}
+.board-far .board-card.board-element {
+  width: 320px;
+  font-size: 22px;
+}
+.board-far .board-element-title {
+  font-size: 26px;
+}
+
+/* Add to Board: the registry's kinds as paper chips, then a short form. */
+.modal.board-add-dialog {
+  width: min(520px, calc(100vw - 24px));
+  max-height: min(680px, calc(100dvh - 24px));
+  overflow: auto;
+}
+.board-add-dialog .modal-head {
+  gap: 6px;
+}
+.board-add-back {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+.board-add-section {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+.board-add-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.board-add-kind {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 72px;
+  padding: 10px;
+  border: 1px solid
+    color-mix(in srgb, var(--note-ink, #29281f) 18%, transparent);
+  border-radius: 6px;
+  background: #fbfaf6;
+  color: var(--note-ink, #29281f);
+  text-align: left;
+}
+.board-add-kind:hover,
+.board-add-kind:focus-visible {
+  border-color: var(--accent, #4a7cc9);
+}
+.board-add-kind-note {
+  background: var(--note-yellow, #fff0a3);
+}
+.board-add-kind-memory {
+  background: #eadcb8;
+}
+.board-add-kind-log {
+  background: #fdfcf3;
+}
+.board-add-kind-link {
+  background: #f4e3c4;
+}
+.board-add-icon {
+  display: inline-grid;
+  place-items: center;
+}
+.board-add-name {
+  font-weight: 700;
+}
+.board-add-blurb {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.3;
+  opacity: 0.8;
+}
+.board-add-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.board-add-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.board-add-list li > span {
+  flex: 1 1 200px;
+}
+.board-add-list button {
+  min-height: 30px;
+  padding: 0 10px;
+}
+.board-add-form {
+  display: grid;
+  gap: 12px;
+}
+.board-add-form label {
+  display: grid;
+  gap: 4px;
+  font-weight: 600;
+}
+.board-add-form small {
+  font-weight: 400;
+  opacity: 0.75;
+}
+.board-add-form textarea {
+  resize: vertical;
+}
+.board-add-choice {
+  display: flex;
+  gap: 6px;
+}
+.board-add-choice button[aria-checked="true"] {
+  border-color: var(--accent, #4a7cc9);
+  font-weight: 700;
+}
+
+/* The reader: a side panel on a wide screen, a sheet from the bottom on a
+   phone. Text is shown as text, never as HTML. */
+.modal.board-reader {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  height: min(760px, 100%);
+  margin: auto 0 auto auto;
+  overflow: hidden;
+}
+.board-reader-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.board-reader-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: #eadcb8;
+  color: var(--note-ink, #29281f);
+}
+.board-reader-log .board-reader-icon {
+  background: #fdfcf3;
+}
+.board-reader-document .board-reader-icon {
+  background: #fbfaf6;
+}
+.board-reader-link .board-reader-icon {
+  background: #f4e3c4;
+}
+.board-reader-titles {
+  display: grid;
+  min-width: 0;
+}
+.board-reader-titles h2 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-reader-titles small {
+  overflow: hidden;
+  opacity: 0.7;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-reader-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.board-reader-text {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.board-reader-status {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  opacity: 0.85;
+}
+.board-reader-hint {
+  font-size: 12px;
+  opacity: 0.7;
+}
+.board-reader-files {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.board-reader-files button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.board-reader-files button:hover,
+.board-reader-files button:focus-visible {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.board-reader-turns {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.board-reader-turns li {
+  display: grid;
+  gap: 2px;
+}
+.board-reader-turns p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.board-reader-who {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+  text-transform: uppercase;
+}
+.board-reader-turns li[data-who="tool"] p,
+.board-reader-turns li[data-who="note"] p {
+  font-size: 12px;
+  opacity: 0.7;
+}
+.board-reader-link {
+  display: grid;
+  gap: 8px;
+}
+.board-reader-link code {
+  overflow-wrap: anywhere;
+}
+.board-reader-actions {
+  flex-wrap: wrap;
+}
+.board-reader-remove {
+  margin-right: auto;
+}
+.board-reader-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .modal-backdrop.board-reader-backdrop {
+    padding-right: 0;
+    padding-bottom: 0;
+    padding-left: 0;
+  }
+  .modal.board-reader {
+    width: 100%;
+    height: min(82dvh, 100%);
+    margin: auto 0 0;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    border-radius: 16px 16px 0 0;
+  }
+}

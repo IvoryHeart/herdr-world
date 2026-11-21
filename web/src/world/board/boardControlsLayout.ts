@@ -1,5 +1,6 @@
 export type BoardControl =
   | "work"
+  | "add"
   | "lens"
   | "next"
   | "home"
@@ -13,7 +14,11 @@ export type BoardControlsLayout = {
   overflow: BoardControl[];
 };
 
-/** Measured widths, including margins; Work and the menu always retain their slots. */
+/**
+ * Measured widths, including margins; Work and the menu always retain their
+ * slots. Add gives way last: it is one icon and the way to place an element,
+ * and at the top of the menu once the row has no room for it.
+ */
 export function boardControlsLayout({
   available,
   widths,
@@ -31,6 +36,7 @@ export function boardControlsLayout({
 }): BoardControlsLayout {
   let inline: BoardControl[] = [
     "work",
+    "add",
     "lens",
     "next",
     ...(count > 0 ? ["home" as const] : []),
@@ -54,6 +60,7 @@ export function boardControlsLayout({
     "zoomOut",
     "tidy",
     "next",
+    "add",
   ] as const) {
     if (Math.ceil(occupied()) <= Math.floor(available)) break;
     inline = inline.filter((entry) => entry !== control);
@@ -61,7 +68,16 @@ export function boardControlsLayout({
   return {
     inline,
     overflow: (
-      ["home", "lens", "tidy", "fit", "zoomIn", "zoomOut", "next"] as const
+      [
+        "add",
+        "home",
+        "lens",
+        "tidy",
+        "fit",
+        "zoomIn",
+        "zoomOut",
+        "next",
+      ] as const
     ).filter((control) => !inline.includes(control)),
   };
 }

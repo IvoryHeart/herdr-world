@@ -13,6 +13,7 @@ export type WorldBrowserEntry =
   | "CoreSharedState"
   | "CoreFiles"
   | "QuestionCards"
+  | "BoardElements"
   | "ApartmentsAvatars";
 export type WorldBrowserBundle = {
   directory: string;

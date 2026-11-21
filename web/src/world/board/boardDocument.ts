@@ -1,6 +1,8 @@
 import type {
   BoardElement,
   BoardElementInput,
+  BoardElementReadParams,
+  BoardElementReadResult,
 } from "../../../../shared/boardElements";
 import type { GroupOp } from "../../../../shared/groupOps";
 
@@ -254,6 +256,16 @@ export class BoardDocumentStore {
       ops,
       ...(revision === undefined ? {} : { revision }),
     });
+  }
+  /**
+   * Read an element's source through the service (world.board.elements.read).
+   * The content is shown and dropped: Board never stores it.
+   */
+  readElement(params: BoardElementReadParams): Promise<BoardElementReadResult> {
+    return this.client.call(
+      "world.board.elements.read",
+      params,
+    ) as Promise<BoardElementReadResult>;
   }
   appearance(
     target: AppearanceTarget & { connection_generation: number },

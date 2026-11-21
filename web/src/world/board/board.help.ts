@@ -68,6 +68,23 @@ export const BOARD_HELP: readonly HelpEntry[] = [
     picture: { scene: "board" },
   },
   {
+    id: "board.add",
+    title: "Add memory, logs, docs and links",
+    summary:
+      "Add to Board places a project's memory, a past agent's log, a document or a link on the board as a card you can open and read.",
+    steps: [
+      "Press Add to Board in Board's controls.",
+      "Pick a kind, then choose what it shows.",
+      "Press the card to read it beside the board.",
+    ],
+    place: "board",
+    where: "Board, the controls along the top",
+    control: "board.add",
+    since: "0.3.6",
+    // Narrow screens keep Add to Board in Board's settings menu.
+    picture: { scene: "board", press: ['[data-help-opens~="board.add"]'] },
+  },
+  {
     id: "board.notes",
     title: "Notes for agents",
     summary:
