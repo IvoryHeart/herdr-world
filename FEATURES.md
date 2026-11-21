@@ -964,8 +964,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     weather** (the default; it follows the [Weather source](#weather-source)
     and shows its current reading, such as `Rain 7° · Example City`, or why
     there is none), one held condition (**Clear**, **Cloud**, **Rain**,
-    **Snow**, **Fog**, **Storm** or **Wind**), or **No weather**. **Weather
-    place and source…** opens the Weather source in Settings → Integrations.
+    **Snow**, **Fog**, **Storm** or **Wind**), or **No weather**. The panel
+    holds no place or source settings of its own: **Weather place and
+    source…** opens that row in Settings (Integrations → Sources → Weather).
     Each browser keeps both choices; the button shows the weather Town is
     showing, or the time of day when there is none. As the sky
     darkens, light follows where agents are: a room is lit while an agent
@@ -2453,7 +2454,8 @@ also find by typing its name.
   connection; when Cmd+K cannot act, its commands leave Settings.
 - The search finds a setting by its name, its words and its choices:
   **lighting** and **night** find Town's time of day, **font size** finds the
-  terminal, interface and chat sizes, **sounds** finds sound on this device.
+  terminal, interface and chat sizes, **sounds** finds sound on this device,
+  **weather** finds the Weather source's place and on/off.
   The control in the result changes the setting at once.
 - **Cmd+K** (`Ctrl+K`) finds the same settings and commands. A choice offers
   each option (**night** → **Town time of day: Night**), a switch offers
@@ -3284,8 +3286,10 @@ never resumes against a replacement server. World keeps its schema-v4 task store
 ## Weather source
 
 - **Optional and shared:** Weather is off by default. Open Settings → Integrations
-  → Sources → Weather → Settings to configure it; **Connect** turns it on and
-  **Disconnect** turns it off. Only turning it on permits Open-Meteo requests.
+  → Sources → Weather → Settings to configure it, or search Settings or Cmd+K
+  for **weather** (or **location**) to reach **Weather place and source**, the
+  row Town's sky button links to (`?setting=integrations.weather`).
+  **Connect** turns it on and **Disconnect** turns it off. Only turning it on permits Open-Meteo requests.
   A typed place name goes to its geocoding service; city-level coordinates go to its weather service. No account
   or key; the free API is for non-commercial use.
 - **One location:** type a city/country or latitude, longitude. Typed input always
