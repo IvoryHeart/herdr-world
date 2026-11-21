@@ -89,6 +89,7 @@ const resident: ApartmentResident = {
   last_report: null,
   links: [],
   session_id: SESSION,
+  appearance: null,
 };
 
 describe("a resident's history comes from its harness transcript", () => {
