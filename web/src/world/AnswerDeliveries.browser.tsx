@@ -225,6 +225,7 @@ function Fixture() {
                 asks: mixed ? [openQuestion] : [],
                 finished: [],
                 hosts: [],
+                harnesses: [],
                 spend: { available: false },
               }}
               now={4000}

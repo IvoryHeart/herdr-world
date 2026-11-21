@@ -842,7 +842,6 @@ export function TownCanvas({
     if (rendererRef.current)
       view.stepZoom(direction, latest.current.layout, viewport());
   };
-
   const focusTarget = (target: TownTarget) => {
     lens.focus(target.key);
     view.focusTarget(target);
@@ -977,6 +976,7 @@ export function TownCanvas({
         <TownBoard
           counts={summary.counts}
           quiet={quiet.board}
+          harnesses={summary.harnesses}
           onOpenSummary={onOpenSummary}
           sinceYouLeft={sinceYouLeft}
         />
