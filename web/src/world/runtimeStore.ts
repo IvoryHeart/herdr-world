@@ -23,6 +23,7 @@ import {
 import { worldObjectForHosts } from "./worldFilters";
 import { DEVTOOLS } from "./devtools/flag";
 import { countWorldWork } from "./devtools/renderer";
+import { hostRuntimeLabels, withHostLabel } from "./hostRuntimeLabels";
 
 const INVALIDATION_DEBOUNCE_MS = 80;
 const FALLBACK_REFRESH_MS = 15_000;
@@ -344,13 +345,14 @@ export function parseWorldSnapshotResult(
   }
   const seen = new Set<string>();
   const connections: WorldRuntimeConnection[] = [];
+  const labels = hostRuntimeLabels(item.hosts);
   // The same-origin service has already bounded the managed catalogue. A
   // renderer cap here would discard selection and descendant information.
   for (const value of item.connections) {
     const connection = parseConnection(value);
     if (!connection || seen.has(connection.connectionId)) continue;
     seen.add(connection.connectionId);
-    connections.push(connection);
+    connections.push(withHostLabel(connection, labels));
   }
   return {
     ...(typeof item.service_incarnation === "string"
@@ -373,6 +375,7 @@ async function prepareWorldSnapshotResult(
   if (!item || !Array.isArray(item.connections)) return null;
   const header = parseWorldSnapshotResult({ ...item, connections: [] });
   if (!header) return null;
+  const labels = hostRuntimeLabels(item.hosts);
   const seen = new Set<string>();
   for (const value of item.connections) {
     if (!current()) return null;
@@ -384,7 +387,7 @@ async function prepareWorldSnapshotResult(
       throw new Error("invalid World observation catalogue");
     if (connection && !seen.has(connection.connectionId)) {
       seen.add(connection.connectionId);
-      header.connections.push(connection);
+      header.connections.push(withHostLabel(connection, labels));
     }
     await yieldTask();
   }
@@ -813,6 +816,13 @@ export class WorldRuntimeStore {
         throw new Error("invalid World observation catalogue");
       if (incarnation && record(response)?.service_incarnation !== incarnation)
         throw new Error("World observation service incarnation mismatch");
+      // Held hosts carry their host label; compare like with like so an
+      // unchanged host is retained.
+      const labels = hostRuntimeLabels(record(response)?.hosts);
+      const parseLabelled = (row: unknown) => {
+        const connection = parseConnection(row);
+        return connection && withHostLabel(connection, labels);
+      };
       try {
         return await prepareWorldSnapshotResult(
           response,
@@ -825,7 +835,7 @@ export class WorldRuntimeStore {
                   this.state,
                   incarnation,
                   base,
-                  parseConnection,
+                  parseLabelled,
                 )
             : parseConnection,
         );

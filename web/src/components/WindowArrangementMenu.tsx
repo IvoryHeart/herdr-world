@@ -137,14 +137,25 @@ export function WindowArrangementMenu({
       if (event.key === "Tab") setOpen(false);
     };
     document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", closeMenu);
+    // Close only on a real size change: browsers can fire resize with an
+    // unchanged viewport while a page is still loading.
+    const openedWidth = window.innerWidth;
+    const openedHeight = window.innerHeight;
+    const onResize = () => {
+      if (
+        window.innerWidth !== openedWidth ||
+        window.innerHeight !== openedHeight
+      )
+        closeMenu();
+    };
+    window.addEventListener("resize", onResize);
     const onScroll = (event: Event) => {
       if (!menuRef.current?.contains(event.target as Node)) closeMenu();
     };
     window.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("resize", onResize);
       window.removeEventListener("scroll", onScroll, true);
     };
   }, [open]);

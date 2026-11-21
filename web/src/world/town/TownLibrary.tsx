@@ -75,6 +75,7 @@ export const TownLibrary = memo(function TownLibrary({
       void requestMemoryCatalog(host);
   }, [hostKeys]);
   const counts = townLibraryCounts();
+  if (counts.status === "none") return null;
   const text = townLibrarySignText(counts);
   const label = `Library: ${text === "…" ? "reading" : text}. Open`;
   const lot = townLibraryLot(layout);

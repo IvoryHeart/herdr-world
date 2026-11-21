@@ -11,6 +11,7 @@ import {
 import { jsonDeepEqual } from "./sessions";
 import type { BridgeStatus, State } from "./types";
 import { parseCoreConnections } from "../coreConnections";
+import { parseHostCatalogue } from "../hostGroups";
 import { scheduleRefresh } from "./refresh";
 import { sharedAcquisitionEnabled } from "./focusedInterest";
 
@@ -119,5 +120,15 @@ export function changedCoreHosts(
     delete profile.observation;
     return profile as NonNullable<State["coreConnections"]>[number];
   });
+  return previous && jsonDeepEqual(previous, next) ? undefined : next;
+}
+
+/** The reply's machines when they changed; `undefined` when unchanged or absent. */
+export function changedHostCatalogue(
+  previous: State["hostCatalogue"],
+  catalogue: unknown,
+): State["hostCatalogue"] {
+  const next = parseHostCatalogue(catalogue);
+  if (next === undefined) return undefined;
   return previous && jsonDeepEqual(previous, next) ? undefined : next;
 }
