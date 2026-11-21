@@ -1187,8 +1187,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     under labels and panels, and shrinking with the town as it zooms out (on
     a phone zoomed far out, the floating bin is the easier target). A
     countdown board over those
-    waiting counts down to the bus reaching that stop (**due** a few seconds
-    before it pulls in). The bin floats at the bottom of the screen and
+    waiting shows the bin's own countdown, from the one bus timetable: the
+    time until the next bus sets off from Apartments, **on its way** while a
+    trip is out and **stopped** while it stands. Every stop and the bin read
+    the same value at the same moment. The bin floats at the bottom of the screen and
     lights up during a drag, so a phone needs only a short drag, and the town
     does not scroll while the drag rests on it. A red
     double-decker lives at Apartments' stop, on the last street by a
