@@ -4777,6 +4777,10 @@ Herdr supports.
 
 ### Requirement: Built-in sources
 
+Weather is a separate optional, disabled-by-default observation source; its
+location, acquisition and API contract is in [World weather](../world-weather/spec.md).
+The work-source requirements below apply to GitHub and Jira.
+
 World SHALL include built-in sources for GitHub and Jira Cloud, each enabled
 by default and switchable in World settings. The service SHALL make every
 source request with the service user's credentials, bound each refresh in

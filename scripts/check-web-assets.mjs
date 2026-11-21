@@ -63,6 +63,10 @@ const maxFileCount = 310;
 // carries those lazy features together, with startup budgets unchanged.
 // Resident avatars (#1069) share Town's sprites in lazy Apartments chunks;
 // main measures 15.503 MiB within the same 15.6 MiB total (2026-11-20).
+// Merging the Weather source and its published Town consumer (#1040/#1100)
+// with main's Apartments and post-office work measures 16,270,139 bytes
+// (15.5164 MiB): 17,211 bytes above 15.5 MiB. Account for the combined
+// delivered features at 15.6 MiB; file, help-picture and startup limits stay.
 // Retain the accepted diffs 1.6.1 headroom above when combining these assets.
 const maxTotalBytes = 16.5 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */

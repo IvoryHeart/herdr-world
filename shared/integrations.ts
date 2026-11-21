@@ -59,6 +59,7 @@ export const INTEGRATION_PROVISIONS = [
   "pull_requests",
   "tickets",
   "usage",
+  "weather",
   "agent_skill",
   "editor",
 ] as const;
@@ -74,6 +75,7 @@ export const INTEGRATION_PROVISION_LABELS: Record<
   pull_requests: "pull requests",
   tickets: "tickets",
   usage: "usage and cost",
+  weather: "weather",
   agent_skill: "World's skill",
   editor: "editing",
 };
@@ -207,6 +209,7 @@ export function connectFor(
 const SOURCE_PROVIDES = {
   github: ["pull_requests"],
   jira: ["tickets"],
+  weather: ["weather"],
 } as const;
 
 /**
@@ -224,17 +227,36 @@ export function sourceEntry(status: WorldSourceStatus): IntegrationEntry {
             value: `${status.config.mergedDays} days`,
           },
         ]
-      : [
-          { key: "site", label: "Site", value: status.config.site || null },
-          { key: "email", label: "Email", value: status.config.email || null },
-          { key: "jql", label: "Search", value: status.config.jql || null },
-          {
-            key: "token",
-            label: "API token",
-            value: status.config.tokenSet,
-            secret: true,
-          },
-        ];
+      : status.config.kind === "weather"
+        ? [
+            {
+              key: "location",
+              label: "Weather location",
+              value: status.config.location || null,
+            },
+            {
+              key: "browser_location",
+              label: "Browser location",
+              value: status.config.browserLocation
+                ? `${status.config.browserLocation.latitude}, ${status.config.browserLocation.longitude}`
+                : null,
+            },
+          ]
+        : [
+            { key: "site", label: "Site", value: status.config.site || null },
+            {
+              key: "email",
+              label: "Email",
+              value: status.config.email || null,
+            },
+            { key: "jql", label: "Search", value: status.config.jql || null },
+            {
+              key: "token",
+              label: "API token",
+              value: status.config.tokenSet,
+              secret: true,
+            },
+          ];
   return {
     id: `source:${status.id}`,
     kind: "source",
@@ -256,6 +278,8 @@ function sourceState(status: WorldSourceStatus): {
   if (status.state === "error")
     return { state: "error", detail: status.detail };
   if (status.state === "disabled") {
+    if (status.config.kind === "weather")
+      return { state: "available", detail: "Off. Connect turns it on." };
     const ready =
       status.config.kind === "github" ||
       Boolean(
