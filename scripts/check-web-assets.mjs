@@ -49,7 +49,9 @@ const maxFileCount = 212;
 // unchanged (2026-11-20).
 // Apartments (#1011: the resident search/history dialog, its store and Town's
 // apartment building) add about 18.7 KB to lazy chunks; startup budgets are
-// unchanged.
+// unchanged. Resident avatars (#1069) share Town's sprites in the lazy
+// Apartments chunks: 15.503 MiB on main, so 15.6 MiB, initial budgets
+// unchanged (2026-11-20).
 // The Code view (#1009) fit main alone, but main's Apartments, post office
 // and help grew under it: 15.51 MiB together, so 15.6 MiB, startup budgets
 // unchanged (2026-11-20).
