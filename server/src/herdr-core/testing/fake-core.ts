@@ -533,7 +533,7 @@ export class FakeCore {
     this.emit("restarted", address, { ...record });
   }
 
-  /** Holds the next `terminal.kill`/`terminal.run` reply (a lost reply). */
+  /** Holds the next native write reply, including labels (a lost reply). */
   dropNextWriteReply = false;
 
   remove(address: string): void {
@@ -1253,6 +1253,10 @@ export class FakeCore {
         )
           return error(-32602, "invalid_params", "invalid_params");
         this.label(address, labels as Record<string, string>);
+        if (this.dropNextWriteReply) {
+          this.dropNextWriteReply = false;
+          return;
+        }
         return reply({ ...this.terminals.get(address)! });
       }
       default:

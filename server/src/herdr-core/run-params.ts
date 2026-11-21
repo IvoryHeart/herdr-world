@@ -25,7 +25,7 @@ export type CoreRunRequest = {
 
 /**
  * Labels World may write: Herdr's shared ones, the app's `where` caption
- * (written once at launch) and World's own namespace.
+ * (at launch and on explicit Town moves) and World's own namespace.
  */
 const WRITABLE_LABEL =
   /^(?:herdr\.(?:seen|pinned|space|tab)|where|herdr-world\.[a-z][a-z0-9-]{0,31})$/;
