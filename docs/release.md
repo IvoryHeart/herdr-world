@@ -37,6 +37,10 @@ Windows plugin assertions share both Windows platform jobs; macOS lifecycle
 assertions share both Darwin jobs. The protected macOS reports remain and require
 the correct selected success or skip.
 
+Compact installer evidence uploads retry once after an upload failure, including
+transient artifact-service DNS errors. The retry replaces any partial artifact;
+a second upload failure still fails the job. Native checks remain strict.
+
 One planning job freezes the current latest stable World release tag and its source
 SHA. Each runner builds the proposed merge revision (or restores its exact content-keyed PR build) with `scripts/package-release.sh`
 and a synthetic next-patch release-candidate version derived from the production input hash. It uses
