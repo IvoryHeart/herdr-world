@@ -607,7 +607,6 @@ export function TownCanvas({
     const host = hostRef.current;
     return host ? holdTownReflowOnInput(scene, host) : undefined;
   }, [scene]);
-
   useEffect(() => {
     const { model: m, layout: l } = latest.current;
     rendererRef.current?.apply(diff.next(m, l, sceneState()));
