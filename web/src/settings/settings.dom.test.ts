@@ -144,6 +144,28 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     expect(opened).toEqual([{}]);
   });
 
+  test("search and the command box find the Weather place and source", () => {
+    // #1111: the Sky panel's place and source live in Settings, findable.
+    for (const query of ["weather", "weather place", "location", "open-meteo"])
+      expect(ids(query)[0]).toBe("integrations.weather");
+    const weather = registryEntry("integrations.weather");
+    if (weather?.kind !== "panel") throw new Error("Weather is a panel");
+    expect(weather.page?.focus).toBe("source:weather");
+    expect(weather.alsoOn).toBe("Town: the sky button under ALL");
+
+    const { host } = makeHost();
+    const action = settingsCommandGroups(registryEntries(), host, "weather")[0]
+      .actions[0];
+    expect(action.title).toBe("Weather place and source");
+    const opened: unknown[] = [];
+    const listener = (event: Event) =>
+      opened.push((event as CustomEvent).detail);
+    window.addEventListener("herdr-world:settings-open", listener);
+    action.run();
+    window.removeEventListener("herdr-world:settings-open", listener);
+    expect(opened).toEqual(["integrations.weather"]);
+  });
+
   test("the command box changes a setting from a result", () => {
     const { host } = makeHost();
     const groups = settingsCommandGroups(registryEntries(), host, "night");
@@ -342,6 +364,7 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     };
     expect(focusOf("integrations.sources")).toBe("source:github");
     expect(focusOf("integrations.metrics")).toBe("source:metrics");
+    expect(focusOf("integrations.weather")).toBe("source:weather");
     expect(focusOf("integrations.agents")).toBe("harness:");
     expect(ids("upgrade herdr")[0]).toBe("system.runtime");
     expect(ids("connection details")).toContain("system.runtime");
