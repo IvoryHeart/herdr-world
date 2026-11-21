@@ -117,6 +117,9 @@ function pause(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/** Runtime fingerprints a new question belongs to, kept with it (#1152). */
+export type AskRuntimeDeps = { askRuntimes?(asker: CliActor): string[] };
+
 export async function handleWorldAsk(
   deps: WorldCliDeps,
   command: string,
@@ -212,6 +215,7 @@ export async function handleWorldAsk(
       )
         questionCap(`you have ${LEDGER_LIMITS.asksPerActor} open questions`);
       const recipient = await deps.captureRecipient?.(asker);
+      const runtimes = deps.askRuntimes?.(asker) ?? [];
       let id = await deps.ledger.nextId("q");
       let created = true;
       deps.publishLedger(
@@ -245,6 +249,7 @@ export async function handleWorldAsk(
               at: now(),
               actor: asker,
               ...(recipient ? { recipient } : {}),
+              ...(runtimes.length ? { runtimes } : {}),
               question,
               ...(key ? { key } : {}),
               options,
