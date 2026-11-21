@@ -97,6 +97,28 @@ export function townBusDemoBin(
   };
 }
 
+let shown: WorldBin | null = null;
+const watchers = new Set<() => void>();
+
+/**
+ * The demo's bin while Town shows it (null otherwise), so the bin's chip and
+ * tray count down from the same bin as Town's stops while the demo runs.
+ */
+export const townBusDemoShown = {
+  get: () => shown,
+  set(bin: WorldBin | null) {
+    if (shown === bin) return;
+    shown = bin;
+    for (const watcher of watchers) watcher();
+  },
+  subscribe(watcher: () => void) {
+    watchers.add(watcher);
+    return () => {
+      watchers.delete(watcher);
+    };
+  },
+};
+
 /** When the demo's bin next changes, after `now`, or null once it is over. */
 export function townBusDemoNext(start: number, now: number): number | null {
   for (const at of [
