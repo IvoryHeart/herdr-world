@@ -3,32 +3,37 @@
 ### Requirement: Common view navigation
 
 The native World shell SHALL offer Town, Board, Desk, Code and Spaces once each and SHALL keep rendered
-view, browser history and canonical paths `/town`, `/board`, `/desk`, `/code` and `/spaces` consistent. The
-World root and unknown paths SHALL resolve to Town. Invalid view values SHALL resolve to Town, except
-the retired values covered by Retired view addresses; explicit canonical paths, including `/desk` and `/code`,
-SHALL retain their requested views.
-The view selector SHALL occupy the existing Roamgate-derived top bar between the World version and
-Hosts filter; a muted aggregate health indicator with the bounded space/agent/stale summary
-in its accessible label and tooltip SHALL remain in that top bar. The shell SHALL provide one shared
-view-control slot there for view-specific search and controls. World SHALL NOT stack a second
-view-navigation, Visual Control Plane status bar or view-local search/zoom header above the
-application stage.
-The inherited Spaces workspace navigator, focused tab strip and review-annotations control SHALL
-remain the common frame around Town, Board, Desk, Code and Spaces. Changing views SHALL replace only the
-center surface. Inspector-created review drafts SHALL remain visible and editable through the same
-workspace-qualified annotation panel in every view. Selecting a workspace or pane through either
-the navigator or the focused tab strip SHALL resolve through the same qualified World selection
-path and update the docked Inspector only after exact focus succeeds.
-Town SHALL be the primary default surface after a valid managed profile is selected. Town and Board
-SHALL remain spatial views of the same topology, and Spaces SHALL remain the first-class
-operational workspace and profile-management surface rather than being removed or embedded into
-another view.
-The common shell SHALL expose Manage connections separately from its Hosts filter using the
-existing managed catalogue. Every operational workspace or Inspector SHALL identify its owning host
-and state. The common navigator SHALL group workspaces by host within the filter; an already-open
-workspace outside that filter SHALL retain its labelled context.
-Inspector presentation, Town calm motion and optional observability configuration SHALL live in the
-common settings menu on desktop, compact and Zen layouts.
+view, browser history and canonical paths `/town`, `/board`, `/desk`, `/code` and `/spaces` consistent.
+
+#### Scenario: Common view navigation acceptance rules
+
+- **WHEN** World presents or operates this feature
+- **THEN** The
+  World root and unknown paths SHALL resolve to Town. Invalid view values SHALL resolve to Town, except
+  the retired values covered by Retired view addresses; explicit canonical paths, including `/desk` and `/code`,
+  SHALL retain their requested views.
+  The view selector SHALL occupy the existing Roamgate-derived top bar between the World version and
+  Hosts filter; a muted aggregate health indicator with the bounded space/agent/stale summary
+  in its accessible label and tooltip SHALL remain in that top bar. The shell SHALL provide one shared
+  view-control slot there for view-specific search and controls. World SHALL NOT stack a second
+  view-navigation, Visual Control Plane status bar or view-local search/zoom header above the
+  application stage.
+  The inherited Spaces workspace navigator, focused tab strip and review-annotations control SHALL
+  remain the common frame around Town, Board, Desk, Code and Spaces. Changing views SHALL replace only the
+  center surface. Inspector-created review drafts SHALL remain visible and editable through the same
+  workspace-qualified annotation panel in every view. Selecting a workspace or pane through either
+  the navigator or the focused tab strip SHALL resolve through the same qualified World selection
+  path and update the docked Inspector only after exact focus succeeds.
+  Town SHALL be the primary default surface after a valid managed profile is selected. Town and Board
+  SHALL remain spatial views of the same topology, and Spaces SHALL remain the first-class
+  operational workspace and profile-management surface rather than being removed or embedded into
+  another view.
+  The common shell SHALL expose Manage connections separately from its Hosts filter using the
+  existing managed catalogue. Every operational workspace or Inspector SHALL identify its owning host
+  and state. The common navigator SHALL group workspaces by host within the filter; an already-open
+  workspace outside that filter SHALL retain its labelled context.
+  Inspector presentation, Town calm motion and optional observability configuration SHALL live in the
+  common settings menu on desktop, compact and Zen layouts.
 
 #### Scenario: Browser history across views
 

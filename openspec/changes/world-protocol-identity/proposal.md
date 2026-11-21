@@ -98,7 +98,7 @@ evidence, and syncs its own deltas into the current specs.
 - `runtime-federation`: service incarnation, observation v1, incremental preparation,
   the Herdr observation baseline and World subscriptions v2.
 - `bridge-access`: registered verbs with actor policy and staged command evidence.
-- `world-surfaces`: per-terminal settings live with the terminal in Herdr.
+- `world-surfaces/appearance`: per-terminal settings live with the terminal in Herdr.
 
 ## Impact
 
