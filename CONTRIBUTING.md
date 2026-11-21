@@ -265,6 +265,11 @@ full unit inventory locally and full CI gate, even when that input is absent fro
 | World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
 | Native installation | Install/plugin/package inputs, imports of the compiled entry points or native test consumers, and build-version metadata | Installer upgrades, Windows plugin and both macOS architectures |
+| Release walk | Native installation inputs, launch/connection request builders and release-walk implementation | Exact packaged executable, real TUI/core and real signed-out Claude/Codex on Linux and macOS, through the required installer workflow |
+
+Published-release bugs add or extend a release-walk journey in the same PR as the
+fix. See the [release walk and escape rule](docs/release.md#real-runtime-release-walk),
+including the signed-in local run required before any release tag.
 
 The agent-tooling exception from #484 still covers `scripts/agent/**` (the worktree
 helper), the agent development guide and `changes/<slug>.md`: static checks and affected
