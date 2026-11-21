@@ -114,14 +114,34 @@ test("generated web index runs in every browser build path", async () => {
     for (const [path, asset] of world.assets) assets.set(path, asset);
     script = "probe.browser.js";
     await run("browserBundles.ts");
-    for (const [label, config] of [
-      ["help-picture", helpPictureBuildConfig],
-      ["golden", townGoldenBuildConfig],
-      ["build-pages.ts site", pagesBuildConfig],
-      ["build-pages.ts film", filmBuildConfig],
-      ["film-render.ts", filmBuildConfig],
+    // The index carries the shell's real features. Golden, site and film
+    // bundles never load the shell, so they lack its `?raw` SVG loader; a
+    // test-only stub lets them still prove the static index itself.
+    const rawSvg: Bun.BunPlugin = {
+      name: "feature-index-raw-svg-stub",
+      setup(builder) {
+        builder.onResolve({ filter: /\.svg\?raw$/ }, (args) => ({
+          path: args.path,
+          namespace: "raw-svg-stub",
+        }));
+        builder.onLoad({ filter: /.*/, namespace: "raw-svg-stub" }, () => ({
+          contents: 'export default "";',
+          loader: "js",
+        }));
+      },
+    };
+    for (const [label, config, plugins] of [
+      ["help-picture", helpPictureBuildConfig, []],
+      ["golden", townGoldenBuildConfig, [rawSvg]],
+      ["build-pages.ts site", pagesBuildConfig, [rawSvg]],
+      ["build-pages.ts film", filmBuildConfig, [rawSvg]],
+      ["film-render.ts", filmBuildConfig, [rawSvg]],
     ] as const) {
-      const result = await Bun.build({ ...config, entrypoints: [entry] });
+      const result = await Bun.build({
+        ...config,
+        plugins: [...("plugins" in config ? config.plugins : []), ...plugins],
+        entrypoints: [entry],
+      });
       expect(result.success, result.logs.join("\n")).toBe(true);
       assets.set(
         "/probe.js",

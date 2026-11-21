@@ -11,7 +11,7 @@ const MemoryLibrary = lazyWithReload("world-memory", () =>
 );
 
 /**
- * Mounted once by the control plane, whichever view is open: publishes the
+ * Mounted once by FeatureHosts, whichever view is open: publishes the
  * hosts the Library may read and opens it on WORLD_MEMORY_EVENT.
  */
 export function MemoryLibraryHost({ world }: { world: WorldObject }) {

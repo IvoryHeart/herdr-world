@@ -1,2 +1,2 @@
-// Inert discovery fixture; imported only by tests, never by the app shell.
+// Inert discovery fixture: it declares no Host, so FeatureHosts never renders it.
 export const mount = () => <span>web-feature</span>;
