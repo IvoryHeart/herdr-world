@@ -23,6 +23,7 @@ describe("View preferences", () => {
       townCalm: true,
       townOpens: "chat",
       townBuildings: "host",
+      townRoomsPerRow: "auto",
       townMaster: "firstmate",
       townGreeting: true,
       tabBadge: true,
@@ -37,6 +38,17 @@ describe("View preferences", () => {
     expect(read("runtime")).toBe("runtime");
     expect(read("host")).toBe("host");
     expect(read("machine")).toBe("host");
+  });
+
+  test("Town's rooms per row is Auto unless a count from 2 to 5 was chosen", () => {
+    const read = (townRoomsPerRow: unknown) =>
+      readOfficePreferences(memoryStorage(JSON.stringify({ townRoomsPerRow })))
+        .townRoomsPerRow;
+    expect(DEFAULT_OFFICE_PREFERENCES.townRoomsPerRow).toBe("auto");
+    for (const count of [2, 3, 4, 5] as const) expect(read(count)).toBe(count);
+    expect(read(6)).toBe("auto");
+    expect(read("3")).toBe("auto");
+    expect(read("auto")).toBe("auto");
   });
 
   test("the tab and app icon count is on unless it was turned off", () => {
@@ -109,6 +121,7 @@ describe("View preferences", () => {
       townCalm: false,
       townOpens: "terminal",
       townBuildings: "runtime",
+      townRoomsPerRow: 4,
       townMaster: "",
       townGreeting: false,
       tabBadge: false,
@@ -120,6 +133,7 @@ describe("View preferences", () => {
         townCalm: false,
         townOpens: "terminal",
         townBuildings: "runtime",
+        townRoomsPerRow: 4,
         townMaster: "",
         townGreeting: false,
         tabBadge: false,

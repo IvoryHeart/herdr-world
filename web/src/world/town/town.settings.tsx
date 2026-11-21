@@ -9,6 +9,7 @@
 import {
   Building2,
   Bug,
+  Columns3,
   Focus,
   Hand,
   Layers,
@@ -24,6 +25,7 @@ import { requestTrace, traceRemembered } from "../devtools/trace";
 import {
   type OfficePreferences,
   readOfficePreferences,
+  townRoomsPerRow,
   WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
   writeOfficePreferences,
 } from "../officePreferences";
@@ -150,6 +152,43 @@ defineSettings("town", [
       set: (_host, value) =>
         updatePreferences({
           townBuildings: value as OfficePreferences["townBuildings"],
+        }),
+    },
+  },
+  {
+    kind: "setting",
+    id: "town.rooms-per-row",
+    category: "town",
+    title: "Rooms per row",
+    description:
+      "Auto keeps each building about square; a number sets every building",
+    words: [
+      "rooms per row",
+      "columns",
+      "building shape",
+      "square",
+      "tower",
+      "layout",
+      "auto",
+    ],
+    icon: <Columns3 size={15} />,
+    scope: "browser",
+    subscribe: subscribePreferences,
+    control: {
+      type: "choice",
+      options: [
+        { value: "auto", label: "Auto", words: ["square", "automatic"] },
+        { value: "2", label: "2" },
+        { value: "3", label: "3" },
+        { value: "4", label: "4" },
+        { value: "5", label: "5" },
+      ],
+      get: () => String(preferences().townRoomsPerRow),
+      set: (_host, value) =>
+        updatePreferences({
+          townRoomsPerRow: townRoomsPerRow(
+            value === "auto" ? value : Number(value),
+          ),
         }),
     },
   },
