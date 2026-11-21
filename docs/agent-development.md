@@ -234,6 +234,13 @@ an unrelated red CI run: first identify the failed leaf job and whether main
 shares it. Branch age increases exposure, but overlapping changes cause the
 conflict; a very old branch can still merge cleanly when its files are separate.
 
+Feature PRs do not regenerate Help pictures for ordinary component changes.
+Stale fingerprints are warnings; main owns the full refresh through a bot PR.
+When adding or changing a help entry, use `HELP_PICTURES_IDS="<id>" bun run
+help:pictures` and commit only that entry's pictures and manifest record (plus
+`bun run help:docs` output when declarations change). Remove assets for deleted
+entries. See [Help contribution guidance](../CONTRIBUTING.md#help-that-ships-with-a-feature).
+
 ## Run an optional visible team
 
 For HWF operating guidance, use the repo-local
