@@ -209,8 +209,8 @@ Around it you will find:
 - **The warehouse.** With GitHub connected, your open pull requests wait in its
   yard as crates. Tap one for its card and **Merge…**. Tap its sign to see
   every pull request on the Work board.
-- **The harbour.** At the town's right edge, each project has a shipping lane:
-  ships are its releases. Tap a lane's name board to see its releases.
+- **The harbour.** At the town's right edge, each project with a release has
+  a shipping lane: ships are its releases. Tap a lane's name board to see them.
 
 After 30 minutes or more away, the board starts with **Since you left**: what
 is new for you, what finished and what merged.
