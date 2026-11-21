@@ -66,4 +66,23 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     since: "0.3.6",
     picture: { scene: "town", sizes: ["desktop"] },
   },
+  {
+    id: "town.apartments",
+    title: "Apartments: finished agents",
+    summary:
+      "Agents that are not running live on in the apartment building beside the town center, asleep and resumable. Its sign says how many live there.",
+    steps: [
+      "Find the building beside the town center; press ALL if it is out of view.",
+      "Press its green APARTMENTS sign.",
+      "Search residents by name, project, summary, pull request or date.",
+      "Open one to read its history; resume a Claude or Codex agent into a room, or evict it.",
+    ],
+    place: "town",
+    where:
+      "Town, the building beside the town center; also Apartments in the town center ring and Board's hub",
+    control: "town.apartments",
+    since: "0.3.6",
+    // On a phone the building is below the first view: ALL brings it in.
+    picture: { scene: "town", press: [".town-zoom-all"] },
+  },
 ];
