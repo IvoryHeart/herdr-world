@@ -3805,8 +3805,8 @@ async function run() {
         shown.deskColumns === expected.deskColumns,
       `the town's shape ${JSON.stringify(shown)} does not fit a ${stage.clientWidth}x${stage.clientHeight} container`,
     );
-    // Half-width windows sit in between: portrait or medium, both two
-    // columns of rooms.
+    // Half-width windows sit in between: portrait or medium, both six desks
+    // wide (rooms per row on Auto follows each building and the width).
     const fits =
       window.innerWidth < 640
         ? [TOWN_SHAPES.phone]
@@ -3816,7 +3816,11 @@ async function run() {
             ? [TOWN_SHAPES.wide]
             : [TOWN_SHAPES.portrait, TOWN_SHAPES.medium];
     check(
-      fits.some((shape) => shape === expected),
+      fits.some(
+        (shape) =>
+          shape.formFactor === expected.formFactor &&
+          shape.deskColumns === expected.deskColumns,
+      ),
       `a ${window.innerWidth}x${window.innerHeight} window got ${JSON.stringify(expected)}`,
     );
 

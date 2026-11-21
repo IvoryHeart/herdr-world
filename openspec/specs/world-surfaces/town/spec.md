@@ -253,18 +253,36 @@ moves (a tab's number is not its position).
   rebuilt. Town SHALL take its shape from its container's size rather than one
   breakpoint: on a phone, rooms up to four desks wide SHALL form three columns,
   spread across the building rather than one long column, and buildings SHALL
-  stack in one vertical column; on a portrait screen or a half-width window, rooms SHALL form
-  two columns and buildings SHALL stack (or share a street when the window is
-  landscape); on a wide screen, rooms SHALL form three columns and buildings
-  SHALL share one street. Rooms SHALL fill their building's columns in workspace
-  order, and while a scene is live each room SHALL keep its column, so a room
-  that grows moves only the rooms below it in that column. The lounge SHALL stay
+  stack in one vertical column; on a portrait screen or a half-width window, rooms
+  SHALL be up to six desks wide and buildings SHALL stack (or share a street when
+  the window is landscape); on a wide screen, rooms SHALL be up to eight desks
+  wide and buildings SHALL share one street. Outside phones, each building SHALL
+  choose its rooms per row from its rooms' count and sizes so its floor is close
+  to square (about 1:1 to 4:3, wider than tall), up to what fits the view's width
+  (two to five), so a small building stays compact and a large one gets more
+  columns. A browser-local Rooms per row setting (Auto, 2, 3, 4 or 5; Auto by
+  default) SHALL apply a chosen count to every building, phones included, live
+  and without a reload. Rooms SHALL fill their building's columns in workspace
+  order, and while a scene is live each room SHALL keep its column while its
+  building's rooms per row stays the same, so a room that grows moves only the
+  rooms below it in that column. Rooms without a saved spot SHALL fill the
+  building's rows around rooms that have one, so a saved spot never narrows a
+  building below its rooms per row. The lounge SHALL stay
   above the rooms, and the lobby and reception below them. A reflow that would move rooms
   or buildings due to background topology changes SHALL wait while the user
   presses, scrolls or zooms and until a short pause after, and the camera SHALL
   then follow the room in view so it stays where it was. An explicit Fold or
   Expand request SHALL apply its admitted desks and layout immediately, without
   waiting for that ambient quiet period.
+
+#### Scenario: A large building stays about square
+
+- **WHEN** Town is about 1100 px wide and a host's building holds about twenty
+  rooms, one of them moved to a saved spot
+- **THEN** on Auto the building takes more than two rooms per row and its floor
+  is about square, and the moved room keeps its spot
+- **AND WHEN** the user sets Rooms per row to 4 and then to 2
+- **THEN** the building reflows to four and then two rooms per row at once
 
 #### Scenario: A user expands while the reflow guard is active
 
