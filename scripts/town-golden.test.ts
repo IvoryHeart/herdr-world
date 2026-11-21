@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import { comparePixels } from "../web/src/world/testing/town-golden/pixels";
-import { townGoldenViewports, runTownGolden } from "./town-golden";
+import {
+  townGoldenCaptures,
+  townGoldenViewports,
+  runTownGolden,
+} from "./town-golden";
 import { resumeViewports } from "../web/src/world/testing/resumeVisualCapture";
 import {
   includesBrowserSuites,
@@ -31,8 +35,20 @@ test("goldens cover the five PR screenshot viewports at bounded size", () => {
   );
 });
 
+test("weather goldens hold each condition on a laptop and a phone", () => {
+  const scenes = townGoldenCaptures.filter((c) => c.scene);
+  expect(new Set(scenes.map((c) => c.scene)).size).toBe(7);
+  expect(
+    new Set(scenes.map((c) => c.name.replace(/^weather-[a-z]+-[a-z]+-/, ""))),
+  ).toEqual(new Set(["phone", "mac-laptop"]));
+  // Town without weather keeps its five goldens, named as before.
+  expect(townGoldenCaptures.filter((c) => !c.scene).map((c) => c.name)).toEqual(
+    townGoldenViewports.map((v) => v.name),
+  );
+});
+
 test("stored PNG dimensions equal the declared DPR-1 viewports", async () => {
-  for (const viewport of townGoldenViewports) {
+  for (const viewport of townGoldenCaptures) {
     const png = Buffer.from(
       await Bun.file(
         new URL(
@@ -154,11 +170,14 @@ test("the negative control moves only the production zoom control by one pixel",
 });
 
 test("the full-path negative control rejects startup errors and false positive restores", () => {
-  const receipts = Array.from({ length: 5 }, (_, i) => ({
-    name: "viewport-" + i,
-    changedPixels: 1,
-    gpu: "SwiftShader",
-  }));
+  const receipts = Array.from(
+    { length: townGoldenCaptures.length },
+    (_, i) => ({
+      name: "viewport-" + i,
+      changedPixels: 1,
+      gpu: "SwiftShader",
+    }),
+  );
   const mutant = {
     browserVersion: "Chrome",
     failures: ["Run 1, phone: 1 pixels differ"],
