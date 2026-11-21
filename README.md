@@ -86,8 +86,8 @@ unchanged. See [deployment](./docs/DEPLOYMENT.md) for upgrades, services and SSH
 
 **Hosts** filters the overview. It never disconnects a host or redirects an
 open terminal. **Ctrl+K** (**Cmd+K** on Mac) opens **Find or act**; on phones,
-use the corner view menu. Town's time-of-day button below **ALL** cycles your
-clock, day, dusk and night. Amber light means someone needs you.
+use the corner view menu. Town's sky button below **ALL** sets the time of day
+and the weather. Amber light means someone needs you.
 
 GitHub pull requests appear after `gh auth login` for the account running
 World. Add Jira in **Settings → Integrations**.

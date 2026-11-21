@@ -2,10 +2,15 @@ import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { UsageLimit, WorldUsageSnapshot } from "../../../../shared/usage";
+import { boardFuelText } from "../board/boardFactsText";
 import {
   townFuelAge,
+  townFuelClock,
+  townFuelGauge,
   townFuelGauges,
   townFuelNotes,
+  townFuelRefreshText,
+  townFuelRows,
   townLimits,
   townResetTime,
   townSeenAge,
@@ -20,6 +25,7 @@ import {
 } from "./TownFuelGauge";
 import { HostLimits } from "./TownSummaryPanel";
 import type { TownUsageState } from "./townPlaceUsage";
+import { townScaleLimits } from "./townScaleUsage";
 
 const now = Date.parse("2026-11-03T12:00:00Z");
 const codex = (
@@ -141,7 +147,7 @@ test("a gauge reads percent left, warns when low and explains itself", () => {
   expect(html).toContain('data-low="true"');
   expect(html).toContain("Codex limits: 5 h 60 % left; week 8 % left, low");
   expect(townFuelDetails(gauges[0]!, now)).toMatch(
-    /^5 h resets .+ · week resets .+ · seen 3 min ago · Codex session log$/,
+    /^5 h resets .+ · week resets .+ · seen 3 min ago · Codex session log\nUpdates when a Codex agent answers/,
   );
   // Nothing to show renders nothing.
   expect(
@@ -154,7 +160,12 @@ test("a harness without readable limits shows as not available, never as a level
   const gauges = townFuelGauges(limits, now);
   const notes = townFuelNotes(limits, gauges);
   expect(notes).toEqual([
-    { harness: "claude", name: "Claude", reason: "Synthetic reason" },
+    {
+      harness: "claude",
+      name: "Claude",
+      kind: "unavailable",
+      reason: "Synthetic reason",
+    },
   ]);
   const html = renderToStaticMarkup(
     createElement(TownFuel, { gauges, notes, now }),
@@ -176,7 +187,8 @@ test("a harness without readable limits shows as not available, never as a level
   expect(alone).toContain("Claude");
   expect(alone).not.toContain("town-fuel-bar");
   expect(alone).not.toContain("%");
-  // A missing Codex observation is not "not available"; it has no entry.
+  // A missing Codex observation is not "not available"; with no Codex
+  // agents in Town it has no entry.
   expect(townFuelNotes([missing("alpha")], [])).toEqual([]);
 });
 
@@ -195,26 +207,27 @@ test("a reading over 15 minutes old shows its age on the gauge, the chip and the
     );
     expect(chip).not.toContain("ago");
   }
-  // 86 minutes old: "seen 1 h ago" on the gauge, the chip and the summary.
-  const observed = now - 86 * 60_000;
+  // 26 minutes old: "seen 26 min ago" on the gauge, the chip and the summary.
+  const observed = now - 26 * 60_000;
   const gauges = townFuelGauges(
     [{ ...claudeTap("alpha", [20, 90]), observed_at: observed }],
     now,
   );
-  expect(townFuelAge(gauges[0]!, now)).toBe("seen 1 h ago");
+  expect(gauges[0]?.aged).toBe(false);
+  expect(townFuelAge(gauges[0]!, now)).toBe("seen 26 min ago");
   const html = renderToStaticMarkup(createElement(TownFuel, { gauges, now }));
-  expect(html).toContain('<span class="town-fuel-age">seen 1 h ago</span>');
+  expect(html).toContain('<span class="town-fuel-age">seen 26 min ago</span>');
   expect(html).toContain(
-    "Claude limits: 5 h 80 % left; week 10 % left, low; seen 1 h ago",
+    "Claude limits: 5 h 80 % left; week 10 % left, low; seen 26 min ago",
   );
   const lowest = townFuelLowest(gauges)!;
   const chip = renderToStaticMarkup(
     createElement(TownFuelChip, { lowest, now }),
   );
   expect(chip).toContain("10%");
-  expect(chip).toContain("seen 1 h ago");
+  expect(chip).toContain("seen 26 min ago");
   expect(townFuelLowestText(lowest, now)).toBe(
-    "Claude week 10 % left, low; seen 1 h ago",
+    "Claude week 10 % left, low; seen 26 min ago",
   );
   const summary = renderToStaticMarkup(
     createElement(HostLimits, {
@@ -225,7 +238,7 @@ test("a reading over 15 minutes old shows its age on the gauge, the chip and the
       ]),
     }),
   );
-  expect(summary).toContain("seen 1 h ago");
+  expect(summary).toContain("seen 26 min ago");
   // Past 3 h it reads stale as before, with no age label on the gauge.
   const stale = townFuelGauges(
     [codex("alpha", [40, 92], "available", now - 4 * 3_600_000)],
@@ -279,7 +292,8 @@ test("the summary lists each host's windows, source and age, and says why Claude
       usage: ready([missing("gamma"), codex("delta", [1, 1], "stale")]),
     }),
   );
-  expect(other).toContain("Limits missing");
+  expect(other).toContain("No reading yet on this host");
+  expect(other).toContain("Updates when a Codex agent answers");
   const stale = renderToStaticMarkup(
     createElement(HostLimits, {
       connectionId: "delta",
@@ -316,7 +330,7 @@ test("Claude's status line reading gets a gauge beside Codex", () => {
   const html = renderToStaticMarkup(createElement(TownFuel, { gauges, now }));
   expect(html).toContain("Claude limits: 5 h 80 % left; week 10 % left, low");
   expect(townFuelDetails(gauges[0]!, now)).toMatch(
-    /^5 h resets .+ · week resets .+ · seen 3 min ago · Claude status line$/,
+    /^5 h resets .+ · week resets .+ · seen 3 min ago · Claude status line\nUpdates when a Claude Code agent started from World draws its status line\.$/,
   );
   expect(townFuelLowest(gauges)?.gauge.name).toBe("Claude");
 });
@@ -341,8 +355,10 @@ test("a Claude refusal reads limit reached with its reset, never a level", () =>
   expect(html).not.toContain("town-fuel-bar");
   expect(html).not.toContain("%");
   expect(townFuelDetails(gauges[0]!, now)).toBe(
-    `5 h limit reached, resets ${reset} · seen 3 min ago · Claude transcript`,
+    `5 h limit reached, resets ${reset} · seen 3 min ago · Claude transcript\nUpdates when a Claude Code agent started from World draws its status line.`,
   );
+  // A refusal says nothing of the other windows: none reads "not reported".
+  expect(gauges[0]?.missing).toEqual([]);
   expect(townFuelLowest(gauges)?.window.reached).toBe(true);
   // An unnamed window still reads "limit reached".
   expect(
@@ -372,4 +388,147 @@ test("a Claude refusal reads limit reached with its reset, never a level", () =>
   expect(summary).toContain("5 h limit reached");
   expect(summary).toContain("Claude transcript · seen 3 min ago");
   expect(summary).not.toContain("100 % used");
+});
+
+test("past its source's short age a reading dims, reads as of its time and never raises the low chip", () => {
+  const observed = now - 40 * 60_000;
+  const aged = { ...claudeTap("alpha", [20, 90]), observed_at: observed };
+  const gauges = townFuelGauges([aged], now);
+  expect(gauges[0]).toMatchObject({ aged: true, stale: false });
+  const clock = townFuelClock(observed);
+  expect(townFuelAge(gauges[0]!, now)).toBe(`as of ${clock}`);
+  const html = renderToStaticMarkup(createElement(TownFuel, { gauges, now }));
+  expect(html).toContain('data-aged="true"');
+  expect(html).toContain(`<span class="town-fuel-age">as of ${clock}</span>`);
+  expect(html).toContain(
+    `Claude limits: 5 h 80 % left; week 10 % left, low; as of ${clock}`,
+  );
+  expect(townFuelDetails(gauges[0]!, now)).toContain(
+    `as of ${clock}, seen 40 min ago · Claude status line`,
+  );
+  // An aged low reading alone never raises the low chip.
+  expect(townFuelLowest(gauges)).toBeNull();
+  // A current reading on another host wins over the aged one.
+  const both = townFuelGauges([aged, claudeTap("beta", [10, 20])], now);
+  expect(both[0]?.connectionId).toBe("beta");
+  expect(townFuelLowest(both)?.window.left).toBe(80);
+  // Board's facts and the summary read the same way.
+  expect(boardFuelText(gauges[0]!, now)).toBe(
+    `Claude 5 h 80% left · week 10% left (low) · as of ${clock} (40 min ago)`,
+  );
+  const summary = renderToStaticMarkup(
+    createElement(HostLimits, {
+      connectionId: "alpha",
+      now,
+      usage: ready([aged]),
+    }),
+  );
+  expect(summary).toContain('data-state="aged"');
+  expect(summary).toContain(`as of ${clock}`);
+  expect(summary).not.toContain('data-low="true"');
+  // Over 3 h it is stale as before.
+  const stale = townFuelGauges(
+    [{ ...aged, observed_at: now - 4 * 3_600_000 }],
+    now,
+  );
+  expect(stale[0]).toMatchObject({ aged: false, stale: true });
+});
+
+test("a window the source did not send reads not reported", () => {
+  const weekOnly: UsageLimit = {
+    ...claudeTap("alpha", [20, 30]),
+    windows: [
+      { window_minutes: 10080, used_percent: 30, resets_at: now + 86_400_000 },
+    ],
+  };
+  const gauges = townFuelGauges([weekOnly], now);
+  expect(gauges[0]?.missing).toEqual([{ label: "5 h", minutes: 300 }]);
+  expect(townFuelRows(gauges[0]!).map((r) => r.kind)).toEqual([
+    "missing",
+    "window",
+  ]);
+  const html = renderToStaticMarkup(createElement(TownFuel, { gauges, now }));
+  expect(html).toContain('data-missing="true"');
+  expect(html).toContain("— not reported");
+  expect(html).toContain("Claude limits: 5 h not reported; week 70 % left");
+  // The 5 h row comes before the week row.
+  expect(html.indexOf("not reported")).toBeLessThan(html.indexOf("70%"));
+  expect(townFuelDetails(gauges[0]!, now)).toMatch(
+    /^week resets .+ · 5 h not reported · seen 3 min ago/,
+  );
+  expect(boardFuelText(gauges[0]!, now)).toBe(
+    "Claude 5 h not reported · week 70% left · seen 3 min ago",
+  );
+  const summary = renderToStaticMarkup(
+    createElement(HostLimits, {
+      connectionId: "alpha",
+      now,
+      usage: ready([weekOnly]),
+    }),
+  );
+  expect(summary).toContain("5 h: not reported");
+  // Both windows present: nothing missing.
+  expect(townFuelGauges([codex("alpha", [1, 1])], now)[0]?.missing).toEqual([]);
+});
+
+test("a harness with agents in Town and no reading yet is named, muted, with what refreshes it", () => {
+  const limits = [claudeTap("alpha", [20, 30]), missing("alpha")];
+  const gauges = townFuelGauges(limits, now);
+  // No Codex agents: no row.
+  expect(townFuelNotes(limits, gauges, ["claude"])).toEqual([]);
+  const notes = townFuelNotes(limits, gauges, ["claude", "codex", "pi"]);
+  expect(notes).toEqual([
+    {
+      harness: "codex",
+      name: "Codex",
+      kind: "no-reading",
+      reason: townFuelRefreshText("codex"),
+    },
+  ]);
+  const html = renderToStaticMarkup(
+    createElement(TownFuel, { gauges, notes, now }),
+  );
+  expect(html).toContain("no reading yet");
+  expect(html).toContain('data-unavailable="true"');
+  expect(html).toContain("Codex limits: no reading yet.");
+  expect(html).not.toContain("Codex limits not available");
+  // A gauge from any host means a reading exists.
+  expect(
+    townFuelNotes(
+      [missing("alpha"), codex("beta", [1, 1])],
+      townFuelGauges([missing("alpha"), codex("beta", [1, 1])], now),
+      ["codex"],
+    ),
+  ).toEqual([]);
+  // Unsupported still reads "not available", not "no reading yet".
+  expect(townFuelNotes([claude("alpha")], [], ["claude"])[0]?.kind).toBe(
+    "unavailable",
+  );
+});
+
+test("the town-scale scene's limits show every FUEL state", () => {
+  const hosts = ["atlas", "nova", "zephyr"].map((name) => ({
+    connectionId: `scene-${name}`,
+    generation: 1,
+  }));
+  const limits = townScaleLimits(hosts, now);
+  const each = limits.flatMap((limit) => {
+    const gauge = townFuelGauge(limit, now);
+    return gauge ? [gauge] : [];
+  });
+  expect(
+    each.map((g) => [g.connectionId, g.aged, g.missing.map((m) => m.label)]),
+  ).toEqual([
+    ["scene-atlas", false, []],
+    ["scene-nova", true, []],
+    ["scene-zephyr", false, ["5 h"]],
+  ]);
+  const gauges = townFuelGauges(limits, now);
+  expect(gauges.map((g) => g.connectionId)).toEqual(["scene-zephyr"]);
+  expect(
+    townFuelNotes(limits, gauges, ["claude", "codex", "pi"]).map((n) => [
+      n.name,
+      n.kind,
+    ]),
+  ).toEqual([["Codex", "no-reading"]]);
 });

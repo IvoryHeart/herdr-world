@@ -1,4 +1,4 @@
-import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
+import { afterAll, expect, test as bunTest } from "bun:test";
 import {
   copyFileSync,
   mkdirSync,
@@ -10,8 +10,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Tests spawn oxlint once per case, in turn; a loaded machine passes 5 s.
-setDefaultTimeout(30_000);
+// Each test launches the real linter for several fixtures. Bound the whole
+// subprocess batch separately from Bun's five-second in-process default.
+function test(name: string, run: () => void) {
+  bunTest(name, run, 30_000);
+}
 
 const root = new URL("../", import.meta.url);
 const directory = mkdtempSync(join(tmpdir(), "roamgate-lint-"));

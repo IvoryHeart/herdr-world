@@ -7,6 +7,7 @@
 - Create worktrees under `.agents/worktrees/` with `bun run agent:worktree -- create <slug> <parent-ref>` after resolving the parent.
 - Preserve others' edits and worktrees; never move or clean another agent's worktree.
 - Use synthetic data and reserved domains; never publish private hosts, usernames, paths, sockets, keys, tokens, sessions or repository contents. Inspect diff/history before pushing.
+- Scan committed additions with `bun run check:privacy` before any push. Never copy material from `.agents/` into tracked paths without that scan; keep owner-only research in gitignored `research-local/`. CI checks every branch push and PR even when local hooks are skipped.
 - Local-first, trusted-single-user: LAN binding, authentication, uploads, shell/terminal operations and update installation are security-sensitive.
 - Qualify downstream operations by immutable connection ID and runtime generation; never fall back to another connection.
 - Aggregate observation is bounded and read-only; failed-host cached topology is stale and non-actionable.

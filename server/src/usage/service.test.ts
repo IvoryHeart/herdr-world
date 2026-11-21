@@ -56,7 +56,11 @@ function value(): RuntimeUsage {
   };
 }
 
-function setup(hosts = ["alpha"], collectionMs = 20_000) {
+function setup(
+  hosts = ["alpha"],
+  collectionMs = 20_000,
+  hostScope?: (id: string) => string,
+) {
   let now = at,
     generation = 1,
     ready = true,
@@ -89,6 +93,7 @@ function setup(hosts = ["alpha"], collectionMs = 20_000) {
     scheduler: systemScheduler,
     waitMs: 100,
     collectionMs,
+    hostScope,
     ids: { issue: async () => `usage_${++serial}` },
     connections: {
       list: () =>
@@ -170,6 +175,33 @@ function setup(hosts = ["alpha"], collectionMs = 20_000) {
     },
   };
 }
+
+test("same-known-host connections count numeric usage once and conflicting claims stay unattributed", async () => {
+  const s = setup(["tui", "core"], 20_000, () => "same-host");
+  try {
+    const usage = await s.service.get();
+    expect(usage.total.total_tokens).toBe(20);
+    expect(usage.entities).toHaveLength(1);
+    expect(usage.entities[0]?.pane_id).toBeNull();
+    expect(usage.sources).toHaveLength(8);
+  } finally {
+    await s.service.close();
+  }
+});
+
+test("analytics internal read retains all details while public usage read stays bounded", async () => {
+  const s = setup();
+  s.data({
+    ...value(),
+    rows: Array.from({ length: 150 }, (_, i) => row(`session-${i}`)),
+  });
+  try {
+    expect((await s.service.get()).entities).toHaveLength(128);
+    expect((await s.service.get({}, false)).entities).toHaveLength(150);
+  } finally {
+    await s.service.close();
+  }
+});
 
 test("shared read returns view-neutral entities and all four attribution rollups without OTel double count", async () => {
   const s = setup();

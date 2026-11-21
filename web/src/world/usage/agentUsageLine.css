@@ -1,0 +1,41 @@
+/* An agent's run on its cards (AgentUsageLine.tsx): one quiet line under
+   the head, a warning line per flag. */
+.agent-usage {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 3px 0;
+  color: inherit;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+}
+button.agent-usage {
+  cursor: pointer;
+  border-radius: 6px;
+}
+button.agent-usage:hover .agent-usage-facts {
+  text-decoration: underline;
+}
+button.agent-usage:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.agent-usage-facts {
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+.agent-usage-flag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+.agent-usage-flag svg {
+  flex: none;
+  color: #e8a33d;
+}

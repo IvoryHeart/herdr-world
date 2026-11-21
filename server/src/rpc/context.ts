@@ -112,6 +112,7 @@ export type RpcServices = {
   worldUsage?: import("../usage/service").WorldUsageService;
   /** Installed web IDEs and their World-owned servers (world.ide.*). */
   ide?: import("../ide/service").IdeService;
+  worldUsageAnalytics?: import("../usage/analytics").WorldUsageAnalyticsService;
   worldMemory?: import("../memory/service").MemoryService;
 };
 

@@ -120,7 +120,8 @@
 .board-facts-list li[data-low] {
   color: var(--s-blocked);
 }
-.board-facts-list li[data-stale] {
+.board-facts-list li[data-stale],
+.board-facts-list li[data-aged] {
   color: var(--board-soft);
 }
 .board-facts-list button {
@@ -164,7 +165,13 @@
   padding-left: 30px;
   line-height: 1.35;
 }
-.board-zone-facts [data-stale] {
+/* Aged, stale and missing limits dim on host lines and zone lines alike. */
+.board-facts-host-line[data-stale],
+.board-facts-host-line[data-aged],
+.board-facts-host-line[data-missing],
+.board-zone-facts [data-stale],
+.board-zone-facts [data-aged],
+.board-zone-facts [data-missing] {
   opacity: 0.7;
 }
 .board-far .board-zone-counts,
