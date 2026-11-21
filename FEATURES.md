@@ -36,7 +36,8 @@ A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
   World on this computer runs that version. The lighthouse at the pier's head,
   past the last berth and above every ship, is main's checks (green passing,
   red failing, yellow running, grey unknown); its lamp keeps a visible size
-  however far out the view is zoomed.
+  however far out the view is zoomed. The sign and the lanes sit together,
+  vertically centred on the harbour's side of Town.
   The Shipyard sign counts projects and those with main failing or out of date.
   A board or hull opens that project in **Work → Releases**; a ship opens its
   release card with **All releases**. A new release sails in once, only in its

@@ -34,6 +34,8 @@ import {
   townBerthAt,
   townHarbourFoldAt,
   townHarbourLot,
+  townHarbourPlaced,
+  townHarbourSignRow,
   townHarbourView,
   townLanePierAt,
   townLaneSignAt,
@@ -42,7 +44,6 @@ import {
   townProjectColor,
   type TownHarbourLot,
 } from "./townHarbour";
-import { TOWN_HARBOUR_SIGN_ROW } from "./townHarbourLot";
 import {
   TOWN_PIER_ART,
   townFlagUrl,
@@ -214,7 +215,14 @@ export const TownShipyard = memo(function TownShipyard({
         openWork("releases");
       }
     : null;
-  const lot = townHarbourLot(layout);
+  // The drawn lanes (a "+N" lane included) and the sign sit vertically
+  // centred on the harbour's side of Town, not from its top.
+  const shown = townLanesShown(townHarbourLot(layout), lanes.length);
+  const rest = lanes.slice(shown);
+  const lot = townHarbourPlaced(
+    townHarbourLot(layout),
+    shown + (rest.length ? 1 : 0),
+  );
   const fold = townHarbourFoldAt(layout.center, T);
   /** Keyboard focus on an off-screen ship or sign pans it into view. */
   const reveal: Reveal = (event) => {
@@ -261,9 +269,7 @@ export const TownShipyard = memo(function TownShipyard({
   };
   const signText = townHarbourSignText(lanes, chosen);
   const label = `Shipyard: ${signText}${openWork ? ". Open releases" : ""}`;
-  const shown = townLanesShown(lot, lanes.length);
-  const rest = lanes.slice(shown);
-  const signAt = { x: lot.streetEnd * T + 4, y: TOWN_HARBOUR_SIGN_ROW * T };
+  const signAt = { x: lot.streetEnd * T + 4, y: townHarbourSignRow(lot) * T };
   // A phone's first view keeps the stacked buildings; a signpost on the
   // town center's left wing points the way to the sea.
   const signpost =

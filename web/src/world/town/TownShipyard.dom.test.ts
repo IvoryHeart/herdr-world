@@ -71,10 +71,11 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
   const {
     TOWN_PROJECT_COLORS,
     townHarbourLot,
+    townHarbourPlaced,
+    townHarbourSignRow,
     townLanePierAt,
     townLanesShown,
   } = await import("./townHarbour");
-  const { TOWN_HARBOUR_SIGN_ROW } = await import("./townHarbourLot");
   const { TownCamera } = await import("./townCamera");
   const T = (await import("./townLayout")).TOWN_TILE;
   type TownRendererHandle = import("./townRenderer").TownRendererHandle;
@@ -520,8 +521,12 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     await act(async () => fold.click());
     expect(harbour.opened).toEqual([]);
     expect(invalidated).toEqual(["harbour"]);
-    const pier = townLanePierAt(lot, 0);
-    const from = camera.toScreen(lot.streetEnd * T, TOWN_HARBOUR_SIGN_ROW * T);
+    const placed = townHarbourPlaced(lot, repos.length);
+    const pier = townLanePierAt(placed, 0);
+    const from = camera.toScreen(
+      lot.streetEnd * T,
+      townHarbourSignRow(placed) * T,
+    );
     const to = camera.toScreen(pier.x + pier.w, pier.y);
     expect(from.x).toBeGreaterThanOrEqual(viewport.inset.left - 1);
     expect(to.x).toBeLessThanOrEqual(viewport.width - viewport.inset.right + 1);

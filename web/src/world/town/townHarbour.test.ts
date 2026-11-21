@@ -5,7 +5,9 @@ import {
   TOWN_SHIP,
   townBerthAt,
   townHarbourLot,
+  townHarbourPlaced,
   townHarbourReserve,
+  townHarbourSignRow,
   townLanePierAt,
   townLaneSignAt,
   townLanesShown,
@@ -160,6 +162,34 @@ describe("town harbour", () => {
     expect(townLanesShown(lot, lot.lanes)).toBe(lot.lanes);
     expect(townLanesShown(lot, lot.lanes + 3)).toBe(lot.lanes - 1);
   });
+
+  for (const shape of Object.keys(TOWN_SHAPES) as (keyof typeof TOWN_SHAPES)[])
+    test(`${shape}: the Shipyard sits vertically centred on its side`, () => {
+      for (const [hosts, rooms] of SIZES) {
+        const lot = townHarbourLot(town(shape, hosts, rooms));
+        expect(lot.shift).toBe(0);
+        for (let drawn = 0; drawn <= lot.lanes; drawn += 1) {
+          const placed = townHarbourPlaced(lot, drawn);
+          // The sign above the drawn lanes, as one block: the sea above it
+          // and below it differ by at most a row.
+          const top = townHarbourSignRow(placed);
+          const last = drawn ? townLanePierAt(placed, drawn - 1).y / T : top;
+          const bottom = drawn ? last + 2 : top + 5;
+          expect(top).toBeGreaterThanOrEqual(townHarbourSignRow(lot));
+          expect(Math.abs(top - (lot.bottom - bottom))).toBeLessThanOrEqual(1);
+          // Placing moves only rows: the lanes the sea holds stay.
+          expect(placed.lanes).toBe(lot.lanes);
+          expect(placed.coast).toBe(lot.coast);
+          // Every lighthouse is still on the map.
+          for (let lane = 0; lane < drawn; lane += 1)
+            expect(townLighthouseAt(placed, lane).y).toBeGreaterThanOrEqual(0);
+          if (drawn)
+            expect(townLanePierAt(placed, drawn - 1).y).toBeLessThan(
+              placed.bottom * T,
+            );
+        }
+      }
+    });
 
   test("project colours are distinct and cycle", () => {
     expect(new Set(TOWN_PROJECT_COLORS).size).toBe(TOWN_PROJECT_COLORS.length);
