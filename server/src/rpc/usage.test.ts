@@ -3,6 +3,82 @@ import type { ServerWebSocket } from "bun";
 import { createRpcDispatcher } from "../service/rpc-dispatch";
 import { createLegacyRoutingLogger } from "../connections/protocol";
 import type { RpcServices } from "./context";
+import { usageAnalyticsFixture } from "../usage/fixture";
+
+test("analytics RPC uses admitted World reads, validates filters and hides raw source failures", async () => {
+  const ws = {} as ServerWebSocket<unknown>,
+    replies: any[] = [];
+  let failed = false;
+  const services = {
+    clients: new Set([ws]),
+    snapshotAdmission: { acknowledge: () => false },
+    worldUsageAnalytics: {
+      get: async (params: Record<string, unknown>) => {
+        if (failed) throw new Error("PRIVATE_SOURCE_ERROR");
+        return usageAnalyticsFixture(params);
+      },
+    },
+    safeSend: (_ws: unknown, payload: string) => {
+      replies.push(JSON.parse(payload));
+      return true;
+    },
+    markRpcError() {},
+    connectionManager: {
+      readyRuntimeLease() {
+        throw new Error("no fallback");
+      },
+    },
+  } as unknown as RpcServices;
+  const dispatch = createRpcDispatcher(
+    services,
+    createLegacyRoutingLogger({ log() {} }),
+  );
+  await dispatch(
+    ws,
+    JSON.stringify({
+      id: "analytics",
+      method: "world.usage.analytics",
+      params: { group_by: "day" },
+    }),
+  );
+  expect(replies.at(-1)).toMatchObject({
+    id: "analytics",
+    result: { version: 1, total: { total_tokens: { value: 1700 } } },
+  });
+  for (const params of [
+    { group_by: "bad" },
+    { window: "month" },
+    { fixture: true },
+    { pane_id: "p1" },
+  ]) {
+    await dispatch(
+      ws,
+      JSON.stringify({ id: "bad", method: "world.usage.analytics", params }),
+    );
+    expect(replies.at(-1)?.error).toBeDefined();
+  }
+  failed = true;
+  await dispatch(
+    ws,
+    JSON.stringify({
+      id: "failed",
+      method: "world.usage.analytics",
+      params: {},
+    }),
+  );
+  expect(replies.at(-1)?.error.message).toContain("unavailable");
+  expect(JSON.stringify(replies)).not.toContain("PRIVATE_SOURCE_ERROR");
+  services.clients.delete(ws);
+  await dispatch(
+    ws,
+    JSON.stringify({
+      id: "revoked",
+      method: "world.usage.analytics",
+      params: {},
+    }),
+  );
+  expect(replies.at(-1)?.error.message).toContain("revoked");
+});
 
 test("usage is a registered World read with bounded windows and no default-runtime routing", async () => {
   const ws = {} as ServerWebSocket<unknown>,
