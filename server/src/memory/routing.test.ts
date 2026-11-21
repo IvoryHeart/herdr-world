@@ -22,7 +22,16 @@ function host(id: string): MemoryLease {
         listWorkspaces: async () => ({
           workspaces: [{ workspace_id: "w1", cwd: `/workspace/${id}` }],
         }),
-        listTerminals: async () => ({ panes: [] }),
+        listTerminals: async () => ({
+          panes: [
+            {
+              pane_id: "p1",
+              workspace_id: "w1",
+              cwd: `/workspace/${id}`,
+              agent: "opencode",
+            },
+          ],
+        }),
       },
       memoryHost: {
         execute: async <T>(request: Record<string, unknown>) => {

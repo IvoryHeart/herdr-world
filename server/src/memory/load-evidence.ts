@@ -21,11 +21,12 @@ export function memoryLoadEvidence(
   );
   for (const entry of entries) {
     const source = sources.find((source) => source.id === entry.source_id)!;
+    const ruleLoads = entry.harness_loads;
     entry.harness_loads = {};
     for (const harness of source.harnesses) {
       let mode: NonNullable<
         MemoryEntry["harness_loads"][typeof harness]
-      >["mode"] = entry.load;
+      >["mode"] = ruleLoads?.[harness]?.mode ?? entry.load;
       let reason: string | undefined;
       if (source.kind === "instructions" && entry.size === 0) mode = "empty";
       if (
@@ -59,6 +60,30 @@ export function memoryLoadEvidence(
           mode = "shadowed";
           reason =
             "Claude instructions take precedence over the AGENTS.md fallback";
+        }
+      }
+      if (
+        harness === "opencode" &&
+        path.basename(source.path) === "CLAUDE.md"
+      ) {
+        const primary = sources.find(
+          (candidate) =>
+            candidate.harnesses.includes("opencode") &&
+            candidate.scope === source.scope &&
+            path.basename(candidate.path) === "AGENTS.md" &&
+            (source.scope === "user" ||
+              path.dirname(candidate.path) === path.dirname(source.path)),
+        );
+        if (
+          primary &&
+          entries.some(
+            (entry) =>
+              entry.source_id === primary.id && entry.state === "available",
+          )
+        ) {
+          mode = "shadowed";
+          reason =
+            "OpenCode AGENTS.md takes precedence over its CLAUDE.md fallback";
         }
       }
       entry.harness_loads[harness] = { mode, ...(reason ? { reason } : {}) };

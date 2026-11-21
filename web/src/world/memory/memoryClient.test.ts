@@ -185,3 +185,12 @@ test("the testing switch offers its synthetic host and mimics conflicts", async 
   const hits = await client.search(t, "release", { agent_id: "p2" });
   expect(hits.matches).toHaveLength(0);
 });
+
+test("unsupported-only preview hides the host without reading a real connection", async () => {
+  setMemoryFixtureForTests(true, true);
+  expect(memoryHosts()).toEqual([]);
+  const catalog = await memoryFixtureClient().list(MEMORY_FIXTURE_TARGET);
+  expect(catalog.agents.map((agent) => agent.harness)).toEqual(["letta"]);
+  expect(catalog.sources).toEqual([]);
+  expect(townLibraryCounts()).toEqual({ status: "none" });
+});

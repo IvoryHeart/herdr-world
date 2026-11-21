@@ -28,6 +28,11 @@ const PARAM = "memoryFixture";
  */
 export const UNCERTAIN_MARK = "[uncertain]";
 let on: boolean | undefined;
+let unsupportedOnly = false;
+
+export function memoryFixtureHasMemory() {
+  return !unsupportedOnly;
+}
 
 /** The switch, read once per page load; the parameter is removed. */
 export function memoryFixtureOn(): boolean {
@@ -37,13 +42,18 @@ export function memoryFixtureOn(): boolean {
   const url = new URL(location.href);
   if (!url.searchParams.has(PARAM)) return on;
   on = true;
+  unsupportedOnly = url.searchParams.get(PARAM) === "unsupported";
   url.searchParams.delete(PARAM);
   history.replaceState(history.state, "", url);
   return on;
 }
 
 /** For tests: set the switch (undefined: read the URL again). */
-export function setMemoryFixtureForTests(value: boolean | undefined) {
+export function setMemoryFixtureForTests(
+  value: boolean | undefined,
+  unsupported = false,
+) {
+  unsupportedOnly = unsupported;
   on = value;
   library = null;
 }
@@ -60,6 +70,7 @@ export const MEMORY_FIXTURE_AGENT_NAMES: Record<string, string> = {
   p2: "web-reviewer",
   p3: "docs-writer",
   p4: "helper",
+  p5: "opencode-builder",
 };
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -96,6 +107,30 @@ function source(
 
 function seed(now: number): FixtureLibrary {
   const sources: FixtureSource[] = [
+    source({
+      id: "fx-opencode-user",
+      harnesses: ["opencode"],
+      kind: "instructions",
+      scope: "user",
+      path: `${HOME}/.config/opencode/AGENTS.md`,
+      shape: "file",
+      load: "startup-candidate",
+      description: "OpenCode user instructions for every project",
+      project_ids: ["w3"],
+      agent_ids: ["p5"],
+    }),
+    source({
+      id: "fx-opencode-project",
+      harnesses: ["opencode"],
+      kind: "instructions",
+      scope: "project",
+      path: "/workspace/opencode-app/AGENTS.md",
+      shape: "file",
+      load: "startup-candidate",
+      description: "OpenCode project instructions",
+      project_ids: ["w3"],
+      agent_ids: ["p5"],
+    }),
     source({
       id: "fx-claude-user",
       harnesses: ["claude"],
@@ -303,6 +338,18 @@ function seed(now: number): FixtureLibrary {
     "# Release\n\nTag only after the release branch is merged and verified.\n",
     61 * DAY,
   );
+  put(
+    "fx-opencode-user",
+    "AGENTS.md",
+    "Use synthetic examples in every project.\n",
+    DAY,
+  );
+  put(
+    "fx-opencode-project",
+    "AGENTS.md",
+    "OpenCode project: verify focused changes.\n",
+    DAY,
+  );
   return { sources, files, revision: 1 };
 }
 
@@ -382,12 +429,14 @@ function catalog(target: MemoryTarget): MemoryCatalog {
       return { ...rest, state: "available" };
     },
   );
-  return {
+  const result: MemoryCatalog = {
     ...target,
     observed_at: now,
     projects: [
       { id: "w1", label: "web-app", path: "/workspace/web-app" },
       { id: "w2", label: "docs-site", path: "/workspace/docs-site" },
+      { id: "w3", label: "opencode-app", path: "/workspace/opencode-app" },
+      { id: "w4", label: "no-memory-app", path: "/workspace/no-memory-app" },
     ],
     agents: [
       {
@@ -410,17 +459,23 @@ function catalog(target: MemoryTarget): MemoryCatalog {
       },
       {
         id: "p4",
-        project_id: "w2",
-        harness: "example-cli",
-        path: "/workspace/docs-site",
+        project_id: "w4",
+        harness: "letta",
+        path: "/workspace/no-memory-app",
+      },
+      {
+        id: "p5",
+        project_id: "w3",
+        harness: "opencode",
+        path: "/workspace/opencode-app",
       },
     ],
-    sources: out,
-    entries,
+    sources: unsupportedOnly ? [] : out,
+    entries: unsupportedOnly ? [] : entries,
     unsupported: [
       {
         agent_id: "p4",
-        harness: "example-cli",
+        harness: "letta",
         reason: "World has no memory reader for this harness",
       },
     ],
@@ -431,6 +486,13 @@ function catalog(target: MemoryTarget): MemoryCatalog {
     truncated: false,
     limits: MEMORY_LIMITS,
   };
+  return unsupportedOnly
+    ? {
+        ...result,
+        projects: result.projects.filter((project) => project.id === "w4"),
+        agents: result.agents.filter((agent) => agent.id === "p4"),
+      }
+    : result;
 }
 
 function owned(sourceId: string) {

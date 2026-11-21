@@ -1,3 +1,4 @@
+import { memoryHarness } from "../../../../shared/memory";
 import type {
   MemoryAgent,
   MemoryCatalog,
@@ -28,6 +29,20 @@ const HARNESS_LABELS: Record<string, string> = {
   claude: "Claude",
   codex: "Codex",
   pi: "Pi",
+  opencode: "OpenCode",
+  copilot: "GitHub Copilot CLI",
+  cursor: "Cursor",
+  qwen: "Qwen Code",
+  droid: "Droid",
+  kimi: "Kimi",
+  omp: "oh-my-pi",
+  kilo: "Kilo",
+  hermes: "Hermes",
+  qodercli: "Qoder CLI",
+  "antigravity-cli": "Antigravity CLI",
+  grok: "Grok",
+  devin: "Devin",
+  mastracode: "Mastra Code",
 };
 
 export function harnessLabel(harness: string | null | undefined) {
@@ -145,22 +160,29 @@ export function readerRows(
   catalog: MemoryCatalog,
   names: MemoryAgentNames = {},
 ): MemoryReaderRow[] {
+  const supported = catalog.agents.filter((agent) =>
+    memoryHarness(agent.harness),
+  );
+  const projects = catalog.projects.filter((project) =>
+    supported.some((agent) => agent.project_id === project.id),
+  );
+  if (!projects.length) return [];
   const rows: MemoryReaderRow[] = [
     {
       reader: ALL_READERS,
       label: "Everything",
       detail:
-        plural(catalog.projects.length, "project") +
+        plural(projects.length, "project") +
         ", " +
-        plural(catalog.agents.filter((agent) => agent.harness).length, "agent"),
+        plural(supported.length, "agent"),
       ...counts(catalog, ALL_READERS),
     },
   ];
-  for (const project of catalog.projects) {
+  for (const project of projects) {
     const reader: MemoryReader = { kind: "project", id: project.id };
     // Shells have no harness and read no memory; they stay off the list.
-    const agents = catalog.agents
-      .filter((agent) => agent.project_id === project.id && agent.harness)
+    const agents = supported
+      .filter((agent) => agent.project_id === project.id)
       .map((agent): MemoryReaderRow => {
         const own: MemoryReader = { kind: "agent", id: agent.id };
         return {

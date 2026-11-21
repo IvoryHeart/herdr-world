@@ -1,3 +1,5 @@
+import { memoryHarness } from "../../../../shared/memory";
+import { memoryFixtureOn, memoryFixtureHasMemory } from "./memoryFixture";
 import { openMemoryLibrary } from "./memoryEvents";
 
 /**
@@ -7,11 +9,18 @@ import { openMemoryLibrary } from "./memoryEvents";
 export function AgentMemoryLink({
   connectionId,
   agentId,
+  harness,
 }: {
   connectionId: string;
   /** The agent's pane ID, the memory service's agent ID. */
   agentId?: string;
+  harness?: string;
 }) {
+  if (
+    !memoryHarness(harness) ||
+    (memoryFixtureOn() && !memoryFixtureHasMemory())
+  )
+    return null;
   return (
     <button
       type="button"

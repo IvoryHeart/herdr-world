@@ -1,3 +1,7 @@
+import { flushSync } from "react-dom";
+import { TownLibrary } from "../town/TownLibrary";
+import type { TownLayout } from "../town/townLayout";
+import { AgentMemoryLink } from "./AgentMemoryLink";
 import { createRoot } from "react-dom/client";
 import "../../styles/tokens.css";
 import "../../styles/base.css";
@@ -21,7 +25,8 @@ setMemoryFixtureForTests(true);
 let closed = 0;
 const host = document.createElement("div");
 document.body.append(host);
-createRoot(host).render(
+const root = createRoot(host);
+root.render(
   <MemoryLibrary
     request={{ connectionId: "memory-fixture", agentId: "p1" }}
     onClose={() => {
@@ -349,6 +354,44 @@ async function run() {
   );
   await backToShelves();
 
+  // The new documented harness has its own project and user instructions.
+  if (phone) {
+    const select = $<HTMLSelectElement>(".memory-reader-select select")!;
+    check(
+      ![...select.options].some((option) =>
+        /no-memory-app|helper/.test(option.text),
+      ),
+      "unsupported readers have a zero-count entry",
+    );
+    select.value = "agent:p5";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  } else {
+    check(
+      !byText(".memory-reader", "no-memory-app") &&
+        !byText(".memory-reader", "helper"),
+      "unsupported readers have a zero-count entry",
+    );
+    byText(".memory-reader", "opencode-builder")!.click();
+  }
+  await waitFor(
+    () => $(".memory-agent-load")?.textContent?.includes("opencode-builder"),
+    "OpenCode reader never opened",
+  );
+  check(
+    /2\s*at start/.test($(".memory-agent-load")!.textContent ?? ""),
+    "OpenCode instructions do not load at start",
+  );
+  check(
+    $$(".memory-book-row").length === 2,
+    "OpenCode lacks project and user AGENTS.md",
+  );
+  check(
+    byText(".memory-shelf", "OpenCode project instructions") &&
+      byText(".memory-shelf", "OpenCode user instructions"),
+    "OpenCode shelves lack descriptions",
+  );
+  await fits("OpenCode reader");
+
   // Escape closes the Library.
   const search = $<HTMLInputElement>('input[aria-label="Search memory"]')!;
   search.focus();
@@ -356,6 +399,30 @@ async function run() {
     new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
   );
   check(closed === 1, `Escape closed ${closed} times`);
+
+  // The no-capable-host preview state has neither desktop nor phone sign.
+  flushSync(() => root.render(null));
+  setMemoryFixtureForTests(true, true);
+  flushSync(() =>
+    root.render(
+      <>
+        <TownLibrary layout={{} as TownLayout} />
+        <AgentMemoryLink
+          connectionId="memory-fixture"
+          agentId="p4"
+          harness="letta"
+        />
+      </>,
+    ),
+  );
+  check(
+    !$(".town-library-sign, .town-library-fold"),
+    "unsupported-only host has a Library sign",
+  );
+  check(
+    !host.textContent?.includes("Memory"),
+    "unsupported agent has a Memory entry",
+  );
 }
 
 run()
