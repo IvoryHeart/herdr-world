@@ -1,11 +1,34 @@
 """Real native lifecycle, restricted to an explicitly disposable OS account."""
+import contextlib
 import os
 from pathlib import Path
 import platform
 import re
+import select
 import socket
 from processes import run
 from world import PASSWORD
+
+
+@contextlib.contextmanager
+def launchd_exit_watch(printed):
+    # bootout acknowledges removal before a running job has necessarily exited.
+    # Subscribe before uninstall so even a fast exit cannot be missed; wait on
+    # the kernel once rather than sleeping or polling launchctl's job state.
+    match = re.search(r'^\tpid = ([1-9][0-9]*)$', printed, re.MULTILINE)
+    assert match, 'native service did not start: launchd job has no running process'
+    pid = int(match[1])
+    with select.kqueue() as queue:
+        queue.control([select.kevent(pid, filter=select.KQ_FILTER_PROC,
+                                     flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+                                     fflags=select.KQ_NOTE_EXIT)], 0, 0)
+        def wait():
+            events = queue.control(None, 1, 30)
+            assert any(event.ident == pid and event.filter == select.KQ_FILTER_PROC
+                       and not event.flags & select.KQ_EV_ERROR
+                       and event.fflags & select.KQ_NOTE_EXIT for event in events), \
+                'service uninstall left the native service running (no process-exit event within 30 seconds)'
+        yield wait
 
 
 def service_guard(home, disposable):
@@ -64,8 +87,12 @@ def services(walk, candidate, baseline, root, disposable):
                 config.chmod(0o600)
                 run([binary, 'service', 'install'], env)
                 assert definition.is_file(), 'service install did not create its native definition'
-                assert run(query, env, check=False).returncode == 0, 'native service did not start'
-                run([candidate, 'service', 'uninstall'], env)
+                started = run(query, env, check=False)
+                assert started.returncode == 0, 'native service did not start'
+                watcher = contextlib.nullcontext(lambda: None) if linux else launchd_exit_watch(started.stdout)
+                with watcher as wait_stopped:
+                    run([candidate, 'service', 'uninstall'], env)
+                    wait_stopped()
                 assert not definition.exists(), 'service uninstall left the native definition'
                 assert run(query, env, check=False).returncode != 0, 'service uninstall left the native service running'
                 assert config.read_text() == text, 'service uninstall deleted or changed the saved configuration'
