@@ -516,3 +516,40 @@
     flex: 1 1 auto;
   }
 }
+
+/* Add host leads; runtime profiles by hand sit behind a disclosure. */
+.connection-manager-by-hand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.connection-manager-by-hand > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.connection-manager-by-hand[open] {
+  flex-basis: 100%;
+}
+
+.connection-manager-hosts {
+  display: grid;
+  gap: 10px;
+}
+
+.connection-manager-hosts > h3,
+.connection-manager-runtimes-heading {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.connection-manager-host-empty {
+  margin: 0;
+  color: var(--muted);
+}
