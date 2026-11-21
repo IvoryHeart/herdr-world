@@ -19,9 +19,6 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // the float shell's lazy chunk, which moves that confirmation and the float
 // shell's read model into one shared chunk and its CSS (185 files, no new
 // bytes, on 2026-11-17).
-// The #981 Code view design study adds three standalone, on-demand static
-// assets (HTML, CSS and JS), without adding to the application's eager graph.
-// Account for those files explicitly; byte and startup budgets remain binding.
 // New room's dialog reads each connection's recent folders, which splits the
 // World runtime store into a lazy chunk of its own (190 files with #981, no new
 // bytes or initial load, on 2026-11-19).
@@ -36,6 +33,9 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // dialog split its tabs into lazy Settings pages (Runtime, connection,
 // Integrations, instance name, speech, worktree command) with their
 // stylesheets: +12 files and fewer total bytes (212 files, 15.3 MiB).
+// The Code view (#1009) retired the #981 design study's three standalone
+// assets and adds its lazy chunks (JS and CSS), which Settings' IDE rows
+// share; the bundle stays within 212 (205 files on 2026-11-20).
 const maxFileCount = 212;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
@@ -51,6 +51,9 @@ const maxFileCount = 212;
 // apartment building) add about 18.7 KB to lazy chunks; startup budgets are
 // unchanged. Resident avatars (#1069) share Town's sprites in the lazy
 // Apartments chunks: 15.503 MiB on main, so 15.6 MiB, initial budgets
+// unchanged (2026-11-20).
+// The Code view (#1009) fit main alone, but main's Apartments, post office
+// and help grew under it: 15.51 MiB together, so 15.6 MiB, startup budgets
 // unchanged (2026-11-20).
 const maxTotalBytes = 15.6 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */

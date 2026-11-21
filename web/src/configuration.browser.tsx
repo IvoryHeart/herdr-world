@@ -385,7 +385,9 @@ window.confirm = (message) => {
   confirmations.push(String(message));
   return confirmChange;
 };
-// World's own skill rows (world.integration.*) have focused DOM tests.
+// World's own skill rows (world.integration.*) and IDE rows (world.ide.*,
+// web/src/world/code/CodeView.browser.test.ts) have focused DOM tests; here
+// they answer empty so their alerts never mix with the agent rows'.
 let worldIntegrationLists = 0;
 const bridgeCall = bridge.call.bind(bridge);
 const worldConnectionCalls: Array<{ method: string; id: unknown }> = [];
@@ -398,9 +400,15 @@ bridge.call = ((method: string, ...rest: unknown[]) => {
     });
     return Promise.resolve({});
   }
-  return method.startsWith("world.integration.")
-    ? Promise.resolve({ integrations: [] })
-    : bridgeCall(method, ...(rest as []));
+  if (method.startsWith("world.integration."))
+    return Promise.resolve({ integrations: [] });
+  if (method.startsWith("world.ide."))
+    return Promise.resolve({
+      providers: [],
+      instances: [],
+      localConnections: [],
+    });
+  return bridgeCall(method, ...(rest as []));
 }) as typeof bridge.call;
 // Like the real bridge, a client captures the runtime lease when created; a
 // reconnect drops the lease until World's catalog restores it.

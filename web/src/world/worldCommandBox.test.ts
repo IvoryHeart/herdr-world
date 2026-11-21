@@ -63,6 +63,7 @@ describe("the command box's views", () => {
     expect(group.actions.map((action) => action.title)).toEqual([
       "Go to Board",
       "Go to Desk",
+      "Go to Code",
       "Go to Spaces",
     ]);
     group.actions[0]!.run();

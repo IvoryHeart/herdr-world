@@ -563,7 +563,7 @@ export function inspectorInitialSnap(
   presentation: "docked" | "floating",
   saved: FloatingTerminalDock | null,
 ): SnapTarget | undefined {
-  if (view === "desk") return "right";
+  if (view === "desk" || view === "code") return "right";
   if (view !== "town") return undefined;
   if (saved) return saved === "float" ? undefined : saved;
   return presentation === "docked" ? "right" : undefined;

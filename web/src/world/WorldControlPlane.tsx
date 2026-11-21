@@ -79,6 +79,9 @@ const BoardView = memo(
   lazyWithReload("world-board", () => import("./BoardView")),
 );
 const MemoDeskView = memo(DeskView);
+const CodeView = memo(
+  lazyWithReload("world-code", () => import("./code/CodeView")),
+);
 
 const AgentLauncherDialog = lazyWithReload("world-agent-launcher", () =>
   import("./AgentLauncherDialog").then((module) => ({
@@ -411,6 +414,9 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   const stableCloseDeskReading = useStableCallback(closeDeskReading);
   const stableSelectNode = useStableCallback(selectNode);
   const stableOpenTerminalById = useStableCallback(openTerminalById);
+  const stableOpenAgentChat = useStableCallback((id: string) =>
+    applySelection(id, "history"),
+  );
   const stableOpenInspectorView = useStableCallback(
     (
       id: string,
@@ -556,6 +562,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         deskReadingPane ? stablePreviewTerminalById : null
                       }
                       onCloseReading={stableCloseDeskReading}
+                    />
+                  ) : view === "code" ? (
+                    <CodeView
+                      world={world}
+                      onOpenAgent={stableOpenAgentChat}
+                      onOpenTerminal={stableOpenTerminalById}
                     />
                   ) : view === "town" ? (
                     <Suspense
