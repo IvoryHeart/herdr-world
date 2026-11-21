@@ -400,7 +400,7 @@ for watch revision and unavailable-host scope policy. Actions browser cases keep
 rendered watch feedback, qualified action wiring and focus at desktop/phone widths.
 
 Keep policy checks headless once a replacement test and its mapping in
-`verification/coverage.json` exist. Retained browser cases name the behavior that
+`verification/coverage/` exist. Retained browser cases name the behavior that
 requires a browser: geometry, trusted input, focus, rendering, renderer lifecycle
 or visual comparison. For example, `useWorldCreatedTerminal.test.ts` mounts the
 production creation hook and the Inspector selection-lease effect on the test

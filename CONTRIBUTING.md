@@ -200,7 +200,7 @@ nested IDs such as `world-surfaces/town`) or OpenSpec change name. Verification
 claims name a changed model, adapter, coverage owner or test/check path. An untouched
 claim fails. `Spec impact: none` fails when `openspec/specs/` or `openspec/changes/`
 changes; `Verification impact: none` fails when `quint/`, `verification/` or an owner
-in `verification/coverage.json` changes (including files under directory owners).
+in `verification/coverage/` changes (including files under directory owners).
 These are cheap consistency checks: reviewers still judge whether a `none` is true
 and whether the evidence is sufficient. Ordinary documentation retains its exemption;
 dependency-bot PRs and merge-only pushes retain their existing policy paths.
@@ -378,7 +378,7 @@ Releases: package and inspect every supported archive/checksum; see
 
 ## Behavioral evidence
 
-Assess every changed contract against the [coverage inventory](verification/coverage.json).
+Assess every changed contract against the [coverage inventory](verification/coverage/).
 Use existing requirements, fixtures and regressions to state allowed and forbidden
 behavior before choosing evidence. Ordering, ownership, authority and recovery
 normally warrant maintained Quint models connected to real implementation replay.

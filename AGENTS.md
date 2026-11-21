@@ -66,7 +66,7 @@ Wait on a running command until it exits; never poll `gh` or `ps` in short loops
 
 ## Verification
 
-Changing a contract owner in `verification/coverage.json`, a Quint model, adapter or consumer test requires the full verification gate; `--case` alone does not count. Mechanical edits explain in the PR why no contract is affected. Details: [verification](verification/README.md).
+Changing a contract owner in `verification/coverage/`, a Quint model, adapter or consumer test requires the full verification gate; `--case` alone does not count. Mechanical edits explain in the PR why no contract is affected. Details: [verification](verification/README.md).
 
 ## Pointers
 

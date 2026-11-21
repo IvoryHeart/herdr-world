@@ -1,6 +1,7 @@
 import { affected, buildGraph, gitChanges, TEST, type Graph } from "./affected";
 import { readFileSync } from "node:fs";
 import { readCoverageScope } from "./coverage-scope";
+import { isCoveragePath } from "./coverage";
 import {
   worldBrowserSuites,
   worldBrowserShards,
@@ -179,10 +180,7 @@ export function selectValidation(
       : tests.full
         ? allTests
         : tests.unit;
-  if (
-    !full &&
-    paths.some((path) => path === "verification/coverage.json" || owns(path))
-  )
+  if (!full && paths.some((path) => isCoveragePath(path) || owns(path)))
     chosen.push("scripts/verification-coverage.test.ts");
   const browserPlanPaths = [
     "scripts/world-browser-suites.ts",

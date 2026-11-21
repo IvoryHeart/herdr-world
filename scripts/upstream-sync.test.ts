@@ -121,7 +121,7 @@ test("control changes require human approval even when the agent approves", () =
     ".github/workflows/ci.yml",
     ".agents/skills/reviewer/SKILL.md",
     ".githooks/pre-push",
-    "verification/coverage.json",
+    "verification/coverage/Q01.json",
     "quint/control.qnt",
     "tools/quint/execution.json",
     "openspec/specs/access/spec.md",

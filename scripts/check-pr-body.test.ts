@@ -130,7 +130,7 @@ test("verification claims account for models, inventory owners and changed named
     path === "server/src/owner.ts" || path.startsWith("server/src/owned/");
   for (const path of [
     "quint/example.qnt",
-    "verification/coverage.json",
+    "verification/coverage/example.json",
     "verification/contracts/example.md",
     "server/src/owner.ts",
     "server/src/owned/nested/consumer.ts",
@@ -198,10 +198,11 @@ test("CI and pre-push share inventory owners and use the immutable PR head", () 
     git("init", "-q");
     git("config", "user.name", "Example");
     git("config", "user.email", "example@example.invalid");
-    mkdirSync(join(root, "verification"));
+    mkdirSync(join(root, "verification/coverage"), { recursive: true });
+    writeFileSync(join(root, "verification/coverage/_meta.json"), "{}");
     writeFileSync(
-      join(root, "verification/coverage.json"),
-      JSON.stringify({ areas: [{ owner: "server/src/owned/" }] }),
+      join(root, "verification/coverage/example.json"),
+      JSON.stringify({ id: "example", owner: "server/src/owned/" }),
     );
     git("add", ".");
     git("commit", "-qm", "base");

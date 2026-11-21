@@ -121,6 +121,6 @@ For recent contract gaps and evidence boundaries, see the
 | File-size ratchet | [Contract](../CONTRIBUTING.md#validation) | [Source](../scripts/file-size-ratchet.ts) | [Tests](../scripts/file-size-ratchet.test.ts) |
 | CI pipelines and reuse | [Contract](ci-pipelines.md) | [Source](../scripts/ci-validation-proof.ts) | [Tests](../scripts/ci-validation-proof.test.ts) |
 | CI and delivery health | [Definitions and limits](ci-pipelines.md#health-and-delivery-measures) | [Source](../scripts/ci-health.ts) | [Tests](../scripts/ci-health.test.ts) |
-| Behavioural verification | [Contract](../verification/README.md) | [Source](../quint/models.ts) | [Tests](../scripts/verification-coverage.test.ts) |
+| Behavioural verification | [Contract](../verification/README.md) | [Inventory loader](../scripts/coverage.ts), [models](../quint/models.ts) | [Tests](../scripts/verification-coverage.test.ts), [loader tests](../scripts/coverage.test.ts) |
 | SSH forwarding | [Contract](foundation-guide.md#rpc-paths) | [Source](../server/src/service/forward-service.ts) | [Tests](../server/src/bridge/forward-owner.test.ts) |
 | Agent workflow and asks | [Contract](agent-development.md) | [Source](../server/src/cli/world.ts) | [Tests](../server/src/cli/world.test.ts) |
