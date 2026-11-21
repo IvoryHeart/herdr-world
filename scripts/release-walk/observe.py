@@ -70,7 +70,10 @@ def main():
 
     signal.signal(signal.SIGWINCH, resize)
 
-    def end(*_):
+    termination = dict(reason='relay-error')
+
+    def end(number, *_):
+        termination.update(reason='relay-signal', signal=number)
         raise SystemExit(128 + signal.SIGTERM)
 
     signal.signal(signal.SIGTERM, end)
@@ -82,13 +85,16 @@ def main():
         while True:
             readable, _, _ = select.select([0, master], [], [])
             for fd in readable:
+                source = 'harness-output' if fd == master else 'runtime-input'
                 try:
                     data = os.read(fd, 65536)
                 except OSError as error:
                     if error.errno == errno.EIO:
+                        termination.update(reason=source + '-eio', source=source, errno=error.errno)
                         return
                     raise
                 if not data:
+                    termination.update(reason=source + '-eof', source=source)
                     return
                 if fd == master:
                     os.write(1, data)
@@ -107,7 +113,14 @@ def main():
                     os.write(master, data)
                     received = (received + data.decode(errors='replace'))[-32768:]
                     emit('input', text=received)
+    except Exception as error:
+        termination.update(error_type=type(error).__name__, errno=getattr(error, 'errno', None))
+        raise
     finally:
+        try:
+            emit('terminated', **termination, output_tail=output)
+        except OSError:
+            pass  # Preserve relay cleanup if the telemetry collector has closed.
         try:
             termios.tcsetattr(0, termios.TCSANOW, saved)
         except termios.error:

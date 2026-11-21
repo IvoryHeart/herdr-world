@@ -83,6 +83,14 @@ jobs:
           path: ${{ runner.temp }}/release-walk/report.json
           if-no-files-found: error
           retention-days: 30
+      - name: Retain redacted listing failure evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: failure()
+        with:
+          name: release-walk-listing-failure-${{ matrix.platform }}
+          path: ${{ runner.temp }}/release-walk/listing-failure.json
+          if-no-files-found: ignore # Other journeys do not create listing evidence.
+          retention-days: 30
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-walk-package-${{ matrix.platform }}

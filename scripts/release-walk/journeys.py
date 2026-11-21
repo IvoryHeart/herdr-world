@@ -6,6 +6,7 @@ import secrets
 import shutil
 from assets import environment
 from contract import HARNESS_VERSIONS
+from diagnostics import capture_listing
 from processes import background, run
 from world import World
 
@@ -216,12 +217,19 @@ def listing(world, agents, fixture=None):
     # Every attempt must contain all agents, never accumulated partial passes.
     try:
         world.observe(read, complete, reason)
-    except AssertionError as error:
-        if str(error) != reason:
-            raise
+    except Exception as error:
         if fixture is not None:
-            listing_diagnostics(last_rows, agents, fixture)
-        raise AssertionError(f'{reason}: {last_failure}') from None
+            try:
+                listing_diagnostics(last_rows, agents, fixture)
+            except Exception:
+                print('Listing diagnostic: unavailable', flush=True)
+            try:
+                capture_listing(last_rows, agents, fixture)
+            except Exception:
+                print('Listing failure artifact: unavailable', flush=True)
+        if isinstance(error, AssertionError) and str(error) == reason:
+            raise AssertionError(f'{reason}: {last_failure}') from None
+        raise
 
 
 def listing_diagnostics(rows, agents, fixture):

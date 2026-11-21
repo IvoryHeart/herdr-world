@@ -11,6 +11,8 @@
   runtimes; expose metadata in memory until an explicit host discovery or a new
   runtime commits the migration. Keep release-walk assertions and add bounded,
   private-data-free native diagnostics when runtime listing fails.
+- Retain redacted core Codex final-screen, recorder-termination and aggregate
+  snapshot evidence as a native CI artifact when release-walk listing fails.
 - Preserve the real harness's foreground process identity while recording the
   release walk, so runtime detection can see the launched agent. Refuse existing
   World services installed under alternate labels before service journeys.

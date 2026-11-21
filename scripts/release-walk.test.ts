@@ -25,7 +25,7 @@ test("release walk fixture, recorder and receipt regressions pass", () => {
       stderr: "pipe",
     },
   );
-  expect(result.stderr.toString()).toContain("Ran 33 tests");
+  expect(result.stderr.toString()).toContain("Ran 39 tests");
   expect(result.exitCode).toBe(0);
 });
 
@@ -167,6 +167,15 @@ test("required native workflow runs every release walk without tolerating failur
       step.with?.name === "release-walk-package-${{ matrix.platform }}",
   );
   expect(retained.if).toBeUndefined();
+  const diagnostics = job.steps.find(
+    (step: any) =>
+      step.with?.name === "release-walk-listing-failure-${{ matrix.platform }}",
+  );
+  expect(diagnostics.if).toBe("failure()");
+  expect(diagnostics.with.path).toBe(
+    "${{ runner.temp }}/release-walk/listing-failure.json",
+  );
+  expect(diagnostics.with["if-no-files-found"]).toBe("ignore");
 });
 
 test("tag creation follows exact-revision walk approval; publication reuses tested Unix bytes", () => {

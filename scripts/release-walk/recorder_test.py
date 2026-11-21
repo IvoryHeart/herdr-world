@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import pty
+import signal
 import subprocess
 import sys
 import tempfile
@@ -93,6 +94,16 @@ class RecorderTests(unittest.TestCase):
                 os.write(master, b'WALK_INPUT_COMPLETE\r')
                 telemetry.wait(lambda item: item['event'] == 'input' and 'WALK_INPUT_COMPLETE' in item['text'], timeout=10)
                 output.wait(lambda text: 'child received: WALK_INPUT_COMPLETE' in text, timeout=10)
+                os.write(master, b'finish\r')
+                child.wait(timeout=10)
+                _, ended = telemetry.wait(lambda item: item['event'] == 'terminated', timeout=2)
+                self.assertEqual(ended['identity'], invoked['identity'])
+                # Exiting the controlling session leader can SIGHUP the relay
+                # before the inner PTY reports EOF (platform-dependent).
+                self.assertIn(ended['reason'], ('harness-output-eof', 'harness-output-eio', 'relay-signal'))
+                if ended['reason'] == 'relay-signal':
+                    self.assertEqual(ended['signal'], signal.SIGHUP)
+                self.assertIn('child received: WALK_INPUT_COMPLETE', ended['output_tail'])
             finally:
                 child.terminate()
                 child.wait(timeout=10)

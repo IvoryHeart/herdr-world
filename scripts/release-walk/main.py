@@ -39,6 +39,7 @@ def main(config):
                 archive, candidate, config['baseline'])
     report_path = Path(config['report'])
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.with_name('listing-failure.json').unlink(missing_ok=True)
     try:
         tool_dir = tools(root, config)
         baseline = published(root, config['baseline'], config['platform'])
@@ -61,6 +62,9 @@ def main(config):
                         default_connection(world, runtime)
                         assert len(world.snapshot()) == 1, 'fresh installation added an absent runtime'
             with Fixture(root / 'both', tool_dir, telemetry) as fixture, fixture.world(candidate) as world:
+                fixture.failure_artifact = report_path.with_name('listing-failure.json')
+                fixture.failure_context = {key: walk.report[key] for key in
+                                           ('commit', 'platform', 'archive_sha256', 'binary_sha256')}
                 with walk.journey('Fresh World: both'):
                     check_signed_out(fixture)
                     tui = default_connection(world, 'herdr')

@@ -59,6 +59,16 @@ harness binding. For the unchanged isolated core generation, one native read
 reports liveness, exit code and whether the foreground matches the harness.
 Diagnostics never print arguments, paths or transcripts and cannot turn a failure
 into a pass or replace its original reason.
+Before teardown, listing failures also save `listing-failure.json` beside the
+receipt. CI retains it as `release-walk-listing-failure-PLATFORM`: the core
+Codex terminal's final screen (or an explicit unavailable result), the recorder's
+termination reason and bounded output tail, and that runtime's aggregate snapshot.
+The artifact binds the expected generation and exact package/commit; a changed
+generation refuses the terminal read. Sign-in URLs, tokens, device codes,
+paths and sensitive settings are redacted before writing. Raw recorder traffic
+is never uploaded. If the native terminal is already gone, the recorder tail
+retains its last output; no termination event is reported explicitly as such.
+Inspect this artifact from the failed native job before diagnosing an exit.
 The older pre-0.2.4 cookie migration remains covered by installer acceptance below.
 
 The walk installs pinned, real `claude` and `codex` executables, signed out.
