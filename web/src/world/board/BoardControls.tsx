@@ -15,6 +15,7 @@ import {
   useState,
   type RefObject,
 } from "react";
+import { helpAnchor } from "../../help/helpEntry";
 import { useLayer } from "../../layerStack";
 import { binDock, dockReserve, onBinDock } from "../bin/binDock";
 import {
@@ -24,6 +25,7 @@ import {
 } from "./boardControlsLayout";
 import "./boardControls.css";
 import { BoardSettingsDialog } from "./BoardSettingsDialog";
+import { useViewControlRequest } from "../../settings/viewControls";
 import { BOARD_SURFACES, type BoardAppearance } from "./boardAppearance";
 
 const CONTROLS: readonly BoardControl[] = [
@@ -37,6 +39,13 @@ const CONTROLS: readonly BoardControl[] = [
   "tidy",
   "menu",
 ];
+/** The controls a help entry points at (board.help.ts). */
+const HELP_ANCHORS: Partial<Record<BoardControl, { "data-help": string }>> = {
+  next: helpAnchor("board.next"),
+  lens: helpAnchor("board.lenses"),
+  fit: helpAnchor("board.camera"),
+};
+
 const INITIAL_WIDTHS = {
   work: 76,
   lens: 84,
@@ -106,6 +115,9 @@ export function BoardControls(props: {
     }),
   );
   const measuredLayout = useRef(layout);
+  // Settings and the command box open this menu or its colours (#1035).
+  useViewControlRequest("board.settings", () => setOpen(true));
+  useViewControlRequest("board.colours", () => setDialog("colors"));
   useLayer(open, () => setOpen(false), {
     element: () => menu.current,
     anchors: () => [trigger.current],
@@ -263,6 +275,12 @@ export function BoardControls(props: {
                 type="button"
                 className={className(control)}
                 aria-label="Board settings"
+                data-help-opens={
+                  layout.overflow
+                    .map((hidden) => HELP_ANCHORS[hidden]?.["data-help"])
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
                 aria-haspopup="menu"
                 aria-expanded={open}
                 onClick={() => setOpen(!open)}
@@ -307,6 +325,7 @@ export function BoardControls(props: {
                       type="button"
                       key={control}
                       className={className(control)}
+                      {...HELP_ANCHORS[control]}
                       role="menuitem"
                       aria-label={accessible(control)}
                       disabled={control === "next" && !props.onNext}
@@ -382,6 +401,7 @@ export function BoardControls(props: {
               type="button"
               key={control}
               className={className(control)}
+              {...HELP_ANCHORS[control]}
               ref={control === "work" ? props.workRef : undefined}
               aria-label={accessible(control)}
               disabled={control === "next" && !props.onNext}

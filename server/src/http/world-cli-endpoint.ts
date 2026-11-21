@@ -15,11 +15,13 @@ import { readJsonBody } from "./json-body";
 export const WORLD_CLI_PATH = "/api/world/cli";
 /** Longer than the longest held `ask get` (world-cli.ts ASK_WAIT_MAX_MS). */
 export const WORLD_CLI_IDLE_TIMEOUT_SECONDS = 40;
-const MAX_BODY_BYTES = 64 * 1024;
+// A 256 KiB memory edit can expand sixfold under JSON string escaping.
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 const STATUS: Record<CliErrorCode, number> = {
   usage: 400,
   refused: 403,
+  question_cap: 429,
   not_found: 404,
   unavailable: 503,
 };
@@ -73,6 +75,20 @@ export async function handleWorldCliEndpoint(
       { status: 400 },
     );
   }
+  const command = (body as { command?: unknown } | null)?.command;
+  if (
+    command !== "memory create" &&
+    command !== "memory update" &&
+    Buffer.byteLength(JSON.stringify(body)) > 64 * 1024
+  )
+    return Response.json(
+      {
+        ok: false,
+        code: "usage",
+        error: "the request exceeds the command body limit",
+      },
+      { status: 400 },
+    );
   // Searched only when the call names a pane, under that pane's processes.
   const locate: CallerLocator | null =
     (deps.platform ?? process.platform) === "linux" && peer

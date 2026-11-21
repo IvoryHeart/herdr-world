@@ -626,6 +626,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
             snapshot.panes,
             observedAt,
             snapshot.agents,
+            { workspaces: snapshot.workspaces, tabs: snapshot.tabs },
           );
         }
         if ((work.late && changed) || this.wasInvalidatedSinceStart(work)) {

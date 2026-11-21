@@ -1,3 +1,4 @@
+import { handleApartmentsRpc } from "./apartments";
 import { planBoardPatch } from "../world/board-plan";
 import { parseObservationBase } from "../world/observation-v1";
 import { pruneSnapshotAppearance } from "../world/appearance-prune";
@@ -15,6 +16,7 @@ import { handleIdeRpc } from "./ide";
 import { handleWorldIntegrationRpc } from "./integration";
 import { ownerPresence } from "./presence";
 import { handleCoreSharedRpc } from "./core-shared";
+import { handleMemoryRpc } from "./memory";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
@@ -60,6 +62,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     }
     return;
   }
+  if (method.startsWith("world.memory.")) return handleMemoryRpc(rpc);
   if (method === "world.usage.get") {
     try {
       const usage = rpc.services.worldUsage;
@@ -86,6 +89,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   )
     return handleCoreWatchRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
+  if (method.startsWith("world.apartments.")) return handleApartmentsRpc(rpc);
   if (method.startsWith("world.core.")) return handleCoreRpc(rpc);
   if (method.startsWith("world.float.")) return handleFloatRpc(rpc);
   if (method.startsWith("world.integration."))

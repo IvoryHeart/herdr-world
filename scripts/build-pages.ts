@@ -7,6 +7,7 @@ import {
   verifySiteReferences,
   versionSiteAssets,
 } from "./pages-content";
+import { renderHelpSite } from "./help-docs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const sourceDirectory = join(root, "site");
@@ -76,6 +77,31 @@ await writeFile(
     .replace("<!-- tutorial:content -->", () => tutorial.content)
     .replace("<!-- tutorial:navigation -->", () => tutorial.navigation),
 );
+
+// The help page: docs/HELP.md, generated from the help declarations, with
+// the pictures it shows (scripts/help-docs.ts).
+const help = await renderHelpSite(
+  await Bun.file(join(root, "docs/HELP.md")).text(),
+);
+const helpPath = join(outputDirectory, "help/index.html");
+const helpTemplate = await Bun.file(helpPath).text();
+for (const slot of ["content", "navigation"]) {
+  if (!helpTemplate.includes(`<!-- help:${slot} -->`)) {
+    throw new Error(`Missing help template slot: ${slot}`);
+  }
+}
+await writeFile(
+  helpPath,
+  helpTemplate
+    .replace("<!-- help:content -->", () => help.content)
+    .replace("<!-- help:navigation -->", () => help.navigation),
+);
+await mkdir(join(assetDirectory, "help"), { recursive: true });
+for (const picture of help.pictures) {
+  const sourcePath = join(root, "web/public/help", picture);
+  await ensureFile(sourcePath);
+  await copyFile(sourcePath, join(assetDirectory, "help", picture));
+}
 
 const build = await Bun.build({
   entrypoints: [

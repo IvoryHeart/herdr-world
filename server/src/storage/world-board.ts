@@ -30,7 +30,11 @@ const firstBoardTables = [
   "groups",
   "group_changes",
 ] as const;
-export const boardTables = [...firstBoardTables, "room_pins"] as const;
+export const boardTables = [
+  ...firstBoardTables,
+  "room_pins",
+  "shapes",
+] as const;
 type Family = (typeof boardTables)[number];
 type Row = {
   key: string;
@@ -50,6 +54,8 @@ ${firstBoardTables.map(boardTable).join("\n")}
 `;
 /** Town room spots (board-types.ts `room_pins`), added after the first schema. */
 export const worldRoomPinsMigration = boardTable("room_pins");
+/** Board drawings (shared/boardShapes.ts), added after room spots. */
+export const worldBoardShapesMigration = boardTable("shapes");
 export function readBoard(db: Database): BoardDocument | null {
   const meta = db.query("SELECT * FROM board_meta WHERE singleton=1").get() as {
     revision: number;
@@ -68,6 +74,8 @@ export function readBoard(db: Database): BoardDocument | null {
   doc.revision = meta.revision;
   doc.notes = rows("notes").map(([, body]) => body);
   doc.strings = rows("strings").map(([, body]) => body);
+  const shapes = rows("shapes").map(([, body]) => body);
+  if (shapes.length) doc.shapes = shapes;
   for (const family of maps)
     (doc.layout as any)[family] = Object.fromEntries(rows(family));
   if (!meta.group_interest) delete doc.layout.group_interest;
@@ -98,6 +106,7 @@ export function writeBoard(
   for (const record of [
     ...next.notes,
     ...next.strings,
+    ...(next.shapes ?? []),
     ...next.relations.groups,
   ])
     reserve.run(record.id, record.id);
@@ -176,9 +185,13 @@ export function writeBoard(
         !binding
       )
         throw new Error("Board binding capture is missing");
-      const record = ["notes", "strings", "groups", "group_interest"].includes(
-        family,
-      )
+      const record = [
+        "notes",
+        "strings",
+        "shapes",
+        "groups",
+        "group_interest",
+      ].includes(family)
         ? key
         : (binding?.record_id ?? null);
       put.run(
@@ -198,6 +211,10 @@ export function writeBoard(
   save(
     "strings",
     next.strings.map((string) => [string.id, string]),
+  );
+  save(
+    "shapes",
+    (next.shapes ?? []).map((shape) => [shape.id, shape]),
   );
   save("appearance", Object.entries(next.appearance ?? {}));
   for (const family of maps)

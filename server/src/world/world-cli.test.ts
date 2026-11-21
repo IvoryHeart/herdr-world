@@ -527,7 +527,7 @@ describe("questions and results", () => {
     ).toBeUndefined();
   });
 
-  test("withdrawal refuses another agent session in the same verified terminal", async () => {
+  test("withdrawal survives session replacement in the same verified terminal", async () => {
     const current = host();
     const originalCall = current.call.bind(current);
     let session = "original-session";
@@ -561,10 +561,10 @@ describe("questions and results", () => {
     });
     session = "replacement-session";
     expect(await run("ask withdraw", { id })).toMatchObject({
-      ok: false,
-      code: "refused",
+      ok: true,
+      result: { withdrawn: { at: 1000 } },
     });
-    expect(ledger.openAsks().asks).toHaveLength(1);
+    expect(ledger.openAsks().asks).toHaveLength(0);
   });
 
   /** A host whose Herdr names the agents in its panes (`agent.get`). */
@@ -644,7 +644,7 @@ describe("questions and results", () => {
     );
     expect(unverified.filter((reply) => reply.ok)).toHaveLength(20);
     expect(unverified.filter((reply) => !reply.ok)).toMatchObject([
-      { code: "refused" },
+      { code: "question_cap" },
     ]);
     expect(
       ledger.openAsks().asks.filter((ask) => !ask.actor.verified),
@@ -1091,7 +1091,7 @@ describe("review fixes", () => {
       expect((await run("ask", { question: `q${index}` })).ok).toBe(true);
     expect(await run("ask", { question: "one more" })).toMatchObject({
       ok: false,
-      code: "refused",
+      code: "question_cap",
     });
   });
 
@@ -1103,10 +1103,10 @@ describe("review fixes", () => {
       ).toBe(true);
     expect(
       await run("ask", { question: "one more" }, "w9:p99", null),
-    ).toMatchObject({ ok: false, code: "refused" });
+    ).toMatchObject({ ok: false, code: "question_cap" });
     expect(
       await run("ask", { question: "one more" }, null, null),
-    ).toMatchObject({ ok: false, code: "refused" });
+    ).toMatchObject({ ok: false, code: "question_cap" });
     // A verified pane still has its own.
     expect((await run("ask", { question: "mine" })).ok).toBe(true);
   });

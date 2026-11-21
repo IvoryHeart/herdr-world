@@ -71,6 +71,12 @@ import type { createOfficeObservabilityHttpHandler } from "../world/observabilit
 import type { createWorldCliService } from "../world/world-cli-service";
 import type { BrowserClients } from "./clients";
 import type { Clock } from "./ports";
+import {
+  SHIPYARD_CLI_PATH,
+  handleShipyardCli,
+  type createShipyardHttp,
+} from "../shipyard/http";
+import type { ShipyardService } from "../shipyard/service";
 
 /** Why World closed a browser's IDE socket; the server may run on. */
 const IDE_SOCKET_CLOSED = "World disconnected from the IDE server";
@@ -102,6 +108,10 @@ export type ListenerDeps = {
   sources: ReturnType<typeof createSourcesHttpHandler>;
   /** Installed web IDEs proxied under `/ide/<instance>/` (Code view). */
   ide?: IdeService;
+  shipyard: {
+    service: ShipyardService;
+    http: ReturnType<typeof createShipyardHttp>;
+  };
   /** Counts a request or message as in flight until it settles. */
   track<T>(work: Promise<T>): Promise<T>;
   /** True once the service is stopping: nothing new is admitted. */
@@ -414,6 +424,13 @@ export function listen(deps: ListenerDeps) {
         bearerAuth,
       });
     }
+    if (url.pathname === SHIPYARD_CLI_PATH) {
+      return handleShipyardCli(req, server.requestIP(req), {
+        serverPort: server.port ?? config.port,
+        bearerAuth,
+        service: deps.shipyard.service,
+      });
+    }
     if (url.pathname === WORLD_CLI_PATH) {
       // `ask --wait` holds a call for up to 20 s; Bun's default idle
       // timeout (10 s) would cut it.
@@ -493,6 +510,8 @@ export function listen(deps: ListenerDeps) {
     if (officeObservabilityResponse) return officeObservabilityResponse;
     const sourcesResponse = await handleWorldSources(req, url.pathname);
     if (sourcesResponse) return sourcesResponse;
+    const shipyardResponse = await deps.shipyard.http(req, url.pathname);
+    if (shipyardResponse) return shipyardResponse;
     const connectionRoute = parseConnectionHttpRoute(
       requestPathname,
       req.method,

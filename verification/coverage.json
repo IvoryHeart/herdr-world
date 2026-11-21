@@ -63,6 +63,8 @@
         "server/src/connections/ssh-preflight-recovery.test.ts",
         "server/src/connections/profiles.test.ts",
         "server/src/connections/first-run.test.ts",
+        "server/src/cli/connections.test.ts",
+        "server/src/connections/registry-process.test.ts",
         "server/src/connections/local-recovery.test.ts",
         "server/src/service/local-recovery.test.ts",
         "server/src/connections/host-service.test.ts",
@@ -82,10 +84,14 @@
         "models": ["quint/runtime-control.qnt", "quint/runtime-drain.qnt"],
         "contracts": [
           "verification/consumer-evidence.md",
-          "verification/composition.md"
+          "verification/composition.md",
+          "verification/contracts/connection-registry.md"
         ],
         "tests": [
           "server/src/connections/profile-service.test.ts",
+          "server/src/cli/connections.test.ts",
+          "server/src/connections/registry-process.test.ts",
+          "server/src/connections/first-run.test.ts",
           "server/src/connections/ssh-preflight-recovery.test.ts",
           "server/src/connections/profiles.test.ts",
           "server/src/connections/local-recovery.test.ts",
@@ -100,7 +106,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local initial-socket retry consumes the same unchanged runtime-control/drain transitions; deterministic scheduler cancellation/backoff tests and a production-composition native-socket test verify late readiness, fresh admission and retired-generation refusal. This does not establish macOS login activation. Host catalogue migration preserves runtime IDs; serialized discovery, empty-host durability, disappearance/rediscovery, independent sibling failure, host removal and discovery during shutdown consume the same unchanged manager transitions. Real composition tests cover authenticated host RPC/CLI admission and no offline fallback. Host admission additionally exhausts eight saved-host/profile auto-connect combinations and four recovering-runtime/sibling-disconnect combinations with the actual retry scheduler. Persistence reload, deferred-start Disconnect, explicit absent-endpoint Connect, retained intent across temporary absence and failed-write startup isolation are direct finite consumer evidence; manager transitions remain unchanged. See the host ownership consumer decision.",
+      "evidenceDecision": "Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local initial-socket retry consumes the same unchanged runtime-control/drain transitions; deterministic scheduler cancellation/backoff tests and a production-composition native-socket test verify late readiness, fresh admission and retired-generation refusal. This does not establish macOS login activation. Host catalogue migration preserves runtime IDs; serialized discovery, empty-host durability, disappearance/rediscovery, independent sibling failure, host removal and discovery during shutdown consume the same unchanged manager transitions. Real composition tests cover authenticated host RPC/CLI admission and no offline fallback. Host admission additionally exhausts eight saved-host/profile auto-connect combinations and four recovering-runtime/sibling-disconnect combinations with the actual retry scheduler. Persistence reload, deferred-start Disconnect, explicit absent-endpoint Connect, retained intent across temporary absence and failed-write startup isolation are direct finite consumer evidence; manager transitions remain unchanged. See the host ownership consumer decision. Saved registry ownership adds direct exhaustive CLI admission orders and actual independent-process startup/crash consumers (verification/contracts/connection-registry.md); these establish the native file-lock and consumer boundaries without expanding the manager models.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1218,6 +1224,10 @@
         "server/src/agent/worktree-session.test.ts",
         "server/src/workspace/agent-worktree-files.test.ts",
         "server/src/agent/session-history.test.ts",
+        "server/src/agent/process-transcript.test.ts",
+        "server/src/herdr-core/headless-chat.test.ts",
+        "server/src/herdr-core/history.test.ts",
+        "server/src/herdr-core/agent-sessions.test.ts",
         "server/src/agent/claude-ssh.test.ts",
         "server/src/agent/conversation-matrix.test.ts",
         "server/src/agent/conversation-watch.test.ts",
@@ -1309,7 +1319,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Direct Codex protocol and inference fixtures check bounded complete discovery, title precedence, contradictory reports, two-sided uniqueness, freshness, changing evidence, connection isolation and refusal of guessed message/answer input; inferred evidence never establishes client identity. Claude SSH fixtures execute the production POSIX lookup/stat/read payloads against a disposable filesystem with a synthetic Herdr source, checking remote read/send/receipt, duplicate and malformed IDs, missing files, stale-session refusal and connection isolation; native SSH/Claude acceptance is not claimed. Repository popover consumers also verify that retained PR/MR reports stay within the complete connection/runtime/workspace/checkout/cwd/branch/worktree association: a failed read after target replacement cannot reuse the former request, while same-association refresh failures retain it. This is direct React consumer evidence for a read-only report cache, not an abstract model of provider or Git semantics. Per-terminal settings add direct P5 platform checks and P7 finite exhaustive convergence evidence; the unchanged runtime-leases model supplies only lease authority, not token atomicity or HLC convergence. See the terminal-settings contract for the finite domain, migration and platform limits. The send-guard consumer drives the real Herdr conversation source with a captured menu on screen: a message or command is refused with nothing typed while the menu is open and sent once it closes, and a command queued while the agent is working is not queued twice. The send-boundary consumer (real conversation source, fake Herdr) refuses typing when the pre-prompt screen read fails, is malformed, shows a cut-off or any menu under a stale working status, or when a menu opens during preparation awaits, and keeps ordinary text and distinct commands allowed; identical slash commands are reserved before dispatch, kept after a lost acknowledgement but released after definite native non-submission, retired only by qualified fresh session/idle observations (never malformed, unknown or pre-dispatch reads), scoped to the session and busy interval, and not cancelled by dismissing a receipt. The send-repair consumer also checks local and SSH quoted-footer compatibility, including browser baselines: quote text is read from the same bound session and recognizes the Claude message prefix. Partial boxed options and blank-padded menu evidence refuse despite lacking answer controls, while a changed terminal/state witness in the final native observation refuses before dispatch; actual menus, failed/malformed screens and replacement sessions still refuse. The waiting-render consumer (pendingSends, static render) shows waiting only for a receipt the service marks waiting and otherwise the unchecked label; it does not claim native execution. No real harness send is exercised: Herdr refuses prompts to synthetic panes, so queue admission end to end remains unexercised. Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required. Continuation regressions require bounded top-level provenance, renewed remote UUID/path authority and owned local process cancellation; nested or discarded branch content cannot establish a session. Local configured-root parity is not claimed.",
+      "evidenceDecision": "Headless conversation discovery adds bounded writable-descriptor/process-start evidence, real Linux/macOS writer consumers, macOS field fixtures and SSH destination/failure fixtures; see the Q25 headless identity assessment in consumer-evidence.md. Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Direct Codex protocol and inference fixtures check bounded complete discovery, title precedence, contradictory reports, two-sided uniqueness, freshness, changing evidence, connection isolation and refusal of guessed message/answer input; inferred evidence never establishes client identity. Claude SSH fixtures execute the production POSIX lookup/stat/read payloads against a disposable filesystem with a synthetic Herdr source, checking remote read/send/receipt, duplicate and malformed IDs, missing files, stale-session refusal and connection isolation; native SSH/Claude acceptance is not claimed. Repository popover consumers also verify that retained PR/MR reports stay within the complete connection/runtime/workspace/checkout/cwd/branch/worktree association: a failed read after target replacement cannot reuse the former request, while same-association refresh failures retain it. This is direct React consumer evidence for a read-only report cache, not an abstract model of provider or Git semantics. Per-terminal settings add direct P5 platform checks and P7 finite exhaustive convergence evidence; the unchanged runtime-leases model supplies only lease authority, not token atomicity or HLC convergence. See the terminal-settings contract for the finite domain, migration and platform limits. The send-guard consumer drives the real Herdr conversation source with a captured menu on screen: a message or command is refused with nothing typed while the menu is open and sent once it closes, and a command queued while the agent is working is not queued twice. The send-boundary consumer (real conversation source, fake Herdr) refuses typing when the pre-prompt screen read fails, is malformed, shows a cut-off or any menu under a stale working status, or when a menu opens during preparation awaits, and keeps ordinary text and distinct commands allowed; identical slash commands are reserved before dispatch, kept after a lost acknowledgement but released after definite native non-submission, retired only by qualified fresh session/idle observations (never malformed, unknown or pre-dispatch reads), scoped to the session and busy interval, and not cancelled by dismissing a receipt. The send-repair consumer also checks local and SSH quoted-footer compatibility, including browser baselines: quote text is read from the same bound session and recognizes the Claude message prefix. Partial boxed options and blank-padded menu evidence refuse despite lacking answer controls, while a changed terminal/state witness in the final native observation refuses before dispatch; actual menus, failed/malformed screens and replacement sessions still refuse. The waiting-render consumer (pendingSends, static render) shows waiting only for a receipt the service marks waiting and otherwise the unchecked label; it does not claim native execution. No real harness send is exercised: Herdr refuses prompts to synthetic panes, so queue admission end to end remains unexercised. Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required. Continuation regressions require bounded top-level provenance, renewed remote UUID/path authority and owned local process cancellation; nested or discarded branch content cannot establish a session. Local configured-root parity is not claimed.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1476,6 +1486,10 @@
         "server/src/storage/world-writer.test.ts",
         "server/src/world/attention-dispatch.test.ts",
         "server/src/cli/world.test.ts",
+        "server/src/world/world-question-ownership.test.ts",
+        "server/src/world/question-backlog-storage.test.ts",
+        "server/src/http/world-cli-endpoint.test.ts",
+        "web/src/world/NeedsYouAskerActions.dom.test.ts",
         "server/src/storage/world-identifiers.test.ts",
         "server/src/service/storage-lifecycle.test.ts",
         "server/src/service/world-service.test.ts",
@@ -1503,7 +1517,7 @@
       "status": "alternative-evidence",
       "remaining": "Dedup is scoped to recorded occurrences/sessions; it does not make external push delivery exactly once.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real notification listener/push tests and durable task notification tests exercise session-safe clicks, endpoint validation and persist-before-dispatch/dedup across restart. Owner asks (#472): direct store and browser cases check one announcement per retained ask ID, initial-backlog suppression, revision/socket retirement, local OS delivery with Web Push selected and exact original-terminal/session notification admission. #493: store cases name the asker (Herdr's agent name, an unverified mark once) with the question's first line, announce an unverified ask only when the service placed it on one local pane, and never announce a dismissed ask; the asks store sends the owner's dismissal through world.ask.dismiss. These tests do not claim delivery while every browser is closed. SQLite attention supplements this assessment under openspec/specs/world-storage/spec.md: finite source/compiled crash schedules prove acknowledged-answer retention, atomic outbox commits, one writer, import/reopen and explicit effect-class uncertainty. Owner alerts may repeat; uncertain pane answers never auto-replay. Synthetic receiver deduplication is not attributed to Herdr. Supplemental finite source/compiled recovery, root fail-stop, base32 allocation and Reception evidence require independent review under the World storage contract; accepted model claims are unchanged.",
+      "evidenceDecision": "Real notification listener/push tests and durable task notification tests exercise session-safe clicks, endpoint validation and persist-before-dispatch/dedup across restart. Owner asks (#472): direct store and browser cases check one announcement per retained ask ID, initial-backlog suppression, revision/socket retirement, local OS delivery with Web Push selected and exact original-terminal/session notification admission. #493: store cases name the asker (Herdr's agent name, an unverified mark once) with the question's first line, announce an unverified ask only when the service placed it on one local pane, and never announce a dismissed ask; the asks store sends the owner's dismissal through world.ask.dismiss. These tests do not claim delivery while every browser is closed. SQLite attention supplements this assessment under openspec/specs/world-storage/spec.md: finite source/compiled crash schedules prove acknowledged-answer retention, atomic outbox commits, one writer, import/reopen and explicit effect-class uncertainty. Owner alerts may repeat; uncertain pane answers never auto-replay. Synthetic receiver deduplication is not attributed to Herdr. Question closure (#1128) selects an exhaustive alternative to a new Quint model: 256 identity cases and 120 serial orders in world-question-ownership.test.ts, real SQLite race/reopen/RPC and production DOM controls; downstream lease and answer-recipient models remain unchanged. Supplemental finite source/compiled recovery, root fail-stop, base32 allocation and Reception evidence require independent review under the World storage contract; accepted model claims are unchanged.",
       "partialEvidence": {
         "models": [],
         "contracts": [
@@ -1522,6 +1536,10 @@
           "server/src/storage/world-writer.test.ts",
           "server/src/world/attention-dispatch.test.ts",
           "server/src/cli/world.test.ts",
+          "server/src/world/world-question-ownership.test.ts",
+          "server/src/world/question-backlog-storage.test.ts",
+          "server/src/http/world-cli-endpoint.test.ts",
+          "web/src/world/NeedsYouAskerActions.dom.test.ts",
           "server/src/storage/world-identifiers.test.ts",
           "server/src/service/storage-lifecycle.test.ts",
           "server/src/service/world-service.test.ts",
@@ -1541,6 +1559,9 @@
             "server/src/storage/world-schema.ts",
             "server/src/world/attention-dispatch.ts",
             "server/src/world/world-cli-service.ts",
+            "server/src/world/world-cli-asks.ts",
+            "shared/questionAsker.ts",
+            "web/src/world/NeedsYouAskerActions.tsx",
             "server/src/service/world-service.ts",
             "server/src/storage/world-identifiers.ts",
             "web/src/world/town/TownRail.tsx"
@@ -1549,7 +1570,8 @@
           "properties": [
             "Acknowledgement follows atomic domain/declared-outbox commit; exclusive worker ownership and drain/reopen",
             "Finite process-crash recovery and explicit uncertain effect outcomes; worker failure stops the service",
-            "Owner alerts use original connection current leases, bounded backoff and closed-ask cancellation; CLI fallback remains",
+            "Owner alerts use original connection current leases, bounded backoff and closed-ask cancellation; CLI fallback excludes quiet question-cap refusals",
+            "Verified terminal question closure survives generation/session replacement; exhaustive identity and serial-order sweeps plus actual SQLite cap race, reopen and owner bulk-close RPC",
             "Idempotent private hash-backed import and separate history/domain retention; no unconsumed answer-send backlog",
             "Store collision checks issue kind plus eight random base32 symbols without clocks/counters",
             "Service-incarnation cursors reset across restart; deadline waits re-arm within 60 seconds",
@@ -1561,6 +1583,10 @@
             "server/src/storage/world-writer.test.ts",
             "server/src/world/attention-dispatch.test.ts",
             "server/src/cli/world.test.ts",
+            "server/src/world/world-question-ownership.test.ts",
+            "server/src/world/question-backlog-storage.test.ts",
+            "server/src/http/world-cli-endpoint.test.ts",
+            "web/src/world/NeedsYouAskerActions.dom.test.ts",
             "server/src/storage/world-identifiers.test.ts",
             "server/src/service/storage-lifecycle.test.ts",
             "server/src/service/world-service.test.ts",
@@ -2015,6 +2041,7 @@
         "web/src/world/town/townPlaceSummary.test.ts",
         "server/src/usage/limits.test.ts",
         "server/src/usage/claude-tap.test.ts",
+        "quint/claude-tap-lock.test.ts",
         "server/src/cli/integration-claude.test.ts",
         "server/src/rpc/usage.test.ts",
         "server/src/usage/process.test.ts",
@@ -2028,10 +2055,11 @@
       "status": "alternative-evidence",
       "remaining": "Metrics do not grant operation authority; provider availability and network deadlines are observed integration behavior.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration. Harness-log usage uses direct parser, incremental host-cache, attribution/lease, retention/size, transport cancellation/reaping and RPC admission consumers under verification/contracts/world-usage.md. These read-only consumers do not expand accepted model claims.",
+      "evidenceDecision": "Real provider/HTTP/cache tests exercise bounded read-only observation, unavailable providers, coalescing and validated credential-free configuration. Harness-log usage uses direct parser, incremental host-cache, attribution/lease, retention/size, transport cancellation/reaping and RPC admission consumers under verification/contracts/world-usage.md. Numeric consumers retain direct evidence. The Claude tap publication/recovery subset has a candidate finite model and real-filesystem replay under verification/contracts/claude-tap-lock.md; this does not expand previously accepted model claims.",
       "partialEvidence": {
-        "models": [],
+        "models": ["quint/claude-tap-lock.qnt"],
         "contracts": [
+          "verification/contracts/claude-tap-lock.md",
           "verification/consumer-evidence.md",
           "verification/contracts/world-usage.md"
         ],
@@ -2053,10 +2081,11 @@
           "server/src/bridge/herdr-client.test.ts",
           "server/src/usage/context.test.ts",
           "server/src/usage/limits.test.ts",
-          "server/src/usage/claude-tap.test.ts"
+          "server/src/usage/claude-tap.test.ts",
+          "quint/claude-tap-lock.test.ts"
         ],
-        "checks": ["bun run check"],
-        "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+        "checks": ["bun run check", "bun run verification:gate"],
+        "review": "Numeric consumer foundation accepted in review 5516249164. Claude tap ownership repair and model mapping require fresh independent review; existing consumer/platform checks and excluded claims remain mandatory."
       },
       "promotion": {
         "decision": "accepted",
@@ -2084,7 +2113,8 @@
             "Counted-once private numeric usage and bounded UTC rollups; explicit stale, missing and truncated coverage",
             "Unique current session attribution and runtime fencing; no observation grants mutation authority",
             "Newest subscription limits, fresh context fill and unknown-window honesty",
-            "Claude tap numeric privacy and input/output chaining; local installation preserves user edits and exact unchanged settings restoration"
+            "Claude tap numeric privacy and input/output chaining; local installation preserves user edits and exact unchanged settings restoration",
+            "Comparable Claude tap readings never decrease through final rename; only confirmed-dead owners are recovered and delayed cleanup preserves replacement ownership"
           ],
           "tests": [
             "server/src/usage/projection.test.ts",
@@ -2097,6 +2127,7 @@
             "web/src/world/town/townPlaceSummary.test.ts",
             "server/src/usage/limits.test.ts",
             "server/src/usage/claude-tap.test.ts",
+            "quint/claude-tap-lock.test.ts",
             "server/src/cli/integration-claude.test.ts",
             "server/src/usage/process.test.ts",
             "server/src/usage/reader.test.ts",
@@ -3157,6 +3188,148 @@
           "bun run verification:gate"
         ],
         "review": "New design contract pending PR review."
+      }
+    },
+    {
+      "id": "Q54",
+      "area": "Live catalogue writer serialization",
+      "owner": "server/src/connections/profile-service.ts",
+      "requirement": "openspec/specs/runtime-federation/spec.md",
+      "properties": "Successful unrelated edits survive, one service persistence owner, failure preserves catalogue, retry reads current state",
+      "existingTests": [
+        "quint/connection-registry.test.ts",
+        "server/src/service/connections-cli.test.ts",
+        "server/src/cli/connections.test.ts",
+        "server/src/connections/profile-service.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1004",
+      "status": "modeled",
+      "technique": "finite-model-and-exhaustive-consumer",
+      "assessment": "48 configurations: three CLI verbs, both writer orders, both arrival boundaries and independent save failures with retry",
+      "remaining": "Runtime rollback and platform durability retain existing consumers. Offline preservation and startup races use the separate registry ownership protocol and real-process consumers mapped in Q02; the live queue is not cross-process ownership.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": ["quint/connection-registry.qnt"],
+        "contracts": ["verification/contracts/connection-registry.md"],
+        "tests": [
+          "quint/connection-registry.test.ts",
+          "server/src/service/connections-cli.test.ts",
+          "server/src/cli/connections.test.ts",
+          "server/src/connections/profile-service.test.ts"
+        ],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q55",
+      "area": "Claude limits stale-lock ownership",
+      "owner": "server/src/usage/claude-tap.ts",
+      "requirement": "openspec/specs/world-usage/spec.md",
+      "properties": "Comparable window maxima must not decrease after stale-lock recovery; a retired holder must not publish",
+      "existingTests": [
+        "quint/claude-tap-lock.test.ts",
+        "server/src/usage/claude-tap.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/853",
+      "status": "pending",
+      "technique": "finite-model-with-production-replay",
+      "assessment": "Positive TLC invariant and real filesystem replay cover eight live/dead acquisition, preparation, final-rename and release schedules; age-stealing remains a rejected model and production fault control.",
+      "remaining": "Independent acceptance of the repaired protocol and Q55 mapping; host-local PID identity and platform filesystem semantics remain direct consumer assumptions.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": ["quint/claude-tap-lock.qnt"],
+        "contracts": ["verification/contracts/claude-tap-lock.md"],
+        "tests": [
+          "quint/claude-tap-lock.test.ts",
+          "server/src/usage/claude-tap.test.ts"
+        ],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q56",
+      "area": "First-run and immutable launch preparation",
+      "owner": "server/src/connections/first-run.ts",
+      "requirement": "openspec/specs/herdr-core-runtime/spec.md",
+      "properties": "Saved/explicit authority wins, no unsaved default or launch before preparation, complete retry after uncertain file publication",
+      "existingTests": [
+        "server/src/connections/first-run.test.ts",
+        "server/src/usage/claude-launch-settings.test.ts",
+        "server/src/herdr-core/shell.test.ts",
+        "server/src/herdr-core/operations.test.ts",
+        "server/src/rpc/launcher-tap.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/984",
+      "status": "alternative-evidence",
+      "technique": "finite-failure-matrix-and-native-subprocess",
+      "assessment": "One async discovery save with before/after failure and retry; equal-content cache publications commute; real subprocess/PTY tests retain byte transport",
+      "remaining": "Cross-process startup ownership uses the Q02 registry-process consumers and connection-registry contract. Native harness/macOS acceptance and power loss remain platform checks; existing creation/core models own post-preparation launch.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/launch-preparation.md"],
+        "tests": [
+          "server/src/connections/first-run.test.ts",
+          "server/src/usage/claude-launch-settings.test.ts",
+          "server/src/herdr-core/shell.test.ts",
+          "server/src/herdr-core/operations.test.ts",
+          "server/src/rpc/launcher-tap.test.ts"
+        ],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q57",
+      "area": "Open agent runtime move candidate",
+      "owner": "verification/contracts/agent-move-audit.md",
+      "requirement": "verification/contracts/agent-move-audit.md",
+      "properties": "Quit before resume; at most one running conversation; details follow or loss/uncertainty reported",
+      "existingTests": [
+        "quint/replay.test.ts",
+        "quint/binding-resolution.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/990",
+      "status": "pending",
+      "technique": "external-candidate-exhaustive-assessment",
+      "assessment": "Frozen open #990 df398319a031f840668f7e6ea0dff765c5764c11: actual serial controller 576-outcome matrix ran; native and persistence consumers mapped in contract",
+      "remaining": "Feature and candidate consumer files are not merged. Current listed tests cover only existing shared runtime/binding fences; native, metadata, browser acceptance remains with #990. Independent Worlds and crash atomicity are not claimed.",
+      "requiredChecks": ["bun run check", "bun run verification:gate"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/agent-move-audit.md"],
+        "tests": ["quint/replay.test.ts", "quint/binding-resolution.test.ts"],
+        "checks": ["bun run verification:gate"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+      }
+    },
+    {
+      "id": "Q58",
+      "area": "Read-only integrations registry and private vault",
+      "owner": "server/src/integrations/",
+      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "properties": "Existing owners retain control authority; owner failure is isolated; only supported secret names leave storage; private atomic publication and closure refusal",
+      "existingTests": [
+        "server/src/integrations/registry.test.ts",
+        "server/src/integrations/vault.test.ts"
+      ],
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1026",
+      "status": "alternative-evidence",
+      "technique": "direct-owner-and-filesystem-matrices",
+      "assessment": "Read-only owner projection plus synchronous in-service vault read/replace: no independent writer completion to permute. Real tests cover owner failures, named-secret privacy, legacy migration, unsafe targets and closed storage.",
+      "remaining": "Source refresh, connection authority and integration installation retain their own consumers. Independent-process filesystem and power-loss behavior are not proved.",
+      "requiredChecks": ["bun run check"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/architecture-audit-2026-11.md"],
+        "tests": [
+          "server/src/integrations/registry.test.ts",
+          "server/src/integrations/vault.test.ts"
+        ],
+        "checks": ["bun run test server/src/integrations"],
+        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
       }
     }
   ],

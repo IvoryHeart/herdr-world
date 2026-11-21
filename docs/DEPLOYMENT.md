@@ -512,7 +512,7 @@ reopening are separate; this setup behavior does not verify macOS login recovery
 A failed Homebrew bootstrap warns and leaves World available for SSH or browser
 setup. Repair a broken default-path executable before retrying. For managed
 TUI installations, use their package manager; World never replaces a shim or
-downgrades a newer binary. **Menu → Runtime** offers **Upgrade Herdr** or
+downgrades a newer binary. **Menu → Settings → Herdr and connection details** offers **Upgrade Herdr** or
 **Update Herdr integrations** when the local TUI needs them.
 
 What the upgrade does:
@@ -638,19 +638,33 @@ Choose another default before removing the current one. Explicit Herdr socket,
 SSH or session settings in the service configuration still pin its default.
 `--restart` optionally restarts the service after admission; it is no longer
 required on loopback. For a managed service bound to one specific non-loopback
-address, live admission is unavailable: use `--restart` to save and restart it,
-or stop a foreground process before editing its registry. With no listener
-answering, the CLI retains its existing save-for-next-start behavior, including
-when the managed service is starting or unreachable; it does not restart it.
+address, live admission is unavailable: `--restart` stops the service before
+saving offline and starts it after releasing registry ownership, even if the edit
+is refused. Stop a foreground process before editing its registry.
 
-Live admission uses the service configuration's listener, the data directory's
-local CLI token and an exact registry-path check. A refused or failed live request
-never falls back to writing the file; after a lost reply, check the catalogue
+Offline commands hold cross-process ownership from the fresh catalogue read
+through validation and atomic save or clearing. Successful unrelated edits
+accumulate. Startup and first-run discovery use the same ownership; they cannot
+replace an acknowledged offline edit. The CLI rechecks service discovery under
+ownership before reading. A busy registry can refuse after a five-second wait;
+a starting or unreachable live owner refuses without an offline write. Process
+exit releases ownership automatically, including after a crash. Keep the private
+`connections.json.ownership.sqlite` sidecar in place: never delete, rename or
+replace it to force an edit. With no live owner or answering legacy listener,
+the CLI saves for the next start without restarting the service.
+
+Live admission uses the selected data folder's instance-lock address (the
+configured listener for older services), its local CLI token and an exact
+registry-path check. Agent URL/token overrides cannot redirect connection edits.
+A refused or failed live request never falls back to writing the file; after a lost reply, check the catalogue
 before retrying. An older service must be upgraded before it accepts live edits.
 Duplicate or unknown IDs and other input errors exit 2; persistence, I/O and
 service failures exit 1.
-The CLI only checks the configured listener: stop any foreground World process
-on another port that shares the registry before editing offline.
+A service retains registry ownership until its connection storage closes. This
+also prevents offline writes through another data folder that selects the same
+registry with `HERDR_WORLD_CONNECTIONS_PATH`. Stop that owner before editing
+offline. Older binaries without this ownership protocol must be stopped before
+concurrent offline edits or startup.
 
 The command-line default remains useful for a single connection:
 
@@ -717,7 +731,7 @@ their Herdr supports stays available. Log in is not offered there.
 
 The Town board can show token use and reported cost from a Prometheus-compatible
 HTTP API. It does not supply Board notes, strings or agent status. Open
-**Menu → Integrations**, choose **Usage metrics → Connect** and save an HTTP or HTTPS
+**Menu → Settings → Integrations**, choose **Usage metrics → Connect** and save an HTTP or HTTPS
 base URL, or set the service startup default:
 
 ```bash
@@ -945,10 +959,10 @@ public Host and configure `--public-origin` when proxying to loopback.
 
 1. Open World over trusted HTTPS. On iOS/iPadOS 16.4 or newer, open the installed
    Home Screen PWA.
-2. Open **Menu → Behavior & automation → Task notifications**, enable alerts,
-   grant browser permission, and choose **Agent needs input** and/or
-   **Task completed**.
-3. Confirm **Background push** enrollment. If an existing browser only has local
+2. Open **Menu → Settings → Notifications & sounds**, turn on **Task
+   notifications**, grant browser permission, and choose **Notify when a task
+   needs you** and/or **Notify when a task finishes**.
+3. Confirm the row reads **On · Background push**. If an existing browser only has local
    alerts, toggle notifications off and on to enroll it again.
 
 Server delivery is enabled by default; each browser profile needs its own
@@ -1140,7 +1154,7 @@ another port with `--port`; do not run two shells for one installation.
 Open **Ranger** in the desktop toolbar or mobile controls. Connect a model provider
 using Ranger credentials, explicit Pi credentials, or a custom model endpoint.
 Use the gear button in the Ranger panel for model credentials and workspace
-permissions. **Menu → Configuration → Integrations** manages agent integration
+permissions. **Menu → Settings → Integrations** manages agent integration
 scripts on the selected Herdr host; it is separate from Ranger model setup.
 Allow specific workspaces in Ranger settings before asking it to read status,
 terminal output, agent history or Git changes. New installations allow no

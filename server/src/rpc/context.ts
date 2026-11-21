@@ -103,6 +103,8 @@ export type RpcServices = {
   worldWatchlist: WorldWatchlistRegistry;
   /** The agent bin; absent without World storage's effect outbox. */
   bin?: import("../service/bin-service").BinService;
+  /** Finished agents' records; absent in tests without World storage. */
+  apartments?: import("../service/apartments-service").ApartmentsService;
   worldDesk: DeskService["registry"];
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;
@@ -110,6 +112,7 @@ export type RpcServices = {
   worldUsage?: import("../usage/service").WorldUsageService;
   /** Installed web IDEs and their World-owned servers (world.ide.*). */
   ide?: import("../ide/service").IdeService;
+  worldMemory?: import("../memory/service").MemoryService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;

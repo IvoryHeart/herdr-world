@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   assessContractImpacts,
+  assessHelpImpact,
   checkPrBodyEvent,
   checkPrBodyText,
 } from "./check-pr-body";
@@ -343,4 +344,32 @@ test("draft descriptions enforce the same knowledge-map and changelog rules befo
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("an added feature ships a help declaration or says why it needs none", () => {
+  const added = "### Added\n\n- A synthetic feature.\n";
+  const fixed = "### Fixed\n\n- A synthetic fix.\n";
+  const paths = ["changes/synthetic.md", "web/src/example.tsx"];
+  const read = (text: string) => (path: string) =>
+    path === "changes/synthetic.md" ? text : undefined;
+  expect(assessHelpImpact(paths, read(added), "")).toEqual([
+    expect.stringContaining("changes/synthetic.md adds something"),
+  ]);
+  expect(assessHelpImpact(paths, read(fixed), "")).toEqual([]);
+  expect(
+    assessHelpImpact(
+      [...paths, "web/src/world/example.help.ts"],
+      read(added),
+      "",
+    ),
+  ).toEqual([]);
+  expect(
+    assessHelpImpact(
+      paths,
+      read(added),
+      "Help: none — The setting has no control on screen.",
+    ),
+  ).toEqual([]);
+  for (const answer of ["Help: none", "Help: none — <reason>", "Help: yes"])
+    expect(assessHelpImpact(paths, read(added), answer)).toHaveLength(1);
 });

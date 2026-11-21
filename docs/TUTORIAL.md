@@ -24,6 +24,9 @@ follow it, check what it changed, and then pick it up from your phone.
 
 This page is only reading material: World itself runs on your computer.
 
+Looking for one feature? [Help](./HELP.md) shows what each screen can do,
+with pictures. In World, press ? beside the views for the same help.
+
 ## 1. Get started
 
 <a id="start"></a>
@@ -111,7 +114,7 @@ reconnects one. A disconnected host stays visible, marked
 ### Keep World up to date
 
 When a new release is out, World tells you once and puts a dot on **Menu**.
-Install it when you are ready with **Menu → Help & updates → Upgrade to …**.
+Install it when you are ready with **Menu → Upgrade to …**.
 After an upgrade, open tabs offer **Reload**; your terminals keep running.
 
 ## 2. Find what needs you in Town
@@ -175,7 +178,8 @@ Tap an agent or its table. Its window opens on **Chat**, with **Terminal**,
 on the right; drag its edge to resize it. [Chat with an agent](#chat) covers
 reading and replying.
 
-Prefer the terminal? Set **Menu → Agents open** to **Terminal**.
+Prefer the terminal? Set **Menu → Settings → Opening an agent shows** to
+**Terminal**.
 
 ### Find anything
 
@@ -201,9 +205,11 @@ Around it you will find:
 - **The City expenses billboard.** Estimated cost for today and the last 7
   days. Each building's reception board shows its own share. Costs need a
   price table; see [harness usage](./usage.md).
-- **The post office.** With GitHub connected, your open pull requests wait here
-  as parcels. Tap one for its card and **Merge…**. Tap its sign to see every
-  pull request on the Work board.
+- **The warehouse.** With GitHub connected, your open pull requests wait in its
+  yard as crates. Tap one for its card and **Merge…**. Tap its sign to see
+  every pull request on the Work board.
+- **The harbour.** At the town's right edge, each project has a shipping lane:
+  ships are its releases. Tap a lane's name board to see its releases.
 
 After 30 minutes or more away, the board starts with **Since you left**: what
 is new for you, what finished and what merged.
@@ -235,11 +241,11 @@ room starts a new tab or agent there.
 1. Drag an agent you no longer need onto the **bin** at the bottom of the
    screen, or choose **⋯ → Put in bin** in its window.
 2. The agent walks out to the nearest bus stop. Nothing is closed yet.
-3. Every four minutes a red bus collects whoever is waiting. World closes
-   those agents only once it has driven off.
+3. Every four minutes a red bus collects whoever is waiting and drives them
+   to Apartments. World closes those agents only once they have walked in.
 
 Changed your mind? Open the tray from the bin and choose **Put back** before
-the bus leaves. **Close now** skips the wait.
+they walk into Apartments. **Close now** skips the wait.
 
 **You are done when:** you can find an agent, see what it is doing and open
 its window.
@@ -313,8 +319,8 @@ message reached the transcript.
 A **profile** is a ready-made agent: a name, a harness and model, a role,
 skills, a first brief and a look in Town.
 
-1. Open **Menu → Agent profiles**. Pick a starter (Reviewer, Builder, Designer
-   or FirstMate), or choose **New profile**.
+1. Open **Menu → Settings → Agent profiles**. Pick a starter (Reviewer,
+   Builder, Designer or FirstMate), or choose **New profile**.
 2. Work through **Who**, **Brain**, **Skills & tools**, **Brief** and
    **Look & sound**, then **Save**. In the brief, `{{task}}` becomes the task
    you type at launch.
@@ -335,8 +341,8 @@ you chose.
 
 <a id="chimes"></a>
 
-1. Open **Menu → Sounds** and tap **Needs you**, **For you** and **Finished**
-   to hear each chime. On devices that should stay quiet, turn off
+1. Open **Menu → Settings → Chimes and who plays them** and tap **Needs
+   you**, **For you** and **Finished** to hear each chime. On devices that should stay quiet, turn off
    **Play chimes on this device**.
 2. Under **Town master**, choose your coordinating agent and tap
    **Make Town master**. Its chime is a sound of its own.
@@ -366,7 +372,7 @@ results, and ask you questions.
    ```
 
    Use `codex` or `pi` for those agents, or use
-   **Menu → Configuration → Integrations → Agents**.
+   **Menu → Settings → Agent integrations**.
 
 2. Start a new agent session. It can now ask you something:
 
@@ -424,7 +430,7 @@ target before you press **Send**.
 4. Open a pull request for its checks and reviews. **Merge…**, **Close…** and
    **Mark ready…** ask first and say exactly what will happen.
 
-Nothing shows? Open **Menu → Integrations → Sources**. Sign in to GitHub with
+Nothing shows? Open **Menu → Settings → Sources**. Sign in to GitHub with
 `gh auth login` as the user that runs World, or add your Jira site and an API
 token.
 
@@ -573,7 +579,7 @@ First set up [Tailscale and Serve](#tailscale) in chapter 7. On a phone,
 2. Read and reply in **Chat**. In a terminal, tap **Message** to type with the
    phone keyboard; the key rows give you arrows, Esc and Ctrl.
 3. Open **Changes** to review the README diff.
-4. Adjust the size in **Menu → Appearance → Text size**.
+4. Adjust the size in **Menu → Settings → Appearance**.
 5. Install World as an app:
 
 | Browser or device | Where to install |
