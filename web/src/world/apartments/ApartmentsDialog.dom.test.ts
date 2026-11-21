@@ -118,9 +118,16 @@ if (process.env.APARTMENTS_DOM !== "1") {
 
   test("residents list newest first and search covers name, project, summary, PR and date", async () => {
     const view = await mount();
-    expect(view.names()).toEqual(["ada", "grace", "linus", "hopper", "turing"]);
+    expect(view.names()).toEqual([
+      "ada",
+      "grace",
+      "linus",
+      "hopper",
+      "lovelace",
+      "turing",
+    ]);
     expect(view.dialog().textContent).toContain(
-      "5 residents · up to 5000, newest kept",
+      "6 residents · up to 5000, newest kept",
     );
     await view.search("#42");
     expect(view.names()).toEqual(["ada"]);
@@ -137,6 +144,91 @@ if (process.env.APARTMENTS_DOM !== "1") {
     expect(view.names()).toContain("ada");
     await view.search("nobody-by-this-name");
     expect(view.dialog().textContent).toContain("No resident matches.");
+    await view.unmount();
+  });
+
+  test("every resident shows an avatar on its colour with its harness icon, kept or nearest", async () => {
+    const view = await mount();
+    const rows = [
+      ...view.dialog().querySelectorAll<HTMLElement>(".apartments-row"),
+    ];
+    const avatars = rows.map((row) => {
+      const avatar = row.querySelector<HTMLElement>(".apartments-avatar")!;
+      return {
+        name: row.querySelector("strong")!.textContent,
+        source: avatar.dataset.avatarSource,
+        sprite: !!avatar.querySelector("canvas.profile-sprite"),
+        harness:
+          avatar.querySelector<HTMLElement>(".agent-icon")?.dataset.agent,
+        colour: avatar.style.getPropertyValue("--agent-colour"),
+        title: avatar.title,
+      };
+    });
+    // No profiles are loaded here: a resident whose look was not kept gets
+    // World's default (residentLook.test.ts covers profile and harness).
+    expect(avatars).toEqual([
+      {
+        name: "ada",
+        source: "own",
+        sprite: true,
+        harness: "claude",
+        colour: "#9a7555",
+        title: "",
+      },
+      {
+        name: "grace",
+        source: "own",
+        sprite: true,
+        harness: "codex",
+        colour: "#83759f",
+        title: "",
+      },
+      {
+        name: "linus",
+        source: "own",
+        sprite: true,
+        harness: "claude",
+        colour: "#4b8a87",
+        title: "",
+      },
+      {
+        name: "hopper",
+        source: "default",
+        sprite: true,
+        harness: "codex",
+        colour: "",
+        title: "World's default avatar",
+      },
+      {
+        name: "lovelace",
+        source: "default",
+        sprite: true,
+        harness: "codex",
+        colour: "#5f80a3",
+        title: "World's default avatar",
+      },
+      {
+        name: "turing",
+        source: "default",
+        sprite: true,
+        harness: "pi",
+        colour: "",
+        title: "World's default avatar",
+      },
+    ]);
+    // The opened resident shows the same avatar, larger.
+    await act(async () => view.button("turing").click());
+    const head = view
+      .dialog()
+      .querySelector<HTMLElement>(
+        ".apartments-detail-head .apartments-avatar",
+      )!;
+    expect(head.dataset.large).toBe("true");
+    expect(head.dataset.avatarSource).toBe("default");
+    expect(head.querySelector("canvas.profile-sprite")).not.toBeNull();
+    expect(view.dialog().textContent).toContain(
+      "Pi · project-beta · Fixture core",
+    );
     await view.unmount();
   });
 
@@ -169,7 +261,13 @@ if (process.env.APARTMENTS_DOM !== "1") {
     // Back on the list, and ada no longer lives here.
     expect(view.names()).toEqual([]);
     await view.search("");
-    expect(view.names()).toEqual(["grace", "linus", "hopper", "turing"]);
+    expect(view.names()).toEqual([
+      "grace",
+      "linus",
+      "hopper",
+      "lovelace",
+      "turing",
+    ]);
     await view.unmount();
   });
 
@@ -201,7 +299,7 @@ if (process.env.APARTMENTS_DOM !== "1") {
     const view = await mount();
     expect(view.names()).toHaveLength(200);
     expect(view.dialog().textContent).toContain(
-      "255 residents · up to 5000, newest kept · newest 200 shown; search to find older",
+      "256 residents · up to 5000, newest kept · newest 200 shown; search to find older",
     );
     await view.search("Asleep task 249");
     expect(view.names()).toEqual(["claude"]);
