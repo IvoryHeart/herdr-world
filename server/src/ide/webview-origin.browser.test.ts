@@ -153,7 +153,12 @@ test.skipIf(!chrome || !openssl)(
       violations: string[];
     }>();
     // What reached World from another origin, and whether World admitted it.
-    const crossOrigin: { path: string; origin: string; status: number }[] = [];
+    const crossOrigin: {
+      path: string;
+      origin: string;
+      status: number;
+      cookie: string | null;
+    }[] = [];
     // World, on HTTPS, with its real browser admission in front.
     const world = Bun.serve({
       hostname: "127.0.0.1",
@@ -168,6 +173,7 @@ test.skipIf(!chrome || !openssl)(
             path: url.pathname,
             origin,
             status: refused?.status ?? 200,
+            cookie: req.headers.get("cookie"),
           });
         if (refused) return refused;
         if (url.pathname === "/ws")
@@ -185,7 +191,7 @@ test.skipIf(!chrome || !openssl)(
             headers: {
               ...html,
               "set-cookie":
-                "herdr_world_session=secret; Path=/; HttpOnly; Secure; SameSite=Strict",
+                "herdr_world_session=secret; Path=/; HttpOnly; Secure; SameSite=Lax",
             },
           });
         }
@@ -253,18 +259,14 @@ test.skipIf(!chrome || !openssl)(
       // ...can't reach World's window...
       expect(hostile!.top).toBe("SecurityError");
       expect(hostile!.parentStorage).toBe("SecurityError");
-      // ...and World refuses its API and socket requests by their origin.
+      // ...and World refuses its API and socket requests by their origin;
+      // they don't carry World's session cookie either.
       expect(hostile!.fetch).toBe("TypeError");
       expect(hostile!.socket).not.toBe("open");
-      expect(crossOrigin.map(({ path }) => path).sort()).toEqual([
-        "/rpc",
-        "/ws",
+      expect(crossOrigin.sort((a, b) => a.path.localeCompare(b.path))).toEqual([
+        { path: "/rpc", origin: webviewOrigin, status: 403, cookie: null },
+        { path: "/ws", origin: webviewOrigin, status: 403, cookie: null },
       ]);
-      expect(
-        crossOrigin.every(
-          ({ origin, status }) => origin === webviewOrigin && status === 403,
-        ),
-      ).toBe(true);
       // Its service worker can cover only its own origin, never World's.
       expect(hostile!.worldWorker).toBe("SecurityError");
       expect(
