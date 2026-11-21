@@ -1,3 +1,4 @@
+import { weatherCliHandler } from "../weather/cli";
 import { findHerdrBinary } from "../herdr/bootstrap";
 import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
 import { createCoreInstall } from "../herdr-core/install";
@@ -230,13 +231,11 @@ async function compose(
     "world_board_changed",
     "world-board",
   );
-
   const bindBoardRecipients = createBoardRecipientRecorder(
     () => connectionManager,
     board,
     publishBoardChanged,
   );
-
   const worldCli = createWorldCliService({
     memory: () => rpcServices.worldMemory!,
     core: () => coreCallers,
@@ -338,7 +337,6 @@ async function compose(
   const connectionFailureReporter = connectionFailureReporters(
     logger.child("connections"),
   );
-
   const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
     connectionBootstrap.defaultConnectionId,
     (status) => {
@@ -872,6 +870,7 @@ async function compose(
             herdrSetup,
             officeObservability: handleOfficeObservability,
             sources: handleWorldSources,
+            weatherCli: weatherCliHandler(worldSources),
             shipyard: { service: shipyard, http: shipyardHttp },
             track,
             stopping: () => stopping,
@@ -946,6 +945,7 @@ async function compose(
   async function stopService() {
     // Refuse requests (503), reconnects, pushes, Ranger starts and new answer waits.
     stopping = true;
+    worldSources.weather.close();
     shipyard.close();
     shipyardInstances.stop();
     const usageStopped = worldUsage!.close();
