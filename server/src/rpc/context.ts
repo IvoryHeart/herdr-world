@@ -112,6 +112,8 @@ export type RpcServices = {
   worldUsage?: import("../usage/service").WorldUsageService;
   worldUsageAnalytics?: import("../usage/analytics").WorldUsageAnalyticsService;
   worldMemory?: import("../memory/service").MemoryService;
+  /** The owner's focus session (world.focus.*). */
+  focus?: import("../world/focus").FocusService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;

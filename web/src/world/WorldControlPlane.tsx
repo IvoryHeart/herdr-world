@@ -1,6 +1,7 @@
 import { memo, Suspense, useEffect, useMemo, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
+import { FocusDialogHost } from "./FocusControls";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
 import { ConfirmDialog } from "../components/ModalDialogs";
 import { lazyWithReload } from "../lazyWithReload";
@@ -155,6 +156,8 @@ function AgentDialogs({
     <Suspense fallback={null}>
       <ApartmentsHost world={world} onOpen={setPendingOpen} />
       <MemoryLibraryHost world={world} />
+      {/* Focus (#1131): its dialog, and the end's chime and recap. */}
+      <FocusDialogHost />
       {sounds ? (
         <SoundsDialog
           world={world}

@@ -12,6 +12,7 @@ import {
   DoorOpen,
   Inbox,
   LibraryBig,
+  Moon,
   Shirt,
   UserPlus,
 } from "lucide-react";
@@ -33,6 +34,8 @@ import {
   openMemoryLibrary,
 } from "../memory/memoryEvents";
 import { openNeedsYou } from "../needsYou";
+import { openFocus } from "../focus";
+import { useFocusClock } from "../FocusControls";
 import type { WorldObject } from "../worldObject";
 import type { TownCenterAction } from "./TownCenterMenu";
 import type { TownRoomActions } from "./TownCanvas";
@@ -109,8 +112,10 @@ export function useTownCenter(
     openChat(key, false),
   );
   const holder = useAgentProfiles().document?.town_master ?? null;
+  const focus = useFocusClock();
   const residents = useApartments().residents.length;
   return townCenterActions({
+    focusLeft: focus.left,
     world,
     office,
     holder,
@@ -135,6 +140,7 @@ export function townCenterActions({
   summary,
   openChat,
   toast,
+  focusLeft = null,
   residents,
 }: {
   world: Pick<WorldObject, "leaves">;
@@ -148,6 +154,8 @@ export function townCenterActions({
   summary: { summary: { counts: { needsYou: number } }; open(): void };
   openChat(agentKey: string): void;
   toast(kind: "ok" | "error", text: string): void;
+  /** A running focus session's time left ("18 m left"), else null. */
+  focusLeft?: string | null;
   /** Apartments' residents, shown on its medallion. */
   residents?: number;
 }): TownCenterAction[] {
@@ -174,6 +182,7 @@ export function townCenterActions({
       toast,
     }),
     needsYouAction(summary.summary.counts.needsYou),
+    focusAction(focusLeft),
     summaryAction(() => summary.open()),
     profilesAction(),
     apartmentsAction(residents),
@@ -274,6 +283,18 @@ export const needsYouAction = (count?: number): TownCenterAction => ({
   icon: Inbox,
   count,
   run: () => openNeedsYou(),
+});
+
+/**
+ * Focus (#1131): start a session that holds chimes and notifications, or,
+ * while one runs, its time left and End now.
+ */
+export const focusAction = (left: string | null = null): TownCenterAction => ({
+  id: "focus",
+  label: "Focus",
+  icon: Moon,
+  detail: left ?? undefined,
+  run: openFocus,
 });
 
 /**

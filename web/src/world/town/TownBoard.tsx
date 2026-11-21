@@ -35,6 +35,12 @@ import {
   townFuelLowestText,
 } from "./TownFuelGauge";
 import { TownExpenseCaveats } from "./TownExpenseCaveats";
+import { FOCUS_RECAP_EVENT } from "../focus";
+import {
+  TownFocusMark,
+  TownFocusSection,
+  useTownFocusLabel,
+} from "./TownFocus";
 
 /**
  * The Town board counts the whole town from the Town summary (townSummary.ts):
@@ -93,6 +99,13 @@ export function TownBoard({
     };
   }, [open]);
   useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
+  // A focus session that ends here opens the board on its recap (#1131).
+  useEffect(() => {
+    const show = () => setPinned(true);
+    window.addEventListener(FOCUS_RECAP_EVENT, show);
+    return () => window.removeEventListener(FOCUS_RECAP_EVENT, show);
+  }, []);
+  const focusLabel = useTownFocusLabel();
   const hoverIn = (event: React.PointerEvent) => {
     if (event.pointerType !== "mouse") return;
     window.clearTimeout(leaveTimer.current);
@@ -130,9 +143,10 @@ export function TownBoard({
         type="button"
         className="town-board-chip"
         data-help="town.board-chip"
+        data-help-opens="town.focus"
         aria-expanded={open}
         aria-controls="town-board"
-        aria-label={`Town board: ${summary}`}
+        aria-label={`Town board: ${focusLabel ? `${focusLabel}; ` : ""}${summary}`}
         data-attention={counts.needsYou > 0}
         // A click pins the board a hover opened; the next one closes it.
         onClick={() => (pinned ? close() : setPinned(true))}
@@ -141,6 +155,7 @@ export function TownBoard({
         onKeyDown={closeOnEscape}
       >
         <Activity size={14} aria-hidden="true" />
+        <TownFocusMark />
         {counts.needsYou > 0 ? (
           <span data-status="blocked" data-attention="true">
             !{counts.needsYou}
@@ -177,6 +192,7 @@ export function TownBoard({
         </div>
         {sinceYouLeft?.board}
         <TownBoardCounts counts={counts} />
+        <TownFocusSection />
         <p className="town-board-population">
           {population}
           {counts.unknown ? ` · ${counts.unknown} unknown` : ""}

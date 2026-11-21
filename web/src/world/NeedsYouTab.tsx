@@ -44,6 +44,7 @@ import { preloadWorkspaceInspector } from "./inspectorPreload";
 import { sharedPresence, useOwnerPresence } from "./presence";
 import { arrivedWhileAway } from "./sinceYouLeft";
 import { useAttentionBadge } from "./attentionBadge";
+import { focusHeld, useFocus } from "./focus";
 import "./needsYouTab.css";
 
 /**
@@ -134,7 +135,10 @@ export function NeedsYouTabBadge({
 }: {
   world: Pick<WorldObject, "leaves">;
 }) {
-  useAttentionBadge(useWaitingCount(world));
+  const count = useWaitingCount(world);
+  // A focus session keeps the tab title and app icon plain (#1131).
+  const held = focusHeld(useFocus().state);
+  useAttentionBadge(held ? 0 : count);
   return null;
 }
 

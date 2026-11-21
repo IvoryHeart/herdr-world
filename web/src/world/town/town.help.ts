@@ -67,6 +67,24 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     picture: { scene: "town", sizes: ["desktop"] },
   },
   {
+    id: "town.focus",
+    title: "Focus for a while",
+    summary:
+      "A focus session holds chimes, notifications and the tab count on every device while the crew keeps working. When it ends you hear one chime and get one recap.",
+    steps: [
+      "Open the town board from the chip in the top left corner.",
+      "Under Focus, press 25 m, 45 m, 90 m or Until I stop.",
+      "The chip shows a moon and the time left; press End now to stop early.",
+      'When it ends, "While you focused" lists what arrived; each line opens Needs you.',
+    ],
+    place: "town",
+    where:
+      "Town, the town board at the top left; also the town center ring and Menu",
+    control: "town.focus",
+    since: "0.3.6",
+    picture: { scene: "town", press: ['[data-help-opens~="town.focus"]'] },
+  },
+  {
     id: "town.apartments",
     title: "Apartments: finished agents",
     summary:
