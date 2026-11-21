@@ -63,6 +63,7 @@ import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { afterHerdrClose } from "../world/board-closing";
+import { createApartmentsService } from "./apartments-service";
 import { createBinService } from "./bin-service";
 import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
@@ -307,8 +308,19 @@ async function compose(
     connections: () => connectionManager,
     publish: revisionPublisher("world_bin_changed", "world-bin"),
     log: (message) => logger.warn(message),
+    retiring: (entries) => apartments.apartments.retire(entries),
   });
   void bin.start();
+  /** Apartments: the records finished agents leave (shared/apartments.ts). */
+  const apartments = createApartmentsService({
+    port: storage.apartments,
+    now: () => clock.now(),
+    tui: () => connectionManager,
+    core: () => coreRpc,
+    sources: () => worldSources.current(),
+    publish: revisionPublisher("world_apartments_changed", "world-apartments"),
+    log: (message) => logger.warn(message),
+  });
 
   const {
     observe: observeHost,
@@ -362,6 +374,7 @@ async function compose(
         !["error", "disconnected"].includes(status.state),
       );
       bin.connectionStatus(status);
+      apartments.apartments.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -468,8 +481,8 @@ async function compose(
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    ownedBy(connectionManager, observeHost),
-    ownedBy(connectionManager, observeTerminalSettings),
+    apartments.fresh(ownedBy(connectionManager, observeHost)),
+    apartments.complete(ownedBy(connectionManager, observeTerminalSettings)),
     serviceIncarnation,
   );
 
@@ -787,6 +800,7 @@ async function compose(
     }),
     ...terminalMarks,
     bin,
+    apartments,
     worldCli,
     worldSnapshots,
     worldUsage,
@@ -971,6 +985,9 @@ async function compose(
       await drained();
     } finally {
       try {
+        // Finished agents seen so far are written before storage closes;
+        // a history census still reading stops.
+        await apartments.stop();
         await closeTerminalMarks();
         storageOpen = false;
         await storage.close();

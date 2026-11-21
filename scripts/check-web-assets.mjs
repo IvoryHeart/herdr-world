@@ -47,6 +47,9 @@ const maxFileCount = 212;
 // The Town harbour and warehouse (#1028) fit main alone, but main's Library
 // (#1082) grew under it: 15.42 MiB together, so 15.5 MiB, initial budgets
 // unchanged (2026-11-20).
+// Apartments (#1011: the resident search/history dialog, its store and Town's
+// apartment building) add about 18.7 KB to lazy chunks; startup budgets are
+// unchanged.
 // Board's element screens (#1030: cards, Add to Board, the reader; +34 KB,
 // all in the lazy Board chunk) fit main alone, but Apartments (#1034) left
 // main 3 KB under 15.5 MiB: 15.53 MiB together, so 15.6 MiB, initial budgets

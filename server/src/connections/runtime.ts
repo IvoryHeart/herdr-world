@@ -961,6 +961,8 @@ export function createLegacyConnectionRuntime(args: {
     worktreeRemovalRuntime,
     terminalBridge,
     agentSessions,
+    /** Agents' transcript files on this host (Apartments' history). */
+    agentSessionFiles,
     usage,
     agentCheckout,
     agentWorktree,

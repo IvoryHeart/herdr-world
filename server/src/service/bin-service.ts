@@ -42,6 +42,10 @@ export function createBinService(deps: {
   log(message: string): void;
   /** herdr-core connections, whose closes are native kills. */
   core?: () => ConnectionManager<CoreConnectionRuntime> | null;
+  /** The bus has left with these riders: they are being retired. */
+  retiring?: (
+    entries: readonly import("../../../shared/bin").BinEntry[],
+  ) => void;
 }) {
   const lease = (id: string): BinLease | null => {
     const current = deps.connections().readyRuntimeLease(id);
@@ -60,7 +64,10 @@ export function createBinService(deps: {
     epoch: deps.incarnation,
     clock: deps.clock,
     scheduler: deps.scheduler,
-    commit: (entries) => closer.commit(entries),
+    commit: (entries) => {
+      deps.retiring?.(entries);
+      return closer.commit(entries);
+    },
     publish: deps.publish,
     log: deps.log,
   });
