@@ -485,6 +485,16 @@ export function createTownDragEffects(ctx: TownDragContext) {
     moveDrag,
     endDrag,
     finishMove,
+    /**
+     * Dust along a line `width` world pixels wide centred on (x, y): a
+     * host's building breaking ground or sinking (townRendererTopology.ts).
+     * None under calm or reduced motion.
+     */
+    dust: (x: number, y: number, width: number) => {
+      const puffsAcross = Math.max(2, Math.min(12, Math.round(width / 32)));
+      for (let i = 0; i < puffsAcross; i += 1)
+        puffAt(x - width / 2 + ((i + 0.5) * width) / puffsAcross, y, 4);
+    },
     /** Tidy rooms: snapshot a building's rooms to glide to their new spots. */
     beginGlide: glide.begin,
     /** How the tidy's save ended: one not saved glides nothing. */
