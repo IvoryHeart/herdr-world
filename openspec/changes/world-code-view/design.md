@@ -114,10 +114,18 @@ policy is a refusal, not licence to strip protections until the iframe loads.
 
 Official webviews may use a Microsoft CDN. A compatible distribution-supported,
 licence-permitted self-hosted configuration could pass; asset rewriting and blanket
-CDN/CSP allowances are not proposed. If full functionality cannot coexist with the
-current single-origin policy, block embed and offer desktop handoff. A separate
-origin/changed webview policy requires an owner decision and revised architecture;
-the mock is not evidence that the current policy can deliver all official features.
+CDN/CSP allowances are not proposed. A separate origin/changed webview policy requires
+a reviewed change to the one-origin rule and revised architecture; the mock is not
+evidence that the current policy can deliver all official features.
+Decided for #1038 (`docs/design/code-view/webview-origin.md`): stock VS Code and
+OpenVSCode webviews load from VS Code's own webview origin. The frame rule World adds
+to IDE route responses admits `https://*.vscode-cdn.net` as the one origin besides
+World's own (#1053); World's own pages keep the one-origin policy and no product file
+is rewritten. Webview content is untrusted and stays cross-origin to World, so it
+cannot reach World's window, storage, cookies or API. Same-origin webviews (a
+rewritten host page) were tried and rejected, because no rule separates two
+documents on one origin; a second World-owned origin and blank webviews were also
+rejected.
 Marketplace/Sync/extension sign-in may also require external HTTPS/popups;
 upstream's CSP includes unsafe-eval and blob workers. Enumerate actual origins and
 directives for the selected release; proxying its HTML alone does not satisfy the

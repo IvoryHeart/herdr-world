@@ -65,11 +65,24 @@ owner licence acceptance, same-origin behavior and explicit full shell/file-writ
 trust pass admission. World SHALL call installed servers only and SHALL NOT claim
 that nonbundling alone grants embedding rights. The owner SHALL be told that an
 IDE is not confined to the selected project and same-origin workbench/extension
-code shares World's browser authority. Failed licence, frame, webview, worker,
+code shares World's browser authority. Failed licence, frame, worker,
 secure-context or origin compatibility SHALL block embedding with a concrete
 reason and an explicit desktop handoff option. World SHALL NOT silently relax
 its global origin/CSP policy, rewrite restricted product assets or assert desktop
 extension parity based only on Marketplace availability.
+
+Webviews load from VS Code's own webview origin. Stock VS Code and OpenVSCode
+Server frame webviews and their web worker extension host from
+`https://<hash>.vscode-cdn.net`, as their product configuration says; the frame
+rule World adds to IDE route responses SHALL admit `https://*.vscode-cdn.net` as
+the one origin besides World's own. World SHALL NOT rewrite the webview host page
+or `product.json`, serve webviews from its own origin, open a second World origin
+for them, or change the policy of World's own pages or any other route. Webview
+content (extension panels, notebook outputs, previews of repository files) is
+untrusted; it stays cross-origin to World, so it cannot reach World's window,
+storage, cookies or API, and its service worker's scope is its own origin. The
+decision, its threat model and the rejected options are recorded in
+`docs/design/code-view/webview-origin.md`.
 
 #### Scenario: Official webviews load from VS Code's webview origin
 
