@@ -337,7 +337,10 @@ synthetic example offline, including an owner wait and a usage limit.
 The [memory service, API and CLI](./docs/memory-api.md) browse, search, read, add,
 edit and delete harness memory on its owning local or SSH connection. Claude
 instructions, rules and project/subagent memory, Codex instructions and v1/v2
-Markdown memory, and Pi instructions share one model for TUI and core. Sources
+Markdown memory, and Pi instructions share one model for TUI and core. Documented
+instruction/memory candidates also cover OpenCode, GitHub Copilot CLI, Cursor,
+Qwen Code, Droid, Kimi, oh-my-pi, Kilo, Hermes, Qoder CLI, Antigravity CLI, Grok, Devin and Mastra Code
+([sources and limits](./docs/memory-api.md#discovery-and-load-evidence)). Sources
 show current project/agent sharing; entries show bytes, modification time, a
 30-day age hint and per-harness default load candidates or shadowing. Unknown
 harnesses and missing/refused sources are explicit. Discovery cannot prove what
@@ -354,7 +357,8 @@ the owning host and in private responses, without a World content cache, index,
 Board copy or telemetry. The Library (below) is the browser's view of this data.
 
 The Unix host needs Python 3; Windows, symlinks, hardlinks, special/binary/non-UTF-8
-files and non-Markdown entries refuse. Discovery stops at 32 projects, 128 agents,
+files and non-Markdown entries refuse. Cursor/oh-my-pi `.mdc` rules are readable
+and searchable with those same protections; editing remains limited to `.md`. Discovery stops at 32 projects, 128 agents,
 256 sources and 512 entries, four directory levels, and 256 KiB per file. Search
 is literal and case-insensitive, with a 2 MiB scan budget and 100 results. Partial
 results say `truncated`, skipped reads are counted, and each host request has a
@@ -363,6 +367,12 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
 
 ### The Library
 
+- Library entries and the Town sign appear only for hosts, projects and agents
+  with an observed harness whose memory adapter exists. Unsupported harnesses
+  never appear as “0 memories”; an empty or unsupported-only project has no
+  Library entry. Supported harnesses still offer their missing files to create.
+  The [testing fixture](./docs/memory-api.md#discovery-and-load-evidence) includes
+  OpenCode and an unsupported-only project, plus a no-capable-host switch.
 - Open it from Town's **library**, right of the town center on the first street,
   from the town center's ring (**Library**), from Board's hub (**Library**, on the
   selected agent or workspace), from an agent window's settings (**Memory**)
@@ -378,8 +388,9 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   age (stale after 30 days) and who else reads it. Refused sources and files say
   why; a missing instruction file offers **Create** and a missing memory folder
   (a fresh project) offers **Add the first note**, which creates the folder;
-  harnesses World cannot read
-  say so; truncated lists and searches say they show the first ones only.
+  truncated lists and searches say they show the first ones only. Conditional
+  rule descriptions explain when the harness may read them; load candidates
+  are never receipts from a running session. MDC rule books are read-only.
 - Opening a book reads it fresh from its host. **Edit** then **Save** writes it
   with the revision you read. If the file changed meanwhile, the save is refused,
   your text stays and **Load latest** shows theirs. When World can't tell whether a
@@ -1281,7 +1292,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     [Apartments](#apartments-finished-agents).
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
-    reception and Board's host label. When the local connection is failing and
+    reception and Board's host label. A live herdr-core host is never stale
+    there: Board offers its **+** (New workspace) instead. When the local connection is failing and
     no host is ready, Town's stage also offers to set up a runtime. With no
     runtime installed it offers **Set up herdr-core** first and **Use the Herdr
     TUI instead** second; with Herdr installed but stopped it offers to start

@@ -1,4 +1,4 @@
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { balanceShards } from "./balance-shards";
 import timings from "./world-browser-timings.json";
 import { join, relative, resolve, sep } from "node:path";
@@ -33,15 +33,33 @@ export const worldRuntimeSuites = [
   "web/src/world/WorldTerminalHandoff.test.ts",
 ];
 
-// Six runners, longest-first by measured CI seconds (source recorded in JSON).
-// TownCanvas's original 22 cases now span five files; the inventory assertion
-// still rejects missing or duplicated suites. These weights are estimates of
-// future work, not test deadlines or runner-speed assertions.
-export const worldBrowserShards = balanceShards(
-  Object.keys(timings.seconds) as Array<keyof typeof timings.seconds>,
-  timings.seconds,
-  6,
-).map((shard) => shard.map((name) => `web/src/world/${name}.test.ts`));
+// Six runners, longest-first by measured CI seconds. Unmeasured suites use
+// ten seconds until measured; stale timing entries never introduce suites.
+// Weights estimate future work, not test deadlines or runner-speed assertions.
+export function discoverWorldBrowserShards(
+  root = join(import.meta.dir, ".."),
+  seconds: Record<string, number> = timings.seconds,
+): string[][] {
+  const directory = join(root, "web/src/world");
+  const paths = [
+    ...new Bun.Glob("**/*.test.{ts,tsx}").scanSync({ cwd: directory }),
+  ]
+    .sort()
+    .filter((path) =>
+      browserSource(readFileSync(join(directory, path), "utf8")),
+    );
+  const weights = Object.fromEntries(
+    paths.map((path) => [
+      path,
+      seconds[path.replace(/\.test\.tsx?$/, "")] ?? 10,
+    ]),
+  );
+  return balanceShards(paths, weights, 6).map((shard) =>
+    shard.map((path) => `web/src/world/${path}`),
+  );
+}
+
+export const worldBrowserShards = discoverWorldBrowserShards();
 
 export const worldBrowserSuites = worldBrowserShards.flat();
 export const worldBrowserIgnorePattern = ignorePattern(worldBrowserSuites);
@@ -83,9 +101,12 @@ function ignorePattern(paths: string[]) {
   return `{${paths.join(",")}}`;
 }
 
-const browserSource = (source: string) =>
-  /^\/\/ @world-browser-suite\b/m.test(source) ||
-  /CHROME_BIN|--headless/.test(source);
+function browserSource(source: string) {
+  return (
+    /^\/\/ @world-browser-suite\b/m.test(source) ||
+    /CHROME_BIN|--headless/.test(source)
+  );
+}
 
 export function selectWorldBrowserShard(shard?: string): string[] {
   if (!shard) return [...worldBrowserSuites];
@@ -100,7 +121,10 @@ export function selectWorldBrowserShard(shard?: string): string[] {
   return [...worldBrowserShards[index - 1]!];
 }
 
-export async function assertWorldBrowserInventory(root = process.cwd()) {
+export async function assertWorldBrowserInventory(
+  root = process.cwd(),
+  suites = worldBrowserSuites,
+) {
   const actual: string[] = [];
   for await (const path of new Bun.Glob("**/*.test.{ts,tsx}").scan({
     cwd: join(root, "web/src/world"),
@@ -108,18 +132,12 @@ export async function assertWorldBrowserInventory(root = process.cwd()) {
     const source = await Bun.file(join(root, "web/src/world", path)).text();
     if (browserSource(source)) actual.push(`web/src/world/${path}`);
   }
-  const expected = new Set(worldBrowserSuites);
+  const expected = new Set(suites);
   const missing = actual.filter((path) => !expected.has(path));
-  const nonexistent = worldBrowserSuites.filter(
-    (path) => !actual.includes(path),
-  );
-  if (
-    expected.size !== worldBrowserSuites.length ||
-    missing.length ||
-    nonexistent.length
-  ) {
+  const nonexistent = suites.filter((path) => !actual.includes(path));
+  if (expected.size !== suites.length || missing.length || nonexistent.length) {
     throw new Error(
-      `World browser inventory mismatch: unassigned=${missing.join(",")}; missing=${nonexistent.join(",")}; duplicate=${expected.size !== worldBrowserSuites.length}`,
+      `World browser inventory mismatch: unassigned=${missing.join(",")}; missing=${nonexistent.join(",")}; duplicate=${expected.size !== suites.length}`,
     );
   }
 }

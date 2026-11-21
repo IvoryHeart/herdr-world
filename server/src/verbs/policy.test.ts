@@ -7,6 +7,10 @@ import { ACTORS } from "./types";
 import { registeredVerb, VERBS } from "./registry";
 import { WORLD_CLI_COMMANDS } from "../world/world-cli";
 
+test("P4: the hand-recorded policy table stays sorted by verb key", () => {
+  expect(Object.keys(baseline)).toEqual(Object.keys(baseline).sort());
+});
+
 test("P4: every legacy verb × actor equals the independently recorded policy table", () => {
   expect(VERBS.map((verb) => `${verb.channel}:${verb.name}`).sort()).toEqual(
     Object.keys(baseline).sort(),
