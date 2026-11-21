@@ -32,15 +32,6 @@ export type IdeProviderInfo = {
    * builds don't sign.
    */
   needsSecurePage: boolean;
-  /**
-   * Whether World serves its webview host page (Markdown preview, extension
-   * panels) on World's origin. Stock VS Code and OpenVSCode Server frame it
-   * from `*.vscode-cdn.net`, which World's frame rule keeps out, so World
-   * points their workbench at the IDE's own copy under `/ide/<id>/` and
-   * makes that page's parent check same-origin (webview-host.ts, #1053).
-   * code-server already serves its webviews itself.
-   */
-  rehostsWebviews: boolean;
 };
 
 export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
@@ -60,7 +51,6 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     ],
     setupUrl: "https://code.visualstudio.com/download",
     needsSecurePage: true,
-    rehostsWebviews: true,
   },
   "code-server": {
     id: "code-server",
@@ -69,7 +59,6 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     terms: [],
     setupUrl: "https://coder.com/docs/code-server/install",
     needsSecurePage: false,
-    rehostsWebviews: false,
   },
   openvscode: {
     id: "openvscode",
@@ -78,7 +67,6 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     terms: [],
     setupUrl: "https://github.com/gitpod-io/openvscode-server#getting-started",
     needsSecurePage: false,
-    rehostsWebviews: true,
   },
 };
 

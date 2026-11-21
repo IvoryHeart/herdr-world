@@ -62,16 +62,16 @@ reason and an explicit desktop handoff option. World SHALL NOT silently relax
 its global origin/CSP policy, rewrite restricted product assets or assert desktop
 extension parity based only on Marketplace availability.
 
-#### Scenario: Official webviews require another origin
+#### Scenario: Official webviews load from VS Code's webview origin
 
-- **WHEN** an installed Microsoft provider requires a CDN webview origin incompatible with World's current policy
-- **THEN** embedding remains blocked with the compatibility reason and explicit handoff; no automatic CSP exception or Open VSX substitution occurs
+- **WHEN** stock VS Code or OpenVSCode Server frames a webview or its web worker extension host from `https://<hash>.vscode-cdn.net`
+- **THEN** the frame rule World adds to IDE route responses admits `https://*.vscode-cdn.net` as the one origin besides World's own, and no product file is rewritten
+- **AND** World's own pages and every other route keep World's one-origin policy, the webview content stays cross-origin to World so it cannot reach World's window, storage, cookies or API, and its service worker's scope is its own origin
 
-#### Scenario: Stock webviews served on World's origin
+#### Scenario: Webview origin incompatible
 
-- **WHEN** stock VS Code or OpenVSCode Server would frame its webview host page from `*.vscode-cdn.net`
-- **THEN** World sets the workbench's own `webviewEndpoint` option to the IDE's copy of that page under `/ide/<id>/`, and serves that one page (`out/vs/workbench/contrib/webview/browser/pre/index.html`) with only its hostname-hash parent check replaced by a same-origin parent check and its CSP script hash recomputed after the replaced hash is proved to be the original script's
-- **AND** the page still hands its message port only to a parent on World's origin, the rest of its CSP and every other product file are unchanged, World's own origin and CSP policy are unchanged, and a page World cannot match is forwarded unchanged so webviews stay blank
+- **WHEN** an installed provider requires a webview origin other than VS Code's own `https://*.vscode-cdn.net`
+- **THEN** its webviews stay blank with the reason; no further frame exception or Open VSX substitution occurs
 
 #### Scenario: First enable grants broad authority
 

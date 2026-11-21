@@ -14,21 +14,14 @@
  * - A response may not widen a service worker's scope, and a redirect may
  *   not leave the instance's route.
  * - Every response also carries World's frame policy: browsers enforce
- *   both policies, so the IDE can frame only its own origin whatever its
- *   own policy allows.
+ *   both policies, so the IDE can frame only its own origin and VS Code's
+ *   webview origin, whatever its own policy allows.
  * - The workbench's own WebSocket handshake carries the token too: VS Code
  *   reads it from the cookie it never gets, so World fills it into the
  *   first message of each IDE socket (`withConnectionToken`).
- * - Stock VS Code and OpenVSCode Server get their webview host page from
- *   this route instead of vscode-cdn.net (webview-host.ts, #1053).
  */
 
-import { IDE_PROVIDERS, type IdeProviderId } from "./providers";
-import {
-  isWebviewHostPage,
-  withSameOriginWebviewHost,
-  withWorldWebviewEndpoint,
-} from "./webview-host";
+import type { IdeProviderId } from "./providers";
 
 export const IDE_ROUTE_PREFIX = "/ide/";
 const INSTANCE_ID = /^[A-Za-z0-9_-]{16,64}$/;
@@ -70,8 +63,18 @@ const DROPPED_RESPONSE_HEADERS = new Set([
 /** Cookies an IDE sets for itself; anything else in the jar is World's. */
 const IDE_COOKIE = /^(vscode-|code-server-)/;
 export const IDE_TOKEN_COOKIE = "vscode-tkn";
+/**
+ * VS Code's own webview origin. Stock VS Code and OpenVSCode Server frame
+ * webviews (Markdown preview, extension panels) and the web worker
+ * extension host from `https://<hash>.vscode-cdn.net`, a fresh subdomain per
+ * webview. The one exception to World's one-origin frame rule, and only on
+ * IDE pages (#1053): that content stays cross-origin to World, so it can't
+ * reach World's window, storage, cookies or API, and its service worker's
+ * scope is its own origin.
+ */
+export const IDE_WEBVIEW_FRAME_ORIGIN = "https://*.vscode-cdn.net";
 /** Added beside the IDE's own policy; the stricter of the two wins. */
-export const IDE_FRAME_POLICY = "frame-src 'self' blob: data:";
+export const IDE_FRAME_POLICY = `frame-src 'self' blob: data: ${IDE_WEBVIEW_FRAME_ORIGIN}`;
 
 export function parseIdeRoute(
   pathname: string,
@@ -211,80 +214,19 @@ export function ideResponseHeaders(
   return headers;
 }
 
-/**
- * Which of the IDE's own pages World edits for same-origin webviews: the
- * workbench page (a navigation) and the webview host page.
- */
-function webviewRewrite(
-  req: Request,
-  upstream: IdeUpstream,
-  path: string,
-): "workbench" | "webview-host" | null {
-  if (!IDE_PROVIDERS[upstream.provider].rehostsWebviews || req.method !== "GET")
-    return null;
-  if (isWebviewHostPage(path)) return "webview-host";
-  return req.headers.get("sec-fetch-dest") === "iframe" ||
-    req.headers.get("accept")?.includes("text/html")
-    ? "workbench"
-    : null;
-}
-
-async function rewrittenWebviewPage(
-  response: Response,
-  headers: Headers,
-  rewrite: "workbench" | "webview-host",
-  upstream: IdeUpstream,
-  browserOrigin: string,
-): Promise<Response> {
-  const text = await response.text();
-  const page =
-    rewrite === "workbench"
-      ? withWorldWebviewEndpoint(
-          text,
-          browserOrigin,
-          ideBasePath(upstream.instanceId),
-        )
-      : withSameOriginWebviewHost(text);
-  if (page !== null) {
-    // A copy World edited is never the IDE's cached file.
-    headers.delete("etag");
-    headers.delete("last-modified");
-    headers.set("cache-control", "private, no-cache");
-  }
-  return new Response(page ?? text, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
-
 /** Forward one HTTP request to the instance's socket. */
 export async function proxyIdeHttp(
   req: Request,
   url: URL,
   upstream: IdeUpstream,
-  /** World's origin as the browser sees it; webviews are framed from it. */
-  browserOrigin = url.origin,
 ): Promise<Response> {
   const path = upstreamPath(upstream, url.pathname);
-  const rewrite = webviewRewrite(req, upstream, path);
-  const requestHeaders = upstreamRequestHeaders(req.headers, upstream);
-  if (rewrite) {
-    // A page World may edit comes whole and uncompressed.
-    for (const name of [
-      "accept-encoding",
-      "range",
-      "if-none-match",
-      "if-modified-since",
-    ])
-      requestHeaders.delete(name);
-  }
   let response: Response;
   try {
     response = await fetch(`http://localhost${path}${url.search}`, {
       unix: upstream.socketPath,
       method: req.method,
-      headers: requestHeaders,
+      headers: upstreamRequestHeaders(req.headers, upstream),
       body:
         req.method === "GET" || req.method === "HEAD" ? undefined : req.body,
       redirect: "manual",
@@ -304,20 +246,6 @@ export async function proxyIdeHttp(
       headers: { "cache-control": "no-store" },
     });
   }
-  const encoding = response.headers.get("content-encoding");
-  if (
-    rewrite &&
-    response.status === 200 &&
-    response.headers.get("content-type")?.includes("text/html") &&
-    (!encoding || encoding === "identity")
-  )
-    return rewrittenWebviewPage(
-      response,
-      headers,
-      rewrite,
-      upstream,
-      browserOrigin,
-    );
   return new Response(req.method === "HEAD" ? null : response.body, {
     status: response.status,
     statusText: response.statusText,

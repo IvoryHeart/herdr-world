@@ -123,12 +123,11 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
     });
     expect(vscode.enabled).toBe(false);
     expect(vscode.needsSecurePage).toBe(true);
-    expect(vscode.rehostsWebviews).toBe(true);
     // The local connection is one Code can open on this computer.
     expect(status.localConnections).toEqual([connection.id]);
 
-    // Stock VS Code is embedded too, behind the same gate; World serves its
-    // webview host page on its own origin.
+    // Stock VS Code is embedded too, behind the same gate; its webviews
+    // load from vscode-cdn.net, the one origin the IDE frame rule admits.
     await expect(
       browser.call("world.ide.enable", { provider: "vscode", trust: true }),
     ).rejects.toThrow(/terms/);

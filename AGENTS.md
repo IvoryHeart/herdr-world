@@ -10,7 +10,7 @@
 - Local-first, trusted-single-user: LAN binding, authentication, uploads, shell/terminal operations and update installation are security-sensitive.
 - Qualify downstream operations by immutable connection ID and runtime generation; never fall back to another connection.
 - Aggregate observation is bounded and read-only; failed-host cached topology is stale and non-actionable.
-- Keep the browser on one World origin; never restore bridge Host, Origin or cross-origin CSP configuration.
+- Keep the browser on one World origin; never restore bridge Host, Origin or cross-origin CSP configuration. Sole exception: IDE pages may frame VS Code's webview origin (`https://*.vscode-cdn.net`).
 - SSH profiles accept OpenSSH aliases or `user@host`; policy belongs in OpenSSH config. Never persist passwords, keys, passphrases or arbitrary SSH options.
 - Never commit generated `web/dist/`, `server/public/`, binaries, `.pages-dist/` or `dist/`.
 - Add a changelog fragment before pushing, or state `Changelog: none — <reason>` in the PR; [format](changes/README.md). Never edit `CHANGELOG.md` directly.

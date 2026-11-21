@@ -102,19 +102,3 @@ export function browserRequestAdmissionError(
   }
   return null;
 }
-
-/**
- * The origin the browser sees for an admitted request: the configured public
- * proxy origin when the request came through it, else the listener's own.
- */
-export function browserOriginOf(
-  request: Request,
-  url: URL,
-  publicOrigin?: string,
-): string {
-  const configured = publicOrigin ? parseBrowserOrigin(publicOrigin) : null;
-  const host = request.headers.get("host")?.toLowerCase();
-  return configured && configured.host.toLowerCase() === host
-    ? configured.origin
-    : url.origin;
-}

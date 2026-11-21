@@ -1,7 +1,4 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { ideBlockedPath } from "./providers";
 import {
   IDE_FRAME_POLICY,
@@ -10,23 +7,12 @@ import {
   type IdeUpstream,
   ideResponseHeaders,
   parseIdeRoute,
-  proxyIdeHttp,
   scopeIdeCookie,
   scopeIdeLocation,
   upstreamPath,
   upstreamRequestHeaders,
   withConnectionToken,
 } from "./proxy";
-import {
-  FAKE_PRODUCT_PATH,
-  fakeWebviewHostPage,
-  fakeWorkbenchPage,
-} from "./testing/fake-webview-host";
-import {
-  WEBVIEW_HOST_DIR,
-  WEBVIEW_HOSTNAME_CHECK,
-  WEBVIEW_SAME_ORIGIN_CHECK,
-} from "./webview-host";
 
 const ID = "AbCdEfGhIjKlMnOpQrStUv";
 const vscode: IdeUpstream = {
@@ -129,6 +115,10 @@ test("responses lose service-worker widening and get a private cache policy", ()
   ]);
   expect(headers.get("cache-control")).toBe("private, no-cache");
   expect(headers.get("content-security-policy")).toBe(IDE_FRAME_POLICY);
+  // World's own origin and VS Code's webview origin, nothing else (#1053).
+  expect(IDE_FRAME_POLICY).toBe(
+    "frame-src 'self' blob: data: https://*.vscode-cdn.net",
+  );
   // The IDE's own policy stays; World's frame policy is a second one, and
   // the browser enforces both.
   const framed = ideResponseHeaders(
@@ -257,68 +247,4 @@ test("the bridge fills the token into the first message only", () => {
   bridge.message(frame(2, auth));
   expect(JSON.parse(unframe(sent[0]).body).auth).toBe("secret-token");
   expect(JSON.parse(unframe(sent[1]).body).auth).toBe("0000");
-});
-
-test("stock VS Code's workbench and webview host page come back edited for World's origin; code-server's don't", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "ide-webview-"));
-  const socketPath = join(dir, "ide.sock");
-  const seen: Headers[] = [];
-  const pre = `/ide/${ID}${FAKE_PRODUCT_PATH}/static${WEBVIEW_HOST_DIR}`;
-  const server = Bun.serve({
-    unix: socketPath,
-    fetch(req) {
-      seen.push(req.headers);
-      const path = new URL(req.url).pathname;
-      const html = { "content-type": "text/html", etag: '"stock"' };
-      if (path === `/ide/${ID}/` || path === "/")
-        return new Response(fakeWorkbenchPage(`/ide/${ID}`), {
-          headers: html,
-        });
-      if (path.endsWith("/index.html"))
-        return new Response(fakeWebviewHostPage(), { headers: html });
-      return new Response("other", { headers: { "content-type": "text/css" } });
-    },
-  });
-  try {
-    const get = (upstream: IdeUpstream, path: string, headers = {}) => {
-      const url = new URL(path, page);
-      return proxyIdeHttp(
-        new Request(url, { headers }),
-        url,
-        { ...upstream, socketPath },
-        "https://world.example",
-      );
-    };
-    const workbench = await get(vscode, `/ide/${ID}/`, {
-      accept: "text/html",
-      "accept-encoding": "gzip, br",
-    });
-    expect(await workbench.text()).toContain(
-      `&quot;webviewEndpoint&quot;:&quot;https://world.example${pre}&quot;`,
-    );
-    // World asked for the whole, plain page and doesn't claim the IDE's etag.
-    expect(seen.at(-1)!.get("accept-encoding")).toBeNull();
-    expect(workbench.headers.get("etag")).toBeNull();
-    expect(workbench.headers.get("content-security-policy")).toBe(
-      IDE_FRAME_POLICY,
-    );
-
-    const host = await get(vscode, `${pre}index.html`, {
-      "if-none-match": '"stock"',
-    });
-    expect(seen.at(-1)!.get("if-none-match")).toBeNull();
-    const hostPage = await host.text();
-    expect(hostPage).toContain(WEBVIEW_SAME_ORIGIN_CHECK);
-    expect(hostPage).not.toContain(WEBVIEW_HOSTNAME_CHECK);
-
-    // Other files pass through untouched, and so does code-server.
-    expect(await (await get(vscode, `${pre}fake.css`)).text()).toBe("other");
-    const own = await get(codeServer, `/ide/${ID}/`, { accept: "text/html" });
-    expect(await own.text()).toBe(fakeWorkbenchPage(`/ide/${ID}`));
-    const ownHost = await get(codeServer, `/ide/${ID}/x/pre/index.html`);
-    expect(await ownHost.text()).toBe(fakeWebviewHostPage());
-  } finally {
-    server.stop(true);
-    await rm(dir, { recursive: true, force: true });
-  }
 });
