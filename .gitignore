@@ -15,6 +15,8 @@ dist
 **/session-secret.json
 **/world.sqlite*
 **/runtime-*/
+# Contract directories are source, not runtime state (including change deltas).
+!**/specs/runtime-federation/
 **/*.local.md
 research-local/
 

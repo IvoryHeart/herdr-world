@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { privacyRules, scanPrivacyRange } from "./check-privacy";
@@ -80,6 +86,16 @@ test("rejects login tokens, literal passwords and session signing state", () => 
   ]) {
     expect(privacyRules(`"${key}": "${secret}"`)).toContain("session-secret");
   }
+});
+
+test("dependency versions are not emails, but numeric email labels remain covered", () => {
+  expect(
+    privacyRules('"react-dom@19.3.1": "patches/react-dom@19.3.1.patch"'),
+  ).toEqual([]);
+  expect(privacyRules('"@scope/pkg@1.2.3-beta.4.patch"')).toEqual([]);
+  expect(
+    privacyRules(["operator", "19.mail-provider.com"].join("@")),
+  ).toContain("email");
 });
 
 test("only reserved domains, public/documentation addresses and explicit placeholders pass", () => {
@@ -218,7 +234,180 @@ test("push and PR events scan exact commits; new branches and force pushes stay 
     );
     const missing = cli(root, ["--event", event]);
     expect(missing.status).toBe(1);
+    expect(missing.stderr).toContain("privacy/email");
     expect(missing.stderr).not.toContain(root);
+    writeFileSync(
+      event,
+      JSON.stringify({ before: "f".repeat(40), after: clean }),
+    );
+    expect(cli(root, ["--event", event]).status).toBe(0);
+    writeFileSync(event, JSON.stringify({ before: bad, after: clean }));
+    expect(cli(root, ["--event", event]).status).toBe(0);
+    writeFileSync(
+      event,
+      JSON.stringify({ before: base, after: "f".repeat(40) }),
+    );
+    expect(cli(root, ["--event", event]).status).toBe(1);
+  }));
+
+test("checkout refspec after a force push need not contain the previous head", () =>
+  repository(({ root, git, base, commit }) => {
+    const previous = commit("Old branch\n");
+    const remote = join(root, "remote.git");
+    git("init", "--bare", "-q", remote);
+    git(
+      "push",
+      "-q",
+      remote,
+      `${base}:refs/heads/main`,
+      `${previous}:refs/heads/topic`,
+    );
+    git("checkout", "-q", "--detach", base);
+    const clean = commit("Clean rewrite\n");
+    git("push", "-q", "--force", remote, `${clean}:refs/heads/topic`);
+    const checkout = join(root, "checkout");
+    mkdirSync(checkout);
+    const fetchedGit = (...args: string[]) => git("-C", checkout, ...args);
+    fetchedGit("init", "-q");
+    fetchedGit("remote", "add", "origin", remote);
+    fetchedGit(
+      "fetch",
+      "-q",
+      "origin",
+      "+refs/heads/*:refs/remotes/origin/*",
+      "+refs/tags/*:refs/tags/*",
+    );
+    expect(() => fetchedGit("cat-file", "-e", previous)).toThrow();
+    const event = join(root, "event.json");
+    writeFileSync(event, JSON.stringify({ before: previous, after: clean }));
+    expect(cli(checkout, ["--event", event]).status).toBe(0);
+    const bad = commit(`${login}\n`);
+    git("push", "-q", "--force", remote, `${bad}:refs/heads/topic`);
+    fetchedGit("fetch", "-q", "origin", "+refs/heads/*:refs/remotes/origin/*");
+    writeFileSync(event, JSON.stringify({ before: previous, after: bad }));
+    const result = cli(checkout, ["--event", event]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("privacy/login-token");
+  }));
+
+test("branch pushes and PRs do not reattribute main additions to a merge", () =>
+  repository(({ root, git, base, commit }) => {
+    const upstream = commit(`${email}\n`, "upstream.md");
+    git("update-ref", "refs/remotes/origin/main", upstream);
+    git("checkout", "-q", "-b", "topic", base);
+    const prior = commit("Branch change\n", "branch.md");
+    git(
+      "-c",
+      "core.hooksPath=/dev/null",
+      "merge",
+      "-q",
+      "--no-ff",
+      "--no-edit",
+      upstream,
+    );
+    const head = git("rev-parse", "HEAD");
+    expect(scanPrivacyRange(root, upstream, head)).toEqual([]);
+    const event = join(root, "event.json");
+    for (const before of [prior, upstream, "f".repeat(40)]) {
+      writeFileSync(event, JSON.stringify({ before, after: head }));
+      expect(cli(root, ["--event", event]).status).toBe(0);
+    }
+    commit(`${login}\n`, "branch-secret.md");
+    writeFileSync(
+      event,
+      JSON.stringify({ before: prior, after: git("rev-parse", "HEAD") }),
+    );
+    expect(cli(root, ["--event", event]).stderr).toContain(
+      "privacy/login-token",
+    );
+    const refs = join(root, "refs");
+    writeFileSync(refs, `refs/heads/topic ${head} refs/heads/topic ${prior}\n`);
+    expect(cli(root, ["--pre-push", refs]).status).toBe(0);
+  }));
+
+test("binary additions and updates do not produce text findings", () =>
+  repository(({ root, git, base, commit }) => {
+    const saveBinary = () => {
+      writeFileSync(
+        join(root, "golden.png"),
+        Buffer.from(`\x89PNG\0${email}\n${login}\n`),
+      );
+      git("add", "golden.png");
+      git("-c", "core.hooksPath=/dev/null", "commit", "-qm", "binary fixture");
+    };
+    saveBinary();
+    const binaryBase = git("rev-parse", "HEAD");
+    expect(scanPrivacyRange(root, base, binaryBase)).toEqual([]);
+    writeFileSync(join(root, "golden.png"), Buffer.from("\x89PNG\0safe\n"));
+    git("add", "golden.png");
+    git("-c", "core.hooksPath=/dev/null", "commit", "-qm", "binary update");
+    saveBinary();
+    expect(scanPrivacyRange(root, binaryBase, "HEAD")).toEqual([]);
+    const head = commit(`${email}\n`, "text.png");
+    expect(scanPrivacyRange(root, binaryBase, head)).toContainEqual(
+      expect.objectContaining({ file: "text.png", rule: "email" }),
+    );
+  }));
+
+test("published dependency attribution is reusable only in the root generated licence artifact", () =>
+  repository(({ root, git, commit }) => {
+    const baseline = commit(
+      `- \`package@1.0.0\` — Author <${email}>\n`,
+      "DEPENDENCY_LICENSES.md",
+    );
+    git("update-ref", "refs/remotes/origin/main", baseline);
+    const updated = commit(
+      `- \`package@2.0.0\` — Author <${email}>\n`,
+      "DEPENDENCY_LICENSES.md",
+    );
+    expect(scanPrivacyRange(root, baseline, updated)).toEqual([]);
+    const outside = commit(`${email}\n`, "report.md");
+    expect(scanPrivacyRange(root, updated, outside)).toContainEqual(
+      expect.objectContaining({ file: "report.md", rule: "email" }),
+    );
+    const unknown = ["new-person", "mail-provider.com"].join("@");
+    const bad = commit(
+      `Author <${email}>\nAuthor <${unknown}>\n${login}\n${home}\n`,
+      "DEPENDENCY_LICENSES.md",
+    );
+    const findings = scanPrivacyRange(root, outside, bad);
+    for (const rule of ["email", "login-token", "home-path"])
+      expect(findings).toContainEqual(
+        expect.objectContaining({ file: "DEPENDENCY_LICENSES.md", rule }),
+      );
+    const actual = readFileSync(
+      join(import.meta.dir, "../DEPENDENCY_LICENSES.md"),
+      "utf8",
+    );
+    const trusted = commit(actual, "DEPENDENCY_LICENSES.md");
+    git("update-ref", "refs/remotes/origin/main", trusted);
+    const refreshed = commit(
+      actual
+        .split("\n")
+        .map((line) => (line ? ` ${line}` : line))
+        .join("\n"),
+      "DEPENDENCY_LICENSES.md",
+    );
+    expect(scanPrivacyRange(root, trusted, refreshed)).toEqual([]);
+  }));
+
+test("main pushes cannot approve newly added attribution addresses", () =>
+  repository(({ root, git, commit }) => {
+    const before = commit(`Author <${email}>\n`, "DEPENDENCY_LICENSES.md");
+    const unknown = ["new-person", "mail-provider.com"].join("@");
+    const after = commit(
+      `Author <${email}>\nNew author <${unknown}>\n`,
+      "DEPENDENCY_LICENSES.md",
+    );
+    git("update-ref", "refs/remotes/origin/main", after);
+    const event = join(root, "event.json");
+    writeFileSync(event, JSON.stringify({ before, after }));
+    const result = cli(root, ["--event", event]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      '"DEPENDENCY_LICENSES.md":2: privacy/email',
+    );
+    expect(result.stderr).not.toContain(unknown);
   }));
 
 test("pre-push scans every actual ref and ignores branch deletions", () =>
@@ -233,6 +422,12 @@ test("pre-push scans every actual ref and ignores branch deletions", () =>
     expect(cli(root, ["--pre-push", refs]).status).toBe(1);
     writeFileSync(refs, row("0".repeat(40), bad));
     expect(cli(root, ["--pre-push", refs]).status).toBe(0);
+    writeFileSync(refs, row(clean, "f".repeat(40)));
+    expect(cli(root, ["--pre-push", refs]).status).toBe(0);
+    writeFileSync(refs, row(bad, "f".repeat(40)));
+    expect(cli(root, ["--pre-push", refs]).stderr).toContain(
+      "privacy/login-token",
+    );
     writeFileSync(refs, "invalid input");
     expect(cli(root, ["--pre-push", refs]).status).toBe(1);
   }));

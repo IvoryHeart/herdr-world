@@ -92,6 +92,15 @@ test("ignore rules cover nested credentials, databases, runtimes and owner resea
     .trim()
     .split("\n");
   expect(ignored).toEqual(paths);
+  for (const path of [
+    "openspec/specs/runtime-federation/spec.md",
+    "openspec/changes/new-change/specs/runtime-federation/spec.md",
+  ]) {
+    const checked = spawnSync("git", ["check-ignore", "--no-index", path], {
+      cwd: root,
+    });
+    expect(checked.status).toBe(1);
+  }
 });
 
 test("the real pre-push hook blocks private refs before policy and delivery commands", () => {

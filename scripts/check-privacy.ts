@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
+  publishedAttributionFile,
   reservedEmailDomain,
   syntheticCredential,
   syntheticHomeUsers,
@@ -17,8 +18,23 @@ type Rule =
   | "session-secret";
 export type PrivacyFinding = { file: string; line: number; rule: Rule };
 
+function emailMatches(line: string) {
+  return [
+    ...line.matchAll(
+      /[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63})\b/gi,
+    ),
+  ].filter(
+    (match) =>
+      // Package versions/patch filenames are not mailbox domains.
+      !/^\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?(?:\.patch)?$/i.test(match[1]),
+  );
+}
+
 /** Only rule IDs escape this function: never return matched private material. */
-export function privacyRules(line: string): Rule[] {
+export function privacyRules(
+  line: string,
+  publishedEmails: ReadonlySet<string> = new Set(),
+): Rule[] {
   const rules = new Set<Rule>();
   for (const match of line.matchAll(
     /(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])/g,
@@ -39,10 +55,12 @@ export function privacyRules(line: string): Rule[] {
   if (/\b(?:[a-z0-9-]+\.)+ts\.net\b/i.test(line)) rules.add("tailnet-host");
   for (const match of line.matchAll(/\/(?:home|Users)\/([^/\s"'`]+)/g))
     if (!syntheticHomeUsers.has(match[1])) rules.add("home-path");
-  for (const match of line.matchAll(
-    /[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63})\b/gi,
-  ))
-    if (!reservedEmailDomain.test(match[1])) rules.add("email");
+  for (const match of emailMatches(line))
+    if (
+      !reservedEmailDomain.test(match[1]) &&
+      !publishedEmails.has(match[0].toLowerCase())
+    )
+      rules.add("email");
 
   // Quoted literals, shell assignments and copied links; interpolation stays
   // synthetic. Token/session literals need a plausible length; passwords do not.
@@ -108,62 +126,109 @@ function mainBaseline(cwd: string): string | null {
   }
 }
 
-/** Scan each introduced commit against its first parent, including merges.
+function publishedAttribution(cwd: string, main: string | null): Set<string> {
+  if (main) {
+    try {
+      return new Set(
+        emailMatches(
+          git(cwd, ["show", `${main}:${publishedAttributionFile}`]),
+        ).map((match) => match[0].toLowerCase()),
+      );
+    } catch {
+      /* No published attribution: keep the email rule strict. */
+    }
+  }
+  return new Set();
+}
+
+function addedLines(diff: string): Map<number, string> {
+  const lines = new Map<number, string>();
+  let line = 0;
+  let inHunk = false;
+  for (const text of diff.split("\n")) {
+    const hunk = text.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunk) {
+      line = Number(hunk[1]);
+      inHunk = true;
+    } else if (inHunk && text.startsWith("+")) lines.set(line++, text.slice(1));
+    else if (inHunk && text.startsWith(" ")) line++;
+  }
+  return lines;
+}
+
+/** Scan additions absent from every parent of each introduced commit.
  * A net tree diff would miss a leak deleted later in the very same push. */
 export function scanPrivacyRange(
   cwd: string,
-  base: string | null,
+  base: string | string[] | null,
   head: string,
 ): PrivacyFinding[] {
   const after = commitId(cwd, head);
-  const before = base === null ? null : commitId(cwd, base);
+  const before = (Array.isArray(base) ? base : base === null ? [] : [base]).map(
+    (ref) => commitId(cwd, ref),
+  );
   const commits = git(cwd, [
     "rev-list",
     "--reverse",
     "--topo-order",
     after,
-    ...(before ? ["--not", before] : []),
+    ...(before.length ? ["--not", ...before] : []),
   ])
     .trim()
     .split("\n")
     .filter(Boolean);
   const emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
   const findings: PrivacyFinding[] = [];
+  const main = mainBaseline(cwd);
+  // On a main push checkout's remote ref already points at the new head.
+  // Only its prior baseline may approve attribution, never this push's additions.
+  const attributionBase =
+    main === after
+      ? (before.find((revision) => revision !== after) ?? null)
+      : main;
+  const publishedEmails = publishedAttribution(cwd, attributionBase);
   for (const commit of commits) {
-    const parent =
-      git(cwd, ["rev-list", "--parents", "-n", "1", commit])
-        .trim()
-        .split(" ")[1] ?? emptyTree;
+    const parents = git(cwd, ["rev-list", "--parents", "-n", "1", commit])
+      .trim()
+      .split(" ")
+      .slice(1);
+    if (!parents.length) parents.push(emptyTree);
     const diffArgs = [
       "diff",
       "--no-color",
       "--no-ext-diff",
       "--no-textconv",
       "--no-renames",
-      parent,
-      commit,
     ];
-    const files = git(cwd, [...diffArgs, "--name-only", "-z", "--"])
+    const files = git(cwd, [
+      ...diffArgs,
+      parents[0],
+      commit,
+      "--name-only",
+      "-z",
+      "--",
+    ])
       .split("\0")
       .filter(Boolean);
     for (const file of files) {
-      const diff = git(cwd, [...diffArgs, "--text", "--unified=0", "--", file]);
-      let line = 0;
-      let inHunk = false;
-      for (const text of diff.split("\n")) {
-        const hunk = text.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-        if (hunk) {
-          line = Number(hunk[1]);
-          inHunk = true;
-          continue;
-        }
-        if (!inHunk) continue;
-        if (text.startsWith("+")) {
-          for (const rule of privacyRules(text.slice(1)))
-            findings.push({ file, line, rule });
-          line++;
-        } else if (text.startsWith(" ")) line++;
+      let additions: Map<number, string> | undefined;
+      for (const parent of parents) {
+        // Let Git identify binary blobs; never force their bytes into text.
+        const lines = addedLines(
+          git(cwd, [...diffArgs, parent, commit, "--unified=0", "--", file]),
+        );
+        if (!additions) additions = lines;
+        else
+          for (const line of additions.keys())
+            if (!lines.has(line)) additions.delete(line);
+        if (!additions.size) break;
       }
+      for (const [line, text] of additions ?? [])
+        for (const rule of privacyRules(
+          text,
+          file === publishedAttributionFile ? publishedEmails : undefined,
+        ))
+          findings.push({ file, line, rule });
     }
   }
   return findings;
@@ -175,7 +240,22 @@ function exactSha(value: unknown): string {
   return value;
 }
 const zero = "0".repeat(40);
-function ranges(cwd: string, args: string[]): [string | null, string][] {
+function pushBaseline(cwd: string, before: string, after: string): string[] {
+  const main = mainBaseline(cwd);
+  if (before !== zero) {
+    try {
+      const prior = commitId(cwd, before);
+      git(cwd, ["merge-base", "--is-ancestor", prior, after]);
+      // Main's published commits must not be re-scanned when a branch syncs it.
+      return [prior, ...(main && main !== after ? [main] : [])];
+    } catch {
+      /* Force pushes may leave the old head outside checkout's refs. */
+    }
+  }
+  return main ? [main] : [];
+}
+type PrivacyRange = [string | string[] | null, string];
+function ranges(cwd: string, args: string[]): PrivacyRange[] {
   if (!args.length) return [[mainBaseline(cwd), "HEAD"]];
   if (args[0] === "--range" && args.length === 3) return [[args[1], args[2]]];
   if (args[0] === "--event" && args.length === 2) {
@@ -189,21 +269,17 @@ function ranges(cwd: string, args: string[]): [string | null, string][] {
       ];
     const after = exactSha(event.after);
     const before = exactSha(event.before);
-    return after === zero
-      ? []
-      : [[before === zero ? mainBaseline(cwd) : before, after]];
+    return after === zero ? [] : [[pushBaseline(cwd, before, after), after]];
   }
   if (args[0] === "--pre-push" && args.length === 2) {
     const rows = readFileSync(args[1], "utf8").trim();
     if (!rows) return [[mainBaseline(cwd), "HEAD"]];
-    return rows.split("\n").flatMap((row): [string | null, string][] => {
+    return rows.split("\n").flatMap((row): PrivacyRange[] => {
       const fields = row.trim().split(/\s+/);
       if (fields.length !== 4) throw new Error("Invalid push input");
       const after = exactSha(fields[1]);
       const before = exactSha(fields[3]);
-      return after === zero
-        ? []
-        : [[before === zero ? mainBaseline(cwd) : before, after]];
+      return after === zero ? [] : [[pushBaseline(cwd, before, after), after]];
     });
   }
   throw new Error("Invalid arguments");

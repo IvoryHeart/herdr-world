@@ -1,5 +1,8 @@
-/** Reviewed value-level exceptions only. Never exempt a file, directory or line.
+/** Reviewed value-level exceptions only. Never exempt an entire file or line.
  * Additions to this list need the same review as the guard itself. */
+// Reuse already-published upstream attribution only in this generated artifact.
+// Values come from main's published baseline, never from the current additions.
+export const publishedAttributionFile = "DEPENDENCY_LICENSES.md";
 export const reservedEmailDomain =
   /^(?:[a-z0-9-]+\.)*(?:example\.(?:com|org|net)|example|invalid|test|localhost)$/i;
 export const syntheticHomeUsers = new Set([

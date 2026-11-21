@@ -146,14 +146,24 @@ later commit of the same push does not hide it. It rejects private/CGNAT IPv4,
 Tailscale IPv6 and `*.ts.net` hosts, absolute home paths, plausible login tokens
 and session secrets, literal World passwords, and non-reserved email addresses.
 It prints file, line and rule only; matched values and Git error details are
-suppressed. Missing required history fails the check. Renames scan their added
-content; existing unchanged lines and deletions are outside the scan.
+suppressed. A missing or rewritten previous push head falls back to `origin/main`
+(or all history if main is unavailable); an unavailable requested head fails.
+Branch pushes exclude published main history. Merge commits scan lines absent
+from every parent, so syncing main does not reattribute published content.
+Renames scan their added content; binary blobs, existing unchanged lines and
+deletions are outside the text scan.
 
 Use RFC 5737/3849 documentation addresses and reserved domains such as
 `example.com` and `.invalid` for fixtures. The small value-level allowlist in
 `scripts/privacy-allowlist.ts` permits explicit placeholders, repeated-character
 credentials and synthetic home usernames; changing it requires review. There
-are no per-file exclusions or inline bypasses. Keep credentials, runtime state,
+is one narrow attribution rule: `DEPENDENCY_LICENSES.md` may reuse exact public
+email addresses already published in that file on `origin/main` before the push, preserving
+upstream licence attribution across dependency refreshes. New addresses require
+a reviewed allowlist change. All other privacy rules still apply there, and the
+same emails remain disallowed elsewhere. Package versions such as
+`react-dom@19.3.1.patch` are not emails. There are no whole-file exclusions or
+inline bypasses. Keep credentials, runtime state,
 `*.local.md` notes and owner-only material in gitignored paths; `research-local/`
 is the owner-only research folder. Ignore rules do not remove already tracked files.
 
