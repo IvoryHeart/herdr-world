@@ -1546,6 +1546,11 @@ async function run() {
   }
   if (scale === "typical" && mode === "test") {
     await checkTownCenter(host, check, waitFor);
+  }
+  // Same seeded topology as typical, in its own case: the complete trip
+  // samples every second over drawn frames, independently of Town's other
+  // interactions and camera changes.
+  if (scale === "bus" && mode === "test") {
     const [connection] = base.connections;
     // A blocked agent queues at reception, a few steps from its building's
     // front door: its walk out is short whatever the frame rate
@@ -1573,6 +1578,17 @@ async function run() {
         terminal_id: pane.terminal_id,
       },
     );
+    root.unmount();
+    await settle();
+    check(
+      window.__HERDR_TOWN_RENDERER__?.activeApplications === 0,
+      "bus trip unmount left a live renderer",
+    );
+    check(
+      document.querySelectorAll("canvas[data-office-canvas]").length === 0,
+      "bus trip unmount left a town canvas",
+    );
+    return;
   }
   if (scale === "plates" && mode === "test") {
     // A room dragged by its wall goes where it is dropped in its building:
