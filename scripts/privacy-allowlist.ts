@@ -13,6 +13,11 @@ export const syntheticHomeUsers = new Set([
   "$USER",
   "${USER}",
 ]);
+// This unquoted Python binding holds 'release-walk-synthetic-password'. Keep
+// the exception scoped to that binding in its fixture, never quoted passwords.
+export const syntheticWorldPasswordBindings = new Map([
+  ["scripts/release-walk/world.py", "PASSWORD"],
+]);
 const placeholderWords = new Set([
   "example",
   "placeholder",
