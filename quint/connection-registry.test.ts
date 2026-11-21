@@ -10,7 +10,7 @@ test("all 48 registry writer, arrival, persistence and retry schedules preserve 
   expect((await replayRegistryMatrix()).configurations).toBe(48);
 });
 
-test("counterexample: two offline CLI writers acknowledge success but lose an addition", async () => {
+test("two successful offline CLI writers preserve both additions", async () => {
   const cli = createTestCli();
   cli.writeConfig("");
   const add = (id: string) =>
@@ -29,10 +29,9 @@ test("counterexample: two offline CLI writers acknowledge success but lose an ad
         "utf8",
       ),
     );
-    // Characterization of a reported defect, deliberately not a passing claim
-    // for offline serialization. Remove this witness when its repair lands.
     expect(saved.profiles.map((p: { id: string }) => p.id)).toEqual([
       "alpha",
+      "beta",
       "gamma",
     ]);
   } finally {

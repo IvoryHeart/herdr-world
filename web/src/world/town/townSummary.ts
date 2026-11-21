@@ -34,6 +34,11 @@ export type TownSummary = {
    */
   finished: readonly TownSummaryItem[];
   hosts: readonly TownSummaryHost[];
+  /**
+   * The harnesses ("claude", "codex", …) of the town's agents, as Herdr
+   * names them, so FUEL can name one with agents but no limits reading.
+   */
+  harnesses: readonly string[];
   spend: TownSummarySpend;
 };
 
@@ -65,6 +70,8 @@ export type TownSummaryHost = {
   /** Offline or stale hosts show when they were last seen. */
   stale: boolean;
   counts: TownSummaryCounts;
+  /** The harnesses of this host's agents, as `TownSummary.harnesses`. */
+  harnesses: readonly string[];
   rooms: readonly {
     key: string;
     label: string;
@@ -114,7 +121,7 @@ export function townSummaryAgents(counts: TownSummaryCounts): number {
 const roomContributions = new WeakMap<OfficeStatusCounts, TownSummaryCounts>();
 const topologies = new WeakMap<
   HerdrOfficeProjection,
-  { hosts: TownSummaryHost[]; totals: TownSummaryCounts }
+  { hosts: TownSummaryHost[]; totals: TownSummaryCounts; harnesses: string[] }
 >();
 
 function summaryTopology(office: HerdrOfficeProjection) {
@@ -143,6 +150,13 @@ function summaryTopology(office: HerdrOfficeProjection) {
     if (!rooms) byHost.set(room.hostKey, (rooms = []));
     rooms.push({ key: room.key, label: room.displayLabel, counts });
   }
+  const hostHarnesses = new Map<string, Set<string>>();
+  office.roster.forEach((entry) => {
+    if (!entry.agent.harness) return;
+    let set = hostHarnesses.get(entry.hostKey);
+    if (!set) hostHarnesses.set(entry.hostKey, (set = new Set()));
+    set.add(entry.agent.harness.toLowerCase());
+  });
   const hosts = office.hosts.map((host): TownSummaryHost => {
     const rooms = byHost.get(host.key) ?? [];
     const counts = emptyCounts();
@@ -153,10 +167,14 @@ function summaryTopology(office: HerdrOfficeProjection) {
       label: host.accessibleLabel ?? host.displayLabel,
       stale: host.stale,
       counts,
+      harnesses: [...(hostHarnesses.get(host.key) ?? [])].sort(),
       rooms,
     };
   });
-  const result = { hosts, totals };
+  const harnesses = [
+    ...new Set([...hostHarnesses.values()].flatMap((set) => [...set])),
+  ].sort();
+  const result = { hosts, totals, harnesses };
   topologies.set(office, result);
   return result;
 }
@@ -185,7 +203,7 @@ export function townSummary(
     .sort((left, right) => (right.since ?? 0) - (left.since ?? 0));
   // Complete room contributions were counted cooperatively before publication.
   // Asks, metrics and the display clock do not recount raw agent topology.
-  const { hosts, totals } = summaryTopology(office);
+  const { hosts, totals, harnesses } = summaryTopology(office);
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
   return {
@@ -203,6 +221,7 @@ export function townSummary(
     asks,
     finished,
     hosts,
+    harnesses,
     spend: available
       ? {
           available: true,

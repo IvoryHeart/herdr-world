@@ -1,9 +1,12 @@
 import { WORLD_AGENT_LAUNCH_EVENT } from "../agentProfiles";
+import { WORLD_APARTMENTS_EVENT } from "../apartments/apartmentsStore";
+import { spotlightHelpTarget } from "../../help/helpTry";
 
 /**
  * The town center in a real renderer: its plaque is in the home view, a tap
  * on the building opens the ring around it, every action fits on screen,
- * Escape and a press outside close it, and New agent opens the launcher.
+ * Escape and a press outside close it, New agent opens the launcher, and
+ * Apartments opens from the ring and from its building's sign.
  */
 export async function checkTownCenter(
   host: HTMLElement,
@@ -50,7 +53,7 @@ export async function checkTownCenter(
     () => ring() !== null,
     "a tap on the town center opened no menu",
   );
-  check(actions().length === 8, `the ring has ${actions().length} actions`);
+  check(actions().length === 9, `the ring has ${actions().length} actions`);
   check(
     actions().some((action) => action.dataset.action === "library"),
     "the ring offers no Library",
@@ -116,6 +119,30 @@ export async function checkTownCenter(
     window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, launched);
   }
 
+  // Apartments opens from the ring and from the building's sign.
+  let apartments = 0;
+  const opened = () => {
+    apartments += 1;
+  };
+  window.addEventListener(WORLD_APARTMENTS_EVENT, opened);
+  try {
+    sign()!.click();
+    await waitFor(() => ring() !== null, "the plaque did not reopen the menu");
+    actions()
+      .find((action) => action.dataset.action === "apartments")!
+      .click();
+    await waitFor(() => ring() === null, "choosing Apartments left it open");
+    check(apartments === 1, "Apartments did not open from the ring");
+    const building = host.querySelector<HTMLButtonElement>(
+      ".town-apartments-sign",
+    );
+    check(building !== null, "Town has no apartment building sign");
+    building?.click();
+    check(apartments === 2, "the apartment sign did not open Apartments");
+  } finally {
+    window.removeEventListener(WORLD_APARTMENTS_EVENT, opened);
+  }
+
   // Lenses turns a lens on, its legend in the Town board's place; ✕ leaves
   // it and the board comes back.
   const legend = () => host.querySelector<HTMLElement>(".town-lens-legend");
@@ -143,6 +170,58 @@ export async function checkTownCenter(
     host.querySelector(".town-board") !== null,
     "the Town board did not come back",
   );
+}
+
+/**
+ * Help's Try on the Apartments sign when it is off camera (#1150): Town
+ * flies its camera to the sign. The browser must not scroll the clipped
+ * Town shell, which would lift the controls off the painted buildings. It
+ * leaves the camera where Try put it, so it runs last.
+ */
+export async function checkApartmentsTry(
+  host: HTMLElement,
+  check: (condition: boolean, message: string) => void,
+  waitFor: (condition: () => boolean, message: string) => Promise<void>,
+) {
+  const sign = host.querySelector<HTMLButtonElement>(".town-apartments-sign")!;
+  const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
+  const shell = host.querySelector<HTMLElement>(".town-shell")!;
+  const inView = () => {
+    const box = sign.getBoundingClientRect();
+    const frame = canvas.getBoundingClientRect();
+    return (
+      box.top >= frame.top &&
+      box.left >= frame.left &&
+      box.bottom <= frame.bottom &&
+      box.right <= frame.right
+    );
+  };
+  // The world layer follows the camera on Town's next frame.
+  const frame = () =>
+    new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+  const press = async (key: string) => {
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    await frame();
+  };
+  canvas.focus();
+  // Closer in, then away until the sign is out of the camera's view.
+  for (let step = 0; step < 3; step += 1) await press("+");
+  for (const key of ["ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight"])
+    for (let step = 0; step < 40 && inView(); step += 1) await press(key);
+  await waitFor(() => !inView(), "the arrows never took the sign off camera");
+  spotlightHelpTarget(sign);
+  await waitFor(inView, "Try did not bring the Apartments sign into view");
+  check(
+    shell.scrollTop === 0 && shell.scrollLeft === 0,
+    `Try scrolled the Town shell to ${shell.scrollLeft},${shell.scrollTop}`,
+  );
+  check(
+    (document.scrollingElement?.scrollTop ?? 0) === 0,
+    "Try scrolled the page",
+  );
+  sign.removeAttribute("data-help-spotlight");
 }
 
 /**

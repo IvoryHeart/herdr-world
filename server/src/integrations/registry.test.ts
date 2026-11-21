@@ -7,6 +7,7 @@ import {
   WORLD_INTEGRATIONS_PATH,
   type IntegrationsSnapshot,
 } from "../../../shared/integrations";
+import { normalizeWeatherSettings } from "../../../shared/weather";
 import type { WorldSourceStatus } from "../../../shared/worldSources";
 import type { WorldIntegrationStatus } from "../cli/integration";
 import { createTestCli } from "../cli/test-context";
@@ -187,6 +188,63 @@ describe("source rows", () => {
       label: "API token",
       value: true,
       secret: true,
+    });
+  });
+
+  test("Weather maps through the registry without becoming a work provider", () => {
+    const status: WorldSourceStatus = {
+      id: "weather",
+      label: "Weather",
+      enabled: false,
+      state: "disabled",
+      detail: "Weather is off.",
+      checkedAt: 1,
+      lastSuccessAt: null,
+      itemCount: 0,
+      config: { kind: "weather", ...normalizeWeatherSettings({}) },
+    };
+    const row = sourceEntry(status);
+    expect(row).toMatchObject({
+      id: "source:weather",
+      control: "source",
+      state: "available",
+      provides: ["weather"],
+    });
+    expect(row.settings).toEqual([
+      { key: "location", label: "Weather location", value: null },
+      { key: "browser_location", label: "Browser location", value: null },
+    ]);
+    expect(
+      connectedProvider([{ ...row, state: "connected" }], "pull_requests"),
+    ).toBeNull();
+    expect(
+      sourceEntry({ ...status, enabled: true, state: "not_connected" }).state,
+    ).toBe("needs_connect");
+    expect(
+      sourceEntry({ ...status, enabled: true, state: "error" }).state,
+    ).toBe("error");
+    expect(
+      sourceEntry({ ...status, enabled: true, state: "connected" }).state,
+    ).toBe("connected");
+    const configured = sourceEntry({
+      ...status,
+      config: {
+        kind: "weather",
+        ...normalizeWeatherSettings({
+          location: "Example City",
+          browserLocation: { latitude: 1.2, longitude: 2.3 },
+        }),
+      },
+    });
+    expect(configured.settings).toContainEqual({
+      key: "location",
+      label: "Weather location",
+      value: "Example City",
+    });
+    expect(configured.settings).toContainEqual({
+      key: "browser_location",
+      label: "Browser location",
+      value: "1.2, 2.3",
     });
   });
 

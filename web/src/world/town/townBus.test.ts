@@ -1,17 +1,11 @@
 import { expect, test } from "bun:test";
 import type { BinEntry } from "../../../../shared/bin";
-import { binClockLabel } from "../bin/binStore";
 import {
-  TOWN_BUS_DWELL_MS,
   TOWN_QUEUE_ROW,
   TOWN_QUEUE_ROWS,
   TOWN_STOP_SPACING,
   townBinRiders,
-  townBusAlong,
-  townBusAt,
-  townBusOpacity,
   townBusRoute,
-  townBusTimeline,
   townNearestStop,
   townQueueMoreLeft,
   townQueueShape,
@@ -22,10 +16,21 @@ import {
   townRiderWalk,
   townRiderWalkBack,
   townRiderWalkMs,
-  townStopClock,
+  townWalkAlong,
+  townWalkLength,
+  type TownBusRoute,
   type TownBusStop,
 } from "./townBus";
-import { TownGround, type TownShape } from "./townLayout";
+import {
+  TOWN_BUS_DWELL_MS,
+  TOWN_BUS_IN_BEFORE_END_S,
+  townBusDoor,
+  townBusPose,
+  townBusTimeline,
+  townBusWay,
+} from "./townBusDrive";
+import { townApartmentsDoor, townApartmentsLot } from "./townApartmentsLot";
+import { TownGround, type TownLayout, type TownShape } from "./townLayout";
 import { TOWN_WALK_SPEED } from "./townActors";
 import { layoutTown, TOWN_SHAPES, TOWN_TILE as T } from "./townLayout";
 import type { TownModel } from "./townModel";
@@ -63,7 +68,7 @@ const towns: Record<string, number[]>[] = [
   { a: [3, 2], b: [1], c: [2, 2, 2], d: [2, 2] },
 ];
 
-test("every road crossing has a stop, and the bus passes each on its way off the map", () => {
+test("every road crossing has a stop, and the bus halts on its street for it", () => {
   for (const shape of shapes)
     for (const hosts of towns) {
       const { layout } = layoutTown(town(hosts), shape);
@@ -114,29 +119,56 @@ test("every road crossing has a stop, and the bus passes each on its way off the
           expect(stop).toBeDefined();
           expect(stop!.wait.x).toBeGreaterThan(0);
         }
-      // Every street is driven edge to edge: from off the map's left edge to
-      // off its right, or to a wide town's promenade, where it turns away.
-      const streetEnd = townHarbourLot(layout)?.streetEnd;
-      expect(route.legs.map((leg) => leg.y)).toEqual(
-        [...new Set(layout.roads)]
-          .sort((a, b) => a - b)
-          .map((r) => (r + 2.5) * T),
-      );
-      for (const leg of route.legs)
-        for (const end of [leg.from, leg.to])
-          expect(
-            end < 0 ||
-              (streetEnd ? end >= (streetEnd - 3) * T : end > layout.width * T),
-          ).toBe(true);
+      // The bus halts for each on its street's lanes, short of the
+      // crossing and wholly on the map, short of the harbour's promenade.
       for (const stop of route.stops) {
-        expect(stop.at).toBeGreaterThan(0);
-        expect(stop.at).toBeLessThan(route.length);
-        // The bus is at the stop's crossing when it passes it.
-        const bus = townBusAt(route, stop.at);
-        expect(
-          Math.hypot(bus.x - stop.wait.x, bus.y - stop.wait.y),
-        ).toBeLessThanOrEqual(2 * T);
+        const [, road] = stop.key.split(":").map(Number);
+        expect(stop.halt.y).toBe((road! + 2.5) * T);
+        expect(stop.halt.x).toBeLessThan(stop.wait.x);
+        expect(stop.halt.x).toBeGreaterThanOrEqual(32);
+        expect(stop.halt.x).toBeLessThanOrEqual(
+          townHarbourLot(layout).streetEnd * T - 32,
+        );
       }
+    }
+});
+
+const groundAt = (layout: TownLayout, x: number, y: number) =>
+  layout.ground[Math.floor(y / T) * layout.width + Math.floor(x / T)];
+
+test("every town's bus lives at Apartments: it parks on the last street, by a footpath to the door", () => {
+  for (const shape of shapes)
+    for (const hosts of towns) {
+      const { layout } = layoutTown(town(hosts), shape);
+      const { terminus } = townBusRoute(layout);
+      const lot = townApartmentsLot(layout)!;
+      expect(lot).not.toBeNull();
+      expect(terminus).not.toBeNull();
+      expect(terminus!.to).toBe("apartments");
+      const last = Math.max(...layout.roads);
+      expect(terminus!.halt.y).toBe((last + 2.5) * T);
+      expect(terminus!.halt.x).toBeGreaterThanOrEqual(32);
+      expect(terminus!.halt.x).toBeLessThanOrEqual(
+        townHarbourLot(layout).streetEnd * T - 32,
+      );
+      // Its door (facing right, parked) opens onto the footpath's kerb.
+      expect(townBusDoor(terminus!.halt, "right", terminus!.kerb.y)).toEqual(
+        terminus!.kerb,
+      );
+      // The walk in keeps to pavement and plaza and ends at the door.
+      const walk = terminus!.walk;
+      expect(walk[walk.length - 1]).toEqual(townApartmentsDoor(lot));
+      const length = townWalkLength(walk);
+      for (let d = 0; d < length - 6; d += 4) {
+        const at = townWalkAlong(walk, d);
+        expect<number[]>([TownGround.walk, TownGround.plaza]).toContain(
+          groundAt(layout, at.x, at.y),
+        );
+      }
+      expect(townWalkAlong(walk, length + 1)).toMatchObject({
+        ...walk[walk.length - 1],
+        walking: false,
+      });
     }
 });
 
@@ -233,71 +265,143 @@ test("bin entries become Town riders by connection, generation and pane", () => 
   });
 });
 
-test("the bus comes in, waits about 10 s at each stop with riders and is off the map as its trip ends", () => {
+/** The halts a trip makes at `stops`, as TownBusLayer asks for them. */
+const haltsAt = (stops: readonly TownBusStop[]) =>
+  stops.map((stop) => ({ key: stop.key, at: stop.halt }));
+const walkOf = (route: TownBusRoute) =>
+  townWalkLength(route.terminus!.walk) / TOWN_WALK_SPEED;
+
+test("the bus drives from Apartments to each stop with riders by road, waits there with its doors open and brings them back", () => {
   const TRIP = 120_000;
+  const RIDERS = 3;
   for (const shape of shapes)
     for (const hosts of towns) {
       const { layout } = layoutTown(town(hosts), shape);
       const route = townBusRoute(layout);
-      const halting = new Set(
-        route.stops
-          .filter((_, index) => index % 2 === 0)
-          .slice(0, 4)
-          .map((s) => s.key),
+      const terminus = route.terminus!;
+      const halting = route.stops
+        .filter((_, index) => index % 2 === 0)
+        .slice(0, 4);
+      const walk = walkOf(route);
+      const timeline = townBusTimeline(
+        route.graph,
+        terminus.halt,
+        haltsAt(halting),
+        RIDERS,
+        walk,
+        TRIP,
       );
-      const timeline = townBusTimeline(route, halting, TRIP);
-      // It has not come in at the start; it is off the map, unseen, at the end.
-      expect(townBusAlong(timeline, 0)).toBeNull();
-      expect(townBusAlong(timeline, TRIP)).toBe(route.length);
-      const end = townBusAt(route, route.length);
-      expect(townBusOpacity(route, end.x)).toBe(0);
-      const begin = townBusAt(
-        route,
-        townBusAlong(timeline, timeline.start * 1000)!,
-      );
-      expect(townBusOpacity(route, begin.x)).toBe(0);
-      // It never goes backwards, and is never fast.
-      let previous = 0;
-      for (let ms = timeline.start * 1000; ms <= TRIP; ms += 100) {
-        const along = townBusAlong(timeline, ms)!;
-        expect(along).toBeGreaterThanOrEqual(previous - 1e-6);
-        expect(along - previous).toBeLessThanOrEqual(
-          timeline.cruise * 0.1 + 1e-6,
+      const pose = (s: number) =>
+        townBusPose(timeline, terminus.halt, s * 1000);
+      // Parked at Apartments as the trip starts and as it ends.
+      for (const s of [0, TRIP / 1000])
+        expect(pose(s)).toMatchObject({
+          ...terminus.halt,
+          facing: "right",
+          moving: false,
+          doors: false,
+        });
+      // It never leaves the map or the roads (the streets end at the
+      // harbour's promenade), and never jumps.
+      let previous = pose(0);
+      for (let s = 0; s <= TRIP / 1000; s += 0.1) {
+        const now = pose(s);
+        expect(now.x).toBeGreaterThanOrEqual(0);
+        expect(now.x).toBeLessThanOrEqual(townHarbourLot(layout).streetEnd * T);
+        expect(now.y).toBeGreaterThanOrEqual(0);
+        expect(now.y).toBeLessThanOrEqual(layout.height * T);
+        // Its lanes, or the pavement where a side road meets a street.
+        expect<number[]>([TownGround.road, TownGround.walk]).toContain(
+          groundAt(layout, now.x, now.y),
         );
-        previous = along;
+        expect(
+          Math.hypot(now.x - previous.x, now.y - previous.y),
+        ).toBeLessThanOrEqual(timeline.cruise * 0.1 * 1.05 + 1e-6);
+        previous = now;
       }
       expect(timeline.cruise).toBeLessThanOrEqual(400);
-      // It stands at each stop with riders for about 10 s, then goes on.
-      for (const stop of route.stops) {
-        const halt = timeline.halts.get(stop.key);
-        if (!halting.has(stop.key)) continue;
+      // It stands at each stop with riders for about 10 s, its doors open.
+      for (const stop of halting) {
+        const halt = timeline.halts.get(stop.key)!;
         expect(halt).toBeDefined();
-        const at = (s: number) => townBusAlong(timeline, s * 1000)!;
-        expect(at(halt!)).toBeCloseTo(stop.at, 3);
-        expect(at(halt! + TOWN_BUS_DWELL_MS / 1000 - 0.01)).toBeCloseTo(
-          stop.at,
-          3,
+        expect(halt.point).toEqual(stop.halt);
+        expect(pose(halt.at + 0.01)).toMatchObject({
+          ...stop.halt,
+          moving: false,
+        });
+        expect(pose((halt.open + halt.close) / 2).doors).toBe(true);
+        expect(halt.close - halt.at).toBeLessThanOrEqual(
+          TOWN_BUS_DWELL_MS / 1000,
         );
+        expect(halt.close - halt.at).toBeGreaterThan(5);
         // It slows to the stop: in the last half second it barely moves.
-        expect(stop.at - at(halt! - 0.5)).toBeLessThan(timeline.cruise * 0.2);
-        expect(at(halt! + TOWN_BUS_DWELL_MS / 1000 + 0.5)).toBeGreaterThan(
-          stop.at,
-        );
+        const before = pose(halt.at - 0.5);
+        expect(
+          Math.hypot(before.x - stop.halt.x, before.y - stop.halt.y),
+        ).toBeLessThan(timeline.cruise * 0.3);
       }
+      // Back at Apartments, it faces the footpath and its riders step off;
+      // the last is in just before the trip ends and they close.
+      const { arrive } = timeline;
+      expect(arrive.point).toEqual(terminus.halt);
+      expect(arrive.facing).toBe("right");
+      expect(pose(arrive.open + 0.1).doors).toBe(true);
+      expect(arrive.open + (RIDERS - 1) * arrive.step + walk).toBeCloseTo(
+        TRIP / 1000 - TOWN_BUS_IN_BEFORE_END_S,
+        6,
+      );
     }
 });
 
-test("many stops with riders share half the trip, so the bus still drives it", () => {
+test("the bus takes the nearest way round its stops", () => {
+  for (const shape of shapes)
+    for (const hosts of towns) {
+      const { layout } = layoutTown(town(hosts), shape);
+      const route = townBusRoute(layout);
+      const halts = haltsAt(route.stops.slice(0, 5));
+      const way = townBusWay(route.graph, route.terminus!.halt, halts);
+      expect([...way.order].sort()).toEqual(halts.map((h) => h.key).sort());
+      expect(way.legs).toHaveLength(halts.length + 1);
+      // One round is never longer than a trip out and back for each stop.
+      const alone = halts.map(
+        (halt) => townBusWay(route.graph, route.terminus!.halt, [halt]).length,
+      );
+      expect(way.length).toBeLessThanOrEqual(
+        alone.reduce((a, b) => a + b, 0) + 1e-6,
+      );
+      expect(way.length).toBeGreaterThanOrEqual(Math.max(...alone) - 1e-6);
+      // Each leg runs along a street or a side road, a turn at a time.
+      for (const leg of way.legs)
+        for (let i = 1; i < leg.length; i += 1)
+          expect(
+            leg[i]!.x === leg[i - 1]!.x || leg[i]!.y === leg[i - 1]!.y,
+          ).toBe(true);
+    }
+});
+
+test("many stops with riders share under half the trip, so the bus still drives it", () => {
   const { layout } = layoutTown(
     town(Object.fromEntries([..."abcdefgh"].map((key) => [key, [1]]))),
     TOWN_SHAPES.wide,
   );
   const route = townBusRoute(layout);
-  const all = new Set(route.stops.map((stop) => stop.key));
-  const timeline = townBusTimeline(route, all, 120_000);
-  expect(townBusAlong(timeline, 120_000)).toBe(route.length);
-  const dwell = timeline.pieces.find((piece) => !piece.phases.length)!;
-  expect(dwell.t1 - dwell.t0).toBeLessThanOrEqual(60 / all.size + 1e-9);
+  const timeline = townBusTimeline(
+    route.graph,
+    route.terminus!.halt,
+    haltsAt(route.stops),
+    12,
+    walkOf(route),
+    120_000,
+  );
+  expect(timeline.halts.size).toBe(route.stops.length);
+  const dwells = [...timeline.halts.values()].reduce(
+    (sum, halt) => sum + (halt.close - halt.open),
+    0,
+  );
+  expect(dwells).toBeLessThanOrEqual(120 * 0.4);
+  expect(townBusPose(timeline, route.terminus!.halt, 120_000)).toMatchObject(
+    route.terminus!.halt,
+  );
 });
 
 test("a binned agent walks out to its stop as it walks indoors, then stands there", () => {
@@ -350,51 +454,6 @@ test("an agent seen indoors walks out of the door however long it took to reach 
   expect(
     townRiderOuting({ indoors: true, out: null }, true, 5_000, true).out,
   ).toBe(-Infinity);
-});
-
-test("a stop's clock reads due only just before the bus pulls in there", () => {
-  const TRIP = 120_000;
-  const { layout } = layoutTown(
-    town({ a: [2], b: [2], c: [1] }),
-    TOWN_SHAPES.phone,
-  );
-  const route = townBusRoute(layout);
-  const stop = [...route.stops].sort((a, b) => b.at - a.at)[0]!;
-  const timeline = townBusTimeline(route, new Set([stop.key]), TRIP);
-  const halt = timeline.halts.get(stop.key)!;
-  // The trip sets off with the bus off the map: it reaches a stop well after.
-  expect(halt).toBeGreaterThan(30);
-  const clock = (elapsed: number | null, next = 200_000, riding = true) =>
-    townStopClock({
-      elapsed,
-      next,
-      stopped: false,
-      riding,
-      halt,
-      nextHalt: halt,
-    });
-  // Waiting for the next trip: until it sets off and drives to this stop.
-  expect(clock(null, 60_000, false)).toBe(binClockLabel(60_000 + halt * 1000));
-  expect(clock(null, 0, false)).not.toBe("due");
-  // Riding this trip: it counts down to the bus pulling in here.
-  expect(clock(0)).not.toBe("due");
-  expect(clock((halt - 10) * 1000)).toBe("0:10");
-  expect(clock((halt - 4) * 1000)).toBe("due");
-  // Due, the bus is a few seconds away: in sight, slowing to the stop.
-  const along = townBusAlong(timeline, (halt - 4) * 1000);
-  expect(along).not.toBeNull();
-  expect(stop.at - along!).toBeLessThan(timeline.cruise * 5);
-  expect(clock((halt + 3) * 1000)).toBe("due");
-  expect(
-    townStopClock({
-      elapsed: 1_000,
-      next: 0,
-      stopped: true,
-      riding: true,
-      halt,
-      nextHalt: halt,
-    }),
-  ).toBe("stopped");
 });
 
 /** A Town of one host with `count` agents in one room, and their bin entries. */

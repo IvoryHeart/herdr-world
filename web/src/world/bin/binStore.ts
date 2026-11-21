@@ -130,12 +130,28 @@ export const binClockLabel = (ms: number) => {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
 
-/** Town's words for the bin's clock: its bus. */
-export function binBusLabel(bin: WorldBin, now: number) {
-  if (!bin.verified) return "bin unavailable";
+/**
+ * The bus's countdown at `now`, as Town shows it everywhere: on each stop's
+ * sign and on the bin. One value from the timetable, the same for every stop
+ * and every rider: the time until the next bus sets off ("2:05"), "on its
+ * way" while a trip is out and "stopped" while it stands. Riders who join
+ * while a trip is out wait for the next one, which sets off once that trip is
+ * back. Null when the bin is unavailable.
+ */
+export function binBusCountdown(bin: WorldBin, now: number) {
+  if (!bin.verified) return null;
   const { elapsed, next } = binBusClock(bin, now);
-  if (elapsed !== null && bin.bus.stopped) return "bus stopped";
-  return elapsed !== null ? "bus on its way" : `bus in ${binClockLabel(next)}`;
+  if (elapsed !== null) return bin.bus.stopped ? "stopped" : "on its way";
+  return binClockLabel(next);
+}
+
+/** Town's words for the bin's clock: its bus (binBusCountdown). */
+export function binBusLabel(bin: WorldBin, now: number) {
+  const countdown = binBusCountdown(bin, now);
+  if (countdown === null) return "bin unavailable";
+  return countdown === "stopped" || countdown === "on its way"
+    ? `bus ${countdown}`
+    : `bus in ${countdown}`;
 }
 
 /**

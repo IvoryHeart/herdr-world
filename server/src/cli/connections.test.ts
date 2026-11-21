@@ -2,6 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { EXIT_FAILURE, EXIT_OK, EXIT_USAGE } from "./command";
+import { ConnectionProfileStore } from "../connections/profiles";
+import { acquireInstanceLock } from "../config/instance-lock";
 import {
   type ConnectionsDependencies,
   createConnectionsCommand,
@@ -207,6 +209,125 @@ describe("herdr-world connections", () => {
     });
   });
 
+  test("concurrent offline first saves retain both successful additions", async () => {
+    cli = createTestCli();
+    cli.writeConfig("");
+    // Both old snapshots would see no registry while the first detection yields.
+    const dependencies = { ...idle, herdrInstalled: async () => true };
+    const receipts = await Promise.all([
+      connections(["add", "beta", "--core"], dependencies),
+      connections(["add", "gamma", "--core"], dependencies),
+    ]);
+    expect(receipts).toEqual([EXIT_OK, EXIT_OK]);
+    expect(
+      registry(cli)
+        .profiles.map((p: { id: string }) => p.id)
+        .sort(),
+    ).toEqual(["beta", "gamma", "local"]);
+  });
+
+  test("all 24 admission orders retain unrelated additions, removal and default changes", async () => {
+    const operations = [
+      ["add", "beta", "--core"],
+      ["add", "gamma", "--core"],
+      ["set-default", "delta"],
+      ["remove", "omega"],
+    ];
+    function permutations(items: string[][]): string[][][] {
+      return items.length === 0
+        ? [[]]
+        : items.flatMap((item, i) =>
+            permutations(items.filter((_, j) => j !== i)).map((rest) => [
+              item,
+              ...rest,
+            ]),
+          );
+    }
+    const orders = permutations(operations);
+    expect(orders).toHaveLength(24);
+    for (const order of orders) {
+      cli = createTestCli();
+      cli.writeConfig("");
+      const path = join(cli.home, ".config", "herdr-world", "connections.json");
+      const store = new ConnectionProfileStore({ path });
+      await store.save({
+        version: 2,
+        default_connection_id: "alpha",
+        profiles: ["alpha", "delta", "omega"].map((id) => ({
+          id,
+          label: id,
+          type: "local",
+          runtime: "herdr-core",
+          core_session: "default",
+          core_state_dir: "",
+          auto_connect: false,
+        })),
+      });
+      expect(await Promise.all(order.map((args) => connections(args)))).toEqual(
+        [0, 0, 0, 0],
+      );
+      const reopened = new ConnectionProfileStore({ path }).load()!;
+      expect(reopened.profiles.map((p) => p.id).sort()).toEqual([
+        "alpha",
+        "beta",
+        "delta",
+        "gamma",
+      ]);
+      expect(reopened.default_connection_id).toBe("delta");
+      cli.cleanup();
+    }
+  });
+
+  test("a failed offline edit releases ownership for the next addition", async () => {
+    cli = createTestCli();
+    cli.writeConfig("");
+    await connections(["add", "beta", "--core"]);
+    expect(
+      await Promise.all([
+        connections(["add", "beta", "--core"]),
+        connections(["add", "gamma", "--core"]),
+      ]),
+    ).toEqual([EXIT_USAGE, EXIT_OK]);
+    expect(
+      registry(cli)
+        .profiles.map((p: { id: string }) => p.id)
+        .sort(),
+    ).toEqual(["beta", "gamma", "local"]);
+  });
+
+  test("startup between the initial probe and offline snapshot refuses the edit", async () => {
+    cli = createTestCli();
+    cli.writeConfig("");
+    const probed = Promise.withResolvers<void>();
+    const proceed = Promise.withResolvers<boolean>();
+    const editing = connections(["add", "beta", "--core"], {
+      ...idle,
+      probe: () => {
+        probed.resolve();
+        return proceed.promise;
+      },
+    });
+    await probed.promise;
+    const release = acquireInstanceLock(
+      join(cli.home, ".config", "herdr-world"),
+      0,
+    );
+    try {
+      proceed.resolve(false);
+      expect(await editing).toBe(EXIT_FAILURE);
+      expect(cli.errors.join()).toContain(
+        "has not recorded a listening address",
+      );
+      expect(
+        existsSync(
+          join(cli.home, ".config", "herdr-world", "connections.json"),
+        ),
+      ).toBe(false);
+    } finally {
+      release();
+    }
+  });
+
   test("enforces the same removal and default rules as the server", async () => {
     cli = createTestCli();
     cli.writeConfig("");
@@ -343,7 +464,7 @@ describe("herdr-world connections", () => {
     managedService("HOST=192.0.2.10\n");
     const serving: ConnectionsDependencies = {
       ...idle,
-      probe: async () => true,
+      probe: async () => cli.commands.at(-1)?.includes("stop") !== true,
       apply: async () => {
         throw new Error("non-loopback listeners cannot admit live edits");
       },
@@ -357,7 +478,13 @@ describe("herdr-world connections", () => {
     expect(cli.commands).toContainEqual([
       "systemctl",
       "--user",
-      "restart",
+      "stop",
+      "herdr-world.service",
+    ]);
+    expect(cli.commands).toContainEqual([
+      "systemctl",
+      "--user",
+      "start",
       "herdr-world.service",
     ]);
     expect(
@@ -370,6 +497,32 @@ describe("herdr-world connections", () => {
     expect(registry(cli).profiles.map((p: { id: string }) => p.id)).toEqual([
       "box",
     ]);
+  });
+
+  test("non-loopback restart starts the stopped service after an edit refusal", async () => {
+    managedService("HOST=192.0.2.10\n");
+    const serving = {
+      ...idle,
+      probe: async () => cli.commands.at(-1)?.includes("stop") !== true,
+    };
+    expect(await connections(["remove", "absent", "--restart"], serving)).toBe(
+      EXIT_USAGE,
+    );
+    expect(cli.commands).toContainEqual([
+      "systemctl",
+      "--user",
+      "stop",
+      "herdr-world.service",
+    ]);
+    expect(cli.commands.at(-1)).toEqual([
+      "systemctl",
+      "--user",
+      "start",
+      "herdr-world.service",
+    ]);
+    expect(
+      existsSync(join(cli.home, ".config", "herdr-world", "connections.json")),
+    ).toBe(false);
   });
 
   test.each([false, true])(

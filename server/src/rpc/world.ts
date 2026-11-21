@@ -1,3 +1,4 @@
+import { handleApartmentsRpc } from "./apartments";
 import { planBoardPatch } from "../world/board-plan";
 import { parseObservationBase } from "../world/observation-v1";
 import { pruneSnapshotAppearance } from "../world/appearance-prune";
@@ -21,6 +22,7 @@ import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
 import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
+import { UsageQueryError } from "../usage/analytics";
 
 /** Aggregate World methods: snapshot, board document, profiles, watchlist (world.*). */
 export function handleWorldRpc(
@@ -60,6 +62,21 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     }
     return;
   }
+  if (method === "world.usage.analytics") {
+    try {
+      const analytics = rpc.services.worldUsageAnalytics;
+      if (!analytics) throw new Error("unavailable");
+      sendReply({ id, result: await analytics.get(params ?? {}) }, method);
+    } catch (error) {
+      sendError(
+        "world-usage-error",
+        error instanceof UsageQueryError
+          ? error
+          : new Error("World usage analytics is unavailable"),
+      );
+    }
+    return;
+  }
   if (method.startsWith("world.memory.")) return handleMemoryRpc(rpc);
   if (method === "world.usage.get") {
     try {
@@ -87,6 +104,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   )
     return handleCoreWatchRpc(rpc);
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
+  if (method.startsWith("world.apartments.")) return handleApartmentsRpc(rpc);
   if (method.startsWith("world.core.")) return handleCoreRpc(rpc);
   if (method.startsWith("world.float.")) return handleFloatRpc(rpc);
   if (method.startsWith("world.integration."))

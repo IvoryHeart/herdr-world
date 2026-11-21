@@ -1,5 +1,5 @@
 import { lazyIndex } from "./town/lazyIndex";
-import { TownContexts, useTownWork } from "./town/TownWorkLens";
+import { TownContexts, useTownLenses } from "./town/TownWorkLens";
 import { TownStepStore } from "./town/townStepStore";
 import { useTownStepReads } from "./town/useTownStepReads";
 import { townScaleSceneRequested } from "./town/townScaleScene";
@@ -173,7 +173,7 @@ export default function TownView({
   );
   const preferencesRef = useRef(preferences);
   const [roomDialog, setRoomDialog] = useState<TownRoomDialog | null>(null);
-  const workLens = useTownWork(world, onSelect); // The post office's Work.
+  const lenses = useTownLenses(world, onSelect); // Work and Usage.
   // The one reviewed record, Desk's stop mark. Town sees only reviewed
   // records, so the service's stop notices do not re-render a busy Town.
   const work = useReviewedWork(undefined, false);
@@ -780,7 +780,7 @@ export default function TownView({
   const toolbar = <WorldViewToolbar viewLabel="Town" {...search.toolbar} />;
 
   return (
-    <TownContexts outbox={townSummary.openOutbox} openWork={workLens.open}>
+    <TownContexts outbox={townSummary.openOutbox} lenses={lenses}>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <WorldSearchResults
         world={world}
@@ -992,7 +992,7 @@ export default function TownView({
           submitRenameRoom={submitRenameRoom}
           closeRoom={closeRoom}
         />
-        {workLens.lens}
+        {lenses.lens}
       </div>
     </TownContexts>
   );

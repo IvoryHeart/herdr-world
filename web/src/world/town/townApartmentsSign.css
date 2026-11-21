@@ -1,0 +1,77 @@
+/* The apartment building's sign (TownApartments.tsx), in Town's pixel skin:
+   a green enamel plate over the roof, keeping a readable size as the town
+   zooms, like the post office's. */
+.town-world .town-apartments-sign {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  min-width: 84px;
+  padding: 3px 7px 4px;
+  color: #eaf6e4;
+  background: #2f5e46;
+  border: 2px solid #1c3a2b;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1px #4a8a66,
+    0 2px 0 #1c3a2b;
+  transform: translate(-50%, -100%) scale(clamp(0.5, var(--iz), 2.4));
+  transform-origin: 50% 100%;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  image-rendering: pixelated;
+}
+
+.town-world .town-apartments-sign:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+
+/* Help's Try rings the sign (town.help.ts): it shows above a parked bus. */
+.town-world .town-apartments-sign[data-help-spotlight] {
+  z-index: 5;
+}
+
+.town-world .town-apartments-sign[data-empty] {
+  opacity: 0.85;
+}
+
+.town-apartments-title {
+  font:
+    700 10px "Silkscreen",
+    "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  color: #ffd166;
+}
+
+.town-apartments-count {
+  font-weight: 600;
+}
+
+/* One more moved in: the count pops (townApartmentsArrivals.ts). */
+.town-apartments-count[data-pop] {
+  animation: town-apartments-pop 0.45s ease-out;
+}
+@keyframes town-apartments-pop {
+  0% {
+    scale: 1;
+  }
+  35% {
+    scale: 1.35;
+    color: #ffd166;
+  }
+  100% {
+    scale: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .town-apartments-count[data-pop] {
+    animation: none;
+  }
+}

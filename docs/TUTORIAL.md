@@ -135,9 +135,10 @@ prompt instead of a character.
    are working, waiting or done, and what the room cost today.
 3. For Herdr TUI agents, zoom to a desk to read its current step, such as
    **Run the login tests · tests 3m**. Core agents show their reported status.
-4. Press the time-of-day button below **ALL** to cycle **clock**, **day**,
-   **dusk** and **night**. Lit rooms have activity; amber reception light
-   means someone needs you. Your browser remembers the choice.
+4. Press the sky button below **ALL** and pick **Night** under **Time of
+   day**. Lit rooms have activity; amber reception light means someone needs
+   you. Under **Weather**, pick **Rain**, then **No weather** to clear it.
+   Your browser remembers both choices.
 
 On a phone, buildings stack vertically; tap wherever this guide says hover.
 Use **Town calm motion** or your device's reduced-motion setting for still light.
@@ -241,11 +242,11 @@ room starts a new tab or agent there.
 1. Drag an agent you no longer need onto the **bin** at the bottom of the
    screen, or choose **⋯ → Put in bin** in its window.
 2. The agent walks out to the nearest bus stop. Nothing is closed yet.
-3. Every four minutes a red bus collects whoever is waiting. World closes
-   those agents only once it has driven off.
+3. Every four minutes a red bus collects whoever is waiting and drives them
+   to Apartments. World closes those agents only once they have walked in.
 
 Changed your mind? Open the tray from the bin and choose **Put back** before
-the bus leaves. **Close now** skips the wait.
+they walk into Apartments. **Close now** skips the wait.
 
 **You are done when:** you can find an agent, see what it is doing and open
 its window.

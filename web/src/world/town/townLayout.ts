@@ -8,9 +8,14 @@
  * step contains the previous one.
  */
 
+import {
+  townApartmentsLot,
+  townApartmentsPathColumn,
+} from "./townApartmentsLot";
 import { townCenterForecourt, type TownCenterLot } from "./townCenter";
 import { TOWN_HARBOUR_ROOM, townHarbourGeometry } from "./townHarbourLot";
 import { townLibraryLotBeside } from "./townLibraryLot";
+import { townObservatoryLotBeside } from "./townObservatoryLot";
 import { townPostLotBeside } from "./townPostLot";
 import {
   ADD_ROOM_WIDTH,
@@ -795,9 +800,19 @@ export function layoutTown(
   for (let tx = MARGIN; tx < streetEnd; tx += 1)
     if (get(tx, plaza.y) === TownGround.grass)
       set(tx, plaza.y, TownGround.walk);
+  // Apartments' footpath, from its bus stop on the last street down the
+  // house's lawn to the plaza's walk and its door (townBus.ts).
+  const apartments = townApartmentsLot({ plaza, width });
+  if (apartments) {
+    const column = townApartmentsPathColumn(apartments, plaza);
+    for (let ty = lastRoad + ROAD_GAP; ty < plaza.y; ty += 1)
+      set(column, ty, TownGround.walk);
+  }
 
   const post = townPostLotBeside(center);
   const library = formFactor === "narrow" ? null : townLibraryLotBeside(center);
+  const observatory =
+    formFactor === "narrow" ? null : townObservatoryLotBeside(center);
   const lamps: TownPoint[] = [];
   // Spaced from the town's first column, shifted with it (townLots.ts).
   for (const ry of roads)
@@ -823,6 +838,13 @@ export function layoutTown(
         tx >= library.x - 1 &&
         tx <= library.x + library.w;
       if (underLibrary) continue;
+      // So does the observatory's door (townObservatoryLot.ts).
+      const underObservatory =
+        observatory &&
+        ry === center.street &&
+        tx >= observatory.x - 1 &&
+        tx <= observatory.x + observatory.w;
+      if (underObservatory) continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }
 

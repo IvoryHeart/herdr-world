@@ -19,10 +19,15 @@
  */
 
 import { townBusRoute } from "./townBus";
+import { townApartmentsLot, townApartmentsReserve } from "./townApartmentsLot";
 import { townHarbourLot, townHarbourReserve } from "./townHarbour";
 import { townWarehouseReserve } from "./townHarbourLot";
 import { townPostLotBeside, townPostReserve } from "./townPostLot";
 import { townLibraryLot, townLibraryReserve } from "./townLibraryLot";
+import {
+  townObservatoryLot,
+  townObservatoryReserve,
+} from "./townObservatoryLot";
 import {
   TOWN_FACADE,
   TOWN_TILE as T,
@@ -237,9 +242,13 @@ function reservedLand(layout: TownLayout) {
     layout.plaza.x + 3,
     layout.plaza.y + 2,
   );
-  for (const stop of townBusRoute(layout).stops) {
-    const sx = Math.floor(stop.wait.x / T);
-    const sy = Math.floor(stop.wait.y / T);
+  const route = townBusRoute(layout);
+  for (const sign of [
+    ...route.stops.map((stop) => stop.wait),
+    ...(route.terminus?.sign ? [route.terminus.sign] : []),
+  ]) {
+    const sx = Math.floor(sign.x / T);
+    const sy = Math.floor(sign.y / T);
     reserve(sx - 2, sy - 5, sx + 3, sy + 2);
   }
   const post = townPostReserve(townPostLotBeside(layout.center));
@@ -253,6 +262,16 @@ function reservedLand(layout: TownLayout) {
   const library = townLibraryLot(layout);
   if (library) {
     const lot = townLibraryReserve(library);
+    reserve(lot.x0, lot.y0, lot.x1, lot.y1);
+  }
+  const observatory = townObservatoryLot(layout);
+  if (observatory) {
+    const lot = townObservatoryReserve(observatory);
+    reserve(lot.x0, lot.y0, lot.x1, lot.y1);
+  }
+  const apartments = townApartmentsLot(layout);
+  if (apartments) {
+    const lot = townApartmentsReserve(apartments);
     reserve(lot.x0, lot.y0, lot.x1, lot.y1);
   }
   if (layout.roads.length) {

@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { openWorldWriter } from "./world-writer";
+import { openWorldWriter, writeGroup } from "./world-writer";
 import { migrateWorldDatabase, worldMigrations } from "./world-schema";
 import type {
   AttentionEntry,
@@ -182,6 +182,67 @@ test("savepoint refusal preserves neighboring operations in a committed group", 
   expect(results[1]!.error).toContain("revision conflict");
   expect((results[2]!.result as LedgerCommit).revision).toBe(2);
   expect(writer.read().document.revision).toBe(2);
+});
+
+test("a full disk ends the whole group with its own error, not a failed rollback", () => {
+  // SQLite rolls the whole transaction back itself on SQLITE_FULL; the group
+  // used to try its savepoint and ROLLBACK anyway and fail with "cannot
+  // rollback - no transaction is active", which hid the cause (a preview
+  // stopped this way during a bin close while the disk was full).
+  const db = new Database(fixture().database);
+  try {
+    db.exec("PRAGMA journal_mode=WAL");
+    db.exec("CREATE TABLE rows(id INTEGER PRIMARY KEY, body TEXT)");
+    const { page_count } = db.query("PRAGMA page_count").get() as {
+      page_count: number;
+    };
+    db.exec(`PRAGMA max_page_count=${page_count + 2}`);
+    const insert = db.query("INSERT INTO rows(body) VALUES(?)");
+    expect(() =>
+      writeGroup(db, ["small", "x".repeat(200_000)], (body) =>
+        insert.run(body),
+      ),
+    ).toThrow("database or disk is full");
+    expect(db.inTransaction).toBe(false);
+    expect(db.query("SELECT count(*) AS n FROM rows").get()).toEqual({ n: 0 });
+    // The connection stays usable once space is back.
+    db.exec("PRAGMA max_page_count=1073741823");
+    expect(
+      writeGroup(db, ["again"], (body) => insert.run(body).changes),
+    ).toEqual([{ result: 1 }]);
+  } finally {
+    db.close();
+  }
+});
+
+test("a refused operation rolls back only its savepoint; a failure before commit rolls back the group", () => {
+  const db = new Database(":memory:");
+  try {
+    db.exec("CREATE TABLE rows(id INTEGER PRIMARY KEY, body TEXT UNIQUE)");
+    const insert = db.query("INSERT INTO rows(body) VALUES(?)");
+    const outcomes = writeGroup(db, ["a", "a", "b"], (body) =>
+      insert.run(body),
+    );
+    expect("error" in outcomes[1]!).toBe(true);
+    expect(db.query("SELECT body FROM rows ORDER BY id").all()).toEqual([
+      { body: "a" },
+      { body: "b" },
+    ]);
+    expect(() =>
+      writeGroup(
+        db,
+        ["c"],
+        (body) => insert.run(body),
+        () => {
+          throw new Error("synthetic commit fault");
+        },
+      ),
+    ).toThrow("synthetic commit fault");
+    expect(db.inTransaction).toBe(false);
+    expect(db.query("SELECT count(*) AS n FROM rows").get()).toEqual({ n: 2 });
+  } finally {
+    db.close();
+  }
 });
 
 test("history expiry preserves pending asks and intents, with no record-body copies", () => {

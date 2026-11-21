@@ -129,7 +129,7 @@ no control for it. Platform and harness limits apply across the table.
 | Ranger | [partial](#runtime-limits) | [partial](#runtime-limits) |
 | Pins | ✓ (World only) | ✓ (shared with Herdr apps) |
 | Notifications and chimes | ✓ | [partial](#runtime-limits) |
-| Usage and fuel | [partial](#runtime-limits) | [not yet](#runtime-limits) |
+| Usage and fuel | [partial](#runtime-limits) | [partial](#runtime-limits) |
 | Harness integrations | [partial](#runtime-limits) | [partial](#runtime-limits) |
 | Herdr phone app pairing in World | [not yet](#runtime-limits) | [not yet](#runtime-limits) |
 | World on your phone (browser/PWA) | ✓ | ✓ |
@@ -251,9 +251,10 @@ no control for it. Platform and harness limits apply across the table.
   status changes. It has no Herdr TUI custom notification stream or its
   “for you” chimes. A core push opens World, without a verified Chat-session
   target. Browser permission and HTTPS requirements apply to both runtimes.
-- **Usage and integrations:** World's usage/fuel collector currently reads
-  Herdr TUI connections only, for Claude Code, Codex, Pi and Gemini. A
-  core-only host has no usage/fuel readings. World's harness skills work with
+- **Usage and integrations:** World's usage/fuel collector reads Unix Herdr TUI
+  and core connections for Claude Code, Codex, Pi and Gemini. Core attribution
+  needs explicit resume/session arguments or a uniquely resolved Codex title;
+  other records remain host-level. World's harness skills work with
   either runtime; core status comes only from core, never TUI hooks or screen
   inference. See [integration differences](./docs/harness-integrations.md#runtime-differences).
 - **Phone pairing:** World has no pairing UI for Herdr's phone app on either
@@ -281,6 +282,20 @@ token records from Claude Code, Codex, Pi and Gemini logs on qualified local or
 SSH hosts, with source health, host/workspace/tab/pane rollups and optional
 versioned price-table estimates. Town's expenses boards and Board's summary,
 host zones and workspace cards read it (below).
+
+The [usage analytics API and CLI](./docs/usage-analytics.md) expose that data by
+agent, Git project, room or UTC day through `world.usage.analytics` and
+`herdr-world usage`. Active and waiting-on-you milliseconds are observed runtime
+status intervals, with explicit partial coverage; idle is never owner wait and
+gaps remain unknown. Numeric daily time history stays in the instance's private
+data folder for seven days; open intervals never resume after restart. Tokens
+come from existing logs, Pi's explicitly recorded cost is separate from optional
+price estimates, and Claude/Codex cost stays unknown without reported numbers.
+PR counts are distinct known authored PRs in the configured work-source catalogue,
+with source creation/merge dates and current session-qualified links for agent
+attribution. Missing sources never imply zero. Reads refuse unqualified pane/room
+filters, unsupported windows and arbitrary paths. `usage --fixture` runs a
+synthetic example offline, including an owner wait and a usage limit.
 
 ## Agent and project memory data
 
@@ -384,7 +399,9 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   control (phone or desktop, light or dark, as your screen), its steps, where
   it lives and **Try**.
 - **Try** closes the help, switches to Town or Board when the entry lives
-  there, and rings the control for a moment. A control inside a closed menu
+  there, and rings the control for a moment. A Town control off camera (the
+  Apartments sign below a phone's first view) is flown into view at the same
+  zoom; Town itself never scrolls. A control inside a closed menu
   rings the button that opens it. When the control is not on this screen
   (Chat's controls without an open Chat, a phone-only control on a desktop),
   help reopens on that tab and says where to find it.
@@ -427,9 +444,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     data (Codex from its session logs, Claude from its status line) shows a short bar per window
     (`5 h`, `week`) with the percent left; under 15 % left it turns amber and
     says **low**. A reading more than 15 minutes old shows its age under the
-    bars in muted text, such as "seen 1 h ago". Hover, focus or tap a gauge for
-    each reset time, how long ago the numbers were seen, and their source. Old
-    numbers (over 3 h, or past a reset) read **stale** with no level; with several hosts the board shows the one with the least left.
+    bars in muted text, such as "seen 20 min ago"; past 30 minutes its levels
+    dim and the age reads "as of 09:24", and a dimmed reading never turns the
+    compact chip **low** on its own. A window the source did not send reads,
+    for example, `5 h — not reported` instead of vanishing, and a harness with
+    agents in Town but no reading from any host reads `Codex — no reading yet`
+    in muted text. Hover, focus or tap a gauge for each reset time, how long
+    ago the numbers were seen, their source and one line on what refreshes
+    them. Old numbers (over 3 h, or past a reset) read **stale** with no level;
+    with several hosts the board shows a current reading before a dimmed one,
+    and among those the one with the least left. The summary window's hosts and
+    Board's facts show each host's reading with the same rules, and name a
+    harness with agents on that host but no reading from it.
     Claude gets its own gauge within about a minute of the first answer from an
     agent started from World's launcher: its status line passes Claude Code's 5 h and week windows to
     World, and the agent's status line looks as before. World shows Claude Code's
@@ -556,13 +582,39 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (a phone keeps only a few rows of yard above each building for its
     reception board); tap one to open it. Zoomed in to desks, the boards are put away with
     reception. At every zoom the reception boards keep clear of the town
-    center, the post office, the warehouse, the billboard and each other: a
+    center, the post office, the warehouse, the observatory, the billboard and each other: a
     board that would cover one slides aside the least it can while staying
     over its building, else it hangs lower, below the center or the board in its way.
     The `?scene=town-scale` preview replaces every economy reader with labelled
     test data for its synthetic buildings, including the Town board and Spend lens.
   - Town's **post office** stands on the first street left of the town
-    center, on a phone as on a wide screen; it no longer holds pull requests.
+    center, on a phone as on a wide screen: Town's place for what is
+    addressed to you, messages and never cargo (pull requests are crates in
+    the warehouse; releases are ships). Its red sign on the roof counts,
+    without hovering, what **Needs you** lists, by kind with the shared
+    marks: "? 2 questions", "! 1 blocked", "✓ 3 to review", and "✉ 1 to
+    check" for saved answers waiting in the Outbox; with none it reads
+    "Nothing for you", and its rim turns gold while a question or a blocked
+    agent waits. Click it, or focus it and press Enter, to open the same
+    **Needs you** tab as the top bar's counter, where you answer, withdraw
+    and reach the Outbox as usual; it is not a second inbox. It counts the
+    hosts the Hosts filter shows, as Needs you does. On a phone the sign
+    folds to a smaller red plate across the house's front, in view at home
+    zoom, with the marks and numbers only; tap it for Needs you. Each open
+    question for you (from `herdr-world ask`) is a letter in its yard,
+    oldest first; a letter from a caller World could not verify has a grey
+    seal. Hover or focus a letter for "Letter from orbit: …"; click or tap
+    it for a card with the question, its answer choices, its age and
+    **Answer in Needs you**, which opens Needs you at that question.
+    Answers on their way to an agent ride the mail trolley by the door, red
+    when one needs checking (delivery uncertain or refused); click it to
+    open the Outbox. More letters than the yard holds make a "+N" bundle
+    that lists the rest. For trying it without real questions, open World
+    with `?townPostFixture` (four synthetic letters, one unverified, and
+    three answers on the trolley; the sign counts them), `?townPostFixture=many`
+    (a bundle) or `?townPostFixture=empty` (no mail); the page drops the
+    parameter at once, only the post office uses it, and a test letter's
+    card has nothing to answer.
   - Town's **warehouse** stands on the shore at the first street's end, by
     the harbour, its yard on the pavement: your open pull requests (opened by
     you, waiting on your review or assigned to you) as crates in its yard,
@@ -588,15 +640,74 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     counts; when a refresh fails it keeps the last list as unknown and says
     GitHub is out of date. On a phone it stands on the harbour's shore too,
     and a sign on the town center's right wing, in view at home zoom (a crate
-    and coloured ready, failing and waiting counts), opens the crates as a
-    list. Searching Town for "warehouse" (or "pull requests") lists the
-    **Warehouse** and choosing it takes the map there, on a phone or a wide
-    screen. For trying it without
+    and "PRs", no counts: the post office counts what needs you), opens the
+    crates as a list with their counts. Searching Town for "warehouse" (or
+    "pull requests") lists the **Warehouse** and choosing it takes the map
+    there, on a phone or a wide screen. For trying it without
     real pull requests, open World with `?townWarehouseFixture` (synthetic
     pull requests in every state; ten seconds later the first ready one
     merges), `?townWarehouseFixture=many` (a pile) or
     `?townWarehouseFixture=off` (signed out); the page drops the parameter at
     once and only the warehouse and the Work lens it opens use it.
+  - Town's **observatory** stands on the first street right of the library,
+    which stands right of the town center (a wide town grows rightwards to
+    keep its lot; nothing moves). Its
+    sign shows, for Claude and Codex, the **5 h** and **week** subscription
+    windows used and when each resets, such as "40% · Wed 14:00", or
+    "limit · 12:40" when the harness refused work; a window with under 15%
+    left is orange. A badge beside each name counts its agents at work, and a
+    tower window lights per agent at work (warm for Claude, cool for Codex,
+    pale for any other harness; "+N" past eight): Town's working agents, or
+    the runs that answered in the last ten minutes where those are more. A
+    harness with no reading, including one at work whose budget World cannot
+    read (such as Cursor), says "no reading", never 0%; an old reading is dimmed "out of date".
+    On a phone it folds to a night-blue sign with a telescope on the town
+    center's right wing, such as "Claude 71% Codex 18%". Either sign opens
+    **Usage**, a lens over Town with four tabs (Escape, Back, the close
+    button or a press outside closes it):
+    - **Budget**: each harness's windows with a meter, a line where even use
+      would be now and the pace in words: "On track to be used by the
+      reset", "Runs out around Thu 09:00, 1 d 5 h before it resets",
+      "On pace to leave about 40% unused" (under 80% by the reset), "Too
+      early in the window to tell" in its first tenth, or "Limit reached".
+      Each card says how many are at work and when and where the reading
+      was seen.
+    - **Runs at once**: per harness, the most runs going at the same moment
+      in each hour of the last 24, stacked into building (worker, fixer) and
+      reviewing or checking (reviewer, checker), with the week's busiest
+      hour and **Show as table** for the same numbers. A run is going while
+      its responses are at most ten minutes apart and while World sees its
+      agent working; two short runs at 12:05 and 12:30 are one at once.
+    - **Tokens**: the runs answering now and the week's heaviest, each with
+      role, item, tokens, calls, largest prompt and context fill; tokens by
+      role (with the typical run and calls) and by item or pull request. A
+      fixer's second or later round on one item, a context 85% full or a
+      run with several times its role's typical calls is flagged in words.
+      A run of a harness World reads no log of (Cursor, OpenCode and others)
+      shows its time at work and waiting, and "tokens and cost not available
+      for this harness".
+    - **Breakdown**: the last seven days by **Agent**, **Project**, **Room**
+      or **Day**, with time at work, time waiting on you, tokens, cost (the
+      harness's reported cost, else "est." from list prices) and pull
+      requests opened and merged, and a total row. "unknown" means no
+      reading; "(partly read)" means some sources were not readable. Agents
+      and rooms no longer open read "Earlier agent" and "Earlier room".
+      Under the table, **What World can read** names, per harness at work
+      this week, whether its tokens come from its session logs or only
+      World's time is known, and whether pull requests could be read.
+    Every number comes from [usage analytics](./docs/usage-analytics.md):
+    each API response counts once, roles are read from a run's first prompt
+    (unknown when it names none), and what the logs do not show says
+    "unknown" instead of an estimate. A run's pull request comes from a work
+    link its own agent session confirmed, never from its branch alone; a
+    branch a pull request has but no confirmed link reads "(pull request
+    unknown)". The read refreshes at most every 30
+    seconds; after five minutes of failed re-reads the sign says "Usage
+    unavailable". For trying rare states, open World with `?usageFixture`
+    (two harnesses at work), `?usageFixture=reached` (Claude's 5-hour limit
+    reached) or `?usageFixture=empty` (nothing observed); the page drops the
+    parameter at once, and only the observatory, Usage and agent cards use
+    synthetic runs until the next page load.
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to
@@ -803,6 +914,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     sweat drop at its desk: it is about to compact or lose the thread. An
     agent without a reading, or on a model World does not know, shows no bar
     rather than zero. See [harness usage data](docs/usage.md#context-fill).
+  - An agent's peek, and the hover card on its tab or pane row, show its run
+    this week: role, item, tokens, calls and largest prompt, such as
+    "Fixer · #101 · 12M tokens · 228 calls · largest prompt 176k", with a
+    warning line for what may be waste ("fixer round 3 on #101", "context
+    86% full"). In the peek the line opens Usage's **Tokens** tab. A pane
+    with no run in the read says "This run: usage unknown". An agent of a
+    harness World reads no log of shows its time instead, such as "at work
+    40 min · tokens and cost not available for this harness".
   - Zoomed into a room, each working agent shows a thought bubble over its
     head with a glyph for the step it runs now: a pencil for editing files,
     a test tube for tests, a prompt for a command, a magnifier for reading or
@@ -841,9 +960,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
     Phones stack buildings vertically; large towns can initially show roofs.
     **Town calm motion** reduces ambient animation.
-  - Light is Town's status language. The button under **ALL** sets the time
-    of day: it cycles **clock** (follows this device's time), **day**,
-    **dusk** and **night**, and each browser keeps its choice. As the sky
+  - Light is Town's status language. The sky button under **ALL** opens a
+    small **Sky** panel. **Time of day** is **Your clock** (follows this
+    device's time), **Day**, **Dusk** or **Night**. **Weather** is **Real
+    weather** (the default; it follows the [Weather source](#weather-source)
+    and shows its current reading, such as `Rain 7° · Example City`, or why
+    there is none), one held condition (**Clear**, **Cloud**, **Rain**,
+    **Snow**, **Fog**, **Storm** or **Wind**), or **No weather**. The panel
+    holds no place or source settings of its own: **Weather place and
+    source…** opens that row in Settings (Integrations → Sources → Weather).
+    Each browser keeps both choices; the button shows the weather Town is
+    showing, or the time of day when there is none. As the sky
     darkens, light follows where agents are: a room is lit while an agent
     sits at a desk there working (or waiting on you at it) and is dark
     otherwise; each desk throws its seated agent's state colour (blue-white
@@ -858,14 +985,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     status; a terminal with no agent throws amber from its desk. A failed
     host's cached building stays dark. Day leaves the town as painted.
   - Town's overlays share one style: the Town board (and its phone chips),
-    the zoom and time-of-day buttons, an agent's peek, toasts, and the hover
+    the zoom and sky buttons, the Sky panel, an agent's peek, toasts, and the hover
     cards of rooms, tables and fuel gauges are the same translucent dark
     panel, with one border, corner, shadow, type and spacing in World's light
     and dark themes, readable over a white roof or the night. Their titles,
     borders, buttons and focus rings are neutral. Amber in them marks only
     what needs you: a **Waiting** count above zero, a waiting agent's peek,
     the first answer to an agent's question and a **low** fuel gauge. The
-    time-of-day button keeps one neutral colour at dusk and night.
+    sky button keeps one neutral colour at dusk and night.
   - The time of day also gives the town depth. By day each building casts a
     sun shadow that swings from left in the morning to right in the evening,
     short at noon and long toward dawn and dusk, and faint cloud shadows drift
@@ -878,6 +1005,26 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     redraws only as often as they move a screen pixel, at most 12 times a
     second. Rugs are woven with a bound edge, and room walls shade the floor
     along their foot.
+  - Weather follows the same rules. Clouds thicken and dim the sun; rain
+    falls at a slant with a wet street and puddles on roads and the plaza;
+    snow falls slowly and lies on the ground; fog veils the land in drifting
+    banks; wind speeds the clouds and blows streaks across the town; a
+    storm adds heavy rain, a dark sky and a soft, rare lightning flash. Light
+    real weather still shows clearly, and a held condition shows at moderate
+    strength. Rain, snow and wind streaks fall over the whole visible map,
+    buildings and trees included, at every zoom and scroll position; wet and
+    snowy ground and fog lie under the buildings and cover all the land on
+    screen, the forest around the town included, with no edge. Status light stays above
+    the weather, and dark weather lights rooms, desk colours and lamps as
+    dusk would, so lit rooms, desk colours, the amber reception pulse and the
+    post office read in a storm. Rain, snow and wind streaks keep the same
+    density on screen at every zoom, with a fixed cap (a phone shows a little
+    more than its share so it never looks patchy), and redraw at most 20
+    times a second (snow 12). Under calm motion or reduced motion nothing falls or flashes:
+    the street stays wet, snow lies, fog and cloud hold still, and nothing
+    redraws for the weather. With **No weather**, or when real weather is
+    off, unavailable or expired, Town looks exactly as it does without
+    weather.
   - Zoomed into a room or desk, every agent that needs you outside the view
     gets an arrow on the view's edge pointing at it, with its mark (**!**,
     **?** or **✓**); arrows pointing the same way or at one building merge
@@ -1041,27 +1188,39 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     under labels and panels, and shrinking with the town as it zooms out (on
     a phone zoomed far out, the floating bin is the easier target). A
     countdown board over those
-    waiting counts down to the bus reaching that stop (**due** a few seconds
-    before it pulls in). The bin floats at the bottom of the screen and
+    waiting shows the bin's own countdown, from the one bus timetable: the
+    time until the next bus sets off from Apartments, **on its way** while a
+    trip is out and **stopped** while it stands. Every stop and the bin read
+    the same value at the same moment. The bin floats at the bottom of the screen and
     lights up during a drag, so a phone needs only a short drag, and the town
     does not scroll while the drag rests on it. A red
-    double-decker comes every four minutes on a
-    fixed schedule when someone is waiting: it comes in, slows to each stop
-    with riders, waits about ten seconds, speeds up and drives off the map,
-    and only then do its riders' agents close; its riders show in its
-    windows. Agents put in the bin while
+    double-decker lives at Apartments' stop, on the last street by a
+    footpath down to the building's door (its green house sign marks it),
+    and sets off every four minutes on a fixed schedule when someone is
+    waiting. It drives only the town's roads, by the nearest way round the
+    stops with riders and back, never off the map: it turns its corners,
+    slows to each stop and waits there about ten seconds with its door open
+    while its riders step on, and its riders show in its windows the whole
+    way (in its side windows, or its front and back windows on a road up
+    or down the screen). Back at
+    Apartments it opens its door, its riders step off one by one and walk in,
+    and the sign counts each as it goes in; the last is in just as the trip
+    ends, which is when their agents close. Where the town is too small for
+    the building, the bus stops at the town center's door instead, which
+    opens Apartments. Agents put in the bin while
     the bus is out wait for the next one. Tapping the bus stops it where it
     is and opens the tray (nothing closes while it stands); **Let the bus
     go**, or closing the tray, sends it on. The bin (always shown in Town and on Board, in other views while
     it holds agents; on a phone, also a stop or the bus in Town) opens the
-    tray: who waits, the time to the next bus, **Put back** (until the bus
-    has left the screen, even after boarding; it walks back to its desk) and
+    tray: who waits, the time to the next bus, **Put back** (until the trip
+    ends, even after boarding; it walks back to its desk from its stop) and
     **Close now**. A pinned desk's or pinned tab's last agent cannot go
     in the bin, and its close never takes a pinned tab's last pane. Closes are qualified by host
     and runtime: a host that restarts keeps its agents, and restarting World
     drops the bin without closing anything. Only Town speaks of the bus:
     elsewhere the bin reads **Cleaning up** and how many, and its tray says
-    when they close.
+    when they close. Closed agents move into
+    [Apartments](#apartments-finished-agents).
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
     reception and Board's host label. When the local connection is failing and
@@ -1095,8 +1254,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
     click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
     a readable zoom and pulses it; choosing it again, or **Enter** a second
-    time, opens it as selecting does. Town's own places are found too: "post
-    office" (or "pull requests") lists the **Post office**, and choosing it
+    time, opens it as selecting does. Town's own places are found too:
+    "warehouse" (or "pull requests") lists the **Warehouse**, and choosing it
     moves the camera there; choosing it again only shows it again. A result Town does not draw, such as
     an agent at a table its room folds away, opens at once and counts as
     off-screen. Under **Town calm motion** or reduced motion the camera jumps
@@ -1551,7 +1710,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   links. Hovering the agent's name shows its card with
   the latest message. An answered question folds to one line until the tab
   closes. It shows a page of 30 items; **Show … more** and **Show the … before**
-  turn the page, and every opener turns to its item's page. Town's reception
+  turn the page, and every opener turns to its item's page. Town's post
+  office sign opens it too. Town's reception
   letters, Desk's **Answer** and the **!**/**✓** badge on a Board card open it at
   that item. When Town has saved answers to check, **✉ Outbox** at the foot opens
   Town's Summary there. It replaces Town's Needs you rail.
@@ -1675,7 +1835,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 **Menu → Settings → Integrations** lists everything World reads from or works through.
 **All** opens first and lists every kind under its heading; then one tab per
 kind: **Runtimes** (this computer's Herdr or herdr-core and each SSH host),
-**Sources** (GitHub, Jira and Usage metrics), **Agents** (World's skill for
+**Sources** (GitHub, Jira, Weather and Usage metrics), **Agents** (World's skill for
 each harness, per host) and **Editors** once one is listed; last, set apart
 with its key, the **Vault**. The kind tabs come from the registry's kinds, so a new kind gets
 its own tab; a kind with nothing in it has no tab, except Runtimes and
@@ -1697,7 +1857,7 @@ page reloads. Sample rows have no action and give World nothing.
 
 Each row leads with the product's mark where World has one (Herdr, GitHub,
 each agent) or a plain symbol (tickets, usage), says what it
-gives World (terminals, agents, files, pull requests, tickets or usage) and
+gives World (terminals, agents, files, pull requests, tickets, weather or usage) and
 shows its state as a coloured chip; its actions stay on its right, on a phone
 too. A source's settings open under its row from the settings button
 (**Jira settings**). Each kind's own action sits on its heading in **All** and
@@ -1719,7 +1879,7 @@ read, it refuses and asks you to check again rather than acting on the new
 one. **Add or edit hosts…** opens the same profile editor as **Hosts → Manage
 connections**. Nothing here is required; every request goes from the World
 service, never from the browser. A World element missing what it needs (the
-closed post office, Work's empty lens, Town with no hosts) offers **Connect**,
+closed warehouse, Work's empty lens, Town with no hosts) offers **Connect**,
 which opens this screen at that row.
 
 The **Vault** tab shows where World keeps the tokens integrations need
@@ -1732,8 +1892,9 @@ at `GET /api/world/integrations`; editors join it as they land.
 ### Sources: GitHub and Jira
 
 World reads your pull requests and tickets itself; there is nothing else to
-install, and every source is on by default. Open **Settings → Integrations** to see
-each source's state, switch it off or configure it under **Settings**.
+install. These two work sources are on by default. Open **Settings → Integrations**
+to see each source's state, switch it off or configure it under **Settings**.
+The separate [Weather source](#weather-source) is off by default.
 
 - **GitHub** uses the GitHub CLI signed in as the user that runs World (`gh
   auth login`): open pull requests you opened, were asked to review or are
@@ -1757,8 +1918,8 @@ each source's state, switch it off or configure it under **Settings**.
   `herdr-world agent-checkout --pr`, and to a ticket whose key its branch names
   (for example `abc-12-fix-login` and `ABC-12`). Its Town desk shows the badge
   on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), its Board tab
-  card shows the same badge, and Board's Work lens names it on the card. Town's post office shows every open pull
-  request for you as a parcel, including those whose agent has gone. A link holds only for the agent session and
+  card shows the same badge, and Board's Work lens names it on the card. Town's warehouse shows every open pull
+  request for you as a crate, including those whose agent has gone. A link holds only for the agent session and
   Herdr runtime it was made in.
 - **Your open pull requests** get a card in Work with CI on the head (a dot
   per check), each explicitly attributed rev agent's latest `RESULT #N: …`
@@ -1816,6 +1977,89 @@ session-qualified description of current work for an exact local or fixed-policy
 Herdr pane. The Inspector shows it only while the current
 agent session matches the report. Herdr owns expiry; the command does not infer work,
 assign tasks, or provide a Clear operation.
+
+### Apartments: finished agents
+
+**Apartments** holds every agent that is not running now, asleep and
+resumable: agents from before Apartments existed, on every connected host
+(Herdr TUI and herdr-core). Agents move in three ways:
+
+- **Found asleep**: on each connected host World reads the transcripts Claude
+  Code (`~/.claude/projects`), Codex (`~/.codex/sessions` and
+  `archived_sessions`), Pi and Oh My Pi keep, honouring `CLAUDE_CONFIG_DIR`,
+  `CODEX_HOME`, `PI_CODING_AGENT_DIR` and `PI_CONFIG_DIR`. Each such agent
+  moves in with its harness as name, its folder, its session, when its
+  transcript started and was last written, and its first request as summary.
+  World looks through a host's histories when it first sees the host, then
+  every 15 minutes, newest first and at most 400 transcripts read per pass
+  (a longer history continues a minute later). It reads only each file's
+  first bytes, once per World run, and writes nothing on the host. Codex
+  subagents and Claude sidechains are another agent's helpers, not agents.
+- **Its terminal ended**, seen by World while it observed the host.
+- **Retired by the bus** when the bus took it from the bin.
+
+Each resident keeps its name, harness, project folder, room and tab, host, when
+it ran, its last task summary, its last report (the closing message of its
+transcript, when the host answers within ten seconds; added just after the
+move-in, and lost if World stops first), the pull requests and issues the
+Sources linked to it, and its harness session (the one its Chat reads: Herdr's
+report, or for herdr-core a linked Codex session, Claude's process record or
+the launch command, read again while the agent runs). One session is one
+resident: an ending World sees replaces the found record of that session.
+
+- Open it from the green **APARTMENTS** sign on the sandstone block in Town's
+  park beside the town center (left of the plaza, or right when there is no
+  room; a town too small for it hides the building), where the bus brings
+  binned agents to its door and the sign's count goes up as each walks in
+  (see **Bin and bus** under [Visual control plane](#visual-control-plane)),
+  from **Apartments** in
+  the town center ring, or from **Apartments** in Board's hub. All three read
+  the same residents, and the ring and hub show how many live there.
+- Each resident shows its avatar, as Town and Inspector show a live agent:
+  its Town character on its terminal colour, with its harness's icon, in the
+  list (with its harness, project, room and host) and larger in the opened
+  resident. World keeps the avatar at move-in: the avatar chosen for its
+  pane, else its profile's look, else the character Town drew for it, and
+  the colour Town showed: its tab's, else (a spawned agent) its parent's
+  tab's, else its room's. Herdr TUI and herdr-core residents look the
+  same. A resident whose avatar was not kept (it moved in before World kept
+  avatars, or World found it in its harness's history) shows the nearest: its profile's look, else a profile of the same
+  harness, else World's default character; hovering the avatar says which.
+  Its colour then falls back to the plain tile.
+- `?apartments-preview=avatars` in the page's address shows synthetic
+  residents, one per avatar case, for that load only (the page removes it at
+  once; nothing is saved).
+- A resident whose session runs again at a desk is hidden while it runs, and
+  returns when it stops, also when its terminal stays open with a shell. Its
+  newer end is recorded when that terminal closes. A transcript written in the last 10 minutes is left
+  for a later pass, since its agent may still be running.
+- Search matches name, harness, project, folder, room, host, summary, report,
+  `#42` or `PR 42`, repository and the day it ran or moved in (`2026-11-19`).
+  Residents list newest first; the newest 200 matches are shown, and a search
+  finds older ones.
+- Opening a resident shows its facts, how it moved in, summary, report and
+  linked work. **Read history** reads its conversation from the harness
+  transcript on its host, the same chat reading Inspector uses (the latest 200
+  messages); a message opens in full. History needs that host connected.
+- **Resume in room** starts the agent again with its harness's own resume
+  (`claude --resume <session>` or `codex resume <session>`) in a room on the
+  host where it ran: its old room when it still exists, or the one chosen. A
+  Herdr TUI room opens the new terminal; herdr-core says it is back. The
+  command is also shown to run by hand. Resume is refused on another host,
+  for a resident with no session, and for harnesses other than Claude and
+  Codex; the resident stays either way.
+- **Evict…**, then **Evict**, forgets a resident. Its transcript stays on the
+  host, and a later pass does not bring it back; it returns only if it runs
+  again and World sees it end. World keeps at most 5000 residents, whatever
+  their age; the longest asleep go first. Running, recent, empty and evicted
+  transcripts take none of those places.
+- Limits: Kimi, Grok, Muse and Antigravity keep histories World does not look
+  through, so their agents are recorded only when World sees them end. An
+  agent whose host disconnects, restarts or changes runtime generation is not
+  recorded as ended, nor one that ends while World is stopped; a found record
+  covers it later when its harness is one of the four above. Found agents have
+  no room, tab or linked work. Records live in World's own store on this
+  computer.
 
 ### Teams and spawn stamps
 
@@ -2212,7 +2456,8 @@ also find by typing its name.
   connection; when Cmd+K cannot act, its commands leave Settings.
 - The search finds a setting by its name, its words and its choices:
   **lighting** and **night** find Town's time of day, **font size** finds the
-  terminal, interface and chat sizes, **sounds** finds sound on this device.
+  terminal, interface and chat sizes, **sounds** finds sound on this device,
+  **weather** finds the Weather source's place and on/off.
   The control in the result changes the setting at once.
 - **Cmd+K** (`Ctrl+K`) finds the same settings and commands. A choice offers
   each option (**night** → **Town time of day: Night**), a switch offers
@@ -2680,13 +2925,20 @@ and herdr-core alike:
   records the actual service address, and the CLI uses that folder's own token.
   `HERDR_WORLD_URL` and `HERDR_WORLD_TOKEN` cannot redirect these edits, and a
   service owning another registry refuses them. A managed service bound to one
-  non-loopback address still needs `--restart` to save and restart; stop a
-  foreground process there before editing.
+  non-loopback address still needs `--restart`: it stops the service, saves
+  offline, then starts it again even if the edit is refused. Stop a foreground
+  process there before editing.
   An unreachable live owner, refused edit or unreadable HTTP reply names the
   target service and gives recovery steps, without an offline retry. Check that
   World's data folder, address and live catalogue before retrying, or stop it
-  before editing offline. With no live owner, edits are saved for the next start;
-  for older services without locks, the installed service's configured address
+  before editing offline. Offline commands serialize the whole read/edit/save,
+  so successful unrelated edits survive concurrent CLI commands. Service startup
+  and first-run discovery share that ownership; a starting or busy owner can
+  refuse an edit without writing. Ownership follows the registry even across
+  data folders, survives process pauses and releases automatically on process exit.
+  Keep the private `connections.json.ownership.sqlite` sidecar in place; never
+  delete or replace it to bypass a busy owner. With no live owner, edits are saved
+  for the next start; for older services without locks, the installed service's configured address
   is still checked. Validation errors exit 2; persistence and service failures exit 1.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
@@ -3003,3 +3255,33 @@ independent. Background reads leave command slots available for interactive work
 Git status refreshes in the background, and large untracked-file lists avoid a
 command per file. Stalled sessions end through keepalives. See
 [SSH setup and operator controls](docs/DEPLOYMENT.md#ssh-command-sharing-and-port-forwards).
+
+## Weather source
+
+- **Optional and shared:** Weather is off by default. Open Settings → Integrations
+  → Sources → Weather → Settings to configure it, or search Settings or Cmd+K
+  for **weather** (or **location**) to reach **Weather place and source**, the
+  row Town's sky button links to (`?setting=integrations.weather`).
+  **Connect** turns it on and **Disconnect** turns it off. Only turning it on permits Open-Meteo requests.
+  A typed place name goes to its geocoding service; city-level coordinates go to its weather service. No account
+  or key; the free API is for non-commercial use.
+- **One location:** type a city/country or latitude, longitude. Typed input always
+  wins over the optional browser fallback. **Use browser location** requests
+  permission once only when pressed; no automatic prompt, tracking or watch.
+  Coordinates are rounded to 0.1° before storage/sending. Settings are service-owned
+  and shared across devices, including a remote browser.
+- **Bounded observations:** current model conditions and at most six upcoming
+  hours, cached in memory. Demand-driven refresh at most every 15 minutes per
+  configuration, including Refresh Sources; six-second total deadline, 32 KiB per
+  response. Reads never wait. Failure clears weather; cached conditions expire
+  after 30 minutes. World keeps running with weather unavailable.
+- **Limits/refusals:** one place, first geocoding match, no long forecasts, custom
+  provider hosts, keys, multiple locations or Town drawings. Invalid coordinates,
+  over-120-character/control-character text and unknown settings refuse before
+  saving. Disabling aborts pending reads; their late results cannot return.
+- **API/CLI:** a small normalized value (condition, relative intensity, Celsius,
+  local day/night, valid/read time or unavailable) is in the Sources store and
+  `GET /api/world/weather`. `herdr-world weather [--json]`, `weather location
+  "City"`, `weather on|off` share settings; CLI reads alone may wait six seconds.
+  [Weather guide](docs/weather.md) describes fields, attribution, precision,
+  cache/outage behavior and a development-only unavailable fixture.

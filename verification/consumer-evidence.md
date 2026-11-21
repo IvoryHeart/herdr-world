@@ -79,7 +79,7 @@ This reconciles the remaining baseline entries without treating a component mode
 
 | Area | Mapping and required consumer evidence | Limits |
 | --- | --- | --- |
-| Q02 Profile service and persistence | Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local recovery consumers cover capped backoff, explicit Reconnect, cancellation tokens and manager generations; the production native-socket fixture covers late readiness, non-actionable failed topology and fresh qualified admission. Models: runtime-control, runtime-drain. | Persistence atomicity and retry clock/jitter remain real integration evidence; manager readiness alone does not prove catalogue consistency. |
+| Q02 Profile service and persistence | Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local recovery consumers cover capped backoff, explicit Reconnect, cancellation tokens and manager generations; the production native-socket fixture covers late readiness, non-actionable failed topology and fresh qualified admission. Offline ownership adds [direct CLI/process evidence](contracts/connection-registry.md): all 24 independent edit admission orders, real two-process writers, startup/discovery races and process-death recovery. Models: runtime-control, runtime-drain (unchanged scope). | Persistence atomicity and retry clock/jitter remain real integration evidence; manager readiness alone does not prove catalogue consistency. |
 | Q03 SSH supervision | Manager currency and drain fence late transport completion. Real supervisor/tunnel tests exercise process exits, cancellation, reconnect classification and private path ownership. Models: runtime-leases, runtime-drain. | Real OpenSSH, OS process and Windows transport semantics remain platform checks; the manager model does not simulate SSH. |
 | Q04 Subscriptions | Retired manager owners cannot publish readiness. Subscription tests independently exercise stop-before-ready, stop-during-retry, coalesced drain and callback suppression. Models: runtime-leases, runtime-drain. | Subscription retry progress requires actual timers and transport behavior; model producer guarantees do not prove callback consumers. |
 | Q05 RPC/HTTP routing | Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams. The session-link routing fixture combines the real manager, RPC dispatcher, runtime handlers and filesystem lookup with a synthetic external transport; identical pane IDs stay isolated, and replacement during confirmation or immediately before transport dispatch cannot report a link. Models: runtime-leases, runtime-control. | No model substitutes for endpoint parsing or HTTP stream cancellation; legacy compatibility is scoped separately from explicit admission. |
@@ -1066,3 +1066,25 @@ selection and terminal identity checks. These DOM/animation-frame consumers add
 evidence beyond the maintained window-ordering model, whose membership and
 restore rules do not encode Radix focus dismissal. No new authority or arbitrary
 browser-scheduling claim is introduced.
+
+## Weather cache candidate (issue #1040)
+
+The [weather contract](../openspec/specs/world-weather/spec.md) uses direct finite
+schedules and real consumer tests as alternative evidence. It owns no runtime
+connection or mutation authority and introduces no durable effects/recovery queue.
+A new Quint model would duplicate the isolated generation/cache state without
+adding evidence about HTTP parsing, permission or settings persistence. The Q37 service owner is touched to register local CLI admission and cancel the
+weather flight on stop, so the complete `verification:gate` is required alongside
+consumer checks. No inventory or model/adapter mapping is changed.
+
+`server/src/weather/weather.test.ts` enumerates lookup/read completion crossed
+with disable/location replacement/close, plus new-before-old completion, deadline
+and cache-expiry/failure cases. `http.test.ts` covers queued settings saves, failed
+persistence, API and production loopback/token/no-Origin admission. Provider
+fixtures cover all documented WMO codes, malformed/missing fields and response
+size bounds. The actual Sources dialog DOM test checks no permission on mount,
+one-shot permission, coordinate reduction and manual precedence; source store
+tests check unavailable on service failure. The CLI tests cover parsing and output.
+These checks do not establish live Open-Meteo availability, geocoding accuracy,
+OS permission UI, or future Town visuals. Existing delivery checks and independent
+review remain required.

@@ -36,6 +36,12 @@ existing runtime profiles. Local profiles and identical SSH destinations group
 without renaming runtime IDs. See [host discovery and API](host-connections.md)
 for CLI use, migration and rollback constraints.
 
+Usage analytics saves bounded numeric daily status history in private
+`usage-activity.json` beside `world.sqlite`. Include it in an instance backup to
+retain observed time; token history rebuilds from the harness logs. Open status
+intervals never resume after restart, and unobserved time stays unknown. See
+[usage coverage](usage-analytics.md#meaning-gaps-and-limits).
+
 At startup, World checks `boards/world-ledger.json` (or the configured
 `HERDR_WORLD_LEDGER_PATH`). Before importing a changed file, it makes a private,
 byte-identical `<ledger>.<content-hash>.sqlite-import.bak` beside it. An unchanged
@@ -638,19 +644,33 @@ Choose another default before removing the current one. Explicit Herdr socket,
 SSH or session settings in the service configuration still pin its default.
 `--restart` optionally restarts the service after admission; it is no longer
 required on loopback. For a managed service bound to one specific non-loopback
-address, live admission is unavailable: use `--restart` to save and restart it,
-or stop a foreground process before editing its registry. With no listener
-answering, the CLI retains its existing save-for-next-start behavior, including
-when the managed service is starting or unreachable; it does not restart it.
+address, live admission is unavailable: `--restart` stops the service before
+saving offline and starts it after releasing registry ownership, even if the edit
+is refused. Stop a foreground process before editing its registry.
 
-Live admission uses the service configuration's listener, the data directory's
-local CLI token and an exact registry-path check. A refused or failed live request
-never falls back to writing the file; after a lost reply, check the catalogue
+Offline commands hold cross-process ownership from the fresh catalogue read
+through validation and atomic save or clearing. Successful unrelated edits
+accumulate. Startup and first-run discovery use the same ownership; they cannot
+replace an acknowledged offline edit. The CLI rechecks service discovery under
+ownership before reading. A busy registry can refuse after a five-second wait;
+a starting or unreachable live owner refuses without an offline write. Process
+exit releases ownership automatically, including after a crash. Keep the private
+`connections.json.ownership.sqlite` sidecar in place: never delete, rename or
+replace it to force an edit. With no live owner or answering legacy listener,
+the CLI saves for the next start without restarting the service.
+
+Live admission uses the selected data folder's instance-lock address (the
+configured listener for older services), its local CLI token and an exact
+registry-path check. Agent URL/token overrides cannot redirect connection edits.
+A refused or failed live request never falls back to writing the file; after a lost reply, check the catalogue
 before retrying. An older service must be upgraded before it accepts live edits.
 Duplicate or unknown IDs and other input errors exit 2; persistence, I/O and
 service failures exit 1.
-The CLI only checks the configured listener: stop any foreground World process
-on another port that shares the registry before editing offline.
+A service retains registry ownership until its connection storage closes. This
+also prevents offline writes through another data folder that selects the same
+registry with `HERDR_WORLD_CONNECTIONS_PATH`. Stop that owner before editing
+offline. Older binaries without this ownership protocol must be stopped before
+concurrent offline edits or startup.
 
 The command-line default remains useful for a single connection:
 

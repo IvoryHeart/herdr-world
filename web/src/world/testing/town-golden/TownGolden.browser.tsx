@@ -2,6 +2,7 @@ import { clock } from "./install";
 import { createRoot } from "react-dom/client";
 import { WebGLRenderer } from "pixi.js";
 import { TownCanvas, type TownRoomActions } from "../../town/TownCanvas";
+import { TownPostProvider } from "../../town/TownPostOffice";
 import { buildWorldObject } from "../../worldObject";
 import {
   projectWorldOffice,
@@ -12,6 +13,8 @@ import { goldenConnections, goldenUsage } from "./scene";
 import { bridge } from "../../../api";
 import { comparePixels } from "./pixels";
 import { setTownDaylightMode } from "../../town/townDaylight";
+import { setTownWeatherMode } from "../../town/townWeather";
+import { TOWN_GOLDEN_WEATHER } from "./weatherScenes";
 import { shipyardStore } from "../../shipyard/shipyardStore";
 import {
   shipyardFixtureCatalog,
@@ -110,28 +113,40 @@ async function prepare() {
 
   // Hold Town's time of day: following the clock would make the image depend
   // on the runner's time zone. Night shows the status lighting: lit and dark
-  // rooms, each desk's state light and a waiting reception.
-  setTownDaylightMode("night");
+  // rooms, each desk's state light and a waiting reception. Without a scene,
+  // Town follows the real weather, which this fixture never has: the image
+  // is Town without weather. A weather scene (?scene=) holds one weather.
+  const scene = TOWN_GOLDEN_WEATHER.find(
+    (s) => s.scene === new URLSearchParams(location.search).get("scene"),
+  );
+  setTownDaylightMode(scene?.time ?? "night");
+  setTownWeatherMode(scene?.weather ?? "real");
   const projection = projectWorldOffice(
     buildWorldObject(goldenConnections(), "host-0"),
     Date.now(),
     null,
     TOWN_PRESENTATION_BOUNDS,
   );
+  const GOLDEN_POST = {
+    counts: { asks: 1, needs: 2, done: 3, outbox: 1 },
+  } as const;
   createRoot(document.getElementById("root")!).render(
     <div className="town-stage" style={{ position: "fixed", inset: 0 }}>
-      <TownCanvas
-        projection={projection}
-        selectedKey={null}
-        completionSeenKeys={new Set()}
-        conversationTargets={[]}
-        onSelect={noAction}
-        onActivateAgent={noAction}
-        onActivateRoom={noAction}
-        roomActions={roomActions}
-        selectedRoomKey={null}
-        observability={EMPTY_OFFICE_OBSERVABILITY}
-      />
+      {/* Fixed counts: the post office's sign reads them at a glance. */}
+      <TownPostProvider source={GOLDEN_POST}>
+        <TownCanvas
+          projection={projection}
+          selectedKey={null}
+          completionSeenKeys={new Set()}
+          conversationTargets={[]}
+          onSelect={noAction}
+          onActivateAgent={noAction}
+          onActivateRoom={noAction}
+          roomActions={roomActions}
+          selectedRoomKey={null}
+          observability={EMPTY_OFFICE_OBSERVABILITY}
+        />
+      </TownPostProvider>
     </div>,
   );
   await clock.until(
