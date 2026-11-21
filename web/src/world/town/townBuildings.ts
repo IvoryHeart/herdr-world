@@ -57,8 +57,18 @@ type Plan = {
   /** Room order offset by office host key, so a host's runtimes stay apart. */
   orderOffset: Map<string, number>;
   labelOf: Map<string, string>;
+  /** Runtime tag by office host key, in buildings of more than one runtime. */
+  tagOf: Map<string, string>;
   signature: string;
 };
+
+/**
+ * How a room's runtime reads on its plaque, card and in Move menus, so two
+ * runtimes' rooms of the same name in one building stay apart.
+ */
+export function townRuntimeTag(runtime: "herdr" | "herdr-core" | string) {
+  return runtime === "herdr" ? "Herdr TUI" : runtime;
+}
 
 /** Rooms of a host's later runtimes follow its first runtime's rooms. */
 const RUNTIME_ORDER_STRIDE = 1_000_000;
@@ -89,6 +99,7 @@ function plan(
   const buildingOf = new Map<string, string>();
   const orderOffset = new Map<string, number>();
   const labelOf = new Map<string, string>();
+  const tagOf = new Map<string, string>();
   const hosts: OfficeHost[] = [];
   const push = (host: OfficeHost) =>
     hosts.push(
@@ -135,6 +146,9 @@ function plan(
     members.forEach((host, index) => {
       buildingOf.set(host.key, first.key);
       orderOffset.set(host.key, index * RUNTIME_ORDER_STRIDE);
+      const runtime = group.runtimes.find(({ id }) => id === host.connectionId);
+      if (members.length > 1 && runtime)
+        tagOf.set(host.key, townRuntimeTag(runtime.runtime));
     });
     labelOf.set(first.key, group.label);
     const live = members.find((host) => !host.stale);
@@ -161,8 +175,9 @@ function plan(
     [...buildingOf],
     [...labelOf],
     [...orderOffset],
+    [...tagOf],
   ]);
-  return { buildingOf, hosts, orderOffset, labelOf, signature };
+  return { buildingOf, hosts, orderOffset, labelOf, tagOf, signature };
 }
 
 /**
@@ -210,7 +225,7 @@ export function createTownBuildings() {
 
 function apply(
   office: HerdrOfficeProjection,
-  { buildingOf, hosts, orderOffset, labelOf }: Plan,
+  { buildingOf, hosts, orderOffset, labelOf, tagOf }: Plan,
   cache: {
     agents: WeakMap<OfficeAgent, OfficeAgent>;
     desks: WeakMap<OfficeDesk, OfficeDesk>;
@@ -265,13 +280,14 @@ function apply(
         }))
       : item;
   const room = (item: OfficeRoom) =>
-    moved(item.hostKey)
+    moved(item.hostKey) || tagOf.has(item.hostKey)
       ? memo(cache.rooms, item, () => ({
           ...item,
           hostKey: building(item.hostKey),
           order: item.order + (orderOffset.get(item.hostKey) ?? 0),
           desks: item.desks.map(desk),
           roomAgents: item.roomAgents.map(agent),
+          runtimeTag: tagOf.get(item.hostKey),
         }))
       : item;
   // One reception per building, its queue the queues of its runtimes.

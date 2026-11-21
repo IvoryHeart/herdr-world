@@ -5,6 +5,7 @@ import { officeReadModel } from "../officeReadModel";
 import { createTownBuildings, townBuildingsMode } from "./townBuildings";
 import { townModelFromProjection } from "./townModel";
 import { layoutTown } from "./townLayout";
+import { townMoveMenu, type TownMoveMenuDeps } from "./townMoveMenu";
 
 // The real shape: two runtimes on this computer and one remote host.
 const office = projectWorldOffice(
@@ -98,6 +99,16 @@ test("a building per host holds every runtime's rooms", () => {
   expect(layout.buildings.map((building) => building.rooms.length)).toEqual([
     3, 1,
   ]);
+  // Two runtimes share the building, so each room names its runtime.
+  expect(
+    town.rooms
+      .filter((room) => room.hostKey === keyOf("tui"))
+      .map((room) => room.runtimeTag),
+  ).toEqual(["Herdr TUI", "Herdr TUI", "herdr-core"]);
+  expect(
+    town.rooms.find((room) => room.workspaceRef.connectionId === "remote")!
+      .runtimeTag,
+  ).toBeUndefined();
   // Lookups answer with the building's copy of an agent.
   const agent = office.roster.find(
     (entry) => entry.agent.currentPaneRef.connectionId === "core",
@@ -123,6 +134,8 @@ test("a building per runtime stands beside its host's other runtimes", () => {
     ),
   ).toBe(true);
   expect(town.receptions).toHaveLength(3);
+  // A building of one runtime names it on its sign, not on each room.
+  expect(town.rooms.every((room) => room.runtimeTag === undefined)).toBe(true);
 });
 
 test("the same office keeps its buildings; unknown hosts stay as they are", () => {
@@ -131,4 +144,20 @@ test("the same office keeps its buildings; unknown hosts stay as they are", () =
   expect(buildings(office, groups, "host")).toBe(first);
   // Without host groups (no catalogue yet), each runtime keeps its building.
   expect(createTownBuildings()(office, [], "host")).toBe(office);
+});
+
+test("Move menus name each room's runtime in a building of two", () => {
+  const town = createTownBuildings()(office, groups, "host");
+  const agent = town.roster.find(
+    (entry) => entry.agent.currentPaneRef.connectionId === "tui",
+  )!.agent;
+  const menu = townMoveMenu({ step: "desk", agentKey: agent.key }, {
+    office: town,
+    agentOf: (key) => officeReadModel(town).agentOf(key),
+    roomForKey: (key) => town.rooms.find((room) => room.key === key) ?? null,
+  } as TownMoveMenuDeps);
+  expect(menu.entries.map((entry) => entry.detail).sort()).toEqual([
+    "Core · herdr-core",
+    "Docs · Herdr TUI",
+  ]);
 });

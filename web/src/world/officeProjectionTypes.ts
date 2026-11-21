@@ -127,6 +127,11 @@ export type OfficeRoom = {
   deskRenderLimit: number;
   /** Current per-room reveal target; expansion survives closures until Fold. */
   deskFold?: "folded" | "expanded";
+  /**
+   * Town only: the room's runtime ("Herdr TUI", "herdr-core") when its
+   * building holds rooms of more than one runtime (townBuildings.ts).
+   */
+  runtimeTag?: string;
 };
 
 export type OfficeReception = {

@@ -9,3 +9,6 @@
 
 - A Town building with one moved room now fills its rooms per row with the
   others, instead of squeezing every unmoved room into that room's width.
+- In a Town building holding both Herdr TUI and herdr-core rooms, each room's
+  plaque, card and Move menus now name its runtime, so two rooms of the same
+  name no longer look like a duplicate.
