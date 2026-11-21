@@ -1,5 +1,5 @@
 export async function readJsonBody(
-  req: Request,
+  req: Pick<Request, "body">,
   maxBytes: number,
 ): Promise<unknown> {
   if (!req.body) throw new Error("Missing request body");

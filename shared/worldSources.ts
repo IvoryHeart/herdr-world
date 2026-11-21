@@ -6,7 +6,7 @@ import type { PullRequestAction, PullRequestDetail } from "./pullRequests";
  * credentials and requests; the browser sees only these display-safe records.
  */
 
-export const WORLD_SOURCE_IDS = ["github", "jira"] as const;
+export const WORLD_SOURCE_IDS = ["github", "jira", "weather"] as const;
 export type WorldSourceId = (typeof WORLD_SOURCE_IDS)[number];
 
 /**
@@ -36,6 +36,7 @@ export type WorldSourceStatus = {
 };
 
 export type WorldSourcePublicConfig =
+  | ({ kind: "weather" } & import("./weather").WeatherSettings)
   | { kind: "github"; mergedDays: number }
   | {
       kind: "jira";
@@ -90,7 +91,7 @@ export type PullRequestDetailObservation = {
 export type WorkItem = {
   /** Stable across refreshes: `github:pr:owner/repo#12`, `jira:ABC-1`. */
   key: string;
-  source: WorldSourceId;
+  source: Exclude<WorldSourceId, "weather">;
   kind: "pull_request" | "issue" | "ticket";
   /** Short reference shown on cards: `owner/repo#12` or `ABC-1`. */
   ref: string;
@@ -138,6 +139,8 @@ export type WorkLink = {
 };
 
 export type WorldSourcesSnapshot = {
+  /** Present on weather-capable services; old services decode as unavailable. */
+  weather?: import("./weather").WeatherSnapshot;
   observedAt: number;
   /** A refresh is still running; ask again shortly for its result. */
   refreshing: boolean;

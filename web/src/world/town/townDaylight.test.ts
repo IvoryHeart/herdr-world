@@ -2,12 +2,13 @@ import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import {
   TOWN_DAYLIGHT_KEY,
+  TOWN_DAYLIGHT_MODES,
+  TOWN_NO_WEATHER,
   resetTownDaylightForTest,
   setTownDaylightMode,
   subscribeTownDaylight,
   townDaylightHour,
   townDaylightMode,
-  townNextDaylightMode,
   townSky,
   townSkyIsClear,
   townSkyToward,
@@ -27,12 +28,18 @@ afterAll(() => {
   if (!hadStorage) Reflect.deleteProperty(globalThis, "localStorage");
 });
 
-test("the button cycles clock, day, dusk and night", () => {
+test("the sky menu offers clock, day, dusk and night; clock by default", () => {
   expect(townDaylightMode()).toBe("clock");
-  const seen = ["clock"];
-  for (let i = 0; i < 4; i += 1)
-    seen.push(townNextDaylightMode(seen[seen.length - 1] as never));
-  expect(seen).toEqual(["clock", "day", "dusk", "night", "clock"]);
+  expect(TOWN_DAYLIGHT_MODES).toEqual(["clock", "day", "dusk", "night"]);
+});
+
+test("the time of day's sky carries no weather", () => {
+  for (const hour of [3, 9, 12, 18, 23]) {
+    const sky = townSky(hour);
+    expect(sky).toMatchObject(TOWN_NO_WEATHER);
+    // Cloud shadows show as strongly as the sun.
+    expect(sky.clouds).toBe(sky.sun);
+  }
 });
 
 test("the chosen time of day persists across a reload", () => {

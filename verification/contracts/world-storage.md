@@ -27,8 +27,10 @@ The compiled crash entry is outside storage/ and uses the release minify and
 source-map flags, preserving the production worker's embedded path. The large
 real-FULL-sync history fixture has an explicit watchdog, not a latency claim.
 `world-storage.test.ts` must cover exclusive ownership, isolated roots, reopen,
+an abandoned open that closes its database before it rejects,
 hash-named private import backup, changed-source missing-ID merge, malformed
-legacy input and recovered uncertainty.
+legacy input and recovered uncertainty. `world-worker.test.ts` keeps the
+service composition out of the worker's import graph, which each open re-parses.
 
 The storage, Board, profile, runtime-status, terminal-mark and answer-delivery
 crash consumers share `storage/testing/crash-harness.ts`. It separates compilation,
