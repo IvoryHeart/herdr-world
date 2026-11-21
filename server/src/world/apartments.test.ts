@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { BinEntry } from "../../../shared/bin";
 import { memoryApartmentsPort } from "../storage/apartments";
+import { analyticsAgentId } from "../usage/activity";
 import { WorldApartments } from "./apartments";
 
 const NOW = 1_800_000_000_000;
@@ -232,6 +233,35 @@ describe("finished agents move into apartments", () => {
     await apartments.settled();
     expect(apartments.list().residents[0]?.last_report).toBe("Opened PR #42");
     expect(published).toEqual([1, 2]);
+  });
+
+  test("a resident keeps the usage agent IDs its runs were counted under", async () => {
+    const { apartments } = tracker();
+    // As usage reads the pane: its agent record joined in.
+    const usageId = (session: string) =>
+      analyticsAgentId("local", 1, {
+        ...pane("t1", { agent_session: { kind: "id", value: session } }),
+        ...agents[0],
+      })!;
+    apartments.fresh("local", 1, [pane("t1")], NOW - 60_000, agents);
+    apartments.fresh("local", 1, [pane("t1")], NOW - 30_000, agents);
+    // A new harness session in the same terminal is a new usage agent.
+    const next = "0f0e0d0c-0000-4000-8000-000000000002";
+    apartments.fresh(
+      "local",
+      1,
+      [pane("t1", { agent_session: { kind: "id", value: next } })],
+      NOW - 1000,
+      agents,
+    );
+    apartments.complete("local", 1, []);
+    await apartments.settled();
+    const ids = apartments.list().residents[0]?.usage_agent_ids;
+    expect(ids).toEqual([
+      usageId("0f0e0d0c-0000-4000-8000-000000000001"),
+      usageId(next),
+    ]);
+    expect(ids?.every((id) => /^agent_[a-f0-9]{64}$/.test(id))).toBe(true);
   });
 
   test("evict removes residents and publishes", async () => {

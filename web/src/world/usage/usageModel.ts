@@ -4,7 +4,9 @@ import type {
   UsageRunRole,
 } from "../../../../shared/usage";
 import type {
+  UsageAnalyticsMetrics,
   UsageAnalyticsRow,
+  UsageMetric,
   WorldUsageAnalytics,
 } from "../../../../shared/usageAnalytics";
 import {
@@ -724,4 +726,84 @@ export function usageRunFacts(run: UsageRunView) {
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+// ── One agent's usage, by its agent IDs ─────────────────────────────────
+
+/**
+ * The rows of an answer grouped by agent that are one of `ids` (the agent
+ * IDs a resident was counted under, shared/apartments.ts).
+ */
+export function usageAgentRows(
+  data: WorldUsageAnalytics,
+  ids: readonly string[],
+): UsageAnalyticsRow[] {
+  const wanted = new Set(ids);
+  return data.group_by === "agent"
+    ? data.rows.filter(
+        (row) => row.dimension !== null && wanted.has(row.dimension),
+      )
+    : [];
+}
+
+/** A sum of metrics: unknown when none was read, partly read when some was. */
+function sumMetric(metrics: readonly UsageMetric[]): UsageMetric {
+  const known = metrics.filter((m) => m.value !== null);
+  if (!known.length) return { value: null, coverage: "unknown" };
+  return {
+    value: known.reduce((sum, m) => sum + m.value!, 0),
+    coverage:
+      known.length === metrics.length &&
+      known.every((m) => m.coverage === "observed")
+        ? "observed"
+        : "partial",
+  };
+}
+
+/** Several rows' metrics as one (token kinds are not summed). */
+export function usageSumRows(
+  rows: readonly UsageAnalyticsMetrics[],
+): UsageAnalyticsMetrics {
+  const sum = (
+    key: Exclude<keyof UsageAnalyticsMetrics, "tokens" | "observed_ms">,
+  ) => sumMetric(rows.map((row) => row[key]));
+  return {
+    active_ms: sum("active_ms"),
+    waiting_on_you_ms: sum("waiting_on_you_ms"),
+    observed_ms: rows.reduce((total, row) => total + row.observed_ms, 0),
+    tokens: null,
+    total_tokens: sum("total_tokens"),
+    reported_cost_usd: sum("reported_cost_usd"),
+    estimated_cost_usd: sum("estimated_cost_usd"),
+    prs_opened: sum("prs_opened"),
+    prs_merged: sum("prs_merged"),
+  };
+}
+
+/**
+ * One agent's week in words, as its card says a run's: time at work,
+ * waiting on you, and tokens, or that its harness's tokens are not
+ * available. Null `metrics` (no row this week) is "usage unknown". Like the
+ * card line it leaves "(partly read)" to the Breakdown it opens.
+ */
+export function usageAgentFacts(
+  metrics: UsageAnalyticsMetrics | null,
+  harness: string | null,
+) {
+  if (!metrics) return "This week: usage unknown";
+  const { active_ms: active, waiting_on_you_ms: waiting } = metrics;
+  const tokens = metrics.total_tokens;
+  return `This week: ${[
+    active.value === null
+      ? "at work unknown"
+      : `at work ${usageDuration(active.value)}`,
+    waiting.value === null
+      ? "waiting on you unknown"
+      : `waited on you ${usageDuration(waiting.value)}`,
+    harness && !usageReadsTokens(harness)
+      ? "tokens and cost not available for this harness"
+      : tokens.value === null
+        ? "tokens unknown"
+        : `${usageCount(tokens.value)} tokens`,
+  ].join(" · ")}`;
 }

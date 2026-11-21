@@ -6,6 +6,7 @@ import {
   type ApartmentMoveOut,
   type ApartmentResident,
   type ApartmentState,
+  apartmentUsageAgentIds,
   EMPTY_APARTMENTS,
   parseApartmentAppearance,
 } from "../../../../shared/apartments";
@@ -83,6 +84,7 @@ function residentOf(value: unknown): ApartmentResident | null {
       .filter((link): link is ApartmentLink => link !== null),
     session_id: text(value.session_id),
     appearance: parseApartmentAppearance(value.appearance),
+    usage_agent_ids: apartmentUsageAgentIds(value.usage_agent_ids),
   };
 }
 

@@ -8,9 +8,11 @@ import type {
 import {
   APARTMENT_CAPACITY,
   apartmentSessionKey,
+  apartmentUsageAgentIds,
 } from "../../../shared/apartments";
 import type { BinEntry } from "../../../shared/bin";
 import { readTerminalSettings } from "../agent/terminal-tokens";
+import { analyticsAgentId } from "../usage/activity";
 import type { ApartmentMoveIn, ApartmentsPort } from "../storage/apartments";
 
 type Row = Record<string, unknown>;
@@ -40,6 +42,8 @@ export type ApartmentTenant = {
   away?: boolean;
   /** Its look in World as last seen live; null when World could not read it. */
   appearance: ApartmentAppearance | null;
+  /** The usage agent IDs it was counted under while live, newest last. */
+  usage_agent_ids: string[];
 };
 
 /** What World needs to read a live agent's look (its pane, room and table). */
@@ -282,6 +286,8 @@ export class WorldApartments {
       | ((pane: ApartmentPane) => ApartmentAppearance)
       | null
       | undefined;
+    // As usage's observeFresh joins them, so the agent IDs are the same.
+    const agentByPane = new Map(agents.map((row) => [row.pane_id, row]));
     for (const pane of panes) {
       const harness = text(pane.agent, 40);
       const terminal = text(pane.terminal_id, 200);
@@ -298,6 +304,12 @@ export class WorldApartments {
       const same = before && before.harness === harness;
       if (!same && host.tenants.size >= MAX_TENANTS_PER_HOST) continue;
       const reported = sessionId(pane, agent);
+      // The ID usage counts this agent under, read as usage reads it.
+      const usageAgent = analyticsAgentId(connectionId, generation, {
+        ...pane,
+        ...agentByPane.get(pane.pane_id),
+      });
+      const usage = same ? before.usage_agent_ids : [];
       if (lookOf === undefined)
         lookOf = safe(
           () =>
@@ -345,6 +357,10 @@ export class WorldApartments {
         last_seen_at: observedAt,
         away: false,
         appearance: look ?? (same ? before.appearance : null),
+        usage_agent_ids:
+          usageAgent && usage.at(-1) !== usageAgent
+            ? apartmentUsageAgentIds([...usage, usageAgent])
+            : usage,
       };
       // The same agent stays one object, so a session read still running
       // when it leaves lands on the record it leaves.
@@ -493,6 +509,7 @@ export class WorldApartments {
       links: safe(() => this.deps.links?.(tenant) ?? [], []),
       session_id: tenant.session_id,
       appearance: tenant.appearance,
+      usage_agent_ids: tenant.usage_agent_ids,
     };
     const task = (async () => {
       let saved: ApartmentResident;

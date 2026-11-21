@@ -34,6 +34,18 @@ const LOOKS: Record<string, ApartmentAppearance | null> = {
   turing: null,
 };
 
+/**
+ * The usage agent IDs residents were counted under, matching the Usage
+ * fixture's agents (usage/usageFixture.ts `fixture-agent-N`), so
+ * `?usageFixture&apartments-preview=avatars` shows residents' usage. Linus
+ * ran twice in one terminal; the others moved in before World kept usage.
+ */
+const USAGE: Record<string, string[]> = {
+  ada: ["fixture-agent-5"],
+  grace: ["fixture-agent-1"],
+  linus: ["fixture-agent-0", "fixture-agent-2"],
+};
+
 /** Synthetic residents ending at `now`; example.com and example paths only. */
 export function fixtureResidents(now: number): ApartmentResident[] {
   const base = {
@@ -138,8 +150,37 @@ export function fixtureResidents(now: number): ApartmentResident[] {
         ? { runtime: "herdr-core" as const, connection_label: "Fixture core" }
         : {}),
       appearance: LOOKS[name] ?? null,
+      usage_agent_ids: USAGE[name] ?? [],
     }),
   );
+}
+
+/**
+ * A resident of a harness World reads no log of (OpenCode): its usage says
+ * tokens are not available. The preview adds it after the avatar cases.
+ */
+export function fixtureLoglessResident(now: number): ApartmentResident {
+  return {
+    id: "r-fixture-logless",
+    name: "hamilton",
+    harness: "opencode",
+    cwd: "/srv/example/project-beta",
+    room: "project-beta",
+    tab: null,
+    connection_id: "fixture",
+    connection_label: "Fixture host",
+    runtime: "herdr",
+    terminal_id: "t-fixture-logless",
+    first_seen_at: now - 28 * HOUR,
+    moved_out_at: now - 26 * HOUR,
+    move_out: "ended",
+    summary: "Tidied the synthetic style sheet",
+    last_report: null,
+    links: [],
+    session_id: null,
+    appearance: null,
+    usage_agent_ids: ["fixture-agent-15"],
+  };
 }
 
 /** A client answering Apartments' calls from synthetic residents in memory. */
