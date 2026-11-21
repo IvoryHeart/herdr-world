@@ -99,10 +99,14 @@ found runtimes; newly discovered runtimes connect during automatic discovery too
 
 `herdr-world ls` returns hosts with their runtimes and rooms; `connections` lists
 host/runtime kind, version and state. Existing per-connection API arrays and legacy
-runtime-specific CLI add flags remain available. The current browser Hosts and
-Manage connections screens still present runtime entries; their host grouping is
-a separate screen change. See [host connections](docs/host-connections.md) for the
-API shape and migration rules.
+runtime-specific CLI add flags remain available. In the browser, **Hosts** and
+**Manage connections** show one row per machine; **Add host** asks only for the
+SSH name (and whether it is Windows), then World looks for runtimes and connects
+what it finds. A host with none says so and lists what can be installed; a host
+with one is not asked about the others. **Settings → Integrations → Runtimes**
+lists each host's runtimes with **Add a runtime**. A runtime profile with its own
+sockets or session is still added by hand under **Runtime profile by hand**. See
+[host connections](docs/host-connections.md) for the API shape and migration rules.
 
 herdr-core is primary for new agents when installed and connected. Choose a
 Herdr TUI room to launch there instead.
@@ -435,8 +439,17 @@ retired: `/office` opens Town, and `/graph` and `/tree` open Board. Board and
 these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 - **Town** is the default view (`/town`); the root URL opens it too.
-  Each host is a building, each workspace a room, each tab a team table and each
-  pane a seat. Rooms resize as tabs open and close; expanded rooms stay expanded
+  Each host (machine) is a building, each workspace a room, each tab a team
+  table and each pane a seat. A machine running both Herdr and herdr-core has one
+  building and one reception holding both runtimes' rooms; the first runtime's
+  rooms come first, and each room still acts on its own runtime. The building's
+  roof colour, reception and **Add room** belong to its first runtime.
+  **Settings → Town & views → Town buildings → One per runtime** gives each
+  runtime its own building instead, side by side and signed `<host> · Herdr` /
+  `<host> · herdr-core`; it is kept in this browser and **One per host** is the
+  default. `?townBuildings=runtime` or `?townBuildings=host` in the URL
+  overrides the setting for that page, to compare the two.
+  Room positions, colours and pins are the same either way. Rooms resize as tabs open and close; expanded rooms stay expanded
   as they shrink, until folded. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table's
   nameplate shows its sole agent's Herdr name when exactly one named agent
@@ -789,8 +802,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Town says so; with neither set it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
     **New room** (disabled with the reason when no room can be created). With
-    no room open, New room asks for the **Destination host**, herdr-core hosts
-    included (`· herdr-core`); an empty core room name becomes "Room". Arrow
+    no room open, New room asks for the **Destination host** by machine name;
+    a **Runtime** choice (Herdr or herdr-core, starting at the open room's or the
+    first ready one) appears only when that machine runs both. An empty core
+    room name becomes "Room". Arrow
     keys, Home and End move around the ring; Escape, a press outside, the
     centre **✕** or **Back** on a phone closes it.
   - **Lenses** colour the whole map by one fact, as strategy games' map
@@ -1679,10 +1694,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   **Hosts** (in the top bar; on a phone in Zen, in the corner view menu too)
   defaults to All hosts and persists an explicit host set independently
   of **Manage connections**; both places show and change one filter per
-  browser. It lists every connection of either runtime,
-  Herdr's first; a herdr-core connection reads `<name> · herdr-core · <state>`
-  and is counted, selected and remembered like a Herdr host (profiles of one
-  runtime endpoint count once). Filtering preserves open resources and terminals;
+  browser. It lists one row and one tick per machine: a host's runtimes are
+  not told apart there, and ticking a host shows all of them (a saved filter
+  of runtime IDs reads as their hosts). Before the host catalogue loads, or for
+  a runtime no host holds, a runtime shows as its own row. Board, Desk,
+  Needs you, search and **New agent** name places by machine; they add
+  `· Herdr` or `· herdr-core` only where a machine runs both. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
 - **Needs you** in the top bar (in the view picker in Zen, including on a phone;
@@ -1875,7 +1892,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 **Menu → Settings → Integrations** lists everything World reads from or works through.
 **All** opens first and lists every kind under its heading; then one tab per
-kind: **Runtimes** (this computer's Herdr or herdr-core and each SSH host),
+kind: **Runtimes** (one heading per machine, listing the Herdr and herdr-core
+runtimes found on it, each with **Add a runtime**: herdr-core installs from
+there after a confirmation, Herdr is installed and started on the machine, and
+**Look again** looks for runtimes and connects what it finds; a machine with
+none says **No runtime found on this host.**),
 **Sources** (GitHub, Jira, Weather and Usage metrics), **Agents** (World's skill for
 each harness, per host) and **Editors** once one is listed; last, set apart
 with its key, the **Vault**. The kind tabs come from the registry's kinds, so a new kind gets
@@ -2992,8 +3013,8 @@ and herdr-core alike:
   must be private (0700). Windows needs PowerShell and SSH key login; the
   pipe must be accessible only to your account, SYSTEM and Administrators.
   Start core without elevation so the SSH account can open it.
-  The card shows the version and live terminals. **Hosts** filters core and
-  Herdr TUI buildings together. A stale core keeps its last topology for
+  The card shows the version and live terminals. **Hosts** shows core and the
+  Herdr TUI of one machine as one host. A stale core keeps its last topology for
   reference and refuses actions until fresh observation succeeds.
 - **Core-only setup.** Without the Herdr TUI installed, the first core
   connection becomes the default and Town shows only its building. With the

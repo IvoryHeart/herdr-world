@@ -53,6 +53,17 @@ function harness(
           remote_platform: "windows",
         },
       ],
+      hosts: {
+        // Added by SSH name only: no runtime found there yet.
+        list: () => [
+          { type: "ssh", ssh_destination: "empty.example.com" },
+          {
+            type: "ssh",
+            ssh_destination: "win-empty.example.com",
+            remote_platform: "windows",
+          },
+        ],
+      },
       coreList: () =>
         (options.coreProfiles ?? []).map((profile) => ({
           core_session: "default",
@@ -214,9 +225,10 @@ describe("herdr-core install from World", () => {
     ).rejects.toThrow(
       "only on this computer or an SSH host in Manage connections",
     );
-    await expect(
-      install.probe({ type: "ssh", destination: "win.example.com" }),
-    ).rejects.toThrow("only on this computer");
+    for (const destination of ["win.example.com", "win-empty.example.com"])
+      await expect(install.probe({ type: "ssh", destination })).rejects.toThrow(
+        "only on this computer",
+      );
     await expect(install.probe({ type: "shell" })).rejects.toThrow(
       "choose this computer or an SSH host",
     );
@@ -228,6 +240,24 @@ describe("herdr-core install from World", () => {
     expect(probed.version).toBe("0.1.21");
     expect(calls[0]!.argv).toContain("dev.example.com");
     expect(calls[0]!.argv.at(-1)).toBe("sh -s");
+  });
+
+  test("a saved host with no runtime yet installs core and connects it there", async () => {
+    const h = harness();
+    const host = { type: "ssh" as const, destination: "empty.example.com" };
+    expect((await h.install.probe(host)).host).toEqual(host);
+    h.install.install(host, "0.1.21");
+    h.finishSetup();
+    const done = await settle(h.install, host);
+    expect(done.phase).toBe("done");
+    expect(h.calls.at(-1)!.argv).toContain("empty.example.com");
+    expect(h.created).toEqual([
+      expect.objectContaining({
+        type: "ssh",
+        runtime: "herdr-core",
+        ssh_destination: "empty.example.com",
+      }),
+    ]);
   });
 
   test("a confirmed install runs setup, then adds and connects a core profile", async () => {

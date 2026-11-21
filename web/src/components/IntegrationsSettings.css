@@ -469,3 +469,55 @@
     justify-content: flex-end;
   }
 }
+
+/* Runtimes, one block per machine, each able to add another runtime. */
+.integrations-host {
+  display: grid;
+  gap: 6px;
+}
+
+.integrations-host + .integrations-host {
+  margin-top: 10px;
+}
+
+.integrations-host > h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.integrations-host > button {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.integrations-add-runtime {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px dashed var(--border-soft);
+  border-radius: 8px;
+}
+
+.integrations-add-runtime ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.integrations-add-runtime li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.integrations-add-runtime > button {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
