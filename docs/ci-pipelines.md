@@ -9,6 +9,7 @@ for compatibility with branch rules.
 | --- | --- | --- |
 | Local pre-commit | `check:commit`: no live `.agents/` files, read-only formatting and lint | Quick feedback before a commit; not a delivery gate |
 | Local pre-push | `check:changed`: static checks and affected non-browser units; gate/configuration changes run all non-browser units | Affected tests save local work; CI remains authoritative |
+| Privacy on every branch push and PR | Scan added lines in every introduced commit for private material, with redacted diagnostics | Independent of PR creation and validation scope; local pre-push scans the actual pushed refs too |
 | CI on a PR | Validate the proposed merge; check its description and changelog policy | One shared scope decision; native platforms and browser shards keep separate runners |
 | CI on main | Execute the complete integrated matrix, without model-result or installer-build reuse | PR success cannot prove the result of later merges |
 | Main gate | Classify failed push CI, rerun a recognized infrastructure failure once, or prepare an issue and revert | Does not merge a revert; green main resolves earlier alerts |
@@ -31,6 +32,7 @@ for compatibility with branch rules.
 | `check:changed` | Unqueued static lane plus affected non-browser units; browsers and verification run in CI |
 | `check:delivery` | Static lane plus all test lanes and behavioral verification |
 | `check:pr-body <file>` | CI knowledge-map and changelog policy against a committed PR diff and draft description; optional base ref follows the file |
+| `check:privacy` | Committed additions since `origin/main`, or `--range <base-ref> <head-ref>`; [privacy policy and reviewed exceptions](../CONTRIBUTING.md#privacy-before-publication) |
 | `check:docs` | Notices, fragments, formatting, site and specs for qualifying Markdown changes |
 | `test:install-linux` | Real Linux x64 installer, runtime downloads, systemd user unit/reboot, RPC setup and stable upgrade in disposable Docker containers; [runbook](development.md#linux-installation-acceptance) |
 
