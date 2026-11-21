@@ -1,18 +1,4 @@
 import {
-  CoreConnectionCards,
-  CoreFixturePanel,
-  CoreProfileForm,
-} from "./CoreConnections";
-import { coreFixtureEnabled, coreFixtureScenario } from "../coreFixture";
-import { useCoreConnections } from "../coreConnections";
-import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
-import { ConnectionHerdrInfo } from "./ConnectionHerdrInfo";
-import { type Feedback, ProfileForm } from "./LocalProfileForm";
-import { SshProfileForm } from "./SshProfileForm";
-import { AddHostForm, HostCards, hostFoundMessage } from "./HostProfiles";
-import type { HostCatalogueEntry } from "../hostGroups";
-import { openIntegrations } from "../integrations";
-import {
   Check,
   ChevronDown,
   CircleAlert,
@@ -25,11 +11,11 @@ import {
   Users,
 } from "lucide-react";
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import { bridge, type ConnectionSummary } from "../api";
@@ -43,18 +29,29 @@ import {
   selectConnectionProfile,
   sshConnectionProfilePayload,
 } from "../connectionProfiles";
+import { useCoreConnections } from "../coreConnections";
+import { coreFixtureEnabled, coreFixtureScenario } from "../coreFixture";
 import { shallowEqual, store, useStoreSelector } from "../store";
 import { browserTransportPresentation } from "./browserTransport";
 import { CloseButton } from "./CloseButton";
+import { ConnectionHerdrInfo } from "./ConnectionHerdrInfo";
+import {
+  CoreConnectionCards,
+  CoreFixturePanel,
+  CoreProfileForm,
+} from "./CoreConnections";
 import {
   focusDialogElement,
-  trapDialogTab,
-  tabbableElements,
   isActuallyTabbable,
+  tabbableElements,
+  trapDialogTab,
 } from "./dialogFocus";
+import { type Feedback, ProfileForm } from "./LocalProfileForm";
 import { ConfirmDialog } from "./ModalDialogs";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import "./ConnectionSwitcher.css";
+import { SshProfileForm } from "./SshProfileForm";
 
 function runtimeStateClass(connection: Pick<ConnectionSummary, "state">) {
   return `connection-runtime-${connection.state}`;
@@ -151,12 +148,10 @@ function BrowserTransportStatus({ onAction }: { onAction?: () => void }) {
 
 export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
   const connections = useStoreSelector((snapshot) => snapshot.connections);
-  const hostCatalogue = useStoreSelector((snapshot) => snapshot.hostCatalogue);
   const coreConnections = useCoreConnections();
   const [editing, setEditing] = useState<
-    ConnectionSummary | "new-host" | "new-local" | "new-ssh" | "new-core" | null
+    ConnectionSummary | "new-local" | "new-ssh" | "new-core" | null
   >(null);
-  const [removeHost, setRemoveHost] = useState<HostCatalogueEntry | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Pick<
     ConnectionSummary,
     "id" | "label"
@@ -217,14 +212,14 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
       event.preventDefault();
       // The removal ConfirmDialog handles its own Escape via its capture
       // listener; do not close the whole manager behind it.
-      if (pending || removeTarget || removeHost) return;
+      if (pending || removeTarget) return;
       if (editing) closeEditing();
       else onClose();
     };
     window.addEventListener("keydown", onKey, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKey, { capture: true });
-  }, [closeEditing, editing, onClose, pending, removeHost, removeTarget]);
+  }, [closeEditing, editing, onClose, pending, removeTarget]);
 
   const performAction = async (
     key: string,
@@ -305,29 +300,7 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
           tabIndex={-1}
           onMouseDown={(event) => event.stopPropagation()}
         >
-          {editing === "new-host" ? (
-            <AddHostForm
-              pending={pending}
-              feedback={feedback}
-              onCancel={closeEditing}
-              onAdd={(host) =>
-                void performAction(
-                  "add-host",
-                  () => bridge.call("connections.add_host", { host }),
-                  "Host added.",
-                ).then((result) => {
-                  if (!result || !mounted.current) return;
-                  setEditing(null);
-                  setFeedback({
-                    kind: "success",
-                    message: hostFoundMessage(
-                      result as Parameters<typeof hostFoundMessage>[0],
-                    ),
-                  });
-                })
-              }
-            />
-          ) : editing === "new-core" ? (
+          {editing === "new-core" ? (
             <CoreProfileForm
               pending={pending}
               feedback={feedback}
@@ -421,37 +394,25 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
         <div className="connection-manager-toolbar">
           <button
             type="button"
-            className="primary"
-            onClick={() => setEditing("new-host")}
+            onClick={() => setEditing("new-local")}
             disabled={!!pending}
           >
-            <Plus size={14} /> Add host
+            <Plus size={14} /> Add Local
           </button>
-          {/* A runtime with its own sockets or session, set by hand. */}
-          <details className="connection-manager-by-hand">
-            <summary>Runtime profile by hand</summary>
-            <button
-              type="button"
-              onClick={() => setEditing("new-local")}
-              disabled={!!pending}
-            >
-              <Plus size={14} /> Add Local
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditing("new-ssh")}
-              disabled={!!pending}
-            >
-              <Plus size={14} /> Add SSH
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditing("new-core")}
-              disabled={!!pending}
-            >
-              <Plus size={14} /> Add herdr-core
-            </button>
-          </details>
+          <button
+            type="button"
+            onClick={() => setEditing("new-ssh")}
+            disabled={!!pending}
+          >
+            <Plus size={14} /> Add SSH
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing("new-core")}
+            disabled={!!pending}
+          >
+            <Plus size={14} /> Add herdr-core
+          </button>
         </div>
         {feedback ? (
           <div
@@ -465,36 +426,6 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
           </div>
         ) : null}
         <div className="connection-manager-list">
-          <HostCards
-            hosts={hostCatalogue ?? []}
-            pending={pending}
-            onDiscover={(host) =>
-              void performAction(
-                `discover-${host.id}`,
-                () =>
-                  bridge.call("connections.discover_host", {
-                    host_id: host.id,
-                  }),
-                "",
-              ).then((result) => {
-                if (result && mounted.current)
-                  setFeedback({
-                    kind: "success",
-                    message: hostFoundMessage(
-                      result as Parameters<typeof hostFoundMessage>[0],
-                    ),
-                  });
-              })
-            }
-            onRemove={setRemoveHost}
-            onAddRuntime={(host) => {
-              onClose();
-              openIntegrations(`host:${host.id}`);
-            }}
-          />
-          {hostCatalogue?.length ? (
-            <h3 className="connection-manager-runtimes-heading">Runtimes</h3>
-          ) : null}
           {coreFixtureEnabled() ? (
             <CoreFixturePanel
               pending={pending}
@@ -770,29 +701,6 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
               `remove-${target.id}`,
               () => bridge.call("connections.remove", { id: target.id }),
               "Connection removed.",
-            );
-          }}
-        />
-        <ConfirmDialog
-          open={!!removeHost}
-          title="Remove host"
-          message={
-            removeHost
-              ? `Remove host "${removeHost.label}" and every runtime World holds there? Runtimes keep running on that machine.`
-              : "Remove this host?"
-          }
-          confirmLabel="Remove host"
-          danger
-          onClose={() => setRemoveHost(null)}
-          onConfirm={() => {
-            const target = removeHost;
-            setRemoveHost(null);
-            if (!target) return;
-            void performAction(
-              `remove-host-${target.id}`,
-              () =>
-                bridge.call("connections.remove_host", { host_id: target.id }),
-              "Host removed.",
             );
           }}
         />

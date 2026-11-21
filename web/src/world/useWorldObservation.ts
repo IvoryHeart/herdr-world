@@ -14,7 +14,7 @@ import { buildWorldObject, worldObjectWithWatches } from "./worldObject";
 import { worldObjectForHosts, worldObjectForWatches } from "./worldFilters";
 import { useWorldWatchlist, WorldWatchlistStore } from "./watchlistStore";
 import { useHostsFilter } from "./hostsFilter";
-import { worldHostGroups } from "../hostGroups";
+import { worldHosts } from "../worldHosts";
 import {
   readOfficePreferences,
   WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
@@ -61,11 +61,10 @@ export function useWorldObservation({ onPresentedWorldChange }: Input) {
     shallowEqual,
   );
   const operationalSnapshot = useStoreSelector((snapshot) => snapshot);
-  const hosts = useStoreSelector(worldHostGroups);
+  const hosts = useStoreSelector(worldHosts);
   const storedHostsFilter = useHostsFilter(
-    hosts.flatMap((host) => host.connectionIds),
+    hosts.map((host) => host.id),
     connectionSelection.catalogueReady,
-    hosts.map((host) => host.connectionIds),
   );
   const hostsFilter = scene
     ? { ...storedHostsFilter, ids: null }
@@ -198,7 +197,7 @@ export function useWorldObservation({ onPresentedWorldChange }: Input) {
     deskReadingPane,
     connectionSelection,
     operationalSnapshot,
-    /** Every machine, with its runtimes (`worldHostGroups`). */
+    /** Every host of either runtime (`worldHosts`). */
     hosts,
     hostsFilter,
     hasSelectedConnection,

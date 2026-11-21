@@ -98,10 +98,8 @@ was available. Pending discovery makes no installation claim.
 `GET /api/world/integrations` adds `hosts: [{host_id, label, runtimes,
 available_runtimes: [{kind, label}]}]`. This keeps adding a sibling runtime out of
 host onboarding. Existing confirmed core installation verbs remain unchanged.
-The browser's Hosts menu, Add host, Integrations' Runtimes and Town's buildings
-read this host catalogue: one row, tick and building per host, its runtimes
-listed in Integrations. Town's `?townBuildings=runtime` keeps one building per
-runtime instead.
+The current browser Hosts and Manage connections screens still use their existing
+runtime entries; the separate screens item can consume this host catalogue.
 
 `ls` returns `{hosts, connections}`: host runtimes include the existing
 per-connection `workspaces` / tabs / panes projection, and `connections` retains

@@ -2,11 +2,8 @@ import { expect, test } from "bun:test";
 import { bridge } from "../../api";
 import { moveTabInList } from "../../tabReorder";
 import type { OfficeDesk, OfficeRoom } from "../herdrOfficeProjection";
-import { roomSpotsByRuntime, saveRoomSpots } from "./townRoomPins";
-import type { BoardDocumentStore } from "../board/boardDocument";
 import {
   deskReorderIndex,
-  requestBuildingRoomOrder,
   requestDeskReorder,
   requestRoomOrder,
   townRoomOrderMoves,
@@ -222,83 +219,6 @@ test("a building's rooms are put in order through workspace.move", async () => {
       await requestRoomOrder([room("w1"), room("w2", "remote")]),
     ).toMatchObject({ status: "refused", reason: "other_host" });
     expect(calls).toEqual([]);
-  } finally {
-    bridge.connection = connection;
-  }
-});
-
-test("a host's building saves and orders each runtime's rooms on that runtime", async () => {
-  // One machine, two runtimes: Herdr ("local") and herdr-core ("core").
-  const rooms = [
-    room("w2"),
-    { ...room("c1", "core", 5) },
-    room("w1"),
-    { ...room("c9", "gone", 1), stale: true } as OfficeRoom,
-  ];
-  const spots = roomSpotsByRuntime(
-    rooms.map((placed, i) => [placed, { x: i, y: 1 }] as const),
-  );
-  expect([...spots.keys()]).toEqual(["local", "core", "gone"]);
-  for (const [id, owned] of spots)
-    expect(Object.keys(owned).every((key) => key.startsWith(`${id}:`))).toBe(
-      true,
-    );
-  // One patch, one room.place per runtime: the service's ownership check holds.
-  const patches: unknown[] = [];
-  await saveRoomSpots(spots, {
-    patch: async (ops: unknown[]) => (patches.push(ops), null),
-  } as unknown as BoardDocumentStore);
-  expect(patches).toEqual([
-    [
-      {
-        op: "room.place",
-        connection_id: "local",
-        spots: { "local:w2": { x: 0, y: 1 }, "local:w1": { x: 2, y: 1 } },
-      },
-      {
-        op: "room.place",
-        connection_id: "core",
-        spots: { "core:c1": { x: 1, y: 1 } },
-      },
-      {
-        op: "room.place",
-        connection_id: "gone",
-        spots: { "gone:c9": { x: 3, y: 1 } },
-      },
-    ],
-  ]);
-  // Herdr's order goes to each live runtime on its own connection and
-  // generation; the stale runtime is not asked.
-  const calls: [string, number, string, unknown][] = [];
-  const connection = bridge.connection;
-  bridge.connection = ((connectionId: string, generation: number) => ({
-    connectionId,
-    generation,
-    serverRuntimeGeneration: generation,
-    isCurrent: () => true,
-    acceptsServerGeneration: () => true,
-    call: async (method: string, params: unknown) => {
-      calls.push([connectionId, generation, method, params]);
-      if (method === "workspace.list")
-        return {
-          workspaces:
-            connectionId === "core"
-              ? [{ workspace_id: "c1", number: 1 }]
-              : [
-                  { workspace_id: "w1", number: 1 },
-                  { workspace_id: "w2", number: 2 },
-                ],
-        };
-      return { type: "ok" };
-    },
-  })) as unknown as typeof bridge.connection;
-  try {
-    expect(await requestBuildingRoomOrder(rooms)).toEqual({ status: "moved" });
-    expect(calls).toEqual([
-      ["local", 3, "workspace.list", expect.anything()],
-      ["core", 5, "workspace.list", expect.anything()],
-      ["local", 3, "workspace.move", { workspace_id: "w2", insert_index: 0 }],
-    ]);
   } finally {
     bridge.connection = connection;
   }
