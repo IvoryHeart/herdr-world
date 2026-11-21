@@ -215,7 +215,10 @@ newly staged sources are included without changing HEAD or staged contents.
 Merge conflicts block the check. Fetch main to refresh the proposed merge input.
 For a stacked PR, run `bun run check:size origin/main <target-ref>` or set
 `HERDR_WORLD_RATCHET_TARGET=<target-ref>` for pre-push; CI supplies the exact PR
-base SHA. The local gate then runs non-browser unit tests that import or read a changed
+base SHA. Static CI checks pin the checkout to the event commit; PRs targeting
+main also use that immutable base as their ratchet baseline, so later main changes
+cannot turn inherited growth into a PR failure. Stacked PRs retain main's ceilings.
+The local gate then runs non-browser unit tests that import or read a changed
 file. Browser suites and behavioral verification run in CI;
 `HERDR_WORLD_PREPUSH=full` opts into every local lane. A deleted file runs the tests that still
 import or name it. Toolchain, lockfile, configuration and gate changes, code that

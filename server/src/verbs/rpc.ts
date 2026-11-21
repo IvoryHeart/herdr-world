@@ -307,6 +307,27 @@ export const rpcVerbs = [
     }),
   ),
   rpc(
+    "world.core.move",
+    "reconcilable",
+    "world",
+    Type.Union([
+      object({
+        connection_id: text,
+        connection_generation: Type.Integer({ minimum: 0 }),
+        kind: Type.Literal("pane"),
+        pane_id: Type.String({ pattern: CORE_LOCAL_ADDRESS_PATTERN }),
+        tab_id: text,
+      }),
+      object({
+        connection_id: text,
+        connection_generation: Type.Integer({ minimum: 0 }),
+        kind: Type.Literal("desk"),
+        tab_id: text,
+        workspace_id: text,
+      }),
+    ]),
+  ),
+  rpc(
     "world.core.kill_plan",
     "read",
     "world",

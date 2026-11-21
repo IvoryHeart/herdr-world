@@ -179,9 +179,13 @@ if (import.meta.main) {
     process.chdir(root);
     // Compare the proposed integration tree, not stale files on a branch
     // behind main. A stacked PR can select its real target independently of
-    // the main ratchet baseline; CI supplies the event's exact base SHA.
+    // the main ratchet baseline. Main PRs use the event's immutable base for
+    // both: origin/main may advance (and shrink) while a CI run is queued.
     const baseRef =
       process.argv[2] ??
+      (process.env.GITHUB_BASE_REF === "main"
+        ? process.env.HERDR_WORLD_RATCHET_TARGET || undefined
+        : undefined) ??
       git(["rev-parse", "--verify", "origin/main^{commit}"])?.trim() ??
       (mustGit([
         "fetch",
