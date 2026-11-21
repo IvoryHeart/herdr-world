@@ -7,6 +7,7 @@
  */
 
 import {
+  Building2,
   Bug,
   Focus,
   Hand,
@@ -109,6 +110,47 @@ defineSettings("town", [
       type: "toggle",
       get: () => preferences().townCalm,
       set: (_host, on) => updatePreferences({ townCalm: on }),
+    },
+  },
+  {
+    kind: "setting",
+    id: "town.buildings",
+    category: "town",
+    title: "Town buildings",
+    description:
+      "One building per host with every runtime's rooms, or one per runtime",
+    words: [
+      "buildings",
+      "layout",
+      "host",
+      "machine",
+      "runtime",
+      "herdr-core",
+      "herdr-tui",
+      "separate buildings",
+    ],
+    icon: <Building2 size={15} />,
+    scope: "browser",
+    subscribe: subscribePreferences,
+    control: {
+      type: "choice",
+      options: [
+        {
+          value: "host",
+          label: "One per host",
+          words: ["machine", "merged"],
+        },
+        {
+          value: "runtime",
+          label: "One per runtime",
+          words: ["separate", "herdr-core", "herdr-tui"],
+        },
+      ],
+      get: () => preferences().townBuildings,
+      set: (_host, value) =>
+        updatePreferences({
+          townBuildings: value as OfficePreferences["townBuildings"],
+        }),
     },
   },
   {

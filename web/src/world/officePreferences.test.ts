@@ -22,10 +22,21 @@ describe("View preferences", () => {
       inspectorPresentation: "docked",
       townCalm: true,
       townOpens: "chat",
+      townBuildings: "host",
       townMaster: "firstmate",
       townGreeting: true,
       tabBadge: true,
     });
+  });
+
+  test("Town keeps a building per host unless per runtime was chosen", () => {
+    const read = (townBuildings: unknown) =>
+      readOfficePreferences(memoryStorage(JSON.stringify({ townBuildings })))
+        .townBuildings;
+    expect(DEFAULT_OFFICE_PREFERENCES.townBuildings).toBe("host");
+    expect(read("runtime")).toBe("runtime");
+    expect(read("host")).toBe("host");
+    expect(read("machine")).toBe("host");
   });
 
   test("the tab and app icon count is on unless it was turned off", () => {
@@ -97,6 +108,7 @@ describe("View preferences", () => {
       inspectorPresentation: "floating",
       townCalm: false,
       townOpens: "terminal",
+      townBuildings: "runtime",
       townMaster: "",
       townGreeting: false,
       tabBadge: false,
@@ -107,6 +119,7 @@ describe("View preferences", () => {
         inspectorPresentation: "floating",
         townCalm: false,
         townOpens: "terminal",
+        townBuildings: "runtime",
         townMaster: "",
         townGreeting: false,
         tabBadge: false,

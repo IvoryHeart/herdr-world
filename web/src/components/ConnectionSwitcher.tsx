@@ -8,6 +8,10 @@ import { useCoreConnections } from "../coreConnections";
 import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import { ConnectionHerdrInfo } from "./ConnectionHerdrInfo";
 import { type Feedback, ProfileForm } from "./LocalProfileForm";
+import { SshProfileForm } from "./SshProfileForm";
+import { AddHostForm, HostCards, hostFoundMessage } from "./HostProfiles";
+import type { HostCatalogueEntry } from "../hostGroups";
+import { openIntegrations } from "../integrations";
 import {
   Check,
   ChevronDown,
@@ -19,7 +23,6 @@ import {
   Server,
   Star,
   Users,
-  X,
 } from "lucide-react";
 import {
   useCallback,
@@ -39,7 +42,6 @@ import {
   reconnectConnectionProfile,
   selectConnectionProfile,
   sshConnectionProfilePayload,
-  suggestConnectionId,
 } from "../connectionProfiles";
 import { shallowEqual, store, useStoreSelector } from "../store";
 import { browserTransportPresentation } from "./browserTransport";
@@ -53,32 +55,6 @@ import {
 import { ConfirmDialog } from "./ModalDialogs";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import "./ConnectionSwitcher.css";
-
-type SshDraft = {
-  id: string;
-  label: string;
-  sshDestination: string;
-  remoteControlSocketPath: string;
-  remoteClientSocketPath: string;
-  autoConnect: boolean;
-  remotePlatform?: "windows";
-  remoteHerdrPath: string;
-  remoteSession: string;
-};
-
-function sshDraftFor(connection?: ConnectionSummary): SshDraft {
-  return {
-    id: connection?.id ?? "",
-    label: connection?.label ?? "",
-    sshDestination: connection?.ssh_destination ?? "",
-    remoteControlSocketPath: connection?.remote_control_socket_path ?? "",
-    remoteClientSocketPath: connection?.remote_client_socket_path ?? "",
-    remotePlatform: connection?.remote_platform,
-    remoteHerdrPath: connection?.remote_herdr_path ?? "",
-    remoteSession: connection?.remote_session ?? "",
-    autoConnect: connection?.auto_connect ?? true,
-  };
-}
 
 function runtimeStateClass(connection: Pick<ConnectionSummary, "state">) {
   return `connection-runtime-${connection.state}`;
@@ -173,233 +149,14 @@ function BrowserTransportStatus({ onAction }: { onAction?: () => void }) {
   );
 }
 
-function SshProfileForm({
-  connection,
-  pending,
-  feedback,
-  onCancel,
-  onSave,
-  onTest,
-}: {
-  connection?: ConnectionSummary;
-  pending: string | null;
-  feedback: Feedback;
-  onCancel: () => void;
-  onSave: (draft: SshDraft) => void;
-  onTest: (draft: SshDraft) => void;
-}) {
-  const [draft, setDraft] = useState(() => sshDraftFor(connection));
-  const [idWasEdited, setIdWasEdited] = useState(false);
-  const isEditing = !!connection;
-  const update = <K extends keyof SshDraft>(key: K, value: SshDraft[K]) =>
-    setDraft((current) => ({ ...current, [key]: value }));
-
-  return (
-    <form
-      aria-busy={!!pending}
-      aria-describedby={feedback ? "connection-profile-feedback" : undefined}
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSave(draft);
-      }}
-    >
-      <div className="modal-head">
-        <div>
-          <h2 id="connection-profile-form-title">
-            {isEditing ? "Edit SSH connection" : "Add SSH connection"}
-          </h2>
-          <p>Forward an existing remote Herdr server through OpenSSH.</p>
-        </div>
-        <button
-          type="button"
-          className="icon-button"
-          onClick={onCancel}
-          aria-label="Back"
-          disabled={!!pending}
-        >
-          <X size={16} />
-        </button>
-      </div>
-      <label className="form-field">
-        <span>Label</span>
-        <input
-          autoFocus
-          data-initial-focus
-          value={draft.label}
-          maxLength={80}
-          onChange={(event) => {
-            const label = event.target.value;
-            setDraft((current) => ({
-              ...current,
-              label,
-              id:
-                !isEditing && !idWasEdited
-                  ? suggestConnectionId(label, "ssh")
-                  : current.id,
-            }));
-          }}
-          placeholder="Remote development"
-        />
-      </label>
-      <label className="form-field">
-        <span>Connection ID</span>
-        <input
-          value={draft.id}
-          disabled={isEditing}
-          maxLength={128}
-          onChange={(event) => {
-            setIdWasEdited(true);
-            update("id", event.target.value);
-          }}
-          placeholder="remote-dev"
-          autoCapitalize="none"
-          spellCheck={false}
-        />
-      </label>
-      <label className="form-field">
-        <span>OpenSSH destination</span>
-        <input
-          value={draft.sshDestination}
-          maxLength={320}
-          onChange={(event) => update("sshDestination", event.target.value)}
-          placeholder="user@dev-box or config-alias"
-          autoCapitalize="none"
-          spellCheck={false}
-        />
-      </label>
-      <label className="form-field">
-        <span>Remote host OS</span>
-        <select
-          value={draft.remotePlatform ?? "unix"}
-          onChange={(event) =>
-            setDraft((current) => ({
-              ...current,
-              remotePlatform:
-                event.target.value === "windows" ? "windows" : undefined,
-              remoteControlSocketPath: "",
-              remoteClientSocketPath: "",
-              remoteHerdrPath: "",
-              remoteSession: "",
-            }))
-          }
-        >
-          <option value="unix">Linux / macOS</option>
-          <option value="windows">Windows</option>
-        </select>
-      </label>
-      {draft.remotePlatform === "windows" ? (
-        <>
-          <label className="form-field">
-            <span>Herdr executable path (optional)</span>
-            <input
-              value={draft.remoteHerdrPath}
-              maxLength={1024}
-              onChange={(event) =>
-                update("remoteHerdrPath", event.target.value)
-              }
-              placeholder="Auto: herdr.exe in PATH"
-              autoCapitalize="none"
-              spellCheck={false}
-            />
-          </label>
-          <label className="form-field">
-            <span>Herdr session (optional)</span>
-            <input
-              value={draft.remoteSession}
-              onChange={(event) => update("remoteSession", event.target.value)}
-              placeholder="default"
-              maxLength={64}
-              autoCapitalize="none"
-              spellCheck={false}
-            />
-          </label>
-        </>
-      ) : (
-        <>
-          <label className="form-field">
-            <span>Remote control socket path (optional)</span>
-            <input
-              value={draft.remoteControlSocketPath}
-              onChange={(event) =>
-                update("remoteControlSocketPath", event.target.value)
-              }
-              placeholder="Auto: ~/.config/herdr/herdr.sock"
-              autoCapitalize="none"
-              spellCheck={false}
-            />
-          </label>
-          <label className="form-field">
-            <span>Remote render socket path (optional)</span>
-            <input
-              value={draft.remoteClientSocketPath}
-              onChange={(event) =>
-                update("remoteClientSocketPath", event.target.value)
-              }
-              placeholder="Auto: ~/.config/herdr/herdr-client.sock"
-              autoCapitalize="none"
-              spellCheck={false}
-            />
-          </label>
-        </>
-      )}
-      <label className="connection-profile-checkbox">
-        <input
-          type="checkbox"
-          checked={draft.autoConnect}
-          onChange={(event) => update("autoConnect", event.target.checked)}
-        />
-        Connect automatically when Herdr World starts
-      </label>
-      <p className="connection-profile-security-note">
-        {draft.remotePlatform === "windows"
-          ? "Windows requires a running Herdr 0.9.1+ session and Windows PowerShell. The default session is used unless specified. Terminal and Herdr workspace actions are supported; remote file and Git tools require a Unix host. "
-          : "Leave the socket paths empty to use the default Herdr sockets under the remote home directory. "}
-        Authentication comes from the bridge service user&apos;s OpenSSH config,
-        ssh-agent, or system Keychain. Establish host trust outside Herdr World.
-        Passwords, keys, passphrases, commands, ports, and SSH options are never
-        stored here.
-      </p>
-      {feedback ? (
-        <div
-          id="connection-profile-feedback"
-          role={feedback.kind === "error" ? "alert" : "status"}
-          aria-live="polite"
-          className={
-            feedback.kind === "error" ? "modal-error" : "modal-message"
-          }
-        >
-          {feedback.message}
-        </div>
-      ) : null}
-      <div className="modal-actions">
-        <button
-          type="button"
-          onClick={() => onTest(draft)}
-          disabled={!!pending}
-        >
-          {pending === "test-form" ? "Testing..." : "Test connection"}
-        </button>
-        <button type="button" onClick={onCancel} disabled={!!pending}>
-          Cancel
-        </button>
-        <button type="submit" disabled={!!pending}>
-          {pending === "save"
-            ? "Saving..."
-            : isEditing
-              ? "Save"
-              : "Add connection"}
-        </button>
-      </div>
-    </form>
-  );
-}
-
 export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
   const connections = useStoreSelector((snapshot) => snapshot.connections);
+  const hostCatalogue = useStoreSelector((snapshot) => snapshot.hostCatalogue);
   const coreConnections = useCoreConnections();
   const [editing, setEditing] = useState<
-    ConnectionSummary | "new-local" | "new-ssh" | "new-core" | null
+    ConnectionSummary | "new-host" | "new-local" | "new-ssh" | "new-core" | null
   >(null);
+  const [removeHost, setRemoveHost] = useState<HostCatalogueEntry | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Pick<
     ConnectionSummary,
     "id" | "label"
@@ -460,14 +217,14 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
       event.preventDefault();
       // The removal ConfirmDialog handles its own Escape via its capture
       // listener; do not close the whole manager behind it.
-      if (pending || removeTarget) return;
+      if (pending || removeTarget || removeHost) return;
       if (editing) closeEditing();
       else onClose();
     };
     window.addEventListener("keydown", onKey, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKey, { capture: true });
-  }, [closeEditing, editing, onClose, pending, removeTarget]);
+  }, [closeEditing, editing, onClose, pending, removeHost, removeTarget]);
 
   const performAction = async (
     key: string,
@@ -548,7 +305,29 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
           tabIndex={-1}
           onMouseDown={(event) => event.stopPropagation()}
         >
-          {editing === "new-core" ? (
+          {editing === "new-host" ? (
+            <AddHostForm
+              pending={pending}
+              feedback={feedback}
+              onCancel={closeEditing}
+              onAdd={(host) =>
+                void performAction(
+                  "add-host",
+                  () => bridge.call("connections.add_host", { host }),
+                  "Host added.",
+                ).then((result) => {
+                  if (!result || !mounted.current) return;
+                  setEditing(null);
+                  setFeedback({
+                    kind: "success",
+                    message: hostFoundMessage(
+                      result as Parameters<typeof hostFoundMessage>[0],
+                    ),
+                  });
+                })
+              }
+            />
+          ) : editing === "new-core" ? (
             <CoreProfileForm
               pending={pending}
               feedback={feedback}
@@ -642,25 +421,37 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
         <div className="connection-manager-toolbar">
           <button
             type="button"
-            onClick={() => setEditing("new-local")}
+            className="primary"
+            onClick={() => setEditing("new-host")}
             disabled={!!pending}
           >
-            <Plus size={14} /> Add Local
+            <Plus size={14} /> Add host
           </button>
-          <button
-            type="button"
-            onClick={() => setEditing("new-ssh")}
-            disabled={!!pending}
-          >
-            <Plus size={14} /> Add SSH
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditing("new-core")}
-            disabled={!!pending}
-          >
-            <Plus size={14} /> Add herdr-core
-          </button>
+          {/* A runtime with its own sockets or session, set by hand. */}
+          <details className="connection-manager-by-hand">
+            <summary>Runtime profile by hand</summary>
+            <button
+              type="button"
+              onClick={() => setEditing("new-local")}
+              disabled={!!pending}
+            >
+              <Plus size={14} /> Add Local
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing("new-ssh")}
+              disabled={!!pending}
+            >
+              <Plus size={14} /> Add SSH
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing("new-core")}
+              disabled={!!pending}
+            >
+              <Plus size={14} /> Add herdr-core
+            </button>
+          </details>
         </div>
         {feedback ? (
           <div
@@ -674,6 +465,36 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
           </div>
         ) : null}
         <div className="connection-manager-list">
+          <HostCards
+            hosts={hostCatalogue ?? []}
+            pending={pending}
+            onDiscover={(host) =>
+              void performAction(
+                `discover-${host.id}`,
+                () =>
+                  bridge.call("connections.discover_host", {
+                    host_id: host.id,
+                  }),
+                "",
+              ).then((result) => {
+                if (result && mounted.current)
+                  setFeedback({
+                    kind: "success",
+                    message: hostFoundMessage(
+                      result as Parameters<typeof hostFoundMessage>[0],
+                    ),
+                  });
+              })
+            }
+            onRemove={setRemoveHost}
+            onAddRuntime={(host) => {
+              onClose();
+              openIntegrations(`host:${host.id}`);
+            }}
+          />
+          {hostCatalogue?.length ? (
+            <h3 className="connection-manager-runtimes-heading">Runtimes</h3>
+          ) : null}
           {coreFixtureEnabled() ? (
             <CoreFixturePanel
               pending={pending}
@@ -949,6 +770,29 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
               `remove-${target.id}`,
               () => bridge.call("connections.remove", { id: target.id }),
               "Connection removed.",
+            );
+          }}
+        />
+        <ConfirmDialog
+          open={!!removeHost}
+          title="Remove host"
+          message={
+            removeHost
+              ? `Remove host "${removeHost.label}" and every runtime World holds there? Runtimes keep running on that machine.`
+              : "Remove this host?"
+          }
+          confirmLabel="Remove host"
+          danger
+          onClose={() => setRemoveHost(null)}
+          onConfirm={() => {
+            const target = removeHost;
+            setRemoveHost(null);
+            if (!target) return;
+            void performAction(
+              `remove-host-${target.id}`,
+              () =>
+                bridge.call("connections.remove_host", { host_id: target.id }),
+              "Host removed.",
             );
           }}
         />

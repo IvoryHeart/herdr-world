@@ -62,7 +62,11 @@ const maxFileCount = 212;
 // with main's Apartments and post-office work measures 16,270,139 bytes
 // (15.5164 MiB): 17,211 bytes above 15.5 MiB. Account for the combined
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
-const maxTotalBytes = 15.6 * 1024 * 1024;
+// Hosts on screen (#1047: one row per host, runtimes in Integrations, the
+// two Town layouts) merged with the Weather source measures 16,362,073 bytes
+// (15.604 MiB): 4,288 bytes above 15.6 MiB, all in lazy chunks. 15.7 MiB
+// carries the combined features; file, help-picture and startup limits stay.
+const maxTotalBytes = 15.7 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two

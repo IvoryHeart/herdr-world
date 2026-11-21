@@ -33,8 +33,8 @@ import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
 import { buildWorldObject, type WorldObject } from "./worldObject";
 import { worldObjectForHosts } from "./worldFilters";
 import { useHostsFilter } from "./hostsFilter";
-import { HostsControl } from "./HostsControl";
-import { worldHosts } from "../worldHosts";
+import { HostsControl, hostsSelectionLabel } from "./HostsControl";
+import { worldHostGroups } from "../hostGroups";
 import { WorldNavigator } from "./WorldNavigator";
 import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
 import { WorldTopbarStatus } from "./WorldStatus";
@@ -145,13 +145,14 @@ export default function WorldFoundationApp() {
   const topbarConnectionId = useStoreSelector(
     (snapshot) => snapshot.activeConnectionId,
   );
-  const hosts = useStoreSelector(worldHosts);
+  const hosts = useStoreSelector(worldHostGroups);
   const catalogueReady = useStoreSelector(
     (snapshot) => snapshot.catalogueReady,
   );
   const hostsFilter = useHostsFilter(
-    hosts.map((host) => host.id),
+    hosts.flatMap((host) => host.connectionIds),
     catalogueReady,
+    hosts.map((host) => host.connectionIds),
   );
   const topbarWorld = useMemo(
     () =>
@@ -202,10 +203,12 @@ export default function WorldFoundationApp() {
   useLayoutEffect(() => {
     if (conversationStatus !== "connected" || !catalogueReady) return;
     // Windows of every current host stay, a herdr-core host's included.
-    const lease = hosts.map((host) => ({
-      connectionId: host.id,
-      runtimeGeneration: host.generation,
-    }));
+    const lease = hosts.flatMap((host) =>
+      host.runtimes.map((runtime) => ({
+        connectionId: runtime.id,
+        runtimeGeneration: runtime.generation,
+      })),
+    );
     const retained = retainWorldInspectorConversations(
       inspectorConversations,
       lease,
@@ -350,7 +353,7 @@ export default function WorldFoundationApp() {
   }, [activeArrangementControl]);
 
   const hostsControl = {
-    connections: hosts,
+    hosts,
     ids: hostsFilter.ids,
     explanation: hostsFilter.explanation,
     onChange: hostsFilter.setIds,
@@ -534,11 +537,10 @@ export default function WorldFoundationApp() {
                   <WorldTopbarStatus
                     runtime={topbarRuntime}
                     world={presentedStatusWorld ?? topbarWorld}
-                    selectedHostLabel={
-                      hostsFilter.ids === null
-                        ? "All hosts"
-                        : `${hostsFilter.ids.length} selected hosts`
-                    }
+                    selectedHostLabel={hostsSelectionLabel(
+                      hosts,
+                      hostsFilter.ids,
+                    )}
                   />
                   <div
                     className="world-view-toolbar-host"
