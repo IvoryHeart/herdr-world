@@ -33,6 +33,7 @@ export type InstanceIdentity = Pick<
 export class ShipyardInstances {
   #timer: { cancel(): void } | null = null;
   #report: Report | null = null;
+  #extra: (() => Record<string, unknown>) | null = null;
   #id: string;
   constructor(
     private readonly directory: string,
@@ -43,8 +44,24 @@ export class ShipyardInstances {
     this.#id = createHash("sha256").update(dataRoot).digest("hex").slice(0, 24);
   }
 
-  start(identity: InstanceIdentity, port: number, host: string, tls: boolean) {
+  /** This World's registry ID: a hash of its data root. */
+  get id() {
+    return this.#id;
+  }
+
+  /**
+   * `extra` adds fields to each renewed report (owner questions across
+   * instances, #1152); readers here pick their own fields and ignore it.
+   */
+  start(
+    identity: InstanceIdentity,
+    port: number,
+    host: string,
+    tls: boolean,
+    extra?: () => Record<string, unknown>,
+  ) {
     if (this.#report) throw new Error("Instance is already reported");
+    this.#extra = extra ?? null;
     const loopback = [
       "127.0.0.1",
       "localhost",
@@ -73,7 +90,7 @@ export class ShipyardInstances {
     try {
       replaceDataFile(
         join(this.directory, `${this.#id}.json`),
-        `${JSON.stringify(report)}\n`,
+        `${JSON.stringify({ ...this.#extra?.(), ...report })}\n`,
       );
     } catch {
       /* Observation failure must not break the World listener. */
@@ -82,6 +99,12 @@ export class ShipyardInstances {
       () => this.#publish(),
       L.instanceLeaseMs / 3,
     );
+  }
+  /** Renew the report now: its `extra` fields changed. */
+  republish() {
+    if (!this.#report) return;
+    this.#timer?.cancel();
+    this.#publish();
   }
   stop() {
     this.#timer?.cancel();
