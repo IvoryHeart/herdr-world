@@ -44,8 +44,8 @@ Where: Town, the buttons on the right edge. Since 0.2.5.
 
 Town follows your clock: rooms with work are lit, idle rooms go dark, and a reception waiting on you glows amber.
 
-1. Press the clock under the zoom buttons.
-2. Each press moves through your clock, day, dusk and night.
+1. Press the sky button under ALL to open the Sky panel.
+2. Under Time of day, choose Your clock, Day, Dusk or Night.
 
 Where: Town, under the zoom buttons on the right. Since 0.3.5.
 

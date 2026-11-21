@@ -35,7 +35,10 @@ import {
 import { TownSinceYouLeft } from "./TownSinceYouLeft";
 import { TownFocusRecap, TownRecapChip } from "./TownFocus";
 import {
+  townFuelClock,
   townFuelGauge,
+  townFuelRefreshText,
+  townFuelRows,
   townHarnessName,
   townLimits,
   townReachedText,
@@ -246,30 +249,46 @@ function HostLimit({ limit, now }: { limit: UsageLimit; now: number }) {
         <small>
           {limit.state === "unsupported"
             ? `Limits not available: ${limit.reason ?? "no source"}`
-            : "Limits missing: none seen on this host"}
+            : "No reading yet on this host"}
         </small>
+        {limit.state === "unsupported" ? null : (
+          <small>{townFuelRefreshText(limit.harness)}</small>
+        )}
       </li>
     );
   return (
-    <li data-state={gauge.stale ? "stale" : "available"}>
+    <li data-state={gauge.stale ? "stale" : gauge.aged ? "aged" : "available"}>
       <span>
         {name}
         {gauge.stale ? <em> · stale</em> : null}
+        {gauge.aged ? (
+          <em> · as of {townFuelClock(gauge.observedAt)}</em>
+        ) : null}
       </span>
-      {gauge.windows.map((w) => (
-        <small key={w.label} data-low={!gauge.stale && w.low}>
-          {w.reached
-            ? townReachedText(w)
-            : `${w.label}: ${w.used} % used${!gauge.stale && w.low ? " (low)" : ""}`}{" "}
-          ·{" "}
-          {w.resetsAt === null
-            ? "reset unknown"
-            : `resets ${townResetTime(w.resetsAt)}`}
-        </small>
-      ))}
+      {townFuelRows(gauge).map((row) => {
+        if (row.kind === "missing")
+          return (
+            <small key={row.label} data-missing="true">
+              {row.label}: not reported
+            </small>
+          );
+        const w = row.window;
+        return (
+          <small key={w.label} data-low={!gauge.stale && !gauge.aged && w.low}>
+            {w.reached
+              ? townReachedText(w)
+              : `${w.label}: ${w.used} % used${!gauge.stale && w.low ? " (low)" : ""}`}{" "}
+            ·{" "}
+            {w.resetsAt === null
+              ? "reset unknown"
+              : `resets ${townResetTime(w.resetsAt)}`}
+          </small>
+        );
+      })}
       <small>
         {gauge.source} · seen {townSeenAge(gauge.observedAt, now)}
       </small>
+      <small>{gauge.refresh}</small>
     </li>
   );
 }

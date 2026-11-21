@@ -12,6 +12,15 @@ or 7 days), the expenses on each reception board and the Economy line on room an
 table cards and the Town board's **Economy today** line; see [Town expenses boards](#town-expenses-boards). Existing Town
 Summary spend controls still use their configured metrics provider.
 
+The [analytics read and CLI](usage-analytics.md) add agent, project, room and daily
+grouping, observed status time and known PR creation/merge counts over these same
+sources. Both Unix TUI and core hosts use the numeric reader. Known same-host
+connections count each session/day/model once across both runtimes; distinct SSH
+aliases cannot prove physical-host equality and must be treated as separate
+sources. Multiple live claims stay unattributed. Core uses explicit resume/session
+arguments and Codex title evidence; missing session evidence never guesses from
+cwd. Windows usage tools remain unsupported.
+
 ## Sources and inventory
 
 | Harness | Host-local source | Accounting and evidence |
@@ -78,6 +87,10 @@ The response is typed by `shared/usage.ts`:
   numeric counters, response count, first/last observation, estimate and source
   health. IDs derive from the qualified connection/generation and session/day/model;
   reads do not allocate durable ID records.
+  Optional `reported_cost_usd` contains Pi's numeric `message.usage.cost.total`
+  when every response in that row reports it. A missing/invalid cost remains
+  unknown; reported cost is not an invoice or subscription charge. Claude and
+  Codex token logs used here do not provide a dollar charge.
 - Qualified host ownership (`connection_id`, `connection_generation`), plus
   `workspace_id`, `tab_id` and `pane_id` only for a unique current session/file
   match. A title prefix must resolve uniquely in a complete source inventory;
@@ -174,7 +187,10 @@ FEATURES.md).
 Town shows these as fuel gauges on the board sign and per host in the Summary;
 see FEATURES.md. The board re-reads them every 30 seconds while it is shown,
 so a new reading reaches the sign within about a minute. A harness reported as `unsupported` appears on the sign as
-**not available** with its reason, never as an empty or full gauge.
+**not available** with its reason, never as an empty or full gauge; a
+`missing` harness with agents in Town reads **no reading yet**. The wire is
+unchanged: how old a reading looks (dimmed and "as of 09:24" after 30 minutes)
+and which windows read "not reported" are decided in the browser.
 
 ## Context fill
 
