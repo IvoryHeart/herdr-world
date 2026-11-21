@@ -100,6 +100,7 @@ test("the hub offers the town center's actions, New agent first", () => {
     "needs-you",
     "summary",
     "profiles",
+    "apartments",
     "library",
     "workspace",
   ]);

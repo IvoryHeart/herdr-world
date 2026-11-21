@@ -24,6 +24,7 @@ import { TownStepBubble } from "./TownStepBubble";
 import { TownFuelMark } from "./TownFuelMark";
 import type { TownStepStore } from "./townStepStore";
 import { TownCityBillboard, TownReceptionExpenses } from "./TownExpenseBoards";
+import { TownApartments } from "./TownApartments";
 import { TownPostOffice } from "./TownPostOffice";
 import { TownLibrary } from "./TownLibrary";
 import { TownShipyard } from "./TownShipyard";
@@ -289,6 +290,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
       <TownWarehouse layout={layout} renderer={renderer} />
       <TownShipyard layout={layout} renderer={renderer} />
       <TownLibrary layout={layout} />
+      <TownApartments layout={layout} />
       {layout.buildings.map((building) => {
         if (!visible.hosts.has(building.hostKey)) return null;
         const host = model.hosts.get(building.hostKey);

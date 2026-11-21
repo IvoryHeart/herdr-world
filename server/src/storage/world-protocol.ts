@@ -127,6 +127,10 @@ export type StorageRequest =
       expected: number;
       document: import("./core-topology").CoreTopologyDocument;
     }
+  | {
+      type: "apartments";
+      operation: import("./apartments").ApartmentOperation;
+    }
   | { type: "profiles"; operation: import("./world-profiles").ProfileOperation }
   | { type: "binding"; operation: import("./world-bindings").BindingOperation }
   | { type: "write"; write: LedgerWrite }
@@ -233,6 +237,7 @@ export type WorldLedgerStorage = {
   board: import("../world/board-store").BoardStorePort;
   runtimeStatus: import("./runtime-status").RuntimeStatusPort;
   coreTopology: import("./core-topology").CoreTopologyPort;
+  apartments: import("./apartments").ApartmentsPort;
   profiles: import("../agent/profile-store").ProfileStorePort;
   bindings: import("./world-bindings").WorldBindings;
   ids: import("./world-ids").WorldIds;
@@ -272,6 +277,7 @@ export type StorageSnapshot = {
   board?: import("../world/board-store").BoardDocument;
   runtimeStatus?: Record<string, import("./runtime-status").AutoSyncRunStatus>;
   coreTopology?: import("./core-topology").CoreTopologyDocument[];
+  apartments?: import("../../../shared/apartments").ApartmentResident[];
   profiles?: import("../agent/profile-store").ProfilesDocument;
   document: LedgerDocument;
   attention: AttentionEntry[];

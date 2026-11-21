@@ -7,8 +7,11 @@
  * flower boxes, lanterns, a notice board and a red pillar box. Its forecourt
  * is cobbled, with mail sacks, a postman's bicycle and a mail trolley. It
  * holds letters, never parcels: pull requests are the warehouse's
- * (TownWarehouse.tsx). Painted once and shared; the renderer places the
- * house and the yard as two outdoor sprites.
+ * (TownWarehouse.tsx). The letters in the yard (questions agents asked
+ * you) and the trolley's load (your answers on their way) are the DOM
+ * layer's (TownPostOffice.tsx, #1105), drawn with the letter painted here.
+ * Painted once and shared; the renderer places the house and the yard as
+ * two outdoor sprites.
  */
 
 import { TOWN_TILE as T } from "./townLayout";
@@ -17,7 +20,9 @@ import {
   TOWN_POST_WIDTH,
   TOWN_POST_YARD_ROWS,
 } from "./townPostLot";
+import { TOWN_LETTER_SIZE } from "./townPostModel";
 import {
+  TOWN_OUTLINE,
   townCanvas,
   townOutline,
   townShade,
@@ -48,6 +53,7 @@ const SHADOW = "rgba(0,0,0,.2)";
 
 let house: TownCanvas | null = null;
 let yard: TownCanvas | null = null;
+const letterUrls = new Map<string, string>();
 
 type Paint = ReturnType<typeof painter>;
 
@@ -363,4 +369,38 @@ function paintYard(W: number, H: number) {
     rect(tx + 7, 6, 1, 1, "#f2a5c4");
   }
   return outlined(ground, p);
+}
+
+/**
+ * A letter, TOWN_LETTER_SIZE: a cream envelope with its flap, sealed in red
+ * wax, or grey wax when the service could not verify who wrote it.
+ */
+export function paintTownLetter(verified: boolean): TownCanvas {
+  const { w: W, h: H } = TOWN_LETTER_SIZE;
+  const { canvas, rect, disc } = painter(W, H);
+  rect(0, 0, W, H, TOWN_OUTLINE);
+  rect(1, 1, W - 2, H - 2, PAPER);
+  rect(1, H - 2, W - 2, 1, STONE_SHADE);
+  // The flap: two lines from the top corners down to the seal.
+  for (let i = 0; i < 5; i += 1) {
+    rect(1 + i, 1 + i, 1, 1, STONE_DARK);
+    rect(W - 2 - i, 1 + i, 1, 1, STONE_DARK);
+  }
+  disc(W / 2, 5, 2, verified ? POST_RED : "#8a8f99");
+  return canvas;
+}
+
+/** A letter's art as an image URL, drawn once; empty without a canvas (tests). */
+export function townLetterUrl(verified: boolean) {
+  const key = verified ? "sealed" : "unverified";
+  let value = letterUrls.get(key);
+  if (value === undefined) {
+    try {
+      value = paintTownLetter(verified).toDataURL();
+    } catch {
+      value = "";
+    }
+    letterUrls.set(key, value);
+  }
+  return value;
 }

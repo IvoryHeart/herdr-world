@@ -6,12 +6,25 @@ import {
   useRef,
   useState,
 } from "react";
-import { yieldWorldTask } from "../worldObject";
+import { yieldWorldAdmissionTask } from "../worldObject";
 import type { TownTarget } from "./townTargets";
 
+/** The first batch, and the smallest. */
 const TARGET_BATCH = 16;
+/** The most targets one turn adds. */
+const TARGET_BATCH_MAX = 256;
 
-/** Accessible targets, admitted in batches so dense scenes keep input responsive. */
+/**
+ * Accessible targets, admitted in batches so dense scenes keep input
+ * responsive. Every batch re-renders the targets already admitted and waits
+ * a turn, which on a continuously painted Town costs about a frame, so
+ * batches of a fixed 16 grew quadratic: a maximum-scale town (some 1,800
+ * targets, 114 batches) went without its controls for ten seconds on slow
+ * machines. Each batch now adds as many targets as are already in, up to
+ * TARGET_BATCH_MAX, so that town is complete in about a dozen turns while
+ * no commit mounts more than TARGET_BATCH_MAX buttons. Batches take
+ * ordinary (user-visible) turns.
+ */
 export function TownTargets({
   targets,
   selectedKey,
@@ -55,8 +68,9 @@ export function TownTargets({
   useEffect(() => {
     if (!pending) return;
     let current = true;
-    void yieldWorldTask().then(() => {
-      if (current) setProgress({ identity, limit: limit + TARGET_BATCH });
+    const batch = Math.min(limit, TARGET_BATCH_MAX);
+    void yieldWorldAdmissionTask().then(() => {
+      if (current) setProgress({ identity, limit: limit + batch });
     });
     return () => {
       current = false;

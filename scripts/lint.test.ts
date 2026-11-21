@@ -102,6 +102,7 @@ test("dependency warnings retain scope and existing ESLint suppressions", () => 
   ).toEqual(["warning:diagnostic"]);
 });
 
+// Eleven real linter startups need the same bounded budget as nearby fixtures.
 test("lint preserves recommended TypeScript rules and ESLint option defaults", () => {
   for (const [source, rule] of [
     ["const _unused = 1;", "eslint(no-unused-vars)"],
@@ -139,7 +140,7 @@ export const value = 1 < 2;
 export type Anything = any;
 export type Empty = {};`),
   ).toEqual([]);
-});
+}, 30_000);
 
 test("JavaScript globals and duplicate parameters remain checked", () => {
   expect(

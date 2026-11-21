@@ -47,7 +47,14 @@ const maxFileCount = 212;
 // The Town harbour and warehouse (#1028) fit main alone, but main's Library
 // (#1082) grew under it: 15.42 MiB together, so 15.5 MiB, initial budgets
 // unchanged (2026-11-20).
-const maxTotalBytes = 15.5 * 1024 * 1024;
+// Apartments (#1011: the resident search/history dialog, its store and Town's
+// apartment building) add about 18.7 KB to lazy chunks; startup budgets are
+// unchanged.
+// Merging the Weather source and its published Town consumer (#1040/#1100)
+// with main's Apartments and post-office work measures 16,270,139 bytes
+// (15.5164 MiB): 17,211 bytes above 15.5 MiB. Account for the combined
+// delivered features at 15.6 MiB; file, help-picture and startup limits stay.
+const maxTotalBytes = 15.6 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two

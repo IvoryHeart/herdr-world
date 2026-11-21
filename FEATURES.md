@@ -563,17 +563,32 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     test data for its synthetic buildings, including the Town board and Spend lens.
   - Town's **post office** stands on the first street left of the town
     center, on a phone as on a wide screen: Town's place for what is
-    addressed to you. Its red sign on the roof counts, without hovering,
-    what **Needs you** lists, by kind with the shared marks: "? 2 questions",
-    "! 1 blocked", "✓ 3 to review", and "✉ 1 to check" for saved answers
-    waiting in the Outbox; with none it reads "Nothing for you", and its rim
-    turns gold while a question or a blocked agent waits. Click it, or focus
-    it and press Enter, to open the same **Needs you** tab as the top bar's
-    counter, where you answer, withdraw and reach the Outbox as usual; it is
-    not a second inbox. It counts the hosts the Hosts filter shows, as Needs
-    you does. It holds no pull requests: those are the warehouse's. On a
-    phone the sign folds to a smaller red plate across the house's front, in
-    view at home zoom, with the marks and numbers only; tap it for Needs you.
+    addressed to you, messages and never cargo (pull requests are crates in
+    the warehouse; releases are ships). Its red sign on the roof counts,
+    without hovering, what **Needs you** lists, by kind with the shared
+    marks: "? 2 questions", "! 1 blocked", "✓ 3 to review", and "✉ 1 to
+    check" for saved answers waiting in the Outbox; with none it reads
+    "Nothing for you", and its rim turns gold while a question or a blocked
+    agent waits. Click it, or focus it and press Enter, to open the same
+    **Needs you** tab as the top bar's counter, where you answer, withdraw
+    and reach the Outbox as usual; it is not a second inbox. It counts the
+    hosts the Hosts filter shows, as Needs you does. On a phone the sign
+    folds to a smaller red plate across the house's front, in view at home
+    zoom, with the marks and numbers only; tap it for Needs you. Each open
+    question for you (from `herdr-world ask`) is a letter in its yard,
+    oldest first; a letter from a caller World could not verify has a grey
+    seal. Hover or focus a letter for "Letter from orbit: …"; click or tap
+    it for a card with the question, its answer choices, its age and
+    **Answer in Needs you**, which opens Needs you at that question.
+    Answers on their way to an agent ride the mail trolley by the door, red
+    when one needs checking (delivery uncertain or refused); click it to
+    open the Outbox. More letters than the yard holds make a "+N" bundle
+    that lists the rest. For trying it without real questions, open World
+    with `?townPostFixture` (four synthetic letters, one unverified, and
+    three answers on the trolley; the sign counts them), `?townPostFixture=many`
+    (a bundle) or `?townPostFixture=empty` (no mail); the page drops the
+    parameter at once, only the post office uses it, and a test letter's
+    card has nothing to answer.
   - Town's **warehouse** stands on the shore at the first street's end, by
     the harbour, its yard on the pavement: your open pull requests (opened by
     you, waiting on your review or assigned to you) as crates in its yard,
@@ -1083,23 +1098,33 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     before it pulls in). The bin floats at the bottom of the screen and
     lights up during a drag, so a phone needs only a short drag, and the town
     does not scroll while the drag rests on it. A red
-    double-decker comes every four minutes on a
-    fixed schedule when someone is waiting: it comes in, slows to each stop
-    with riders, waits about ten seconds, speeds up and drives off the map,
-    and only then do its riders' agents close; its riders show in its
-    windows. Agents put in the bin while
+    double-decker lives at Apartments' stop, on the last street by a
+    footpath down to the building's door (its green house sign marks it),
+    and sets off every four minutes on a fixed schedule when someone is
+    waiting. It drives only the town's roads, by the nearest way round the
+    stops with riders and back, never off the map: it turns its corners,
+    slows to each stop and waits there about ten seconds with its door open
+    while its riders step on, and its riders show in its windows the whole
+    way (in its side windows, or its front and back windows on a road up
+    or down the screen). Back at
+    Apartments it opens its door, its riders step off one by one and walk in,
+    and the sign counts each as it goes in; the last is in just as the trip
+    ends, which is when their agents close. Where the town is too small for
+    the building, the bus stops at the town center's door instead, which
+    opens Apartments. Agents put in the bin while
     the bus is out wait for the next one. Tapping the bus stops it where it
     is and opens the tray (nothing closes while it stands); **Let the bus
     go**, or closing the tray, sends it on. The bin (always shown in Town and on Board, in other views while
     it holds agents; on a phone, also a stop or the bus in Town) opens the
-    tray: who waits, the time to the next bus, **Put back** (until the bus
-    has left the screen, even after boarding; it walks back to its desk) and
+    tray: who waits, the time to the next bus, **Put back** (until the trip
+    ends, even after boarding; it walks back to its desk from its stop) and
     **Close now**. A pinned desk's or pinned tab's last agent cannot go
     in the bin, and its close never takes a pinned tab's last pane. Closes are qualified by host
     and runtime: a host that restarts keeps its agents, and restarting World
     drops the bin without closing anything. Only Town speaks of the bus:
     elsewhere the bin reads **Cleaning up** and how many, and its tray says
-    when they close.
+    when they close. Closed agents move into
+    [Apartments](#apartments-finished-agents).
   - Cached failed-host buildings, agents and Board cards stay stale and
     non-actionable. **Disconnected · Reconnect** appears on Town's building and
     reception and Board's host label. When the local connection is failing and
@@ -1133,8 +1158,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
     click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
     a readable zoom and pulses it; choosing it again, or **Enter** a second
-    time, opens it as selecting does. Town's own places are found too: "post
-    office" (or "pull requests") lists the **Post office**, and choosing it
+    time, opens it as selecting does. Town's own places are found too:
+    "warehouse" (or "pull requests") lists the **Warehouse**, and choosing it
     moves the camera there; choosing it again only shows it again. A result Town does not draw, such as
     an agent at a table its room folds away, opens at once and counts as
     off-screen. Under **Town calm motion** or reduced motion the camera jumps
@@ -1758,7 +1783,7 @@ read, it refuses and asks you to check again rather than acting on the new
 one. **Add or edit hosts…** opens the same profile editor as **Hosts → Manage
 connections**. Nothing here is required; every request goes from the World
 service, never from the browser. A World element missing what it needs (the
-closed post office, Work's empty lens, Town with no hosts) offers **Connect**,
+closed warehouse, Work's empty lens, Town with no hosts) offers **Connect**,
 which opens this screen at that row.
 
 The **Vault** tab shows where World keeps the tokens integrations need
@@ -1856,6 +1881,75 @@ session-qualified description of current work for an exact local or fixed-policy
 Herdr pane. The Inspector shows it only while the current
 agent session matches the report. Herdr owns expiry; the command does not infer work,
 assign tasks, or provide a Clear operation.
+
+### Apartments: finished agents
+
+**Apartments** holds every agent that is not running now, asleep and
+resumable: agents from before Apartments existed, on every connected host
+(Herdr TUI and herdr-core). Agents move in three ways:
+
+- **Found asleep**: on each connected host World reads the transcripts Claude
+  Code (`~/.claude/projects`), Codex (`~/.codex/sessions` and
+  `archived_sessions`), Pi and Oh My Pi keep, honouring `CLAUDE_CONFIG_DIR`,
+  `CODEX_HOME`, `PI_CODING_AGENT_DIR` and `PI_CONFIG_DIR`. Each such agent
+  moves in with its harness as name, its folder, its session, when its
+  transcript started and was last written, and its first request as summary.
+  World looks through a host's histories when it first sees the host, then
+  every 15 minutes, newest first and at most 400 transcripts read per pass
+  (a longer history continues a minute later). It reads only each file's
+  first bytes, once per World run, and writes nothing on the host. Codex
+  subagents and Claude sidechains are another agent's helpers, not agents.
+- **Its terminal ended**, seen by World while it observed the host.
+- **Retired by the bus** when the bus took it from the bin.
+
+Each resident keeps its name, harness, project folder, room and tab, host, when
+it ran, its last task summary, its last report (the closing message of its
+transcript, when the host answers within ten seconds; added just after the
+move-in, and lost if World stops first), the pull requests and issues the
+Sources linked to it, and its harness session (the one its Chat reads: Herdr's
+report, or for herdr-core a linked Codex session, Claude's process record or
+the launch command, read again while the agent runs). One session is one
+resident: an ending World sees replaces the found record of that session.
+
+- Open it from the green **APARTMENTS** sign on the sandstone block in Town's
+  park beside the town center (left of the plaza, or right when there is no
+  room; a town too small for it hides the building), where the bus brings
+  binned agents to its door and the sign's count goes up as each walks in
+  (see **Bin and bus** under [Visual control plane](#visual-control-plane)),
+  from **Apartments** in
+  the town center ring, or from **Apartments** in Board's hub. All three read
+  the same residents, and the ring and hub show how many live there.
+- A resident whose session runs again at a desk is hidden while it runs, and
+  returns when it stops, also when its terminal stays open with a shell. Its
+  newer end is recorded when that terminal closes. A transcript written in the last 10 minutes is left
+  for a later pass, since its agent may still be running.
+- Search matches name, harness, project, folder, room, host, summary, report,
+  `#42` or `PR 42`, repository and the day it ran or moved in (`2026-11-19`).
+  Residents list newest first; the newest 200 matches are shown, and a search
+  finds older ones.
+- Opening a resident shows its facts, how it moved in, summary, report and
+  linked work. **Read history** reads its conversation from the harness
+  transcript on its host, the same chat reading Inspector uses (the latest 200
+  messages); a message opens in full. History needs that host connected.
+- **Resume in room** starts the agent again with its harness's own resume
+  (`claude --resume <session>` or `codex resume <session>`) in a room on the
+  host where it ran: its old room when it still exists, or the one chosen. A
+  Herdr TUI room opens the new terminal; herdr-core says it is back. The
+  command is also shown to run by hand. Resume is refused on another host,
+  for a resident with no session, and for harnesses other than Claude and
+  Codex; the resident stays either way.
+- **Evict…**, then **Evict**, forgets a resident. Its transcript stays on the
+  host, and a later pass does not bring it back; it returns only if it runs
+  again and World sees it end. World keeps at most 5000 residents, whatever
+  their age; the longest asleep go first. Running, recent, empty and evicted
+  transcripts take none of those places.
+- Limits: Kimi, Grok, Muse and Antigravity keep histories World does not look
+  through, so their agents are recorded only when World sees them end. An
+  agent whose host disconnects, restarts or changes runtime generation is not
+  recorded as ended, nor one that ends while World is stopped; a found record
+  covers it later when its harness is one of the four above. Found agents have
+  no room, tab or linked work. Records live in World's own store on this
+  computer.
 
 ### Teams and spawn stamps
 

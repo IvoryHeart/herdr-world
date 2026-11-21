@@ -100,7 +100,6 @@ import type { TownRoomActions } from "./townRoomActions";
 
 /** Camera kept across Office visits within one page session. */
 const savedCameras = new Map<string, { x: number; y: number; z: number }>();
-
 const NO_COLORS: TerminalColors = {};
 const NO_RELATIONS = { relations: [], places: new Map() };
 const NO_PINS: DeskPins = {};
@@ -906,6 +905,7 @@ export function TownCanvas({
           lookOf={townBin.lookOf}
           framed={busFramed}
           renderer={rendererRef}
+          demo={townBin.demo}
         />
         <TownArrivalLayer
           arrivals={arrivals.arrivals}
