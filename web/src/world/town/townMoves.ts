@@ -71,6 +71,33 @@ const sameOwner = (
 
 const moveTimeoutMs = 90_000;
 
+/** Core derives unpinned app desk order from terminal addresses, not tab.move. */
+function coreOrderRefusal(): TownMoveOutcome {
+  return {
+    status: "refused",
+    reason: "unsupported",
+    message:
+      "herdr-core does not expose desk ordering. Pin desks to arrange their seats in Town.",
+  };
+}
+
+async function requestCoreMove(
+  target: { connectionId: string; generation: number },
+  params: Record<string, unknown>,
+): Promise<TownMoveOutcome> {
+  return parseOutcome(
+    await bridge.call(
+      "world.core.move",
+      {
+        connection_id: target.connectionId,
+        connection_generation: target.generation,
+        ...params,
+      },
+      moveTimeoutMs,
+    ),
+  );
+}
+
 function parseOutcome(result: unknown): TownMoveOutcome {
   const value = result as Partial<TownMoveOutcome> & Record<string, unknown>;
   if (
@@ -99,6 +126,12 @@ export async function requestDeskMove(
       reason: "other_host",
       message: "Desks move only within one host.",
     };
+  if (desk.coreOpen)
+    return requestCoreMove(desk.tabRef, {
+      kind: "desk",
+      tab_id: desk.tabRef.nativeId,
+      workspace_id: room.workspaceRef.nativeId,
+    });
   const client = bridge.connection(
     desk.tabRef.connectionId,
     desk.tabRef.generation,
@@ -136,6 +169,7 @@ export async function requestDeskReorder(
       reason: "other_room",
       message: "Desks reorder only within one room.",
     };
+  if (desk.coreOpen) return coreOrderRefusal();
   return requestTabReorder(
     desk.tabRef,
     desk.tabRef.nativeId,
@@ -224,6 +258,12 @@ export async function requestAgentMove(
       reason: "other_host",
       message: "Agents move only within one host.",
     };
+  if (device.coreOpen)
+    return requestCoreMove(device.paneRef, {
+      kind: "pane",
+      pane_id: device.paneRef.nativeId,
+      tab_id: desk.tabRef.nativeId,
+    });
   const client = bridge.connection(
     device.paneRef.connectionId,
     device.paneRef.generation,
