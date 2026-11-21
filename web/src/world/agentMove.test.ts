@@ -40,6 +40,7 @@ test.each([
     ).toEqual([]);
   },
 );
-test("a source never offers its own runtime", () => {
-  expect(agentMoveDestinations([host], "core")).toEqual([]);
+test("the source offers other rooms on its runtime, never its current room", () => {
+  expect(agentMoveDestinations([host], "core", "room")).toEqual([]);
+  expect(agentMoveDestinations([host], "core", "other")).toHaveLength(1);
 });

@@ -57,6 +57,28 @@ that omits the native terminal and transcript consumers.
 
 ## Limits and checks
 
+`server/src/herdr-core/agent-moves.live.test.ts` runs the browser's production
+Town keyboard move actions, drop eligibility and Settings colour editor against
+a real scratch `herdr-core`, configured through a saved local profile named
+`core-local` with `core_session` and `core_state_dir`. It moves TUI → core →
+another room on the same core → TUI, checking the destination room, persistent
+Board pin, colour and spawned-by link. Core keyboard/watch streams, shell
+preparation, foreground inspection, process exit and native closure are real.
+The TUI protocol stand-in uses separate scratch PTYs; both vendor harnesses and
+Herdr's actual TUI protocol implementation remain external acceptance boundaries.
+The credential-free native harness speaks OSC 7501 and names a synthetic Claude
+transcript; this is not vendor-harness resume certification. Run on Linux with
+Chrome, `cc` and an explicit official core binary:
+`HERDR_CORE_BIN=/path/to/herdr-core bun run test --live server/src/herdr-core/agent-moves.live.test.ts`.
+The existing latest-core smoke command discovers this live suite as well.
+
+`server/src/rpc/appearance.test.ts` exhausts generation, terminal-witness and
+read-retirement combinations for the core metadata reader, including a trap
+against using the TUI manager. `townRuntimeMove.test.ts` checks the browser's
+exact source/destination route and outcome mapping. These consumers supplement
+the unchanged handoff fault matrix and lease/fence models; no new concurrency
+owner or recovery transition is introduced by selecting another room.
+
 The matrix is exhaustive over its listed fault axes, not arbitrary external
 process schedules. Native Herdr/core commands cannot atomically compare all
 process/status evidence with another client's input. External user actions,

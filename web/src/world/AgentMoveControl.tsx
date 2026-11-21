@@ -37,7 +37,11 @@ export function AgentMoveForm({
   disabled?: boolean;
   connections: readonly WorldRuntimeConnection[];
 }) {
-  const destinations = agentMoveDestinations(connections, source.connection_id);
+  const destinations = agentMoveDestinations(
+    connections,
+    source.connection_id,
+    source.workspace_id,
+  );
   const [open, setOpen] = useState(false),
     [selected, select] = useState("");
   const [folder, setFolder] = useState("");

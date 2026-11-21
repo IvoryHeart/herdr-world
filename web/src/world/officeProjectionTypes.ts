@@ -109,6 +109,8 @@ export type OfficeDesk = {
 };
 
 export type OfficeRoom = {
+  /** A current core room that can receive an agent handoff. */
+  coreOpen?: true;
   key: string;
   hostKey: string;
   workspaceRef: OfficeQualifiedTarget;

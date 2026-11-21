@@ -6,6 +6,7 @@ import type {
 } from "../herdrOfficeProjection";
 import { TOWN_TILE as T, townSeat, type TownLayout } from "./townLayout";
 import type { TownModel } from "./townModel";
+import { canHandoffDesk } from "./townRuntimeMove";
 
 export type TownTarget = {
   key: string;
@@ -108,7 +109,9 @@ export function townTargets(
             width: 64,
             height: 24,
           },
-          canActivate: desk.canOpenInSpaces,
+          canActivate:
+            desk.canOpenInSpaces ||
+            Boolean(desk.coreOpen && canHandoffDesk(desk)),
         });
         desk.paneDevices.forEach((device, seat) => {
           const geometry = townSeat(cell, seat);

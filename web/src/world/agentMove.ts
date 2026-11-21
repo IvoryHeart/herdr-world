@@ -6,21 +6,28 @@ import type { WorldRuntimeConnection } from "./runtimeStore";
 export function agentMoveDestinations(
   connections: readonly WorldRuntimeConnection[],
   sourceConnection: string,
+  sourceWorkspace?: string,
 ) {
   return connections.flatMap((host) =>
-    host.connectionId !== sourceConnection &&
     host.actionable &&
     !host.stale &&
     host.state === "ready" &&
     host.snapshotGeneration === host.generation
-      ? (host.snapshot?.workspaces ?? []).map((room) => ({
-          destination: {
-            connection_id: host.connectionId,
-            generation: host.generation,
-            workspace_id: room.workspace_id,
-          } satisfies AgentMoveDestination,
-          label: `${host.label} · ${host.runtime === "herdr-core" ? "herdr-core" : "Herdr TUI"} · ${room.label || "Room"}`,
-        }))
+      ? (host.snapshot?.workspaces ?? [])
+          .filter(
+            (room) =>
+              host.connectionId !== sourceConnection ||
+              (sourceWorkspace !== undefined &&
+                room.workspace_id !== sourceWorkspace),
+          )
+          .map((room) => ({
+            destination: {
+              connection_id: host.connectionId,
+              generation: host.generation,
+              workspace_id: room.workspace_id,
+            } satisfies AgentMoveDestination,
+            label: `${host.label} · ${host.runtime === "herdr-core" ? "herdr-core" : "Herdr TUI"} · ${room.label || "Room"}`,
+          }))
       : [],
   );
 }

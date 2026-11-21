@@ -4679,6 +4679,17 @@ start another copy. Native runtime actions remain generation/occupant-qualified.
   appearance, Board strings and World spawned-by claims
 - **AND** any other source desk occupants keep their desk choices
 
+#### Scenario: Town desk moves across runtime kinds
+
+- **WHEN** an owner drops a single-agent desk onto a current destination room,
+  or chooses that room through the desk's keyboard move menu
+- **THEN** TUI → core, core → TUI and core → another core room use the same
+  admitted conversation handoff, preserving pins, colours and spawned-by links
+- **AND** core desk appearance edits resolve the exact core connection and
+  generation; an unavailable core SHALL NOT fall back to a TUI connection
+- **AND** Move to offers other rooms on the source runtime, excluding its
+  current room; multi-pane desks require selecting one agent for a handoff
+
 #### Scenario: Launch settings follow a move
 
 - **WHEN** an idle Claude launched with a model, permission mode or custom agent

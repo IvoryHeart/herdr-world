@@ -31,7 +31,7 @@ export async function until(
  * under a throwaway profile store. The caller removes `root` and awaits
  * `stop` after the test.
  */
-export async function connectedLive(stateDir: string) {
+export async function connectedLive(stateDir: string, connectionId = "core") {
   const root = mkdtempSync(join(tmpdir(), "hcw-live-"));
   const topology = memoryCoreTopologyPort();
   const core = createCoreConnections({
@@ -74,7 +74,7 @@ export async function connectedLive(stateDir: string) {
       retry: { baseDelayMs: 20, maxDelayMs: 200, random: () => 0 },
     });
   await service.create({
-    id: "core",
+    id: connectionId,
     label: "Scratch core",
     type: "local",
     runtime: "herdr-core",
@@ -82,8 +82,8 @@ export async function connectedLive(stateDir: string) {
     core_state_dir: stateDir,
     auto_connect: true,
   });
-  await until(() => core.manager.status("core").state === "ready");
-  const lease = () => core.manager.readyRuntimeLease("core")!;
+  await until(() => core.manager.status(connectionId).state === "ready");
+  const lease = () => core.manager.readyRuntimeLease(connectionId)!;
   const record = (address: string) =>
     lease().runtime.core.mirror.terminal(address);
   return { root, core, topology, lease, record, stop: () => core.stop() };

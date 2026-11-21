@@ -19,6 +19,15 @@ uses the original folder. Project files and shell sessions are not transferred.
 A conversation linked only for reading needs matching native resume evidence
 before World can move it.
 
+In Town, drag a desk containing one agent onto a destination room, or focus its
+desk target and press **M** to choose a room. TUI → core, core → TUI and core →
+another core room use the same checked conversation handoff as **Move to…**.
+Another room on the current runtime is also offered in Agent settings. For a
+desk with several panes, open the individual agent's settings instead. Native
+TUI desk moves within a TUI connection keep the panes running. Town desk pins
+still restrict dragging to the pinned row; a Board card pin does not. Colours
+can be set on core desks in Agent settings and follow subsequent moves.
+
 World first checks both current connections, the exact resume ID, the source's
 idle state, dialogs, pending messages/tools and process tree. It opens a shell
 at the destination, finds the harness and checks login there, and stages the

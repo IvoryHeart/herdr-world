@@ -9,3 +9,9 @@
   launch commands refuse before quitting.
 - Re-attach remaining saved desk details after a manual move with
   `herdr-world agent reattach`.
+
+### Fixed
+
+- Move a single-agent Town desk TUI → core, core → TUI or between core rooms
+  through the conversation handoff. Offer other rooms on the current runtime
+  in Move to, and resolve core desk colour edits through their core connection.

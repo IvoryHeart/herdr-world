@@ -42,8 +42,11 @@ export async function moveAgent(
     request.destination.connection_id,
     request.destination.generation,
   );
-  if (request.source.connection_id === request.destination.connection_id)
-    throw new Error("Choose a different runtime or host.");
+  if (
+    request.source.connection_id === request.destination.connection_id &&
+    request.source.workspace_id === request.destination.workspace_id
+  )
+    throw new Error("Choose a different room, runtime or host.");
   const locks = active.get(services) ?? new Set<string>();
   active.set(services, locks);
   const key = JSON.stringify([

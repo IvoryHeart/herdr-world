@@ -15,7 +15,16 @@ import type { TownModel } from "./townModel";
 function model(pinned: string[] = []) {
   const desk = (key: string, hostKey: string, roomKey: string) => [
     key,
-    { key, hostKey, roomKey, displayLabel: key, canOpenInSpaces: true },
+    {
+      key,
+      hostKey,
+      roomKey,
+      displayLabel: key,
+      canOpenInSpaces: true,
+      tabRef: { connectionId: hostKey, generation: 1, nativeId: key },
+      observedPaneCount: 1,
+      paneDevices: [{ paneRef: { nativeId: "p" } }],
+    },
   ];
   const room = (
     key: string,
@@ -32,6 +41,7 @@ function model(pinned: string[] = []) {
       omittedDeskCount,
       canOpenInSpaces: true,
       stale: false,
+      workspaceRef: { connectionId: hostKey, generation: 1, nativeId: key },
     },
   ];
   return {
@@ -95,7 +105,7 @@ test("a held press picks up a desk from the room-card zoom in, an agent only zoo
   expect(townDragFor({ kind: "room", key: "r1" }, m, "desk")).toBeNull();
 });
 
-test("a desk lands on another room of its host, never its own or another host's", () => {
+test("a shell desk lands on another room of its host, never its own or another host's", () => {
   const m = model();
   const drag = townDragFor({ kind: "desk", key: "d1" }, m, "room")!;
   expect(townDropTarget(drag, { kind: "room", key: "r2" }, m)).toMatchObject({
@@ -110,7 +120,7 @@ test("a desk lands on another room of its host, never its own or another host's"
   expect(townDropTarget(drag, { kind: "desk", key: "d1" }, m).key).toBeNull();
   expect(townDropTarget(drag, { kind: "room", key: "r3" }, m)).toMatchObject({
     key: null,
-    label: "Desks move only within one host",
+    label: "Move one agent at a time from Agent settings → Move to…",
   });
   expect(townDropTarget(drag, null, m).key).toBeNull();
 });

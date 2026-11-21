@@ -41,15 +41,27 @@ export async function handleAppearanceRpc(
         /[\u0000-\u001f\u007f-\u009f]/.test(params.label))
     )
       throw new Error("invalid tab name");
-    const lease = connectionManager.readyRuntimeLease(target.connection_id);
+    const core = rpc.services.coreControl?.manager;
+    const coreOwner = core?.has(target.connection_id) ?? false;
+    const coreLease = coreOwner
+      ? core!.readyRuntimeLease(target.connection_id)
+      : null;
+    const tuiLease = coreOwner
+      ? null
+      : connectionManager.readyRuntimeLease(target.connection_id);
+    const lease = coreLease ?? tuiLease;
     if (!lease || lease.generation !== generation || !lease.isCurrent())
       throw new Error("Appearance target is unavailable");
+    const current = () =>
+      lease.isCurrent() && (!coreLease || coreLease.runtime.core.actionable);
+    if (!current()) throw new Error("Appearance target is unavailable");
     const call = (method: string, values: Record<string, unknown> = {}) =>
-      lease.runtime.tui.call(method, values, 10_000);
+      tuiLease!.runtime.tui.call(method, values, 10_000);
+    const reader = lease.runtime.operations;
     const [paneResult, tabResult, workspaceResult] = await Promise.all([
-      call("pane.list"),
-      call("tab.list"),
-      call("workspace.list"),
+      reader.listTerminals(),
+      reader.listTabs(),
+      reader.listWorkspaces(),
     ]);
     const panes = (paneResult as { panes?: Record<string, unknown>[] })?.panes;
     const tabs = (tabResult as { tabs?: Record<string, unknown>[] })?.tabs;
@@ -92,12 +104,12 @@ export async function handleAppearanceRpc(
           ))
     )
       throw new Error("Appearance tab changed");
-    if (!continuingAppearance(target, observed) || !lease.isCurrent())
+    if (!continuingAppearance(target, observed) || !current())
       throw new Error("Appearance target changed");
     if (fields) {
       const document = await board().patch(
         planBoardPatch([params, observed, fields], () => {
-          if (!lease.isCurrent() || !rpc.requestIsCurrent())
+          if (!current() || !rpc.requestIsCurrent())
             throw new Error("Appearance target changed");
           return [{ op: "appearance.set", target: observed, fields }];
         }),
@@ -105,6 +117,7 @@ export async function handleAppearanceRpc(
       publishBoardChanged(document.revision);
       sendReply({ id, result: { document } }, method);
     } else {
+      if (!tuiLease) throw new Error("Rename this core desk in its runtime.");
       // This native operation never creates a World-owned shadow label.
       await call("tab.rename", {
         tab_id: target.native_id,

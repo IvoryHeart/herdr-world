@@ -135,7 +135,11 @@ export function townMoveActions({
     const source = desk ? roomForKey(desk.roomKey) : null;
     if (!desk || !room || movingKey) return "returned";
     // Herdr closes a room when its last desk leaves; ask first.
-    if (!allowCloseRoom && (source?.observedDeskCount ?? 2) <= 1) {
+    if (
+      !desk.coreOpen &&
+      !allowCloseRoom &&
+      (source?.observedDeskCount ?? 2) <= 1
+    ) {
       setMoveConfirm({
         message: `“${desk.displayLabel}” is the last desk in “${source?.displayLabel}”. Moving it to “${room.displayLabel}” closes that room.`,
         run: () => void runDeskMove(deskKey, roomKey, true, then),
@@ -150,6 +154,17 @@ export function townMoveActions({
         room,
         allowCloseRoom,
         inheritsColor(desk),
+        source
+          ? {
+              room: source,
+              workspaceIds: office.roomRoster
+                .filter(
+                  (r) =>
+                    r.workspaceRef.connectionId === desk.tabRef.connectionId,
+                )
+                .map((r) => r.workspaceRef.nativeId),
+            }
+          : undefined,
       );
       const result = reportMove(
         desk.displayLabel,
