@@ -9,6 +9,53 @@ prepared.
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-11-19
+
+### Added
+
+- On a phone, the corner view menu offers **Hosts**: the same Hosts filter
+  and **Manage connections** as the top bar, one tap away without leaving Zen.
+
+### Changed
+
+- Apply connection CLI additions, removals and default changes through the running
+  service without restarting it or dropping other hosts' terminals and browser
+  sessions. Concurrent Settings edits are retained; `--restart` remains optional
+  on loopback and still saves and restarts a managed service bound to one other
+  address. Unreachable services retain offline editing; persistence failures
+  report service errors rather than usage errors.
+
+### Fixed
+
+- Discover an existing local herdr-core on first run without the Herdr TUI and
+  save it as World's default connection.
+- Remove legacy World login services during uninstall while preserving
+  herdr-core's login item and unrelated services.
+- Start core agents with the host's interactive shell environment, including
+  shell-added tools such as bun and nvm, with login startup on macOS.
+- Preserve direct core discovery and launching for unsupported account shells,
+  including csh, tcsh, nu, xonsh and elvish.
+- Start Claude from New agent in Unix Herdr TUI rooms without truncating the
+  status-line tap at the shell's terminal input limit.
+- Fix macOS Homebrew release acceptance to install and start the signed herdr-core
+  release with a short temporary home, clean it up, and preserve it across World
+  reinstallation. Keep the tap's acceptance check synchronized with each release.
+  Recognize World's `localhost` listener URL so successful startups pass the check.
+
+### Documentation
+
+- Explain core-only first run and when CLI connection edits need `--restart`.
+- Research and propose real installed VS Code in World's Code view, with IDE
+  integrations per host/project and desktop handoffs. Try the synthetic labelled
+  desktop workbench, provider picker and handoff at `/code-view-prototype.html`.
+  No live editor, IDE server, extension, installer or runtime changes are shipped.
+
+### Known issues
+
+- Codex on Linux core stays unknown when the core/harness supplies no native
+  status. Current Linux core 0.1.21 / Codex 0.167.0 reports work; World cannot
+  reconstruct missing reports from Chat or Terminal output.
+
 ## [0.3.5] - 2026-11-18
 
 ### Added
