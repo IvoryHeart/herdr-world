@@ -7,6 +7,7 @@ import { type CollectorOptions, type HostUsage } from "./collector";
 import { usageScope } from "./lifetime";
 import { codexIdsFromTitle } from "../agent/session-resolver";
 import { normalizeAgentName } from "../agent/chat-harnesses";
+import { usageReadsTokens } from "../../../shared/usageHarnesses";
 
 export const usageDigest = (value: string) =>
   createHash("sha256").update(value).digest("hex");
@@ -74,7 +75,7 @@ export function createRuntimeUsage(args: {
       const titleBindings = new Map<string, UsageBinding>();
       for (const agent of agents.slice(0, 128)) {
         const harness = normalizeAgentName(String(agent.agent ?? ""));
-        if (!["claude", "codex", "pi", "gemini"].includes(harness)) {
+        if (!usageReadsTokens(harness)) {
           if (/^[a-z0-9_-]{1,40}$/.test(harness)) unsupported.add(harness);
           continue;
         }

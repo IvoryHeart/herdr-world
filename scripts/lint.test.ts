@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, test as bunTest } from "bun:test";
 import {
   copyFileSync,
   mkdirSync,
@@ -9,6 +9,12 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+// Each test launches the real linter for several fixtures. Bound the whole
+// subprocess batch separately from Bun's five-second in-process default.
+function test(name: string, run: () => void) {
+  bunTest(name, run, 30_000);
+}
 
 const root = new URL("../", import.meta.url);
 const directory = mkdtempSync(join(tmpdir(), "roamgate-lint-"));
@@ -187,7 +193,7 @@ test("generated assets, binaries and workspace dependencies stay ignored", () =>
 
 // Each path is an independent policy check. Keep its seven linter processes
 // within their own test deadline instead of timing all paths as one case.
-test.each([
+bunTest.each([
   "server/src/effects/fixture.ts",
   "server/src/storage/fixture.ts",
   "server/src/world/answer-dispatch.ts",
@@ -210,6 +216,7 @@ test.each([
       [],
     );
   },
+  30_000,
 );
 
 test("effect tests may use the platform clock", () => {

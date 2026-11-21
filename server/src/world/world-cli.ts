@@ -35,6 +35,7 @@ export {
 import type { GroupWorkSources } from "../../../shared/groupViews";
 export { CliError, type CliErrorCode } from "./world-cli-errors";
 import { randomUUID } from "node:crypto";
+import { runUsageCli } from "./world-cli-usage";
 import { stampSpawn } from "../herdr/spawn-stamp";
 import {
   terminalKey,
@@ -121,6 +122,7 @@ export type WorldCliDeps = {
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
+  usage?(params: Record<string, unknown>): Promise<unknown>;
   groupMove?(request: GroupMoveRequest, recheck?: () => void): Promise<unknown>;
   publishBoard(revision: number): void;
   /** Tell World's pages; `asks` when a question was asked or answered. */
@@ -665,6 +667,8 @@ export function createWorldCli(deps: WorldCliDeps) {
         await record(actor, command, result.message, null);
         return result;
       }
+      case "usage":
+        return runUsageCli(deps, params);
       case "whoami":
         return actor;
       case "ls": {

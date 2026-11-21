@@ -38,6 +38,7 @@ export const WORLD_CLI_COMMANDS = [
   "agent reattach",
   "whoami",
   "ls",
+  "usage",
   "history",
   "undo",
   "board card move",

@@ -83,8 +83,10 @@ Herdr TUI integrations provide its session/status evidence. Core reads status
 from core alone: World does not install TUI status hooks or infer core status
 from the screen. Chat reuses the same transcript readers where available;
 missing transcripts do not prevent native core input. The Claude limits tap
-can be installed with either runtime, but World's usage/fuel collector currently
-reads TUI connections only. See the [runtime support table](../FEATURES.md#runtime-support)
+can be installed with either runtime. World's numeric usage/fuel collector reads
+Unix TUI and core hosts through the same bounded reader; core attribution uses
+explicit session/resume arguments or uniquely resolved Codex title evidence.
+See [analytics coverage](usage-analytics.md), the [runtime support table](../FEATURES.md#runtime-support)
 and [harness inventory](core-harnesses.md).
 
 ## Herdr integration upgrades

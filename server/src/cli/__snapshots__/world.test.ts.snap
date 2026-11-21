@@ -40,6 +40,7 @@ write pane metadata through Herdr; they do not require the World service.
 
     herdr-world whoami
     herdr-world ls --json
+    herdr-world usage --window 7d --group-by agent --json
     herdr-world spawned-by w1:p3                  # the pane that started you
     herdr-world colour set me teal                # your tab's colour
     herdr-world colour reset workspace:w2
@@ -88,6 +89,10 @@ Targets are on your own host; add --connection ID for another one.
 ## Commands
 
   whoami | ls | history [--actor A] [--limit N] | undo CHANGE
+  usage [--window today|7d] [--group-by agent|project|room|day] [--json]
+         read numeric usage and observed status time; missing values are unknown.
+         --connection ID --generation N qualifies --pane ID or --room ID.
+         --fixture runs an offline synthetic example; see usage --help.
   board card move TARGET --by DX,DY     nudge (a pinned card's pin moves)
   board card pin TARGET X,Y | unpin TARGET
   board card group TARGET --with TARGET | ungroup TARGET
