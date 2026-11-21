@@ -154,14 +154,15 @@
 }
 
 /* The lighthouse lamp: main's checks as light. Zoomed out, it keeps its
-   size on screen, so red or green still reads at the town's widest view. */
+   size on screen with no cap, so red or green still reads at the widest
+   view of any town, however many hosts and rooms shrink that zoom. */
 .town-world .town-harbour-lamp {
   position: absolute;
   width: 12px;
   height: 5px;
   background: var(--harbour-tone, #2b2f3a);
   box-shadow: 0 0 8px 3px var(--harbour-tone, transparent);
-  transform: scale(clamp(1, var(--iz, 1), 4));
+  transform: scale(max(1, var(--iz, 1)));
   transform-origin: 50% 50%;
 }
 [data-tone="pass"]:is(

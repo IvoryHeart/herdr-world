@@ -25,8 +25,11 @@ const VIEWPORTS = [
   { name: "phone", width: 390, height: 844, mobile: false },
   { name: "desktop", width: 1512, height: 982, mobile: false },
 ] as const;
-// A full harbour with its +N lane, and the usual few projects.
+// A full harbour with its +N lane, and the usual few projects; each in the
+// usual two-host town and in a large one (eight hosts, six rooms each)
+// whose widest zoom is much smaller.
 const MODES = ["many", "ready"] as const;
+const TOWNS = ["usual", "large"] as const;
 
 test.skipIf(!chrome)(
   "every Shipyard lighthouse lamp shows above ships at every zoom, on a phone and a desktop (#1148)",
@@ -80,30 +83,31 @@ test.skipIf(!chrome)(
         await waitForChromePort(child, profile, log),
       );
       for (const viewport of VIEWPORTS)
-        for (const mode of MODES) {
-          await connection.command("Emulation.setDeviceMetricsOverride", {
-            width: viewport.width,
-            height: viewport.height,
-            deviceScaleFactor: 1,
-            mobile: viewport.mobile,
-          });
-          result = Promise.withResolvers<string[]>();
-          requested = Promise.withResolvers<void>();
-          await connection.command("Page.navigate", {
-            url: `${server.url.href}?mode=${mode}${viewport.name === "phone" ? "&phone" : ""}`,
-          });
-          const scene = `${mode}-${viewport.name}`;
-          expect({
-            scene,
-            failures: await waitForBrowserFixture(
-              requested.promise,
-              result.promise,
-              exited,
-              `Shipyard lighthouse ${scene}`,
-              BROWSER_STARTUP_TIMEOUT_MS,
-            ),
-          }).toEqual({ scene, failures: [] });
-        }
+        for (const mode of MODES)
+          for (const town of TOWNS) {
+            await connection.command("Emulation.setDeviceMetricsOverride", {
+              width: viewport.width,
+              height: viewport.height,
+              deviceScaleFactor: 1,
+              mobile: viewport.mobile,
+            });
+            result = Promise.withResolvers<string[]>();
+            requested = Promise.withResolvers<void>();
+            await connection.command("Page.navigate", {
+              url: `${server.url.href}?mode=${mode}${viewport.name === "phone" ? "&phone" : ""}${town === "large" ? "&large" : ""}`,
+            });
+            const scene = `${mode}-${town}-${viewport.name}`;
+            expect({
+              scene,
+              failures: await waitForBrowserFixture(
+                requested.promise,
+                result.promise,
+                exited,
+                `Shipyard lighthouse ${scene}`,
+                BROWSER_STARTUP_TIMEOUT_MS,
+              ),
+            }).toEqual({ scene, failures: [] });
+          }
     } finally {
       connection?.close();
       await stopChrome(child);

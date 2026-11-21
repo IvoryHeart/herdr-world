@@ -51,7 +51,10 @@ async function run() {
     throw new Error(
       `a ${width}×${height} page took ${phone ? "" : "not "}the phone shape`,
     );
-  const hosts = [0, 1].map((index) => ({
+  // `large`: eight hosts with six rooms each, a town whose widest zoom is
+  // far below the usual two hosts' (the review case for #1148).
+  const large = query.has("large");
+  const hosts = Array.from({ length: large ? 8 : 2 }, (_, index) => ({
     key: `h${index}`,
     displayOrder: index,
   }));
@@ -59,7 +62,7 @@ async function run() {
     {
       hosts,
       rooms: hosts.flatMap((host) =>
-        [0, 1, 2].map((order) => ({
+        Array.from({ length: large ? 6 : 3 }, (_, order) => ({
           key: `${host.key}/${order}`,
           hostKey: host.key,
           order,
