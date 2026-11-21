@@ -1,4 +1,4 @@
-import { type CSSProperties, useRef, useState } from "react";
+import { type CSSProperties, type RefObject, useRef, useState } from "react";
 import type { BoardShapeColor } from "../../../../shared/boardShapes";
 import { type ShapeDraft, TEXT_SIZE, textBox } from "./boardSketchGeometry";
 
@@ -51,10 +51,12 @@ export function lines(
 export function TextEditor({
   shape,
   initial,
+  inputRef,
   onDone,
 }: {
   shape: ShapeDraft;
   initial: string;
+  inputRef: RefObject<HTMLTextAreaElement | null>;
   onDone(text: string): void;
 }) {
   const [text, setText] = useState(initial);
@@ -86,6 +88,7 @@ export function TextEditor({
       };
   return (
     <textarea
+      ref={inputRef}
       className={`board-sketch-edit board-sketch-live${box ? "" : " board-sketch-edit-label"}`}
       aria-label={box ? "Drawing text" : "Drawing label"}
       // biome-ignore lint/a11y/noAutofocus: the text is typed where it was placed

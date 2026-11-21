@@ -3549,6 +3549,7 @@ export default function BoardView({
       <div
         ref={boardRef}
         data-surface={appearance.surface}
+        data-help="board.surface"
         style={boardAppearanceStyle(appearance)}
         className={`board${far ? " board-far" : ""}${pulses ? "" : " board-no-pulse"}${culling ? " board-culling" : ""}`}
         data-lens={lenses.view?.lens}
@@ -5075,3 +5076,6 @@ function MoveDialog({
     </div>
   );
 }
+
+// Keep the testing-only preview behind Board's existing lazy bundle boundary.
+export { default as BoardTextConflictFixture } from "./testing/BoardTextConflictFixture";

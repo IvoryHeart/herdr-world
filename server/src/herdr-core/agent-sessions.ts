@@ -53,7 +53,7 @@ export function withCoreRecipient<T>(
  * not report), which does not apply to core.
  */
 export const CORE_NO_SESSION =
-  "World has not found where this agent saves its conversation yet. It looks in the agent's own session record and its launch command. You can still send it a message, and the Terminal tab shows it live.";
+  "World has not found where this agent saves its conversation yet. It looks in the agent's own session record, its open conversation files and its launch command. You can still send it a message, and the Terminal tab shows it live.";
 
 /** CORE_NO_SESSION for Codex, whose session ID Chat can link for reading. */
 export const CORE_CODEX_UNLINKED = `${CORE_NO_SESSION} If you know its Codex session ID, link it to read the conversation here.`;
@@ -147,16 +147,23 @@ export function createCoreAgentSessions(args: {
       | { pid?: unknown; name?: unknown; argv?: unknown }
       | undefined;
     let found: Awaited<ReturnType<typeof processSession>>;
-    const pid = foreground?.pid;
+    const identity = (current: Row | undefined) =>
+      JSON.stringify([
+        address,
+        view.occupancy(address) ?? 0,
+        agent,
+        current?.foreground,
+      ]);
     const key =
-      typeof pid === "number"
-        ? JSON.stringify([address, view.occupancy(address) ?? 0, pid])
-        : undefined;
+      typeof foreground?.pid === "number" ? identity(record) : undefined;
     const cached = key ? recorded.get(key) : undefined;
     if (cached && Date.now() - cached.at < 1000)
       found = cached.value as typeof found;
     else {
       found = await processSession(agent, foreground, files);
+      // A slow host read must not publish the previous foreground's session.
+      if (key && key !== identity(view.terminal(address) as Row | undefined))
+        return;
       if (key) recorded.set(key, { at: Date.now(), value: found });
       if (recorded.size > 64) recorded.clear();
     }
@@ -520,8 +527,51 @@ export function createCoreAgentSessions(args: {
     },
   };
 
+  /** The last session read per terminal for Apartments, by program. */
+  const known = new Map<
+    string,
+    { holder: string; at: number; id: string | null }
+  >();
+  /**
+   * The session Chat would read for the program at `address` now (a linked
+   * Codex session, the process record, the launch arguments), and which
+   * program that is (its occupant and process): Apartments keeps it while
+   * the agent lives, because a finished agent's terminal has no record.
+   * Called on every observation, so a process-record read (a file read on
+   * the agent's host) is repeated for the same program at most every
+   * five seconds; another program reads again at once.
+   */
+  const knownSession = async (
+    address: string,
+    agent: string,
+  ): Promise<{ id: string | null; holder: string } | null> => {
+    const record = view.terminal(address) as Row | undefined;
+    if (!record) return null;
+    const pid = (record.foreground as { pid?: unknown } | undefined)?.pid;
+    const holder = JSON.stringify([
+      view.occupancy(address) ?? 0,
+      typeof pid === "number" ? pid : null,
+    ]);
+    const idOf = (session: Row | undefined) =>
+      session?.kind === "id" && typeof session.value === "string"
+        ? session.value
+        : null;
+    const link = idOf(linked(address));
+    if (link) return { id: link, holder };
+    const cached = known.get(address);
+    if (cached?.holder === holder && Date.now() - cached.at < 5000)
+      return { id: cached.id, holder };
+    const id = idOf(
+      await sessionOf(normalizeAgentName(agent), address, record),
+    );
+    if (known.size >= 256) known.clear();
+    known.set(address, { holder, at: Date.now(), id });
+    return { id, holder };
+  };
+
   return {
     ...handlers,
+    knownSession,
     previewLink: linker.preview,
     link: linker.link,
     conversation,

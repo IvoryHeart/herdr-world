@@ -227,6 +227,30 @@ function fakeClient() {
 const box = (selector: string) => $(selector)?.getBoundingClientRect();
 const near = (a: number, b: number) => Math.abs(a - b) < 1;
 
+/**
+ * VS Code's light/dark follows `prefers-color-scheme` inside its frame: it
+ * must answer World's theme (headless Chrome's own is light), and change
+ * live, with the change event VS Code listens for.
+ */
+async function checkFrameTheme(frame: HTMLIFrameElement) {
+  const media = frame.contentWindow?.matchMedia("(prefers-color-scheme: dark)");
+  if (!media) return check(false, "the workbench frame can be read");
+  const themeIs = (theme: "dark" | "light") =>
+    until(
+      () => media.matches === (theme === "dark"),
+      `the workbench frame prefers World's ${theme} theme`,
+    );
+  let changes = 0;
+  media.addEventListener("change", () => changes++);
+  document.documentElement.dataset.theme = "dark";
+  await themeIs("dark");
+  document.documentElement.dataset.theme = "light";
+  await themeIs("light");
+  await until(() => changes > 0, "VS Code hears World's theme change");
+  document.documentElement.dataset.theme = "dark";
+  await themeIs("dark");
+}
+
 async function run() {
   localStorage.clear();
   const host = document.getElementById("root")!;
@@ -389,6 +413,7 @@ async function run() {
         true,
       "the proxied workbench loads in the frame",
     );
+    await checkFrameTheme(frame);
     check(
       $<HTMLAnchorElement>(
         'a.code-view-bar-action[target="_blank"]',

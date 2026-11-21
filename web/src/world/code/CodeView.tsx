@@ -14,6 +14,7 @@ import {
 import { worldLocalStorage } from "../../browserStorage";
 import { AgentIcon } from "../../components/AgentIcon";
 import { CloseButton } from "../../components/CloseButton";
+import { useViewTheme } from "../../themeScope";
 import type { WorldLeafObject, WorldObject } from "../worldObject";
 import {
   type CodeProject,
@@ -121,6 +122,10 @@ export default function CodeView({
 }) {
   const client = useMemo(() => clientProp ?? pageIdeClient(), [clientProp]);
   const ide = useIdeStatus(client);
+  // VS Code's light/dark follows the frame's colour scheme (the server adds
+  // auto-detect, workbench-theme.ts). Set on the frame itself: an inherited
+  // change alone doesn't fire the frame's prefers-color-scheme change event.
+  const theme = useViewTheme();
   const projects = useMemo(() => codeProjects(world), [world]);
   const [chosen, setChosen] = useState<string | null>(readProjectKey);
   const local = new Set(ide.status?.localConnections ?? []);
@@ -402,6 +407,7 @@ export default function CodeView({
               src={entry.url}
               title={`${providerLabel(entry)} — ${displayFolder(entry.folder)}`}
               hidden={entry.id !== instance?.id}
+              style={{ colorScheme: theme }}
               allow="clipboard-read; clipboard-write"
             />
           ))}

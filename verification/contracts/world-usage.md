@@ -1,7 +1,7 @@
 # World usage projection evidence
 
 Requirement authority: issue #213 and the approved
-[World usage delta](../../openspec/changes/harness-usage/specs/world-usage/spec.md).
+[current World usage contract](../../openspec/specs/world-usage/spec.md).
 This extends Q38's read-only numeric observation consumer; accepted runtime lease
 and verb-policy models continue to supply operation authority.
 
@@ -57,8 +57,9 @@ and verb-policy models continue to supply operation authority.
 Deterministic parser and service matrices exercise the actual numeric adapters
 and all relevant lease transitions. A new state machine would duplicate a pure
 projection while the existing runtime manager remains the source of lease
-authority. Direct evidence is therefore selected; no expanded model proof or
-new platform conformance is claimed.
+authority. Direct evidence is selected for numeric projection. The separately bounded
+[Claude tap ownership model](claude-tap-lock.md) covers publication/recovery;
+it does not expand the numeric projection or platform claims.
 
 - `server/src/usage/projection.test.ts`: response deduplication, cumulative
   high-water recovery, model/cache conventions, unknown baselines and UTC bounds.
@@ -94,9 +95,11 @@ new platform conformance is claimed.
 - `claude-tap.test.ts`: the tap records only numbers, keeps the highest
   reading per window when sessions write out of order (a later `resets_at`
   starts fresh, an earlier one never replaces it) and serializes
-  read-merge-replace under a lock file (an interleaved tap cannot lower it;
-  a waiting tap merges with the holder's commit; a dead tap's lock is
-  cleared and a tap that lost its lock commits nothing), finds the user's status
+  read-merge-replace under a process-owned nonempty lock directory (an
+  interleaved tap cannot lower it; a waiting tap merges with the holder's commit;
+  only confirmed-dead processes are recovered and delayed cleanup cannot remove
+  a replacement's directory); `quint/claude-tap-lock.test.ts` exercises the
+  suspension boundaries, including the final check/rename interval, finds the user's status
   line by Claude Code's precedence without recursing, and as a real program
   passes the same input to it and its output and exit code through unchanged;
   Claude launches retain their per-launch settings, including chaining through an installed host-wide tap.
@@ -123,3 +126,10 @@ checks; CI retains the required complete behavioral verification selection.
 Tests do not establish live SSH fleet availability, arbitrary future harness
 schema compatibility, synchronized source clocks, full history beyond budgets,
 actual provider charges or performance deadlines on every host.
+
+## November writer assessment
+
+The read-only projection assessment above does not prove the Claude tap writer's
+stale-lock commit protocol. [Q55](claude-tap-lock.md) records the model and real
+counterexample for #1086; its safety claim stays pending. Immutable launch-settings
+preparation is separately assessed in [Q56](launch-preparation.md).

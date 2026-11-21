@@ -299,7 +299,6 @@ test("the boards render the figures, rooms and what they leave out", async () =>
   const billboard = renderToStaticMarkup(
     createElement(TownCityBillboard, {
       center,
-      folded: false,
       stores: () => today,
     }),
   );
@@ -420,7 +419,6 @@ test("a read kept through failed refreshes goes stale, and never past UTC midnig
   const billboard = renderToStaticMarkup(
     createElement(TownCityBillboard, {
       center,
-      folded: false,
       stores: () => store,
     }),
   );

@@ -38,11 +38,20 @@ profiles and Workspace Trust. World SHALL retain host/room/agent/PR context.
 Opening a project SHALL preserve the exact connection, runtime generation,
 workspace and admitted checkout; ambiguous roots SHALL require explicit selection.
 Selecting an agent terminal SHALL NOT silently change the checkout or branch.
+The workbench's light or dark appearance SHALL follow World's resolved theme
+(the system's when World follows the system) and change live with it; World
+SHALL do this through configuration defaults on the workbench page, never by
+writing the user's IDE settings, so an explicit setting of the user's own wins.
 
 #### Scenario: Open a room and an agent checkout
 
 - **WHEN** the owner opens a qualified room in Code and explicitly selects an agent's linked checkout
 - **THEN** the real workbench opens that checkout on its owning host and the World frame keeps the same room and agents without creating replacements
+
+#### Scenario: World's theme changes while the workbench is open
+
+- **WHEN** the owner switches World from dark to light, or World follows the system and the system switches
+- **THEN** the open workbench switches to the user's preferred light theme without reloading, and switches back with World
 
 #### Scenario: Project evidence disappears
 
