@@ -51,7 +51,10 @@ export type HelpPicture = {
   scene: HelpScene;
   /** Sizes where the control exists; both by default. */
   sizes?: readonly HelpPictureSize[];
-  /** Controls pressed, in order, before the capture (CSS selectors). */
+  /**
+   * Controls pressed, in order, before the capture when the control is not
+   * on screen: closed in a menu, or out of Town's view (CSS selectors).
+   */
   press?: readonly string[];
 };
 

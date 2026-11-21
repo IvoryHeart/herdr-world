@@ -1,3 +1,4 @@
+import { normalizeWeatherSettings } from "../../../shared/weather";
 import type { GuiSettings } from "../config/gui-settings";
 import { admitVerb, checkVerbResult } from "../verbs/admission";
 import { registeredVerb } from "../verbs/registry";
@@ -17,6 +18,8 @@ const MAX_BODY_BYTES = 8 * 1024;
 const JIRA_FIELDS = ["enabled", "site", "email", "jql", "token"] as const;
 
 /**
+ * - `GET /api/world/weather`: immediate cached reading or unavailable.
+ * - `PUT /api/world/sources/weather` `{enabled?, location?, browserLocation?}`.
  * - `GET /api/world/sources`: statuses, items and links (bounded refresh).
  * - `POST /api/world/sources/refresh`: refresh now.
  * - `PUT /api/world/sources/github` `{enabled}`.
@@ -29,6 +32,29 @@ const JIRA_FIELDS = ["enabled", "site", "email", "jql", "token"] as const;
  */
 export function createSourcesHttpHandler(service: SourcesService) {
   return async (request: Request, pathname: string) => {
+    if (pathname === "/api/world/weather") {
+      if (request.method !== "GET") return methodNotAllowed("GET");
+      return jsonResponse(service.weather.snapshot());
+    }
+    if (pathname === `${WORLD_SOURCES_PATH}/weather`) {
+      if (request.method !== "PUT") return methodNotAllowed("PUT");
+      let body: Record<string, unknown>;
+      try {
+        body = await readBody(request);
+      } catch (cause) {
+        return jsonError(errorMessage(cause), 400);
+      }
+      try {
+        return jsonResponse(await service.configureWeather(body));
+      } catch (cause) {
+        return jsonError(
+          cause instanceof SourceSettingsError
+            ? cause.message
+            : "Could not save Weather settings",
+          cause instanceof SourceSettingsError ? 400 : 500,
+        );
+      }
+    }
     if (pathname === WORLD_SOURCES_PATH) {
       if (request.method !== "GET") return methodNotAllowed("GET");
       return jsonResponse(await service.snapshot());
@@ -188,7 +214,14 @@ export function storedSourceSettings(
   const github = part("github");
   const jira = part("jira");
   const text = (entry: unknown) => (typeof entry === "string" ? entry : null);
+  let weather;
+  try {
+    weather = normalizeWeatherSettings(part("weather"));
+  } catch {
+    weather = normalizeWeatherSettings({});
+  }
   return {
+    ...(part("weather") ? { weather } : {}),
     ...(github
       ? {
           github: {

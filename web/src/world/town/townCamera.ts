@@ -13,6 +13,7 @@ import { townHarbourLot } from "./townHarbour";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import { TOWN_RECEPTION_LIFT } from "./townBoardPlacement";
 import { TOWN_LIBRARY_ROOM } from "./townLibraryLot";
+import { TOWN_OBSERVATORY_ROOM } from "./townObservatoryLot";
 import { TOWN_POST_ROOM } from "./townPostLot";
 import { townEase } from "./townTransition";
 
@@ -42,15 +43,19 @@ export type TownZoomLimits = {
 
 /**
  * Tiles from the town's left edge past the side road of the last host's
- * building or the town center (with a wide town's library), whichever
+ * building or the town center (with a wide town's library and observatory), whichever
  * stands further right, on to the harbour's shore and the water's edge, so
  * a wide town's home shows the warehouse and the shipping lanes' flags
  * (townHarbour.ts).
  */
 export function townHostsWidth(layout: TownLayout) {
   if (!layout.buildings.length) return layout.width;
-  // A wide town's library stands right of the center (townLibraryLot.ts).
-  const civic = layout.formFactor === "narrow" ? 0 : TOWN_LIBRARY_ROOM;
+  // A wide town's library stands right of the center (townLibraryLot.ts),
+  // its observatory right of the library (townObservatoryLot.ts).
+  const civic =
+    layout.formFactor === "narrow"
+      ? 0
+      : TOWN_LIBRARY_ROOM + TOWN_OBSERVATORY_ROOM;
   const right = Math.max(
     layout.center.x + layout.center.w + civic,
     ...layout.buildings.map((b) => b.x + b.w),

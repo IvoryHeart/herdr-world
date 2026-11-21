@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runCli } from "./index";
 import { integrationPaths, WORLD_HARNESSES } from "./integration-paths";
+import { WORLD_SKILL_VERSION } from "./integration";
 import { createTestCli, type TestCli } from "./test-context";
 
 let cli: TestCli;
@@ -21,7 +22,9 @@ test("discovers configured supported harnesses, installs and refreshes each, and
   for (const name of WORLD_HARNESSES) {
     const paths = integrationPaths(name, cli.context.runtime);
     if (!paths) continue;
-    expect(readFileSync(paths.file, "utf8")).toContain("VERSION=3");
+    expect(readFileSync(paths.file, "utf8")).toContain(
+      `VERSION=${WORLD_SKILL_VERSION}`,
+    );
     expect(cli.output.join("\n")).toContain(
       `${name}: installed World's integration. Remove: herdr-world integration uninstall ${name}`,
     );
@@ -51,7 +54,10 @@ test("discovers configured supported harnesses, installs and refreshes each, and
     if (paths)
       writeFileSync(
         paths.file,
-        readFileSync(paths.file, "utf8").replace("VERSION=3", "VERSION=0"),
+        readFileSync(paths.file, "utf8").replace(
+          `VERSION=${WORLD_SKILL_VERSION}`,
+          "VERSION=0",
+        ),
       );
   }
   cli.output.length = 0;
@@ -59,7 +65,9 @@ test("discovers configured supported harnesses, installs and refreshes each, and
   for (const name of WORLD_HARNESSES) {
     const paths = integrationPaths(name, cli.context.runtime);
     if (!paths) continue;
-    expect(readFileSync(paths.file, "utf8")).toContain("VERSION=3");
+    expect(readFileSync(paths.file, "utf8")).toContain(
+      `VERSION=${WORLD_SKILL_VERSION}`,
+    );
     expect(cli.output.join("\n")).toContain(
       `${name}: updated World's integration`,
     );
@@ -80,7 +88,7 @@ test("no harness creates nothing; opt-out prevents fresh installation and update
   delete cli.context.runtime.env.HERDR_WORLD_SKIP_INTEGRATIONS;
   expect(await sync()).toBe(0);
   const old = readFileSync(skill("codex"), "utf8").replace(
-    "VERSION=3",
+    `VERSION=${WORLD_SKILL_VERSION}`,
     "VERSION=0",
   );
   writeFileSync(skill("codex"), old);

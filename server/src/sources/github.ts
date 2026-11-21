@@ -75,7 +75,7 @@ function shortenedHistory(oldest: number | undefined): SourceRefresh {
 const ROLLUP_CONTEXTS = 100;
 
 export const PR_FIELDS = `
-  number title url isDraft state updatedAt mergedAt headRefName headRefOid baseRefName reviewDecision mergeable
+  number title url isDraft state createdAt updatedAt mergedAt headRefName headRefOid baseRefName reviewDecision mergeable
   repository { nameWithOwner }
   headRepository { nameWithOwner }
   commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: ${ROLLUP_CONTEXTS}) { totalCount nodes { __typename ... on CheckRun { status conclusion } ... on StatusContext { context state } } } } } } }`;
@@ -381,6 +381,7 @@ function pullRequestItem(node: Record<string, unknown>): WorkItem | null {
     status: merged ? "merged" : draft ? "draft" : "open",
     roles: [],
     updatedAt: time(node.updatedAt),
+    ...(time(node.createdAt) ? { createdAt: time(node.createdAt) } : {}),
     ...(merged && time(node.mergedAt)
       ? { finishedAt: time(node.mergedAt) }
       : {}),
