@@ -21,8 +21,8 @@ import type { WorldObject } from "../worldObject";
 import { saveDeskPinOrder, type DeskPins } from "../useDeskPins";
 import { TownChooser } from "./TownChooser";
 import type { TownToast } from "./TownToasts";
-import { townDeskColorTarget, townRoomColorKey } from "./townModel";
-import { saveRoomSpots } from "./townRoomPins";
+import { townDeskColorTarget } from "./townModel";
+import { roomSpotsByRuntime, saveRoomSpots } from "./townRoomPins";
 import type { TownRoomPlacement } from "./townRoomPlace";
 import { townMoveMenu, type TownMoveFlow } from "./townMoveMenu";
 import { townPinnedReorder, townRoomPinnedSeats } from "./townPinOrder";
@@ -30,7 +30,7 @@ import {
   requestAgentMove,
   requestDeskMove,
   requestDeskReorder,
-  requestRoomOrder,
+  requestBuildingRoomOrder,
   townMoveNotice,
   townMoveResult,
   type TownMoveOutcome,
@@ -320,26 +320,21 @@ export function townMoveActions({
       toast("error", `${label} not moved: the building changed.`);
       return "returned";
     }
-    const spots = Object.fromEntries(
-      [...placement.spots].map(([key, spot]) => [
-        townRoomColorKey(roomForKey(key)!),
-        spot,
-      ]),
+    // A building per host can hold several runtimes' rooms: each runtime
+    // keeps its own spots and workspace order.
+    const spots = roomSpotsByRuntime(
+      [...placement.spots].map(([key, spot]) => [roomForKey(key)!, spot]),
     );
     setMovingKey(room.key);
     try {
-      const conflict = await saveRoomSpots(
-        room.workspaceRef.connectionId,
-        spots,
-      );
+      const conflict = await saveRoomSpots(spots);
       if (conflict) {
         toast("error", `${label} not moved: ${conflict}`);
         return "returned";
       }
       // A core room's place is World's own: core has no room order.
-      const outcome = await (room.coreOpen
-        ? Promise.resolve({ status: "moved" as const })
-        : requestRoomOrder(rooms as OfficeRoom[])
+      const outcome = await requestBuildingRoomOrder(
+        (rooms as OfficeRoom[]).filter((entry) => !entry.coreOpen),
       ).catch((cause: unknown) => ({
         status: "refused" as const,
         reason: "failed",
