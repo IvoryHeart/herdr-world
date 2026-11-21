@@ -19,8 +19,11 @@
  */
 
 import { townBusRoute } from "./townBus";
-import { townPostLot } from "./townPost";
-import { townPostReserve } from "./townPostLot";
+import { townApartmentsLot, townApartmentsReserve } from "./townApartmentsLot";
+import { townHarbourLot, townHarbourReserve } from "./townHarbour";
+import { townWarehouseReserve } from "./townHarbourLot";
+import { townPostLotBeside, townPostReserve } from "./townPostLot";
+import { townLibraryLot, townLibraryReserve } from "./townLibraryLot";
 import {
   TOWN_FACADE,
   TOWN_TILE as T,
@@ -57,6 +60,8 @@ export const TownLand = {
   gravel: 6,
   /** A garden's mown lawn. */
   lawn: 7,
+  /** The open sea past a wide town's harbour (townHarbourLot.ts). */
+  sea: 8,
 } as const;
 export type TownLandKind = (typeof TownLand)[keyof typeof TownLand];
 
@@ -138,7 +143,7 @@ export type TownLandscape = {
   /**
    * Chebyshev distance from the tile to the nearest reserved tile (a road,
    * pavement, plaza, building, the town center, a lamp, bench, bush, board,
-   * bus stop, the post office or the billboard verge), capped above REACH.
+   * bus stop, the post office, the library or the billboard verge), capped above REACH.
    */
   reserved(tx: number, ty: number): number;
   /** The free tile's surface; reserved tiles keep the layout's ground. */
@@ -233,14 +238,31 @@ function reservedLand(layout: TownLayout) {
     layout.plaza.x + 3,
     layout.plaza.y + 2,
   );
-  for (const stop of townBusRoute(layout).stops) {
-    const sx = Math.floor(stop.wait.x / T);
-    const sy = Math.floor(stop.wait.y / T);
+  const route = townBusRoute(layout);
+  for (const sign of [
+    ...route.stops.map((stop) => stop.wait),
+    ...(route.terminus?.sign ? [route.terminus.sign] : []),
+  ]) {
+    const sx = Math.floor(sign.x / T);
+    const sy = Math.floor(sign.y / T);
     reserve(sx - 2, sy - 5, sx + 3, sy + 2);
   }
-  const post = townPostLot(layout);
-  if (post) {
-    const lot = townPostReserve(post);
+  const post = townPostReserve(townPostLotBeside(layout.center));
+  reserve(post.x0, post.y0, post.x1, post.y1);
+  const harbour = townHarbourLot(layout);
+  for (const lot of [
+    townWarehouseReserve(harbour.warehouse),
+    townHarbourReserve(harbour),
+  ])
+    reserve(lot.x0, lot.y0, lot.x1, lot.y1);
+  const library = townLibraryLot(layout);
+  if (library) {
+    const lot = townLibraryReserve(library);
+    reserve(lot.x0, lot.y0, lot.x1, lot.y1);
+  }
+  const apartments = townApartmentsLot(layout);
+  if (apartments) {
+    const lot = townApartmentsReserve(apartments);
     reserve(lot.x0, lot.y0, lot.x1, lot.y1);
   }
   if (layout.roads.length) {
@@ -279,6 +301,8 @@ function build(layout: TownLayout | null, seed: number): TownLandscape {
   // Past the wild line the town's land is the wild's, tile for tile.
   const wild = layout ? townWildLandscape(seed) : null;
   const line = layout ? townWildLine(layout) : null;
+  // A wide town's right edge is the coast: the sea runs on past the map.
+  const coast = (layout && townHarbourLot(layout)?.coast) ?? Infinity;
   const isWild = (tx: number, ty: number) =>
     !!line && (tx < line.x0 || ty < line.y0 || tx >= line.x1 || ty >= line.y1);
   const inTown = (tx: number, ty: number) =>
@@ -342,6 +366,8 @@ function build(layout: TownLayout | null, seed: number): TownLandscape {
     return true;
   };
   const plot = (cx: number, cy: number): TownLandPlot | null => {
+    // No garden or pond runs into the sea.
+    if ((cx + 1) * PLOT_CELL > coast - 2) return null;
     if (wild && isWild(cx * PLOT_CELL, cy * PLOT_CELL))
       return wild.plot(cx, cy);
     const key = `${cx},${cy}`;
@@ -390,6 +416,7 @@ function build(layout: TownLayout | null, seed: number): TownLandscape {
   };
 
   const surface = (tx: number, ty: number): TownLandKind => {
+    if (tx >= coast) return TownLand.sea;
     if (wild && isWild(tx, ty)) return wild.surface(tx, ty);
     if (reserved(tx, ty) === 0) return TownLand.meadow;
     if (lane(tx, ty)) return TownLand.lane;
@@ -440,6 +467,8 @@ function build(layout: TownLayout | null, seed: number): TownLandscape {
   };
 
   const objectAt = (tx: number, ty: number): TownLandObject | null => {
+    // Nothing stands at sea, nor reaches over the quay.
+    if (tx >= coast - TOWN_LAND_OBJECT_REACH.right) return null;
     if (wild && isWild(tx, ty)) return wild.objectAt(tx, ty);
     if (reserved(tx, ty) === 0) return null;
     const p = plotAt(tx, ty);

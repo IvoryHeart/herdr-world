@@ -7,6 +7,28 @@ concurrent independently qualified operational contexts and fair bounded aggrega
 
 ## Requirements
 
+### Requirement: Serialized live catalogue edits
+
+CLI and Settings edits admitted by a running World SHALL use one serialized
+read-modify-save-publication queue. A successful edit SHALL survive a later
+unrelated successful edit. A failed persistence operation SHALL leave the
+preceding catalogue intact, report failure and permit later queue admission;
+retry SHALL derive its change from the latest committed catalogue. The persisted
+default SHALL always name a retained profile. Runtime generation and cleanup
+fences remain independently required.
+
+#### Scenario: Settings save overlaps a CLI edit
+
+- **WHEN** a Settings edit is requested while a CLI add, remove or default save is pending, or in the reverse order
+- **THEN** both successful edits appear in memory and on disk after settlement,
+  with one persistence owner and no restart of unaffected sibling runtimes
+
+#### Scenario: A failed live request
+
+- **WHEN** live admission or persistence fails
+- **THEN** the CLI reports the failure without attempting an offline file write,
+  and the next admitted edit reads the latest committed service catalogue
+
 ### Requirement: Runtime authority
 Herdr SHALL own structural topology, agent lifecycle and terminal streams. One World service SHALL
 own the saved host catalogue and its runtime connection profiles, and SHALL isolate each runtime connection in its own
@@ -59,7 +81,8 @@ with that World service rather than connecting to independently deployed bridges
 
 #### Scenario: CLI requests a restart for a non-loopback listener
 - **WHEN** the configured listener answers on one specific non-loopback address
-- **THEN** `--restart` retains save-and-restart for an active managed service
+- **THEN** `--restart` stops the active managed service, saves under offline registry
+  ownership and starts it after releasing ownership, including after an edit refusal
 - **AND** the CLI refuses offline writes while a foreground process serves there
 
 #### Scenario: CLI targets a separate World data folder
@@ -108,6 +131,36 @@ with that World service rather than connecting to independently deployed bridges
 - **AND** permanent, permission, protocol and unclassified failures do not acquire indefinite retries
 - **AND** disconnect, removal, replacement, generation retirement and shutdown cancel old retry work;
   explicit Reconnect remains available and failed topology remains non-actionable until freshly observed
+
+### Requirement: Exclusive saved connection registry ownership
+Every successful connection edit SHALL preserve unrelated successful edits. Offline CLI
+writers SHALL acquire cross-process ownership before reading a catalogue snapshot and
+retain it through validation and atomic publication or clearing. A starting service SHALL
+acquire the same registry ownership before bootstrap or first-run discovery and retain
+it until its connection storage is closed. Ownership SHALL follow the registry path,
+including when different data folders select the same registry.
+
+#### Scenario: Two offline commands edit concurrently
+- **WHEN** independent offline CLI processes add different profiles, remove an unrelated
+  profile or change the default
+- **THEN** successful edits accumulate in ownership order, using a freshly loaded snapshot
+- **AND** contention may fail after a bounded wait without a write or success receipt
+- **AND** validation or persistence failure releases ownership for later commands
+
+#### Scenario: Service startup overlaps an offline edit
+- **WHEN** the offline command owns its snapshot before service startup
+- **THEN** startup waits for ownership and bootstraps from the completed saved catalogue,
+  or refuses startup after a bounded wait without replacing that catalogue
+- **WHEN** startup wins ownership or publishes its instance claim before the CLI snapshot
+- **THEN** the CLI refuses offline mutation or uses authenticated live admission once available
+- **AND** first-run discovery never replaces a successful saved edit
+
+#### Scenario: A registry owner pauses, exits or cannot be established
+- **WHEN** an owner pauses or the ownership file is unsafe, unreadable or invalid
+- **THEN** another process never steals ownership based on elapsed time or overwrites a snapshot
+- **WHEN** the owning process exits, including an ungraceful exit
+- **THEN** the OS releases its ownership and later commands can reopen the registry
+- **AND** the stable ownership sidecar is retained; recovery never deletes or replaces it
 
 ### Requirement: Hosts own independently discovered runtime connections
 

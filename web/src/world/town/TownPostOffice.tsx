@@ -1,181 +1,140 @@
-import { memo, useEffect, useRef, useState, type FocusEvent } from "react";
+import {
+  createContext,
+  memo,
+  useContext,
+  useRef,
+  useState,
+  type FocusEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
-import type { WorldSourcesSnapshot } from "../../../../shared/worldSources";
+import { AgentMark } from "../../components/AgentMark";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "../../components/ui/popover";
-import { openIntegrations } from "../../integrations";
-import { PullRequestCard } from "../PullRequestCard";
+import { useNow } from "../handoffs";
+import { needsYouAskKey, needsYouItems, openNeedsYou } from "../needsYou";
+import { useReviewedWork } from "../useReviewedWork";
+import {
+  sharedAnswerDeliveries,
+  useAnswerDeliveryCounts,
+  type WorldAnswerDeliveriesStore,
+} from "../worldAnswerDeliveries";
+import {
+  sharedAsksStore,
+  useWorldAsks,
+  type WorldAsksStore,
+} from "../worldAsks";
+import type { WorldObject } from "../worldObject";
+import { useOpenAnswerOutbox } from "./answerOutbox";
 import { BadgePopover } from "./DeskWorkBadge";
-import type { TownCenterLot } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
 import {
-  TOWN_POST_SLOTS,
-  TOWN_POST_YARD_ROWS,
-  townPostCountParts,
+  TOWN_POST_EMPTY,
+  TOWN_POST_TROLLEY,
+  townLetterAge,
+  townLetterFrom,
+  townLetterLabel,
+  townLetterLine,
+  townPostCounts,
   townPostFoldAt,
-  townPostLabel,
-  townPostLot,
-  townPostName,
   townPostOffice,
-  townPostSignText,
+  townPostParts,
+  townPostSignAt,
   townPostSlot,
+  townPostSpoken,
+  townPostWaiting,
+  townPostYardCount,
+  type TownLetter,
+  type TownPostCounts,
   type TownPostOffice as Office,
-  type TownPostParcel,
-} from "./townPost";
-import { useTownPostSources } from "./townPostFixture";
+} from "./townPostModel";
+import {
+  TOWN_POST_WIDTH,
+  TOWN_POST_YARD_ROWS,
+  townPostLotBeside,
+} from "./townPostLot";
+import {
+  TOWN_POST_FIXTURE_PREFIX,
+  townPostFixture,
+  townPostFixtureMode,
+} from "./townPostFixture";
+import { townLetterUrl } from "./townPostPaint";
 import type { TownRendererHandle } from "./townRenderer";
-import { useOpenTownWork } from "./TownWorkLens";
 import "./townPost.css";
 
-/** How long a parcel takes to leave the yard (townPost.css). */
-export const TOWN_POST_LEAVE_MS = 1_400;
-
-const openSourcesSettings = () => openIntegrations("source:github");
-
-/** A parcel leaving the yard: carried off when merged, else just gone. */
-type Leaving = {
-  parcel: TownPostParcel;
-  slot: number;
-  how: "posted" | "gone";
-};
-
 /**
- * Parcels that left since the last read: merged ones are posted, closed or
- * dropped ones simply go. Only parcels that stood in the yard animate; the
- * first read, and a source that closes, animate nothing.
+ * What the post office counts: Town's world (the Hosts filter applied, as
+ * Needs you's), counted with Needs you's own items, or fixed counts where a
+ * town is drawn alone (captures). Without either it shows its sign alone.
  */
-function useLeaving(office: Office, snapshot: WorldSourcesSnapshot) {
-  const before =
-    useRef<Map<string, { parcel: TownPostParcel; slot: number }>>(null);
-  const timers = useRef(new Set<number>());
-  const [leaving, setLeaving] = useState<Leaving[]>([]);
-  useEffect(() => {
-    if (office.status !== "open") {
-      before.current = null;
-      return;
-    }
-    const prev = before.current;
-    const yard = yardSlots(office.parcels.length);
-    before.current = new Map(
-      office.parcels
-        .slice(0, yard)
-        .map((parcel, slot) => [parcel.key, { parcel, slot }]),
-    );
-    if (!prev) return;
-    const open = new Set(office.parcels.map((parcel) => parcel.key));
-    const merged = new Set(
-      snapshot.items
-        .filter((item) => item.lane === "merged")
-        .map((item) => item.key),
-    );
-    const batch: Leaving[] = [...prev.values()]
-      .filter(({ parcel }) => !open.has(parcel.key))
-      .map((entry) => ({
-        ...entry,
-        how: merged.has(entry.parcel.key) ? "posted" : "gone",
-      }));
-    if (!batch.length) return;
-    setLeaving((list) => [...list, ...batch]);
-    const timer = window.setTimeout(() => {
-      timers.current.delete(timer);
-      setLeaving((list) => list.filter((entry) => !batch.includes(entry)));
-    }, TOWN_POST_LEAVE_MS);
-    timers.current.add(timer);
-  }, [office, snapshot]);
-  useEffect(() => {
-    const pending = timers.current;
-    return () => {
-      for (const timer of pending) window.clearTimeout(timer);
-    };
-  }, []);
-  return leaving;
-}
+export type TownPostSource =
+  | { world: Pick<WorldObject, "leaves" | "nodeById"> }
+  | { counts: TownPostCounts };
 
-/** How many parcels stand in the yard; the rest make the "+N" pile. */
-const yardSlots = (count: number) =>
-  count > TOWN_POST_SLOTS ? TOWN_POST_SLOTS - 1 : count;
+const TownPostContext = createContext<TownPostSource | null>(null);
 
-/**
- * Re-reads the post office when a parcel's detail expires, so a ready
- * parcel never outlives the fresh read that made it ready.
- */
-function useExpiry(snapshot: WorldSourcesSnapshot) {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const now = Date.now();
-    let next = Infinity;
-    for (const item of snapshot.items) {
-      const expires = item.prObservation?.expiresAt;
-      if (typeof expires === "number" && expires > now)
-        next = Math.min(next, expires);
-    }
-    if (!Number.isFinite(next)) return;
-    const timer = window.setTimeout(
-      () => setTick((value) => value + 1),
-      Math.min(next - now + 20, 2 ** 31 - 1),
-    );
-    return () => window.clearTimeout(timer);
-  }, [snapshot, tick]);
-}
-
-/** The counts in words, for names and the folded sign. */
-function spoken(office: Office) {
-  if (office.status !== "open" || office.stale) return townPostSignText(office);
-  return townPostCountParts(office.counts)
-    .map((part) =>
-      part.state === "ready" ? `${part.count} ready to merge` : part.text,
-    )
-    .join(", ");
-}
-
-const FOLDED_WAITING = {
-  loading: "…",
-  off: "closed",
-  closed: "closed",
-} as const;
-
-/**
- * Town's post office (#760): your open pull requests as parcels in its
- * sorting yard beside the town center, ready to merge first, each opening the pull
- * request card the desk badge opens. Its sign counts them without hovering.
- * On a narrow (stacked) town it folds to a sign on the town center that
- * opens the same parcels as a list, as the city billboard folds. Its sign,
- * and "All pull requests" in its lists, open Board's Work lens over Town
- * (#887): every pull request as the same kanban.
- */
-export const TownPostOffice = memo(function TownPostOffice({
-  layout,
-  renderer,
+/** Town provides its world; only the post office re-renders as it counts. */
+export function TownPostProvider({
+  source,
+  children,
 }: {
-  layout: TownLayout;
-  /** Brings a focused parcel into view. */
-  renderer: { readonly current: TownRendererHandle | null };
+  source: TownPostSource;
+  children: ReactNode;
 }) {
-  const snapshot = useTownPostSources();
-  // Read at every render: an expiring detail re-renders it (useExpiry).
-  useExpiry(snapshot);
-  const office = townPostOffice(snapshot, Date.now());
-  const openWork = useOpenTownWork();
-  const leaving = useLeaving(office, snapshot);
-  const [cardKey, setCardKey] = useState<string | null>(null);
-  const cardAnchor = useRef<HTMLElement | null>(null);
-  const yardRef = useRef<HTMLDivElement | null>(null);
-  const item = cardKey
-    ? snapshot.items.find((entry) => entry.key === cardKey)
-    : undefined;
-  // A pull request GitHub no longer lists closes its card for good.
-  useEffect(() => {
-    if (cardKey && !item) setCardKey(null);
-  }, [cardKey, item]);
-  const openCard = (key: string, anchor: HTMLElement | null) => {
-    cardAnchor.current = anchor;
-    setCardKey(key);
-  };
-  /** Keyboard focus on an off-screen parcel or sign pans it into view. */
-  const reveal = (event: FocusEvent<HTMLElement>) => {
+  return (
+    <TownPostContext.Provider value={source}>
+      {children}
+    </TownPostContext.Provider>
+  );
+}
+
+/** Needs you's items by kind, from the same stores and clock as its list. */
+function useWorldCounts(
+  world: Pick<WorldObject, "leaves" | "nodeById">,
+): TownPostCounts {
+  const asks = useWorldAsks(sharedAsksStore());
+  const work = useReviewedWork();
+  const now = useNow(30_000);
+  const outbox = useAnswerDeliveryCounts().checks;
+  return townPostCounts(
+    needsYouItems(world, asks, (leaf) => work.toReview(leaf, now)),
+    outbox,
+  );
+}
+
+function CountedSign({
+  world,
+  children,
+}: {
+  world: Pick<WorldObject, "leaves" | "nodeById">;
+  children(counts: TownPostCounts): ReactNode;
+}) {
+  return children(useWorldCounts(world));
+}
+
+/**
+ * The fixture's post office (`?townPostFixture`), made once per mount, or
+ * null without the switch.
+ */
+function useFixtureOffice(): Office | null {
+  const [office] = useState(() => {
+    const fixture = townPostFixtureMode();
+    if (!fixture) return null;
+    const made = townPostFixture(fixture, Date.now());
+    return townPostOffice(made.asks, made.outgoing);
+  });
+  return office;
+}
+
+/** Keyboard focus on an off-screen sign or letter pans `at` into view. */
+function revealer(
+  renderer: { readonly current: TownRendererHandle | null },
+  at: { x: number; y: number },
+) {
+  return (event: FocusEvent<HTMLElement>) => {
     const handle = renderer.current;
     const target = event.currentTarget;
     if (!handle || !focusVisible(target)) return;
@@ -189,189 +148,345 @@ export const TownPostOffice = memo(function TownPostOffice({
       box.bottom < height - margin
     )
       return;
-    const lot = townPostLot(layout);
-    const at = lot
-      ? { x: (lot.x + lot.w / 2) * T, y: lot.yardY * T }
-      : townPostFoldAt(layout.center);
     handle.camera.flyTo(at.x, at.y, handle.camera.z, 0.4);
     handle.invalidate("focus");
   };
+}
+
+/**
+ * Town's post office (#1098, #1105): what is addressed to you, mail and
+ * never cargo. Its sign counts Needs you's items by kind without hovering
+ * (questions, blocked agents, finished work to review) and the Outbox's
+ * answers to check; clicking it, or Enter on it, opens Needs you, the same
+ * list as the top bar's counter. A narrow town folds the sign to a smaller
+ * one across its house's front. In its yard each open question lies as a
+ * letter, oldest first, opening a letter card whose **Answer** opens Needs
+ * you at that question; your answers still on their way ride the mail
+ * trolley, which opens Town's Outbox.
+ */
+export const TownPostOffice = memo(function TownPostOffice({
+  layout,
+  renderer,
+  asksStore = sharedAsksStore(),
+  deliveries = sharedAnswerDeliveries(),
+}: {
+  layout: TownLayout;
+  /** Brings a focused sign or letter into view. */
+  renderer: { readonly current: TownRendererHandle | null };
+  asksStore?: WorldAsksStore;
+  deliveries?: WorldAnswerDeliveriesStore;
+}) {
+  const source = useContext(TownPostContext);
+  const fixture = useFixtureOffice();
+  const folded = layout.formFactor === "narrow";
+  const lot = townPostLotBeside(layout.center);
+  const at = folded ? townPostFoldAt(lot) : townPostSignAt(lot);
+  const reveal = revealer(renderer, at);
+  const sign = (counts: TownPostCounts | null) => (
+    <Sign counts={counts} folded={folded} at={at} onFocus={reveal} />
+  );
+  const counted = fixture ? (
+    sign(fixtureCounts(fixture))
+  ) : !source ? (
+    sign(null)
+  ) : "counts" in source ? (
+    sign(source.counts)
+  ) : (
+    <CountedSign world={source.world}>{sign}</CountedSign>
+  );
+  return (
+    <>
+      {counted}
+      {fixture ? (
+        <PostYard office={fixture} layout={layout} renderer={renderer} />
+      ) : (
+        <LedgerYard
+          asksStore={asksStore}
+          deliveries={deliveries}
+          layout={layout}
+          renderer={renderer}
+        />
+      )}
+    </>
+  );
+});
+
+/** The sign's counts for the fixture's letters and trolley. */
+const fixtureCounts = (office: Office): TownPostCounts => ({
+  ...TOWN_POST_EMPTY,
+  asks: office.letters.length,
+  outbox: office.outgoing.checks,
+});
+
+function Sign({
+  counts,
+  folded,
+  at,
+  onFocus,
+}: {
+  counts: TownPostCounts | null;
+  folded: boolean;
+  at: { x: number; y: number };
+  onFocus(event: FocusEvent<HTMLElement>): void;
+}) {
+  const parts = counts ? townPostParts(counts) : [];
+  const waiting = counts ? townPostWaiting(counts) : 0;
+  return (
+    <button
+      type="button"
+      className={folded ? "town-post-fold" : "town-post-sign"}
+      data-waiting={waiting > 0 || undefined}
+      style={{ left: at.x, top: at.y }}
+      aria-label={`Post office: ${counts ? townPostSpoken(counts) : "Needs you"}. Open Needs you`}
+      title="Post office: open Needs you"
+      onPointerDown={(event) => event.stopPropagation()}
+      onFocus={onFocus}
+      onClick={(event) => {
+        event.stopPropagation();
+        openNeedsYou();
+      }}
+    >
+      {folded ? (
+        <span className="town-post-mark" aria-hidden="true" />
+      ) : (
+        <span className="town-post-sign-title" aria-hidden="true">
+          <span className="town-post-mark" />
+          POST OFFICE
+        </span>
+      )}
+      {counts ? (
+        <span className="town-post-counts" aria-hidden="true">
+          {parts.length ? (
+            parts.map((part) => (
+              <span key={part.key} data-kind={part.key}>
+                {part.mark ? (
+                  <AgentMark kind={part.mark} />
+                ) : (
+                  <span className="town-post-letter">✉</span>
+                )}
+                {folded ? part.count : part.text}
+              </span>
+            ))
+          ) : (
+            <span data-kind="none">{folded ? "0" : "Nothing for you"}</span>
+          )}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/** Whether focus arrived by keyboard (a tap must not move the camera). */
+function focusVisible(target: HTMLElement) {
+  try {
+    return target.matches(":focus-visible");
+  } catch {
+    return false;
+  }
+}
+
+const letterArt = (verified: boolean) => {
+  const url = townLetterUrl(verified);
+  return url ? `url("${url}")` : undefined;
+};
+
+const isFixture = (letter: TownLetter) =>
+  letter.id.startsWith(TOWN_POST_FIXTURE_PREFIX);
+
+/** Needs you at a letter's question. */
+const answer = (letter: TownLetter) => openNeedsYou(needsYouAskKey(letter.id));
+
+/** The yard from the World ledger: open asks and answers on their way. */
+function LedgerYard({
+  asksStore,
+  deliveries,
+  layout,
+  renderer,
+}: {
+  asksStore: WorldAsksStore;
+  deliveries: WorldAnswerDeliveriesStore;
+  layout: TownLayout;
+  renderer: { readonly current: TownRendererHandle | null };
+}) {
+  const asks = useWorldAsks(asksStore);
+  const outgoing = useAnswerDeliveryCounts(deliveries);
+  return (
+    <PostYard
+      office={townPostOffice(asks, outgoing)}
+      layout={layout}
+      renderer={renderer}
+    />
+  );
+}
+
+/**
+ * The yard (#1105): a letter per open question, oldest first, a "+N"
+ * bundle beyond the yard's slots, and the mail trolley with your answers
+ * on their way.
+ */
+function PostYard({
+  office,
+  layout,
+  renderer,
+}: {
+  office: Office;
+  layout: TownLayout;
+  renderer: { readonly current: TownRendererHandle | null };
+}) {
+  const openOutbox = useOpenAnswerOutbox();
+  const [cardId, setCardId] = useState<string | null>(null);
+  const cardAnchor = useRef<HTMLElement | null>(null);
+  const letter = cardId
+    ? office.letters.find((entry) => entry.id === cardId)
+    : undefined;
+  const openCard = (id: string, anchor: HTMLElement | null) => {
+    cardAnchor.current = anchor;
+    setCardId(id);
+  };
+  const lot = townPostLotBeside(layout.center);
+  const reveal = revealer(renderer, {
+    x: (lot.x + lot.w / 2) * T,
+    y: lot.yardY * T,
+  });
+  // A question answered, dismissed or withdrawn takes its card with it.
   const card =
-    cardKey && item
+    cardId && letter
       ? createPortal(
           <BadgePopover
             anchor={cardAnchor}
-            label={`Pull request ${item.ref}`}
-            onClose={() => setCardKey(null)}
+            label={`Letter from ${townLetterFrom(letter)}`}
+            onClose={() => setCardId(null)}
           >
-            <PullRequestCard item={item} compact />
+            <LetterCard
+              letter={letter}
+              onAnswer={() => {
+                setCardId(null);
+                answer(letter);
+              }}
+            />
           </BadgePopover>,
           document.body,
         )
       : null;
-  const lot = townPostLot(layout);
-  if (!lot)
-    return (
-      <>
-        <FoldedSign
-          center={layout.center}
-          office={office}
-          onOpen={openCard}
-          onOpenWork={openWork}
-          onFocus={reveal}
-        />
-        {card}
-      </>
-    );
-  const parcels = office.status === "open" ? office.parcels : [];
-  const shown = parcels.slice(0, yardSlots(parcels.length));
-  const pile = parcels.slice(shown.length);
-  const quiet = office.status !== "open";
-  const connect = office.status === "off" || office.status === "closed";
-  // Work opens only once GitHub has answered; loading keeps the old sign.
-  const work = office.status === "open" ? openWork : undefined;
+  const outgoing = office.outgoing.waiting + office.outgoing.checks;
+  const shown = office.letters.slice(
+    0,
+    townPostYardCount(office.letters.length),
+  );
+  const bundle = office.letters.slice(shown.length);
   return (
     <>
-      <button
-        type="button"
-        className="town-post-sign"
-        data-quiet={quiet || undefined}
-        style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 34 }}
-        aria-label={`Post office: ${spoken(office)}${work ? ". Open all pull requests" : ""}`}
-        title={quiet && office.status === "closed" ? office.detail : undefined}
-        onPointerDown={(event) => event.stopPropagation()}
-        onFocus={reveal}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (connect) openSourcesSettings();
-          else if (work) work();
-          else
-            yardRef.current
-              ?.querySelector<HTMLElement>(".town-post-parcel")
-              ?.focus();
-        }}
-      >
-        <span className="town-post-sign-title" aria-hidden="true">
-          POST OFFICE
-        </span>
-        <SignCounts office={office} />
-      </button>
       <div
-        ref={yardRef}
         className="town-post-yard"
         role="group"
         aria-label="Post office yard"
         style={{
           left: lot.x * T,
           top: lot.yardY * T,
-          width: lot.w * T,
+          width: TOWN_POST_WIDTH * T,
           height: TOWN_POST_YARD_ROWS * T,
         }}
       >
-        {shown.map((parcel, index) => {
+        {shown.map((entry, index) => {
           const at = townPostSlot(index);
           return (
             <button
-              key={parcel.key}
+              key={entry.id}
               type="button"
-              className="town-post-parcel"
-              data-state={parcel.state}
-              style={{ left: at.x, top: at.y }}
-              aria-label={`${townPostLabel(parcel)}. Open pull request`}
+              className="town-post-envelope"
+              data-unverified={entry.verified ? undefined : ""}
+              style={{
+                left: at.x,
+                top: at.y,
+                backgroundImage: letterArt(entry.verified),
+              }}
+              aria-label={`${townLetterLabel(entry)}. Open letter`}
               onPointerDown={(event) => event.stopPropagation()}
               onFocus={reveal}
               onClick={(event) => {
                 event.stopPropagation();
-                openCard(parcel.key, event.currentTarget);
+                openCard(entry.id, event.currentTarget);
               }}
             >
               <span className="town-post-label" aria-hidden="true">
-                <b>{townPostName(parcel)}</b>
-                <span>
-                  {parcel.repo} · {parcel.why}
-                </span>
+                <b>{townLetterFrom(entry)}</b>
+                <span>{townLetterLine(entry, 60)}</span>
               </span>
             </button>
           );
         })}
-        {pile.length ? (
-          <Pile
-            parcels={pile}
+        {bundle.length ? (
+          <Bundle
+            letters={bundle}
             at={townPostSlot(shown.length)}
             onOpen={openCard}
-            onOpenWork={openWork}
             onFocus={reveal}
           />
         ) : null}
-        {leaving
-          .filter((entry) => entry.slot < TOWN_POST_SLOTS)
-          .map((entry) => {
-            const at = townPostSlot(entry.slot);
-            return (
-              <span
-                key={`left:${entry.parcel.key}`}
-                className="town-post-parcel"
-                data-state={entry.parcel.state}
-                data-leaving={entry.how}
-                style={{ left: at.x, top: at.y }}
-                aria-hidden="true"
-              />
-            );
-          })}
-        <span className="town-post-announce" role="status">
-          {leaving
-            .map(
-              (entry) =>
-                `${townPostName(entry.parcel)} ${entry.how === "posted" ? "merged" : "left the post office"}.`,
-            )
-            .join(" ")}
-        </span>
+        {outgoing ? (
+          <Trolley
+            office={office}
+            left={TOWN_POST_WIDTH * T - TOWN_POST_TROLLEY.fromRight}
+            onOpen={openOutbox}
+            onFocus={reveal}
+          />
+        ) : null}
       </div>
       {card}
     </>
   );
-});
-
-function focusVisible(element: HTMLElement) {
-  try {
-    return element.matches(":focus-visible");
-  } catch {
-    return false;
-  }
 }
 
-/** The sign's second line: counts by state, or what stands in for them. */
-function SignCounts({ office }: { office: Office }) {
-  if (office.status !== "open" || office.stale)
-    return (
-      <span className="town-post-sign-counts" aria-hidden="true">
-        {townPostSignText(office)}
-      </span>
-    );
+/** The trolley's load: your answers on their way, opening the Outbox. */
+function Trolley({
+  office,
+  left,
+  onOpen,
+  onFocus,
+}: {
+  office: Office;
+  left: number;
+  onOpen(): void;
+  onFocus(event: FocusEvent<HTMLElement>): void;
+}) {
+  const { waiting, checks } = office.outgoing;
   return (
-    <span className="town-post-sign-counts" aria-hidden="true">
-      {townPostCountParts(office.counts).map((part) => (
-        <span key={part.state} data-state={part.state}>
-          <i aria-hidden="true" />
-          {part.text}
-        </span>
-      ))}
-    </span>
+    <button
+      type="button"
+      className="town-post-trolley"
+      data-check={checks ? "" : undefined}
+      style={{ left, top: TOWN_POST_TROLLEY.y - 8 }}
+      aria-label={`Mail trolley: ${outgoingWords(waiting, checks)}. Open Outbox`}
+      onPointerDown={(event) => event.stopPropagation()}
+      onFocus={onFocus}
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen();
+      }}
+    >
+      {waiting + checks}
+    </button>
   );
 }
 
-/** Parcels beyond the yard: "+N", opening them as a list. */
-function Pile({
-  parcels,
+const outgoingWords = (waiting: number, checks: number) =>
+  [
+    waiting ? `${waiting} ${waiting === 1 ? "answer" : "answers"} to send` : "",
+    checks ? `${checks} ${checks === 1 ? "answer" : "answers"} to check` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+/** Letters beyond the yard: a "+N" bundle, opening them as a list. */
+function Bundle({
+  letters,
   at,
   onOpen,
-  onOpenWork,
   onFocus,
 }: {
-  parcels: readonly TownPostParcel[];
+  letters: readonly TownLetter[];
   at: { x: number; y: number };
-  onOpen(key: string, anchor: HTMLElement | null): void;
-  onOpenWork: (() => void) | null;
+  onOpen(id: string, anchor: HTMLElement | null): void;
   onFocus(event: FocusEvent<HTMLElement>): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -382,29 +497,25 @@ function Pile({
         <button
           ref={trigger}
           type="button"
-          className="town-post-pile"
+          className="town-post-bundle"
           style={{ left: at.x, top: at.y }}
-          aria-label={`${parcels.length} more pull requests`}
+          aria-label={`${letters.length} more letters`}
           onPointerDown={(event) => event.stopPropagation()}
           onFocus={onFocus}
         >
-          +{parcels.length}
+          +{letters.length}
         </button>
       </PopoverTrigger>
       <PopoverContent
         className="town-post-popover"
         collisionPadding={8}
-        aria-label="More pull requests"
+        aria-label="More letters"
       >
-        <AllPullRequests
-          onOpenWork={onOpenWork}
-          onClose={() => setOpen(false)}
-        />
-        <ParcelList
-          parcels={parcels}
-          onOpen={(key) => {
+        <LetterList
+          letters={letters}
+          onOpen={(id) => {
             setOpen(false);
-            onOpen(key, trigger.current);
+            onOpen(id, trigger.current);
           }}
         />
       </PopoverContent>
@@ -412,56 +523,31 @@ function Pile({
   );
 }
 
-/** Opens every pull request in the Work lens, closing the list first. */
-function AllPullRequests({
-  onOpenWork,
-  onClose,
-}: {
-  onOpenWork: (() => void) | null;
-  onClose(): void;
-}) {
-  if (!onOpenWork) return null;
-  return (
-    <button
-      type="button"
-      className="town-post-all"
-      onClick={() => {
-        onClose();
-        onOpenWork();
-      }}
-    >
-      All pull requests
-    </button>
-  );
-}
-
-/** Parcels as rows: the folded sign's and the pile's list. */
-function ParcelList({
-  parcels,
+/** Letters as rows: the bundle's list. */
+function LetterList({
+  letters,
   onOpen,
 }: {
-  parcels: readonly TownPostParcel[];
-  onOpen(key: string): void;
+  letters: readonly TownLetter[];
+  onOpen(id: string): void;
 }) {
   return (
-    <ul className="town-post-list" aria-label="Pull requests">
-      {parcels.map((parcel) => (
-        <li key={parcel.key}>
+    <ul className="town-post-list" aria-label="Letters">
+      {letters.map((letter) => (
+        <li key={letter.id}>
           <button
             type="button"
             className="town-post-row"
-            aria-label={`${townPostLabel(parcel)}. Open pull request`}
-            onClick={() => onOpen(parcel.key)}
+            aria-label={`${townLetterLabel(letter)}. Open letter`}
+            onClick={() => onOpen(letter.id)}
           >
             <span
               className="town-post-icon"
-              data-state={parcel.state}
+              style={{ backgroundImage: letterArt(letter.verified) }}
               aria-hidden="true"
             />
-            <span className="town-post-row-name">{townPostName(parcel)}</span>
-            <span className="town-post-row-why">
-              {parcel.repo} · {parcel.why}
-            </span>
+            <span className="town-post-row-name">{townLetterFrom(letter)}</span>
+            <span className="town-post-row-why">{townLetterLine(letter)}</span>
           </button>
         </li>
       ))}
@@ -469,107 +555,43 @@ function ParcelList({
   );
 }
 
-/** The red pillar box painted by the house door, as the folded sign's mark. */
-function PostBox() {
-  return <span className="town-post-box" aria-hidden="true" />;
-}
-
-/**
- * On a narrow town: a sign on the town center's right wing, inside a phone's
- * home view (townPostFoldAt), opening the post office as a list, or how to
- * connect GitHub.
- */
-function FoldedSign({
-  center,
-  office,
-  onOpen,
-  onOpenWork,
-  onFocus,
+/** A letter opened: who wrote, when, the question and its choices. */
+function LetterCard({
+  letter,
+  onAnswer,
 }: {
-  center: TownCenterLot;
-  office: Office;
-  onOpen(key: string, anchor: HTMLElement | null): void;
-  onOpenWork: (() => void) | null;
-  onFocus(event: FocusEvent<HTMLElement>): void;
+  letter: TownLetter;
+  onAnswer(): void;
 }) {
-  const [open, setOpen] = useState(false);
-  const trigger = useRef<HTMLButtonElement | null>(null);
-  const at = townPostFoldAt(center);
+  const fixture = isFixture(letter);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          ref={trigger}
-          type="button"
-          className="town-post-fold"
-          style={{ left: at.x, top: at.y }}
-          aria-label={`Post office: ${spoken(office)}. Open`}
-          title="Post office"
-          onPointerDown={(event) => event.stopPropagation()}
-          onFocus={onFocus}
-        >
-          <PostBox />
-          {office.status === "open" && !office.stale ? (
-            <span className="town-post-fold-counts">
-              {(["ready", "failing", "waiting"] as const).map((state) => (
-                <b key={state} data-state={state}>
-                  {office.counts[state]}
-                </b>
-              ))}
-            </span>
-          ) : (
-            <span>
-              {office.status === "open" ? "old" : FOLDED_WAITING[office.status]}
-            </span>
-          )}
+    <article className="town-post-card">
+      <header className="town-post-card-from">
+        <span
+          className="town-post-icon"
+          style={{ backgroundImage: letterArt(letter.verified) }}
+          aria-hidden="true"
+        />
+        <b>{townLetterFrom(letter)}</b>
+        <span>{townLetterAge(letter.at, Date.now())}</span>
+      </header>
+      <p className="town-post-card-question">{letter.question}</p>
+      {letter.options.length ? (
+        <ul className="town-post-card-options" aria-label="Choices">
+          {letter.options.map((option) => (
+            <li key={option}>{option}</li>
+          ))}
+        </ul>
+      ) : null}
+      {fixture ? (
+        <p className="town-post-note">
+          A test letter: there is no question to answer.
+        </p>
+      ) : (
+        <button type="button" className="town-post-action" onClick={onAnswer}>
+          Answer in Needs you
         </button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="town-post-popover"
-        collisionPadding={8}
-        aria-label="Post office"
-      >
-        <header className="town-post-popover-title">
-          <PostBox />
-          <span>POST OFFICE</span>
-        </header>
-        <p className="town-post-popover-counts">{townPostSignText(office)}</p>
-        {office.status === "open" ? (
-          <AllPullRequests
-            onOpenWork={onOpenWork}
-            onClose={() => setOpen(false)}
-          />
-        ) : null}
-        {office.status === "open" ? (
-          office.parcels.length ? (
-            <ParcelList
-              parcels={office.parcels}
-              onOpen={(key) => {
-                setOpen(false);
-                onOpen(key, trigger.current);
-              }}
-            />
-          ) : (
-            <p className="town-post-popover-note">No open pull requests.</p>
-          )
-        ) : office.status === "loading" ? null : (
-          <>
-            {office.status === "closed" ? (
-              <p className="town-post-popover-note">{office.detail}</p>
-            ) : null}
-            <button
-              type="button"
-              className="town-post-setup"
-              onClick={() => {
-                setOpen(false);
-                openSourcesSettings();
-              }}
-            >
-              Connect GitHub
-            </button>
-          </>
-        )}
-      </PopoverContent>
-    </Popover>
+      )}
+    </article>
   );
 }

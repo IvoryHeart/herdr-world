@@ -1,9 +1,11 @@
 import { WORLD_AGENT_LAUNCH_EVENT } from "../agentProfiles";
+import { WORLD_APARTMENTS_EVENT } from "../apartments/apartmentsStore";
 
 /**
  * The town center in a real renderer: its plaque is in the home view, a tap
  * on the building opens the ring around it, every action fits on screen,
- * Escape and a press outside close it, and New agent opens the launcher.
+ * Escape and a press outside close it, New agent opens the launcher, and
+ * Apartments opens from the ring and from its building's sign.
  */
 export async function checkTownCenter(
   host: HTMLElement,
@@ -50,7 +52,11 @@ export async function checkTownCenter(
     () => ring() !== null,
     "a tap on the town center opened no menu",
   );
-  check(actions().length === 7, `the ring has ${actions().length} actions`);
+  check(actions().length === 9, `the ring has ${actions().length} actions`);
+  check(
+    actions().some((action) => action.dataset.action === "library"),
+    "the ring offers no Library",
+  );
   check(
     document.activeElement === actions()[0],
     "the ring did not focus its first action",
@@ -110,6 +116,30 @@ export async function checkTownCenter(
     check(launches.length === 1, "New agent did not open the launcher");
   } finally {
     window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, launched);
+  }
+
+  // Apartments opens from the ring and from the building's sign.
+  let apartments = 0;
+  const opened = () => {
+    apartments += 1;
+  };
+  window.addEventListener(WORLD_APARTMENTS_EVENT, opened);
+  try {
+    sign()!.click();
+    await waitFor(() => ring() !== null, "the plaque did not reopen the menu");
+    actions()
+      .find((action) => action.dataset.action === "apartments")!
+      .click();
+    await waitFor(() => ring() === null, "choosing Apartments left it open");
+    check(apartments === 1, "Apartments did not open from the ring");
+    const building = host.querySelector<HTMLButtonElement>(
+      ".town-apartments-sign",
+    );
+    check(building !== null, "Town has no apartment building sign");
+    building?.click();
+    check(apartments === 2, "the apartment sign did not open Apartments");
+  } finally {
+    window.removeEventListener(WORLD_APARTMENTS_EVENT, opened);
   }
 
   // Lenses turns a lens on, its legend in the Town board's place; ✕ leaves

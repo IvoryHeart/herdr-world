@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { WORLD_AGENT_LAUNCH_EVENT } from "../agentProfiles";
+import { WORLD_MEMORY_EVENT } from "../memory/memoryEvents";
 import type { WorldObject } from "../worldObject";
 import { boardHubActions, boardLaunchSpace } from "./BoardHub";
 
@@ -73,13 +74,13 @@ function board(
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Run `body` with a window that records launcher requests. */
-function launches(body: () => void) {
+function launches(body: () => void, event = WORLD_AGENT_LAUNCH_EVENT) {
   const had = "window" in globalThis;
   const previous = (globalThis as { window?: unknown }).window;
   const target = new EventTarget();
   const seen: unknown[] = [];
-  target.addEventListener(WORLD_AGENT_LAUNCH_EVENT, (event) =>
-    seen.push((event as CustomEvent).detail),
+  target.addEventListener(event, (fired) =>
+    seen.push((fired as CustomEvent).detail),
   );
   (globalThis as { window?: unknown }).window = target;
   try {
@@ -99,6 +100,8 @@ test("the hub offers the town center's actions, New agent first", () => {
     "needs-you",
     "summary",
     "profiles",
+    "apartments",
+    "library",
     "workspace",
   ]);
   expect(action("launch").primary).toBe(true);
@@ -187,4 +190,22 @@ test("Summary takes you to Town's summary", () => {
   expect(action("summary").detail).toBe("in Town");
   action("summary").run();
   expect(calls).toEqual([["summary"]]);
+});
+
+test("the Library opens on the selected agent or workspace, else everything", () => {
+  const leaves = [leaf("a", "api", "firstmate", { nativeId: "p-a" })];
+  const agent = board({ selectedId: "a", leaves });
+  expect(agent.action("library").detail).toBe("for firstmate");
+  expect(
+    launches(() => agent.action("library").run(), WORLD_MEMORY_EVENT),
+  ).toEqual([{ connectionId: "local", agentId: "p-a" }]);
+  const room = board({ selectedId: "docs", leaves });
+  expect(
+    launches(() => room.action("library").run(), WORLD_MEMORY_EVENT),
+  ).toEqual([{ connectionId: "local", workspaceId: "w-docs" }]);
+  const none = board({ leaves });
+  expect(none.action("library").detail).toBeUndefined();
+  expect(
+    launches(() => none.action("library").run(), WORLD_MEMORY_EVENT),
+  ).toEqual([{}]);
 });

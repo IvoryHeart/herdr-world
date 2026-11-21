@@ -371,7 +371,7 @@ test("concurrent SQLite asks cannot bypass their shared unverified allowance", a
   );
   expect(replies.filter((reply) => reply.ok)).toHaveLength(20);
   expect(replies.filter((reply) => !reply.ok)).toEqual([
-    expect.objectContaining({ code: "refused" }),
+    expect.objectContaining({ code: "question_cap" }),
   ]);
 });
 

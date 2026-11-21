@@ -152,3 +152,19 @@ test("refusals answer in the CLI's shape", async () => {
     error: "wrong World CLI token",
   });
 });
+
+test("question-cap refusals retain their typed wait response over HTTP", async () => {
+  const response = await handleWorldCliEndpoint(request(), local, {
+    ...deps(),
+    handle: async () => ({
+      ok: false as const,
+      code: "question_cap" as const,
+      error: "wait until a question closes before asking again",
+    }),
+  });
+  expect(response.status).toBe(429);
+  expect(await response.json()).toMatchObject({
+    code: "question_cap",
+    error: expect.stringContaining("wait"),
+  });
+});

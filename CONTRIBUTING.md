@@ -438,6 +438,39 @@ bun run test scripts/pages-content.test.ts scripts/pages-workflow.test.ts
 bun run build:site
 ```
 
+### Help that ships with a feature
+
+A user-facing feature declares its help beside its code, in a `<area>.help.ts`
+file (`web/src/world/town/town.help.ts`, `web/src/world/board/board.help.ts`,
+`web/src/components/chat/chat.help.ts`, `web/src/world/world.help.ts`) listed in
+`web/src/help/entries.ts`. An entry (`web/src/help/helpEntry.ts`) says what the
+feature is, up to five steps to try it, where it lives, the control it points
+at and the version it arrived in. Mark that control in the component with
+`data-help="<control>"` or `{...helpAnchor("<control>")}`; a control inside a
+closed menu is found through the button that opens it,
+`data-help-opens="<control> …"`. World's **What can I do here?** panel, the Town
+Master's **What's new**, `docs/HELP.md` and the site's `/help/` page are all
+drawn from these entries. The tutorial stays the short learner's path and
+links the help page.
+
+```bash
+CHROME_BIN=/path/to/chrome bun run help:pictures   # web/public/help/*.webp
+bun run help:docs                                  # docs/HELP.md
+bun run help:check                                 # check:docs and the static lane
+```
+
+`help:pictures` captures each entry's control from the production components
+on the synthetic site scene (`web/src/help/testing/HelpShots.browser.tsx`), at
+phone and desktop sizes, light and dark, and records each picture's inputs in
+`web/src/help/pictures.json`. `HELP_PICTURES_IDS="board.next town.zoom"` limits
+a run. Nobody edits a picture by hand. `help:check` fails when an entry's
+control is no longer marked (naming the entry), a picture is missing or its
+inputs changed (its picture settings, the control's markup, or any file the
+stage renders from: every component, stylesheet, scene and script it imports),
+so any UI change regenerates the pictures; a `*.help.ts` file is not listed, a picture is left over, or
+`docs/HELP.md` is out of date. A PR whose changelog fragment has `### Added`
+changes a `*.help.ts` file or states `Help: none — <reason>`.
+
 The build adds content versions to local CSS and JavaScript URLs so a new page
 loads its matching assets rather than a cached stylesheet from a previous deploy.
 

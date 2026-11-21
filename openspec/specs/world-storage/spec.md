@@ -41,6 +41,50 @@ reject pending outcomes as unknown and fail-stop the service for restart.
 - **AND** recovery uses committed domain/outbox state without blindly resending
   an external effect
 
+### Requirement: Stable question closure and quiet admission limits
+
+A verified asker's authority to withdraw its own retained question, by ID or
+cause key, SHALL follow its immutable connection ID and stable terminal ID,
+independently of runtime generation or occupant/session fingerprint changes.
+World SHALL verify the current caller in that terminal; an unverified caller,
+a different terminal or another connection SHALL NOT inherit that authority.
+Legacy questions without a stable terminal identity SHALL retain their stricter
+original identity checks. This authority SHALL change World question state only;
+runtime sends, answer acknowledgement and answer delivery SHALL retain their
+own current-generation and original-recipient guards. Cause-key creation
+idempotency SHALL remain scoped to the original verified occupant.
+
+Admission SHALL count at most 20 open questions per verified terminal across
+runtime restarts, one shared allowance for unverified callers, and 500 open
+questions overall. Both the initial check and the serialized mutation SHALL
+refuse excess asks with `question_cap` (CLI exit 3, HTTP 429) and tell the caller
+to wait until a question closes. A cap refusal SHALL create neither a question
+nor an attention intent and SHALL NOT send a service or CLI fallback owner alert,
+including on repeated attempts. Unexpected recording failures SHALL retain the
+existing fallback alert.
+
+The owner SHALL be able to dismiss all currently open questions from one
+verified connection/terminal in one atomic mutation, across generations and
+sessions. This SHALL preserve answered, withdrawn and already dismissed records,
+leave other askers untouched, cancel pending alerts through normal closure,
+and leave cause keys closed until the asker withdraws them. The owner action
+SHALL NOT require that runtime to be online.
+
+#### Scenario: The asking runtime restarts
+- **WHEN** a caller is freshly verified in the original terminal after its runtime generation and occupant fingerprint change
+- **THEN** it can withdraw its earlier question by ID or retained cause key
+- **AND** a caller in another terminal or connection cannot withdraw it
+
+#### Scenario: Repeated asks at capacity
+- **WHEN** an asker retries while its open-question allowance is full
+- **THEN** each attempt returns the quiet cap error with wait guidance
+- **AND** closing one question permits a later ask without bypassing concurrent admission checks
+
+#### Scenario: Owner clears a stale backlog
+- **WHEN** the owner dismisses all questions from a verified asker
+- **THEN** all that terminal's open questions at mutation time close together, including earlier generations
+- **AND** another terminal's questions and saved answers remain intact
+
 ### Requirement: Explicit external-effect recovery
 
 World SHALL persist dispatching before any attention send and turn interrupted
@@ -53,7 +97,7 @@ recheck currency; it SHALL never fall back to another connection. A pending aler
 SHALL be cancelled when its ask closes. Definite disabled/no-foreground-client
 refusals SHALL finish without retry; busy/rate-limited or missing-lease outcomes
 SHALL defer with bounded backoff. A worker or process crash during dispatch SHALL
-preserve explicit uncertainty. A failed recording request SHALL retain the
+preserve explicit uncertainty. A recording failure other than a cap refusal SHALL retain the
 CLI's existing fallback user alert and report the recording failure.
 
 #### Scenario: Effect happens before its receipt is persisted
@@ -116,8 +160,8 @@ later writes and retain committed cached reads without reopening storage.
 
 ### Requirement: Durable Board concerns with compatible revisions and bindings
 
-World SHALL store Board notes, strings, appearance, layout concerns, interest and
-relations in separate SQLite tables through the instance's single asynchronous
+World SHALL store Board notes, strings, drawings, appearance, layout concerns,
+interest and relations in separate SQLite tables through the instance's single asynchronous
 writer. Board patches SHALL remain all-or-none, retain existing document and
 per-note/Group conflict wire behavior, and commit identity captures with their
 records. Only acknowledged commits SHALL advance synchronous reads, replies or
