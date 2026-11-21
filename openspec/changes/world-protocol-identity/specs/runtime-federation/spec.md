@@ -88,50 +88,6 @@ that socket.
 - **WHEN** an older browser requests aggregate observation without a base
 - **THEN** it receives a complete reply as before
 
-### Requirement: Incremental observation preparation
-
-An admitted observation, or a change to a World document or mark that a view reads,
-SHALL prepare only what reads the change. A room's inputs SHALL be:
-- its slice of the observation;
-- the Board appearance and relations, profile looks, watch entries, seen marks and Town
-  master that touch it.
-
-Preparation rules:
-- **All unchanged.** A reply whose hosts are all unchanged, with identical state and
-  unchanged documents, SHALL rebuild no host, room or view model and SHALL NOT publish.
-- **One room changed.** When only one room's inputs change, World SHALL prepare that
-  room and the counts, attention and summaries that depend on it. It SHALL reuse every
-  other room's prepared presentation.
-- **Consumed views only.** World SHALL prepare a view's model only while a consumer of
-  that model is mounted.
-- **Board document.** World SHALL keep the Board document available to appearance and
-  relations in every view.
-- **View switch.** World SHALL finish a newly selected view's preparation before
-  presenting it.
-- **Equivalence.** Incremental preparation SHALL produce the same presentation as a
-  complete preparation of the same inputs: the observation and every document and
-  mark the rooms read.
-
-#### Scenario: One status change in a large host
-- **WHEN** one agent's status changes in a host with ten rooms
-- **THEN** World prepares that agent's room and the dependent counts, attention and
-  summaries, and prepares none of the other nine rooms
-
-#### Scenario: Town is shown
-- **WHEN** an observation is admitted while only Town is shown
-- **THEN** World prepares no Board topology, Board's document still serves appearance
-  and relations, and switching to Board prepares Board topology before Board is presented
-
-#### Scenario: A profile's Town look is edited
-- **WHEN** the user edits a profile's look and no observation changes
-- **THEN** every room showing an agent with that profile is prepared again with the new
-  look, and no other room is prepared
-
-#### Scenario: Equivalence with complete preparation
-- **WHEN** any sequence of observations and document changes is prepared incrementally
-- **THEN** the result equals a complete preparation of the latest observation and
-  documents
-
 ### Requirement: Herdr observation baseline
 
 The service SHALL treat Herdr events as invalidation, not as an authoritative replica,
@@ -303,3 +259,45 @@ the same state as applying every original change up to that batch's cursor.
 - **WHEN** a key is deleted and created again before the next delivery
 - **THEN** the client observes the end of the first lifetime and the start of the
   second, and drops state bound to the first
+
+## MODIFIED Requirements
+
+### Requirement: Incremental observation preparation
+
+Admitted observations and document or mark changes SHALL prepare only their readers.
+Rooms SHALL reuse their prepared presentation when their observation slice and
+owner/presentation inputs are unchanged. Appearance, relations, profiles, watches,
+seen marks and Town master SHALL invalidate only the readers of the changed inputs.
+Host and World counts, attention and summaries SHALL use per-room contributions.
+
+A view's topology SHALL be prepared only for mounted consumers and their consumed
+Hosts/watch projection. Changes outside that projection SHALL update aggregate World
+data without preparing hidden view rooms. The Board document
+SHALL remain available for appearance and relations in all views. A newly selected
+view SHALL finish missing model preparation before presentation. Incremental output
+SHALL equal complete preparation of the same observation, documents and marks.
+
+#### Scenario: One room changes
+- **WHEN** one agent changes status in a host with ten rooms
+- **THEN** only that room and dependent counts, attention and summaries are prepared,
+  and the other nine rooms retain their prepared presentation
+
+#### Scenario: Town is shown
+- **WHEN** an observation is admitted while only Town is mounted
+- **THEN** no Board topology is prepared, its document remains available, and switching
+  to Board finishes its topology before presentation
+
+#### Scenario: A change is outside the presented scope
+- **WHEN** Town or Board is mounted and only a host, room or pane hidden by Hosts or
+  watched-only changes
+- **THEN** aggregate observation remains current and no unchanged presented room is
+  prepared again
+
+#### Scenario: A profile look changes
+- **WHEN** a profile's look changes without an observation change
+- **THEN** readers showing that profile receive the new look and unrelated readers
+  retain their prepared presentation
+
+#### Scenario: Complete preparation equivalence
+- **WHEN** observations, documents and marks change in any supported sequence
+- **THEN** incremental presentation equals complete preparation of the latest inputs

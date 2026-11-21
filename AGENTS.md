@@ -51,6 +51,8 @@ After committing, run `bun run check:pr-body <file>` on the exact PR body; appen
 For stacked PRs: `bun run check:size origin/main <ref>`.
 Dependency graph changes: `bun run notices:generate`.
 Deliver with the [candidate-delivery skill](.agents/skills/candidate-delivery/SKILL.md).
+Use the adapted `world-openspec-*` skills for OpenSpec work; see the
+[skill guide](docs/agent-development.md#openspec-skills). These names survive CLI updates.
 
 ## Output bounds
 

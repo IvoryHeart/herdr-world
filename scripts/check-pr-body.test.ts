@@ -104,6 +104,27 @@ test("spec claims agree with changed current specs or OpenSpec changes", () => {
   }
 });
 
+test("spec claims use complete nested capability ids without matching siblings", () => {
+  for (const root of [
+    "openspec/specs",
+    "openspec/changes/example-change/specs",
+  ]) {
+    for (const id of ["world-surfaces/town", "world-surfaces/town/lighting"]) {
+      const path = `${root}/${id}/spec.md`;
+      const body = (claim: string) =>
+        noImpacts.replace(/^Spec impact:.*$/m, `Spec impact: ${claim}`);
+      for (const claim of [id, path, `${root}/${id}`]) {
+        expect(assessContractImpacts([path], body(claim))).toEqual([]);
+      }
+      for (const claim of ["world-surfaces", "town", "world-surfaces/board"]) {
+        expect(assessContractImpacts([path], body(claim))).toEqual([
+          expect.stringContaining("Spec impact:"),
+        ]);
+      }
+    }
+  }
+});
+
 test("verification claims account for models, inventory owners and changed named checks", () => {
   const owns = (path: string) =>
     path === "server/src/owner.ts" || path.startsWith("server/src/owned/");
@@ -170,8 +191,8 @@ test("CI and pre-push share inventory owners and use the immutable PR head", () 
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
   const owner = "server/src/owned/example.ts";
-  const spec = "openspec/specs/example/spec.md";
-  const body = `Spec impact: ${spec}\nVerification impact: ${owner}\nChangelog: none — Only synthetic regression fixtures change.\n`;
+  const spec = "openspec/specs/world-surfaces/town/spec.md";
+  const body = `Spec impact: world-surfaces/town\nVerification impact: ${owner}\nChangelog: none — Only synthetic regression fixtures change.\n`;
   const event = join(root, "event.json");
   try {
     git("init", "-q");
@@ -204,6 +225,13 @@ test("CI and pre-push share inventory owners and use the immutable PR head", () 
       expect.stringContaining("Verification impact:"),
     ]);
     expect(checkPrBodyText(body, root)).toEqual([]);
+    const description = join(root, "body.md");
+    writeFileSync(description, body);
+    expect(
+      spawnSync(process.execPath, [cli, description], {
+        cwd: root,
+      }).status,
+    ).toBe(0);
     // The checkout can contain merge-only changes that are outside this PR.
     writeFileSync(
       join(root, "README.md"),

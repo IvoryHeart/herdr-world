@@ -1,5 +1,5 @@
 ---
-name: openspec-apply-change
+name: world-openspec-apply-change
 description: Implement an authorized OpenSpec change and track progress against its tasks.
 license: MIT
 metadata:
