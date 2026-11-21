@@ -5,6 +5,7 @@ import type {
   OfficeRoom,
 } from "../herdrOfficeProjection";
 import { TOWN_PINNED_HINT } from "./townDrag";
+import { canMoveDeskToRoom } from "./townMoveEligibility";
 import type { TownMoveResult } from "./townMoves";
 import type { townTeamActions, TownMenuEntry } from "./townTeamActions";
 
@@ -42,10 +43,7 @@ export function townMoveMenu(
     const desk = deps.deskForKey(flow.deskKey);
     const rooms = desk
       ? deps.office.rooms.filter(
-          (room) =>
-            room.hostKey === desk.hostKey &&
-            room.key !== desk.roomKey &&
-            room.workspaceRef.connectionId === desk.tabRef.connectionId,
+          (room) => room.key !== desk.roomKey && canMoveDeskToRoom(desk, room),
         )
       : [];
     // Within its room a desk takes another desk's slot, as in a drag.
@@ -107,14 +105,14 @@ export function townMoveMenu(
       title: `Move ${desk?.displayLabel ?? "desk"}`,
       detail:
         places.length || rooms.length
-          ? "Choose a place in this room or a room on this host"
-          : "No other desk or room on this host",
+          ? "Choose a place in this room or a destination room"
+          : "No other desk or destination room",
       entries: [
         ...places,
         ...rooms.map((room) => ({
           key: room.key,
           label: room.displayLabel,
-          detail: `${room.observedDeskCount} desks`,
+          detail: `${deps.office.hosts.find((host) => host.key === room.hostKey)?.displayLabel ?? "Host"} · ${room.observedDeskCount} desks`,
           onChoose: () => {
             deps.close();
             void deps.runDeskMove(flow.deskKey, room.key);

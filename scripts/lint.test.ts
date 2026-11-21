@@ -191,12 +191,15 @@ test("generated assets, binaries and workspace dependencies stay ignored", () =>
   }
 });
 
-test("effect and storage core time uses injected ports, including globalThis access", () => {
-  for (const path of [
-    "server/src/effects/fixture.ts",
-    "server/src/storage/fixture.ts",
-    "server/src/world/answer-dispatch.ts",
-  ]) {
+// Each path is an independent policy check. Keep its seven linter processes
+// within their own test deadline instead of timing all paths as one case.
+bunTest.each([
+  "server/src/effects/fixture.ts",
+  "server/src/storage/fixture.ts",
+  "server/src/world/answer-dispatch.ts",
+])(
+  "effect and storage core time uses injected ports, including globalThis access (%s)",
+  (path) => {
     for (const expression of [
       "Date.now()",
       "new Date()",
@@ -212,7 +215,11 @@ test("effect and storage core time uses injected ports, including globalThis acc
     expect(lint("export const time = (clock) => clock.now();", path)).toEqual(
       [],
     );
-  }
+  },
+  30_000,
+);
+
+test("effect tests may use the platform clock", () => {
   expect(
     lint(
       "export const value = Date.now();",

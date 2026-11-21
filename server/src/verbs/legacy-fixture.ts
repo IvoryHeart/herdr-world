@@ -12,6 +12,9 @@ import {
 } from "../world/world-cli";
 import type { WorldSnapshotResult } from "../world/snapshot";
 
+// Introduced after this baseline: independent acceptance is in agent-reattach.test
+// and policy.test. Keep the historical fixture independent of expected outcomes.
+const postRegistryCommands = new Set<WorldCliCommand>(["agent reattach"]);
 const panes = [1, 2].map((id) => ({
   pane_id: `w1:p${id}`,
   terminal_id: `term${id}`,
@@ -65,7 +68,9 @@ export async function legacyOutcomes(factory = createWorldCli) {
     effects: string[];
   }[] = [];
   for (const verified of [true, false])
-    for (const command of WORLD_CLI_COMMANDS) {
+    for (const command of WORLD_CLI_COMMANDS.filter(
+      (name) => !postRegistryCommands.has(name),
+    )) {
       // Memory was added after the frozen pre-registry baseline. Its admission
       // and effects are covered by memory/routing.test.ts and cli/memory.test.ts.
       if (command.startsWith("memory ")) continue;

@@ -20,7 +20,9 @@
         "server/src/connections/shutdown.test.ts",
         "server/src/connections/runtime.test.ts",
         "server/src/connections/ssh-profile-process.test.ts",
-        "server/src/rpc/appearance.test.ts"
+        "server/src/rpc/appearance.test.ts",
+        "server/src/rpc/appearance-snapshot.test.ts",
+        "server/src/rpc/snapshot-runtime.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "lifecycle",
@@ -50,7 +52,7 @@
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
       },
-      "evidenceDecision": "Shared appearance consumes captured ready leases and revalidates currency after native reads; its direct admission matrix supplements the unchanged manager model/replay and does not expand that model’s domain."
+      "evidenceDecision": "Shared snapshot spawn/appearance, appearance edits and agent moves consume one exact-owner ready-lease resolver (including core actionability and no TUI fallback) and revalidate currency after native reads; its direct admission matrix supplements the unchanged manager model/replay and does not expand that model’s domain."
     },
     {
       "id": "Q02",
@@ -1215,6 +1217,16 @@
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "Atomic publication and session identity; old reports cannot overwrite newer state; terminal settings require current terminal/lease witnesses, one-time import and convergent master revisions; prompt answers require complete valid transcript fields and the same literal question/options (including paired globs and rendered code) or complete review and screen; failed transcript checks retain no answer keys; pre-session trust input requires a current pane/terminal/process witness with no session, complete workspace heading/folder and question, exact menu identity ignoring only the option cursor before every key, and the per-pane input lock; Needs you displays trust safety text and grant warnings unclamped",
       "existingTests": [
+        "server/src/herdr-core/agent-moves.live.test.ts",
+        "server/src/agent/move/handoff.test.ts",
+        "server/src/agent/move/processes.test.ts",
+        "server/src/agent/move/session.test.ts",
+        "server/src/agent/move/runtime.test.ts",
+        "server/src/world/agent-rehome.test.ts",
+        "server/src/world/agent-reattach.test.ts",
+        "web/src/world/agentMove.test.ts",
+        "web/src/world/AgentMove.browser.test.ts",
+
         "server/src/agent/worktree.test.ts",
         "server/src/agent/terminal-settings.test.ts",
         "server/src/agent/terminal-tokens.test.ts",
@@ -1279,12 +1291,23 @@
       "partialEvidence": {
         "models": ["quint/runtime-leases.qnt"],
         "contracts": [
+          "verification/contracts/agent-moves.md",
           "verification/contracts/shared-acquisition.md",
           "verification/consumer-evidence.md",
           "verification/composition.md",
           "verification/contracts/terminal-settings.md"
         ],
         "tests": [
+          "server/src/herdr-core/agent-moves.live.test.ts",
+          "server/src/agent/move/handoff.test.ts",
+          "server/src/agent/move/processes.test.ts",
+          "server/src/agent/move/session.test.ts",
+          "server/src/agent/move/runtime.test.ts",
+          "server/src/world/agent-rehome.test.ts",
+          "server/src/world/agent-reattach.test.ts",
+          "web/src/world/agentMove.test.ts",
+          "web/src/world/AgentMove.browser.test.ts",
+
           "server/src/agent/worktree.test.ts",
           "server/src/agent/terminal-settings.test.ts",
           "server/src/agent/terminal-tokens.test.ts",
@@ -1319,7 +1342,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Headless conversation discovery adds bounded writable-descriptor/process-start evidence, real Linux/macOS writer consumers, macOS field fixtures and SSH destination/failure fixtures; see the Q25 headless identity assessment in consumer-evidence.md. Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Direct Codex protocol and inference fixtures check bounded complete discovery, title precedence, contradictory reports, two-sided uniqueness, freshness, changing evidence, connection isolation and refusal of guessed message/answer input; inferred evidence never establishes client identity. Claude SSH fixtures execute the production POSIX lookup/stat/read payloads against a disposable filesystem with a synthetic Herdr source, checking remote read/send/receipt, duplicate and malformed IDs, missing files, stale-session refusal and connection isolation; native SSH/Claude acceptance is not claimed. Repository popover consumers also verify that retained PR/MR reports stay within the complete connection/runtime/workspace/checkout/cwd/branch/worktree association: a failed read after target replacement cannot reuse the former request, while same-association refresh failures retain it. This is direct React consumer evidence for a read-only report cache, not an abstract model of provider or Git semantics. Per-terminal settings add direct P5 platform checks and P7 finite exhaustive convergence evidence; the unchanged runtime-leases model supplies only lease authority, not token atomicity or HLC convergence. See the terminal-settings contract for the finite domain, migration and platform limits. The send-guard consumer drives the real Herdr conversation source with a captured menu on screen: a message or command is refused with nothing typed while the menu is open and sent once it closes, and a command queued while the agent is working is not queued twice. The send-boundary consumer (real conversation source, fake Herdr) refuses typing when the pre-prompt screen read fails, is malformed, shows a cut-off or any menu under a stale working status, or when a menu opens during preparation awaits, and keeps ordinary text and distinct commands allowed; identical slash commands are reserved before dispatch, kept after a lost acknowledgement but released after definite native non-submission, retired only by qualified fresh session/idle observations (never malformed, unknown or pre-dispatch reads), scoped to the session and busy interval, and not cancelled by dismissing a receipt. The send-repair consumer also checks local and SSH quoted-footer compatibility, including browser baselines: quote text is read from the same bound session and recognizes the Claude message prefix. Partial boxed options and blank-padded menu evidence refuse despite lacking answer controls, while a changed terminal/state witness in the final native observation refuses before dispatch; actual menus, failed/malformed screens and replacement sessions still refuse. The waiting-render consumer (pendingSends, static render) shows waiting only for a receipt the service marks waiting and otherwise the unchecked label; it does not claim native execution. No real harness send is exercised: Herdr refuses prompts to synthetic panes, so queue admission end to end remains unexercised. Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required. Continuation regressions require bounded top-level provenance, renewed remote UUID/path authority and owned local process cancellation; nested or discarded branch content cannot establish a session. Local configured-root parity is not claimed.",
+      "evidenceDecision": "Headless conversation discovery adds bounded writable-descriptor/process-start evidence, real Linux/macOS writer consumers, macOS field fixtures and SSH destination/failure fixtures; see the Q25 headless identity assessment in consumer-evidence.md. Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Direct Codex protocol and inference fixtures check bounded complete discovery, title precedence, contradictory reports, two-sided uniqueness, freshness, changing evidence, connection isolation and refusal of guessed message/answer input; inferred evidence never establishes client identity. Claude SSH fixtures execute the production POSIX lookup/stat/read payloads against a disposable filesystem with a synthetic Herdr source, checking remote read/send/receipt, duplicate and malformed IDs, missing files, stale-session refusal and connection isolation; native SSH/Claude acceptance is not claimed. Repository popover consumers also verify that retained PR/MR reports stay within the complete connection/runtime/workspace/checkout/cwd/branch/worktree association: a failed read after target replacement cannot reuse the former request, while same-association refresh failures retain it. This is direct React consumer evidence for a read-only report cache, not an abstract model of provider or Git semantics. Per-terminal settings add direct P5 platform checks and P7 finite exhaustive convergence evidence; the unchanged runtime-leases model supplies only lease authority, not token atomicity or HLC convergence. See the terminal-settings contract for the finite domain, migration and platform limits. The send-guard consumer drives the real Herdr conversation source with a captured menu on screen: a message or command is refused with nothing typed while the menu is open and sent once it closes, and a command queued while the agent is working is not queued twice. The send-boundary consumer (real conversation source, fake Herdr) refuses typing when the pre-prompt screen read fails, is malformed, shows a cut-off or any menu under a stale working status, or when a menu opens during preparation awaits, and keeps ordinary text and distinct commands allowed; identical slash commands are reserved before dispatch, kept after a lost acknowledgement but released after definite native non-submission, retired only by qualified fresh session/idle observations (never malformed, unknown or pre-dispatch reads), scoped to the session and busy interval, and not cancelled by dismissing a receipt. The send-repair consumer also checks local and SSH quoted-footer compatibility, including browser baselines: quote text is read from the same bound session and recognizes the Claude message prefix. Partial boxed options and blank-padded menu evidence refuse despite lacking answer controls, while a changed terminal/state witness in the final native observation refuses before dispatch; actual menus, failed/malformed screens and replacement sessions still refuse. The waiting-render consumer (pendingSends, static render) shows waiting only for a receipt the service marks waiting and otherwise the unchecked label; it does not claim native execution. No real harness send is exercised: Herdr refuses prompts to synthetic panes, so queue admission end to end remains unexercised. Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required. Continuation regressions require bounded top-level provenance, renewed remote UUID/path authority and owned local process cancellation; nested or discarded branch content cannot establish a session. Local configured-root parity is not claimed. Agent moves consume the existing lease/fence rules, with a direct 576-case production handoff fault matrix, native core recovery-shell/pin consumer, persisted explicit metadata transfer and manual re-attach tests; the new agent-moves contract records intended ordering and platform limits. This added mapping awaits independent review and does not expand accepted model domains. Real-core browser room handoffs and core-local colour admission are mapped in verification/contracts/agent-moves.md; the same controller and lease/fence models retain ownership and recovery. Credential-free harness and TUI protocol stand-ins exclude vendor certification.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -2926,6 +2949,9 @@
       "requirement": "openspec/specs/world-storage/spec.md",
       "properties": "Compact dense-observation metadata plans preserve completeness/current authority and committed-state reconciliation; queued retained-payload byte reservations through guards and actual RPC admission; atomic concern rows and identity bindings; committed-only cache/reply/events; independent edits, per-note and Group revision conflicts; queued runtime authority and move/undo concurrency; exact private once-only import; source/standalone crash recovery and close drain; native-keyed layout preferences retain existing policy",
       "existingTests": [
+        "server/src/world/agent-rehome.test.ts",
+        "server/src/world/agent-reattach.test.ts",
+
         "server/src/storage/board-writer.test.ts",
         "server/src/storage/board-port.test.ts",
         "server/src/rpc/board-admission.test.ts",
@@ -2950,8 +2976,14 @@
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": [],
-        "contracts": ["verification/contracts/board-storage.md"],
+        "contracts": [
+          "verification/contracts/agent-moves.md",
+          "verification/contracts/board-storage.md"
+        ],
         "tests": [
+          "server/src/world/agent-rehome.test.ts",
+          "server/src/world/agent-reattach.test.ts",
+
           "server/src/storage/board-writer.test.ts",
           "server/src/storage/board-port.test.ts",
           "server/src/rpc/board-admission.test.ts",
@@ -2974,7 +3006,7 @@
         ],
         "review": "The accepted delivery link records the approved identity/storage design, not implementation acceptance. Independent review and native CI are pending."
       },
-      "evidenceDecision": "Real SQLite and process recovery establish the persistence boundary. Exhaustive operation orders and actual RPC/move/CLI consumers cover ordering and compatible projection without modeling the SQL engine. Existing binding/runtime models and mandatory browser consumers remain required. Assertion controls establish sensitivity separately.",
+      "evidenceDecision": "Real SQLite and process recovery establish the persistence boundary. Exhaustive operation orders and actual RPC/move/CLI consumers cover ordering and compatible projection without modeling the SQL engine. Existing binding/runtime models and mandatory browser consumers remain required. Assertion controls establish sensitivity separately. Agent moves consume the existing lease/fence rules, with a direct 576-case production handoff fault matrix, native core recovery-shell/pin consumer, persisted explicit metadata transfer and manual re-attach tests; the new agent-moves contract records intended ordering and platform limits. This added mapping awaits independent review and does not expand accepted model domains.",
       "promotion": {
         "decision": "pending",
         "scope": "Board physical storage split, initial import and unchanged identity/revision/consumer boundaries only; independent acceptance required."
@@ -3050,6 +3082,9 @@
       "requirement": "openspec/specs/herdr-core-runtime/spec.md",
       "properties": "Delta ordering, missed cuts, heartbeat gaps, reconnect/restart, original lease/profile ownership, pre-send occupant/foreground fencing (including missing foreground), core-side source-queue fencing assumed under Q3, existing-only connect, kill confirmation (M7: no observed unconfirmed descendant and no replaced program ends; a child created after World's last observation is core's under Q11) and worktree removal order (P4: teardown only on a matching confirmation; the checkout only after the confirmed kill and under the planning generation, profile and core epoch), observe streams that never size, type or focus and paint every frame on core's announced grid; transcript publication keeps the original foreground and never promotes a reading link to input authority; automatic profile briefs require core idle at execution after queue/startup/draft waits; and typing that opens World's keyboard only on a genuine key, sends every key once and in order after the attach, refuses a replaced program, holds World's fitted size on a resumed seat that never resizes and swaps without a headless gap, and replies only on a touched seat",
       "existingTests": [
+        "server/src/herdr-core/agent-moves.live.test.ts",
+        "server/src/agent/move/runtime.test.ts",
+
         "quint/herdr-core-runtime.test.ts",
         "server/src/herdr-core/mirror.test.ts",
         "server/src/herdr-core/replay.test.ts",
@@ -3092,6 +3127,7 @@
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
       "technique": "composed-design-model",
+      "evidenceDecision": "Agent moves consume the existing lease/fence rules, with a direct 576-case production handoff fault matrix, native core recovery-shell/pin consumer, persisted explicit metadata transfer and manual re-attach tests; the new agent-moves contract records intended ordering and platform limits. This added mapping awaits independent review and does not expand accepted model domains.",
       "assessment": "Bounded composed model. Replay drives the production CoreMirror for every mirror, cursor and readiness transition and the production read model for World's views, with five production negative controls (gap, heartbeat, stale, missed cut, view of a retired mirror); plan/kill and the worktree teardown replay the production coreKillPlan and coreKillRefusal with two production controls (pid-only confirmation, unconfirmed terminal passed); the checkout removal step is a design seam mapped to removeCoreWorktree's lease guard by its Bun and live-release suites; the observe family replays World's production watch attach/reply rules and page grid adoption with three more controls (typing attach, unconfirmed reply accepted, paint before its grid); the typing family drives the production CoreTypingSession and seat with three more (first key replayed, a seat that resizes, a swap that detaches before the new seat attaches); dispatch also drives the production recipient comparison with a missing-foreground action/control; capture/dispatch/deliver still use the design seam because the model checks the source occupant at dispatch while World can check only its observation. Foundation delivery history is not acceptance of this contract. Issue #874 maps transcript completion to capture/dispatch/complete with the publication-foreground model fault; exhaustive shared TUI format and harness matrix tests cover data mapping. The launchBrief action and brief-without-idle mutant map automatic brief readiness to the production native-parameter builder; source-side idle comparison remains a core-owned seam verified by native live and queued fake tests. Vendor harness credentials and Windows transcript reading are excluded. Native address grammar uses executed official-source vectors and in-process allocation across t19 to t1b, with RPC/schema, durable placement, labels, verified claims, Terminal/Files and browser-watch consumers; replacement and generation refusal also run at terminal 20. This adds no state transition to the ordering model; source grammar is checked directly rather than modeled.",
       "status": "pending",
       "remaining": "Independent design/model review; a model split of observed versus actual occupant before the production fence can replace the authority seam; harness, browser/app and owner real-Windows relay acceptance in P2–P6. The Windows relay realizes the same existing-only connect (a probe reads core.lock, then one relay per generation opens exactly that pipe); it adds no ordering rule, so the model is unchanged and its evidence is the fake-pipe and real-PowerShell tests.",
@@ -3103,9 +3139,13 @@
           "quint/effect-recovery.qnt"
         ],
         "contracts": [
+          "verification/contracts/agent-moves.md",
           "openspec/changes/archive/2026-11-17-herdr-core-runtime/model.md"
         ],
         "tests": [
+          "server/src/herdr-core/agent-moves.live.test.ts",
+          "server/src/agent/move/runtime.test.ts",
+
           "quint/herdr-core-runtime.test.ts",
           "server/src/herdr-core/mirror.test.ts",
           "server/src/herdr-core/replay.test.ts",
@@ -3157,6 +3197,8 @@
       "requirement": "openspec/specs/herdr-core-runtime/spec.md",
       "properties": "A turn is shared once per foreground look on a current host; another client's mark unread during a look stands; World's service writes herdr.seen only while its ordered observation still holds the label the look was decided on, only to raise and never past core's turn; a lost write is not retried",
       "existingTests": [
+        "server/src/agent/move/runtime.test.ts",
+
         "quint/herdr-core-seen.test.ts",
         "web/src/world/coreShared.test.ts",
         "server/src/herdr-core/shared-state.test.ts",
@@ -3166,6 +3208,7 @@
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
       "technique": "design-model-with-production-replay",
+      "evidenceDecision": "Agent moves consume the existing lease/fence rules, with a direct 576-case production handoff fault matrix, native core recovery-shell/pin consumer, persisted explicit metadata transfer and manual re-attach tests; the new agent-moves contract records intended ordering and platform limits. This added mapping awaits independent review and does not expand accepted model domains.",
       "assessment": "Bounded model of one core agent, one World look and one other Herdr client, checked exhaustively by TLC. Replay drives the production browser rule (CoreSeenSharer) and the production service rule (seenToShare) through every sampled trace; five model faults violate safety and diverge, and four production faults (forgotten look, hidden page, stale host, blind write) are rejected by valid traces. The pin has no ordering rule (a one-key change, last writer wins): a core tab's desk and card pin is a pure function of one observation and World's saved positions, checked over every combination of liveness, labels and saved cell with production mutants, and the label by unit, RPC, recorded 0.1.20, browser and live tests. Push follows Herdr's attention rule from the ordered mirror and is covered by unit, RPC and live tests.",
       "status": "pending",
       "remaining": "Independent review; owner device step B with Herdr's phone and desktop apps. Core has no compare-and-set (upstream Q7): a change another client makes that World's mirror has not yet received, or an unread that returns the label to the decided value within one write, can still be overwritten; a core-side CAS or numeric max would close it.",
@@ -3173,9 +3216,12 @@
       "partialEvidence": {
         "models": ["quint/herdr-core-seen.qnt"],
         "contracts": [
+          "verification/contracts/agent-moves.md",
           "openspec/changes/archive/2026-11-17-herdr-core-runtime/model.md"
         ],
         "tests": [
+          "server/src/agent/move/runtime.test.ts",
+
           "quint/herdr-core-seen.test.ts",
           "web/src/world/coreShared.test.ts",
           "server/src/herdr-core/shared-state.test.ts",

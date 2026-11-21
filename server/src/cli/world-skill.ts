@@ -64,6 +64,17 @@ write pane metadata through Herdr; they do not require the World service.
     herdr-world pod now Chat "Review first" "Ship"
     herdr-world group list --kind room --json
 
+## Re-attach an agent moved by hand
+
+    herdr-world agent reattach --from-connection tui-example --from-tab w1:t2 \\
+      --from-terminal term-example --to-connection core-example --to-pane t7
+
+Copies the old desk's remaining saved pins, colours and links to the current
+Claude/Codex agent. Nothing is started. The old terminal ID is optional for one saved witness or legacy pins/colours;
+use --from-terminal for an ambiguous desk. --from-pane can name the old pane. A live old terminal or stale destination
+refuses. Deleted historical settings cannot be reconstructed. No CLI undo.
+Use Agent settings → Move to… in World for the managed quit/resume handoff.
+
 ## Targets
 
   me             your pane (and its tab, for cards and colours)

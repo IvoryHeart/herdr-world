@@ -165,6 +165,8 @@ test("the actual snapshot RPC adopts a legacy tab colour from maintained dense m
           warnings.push({ message, fields }),
       },
       connectionManager: {
+        has: (id: string) =>
+          observed.connections.some((h) => h.connection_id === id),
         readyRuntimeLease: (id: string) => {
           const host = observed.connections.find((h) => h.connection_id === id);
           return host

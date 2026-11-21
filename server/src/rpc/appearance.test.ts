@@ -19,7 +19,7 @@ const identity = {
   color_key: "alpha:tab-1",
   witness: ["terminal-1"],
 };
-function fixture() {
+function fixture(core = false) {
   const root = mkdtempSync(join(tmpdir(), "world-appearance-rpc-"));
   roots.push(root);
   const board = new BoardStore(join(root, "board.json"));
@@ -29,7 +29,9 @@ function fixture() {
     calls: string[] = [];
   let current = true,
     terminal = "terminal-1",
-    fail = false;
+    fail = false,
+    actionable = true,
+    ready = true;
   let defer: ((method: string) => void) | undefined;
   const rpc = (
     method = "world.appearance.patch",
@@ -37,8 +39,8 @@ function fixture() {
       ...identity,
       fields: { status: "Reviewing" },
     },
-  ) =>
-    handleAppearanceRpc({
+  ) => {
+    const context = {
       id: "test",
       method,
       params,
@@ -53,6 +55,7 @@ function fixture() {
         publishBoardChanged: (rev: number) => notifications.push(rev),
         publishWorldInvalidation: () => {},
         connectionManager: {
+          has: (id: string) => id === "alpha",
           readyRuntimeLease: (id: string) =>
             id !== "alpha"
               ? null
@@ -88,8 +91,39 @@ function fixture() {
                 },
         },
       },
-    } as unknown as BridgeRpcContext);
+    } as unknown as BridgeRpcContext;
+    if (core) {
+      const owner = context.services.connectionManager;
+      context.services.coreControl = {
+        manager: {
+          has: (id: string) => id === "alpha",
+          readyRuntimeLease: (id: string) => {
+            const lease = owner.readyRuntimeLease(id);
+            return ready && lease
+              ? {
+                  ...lease,
+                  runtime: { ...lease.runtime, core: { actionable } },
+                }
+              : null;
+          },
+        },
+      } as unknown as NonNullable<BridgeRpcContext["services"]["coreControl"]>;
+      context.services.connectionManager = {
+        has: (id: string) => id === "alpha",
+        readyRuntimeLease: () => {
+          throw new Error("Core must never use TUI manager");
+        },
+      } as unknown as typeof owner;
+    }
+    return handleAppearanceRpc(context);
+  };
   return {
+    unavailable: () => {
+      ready = false;
+    },
+    nonactionable: () => {
+      actionable = false;
+    },
     board,
     errors,
     replies,
@@ -206,4 +240,41 @@ test("finite admission matrix checks both operations across connection, generati
               admitted && method === "world.appearance.rename",
             );
           }
+});
+
+test("core colour admission uses its owning reader and rejects all stale witnesses", async () => {
+  for (const generation of [2, 3])
+    for (const witness of [["terminal-1"], ["replacement"]])
+      for (const retireAt of [
+        null,
+        "pane.list",
+        "tab.list",
+        "workspace.list",
+      ]) {
+        const f = fixture(true);
+        f.defer((reading) => {
+          if (reading === retireAt) f.retire();
+        });
+        await f.rpc("world.appearance.patch", {
+          ...identity,
+          connection_generation: generation,
+          witness,
+          fields: { color: "teal" },
+        });
+        const admitted =
+          generation === 3 && witness[0] === "terminal-1" && retireAt === null;
+        expect(f.errors.length).toBe(admitted ? 0 : 1);
+        expect(f.board.get().revision).toBe(admitted ? 1 : 0);
+      }
+});
+
+test("unavailable and unsynchronised core owners never fall back to TUI", async () => {
+  for (const state of ["unavailable", "nonactionable"] as const) {
+    const f = fixture(true);
+    f[state]();
+    await f.rpc();
+    expect(f.errors).toHaveLength(1);
+    expect(f.board.get().revision).toBe(0);
+    expect(f.calls).toEqual([]);
+  }
 });

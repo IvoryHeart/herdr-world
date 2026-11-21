@@ -3,6 +3,8 @@ import { basename, dirname, join } from "node:path";
 import { assetUrlImports } from "./assetUrlImports";
 
 export type WorldBrowserEntry =
+  | "AgentMove"
+  | "RuntimeMove"
   | "HostsFilter"
   | "ProductionContexts"
   | "AnswerDeliveries"

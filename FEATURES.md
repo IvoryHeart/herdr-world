@@ -3,6 +3,85 @@
 A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
 [Install it](./README.md#quick-start) or follow the [tutorial](./docs/TUTORIAL.md).
 
+## Move an agent between runtimes
+
+Open an agent's desk, choose **Agent settings → Move to…**, select the
+connected destination runtime and room, then choose **Move agent**. Claude
+and Codex continue the same conversation. The new terminal runs the harness
+inside the destination user's shell, so it inherits that shell's environment.
+World carries the source's launch options, including the model, permission or
+approval mode, sandbox and Claude custom agent definitions, into both the
+destination and any recovery resume. It replaces old session selectors with the
+exact conversation ID and uses the chosen destination folder for Codex.
+The tab keeps its name in the chosen room. Use **Folder on destination** when
+the project has a different absolute path on the other host; otherwise World
+uses the original folder. Project files and shell sessions are not transferred.
+A conversation linked only for reading needs matching native resume evidence
+before World can move it.
+
+In Town, drag a desk containing one agent onto a destination room, or focus its
+desk target and press **M** to choose a room. TUI → core, core → TUI and core →
+another core room use the same checked conversation handoff as **Move to…**.
+Another room on the current runtime is also offered in Agent settings. For a
+desk with several panes, open the individual agent's settings instead. Native
+TUI desk moves within a TUI connection keep the panes running. Town desk pins
+still restrict dragging to the pinned row; a Board card pin does not. Colours
+can be set on core desks in Agent settings and follow subsequent moves.
+Colour edits, moves and snapshot spawn links check the same exact runtime owner
+and generation. An unavailable core connection refuses; World never redirects
+its operation to a TUI connection.
+
+World first checks both current connections, the exact resume ID, the source's
+idle state, dialogs, pending messages/tools and process tree. It opens a shell
+at the destination, finds the harness and checks login there, and stages the
+conversation transcript in writable session storage. It also prepares a recovery
+shell in the original tab. Only then does it quit the source, refresh the final
+transcript and resume at the destination. It closes the old terminal after the
+new agent reports ready with the same conversation ID. A failed destination is
+closed and confirmed stopped before World resumes in the original tab. A lost
+reply is inspected, never blindly repeated. A disconnected host can prevent
+confirmation or rollback: World reports **interrupted recovery** and does not
+start a second copy. Inspect both terminals before any manual resume.
+
+Board pins, desk pins, colours, appearance and Board strings follow the agent,
+as do World’s saved spawned-by links in either direction, including across hosts.
+A shared desk retains its choices for the other panes and gives the moved agent
+the same choices. Ordinary snapshots never guess a move from a matching ID;
+World explicitly transfers the witnessed addresses after the handoff. An old
+native parent stamp cannot replace its moved link. Core desk favourites are also
+shared through the destination's native pin label.
+
+Moving currently requires Unix hosts, readable Claude/Codex session files up to
+32 MiB, and a signed-in harness on each host. Busy agents, dialogs, pending
+messages, running tools/background processes, unknown process evidence, stale
+connections, missing folders/binaries/sessions, and divergent destination copies
+refuse before quitting. Scrollback is not moved; Chat reads the resumed
+conversation. Background work must finish first.
+World also refuses when exact foreground launch arguments are unavailable or
+their syntax cannot be reused safely (for example, an unknown option, a different
+subcommand or an initial positional prompt). It never guesses argument quoting
+from a joined command line or replays an initial prompt as new work.
+
+For an agent already moved by hand, copy an old desk's remaining saved details
+with the CLI (the destination agent is never restarted):
+
+```bash
+herdr-world ls --json
+herdr-world agent reattach --from-connection tui-example --from-tab w1:t2 \
+  --from-terminal term-example --to-connection core-example --to-pane t7
+```
+
+The old terminal ID is optional when the saved desk has one witness or only
+legacy pins/colours; use `--from-terminal` for an ambiguous desk. `--from-pane`
+can also name its old pane. A still-live old terminal, replaced desk witness or stale
+destination refuses. This cannot recover settings already deleted before the
+feature was installed. Re-attach changes World metadata and has no CLI undo.
+
+Preview refusal check: open the preview with **`?agentMoveBusy`**, which the page
+removes immediately. Open **Agent settings → Move to…**, select a destination
+and choose **Move agent**. It reports background work and leaves the agent
+running. Reload without the parameter for a real move.
+
 ## Shipyard
 
 - `herdr-world shipyard list|show` and the same-origin
@@ -121,6 +200,7 @@ no control for it. Platform and harness limits apply across the table.
 | Windows host over SSH | [partial](#runtime-limits) | [partial](#runtime-limits) |
 | Town, Desk, Board and Needs you | ✓ | [partial](#runtime-limits) |
 | Open terminals, type and resize | ✓ | [partial](#runtime-limits) |
+| Move a Claude or Codex conversation | [partial](#move-an-agent-between-runtimes) | [partial](#move-an-agent-between-runtimes) |
 | Start and stop agents | ✓ | [partial](#runtime-limits) |
 | Room shells | ✓ (Herdr Float plugin) | ✓ (World's float shell) |
 | Chat and asks | [partial](#runtime-limits) | [partial](#runtime-limits) |

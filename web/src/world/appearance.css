@@ -121,3 +121,13 @@
   width: auto;
   max-width: calc(100vw - 24px);
 }
+
+.agent-move-control select {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+.agent-move-control p {
+  font-size: 12px;
+  line-height: 1.4;
+}

@@ -2,6 +2,7 @@
   "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/41083467325",
   "units": "seconds; JUnit suite totals; Town groups sum their original testcase durations",
   "sourceNotes": {
+    "AgentMove.browser": "2026-11-18 local focused run: 2.848 s testcase duration, phone destination controls, saved witnesses and background-work refusal, bun run test web/src/world/AgentMove.browser.test.ts.",
     "ApartmentsAvatars.browser": "2026-11-20 local focused run: 3.06 s file duration, one fixture across phone and desktop, bun run test web/src/world/ApartmentsAvatars.browser.test.ts.",
     "CoreControl.browser": "2026-11-11 local focused run: 1.10 s for the inherited launcher and bin consumers; registered alongside core input so the complete browser inventory includes both stacked suites.",
     "CoreSharedState.browser": "2026-11-11 local focused run: 4.39 s testcase duration, one end-to-end fixture with nine checks plus three dwell waits, bun run test web/src/world/CoreSharedState.browser.test.ts.",
@@ -12,6 +13,7 @@
     "memory/MemoryLibraryLifecycle.browser": "2026-11-20 local focused run: about 2 s, one viewport, five scripted scenarios, bun run test web/src/world/memory/MemoryLibraryLifecycle.browser.test.ts."
   },
   "seconds": {
+    "AgentMove.browser": 2.848,
     "AnswerDeliveries.browser": 10,
     "ApartmentsAvatars.browser": 3.06,
     "BoardView": 21.518,

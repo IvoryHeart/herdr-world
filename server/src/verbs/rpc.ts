@@ -234,6 +234,12 @@ export const rpcVerbs = [
   rpc("worktree.list", "read", "runtime"),
   rpc("worktree.open", "reconcilable", "runtime"),
   rpc("worktree.remove", "reconcilable", "runtime"),
+  rpc(
+    "world.agent.move",
+    "opaque",
+    "world",
+    object({ source: Type.Unknown(), destination: Type.Unknown() }),
+  ),
   // Apartments: finished agents' records. Evict names explicit residents.
   rpc(
     "world.apartments.evict",

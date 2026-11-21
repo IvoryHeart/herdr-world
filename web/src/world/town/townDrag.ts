@@ -1,6 +1,7 @@
 import type { TownLevel } from "./townCamera";
 import type { TownHit } from "./townHitTest";
 import type { TownModel } from "./townModel";
+import { canHandoffDesk, canMoveDeskToRoom } from "./townMoveEligibility";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import {
   townRoomPlacement,
@@ -93,7 +94,8 @@ export function townDragFor(
     hit.kind === "desk" ? hit.key : hit.kind === "pane" ? hit.deskKey : null;
   const desk = deskKey ? model.desks.get(deskKey) : undefined;
   // A pinned desk moves too, among its room's pinned seats (townDropTarget).
-  if (!desk || !desk.canOpenInSpaces) return null;
+  if (!desk || desk.stale || !(desk.canOpenInSpaces || canHandoffDesk(desk)))
+    return null;
   return {
     kind: "desk",
     key: desk.key,
@@ -213,8 +215,15 @@ export function townDropTarget(
       return { key: null, label: TOWN_PINNED_HINT };
     }
     if (!room) return { key: null, label: `${drag.label}: drop on a room` };
-    if (room.hostKey !== drag.hostKey)
-      return { key: null, label: "Desks move only within one host" };
+    const sourceDesk = model.desks.get(drag.key);
+    if (
+      room.key !== drag.from &&
+      (!sourceDesk || !canMoveDeskToRoom(sourceDesk, room))
+    )
+      return {
+        key: null,
+        label: "Move one agent at a time from Agent settings → Move to…",
+      };
     if (room.key === drag.from) {
       const onto = slotDesk(hit, model);
       if (onto && onto.key !== drag.key && model.deskPins.has(onto.key))

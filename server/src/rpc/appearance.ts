@@ -6,18 +6,14 @@ import {
 } from "../../../shared/appearance";
 import { tabCardKey } from "../../../shared/terminalColor";
 import type { BridgeRpcContext } from "./context";
+import { worldRuntimeLease } from "../world/runtime-lease";
 
 /** Exact-runtime admission for World metadata and native names. */
 export async function handleAppearanceRpc(
   rpc: BridgeRpcContext,
 ): Promise<void> {
   const { id, method, params, sendReply, sendError } = rpc;
-  const {
-    board,
-    publishBoardChanged,
-    publishWorldInvalidation,
-    connectionManager,
-  } = rpc.services;
+  const { board, publishBoardChanged, publishWorldInvalidation } = rpc.services;
   try {
     if (
       method !== "world.appearance.patch" &&
@@ -41,15 +37,18 @@ export async function handleAppearanceRpc(
         /[\u0000-\u001f\u007f-\u009f]/.test(params.label))
     )
       throw new Error("invalid tab name");
-    const lease = connectionManager.readyRuntimeLease(target.connection_id);
-    if (!lease || lease.generation !== generation || !lease.isCurrent())
-      throw new Error("Appearance target is unavailable");
-    const call = (method: string, values: Record<string, unknown> = {}) =>
-      lease.runtime.tui.call(method, values, 10_000);
+    const resolved = worldRuntimeLease(
+      rpc.services,
+      target.connection_id,
+      Number(generation),
+    );
+    if (!resolved) throw new Error("Appearance target is unavailable");
+    const { lease, isCurrent: current } = resolved;
+    const reader = lease.runtime.operations;
     const [paneResult, tabResult, workspaceResult] = await Promise.all([
-      call("pane.list"),
-      call("tab.list"),
-      call("workspace.list"),
+      reader.listTerminals(),
+      reader.listTabs(),
+      reader.listWorkspaces(),
     ]);
     const panes = (paneResult as { panes?: Record<string, unknown>[] })?.panes;
     const tabs = (tabResult as { tabs?: Record<string, unknown>[] })?.tabs;
@@ -92,12 +91,12 @@ export async function handleAppearanceRpc(
           ))
     )
       throw new Error("Appearance tab changed");
-    if (!continuingAppearance(target, observed) || !lease.isCurrent())
+    if (!continuingAppearance(target, observed) || !current())
       throw new Error("Appearance target changed");
     if (fields) {
       const document = await board().patch(
         planBoardPatch([params, observed, fields], () => {
-          if (!lease.isCurrent() || !rpc.requestIsCurrent())
+          if (!current() || !rpc.requestIsCurrent())
             throw new Error("Appearance target changed");
           return [{ op: "appearance.set", target: observed, fields }];
         }),
@@ -105,11 +104,17 @@ export async function handleAppearanceRpc(
       publishBoardChanged(document.revision);
       sendReply({ id, result: { document } }, method);
     } else {
+      if (resolved.kind !== "tui")
+        throw new Error("Rename this core desk in its runtime.");
       // This native operation never creates a World-owned shadow label.
-      await call("tab.rename", {
-        tab_id: target.native_id,
-        label: String(params?.label).trim(),
-      });
+      await resolved.lease.runtime.tui.call(
+        "tab.rename",
+        {
+          tab_id: target.native_id,
+          label: String(params?.label).trim(),
+        },
+        10_000,
+      );
       if (!lease.isCurrent())
         throw new Error("Tab runtime changed during rename");
       publishWorldInvalidation(target.connection_id, lease.generation);

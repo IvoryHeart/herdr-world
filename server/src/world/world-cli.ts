@@ -1,3 +1,4 @@
+import { reattachFromCli } from "./agent-reattach";
 import { planBoardPatch } from "./board-plan";
 import type { MemoryAction } from "../../../shared/memory";
 import { runMemoryCli } from "./world-cli-memory";
@@ -34,7 +35,7 @@ export {
 import type { GroupWorkSources } from "../../../shared/groupViews";
 export { CliError, type CliErrorCode } from "./world-cli-errors";
 import { randomUUID } from "node:crypto";
-import { UsageQueryError } from "../usage/analytics";
+import { runUsageCli } from "./world-cli-usage";
 import { stampSpawn } from "../herdr/spawn-stamp";
 import {
   terminalKey,
@@ -117,6 +118,7 @@ export type WorldCliDeps = {
   hosts(): CliHost[];
   /** herdr-core connections, for callers inside core terminals (P4). */
   core?(): import("./world-cli-actor").CoreCallerSource | null;
+  runtimeCurrent?(connectionId: string, generation: number): boolean;
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
@@ -660,17 +662,13 @@ export function createWorldCli(deps: WorldCliDeps) {
         );
       });
     switch (command) {
-      case "usage": {
-        if (!deps.usage)
-          throw new CliError("unavailable", "Usage analytics is unavailable");
-        try {
-          return await deps.usage(params);
-        } catch (error) {
-          if (error instanceof UsageQueryError)
-            throw new CliError("usage", error.message);
-          throw new CliError("unavailable", "Usage analytics is unavailable");
-        }
+      case "agent reattach": {
+        const result = await reattachFromCli(deps, params);
+        await record(actor, command, result.message, null);
+        return result;
       }
+      case "usage":
+        return runUsageCli(deps, params);
       case "whoami":
         return actor;
       case "ls": {

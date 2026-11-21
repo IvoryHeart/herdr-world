@@ -5,6 +5,8 @@
  */
 
 import { bridge } from "../../api";
+import { needsAgentHandoff } from "./townMoveEligibility";
+import { requestRuntimeDeskMove } from "./townRuntimeMove";
 import { deskReorderIndex } from "../../../../shared/tabOrder";
 export { deskReorderIndex };
 import {
@@ -92,7 +94,10 @@ export async function requestDeskMove(
   allowCloseRoom: boolean,
   /** The desk shows its parent's colour, which follows it on its own. */
   inheritedColor = false,
+  source?: { room: OfficeRoom; workspaceIds: readonly string[] },
 ): Promise<TownMoveOutcome> {
+  if (needsAgentHandoff(desk, room))
+    return requestRuntimeDeskMove(desk, room, source);
   if (!sameOwner(desk.tabRef, room.workspaceRef))
     return {
       status: "refused",
