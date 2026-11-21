@@ -2031,12 +2031,15 @@ resident: an ending World sees replaces the found record of that session.
   waited on you 0 min · 7.1M tokens". A harness World reads no log of
   (Cursor, OpenCode and others) reads "tokens and cost not available for
   this harness". World counts a resident under the usage agents it ran as
-  while World watched it (a resumed session adds its new run); a resident
+  while World watched it, in its own harness session only (a resumed
+  session adds its new run; another session later in the same terminal
+  starts its own count); a resident
   from before World kept them, or found in its harness's history, or with
   no run in the seven days Usage keeps, reads "This week: usage unknown".
   While the read is not in the line is empty. In Town, clicking the line
   closes Apartments and opens Usage on **Breakdown** filtered to that
-  resident; from Board's hub the line is text only.
+  resident, even when its usage is unknown (Breakdown then says "Nothing
+  measured"); from Board's hub the line is text only.
 - `?apartments-preview=avatars` in the page's address shows synthetic
   residents, one per avatar case and one OpenCode resident, for that load
   only (the page removes it at once; nothing is saved). Add `&usageFixture`

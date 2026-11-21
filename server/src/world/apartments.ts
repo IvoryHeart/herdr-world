@@ -42,8 +42,13 @@ export type ApartmentTenant = {
   away?: boolean;
   /** Its look in World as last seen live; null when World could not read it. */
   appearance: ApartmentAppearance | null;
-  /** The usage agent IDs it was counted under while live, newest last. */
+  /**
+   * The usage agent IDs it was counted under while live, newest last: only
+   * those of its current harness session (`usage_session`).
+   */
   usage_agent_ids: string[];
+  /** The harness session `usage_agent_ids` belong to; null until known. */
+  usage_session?: string | null;
 };
 
 /** What World needs to read a live agent's look (its pane, room and table). */
@@ -309,7 +314,15 @@ export class WorldApartments {
         ...pane,
         ...agentByPane.get(pane.pane_id),
       });
-      const usage = same ? before.usage_agent_ids : [];
+      // Usage is kept for one harness session: another session in the same
+      // terminal (a /clear, or a new run after the program left) is another
+      // agent, and its time and tokens are not this resident's.
+      const session = reported ?? (same ? before.session_id : null);
+      const bound = same ? (before.usage_session ?? null) : null;
+      const usage =
+        same && !(session && bound && session !== bound)
+          ? before.usage_agent_ids
+          : [];
       if (lookOf === undefined)
         lookOf = safe(
           () =>
@@ -351,7 +364,7 @@ export class WorldApartments {
         tab: tabs.get(pane.tab_id) ?? (same ? before.tab : null),
         summary: summaryOf(pane, agent) ?? (same ? before.summary : null),
         // Kept from before until the runtime's current answer replaces it.
-        session_id: reported ?? (same ? before.session_id : null),
+        session_id: session,
         session_holder: reported ? null : same ? before.session_holder : null,
         first_seen_at: same ? before.first_seen_at : observedAt,
         last_seen_at: observedAt,
@@ -361,6 +374,7 @@ export class WorldApartments {
           usageAgent && usage.at(-1) !== usageAgent
             ? apartmentUsageAgentIds([...usage, usageAgent])
             : usage,
+        usage_session: session ?? bound,
       };
       // The same agent stays one object, so a session read still running
       // when it leaves lands on the record it leaves.
@@ -454,6 +468,11 @@ export class WorldApartments {
       const found = validSession(id);
       const by = typeof holder === "string" ? holder : null;
       if (found) {
+        // Another session than the usage was kept for: only the current
+        // program's newest usage ID can be this session's.
+        if (tenant.usage_session && tenant.usage_session !== found)
+          tenant.usage_agent_ids = tenant.usage_agent_ids.slice(-1);
+        tenant.usage_session = found;
         tenant.session_id = found;
         tenant.session_holder = by;
       } else if (by !== tenant.session_holder) {
@@ -518,6 +537,7 @@ export class WorldApartments {
         if (reading) {
           await within(reading, SESSION_WAIT_MS);
           resident.session_id = tenant.session_id;
+          resident.usage_agent_ids = tenant.usage_agent_ids;
         }
         saved = await port.moveIn(resident);
         this.changed();

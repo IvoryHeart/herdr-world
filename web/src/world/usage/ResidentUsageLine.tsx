@@ -10,8 +10,9 @@ import "./agentUsageLine.css";
  * run line: time at work, waiting on you, and tokens or that its harness's
  * are not available. It reads the agent rows of the IDs the resident was
  * counted under; with none this week it says "usage unknown". While the read
- * is not in it says nothing. With `onOpen` (Town is shown) a resident with
- * usage opens Usage's Breakdown on that agent.
+ * is not in it says nothing. With `onOpen` (Town is shown) every resident
+ * opens Usage's Breakdown on that agent, even one with no usage this week:
+ * Breakdown then says nothing was measured for it.
  */
 export function ResidentUsageLine({
   resident,
@@ -31,13 +32,15 @@ export function ResidentUsageLine({
   }, [usage, ids]);
   if (usage.status !== "ready") return null;
   const facts = usageAgentFacts(metrics, resident.harness);
-  return metrics && ids && onOpen ? (
+  return onOpen ? (
     <button
       type="button"
       className="agent-usage apartments-usage"
       title="Open in Usage"
       aria-label={`${facts}. Open ${resident.name} in Usage`}
-      onClick={() => onOpen("breakdown", { ids, label: resident.name })}
+      onClick={() =>
+        onOpen("breakdown", { ids: ids ?? [], label: resident.name })
+      }
     >
       <span className="agent-usage-facts">{facts}</span>
     </button>

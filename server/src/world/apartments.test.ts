@@ -245,23 +245,93 @@ describe("finished agents move into apartments", () => {
       })!;
     apartments.fresh("local", 1, [pane("t1")], NOW - 60_000, agents);
     apartments.fresh("local", 1, [pane("t1")], NOW - 30_000, agents);
-    // A new harness session in the same terminal is a new usage agent.
-    const next = "0f0e0d0c-0000-4000-8000-000000000002";
-    apartments.fresh(
-      "local",
-      1,
-      [pane("t1", { agent_session: { kind: "id", value: next } })],
-      NOW - 1000,
-      agents,
-    );
     apartments.complete("local", 1, []);
     await apartments.settled();
     const ids = apartments.list().residents[0]?.usage_agent_ids;
-    expect(ids).toEqual([
-      usageId("0f0e0d0c-0000-4000-8000-000000000001"),
-      usageId(next),
-    ]);
+    expect(ids).toEqual([usageId("0f0e0d0c-0000-4000-8000-000000000001")]);
     expect(ids?.every((id) => /^agent_[a-f0-9]{64}$/.test(id))).toBe(true);
+  });
+
+  test("another harness session in the same terminal does not inherit usage", async () => {
+    const { apartments } = tracker();
+    const session = (value: string) => ({
+      agent_session: { kind: "id", value },
+    });
+    const usageId = (value: string, name: string) =>
+      analyticsAgentId("local", 1, {
+        ...pane("t1", session(value)),
+        pane_id: "p-t1",
+        agent: "claude",
+        name,
+      })!;
+    const a = "0f0e0d0c-0000-4000-8000-00000000000a";
+    const b = "0f0e0d0c-0000-4000-8000-00000000000b";
+    const named = (name: string) => [
+      { pane_id: "p-t1", agent: "claude", name },
+    ];
+    apartments.fresh(
+      "local",
+      1,
+      [pane("t1", session(a))],
+      NOW - 9000,
+      named("agent-a"),
+    );
+    // Session A ends into the shell; session B starts in the same terminal.
+    apartments.fresh(
+      "local",
+      1,
+      [pane("t1", { agent: undefined, agent_session: undefined })],
+      NOW - 6000,
+      [],
+    );
+    apartments.fresh(
+      "local",
+      1,
+      [pane("t1", session(b))],
+      NOW - 3000,
+      named("agent-b"),
+    );
+    apartments.complete("local", 1, []);
+    await apartments.settled();
+    const [resident] = apartments.list().residents;
+    expect(resident?.name).toBe("agent-b");
+    expect(resident?.session_id).toBe(b);
+    expect(resident?.usage_agent_ids).toEqual([usageId(b, "agent-b")]);
+  });
+
+  test("a core agent keeps the usage of every run of its own session only", async () => {
+    const run = (occupant: string) => [
+      pane("t1", {
+        agent_session: undefined,
+        core_occupant_fingerprint: occupant,
+      }),
+    ];
+    const usageId = (occupant: string) =>
+      analyticsAgentId("core", 1, run(occupant)[0]!)!;
+    const left = [pane("t1", { agent: undefined })];
+    // Run 1 of session A, the program leaves, and run 2 has `next`.
+    const resident = async (next: string) => {
+      let answer = { id: "session-a", holder: "1:70" };
+      const { apartments } = tracker({ session: () => answer });
+      apartments.fresh("core", 1, run("occ-1"), NOW - 9000, []);
+      apartments.fresh("core", 1, left, NOW - 8000, []);
+      answer = { id: next, holder: "1:71" };
+      apartments.fresh("core", 1, run("occ-2"), NOW - 7000, []);
+      apartments.complete("core", 1, []);
+      await apartments.settled();
+      return apartments.list().residents[0];
+    };
+    // Session A resumed by another process: both runs are its usage.
+    const resumed = await resident("session-a");
+    expect(resumed?.session_id).toBe("session-a");
+    expect(resumed?.usage_agent_ids).toEqual([
+      usageId("occ-1"),
+      usageId("occ-2"),
+    ]);
+    // A new session B: only its own run.
+    const other = await resident("session-b");
+    expect(other?.session_id).toBe("session-b");
+    expect(other?.usage_agent_ids).toEqual([usageId("occ-2")]);
   });
 
   test("evict removes residents and publishes", async () => {

@@ -409,6 +409,18 @@ if (process.env.APARTMENTS_DOM !== "1") {
     expect(opened).toEqual([
       ["breakdown", { ids: ["fixture-agent-5"], label: "ada" }],
     ]);
+    // A resident with no usage this week still opens its own Breakdown.
+    const hopper = view
+      .dialog()
+      .querySelector<HTMLButtonElement>(
+        'button.apartments-usage[aria-label$="Open hopper in Usage"]',
+      );
+    expect(hopper?.textContent).toBe("This week: usage unknown");
+    await act(async () => hopper!.click());
+    expect(opened[opened.length - 1]).toEqual([
+      "breakdown",
+      { ids: [], label: "hopper" },
+    ]);
     // The opened resident shows the same line under its heading.
     await act(async () => view.button("grace").click());
     const detail = view
