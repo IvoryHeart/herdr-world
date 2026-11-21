@@ -87,6 +87,17 @@ export type CoreInstallDeps = {
       remote_platform?: string;
     }>;
     coreList(): CoreProfileItem[];
+    /**
+     * Saved hosts (#1046): an SSH host added by name may have no runtime
+     * profile yet, and is where Integrations offers to install core.
+     */
+    hosts?: {
+      list(): Array<{
+        type: string;
+        ssh_destination?: string;
+        remote_platform?: string;
+      }>;
+    };
     create(value: unknown): Promise<unknown>;
     connect(connectionId: unknown): Promise<unknown>;
   };
@@ -247,13 +258,20 @@ export function createCoreInstall(deps: CoreInstallDeps) {
     ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
   const jobs = new Map<string, CoreInstallStatus>();
 
-  /** Only this computer, or an SSH (non-Windows) host World has a profile for. */
+  /**
+   * Only this computer, or an SSH (non-Windows) host World knows: a saved
+   * host, or one a runtime profile reaches.
+   */
   function hostOf(value: unknown): CoreInstallHost {
     const host = value as Partial<{ type: string; destination: string }>;
     if (host?.type === "local") return { type: "local" };
     if (host?.type === "ssh" && typeof host.destination === "string") {
       const profiles = deps.profiles();
-      const known = [...profiles.list(), ...profiles.coreList()].some(
+      const known = [
+        ...profiles.list(),
+        ...profiles.coreList(),
+        ...(profiles.hosts?.list() ?? []),
+      ].some(
         (profile) =>
           profile.type === "ssh" &&
           profile.ssh_destination === host.destination &&

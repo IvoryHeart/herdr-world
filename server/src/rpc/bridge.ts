@@ -64,6 +64,8 @@ async function dispatchBridgeRpc(rpc: BridgeRpcContext): Promise<false | void> {
           connections: connectionProfiles.list(),
           // The page's catalogue poll: herdr-core hosts ride along, as in connections.list.
           core_connections: connectionProfiles.coreList(),
+          // Machines and the runtimes found on each, as in connections.list.
+          hosts: connectionProfiles.hosts.list(),
         },
       },
       "bridge-status",
