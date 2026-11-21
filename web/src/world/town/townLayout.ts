@@ -15,6 +15,7 @@ import {
 import { townCenterForecourt, type TownCenterLot } from "./townCenter";
 import { TOWN_HARBOUR_ROOM, townHarbourGeometry } from "./townHarbourLot";
 import { townLibraryLotBeside } from "./townLibraryLot";
+import { townObservatoryLotBeside } from "./townObservatoryLot";
 import { townPostLotBeside } from "./townPostLot";
 import {
   ADD_ROOM_WIDTH,
@@ -810,6 +811,8 @@ export function layoutTown(
 
   const post = townPostLotBeside(center);
   const library = formFactor === "narrow" ? null : townLibraryLotBeside(center);
+  const observatory =
+    formFactor === "narrow" ? null : townObservatoryLotBeside(center);
   const lamps: TownPoint[] = [];
   // Spaced from the town's first column, shifted with it (townLots.ts).
   for (const ry of roads)
@@ -835,6 +838,13 @@ export function layoutTown(
         tx >= library.x - 1 &&
         tx <= library.x + library.w;
       if (underLibrary) continue;
+      // So does the observatory's door (townObservatoryLot.ts).
+      const underObservatory =
+        observatory &&
+        ry === center.street &&
+        tx >= observatory.x - 1 &&
+        tx <= observatory.x + observatory.w;
+      if (underObservatory) continue;
       if (get(tx, ry) === TownGround.walk) lamps.push({ x: tx, y: ry });
     }
 

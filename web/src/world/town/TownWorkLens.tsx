@@ -10,6 +10,7 @@ import {
 import { WorkLens, type WorkLensTab } from "../board/WorkLens";
 import type { WorldObject } from "../worldObject";
 import { AnswerOutboxContext } from "./answerOutbox";
+import { TownOpenUsageContext, useTownUsage } from "./TownUsageLens";
 import { TownPostProvider } from "./TownPostOffice";
 import { useTownWarehouseSources } from "./townWarehouseFixture";
 
@@ -62,42 +63,49 @@ export function TownWorkLens({
 }
 
 /**
- * Town's contexts: the answer outbox, the Work lens's opener and Town's
- * world, which the post office counts Needs you's items in (#1098).
+ * Town's contexts: the answer outbox, Work and Usage openers and the world
+ * whose Needs you items the post office counts.
  */
 export function TownContexts({
   outbox,
-  work,
+  lenses,
   children,
 }: {
   outbox: () => void;
-  work: { open: TownOpenWork; world: WorldObject };
+  lenses: Pick<
+    ReturnType<typeof useTownLenses>,
+    "openWork" | "openUsage" | "world"
+  >;
   children: ReactNode;
 }) {
-  const post = useMemo(() => ({ world: work.world }), [work.world]);
+  const post = useMemo(() => ({ world: lenses.world }), [lenses.world]);
   return (
     <AnswerOutboxContext.Provider value={outbox}>
-      <TownOpenWorkContext.Provider value={work.open}>
-        <TownPostProvider source={post}>{children}</TownPostProvider>
+      <TownOpenWorkContext.Provider value={lenses.openWork}>
+        <TownOpenUsageContext.Provider value={lenses.openUsage}>
+          <TownPostProvider source={post}>{children}</TownPostProvider>
+        </TownOpenUsageContext.Provider>
       </TownOpenWorkContext.Provider>
     </AnswerOutboxContext.Provider>
   );
 }
 
 /**
- * Town's Work lens: the warehouse's opener and, while open, the lens. An
- * agent picked on a card opens as Town opens it.
+ * Town's lenses: the warehouse's Work and the observatory's Usage, their
+ * openers and, while open, the lenses. An agent picked on a Work card opens
+ * as Town opens it.
  */
-export function useTownWork(
+export function useTownLenses(
   world: WorldObject,
   onSelect: (id: string) => unknown,
 ) {
   const [shown, setShown] = useState<WorkLensTab | null>(null);
-  const open = useCallback<TownOpenWork>(
+  const openWork = useCallback<TownOpenWork>(
     (tab = "pull_requests") => setShown(tab),
     [],
   );
-  const lens = shown ? (
+  const usage = useTownUsage(world);
+  const work = shown ? (
     <TownWorkLens
       key={shown}
       world={world}
@@ -109,5 +117,15 @@ export function useTownWork(
       }}
     />
   ) : null;
-  return { open, lens, world };
+  return {
+    openWork,
+    openUsage: usage.open,
+    world,
+    lens: (
+      <>
+        {work}
+        {usage.lens}
+      </>
+    ),
+  };
 }

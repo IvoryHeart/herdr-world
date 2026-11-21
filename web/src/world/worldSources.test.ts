@@ -379,3 +379,44 @@ describe("World sources in the browser", () => {
     expect(worldSourcesStore.snapshot().items).toEqual([ticket]);
   });
 });
+
+test("the shared source store exposes weather and clears it when the service is unreachable", async () => {
+  const at = 1795089600000;
+  const parsed = parseWorldSources({
+    weather: {
+      state: "available",
+      location: { latitude: 1, longitude: 2, label: "Example" },
+      current: {
+        condition: "wind",
+        intensity: 0.5,
+        temperatureC: 10,
+        isDay: true,
+        at,
+      },
+      readAt: at,
+      expiresAt: at + 1000,
+    },
+    sources: [
+      {
+        id: "weather",
+        state: "connected",
+        enabled: true,
+        config: {
+          kind: "weather",
+          enabled: true,
+          location: "Example City",
+          browserLocation: null,
+        },
+      },
+    ],
+  });
+  expect(parsed.weather?.current?.condition).toBe("wind");
+  expect(parsed.sources[0]!.config.kind).toBe("weather");
+  worldSourcesStore.publishSettled(parsed);
+  worldSourcesStore.useFetch(async () => {
+    throw new Error("offline");
+  });
+  await worldSourcesStore.refresh(true);
+  expect(worldSourcesStore.snapshot().weather?.state).toBe("unavailable");
+  expect(parseWorldSources({}).weather?.state).toBe("unavailable");
+});

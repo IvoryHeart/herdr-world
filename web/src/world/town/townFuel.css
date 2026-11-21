@@ -30,6 +30,8 @@
 /* Label, bar, value. Rows line up at their usual widths; a longer label or
    value takes its room from the bar, never from the board's border (#886). */
 .town-fuel-window {
+  /* Always beside the name: a gauge can have three rows (#1087). */
+  grid-column: 2;
   display: grid;
   grid-template-columns:
     minmax(34px, max-content) minmax(12px, 1fr)
@@ -94,6 +96,25 @@
   border-style: dashed;
 }
 
+/* A reading past its source's short age (#1087): the levels dim and the age
+   line reads "as of 09:24", so an old number never passes for a current one. */
+.town-fuel-gauge > button[data-aged="true"] .town-fuel-bar > span,
+.town-fuel-gauge > button[data-aged="true"] .town-fuel-value {
+  opacity: 0.45;
+}
+
+.town-fuel-gauge > button[data-aged="true"] .town-fuel-bar {
+  border-style: dashed;
+}
+
+/* A window the reading left out: named, muted, no bar. */
+.town-fuel-missing {
+  grid-column: 2 / -1;
+  min-width: 0;
+  font-style: italic;
+  opacity: 0.7;
+}
+
 /* A harness that keeps no readable limits: words, no bar. */
 .town-fuel-unavailable {
   grid-column: 1 / -1;
@@ -102,6 +123,7 @@
 
 .town-fuel-details {
   position: absolute;
+  white-space: pre-line;
   z-index: 2;
   left: 0;
   right: 0;

@@ -15,6 +15,7 @@ Every World screen answers this too: press ? beside the views (on a phone, the v
 
 - [The town board as a chip](#town-board-chip)
 - [What's new from the Town Master](#town-master)
+- [Apartments: finished agents](#town-apartments)
 - [What can I do here?](#world-help)
 - [Hosts on a phone](#world-phone-hosts)
 
@@ -43,8 +44,8 @@ Where: Town, the buttons on the right edge. Since 0.2.5.
 
 Town follows your clock: rooms with work are lit, idle rooms go dark, and a reception waiting on you glows amber.
 
-1. Press the clock under the zoom buttons.
-2. Each press moves through your clock, day, dusk and night.
+1. Press the sky button under ALL to open the Sky panel.
+2. Under Time of day, choose Your clock, Day, Dusk or Night.
 
 Where: Town, under the zoom buttons on the right. Since 0.3.5.
 
@@ -74,6 +75,21 @@ The Town Master greets you when you come back: what happened since you left, and
 3. Untick Show this on start to stop the greeting.
 
 Where: Town, beside the town board at the top left. Since 0.3.6.
+
+<a id="town-apartments"></a>
+
+### Apartments: finished agents
+
+![Apartments: finished agents](../web/public/help/town.apartments.desktop.light.webp)
+
+Agents that are not running live on in the apartment building beside the town center, asleep and resumable. Its sign says how many live there.
+
+1. Find the building beside the town center; press ALL if it is out of view.
+2. Press its green APARTMENTS sign.
+3. Search residents by name, project, summary, pull request or date.
+4. Open one to read its history; resume a Claude or Codex agent into a room, or evict it.
+
+Where: Town, the building beside the town center; also Apartments in the town center ring and Board's hub. Since 0.3.6.
 
 ## Board
 
