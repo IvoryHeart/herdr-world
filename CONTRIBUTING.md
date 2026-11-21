@@ -492,22 +492,36 @@ drawn from these entries. The tutorial stays the short learner's path and
 links the help page.
 
 ```bash
-CHROME_BIN=/path/to/chrome bun run help:pictures   # web/public/help/*.webp
+CHROME_BIN=/path/to/chrome HELP_PICTURES_IDS="town.zoom" bun run help:pictures
 bun run help:docs                                  # docs/HELP.md
 bun run help:check                                 # check:docs and the static lane
 ```
 
-`help:pictures` captures each entry's control from the production components
-on the synthetic site scene (`web/src/help/testing/HelpShots.browser.tsx`), at
-phone and desktop sizes, light and dark, and records each picture's inputs in
-`web/src/help/pictures.json`. `HELP_PICTURES_IDS="board.next town.zoom"` limits
-a run. Nobody edits a picture by hand. `help:check` fails when an entry's
-control is no longer marked (naming the entry), a picture is missing or its
-inputs changed (its picture settings, the control's markup, or any file the
-stage renders from: every component, stylesheet, scene and script it imports),
-so any UI change regenerates the pictures; a `*.help.ts` file is not listed, a picture is left over, or
-`docs/HELP.md` is out of date. A PR whose changelog fragment has `### Added`
-changes a `*.help.ts` file or states `Help: none — <reason>`.
+Feature PRs do not regenerate or commit Help pictures unless they add or
+change a help entry. Capture only those entries with `HELP_PICTURES_IDS` (and
+commit only their pictures and manifest records); update `docs/HELP.md` when
+its declarations change. Remove pictures and manifest records for deleted entries.
+Nobody edits a picture by hand.
+
+`help:pictures` captures the production components on the synthetic site scene
+(`web/src/help/testing/HelpShots.browser.tsx`), at phone and desktop sizes in both
+themes, recording input fingerprints in `web/src/help/pictures.json`.
+`help:check`, including pre-push, checks declarations, marked controls, missing
+pictures, orphan pictures/manifest records, and the generated help page. Stale
+fingerprints warn without failing: a Town component change needs no picture commit.
+`help:check --strict` also fails for stale fingerprints.
+
+After main pushes, `.github/workflows/help-pictures.yml` checks freshness and,
+when needed, regenerates all pictures, their manifest and `docs/HELP.md` from
+current main. It creates or updates one `bot/help-pictures` PR, labelled
+`help-pictures`, `auto-merge` (the owner's merge-rule signal) and `skip-changelog`.
+It explicitly dispatches CI and Privacy checks because `GITHUB_TOKEN` commits
+and PRs do not trigger them. Only the owner's rule merges after required checks;
+the workflow never pushes to main. A merged refresh passes the strict check,
+so it produces no further refresh PR. Manual dispatch on main retries a failed run.
+
+A PR whose changelog fragment has `### Added` changes a `*.help.ts` file or
+states `Help: none — <reason>`.
 
 The build adds content versions to local CSS and JavaScript URLs so a new page
 loads its matching assets rather than a cached stylesheet from a previous deploy.

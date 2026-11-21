@@ -113,7 +113,7 @@ For recent contract gaps and evidence boundaries, see the
 | Shortcuts and suggested names | [Contract](../FEATURES.md#keyboard-shortcuts) | [Source](../web/src/shortcutCheatSheet.ts) | [Tests](../web/src/shortcutCheatSheet.test.ts) |
 | Scale/performance evidence | [Contract](scale-harness.md) | [Source](../scripts/scale/run.ts) | [Tests](../scripts/scale/lifecycle.test.ts) |
 | Town golden images | [Contract](SCREENSHOTS.md#town-golden-image-report) | [Source](../scripts/town-golden.ts) | [Tests](../scripts/town-golden.test.ts) |
-| Help declarations, pictures and what's new | [Contract](../CONTRIBUTING.md#help-that-ships-with-a-feature) | [Source](../web/src/help/helpEntry.ts) | [Tests](../scripts/help-check.test.ts) |
+| Help declarations, pictures and what's new | [Contract](../CONTRIBUTING.md#help-that-ships-with-a-feature) | [Source](../web/src/help/helpEntry.ts) | [Tests](../scripts/help-check.test.ts), [bot workflow](../scripts/help-pictures-workflow.test.ts) |
 | Site images and tutorial | [Contract](../CONTRIBUTING.md#pages-website-and-tutorial) | [Source](../scripts/build-pages.ts) | [Tests](../scripts/pages-content.test.ts) |
 | Upstream integration | [Contract](upstream-automation.md) | [Source](../scripts/upstream-sync.ts) | [Tests](../scripts/upstream-sync.test.ts) |
 | File-size ratchet | [Contract](../CONTRIBUTING.md#validation) | [Source](../scripts/file-size-ratchet.ts) | [Tests](../scripts/file-size-ratchet.test.ts) |

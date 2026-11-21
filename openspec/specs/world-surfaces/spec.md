@@ -5052,9 +5052,14 @@ it when it is not on this screen.
 Each declaration's pictures SHALL be generated from the synthetic scenes at
 phone and desktop sizes, in light and dark. The repository's help check SHALL
 fail, naming the entry, when an entry's control is no longer marked in any
-component or its pictures are missing or older than their inputs; and the PR
-description check SHALL fail when a change fragment adds something without a
-changed help declaration or a stated reason.
+component, pictures are missing, or pictures are orphaned. Stale picture input
+fingerprints SHALL warn without failing feature PRs. Feature PRs SHALL capture
+only entries they add or change; other UI changes SHALL leave pictures alone.
+After pushes to main, stale fingerprints SHALL cause one bot PR to regenerate
+pictures, their manifest and docs/HELP.md. The bot SHALL update that PR, label it
+for the owner's merge rule and dispatch its checks; it SHALL never push to main.
+The PR description check SHALL fail when a change fragment adds something
+without a changed help declaration or a stated reason.
 
 #### Scenario: A control is renamed
 
@@ -5065,7 +5070,19 @@ changed help declaration or a stated reason.
 
 - **WHEN** a stylesheet or component that the picture stage renders changes
   and the pictures are not regenerated
-- **THEN** the help check fails and names each entry whose picture is out of date
+- **THEN** the feature PR's help check warns and passes if structure is valid
+- **AND** the feature PR need not regenerate any pictures
+- **AND** after merge, the main workflow refreshes pictures in one bot PR
+
+#### Scenario: A new help entry has no picture
+
+- **WHEN** a feature declares a new help entry without its required pictures
+- **THEN** the help check fails and names the entry
+
+#### Scenario: The refresh PR merges
+
+- **WHEN** regenerated pictures and fingerprints merge to main
+- **THEN** the freshness check passes and no further refresh PR is created
 
 #### Scenario: What can I do here?
 

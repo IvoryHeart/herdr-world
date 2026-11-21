@@ -5,8 +5,8 @@
  * - every declaration is well formed, with a unique id;
  * - every entry's control is still marked in a component
  *   (`data-help="<control>"` or `helpAnchor("<control>")`);
- * - every entry's pictures exist and were made from the current inputs
- *   (else: bun run help:pictures);
+ * - every entry's pictures exist (else: capture that entry);
+ * - stale fingerprints warn; --strict makes them fail for the main bot;
  * - every `*.help.ts` file is listed in web/src/help/entries.ts;
  * - no picture is left over from a removed entry;
  * - docs/HELP.md is current (else: bun run help:docs).
@@ -53,7 +53,10 @@ function importPath(file: string) {
 }
 
 /** Every problem, as a sentence naming the entry or file and the fix. */
-export function helpCheckProblems(input: HelpCheckInput): string[] {
+export function helpCheckProblems(
+  input: HelpCheckInput,
+  strict = false,
+): string[] {
   const problems: string[] = [];
   const ids = new Set<string>();
   const firstRun = new Map<number, string>();
@@ -81,11 +84,7 @@ export function helpCheckProblems(input: HelpCheckInput): string[] {
     const missing = files.filter((file) => !input.pictures.includes(file));
     if (!made || missing.length)
       problems.push(
-        `help entry "${entry.id}" has no picture${missing.length ? ` (${missing.join(", ")})` : ""}; run bun run help:pictures`,
-      );
-    else if (made.fingerprint !== input.fingerprint(entry))
-      problems.push(
-        `help entry "${entry.id}" has an out-of-date picture: its control, its picture or a file the stage renders from changed; run bun run help:pictures`,
+        `help entry "${entry.id}" has no picture${missing.length ? ` (${missing.join(", ")})` : ""}; run HELP_PICTURES_IDS="${entry.id}" bun run help:pictures`,
       );
   }
   const expected = new Set(
@@ -94,19 +93,31 @@ export function helpCheckProblems(input: HelpCheckInput): string[] {
   for (const picture of input.pictures)
     if (!expected.has(picture))
       problems.push(
-        `${HELP_PICTURE_DIRECTORY}/${picture} belongs to no help entry; run bun run help:pictures`,
+        `${HELP_PICTURE_DIRECTORY}/${picture} belongs to no help entry; remove the obsolete picture`,
       );
   for (const id of Object.keys(input.manifest))
     if (!ids.has(id))
       problems.push(
-        `the picture manifest lists "${id}", which is no help entry; run bun run help:pictures`,
+        `the picture manifest lists "${id}", which is no help entry; remove the obsolete manifest record`,
       );
   for (const file of input.declarationFiles)
     if (!input.entriesSource.includes(`"${importPath(file)}"`))
       problems.push(`${file} is not listed in ${HELP_ENTRIES_FILE}`);
   if (!input.docCurrent)
     problems.push("docs/HELP.md is out of date; run bun run help:docs");
+  if (strict) problems.push(...helpCheckWarnings(input));
   return problems;
+}
+
+/** Freshness is owned by the post-merge bot, not each feature PR. */
+export function helpCheckWarnings(input: HelpCheckInput): string[] {
+  return input.entries.flatMap((entry) => {
+    const made = input.manifest[entry.id];
+    if (!made || made.fingerprint === input.fingerprint(entry)) return [];
+    return [
+      `help entry "${entry.id}" has an out-of-date picture; the main workflow refreshes it in a bot PR`,
+    ];
+  });
 }
 
 /** The repository's help, as the check sees it. */
@@ -129,7 +140,12 @@ export function repositoryHelp(root = ROOT): HelpCheckInput {
 }
 
 if (import.meta.main) {
-  const problems = helpCheckProblems(repositoryHelp());
+  const input = repositoryHelp();
+  const strict = process.argv.includes("--strict");
+  const problems = helpCheckProblems(input, strict);
+  if (!strict)
+    for (const warning of helpCheckWarnings(input))
+      process.stderr.write(`help: warning: ${warning}\n`);
   if (problems.length) {
     for (const problem of problems) process.stderr.write(`help: ${problem}\n`);
     process.exitCode = 1;

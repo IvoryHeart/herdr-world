@@ -13,6 +13,7 @@
 - Aggregate observation is bounded and read-only; failed-host cached topology is stale and non-actionable.
 - Keep the browser on one World origin; never restore bridge Host, Origin or cross-origin CSP configuration.
 - SSH profiles accept OpenSSH aliases or `user@host`; policy belongs in OpenSSH config. Never persist passwords, keys, passphrases or arbitrary SSH options.
+- Feature PRs do not regenerate Help pictures unless adding or changing a help entry; capture only those entries with `HELP_PICTURES_IDS="<id>" bun run help:pictures`. Stale fingerprints warn; main refreshes the full set through one bot PR.
 - Never commit generated `web/dist/`, `server/public/`, binaries, `.pages-dist/` or `dist/`.
 - Add a changelog fragment before pushing, or state `Changelog: none — <reason>` in the PR; [format](changes/README.md). Never edit `CHANGELOG.md` directly.
 - Non-documentation PRs require plain `Spec impact:` and `Verification impact:` lines naming changed specs/OpenSpec changes and evidence/owners/checks, or `none — <reason>`; `check:pr-body` enforces presence and diff consistency, and reviewers assess the decision.
