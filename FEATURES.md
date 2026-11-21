@@ -14,7 +14,7 @@ A Web/PWA client for the **Herdr TUI**, **herdr-core**, or both.
   “nothing waiting” or permission to release. The existing GitHub Sources switch
   and service user's `gh` sign-in apply. Reads share a bounded cache and deadline.
 - Running World listeners report their versions, ports and known source branches
-  in a private local registry. Isolated previews can opt into one shared registry;
+  in a private per-user registry shared by default, including isolated previews;
   expired reports are stale and have no open action. Only fresh loopback reports
   provide navigation URLs, usable from the service machine. No remote host or
   port discovery runs, and agent runtimes are not treated as World deployments.
@@ -1739,8 +1739,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   grouped. Testing only: open `?questionBacklogFixture` (removed immediately)
   for 20 synthetic Atlas questions and one Beacon question; dismiss Atlas and
   Beacon stays. The fixture never contacts a runtime; reload to leave it.
-  Worlds started with the same `HERDR_WORLD_INSTANCE_REGISTRY_DIR` and attached
-  to the same runtime show each other's open questions (up to 60 per World,
+  Worlds running as the same user on this machine share a private registry by
+  default, even with different data folders. Those attached to the same runtime
+  show each other's open questions (up to 60 per World,
   from up to 8 Worlds, refreshed every 5 seconds and on each question alert),
   marked **Asked in [World]** with a link. Answering or dismissing one there
   closes it in the World that holds it, which records exactly one answer and
@@ -1748,9 +1749,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   closed. A question stays with the runtime it was asked on, even if that saved
   connection is later edited to target another. A long question is shortened
   in the alert so its World's name always arrives. Places, IDs and attachments
-  stay with that World. When it stops, its
-  questions leave the others at the next read (a failed read keeps them 15
-  seconds); answering then says it is not running. An alert whose question this
+  stay with that World. `HERDR_WORLD_INSTANCE_REGISTRY_DIR` overrides discovery
+  for Worlds that need a separate registry. An older World that does not publish
+  (including 0.3.5) contributes no peer questions or discovery errors. When a
+  home stops, its questions leave the others at the next read (a failed read
+  keeps them 15 seconds); answering then says it is not running. An alert whose question this
   World cannot read (no shared registry, an older World, or another runtime)
   shows as **Asked in [World]** with a link when known, no answer field, and
   **Hide alert**; up to 20 are kept until World restarts. Testing only: open
