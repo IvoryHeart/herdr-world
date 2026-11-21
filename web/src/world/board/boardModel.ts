@@ -143,7 +143,10 @@ function projectHost(host: WorldHostObject): HostProjection {
       generation: host.generation,
       label: host.label,
       connectionState: host.connection.state,
-      stale: host.stale || !host.actionable,
+      // Stale only when the host isn't live. A healthy herdr-core host is
+      // not TUI-actionable but World controls it (coreControl, world.core.*);
+      // TUI-only actions check each workspace's and tab's own `actionable`.
+      stale: host.stale || !(host.actionable || host.coreControl === true),
       workspaceKeys: [],
     };
     const workspaceIds = new Set(host.spaces.map((space) => space.nativeId));
