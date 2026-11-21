@@ -189,6 +189,54 @@ describe("apartment residents live in World's SQLite", () => {
     }
   });
 
+  test("a resident keeps its usage agent IDs, bounded, across a resumed run", async () => {
+    const at = 100 * DAY;
+    const a = (n: number) => `agent_${String(n).padStart(64, "0")}`;
+    // Old records have none; bad entries are dropped; the newest 8 are kept.
+    expect(parseApartmentMoveIn(resident("old", at)).usage_agent_ids).toEqual(
+      [],
+    );
+    expect(
+      parseApartmentMoveIn(
+        resident("bad", at, {
+          usage_agent_ids: [a(1), 7, "", "x".repeat(101), a(1), a(2)] as never,
+        }),
+      ).usage_agent_ids,
+    ).toEqual([a(1), a(2)]);
+    expect(
+      parseApartmentMoveIn(
+        resident("many", at, {
+          usage_agent_ids: Array.from({ length: 12 }, (_, i) => a(i)),
+        }),
+      ).usage_agent_ids,
+    ).toEqual(Array.from({ length: 8 }, (_, i) => a(i + 4)));
+    // Resumed and ended again: one resident, counted under both runs.
+    const db = database();
+    try {
+      const write = (operation: Parameters<typeof writeApartments>[1]) =>
+        writeApartments(db, operation, at);
+      write({
+        type: "move-in",
+        resident: resident("ada", at - DAY, { usage_agent_ids: [a(1)] }),
+      });
+      write({
+        type: "move-in",
+        resident: resident("ada", at, { usage_agent_ids: [a(2)] }),
+      });
+      expect(readApartments(db)).toMatchObject([
+        { name: "ada", usage_agent_ids: [a(1), a(2)] },
+      ]);
+    } finally {
+      db.close();
+    }
+    const port = memoryApartmentsPort([], () => at);
+    await port.moveIn(resident("ada", at - DAY, { usage_agent_ids: [a(1)] }));
+    await port.moveIn(resident("ada", at, { usage_agent_ids: [a(2)] }));
+    expect(port.list().map((row) => row.usage_agent_ids)).toEqual([
+      [a(1), a(2)],
+    ]);
+  });
+
   test("an older database gains session keys for the residents it has", () => {
     const path = join(folder(), "world.sqlite");
     const db = new Database(path);

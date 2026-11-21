@@ -692,6 +692,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
       requests opened and merged, and a total row. "unknown" means no
       reading; "(partly read)" means some sources were not readable. Agents
       and rooms no longer open read "Earlier agent" and "Earlier room".
+      Opened from an Apartments resident's usage line, Breakdown shows only
+      that agent: an **Agent: <name>** chip replaces **Group by**, its runs
+      read under its name, the total row reads **This agent**, and an agent
+      with no run in the seven days says "Nothing measured". The chip's ×
+      (**Show every agent**) shows every agent again.
       Under the table, **What World can read** names, per harness at work
       this week, whether its tokens come from its session logs or only
       World's time is known, and whether pull requests could be read.
@@ -2026,9 +2031,24 @@ resident: an ending World sees replaces the found record of that session.
   avatars, or World found it in its harness's history) shows the nearest: its profile's look, else a profile of the same
   harness, else World's default character; hovering the avatar says which.
   Its colour then falls back to the plain tile.
+- Each resident shows its own usage this week under its row and in the
+  opened resident, worded as an agent card's line: "This week: at work 3 h ·
+  waited on you 0 min · 7.1M tokens". A harness World reads no log of
+  (Cursor, OpenCode and others) reads "tokens and cost not available for
+  this harness". World counts a resident under the usage agents it ran as
+  while World watched it, in its own harness session only (a resumed
+  session adds its new run; another session later in the same terminal
+  starts its own count); a resident
+  from before World kept them, or found in its harness's history, or with
+  no run in the seven days Usage keeps, reads "This week: usage unknown".
+  While the read is not in the line is empty. In Town, clicking the line
+  closes Apartments and opens Usage on **Breakdown** filtered to that
+  resident, even when its usage is unknown (Breakdown then says "Nothing
+  measured"); from Board's hub the line is text only.
 - `?apartments-preview=avatars` in the page's address shows synthetic
-  residents, one per avatar case, for that load only (the page removes it at
-  once; nothing is saved).
+  residents, one per avatar case and one OpenCode resident, for that load
+  only (the page removes it at once; nothing is saved). Add `&usageFixture`
+  for synthetic usage lines.
 - A resident whose session runs again at a desk is hidden while it runs, and
   returns when it stops, also when its terminal stays open with a shell. Its
   newer end is recorded when that terminal closes. A transcript written in the last 10 minutes is left

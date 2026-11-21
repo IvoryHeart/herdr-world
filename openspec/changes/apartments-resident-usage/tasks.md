@@ -1,0 +1,11 @@
+## 1. Resident usage
+
+- [x] 1.1 Keep the usage agent IDs a resident ran under on its record, bounded and read leniently; merge them when a resumed session moves in again.
+- [x] 1.2 Show a resident's week of usage in the Apartments list and resident view, with the card line's unknown and not-available wording.
+- [x] 1.3 Open Usage's Breakdown filtered to one agent from a resident in Town, with a clearable Agent chip.
+- [x] 1.4 Cover storage, observation, parsing, wording and the filtered Breakdown with unit and DOM tests.
+- [x] 1.5 Document the behaviour in FEATURES.md (Apartments, Usage Breakdown).
+
+## 2. Synchronize
+
+- [ ] 2.1 Synchronize these deltas into the current specs together with the Apartments capability once it is specified.
