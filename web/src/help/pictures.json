@@ -1,6 +1,6 @@
 {
   "board.arrange": {
-    "fingerprint": "ac2659f6b92e063f",
+    "fingerprint": "c6180e8400665026",
     "files": [
       "board.arrange.desktop.light.webp",
       "board.arrange.desktop.dark.webp",
@@ -9,7 +9,7 @@
     ]
   },
   "board.camera": {
-    "fingerprint": "53910f49ddac168f",
+    "fingerprint": "010d40ab43e741d7",
     "files": [
       "board.camera.desktop.light.webp",
       "board.camera.desktop.dark.webp",
@@ -18,7 +18,7 @@
     ]
   },
   "board.lenses": {
-    "fingerprint": "12633ef4a7bec7f5",
+    "fingerprint": "94b828e2e02f5eed",
     "files": [
       "board.lenses.desktop.light.webp",
       "board.lenses.desktop.dark.webp",
@@ -27,7 +27,7 @@
     ]
   },
   "board.next": {
-    "fingerprint": "11d79a3b38c995e7",
+    "fingerprint": "18b3eb1f4daf7347",
     "files": [
       "board.next.desktop.light.webp",
       "board.next.desktop.dark.webp",
@@ -36,7 +36,7 @@
     ]
   },
   "board.notes": {
-    "fingerprint": "ac2659f6b92e063f",
+    "fingerprint": "c6180e8400665026",
     "files": [
       "board.notes.desktop.light.webp",
       "board.notes.desktop.dark.webp",
@@ -45,7 +45,7 @@
     ]
   },
   "chat.composer": {
-    "fingerprint": "a02849009429f48e",
+    "fingerprint": "c2715b59cbf9a7ba",
     "files": [
       "chat.composer.desktop.light.webp",
       "chat.composer.desktop.dark.webp",
@@ -54,7 +54,7 @@
     ]
   },
   "chat.speak": {
-    "fingerprint": "7b05243797d2abab",
+    "fingerprint": "e427519a7e09ff80",
     "files": [
       "chat.speak.desktop.light.webp",
       "chat.speak.desktop.dark.webp",
@@ -63,7 +63,7 @@
     ]
   },
   "town.board-chip": {
-    "fingerprint": "cdb50e15e55f01fc",
+    "fingerprint": "d0c129d1ddd0d001",
     "files": [
       "town.board-chip.desktop.light.webp",
       "town.board-chip.desktop.dark.webp",
@@ -72,7 +72,7 @@
     ]
   },
   "town.daylight": {
-    "fingerprint": "58b28bf430361f78",
+    "fingerprint": "786e6bac640b808b",
     "files": [
       "town.daylight.desktop.light.webp",
       "town.daylight.desktop.dark.webp",
@@ -81,14 +81,14 @@
     ]
   },
   "town.master": {
-    "fingerprint": "7f38d9fe0d9e2ebb",
+    "fingerprint": "583787b20e3ac64e",
     "files": [
       "town.master.desktop.light.webp",
       "town.master.desktop.dark.webp"
     ]
   },
   "town.zoom": {
-    "fingerprint": "c7f53aa4bf46c063",
+    "fingerprint": "cdc9796bb264a08b",
     "files": [
       "town.zoom.desktop.light.webp",
       "town.zoom.desktop.dark.webp",
@@ -97,14 +97,14 @@
     ]
   },
   "world.command-box": {
-    "fingerprint": "f46111b0b4ee7da5",
+    "fingerprint": "8b2a681c45c20318",
     "files": [
       "world.command-box.desktop.light.webp",
       "world.command-box.desktop.dark.webp"
     ]
   },
   "world.help": {
-    "fingerprint": "5919de7cb96ddf89",
+    "fingerprint": "02fd82957a2cf491",
     "files": [
       "world.help.desktop.light.webp",
       "world.help.desktop.dark.webp",
@@ -113,7 +113,7 @@
     ]
   },
   "world.phone-hosts": {
-    "fingerprint": "1002d40b485887a0",
+    "fingerprint": "7ec5c04811663fc9",
     "files": [
       "world.phone-hosts.phone.light.webp",
       "world.phone-hosts.phone.dark.webp"

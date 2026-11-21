@@ -73,6 +73,7 @@ dialog.
 | keyboard.find | Find or act (Cmd+K) | Keyboard shortcut; top bar search |
 | integrations.sources | Sources (GitHub, Jira) | Menu → Integrations, or Config → Integrations (#1026) |
 | integrations.metrics | Economy metrics (OTEL) | Menu → Integrations, or Config → Integrations (#1026) |
+| integrations.weather | Weather place and source (#1111) | Town: sky button → Weather place and source… (#1061) |
 | integrations.agents | Agent integrations | Menu → Integrations, or Config → Integrations |
 | integrations.hosts | Hosts and connections | Top bar Hosts → Manage connections (phone: view menu) |
 | integrations.terminal-transport | Terminal transport | Config → Connection |
