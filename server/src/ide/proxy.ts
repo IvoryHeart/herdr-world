@@ -14,8 +14,8 @@
  * - A response may not widen a service worker's scope, and a redirect may
  *   not leave the instance's route.
  * - Every response also carries World's frame policy: browsers enforce
- *   both policies, so the IDE can frame only its own origin whatever its
- *   own policy allows.
+ *   both policies, so the IDE can frame only its own origin and VS Code's
+ *   webview origin, whatever its own policy allows.
  * - The workbench page gets World's theme defaults (`workbench-theme.ts`),
  *   so VS Code's light/dark follows World's theme.
  * - The workbench's own WebSocket handshake carries the token too: VS Code
@@ -70,8 +70,18 @@ const DROPPED_RESPONSE_HEADERS = new Set([
 /** Cookies an IDE sets for itself; anything else in the jar is World's. */
 const IDE_COOKIE = /^(vscode-|code-server-)/;
 export const IDE_TOKEN_COOKIE = "vscode-tkn";
+/**
+ * VS Code's own webview origin. Stock VS Code and OpenVSCode Server frame
+ * webviews (Markdown preview, extension panels) and the web worker
+ * extension host from `https://<hash>.vscode-cdn.net`, a fresh subdomain per
+ * webview. The one exception to World's one-origin frame rule, and only on
+ * IDE pages (#1053): that content stays cross-origin to World, so it can't
+ * reach World's window, storage, cookies or API, and its service worker's
+ * scope is its own origin.
+ */
+export const IDE_WEBVIEW_FRAME_ORIGIN = "https://*.vscode-cdn.net";
 /** Added beside the IDE's own policy; the stricter of the two wins. */
-export const IDE_FRAME_POLICY = "frame-src 'self' blob: data:";
+export const IDE_FRAME_POLICY = `frame-src 'self' blob: data: ${IDE_WEBVIEW_FRAME_ORIGIN}`;
 
 export function parseIdeRoute(
   pathname: string,

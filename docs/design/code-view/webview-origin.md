@@ -1,8 +1,9 @@
 # Decision: where stock VS Code's webviews load
 
 Issue #1038, design question 2 of #988. Status: decided. Webviews load from
-World's own origin, by the mechanism in PR #1124 (#1053). Options (a) and (b)
-are rejected.
+VS Code's own webview origin, which only the frame rule on IDE pages admits
+(PR #1124, #1053). Same-origin webviews, a second World origin and blank
+webviews are rejected.
 Contract: [world-code-view delta](../../../openspec/changes/world-code-view/specs/world-code-view/spec.md),
 requirement "Embedding feasibility and full authority admission".
 
@@ -29,24 +30,19 @@ on World's origin, so they always showed.
 
 ## Decision
 
-Serve stock VS Code and OpenVSCode webviews from World's own origin.
+Let IDE pages frame VS Code's own webview origin.
 
-- World sets VS Code's own embedder option `webviewEndpoint` in the workbench
-  configuration it forwards, pointing at the IDE's copy of its webview host
-  page under `/ide/<id>/`. `product.json` is not touched.
-- World serves that one page with one edit: its host-name hash check becomes
-  "the parent is on this page's own origin", and the page's CSP script hash is
-  recomputed, after World proves the old hash is the browser's hash of the
-  original script. The rest of its CSP and every other product file reach the
-  browser unchanged.
-- If either page does not look as World expects, World forwards it unchanged
-  and webviews stay blank. code-server is left as it is.
-- World's own origin rule and CSP do not change: no second origin, no
-  `vscode-cdn.net` in any policy, nothing fetched from Microsoft.
-
-This is option (c)'s result (a same-origin route) reached by a narrower means:
-VS Code's own option plus one checked edit, instead of rewriting the product
-template.
+- The frame rule World adds to every IDE route response (`/ide/<id>/`)
+  becomes `frame-src 'self' blob: data: https://*.vscode-cdn.net`. Stock
+  VS Code and OpenVSCode Server load webviews, and their web worker extension
+  host, from `https://<hash>.vscode-cdn.net` as they do anywhere else.
+- No product file is rewritten: not `product.json`, not the webview host
+  page. code-server is left as it is.
+- World's own pages and every other route keep the one-origin rule; this is
+  the one exception AGENTS.md names.
+- Webviews need internet access to vscode-cdn.net and a secure page (HTTPS
+  or localhost), because the host-name hash uses browser cryptography. On
+  plain HTTP, OpenVSCode Server's webviews stay blank.
 
 ## Threat model
 
@@ -56,58 +52,44 @@ every agent.
 
 **Webview content is untrusted.** Extension panels, notebook outputs and
 previews of files from any opened repository are written by people other than
-the owner. On World's origin that HTML runs with World's authority, exactly as
-code-server's webviews already do. World accepts this, for three reasons:
+the owner. The threat is that content, not the extensions: extensions already
+run with the owner's full rights in VS Code, and the Enable dialog grants the
+workbench World's browser authority.
 
-- The Enable dialog already grants the IDE and its extensions World's
-  browser authority and full shell and file access on the IDE's host;
-  extensions that draw webviews are the same code.
-- The webview host page keeps upstream's CSP, and each webview keeps the CSP
-  its extension sets; Markdown preview, for example, blocks document scripts
-  by default.
-- The added reach is World's other hosts and agents. The owner admits that
-  per IDE when enabling it, and code-server users already live with it.
+**Why the exception is safe.** Webview content stays on another origin, so
+the browser keeps it out of World:
 
-**Other origins.** A web page on another origin (a site the owner visits, a
-LAN page) may frame World's host page to obtain its message port and drive a
-webview. The page hands its port only to a parent on its own origin, so it
-refuses every other parent, whichever parent origin the framing page names.
+- it cannot read World's window, storage or cookies;
+- its requests to World's API and WebSocket carry no World session cookie and
+  are refused;
+- its service worker's scope is its own origin, never World's pages;
+- the IDE still cannot widen a service worker's scope over World's pages or
+  set cookies outside its route.
 
-**Wrong edits.** A future VS Code may change the page. World edits only a page
-whose check and hash it can match exactly, and otherwise forwards the page
-unchanged, which fails closed to blank webviews.
+**Hostile-webview test (PR #1124).**
+`server/src/ide/webview-origin.browser.test.ts` runs World over HTTPS in
+headless Chrome. A fake workbench on World's IDE route frames a hostile page
+on a `vscode-cdn.net` name (mapped to a local HTTPS server) and a page on any
+other origin. It checks that:
 
-**Hostile-webview tests (PR #1124).**
+- the `vscode-cdn.net` page loads and any other origin is refused;
+- the hostile page cannot read World's cookie, storage or window;
+- its calls to World's API and WebSocket carry no session cookie and fail;
+- it cannot register a service worker over World's pages.
 
-- `server/src/ide/webview-host.browser.test.ts`, in headless Chrome:
-  - the workbench's webview loads from World's origin under the recomputed CSP
-    and gets its port;
-  - nothing names `vscode-cdn.net`;
-  - the page as shipped refuses a same-origin parent (control);
-  - another origin that frames World's host page never gets the port, whether
-    it names itself or World as parent.
-- `server/src/ide/webview-host.test.ts` and `server/src/ide/proxy.test.ts`:
-  - a static route outside the instance, a wrong hash, a different check or a
-    duplicated check leave the page unedited;
-  - code-server's pages pass byte for byte.
-
-A failure in any of these blocks the change. A new way for another origin to
-obtain the port is a security bug, not a known gap.
+A failure in this test blocks the change.
 
 ## Rejected options
 
 ### (a) Keep one origin; webviews stay blank
 
-The isolation it buys is small: extension code already runs with World's
-authority inside the workbench, and code-server already shows webviews on
-World's origin. The price is large: Markdown preview, notebooks and
-webview-based extensions (GitLens, Copilot Chat) are blank in the two IDEs
-most people use, which pushes them out of World to a desktop editor.
+Markdown preview, notebooks and webview-based extensions (GitLens, Copilot
+Chat) would be blank in the two IDEs most people use, which pushes them out
+of World to a desktop editor.
 
 ### (b) A second World-owned origin for webviews
 
-It isolates best on paper: webview code would be cross-origin to World. In
-practice:
+It isolates as well as vscode-cdn.net on paper. In practice:
 
 - The host-name hash check means one extra port is not enough: each webview
   needs `<hash>.<webview host>`. From another device that takes a wildcard DNS
@@ -120,25 +102,29 @@ practice:
   is security-sensitive) and a second service-worker scope, and still needs
   the webview template rewritten in the product's configuration.
 
-### Not offered: admit `*.vscode-cdn.net`
+### (c) Serve webviews from World's own origin
 
-Upstream's default, but it is the cross-origin CSP AGENTS.md forbids and makes
-the browser load every webview host page from Microsoft.
+Built first in PR #1124 and withdrawn. World set the workbench's
+`webviewEndpoint` option to a copy of the webview host page under the
+instance route, with its host-name check and CSP hash rewritten. VS Code's
+host page writes content into a same-origin frame, calls into it directly
+and loads resources through a service worker that controls that frame, so
+the content must share World's origin. Script-running content (notebook HTML
+output, extension panels showing untrusted HTML) could then reach World's
+window, storage and API, and no cookie, CSP, sandbox, origin check or
+service-worker rule separates two documents on one origin. Making the frame
+opaque leaves every webview blank.
 
 ## Licence
 
-World edits one Microsoft file in transit, not on disk. The VS Code Server
-[licence](https://code.visualstudio.com/license/server) says you "must comply
-with any technical limitations in the software that only allow you to use it
-in certain ways" (section 5). Whether this edit fits that clause is part of
-recording acceptance of Microsoft's server terms (OpenSpec task 1.1), which
-stays open. OpenVSCode Server is MIT, so the question applies only to stock
-VS Code.
+World admits the webview origin VS Code already uses and changes none of its
+files, so no product file is edited. Recording acceptance of Microsoft's
+server terms (OpenSpec task 1.1) stays open.
 
 ## Revisit when
 
-- VS Code ships a supported way to self-host webviews on the embedder's
-  origin: use it and drop the edit.
-- World gains an HTTPS name with a wildcard certificate: (b) can be
-  reconsidered for stronger isolation, through a reviewed change to the
-  one-origin rule.
+- VS Code ships a supported way to self-host webviews on an embedder-chosen
+  isolated origin.
+- World gains an HTTPS name with a wildcard certificate: (b) could remove the
+  dependency on vscode-cdn.net, through a reviewed change to the one-origin
+  rule.

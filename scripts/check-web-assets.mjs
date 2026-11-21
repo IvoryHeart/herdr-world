@@ -44,14 +44,24 @@ const maxFileCount = 212;
 // grew under it to 13 KB of headroom; 15.3 MiB carries both, initial budgets
 // unchanged (2026-11-19). The lazy #1035 Settings adds about 35 KiB
 // on top of it (15.31 MiB together, so 15.4 MiB on 2026-11-20).
+// The Usage screens (#1029: Budget, Runs at once, Tokens and Breakdown, with
+// the testing fixture) load with Town's lazy chunk and add about 57 KiB.
+// Main grew under it (Settings pages), so its delta on main projects to
+// 15.41 MiB; 15.5 MiB carries both, initial budgets unchanged (2026-11-20).
 // The Town harbour and warehouse (#1028) fit main alone, but main's Library
 // (#1082) grew under it: 15.42 MiB together, so 15.5 MiB, initial budgets
 // unchanged (2026-11-20).
 // Apartments (#1011: the resident search/history dialog, its store and Town's
 // apartment building) add about 18.7 KB to lazy chunks; startup budgets are
-// unchanged. Resident avatars (#1069) share Town's sprites in the lazy
-// Apartments chunks: 15.503 MiB on main, so 15.6 MiB, initial budgets
-// unchanged (2026-11-20).
+// unchanged.
+// The combined Usage/harbour/Apartments merge measures 15.55 MiB; 15.6 MiB
+// carries those lazy features together, with startup budgets unchanged.
+// Resident avatars (#1069) share Town's sprites in lazy Apartments chunks;
+// main measures 15.503 MiB within the same 15.6 MiB total (2026-11-20).
+// Merging the Weather source and its published Town consumer (#1040/#1100)
+// with main's Apartments and post-office work measures 16,270,139 bytes
+// (15.5164 MiB): 17,211 bytes above 15.5 MiB. Account for the combined
+// delivered features at 15.6 MiB; file, help-picture and startup limits stay.
 // The Code view (#1009) fit main alone, but main's Apartments, post office
 // and help grew under it: 15.51 MiB together, so 15.6 MiB, startup budgets
 // unchanged (2026-11-20).

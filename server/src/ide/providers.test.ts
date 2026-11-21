@@ -140,13 +140,7 @@ test("fixed argument lists per provider", () => {
   });
 });
 
-test("only code-server serves webviews inside World", () => {
-  // Stock VS Code and OpenVSCode Server frame them from vscode-cdn.net,
-  // which World's frame policy keeps out; the workbench is still embedded.
-  expect(IDE_PROVIDERS.vscode.webviewsInWorld).toBe(false);
-  expect(IDE_PROVIDERS.openvscode.webviewsInWorld).toBe(false);
-  expect(IDE_PROVIDERS["code-server"].webviewsInWorld).toBe(true);
-  // Only Microsoft's build signs its connection, which needs HTTPS.
+test("only Microsoft's build signs its connection, which needs HTTPS", () => {
   expect(IDE_PROVIDERS.vscode.needsSecurePage).toBe(true);
   expect(IDE_PROVIDERS.openvscode.needsSecurePage).toBe(false);
   expect(IDE_PROVIDERS["code-server"].needsSecurePage).toBe(false);

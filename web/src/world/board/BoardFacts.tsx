@@ -49,7 +49,9 @@ import { useBoardNow } from "./boardClock";
 import {
   boardAgentNow,
   boardCountsText,
+  boardFuelNoteText,
   boardFuelText,
+  boardHostFuelNotes,
   boardHostGauges,
   boardPlaceText,
   boardTotalText,
@@ -101,7 +103,7 @@ export const BoardSummary = memo(function BoardSummary({
   const now = useBoardNow();
   const limits = townLimits(usage);
   const gauges = townFuelGauges(limits, now);
-  const notes = townFuelNotes(limits, gauges);
+  const notes = townFuelNotes(limits, gauges, summary.harnesses);
   const { counts } = summary;
   const countsText = `${counts.working} busy, ${counts.needsYou} waiting, ${counts.finished} done, ${counts.quiet} quiet`;
   useEffect(() => {
@@ -185,14 +187,21 @@ export const BoardSummary = memo(function BoardSummary({
                   <li
                     key={gauge.harness}
                     data-stale={gauge.stale || undefined}
-                    data-low={(!gauge.stale && gauge.lowest.low) || undefined}
+                    data-aged={gauge.aged || undefined}
+                    data-low={
+                      (!gauge.stale && !gauge.aged && gauge.lowest.low) ||
+                      undefined
+                    }
+                    title={gauge.refresh}
                   >
                     {boardFuelText(gauge, now)}
                   </li>
                 ))}
                 {notes.map((note) => (
                   <li key={note.harness} data-stale>
-                    {note.name} limits not available: {note.reason}
+                    {note.kind === "no-reading"
+                      ? `${note.name} no reading yet. ${note.reason}`
+                      : `${note.name} limits not available: ${note.reason}`}
                   </li>
                 ))}
               </ul>
@@ -260,10 +269,13 @@ function BoardHostLines({ host }: { host: TownSummaryHost }) {
   const today = useBoardUsage("today");
   const week = useBoardUsage("7d");
   const now = useBoardNow();
-  const gauges = boardHostGauges(
-    townLimits(useTownUsage(townUsageStore())),
+  const limits = townLimits(useTownUsage(townUsageStore()));
+  const gauges = boardHostGauges(limits, host.connectionId, now);
+  const notes = boardHostFuelNotes(
+    limits,
     host.connectionId,
-    now,
+    gauges,
+    host.harnesses,
   );
   return (
     <>
@@ -279,8 +291,20 @@ function BoardHostLines({ host }: { host: TownSummaryHost }) {
           key={gauge.harness}
           className="board-facts-host-line"
           data-stale={gauge.stale || undefined}
+          data-aged={gauge.aged || undefined}
+          title={gauge.refresh}
         >
           {boardFuelText(gauge, now)}
+        </small>
+      ))}
+      {notes.map((note) => (
+        <small
+          key={note.harness}
+          className="board-facts-host-line"
+          data-missing
+          title={note.reason}
+        >
+          {boardFuelNoteText(note)}
         </small>
       ))}
     </>
@@ -314,6 +338,12 @@ export const BoardZoneFacts = memo(function BoardZoneFacts({
   const limits = townLimits(useTownUsage(townUsageStore()));
   if (!host) return null;
   const gauges = boardHostGauges(limits, host.connectionId, now);
+  const notes = boardHostFuelNotes(
+    limits,
+    host.connectionId,
+    gauges,
+    host.harnesses,
+  );
   return (
     <span className="board-zone-facts">
       <span>
@@ -321,8 +351,18 @@ export const BoardZoneFacts = memo(function BoardZoneFacts({
         days {boardTotalText(townHostExpenses(week, host.connectionId))}
       </span>
       {gauges.map((gauge) => (
-        <span key={gauge.harness} data-stale={gauge.stale || undefined}>
+        <span
+          key={gauge.harness}
+          data-stale={gauge.stale || undefined}
+          data-aged={gauge.aged || undefined}
+          title={gauge.refresh}
+        >
           {boardFuelText(gauge, now)}
+        </span>
+      ))}
+      {notes.map((note) => (
+        <span key={note.harness} data-missing title={note.reason}>
+          {boardFuelNoteText(note)}
         </span>
       ))}
     </span>

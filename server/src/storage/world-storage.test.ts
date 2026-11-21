@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
   mkdtempSync,
@@ -11,6 +11,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openWorldLedger, type WorldLedgerStorage } from "./world-storage";
 import type { OutboxEffect } from "./world-protocol";
+
+// Each open starts a SQLite worker; slow Windows runners take over a second
+// per open, so two opens and their writes can pass Bun's 5 s default.
+setDefaultTimeout(30_000);
 
 const roots: string[] = [];
 const opened: WorldLedgerStorage[] = [];
@@ -31,10 +35,20 @@ const paths = () => {
     ledger: join(root, "ledger.json"),
   };
 };
+// A test that times out mid-open leaves its open running: cleanup abandons it,
+// which closes the database before its folder is removed.
+const opening = new Map<AbortController, Promise<unknown>>();
 const open = async (target = paths()) => {
-  const storage = await openWorldLedger(target, ports);
-  opened.push(storage);
-  return storage;
+  const abandon = new AbortController();
+  const storage = openWorldLedger(target, ports, abandon.signal);
+  opening.set(abandon, storage);
+  try {
+    const ready = await storage;
+    opened.push(ready);
+    return ready;
+  } finally {
+    opening.delete(abandon);
+  }
 };
 const ask = (id: string) => ({
   id,
@@ -53,6 +67,10 @@ const effect = (id: string): OutboxEffect[] => [
   },
 ];
 afterEach(async () => {
+  const abandoned = [...opening];
+  opening.clear();
+  for (const [abandon] of abandoned) abandon.abort();
+  await Promise.allSettled(abandoned.map(([, storage]) => storage));
   await Promise.all(opened.splice(0).map((storage) => storage.close()));
   for (const root of roots.splice(0))
     rmSync(root, { recursive: true, force: true });
@@ -110,6 +128,34 @@ test("one worker owns a database; independent roots and close/reopen share nothi
   expect(other.ledger.get().asks).toEqual([]);
   await first.close();
   expect((await open(target)).ledger.get().asks).toHaveLength(1);
+});
+
+test("abandoning a pending open closes its database before the open settles", async () => {
+  const target = paths();
+  const abandon = new AbortController();
+  const pending = openWorldLedger(target, ports, abandon.signal);
+  abandon.abort();
+  const refusal = await pending.then(
+    (unexpected) => {
+      opened.push(unexpected);
+      return null;
+    },
+    (error: unknown) => error,
+  );
+  expect(refusal).toBeInstanceOf(Error);
+  expect((refusal as Error).message).toMatch(/abort/i);
+  // The exclusive writer lock is free again, so the worker closed the file.
+  const reopened = await open(target);
+  await reopened.ledger.update((doc) => doc.asks.push(ask("q-after-abandon")));
+  expect(reopened.ledger.get().revision).toBe(1);
+  const settled = new AbortController();
+  settled.abort();
+  expect(
+    await openWorldLedger(paths(), ports, settled.signal).then(
+      () => null,
+      (error: unknown) => error,
+    ),
+  ).toBeInstanceOf(Error);
 });
 
 test("import is exact, hash-backed and idempotent; changed legacy input only merges missing IDs", async () => {

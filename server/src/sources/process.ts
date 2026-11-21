@@ -1,9 +1,6 @@
 import { runProcessWithCodeTimeout } from "../utils/process-utils";
 
-/**
- * Runs a built-in source's CLI (gh, jira) without prompts or colour. A
- * missing binary reads as exit 127 rather than throwing.
- */
+/** Read work sources without interactive credential or terminal prompts. */
 export async function runSourceProcess(argv: string[], timeoutMs: number) {
   try {
     return await runProcessWithCodeTimeout(argv, timeoutMs, {

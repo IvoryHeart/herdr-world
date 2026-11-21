@@ -25,7 +25,7 @@ import { apartmentSessionsMigration, apartmentsMigration } from "./apartments";
 import { worldProfilesMigration } from "./world-profiles";
 import { worldBindingsMigration } from "./world-bindings";
 import { assertSafeDataPath } from "../config/data-paths";
-import { systemClock } from "../service/ports";
+import { systemClock } from "../service/clock";
 import { migrateLegacyCompletionReviews } from "./legacy-review-migration";
 
 export type WorldMigration = string | ((db: Database, at: number) => void);

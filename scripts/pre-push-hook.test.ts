@@ -48,7 +48,7 @@ test("pre-push checks what changed and blocks a failed check", () => {
   execFileSync("git", ["init", "-q"], { cwd: root });
   writeFileSync(
     join(root, "bun"),
-    '#!/bin/sh\nif [ "$1" = scripts/check-push-policy.ts ]; then exit "${HOOK_POLICY_EXIT:-0}"; fi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nprintf "%s|%s|%s\\n" "${GIT_DIR:-}" "${GIT_WORK_TREE:-}" "${GIT_INDEX_FILE:-}" > "$HOOK_ENV_FILE"\nprintf "synthetic early diagnostic and stack\\n" >&2\nprintf "(fail) synthetic browser regression\\n" >&2\ni=0\nwhile [ "$i" -lt 100 ]; do\n  printf "filler %s\\n" "$i" >&2\n  i=$((i + 1))\ndone\nexit "$HOOK_EXIT_CODE"\n',
+    '#!/bin/sh\nif [ "$1" = scripts/check-privacy.ts ]; then exit "${HOOK_PRIVACY_EXIT:-0}"; fi\nif [ "$1" = scripts/check-push-policy.ts ]; then exit "${HOOK_POLICY_EXIT:-0}"; fi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nprintf "%s|%s|%s\\n" "${GIT_DIR:-}" "${GIT_WORK_TREE:-}" "${GIT_INDEX_FILE:-}" > "$HOOK_ENV_FILE"\nprintf "synthetic early diagnostic and stack\\n" >&2\nprintf "(fail) synthetic browser regression\\n" >&2\ni=0\nwhile [ "$i" -lt 100 ]; do\n  printf "filler %s\\n" "$i" >&2\n  i=$((i + 1))\ndone\nexit "$HOOK_EXIT_CODE"\n',
     { mode: 0o755 },
   );
 
@@ -127,7 +127,7 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
     const base = git("rev-parse", "HEAD");
     writeFileSync(
       join(root, "bun"),
-      '#!/bin/sh\nif [ "$1" = scripts/check-push-policy.ts ]; then exit "${HOOK_POLICY_EXIT:-0}"; fi\nif [ "$1" = scripts/validation-scope.ts ]; then\n  printf "%s\\n" "$*" > "$HOOK_SCOPE_ARGS"\n  if [ "$HOOK_SCOPE_REAL" = 1 ]; then exec "$REAL_BUN" "$SCOPE_SCRIPT" "$2"; fi\n  [ "$#" = 2 ] && [ "$2" = "--docs-since=$HOOK_SCOPE_SHA" ] || exit 70\n  exit "$HOOK_SCOPE_EXIT"\nfi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nexit "$HOOK_EXIT_CODE"\n',
+      '#!/bin/sh\nif [ "$1" = scripts/check-privacy.ts ]; then exit "${HOOK_PRIVACY_EXIT:-0}"; fi\nif [ "$1" = scripts/check-push-policy.ts ]; then exit "${HOOK_POLICY_EXIT:-0}"; fi\nif [ "$1" = scripts/validation-scope.ts ]; then\n  printf "%s\\n" "$*" > "$HOOK_SCOPE_ARGS"\n  if [ "$HOOK_SCOPE_REAL" = 1 ]; then exec "$REAL_BUN" "$SCOPE_SCRIPT" "$2"; fi\n  [ "$#" = 2 ] && [ "$2" = "--docs-since=$HOOK_SCOPE_SHA" ] || exit 70\n  exit "$HOOK_SCOPE_EXIT"\nfi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nexit "$HOOK_EXIT_CODE"\n',
       { mode: 0o755 },
     );
     const run = (
