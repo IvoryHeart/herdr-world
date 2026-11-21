@@ -49,10 +49,12 @@ const maxFileCount = 212;
 // unchanged (2026-11-20).
 // Apartments (#1011: the resident search/history dialog, its store and Town's
 // apartment building) add about 18.7 KB to lazy chunks; startup budgets are
-// unchanged.
+// unchanged. Resident avatars (#1069) share Town's sprites in the lazy
+// Apartments chunks: 15.503 MiB on main, so 15.6 MiB, initial budgets
+// unchanged (2026-11-20).
 // Town's quiet-agent mark (#1130: rule, hourglass and Busy sub-line, all in
-// the lazy Town chunk) adds about 5 KB to a main already at 15.497 MiB:
-// 15.502 MiB together, so 15.6 MiB, initial budgets unchanged (2026-11-21).
+// the lazy Town chunk) adds about 5 KB: about 15.508 MiB together, within
+// 15.6 MiB (2026-11-21).
 const maxTotalBytes = 15.6 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
