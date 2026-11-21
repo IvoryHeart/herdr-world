@@ -6,7 +6,7 @@
 
 - Choose Town in the view picker or open /town; use buildings, room cards and desks.
 - Reception, board sign/Summary, room/table popovers and the town center ring are entry points.
-- Settings exposes lenses, calm motion, buildings and reception preferences; phones retain semantic targets.
+- Settings exposes lenses, calm motion and reception preferences; phones retain semantic targets.
 - TUI and core share Town; core pins derive from herdr.pinned, TUI pins from World settings.
 
 **Code:**
@@ -25,7 +25,7 @@
 
 **Pitfalls:**
 
-- A host building may contain several independently qualified runtimes.
+- Each runtime connection keeps its own building and qualified room actions.
 - Room counts cover all observed agents; drawn desks are a native-order prefix.
 - Pins and selection do not pull hidden desks across the fold boundary.
 - Moving rooms on the canvas is separate from moving native desks; see town-moves.

@@ -290,7 +290,7 @@ async function registerDomTests() {
       expect(options()).toEqual([
         "Choose a host",
         "Test host",
-        "Synthetic core",
+        "Synthetic core · herdr-core",
       ]);
       const select = container.querySelector<HTMLSelectElement>(
         'select[aria-label="Destination host"]',
@@ -329,73 +329,6 @@ async function registerDomTests() {
       call.mockRestore();
       connection.mockImplementation(() => client);
       create.mockRestore();
-      __storeTesting.replaceState(previous);
-    }
-  });
-
-  test("New room names hosts and asks for a runtime only where a host has two", async () => {
-    const previous = store.get();
-    const core = {
-      id: "core-synthetic",
-      label: "Synthetic core",
-      type: "local" as const,
-      runtime: "herdr-core" as const,
-      state: "ready" as const,
-      generation: 4,
-      core_session: "",
-      core_state_dir: "",
-      auto_connect: true,
-      read_only: false,
-    };
-    __storeTesting.replaceState({
-      ...previous,
-      coreConnections: [core],
-      hostCatalogue: [
-        {
-          id: "host-local",
-          label: "This computer",
-          type: "local",
-          windows: false,
-          state: "ready",
-          discovery: "complete",
-          connectionIds: [client.connectionId, core.id],
-          installable: [],
-        },
-      ],
-    });
-    const container = document.createElement("div");
-    document.body.append(container);
-    root = createRoot(container);
-    const texts = (selector: string) =>
-      [...container.querySelectorAll<HTMLOptionElement>(selector)].map(
-        (option) => option.textContent,
-      );
-    try {
-      await act(async () =>
-        root!.render(
-          h(CreateWorkspaceDialog, { open: true, onClose: () => {} }),
-        ),
-      );
-      expect(texts('select[aria-label="Destination host"] option')).toEqual([
-        "Choose a host",
-        "This computer",
-      ]);
-      const runtime = container.querySelector<HTMLSelectElement>(
-        'select[aria-label="Runtime"]',
-      )!;
-      // The default is the runtime this view works in.
-      expect(runtime.value).toBe(client.connectionId);
-      expect(texts('select[aria-label="Runtime"] option')).toEqual([
-        "Herdr",
-        "herdr-core",
-      ]);
-      // A host with one runtime asks nothing more.
-      __storeTesting.replaceState({ ...store.get(), hostCatalogue: undefined });
-      await act(async () => {});
-      expect(
-        container.querySelector('select[aria-label="Runtime"]'),
-      ).toBeNull();
-    } finally {
       __storeTesting.replaceState(previous);
     }
   });

@@ -1548,8 +1548,9 @@ async function run() {
     await checkTownCenter(host, check, waitFor);
   }
   // Same seeded topology as typical, in its own case: the complete trip
-  // samples every second over drawn frames, independently of Town's other
-  // interactions and camera changes.
+  // samples every second, independently of Town's other interactions and
+  // camera changes. Only the rider's walk out of its building is paced by
+  // drawn frames (#1183).
   if (scale === "bus" && mode === "test") {
     const [connection] = base.connections;
     // A blocked agent queues at reception, a few steps from its building's
