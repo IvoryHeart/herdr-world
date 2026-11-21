@@ -23,6 +23,7 @@ import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
 import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
+import { worldRuntimeLease } from "../world/runtime-lease";
 
 /** Aggregate World methods: snapshot, board document, profiles, watchlist (world.*). */
 export function handleWorldRpc(
@@ -96,15 +97,10 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method.startsWith("world.integration."))
     return handleWorldIntegrationRpc(rpc);
   if (method === "world.snapshot") {
-    // The snapshot lists herdr-core connections too; only Herdr (TUI)
-    // connections have runtimes these Board observers act through.
-    const tuiLease = (connectionId: string) => {
-      try {
-        return connectionManager.readyRuntimeLease(connectionId);
-      } catch {
-        return null; // not a Herdr connection: no runtime to act through
-      }
-    };
+    const runtimeFor = (connectionId: string, generation: number) =>
+      worldRuntimeLease(rpc.services, connectionId, generation);
+    const isCurrent = (connectionId: string, generation: number) =>
+      Boolean(runtimeFor(connectionId, generation));
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
     try {
       const base = parseObservationBase(params);
@@ -122,12 +118,11 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         beforeAppearanceRead,
         snapshot,
         (connectionId, generation) => {
-          const lease = tuiLease(connectionId);
-          return lease && lease.generation === generation && lease.isCurrent()
+          const resolved = runtimeFor(connectionId, generation);
+          return resolved
             ? {
-                call: (method, params) =>
-                  lease.runtime.tui.call(method, params, 10_000),
-                isCurrent: () => lease.isCurrent(),
+                call: () => resolved.lease.runtime.operations.listTerminals(),
+                isCurrent: resolved.isCurrent,
               }
             : null;
         },
@@ -143,16 +138,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
         publishBoardChanged,
         logger,
         rpc.services.clock.now(),
-        (id, generation) => {
-          const lease =
-            tuiLease(id) ??
-            (rpc.services.coreControl?.manager.has(id)
-              ? rpc.services.coreControl.manager.readyRuntimeLease(id)
-              : null);
-          return Boolean(
-            lease && lease.generation === generation && lease.isCurrent(),
-          );
-        },
+        isCurrent,
       );
       try {
         const observations = legacyAppearanceObservations(snapshot);
@@ -162,12 +148,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
             const appearanceOps = legacyAppearanceObservationOps(
               current,
               observations,
-              (connectionId, generation) => {
-                const lease = tuiLease(connectionId);
-                return Boolean(
-                  lease && lease.generation === generation && lease.isCurrent(),
-                );
-              },
+              isCurrent,
             );
             changed = appearanceOps.length > 0;
             return changed ? appearanceOps : null;

@@ -10,6 +10,7 @@ import { sshCommandArgv } from "../../bridge/ssh-command";
 import { observeUntil } from "./wait";
 import { shQuote } from "../../utils/process-utils";
 import { harnessLaunchArgs } from "./launch-args";
+import { worldRuntimeLease } from "../../world/runtime-lease";
 
 type Row = Record<string, unknown>;
 const row = (v: unknown) => (v && typeof v === "object" ? v : {}) as Row;
@@ -18,19 +19,14 @@ export function moveRuntime(
   connectionId: string,
   generation: number,
 ) {
-  const coreOwner = services.coreControl?.manager.has(connectionId) ?? false;
-  const core = coreOwner
-    ? services.coreControl!.manager.readyRuntimeLease(connectionId)
-    : null;
-  const tui =
-    !coreOwner && services.connectionManager.has(connectionId)
-      ? services.connectionManager.readyRuntimeLease(connectionId)
-      : null;
-  const lease = core ?? tui;
-  if (!lease || lease.generation !== generation || !lease.isCurrent())
+  const resolved = worldRuntimeLease(services, connectionId, generation);
+  if (!resolved)
     throw new Error(
       "That runtime disconnected or reconnected. Refresh before moving.",
     );
+  const { lease } = resolved;
+  const core = resolved.kind === "core" ? resolved.lease : null;
+  const tui = resolved.kind === "tui" ? resolved.lease : null;
   const host = core ? services.coreControl!.hostRuntime(core) : tui!.runtime;
   if (
     host.remotePlatform === "windows" ||
@@ -40,7 +36,7 @@ export function moveRuntime(
       "Moving agents currently needs Unix shell terminals on both hosts.",
     );
   const current = () => {
-    if (!lease.isCurrent() || (core && !core.runtime.core.actionable))
+    if (!resolved.isCurrent())
       throw new Error(
         "The runtime changed during the move. Nothing will be retried automatically.",
       );

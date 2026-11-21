@@ -27,6 +27,9 @@ desk with several panes, open the individual agent's settings instead. Native
 TUI desk moves within a TUI connection keep the panes running. Town desk pins
 still restrict dragging to the pinned row; a Board card pin does not. Colours
 can be set on core desks in Agent settings and follow subsequent moves.
+Colour edits, moves and snapshot spawn links check the same exact runtime owner
+and generation. An unavailable core connection refuses; World never redirects
+its operation to a TUI connection.
 
 World first checks both current connections, the exact resume ID, the source's
 idle state, dialogs, pending messages/tools and process tree. It opens a shell

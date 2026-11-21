@@ -55,6 +55,7 @@ function fixture(core = false) {
         publishBoardChanged: (rev: number) => notifications.push(rev),
         publishWorldInvalidation: () => {},
         connectionManager: {
+          has: (id: string) => id === "alpha",
           readyRuntimeLease: (id: string) =>
             id !== "alpha"
               ? null
@@ -108,6 +109,7 @@ function fixture(core = false) {
         },
       } as unknown as NonNullable<BridgeRpcContext["services"]["coreControl"]>;
       context.services.connectionManager = {
+        has: (id: string) => id === "alpha",
         readyRuntimeLease: () => {
           throw new Error("Core must never use TUI manager");
         },

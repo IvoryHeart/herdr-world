@@ -20,7 +20,9 @@
         "server/src/connections/shutdown.test.ts",
         "server/src/connections/runtime.test.ts",
         "server/src/connections/ssh-profile-process.test.ts",
-        "server/src/rpc/appearance.test.ts"
+        "server/src/rpc/appearance.test.ts",
+        "server/src/rpc/appearance-snapshot.test.ts",
+        "server/src/rpc/snapshot-runtime.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "lifecycle",
@@ -50,7 +52,7 @@
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
       },
-      "evidenceDecision": "Shared appearance consumes captured ready leases and revalidates currency after native reads; its direct admission matrix supplements the unchanged manager model/replay and does not expand that model’s domain."
+      "evidenceDecision": "Shared snapshot spawn/appearance, appearance edits and agent moves consume one exact-owner ready-lease resolver (including core actionability and no TUI fallback) and revalidate currency after native reads; its direct admission matrix supplements the unchanged manager model/replay and does not expand that model’s domain."
     },
     {
       "id": "Q02",

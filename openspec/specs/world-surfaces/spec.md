@@ -4690,6 +4690,15 @@ start another copy. Native runtime actions remain generation/occupant-qualified.
 - **AND** Move to offers other rooms on the source runtime, excluding its
   current room; multi-pane desks require selecting one agent for a handoff
 
+#### Scenario: Shared runtime admission for saved agent details
+
+- **WHEN** World admits an appearance edit, an agent move or a snapshot's
+  spawned-by and appearance observations for a TUI or core connection
+- **THEN** these paths SHALL resolve the same exact connection owner and observed
+  generation, require its current lease and, for core, actionable native state
+- **AND** an unavailable core owner SHALL NOT fall back to a TUI connection;
+  runtime retirement during a native read SHALL prevent saved-detail mutation
+
 #### Scenario: Launch settings follow a move
 
 - **WHEN** an idle Claude launched with a model, permission mode or custom agent

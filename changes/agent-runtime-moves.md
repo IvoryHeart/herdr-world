@@ -15,3 +15,6 @@
 - Move a single-agent Town desk TUI → core, core → TUI or between core rooms
   through the conversation handoff. Offer other rooms on the current runtime
   in Move to, and resolve core desk colour edits through their core connection.
+- Share exact runtime admission across snapshot spawn links, saved appearance
+  and agent moves. Core appearance observations use the core reader and reject
+  unavailable or replaced runtimes without falling back to TUI.

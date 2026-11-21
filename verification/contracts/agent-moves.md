@@ -72,6 +72,18 @@ Chrome, `cc` and an explicit official core binary:
 `HERDR_CORE_BIN=/path/to/herdr-core bun run test --live server/src/herdr-core/agent-moves.live.test.ts`.
 The existing latest-core smoke command discovers this live suite as well.
 
+`server/src/world/runtime-lease.ts` supplies one exact-owner resolver to snapshot
+spawn/appearance observers, appearance edits and move admission. The core owner
+always takes precedence and requires actionable state; a missing, unready or
+retired lease cannot select TUI. `server/src/rpc/snapshot-runtime.test.ts` exhausts
+runtime kind × readiness × generation match × currency × core actionability for
+spawn claims and legacy colour witness adoption, including overlapping IDs with
+a TUI fallback trap. `server/src/rpc/appearance-snapshot.test.ts` runs absence,
+concurrent edit, delayed read, native failure and retirement schedules for both
+readers. The move adapter's admission matrix refuses before preparing a host.
+These finite admission/read schedules supplement the unchanged lease model;
+no lifecycle or handoff recovery transition changes.
+
 `server/src/rpc/appearance.test.ts` exhausts generation, terminal-witness and
 read-retirement combinations for the core metadata reader, including a trap
 against using the TUI manager. `townRuntimeMove.test.ts` checks the browser's

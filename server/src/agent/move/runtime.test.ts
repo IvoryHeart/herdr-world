@@ -179,3 +179,66 @@ test("a retired core generation cannot prepare or close anything", async () => {
     await world.dispose();
   }
 });
+
+test("move admission rejects an unavailable core owner without consulting TUI or preparing a host", () => {
+  for (const ready of [false, true])
+    for (const matching of [false, true])
+      for (const current of [false, true])
+        for (const actionable of [false, true]) {
+          let hostCalls = 0;
+          const services = {
+            connectionManager: {
+              has: () => true,
+              readyRuntimeLease: () => {
+                throw new Error("Core must never use TUI manager");
+              },
+            },
+            coreControl: {
+              manager: {
+                has: (id: string) => id === "alpha",
+                readyRuntimeLease: () =>
+                  ready
+                    ? {
+                        generation: matching ? 3 : 4,
+                        isCurrent: () => current,
+                        runtime: { core: { actionable } },
+                      }
+                    : null,
+              },
+              hostRuntime: () => {
+                hostCalls++;
+                return { sshHost: () => undefined };
+              },
+            },
+          } as unknown as RpcServices;
+          if (ready && matching && current && actionable) {
+            const runtime = moveRuntime(services, "alpha", 3);
+            expect(() => runtime.current()).not.toThrow();
+            expect(hostCalls).toBe(1);
+          } else {
+            expect(() => moveRuntime(services, "alpha", 3)).toThrow(
+              "Refresh before moving",
+            );
+            expect(hostCalls).toBe(0);
+          }
+        }
+});
+
+test("unknown move connections refuse without consulting another runtime", () => {
+  const owner = {
+    has: () => false,
+    readyRuntimeLease: () => {
+      throw new Error("Unknown owner must not be consulted");
+    },
+  };
+  expect(() =>
+    moveRuntime(
+      {
+        connectionManager: owner,
+        coreControl: { manager: owner },
+      } as unknown as RpcServices,
+      "missing",
+      3,
+    ),
+  ).toThrow("Refresh before moving");
+});
