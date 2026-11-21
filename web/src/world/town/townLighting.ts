@@ -42,6 +42,7 @@ import {
 } from "./townLayout";
 import type { TownModel } from "./townModel";
 import { townCanvas } from "./townSprites";
+import { townBuildingOf } from "./townBuildings";
 
 /** A desk's light: its most urgent agent's state. */
 export type TownDeskLight = "blocked" | "working" | "done";
@@ -220,7 +221,7 @@ export function townLightPlan(
   const waitingAt = new Set<string>();
   for (const { device } of model.projection.paneRoster)
     if (townDeskLightOf(model, device, asking) === "blocked")
-      waitingAt.add(device.hostKey);
+      waitingAt.add(townBuildingOf(device));
   for (const lamp of layout.lamps)
     plan.points.push({
       x: lamp.x * T + 8,

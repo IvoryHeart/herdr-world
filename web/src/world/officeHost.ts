@@ -4,6 +4,11 @@ import type { WorldHostState } from "./worldObject";
 export type OfficeHost = {
   key: string;
   connectionId: string;
+  /**
+   * Town only, display: the host whose building this runtime's rooms join
+   * (one building per machine, town/townBuildings.ts).
+   */
+  buildingKey?: string;
   displayLabel: string;
   accessibleLabel?: string;
   displayOrder: number;

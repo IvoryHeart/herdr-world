@@ -39,6 +39,7 @@ import {
 import { townReceptionMark } from "./townReceptionFilter";
 import type { TownRendererHandle } from "./townRenderer";
 import { useTownHelpReveal } from "./useTownHelpReveal";
+import { townBuildingOf } from "./townBuildings";
 
 /** Needs you's items in its order, each with its agent's leaf ID and mark. */
 export type TownNeedsYouOrder = () => readonly {
@@ -90,7 +91,7 @@ export function useTownEdgeNav(
         list.push({
           key: agent.key,
           mark: EDGE_MARK[mark],
-          hostKey: agent.hostKey,
+          hostKey: townBuildingOf(agent),
         });
     }
     return list;

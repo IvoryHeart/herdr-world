@@ -19,6 +19,7 @@ import {
 import type { DeskPins } from "../useDeskPins";
 import type { TownInput } from "./townLayout";
 import { NO_ROOM_SPOTS, type TownRoomSpots } from "./townRoomPlace";
+import { townBuildingOf } from "./townBuildings";
 
 export type TownSeatRef = { deskKey: string; seat: number };
 
@@ -262,15 +263,16 @@ export function townModelFromProjection(
   return {
     projection,
     input: {
-      hosts: projection.hosts.map(({ key, displayOrder }) => ({
-        key,
-        displayOrder,
-      })),
+      // A machine's later runtimes have no building of their own: their
+      // rooms stand in its first runtime's (townBuildings.ts).
+      hosts: projection.hosts
+        .filter((host) => !host.buildingKey)
+        .map(({ key, displayOrder }) => ({ key, displayOrder })),
       rooms: projection.rooms.map((room) => ({
         deskFold: room.deskFold,
         key: room.key,
-        hostKey: room.hostKey,
-        order: room.order,
+        hostKey: townBuildingOf(room),
+        order: room.buildingOrder ?? room.order,
         deskKeys: room.desks.map((desk) => desk.key),
         deskSeats: room.desks.map((desk) =>
           Math.max(1, Math.min(4, desk.paneDevices.length)),

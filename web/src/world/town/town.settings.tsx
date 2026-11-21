@@ -120,7 +120,7 @@ defineSettings("town", [
     category: "town",
     title: "Town buildings",
     description:
-      "One building per host with every runtime's rooms, or one per runtime",
+      "One building per machine with every runtime's rooms, or one per runtime",
     words: [
       "buildings",
       "layout",
@@ -139,7 +139,7 @@ defineSettings("town", [
       options: [
         {
           value: "host",
-          label: "One per host",
+          label: "One per machine",
           words: ["machine", "merged"],
         },
         {

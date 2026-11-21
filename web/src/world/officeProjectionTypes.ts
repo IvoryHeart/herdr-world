@@ -23,6 +23,12 @@ export type OfficeAgent = {
   observedGeneration: number;
   roomKey: string;
   hostKey: string;
+  /**
+   * Town only, display: the building it stands in when that is not its own
+   * host's (a machine's later runtime, townBuildings.ts). Never identity:
+   * actions read `hostKey` and the qualified refs.
+   */
+  buildingKey?: string;
   displayLabel: string;
   /** The name Herdr gives the agent (agent.list), when it has one. */
   agentName?: string;
@@ -61,6 +67,12 @@ export type OfficePaneDevice = {
   terminalRef: OfficeQualifiedTarget;
   deskKey: string;
   hostKey: string;
+  /**
+   * Town only, display: the building it stands in when that is not its own
+   * host's (a machine's later runtime, townBuildings.ts). Never identity:
+   * actions read `hostKey` and the qualified refs.
+   */
+  buildingKey?: string;
   roomKey: string;
   displayLabel: string;
   order: number;
@@ -91,6 +103,12 @@ export type OfficeDesk = {
   appearanceStatus?: string;
   key: string;
   hostKey: string;
+  /**
+   * Town only, display: the building it stands in when that is not its own
+   * host's (a machine's later runtime, townBuildings.ts). Never identity:
+   * actions read `hostKey` and the qualified refs.
+   */
+  buildingKey?: string;
   roomKey: string;
   tabRef: OfficeQualifiedTarget;
   terminalSelectionKeys: string[];
@@ -111,6 +129,14 @@ export type OfficeDesk = {
 export type OfficeRoom = {
   key: string;
   hostKey: string;
+  /**
+   * Town only, display: the building it stands in when that is not its own
+   * host's (a machine's later runtime, townBuildings.ts). Never identity:
+   * actions read `hostKey` and the qualified refs.
+   */
+  buildingKey?: string;
+  /** Town only: its order in a merged building (`order` stays its own). */
+  buildingOrder?: number;
   workspaceRef: OfficeQualifiedTarget;
   observedGeneration: number;
   displayLabel: string;
@@ -137,6 +163,12 @@ export type OfficeRoom = {
 export type OfficeReception = {
   key: string;
   hostKey: string;
+  /**
+   * Town only, display: the building it stands in when that is not its own
+   * host's (a machine's later runtime, townBuildings.ts). Never identity:
+   * actions read `hostKey` and the qualified refs.
+   */
+  buildingKey?: string;
   hostLabel: string;
   stale: boolean;
   waitingAgents: OfficeAgent[];
@@ -149,6 +181,12 @@ export type OfficeRosterEntry = {
   roomKey: string;
   roomLabel: string;
   hostKey: string;
+  /**
+   * Town only, display: the building it stands in when that is not its own
+   * host's (a machine's later runtime, townBuildings.ts). Never identity:
+   * actions read `hostKey` and the qualified refs.
+   */
+  buildingKey?: string;
   hostLabel: string;
   roomPresented: boolean;
   deskPresented: boolean;
@@ -165,6 +203,12 @@ export type OfficeDeskRosterEntry = {
 export type OfficeRoomRosterEntry = {
   key: string;
   hostKey: string;
+  /**
+   * Town only, display: the building it stands in when that is not its own
+   * host's (a machine's later runtime, townBuildings.ts). Never identity:
+   * actions read `hostKey` and the qualified refs.
+   */
+  buildingKey?: string;
   hostLabel: string;
   workspaceRef: OfficeQualifiedTarget;
   observedGeneration: number;
