@@ -20,4 +20,6 @@ export type AgentMoveRequest = {
 };
 export type AgentMoveOutcome =
   | { status: "moved"; target: AgentAddress }
-  | { status: "refused"; message: string };
+  | { status: "refused"; message: string }
+  /** The new copy runs, but the original may still run too. */
+  | { status: "uncertain"; target: AgentAddress; message: string };

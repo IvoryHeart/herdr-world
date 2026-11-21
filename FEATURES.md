@@ -198,7 +198,11 @@ no control for it. Platform and harness limits apply across the table.
   an agent World cannot find a conversation for, a core agent whose own
   spawned agents would end with it, a runtime on another machine, or a stale
   or reconnected host. If the new agent does not start within a minute, the
-  half-started one is closed and the original keeps running.
+  half-started one is closed and the original keeps running. If the original
+  starts working, splits or starts agents of its own while the new one starts,
+  the new one is closed and the original stays, desk and all. When a runtime
+  does not confirm that an agent ended, World says which one may still be
+  running instead of reporting a move.
 - **Core agent environment (Unix):** New agent finds and starts the harness
   through the core host's `$SHELL` (`/bin/sh` when unset): interactive on Linux,
   login and interactive on macOS. Supported shells are sh, bash, zsh, dash,

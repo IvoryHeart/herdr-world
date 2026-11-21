@@ -462,8 +462,11 @@ export function withInheritedColors<C extends string>(
   for (const [child, parent] of spawnParents(relations)) {
     const from = places.get(terminalKey(parent));
     const to = places.get(child);
-    if (!from || !to || from.connectionId !== to.connectionId) continue;
-    if (from.tabId === to.tabId) continue;
+    // Only an explicit agent move keeps a link across connections; the
+    // moved desk keeps the colour it showed.
+    if (!from || !to) continue;
+    if (from.connectionId === to.connectionId && from.tabId === to.tabId)
+      continue;
     const key = tabCardKey(to.connectionId, to.tabId, to.workspaceIds);
     if (colors[key] || parentTabs.has(key)) continue;
     parentTabs.set(key, from);

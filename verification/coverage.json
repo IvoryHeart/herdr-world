@@ -3291,26 +3291,29 @@
     },
     {
       "id": "Q57",
-      "area": "Open agent runtime move candidate",
-      "owner": "verification/contracts/agent-move-audit.md",
-      "requirement": "verification/contracts/agent-move-audit.md",
-      "properties": "Quit before resume; at most one running conversation; details follow or loss/uncertainty reported",
+      "area": "Agent move between runtimes (world.agent.move)",
+      "owner": "server/src/world/agent-move.ts",
+      "requirement": "openspec/changes/agent-runtime-move/specs/world-surfaces/spec.md",
+      "properties": "Original closes only after the destination is ready and the original is rechecked idle and alone; core ends only the admitted terminals; one owner of the desk after every outcome; an unconfirmed end or cleanup is reported",
       "existingTests": [
-        "quint/replay.test.ts",
-        "quint/binding-resolution.test.ts"
+        "server/src/world/agent-move.test.ts",
+        "server/src/herdr-core/operations.test.ts"
       ],
-      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/990",
-      "status": "pending",
-      "technique": "external-candidate-exhaustive-assessment",
-      "assessment": "Frozen open #990 df398319a031f840668f7e6ea0dff765c5764c11: actual serial controller 576-outcome matrix ran; native and persistence consumers mapped in contract",
-      "remaining": "Feature and candidate consumer files are not merged. Current listed tests cover only existing shared runtime/binding fences; native, metadata, browser acceptance remains with #990. Independent Worlds and crash atomicity are not claimed.",
+      "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1184",
+      "status": "alternative-evidence",
+      "technique": "direct-serial-controller-matrix",
+      "assessment": "The controller awaits each port serially under a per-source service lock, so no internal completions interleave. A 72-outcome matrix (start, recheck, close, cleanup) checks desk ownership and reporting; a source changing during startup, a child started after admission and a lost kill reply run against the real core kill path.",
+      "remaining": "Independent Worlds, service crash during a handoff and real harness startup are not proved; the owner check on a real Herdr TUI and herdr-core covers the native paths.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/contracts/agent-move-audit.md"],
-        "tests": ["quint/replay.test.ts", "quint/binding-resolution.test.ts"],
-        "checks": ["bun run verification:gate"],
-        "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+        "tests": [
+          "server/src/world/agent-move.test.ts",
+          "server/src/herdr-core/operations.test.ts"
+        ],
+        "checks": ["bun run test server/src/world/agent-move.test.ts"],
+        "review": "Remapped from #990's controller to #1184's; independent PR review required."
       }
     },
     {

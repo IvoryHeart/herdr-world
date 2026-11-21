@@ -97,5 +97,12 @@ export async function requestAgentHandoff(
         tab_id: result.target.tab_id,
         workspace_id: result.target.workspace_id,
       }
-    : { status: "refused", reason: "agent_busy", message: result.message };
+    : result.status === "uncertain"
+      ? {
+          status: "failed",
+          message: result.message,
+          rolled_back: false,
+          topology_known: false,
+        }
+      : { status: "refused", reason: "agent_busy", message: result.message };
 }

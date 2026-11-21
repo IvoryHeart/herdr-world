@@ -1,6 +1,6 @@
 import { interestKey } from "../../../shared/interest";
 import { appearanceKey } from "../../../shared/appearance";
-import { type TerminalRef } from "../../../shared/relations";
+import { type TerminalRef, terminalKey } from "../../../shared/relations";
 import { cardKey } from "../../../shared/terminalColor";
 import type { AgentAddress } from "../../../shared/agentMove";
 import type { BoardDocument } from "./board-types";
@@ -115,7 +115,11 @@ export function rehomeAgent(
     child: isFrom(claim.child) ? toRef : claim.child,
     parent: isFrom(claim.parent) ? toRef : claim.parent,
     ...(isFrom(claim.parent)
-      ? { moved_from: [...(claim.moved_from ?? []), claim.parent].slice(-64) }
+      ? {
+          moved_from: [...(claim.moved_from ?? []), claim.parent]
+            .filter((ref) => terminalKey(ref) !== terminalKey(toRef))
+            .slice(-64),
+        }
       : {}),
     generation: isFrom(claim.child) ? to.generation : claim.generation,
   }));

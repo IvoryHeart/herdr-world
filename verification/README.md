@@ -37,7 +37,7 @@ exploration and 48 actual service schedules; ordinary runtime leases did not
 cover lost updates. By contrast, Q56's immutable settings files have equal
 content for equal names: concurrent publication commutes, so real atomic-file
 and before/after-failure retry checks cover that preparation boundary cheaply.
-Q57 separately assesses the open move candidate's exhaustive serial controller.
+Q57 checks the runtime-move controller's serial outcomes directly, without a model.
 
 The audit also found a **real counterexample**: Q55's stale tap owner can publish
 after its ownership check was superseded (#1086). The repaired canonical case requires

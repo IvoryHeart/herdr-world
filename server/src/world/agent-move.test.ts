@@ -1,11 +1,21 @@
-import { expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import type { AgentAddress } from "../../../shared/agentMove";
 import type { TerminalRow } from "../adapters/runtime-ports";
+import { createCoreRoom, launchCore } from "../herdr-core/operations";
+import { coreWorld } from "../herdr-core/testing/core-world";
 import {
   moveAgentAcross,
+  moveSide,
   type AgentMoveDeps,
   type MoveSide,
 } from "./agent-move";
+import {
+  relationsOf,
+  type TerminalRef,
+  terminalKey,
+  withInheritedColors,
+} from "../../../shared/relations";
+import { resolveTerminalColor } from "../../../shared/terminalColor";
 import { rehomeAgent } from "./agent-rehome";
 import { emptyBoardDocument } from "./board-store";
 import type { BoardOp } from "./board-types";
@@ -33,15 +43,16 @@ function side(id: string, panes: TerminalRow[], log: string[]): MoveSide {
       panes,
       names: new Map([["p1", "Ada"]]),
     }),
-    blocker: async () => null,
+    admit: async () => ({ admitted: `${id}-root-only` }),
     session: async () => "session-1",
     pinned: () => true,
     async start(request) {
       log.push(`start ${id} ${request.args.join(" ")} in ${request.cwd}`);
       return { tab_id: "c1:t5", pane_id: "c5", terminal_id: "c5" };
     },
-    async close(pane) {
-      log.push(`close ${id} ${pane.pane_id}`);
+    async close(pane, admitted) {
+      log.push(`close ${id} ${pane.pane_id}${admitted ? ` ${admitted}` : ""}`);
+      return {};
     },
     async pin(desk) {
       log.push(`pin ${id} ${desk.terminal_id}`);
@@ -78,7 +89,20 @@ function setup(status = "idle", extra: TerminalRow[] = []) {
     publishBoardChanged: () => {},
     publishWorldInvalidation: () => {},
   };
-  return { deps, log, ops, sides };
+  return { deps, log, ops, sides, pane };
+}
+
+/** Change the original while the new copy starts. */
+function duringStart(
+  sides: Record<string, MoveSide>,
+  change: () => void,
+): void {
+  const start = sides.core!.start;
+  sides.core!.start = async (request) => {
+    const started = await start(request);
+    change();
+    return started;
+  };
 }
 
 test("an idle agent resumes on the other runtime before its original closes", async () => {
@@ -91,7 +115,7 @@ test("an idle agent resumes on the other runtime before its original closes", as
   expect(log).toEqual([
     "start core --resume session-1 in /synthetic/project",
     "pin core c5",
-    "close tui p1",
+    "close tui p1 tui-root-only",
   ]);
   expect(ops.at(-1)).toMatchObject({ op: "agent.rehome", from: source });
 });
@@ -159,5 +183,284 @@ test("rehoming carries colour, pin, strings and spawn links to the new address",
   expect(document.relations.spawns[0]).toMatchObject({
     parent: { connection_id: "core", terminal_id: "c5" },
     moved_from: [{ connection_id: "tui", terminal_id: "term-1" }],
+  });
+});
+
+test("an original that changes while the copy starts stays, and the copy goes", async () => {
+  for (const change of ["working", "split", "gone"] as const) {
+    const { deps, log, ops, sides, pane } = setup();
+    const rows = await sides.tui!.rows();
+    duringStart(sides, () => {
+      if (change === "working") pane.agent_status = "working";
+      if (change === "split")
+        rows.panes.push({ pane_id: "p2", terminal_id: "t2", tab_id: "w1:t1" });
+      if (change === "gone") rows.panes.length = 0;
+    });
+    sides.tui!.rows = async () => rows;
+    const result = await moveAgentAcross(deps, { source, destination });
+    expect(result).toMatchObject({ status: "refused" });
+    expect((result as { message: string }).message).toContain(
+      "It still runs where it was.",
+    );
+    expect(log.filter((line) => line.startsWith("close"))).toEqual([
+      "close core c5",
+    ]);
+    expect(ops.some((op) => op.op === "agent.rehome")).toBe(false);
+  }
+});
+
+test("a refused close (a child started meanwhile) undoes the desk and drops the copy", async () => {
+  const { deps, log, ops, sides } = setup();
+  sides.tui!.close = async (pane, admitted) => {
+    log.push(`close tui ${pane.pane_id} ${admitted}`);
+    throw new Error("A new agent would end with it.");
+  };
+  const result = await moveAgentAcross(deps, { source, destination });
+  expect(result).toEqual({
+    status: "refused",
+    message:
+      "Ada didn't close where it was: A new agent would end with it. It still runs there.",
+  });
+  expect(log.slice(-2)).toEqual([
+    "close tui p1 tui-root-only",
+    "close core c5",
+  ]);
+  const rehomes = ops.filter((op) => op.op === "agent.rehome");
+  expect(rehomes).toHaveLength(2);
+  expect(rehomes[1]).toMatchObject({ to: source });
+});
+
+test("an unconfirmed close reports both may run; a failed cleanup says the copy may", async () => {
+  const one = setup();
+  one.sides.tui!.close = async () => ({
+    uncertain: "core didn't confirm it ended.",
+  });
+  expect(
+    await moveAgentAcross(one.deps, { source, destination }),
+  ).toMatchObject({
+    status: "uncertain",
+    target: { connection_id: "core", terminal_id: "c5" },
+    message:
+      "Ada runs in its new room, but the original may still be running: core didn't confirm it ended.",
+  });
+
+  const two = setup();
+  two.sides.core!.start = async () => ({
+    message: "Not ready.",
+    pane_id: "c5",
+  });
+  two.sides.core!.close = async () => {
+    throw new Error("lost reply");
+  };
+  expect(await moveAgentAcross(two.deps, { source, destination })).toEqual({
+    status: "refused",
+    message:
+      "Ada didn't start there: Not ready. It still runs where it was. The new copy there may still be running: close it there.",
+  });
+});
+
+test("a moved child keeps the colour it inherited from its parent", () => {
+  const document = emptyBoardDocument();
+  const parent = { connection_id: "tui", terminal_id: "term-parent" };
+  document.layout.colors["tui:w1:t0"] = "teal";
+  document.relations.spawns.push({
+    child: { connection_id: "tui", terminal_id: "term-1" },
+    parent,
+    source: "token",
+    generation: 1,
+    observed_at: 1,
+  });
+  const to: AgentAddress = {
+    ...destination,
+    tab_id: "c1:t5",
+    pane_id: "c5",
+    terminal_id: "c5",
+    color_key: "core:c1:t5",
+  };
+  const place = (
+    connectionId: string,
+    workspaceId: string,
+    tabId: string,
+    paneId: string,
+  ) => ({
+    connectionId,
+    workspaceId,
+    tabId,
+    paneId,
+    workspaceIds: new Set([workspaceId]),
+  });
+  const colourOf = (child: TerminalRef, tab: ReturnType<typeof place>) => {
+    const observations = [
+      { connection_id: "tui", generation: 1, current: true, panes: [] },
+      { connection_id: "core", generation: 2, current: true, panes: [] },
+    ];
+    const places = new Map([
+      [terminalKey(parent), place("tui", "w1", "w1:t0", "p0")],
+      [terminalKey(child), tab],
+    ]);
+    const colors = withInheritedColors(
+      document.layout.colors,
+      relationsOf(document.relations, observations),
+      places,
+    );
+    return resolveTerminalColor(colors, tab).color;
+  };
+  expect(
+    colourOf(
+      { connection_id: "tui", terminal_id: "term-1" },
+      place("tui", "w1", "w1:t1", "p1"),
+    ),
+  ).toBe("teal");
+  rehomeAgent(document, source, to);
+  expect(
+    colourOf(
+      { connection_id: "core", terminal_id: "c5" },
+      place("core", "c1", "c1:t5", "c5"),
+    ),
+  ).toBe("teal");
+});
+
+test("every start, recheck, close and cleanup outcome leaves one owner of the desk and says what may still run", async () => {
+  const starts = ["ready", "failed", "failed-partial"] as const;
+  const rechecks = ["same", "working"] as const;
+  const closes = ["ended", "uncertain", "refused", "failed-but-gone"] as const;
+  const cleanups = ["ended", "uncertain", "throws"] as const;
+  let runs = 0;
+  for (const start of starts)
+    for (const recheck of rechecks)
+      for (const close of closes)
+        for (const cleanup of cleanups) {
+          const { deps, ops, sides, pane } = setup();
+          let original = true;
+          let copy = false;
+          const rows = sides.tui!.rows;
+          sides.tui!.rows = async () => {
+            const now = await rows();
+            return { ...now, panes: original ? now.panes : [] };
+          };
+          sides.core!.start = async () => {
+            if (start === "ready") {
+              copy = true;
+              if (recheck === "working") pane.agent_status = "working";
+              return { tab_id: "c1:t5", pane_id: "c5", terminal_id: "c5" };
+            }
+            copy = start === "failed-partial";
+            return {
+              message: "Not ready.",
+              ...(copy ? { pane_id: "c5" } : {}),
+            };
+          };
+          sides.core!.close = async () => {
+            if (cleanup === "throws") throw new Error("lost");
+            if (cleanup === "uncertain") return { uncertain: "?" };
+            copy = false;
+            return {};
+          };
+          sides.tui!.close = async () => {
+            if (close === "refused") throw new Error("Refused.");
+            original = false;
+            if (close === "failed-but-gone") throw new Error("lost");
+            if (close === "uncertain") return { uncertain: "?" };
+            return {};
+          };
+          const label = `${start}/${recheck}/${close}/${cleanup}`;
+          const result = await moveAgentAcross(deps, { source, destination });
+          // The desk is wherever the last rehome put it.
+          const desk =
+            ops.filter((op) => op.op === "agent.rehome").at(-1)?.to
+              .connection_id ?? "tui";
+          const message = "message" in result ? result.message : "";
+          if (result.status === "moved") {
+            expect([label, original, copy, desk]).toEqual([
+              label,
+              false,
+              true,
+              "core",
+            ]);
+          } else if (result.status === "uncertain") {
+            expect([label, copy, desk]).toEqual([label, true, "core"]);
+            expect(message).toContain("may still be running");
+          } else {
+            expect([label, original, desk]).toEqual([label, true, "tui"]);
+            expect(message).toContain("still runs");
+            // A copy left behind is always named.
+            expect([label, message.includes("may still be running")]).toEqual([
+              label,
+              copy,
+            ]);
+          }
+          runs++;
+        }
+  expect(runs).toBe(72);
+});
+
+describe("closing a herdr-core original (real kill path)", () => {
+  const worlds: Awaited<ReturnType<typeof coreWorld>>[] = [];
+  afterEach(async () => {
+    for (const w of worlds.splice(0)) await w.dispose();
+  });
+  async function coreSide() {
+    const w = await coreWorld();
+    worlds.push(w);
+    await w.connect();
+    const room = await createCoreRoom(w.lease(), w.topology, "A");
+    await launchCore(
+      w.lease(),
+      {
+        workspaceId: room.workspace_id,
+        kind: "claude",
+        label: "Ada",
+        text: "",
+      },
+      {
+        topology: w.topology,
+        resolveExecutable: async (kind) => `/opt/example/bin/${kind}`,
+      },
+    );
+    await w.settle();
+    const services = {
+      connectionManager: { has: () => false },
+      coreControl: {
+        manager: w.core.manager,
+        topology: w.topology,
+        hostRuntime: () => ({ sshHost: () => null }),
+        host: () => null,
+      },
+      board: () => ({ get: emptyBoardDocument }),
+    } as unknown as Parameters<typeof moveSide>[0];
+    const side = moveSide(services, "box", w.lease().generation)!;
+    const pane = { pane_id: "", terminal_id: "t1" } as TerminalRow;
+    const admitted = await side.admit(pane);
+    expect(admitted).toMatchObject({
+      admitted: { terminals: [{ address: "t1" }] },
+    });
+    return { w, side, admitted: (admitted as { admitted: unknown }).admitted };
+  }
+
+  test("a child started after admission refuses the close; both stay", async () => {
+    const { w, side, admitted } = await coreSide();
+    const child = w.fake.create({
+      parent: "t1",
+      die_with_parent: true,
+      name: "late",
+    });
+    await w.settle();
+    await expect(
+      side.close({ pane_id: "", terminal_id: "t1" }, admitted),
+    ).rejects.toThrow("Nothing was ended.");
+    expect(w.fake.terminal("t1")!.state).toBe("live");
+    expect(w.fake.terminal(child)!.state).toBe("live");
+  });
+
+  test("a lost kill reply is reported as uncertain, not as closed", async () => {
+    const { w, side, admitted } = await coreSide();
+    w.fake.dropNextWriteReply = true;
+    w.fake.onCall = (method) => {
+      if (method === "terminal.kill")
+        queueMicrotask(() => w.fake.kill(w.socket));
+    };
+    expect(
+      await side.close({ pane_id: "", terminal_id: "t1" }, admitted),
+    ).toEqual({ uncertain: "core didn't confirm it ended." });
   });
 });

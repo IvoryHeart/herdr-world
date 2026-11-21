@@ -1,53 +1,46 @@
-# Audit of the open agent-move candidate
+# Agent moves between runtimes (Q57)
 
-## Frozen scope and intended requirements
+## Scope and requirement
 
-PR [#990](https://github.com/IvoryHeart/herdr-world/pull/990), still open during
-this audit, was inspected at `df398319a031f840668f7e6ea0dff765c5764c11`.
-Its own `world-surfaces` delta requires quit-before-resume, at most one running
-conversation, exact session and launch policy, and preservation or an explicit
-loss report for identity, pins, appearance, strings and parent/child links.
-Destination readiness precedes source-terminal closure; confirmed destination
-closure precedes rollback. Busy/ambiguous evidence refuses before source quit.
-The feature and its requirement are not imported into current delivered specs.
+`world.agent.move` (`server/src/world/agent-move.ts`) hands one idle Claude or
+Codex agent from a Herdr TUI connection to a herdr-core connection of the same
+machine, or back. The requirement is the `agent-runtime-move` OpenSpec change
+(`Agent moves between runtimes`, `Agent relations`). Moves within one runtime
+use that runtime's native move and are outside this contract.
 
-## Why the existing exhaustive check is sufficient for its controller
+Order: admit the source (idle, alone, its conversation known; for core, the
+exact kill set: the agent with no descendants) → record spawn claims → start
+the destination resumed and wait until ready → re-read the source and require
+the same idle agent, alone → carry the desk (`agent.rehome`) → close the
+source within the admitted set. A refused close puts the desk back and closes
+the copy. An unconfirmed end returns `uncertain`; an unconfirmed cleanup names
+the copy that may still run.
 
-`server/src/agent/move/handoff.ts` awaits each port serially. For one admitted
-conversation there are no overlapping internal port completions to permute.
-The candidate's `handoff.test.ts` enumerates all 576 combinations of quit
-(4), resume (4), destination stop (3), rollback (3), metadata (2) and old terminal
-close (2) outcomes, distinguishing before-effect failure from lost acknowledgement.
-Each boundary checks live source plus destination at most one, with confirmed
-destination closure before rollback. Separate tests cover both pre-quit refusals
-and exact call order. The audit ran those frozen source files in ignored files
-inside this worktree: nine tests and 2,650 assertions passed. The matrix itself
-took about 4 ms. A second model of these same serial outcomes adds no schedule.
+## Why a direct matrix is enough
 
-Service admission has both a source-address lock and a harness/session identity
-lock, held across the controller and released in `finally`. After the awaited
-session read, identity check-and-insert is synchronous. Thus concurrent requests
-in one service cannot both enter that conversation's controller. This reasoning
-does not establish a lock shared across independent Worlds or external clients.
+The controller awaits each port in turn, and a per-source lock in the service
+keeps a second request out until the first ends, so its own steps never
+overlap. What can change meanwhile is outside: the source agent (working,
+split, gone, a new child) and the runtimes' replies (refused, lost). Those are
+inputs to the serial steps, so enumerating them covers the controller:
 
-## Consumer boundaries and remaining acceptance
+- `agent-move.test.ts` runs 72 combinations of start (ready, failed, failed
+  with a partial copy), recheck (same, working), source close (ended,
+  uncertain, refused, failed but gone) and cleanup (ended, uncertain, throws).
+  Each asserts one owner of the desk, the original still running after any
+  refusal, and that every copy or original that may still run is named.
+- The same file changes the source during startup (working, split, gone) and
+  runs the real herdr-core close against the in-process core: a child started
+  after admission refuses the kill with both alive, and a lost kill reply is
+  `uncertain`. `herdr-core/operations.test.ts` keeps killCore's own plan and
+  confirmation checks.
 
-The candidate's `verification/contracts/agent-moves.md` maps the following real
-consumers; the 576-controller run does not claim to have run them here:
+A model would explore the same serial states and adds no schedule.
 
-- `server/src/agent/move/{session,processes,runtime}.test.ts`: exact argv,
-  transcript, process/background admission, native readiness and generation fences.
-- `server/src/world/{agent-rehome,agent-reattach}.test.ts`: reopened persistent
-  Board details, shared desks, current edits, replaced occupants and superseded
-  native parent stamps.
-- `web/src/world/{agentMove.test.ts,AgentMove.browser.test.ts}`: single outstanding
-  request, current destination, phone controls and refusal fixture.
+## Limits
 
-Q57 remains pending merge and review of that exact consumer mapping. Current
-runtime-leases, core and binding consumers establish only their existing shared
-contracts. The candidate reports uncertain interruption rather than claiming
-cross-host crash atomicity or resuming a competitor. Service crash/restart loses
-its in-memory move lock; automatic recovery is not promised. Independent Worlds,
-external user input, real harness startup/login and host outages remain explicit
-platform/concurrency limits. A durable cross-service handoff would require a new
-ownership/recovery contract and model; it is outside #990's current contract.
+The lock is per service: independent Worlds or external clients acting on the
+same agent are not excluded. A service crash between start and close can leave
+both copies; World does not recover it automatically. Real harness startup,
+login and readiness are checked by the owner check on a real Herdr TUI and
+herdr-core, not here.

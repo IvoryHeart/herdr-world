@@ -1,4 +1,8 @@
-import type { AgentAddress, AgentMoveRequest } from "../../../shared/agentMove";
+import type {
+  AgentAddress,
+  AgentMoveOutcome,
+  AgentMoveRequest,
+} from "../../../shared/agentMove";
 import { apartmentResumeArgs } from "../../../shared/apartments";
 import {
   observedSpawnClaims,
@@ -35,8 +39,13 @@ export type MoveSide = {
     /** Agent names by pane. */
     names: Map<string, string>;
   }>;
-  /** Why closing `pane` would end more than the agent, if it would. */
-  blocker(pane: TerminalRow): Promise<string | null>;
+  /**
+   * Admit closing `pane`: why it would end more than the agent, or the exact
+   * set the later close may end (core: the agent alone, no descendants).
+   */
+  admit(
+    pane: TerminalRow,
+  ): Promise<{ refusal: string } | { admitted: unknown }>;
   /** The harness session the agent at `pane` runs, if known. */
   session(pane: TerminalRow): Promise<string | null>;
   pinned(pane: TerminalRow, colorKey: string): boolean;
@@ -51,7 +60,14 @@ export type MoveSide = {
     | { tab_id: string; pane_id: string; terminal_id: string }
     | { message: string; pane_id?: string }
   >;
-  close(pane: { pane_id: string; terminal_id: string }): Promise<void>;
+  /**
+   * End `pane`, only within `admitted` when given. Throws when it refused or
+   * failed; resolves with `uncertain` when the end was asked but unconfirmed.
+   */
+  close(
+    pane: { pane_id: string; terminal_id: string },
+    admitted?: unknown,
+  ): Promise<{ uncertain?: string }>;
   /** Pin the new desk: core writes Herdr's label, a TUI desk a Board op. */
   pin(desk: AgentAddress): Promise<BoardOp[]>;
 };
@@ -63,9 +79,7 @@ export type AgentMoveDeps = {
   publishWorldInvalidation(connectionId: string, generation: number): void;
 };
 
-export type AgentMoveResult =
-  | { status: "moved"; target: AgentAddress }
-  | { status: "refused"; message: string };
+export type AgentMoveResult = AgentMoveOutcome;
 
 const MOVABLE = new Set(["claude", "codex"]);
 const text = (value: unknown) => (typeof value === "string" ? value : "");
@@ -75,6 +89,42 @@ class Refused extends Error {}
 const refuse = (message: string): never => {
   throw new Refused(message);
 };
+const reason = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
+/** Why `pane` may not move now, with its agent's `name`. */
+function sourceRefusal(
+  rows: Awaited<ReturnType<MoveSide["rows"]>>,
+  from: AgentAddress,
+): { pane: TerminalRow; name: string } | string {
+  const pane = rows.panes.find(
+    (row) =>
+      row.terminal_id === from.terminal_id && row.pane_id === from.pane_id,
+  );
+  if (!pane || pane.tab_id !== from.tab_id) return "That agent has gone.";
+  const name = rows.names.get(from.pane_id) || "agent";
+  const status = text(pane.agent_status);
+  if (status !== "idle" && status !== "done")
+    return status === "blocked"
+      ? `${name} is waiting for an answer. Answer it, then move it.`
+      : `${name} is working. Let it finish, then move it.`;
+  if (rows.panes.some((row) => row !== pane && row.tab_id === from.tab_id))
+    return "Only a desk with one terminal moves between runtimes.";
+  return { pane, name };
+}
+
+/** Close a destination copy that must not stay; say so if it may still run. */
+async function discard(
+  side: MoveSide,
+  pane: { pane_id: string; terminal_id: string },
+): Promise<string> {
+  const warn = " The new copy there may still be running: close it there.";
+  try {
+    return (await side.close(pane)).uncertain ? warn : "";
+  } catch {
+    return warn;
+  }
+}
 
 /**
  * Move an agent to a room on another runtime: start its harness there with
@@ -101,37 +151,25 @@ export async function moveAgentAcross(
     if (source!.machine !== target!.machine)
       refuse("Agents move between runtimes on the same machine only.");
     const rows = await source!.rows();
-    const pane = rows.panes.find(
-      (row) =>
-        row.terminal_id === from.terminal_id && row.pane_id === from.pane_id,
-    );
-    if (!pane || pane.tab_id !== from.tab_id) refuse("That agent has gone.");
+    const admitted = sourceRefusal(rows, from);
+    if (typeof admitted === "string") refuse(admitted);
+    const { pane, name } = admitted as Exclude<typeof admitted, string>;
     if (
       tabCardKey(from.connection_id, from.tab_id, new Set(rows.workspaces)) !==
       from.color_key
     )
       refuse("That desk changed. Look again, then move.");
-    const name = rows.names.get(from.pane_id) || "agent";
-    const kind = text(pane!.agent);
+    const kind = text(pane.agent);
     if (!MOVABLE.has(kind))
       refuse("Only Claude and Codex agents move between runtimes.");
-    const status = text(pane!.agent_status);
-    if (status !== "idle" && status !== "done")
-      refuse(
-        status === "blocked"
-          ? `${name} is waiting for an answer. Answer it, then move it.`
-          : `${name} is working. Let it finish, then move it.`,
-      );
-    if (rows.panes.some((row) => row !== pane && row.tab_id === from.tab_id))
-      refuse("Only a desk with one terminal moves between runtimes.");
-    const blocked = await source!.blocker(pane!);
-    if (blocked) refuse(blocked);
-    const session = await source!.session(pane!);
+    const closing = await source!.admit(pane);
+    if ("refusal" in closing) refuse(closing.refusal);
+    const session = await source!.session(pane);
     const args = session
       ? apartmentResumeArgs({ harness: kind, session_id: session })
       : null;
     if (!args) refuse(`World can't find ${name}'s conversation to resume.`);
-    const pinned = source!.pinned(pane!, from.color_key);
+    const pinned = source!.pinned(pane, from.color_key);
 
     // Keep the links Herdr's tokens show before the original closes.
     const claims = observedSpawnClaims(
@@ -157,7 +195,7 @@ export async function moveAgentAcross(
     );
     deps.publishBoardChanged(record.revision);
 
-    const cwd = text(pane!.cwd) || text(pane!.foreground_cwd);
+    const cwd = text(pane.cwd) || text(pane.foreground_cwd);
     const started = await target!.start({
       workspaceId: to.workspace_id,
       kind,
@@ -166,43 +204,84 @@ export async function moveAgentAcross(
       ...(to.cwd || cwd ? { cwd: to.cwd || cwd } : {}),
     });
     if ("message" in started) {
-      if (started.pane_id)
-        await target!
-          .close({ pane_id: started.pane_id, terminal_id: "" })
-          .catch(() => {});
+      const left = started.pane_id
+        ? await discard(target!, { pane_id: started.pane_id, terminal_id: "" })
+        : "";
       refuse(
-        `${name} didn't start there: ${started.message} It still runs where it was.`,
+        `${name} didn't start there: ${started.message} It still runs where it was.${left}`,
       );
     }
     const placed = started as Exclude<typeof started, { message: string }>;
-    const after = await target!.rows();
-    const moved: AgentAddress = {
-      connection_id: to.connection_id,
-      generation: to.generation,
-      workspace_id: to.workspace_id,
-      tab_id: placed.tab_id,
-      pane_id: placed.pane_id,
-      terminal_id: placed.terminal_id,
-      color_key: tabCardKey(
-        to.connection_id,
-        placed.tab_id,
-        new Set(after.workspaces),
-      ),
-    };
-    const pinOps = pinned ? await target!.pin(moved) : [];
-    const rehomed = await deps
-      .board()
-      .patch(
-        planBoardPatch([from, moved], () => [
-          { op: "agent.rehome", from, to: moved },
-          ...pinOps,
-        ]),
+    const rehome = async (a: AgentAddress, b: AgentAddress, ops: BoardOp[]) =>
+      deps.publishBoardChanged(
+        (
+          await deps
+            .board()
+            .patch(
+              planBoardPatch([a, b], () => [
+                { op: "agent.rehome", from: a, to: b },
+                ...ops,
+              ]),
+            )
+        ).revision,
       );
-    deps.publishBoardChanged(rehomed.revision);
-    await source!.close({
-      pane_id: from.pane_id,
-      terminal_id: from.terminal_id,
-    });
+    let moved: AgentAddress;
+    try {
+      // Starting can take a minute: the original must still be the agent
+      // admitted, idle and alone, or the new copy goes and the original stays.
+      const again = sourceRefusal(await source!.rows(), from);
+      if (typeof again === "string") refuse(again);
+      if (text((again as { pane: TerminalRow }).pane.agent) !== kind)
+        refuse(`${name} changed. Look again, then move.`);
+      const after = await target!.rows();
+      moved = {
+        connection_id: to.connection_id,
+        generation: to.generation,
+        workspace_id: to.workspace_id,
+        tab_id: placed.tab_id,
+        pane_id: placed.pane_id,
+        terminal_id: placed.terminal_id,
+        color_key: tabCardKey(
+          to.connection_id,
+          placed.tab_id,
+          new Set(after.workspaces),
+        ),
+      };
+      const pinOps = pinned ? await target!.pin(moved) : [];
+      // The desk moves before the original closes, so its links outlive it.
+      await rehome(from, moved, pinOps);
+    } catch (error) {
+      refuse(
+        `${reason(error)} It still runs where it was.${await discard(target!, placed)}`,
+      );
+      throw error;
+    }
+    let closed: { uncertain?: string } = {};
+    try {
+      closed = await source!.close(
+        { pane_id: from.pane_id, terminal_id: from.terminal_id },
+        (closing as { admitted: unknown }).admitted,
+      );
+    } catch (error) {
+      const still = await source!
+        .rows()
+        .then((now) =>
+          now.panes.some((row) => row.terminal_id === from.terminal_id),
+        )
+        .catch(() => true);
+      if (!still) return { status: "moved", target: moved };
+      // The original stays: so do its desk and links.
+      await rehome(moved, from, []);
+      refuse(
+        `${name} didn't close where it was: ${reason(error)} It still runs there.${await discard(target!, placed)}`,
+      );
+    }
+    if (closed.uncertain)
+      return {
+        status: "uncertain",
+        target: moved,
+        message: `${name} runs in its new room, but the original may still be running: ${closed.uncertain}`,
+      };
     return { status: "moved", target: moved };
   } catch (error) {
     if (error instanceof Refused)
@@ -248,7 +327,7 @@ export function moveSide(
     return {
       ...base,
       machine: runtime.sshHost() ?? "",
-      blocker: async () => null,
+      admit: async () => ({ admitted: null }),
       async session(pane) {
         const agent = await runtime.operations
           .getAgent({ target: text(pane.pane_id) })
@@ -281,6 +360,7 @@ export function moveSide(
       },
       async close(pane) {
         await call("pane.close", { pane_id: pane.pane_id });
+        return {};
       },
       pin: async (desk) => [
         { op: "desk.pin", key: desk.color_key, cell: null },
@@ -293,11 +373,14 @@ export function moveSide(
   return {
     ...base,
     machine: host.sshHost() ?? "",
-    async blocker(pane) {
+    async admit(pane) {
       const plan = await planCoreKill(lease, [text(pane.terminal_id)]);
       return plan.descendants.length
-        ? "Agents it started would end with it. Let them finish, then move it."
-        : null;
+        ? {
+            refusal:
+              "Agents it started would end with it. Let them finish, then move it.",
+          }
+        : { admitted: { core_id: plan.core_id, terminals: plan.roots } };
     },
     async session(pane) {
       const known = await host
@@ -339,23 +422,30 @@ export function moveSide(
       }
       return { message: "It wasn't ready in time.", pane_id: outcome.pane_id };
     },
-    async close(pane) {
+    async close(pane, admitted) {
       if (!pane.terminal_id) {
         const found = (await rows()).panes.find(
           (row) => row.pane_id === pane.pane_id,
         );
-        if (!found) return;
+        if (!found) return {};
         pane = { ...pane, terminal_id: text(found.terminal_id) };
       }
-      const plan = await planCoreKill(lease, [pane.terminal_id]);
-      await killCore(
+      // Only what was admitted ends: a child started since refuses the kill.
+      let confirm = admitted;
+      if (!confirm) {
+        const plan = await planCoreKill(lease, [pane.terminal_id]);
+        if (plan.descendants.length)
+          return { uncertain: "it started agents, so World left it running." };
+        confirm = { core_id: plan.core_id, terminals: plan.roots };
+      }
+      const outcome = await killCore(
         lease,
         [pane.terminal_id],
-        parseCoreKillConfirmation({
-          core_id: plan.core_id,
-          terminals: [...plan.roots, ...plan.descendants],
-        }),
+        parseCoreKillConfirmation(confirm),
       );
+      if (outcome.uncertain.length)
+        return { uncertain: "core didn't confirm it ended." };
+      return {};
     },
     async pin(desk) {
       const fence = CoreOperationFence.admit(lease, desk.terminal_id);
