@@ -103,7 +103,7 @@ export function TownPeek({
    */
   onFiles?: (() => void) | null;
   /** Move the agent's desk to another place or room, either runtime. */
-  onMove?: (() => void) | null;
+  onMove?: ((deskKey: string) => void) | null;
   onNext: (() => void) | null;
   onClose(): void;
   onHold(hold: boolean): void;
@@ -259,14 +259,17 @@ export function TownPeek({
             <span>Files</span>
           </button>
         ) : null}
-        {onMove ? (
+        {onMove && agent.deskKey ? (
           <button
             type="button"
             className="town-peek-terminal town-peek-move"
             aria-label={`Move ${agent.displayLabel}'s desk`}
             title="Move to another place or room, on this runtime or another"
             disabled={agent.stale}
-            onClick={onMove}
+            onClick={() => {
+              onClose();
+              onMove(agent.deskKey!);
+            }}
           >
             <ArrowRightLeft size={15} aria-hidden="true" />
             <span>Move to…</span>
