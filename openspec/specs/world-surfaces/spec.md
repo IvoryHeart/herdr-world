@@ -1492,7 +1492,11 @@ per runtime, and a `townBuildings=host` or `townBuildings=runtime` query flag
 SHALL override that setting for the page. With one building per runtime,
 Town SHALL keep a building for each runtime; a host's
 buildings SHALL stand side by side, each signed with the host and its runtime
-when the host has more than one. Room keys SHALL NOT depend on the layout, so
+when the host has more than one. A room SHALL offer the same room actions
+in either layout. When two of a host's connections reach the same runtime
+endpoint, Town SHALL show that endpoint's rooms once, from one connection:
+a live one first, then a writable one, then the host's first; both
+connections keep their identities. Room keys SHALL NOT depend on the layout, so
 room spots, colours and pins survive either way. A desk SHALL be a table
 with one seat per admitted pane up to four drawn seats, sized to its panes: a
 one-pane desk SHALL be a solo desk, a two-pane desk a small table with one seat on
@@ -1581,6 +1585,16 @@ supplies it.
   with `?townBuildings=runtime`
 - **THEN** it shows two buildings side by side, signed with the host and each
   runtime, with the same room spots, colours and pins
+
+#### Scenario: Two connections reach one Herdr socket
+
+- **WHEN** the startup Default connection and a saved profile both reach this
+  computer's Herdr socket, and herdr-core runs there too
+- **THEN** Town shows each Herdr workspace once, from the saved profile, and
+  every Herdr and herdr-core room in the building keeps Rename and Close, and
+  every Herdr room keeps Move
+- **AND WHEN** the saved profile's connection is down
+- **THEN** Town shows those rooms from the Default connection
 
 #### Scenario: One of a machine's runtimes fails
 
