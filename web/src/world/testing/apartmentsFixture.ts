@@ -1,4 +1,6 @@
+import { STARTER_PROFILES } from "../../../../shared/agentProfile";
 import type {
+  ApartmentAppearance,
   ApartmentMoveOut,
   ApartmentResident,
   ApartmentState,
@@ -9,6 +11,28 @@ import type { ApartmentsClient } from "../apartments/apartmentsStore";
 /** Synthetic Apartments residents and an in-memory client, for tests. */
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
+
+const starterLook = (id: string) =>
+  STARTER_PROFILES.find((profile) => profile.id === id)!.look;
+
+/**
+ * One resident per way the Apartments window finds an avatar
+ * (apartments/residentLook.ts), by name.
+ */
+const LOOKS: Record<string, ApartmentAppearance | null> = {
+  // Launched from the Builder profile: its look, kept at move-in.
+  ada: { profile_id: "builder", look: starterLook("builder"), color: "orange" },
+  // An avatar chosen for it in World.
+  grace: { profile_id: null, look: starterLook("designer"), color: "purple" },
+  // Started by hand: the character Town drew from its own key.
+  linus: { profile_id: null, look: null, color: "teal" },
+  // From before World kept looks: the nearest, a profile of its harness.
+  hopper: null,
+  // Its look no longer reads: its profile's look now.
+  lovelace: { profile_id: "reviewer", look: null, color: "blue" },
+  // A harness with no profile, from before World kept looks: the default.
+  turing: null,
+};
 
 /** Synthetic residents ending at `now`; example.com and example paths only. */
 export function fixtureResidents(now: number): ApartmentResident[] {
@@ -64,6 +88,15 @@ export function fixtureResidents(now: number): ApartmentResident[] {
       88,
     ],
     [
+      "lovelace",
+      "codex",
+      "project-gamma",
+      12 * DAY,
+      "retired",
+      "Answered the release checklist questions",
+      null,
+    ],
+    [
       "turing",
       "pi",
       "project-beta",
@@ -100,6 +133,11 @@ export function fixtureResidents(now: number): ApartmentResident[] {
         : [],
       session_id:
         harness === "pi" ? null : `0f0e0d0c-0000-4000-8000-00000000000${index}`,
+      // A herdr-core resident shares the one look.
+      ...(name === "turing"
+        ? { runtime: "herdr-core" as const, connection_label: "Fixture core" }
+        : {}),
+      appearance: LOOKS[name] ?? null,
     }),
   );
 }
