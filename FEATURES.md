@@ -314,6 +314,8 @@ synthetic example offline, including an owner wait and a usage limit.
 
 ## Agent and project memory data
 
+Contract: [World memory](./openspec/specs/world-memory/spec.md).
+
 The [memory service, API and CLI](./docs/memory-api.md) browse, search, read, add,
 edit and delete harness memory on its owning local or SSH connection. Claude
 instructions, rules and project/subagent memory, Codex instructions and v1/v2
@@ -2053,6 +2055,8 @@ agent session matches the report. Herdr owns expiry; the command does not infer 
 assign tasks, or provide a Clear operation.
 
 ### Apartments: finished agents
+
+Contract: [Apartments](./openspec/specs/world-surfaces/apartments/spec.md).
 
 **Apartments** holds every agent that is not running now, asleep and
 resumable: agents from before Apartments existed, on every connected host

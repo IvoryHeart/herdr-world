@@ -249,3 +249,5 @@ No v2 subscriptions or persisted-capture fences are implemented here.
 - [ ] 10.1 After the last stage, check that every delta is synchronized and archive the
   change. If v1 ships long before the v2 gate, decide whether to split v2 into
   its own change first. Verify with `bun run spec:check`.
+
+Capability path after the feature-map split: `world-surfaces/appearance`. Existing delivery and pending tasks are unchanged.

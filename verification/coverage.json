@@ -373,7 +373,7 @@
       "id": "Q08",
       "area": "Terminal composition/touch/clipboard",
       "owner": "web/src/terminalComposition.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/terminal-windows/spec.md",
       "properties": "Composition commits once; selection gestures cannot also dispatch input; clipboard completion stays with its captured terminal",
       "existingTests": [
         "web/src/terminalIme.test.ts",
@@ -413,7 +413,7 @@
       "id": "Q09",
       "area": "Terminal composer and shortcuts",
       "owner": "web/src/terminalComposer.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/chat/spec.md",
       "properties": "Preview, submit and cancellation preserve the owning pane; repeated input cannot accidentally duplicate dispatch",
       "existingTests": [
         "web/src/terminalComposer.test.ts",
@@ -752,7 +752,7 @@
       "id": "Q16",
       "area": "Resource caches",
       "owner": "web/src/workspaceResource.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
       "properties": "Cached results cannot cross connection/checkout/generation; old fetch cannot repopulate replacement cache",
       "existingTests": [
         "web/src/components/WorktreeLifecycleDialog.test.ts",
@@ -807,7 +807,7 @@
       "id": "Q17",
       "area": "Creation coordination",
       "owner": "web/src/creationRequests.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/creation-profiles/spec.md",
       "properties": "Preparation/readiness/completion stay qualified; duplicate triggers and delayed replies do not select another terminal",
       "existingTests": [
         "web/src/worldCreation.test.ts",
@@ -972,7 +972,7 @@
       "id": "Q21",
       "area": "Window arrangements",
       "owner": "web/src/world/windows/windowManager.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/terminal-windows/spec.md",
       "properties": "Focus references a live window; minimize/restore preserves geometry; closed windows cannot regain focus",
       "existingTests": [
         "web/src/world/windows/windowManager.test.ts",
@@ -1011,7 +1011,7 @@
       "id": "Q22",
       "area": "Tab/pane layout, pins and reorder",
       "owner": "web/src/tabLayout.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/town-moves/spec.md",
       "properties": "Every live pane has one valid position; pin/reorder/close preserve membership and qualified identity",
       "existingTests": [
         "web/src/tabLayout.test.ts",
@@ -1056,7 +1056,7 @@
       "id": "Q23",
       "area": "Inspector intent and navigation",
       "owner": "web/src/world/worldInspectorSelection.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
       "properties": "Selection survives only for exact owners; delayed opens cannot override later intent",
       "existingTests": [
         "web/src/world/inspectorTerminalHandoff.test.ts",
@@ -1103,7 +1103,7 @@
       "id": "Q24",
       "area": "Desk receipts and review marks",
       "owner": "web/src/world/handoffs.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/desk-attention/spec.md",
       "properties": "New turns invalidate old review marks; dedup and bounded observation; receipts remain session-qualified",
       "existingTests": [
         "server/src/world/legacy-review-boundaries.test.ts",
@@ -1212,7 +1212,7 @@
       "id": "Q25",
       "area": "History/task/checkout reports",
       "owner": "server/src/agent/",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/history/spec.md",
       "properties": "Atomic publication and session identity; old reports cannot overwrite newer state; terminal settings require current terminal/lease witnesses, one-time import and convergent master revisions; prompt answers require complete valid transcript fields and the same literal question/options (including paired globs and rendered code) or complete review and screen; failed transcript checks retain no answer keys; pre-session trust input requires a current pane/terminal/process witness with no session, complete workspace heading/folder and question, exact menu identity ignoring only the option cursor before every key, and the per-pane input lock; Needs you displays trust safety text and grant warnings unclamped",
       "existingTests": [
         "server/src/agent/worktree.test.ts",
@@ -1692,7 +1692,7 @@
       "id": "Q31",
       "area": "Files/uploads/previews",
       "owner": "server/src/workspace/files.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
       "properties": "Captured roots/owners survive async work; partial upload cleanup; preview admission has no authority escalation",
       "existingTests": [
         "server/src/workspace/file-mutations.test.ts",
@@ -1732,7 +1732,7 @@
       "id": "Q32",
       "area": "File search and annotation drafts",
       "owner": "web/src/fileSearch.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
       "properties": "Superseded queries cannot publish; draft edits survive unrelated refresh; host/checkout changes cannot misapply edits",
       "existingTests": [
         "web/src/fileSearch.test.ts",
@@ -1770,7 +1770,7 @@
       "id": "Q33",
       "area": "Git actions/auto-sync",
       "owner": "server/src/workspace/git-actions.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
       "properties": "Per-repository serialization; cancellation preserves user changes; late status cannot cross checkout",
       "existingTests": [
         "server/src/workspace/git-actions.test.ts",
@@ -1819,7 +1819,7 @@
       "id": "Q34",
       "area": "Worktree create/remove/hooks",
       "owner": "server/src/worktree/",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
       "properties": "Partial failure leaves recoverable state; removal cannot target another checkout; hooks run only at valid stages",
       "existingTests": [
         "web/src/components/WorktreeLifecycleDialog.test.ts",
@@ -2143,7 +2143,7 @@
       "id": "Q39",
       "area": "Renderer and lazy-module lifetime",
       "owner": "web/src/world/town/townRenderer.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/town/spec.md",
       "properties": "Unmount disposes one renderer; late initialization cannot resurrect it; reload attempts stay bounded; GPU restoration repaints a sleeping renderer and defers while hidden; capture receipts require current committed owner/revision/viewport, assets, semantic layout and a painted draw",
       "existingTests": [
         "web/src/world/drawReadiness.test.ts",
@@ -2295,7 +2295,7 @@
       "id": "Q42",
       "area": "Preferences/filters/shortcuts",
       "owner": "web/src/browserStorage.ts",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/shell-navigation/spec.md",
       "properties": "Persistence round trip; filters grant no authority",
       "existingTests": [
         "web/src/browserStorage.test.ts",
@@ -2345,7 +2345,7 @@
       "id": "Q43",
       "area": "Rendering/layout/search/metrics/site",
       "owner": "web/src/world/WorldFoundationApp.tsx",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/shell-navigation/spec.md",
       "properties": "Deterministic Town geometry/counts and room-size transitions; renderer lifetime; bounded metric/cache work; Appearance pruning requires complete current all-witness absence and the observation-admission document revision; live moves, newer edits and unknown topology retain records. Actual Spaces/mobile adapters bind editor drafts to the native tab, and profile launches bind colours to the returned terminal.",
       "existingTests": [
         "web/src/testing/reactPerformanceTracks.test.ts",
@@ -3317,7 +3317,7 @@
       "id": "Q58",
       "area": "Read-only integrations registry and private vault",
       "owner": "server/src/integrations/",
-      "requirement": "openspec/specs/world-surfaces/spec.md",
+      "requirement": "openspec/specs/world-surfaces/integrations/spec.md",
       "properties": "Existing owners retain control authority; owner failure is isolated; only supported secret names leave storage; private atomic publication and closure refusal",
       "existingTests": [
         "server/src/integrations/registry.test.ts",

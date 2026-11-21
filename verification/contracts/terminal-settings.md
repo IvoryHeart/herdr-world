@@ -2,7 +2,7 @@
 
 ## Intended behavior
 
-[Current requirements](../../openspec/specs/world-surfaces/spec.md#requirement-per-terminal-settings-live-with-the-terminal)
+[Current requirements](../../openspec/specs/world-surfaces/appearance/spec.md#requirement-per-terminal-settings-live-with-the-terminal)
 place assignments and master claims on Herdr's terminal. Profiles and chimes
 stay per World. Owners are `server/src/agent/terminal-settings.ts` and
 `server/src/agent/terminal-tokens.ts`, under inventory area Q25. Q10/Q11 retain
