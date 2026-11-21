@@ -4,6 +4,29 @@ import { createUsageProjection } from "./projection";
 const at = "2026-10-31T12:00:00Z";
 const now = Date.parse("2026-11-01T12:00:00Z");
 
+test("only an explicit numeric harness cost counts, repeated Pi responses count once", () => {
+  const reader = createUsageProjection("pi", now);
+  const message = {
+    type: "message",
+    id: "response",
+    timestamp: at,
+    message: {
+      role: "assistant",
+      model: "synthetic",
+      usage: { input: 10, output: 2, cost: { total: 0.25 } },
+    },
+  };
+  reader.accept(message);
+  reader.accept(message);
+  expect(reader.finish().rows[0]?.reported_cost_usd).toBe(0.25);
+  const missing = createUsageProjection("pi", now);
+  missing.accept({
+    ...message,
+    message: { ...message.message, usage: { input: 10, output: 2 } },
+  });
+  expect(missing.finish().rows[0]?.reported_cost_usd).toBeUndefined();
+});
+
 test("Claude repeated response blocks count once with disjoint cache tokens", () => {
   const reader = createUsageProjection("claude", now);
   for (const output of [2, 7, 7])
@@ -237,4 +260,89 @@ test("seven UTC days are retained with exclusive upper bound and no content seri
     "2026-11-01",
   ]);
   expect(JSON.stringify(reader.finish())).not.toContain("PRIVATE_SENTINEL");
+});
+
+test("a run keeps its spans, largest prompt, branch and first-prompt role, never the text", () => {
+  const reader = createUsageProjection("claude", now);
+  const user = (content: unknown, extra: object = {}) =>
+    reader.accept({
+      type: "user",
+      sessionId: "synthetic-session",
+      gitBranch: "crew/42",
+      timestamp: at,
+      message: { role: "user", content },
+      ...extra,
+    });
+  user("<local-command-caveat>PRIVATE_PREAMBLE</local-command-caveat>");
+  user("You are the reviewer here, PRIVATE_SENTINEL", { isMeta: true });
+  user([{ type: "text", text: "You are the crew fixer for PRIVATE_SENTINEL" }]);
+  user("Now act as the reviewer");
+  const call = (id: string, time: string, input: number, cached: number) =>
+    reader.accept({
+      type: "assistant",
+      sessionId: "synthetic-session",
+      timestamp: time,
+      message: {
+        id,
+        model: "synthetic-model",
+        usage: {
+          input_tokens: input,
+          cache_read_input_tokens: cached,
+          output_tokens: 1,
+        },
+      },
+    });
+  call("a", "2026-10-31T03:10:00Z", 10, 100);
+  call("a", "2026-10-31T03:10:00Z", 10, 100);
+  call("b", "2026-10-31T17:40:00Z", 5, 400);
+  const result = reader.finish();
+  expect(result.rows).toHaveLength(1);
+  expect(result.rows[0]).toMatchObject({
+    responses: 2,
+    // Responses far apart are separate spans; the repeated one counts once.
+    spans: [
+      [Date.parse("2026-10-31T03:10:00Z"), Date.parse("2026-10-31T03:10:00Z")],
+      [Date.parse("2026-10-31T17:40:00Z"), Date.parse("2026-10-31T17:40:00Z")],
+    ],
+    max_prompt_tokens: 405,
+    role: "fixer",
+    branch: "crew/42",
+  });
+  expect(JSON.stringify(result)).not.toContain("PRIVATE_");
+});
+
+test("Codex reads its branch and role; unnamed roles and detached heads are unknown", () => {
+  const read = (message: string, branch: string) => {
+    const reader = createUsageProjection("codex", now);
+    reader.accept({
+      type: "session_meta",
+      payload: { id: "synthetic-codex", git: { branch } },
+    });
+    reader.accept({ type: "turn_context", payload: { model: "model-a" } });
+    reader.accept({
+      type: "event_msg",
+      payload: { type: "user_message", message },
+    });
+    reader.accept({
+      timestamp: at,
+      type: "event_msg",
+      payload: {
+        type: "token_count",
+        info: {
+          total_token_usage: { input_tokens: 90, output_tokens: 2 },
+          last_token_usage: { input_tokens: 90, output_tokens: 2 },
+        },
+      },
+    });
+    return reader.finish().rows[0];
+  };
+  expect(read("You are the crew checker for issue 7", "crew/7")).toMatchObject({
+    role: "checker",
+    branch: "crew/7",
+    max_prompt_tokens: 90,
+  });
+  expect(read("Fix the build please", "HEAD")).toMatchObject({
+    role: null,
+    branch: null,
+  });
 });

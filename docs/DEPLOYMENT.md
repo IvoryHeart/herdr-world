@@ -36,6 +36,12 @@ existing runtime profiles. Local profiles and identical SSH destinations group
 without renaming runtime IDs. See [host discovery and API](host-connections.md)
 for CLI use, migration and rollback constraints.
 
+Usage analytics saves bounded numeric daily status history in private
+`usage-activity.json` beside `world.sqlite`. Include it in an instance backup to
+retain observed time; token history rebuilds from the harness logs. Open status
+intervals never resume after restart, and unobserved time stays unknown. See
+[usage coverage](usage-analytics.md#meaning-gaps-and-limits).
+
 At startup, World checks `boards/world-ledger.json` (or the configured
 `HERDR_WORLD_LEDGER_PATH`). Before importing a changed file, it makes a private,
 byte-identical `<ledger>.<content-hash>.sqlite-import.bak` beside it. An unchanged

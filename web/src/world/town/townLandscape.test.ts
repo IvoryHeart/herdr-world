@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { townBusRoute } from "./townBus";
 import { townGroundPlan, townWildPlan } from "./townGroundPlan";
 import { townHarbourLot } from "./townHarbour";
+import { townObservatoryLot } from "./townObservatoryLot";
 import {
   TOWN_BILLBOARD_VERGE,
   TOWN_LANDSCAPE_SEED,
@@ -95,6 +96,16 @@ function exclusionZones(layout: TownLayout) {
     add(b.x, b.y - 1, b.x + b.w, b.y + b.h + TOWN_FACADE);
   const { center } = layout;
   add(center.x, center.y, center.x + center.w, center.street);
+  // Growth can move the civic row without changing its grass tiles.
+  // The observatory and its verge still count as changed occupied land.
+  const observatory = townObservatoryLot(layout);
+  if (observatory)
+    add(
+      observatory.x - 1,
+      observatory.y - 1,
+      observatory.x + observatory.w + 1,
+      observatory.y + observatory.h,
+    );
   for (const p of [...layout.lamps, ...layout.bushes, ...layout.benches])
     add(p.x, p.y, p.x + 1, p.y + 1);
   add(layout.board.x, layout.board.y, layout.board.x + 1, layout.board.y + 1);
