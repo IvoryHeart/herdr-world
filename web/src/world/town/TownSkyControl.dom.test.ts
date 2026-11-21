@@ -54,7 +54,7 @@ if (process.env.TOWN_SKY_DOM !== "1") {
     TOWN_WEATHER_KEY,
     resetTownWeatherForTest,
   } = await import("./townWeather");
-  const { WORLD_INTEGRATIONS_EVENT } = await import("../../integrations");
+  const { SETTINGS_OPEN_EVENT } = await import("../../settings/host");
   const { unavailableWeather } = await import("../../../../shared/weather");
   const { worldLocalStorage } = await import("../../browserStorage");
 
@@ -171,19 +171,19 @@ if (process.env.TOWN_SKY_DOM !== "1") {
     await sky.close();
   });
 
-  test("its settings link opens Integrations on the Weather source", async () => {
+  test("its settings link opens the Weather row in Settings", async () => {
     fresh();
     const sky = await mount();
-    const focus: (string | undefined)[] = [];
+    const opened: (string | undefined)[] = [];
     const listen = (event: Event) =>
-      focus.push((event as CustomEvent<{ focus?: string }>).detail.focus);
-    window.addEventListener(WORLD_INTEGRATIONS_EVENT, listen);
+      opened.push((event as CustomEvent<string | undefined>).detail);
+    window.addEventListener(SETTINGS_OPEN_EVENT, listen);
     await sky.click(sky.trigger());
     await sky.click(sky.host.querySelector(".town-sky-settings")!);
-    expect(focus).toEqual(["source:weather"]);
+    expect(opened).toEqual(["integrations.weather"]);
     // The panel closes behind it.
     expect(sky.host.querySelector(".town-sky")).toBeNull();
-    window.removeEventListener(WORLD_INTEGRATIONS_EVENT, listen);
+    window.removeEventListener(SETTINGS_OPEN_EVENT, listen);
     await sky.close();
   });
 }
