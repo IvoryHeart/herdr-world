@@ -321,10 +321,11 @@ async function compose(
     tui: () => connectionManager,
     core: () => coreRpc,
     sources: () => worldSources.current(),
+    board,
+    profiles: () => storage.profiles(),
     publish: revisionPublisher("world_apartments_changed", "world-apartments"),
     log: (message) => logger.warn(message),
   });
-
   const {
     observe: observeHost,
     retire: retireTerminalMarks,
