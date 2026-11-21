@@ -55,7 +55,7 @@ const parameters: Partial<Record<WorldCliCommand, Record<string, unknown>>> = {
   },
 };
 
-/** Outcomes recorded from the pre-registry implementation, not from policy metadata. */
+/** Historical outcomes plus explicit later read additions, never derived from policy metadata. */
 export async function legacyOutcomes(factory = createWorldCli) {
   const outcomes: {
     command: string;
@@ -133,6 +133,7 @@ export async function legacyOutcomes(factory = createWorldCli) {
           publishBoard: () => {},
           publishLedger: () => {},
           acknowledgeAnswer: async () => ({ acknowledged: true }),
+          usage: async () => ({ version: 1 }),
         });
         const locate = () => [
           { pid: 200, ppid: 100, pgrp: 100 },

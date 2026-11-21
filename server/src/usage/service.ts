@@ -13,6 +13,8 @@ import type { OfficeObservabilitySnapshot } from "../world/observability";
 import type { RuntimeUsage } from "./host";
 import { estimateUsage, parseUsagePrices, tokenTotal } from "./totals";
 import { usageDigest } from "./host";
+import { USAGE_TOKEN_HARNESSES } from "../../../shared/usageHarnesses";
+import { joinUsageSpans } from "../../../shared/usageSpans";
 import type { Scheduler } from "../service/ports";
 import { usageScope } from "./lifetime";
 import { codexIdsFromTitle } from "../agent/session-resolver";
@@ -20,10 +22,10 @@ import { normalizeAgentName } from "../agent/chat-harnesses";
 import { boundUsageDetails, summarizeUsage } from "./summary";
 import { contextWindowTokens } from "./context-window";
 
-import type { RuntimeOperations } from "../adapters/runtime-ports";
+import type { RuntimeReader } from "../adapters/runtime-ports";
 
 type UsageRuntime = {
-  operations: RuntimeOperations;
+  operations: RuntimeReader;
   usage(
     agents: Record<string, unknown>[],
     now: number,
@@ -59,6 +61,8 @@ type Options = {
   scheduler: Scheduler;
   waitMs?: number;
   collectionMs?: number;
+  /** Equal only for connections known to read the same transcript host. */
+  hostScope?(id: string): string;
 };
 const rowKey = (r: RuntimeUsage["rows"][number]) =>
   JSON.stringify([r.session_key, r.day, r.model]);
@@ -87,7 +91,7 @@ const unavailable = (): RuntimeUsage => ({
   bindings: [],
   unsupported: [],
   truncated: false,
-  sources: ["claude", "codex", "pi", "gemini"].map((harness) => ({
+  sources: USAGE_TOKEN_HARNESSES.map((harness) => ({
     harness,
     state: "unavailable",
   })),
@@ -257,7 +261,10 @@ export class WorldUsageService {
     }
   }
 
-  async get(params: Record<string, unknown> = {}): Promise<WorldUsageSnapshot> {
+  async get(
+    params: Record<string, unknown> = {},
+    boundDetails = true,
+  ): Promise<WorldUsageSnapshot> {
     if (this.#closed) throw new Error("World usage is closed");
     if (
       params.window !== undefined &&
@@ -324,8 +331,9 @@ export class WorldUsageService {
     void refresh.catch(() => {});
     const table = parseUsagePrices(await this.options.prices());
     const telemetry = await this.options.telemetry();
-    const entities: UsageEntity[] = [],
-      sources: UsageSource[] = [],
+    let entities: UsageEntity[] = [];
+    const deduplication = new Map<string, string>();
+    const sources: UsageSource[] = [],
       limits: UsageLimit[] = [],
       contexts: UsageContext[] = [];
     let truncated = statuses.length > 16;
@@ -479,11 +487,72 @@ export class WorldUsageService {
           last_at: row.last_at,
           observation_span_ms: row.last_at - row.first_at,
           estimated_cost_usd: estimateUsage(row.tokens, row.model, table),
+          ...(row.reported_cost_usd !== undefined
+            ? { reported_cost_usd: row.reported_cost_usd }
+            : {}),
           price_table_version: table?.version ?? null,
           state,
+          run_id: `run_${usageDigest(
+            JSON.stringify([
+              this.options.hostScope?.(status.id) ?? status.id,
+              row.harness,
+              row.session_key,
+            ]),
+          )}`,
+          ...(row.spans !== undefined ? { spans: row.spans } : {}),
+          ...(row.max_prompt_tokens !== undefined
+            ? { max_prompt_tokens: row.max_prompt_tokens }
+            : {}),
+          ...(row.role !== undefined ? { role: row.role } : {}),
+          ...(row.branch !== undefined ? { branch: row.branch } : {}),
         });
+        deduplication.set(
+          entities.at(-1)!.id,
+          JSON.stringify([
+            this.options.hostScope?.(status.id) ?? status.id,
+            rowKey(row),
+          ]),
+        );
       }
     }
+    const counted = new Map<string, UsageEntity[]>();
+    for (const entity of entities) {
+      const key = deduplication.get(entity.id)!;
+      const copies = counted.get(key) ?? [];
+      copies.push(entity);
+      counted.set(key, copies);
+    }
+    entities = [...counted.values()].map((copies) => {
+      const fresh = copies.filter((e) => e.state !== "stale");
+      const candidates = fresh.length ? fresh : copies;
+      const attributed = candidates.filter((e) => e.pane_id !== null);
+      const owners = new Set(
+        attributed.map((e) =>
+          JSON.stringify([e.connection_id, e.connection_generation, e.pane_id]),
+        ),
+      );
+      const row = {
+        ...(owners.size === 1 ? attributed[0]! : candidates[0]!),
+        tokens: { ...candidates[0]!.tokens },
+      };
+      for (const e of candidates)
+        for (const k of Object.keys(row.tokens) as (keyof typeof row.tokens)[])
+          row.tokens[k] = Math.max(row.tokens[k], e.tokens[k]);
+      row.total_tokens = tokenTotal(row.tokens);
+      row.responses = Math.max(...candidates.map((e) => e.responses));
+      row.first_at = Math.min(...candidates.map((e) => e.first_at));
+      row.last_at = Math.max(...candidates.map((e) => e.last_at));
+      row.observation_span_ms = row.last_at - row.first_at;
+      if (candidates.some((e) => e.spans !== undefined))
+        row.spans = joinUsageSpans(candidates.flatMap((e) => e.spans ?? []));
+      if (candidates.some((e) => e.max_prompt_tokens !== undefined))
+        row.max_prompt_tokens = Math.max(
+          ...candidates.map((e) => e.max_prompt_tokens ?? 0),
+        );
+      row.estimated_cost_usd = estimateUsage(row.tokens, row.model, table);
+      if (owners.size !== 1) row.pane_id = row.tab_id = row.workspace_id = null;
+      return row;
+    });
     const response: WorldUsageSnapshot = {
       version: 1,
       incarnation: this.options.incarnation,
@@ -517,7 +586,7 @@ export class WorldUsageService {
         total_tokens: telemetry.totalUsage,
       },
     };
-    boundUsageDetails(response);
+    if (boundDetails) boundUsageDetails(response);
     return response;
   }
 }

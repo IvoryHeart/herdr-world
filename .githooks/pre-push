@@ -9,6 +9,12 @@ done
 artifact_dir=$(git rev-parse --show-toplevel)/.agents/delivery
 mkdir -p "$artifact_dir"
 log_file=$(mktemp "$artifact_dir/pre-push.XXXXXX")
+refs_file=$(mktemp "$artifact_dir/push-refs.XXXXXX")
+trap 'rm -f "$refs_file"' 0
+# Keep every pushed ref for privacy scanning, even when the delivery gate uses
+# a narrower HEAD-based selection. Do not let docs or merge shortcuts skip it.
+cat > "$refs_file"
+exec 3< "$refs_file"
 report_file="$artifact_dir/pre-push.tsv"
 head_sha=$(git rev-parse --verify HEAD 2>/dev/null || printf 'unborn')
 recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -26,8 +32,8 @@ all_units=
 # on an ancestor. A push that only merges origin/main into the pushed branch
 # (scripts/merge-push.ts defines this conservatively) runs static checks only:
 # both sides were tested and CI runs the full gate on the merge.
-if read -r local_ref local_sha remote_ref remote_sha; then
-  if read -r extra_line || [ "$local_sha" != "$head_sha" ]; then
+if read -r local_ref local_sha remote_ref remote_sha <&3; then
+  if read -r extra_line <&3 || [ "$local_sha" != "$head_sha" ]; then
     all_units=--all-units
   fi
   case "$gate:$local_ref" in
@@ -76,7 +82,8 @@ if [ "$gate" = changed ] && [ -n "$base" ]; then
 fi
 
 # Policy uses the complete PR diff even when units narrow to a single push.
-if bun scripts/check-push-policy.ts >"$log_file" 2>&1 && bun "$@" >>"$log_file" 2>&1; then
+if bun scripts/check-privacy.ts --pre-push "$refs_file" >"$log_file" 2>&1 &&
+  bun scripts/check-push-policy.ts >>"$log_file" 2>&1 && bun "$@" >>"$log_file" 2>&1; then
   ended_at=$(date +%s)
   elapsed=$((ended_at - started_at))
   printf '%s\t%s\t0\t%s\t%s\n' "$recorded_at" "$head_sha" "$elapsed" "$gate" >> "$report_file"

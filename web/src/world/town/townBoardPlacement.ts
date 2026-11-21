@@ -16,6 +16,10 @@ import { TOWN_TILE as T, type TownLayout } from "./townLayout";
 import { townHarbourLot } from "./townHarbour";
 import { townWarehouseReserve } from "./townHarbourLot";
 import { townLibraryLotBeside, townLibraryReserve } from "./townLibraryLot";
+import {
+  townObservatoryLotBeside,
+  townObservatoryReserve,
+} from "./townObservatoryLot";
 import { townPostLotBeside, townPostReserve } from "./townPostLot";
 
 /** A rectangle in world pixels, x1 and y1 exclusive. */
@@ -111,7 +115,7 @@ export function townPlaceBoards(
 }
 
 /**
- * The town center's lot, the post office's, the library's, the warehouse's
+ * The town center's lot, the post office's, the library's, the observatory's, the warehouse's
  * and the billboard, in world pixels.
  */
 export function townBoardObstacles(
@@ -142,6 +146,17 @@ export function townBoardObstacles(
       y0: lot.y0 * T,
       y1: lot.y1 * T,
     });
+  if (layout.formFactor !== "narrow") {
+    const observatory = townObservatoryReserve(
+      townObservatoryLotBeside(center),
+    );
+    boxes.push({
+      x0: observatory.x0 * T,
+      x1: observatory.x1 * T,
+      y0: observatory.y0 * T,
+      y1: observatory.y1 * T,
+    });
+  }
   if (city) {
     const scale = townCityBoardScale(z);
     const mid = (center.x + center.w / 2) * T;

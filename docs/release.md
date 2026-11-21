@@ -34,6 +34,10 @@ Documentation-only runs (Markdown outside the packaged notices, which run
 `check:docs`) and exact-head reuse runs skip it and the Windows plugin check;
 Delivery checks then requires both to be skipped.
 
+Compact installer evidence uploads retry once after an upload failure, including
+transient artifact-service DNS errors. The retry replaces any partial artifact;
+a second upload failure still fails the job. Native checks remain strict.
+
 One planning job freezes the current latest stable World release tag and its source
 SHA. Each runner builds the proposed merge revision with `scripts/package-release.sh`
 and a synthetic next-patch release-candidate version unique to the CI run. It uses
