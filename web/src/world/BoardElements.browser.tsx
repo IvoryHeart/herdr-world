@@ -759,6 +759,56 @@ const scenarios: [string, () => Promise<void>][] = [
     },
   ],
   [
+    "a Library host that appears after the form opened is adopted",
+    async () => {
+      setMemoryClientForTests(memoryFixtureClient());
+      publishMemoryHosts([]);
+      try {
+        await openAdd();
+        addDialog()!
+          .querySelector<HTMLButtonElement>('[data-kind="memory"]')!
+          .click();
+        await settle();
+        button(addDialog()!, "From the Library")!.click();
+        await settle();
+        const memory = () =>
+          [...addDialog()!.querySelectorAll("label")]
+            .find((label) => label.textContent?.startsWith("Memory"))
+            ?.querySelector("select");
+        check(
+          memory()?.disabled === true,
+          "with no Library host the memory list is not offered",
+        );
+        libraryOnStudio();
+        await waitFor(
+          () => (memory()?.querySelectorAll("option").length ?? 0) > 1,
+          "the host that became readable was not adopted",
+        );
+        check(
+          ![...addDialog()!.querySelectorAll("label")].some((label) =>
+            label.textContent?.startsWith("Host"),
+          ),
+          "one readable host needs no Host selector",
+        );
+        button(addDialog()!, "Add")!.click();
+        await waitFor(
+          () => !addDialog(),
+          "the adopted host's memory did not save",
+        );
+        const put = writes[0];
+        check(
+          put?.op === "element.put" &&
+            put.element.kind === "memory" &&
+            (put.element.source as { connection_id?: string }).connection_id ===
+              "studio",
+          `the memory is saved on the adopted host (${JSON.stringify(put)})`,
+        );
+      } finally {
+        setMemoryClientForTests(null);
+      }
+    },
+  ],
+  [
     "offline host",
     async () => {
       await tap(card("memory-nightly")!);

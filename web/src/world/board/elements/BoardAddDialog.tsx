@@ -444,6 +444,7 @@ function ElementForm({
               ? preferredProject.workspaceId
               : null
           }
+          preferredHost={preferredProject?.connectionId ?? null}
           onHost={(next) => {
             setLibraryHost(next);
             setLibraryMemory("");
@@ -593,6 +594,7 @@ function LibraryMemoryPicker({
   value,
   savedValue,
   firstProject,
+  preferredHost,
   onHost,
   onChange,
 }: {
@@ -600,12 +602,24 @@ function LibraryMemoryPicker({
   value: string;
   savedValue?: string;
   firstProject: string | null;
+  preferredHost: string | null;
   onHost(connectionId: string): void;
   onChange(value: string): void;
 }) {
   useMemoryStore();
   const hosts = memoryHosts();
   const target = hosts.find((entry) => entry.connection_id === host);
+  // A source with no host yet takes the first one the Library can read, also
+  // when it becomes readable after the form opened. A chosen or saved host is
+  // never replaced here; the Host selector changes it.
+  const adopt = host
+    ? null
+    : (hosts.find((entry) => entry.connection_id === preferredHost) ??
+      hosts[0] ??
+      null);
+  useEffect(() => {
+    if (adopt) onHost(adopt.connection_id);
+  }, [adopt, onHost]);
   useEffect(() => {
     if (target) void requestMemoryCatalog(target);
   }, [target]);
@@ -637,10 +651,13 @@ function LibraryMemoryPicker({
         : "The Library has no memory to read on this host yet.";
   return (
     <>
-      {hosts.length > 1 ? (
+      {hosts.length > 1 || (host && hosts.length && !target) ? (
         <label>
           Host
           <select value={host} onChange={(event) => onHost(event.target.value)}>
+            {host && !target ? (
+              <option value={host}>{host} (not read now)</option>
+            ) : null}
             {hosts.map((entry) => (
               <option key={entry.connection_id} value={entry.connection_id}>
                 {entry.label}
