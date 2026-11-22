@@ -108,7 +108,7 @@ const INSTANCE_ID = "browserFixture0001";
 const SSH_INSTANCE_ID = "browserFixture0002";
 function fakeClient() {
   const listeners = new Set<() => void>();
-  // Stock VS Code: installed, not enabled; its webviews stay blank in World.
+  // Stock VS Code: installed, not enabled; it needs HTTPS or localhost.
   const vscode: IdeProviderStatus = {
     id: "vscode",
     label: "Visual Studio Code",
@@ -274,7 +274,7 @@ async function run() {
     () => Boolean($('.ide-provider[data-provider="code-server"] button')),
     "the Code view lists the IDE integrations",
   );
-  // Stock VS Code can be enabled; its blank webviews are said up front.
+  // Stock VS Code can be enabled; its HTTPS need is said up front.
   const vscodeRow = $('.ide-provider[data-provider="vscode"]')!;
   check(
     vscodeRow.querySelector(".ide-provider-badge")?.textContent ===
