@@ -19,6 +19,13 @@ import sys
 import termios
 import tty
 
+# Pinned harnesses must not offer their own upgrade: a vendor release during a
+# walk opened Codex's "Update available" menu, and the walk's input chose
+# "Update now", which ended the harness. Claude's equivalent is the
+# DISABLE_AUTOUPDATER environment pin. Applied after the invocation is
+# recorded, so the recorded argv stays exactly what World sent.
+PINS = {'codex': ['-c', 'check_for_update_on_startup=false']}
+
 
 def main():
     kind, *args = sys.argv[1:]
@@ -61,7 +68,7 @@ def main():
             os.dup2(slave, fd)
         if slave > 2:
             os.close(slave)
-        os.execv(real, [real, *args])
+        os.execv(real, [real, *PINS.get(kind, []), *args])
     os.close(slave)
 
     def resize(*_):

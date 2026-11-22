@@ -111,5 +111,35 @@ class RecorderTests(unittest.TestCase):
                 telemetry.close()
 
 
+    def test_codex_never_offers_its_own_update_and_recorded_argv_is_unchanged(self):
+        with tempfile.TemporaryDirectory(prefix='walk-recorder-') as directory:
+            root = Path(directory)
+            seen = root / 'argv.json'
+            executable = root / 'codex'
+            executable.write_text('#!/bin/sh\nexec ' + __import__('shlex').join(
+                [sys.executable, '-c', 'import json, sys; open(sys.argv[1], "w").write(json.dumps(sys.argv[2:]))',
+                 str(seen)]) + ' "$@"\n')
+            executable.chmod(0o755)
+            args = ['--no-alt-screen', 'walk prompt']
+            telemetry = Telemetry(root / 'events.sock')
+            master, slave = pty.openpty()
+            attach = 'import fcntl, os, sys, termios; fcntl.ioctl(0, termios.TIOCSCTTY, 0); os.execv(sys.argv[1], sys.argv[1:])'
+            child = subprocess.Popen([sys.executable, '-c', attach, sys.executable,
+                                      str(Path(__file__).with_name('observe.py')), 'codex', *args],
+                                     env={**os.environ, 'WALK_REAL_CODEX': str(executable), 'WALK_TELEMETRY': str(telemetry.path)},
+                                     stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
+            os.close(slave)
+            try:
+                _, invoked = telemetry.wait(lambda item: item['event'] == 'invoked', timeout=10)
+                self.assertEqual(invoked['argv'], args)
+                child.wait(timeout=10)
+                self.assertEqual(json.loads(seen.read_text()), ['-c', 'check_for_update_on_startup=false', *args])
+            finally:
+                if child.poll() is None:
+                    child.terminate()
+                    child.wait(timeout=10)
+                os.close(master)
+                telemetry.close()
+
 if __name__ == '__main__':
     unittest.main()
