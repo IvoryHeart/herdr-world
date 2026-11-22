@@ -3,6 +3,11 @@
  * kept so choices saved before Office was retired still apply; fields that
  * only Office used are ignored and dropped on the next write.
  */
+import {
+  TOWN_QUIET_DEFAULT_MINUTES,
+  townQuietMinutes,
+} from "./town/townQuietWork";
+
 export type OfficeInspectorPresentation = "docked" | "floating";
 
 /** What opening an agent shows in Town, Board and Desk (the Agents open setting). */
@@ -22,6 +27,11 @@ export type OfficePreferences = {
   townGreeting: boolean;
   /** The tab title and app icon show the Needs you count (this browser). */
   tabBadge: boolean;
+  /**
+   * Minutes a working agent's session may stay still before Town marks it
+   * quiet (townQuietWork.ts); 0 turns the mark off.
+   */
+  townQuietMinutes: number;
 };
 
 export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
@@ -32,6 +42,7 @@ export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
   townMaster: "firstmate",
   townGreeting: true,
   tabBadge: true,
+  townQuietMinutes: TOWN_QUIET_DEFAULT_MINUTES,
 });
 
 export const OFFICE_PREFERENCES_KEY = "officePreferences:v1";
@@ -58,6 +69,7 @@ export function readOfficePreferences(
       townMaster: townMasterName(value.townMaster),
       townGreeting: value.townGreeting !== false,
       tabBadge: value.tabBadge !== false,
+      townQuietMinutes: townQuietMinutes(value.townQuietMinutes),
     };
   } catch {
     return { ...DEFAULT_OFFICE_PREFERENCES };
@@ -79,6 +91,7 @@ export function writeOfficePreferences(
     townMaster: townMasterName(preferences.townMaster),
     townGreeting: preferences.townGreeting !== false,
     tabBadge: preferences.tabBadge !== false,
+    townQuietMinutes: townQuietMinutes(preferences.townQuietMinutes),
   };
   try {
     storage.setItem(OFFICE_PREFERENCES_KEY, JSON.stringify(admitted));
