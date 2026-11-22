@@ -47,7 +47,7 @@ import {
   trapDialogTab,
 } from "./dialogFocus";
 import { type Feedback, ProfileForm } from "./LocalProfileForm";
-import { ConfirmDialog } from "./ModalDialogs";
+import { RemoveConnectionDialog } from "./RemoveConnectionDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import "./ConnectionSwitcher.css";
@@ -682,21 +682,11 @@ export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
             onRemove={setRemoveTarget}
           />
         </div>
-        <ConfirmDialog
-          open={!!removeTarget}
-          title="Remove Connection"
-          message={
-            removeTarget
-              ? `Remove connection "${removeTarget.label}"? This disconnects Herdr World but does not stop the Herdr server.`
-              : "Remove this connection?"
-          }
-          confirmLabel="Remove"
-          danger
+        <RemoveConnectionDialog
+          target={removeTarget}
           onClose={() => setRemoveTarget(null)}
-          onConfirm={() => {
-            const target = removeTarget;
+          onConfirm={(target) => {
             setRemoveTarget(null);
-            if (!target) return;
             void performAction(
               `remove-${target.id}`,
               () => bridge.call("connections.remove", { id: target.id }),

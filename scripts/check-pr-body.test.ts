@@ -316,6 +316,88 @@ test("push policy uses the PR's immutable stacked base and fails closed on inval
   ).toThrow("immutable base");
 });
 
+test("push policy judges a branch that merged a newer main against main's current tip", () => {
+  const root = mkdtempSync(join(tmpdir(), "push-policy-base-"));
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  const commit = (path: string, text: string, message: string) => {
+    mkdirSync(join(root, path, ".."), { recursive: true });
+    writeFileSync(join(root, path), text);
+    git("add", path);
+    git("commit", "-qm", message);
+    return git("rev-parse", "HEAD");
+  };
+  const body =
+    noImpacts + "Changelog: none — Only synthetic policy fixtures change.\n";
+  const currentSpec = "openspec/specs/world-surfaces/town/spec.md";
+  try {
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Example");
+    git("config", "user.email", "example@example.invalid");
+    commit(
+      "openspec/specs/world-surfaces/town/notes.md",
+      "**Code:**\n\n- `scripts/`\n",
+      "notes",
+    );
+    const recorded = commit(currentSpec, "# Town\n", "base");
+    git("switch", "-qc", "feature");
+    commit("scripts/example.ts", "export {};\n", "feature");
+    git("switch", "-q", "main");
+    // Main's own archive-style edit of a current spec, outside this PR.
+    const tip = commit(currentSpec, "# Town\n\nSynced.\n", "main sync");
+    git("update-ref", "refs/remotes/origin/main", tip);
+    git("switch", "-q", "feature");
+    git("merge", "-q", "--no-edit", "main");
+
+    // The PR's recorded base is stale: main's spec edit counts as the PR's.
+    expect(checkPrBodyText(body, root, recorded)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Put contract edits in openspec/changes/"),
+      ]),
+    );
+    const policy = pushPolicyContext(
+      undefined,
+      () => ({ body, baseRefOid: recorded, baseRefName: "main" }),
+      root,
+    );
+    expect(policy.base).toBe(tip);
+    expect(checkPrBodyText(policy.body, root, policy.base)).toEqual([]);
+
+    // A rewritten stacked parent keeps the recorded immutable base.
+    git("update-ref", "refs/remotes/origin/parent", recorded);
+    git("switch", "-qc", "parent", recorded);
+    const rewritten = commit("docs/parent.md", "rewritten\n", "rewrite");
+    git("update-ref", "refs/remotes/origin/parent", rewritten);
+    const stackedBase = git("rev-parse", "main");
+    expect(
+      pushPolicyContext(
+        undefined,
+        () => ({ body, baseRefOid: stackedBase, baseRefName: "parent" }),
+        root,
+      ).base,
+    ).toBe(stackedBase);
+    // An unknown base branch or a stale local ref also keeps it.
+    for (const baseRefName of ["missing", "main"])
+      expect(
+        pushPolicyContext(
+          undefined,
+          () => ({ body, baseRefOid: tip, baseRefName }),
+          root,
+        ).base,
+      ).toBe(tip);
+    git("update-ref", "refs/remotes/origin/main", recorded);
+    expect(
+      pushPolicyContext(
+        undefined,
+        () => ({ body, baseRefOid: tip, baseRefName: "main" }),
+        root,
+      ).base,
+    ).toBe(tip);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("push policy reads the intended description or existing PR, and never invents an exemption", () => {
   expect(pushPolicyBody(undefined, () => "Existing PR")).toBe("Existing PR");
   expect(

@@ -559,6 +559,24 @@ export const rpcVerbs = [
     "world",
     object({ harness: text }),
   ),
+  // Installed web IDEs for the Code view and their World-owned servers.
+  rpc("world.ide.status", "read", "world"),
+  rpc("world.ide.enable", "reconcilable", "world", object({ provider: text })),
+  rpc("world.ide.disable", "reconcilable", "world", object({ provider: text })),
+  rpc(
+    "world.ide.configure",
+    "reconcilable",
+    "world",
+    object({ provider: text }),
+  ),
+  rpc("world.ide.open", "reconcilable", "world", object({ folder: text })),
+  rpc("world.ide.stop", "reconcilable", "world", object({ instanceId: text })),
+  rpc(
+    "world.ide.forget",
+    "reconcilable",
+    "world",
+    object({ instanceId: text }),
+  ),
   // The owner's focus session (#1131): held interruptions, then one recap.
   rpc("world.focus.end", "reconcilable", "world"),
   rpc("world.focus.get", "read", "world"),

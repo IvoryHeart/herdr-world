@@ -23,6 +23,7 @@ const actions = {
   "herdr-core-runtime": [],
   "herdr-core-seen": [],
   "agent-move": [],
+  "ide-lifecycle": [],
   "effect-recovery": effectActions,
   "binding-resolution": [],
   "observation-base": [
@@ -196,6 +197,10 @@ export function validateTrace(
     validateMoveTrace(value);
     return;
   }
+  if (model === "ide-lifecycle")
+    throw new Error(
+      "IDE lifecycle schedules use their dedicated replay validator",
+    );
   if (model === "effect-recovery") return validateEffectTrace(value);
   if (model === "observation-base") return validateObservationTrace(value);
   if (model === "binding-resolution") return validateBindingTrace(value);

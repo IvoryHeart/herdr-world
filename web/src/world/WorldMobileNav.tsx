@@ -1,5 +1,6 @@
 import {
   Castle,
+  Code2,
   LayoutDashboard,
   type LucideIcon,
   PanelsTopLeft,
@@ -16,6 +17,7 @@ export const WORLD_VIEW_DESTINATIONS: readonly {
   { view: "town", label: "Town", Icon: Castle },
   { view: "board", label: "Board", Icon: StickyNote },
   { view: "desk", label: "Desk", Icon: LayoutDashboard },
+  { view: "code", label: "Code", Icon: Code2 },
   { view: "spaces", label: "Spaces", Icon: PanelsTopLeft },
 ];
 

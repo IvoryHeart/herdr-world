@@ -1,7 +1,8 @@
 """Transparent PTY recorder. The foreground process execs the vendor executable.
 
 It reports observations; it never prints a replacement screen, reports runtime
-agent state, generates a reply, or writes a transcript. A cut shell command
+agent state, generates a reply, or writes a transcript. Codex startup update
+checks are disabled to keep the fixture on its pinned version. A cut shell command
 cannot reach this program, which is the regression boundary for #984.
 """
 import errno
@@ -61,7 +62,10 @@ def main():
             os.dup2(slave, fd)
         if slave > 2:
             os.close(slave)
-        os.execv(real, [real, *args])
+        # A synthetic Enter must reach onboarding/input, never an updater that
+        # can exit or replace the pinned harness. Keep captured World argv exact.
+        launch_args = ['-c', 'check_for_update_on_startup=false', *args] if kind == 'codex' else args
+        os.execv(real, [real, *launch_args])
     os.close(slave)
 
     def resize(*_):

@@ -210,10 +210,19 @@ World stores no new credentials.
 
 ## Local instance registry
 
-Only listeners running this implementation self-report. Each instance writes a
-private 0600 file in `<data directory>/instances`, renews its 45-second lease every
-15 seconds, and removes its own report on graceful stop. A crash leaves a stale
-report after expiry. The stable ID is an opaque hash of the data-folder identity;
+Only listeners running this implementation self-report. The default registry
+is shared by Worlds running as the same user on this machine, independently
+of their data folders:
+
+- Linux: `$XDG_STATE_HOME/herdr-world/instances` when the state directory is
+  absolute, otherwise `~/.local/state/herdr-world/instances`.
+- macOS: `~/Library/Application Support/herdr-world/instances`.
+- Windows: `%LOCALAPPDATA%/herdr-world/instances`, falling back to
+  `~/AppData/Local/herdr-world/instances`.
+
+Each instance writes a private 0600 file in this 0700 directory, renews its
+45-second lease every 15 seconds, and removes its own report on graceful stop.
+A crash leaves a stale report after expiry. The stable ID is an opaque hash of the data-folder identity;
 the generation changes on restart. Source metadata is captured from World's own
 checkout at startup, not an agent's cwd; installed builds know their version and
 World repository, with unknown branch/commit. Filesystem paths, remote URLs,
@@ -222,9 +231,12 @@ and 4 KiB per report; malformed, symlinked, oversized or overflowing entries mar
 the window incomplete. Old stale reports remain display-only until that data
 folder next reports or its registry is removed outside World.
 
-Different isolated data folders are separate by default. To see several local
-previews together, explicitly set `HERDR_WORLD_INSTANCE_REGISTRY_DIR` to the
-**same private directory** for each World process when starting it. There is no
+`HERDR_WORLD_INSTANCE_REGISTRY_DIR` overrides the default with a selected
+**private directory**; Worlds using different registries do not discover one
+another. Data folders, credentials and question storage remain separate. Old
+per-data-folder reports are not imported. An older World that does not publish
+(including 0.3.5) is simply absent, without discovery errors or peer questions;
+existing alert-only notification handling still applies. There is no
 network registration endpoint, port scanning, remote probing, remote host URL
 collection or inference from runtime connections. A fresh record confirms only
 that World recently reported; it does not promise the port still answers.

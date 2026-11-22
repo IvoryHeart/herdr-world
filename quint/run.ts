@@ -4,6 +4,7 @@ import { runRegistryVerification } from "./connection-registry-verification";
 import { runCoreVerification } from "./herdr-core-verification";
 import { runSeenVerification } from "./herdr-core-seen";
 import { runMoveVerification } from "./agent-move-verification";
+import { runIdeLifecycleVerification } from "./ide-lifecycle-verification";
 import { replayEffectRecovery } from "./effect-recovery";
 import { verificationModels } from "./models";
 import {
@@ -680,20 +681,22 @@ export async function runReviewedQuintModels(
     );
     const results = [];
     for (const item of runCases) {
-      const dedicated = {
+      const composed = {
         "claude-tap-lock": runTapLockVerification,
         "connection-registry": runRegistryVerification,
         "herdr-core-seen": runSeenVerification,
+        "ide-lifecycle": runIdeLifecycleVerification,
         "agent-move": runMoveVerification,
-      }[item.name as string];
-      if (dedicated) {
-        const result = await dedicated({
+      } as const;
+      if (item.name in composed) {
+        const { name } = item;
+        const result = await composed[name as keyof typeof composed]({
           root,
           output,
           artifacts,
           command,
           mutate: (fault?: ImplementationFault) =>
-            implementationMutation(item.name, fault),
+            implementationMutation(name, fault),
         });
         results.push(result);
         console.log(JSON.stringify(result));

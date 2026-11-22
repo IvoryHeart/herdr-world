@@ -35,11 +35,11 @@ export function assertDeliveryResults(
     behavioral !== (verify ? "success" : "skipped") ||
     validation !== expected[0] ||
     world !== expected[1] ||
-    packaging.length !== 3 ||
+    packaging.length !== 2 ||
     packaging
-      .slice(0, 2)
+      .slice(0, 1)
       .some((result) => result !== (native ? "success" : "skipped")) ||
-    packaging[2] !== "success"
+    packaging[1] !== "success"
   ) {
     throw new Error(
       `Delivery checks failed: mode=${mode}, scope=${scope}, validation=${validation}, world=${world}, behavioral=${behavioral}, packaging=${packaging.join(",")}`,
@@ -54,11 +54,7 @@ if (import.meta.main) {
     Bun.env.VALIDATION_RESULT,
     Bun.env.WORLD_RESULT,
     Bun.env.BEHAVIORAL_RESULT,
-    [
-      Bun.env.WINDOWS_PLUGIN_RESULT,
-      Bun.env.INSTALLER_RESULT,
-      Bun.env.LAUNCHD_RESULT,
-    ],
+    [Bun.env.INSTALLER_RESULT, Bun.env.LAUNCHD_RESULT],
     Bun.env.HERDR_CI_SELECTION
       ? (JSON.parse(Bun.env.HERDR_CI_SELECTION) as ValidationSelection)
       : undefined,

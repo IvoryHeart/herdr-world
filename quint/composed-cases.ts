@@ -26,6 +26,7 @@ export const composedCases = [
     witnesses: moveWitnesses,
     mismatches: moveMismatches,
   },
+  { name: "ide-lifecycle", witnesses: [], mismatches: [] },
 ] as const;
 
 export function replayTracesPerSeed(name: Model) {
