@@ -29,21 +29,27 @@ import {
 } from "../shipyard/shipyardStore";
 import {
   TOWN_HARBOUR_BERTHS,
+  TOWN_PIER_BOLLARDS,
+  TOWN_PIER_SLIPWAY,
   townBerthAt,
   townHarbourFoldAt,
   townHarbourLot,
+  townHarbourPlaced,
+  townHarbourSignRow,
   townHarbourView,
   townLanePierAt,
   townLaneSignAt,
   townLanesShown,
+  townLighthouseAt,
   townProjectColor,
   type TownHarbourLot,
 } from "./townHarbour";
-import { TOWN_HARBOUR_SIGN_ROW } from "./townHarbourLot";
 import {
-  TOWN_BEACON_LAMP,
+  TOWN_PIER_ART,
   townFlagUrl,
   townHullUrl,
+  townLighthouseUrl,
+  townPierUrl,
   townShipUrl,
 } from "./townHarbourArt";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
@@ -62,25 +68,26 @@ type OpenProject = ((repo: string) => void) | null;
 type Lane = { repo: string; color: string; view: ShipyardView };
 
 /**
- * Every project the Shipyard reads, in the catalog's order, each with its
- * colour and its own pipeline read from the shared store.
+ * The projects with releases, in the catalog's order, each with its colour
+ * and its own pipeline read from the shared store (#1148). A project gets a
+ * lane once a read of its GitHub releases (kept while a later read fails,
+ * then shown out of date) lists at least one published release. One not
+ * read yet, with no release, or whose GitHub source is off or signed out
+ * gets none: it stays in the Releases tab, which says why.
  */
 export function townShipyardLanes(state: ShipyardState, now: number): Lane[] {
   if (!state.catalog) return [];
-  return shipyardLanes(state.catalog, state.repo).map((repo, index): Lane => {
-    const snapshot = state.snapshots[repo] ?? null;
-    // A lane whose own read failed reads as World not answering for it:
-    // its kept answer is out of date, and with none there is nothing to show.
+  const lanes: Lane[] = [];
+  for (const repo of shipyardLanes(state.catalog, state.repo)) {
+    const snapshot = state.snapshots[repo];
+    if (!snapshot) continue;
+    // A lane whose own read failed keeps its last answer, out of date.
     const error = state.error ?? state.laneErrors[repo] ?? null;
-    return {
-      repo,
-      color: townProjectColor(index),
-      view:
-        error && !snapshot
-          ? { status: "unreachable", detail: error }
-          : shipyardView({ ...state, repo, snapshot, error }, now),
-    };
-  });
+    const view = shipyardView({ ...state, repo, snapshot, error }, now);
+    if (view.status !== "open" || !view.ships.length) continue;
+    lanes.push({ repo, color: townProjectColor(lanes.length), view });
+  }
+  return lanes;
 }
 
 /** "widgets" for "example-org/widgets": the lane's board. */
@@ -171,18 +178,18 @@ export function townHarbourSignText(
   const parts = [`${lanes.length} project${lanes.length === 1 ? "" : "s"}`];
   if (failing) parts.push(`${failing} main failing`);
   if (old) parts.push(`${old} out of date`);
-  if (open.length < lanes.length)
-    parts.push(`${lanes.length - open.length} closed`);
   return parts.join(" · ");
 }
 
 /**
  * Town's harbour (#1028): the Shipyard at the town's right-most edge, on
- * open sea. Every project has its own shipping lane, in its own colour: a
+ * open sea. Every project with releases has its own shipping lane, in its
+ * own colour, and no other lane or pier is drawn (#1148): a
  * flag and name board at the pier's root, the next release being built on
  * the slipway with the count of merged changes waiting for it, the latest
  * releases moored along the pier (a green pennant while a World here runs
- * one), and main's checks in the lighthouse at the pier's head. A board, a
+ * one), and main's checks in the lighthouse at the pier's head, past the
+ * last berth and drawn above every ship (#1148). A board, a
  * hull or a ship's "All releases" opens that project in the Work lens's
  * Releases tab; a ship opens its release's card. Open pull requests are the
  * warehouse's (TownWarehouse.tsx). A narrow (phone) town has the same
@@ -208,7 +215,14 @@ export const TownShipyard = memo(function TownShipyard({
         openWork("releases");
       }
     : null;
-  const lot = townHarbourLot(layout);
+  // The drawn lanes (a "+N" lane included) and the sign sit vertically
+  // centred on the harbour's side of Town, not from its top.
+  const shown = townLanesShown(townHarbourLot(layout), lanes.length);
+  const rest = lanes.slice(shown);
+  const lot = townHarbourPlaced(
+    townHarbourLot(layout),
+    shown + (rest.length ? 1 : 0),
+  );
   const fold = townHarbourFoldAt(layout.center, T);
   /** Keyboard focus on an off-screen ship or sign pans it into view. */
   const reveal: Reveal = (event) => {
@@ -255,9 +269,7 @@ export const TownShipyard = memo(function TownShipyard({
   };
   const signText = townHarbourSignText(lanes, chosen);
   const label = `Shipyard: ${signText}${openWork ? ". Open releases" : ""}`;
-  const shown = townLanesShown(lot, lanes.length);
-  const rest = lanes.slice(shown);
-  const signAt = { x: lot.streetEnd * T + 4, y: TOWN_HARBOUR_SIGN_ROW * T };
+  const signAt = { x: lot.streetEnd * T + 4, y: townHarbourSignRow(lot) * T };
   // A phone's first view keeps the stacked buildings; a signpost on the
   // town center's left wing points the way to the sea.
   const signpost =
@@ -360,8 +372,8 @@ function focusVisible(element: HTMLElement) {
 /** The folded sign's words: the projects, or why there are none. */
 function foldedText(lanes: readonly Lane[], chosen: ShipyardView) {
   if (lanes.length) return `${lanes.length}`;
-  if (chosen.status === "loading") return "…";
-  return "closed";
+  if (chosen.status === "loading" || chosen.status === "reading") return "…";
+  return chosen.status === "open" ? "0" : "closed";
 }
 
 /** The waiting count on the slipway's board: "4", "200+", "?". */
@@ -397,10 +409,7 @@ function LaneView({
   const hull = townBerthAt(lot, index, 0);
   const style = { "--lane": color } as CSSProperties;
   const words = shipyardSignText(view);
-  const lamp = {
-    left: pier.x + pier.w + TOWN_BEACON_LAMP.dx,
-    top: pier.y + TOWN_BEACON_LAMP.dy,
-  };
+  const light = townLighthouseAt(lot, index);
   const openThis = onOpenProject ? () => onOpenProject(repo) : null;
   return (
     <div
@@ -435,15 +444,28 @@ function LaneView({
           {shortName(repo)}
         </span>
       </button>
+      <Pier pier={pier} />
       <span
-        className="town-harbour-lamp"
-        data-tone={beaconOf(view)}
-        style={lamp}
-        role="img"
-        aria-label={`${repo} lighthouse: ${
-          open ? open.main.words : shipyardBeaconWords("unknown")
-        }`}
-      />
+        className="town-harbour-lighthouse"
+        style={{
+          left: light.x,
+          top: light.y,
+          backgroundImage: urlOf(townLighthouseUrl()),
+        }}
+      >
+        <span
+          className="town-harbour-lamp"
+          data-tone={beaconOf(view)}
+          style={{
+            left: light.lamp.x - light.x,
+            top: light.lamp.y - light.y,
+          }}
+          role="img"
+          aria-label={`${repo} lighthouse: ${
+            open ? open.main.words : shipyardBeaconWords("unknown")
+          }`}
+        />
+      </span>
       {open && tally ? (
         <button
           type="button"
@@ -491,6 +513,24 @@ function LaneView({
 }
 
 const urlOf = (url: string) => (url ? `url("${url}")` : undefined);
+
+/** A lane's pier, under its ships: planks, slipway, bollards and head. */
+function Pier({ pier }: { pier: ReturnType<typeof townLanePierAt> }) {
+  return (
+    <span
+      className="town-harbour-pier"
+      style={{
+        left: pier.x,
+        top: pier.y - TOWN_PIER_ART.deck,
+        width: pier.w,
+        backgroundImage: urlOf(
+          townPierUrl(pier.w, TOWN_PIER_SLIPWAY, TOWN_PIER_BOLLARDS),
+        ),
+      }}
+      aria-hidden="true"
+    />
+  );
+}
 
 /** One release moored at its berth, opening its card. */
 function Ship({
@@ -606,6 +646,7 @@ function MoreLanes({
       data-at-x={pier.x + pier.w / 2}
       data-at-y={pier.y}
     >
+      <Pier pier={pier} />
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
