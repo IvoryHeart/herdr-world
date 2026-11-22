@@ -72,15 +72,25 @@ async function run() {
     },
     shape,
   ).layout;
-  shipyardStore.useFetch((input) => {
+  const lot = townHarbourLot(layout);
+  const released = shipyardFixtureCatalog(mode, Date.now()).repositories.filter(
+    (repo) => repo !== FIXTURE_UNRELEASED,
+  );
+  const shown = townLanesShown(lot, released.length);
+  const more = released.length > shown ? 1 : 0;
+  const partial = query.has("partial") && more > 0;
+  const remaining = Promise.withResolvers<void>();
+  if (!partial) remaining.resolve();
+  shipyardStore.useFetch(async (input) => {
     const repo = new URL(String(input), location.href).searchParams.get("repo");
+    // Reproduce the failing CI schedule: all visible lamps arrive before any
+    // overflow project. Hold actual store reads, rather than sleeping under load.
+    if (repo && released.indexOf(repo) >= shown) await remaining.promise;
     const now = Date.now();
-    return Promise.resolve(
-      Response.json(
-        repo
-          ? shipyardFixtureSnapshot(mode, now, repo)
-          : shipyardFixtureCatalog(mode, now),
-      ),
+    return Response.json(
+      repo
+        ? shipyardFixtureSnapshot(mode, now, repo)
+        : shipyardFixtureCatalog(mode, now),
     );
   });
   const stage = document.createElement("div");
@@ -98,26 +108,25 @@ async function run() {
     createElement(TownShipyard, { layout, renderer: { current: null } }),
   );
 
-  const lot = townHarbourLot(layout);
-  const released = shipyardFixtureCatalog(mode, Date.now()).repositories.filter(
-    (repo) => repo !== FIXTURE_UNRELEASED,
-  );
-  const shown = townLanesShown(lot, released.length);
   const lamps = () => [
     ...world.querySelectorAll<HTMLElement>(".town-harbour-lamp"),
   ];
-  const more = released.length > shown ? 1 : 0;
   const piers = () => world.querySelectorAll(".town-harbour-pier").length;
+  const hasShip = () => world.querySelector(".town-harbour-ship") !== null;
   // Lanes appear as each project's releases arrive: with exactly `shown`
   // projects read there are `shown` lamps but no "+N" lane yet, so wait for
   // every pier, not only the lamps.
-  await until(
-    () =>
-      lamps().length === shown &&
-      piers() === shown + more &&
-      world.querySelector(".town-harbour-ship") !== null,
-    `${shown} lanes with ships and ${shown + more} piers`,
-  );
+  const ready = () =>
+    lamps().length === shown && piers() === shown + more && hasShip();
+  if (partial) {
+    await until(
+      () => lamps().length === shown && piers() === shown && hasShip(),
+      `${shown} lamps before the overflow reads`,
+    );
+    check(!ready(), "partial release reads admitted before the overflow pier");
+    remaining.resolve();
+  }
+  await until(ready, `${shown} lanes with ships and ${shown + more} piers`);
   check(piers() === shown + more, `${piers()} piers for ${shown + more} lanes`);
   check(
     !world.querySelector(`[aria-label="Shipping lane ${FIXTURE_UNRELEASED}"]`),
