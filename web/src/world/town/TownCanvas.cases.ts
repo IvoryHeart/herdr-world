@@ -27,6 +27,7 @@ export const townCanvasCases = {
   ],
   portrait: [
     [1080, 1920, "extended", 0],
+    // The same town/viewport, focused on real camera flights under slow frames.
     [1080, 1920, "extended", 300],
   ],
   fold: [

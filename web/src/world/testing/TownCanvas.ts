@@ -10,6 +10,7 @@ import {
   waitForChromePort,
 } from "../../browserChrome";
 import { chromeRenderingFlags } from "./chromeRendering";
+import { connectCapture } from "./connectCapture";
 import {
   buildWorldBrowserBundle,
   readWorldBrowserBundle,
@@ -87,7 +88,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         },
       });
       let browser: ReturnType<typeof Bun.spawn> | undefined;
-      let devtools: WebSocket | undefined;
+      let devtools: Awaited<ReturnType<typeof connectCapture>> | undefined;
       try {
         for (const [path, output] of bundle.assets) assets.set(path, output);
         const browserLog = join(dir, "browser.log");
@@ -142,7 +143,18 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
             ((scale === "typical" || scale === "bus") && width >= 1440)
             ? LARGE_TOWN_FIXTURE_MS
             : 60_000,
-        );
+        ).catch(async (error: Error) => {
+          const state = await devtools!
+            .command("Runtime.evaluate", {
+              expression:
+                "JSON.stringify({progress: window.__townCheckProgress?.slice(-12), renderer: (({frames, flying, transitioning, level, buildingsDrawn}) => ({frames, flying, transitioning, level, buildingsDrawn}))(window.__HERDR_TOWN_RENDERER__ ?? {})})",
+              returnByValue: true,
+            })
+            .catch(() => undefined);
+          throw new Error(
+            `${error.message}: ${state?.result.value ?? "browser unavailable"}`,
+          );
+        });
         expect(failures).toEqual([]);
       } finally {
         devtools?.close();
@@ -168,36 +180,8 @@ async function openAtExactViewport(
   width: number,
   height: number,
 ) {
-  const targets = (await (
-    await fetch(`http://127.0.0.1:${port}/json/list`)
-  ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-  const page = targets.find((target) => target.type === "page");
-  if (!page) throw new Error("Chrome exposed no page target");
-  const socket = new WebSocket(page.webSocketDebuggerUrl);
-  await new Promise<void>((resolve, reject) => {
-    socket.onopen = () => resolve();
-    socket.onerror = () => reject(new Error("DevTools socket failed"));
-  });
-  let serial = 0;
-  const pending = new Map<
-    number,
-    (message: { error?: { message: string } }) => void
-  >();
-  socket.onmessage = (event) => {
-    const message = JSON.parse(String(event.data));
-    pending.get(message.id)?.(message);
-    pending.delete(message.id);
-  };
-  const command = (method: string, params: Record<string, unknown>) =>
-    new Promise<void>((resolve, reject) => {
-      const id = ++serial;
-      pending.set(id, (message) =>
-        message.error
-          ? reject(new Error(`${method}: ${message.error.message}`))
-          : resolve(),
-      );
-      socket.send(JSON.stringify({ id, method, params }));
-    });
+  const socket = await connectCapture(port);
+  const { command } = socket;
   await command("Emulation.setDeviceMetricsOverride", {
     width,
     height,
