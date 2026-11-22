@@ -195,7 +195,14 @@ export function assertNoRuntimeCode(name, text) {
     throw new Error(`${name} compiles code at run time (eval or Function)`);
 }
 
-/** Counts the bundle, leaving out the help pictures' own folder. */
+/** Build-time `.br`/`.gz` variant suffixes (shared/precompressedAssets.ts). */
+const PRECOMPRESSED_SUFFIXES = { ".br": "brotliBytes", ".gz": "gzipBytes" };
+
+/**
+ * Counts the bundle, leaving out the help pictures' own folder. Budgets stay
+ * on what the build makes: a precompressed `.br`/`.gz` variant beside its file
+ * is not a file or bytes of its own, only reported as its compressed size.
+ */
 export async function collectAssetStats(
   root = publicRoot,
   exclude = [HELP_PICTURE_DIRECTORY],
@@ -203,10 +210,12 @@ export async function collectAssetStats(
   const directories = [root];
   let fileCount = 0;
   let totalBytes = 0;
+  const compressed = { brotliBytes: 0, gzipBytes: 0 };
 
   while (directories.length) {
     const directory = directories.pop();
     const entries = await readdir(directory, { withFileTypes: true });
+    const names = new Set(entries.map((entry) => entry.name));
     for (const entry of entries) {
       const path = `${directory}/${entry.name}`;
       if (entry.isDirectory()) {
@@ -215,16 +224,23 @@ export async function collectAssetStats(
         continue;
       }
       const metadata = await stat(path);
+      const suffix = entry.name.slice(-3);
+      const variant = PRECOMPRESSED_SUFFIXES[suffix];
+      if (variant && names.has(entry.name.slice(0, -3))) {
+        compressed[variant] += metadata.size;
+        continue;
+      }
       fileCount += 1;
       totalBytes += metadata.size;
     }
   }
 
-  return { fileCount, totalBytes };
+  return { fileCount, totalBytes, ...compressed };
 }
 
 async function checkAssets() {
-  const { fileCount, totalBytes } = await collectAssetStats(publicRoot);
+  const { fileCount, totalBytes, brotliBytes, gzipBytes } =
+    await collectAssetStats(publicRoot);
   const help = await collectAssetStats(
     `${publicRoot}/${HELP_PICTURE_DIRECTORY}`,
     [],
@@ -275,6 +291,10 @@ async function checkAssets() {
     (exceeded ? process.stderr : process.stdout).write(message);
     if (exceeded) process.exitCode = 1;
   }
+  // Reported beside the raw budget: what browsers download from World.
+  process.stdout.write(
+    `web asset precompressed: brotli ${(brotliBytes / 1024 / 1024).toFixed(1)} MiB, gzip ${(gzipBytes / 1024 / 1024).toFixed(1)} MiB\n`,
+  );
   if (process.env.HERDR_WORLD_BUILD_DEVTOOLS !== "1") {
     const shipped = devtoolsAssets(await textAssets(publicRoot));
     if (shipped.length) {

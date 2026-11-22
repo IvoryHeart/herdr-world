@@ -1,5 +1,11 @@
 import defaultManifest from "../../../web/public/manifest.json";
 import { instanceDisplayName } from "../../../shared/instanceName";
+import {
+  acceptedPrecompressedCodings,
+  HASHED_ASSET_PREFIX,
+  isPrecompressible,
+  PRECOMPRESSED_ENCODINGS,
+} from "../../../shared/precompressedAssets";
 import { join } from "node:path";
 import {
   decodeStaticPathname,
@@ -42,6 +48,8 @@ export async function serveStatic(
     if (!filePath) return new Response("not found", { status: 404 });
     const file = Bun.file(filePath);
     if (await file.exists()) {
+      if (pathname.startsWith(HASHED_ASSET_PREFIX))
+        return serveHashedAsset(req, filePath, file, pathname);
       return serveFile(req, file, pathname, titleSuffix);
     }
     if (serveEntry) {
@@ -58,6 +66,48 @@ export async function serveStatic(
     return serveManifest(req, defaultManifest, titleSuffix);
   }
   return new Response("not found", { status: 404 });
+}
+
+// Vite names every file under /assets/ by its content hash, so a URL never
+// changes meaning and the browser may keep it for a year without asking.
+// `private`, not `public`: assets sit behind World's login and admission, and a
+// shared cache must not hand them to a client that has not been admitted.
+const HASHED_ASSET_CACHE = "private, max-age=31536000, immutable";
+
+/**
+ * A content-hashed build file, as the build's brotli or gzip variant when the
+ * browser accepts one (see scripts/precompress-assets.ts). The variant sits
+ * beside the already resolved file, so it adds no path of its own; the
+ * uncompressed file is the fallback.
+ */
+async function serveHashedAsset(
+  req: Request,
+  filePath: string,
+  file: ReturnType<typeof Bun.file>,
+  pathname: string,
+): Promise<Response> {
+  const headers: Record<string, string> = {
+    "content-type": contentType(pathname),
+    "cache-control": HASHED_ASSET_CACHE,
+  };
+  let body = file;
+  if (isPrecompressible(pathname)) {
+    headers.vary = "Accept-Encoding";
+    for (const coding of acceptedPrecompressedCodings(
+      req.headers.get("accept-encoding"),
+    )) {
+      const { suffix } = PRECOMPRESSED_ENCODINGS.find(
+        (encoding) => encoding.coding === coding,
+      )!;
+      const variant = Bun.file(`${filePath}${suffix}`);
+      if (!(await variant.exists())) continue;
+      headers["content-encoding"] = coding;
+      body = variant;
+      break;
+    }
+  }
+  if (req.method === "HEAD") return new Response(null, { headers });
+  return new Response(body, { headers });
 }
 
 function serveManifest(

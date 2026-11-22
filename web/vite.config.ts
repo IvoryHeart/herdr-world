@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { currentBuildVersion } from "../scripts/build-version";
+import { precompressAssetsPlugin } from "../scripts/precompress-assets";
 import packageJson from "./package.json";
 
 const appVersion = currentBuildVersion(
@@ -15,7 +16,8 @@ export default defineConfig(({ mode }) => {
   const devtools =
     mode === "development" || process.env.HERDR_WORLD_BUILD_DEVTOOLS === "1";
   return {
-    plugins: [react()],
+    // Hashed /assets/* ship with brotli and gzip variants (#1245).
+    plugins: [react(), precompressAssetsPlugin()],
     define: {
       __HERDR_WORLD_VERSION__: JSON.stringify(appVersion),
       // World's development tools (event traces, renderer counters) exist only

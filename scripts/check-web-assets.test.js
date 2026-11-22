@@ -192,10 +192,34 @@ test("help pictures count against their own budget, not the bundle's", async () 
     expect(await collectAssetStats(root)).toEqual({
       fileCount: 1,
       totalBytes: 4,
+      brotliBytes: 0,
+      gzipBytes: 0,
     });
     expect(await collectAssetStats(join(root, "help"), [])).toEqual({
       fileCount: 1,
       totalBytes: 8,
+      brotliBytes: 0,
+      gzipBytes: 0,
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("precompressed variants are reported beside the raw budget, not in it", async () => {
+  const root = mkdtempSync(join(tmpdir(), "web-assets-"));
+  try {
+    mkdirSync(join(root, "assets"));
+    writeFileSync(join(root, "assets/app-hash.js"), "1234567890");
+    writeFileSync(join(root, "assets/app-hash.js.br"), "123");
+    writeFileSync(join(root, "assets/app-hash.js.gz"), "1234");
+    // A .gz or .br without its file is a file of its own, and counts.
+    writeFileSync(join(root, "assets/archive.gz"), "12");
+    expect(await collectAssetStats(root)).toEqual({
+      fileCount: 2,
+      totalBytes: 12,
+      brotliBytes: 3,
+      gzipBytes: 4,
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
