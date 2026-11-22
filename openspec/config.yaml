@@ -3,11 +3,13 @@ context: |
   Herdr World is one Bun service and same-origin React/TypeScript/Vite browser
   app, derived from Roamgate source. Herdr is an external runtime authority.
   Read AGENTS.md and docs/agent-development.md for delivery and knowledge rules.
-  Current contracts live in openspec/specs. docs contains implementation maps
+  Contracts live only in OpenSpec; start with bun run where "<words>". docs contains
   and runbooks; docs/specs preserves historical decisions.
   Inspect source and tests before asserting current behavior.
   Routine fixes, refactors, dependency updates, tests, docs, and release mechanics
-  need no new proposal unless the owner requests one. Update affected current specs.
+  need no new proposal unless the owner requests one. Feature contracts use change-folder deltas;
+  do not edit current spec.md files in feature PRs. The post-main bot PR synchronizes
+  and archives completed deltas in date order, stopping on conflicts.
   Existing user authorization carries through planning and implementation.
   Use one change per coherent outcome; PR review is the delivery boundary.
 rules:
@@ -16,7 +18,7 @@ rules:
     - Identify unresolved decisions; do not reopen decisions the owner has made.
   specs:
     - Requirements need observable scenarios including relevant failure behavior.
-    - Keep source navigation and operational recipes in linked docs.
+    - Keep source navigation and usage recipes in adjacent notes.md, with owning Code paths.
     - Preserve unrelated requirements when synchronizing a delta into a current spec.
   design:
     - Describe consequential implementation choices and actual constraints.

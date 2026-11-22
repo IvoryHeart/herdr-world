@@ -44,7 +44,13 @@ function markdownAnchors(markdown: string): Set<string> {
 
 /** Check repository-local Markdown links; remote URLs are deliberately offline. */
 export function checkKnowledgeMapLinks(root: string): string[] {
-  const map = resolve(root, "docs/knowledge-map.md");
+  return [
+    ...new Bun.Glob("openspec/specs/**/notes.md").scanSync({ cwd: root }),
+  ].flatMap((note) => checkNoteLinks(root, note));
+}
+
+function checkNoteLinks(root: string, note: string): string[] {
+  const map = resolve(root, note);
   const html = Bun.markdown.html(readFileSync(map, "utf8"));
   const failures: string[] = [];
   const anchors = new Map<string, Set<string>>();
@@ -85,7 +91,7 @@ if (import.meta.main) {
       process.exitCode = 1;
     } else
       console.log(
-        "Knowledge-map local links and Markdown fragments are valid.",
+        "Capability notes local links and Markdown fragments are valid.",
       );
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

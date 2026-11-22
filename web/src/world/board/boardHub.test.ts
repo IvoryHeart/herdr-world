@@ -27,6 +27,10 @@ const leaf = (
   parentId,
   connectionId: "local",
   terminalId: `t-${id}`,
+  nativeId: `t-${id}`,
+  workspaceId: `w-${parentId}`,
+  pane: { agent: "codex", pane_id: `t-${id}` },
+  actionable: true,
   label: `pane ${id}`,
   agentName,
   stale: false,
@@ -49,7 +53,13 @@ function board(
     leaf("b", "docs", "lead"),
   ];
   const world = {
-    hosts: [{ actionable: options.hostReady ?? true, stale: false }],
+    hosts: [
+      {
+        connectionId: "local",
+        actionable: options.hostReady ?? true,
+        stale: false,
+      },
+    ],
     leaves,
     nodeById: new Map(
       [...spaces, ...leaves].map((node) => [node.id, node] as const),
@@ -196,7 +206,13 @@ test("Summary takes you to Town's summary", () => {
 });
 
 test("the Library opens on the selected agent or workspace, else everything", () => {
-  const leaves = [leaf("a", "api", "firstmate", { nativeId: "p-a" })];
+  const leaves = [
+    leaf("a", "api", "firstmate", {
+      nativeId: "p-a",
+      pane: { pane_id: "p-a", agent: "codex" },
+    }),
+    leaf("b", "docs", "lead"),
+  ];
   const agent = board({ selectedId: "a", leaves });
   expect(agent.action("library").detail).toBe("for firstmate");
   expect(
@@ -211,4 +227,27 @@ test("the Library opens on the selected agent or workspace, else everything", ()
   expect(
     launches(() => none.action("library").run(), WORLD_MEMORY_EVENT),
   ).toEqual([{}]);
+});
+
+test("a selected unsupported agent or empty project has no Library action", () => {
+  const leaves = [
+    leaf("a", "api", "helper", { pane: { agent: "letta", pane_id: "t-a" } }),
+    leaf("b", "docs", "builder"),
+  ];
+  expect(
+    board({ selectedId: "a", leaves }).actions.some((a) => a.id === "library"),
+  ).toBe(false);
+  expect(
+    board({ selectedId: "api", leaves }).actions.some(
+      (a) => a.id === "library",
+    ),
+  ).toBe(false);
+  expect(
+    board({ selectedId: "docs", leaves }).actions.some(
+      (a) => a.id === "library",
+    ),
+  ).toBe(true);
+  expect(
+    board({ leaves: [leaves[0]!] }).actions.some((a) => a.id === "library"),
+  ).toBe(false);
 });

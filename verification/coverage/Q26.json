@@ -1,0 +1,49 @@
+{
+  "id": "Q26",
+  "area": "Ranger turns and recovery",
+  "owner": "server/src/assistant/service.ts",
+  "requirement": "openspec/specs/workspace-assistant/spec.md",
+  "properties": "Accepted turns persist before execution; cancellation/recovery cannot double-run; context stays captured",
+  "existingTests": [
+    "server/src/assistant/service.test.ts",
+    "server/src/assistant-recovery.integration.test.ts",
+    "server/src/assistant/durable-storage.test.ts",
+    "server/src/assistant/claude-driver.test.ts",
+    "server/src/assistant/claude-mcp.test.ts",
+    "server/src/assistant/ranger-driver.test.ts",
+    "web/src/assistant.test.ts",
+    "web/src/world/WorldTerminalHandoff.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
+  "technique": "ranger-authority",
+  "assessment": "turn authority, cancellation and crash/recovery under explicit storage assumptions; direct FIFO/steer/held-queue integration, chat-transition and concurrent-retry admission regressions, and captured-generation persistence evidence",
+  "status": "shared-model",
+  "remaining": "Actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage remain required consumer evidence. Busy-message queue ordering and steering use direct service/driver regressions; the maintained model does not claim queue or SDK scheduling coverage.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/ranger-recovery.qnt"],
+    "contracts": [
+      "verification/contracts/ranger-recovery.md",
+      "verification/composition.md"
+    ],
+    "tests": [
+      "quint/ranger-recovery.test.ts",
+      "server/src/assistant/service.test.ts",
+      "server/src/assistant-recovery.integration.test.ts",
+      "server/src/assistant/durable-storage.test.ts",
+      "server/src/assistant/claude-driver.test.ts",
+      "server/src/assistant/claude-mcp.test.ts",
+      "server/src/assistant/ranger-driver.test.ts",
+      "web/src/assistant.test.ts",
+      "web/src/world/WorldTerminalHandoff.test.ts"
+    ],
+    "checks": ["bun run verification:check", "bun run verification:typecheck"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  },
+  "evidenceDecision": " Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required."
+}

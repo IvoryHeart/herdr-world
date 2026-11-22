@@ -21,8 +21,11 @@ ignored.
   with its reason, and the entries go when the command box goes).
 - A Settings screen with tabs by kind, an All tab and one search, shaped like the
   Integrations screen.
-- Controls that stay on a view (Board surface, status colours and pulses, Town lens,
-  Manage connections) are listed and open the view's own control.
+- Board surface, Board status pulses and Town lens share subscribed browser stores;
+  Settings and Cmd+K change an open view immediately. Their view controls remain.
+- One Town master row opens the synced agent picker. Town and Board dock that exact
+  holder; an explicitly saved browser name migrates once when uniquely resolvable.
+- Board status colours and Manage connections still open their existing controls.
 - `?setting=<entry id|category>` links open Settings at that entry or tab.
 - A short Menu: the things people do every day, Settings, and the rest one tap away.
 
@@ -30,17 +33,23 @@ ignored.
 
 ### Modified Capabilities
 
-- `world-surfaces`: add the settings registry, search, links and short Menu; Settings
-  is the common settings menu.
+- `world-surfaces/settings`: add the settings registry, search, links and short Menu; Settings
+  is the common settings menu, with direct live view controls (#1065).
+- `world-surfaces/appearance`: use one synced Town master for Town and Board and
+  retire the per-browser name through a one-shot migration (#1066).
 
 ## Impact
 
 Browser only: `web/src/settings/`, feature catalogs (`world/town/town.settings.tsx`,
-`world/board/board.settings.tsx`), the Menu and the command box. No service, Herdr,
-storage or protocol change; settings keep their current values and stores. The
+`world/board/board.settings.tsx`), the Menu and the command box. No service, Herdr or
+protocol change. Board appearance/pulses and Town lens become shared browser stores;
+the retired browser Town master name is consumed before one qualified,
+replacement-disabled assignment through the existing synced-role RPC. The
 current `world-surfaces` requirement that Inspector, calm motion and observability
 settings live in the common settings menu still holds: they live in Settings, which
 the Menu opens.
 
 Open decisions are in the PR description (#1062) and the `crew:idea` slices
-#1063 and #1065–#1067. The requirement below is synchronized into the current spec.
+#1063 and #1067. #1065 and #1066 are implemented by PR #1140. The original Settings
+home requirement is synchronized; these follow-up contracts remain in this delta
+until the post-main synchronization PR.

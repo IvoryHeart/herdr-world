@@ -19,6 +19,7 @@ function center(
     roomReason?: string | null;
     seat?: boolean;
     roster?: OfficeAgent[];
+    harness?: string;
   } = {},
 ) {
   const calls: unknown[][] = [];
@@ -29,7 +30,14 @@ function center(
     world: {
       leaves: [
         { id: "leaf-1", connectionId: "local", terminalId: "t-1" },
-        { id: "leaf-2", connectionId: "local", terminalId: "t-2" },
+        {
+          id: "leaf-2",
+          connectionId: "local",
+          terminalId: "t-2",
+          kind: "agent",
+          pane: { agent: options.harness ?? "codex" },
+          actionable: true,
+        },
       ] as never,
     },
     office: {
@@ -149,4 +157,13 @@ test("New room is shown disabled with the reason it cannot be created", () => {
   open.action("room").run();
   open.action("summary").run();
   expect(open.calls).toEqual([["room", "room-a"], ["summary"]]);
+});
+
+test("the Town ring omits Library when its only harness has no adapter", () => {
+  expect(
+    center({ harness: "letta" }).actions.some((a) => a.id === "library"),
+  ).toBe(false);
+  expect(
+    center({ harness: "opencode" }).actions.some((a) => a.id === "library"),
+  ).toBe(true);
 });

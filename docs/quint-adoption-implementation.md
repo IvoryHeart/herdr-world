@@ -8,7 +8,7 @@ ordering, ownership, authority or recovery exploration warrants them. Spike acce
 
 All 43 stable inventory entries now have explicit requirements, owners, accepted
 source delivery, existing tests and a model/shared-consumer/alternative decision.
-[Coverage](../verification/coverage.json), [contracts](../verification/contracts/)
+[Coverage](../verification/coverage/), [contracts](../verification/contracts/)
 and [consumer decisions](../verification/consumer-evidence.md) preserve each
 scope and exclusion. Status describes evidence, not independent acceptance.
 

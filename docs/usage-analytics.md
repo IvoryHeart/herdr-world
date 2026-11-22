@@ -230,7 +230,7 @@ reads; changed or retired evidence cannot attach numbers to a replacement.
 Town's observatory and the Usage screens read `group_by:"run"` and
 `group_by:"project"` for `7d` through one shared browser read per grouping,
 refreshed at most every 30 seconds; agent cards share the same read (see
-[FEATURES.md](../FEATURES.md#visual-control-plane)). For testing rare states without real
+[FEATURES.md](../openspec/specs/world-surfaces/notes.md#visual-control-plane)). For testing rare states without real
 logs, open World with `?usageFixture` (busy), `?usageFixture=reached` (Claude's
 5-hour limit reached) or `?usageFixture=empty` (nothing observed). The page
 removes the parameter at once and the switch lasts until the next page load.

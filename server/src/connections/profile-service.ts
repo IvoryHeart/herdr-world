@@ -201,6 +201,8 @@ export class ConnectionProfileService<
     this.hosts = new HostConnectionService({
       profiles: () => [...this.profiles.values()].map(({ profile }) => profile),
       saved: () => this.registry?.hosts ?? [],
+      hasLegacyRegistry: () =>
+        this.registry !== null && this.registry.hosts === undefined,
       status: (id) => this.managerOf(id).status(id),
       defaultId: () => args.manager.defaultId(),
       readOnly: (id) =>
@@ -250,6 +252,11 @@ export class ConnectionProfileService<
         ) as TuiConnectionProfile & { read_only: boolean }),
       };
     });
+  }
+
+  /** Configured profiles by connection ID, for runtime keys (#1152). */
+  profilesById(): Map<string, ManagedConnectionProfile> {
+    return new Map([...this.profiles].map(([id, e]) => [id, e.profile]));
   }
 
   /** herdr-core connections with their observation, for the Connections page. */
