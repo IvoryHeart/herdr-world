@@ -72,6 +72,11 @@ Inspect this artifact from the failed native job before diagnosing an exit.
 The older pre-0.2.4 cookie migration remains covered by installer acceptance below.
 
 The walk installs pinned, real `claude` and `codex` executables, signed out.
+Harness auto-update prompts are disabled: Claude through `DISABLE_AUTOUPDATER`
+and Codex through the recorder's launch-only `-c check_for_update_on_startup=false`
+override, including signed-in journeys. Synthetic prompt input cannot select an
+update and replace or exit the pinned executable. Recorded launch arguments stay
+exactly as World supplied them; version and authentication probes are unchanged.
 A transparent PTY recorder keeps the real executable in the pane's original
 foreground process group while a helper forwards terminal traffic and observes
 complete argv/settings, their own first screen and prompt input; it produces no
