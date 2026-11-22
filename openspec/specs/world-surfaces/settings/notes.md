@@ -8,6 +8,8 @@
 - Deep links ?setting=<entry/category> open one row/category and remove the parameter.
 - Help opens Settings Help and offers current-screen Try controls on desktop and phone.
 - TUI/core settings route to their real owner; unavailable command capabilities show reasons.
+- Quiet working agents lives under Town & views (search "quiet"); its
+  browser-local threshold and Town drawing are documented in [Town notes](../town/notes.md).
 
 **Code:**
 
@@ -15,6 +17,9 @@
 - `web/src/world/board/useBoardAppearance.ts`
 - `web/src/world/board/boardPulses.ts`
 - `web/src/world/town/town.settings.tsx`
+- `web/src/world/officePreferences.ts`
+- `web/src/browserStorage.ts`
+- `web/src/world/town/townQuietWork.ts`
 - `web/src/world/town/townLensStore.ts`
 - `web/src/settings/`
 - `web/src/help/`

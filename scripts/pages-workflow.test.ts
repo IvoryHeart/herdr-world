@@ -67,7 +67,7 @@ test("Pages installs locked dependencies before testing, building and rendering 
   expect(installIndex).toBeGreaterThan(setupIndex);
   for (const command of [
     "bun run security:check",
-    "bun run test scripts/pages-content.test.ts scripts/pages-workflow.test.ts scripts/pages-film.test.ts",
+    "bun run test scripts/pages-content.test.ts scripts/pages-features.test.ts scripts/pages-workflow.test.ts scripts/pages-film.test.ts",
     "bun run build:site",
     "bun run film:render",
   ]) {
@@ -88,7 +88,7 @@ test("Pages deploys on main pushes or manual dispatch and checks installer avail
       "site/**",
       "openspec/specs/**",
       "openspec/changes/**",
-      "scripts/where.ts",
+      "scripts/pages-features.ts",
       "docs/TUTORIAL.md",
       "docs/images/**",
       // The film bundles Town's art (site/film/town-art.ts).
@@ -104,6 +104,7 @@ test("Pages deploys on main pushes or manual dispatch and checks installer avail
       "scripts/build-pages.ts",
       "scripts/film-render.ts",
       "scripts/pages-content.ts",
+      "scripts/openspec-notes.ts",
       "scripts/pages-*.test.ts",
       ".github/workflows/pages.yml",
     ],
@@ -226,12 +227,13 @@ test("only a fully published stable release dispatches Pages from main", async (
   expect(handoff.steps![0].run).toBe("gh workflow run pages.yml --ref main");
 });
 
-test("Pages rebuilds the generated feature reference when specs, notes or discovery change", () => {
+test("Pages rebuilds the generated feature reference when specs, notes or rendering change", () => {
   const push = workflow.on.push as { paths: string[] };
   for (const path of [
     "openspec/specs/**",
     "openspec/changes/**",
-    "scripts/where.ts",
+    "scripts/pages-features.ts",
+    "scripts/openspec-notes.ts",
   ])
     expect(push.paths).toContain(path);
 });
