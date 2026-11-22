@@ -6,35 +6,45 @@ World SHALL let the user move an agent's desk to a room of another runtime of
 the same machine (Herdr TUI to herdr-core or back) by dragging the desk into
 that room in Town, from Town's M list, and with Move to… on the desk's Town
 and Board peeks. A move within one runtime SHALL use that runtime's own move.
-The request SHALL run in the World service, qualified by both connections' IDs
-and runtime generations, and SHALL be refused for a retired generation,
-across machines, for a desk with more than one terminal, for an agent that is
-working or waiting for an answer, for a plain terminal running a program
-other than its shell, and for a herdr-core agent whose own agents would end
-with it. One service SHALL hand over one agent at a time.
 
-World SHALL start the agent's harness on the destination with its
-conversation resumed and wait until it is ready. When there is nothing to
-resume (a plain terminal, or a harness whose conversation World cannot find),
-World SHALL first say that the conversation won't continue and move only once
-the user confirms; it SHALL then start the same harness fresh, or a new shell,
-in the same folder. Right before closing, World SHALL check the original
-again: it SHALL still be the same idle agent or idle shell, alone at its desk,
-or World SHALL put the desk back, close the new copy and leave the original
-running. World SHALL carry the desk to the new address before that check and
-close the original, ending only
-what it admitted: a herdr-core child started since admission SHALL refuse the
-close. If the original refuses to close, World SHALL put the desk back, close
-the new copy and say the original still runs. When an end was asked but not
-confirmed, World SHALL say which agent may still be running instead of
-reporting a move or a clean refusal.
+#### Scenario: Agent moves between runtimes refusals
 
-The Board operation `agent.rehome` SHALL move the desk's saved place, colour,
-pin, fold, appearance, strings and spawn links from the old address to the
-new one. A spawn claim whose parent moved SHALL name the new parent and keep
-the old one in `moved_from`, so the child's live token naming the old parent
-neither replaces nor duplicates the claim. Observations SHALL never infer a
-move.
+- **WHEN** a move between runtimes is requested
+- **THEN** The request SHALL run in the World service, qualified by both connections' IDs
+  and runtime generations, and SHALL be refused for a retired generation,
+  across machines, for a desk with more than one terminal, for an agent that is
+  working or waiting for an answer, for a plain terminal running a program
+  other than its shell, and for a herdr-core agent whose own agents would end
+  with it. One service SHALL hand over one agent at a time.
+
+#### Scenario: Agent moves between runtimes handoff rules
+
+- **WHEN** World hands an agent over to another runtime
+- **THEN** World SHALL start the agent's harness on the destination with its
+  conversation resumed and wait until it is ready. When there is nothing to
+  resume (a plain terminal, or a harness whose conversation World cannot find),
+  World SHALL first say that the conversation won't continue and move only once
+  the user confirms; it SHALL then start the same harness fresh, or a new shell,
+  in the same folder. Right before closing, World SHALL check the original
+  again: it SHALL still be the same idle agent or idle shell, alone at its desk,
+  or World SHALL put the desk back, close the new copy and leave the original
+  running. World SHALL carry the desk to the new address before that check and
+  close the original, ending only
+  what it admitted: a herdr-core child started since admission SHALL refuse the
+  close. If the original refuses to close, World SHALL put the desk back, close
+  the new copy and say the original still runs. When an end was asked but not
+  confirmed, World SHALL say which agent may still be running instead of
+  reporting a move or a clean refusal.
+
+#### Scenario: Agent moves between runtimes desk rules
+
+- **WHEN** World carries a moved desk to its new address
+- **THEN** The Board operation `agent.rehome` SHALL move the desk's saved place, colour,
+  pin, fold, appearance, strings and spawn links from the old address to the
+  new one. A spawn claim whose parent moved SHALL name the new parent and keep
+  the old one in `moved_from`, so the child's live token naming the old parent
+  neither replaces nor duplicates the claim. Observations SHALL never infer a
+  move.
 
 #### Scenario: Drag a desk to the other runtime
 
