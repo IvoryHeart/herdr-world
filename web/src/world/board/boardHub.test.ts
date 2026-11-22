@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { WORLD_AGENT_LAUNCH_EVENT } from "../agentProfiles";
 import { WORLD_MEMORY_EVENT } from "../memory/memoryEvents";
+import { apartmentsAction, libraryAction } from "../town/useTownCenter";
 import type { WorldObject } from "../worldObject";
 import { boardHubActions, boardLaunchSpace } from "./BoardHub";
 
@@ -45,6 +46,7 @@ function board(
     hostReady?: boolean;
     spaces?: ReturnType<typeof space>[];
     leaves?: ReturnType<typeof leaf>[];
+    residents?: number;
   } = {},
 ) {
   const spaces = options.spaces ?? [space("api"), space("docs")];
@@ -77,6 +79,7 @@ function board(
     onOpenSummary: () => calls.push(["summary"]),
     onNewWorkspace: () => calls.push(["workspace"]),
     toast: (kind, text) => calls.push(["toast", kind, text]),
+    residents: options.residents,
   });
   const action = (id: string) => actions.find((entry) => entry.id === id)!;
   return { world, actions, action, calls };
@@ -250,4 +253,26 @@ test("a selected unsupported agent or empty project has no Library action", () =
   expect(
     board({ leaves: [leaves[0]!] }).actions.some((a) => a.id === "library"),
   ).toBe(false);
+});
+
+test("the hub uses plain names; Town keeps Apartments and Library", () => {
+  const TOWN_NAMES = /Apartment|Librar|resident|Town center/i;
+  for (const options of [{}, { selectedId: "a" }, { residents: 3 }]) {
+    const { actions } = board(options);
+    for (const entry of actions)
+      expect(`${entry.label} ${entry.detail ?? ""}`).not.toMatch(TOWN_NAMES);
+  }
+  const { action } = board({ residents: 3 });
+  expect(action("apartments").label).toBe("Past sessions");
+  expect(action("apartments").detail).toBe("3 finished agents");
+  expect(board({ residents: 1 }).action("apartments").detail).toBe(
+    "1 finished agent",
+  );
+  expect(board().action("apartments").detail).toBeUndefined();
+  expect(action("library").label).toBe("Memory");
+  expect(board({ selectedId: "docs" }).action("library").label).toBe("Memory");
+  // Town's own actions keep their building names.
+  expect(apartmentsAction(3).label).toBe("Apartments");
+  expect(apartmentsAction(3).detail).toBe("3 residents");
+  expect(libraryAction().label).toBe("Library");
 });

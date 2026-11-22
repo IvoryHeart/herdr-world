@@ -79,7 +79,7 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     ],
     place: "town",
     where:
-      "Town, the building beside the town center; also Apartments in the town center ring and Board's hub",
+      "Town, the building beside the town center; also Apartments in the town center ring, and Past sessions in Board's hub",
     control: "town.apartments",
     since: "0.3.6",
     // On a phone the building is below the first view: ALL brings it in.
