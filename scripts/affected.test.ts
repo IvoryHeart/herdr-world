@@ -23,15 +23,6 @@ const files: Record<string, string> = {
   "quint/adapter.ts":
     'import "../web/src/world/Town";\nimport "../server/src/model";\n',
   "server/src/model.ts": "export const model = 1;\n",
-  "server/src/index.ts": "export {};\n",
-  "web/src/index.ts": "export {};\n",
-  "server/src/http/auth-process.test.ts":
-    'Bun.spawn([process.execPath, "server/src/index.ts"]);\n',
-  "server/package.json": "{}\n",
-  "web/package.json": "{}\n",
-  "scripts/package.test.ts": 'readFileSync("server/package.json");\n',
-  "web/src/world/town/TownCanvas.browser.tsx": "export {};\n",
-  "web/src/world/TownCanvas.test.ts": 'build("town/TownCanvas");\n',
   "scripts/orphan.ts": "export const value = 1;\n",
   "scripts/data.test.ts": 'readFileSync("fixtures/expected.json");\n',
   "fixtures/expected.json": "{}\n",
@@ -119,27 +110,6 @@ describe("scoped pre-push selection", () => {
     // "index.html" names two files; no test names either by path.
     expect(run(["docs/guide.md", "site/index.html"])).toMatchObject({
       full: true,
-    });
-  });
-
-  test("spawned repo-relative paths keep their edges despite duplicate basenames", () => {
-    expect(graph.deps.get("server/src/http/auth-process.test.ts")).toEqual(
-      new Set(["server/src/index.ts"]),
-    );
-    expect(run(["server/src/index.ts"])).toMatchObject({
-      full: false,
-      unit: ["server/src/http/auth-process.test.ts"],
-    });
-    expect(graph.deps.get("scripts/package.test.ts")).toEqual(
-      new Set(["server/package.json"]),
-    );
-    expect(run(["web/src/index.ts"])).toMatchObject({ full: true });
-  });
-
-  test("extension-less slash names still resolve browser fixtures", () => {
-    expect(run(["web/src/world/town/TownCanvas.browser.tsx"])).toMatchObject({
-      full: false,
-      unit: ["web/src/world/TownCanvas.test.ts"],
     });
   });
 

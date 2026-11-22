@@ -17,14 +17,9 @@ export async function discoverWorldBrowserEntries(
 async function entryDirectory(
   entry: WorldBrowserEntry,
   root: string,
-  source = join(import.meta.dir, ".."),
+  source?: string,
 ) {
-  if (
-    !/^[A-Za-z][\w-]*(?:\/[A-Za-z][\w-]*)*$/.test(entry) ||
-    !(await discoverWorldBrowserEntries(join(source, dirname(entry)))).includes(
-      basename(entry),
-    )
-  )
+  if (!(await discoverWorldBrowserEntries(source)).includes(entry))
     throw new Error(`Unknown World browser entry: ${entry}`);
   return join(root, entry);
 }
@@ -80,7 +75,7 @@ export async function buildWorldBrowserBundle(
   }
   await Bun.write(
     join(directory, "index.html"),
-    `<link rel="stylesheet" href="/${basename(entry)}.browser.css"><script type="module" src="/${basename(entry)}.browser.js"></script>`,
+    `<link rel="stylesheet" href="/${entry}.browser.css"><script type="module" src="/${entry}.browser.js"></script>`,
   );
   return { directory, assets };
 }
