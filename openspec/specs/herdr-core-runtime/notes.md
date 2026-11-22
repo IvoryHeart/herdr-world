@@ -154,7 +154,11 @@ no control for it. Platform and harness limits apply across the table.
   peek; on Board, dropping a single-terminal card on another runtime's tab
   works too. World starts the agent's harness in that room with its
   conversation resumed (`claude --resume`, `codex resume`) in the agent's
-  folder. With nothing to resume (a plain terminal, or an agent World cannot
+  folder. For a core agent World finds the conversation from a session linked
+  in its Chat, Claude's process record, the rollout file Codex holds open
+  (its name carries the session ID), or the launch arguments; a Codex that
+  no longer holds its rollout open needs its session linked in Chat first.
+  With nothing to resume (a plain terminal, or an agent World cannot
   find a conversation for) World first says the conversation won't continue;
   once you confirm, it starts a new shell, or the same harness fresh, in the
   same folder. It waits until the new one is
