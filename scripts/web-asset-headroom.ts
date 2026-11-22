@@ -7,7 +7,9 @@
  * - `pr`: build the PR's base and its merge with the PR, record the delta and
  *   judge base + delta.
  * - `main`: build main, then re-judge every open PR's recorded delta on top of
- *   it, so a PR that fit yesterday's main shows red once main has grown.
+ *   it, so a PR that fit yesterday's main shows red once main has grown. A PR
+ *   (or the branch it is stacked on) may raise the budget in a reviewed change;
+ *   main's run keeps the larger of main's budget and the one the PR recorded.
  *
  * Above 95 % of a budget the status stays green but says so.
  */
@@ -59,6 +61,40 @@ export function parseDelta(description: string): Size | undefined {
   return match
     ? { bytes: Number(match[1]), files: Number(match[2]) }
     : undefined;
+}
+
+/**
+ * The budget a status was judged against, as its description shows it. The
+ * byte figure is rounded to 0.01 MiB; budgets are set in tenths of a MiB.
+ */
+export function parseBudget(description: string): Size | undefined {
+  const match = /\/(\d+\.\d+) MiB, \d+\/(\d+) files/.exec(description);
+  return match
+    ? { bytes: Math.round(Number(match[1]) * MiB), files: Number(match[2]) }
+    : undefined;
+}
+
+/**
+ * Main's re-judging of a PR's recorded status. A PR that raises the budget
+ * (directly or through the branch it is stacked on) was judged against its own
+ * budget, which applies once it merges; main's budget applies when it is larger.
+ * The verdict's description records the budget used, so it carries forward.
+ */
+export function rejudge(
+  main: Size,
+  recordedDescription: string,
+  budget: Size = BUNDLE_BUDGET,
+) {
+  const delta = parseDelta(recordedDescription);
+  if (!delta) return undefined;
+  const recorded = parseBudget(recordedDescription);
+  const effective = recorded
+    ? {
+        bytes: Math.max(budget.bytes, recorded.bytes),
+        files: Math.max(budget.files, recorded.files),
+      }
+    : budget;
+  return judge(main, delta, effective);
 }
 
 /**
@@ -267,9 +303,8 @@ async function main() {
       ]),
     ) as Array<{ number: number; headRefOid: string }>;
     for (const pull of pulls) {
-      const delta = parseDelta(await recorded(repo, pull.headRefOid));
-      if (!delta) continue; // Not measured yet; its own PR run will.
-      const verdict = judge(current, delta);
+      const verdict = rejudge(current, await recorded(repo, pull.headRefOid));
+      if (!verdict) continue; // Not measured yet; its own PR run will.
       console.info(`#${pull.number}: ${verdict.description}`);
       await status(
         repo,

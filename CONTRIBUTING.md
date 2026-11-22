@@ -605,7 +605,8 @@ current main and fails if together they would exceed the bundle budgets in
 open PRs, so a PR that fit an older main turns red once main has grown. A
 stacked PR that merged newer main than its base branch has is measured against
 that base with the same main merged in, so main's growth is not counted twice.
-Trim, or raise the budget in a reviewed change, before merging.
+Trim, or raise the budget in a reviewed change, before merging. Main's re-judging
+keeps a budget the PR (or its stacked base) raised, as recorded in its status.
 
 Source files may not regrow. `bun run check:size` (part of `check` and the
 static lane) allows at most 1000 lines per non-test source file; larger files are

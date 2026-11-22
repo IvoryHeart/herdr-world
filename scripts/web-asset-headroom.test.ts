@@ -8,7 +8,9 @@ import {
   judge,
   mainDescription,
   parseDelta,
+  parseBudget,
   parseMain,
+  rejudge,
   settleVerdict,
 } from "./web-asset-headroom";
 
@@ -53,6 +55,37 @@ test("the recorded delta round-trips through the status description", () => {
   const main = mainDescription({ files: 144, bytes: 13937949 });
   expect(parseDelta(main)).toBeUndefined();
   expect(parseMain(main)).toEqual({ files: 144, bytes: 13937949 });
+});
+
+test("main's re-judging keeps a budget the PR raised", () => {
+  const mainBudget = { files: 212, bytes: 15.6 * MiB };
+  const prBudget = { files: 212, bytes: 15.7 * MiB };
+  const main = { files: 203, bytes: 16354314 };
+  // Judged on its own run against the budget its branch raised.
+  const own = judge(
+    { files: 203, bytes: 16338191 },
+    { files: 1, bytes: 8746 },
+    prBudget,
+  );
+  expect(own.state).toBe("success");
+  expect(parseBudget(own.description)).toEqual({
+    files: 212,
+    bytes: Math.round(15.7 * MiB),
+  });
+  const again = rejudge(main, own.description, mainBudget);
+  expect(again?.state).toBe("success");
+  expect(again?.description).toContain("/15.70 MiB");
+  // The verdict keeps that budget for the next main push.
+  expect(rejudge(main, again!.description, mainBudget)?.state).toBe("success");
+  // A PR that did not raise the budget still meets main's.
+  const plain = judge(main, { files: 1, bytes: 8746 }, mainBudget);
+  expect(plain.state).toBe("failure");
+  expect(rejudge(main, plain.description, mainBudget)?.state).toBe("failure");
+  // Main raising its budget later applies to an older record.
+  expect(rejudge(main, plain.description, prBudget)?.state).toBe("success");
+  // Not measured yet.
+  expect(rejudge(main, "", mainBudget)).toBeUndefined();
+  expect(parseBudget(mainDescription(main))).toBeUndefined();
 });
 
 test("the workflow judges PRs and re-judges them on every main push", async () => {
