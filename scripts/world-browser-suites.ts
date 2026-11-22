@@ -108,6 +108,7 @@ export const webBrowserSuites = [
   "web/src/components/WorkspaceInspectorPortal.test.ts",
   "server/src/workspace/html-preview.browser.test.ts",
   "server/src/herdr-core/files.browser.test.ts",
+  "server/src/ide/webview-origin.browser.test.ts",
 ];
 /** Everything the browser workflow runs, for repository validation to skip. */
 export const browserWorkflowIgnorePattern = ignorePattern([

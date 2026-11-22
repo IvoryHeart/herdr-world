@@ -1,0 +1,33 @@
+{
+  "id": "ide-lifecycle",
+  "area": "IDE server lifecycle for the Code view",
+  "owner": "server/src/ide/instances.ts",
+  "requirement": "openspec/changes/world-code-view/specs/world-code-view/spec.md",
+  "properties": "Only Stop ends a server; every server that may run, a lost start included, is listed, counted and stoppable and survives a World restart; at most one server per folder per host; a route reaches only its issued instance and generation, a retired route never reaches a server again and nothing is retargeted; a removed SSH host shows as unreachable with a by-hand stop and Forget",
+  "existingTests": [
+    "quint/ide-lifecycle.test.ts",
+    "server/src/ide/instances.test.ts",
+    "server/src/ide/host.test.ts",
+    "server/src/ide/service.test.ts",
+    "server/src/ide/ide-route.test.ts",
+    "server/src/ide/proxy.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1036",
+  "technique": "design-model-with-production-replay",
+  "assessment": "Bounded model of two folders (local and SSH) under a one-server limit, with lost answers, ghost scripts, World restart, reconnects, connection removal, disable, forward drops, crashes and re-parented terminals, checked exhaustively by TLC in a default and a deep (SSH only, two faults) configuration. 300 sampled traces are replayed through the real IdeService and IdeInstances against a fake host; eight model flags each give a counterexample. Two counterexamples found in the first design (an Open queued past a connection removal, a look that forgot an unanswered start) were fixed and are kept as witnesses that the fixed service rejects and the service with each fix taken out follows.",
+  "status": "pending",
+  "remaining": "Independent review. Host scripts are taken from the model in replay and tested separately with real sh; the server stopping on its own after a timeout, timeouts and downloads are not modelled; one browser origin is covered by route tests, not the model.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/ide-lifecycle.qnt"],
+    "contracts": ["verification/contracts/ide-lifecycle.md"],
+    "tests": [
+      "quint/ide-lifecycle.test.ts",
+      "server/src/ide/instances.test.ts",
+      "server/src/ide/host.test.ts",
+      "server/src/ide/service.test.ts"
+    ],
+    "checks": ["bun run verification:gate"],
+    "review": "New design contract pending PR review."
+  }
+}

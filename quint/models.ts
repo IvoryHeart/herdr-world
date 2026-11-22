@@ -2,6 +2,7 @@
 export const verificationModels = [
   "effect-recovery",
   "herdr-core-runtime",
+  "ide-lifecycle",
   "space-admission",
   "browser-preparation",
   "observation-base",

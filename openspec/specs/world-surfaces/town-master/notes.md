@@ -46,11 +46,11 @@
   **?** beside the views (desktop), the views button's menu (phone),
   **Menu → Help** (Settings at Help; the command box finds it too), Board's
   **⋯ → Help** and Chat's **⋮** tools. Tabs: **What's new**, **Town**,
-  **Board**, **Chat** and **Everywhere**. Each entry has a picture of the real
+  **Board**, **Code**, **Chat** and **Everywhere**. Each entry has a picture of the real
   control (phone or desktop, light or dark, as your screen), its steps, where
   it lives and **Try**.
-- **Try** closes the help, switches to Town or Board when the entry lives
-  there, and rings the control for a moment. A Town control off camera (the
+- **Try** closes the help, switches to Town, Board or Code when the entry
+  lives there, and rings the control for a moment. A Town control off camera (the
   Apartments sign below a phone's first view) is flown into view at the same
   zoom; Town itself never scrolls. A control inside a closed menu
   rings the button that opens it. **Quiet agents** opens the Town board and
@@ -67,8 +67,8 @@
   `?whatsNewSince=0.3.0` shows what is new after 0.3.0, `?whatsNewSince=new`
   the first-run path; the address drops the parameter at once.
 - The same entries make [docs/HELP.md](../../../../docs/HELP.md) and the website's help
-  page. Help covers Town, Board, Chat and controls on every screen; other
-  views are not described there yet.
+  page. Help covers Town, Board, Code, Chat and controls on every screen;
+  Desk and Spaces are not described there yet.
 
   - **Town Master greeting**: each visit (World opening, or its page coming
     back on screen after 30 minutes or more hidden), the Town Master, a small

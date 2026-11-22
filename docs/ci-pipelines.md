@@ -246,7 +246,10 @@ Draft PR descriptions should pass `check:pr-body` before creation, using the sam
 policy functions as Validation scope.
 Pre-push also checks those policies against the complete PR diff and the existing
 PR body, or the intended body named by `HERDR_WORLD_PR_BODY`. Existing PRs use
-their immutable base commit, including stacked PRs. A first push without
+their immutable base commit, including stacked PRs. GitHub records that commit
+at the PR's last push, so when it is an ancestor of `origin/<base branch>` (the
+branch merged a newer base), the hook uses that newer commit, as CI does; a
+rewritten base keeps the recorded commit. A first push without
 a body must carry the fragment/capability notes changes needed to pass on their own.
 
 Main pushes keep a running check and retain only the newest pending run. Main

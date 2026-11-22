@@ -28,6 +28,9 @@ function fixtureExecutable(command: string, env: NodeJS.ProcessEnv): boolean {
 }
 
 export function guardURL(value: string | URL, call = "network"): void {
+  // Bun's `ws+unix://<socket>:<path>` names a socket, not a host.
+  const unix = /^(?:wss?|https?)\+unix:\/\/([^:]+)/.exec(String(value));
+  if (unix) return guardSocket(unix[1]!);
   const url = new URL(value);
   if (["file:", "data:", "blob:"].includes(url.protocol)) return;
   if (
