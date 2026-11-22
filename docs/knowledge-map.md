@@ -125,3 +125,4 @@ For recent contract gaps and evidence boundaries, see the
 | Behavioural verification | [Contract](../verification/README.md) | [Source](../quint/models.ts) | [Tests](../scripts/verification-coverage.test.ts) |
 | SSH forwarding | [Contract](foundation-guide.md#rpc-paths) | [Source](../server/src/service/forward-service.ts) | [Tests](../server/src/bridge/forward-owner.test.ts) |
 | Agent workflow and asks | [Contract](agent-development.md) | [Source](../server/src/cli/world.ts) | [Tests](../server/src/cli/world.test.ts) |
+| Feature discovery and web feature slots | [Guide](development.md) | [Index script](../scripts/features.ts), [web slots](../web/src/features/FeatureHosts.tsx) | [Tests](../scripts/features.test.ts), [slots](../web/src/features/FeatureHosts.test.ts), [browser](../web/src/world/FeatureHosts.browser.test.ts) |
