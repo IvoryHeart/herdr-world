@@ -1586,7 +1586,29 @@ async function run() {
     await checkTownCenter(host, check, waitFor);
   }
   if (scale === "places" && mode === "test") {
-    await checkTownPlaces(host, check, waitFor, phone);
+    await checkTownPlaces(host, check, waitFor, phone, async () =>
+      // GitHub signed out: the warehouse offers Integrations instead of Work.
+      worldSourcesStore.publishSettled({
+        observedAt: 2,
+        refreshing: false,
+        sources: [
+          {
+            id: "github",
+            label: "GitHub",
+            enabled: true,
+            state: "not_connected",
+            detail: "Synthetic sign-in needed",
+            checkedAt: Date.now(),
+            lastSuccessAt: null,
+            itemCount: 0,
+            config: { kind: "github", mergedDays: 7 },
+          },
+        ],
+        items: [],
+        links: [],
+        actions: [],
+      }),
+    );
     root.unmount();
     await settle();
     return;

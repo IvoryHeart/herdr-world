@@ -243,7 +243,8 @@
     actions and the same Escape, Back or press-outside close. An agent on a
     card opens as tapping it in Town does. With the GitHub source off, signed
     out or not yet answered, the warehouse is closed and says to connect
-    GitHub in **Integrations** (its sign opens them), with no crates and no
+    GitHub in **Integrations** (its sign and building open them in Town's
+    place window; `?townWarehouseFixture=off` shows this), with no crates and no
     counts; when a refresh fails it keeps the last list as unknown and says
     GitHub is out of date. On a phone it stands on the harbour's shore too,
     and a sign on the town center's right wing, in view at home zoom (a crate
@@ -318,7 +319,8 @@
   - Town's **places** open from their buildings as well as their signs:
     click or tap the post office, library, Apartments, observatory or
     warehouse house anywhere, and it opens what its sign opens (the
-    warehouse's building opens Integrations while GitHub is off, and nothing
+    warehouse's building opens Integrations, in the same window, while GitHub
+    is off, and nothing
     while it is still being read). Hovering a building lights its sign; the
     signs stay the keyboard targets. A phone's library and observatory fold
     to signs on the town center, so only their signs open them. The town
@@ -329,8 +331,8 @@
     topmost first; long content scrolls inside it. On a phone it is a sheet
     from the bottom edge that leaves a strip of Town visible above it. The
     post office opens **Needs you** in this frame; closing it leaves the Needs
-    you tab as it was (the top bar's counter and other openers still show
-    the tab).
+    you tab as it was, an answer typed but not sent included (the top bar's
+    counter and other openers still show the tab).
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to

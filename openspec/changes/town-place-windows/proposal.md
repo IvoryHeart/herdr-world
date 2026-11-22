@@ -16,7 +16,8 @@ dialogs).
   through the layer stack, and content that scrolls inside. On a phone the
   frame is a sheet from the bottom that keeps a strip of Town visible.
 - The post office opens Needs you in that frame; closing it returns the
-  Needs you tab to how it was. Other openers still show the tab.
+  Needs you tab to how it was, with any unsent answer. Other openers still
+  show the tab. The warehouse opens Integrations in it while GitHub is off.
 - What each window contains does not change. The town center keeps its
   radial menu; the Town summary stays a managed window.
 

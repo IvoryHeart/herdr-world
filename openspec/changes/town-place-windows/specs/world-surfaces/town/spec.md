@@ -25,7 +25,8 @@ sign opens, as a press on the sign does.
 #### Scenario: Warehouse building follows its sign
 
 - **WHEN** the GitHub source is off and the user taps the warehouse building
-- **THEN** Integrations opens, as the warehouse's sign does
+- **THEN** Integrations opens in the place window, as the warehouse's sign
+  opens it
 
 ### Requirement: One Town place window
 
@@ -40,8 +41,10 @@ size over dimmed Town, with the same header, title and close button.
   growing it or going full screen; on a phone the frame SHALL be a sheet
   from the bottom edge, full width, that keeps a strip of Town visible above
   it; what each window contains SHALL be unchanged; the post office's Needs
-  you window SHALL leave the Needs you tab as it was when it closes and SHALL
-  not be remembered across reloads
+  you window SHALL leave the Needs you tab as it was when it closes, SHALL
+  keep an answer typed but not sent when it opens over the tab or closes
+  back to it, and SHALL not be remembered across reloads; a press on dimmed
+  Town around the window SHALL close it
 
 #### Scenario: Same frame for every place
 

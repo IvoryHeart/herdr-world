@@ -18,12 +18,15 @@ type Box = { x0: number; y0: number; x1: number; y1: number };
  * same frame. On a desktop it is a centred modal of one size over dimmed
  * Town; on a phone a sheet from the bottom that keeps a strip of Town above
  * it. Hovering a building lights its sign, and Escape closes the window.
+ * `disconnect` then signs GitHub out: the warehouse building opens
+ * Integrations, in the same frame.
  */
 export async function checkTownPlaces(
   host: HTMLElement,
   check: (condition: boolean, message: string) => void,
   waitFor: (condition: () => boolean, message: string) => Promise<void>,
   phone: boolean,
+  disconnect: () => Promise<void>,
 ) {
   const town = () => window.__HERDR_TOWN_RENDERER__!;
   const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
@@ -180,11 +183,11 @@ export async function checkTownPlaces(
   };
 
   const frames: { key: string; box: DOMRect }[] = [];
-  for (const key of keys) {
+  const press = async (key: TownPlaceKey, name: string) => {
     await bringIntoView(town().layout!.places[key]!);
     const at = pointOn(town().layout!.places[key]!);
     check(at !== null, `the ${key} building is not on screen to press`);
-    if (!at) continue;
+    if (!at) return;
     if (!phone) {
       pointer("pointermove", at);
       await waitFor(
@@ -197,11 +200,11 @@ export async function checkTownPlaces(
     }
     pointer("pointerdown", at);
     pointer("pointerup", at);
-    const selector = `.modal.place-window[data-place-window="${WINDOWS[key]}"]`;
+    const selector = `.modal.place-window[data-place-window="${name}"]`;
     const frame = () => document.querySelector<HTMLElement>(selector);
     await waitFor(
       () => frame() !== null,
-      `a press on the ${key} building opened no ${WINDOWS[key]} window`,
+      `a press on the ${key} building opened no ${name} window`,
     );
     const win = frame()!;
     check(
@@ -240,7 +243,7 @@ export async function checkTownPlaces(
       `the ${key} window's content does not scroll inside it`,
     );
     const box = win.getBoundingClientRect();
-    frames.push({ key, box });
+    frames.push({ key: name, box });
     if (phone)
       check(
         Math.abs(box.bottom - innerHeight) <= 1 &&
@@ -271,7 +274,21 @@ export async function checkTownPlaces(
         clientX: rect().left + 2,
         clientY: rect().top + 2,
       });
-  }
+  };
+  for (const key of keys) await press(key, WINDOWS[key]);
+  // Without GitHub the warehouse opens Integrations, still in the one frame.
+  await disconnect();
+  await waitFor(
+    () =>
+      host
+        .querySelector(".town-warehouse-sign")
+        ?.getAttribute("aria-label")
+        ?.includes("connect GitHub") ?? false,
+    "the warehouse sign did not show GitHub signed out",
+  );
+  // A second press on the same spot this soon would be a double tap (zoom).
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  await press("warehouse", "integrations");
   const [first] = frames;
   for (const { key, box } of frames)
     check(

@@ -12,7 +12,8 @@ import "./placeWindow.css";
  * actions, the close button); content that needs more room scrolls inside
  * it. On a phone it is a sheet from the bottom that keeps a strip of the view
  * above it. It is a layer (layerStack.ts): Escape and Back close the top
- * window first, then whatever is under it.
+ * window first, then whatever is under it; a press on the dimmed view
+ * around it closes it.
  */
 export function PlaceWindow({
   name,
@@ -54,7 +55,14 @@ export function PlaceWindow({
       ref.current?.focus({ preventScroll: true });
   }, []);
   return createPortal(
-    <div className="modal-backdrop place-window-backdrop">
+    <div
+      className="modal-backdrop place-window-backdrop"
+      // A press on dimmed Town around the window (on a phone, the strip
+      // above the sheet) closes it, as a press outside a layer does.
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <div
         ref={ref}
         className={
