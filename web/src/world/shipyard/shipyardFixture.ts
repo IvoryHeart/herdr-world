@@ -16,13 +16,17 @@ import {
  * reloads. The page drops the parameter at once. Values:
  *
  * - (none) or `ready`: passing main, four changes waiting, five releases
- *   (one a prerelease), three running Worlds (one stopped reporting).
+ *   (one a prerelease), three running Worlds (one stopped reporting). Three
+ *   open projects with releases, each a lane in Town, a fourth with none
+ *   yet (example-org/notes), which has no lane, and a fifth with no GitHub
+ *   remote (scratch-notes), listed as such in the Releases tab.
  * - `failing`: main's latest checks failed.
  * - `stale`: GitHub's last refresh failed; the old pipeline stays, labelled.
  * - `limited`: more changes than one read proves; the list is partial.
  * - `off`: GitHub is switched off in Integrations; only running Worlds show.
- * - `empty`: nothing suggested and nothing running yet.
- * - `many`: sixteen projects, more lanes than a town's sea holds.
+ * - `empty`: no project open and nothing running yet.
+ * - `many`: sixteen projects with releases, more lanes than a town's sea
+ *   holds, and three open folders past World's limit, not read.
  * - `offline`: the first read is `ready`; every later read fails as if
  *   World stopped answering (press "Read GitHub again" to see it at once).
  *
@@ -115,6 +119,12 @@ export const FIXTURE_REPOS = [
   "example-org/flywheels",
   "example-org/bearings",
 ] as const;
+/** An open project whose checkout has no GitHub remote. */
+export const FIXTURE_LOCAL_PROJECT = "scratch-notes";
+/** `many`: open folders past the limit, which World did not read. */
+export const FIXTURE_OMITTED = 3;
+/** An open project that has published no release: it gets no lane. */
+export const FIXTURE_UNRELEASED = "example-org/notes";
 const SITE = `https://example.com/${FIXTURE_REPO}`;
 const siteOf = (repo: string) => `https://example.com/${repo}`;
 const DAY = 86_400_000;
@@ -223,12 +233,29 @@ export function shipyardFixtureCatalog(
   mode: ShipyardFixtureMode,
   now: number,
 ): ShipyardCatalog {
+  const repositories =
+    mode === "empty"
+      ? []
+      : [
+          ...FIXTURE_REPOS.slice(0, mode === "many" ? FIXTURE_REPOS.length : 3),
+          FIXTURE_UNRELEASED,
+        ];
   return {
     observedAt: now,
-    repositories:
+    repositories,
+    projects:
       mode === "empty"
         ? []
-        : FIXTURE_REPOS.slice(0, mode === "many" ? FIXTURE_REPOS.length : 3),
+        : [
+            ...repositories.map((repo) => ({
+              repo,
+              name: repo.slice(repo.indexOf("/") + 1),
+              rooms: 1,
+            })),
+            { repo: null, name: FIXTURE_LOCAL_PROJECT, rooms: 1 },
+          ],
+    pending: 0,
+    omitted: mode === "many" ? FIXTURE_OMITTED : 0,
     instances: shipyardFixtureInstances(mode, now),
     limits: SHIPYARD_LIMITS,
   };
@@ -321,12 +348,42 @@ function otherPipeline(
   };
 }
 
+/** A project with main's checks and changes, but no release published yet. */
+function unreleasedPipeline(repo: string): ShipyardPipeline {
+  const site = siteOf(repo);
+  return {
+    repo,
+    main: {
+      branch: "main",
+      sha: sha("6"),
+      health: "pass",
+      workflows: { items: [], complete: true, detail: null },
+      url: `${site}/actions?query=branch%3Amain`,
+    },
+    releases: { items: [], complete: true, detail: null },
+    tags: { items: [], complete: true, detail: null },
+    waiting: {
+      state: "no_baseline",
+      baseline: null,
+      mainSha: sha("6"),
+      aheadBy: null,
+      commits: [],
+      pullRequests: [],
+      complete: false,
+      detail: "No release published yet.",
+      compareUrl: null,
+      pullRequestsUrl: `${site}/pulls?q=is%3Apr+is%3Amerged+base%3Amain`,
+    },
+  };
+}
+
 function pipeline(
   mode: ShipyardFixtureMode,
   now: number,
   repo: string = FIXTURE_REPO,
 ): ShipyardPipeline {
   const index = FIXTURE_REPOS.indexOf(repo as (typeof FIXTURE_REPOS)[number]);
+  if (repo === FIXTURE_UNRELEASED) return unreleasedPipeline(repo);
   if (index > 0) return otherPipeline(index, now, repo);
   const waiting = mode === "limited" ? 6 : 4;
   const failing = mode === "failing";

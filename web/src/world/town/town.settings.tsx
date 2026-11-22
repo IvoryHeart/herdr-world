@@ -7,9 +7,12 @@
  */
 
 import {
+  Building2,
   Bug,
+  Columns3,
   Focus,
   Hand,
+  Hourglass,
   Layers,
   MessageSquare,
   SunMoon,
@@ -18,11 +21,11 @@ import {
 } from "lucide-react";
 import { worldLocalStorage } from "../../browserStorage";
 import { defineSettings } from "../../settings/registry";
-import { openViewControl } from "../../settings/viewControls";
 import { requestTrace, traceRemembered } from "../devtools/trace";
 import {
   type OfficePreferences,
   readOfficePreferences,
+  townRoomsPerRow,
   WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
   writeOfficePreferences,
 } from "../officePreferences";
@@ -32,6 +35,14 @@ import {
   type TownDaylightMode,
   townDaylightMode,
 } from "./townDaylight";
+import { TOWN_QUIET_MINUTES } from "./townQuietWork";
+
+import {
+  setTownLens,
+  subscribeTownLens,
+  townLensSnapshot,
+} from "./townLensStore";
+import { TOWN_LENSES, TOWN_LENS_NAMES, type TownLensId } from "./townLens";
 
 const preferences = () => readOfficePreferences(worldLocalStorage);
 
@@ -113,6 +124,116 @@ defineSettings("town", [
   },
   {
     kind: "setting",
+    id: "town.quiet-agents",
+    category: "town",
+    title: "Quiet working agents",
+    description:
+      "Mark a working agent whose session has not moved for this long",
+    words: [
+      "quiet",
+      "stuck",
+      "hung",
+      "stalled",
+      "no progress",
+      "hourglass",
+      "threshold",
+      "idle working",
+    ],
+    icon: <Hourglass size={15} />,
+    scope: "browser",
+    subscribe: subscribePreferences,
+    control: {
+      type: "choice",
+      options: TOWN_QUIET_MINUTES.map((minutes) =>
+        minutes === 0
+          ? { value: "0", label: "Off", words: ["never", "disable"] }
+          : { value: String(minutes), label: `${minutes} minutes` },
+      ),
+      get: () => String(preferences().townQuietMinutes),
+      set: (_host, value) =>
+        updatePreferences({ townQuietMinutes: Number(value) }),
+    },
+  },
+  {
+    kind: "setting",
+    id: "town.buildings",
+    category: "town",
+    title: "Town buildings",
+    description:
+      "One building per machine with every runtime's rooms, or one per runtime",
+    words: [
+      "buildings",
+      "layout",
+      "host",
+      "machine",
+      "runtime",
+      "herdr-core",
+      "herdr-tui",
+      "separate buildings",
+    ],
+    icon: <Building2 size={15} />,
+    scope: "browser",
+    subscribe: subscribePreferences,
+    control: {
+      type: "choice",
+      options: [
+        {
+          value: "host",
+          label: "One per machine",
+          words: ["machine", "merged"],
+        },
+        {
+          value: "runtime",
+          label: "One per runtime",
+          words: ["separate", "herdr-core", "herdr-tui"],
+        },
+      ],
+      get: () => preferences().townBuildings,
+      set: (_host, value) =>
+        updatePreferences({
+          townBuildings: value as OfficePreferences["townBuildings"],
+        }),
+    },
+  },
+  {
+    kind: "setting",
+    id: "town.rooms-per-row",
+    category: "town",
+    title: "Rooms per row",
+    description:
+      "Auto keeps each building about square; a number sets every building",
+    words: [
+      "rooms per row",
+      "columns",
+      "building shape",
+      "square",
+      "tower",
+      "layout",
+      "auto",
+    ],
+    icon: <Columns3 size={15} />,
+    scope: "browser",
+    subscribe: subscribePreferences,
+    control: {
+      type: "choice",
+      options: [
+        { value: "auto", label: "Auto", words: ["square", "automatic"] },
+        { value: "2", label: "2" },
+        { value: "3", label: "3" },
+        { value: "4", label: "4" },
+        { value: "5", label: "5" },
+      ],
+      get: () => String(preferences().townRoomsPerRow),
+      set: (_host, value) =>
+        updatePreferences({
+          townRoomsPerRow: townRoomsPerRow(
+            value === "auto" ? value : Number(value),
+          ),
+        }),
+    },
+  },
+  {
+    kind: "setting",
     id: "views.agents-open",
     category: "town",
     title: "Opening an agent shows",
@@ -160,29 +281,23 @@ defineSettings("town", [
     },
   },
   {
-    kind: "setting",
+    kind: "panel",
     id: "town.master",
     category: "town",
     title: "Town master",
     description:
-      "The agent whose Chat Town docks from the start; empty docks none",
+      "The agent whose Chat docks from the start, shared across browsers",
     words: ["firstmate", "first mate", "dock chat", "main agent"],
     icon: <UserRound size={15} />,
-    scope: "browser",
-    subscribe: subscribePreferences,
-    control: {
-      type: "text",
-      maxLength: 64,
-      placeholder: "Agent name",
-      get: () => preferences().townMaster,
-      set: (_host, value) => updatePreferences({ townMaster: value }),
-    },
+    scope: "world",
+    alsoOn: "Sounds: the Town master agent picker",
+    open: (host) => host.openPanel("sounds"),
   },
   {
     kind: "setting",
     id: "town.greeting",
     category: "town",
-    title: "Town master greeting",
+    title: "Greeting on start",
     description: "Hello and what changed since you left, on each visit",
     words: ["welcome", "since you left", "show on start"],
     icon: <Hand size={15} />,
@@ -195,9 +310,7 @@ defineSettings("town", [
     },
   },
   {
-    // Town's lens is chosen on Town and starts in Attention on every visit,
-    // so Settings takes you to the chooser rather than holding a value.
-    kind: "panel",
+    kind: "setting",
     id: "town.lenses",
     category: "town",
     title: "Town lenses",
@@ -217,7 +330,17 @@ defineSettings("town", [
     ],
     icon: <Layers size={15} />,
     alsoOn: "Town: L, or the Lenses action on the ring",
-    open: () => openViewControl("town", "town.lenses"),
+    scope: "browser",
+    subscribe: subscribeTownLens,
+    control: {
+      type: "choice",
+      options: TOWN_LENSES.map((value) => ({
+        value,
+        label: TOWN_LENS_NAMES[value],
+      })),
+      get: () => townLensSnapshot().lens,
+      set: (_host, value) => setTownLens(value as TownLensId),
+    },
   },
   {
     kind: "setting",

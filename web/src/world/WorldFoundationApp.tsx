@@ -239,6 +239,15 @@ export default function WorldFoundationApp() {
     };
   }, []);
 
+  // The view on <html> too, for surfaces portaled to <body> (the phone's
+  // Needs you sheet). `body:has(.world-foundation-shell[data-view])` would
+  // restyle the page on every DOM change, typing included (#1231).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-world-view", view);
+    return () => root.removeAttribute("data-world-view");
+  }, [view]);
+
   useEffect(() => {
     // The root, retired views (/office, /graph, /tree) and unknown paths
     // show their view's canonical address; Back does not return to them.

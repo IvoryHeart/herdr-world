@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import { createRpcDispatcher } from "./rpc-dispatch";
-import { composeFeatures } from "../features/compose";
-import type { FeatureKernel, FeatureRpcHandler } from "../features/contract";
+import { withFeatures } from "../testing/features";
+import type { FeatureRpcHandler } from "../features/contract";
 import type { RpcServices } from "../rpc/context";
 import { createLegacyRoutingLogger } from "../connections/protocol";
 
@@ -10,25 +10,24 @@ test("admission refuses unregistered feature handlers before routing; presence k
   const ws = {} as ServerWebSocket<unknown>;
   const clients = new Set([ws]);
   const replies: any[] = [];
-  const handlers = new Map<string, FeatureRpcHandler>(
-    composeFeatures({} as FeatureKernel).rpc,
-  );
+  const services = withFeatures({
+    clients,
+    snapshotAdmission: { acknowledge: () => false },
+    connectionManager: {},
+    markRpcError() {},
+    safeSend: (_ws: unknown, line: string) => {
+      replies.push(JSON.parse(line));
+      return true;
+    },
+  } as unknown as RpcServices);
+  const handlers = new Map<string, FeatureRpcHandler>(services.featureRpc);
   let called = 0;
   handlers.set("world.unregistered", () => {
     called++;
   });
+  services.featureRpc = handlers;
   const dispatch = createRpcDispatcher(
-    {
-      clients,
-      featureRpc: handlers,
-      snapshotAdmission: { acknowledge: () => false },
-      connectionManager: {},
-      markRpcError() {},
-      safeSend: (_ws: unknown, line: string) => {
-        replies.push(JSON.parse(line));
-        return true;
-      },
-    } as unknown as RpcServices,
+    services,
     createLegacyRoutingLogger({ log() {} }),
   );
   const call = (method: string) =>

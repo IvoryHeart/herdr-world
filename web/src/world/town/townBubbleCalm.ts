@@ -8,8 +8,8 @@
  *   bodies still wave and stamp; only the bubble waits its turn.
  * - Zoomed out (the overview), a patch of screen the size of a far bubble
  *   holds one bubble: the most urgent there (blocked, then a question, out
- *   of fuel, finished, the crowd, then the rest). One bubble still says
- *   something is there; zooming in shows each.
+ *   of fuel, finished, a quiet working agent or the crowd, then the rest).
+ *   One bubble still says something is there; zooming in shows each.
  */
 
 import type { townBubbleKind } from "./townBubbleKind";
@@ -36,6 +36,7 @@ const RANK: Record<TownBubbleKindName, number> = {
   ask: 1,
   fuel: 2,
   done: 3,
+  quiet: 4,
   curse: 4,
   confused: 5,
   sleep: 6,

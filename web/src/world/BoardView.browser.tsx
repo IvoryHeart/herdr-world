@@ -1,3 +1,5 @@
+import "./board/board.settings";
+import { registryEntry, type SettingsHost } from "../settings/registry";
 import {
   applyAppearance,
   type AppearanceTarget,
@@ -832,7 +834,6 @@ const hubDock = () => (
       world,
       selectedId: null,
       holder: null,
-      name: "",
       openChat: () => {},
       onOpenSummary: () => {},
       onNewWorkspace: () => {},
@@ -3608,6 +3609,53 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       await waitFor(
         () => boardEl().classList.contains("board-far"),
         "back to the overview",
+      );
+    },
+  ],
+  [
+    "Settings change the open Board",
+    async () => {
+      const settingsHost = {} as SettingsHost;
+      const surface = registryEntry("board.surface")!;
+      const pulses = registryEntry("board.pulses")!;
+      if (
+        surface.kind !== "setting" ||
+        surface.control.type !== "choice" ||
+        pulses.kind !== "setting" ||
+        pulses.control.type !== "toggle"
+      )
+        throw new Error("Missing live Board settings");
+      const before = boardEl();
+      surface.control.set(settingsHost, "whiteboard");
+      await waitFor(
+        () => boardEl().dataset.surface === "whiteboard",
+        "Settings surface updates the open Board",
+      );
+      surface.control.set(settingsHost, "blackboard");
+      await waitFor(
+        () => boardEl().dataset.surface === "blackboard",
+        "Cmd+K surface updates the open Board",
+      );
+      pulses.control.set(settingsHost, false);
+      await waitFor(
+        () => boardEl().classList.contains("board-no-pulse"),
+        "Settings stops open Board pulses",
+      );
+      check(boardEl() === before, "Settings must not remount the Board");
+      // The existing view control reads and changes the same store.
+      host
+        .querySelector<HTMLButtonElement>('[aria-label="Board settings"]')!
+        .click();
+      await waitFor(
+        () => !!host.querySelector('[role="menuitemcheckbox"]'),
+        "Board menu opens",
+      );
+      host
+        .querySelector<HTMLButtonElement>('[role="menuitemcheckbox"]')!
+        .click();
+      await waitFor(
+        () => !boardEl().classList.contains("board-no-pulse"),
+        "Board menu re-enables the shared pulses value",
       );
     },
   ],

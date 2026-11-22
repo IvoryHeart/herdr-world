@@ -146,8 +146,10 @@
 }
 /* The phone's search is one opaque sheet: the box, and its results hanging
    just below it over the top of the view, with the count once, beneath the
-   box. The view keeps its place underneath, so the map stays in sight. */
-body:has(> .world-view-search-overlay) .world-search-results {
+   box. The view keeps its place underneath, so the map stays in sight.
+   The overlay and the results flag themselves on <html> (rootFlag.ts): a
+   `body:has()` here restyled every paragraph on each typed key (#1231). */
+:root[data-world-search-overlay] .world-search-results {
   position: fixed;
   z-index: 999;
   top: calc(var(--world-search-overlay-top, 52px) + 46px);
@@ -160,15 +162,16 @@ body:has(> .world-view-search-overlay) .world-search-results {
   background: var(--panel, #202331);
   box-shadow: 0 12px 28px rgb(0 0 0 / 42%);
 }
-body:has(> .world-view-search-overlay) .world-search-results p {
+:root[data-world-search-overlay] .world-search-results p {
   color: var(--muted, #9da7b4);
   font-size: 11px;
 }
-body:has(> .world-view-search-overlay) .world-search-result {
+:root[data-world-search-overlay] .world-search-result {
   max-width: none;
   flex-basis: 100%;
 }
-body:has(.world-search-results)
+:root[data-world-search-results]
+  body
   > .world-view-search-overlay
   .world-view-toolbar-results {
   display: none;

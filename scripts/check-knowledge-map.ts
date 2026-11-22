@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { readCapabilities, type Capability } from "./where";
+import { readCapabilityNotes } from "./openspec-notes";
 
 export function changedPathsBetween(
   cwd: string,
@@ -38,7 +38,7 @@ export function changedPathsBetween(
 /** Exact files, directory prefixes (trailing /) or repository-relative globs. */
 export function assessKnowledgeMapImpact(
   changedPaths: readonly string[],
-  capabilities: readonly Pick<Capability, "codePaths">[],
+  capabilities: readonly { codePaths: string[] }[],
 ): { ok: boolean; uncovered: string[] } {
   const patterns = capabilities.flatMap((c) => c.codePaths);
   const uncovered = changedPaths.filter(
@@ -96,7 +96,10 @@ if (import.meta.main) {
       head,
       { includeDeleted: false },
     );
-    const result = assessKnowledgeMapImpact(changedPaths, readCapabilities());
+    const result = assessKnowledgeMapImpact(
+      changedPaths,
+      readCapabilityNotes(),
+    );
     if (!result.ok) {
       console.error(
         `Source files without a capability notes.md Code path:\n${result.uncovered.join("\n")}`,

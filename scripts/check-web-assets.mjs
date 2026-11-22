@@ -62,11 +62,14 @@ const maxFileCount = 212;
 // with main's Apartments and post-office work measures 16,270,139 bytes
 // (15.5164 MiB): 17,211 bytes above 15.5 MiB. Account for the combined
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
-// Board's element screens (#1030: cards, Add to Board, the reader; +34 KB,
-// all in the lazy Board chunk) on a base with Usage and Weather (16,338,191
-// bytes) measure 16,372,209 bytes (15.614 MiB), so 15.7 MiB; file,
-// help-picture and startup budgets unchanged (2026-11-21).
-const maxTotalBytes = 15.7 * 1024 * 1024;
+// Town's quiet-agent mark (#1130: rule, hourglass and Busy sub-line, all in
+// the lazy Town chunk) adds about 5 KB, still within 15.6 MiB (2026-11-21).
+// The Quiet agents help card's four pictures (#1220, about 90 KB) and #1198's Town
+// buildings took main past 15.6 MiB. The maintainer approved growth up to 20 MiB on 2026-11-22.
+// 16.5 MiB leaves headroom so feature PRs stop raising this line one by one,
+// until #1228 moves the budget into a reviewed data file. A bundle-size
+// assessment is tracked separately; file, help-picture and startup limits stay.
+const maxTotalBytes = 16.5 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two

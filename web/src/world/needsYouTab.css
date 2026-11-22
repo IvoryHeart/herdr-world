@@ -593,7 +593,7 @@ button.needs-you-icon:hover:not(:disabled) {
 /* Over Town the tab wears Town's skin: the agent window's token re-map
    (windows.css .world-managed-window.is-town-skin) and its 2px edge ring. */
 .world-foundation-shell[data-view="town"] .needs-you-tab,
-body:has(.world-foundation-shell[data-view="town"]) > .needs-you-tab {
+:root[data-world-view="town"] body > .needs-you-tab {
   --panel: #11151d;
   --panel-2: #273141;
   --border: #090c11;
@@ -619,7 +619,7 @@ body:has(.world-foundation-shell[data-view="town"]) > .needs-you-tab {
 }
 :is(
   .world-foundation-shell[data-view="town"] .needs-you-tab,
-  body:has(.world-foundation-shell[data-view="town"]) > .needs-you-tab
+  :root[data-world-view="town"] body > .needs-you-tab
 ) {
   .needs-you-head {
     border-bottom-color: var(--border-soft);

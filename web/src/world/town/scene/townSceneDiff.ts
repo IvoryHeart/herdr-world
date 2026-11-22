@@ -28,6 +28,11 @@ export type TownSceneState = {
   /** Agents the user opened, who walk back to their desks. */
   summonedKeys: ReadonlySet<string>;
   askingKeys?: ReadonlySet<string>;
+  /**
+   * Working agents whose sessions have not moved (townQuietWork.ts): still
+   * seated, typing stilled, an hourglass over their heads.
+   */
+  quietKeys?: ReadonlySet<string>;
   /** Agents in the bin, who leave by the front door (townBus.ts). */
   awayKeys?: ReadonlySet<string>;
   /**

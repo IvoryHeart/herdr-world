@@ -9,7 +9,7 @@ choices and the audit that later slices check against.
 
 - **The registry holds how to read and change a value, never the value.** Values
   stay in today's stores, so Settings, the view and any detail dialog show one value
-  and no migration of stored data is needed.
+  and no migration of stored data is needed for live view settings.
 - **Features register their own entries** with `defineSettings(source, entries)` in
   their own folder (`world/town/town.settings.tsx`, `world/board/board.settings.tsx`)
   and one import line in `settings/catalog.ts`.
@@ -25,8 +25,22 @@ choices and the audit that later slices check against.
   both list the same results.
 - **View controls stay on their view.** `settings/viewControls.ts` switches to the
   view and asks it to open the control; the view answers once, on mount or at once,
-  and a request expires after five seconds. Shared stores for these controls are
-  slice #1065.
+  and a request expires after five seconds. Board surface/pulses and Town lens
+  instead use subscribed module stores (#1065), shared with their existing controls.
+  Town's active lens survives same-page navigation; a fresh page starts in Attention
+  and remembers the last non-Attention lens for L and the ring.
+- **One Town master is the synced role.** Settings opens the existing Sounds picker;
+  Town and Board dock the exact connection/terminal holder without taking focus.
+  A legacy explicit browser name waits for loaded profiles and one unique current
+  match, preferring native name to label. An existing synced holder wins. The old
+  key is consumed before one qualified replacement-disabled RPC; storage refusal
+  prevents dispatch and RPC failure reports without replay. Other preference edits
+  preserve a pending name. The default implicit firstmate name is not imported.
+- **Migration evidence.** The migration matrix exhausts the synchronous admission,
+  deferral, consumption and failure branches; actual docking consumers have unit
+  and Town/Board browser checks. Assignment serialization and runtime generation
+  checks reuse the existing service contract. No new concurrent state machine is
+  introduced; the full verification gate retains authority and recovery coverage.
 - **Availability is live.** `useShownEntries` subscribes to every entry's source,
   so a dependent row appears when its parent setting changes.
 
