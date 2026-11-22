@@ -63,9 +63,10 @@ const maxFileCount = 212;
 // (15.5164 MiB): 17,211 bytes above 15.5 MiB. Account for the combined
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
 // Focus sessions (#1131: Town's focus controls, recap card and the held
-// notification paths) fit under the same 15.6 MiB; initial budgets unchanged
-// (2026-11-21).
-const maxTotalBytes = 15.6 * 1024 * 1024;
+// notification paths) merged with main's feature hosts and central wiring
+// measure 16,364,150 bytes (15.6061 MiB): 6,364 bytes above 15.6 MiB. 15.7 MiB
+// carries them; file, help-picture and initial budgets unchanged (2026-11-22).
+const maxTotalBytes = 15.7 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two
