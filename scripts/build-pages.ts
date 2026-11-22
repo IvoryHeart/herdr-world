@@ -7,7 +7,11 @@ import {
   verifySiteReferences,
   versionSiteAssets,
 } from "./pages-content";
-import { readCapabilities, renderFeatures, renderFeatureSite } from "./where";
+import {
+  readFeatureReference,
+  renderFeatures,
+  renderFeatureSite,
+} from "./pages-features";
 import { renderHelpSite } from "./help-docs";
 import { pagesBuildConfig, filmBuildConfig } from "./site-bundles";
 
@@ -63,7 +67,7 @@ for (const [source, destination] of assets) {
   await copyFile(sourcePath, join(assetDirectory, destination));
 }
 
-const features = renderFeatures(readCapabilities(root));
+const features = renderFeatures(readFeatureReference(root));
 await writeFile(join(root, "FEATURES.md"), features);
 await writeFile(join(outputDirectory, "FEATURES.md"), features);
 await mkdir(join(outputDirectory, "features"), { recursive: true });

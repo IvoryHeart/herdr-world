@@ -5,11 +5,11 @@ OpenSpec contracts and ordinary project checks. Agent work is dispatched by the 
 
 ## Find a feature
 
-Start with `bun run where "<words>"` or `openspec list --specs --json`.
-For example, `bun run where "drag core desk"` finds `world-surfaces/town-moves`,
-its requirement, TownCanvas drag entry point and core's town-move implementation.
-Add `--json` for capability IDs, spec/notes paths, requirement names and Code paths.
-Lookup reads current files at execution time; there is no committed index.
+Start with `openspec list --specs --json` for capabilities and
+`openspec list --json` for work in progress. Use `openspec show <id>` to inspect
+one. For example, read `world-surfaces/town`'s `spec.md` and `notes.md`, plus any
+relevant active change, to find quiet-agent contracts, preference storage and
+Town drawing.
 
 Read the capability's spec and `notes.md`, and inspect every listed surface: Town,
 Board, Spaces, Inspector, CLI, phone/desktop and both runtimes where named. Search
@@ -28,7 +28,11 @@ Repository rules and worktrees live in [AGENTS.md](../AGENTS.md); the helper
 rejects unsafe names and unknown refs. `bun run agent:worktree -- list` is read-only.
 
 Feature PRs add or update one `openspec/changes/<slug>/` with requirement deltas,
-the implementation and capability notes. Do not edit current `spec.md` files.
+the implementation and capability notes. Update the notes' Code list in that
+same PR, including new storage and rendering paths, while its contract delta is
+still active; do not wait for archival. Existing broad directory ownership proves
+source coverage, not that a feature's navigation is current. Do not edit current
+`spec.md` files.
 A main push queues one `bot/openspec-archive` PR: completed changes are applied
 and archived oldest merge date first; incomplete tasks stay active. A conflict
 restores that item's partial writes and stops the batch, retaining earlier
