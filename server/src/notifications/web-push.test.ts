@@ -279,6 +279,31 @@ test("logout revokes session-bound devices before later notifications are delive
   }
 });
 
+test("a focus session holds pushes: none queue while held, and they resume after", async () => {
+  const send = mock(async () => ({ statusCode: 201, body: "", headers: {} }));
+  const dir = mkdtempSync(join(tmpdir(), "herdr-world-push-focus-"));
+  let held = true;
+  const service = createWebPushService({
+    path: join(dir, "web-push.json"),
+    subject: "mailto:operator@example.com",
+    send,
+    held: () => held,
+  });
+  try {
+    await service.handle(request("POST", device("phone")));
+    service.notify(task, () => true);
+    await Promise.resolve();
+    expect(send).toHaveBeenCalledTimes(0);
+    held = false;
+    service.notify(task, () => true);
+    await Promise.resolve();
+    expect(send).toHaveBeenCalledTimes(1);
+  } finally {
+    service.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("completion and blocked preferences, stale runtimes and expired endpoints are isolated", async () => {
   const calls: Array<{ endpoint: string; payload: string }> = [];
   const expired = Promise.withResolvers<void>();

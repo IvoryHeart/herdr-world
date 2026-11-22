@@ -27,6 +27,7 @@ import {
 } from "../store";
 import { connectionSnapshot } from "./sessions";
 import { announceChange, burstDetail } from "../chimes/chimeCenter";
+import { focusHeld } from "../world/focus";
 import { bridge } from "../api";
 import { type HerdrTaskNotification } from "../herdrTaskNotification";
 import { type AssistantTaskNotification } from "../../../shared/assistant";
@@ -226,7 +227,9 @@ function maybeShowBrowserTaskNotification(
     title,
     { body, tag, ...(silent ? { silent: true } : {}) },
     target,
+    // Focus may begin while the worker is still being prepared (#1131).
     () =>
+      !focusHeld() &&
       state.taskNotificationsEnabled &&
       version === taskNotificationPreferenceVersion &&
       (scope === null || taskNotificationTargetIsCurrent(state, scope)),
@@ -304,6 +307,9 @@ function notifyTaskCompleted(
   tabs: Tab[],
   connectionId = state.activeConnectionId,
 ) {
+  // A focus session holds the chime, toast and notification; Town and
+  // Needs you still show it, and the recap counts it (#1131).
+  if (focusHeld()) return;
   const blocked = pane.agent_status === "blocked";
   const notify =
     state.taskNotificationsEnabled &&
@@ -417,6 +423,7 @@ function notifyHerdrTask(
   askGeneration?: number,
   askTerminalId?: string,
 ) {
+  if (focusHeld()) return;
   // A message for the owner follows the completed switch, as before.
   const notify =
     state.taskNotificationsEnabled &&
@@ -518,6 +525,7 @@ function notifyHerdrTask(
 }
 
 function notifyRangerTask(notification: AssistantTaskNotification) {
+  if (focusHeld()) return;
   const kind = notification.status === "succeeded" ? "completed" : "blocked";
   if (
     !state.taskNotificationsEnabled ||

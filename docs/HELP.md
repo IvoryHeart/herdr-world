@@ -15,6 +15,7 @@ Every World screen answers this too: press ? beside the views (on a phone, the v
 
 - [The town board as a chip](#town-board-chip)
 - [What's new from the Town Master](#town-master)
+- [Focus for a while](#town-focus)
 - [Apartments: finished agents](#town-apartments)
 - [Quiet agents](#town-quiet)
 - [What can I do here?](#world-help)
@@ -76,6 +77,21 @@ The Town Master greets you when you come back: what happened since you left, and
 3. Untick Show this on start to stop the greeting.
 
 Where: Town, beside the town board at the top left. Since 0.3.6.
+
+<a id="town-focus"></a>
+
+### Focus for a while
+
+![Focus for a while](../web/public/help/town.focus.desktop.light.webp)
+
+A focus session holds chimes, notifications and the tab count on every device while the crew keeps working. When it ends you hear one chime and get one recap.
+
+1. Open the town board from the chip in the top left corner.
+2. Under Focus, press 25 m, 45 m, 90 m or Until I stop.
+3. The chip shows headphones and the time left; press End now to stop early.
+4. When it ends, "While you focused" lists what arrived; each line opens Needs you.
+
+Where: Town, the town board at the top left; also the town center ring and Menu. Since 0.3.6.
 
 <a id="town-apartments"></a>
 
