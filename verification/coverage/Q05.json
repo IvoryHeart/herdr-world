@@ -1,0 +1,46 @@
+{
+  "id": "Q05",
+  "area": "RPC/HTTP routing",
+  "owner": "server/src/connections/rpc-routing.ts",
+  "requirement": "openspec/specs/runtime-federation/spec.md",
+  "properties": "Captured host/generation remains the dispatch owner; no fallback after explicit rejection",
+  "existingTests": [
+    "server/src/connections/protocol.test.ts",
+    "server/src/connections/session-link-routing.test.ts",
+    "server/src/connections/http-routing.test.ts",
+    "server/src/connections/runtime-process.test.ts",
+    "server/src/bridge/forward-rpc.test.ts",
+    "server/src/service/forward-dispatch.test.ts",
+    "server/src/bridge/herdr-client.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
+  "technique": "qualified-operation",
+  "assessment": "captured dispatch-time lease and explicit legacy omission boundary",
+  "status": "shared-model",
+  "remaining": "No model substitutes for endpoint parsing or HTTP stream cancellation; legacy compatibility is scoped separately from explicit admission.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/runtime-leases.qnt", "quint/runtime-control.qnt"],
+    "contracts": [
+      "verification/consumer-evidence.md",
+      "verification/composition.md"
+    ],
+    "tests": [
+      "server/src/connections/protocol.test.ts",
+      "server/src/connections/session-link-routing.test.ts",
+      "server/src/connections/http-routing.test.ts",
+      "server/src/connections/runtime-process.test.ts",
+      "server/src/bridge/forward-rpc.test.ts",
+      "server/src/service/forward-dispatch.test.ts",
+      "server/src/bridge/herdr-client.test.ts"
+    ],
+    "checks": ["bun run check", "bun run verification:check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "evidenceDecision": "Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams. Usage revalidation directly checks one-shot AbortSignal socket cancellation without expanding operation authority or the model domain. Candidate Roamgate transport consumers add explicit master/forward ownership, bounded session scheduling and qualified status reconciliation checks; existing model bounds and native-platform exclusions remain unchanged. Independent candidate acceptance is still required.",
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

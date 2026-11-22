@@ -376,7 +376,7 @@ History terminal input and mobile shell launching are mapped in the
 [foundation guide](foundation-guide.md) and [History guide](HISTORY.md#history-terminal-input).
 Start with [HistoryTerminalComposer](../web/src/components/HistoryTerminalComposer.tsx),
 [AgentLauncher](../web/src/components/AgentLauncher.tsx) and their Q09 consumers in
-[the coverage inventory](../verification/coverage.json).
+[the coverage inventory](../verification/coverage/).
 
 Desktop shortcut discovery lives in [the read-only cheat sheet](../web/src/components/ShortcutCheatSheet.tsx)
 and [its preset-derived rows and filtering](../web/src/shortcutCheatSheet.ts), with

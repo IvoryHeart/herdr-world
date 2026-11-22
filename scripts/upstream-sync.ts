@@ -298,7 +298,7 @@ function bodyFor(sync: Sync): string {
     `The upstream target is frozen until this PR merges or closes. Repair pass: ${sync.repair}/1.\n\n` +
     `Independent Codex review and all protected delivery/platform checks are required. ` +
     `Changes to workflow, agent, verification or script controls require human review.\n\n` +
-    `Behavioral evidence: integration follows verification/coverage.json; full CI remains mandatory. ` +
+    `Behavioral evidence: integration follows verification/coverage/; full CI remains mandatory. ` +
     `See the integration report below for affected contracts and focused evidence.\n\n` +
     `Agent execution: separate ephemeral Codex implementation and review sessions; model defaults; billed cost unknown.\n\n` +
     `<!-- upstream-sync ${JSON.stringify(sync)} -->\n`

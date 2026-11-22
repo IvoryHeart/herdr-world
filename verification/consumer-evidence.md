@@ -73,7 +73,7 @@ finite alternative evidence; no accepted Quint claim is expanded. Native CI and
 independent mapping/design review remain required. Herdr deduplication, power-loss
 safety and agent read/execution guarantees remain excluded.
 
-This reconciles the remaining baseline entries without treating a component model as a proof of its consumers. Each decision names the required real tests in `coverage.json`; existing accepted-delivery CI is baseline execution evidence. New candidate execution is reported in PR #188 and source-bound manifests. Environment-gated live/OS checks retain their prerequisites and may not be reported as locally executed. All Q01–Q43 mappings and alternatives are independently accepted in review 5516249164 within their stated bounds. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+This reconciles the remaining baseline entries without treating a component model as a proof of its consumers. Each decision names the required real tests in `coverage/`; existing accepted-delivery CI is baseline execution evidence. New candidate execution is reported in PR #188 and source-bound manifests. Environment-gated live/OS checks retain their prerequisites and may not be reported as locally executed. All Q01–Q43 mappings and alternatives are independently accepted in review 5516249164 within their stated bounds. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 
 ## Shared model consumers
 
@@ -463,7 +463,7 @@ jitter, stable healthy siblings, explicit finite retry policy and stop/remove/
 replacement/cleanup cancellation. Continuing default retry does not establish
 infinite progress or model OS/network failure. Static markup/injected recovery
 verbs check explicit truthful controls; real viewport and SSH outcomes remain
-closing browser/platform acceptance. See coverage.json for the required tests.
+closing browser/platform acceptance. See coverage/ for the required tests.
 
 `ssh-preflight-recovery.test.ts` exercises the actual remote HOME discovery,
 subprocess error boundary and profile scheduler together. Synthetic local child
@@ -548,7 +548,7 @@ worktree replacement. `WorldInspectorResourceResume.test.ts` mounts the real
 Inspector, Files/Changes children and gate, retaining three file rows through
 null worktree binding and delayed same-target readmission, while rejecting
 late old-binding responses after replacement. These runners are explicitly
-mapped to Q06, Q07, Q08, Q16 and Q43 in `coverage.json`. Layout, endpoint-presentation and recovery unit tests
+mapped to Q06, Q07, Q08, Q16 and Q43 in `coverage/`. Layout, endpoint-presentation and recovery unit tests
 cover exact geometry owners, stale parser completion and bounded retry budgets.
 These direct browser and consumer checks are needed for DOM lifetime and event
 timing; the existing ownership models and their mandatory consumers remain

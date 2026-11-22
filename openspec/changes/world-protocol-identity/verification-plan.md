@@ -7,7 +7,7 @@ This plan follows `verification/README.md` and the contract template.
   behaviour, with replay adapters that drive the real code, required witnesses on
   production replay, and negative controls.
 - **Mapping goes with the stage.** Each implementing PR updates
-  `verification/coverage.json`, the affected contracts and the mandatory consumer tests,
+  `verification/coverage/`, the affected contracts and the mandatory consumer tests,
   and runs the complete `verification:gate`. Focused `--case` runs do not replace it.
 
 This PR changes no current contract, model, adapter or coverage entry. It only fixes

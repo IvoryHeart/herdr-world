@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { readCoverageScope } from "./coverage-scope";
+import { isCoveragePath } from "./coverage";
 
 /**
  * What a change affects, for the scoped pre-push gate: the unit tests and
@@ -27,7 +28,7 @@ const FULL = [
   /^bun\.lockb?$/,
   /^bunfig\.toml$/,
   /^\.github\/workflows\//,
-  /^scripts\/(?:validation-scope|coverage-scope|ci-validation-proof|ci-tests|ci-verification|ci-reuse-full-check|ci-delivery-result|check-pr-body|file-size-ratchet)\.ts$/,
+  /^scripts\/(?:validation-scope|coverage|coverage-scope|ci-validation-proof|ci-tests|ci-verification|ci-reuse-full-check|ci-delivery-result|check-pr-body|file-size-ratchet)\.ts$/,
   /(?:^|\/)tsconfig[^/]*\.json$/,
   /^web\/vite\.config\.ts$/,
   /^web\/index\.html$/,
@@ -202,8 +203,7 @@ export function affected(
     if (FULL.some((rule) => rule.test(path)))
       return { full: true, reason: `${path} affects every check` };
     if (
-      (path !== "verification/coverage.json" &&
-        VERIFICATION.some((rule) => rule.test(path))) ||
+      (!isCoveragePath(path) && VERIFICATION.some((rule) => rule.test(path))) ||
       models(path)
     )
       verification = true;
@@ -238,7 +238,7 @@ export function affected(
     if (covered) {
       verification ||=
         models(path) ||
-        (path !== "verification/coverage.json" &&
+        (!isCoveragePath(path) &&
           VERIFICATION.some((rule) => rule.test(path))) ||
         [...reach.keys()].some((file) => file.startsWith("quint/"));
       continue;
@@ -257,7 +257,7 @@ export function affected(
 }
 
 /**
- * Whether verification/coverage.json names a path as a contract owner: a
+ * Whether verification/coverage/ names a path as a contract owner: a
  * file, or a directory written with a trailing slash.
  */
 export function coverageOwners(root: string) {
