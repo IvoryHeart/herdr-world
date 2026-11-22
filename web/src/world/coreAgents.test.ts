@@ -21,6 +21,7 @@ import {
 } from "./worldObject";
 import { viewOnlyMessage } from "./viewOnly";
 import { projectAgent } from "./officeAgent";
+import { projectBoard } from "./board/boardModel";
 import { projectWorldOffice } from "./herdrOfficeProjection";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import {
@@ -274,6 +275,20 @@ describe("core agents in World's views", () => {
     const core = world.leaves.filter((l) => l.connectionId === "box-core");
     expect(core.length).toBeGreaterThan(0);
     expect(core.some((leaf) => leaf.watch)).toBe(false);
+  });
+
+  test("Board shows a live core host live, and a failed one stale", async () => {
+    // A healthy core host is never TUI-actionable; World controls it through
+    // world.core.*, so Board offers New workspace there, not Reconnect.
+    const live = projectBoard(await worldOf()).hostByKey.get("box-core");
+    expect(live?.stale).toBe(false);
+    expect(live?.connectionState).toBe("ready");
+    const failed = projectBoard(await worldOf(true)).hostByKey.get("box-core");
+    expect(failed?.stale).toBe(true);
+    // The TUI host here holds no runtime lease: stale, as before.
+    expect(projectBoard(await worldOf()).hostByKey.get("tui")?.stale).toBe(
+      true,
+    );
   });
 
   test("Needs you lists the waiting core agent; Desk lists every core agent", async () => {

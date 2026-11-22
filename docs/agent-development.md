@@ -3,10 +3,60 @@
 Herdr World uses native coding-agent conversations, repository instructions, current
 OpenSpec contracts and ordinary project checks. Agent work is dispatched by the separate herdr-crew dispatcher; this repo only defines how code is built, tested and delivered.
 
-For source ownership use the [knowledge map](knowledge-map.md), then the
-[foundation guide](foundation-guide.md) when work crosses modules. Repository
-rules and worktree creation live in [AGENTS.md](../AGENTS.md). The worktree helper
-rejects unsafe names and unknown refs; `bun run agent:worktree -- list` is read-only.
+## Find a feature
+
+Start with `bun run where "<words>"` or `openspec list --specs --json`.
+For example, `bun run where "drag core desk"` finds `world-surfaces/town-moves`,
+its requirement, TownCanvas drag entry point and core's town-move implementation.
+Add `--json` for capability IDs, spec/notes paths, requirement names and Code paths.
+Lookup reads current files at execution time; there is no committed index.
+
+Read the capability's spec and `notes.md`, and inspect every listed surface: Town,
+Board, Spaces, Inspector, CLI, phone/desktop and both runtimes where named. Search
+all documentation matches without `-m`. Contracts live only in OpenSpec. Notes
+contain surfaces, owning Code paths, tests, pitfalls and usage reference. Code paths
+are repository-relative exact files, directories ending in `/`, or globs. The PR
+check rejects each added or modified source file with no matching capability Code path.
+Existing subsystem directories have owners; new unowned subsystems must add one.
+Deleted paths no longer need an owner.
+
+The retired knowledge map has no replacement file. `FEATURES.md` is ignored and
+generated from specs and usage notes by `bun run build:site`, alongside the public
+`/features/` page. Edit capability notes or learner steps in `docs/TUTORIAL.md`.
+Use the [foundation guide](foundation-guide.md) for cross-module data flows.
+Repository rules and worktrees live in [AGENTS.md](../AGENTS.md); the helper
+rejects unsafe names and unknown refs. `bun run agent:worktree -- list` is read-only.
+
+Feature PRs add or update one `openspec/changes/<slug>/` with requirement deltas,
+the implementation and capability notes. Do not edit current `spec.md` files.
+A main push queues one `bot/openspec-archive` PR: completed changes are applied
+and archived oldest merge date first; incomplete tasks stay active. A conflict
+restores that item's partial writes and stops the batch, retaining earlier
+successful archives in the PR. Even an empty stopped batch fails the workflow and
+names the stopped change in its log and summary. Resolve the named delta in a normal PR
+or on the bot branch before the next batch; the bot merges main without overwriting
+branch repairs. Merge dates use first appearance on main, independent of timezone
+or later edits. The bot never pushes main or merges; independent review still applies.
+The pinned CLI has no bulk command, so `scripts/archive-changes.ts` sequences its
+validated archive command. The feature-map migration archives the five completed
+legacy deltas with `--skip-specs`: they were already synchronized under the old
+rule, and current contracts include subsequent extensions that must be preserved.
+Future batches apply specs normally. Leave the CLI upgrade to its separate change.
+
+## OpenSpec skills
+
+Use the repository's adapted skills:
+
+- [world-openspec-explore](../.agents/skills/world-openspec-explore/SKILL.md) to investigate.
+- [world-openspec-update-change](../.agents/skills/world-openspec-update-change/SKILL.md) to revise a plan.
+- [world-openspec-apply-change](../.agents/skills/world-openspec-apply-change/SKILL.md) to implement authorized tasks.
+- [world-openspec-sync-specs](../.agents/skills/world-openspec-sync-specs/SKILL.md) for the post-merge archive PR.
+- [world-openspec-archive-change](../.agents/skills/world-openspec-archive-change/SKILL.md) for the post-merge archive PR.
+
+These live in `.agents/skills/`; `.claude/skills/` links to the same files.
+The `.openspec-target` marker stays `agents`, the CLI's generation target.
+An `openspec update` can regenerate its own `openspec-*` skills without replacing
+our `world-openspec-*` adaptations. Keep the pinned CLI until its separate upgrade.
 
 ## Capture PR evidence
 
@@ -233,6 +283,13 @@ paths and preserve both behaviors. Do not repeatedly merge main solely to chase
 an unrelated red CI run: first identify the failed leaf job and whether main
 shares it. Branch age increases exposure, but overlapping changes cause the
 conflict; a very old branch can still merge cleanly when its files are separate.
+
+Feature PRs do not regenerate Help pictures for ordinary component changes.
+Stale fingerprints are warnings; main owns the full refresh through a bot PR.
+When adding or changing a help entry, use `HELP_PICTURES_IDS="<id>" bun run
+help:pictures` and commit only that entry's pictures and manifest record (plus
+`bun run help:docs` output when declarations change). Remove assets for deleted
+entries. See [Help contribution guidance](../CONTRIBUTING.md#help-that-ships-with-a-feature).
 
 ## Run an optional visible team
 

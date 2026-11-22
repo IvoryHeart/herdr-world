@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { balanceShards } from "./balance-shards";
-import world from "./world-browser-timings.json";
+import { worldBrowserSuites } from "./world-browser-suites";
 import models from "./verification-timings.json";
 import { verificationModels } from "../quint/models";
 import { townCanvasCases } from "../web/src/world/town/TownCanvas.cases";
@@ -30,11 +30,11 @@ test("every maintained model has a measured weight and each Town group is regist
   for (const group of Object.keys(townCanvasCases)) {
     const name =
       group === "baseline" ? "town/TownCanvas" : `town/TownCanvas.${group}`;
-    expect(Object.keys(world.seconds)).toContain(name);
+    expect(worldBrowserSuites).toContain(`web/src/world/${name}.test.ts`);
   }
 });
 
-test("Town partitions retain exactly the 22 original width, mode and flight cases plus the reception filter and core desk cases", () => {
+test("Town partitions retain the original cases plus reception, core desk and bus proofs", () => {
   const cases = Object.values(townCanvasCases).flat();
   const original = [
     [1440, 900, "typical", 0],
@@ -65,6 +65,9 @@ test("Town partitions retain exactly the 22 original width, mode and flight case
     // Tapping herdr-core desks (#1006), at phone and desktop width.
     [412, 915, "core", 0],
     [1440, 900, "core", 0],
+    // Full bus trips have independent deadlines at both original typical widths.
+    [1440, 900, "bus", 0],
+    [390, 900, "bus", 0],
   ];
   expect(cases.map((item) => JSON.stringify(item)).sort()).toEqual(
     original.map((item) => JSON.stringify(item)).sort(),

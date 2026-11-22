@@ -230,7 +230,7 @@ previous result and a later scheduled run. Runtime field claims remain in memory
 
 - A supported Linux, macOS or Windows release, or Bun 1.4.4+ for a source build.
 - A running **Herdr TUI**, **herdr-core**, or both. See the
-  [runtime support table](../FEATURES.md#runtime-support) for versions and limits.
+  [runtime support table](../openspec/specs/herdr-core-runtime/notes.md#runtime-support) for versions and limits.
 - OpenSSH on the World service's Linux/macOS host for SSH connections.
 
 Runtimes remain external. Disconnecting or removing a profile leaves their
@@ -238,7 +238,7 @@ agents running.
 
 ## Herdr compatibility
 
-The [runtime table](../FEATURES.md#runtime-versions) names the verified Herdr TUI
+The [runtime table](../openspec/specs/herdr-core-runtime/notes.md#runtime-versions) names the verified Herdr TUI
 range, legacy protocols and herdr-core baseline. Herdr TUI setup verifies the
 pinned platform checksum before installation. After a TUI upgrade, run
 `herdr integration install codex` on that host to refresh older Codex hooks.
@@ -454,7 +454,7 @@ continues to use the same World profiles, settings, token, and browser namespace
 World keeps an installed herdr-core. It does not upgrade core automatically;
 use [core's official installation/upgrade instructions](https://github.com/herdrdev/herdr-core)
 on that host, then reconnect. The
-[runtime table](../FEATURES.md#runtime-support) covers versions and platform limits.
+[runtime table](../openspec/specs/herdr-core-runtime/notes.md#runtime-support) covers versions and platform limits.
 
 | Command | Effect on the default local runtime |
 | --- | --- |

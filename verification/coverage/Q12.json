@@ -1,0 +1,32 @@
+{
+  "id": "Q12",
+  "area": "Snapshot chunk credits",
+  "owner": "server/src/bridge/world-snapshot-admission.ts",
+  "requirement": "openspec/specs/runtime-federation/spec.md",
+  "properties": "Two transfers per socket; one pending credit per transfer; wrong socket/index cannot release it; retirement rejects waiters",
+  "existingTests": [
+    "server/src/bridge/world-snapshot-admission.test.ts",
+    "server/src/bridge/world-snapshot-reply.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
+  "technique": "chunk-ownership",
+  "assessment": "wrong socket/index, cancellation, timeout and two-transfer capacity",
+  "status": "modeled",
+  "remaining": "real timeout, batch-window and browser responsiveness remain executed protocol/browser tests.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/chunk-credits.qnt"],
+    "contracts": ["verification/contracts/chunk-credits.md"],
+    "tests": [
+      "quint/chunk-credits.test.ts",
+      "quint/protocol-composition.test.ts"
+    ],
+    "checks": ["bun run verification:check", "bun run verification:typecheck"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

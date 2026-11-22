@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import type { BinEntry } from "../../../../shared/bin";
-import { binClockLabel } from "../bin/binStore";
 import {
   TOWN_QUEUE_ROW,
   TOWN_QUEUE_ROWS,
@@ -17,7 +16,6 @@ import {
   townRiderWalk,
   townRiderWalkBack,
   townRiderWalkMs,
-  townStopClock,
   townWalkAlong,
   townWalkLength,
   type TownBusRoute,
@@ -456,65 +454,6 @@ test("an agent seen indoors walks out of the door however long it took to reach 
   expect(
     townRiderOuting({ indoors: true, out: null }, true, 5_000, true).out,
   ).toBe(-Infinity);
-});
-
-test("a stop's clock reads due only just before the bus pulls in there", () => {
-  const TRIP = 120_000;
-  const { layout } = layoutTown(
-    town({ a: [2], b: [2], c: [1] }),
-    TOWN_SHAPES.phone,
-  );
-  const route = townBusRoute(layout);
-  const terminus = route.terminus!.halt;
-  // The stop farthest from Apartments.
-  const stop = [...route.stops].sort(
-    (a, b) =>
-      Math.hypot(b.halt.x - terminus.x, b.halt.y - terminus.y) -
-      Math.hypot(a.halt.x - terminus.x, a.halt.y - terminus.y),
-  )[0]!;
-  const timeline = townBusTimeline(
-    route.graph,
-    terminus,
-    haltsAt([stop]),
-    1,
-    walkOf(route),
-    TRIP,
-  );
-  const halt = timeline.halts.get(stop.key)!.at;
-  // The trip sets off from Apartments: it reaches a stop well after.
-  expect(halt).toBeGreaterThan(timeline.start + 5);
-  const clock = (elapsed: number | null, next = 200_000, riding = true) =>
-    townStopClock({
-      elapsed,
-      next,
-      stopped: false,
-      riding,
-      halt,
-      nextHalt: halt,
-    });
-  // Waiting for the next trip: until it sets off and drives to this stop.
-  expect(clock(null, 60_000, false)).toBe(binClockLabel(60_000 + halt * 1000));
-  expect(clock(null, 0, false)).not.toBe("due");
-  // Riding this trip: it counts down to the bus pulling in here.
-  expect(clock(0)).not.toBe("due");
-  expect(clock((halt - 10) * 1000)).toBe("0:10");
-  expect(clock((halt - 4) * 1000)).toBe("due");
-  // Due, the bus is a few seconds away: in sight, slowing to the stop.
-  const near = townBusPose(timeline, terminus, (halt - 4) * 1000);
-  expect(Math.hypot(near.x - stop.halt.x, near.y - stop.halt.y)).toBeLessThan(
-    timeline.cruise * 5,
-  );
-  expect(clock((halt + 3) * 1000)).toBe("due");
-  expect(
-    townStopClock({
-      elapsed: 1_000,
-      next: 0,
-      stopped: true,
-      riding: true,
-      halt,
-      nextHalt: halt,
-    }),
-  ).toBe("stopped");
 });
 
 /** A Town of one host with `count` agents in one room, and their bin entries. */

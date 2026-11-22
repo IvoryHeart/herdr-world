@@ -23,6 +23,9 @@ permissions:
   contents: read
 
 jobs:
+  release-walk:
+    uses: ./.github/workflows/release-walk.yml
+
   baseline:
     name: Freeze latest stable installer baseline
     # CI freezes this in Validation scope so native jobs start together. Keep

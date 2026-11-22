@@ -1,3 +1,4 @@
+import { checkCoreDesks } from "./coreTownMoves.browser";
 import { prepareTownEdgeDrop } from "./townEdgeScroll.browser";
 import { checkTownEdgeArrows } from "./townEdgeArrows.browser";
 import { prepareTownRoomCard } from "./townRoomCard.browser";
@@ -10,11 +11,7 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
-import {
-  buildWorldObject,
-  CORE_VIEW_ONLY_REASON,
-  type WorldObject,
-} from "../worldObject";
+import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
 import { AgentLauncherDialog } from "../AgentLauncherDialog";
 import { WORLD_AGENT_LAUNCH_EVENT, type LaunchTarget } from "../agentProfiles";
@@ -24,7 +21,7 @@ import {
   checkOverviewRoomHover,
   checkTownRoomPlates,
 } from "./townRoomPlates.browser";
-import { checkTownCenter } from "./townCenter.browser";
+import { checkApartmentsTry, checkTownCenter } from "./townCenter.browser";
 import { checkTownBusTrip } from "./townBusTrip.browser";
 import type { BinState } from "../../../../shared/bin";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
@@ -681,6 +678,14 @@ const binState = () =>
     },
   };
 worldBridge.call = async (method, params) => {
+  if (method === "world.core.move") {
+    moves.push({ method, params: { ...params } });
+    return {
+      status: "moved",
+      tab_id: "moved-core-tab",
+      workspace_id: "moved-core-room",
+    };
+  }
   if (method.startsWith("world.bin.")) {
     if (method === "world.bin.add") binAdds.push(params ?? {});
     return binState();
@@ -1044,7 +1049,7 @@ function coreTopology(): WorldRuntimeConnection {
   ] as const;
   const tabs: Tab[] = desks.map(([tab_id, panes], index) => ({
     tab_id,
-    workspace_id,
+    workspace_id: index === 2 ? "core-other-room" : workspace_id,
     number: index + 1,
     label: ["shell", "agent", "pair"][index]!,
     focused: index === 0,
@@ -1056,7 +1061,7 @@ function coreTopology(): WorldRuntimeConnection {
       ([address, agent]): Pane => ({
         pane_id: address,
         terminal_id: address,
-        workspace_id,
+        workspace_id: tab_id === "core-pair" ? "core-other-room" : workspace_id,
         tab_id,
         // Of the pair, the second pane holds focus: a tap opens it.
         focused: address === "t4",
@@ -1086,10 +1091,20 @@ function coreTopology(): WorldRuntimeConnection {
           number: 1,
           label: "Core room",
           focused: true,
-          pane_count: panes.length,
-          tab_count: tabs.length,
+          pane_count: 2,
+          tab_count: 2,
           active_tab_id: "core-shell",
           agent_status: "working",
+        } as Workspace,
+        {
+          workspace_id: "core-other-room",
+          number: 2,
+          label: "Core second room",
+          focused: false,
+          pane_count: 2,
+          tab_count: 1,
+          active_tab_id: "core-pair",
+          agent_status: "unknown",
         } as Workspace,
       ],
       tabs,
@@ -1097,92 +1112,6 @@ function coreTopology(): WorldRuntimeConnection {
       agents: [],
     },
   };
-}
-
-/**
- * Tapping a live herdr-core desk opens it as a Herdr desk opens (#1006): a
- * shell desk its terminal, an agent desk its agent, a two-pane desk its
- * focused pane, with no "can't" toast. One tap does it, on a phone too.
- */
-async function checkCoreDesks(
-  host: HTMLElement,
-  world: WorldObject,
-  opened: string[],
-  inspected: [string, string][],
-) {
-  const canvasHost = host.querySelector(".town-canvas-host canvas")!
-    .parentElement!;
-  const leafId = (address: string) =>
-    world.leaves.find(
-      (leaf) => leaf.connectionId === "core" && leaf.pane.pane_id === address,
-    )?.id;
-  const desk = (tabId: string) =>
-    [
-      ...host.querySelectorAll<HTMLElement>(
-        '.world-semantic-target[data-kind="desk"]',
-      ),
-    ].find((target) => JSON.parse(target.dataset.targetKey!)[2] === tabId);
-  const tap = (target: HTMLElement, id: number) => {
-    const box = target.getBoundingClientRect();
-    const at = {
-      bubbles: true,
-      pointerId: id,
-      pointerType: phone ? "touch" : "mouse",
-      button: 0,
-      clientX: box.left + box.width / 2,
-      clientY: box.top + box.height / 2,
-    };
-    canvasHost.dispatchEvent(
-      new PointerEvent("pointerdown", { ...at, buttons: 1 }),
-    );
-    canvasHost.dispatchEvent(
-      new PointerEvent("pointerup", { ...at, buttons: 0 }),
-    );
-    canvasHost.dispatchEvent(new MouseEvent("click", at));
-  };
-  const openedIds = () => [...opened, ...inspected.map(([id]) => id)];
-  // At desk level, where each table wears its nameplate: there a touch tap
-  // on a table with nothing to open at once opens its card first.
-  const rendered = window.__HERDR_TOWN_RENDERER__!;
-  for (let into = 0; into < 6 && rendered.level !== "desk"; into += 1) {
-    const before = rendered.frames;
-    host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
-    await waitFor(
-      () => rendered.frames > before && !rendered.flying,
-      "zooming in to the core desks did not finish",
-    );
-  }
-  await waitFor(
-    () => host.querySelectorAll(".town-desk-title").length >= 3,
-    `the core desks wear no nameplates (level ${rendered.level})`,
-  );
-  let pointer = 60;
-  for (const [tabId, address] of [
-    ["core-shell", "t1"],
-    ["core-agent", "t2"],
-    ["core-pair", "t4"],
-  ] as const) {
-    await waitFor(() => Boolean(desk(tabId)), `no core desk ${tabId}`);
-    const target = desk(tabId)!;
-    opened.length = 0;
-    inspected.length = 0;
-    // One tap opens it, on a phone too: a desk with a pane to open has no
-    // summary card first (townDeskOpensAtOnce).
-    tap(target, pointer++);
-    await waitFor(
-      () => openedIds().length > 0,
-      `one tap on the core ${tabId} desk opened nothing`,
-    );
-    check(
-      openedIds().every((id) => id === leafId(address)),
-      `the core ${tabId} desk opened ${JSON.stringify(openedIds())}, not ${address}`,
-    );
-    const toasts = host.querySelector(".town-toasts")?.textContent ?? "";
-    check(
-      !toasts.includes(CORE_VIEW_ONLY_REASON) && !/can.t/i.test(toasts),
-      `tapping the core ${tabId} desk showed "${toasts}"`,
-    );
-  }
 }
 
 function worldFor(connections: WorldRuntimeConnection[]) {
@@ -1604,13 +1533,25 @@ async function run() {
   );
 
   if (scale === "core" && mode === "test") {
-    await checkCoreDesks(host, worldFor(base.connections), opened, inspected);
+    await checkCoreDesks(host, worldFor(base.connections), opened, inspected, {
+      phone,
+      check,
+      waitFor,
+      requestCount: () => moves.length,
+      lastRequest: () => moves[moves.length - 1],
+    });
     root.unmount();
     await settle();
     return;
   }
   if (scale === "typical" && mode === "test") {
     await checkTownCenter(host, check, waitFor);
+  }
+  // Same seeded topology as typical, in its own case: the complete trip
+  // samples every second, independently of Town's other interactions and
+  // camera changes. Only the rider's walk out of its building is paced by
+  // drawn frames (#1183).
+  if (scale === "bus" && mode === "test") {
     const [connection] = base.connections;
     // A blocked agent queues at reception, a few steps from its building's
     // front door: its walk out is short whatever the frame rate
@@ -1638,6 +1579,17 @@ async function run() {
         terminal_id: pane.terminal_id,
       },
     );
+    root.unmount();
+    await settle();
+    check(
+      window.__HERDR_TOWN_RENDERER__?.activeApplications === 0,
+      "bus trip unmount left a live renderer",
+    );
+    check(
+      document.querySelectorAll("canvas[data-office-canvas]").length === 0,
+      "bus trip unmount left a town canvas",
+    );
+    return;
   }
   if (scale === "plates" && mode === "test") {
     // A room dragged by its wall goes where it is dropped in its building:
@@ -2055,6 +2007,11 @@ async function run() {
   check(
     diagnostics.level === "overview",
     `default level is ${diagnostics.level}, expected overview`,
+  );
+  // Opening Town places the hosts it has: none rises out of its lot.
+  check(
+    diagnostics.hostArrivals === 0 && diagnostics.hostDepartures === 0,
+    `opening Town replayed ${diagnostics.hostArrivals} arrivals and ${diagnostics.hostDepartures} departures`,
   );
   // Observing the same town again reconciles no agent and builds no
   // navigation; one agent's new status reconciles only its host's agents.
@@ -4029,8 +3986,8 @@ async function run() {
   }
 
   // Turning a host off and on changes the town without a blank or
-  // half-drawn frame: the gone building fades out, the others glide to their
-  // new places with their plaques, and it fades back in.
+  // half-drawn frame: the gone building sinks into its lot, the others glide
+  // to their new places with their plaques, and it rises back out of it.
   {
     host
       .querySelector<HTMLButtonElement>(
@@ -4061,6 +4018,8 @@ async function run() {
     const transitions = diagnostics.transitions;
     const crossfades = diagnostics.crossfades;
     const reused = diagnostics.groundReused;
+    const departures = diagnostics.hostDepartures;
+    const arrivals = diagnostics.hostArrivals;
     const buildings = diagnostics.layout!.buildings;
     let followed = false;
     const watch = new MutationObserver(() => {
@@ -4105,6 +4064,11 @@ async function run() {
       diagnostics.transitions >= transitions + 4,
       `buildings did not fade when a host turned off and on (${diagnostics.transitions - transitions} transitions)`,
     );
+    check(
+      diagnostics.hostDepartures === departures + 1 &&
+        diagnostics.hostArrivals === arrivals + 1,
+      `a host turned off and on did not sink once and rise once (${diagnostics.hostDepartures - departures} sank, ${diagnostics.hostArrivals - arrivals} rose)`,
+    );
     // A building that moves is baked again: its interior and desks fade in
     // over its old drawing as both glide.
     check(
@@ -4133,6 +4097,10 @@ async function run() {
     diagnostics.topologyGaps === 0,
     `${diagnostics.topologyGaps} frames after topology changes were missing ${diagnostics.lastTopologyGap}`,
   );
+
+  // Help's Try moves the camera, so it is the last look at this town.
+  if (scale === "typical" && mode === "test")
+    await checkApartmentsTry(host, check, waitFor);
 
   // StrictMode mounts twice; exactly one renderer and canvas must survive.
   check(

@@ -9,3 +9,5 @@
 ## 2. Synchronize
 
 - [ ] 2.1 Synchronize these deltas into the current specs together with the Apartments capability once it is specified.
+
+Capability path after the feature-map split: `world-surfaces/apartments`. Existing delivery and pending tasks are unchanged.

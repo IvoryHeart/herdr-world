@@ -1,4 +1,5 @@
 import type { BinEntry, BinState } from "../../../../shared/bin";
+import { flushSync } from "react-dom";
 import { worldBinStore } from "../bin/useWorldBin";
 
 /**
@@ -82,9 +83,11 @@ export async function checkTownBusTrip(
       },
     });
     await worldBinStore().refresh();
-    // Town draws the change on its next frames.
-    for (let i = 0; i < 2; i += 1)
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+    // The bus layer poses the bus and its riders in its effect, which React
+    // runs at commit for a store change (a sync update), so the DOM read next
+    // is this moment's. Waiting for drawn frames here instead paid a software
+    // render of the whole town for every sampled second (#1183).
+    flushSync(() => {});
   };
   const bus = () => host.querySelector<HTMLElement>(".town-bus");
   const person = () =>

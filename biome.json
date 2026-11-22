@@ -8,6 +8,8 @@
   "files": {
     "includes": [
       "**",
+      "!server/src/features/index.gen.ts",
+      "!web/src/features/index.gen.ts",
       "!server/src/public-files.gen.ts",
       "!web/src/help/pictures.json"
     ]

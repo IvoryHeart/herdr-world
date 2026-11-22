@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { isCoveragePath, readCoverage } from "./coverage";
 
 type Area = {
   [key: string]: unknown;
@@ -10,6 +8,7 @@ type Area = {
   partialEvidence?: { models?: string[] };
 };
 type Coverage = { areas: Area[]; [key: string]: unknown };
+
 const modeled = (area: Area) =>
   area.status !== "alternative-evidence" ||
   !Array.isArray(area.partialEvidence?.models) ||
@@ -36,8 +35,9 @@ export function coverageChangesRequireModels(
     )
       return true;
     if (
-      JSON.stringify(old) !== JSON.stringify(next) &&
-      ((old && modeled(old)) || (next && modeled(next)))
+      (old && next && old.owner !== next.owner) ||
+      (JSON.stringify(old) !== JSON.stringify(next) &&
+        ((old && modeled(old)) || (next && modeled(next))))
     )
       return true;
   }
@@ -45,19 +45,11 @@ export function coverageChangesRequireModels(
 }
 
 export function readCoverageScope(root: string, base?: string) {
-  const coverage = JSON.parse(
-    readFileSync(join(root, "verification/coverage.json"), "utf8"),
-  ) as Coverage;
+  const coverage = readCoverage(root);
   let inventoryModels = true;
   if (base) {
     try {
-      const old = JSON.parse(
-        execFileSync("git", ["show", `${base}:verification/coverage.json`], {
-          cwd: root,
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "pipe"],
-        }),
-      ) as Coverage;
+      const old = readCoverage(root, base);
       inventoryModels = coverageChangesRequireModels(old, coverage);
     } catch {
       /* Missing or malformed baseline requires the full model gate. */
@@ -67,7 +59,7 @@ export function readCoverageScope(root: string, base?: string) {
     owns: (path: string) =>
       coverage.areas.some((area) => matches(area.owner, path)),
     models: (path: string) =>
-      path === "verification/coverage.json"
+      isCoveragePath(path)
         ? inventoryModels
         : coverage.areas.some(
             (area) => matches(area.owner, path) && modeled(area),

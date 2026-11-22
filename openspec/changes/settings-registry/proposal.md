@@ -30,7 +30,7 @@ ignored.
 
 ### Modified Capabilities
 
-- `world-surfaces`: add the settings registry, search, links and short Menu; Settings
+- `world-surfaces/settings`: add the settings registry, search, links and short Menu; Settings
   is the common settings menu.
 
 ## Impact

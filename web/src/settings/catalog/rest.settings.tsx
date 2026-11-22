@@ -10,6 +10,7 @@ import {
   Bug,
   Cable,
   CircleHelp,
+  CloudSun,
   Download,
   FileClock,
   FolderGit2,
@@ -194,6 +195,31 @@ defineSettings("integrations", [
     icon: <Activity size={15} />,
     scope: "world",
     page: { ...integrationsPage, focus: "source:metrics" },
+  },
+  {
+    // The Weather source's row (#1111): Town's Sky panel links here and keeps
+    // only the quick weather choice; the place and the source live here.
+    kind: "panel",
+    id: "integrations.weather",
+    category: "integrations",
+    title: "Weather place and source",
+    description: "Turn real weather on or off and set the place it reads",
+    words: [
+      "weather",
+      "location",
+      "place",
+      "city",
+      "forecast",
+      "rain",
+      "snow",
+      "real weather",
+      "open-meteo",
+      "sky",
+    ],
+    icon: <CloudSun size={15} />,
+    scope: "world",
+    alsoOn: "Town: the sky button under ALL",
+    page: { ...integrationsPage, focus: "source:weather" },
   },
   {
     kind: "panel",
@@ -384,7 +410,7 @@ defineSettings("help", [
     description: "Every feature, its limits and its keys",
     words: ["documentation", "docs", "manual"],
     icon: <LayoutList size={15} />,
-    run: () => openLink(`${REPOSITORY}/blob/main/FEATURES.md`),
+    run: () => openLink("https://herdr.world/features/"),
   },
   {
     kind: "command",

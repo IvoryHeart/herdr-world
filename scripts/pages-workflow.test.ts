@@ -86,6 +86,9 @@ test("Pages deploys on main pushes or manual dispatch and checks installer avail
     branches: ["main"],
     paths: [
       "site/**",
+      "openspec/specs/**",
+      "openspec/changes/**",
+      "scripts/where.ts",
       "docs/TUTORIAL.md",
       "docs/images/**",
       // The film bundles Town's art (site/film/town-art.ts).
@@ -221,4 +224,14 @@ test("only a fully published stable release dispatches Pages from main", async (
     GH_REPO: "${{ github.repository }}",
   });
   expect(handoff.steps![0].run).toBe("gh workflow run pages.yml --ref main");
+});
+
+test("Pages rebuilds the generated feature reference when specs, notes or discovery change", () => {
+  const push = workflow.on.push as { paths: string[] };
+  for (const path of [
+    "openspec/specs/**",
+    "openspec/changes/**",
+    "scripts/where.ts",
+  ])
+    expect(push.paths).toContain(path);
 });

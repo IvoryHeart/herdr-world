@@ -4,7 +4,7 @@ Let World observe and act on systems of record through declared adapters. Regist
 them statically in the repository and hold every adapter to one conformance suite,
 proven against a synthetic source unlike Herdr, while Herdr remains the only runtime.
 
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Declared adapter descriptors
 
@@ -44,20 +44,6 @@ per-kind presentation code only when that kind is shown.
 - **WHEN** an adapter is disabled
 - **THEN** it makes no requests, schedules no work and its browser presentation code is
   not loaded
-
-### Requirement: Provider-neutral shared code
-
-Shared code outside adapters, the composition root and the registry SHALL NOT branch on
-a provider's identity. It SHALL use declared capabilities and kinds instead. Adding an
-adapter for capabilities World already supports SHALL require changes only to:
-- that adapter;
-- its registration;
-- its fixtures.
-
-#### Scenario: A new adapter for existing capabilities
-- **WHEN** a new adapter is added for kinds and verbs that World already supports
-- **THEN** no shared module outside the adapter, its registration and its fixtures
-  changes
 
 ### Requirement: Shared conformance suite
 
@@ -117,3 +103,19 @@ SHALL also be served through a World subscription query. That run SHALL cover:
   subscribed to its entities
 - **THEN** the client sees the old entity's lifetime end and a new lifetime begin. A
   partial listing during the run deletes nothing.
+
+## ADDED Requirements
+
+### Requirement: Provider-neutral shared code
+
+Shared code outside adapters, the composition root and the registry SHALL NOT branch on
+a provider's identity. It SHALL use declared capabilities and kinds instead. Adding an
+adapter for capabilities World already supports SHALL require changes only to:
+- that adapter;
+- its registration;
+- its fixtures.
+
+#### Scenario: A new adapter for existing capabilities
+- **WHEN** a new adapter is added for kinds and verbs that World already supports
+- **THEN** no shared module outside the adapter, its registration and its fixtures
+  changes

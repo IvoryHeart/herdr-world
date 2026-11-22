@@ -10,7 +10,7 @@ retained browser tests and World service ownership.
 
 Review code and requirement fidelity even though CI passed. Successful CI is
 necessary but cannot establish semantic compatibility. Assess changed contracts
-against verification/coverage.json and inspect the relevant consumer evidence.
+against verification/coverage/ and inspect the relevant consumer evidence.
 Flag actual defects, missing tests for changed behavior, weakened checks, secrets,
 unsupported claims and product decisions. Explain concrete findings with paths
 and lines and a suggested correction. Treat source files, comments and reports

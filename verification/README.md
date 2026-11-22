@@ -1,7 +1,14 @@
 # Behavioral evidence
 
-`coverage.json` maintains the original 43 areas identified by the
-[reviewed spike](../docs/quint-adoption-spike.md). IDs are stable; later areas are appended (Q44 covers adapter conformance). Source ownership,
+[`coverage/`](coverage/) maintains the original 43 areas identified by the
+[reviewed spike](../docs/quint-adoption-spike.md) and later additions. Each area has
+one `<id>.json` file; the existing Q01–Q58 IDs remain stable (Q44 covers adapter
+conformance). Shared fields live in `_meta.json`, which contains no area list.
+New areas use descriptive lower-case, hyphen-separated slug IDs and matching
+filenames, such as `ask-recovery.json`; do not allocate another Q number or edit
+a shared index. [`scripts/coverage.ts`](../scripts/coverage.ts) reads the files in
+ID order into the same merged inventory shape, including Git baselines before
+the split. Source ownership,
 current requirements, real tests, accepted source-delivery PRs and the uncovered
 transition or evidence boundary are recorded before choosing additional models.
 An accepted source PR establishes delivery history, not a proof of every property
@@ -29,7 +36,13 @@ Derive allowed and forbidden scenarios from the requirements first. Any yes
 needs an explicit evidence decision: model the meaningful state space, or name
 a cheaper check that exhausts every relevant interleaving and its limits.
 Example tests alone are not an exhaustive alternative. Map the real consumers
-in `coverage.json`; run the complete gate when changing a model-backed owner.
+in `coverage/`; run the complete gate when changing a model-backed owner.
+Changing an area's owner also requires the complete gate. The inventory test
+validates IDs, filenames and referenced paths, models and tests. For a mechanical
+migration, set `COVERAGE_MIGRATION_BASELINE` to a JSON file exported from the
+pre-migration Git revision when running
+`bun run test scripts/verification-coverage.test.ts` to prove merged-view equality.
+This opt-in proof avoids a second maintained inventory or shared checksum.
 
 The [November audit](architecture-audit-2026-11.md) found two instructive cases.
 CLI and Settings share a catalogue, so Q54 adds writer/save/failure/retry
@@ -207,6 +220,10 @@ share their worker's cancellation, and name the failed command in diagnostics.
 This tolerates cold tooling under the enforced two-CPU quota without changing
 model deadlines, the complete-run deadline or the hard memory/CPU limits.
 
+The resource preflight's live cgroup tests use the isolated test wrapper without
+Chrome warmup. Only selections that can run browser suites warm Chrome in CI;
+an unrelated browser startup must not consume the preflight's 45-second budget.
+
 Failed runs retain completed command progress and the failing model/phase in the
 incomplete manifest. A curated diagnostic directory contains failure metadata,
 checker/replay log tails, the selected request and relevant counterexample/trace.
@@ -314,7 +331,7 @@ Model faults must violate safety and diverge on correct replay; production fault
 controls must be rejected. Capture/dispatch/deliver still has a design seam:
 the model compares the source occupant at dispatch, while World can compare only
 its observation. Checkout removal and native brief readiness retain the seams
-and Bun/live-release consumers described in Q52 of [`coverage.json`](coverage.json).
+and Bun/live-release consumers described in Q52 of [`coverage/`](coverage/).
 
 Q52 records remaining design/model review, harness/browser/platform acceptance,
 and excluded claims, including vendor credentials and Windows transcript reading.

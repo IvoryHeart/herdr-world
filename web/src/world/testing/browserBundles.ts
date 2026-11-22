@@ -2,20 +2,33 @@ import { readdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { assetUrlImports } from "./assetUrlImports";
 
-export type WorldBrowserEntry =
-  | "HostsFilter"
-  | "ProductionContexts"
-  | "AnswerDeliveries"
-  | "NeedsYouCard"
-  | "CoreViewOnly"
-  | "CoreControl"
-  | "CoreTerminalWatch"
-  | "CoreSharedState"
-  | "CoreFiles"
-  | "QuestionCards"
-  | "town/TownCanvas"
-  | "SharedViewCreation"
-  | "ApartmentsAvatars";
+// Entry names are checked against the source files at runtime.
+export type WorldBrowserEntry = string;
+
+export async function discoverWorldBrowserEntries(
+  directory = join(import.meta.dir, ".."),
+): Promise<WorldBrowserEntry[]> {
+  return (await readdir(directory, { withFileTypes: true }))
+    .filter((file) => file.isFile() && file.name.endsWith(".browser.tsx"))
+    .map((file) => file.name.slice(0, -".browser.tsx".length))
+    .sort();
+}
+
+async function entryDirectory(
+  entry: WorldBrowserEntry,
+  root: string,
+  source = join(import.meta.dir, ".."),
+) {
+  if (
+    !/^[A-Za-z][\w-]*(?:\/[A-Za-z][\w-]*)*$/.test(entry) ||
+    !(await discoverWorldBrowserEntries(join(source, dirname(entry)))).includes(
+      basename(entry),
+    )
+  )
+    throw new Error(`Unknown World browser entry: ${entry}`);
+  return join(root, entry);
+}
+
 export type WorldBrowserBundle = {
   directory: string;
   assets: Map<string, Blob>;
@@ -26,10 +39,11 @@ export type WorldBrowserBundle = {
 export async function buildWorldBrowserBundle(
   entry: WorldBrowserEntry,
   root: string,
+  source = join(import.meta.dir, ".."),
 ): Promise<WorldBrowserBundle> {
-  const directory = join(root, entry);
+  const directory = await entryDirectory(entry, root, source);
   const build = await Bun.build({
-    entrypoints: [join(import.meta.dir, "..", `${entry}.browser.tsx`)],
+    entrypoints: [join(source, `${entry}.browser.tsx`)],
     outdir: directory,
     target: "browser",
     plugins: [
@@ -66,7 +80,7 @@ export async function buildWorldBrowserBundle(
   }
   await Bun.write(
     join(directory, "index.html"),
-    `<link rel="stylesheet" href="/${entry}.browser.css"><script type="module" src="/${entry}.browser.js"></script>`,
+    `<link rel="stylesheet" href="/${basename(entry)}.browser.css"><script type="module" src="/${basename(entry)}.browser.js"></script>`,
   );
   return { directory, assets };
 }
@@ -75,7 +89,7 @@ export async function readWorldBrowserBundle(
   entry: WorldBrowserEntry,
   root: string,
 ): Promise<WorldBrowserBundle> {
-  const directory = join(root, entry);
+  const directory = await entryDirectory(entry, root);
   const assets = new Map<string, Blob>();
   for (const filename of await readdir(directory)) {
     assets.set(`/${filename}`, Bun.file(join(directory, filename)));
