@@ -1,0 +1,45 @@
+{
+  "id": "Q22",
+  "area": "Tab/pane layout, pins and reorder",
+  "owner": "web/src/tabLayout.ts",
+  "requirement": "openspec/specs/world-surfaces/town-moves/spec.md",
+  "properties": "Every live pane has one valid position; pin/reorder/close preserve membership and qualified identity",
+  "existingTests": [
+    "web/src/tabLayout.test.ts",
+    "web/src/visibleTabLayout.test.ts",
+    "web/src/tabPins.test.ts",
+    "web/src/tabReorder.test.ts",
+    "web/src/components/PaneMoveMenu.test.ts",
+    "web/src/store.test.ts",
+    "web/src/tabStripScroll.test.ts",
+    "web/src/world/board/boardPaneMove.test.ts",
+    "web/src/world/BoardView.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
+  "technique": "alternative",
+  "assessment": "pure structural layout/pin/reorder evidence directly checks membership and serialization",
+  "status": "alternative-evidence",
+  "remaining": "All tab cardinalities and asynchronous native layout responses are not exhausted; captured generation checks retain their implementation regressions.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "evidenceDecision": "Direct pure layout/pin/reorder tests plus queued visible-layout retirement tests cover owner-keyed state; Q21 adds bounded window reducer exploration.",
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/consumer-evidence.md"],
+    "tests": [
+      "web/src/tabLayout.test.ts",
+      "web/src/visibleTabLayout.test.ts",
+      "web/src/tabPins.test.ts",
+      "web/src/tabReorder.test.ts",
+      "web/src/components/PaneMoveMenu.test.ts",
+      "web/src/store.test.ts",
+      "web/src/tabStripScroll.test.ts"
+    ],
+    "checks": ["bun run check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

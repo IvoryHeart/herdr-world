@@ -239,7 +239,7 @@ behavior; discovery SHALL NOT grant additional input authority.
 ### Requirement: Shared app state with independent World ownership
 
 World SHALL own topology, asks/results and review receipts; it SHALL share
-app placement at launch, seen and the pin under the [M1–M11 ownership decisions](../../changes/archive/2026-11-17-herdr-core-runtime/design.md). A core tab's desk and
+app placement at launch and on explicit Town moves, seen and the pin under the [M1–M11 ownership decisions](../../changes/archive/2026-11-17-herdr-core-runtime/design.md). A core tab's desk and
 card SHALL be pinned exactly while one of its terminals carries
 `herdr.pinned`; Herdr (TUI) tabs keep World's own pin. Pinned SHALL mean
 pinned goes first, as in Herdr's apps: World derives a pinned card's place
@@ -251,6 +251,37 @@ installed. Native destructive actions SHALL confirm all dying descendants,
 including ending a room shell, and a confirmation SHALL name each terminal's
 occupant incarnation (the mirror's occupancy token), so a replacement that
 reuses the pid and argv is refused.
+
+#### Scenario: Town moves core agents and desks by placement
+
+- **WHEN** a user drags a live core agent onto another desk in its room or
+  another room, or moves its whole desk to another room on the same connection
+- **THEN** World patches the selected terminals' `herdr.space`, `herdr.tab`
+  and `where` labels and reconciles its own topology overrides so its read
+  model places them at the destination, including app-created spaces and
+  World-created rooms and desks
+- **AND** running terminals retain their addresses, programs and unrelated
+  labels; a one-agent move leaves unselected inherited children in their
+  source room, and a desk move includes every observed terminal at the desk
+- **AND** moves serialize per durable core while retaining the original
+  connection generation, core epoch and terminal occupants; queued moves
+  reread placement and every write checks the original authority
+- **AND** World-owned rooms remain when emptied and no app space is closed
+  by a placement move, so the TUI's room-closing consent does not apply;
+  joining a team across rooms can move the core desk to its teammate
+
+#### Scenario: Core movement cannot complete
+
+- **WHEN** the selected core lacks `terminal.label`, the connection is stale,
+  or a source or destination has disappeared
+- **THEN** Town shows the specific reason and never falls back to a TUI runtime
+- **AND** if a write has been sent and a later step fails or its reply is lost,
+  the outcome reports partial or unknown placement instead of success or a
+  claim that nothing changed; World never retries uncertain writes or rolls
+  back over another client's placement edits
+- **AND** an unpinned desk reorder explains that core exposes no native desk
+  ordering; pinned desks retain World's saved ordering among their room's
+  pinned seats
 
 #### Scenario: Review a finished turn
 
@@ -282,19 +313,6 @@ reuses the pid and argv is refused.
   receipts stay World-only; a core agent that finishes after working or
   starts needing the user triggers a push from core status events under Herdr's
   attention rule
-
-#### Scenario: Unnamed app space
-
-- **WHEN** an app-created core space has no name in its `where` captions
-- **THEN** World names its room for display once, from the space's oldest
-  terminal that shows anything: its folder, else its tab, else its agent;
-  World keeps that name while the space lasts, so agents coming and going, in
-  that room or another, never change it; the row says the name is derived and
-  views mark it; a name another room of the core already shows gets a number,
-  kept when other rooms leave; World never writes the derived name to core,
-  its own launches caption the space `Herdr space` with World's placeholder
-  label so the caption names nothing, while the app's own `Herdr space`
-  caption is a name; with no evidence the room reads `Herdr space`
 
 #### Scenario: Missing agent status
 

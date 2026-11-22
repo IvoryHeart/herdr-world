@@ -85,7 +85,7 @@ missing transcripts do not prevent native core input. The Claude limits tap
 can be installed with either runtime. World's numeric usage/fuel collector reads
 Unix TUI and core hosts through the same bounded reader; core attribution uses
 explicit session/resume arguments or uniquely resolved Codex title evidence.
-See [analytics coverage](usage-analytics.md), the [runtime support table](../FEATURES.md#runtime-support)
+See [analytics coverage](usage-analytics.md), the [runtime support table](../openspec/specs/herdr-core-runtime/notes.md#runtime-support)
 and [harness inventory](core-harnesses.md).
 
 ## Herdr integration upgrades

@@ -10,7 +10,7 @@ No implementation or install is authorized by these planning artifacts.
 - [ ] 1.2 Run a bounded installed `code serve-web` compatibility spike: prove base path, authenticated HTTP/WS, cookies, redirects, sign-in, workers/PWA scopes, webview origins and secure-context behavior without relaxing global CSP; record blockers and explicit handoff if any gate fails.
 - [ ] 1.3 Test exact Copilot, Pylance, Remote and C# Dev Kit versions/entitlements in the supported web/remote extension hosts, plus settings/profiles/Sync and updates; publish a compatibility matrix rather than infer desktop parity.
 - [ ] 1.4 Measure per-host server/cache/browser and per-project extension-host cold/warm, idle/active resource use on supported local/SSH platforms; derive tested server/window/idle limits.
-- [ ] 1.5 Derive qualification, authentication, ownership and revocation invariants; map verification/coverage.json and mandatory consumers, selecting maintained models or justified platform/browser alternatives before code changes.
+- [ ] 1.5 Derive qualification, authentication, ownership and revocation invariants; map verification/coverage/ and mandatory consumers, selecting maintained models or justified platform/browser alternatives before code changes.
 
 ## 2. Extend integrations and qualified lifecycle
 
@@ -31,3 +31,5 @@ No implementation or install is authorized by these planning artifacts.
 - [ ] 4.1 Run complete required consumer/model/browser/platform/security gates for changed production owners, retain independent review, and record measured resources and remaining exclusions before enabling the integration.
 - [ ] 4.2 Update FEATURES, knowledge map, integration guide and affected architecture/deployment/tutorial docs for accepted delivered behavior; synchronize/archive only after authorized implementation and acceptance.
 - [ ] 4.3 When Code ships or the proposal is rejected, delete the three public mock assets and obsolete fixture tests/references, lower the asset-count allowance by three (currently 189 to 186), and verify the build/asset gate.
+
+Capability path after the feature-map split: `world-surfaces/shell-navigation`. Existing delivery and pending tasks are unchanged.

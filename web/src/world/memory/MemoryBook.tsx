@@ -1,3 +1,4 @@
+import { memoryEntryEditable } from "../../../../shared/memory";
 import { ChevronLeft, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -386,6 +387,11 @@ export function MemoryBook({
         </div>
       ) : (
         <>
+          {!memoryEntryEditable(path ?? "") ? (
+            <p className="memory-hint">
+              This rule is read-only in the Library.
+            </p>
+          ) : null}
           <div className="memory-actions">
             <button
               type="button"
@@ -394,7 +400,7 @@ export function MemoryBook({
                 setDraft(loaded.content);
                 setBase(loaded.revision);
               }}
-              disabled={!loaded || busy}
+              disabled={!loaded || busy || !memoryEntryEditable(path ?? "")}
             >
               <Pencil size={14} aria-hidden="true" /> Edit
             </button>
@@ -402,7 +408,7 @@ export function MemoryBook({
               type="button"
               className="danger"
               onClick={() => setConfirming(true)}
-              disabled={!loaded || busy}
+              disabled={!loaded || busy || !memoryEntryEditable(path ?? "")}
             >
               <Trash2 size={14} aria-hidden="true" /> Delete
             </button>

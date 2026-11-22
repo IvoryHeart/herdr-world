@@ -1,4 +1,6 @@
 import { weatherCliHandler } from "../weather/cli";
+import { composeFeatures } from "../features/compose";
+import { featureKernel } from "../features/contract";
 import { findHerdrBinary } from "../herdr/bootstrap";
 import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
 import { createCoreInstall } from "../herdr-core/install";
@@ -13,7 +15,6 @@ import { createServiceForwards } from "./forward-service";
 import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
 import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
-import { authTokenPrintCommand } from "../config/auth-token";
 import { acquireInstanceLock } from "../config/instance-lock";
 import { publishInstanceAddress } from "./instance-address";
 import { listenerSessionSecret } from "../config/session-secret";
@@ -42,12 +43,10 @@ import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { createSshProfileRuntimeConfig } from "../connections/ssh-profile-runtime";
 import { bindListenerBeforeConnectionStart } from "../connections/startup";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
-import { createAuthHandlers } from "../http/auth";
 import {
   createHerdrSetupHandlers,
   herdrSetupGuardForProfile,
 } from "../http/herdr-setup";
-import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
 import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
@@ -59,7 +58,6 @@ import { createShipyardHttp } from "../shipyard/http";
 import { withIntegrations } from "../integrations/http";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
-import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
 import { createApartmentsService } from "./apartments-service";
@@ -73,6 +71,8 @@ import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
+import { createWorldAskPeers } from "./world-ask-peers";
+import { createAssistantLoader } from "./assistant-loader";
 import { createRuntimeMemoryService } from "../memory/runtime-service";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
@@ -80,6 +80,7 @@ import { AgentActivityCache } from "../world/agent-activity-cache";
 import { DeskWatches } from "../world/desk-watches";
 import { readDeskWatch } from "../world/desk-watch-read";
 import { createBrowserClients, summarizeHerdrEvent } from "./clients";
+import { createServiceHttpHandlers } from "./http-handlers";
 import { listen } from "./listener";
 import type { WorldServiceDeps } from "./ports";
 import { createRpcDispatcher } from "./rpc-dispatch";
@@ -89,10 +90,7 @@ export type { WorldServiceDeps } from "./ports";
 
 export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 
-/**
- * Claim the data folder, open storage and build one World service. Nothing
- * listens or connects until `start()`; `stop()` drains and releases it all.
- */
+/** Claim storage; start listens/connects, stop drains/releases. */
 export async function createWorldService(deps: WorldServiceDeps) {
   const { config, paths } = deps;
   // One live World per data folder; nothing in it is written before this.
@@ -149,23 +147,11 @@ async function compose(
     hasExplicitSocketPath: config.hasExplicitSocketPath,
     hasExplicitClientSocketPath: config.hasExplicitClientSocketPath,
   };
-  const auth = createAuthHandlers({
-    authRequired: config.authRequired,
-    password: config.password,
-    pin: config.pin,
+  const { auth, update } = createServiceHttpHandlers(
+    config,
     sessionSecret,
-    urlLoginToken: config.generatedAuthToken,
-    tokenCommand:
-      config.generatedAuthTokenPath &&
-      authTokenPrintCommand(config.generatedAuthTokenPath),
-    secureCookies: Boolean(config.tls),
-  });
-  const update = createUpdateHandlers({
-    appVersion: config.appVersion,
-    runProcessWithCodeTimeout,
-    shQuote,
-    scheduleProcessExit: deps.scheduleProcessExit,
-  });
+    deps.scheduleProcessExit,
+  );
   let connectionRevision = 0;
   function publishConnectionsChanged() {
     if (stopping) return;
@@ -227,6 +213,7 @@ async function compose(
   const readyConnectionGenerations = new Map<string, number>();
   let worldSnapshots: ObservedSnapshots | null = null;
   let worldUsage: ComposedWorldUsage | null = null;
+  let features: ReturnType<typeof composeFeatures> | undefined = undefined;
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
   // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
@@ -251,7 +238,17 @@ async function compose(
     board,
     publishBoardChanged,
   );
+  const askPeers = createWorldAskPeers({
+    titleSuffix: async () => (await settings.read()).title_suffix,
+    profiles: () => connectionProfiles.profilesById(),
+    coreIds: () => connectionProfiles.coreList().map((entry) => entry.id),
+    defaultId: () => connectionManager.defaultId(),
+    ledger: () => storage.ledger(),
+  });
   const worldCli = createWorldCliService({
+    peers: askPeers.peers,
+    homeName: askPeers.homeName,
+    askRuntimes: askPeers.askRuntimes,
     memory: () => rpcServices.worldMemory!,
     core: () => coreCallers,
     board,
@@ -367,6 +364,7 @@ async function compose(
       );
       bin.connectionStatus(status);
       apartments.apartments.connectionStatus(status);
+      features?.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -391,7 +389,7 @@ async function compose(
         connectionManager.readyRuntimeLease(status.id),
         publishBoardChanged,
       );
-      resumeAssistantIfLoaded();
+      assistant.resumeIfLoaded();
       if (reporter.recovered(fields)) {
         readyConnectionGenerations.set(status.id, status.generation);
       } else if (
@@ -490,50 +488,26 @@ async function compose(
     tui: connectionManager,
     core: coreRpc,
   });
-  let assistantServiceTask: Promise<
-    Awaited<
-      ReturnType<typeof import("../assistant/service").createAssistantService>
-    >
-  > | null = null;
-  function getAssistantService() {
-    // Ranger started now would outlive stop and its data folder.
-    if (stopping) return Promise.reject(new Error("World is stopping"));
-    assistantServiceTask ??= import("../assistant/service")
-      .then(({ createAssistantService }) =>
-        createAssistantService({
-          context: assistantContext,
-          directory: paths.assistant,
-          publish: (snapshot) => {
-            broadcast(
-              JSON.stringify({ assistant: snapshot }),
-              "assistant",
-              "assistant",
-            );
-          },
-          notify: (notification) => {
-            broadcast(
-              JSON.stringify({ assistant_notification: notification }),
-              "assistant_notification",
-            );
-            webPush.notify(notification, () => true);
-          },
-        }),
-      )
-      .catch((error) => {
-        assistantServiceTask = null;
-        throw error;
-      });
-    return assistantServiceTask;
-  }
-
-  function resumeAssistantIfLoaded() {
-    if (stopping) return;
-    void assistantServiceTask
-      ?.then((service) => service.resume())
-      .catch(() => {
-        logger.warn("Ranger recovery could not be started");
-      });
-  }
+  const assistant = createAssistantLoader({
+    context: assistantContext,
+    directory: paths.assistant,
+    stopping: () => stopping,
+    warn: (message) => logger.warn(message),
+    publish: (snapshot) => {
+      broadcast(
+        JSON.stringify({ assistant: snapshot }),
+        "assistant",
+        "assistant",
+      );
+    },
+    notify: (notification) => {
+      broadcast(
+        JSON.stringify({ assistant_notification: notification }),
+        "assistant_notification",
+      );
+      webPush.notify(notification, () => true);
+    },
+  });
 
   function defaultConnectionProfile() {
     return connectionProfiles
@@ -601,7 +575,8 @@ async function compose(
           clientLabel,
           markRpcError,
           taskNotificationSource: config.taskNotificationSource,
-          onTaskEvent: (event) =>
+          onTaskEvent: (event) => {
+            if (context.isCurrent()) askPeers.observeAlert(event);
             webPush.notify(
               connectionTaskPush(
                 event,
@@ -614,7 +589,8 @@ async function compose(
                 identity.label,
               ),
               context.isCurrent,
-            ),
+            );
+          },
           onEvent: (event, eventIdentity, kind) => {
             if (!context.isCurrent()) return;
             publishWorldInvalidation(
@@ -785,7 +761,7 @@ async function compose(
     agentActivity,
     deskWatches,
     conversationWatchers: browsers.conversationWatchers,
-    getAssistantService,
+    getAssistantService: assistant.get,
     logger,
     markRpcError,
     profiles,
@@ -814,18 +790,15 @@ async function compose(
       now: () => clock.now(),
     }),
   };
+  features = composeFeatures(
+    featureKernel(deps, storage, rpcServices, () => worldSources),
+  );
+  rpcServices.featureRpc = features.rpc;
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
   const { track, drained } = inFlightWork(scheduler, (requests) =>
     logger.warn("World stopped with requests still running", { requests }),
   );
-
-  /** Dispose Ranger if it was started; stopping keeps a new one from starting. */
-  async function disposeAssistant() {
-    const task = assistantServiceTask;
-    assistantServiceTask = null;
-    await task?.then((service) => service.dispose()).catch(() => {});
-  }
 
   let server: Server<{ sessionToken: string | null }> | null = null;
   let startTask: Promise<void> | null = null;
@@ -852,10 +825,7 @@ async function compose(
     get port(): number | undefined {
       return server?.port;
     },
-    /**
-     * Bind the listener, then start configured connections and Ranger in the
-     * background; a port conflict therefore fails before any connection.
-     */
+    /** Bind before starting connections/Ranger: a port conflict starts neither. */
     start(): { port: number; connected: Promise<void> } {
       if (stopTask) throw new Error("World service is stopped");
       if (server) throw new Error("World service already started");
@@ -901,22 +871,33 @@ async function compose(
         },
       });
       publishInstanceAddress(releaseDataFolder, config, server);
+      const listenPort = server.port ?? config.port;
+      const asksReport = askPeers.start(listenPort, {
+        directory: paths.instanceRegistry,
+        selfId: shipyardInstances.id,
+        now: () => clock.now(),
+        scheduler,
+        any: ["0.0.0.0", "::"].includes(config.host),
+        changed: () => worldCli.peersChanged(),
+        reportChanged: () => shipyardInstances.republish(),
+        log: (message) => logger.warn(message),
+      });
       shipyardInstances.start(
         shipyardIdentity,
-        server.port ?? config.port,
+        listenPort,
         config.host,
         !!config.tls,
+        asksReport,
       );
       worldCli.start();
       forwards.listeningOn(server.port ?? config.port);
+      features!.listening(listenPort);
       return {
         port: server.port ?? config.port,
         connected: startTask!.catch(() => {}),
       };
     },
-    /** Drain/release once, listener last. keepListener binds until process exit:
-     * launchd waits for the port to free before restarting (service-manager.ts).
-     */
+    /** Drain once, listener last; keepListener lets launchd wait for process exit. */
     async stop(options: { keepListener?: boolean } = {}): Promise<void> {
       stopTask ??= stopService();
       await stopTask;
@@ -933,8 +914,8 @@ async function compose(
     // Stopping fences startup: Ranger must not start after stop began.
     if (stopping) return;
     // Resume saved work even when no browser has opened Ranger yet.
-    await getAssistantService();
-    resumeAssistantIfLoaded();
+    await assistant.get();
+    assistant.resumeIfLoaded();
     browsers.notifyBrowserClientCount();
     const runtime = connectionManager.defaultReadyRuntime();
     // Stopping the runtime fails this call, so stop can wait for it.
@@ -960,9 +941,11 @@ async function compose(
   async function stopService() {
     // Refuse requests (503), reconnects, pushes, Ranger starts and new answer waits.
     stopping = true;
+    if (features!.hasStop("quiesce")) await features!.stop("quiesce");
     worldSources.weather.close();
     shipyard.close();
     shipyardInstances.stop();
+    askPeers.stop();
     const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
     deskWatches.stop();
@@ -975,12 +958,13 @@ async function compose(
     try {
       // Stop Ranger then runtimes, failing pending Herdr calls; fenced startup/requests settle.
       await forwards.stop();
-      await disposeAssistant();
+      await assistant.dispose();
+      if (features!.hasStop("drain")) await features!.stop("drain");
       await connectionManager.stopAll();
       await core.stop();
       await usageStopped;
       await startTask?.catch(() => {});
-      await disposeAssistant();
+      await assistant.dispose();
       await drained();
     } finally {
       try {
@@ -988,6 +972,7 @@ async function compose(
         // a history census still reading stops.
         await apartments.stop();
         await closeTerminalMarks();
+        if (features!.hasStop("close")) await features!.stop("close");
         storageOpen = false;
         await storage.close();
       } finally {

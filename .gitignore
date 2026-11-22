@@ -44,3 +44,6 @@ _site/
 bridge/target/
 vendor/*/target/
 dist-packages/
+
+# Feature reference is computed from OpenSpec at site build.
+/FEATURES.md

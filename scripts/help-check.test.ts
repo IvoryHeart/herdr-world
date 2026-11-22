@@ -8,7 +8,11 @@ import {
   helpStageInputs,
   scanHelpAnchors,
 } from "./help-declarations";
-import { helpCheckProblems, repositoryHelp } from "./help-check";
+import {
+  helpCheckProblems,
+  helpCheckWarnings,
+  repositoryHelp,
+} from "./help-check";
 import { renderHelpDoc } from "./help-docs";
 
 test("renaming a control a help entry points at fails and names the entry", () => {
@@ -37,7 +41,7 @@ test("renaming a control a help entry points at fails and names the entry", () =
   }
 });
 
-test("pictures fail when missing, stale or left over", () => {
+test("pictures fail when missing or left over", () => {
   const help = repositoryHelp();
   const entry = help.entries[0]!;
   const one = { ...help, entries: [entry] };
@@ -48,16 +52,6 @@ test("pictures fail when missing, stale or left over", () => {
   expect(
     helpCheckProblems({
       ...one,
-      pictures: files,
-      fingerprint: () => "changed",
-      docCurrent: true,
-    }),
-  ).toContainEqual(
-    expect.stringContaining(`"${entry.id}" has an out-of-date picture`),
-  );
-  expect(
-    helpCheckProblems({
-      ...one,
       pictures: [...files, "town.gone.desktop.light.webp"],
       docCurrent: true,
     }),
@@ -65,6 +59,41 @@ test("pictures fail when missing, stale or left over", () => {
     expect.stringContaining(
       "town.gone.desktop.light.webp belongs to no help entry",
     ),
+  );
+});
+
+test("stale fingerprints warn in feature PRs and fail only in strict mode", () => {
+  const help = repositoryHelp();
+  const stale = { ...help, fingerprint: () => "changed", docCurrent: true };
+  expect(helpCheckProblems(stale)).toEqual([]);
+  expect(helpCheckWarnings(stale)).toHaveLength(help.entries.length);
+  expect(helpCheckWarnings(stale)[0]).toContain("out-of-date picture");
+  expect(helpCheckWarnings(stale)[0]).toContain("bot PR");
+  expect(helpCheckProblems(stale, true)).toEqual(helpCheckWarnings(stale));
+  expect(
+    helpCheckWarnings({
+      ...help,
+      fingerprint: (entry) => help.manifest[entry.id]!.fingerprint,
+    }),
+  ).toEqual([]);
+});
+
+test("a new entry without a manifest or with a missing picture fails", () => {
+  const help = repositoryHelp();
+  const entry = { ...help.entries[0]!, id: "town.new-control" };
+  const missing = { ...help, entries: [...help.entries, entry] };
+  expect(helpCheckProblems(missing)).toContainEqual(
+    expect.stringContaining('"town.new-control" has no picture'),
+  );
+  const files = helpPictureFiles(entry);
+  expect(
+    helpCheckProblems({
+      ...missing,
+      manifest: { ...help.manifest, [entry.id]: { fingerprint: "old", files } },
+      pictures: [...help.pictures, ...files.slice(1)],
+    }),
+  ).toContainEqual(
+    expect.stringContaining('"town.new-control" has no picture'),
   );
 });
 

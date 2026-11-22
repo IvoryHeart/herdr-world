@@ -2,6 +2,7 @@ import { posix as path } from "node:path";
 import {
   MEMORY_ACTIONS,
   MEMORY_LIMITS,
+  MEMORY_HARNESSES,
   MemoryError,
   type MemoryAction,
   type MemoryAgent,
@@ -49,13 +50,13 @@ function absolute(value: unknown): value is string {
     !/[\x00-\x1f]/.test(value)
   );
 }
-function entryPath(value: unknown): string {
+function entryPath(value: unknown, rule = false): string {
   const result = required(value, "path", 1024);
   if (
     result.startsWith("/") ||
     result.includes("\\") ||
     result.split("/").some((part) => !part || part === "." || part === "..") ||
-    !/\.md$/i.test(result) ||
+    !(rule ? /\.mdc?$/i : /\.md$/i).test(result) ||
     result.split("/").length > MEMORY_LIMITS.depth + 1
   )
     throw new MemoryError(
@@ -293,7 +294,7 @@ export class MemoryService {
     )
       throw new MemoryError(
         "invalid",
-        "Unsupported memory harness; use claude, codex or pi",
+        `Unsupported memory harness; use ${MEMORY_HARNESSES.join(", ")}`,
       );
     if (action === "list" || action === "search") {
       const listed = await run<{
@@ -364,7 +365,12 @@ export class MemoryService {
         "not_found",
         "Source is no longer discoverable; list memory again",
       );
-    const relative = entryPath(params.path);
+    const relative = entryPath(
+      params.path,
+      action === "read" &&
+        source.kind === "rules" &&
+        source.harnesses.some((h) => h === "cursor" || h === "omp"),
+    );
     if (source.shape === "file" && relative !== path.basename(source.path))
       throw new MemoryError(
         "refused",
