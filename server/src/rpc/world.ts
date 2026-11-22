@@ -1,4 +1,5 @@
 import { handleApartmentsRpc } from "./apartments";
+import { featureMethods } from "../features/catalog";
 import { planBoardPatch } from "../world/board-plan";
 import { parseObservationBase } from "../world/observation-v1";
 import { pruneSnapshotAppearance } from "../world/appearance-prune";
@@ -28,7 +29,9 @@ export function handleWorldRpc(
   rpc: BridgeRpcContext,
 ): false | Promise<false | void> {
   const { method } = rpc;
-  const feature = rpc.services.featureRpc?.get(method);
+  const feature = featureMethods.has(method)
+    ? rpc.services.featureRpc?.get(method)
+    : undefined;
   if (feature) return (async () => feature(rpc))();
   if (!method.startsWith("world.")) return false;
   return dispatchWorldRpc(rpc);
