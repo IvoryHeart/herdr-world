@@ -15,7 +15,10 @@ import {
   terminalKey,
   withInheritedColors,
 } from "../../../shared/relations";
-import { resolveTerminalColor } from "../../../shared/terminalColor";
+import {
+  resolveTerminalColor,
+  tabCardKey,
+} from "../../../shared/terminalColor";
 import { rehomeAgent } from "./agent-rehome";
 import { emptyBoardDocument } from "./board-store";
 import type { BoardOp } from "./board-types";
@@ -541,4 +544,146 @@ describe("closing a herdr-core original (real kill path)", () => {
       await side.close({ pane_id: "", terminal_id: "t1" }, admitted),
     ).toEqual({ uncertain: "core didn't confirm it ended." });
   });
+});
+
+test("a herdr-core original moves to a Herdr TUI room and closes there", async () => {
+  const w = await coreWorld();
+  try {
+    await w.connect();
+    const room = await createCoreRoom(w.lease(), w.topology, "A");
+    await launchCore(
+      w.lease(),
+      {
+        workspaceId: room.workspace_id,
+        kind: "claude",
+        label: "Ada",
+        text: "",
+      },
+      {
+        topology: w.topology,
+        resolveExecutable: async (kind) => `/opt/example/bin/${kind}`,
+      },
+    );
+    w.fake.status("t1", "idle");
+    await w.settle();
+    const services = {
+      connectionManager: { has: () => false },
+      coreControl: {
+        manager: w.core.manager,
+        topology: w.topology,
+        hostRuntime: () => ({
+          sshHost: () => null,
+          agentSessions: () => ({
+            knownSession: async () => ({ id: "session-1", holder: "" }),
+          }),
+        }),
+        host: () => null,
+      },
+      board: () => ({ get: emptyBoardDocument }),
+    } as unknown as Parameters<typeof moveSide>[0];
+    const core = moveSide(services, "box", w.lease().generation)!;
+    const { workspaces, panes } = await core.rows();
+    const pane = panes.find((row) => row.terminal_id === "t1")!;
+    const log: string[] = [];
+    const tui = side("tui", [], log);
+    const { deps } = setup();
+    deps.side = (id) => (id === "box" ? core : id === "tui" ? tui : null);
+    const outcome = await moveAgentAcross(deps, {
+      source: {
+        connection_id: "box",
+        generation: w.lease().generation,
+        workspace_id: room.workspace_id,
+        tab_id: String(pane.tab_id),
+        pane_id: "t1",
+        terminal_id: "t1",
+        color_key: tabCardKey("box", String(pane.tab_id), new Set(workspaces)),
+      },
+      destination: { connection_id: "tui", generation: 1, workspace_id: "w1" },
+    });
+    expect(outcome).toMatchObject({ status: "moved" });
+    expect(log[0]).toStartWith("start tui claude --resume session-1");
+    await w.settle();
+    expect(w.fake.terminal("t1")!.state).not.toBe("live");
+  } finally {
+    await w.dispose();
+  }
+});
+
+test("a core terminal is idle only while its own shell is alone in front", async () => {
+  const w = await coreWorld();
+  try {
+    await w.connect();
+    const shell = w.fake.create({});
+    const sleeper = w.fake.create({ argv: ["/bin/sleep", "3600"] });
+    w.fake.foreground(sleeper, {
+      pid: w.fake.terminal(sleeper)!.pid,
+      name: "sleep",
+      argv: ["/bin/sleep", "3600"],
+    });
+    await w.settle();
+    const services = {
+      connectionManager: { has: () => false },
+      coreControl: {
+        manager: w.core.manager,
+        topology: w.topology,
+        hostRuntime: () => ({ sshHost: () => null }),
+        host: () => null,
+      },
+      board: () => ({ get: emptyBoardDocument }),
+    } as unknown as Parameters<typeof moveSide>[0];
+    const core = moveSide(services, "box", w.lease().generation)!;
+    const busy = (terminal_id: string) =>
+      core.shellBusy({ pane_id: terminal_id, terminal_id } as TerminalRow);
+    expect(await busy(shell)).toBe(false);
+    expect(await busy(sleeper)).toBe(true);
+  } finally {
+    await w.dispose();
+  }
+});
+
+test("a TUI shell that exits at once is not taken as ready", async () => {
+  const calls: string[] = [];
+  let panes: TerminalRow[] = [];
+  const lease = {
+    generation: 1,
+    isCurrent: () => true,
+    runtime: {
+      sshHost: () => null,
+      operations: {
+        listWorkspaces: async () => ({ workspaces: [{ workspace_id: "w1" }] }),
+        listTerminals: async () => ({ panes }),
+        listAgents: async () => ({ agents: [] }),
+      },
+      tui: {
+        async call(method: string) {
+          calls.push(method);
+          if (method === "tab.create")
+            return {
+              tab: { tab_id: "w1:t9" },
+              root_pane: { pane_id: "p9", terminal_id: "term-9" },
+            };
+          return {
+            process_info: { shell_pid: 7, foreground_process_group_id: 7 },
+          };
+        },
+      },
+    },
+  };
+  const services = {
+    connectionManager: { has: () => true, readyRuntimeLease: () => lease },
+    board: () => ({ get: emptyBoardDocument }),
+  } as unknown as Parameters<typeof moveSide>[0];
+  const tui = moveSide(services, "tui", 1, async () => {})!;
+  const request = { workspaceId: "w1", kind: null, label: "sh", args: [] };
+  expect(await tui.start(request)).toEqual({
+    message: "Its shell exited at once.",
+    pane_id: "p9",
+  });
+  panes = [{ pane_id: "p9", terminal_id: "term-9", tab_id: "w1:t9" }];
+  expect(await tui.start(request)).toEqual({
+    tab_id: "w1:t9",
+    pane_id: "p9",
+    terminal_id: "term-9",
+  });
+  expect(calls).toEqual(["tab.create", "tab.create", "pane.process_info"]);
 });

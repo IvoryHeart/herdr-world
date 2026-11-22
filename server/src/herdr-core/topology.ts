@@ -627,12 +627,16 @@ export function coreTopology(
       if (spaceName) known.label = spaceName;
     }
     if (caption !== null) appNamed.add(workspaceId);
-    if (!tabs.has(tabId))
+    // Herdr's tab rows count their panes; Town hands over only a lone one.
+    const tab = tabs.get(tabId);
+    if (tab) tab.pane_count = Number(tab.pane_count) + 1;
+    else
       tabs.set(tabId, {
         tab_id: tabId,
         workspace_id: workspaceId,
         label: tabLabel,
         focused: false,
+        pane_count: 1,
       });
     const report = coreStatusReport(record);
     const foreground = object(record.foreground);

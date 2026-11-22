@@ -12,6 +12,7 @@ import { tabCardKey } from "../../../shared/terminalColor";
 import type { TerminalRow } from "../adapters/runtime-ports";
 import { launchAgent } from "../agent/launch";
 import { CoreOperationFence } from "../herdr-core/fence";
+import { isIdleShell } from "../herdr-core/harness";
 import { resolveCoreExecutable } from "../herdr-core/host";
 import {
   killCore,
@@ -356,6 +357,20 @@ export function moveSide(
     const { runtime } = resolved.lease;
     const call = (method: string, params: Record<string, unknown>) =>
       runtime.tui.call(method, params, 70_000);
+    /** True unless the pane's shell is alone in front. */
+    const busy = async (pane: TerminalRow) => {
+      const info = (await call("pane.process_info", {
+        pane_id: text(pane.pane_id),
+      }).catch(() => null)) as {
+        process_info?: Record<string, unknown>;
+      } | null;
+      const process = info?.process_info;
+      return (
+        !process ||
+        typeof process.shell_pid !== "number" ||
+        process.foreground_process_group_id !== process.shell_pid
+      );
+    };
     return {
       ...base,
       machine: runtime.sshHost() ?? "",
@@ -371,17 +386,7 @@ export function moveSide(
           }
         return null;
       },
-      async shellBusy(pane) {
-        const info = (await call("pane.process_info", {
-          pane_id: text(pane.pane_id),
-        })) as { process_info?: Record<string, unknown> } | null;
-        const process = info?.process_info;
-        return (
-          !process ||
-          typeof process.shell_pid !== "number" ||
-          process.foreground_process_group_id !== process.shell_pid
-        );
-      },
+      shellBusy: busy,
       pinned: (_pane, colorKey) =>
         Boolean(services.board().get().layout.desk_pins[colorKey]),
       async start(request) {
@@ -397,9 +402,23 @@ export function moveSide(
           const tab_id = text(made?.tab?.tab_id);
           const pane_id = text(made?.root_pane?.pane_id);
           const terminal_id = text(made?.root_pane?.terminal_id);
-          return tab_id && pane_id && terminal_id
-            ? { tab_id, pane_id, terminal_id }
-            : { message: "Herdr did not confirm the new tab." };
+          if (!tab_id || !pane_id || !terminal_id)
+            return {
+              message: "Herdr did not confirm the new tab.",
+              ...(pane_id ? { pane_id } : {}),
+            };
+          // Ready once Herdr shows the new pane with its shell in front.
+          for (let waited = 0; waited < READY_MS; waited += 1_000) {
+            if (!resolved.isCurrent())
+              return { message: "The host reconnected.", pane_id };
+            const live = (await rows()).panes.find(
+              (row) => row.pane_id === pane_id,
+            );
+            if (!live) return { message: "Its shell exited at once.", pane_id };
+            if (!(await busy(live))) return { tab_id, pane_id, terminal_id };
+            await sleep(1_000);
+          }
+          return { message: "Its shell wasn't ready in time.", pane_id };
         }
         const outcome = await launchAgent(call, {
           workspace_id: request.workspaceId,
@@ -448,12 +467,21 @@ export function moveSide(
       return known?.id ?? null;
     },
     async shellBusy(pane) {
-      // Busy while its foreground program is not the shell core started.
+      // Idle only while its own shell is alone in front: any other program,
+      // even one core started as the terminal's own (`sleep 3600`), is busy.
       const record = lease.runtime.core.mirror
         .terminals()
         .find((t) => t.address === text(pane.terminal_id));
-      const foreground = record?.foreground as { pid?: unknown } | undefined;
-      return !record || (foreground?.pid ?? record.pid) !== record.pid;
+      if (!record) return true;
+      const front = record.foreground as
+        | { pid?: unknown; name?: unknown; argv?: unknown }
+        | undefined;
+      if ((front?.pid ?? record.pid) !== record.pid) return true;
+      const named = (p?: { name?: unknown; argv?: unknown }) =>
+        Boolean(p?.name || (Array.isArray(p?.argv) && p.argv.length));
+      const program = named(front) ? front! : { argv: record.argv };
+      // Started without a program, core runs the account's shell.
+      return named(program) && !isIdleShell(program, record.pid);
     },
     pinned: (pane) => pane.favourite === true,
     async start(request) {
