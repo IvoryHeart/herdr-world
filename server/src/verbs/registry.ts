@@ -4,7 +4,6 @@ import { cliVerbs } from "./cli";
 import { effectVerbs } from "./effects";
 import { declare, object, policies, result, text } from "./declaration";
 import { rpcVerbs } from "./rpc";
-import { memoryVerbs } from "./memory";
 import type { Verb } from "./types";
 
 const sourceVerbs = (["merge", "close", "ready"] as const).map((action) =>
@@ -27,7 +26,6 @@ const sourceVerbs = (["merge", "close", "ready"] as const).map((action) =>
 export const VERBS: readonly Verb[] = Object.freeze([
   ...rpcVerbs,
   ...serverFeatures.flatMap((feature) => feature.verbs),
-  ...memoryVerbs,
   ...cliVerbs,
   ...sourceVerbs,
   ...effectVerbs,

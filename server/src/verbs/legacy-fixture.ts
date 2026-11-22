@@ -1,3 +1,4 @@
+import legacyBaseline from "./legacy-outcomes.json";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -64,11 +65,11 @@ export async function legacyOutcomes(factory = createWorldCli) {
     code?: string;
     effects: string[];
   }[] = [];
+  // This oracle captures pre-registry commands. New verbs have their own consumer tests.
   for (const verified of [true, false])
-    for (const command of WORLD_CLI_COMMANDS) {
-      // Memory was added after the frozen pre-registry baseline. Its admission
-      // and effects are covered by memory/routing.test.ts and cli/memory.test.ts.
-      if (command.startsWith("memory ")) continue;
+    for (const command of WORLD_CLI_COMMANDS.filter((name) =>
+      legacyBaseline.some((entry) => entry.command === name),
+    )) {
       const root = mkdtempSync(join(tmpdir(), "verb-compatibility-"));
       try {
         const effects: string[] = [];

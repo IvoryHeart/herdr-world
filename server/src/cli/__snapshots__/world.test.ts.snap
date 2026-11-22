@@ -10,7 +10,8 @@ herdr-world integration uninstall <harness>. It does not start World or Herdr.
 Run them inside your Herdr pane: World reads HERDR_PANE_ID and checks that
 you really run in that pane. Without a pane, or in a pane World cannot
 check, your changes are marked unverified. Board changes have history and
-conditional undo. Groups keep the latest 128 changes with the sender claim
+conditional undo for card/layout actions. Registry element writes use revisions
+and have no CLI history/undo. Groups keep the latest 128 changes with the sender claim
 and its reported/inferred basis (unknown when absent), including deletion;
 this recent attribution is not a complete audit and has no CLI undo.
 
@@ -86,6 +87,19 @@ Targets are on your own host; add --connection ID for another one.
   board card pin TARGET X,Y | unpin TARGET
   board card group TARGET --with TARGET | ungroup TARGET
   board card colour TARGET COLOUR|default
+  board element types|list [--json]
+  board element put KIND ID --title TITLE [--at X,Y] [--rev REV] [--json]
+         document: --text TEXT, or --connection ID --workspace ID --path PATH
+         memory: --connection ID --workspace ID [--path PATH] (MEMORY.md default)
+         log: --connection ID --workspace ID --path PATH [--agent-ref ID]
+         link: --url HTTP_URL (stored only; no fetch or iframe)
+  board element read ID [--generation N] [--path CHILD] [--json]
+         project sources need the named connection's current generation from
+         ls --json: choose a current: true row; use its connection_id, generation
+         and workspaces[].workspace_id. Refresh ls after a generation refusal;
+         a memory directory accepts a relative child path. Reads cap at 64 KiB.
+  board element delete ID --rev REV [--json]
+         removes only the reference; list returns the revision needed to edit/delete.
   colour set TARGET COLOUR | colour reset TARGET
          colours: red orange yellow green teal blue purple pink
   town desk move TARGET --onto TARGET|--last --herdr

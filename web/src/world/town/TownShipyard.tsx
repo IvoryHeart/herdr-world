@@ -68,7 +68,8 @@ type OpenProject = ((repo: string) => void) | null;
 type Lane = { repo: string; color: string; view: ShipyardView };
 
 /**
- * The projects with releases, in the catalog's order, each with its colour
+ * The open projects with releases (#1226), in the catalog's order, and a
+ * repository typed in the Releases tab while chosen, each with its colour
  * and its own pipeline read from the shared store (#1148). A project gets a
  * lane once a read of its GitHub releases (kept while a later read fails,
  * then shown out of date) lists at least one published release. One not
@@ -78,7 +79,7 @@ type Lane = { repo: string; color: string; view: ShipyardView };
 export function townShipyardLanes(state: ShipyardState, now: number): Lane[] {
   if (!state.catalog) return [];
   const lanes: Lane[] = [];
-  for (const repo of shipyardLanes(state.catalog, state.repo)) {
+  for (const repo of shipyardLanes(state.catalog, state.manual)) {
     const snapshot = state.snapshots[repo];
     if (!snapshot) continue;
     // A lane whose own read failed keeps its last answer, out of date.

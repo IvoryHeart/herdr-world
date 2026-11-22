@@ -34,6 +34,7 @@ export const boardTables = [
   ...firstBoardTables,
   "room_pins",
   "shapes",
+  "elements",
 ] as const;
 type Family = (typeof boardTables)[number];
 type Row = {
@@ -54,6 +55,7 @@ ${firstBoardTables.map(boardTable).join("\n")}
 `;
 /** Town room spots (board-types.ts `room_pins`), added after the first schema. */
 export const worldRoomPinsMigration = boardTable("room_pins");
+export const worldBoardElementsMigration = boardTable("elements");
 /** Board drawings (shared/boardShapes.ts), added after room spots. */
 export const worldBoardShapesMigration = boardTable("shapes");
 export function readBoard(db: Database): BoardDocument | null {
@@ -72,6 +74,8 @@ export function readBoard(db: Database): BoardDocument | null {
     ).map((row) => [row.key, JSON.parse(row.body)] as const);
   const doc = emptyBoardDocument();
   doc.revision = meta.revision;
+  const elements = rows("elements").map(([, body]) => body);
+  if (elements.length) doc.elements = elements;
   doc.notes = rows("notes").map(([, body]) => body);
   doc.strings = rows("strings").map(([, body]) => body);
   const shapes = rows("shapes").map(([, body]) => body);
@@ -104,6 +108,7 @@ export function writeBoard(
     "INSERT INTO world_ids(id) SELECT ? WHERE NOT EXISTS(SELECT 1 FROM world_ids WHERE id=?)",
   );
   for (const record of [
+    ...(next.elements ?? []),
     ...next.notes,
     ...next.strings,
     ...(next.shapes ?? []),
@@ -191,6 +196,7 @@ export function writeBoard(
         "shapes",
         "groups",
         "group_interest",
+        "elements",
       ].includes(family)
         ? key
         : (binding?.record_id ?? null);
@@ -204,6 +210,10 @@ export function writeBoard(
       );
     });
   }
+  save(
+    "elements",
+    (next.elements ?? []).map((element) => [element.id, element]),
+  );
   save(
     "notes",
     next.notes.map((note) => [note.id, note]),

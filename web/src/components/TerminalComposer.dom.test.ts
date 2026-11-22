@@ -399,4 +399,130 @@ if (process.env.ROAMGATE_COMPOSER_DOM_TEST !== "1") {
       await browser.happyDOM.close();
     }
   });
+
+  test("an expansion's synchronous commit leaves no orphan resize observer", async () => {
+    const browser = new Window({ url: "http://localhost" });
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 1;
+    const active = new Set<TrackedResizeObserver>();
+    class TrackedResizeObserver {
+      constructor(readonly callback: ResizeObserverCallback) {}
+      observe() {
+        active.add(this);
+      }
+      unobserve() {}
+      disconnect() {
+        active.delete(this);
+      }
+    }
+    const originals = new Map<string, PropertyDescriptor | undefined>();
+    for (const [key, value] of Object.entries({
+      window: browser,
+      document: browser.document,
+      navigator: browser.navigator,
+      HTMLElement: browser.HTMLElement,
+      HTMLButtonElement: browser.HTMLButtonElement,
+      HTMLTextAreaElement: browser.HTMLTextAreaElement,
+      Element: browser.Element,
+      Node: browser.Node,
+      localStorage: browser.localStorage,
+      IS_REACT_ACT_ENVIRONMENT: true,
+      ResizeObserver: TrackedResizeObserver,
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        frames.set(nextFrame, callback);
+        return nextFrame++;
+      },
+      cancelAnimationFrame: (id: number) => frames.delete(id),
+    })) {
+      originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+      Object.defineProperty(globalThis, key, {
+        value,
+        configurable: true,
+        writable: true,
+      });
+    }
+    const { createRoot } = await import("react-dom/client");
+    const { TerminalComposer } = await import("./TerminalComposer");
+    const drafts = await import("../terminalComposer");
+    const key = "orphan-observer-dom";
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const flushFrames = () =>
+      act(() => {
+        while (frames.size) {
+          const [id, callback] = frames.entries().next().value!;
+          frames.delete(id);
+          callback(0);
+        }
+      });
+    let width = 200;
+    const editor = () => {
+      const textarea = container.querySelector("textarea")!;
+      textarea.getBoundingClientRect = () =>
+        ({
+          width,
+          height: 20,
+          top: 0,
+          left: 0,
+          right: width,
+          bottom: 20,
+        }) as DOMRect;
+      return textarea;
+    };
+    const expanded = () =>
+      container
+        .querySelector(".terminal-composer")!
+        .hasAttribute("data-expanded");
+    try {
+      await act(() =>
+        root.render(
+          createElement(TerminalComposer, {
+            draftKey: key,
+            mode: "composer",
+            onModeChange() {},
+            onFocusDirect() {},
+            directDisabled: false,
+            shortcutRows: [],
+            onRunShortcut() {},
+            onClose() {},
+            onSubmit: async () => {},
+            onUploadImage: async () => "/image.png",
+            onUploadFile: async () => "/file.txt",
+            onError() {},
+          }),
+        ),
+      );
+      await act(() => editor().focus());
+      await act(() => drafts.writeTerminalComposerDraft(key, "one\ntwo"));
+      await flushFrames();
+      expect(expanded()).toBe(true);
+      expect(active.size).toBe(1);
+      // Shorten and blur, then a width change must not let any earlier
+      // measurement restore expansion when the short draft is refocused.
+      await act(() => drafts.writeTerminalComposerDraft(key, "one"));
+      await act(() => editor().blur());
+      await flushFrames();
+      expect(active.size).toBe(1);
+      width = 120;
+      editor();
+      await act(() => {
+        for (const observer of [...active])
+          observer.callback([], observer as unknown as ResizeObserver);
+      });
+      await act(() => editor().focus());
+      await flushFrames();
+      expect(expanded()).toBe(false);
+      await act(() => root.unmount());
+      expect(active.size).toBe(0);
+    } finally {
+      container.remove();
+      drafts.writeTerminalComposerDraft(key, "");
+      for (const [key, descriptor] of originals) {
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+        else Reflect.deleteProperty(globalThis, key);
+      }
+      await browser.happyDOM.close();
+    }
+  });
 }
