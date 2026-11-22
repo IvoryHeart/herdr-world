@@ -131,7 +131,7 @@ describe("fixtureIdeClient", () => {
   test("ssh starts the IDE on the SSH host", async () => {
     const client = fixtureIdeClient("ssh");
     const result = await client.open({
-      provider: "vscode",
+      provider: "code-server",
       connectionId: "c1",
       generation: 1,
       folder: "/srv/example/api",
@@ -139,7 +139,7 @@ describe("fixtureIdeClient", () => {
     expect(result).toMatchObject({
       ok: true,
       instance: {
-        provider: "vscode",
+        provider: "code-server",
         state: "starting",
         sshDestination: "devbox.example",
       },
@@ -174,6 +174,41 @@ describe("fixtureIdeClient", () => {
       folder: "/srv/example/api",
     });
     expect(result.ok && result.instance.provider).toBe("vscode");
+  });
+
+  test("a disabled IDE is refused, as the service does", async () => {
+    const result = await fixtureIdeClient("ssh").open({
+      provider: "vscode",
+      connectionId: "c1",
+      generation: 1,
+      folder: "/srv/example/api",
+    });
+    expect(result).toMatchObject({ ok: false, refusal: { code: "disabled" } });
+  });
+
+  test("not-installed refuses OpenVSCode Server; another IDE then opens", async () => {
+    const client = fixtureIdeClient("not-installed");
+    const enabled = (await client.status()).providers.filter(
+      (entry) => entry.enabled,
+    );
+    expect(enabled.map((entry) => entry.id)).toEqual(["openvscode"]);
+    const request = {
+      connectionId: "c1",
+      generation: 1,
+      folder: "/srv/example/api",
+    };
+    const refused = await client.open({ ...request, provider: "openvscode" });
+    expect(refused).toMatchObject({
+      ok: false,
+      refusal: { code: "missing" },
+    });
+    expect(!refused.ok && refused.refusal.message).toContain(
+      "OpenVSCode Server isn't installed",
+    );
+    await client.disable("openvscode");
+    await client.enable("code-server");
+    const opened = await client.open({ ...request, provider: "code-server" });
+    expect(opened.ok && opened.instance.provider).toBe("code-server");
   });
 
   test("failed shows its reason", async () => {

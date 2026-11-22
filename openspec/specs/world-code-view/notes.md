@@ -57,10 +57,12 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   installed**, **Not found** (a set path that is gone) or **Can't run**, for
   World's own computer. Any of them can be enabled even when it isn't
   installed here: a project on an SSH host uses the one installed on that
-  host, looked for when the project opens. A missing one offers **Connect: get
-  …** (its download page) and **Use a program path…** (an absolute path to an
-  executable on World's computer). The same rows are in Settings →
-  Integrations, where the refresh button looks again.
+  host, looked for when the project opens; its row and the Enable dialog say
+  it opens only on a computer where it is installed. A missing one offers
+  **Connect: get …** (its download page) and **Use a program path…** (an
+  absolute path to an executable on World's computer). The same rows are in
+  **IDEs** in Code's bar and in Settings → Integrations, where the refresh
+  button looks again.
 - **Webviews.** Markdown preview and extension panels (GitLens, Copilot
   Chat and the like) work in all three IDEs. Stock VS Code and OpenVSCode
   Server load them, and their web worker extension host, from VS Code's own
@@ -84,8 +86,9 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   workbench, even for a server that already runs, and says what to do: open
   World over [HTTPS](../../../docs/DEPLOYMENT.md#native-https) (its own certificate or
   an HTTPS proxy such as `tailscale serve`), or at localhost on World's
-  computer. **Stop** stays. code-server and OpenVSCode Server work on plain
-  HTTP.
+  computer. **Stop** stays, and **Choose another IDE** opens the IDE list:
+  code-server and OpenVSCode Server work on plain HTTP. Picking another IDE
+  shows **Open in** it for the project.
 - **Enable gate.** **Enable…** opens a dialog that says the IDE runs on the
   computer each project is on, that it and its extensions get full access to
   those computers and to World (it runs on World's page and address), where
@@ -94,7 +97,8 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   localhost (for Microsoft's VS Code, that it won't open from there). **Enable** stays off until the trust box (and any licence box the
   IDE has) is ticked. Nothing starts on enable.
 - **Layout.** One thin bar holds the project picker, its host and folder, the
-  IDE, **New tab**, **Stop**, **Servers** and the rail toggle; the workbench fills the rest
+  IDE, **New tab**, **Stop**, **IDEs** (the IDE list, over the view),
+  **Servers** and the rail toggle; the workbench fills the rest
   of the view edge to edge. The rail of the project's agents (status, Needs
   you first in colour) and terminals folds away with the toggle, which shows
   their count while folded; an agent opens on its Chat, a terminal in the
@@ -173,7 +177,7 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   reattaches to them on its own computer, and on each SSH host once that
   connection is ready. A start whose answer from the SSH host was lost stays
   listed and counted as possibly running until the host shows otherwise.
-  **Show** brings that project to the front.
+  **Show** brings that project and that server's IDE to the front.
 - **Limits and refusals.** At most four servers run or wait to be reattached at
   once, unreachable ones included; a fifth is refused (**Too many IDEs are
   running**) with **Show running servers**, and World never stops one to make
@@ -182,16 +186,29 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   not attached (**Open** tries again, **Stop** ends it); a server that exits
   shows its last error line (or, for SSH, whether SSH failed, the folder is
   missing on the host or World couldn't make its private folder there). An IDE
-  not installed on the project's host is refused by name. These offer **Try
-  again**. Looking for the IDE on an SSH host gives up after 20 seconds. A
+  not installed on the project's host is refused by name. Looking for the IDE
+  on an SSH host gives up after 20 seconds. A
   stale connection must reconnect first. Windows hosts and folders that are
   gone are refused. A process that clears its environment and leaves the
   server's process tree is out of World's reach, and on an SSH host whose login
   manager ends a user's processes at logout (systemd-logind
   `KillUserProcesses=yes`, not the usual default), servers end with the SSH
   session.
+- **Failures.** Every failure screen says what went wrong and on which
+  computer (the project's host, or the computer World runs on): **<IDE> isn't
+  installed on <computer>**, **<IDE> stopped on <computer>** with its last
+  error line, **World can't open <project> in <IDE> on <computer>** with why,
+  and the secure-address screen. Each offers **Try again** (on the
+  secure-address screen it checks again, and the screen stays until World is
+  opened over HTTPS or at localhost) and **Choose another IDE**, which opens the IDE list over the view without leaving Code: disable
+  the failing IDE, enable another, and the screen becomes **Open in** that
+  IDE. Enabling an IDE there makes it the one projects open with. A refusal
+  or stopped server belongs to its IDE; another IDE chosen doesn't show it.
+  World never installs or downloads an IDE from Code.
 - **Preview states.** For trying the screens without an IDE, add
   `?ideFixture=missing`, `detected`, `ssh` (starting on an SSH host),
-  `downloading`, `failed` or `restored` (servers listed after a restart: one
-  here, one on an SSH host, one on a removed SSH host) to a World address; World removes it at once and
-  shows synthetic integration state until the next reload.
+  `downloading`, `failed`, `not-installed` (only OpenVSCode Server enabled,
+  and opening refused because it isn't installed; the others can be enabled
+  instead) or `restored` (servers listed after a restart: one here, one on an
+  SSH host, one on a removed SSH host) to a World address; World removes it at
+  once and shows synthetic integration state until the next reload.

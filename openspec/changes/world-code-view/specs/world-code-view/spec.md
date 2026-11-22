@@ -17,6 +17,12 @@ provider or overwrite user-managed configuration. Existing harness integration
 behavior SHALL remain unchanged. Microsoft VS Code web, OpenVSCode, code-server,
 VS Code desktop, Cursor, JetBrains Gateway and Zed SHALL be distinct provider
 choices/capability records rather than aliases claiming identical functionality.
+Every failure to open a project in Code (provider missing on the project's
+host, server stopped, open refused, page not secure enough) SHALL say what went
+wrong and on which computer, and SHALL offer both Try again (the same open,
+or on a page not secure enough a fresh check) and a way back to the provider
+list (enable, disable, setup) without leaving Code. A failure SHALL belong to its provider: choosing
+another provider SHALL NOT keep showing it.
 
 #### Scenario: Detect without starting
 
@@ -27,6 +33,11 @@ choices/capability records rather than aliases claiming identical functionality.
 
 - **WHEN** the selected provider is disabled, absent or incompatible on the project's host
 - **THEN** World explains the state and offers explicit enablement/setup guidance or another deliberate provider selection without opening another host's IDE
+
+#### Scenario: Recover from a failed open
+
+- **WHEN** opening a project fails because the only enabled provider isn't installed on the project's host
+- **THEN** Code names the provider and that computer, offers Try again and Choose another IDE, and choosing another provider from the list it shows replaces the failure with Open in that provider, without installing anything
 
 ### Requirement: Real workbench in the common World frame
 

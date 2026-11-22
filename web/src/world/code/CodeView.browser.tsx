@@ -9,12 +9,13 @@ import type {
 } from "../worldObject";
 import CodeView from "./CodeView";
 import { IdeIntegrationsSettings } from "./IdeIntegrationsSettings";
-import type {
-  IdeClient,
-  IdeInstance,
-  IdeOpenRequest,
-  IdeProviderStatus,
-  IdeStatus,
+import {
+  fixtureIdeClient,
+  type IdeClient,
+  type IdeInstance,
+  type IdeOpenRequest,
+  type IdeProviderStatus,
+  type IdeStatus,
 } from "./ideClient";
 
 const failures: string[] = [];
@@ -281,8 +282,9 @@ async function run() {
     "stock VS Code reads Installed and offers Enable",
   );
   check(
-    vscodeRow.textContent?.includes("stay blank inside World") === true,
-    "stock VS Code says its webviews stay blank in World",
+    vscodeRow.textContent?.includes("opens only when World is on HTTPS") ===
+      true,
+    "stock VS Code says it needs HTTPS or localhost",
   );
   check(
     !/desktop/i.test($(".code-view")?.textContent ?? "") &&
@@ -603,13 +605,17 @@ async function run() {
     url: "/ide/browserFixture0003/",
     startedAt: new Date().toISOString(),
   };
+  let insecureReads = 0;
   const insecureClient: IdeClient = {
     ...fake.client,
-    status: async () => ({
-      providers: [{ ...fake.vscode, enabled: true }],
-      instances: [ready],
-      localConnections: ["local"],
-    }),
+    status: async () => {
+      insecureReads++;
+      return {
+        providers: [{ ...fake.vscode, enabled: true }],
+        instances: [ready],
+        localConnections: ["local"],
+      };
+    },
   };
   flushSync(() =>
     plain.render(
@@ -641,7 +647,42 @@ async function run() {
       Boolean(button("Stop")),
     "no workbench or New tab that would wait forever; Stop stays",
   );
+  check(
+    insecureText.includes("It can run on the computer World runs on"),
+    "the secure-address screen names the project's computer",
+  );
+  check(
+    Boolean(button("Try again")) && Boolean(button("Choose another IDE")),
+    "the secure-address screen offers Try again and Choose another IDE",
+  );
+  const readsBeforeRetry = insecureReads;
+  button("Try again")?.click();
+  await until(
+    () => insecureReads > readsBeforeRetry,
+    "Try again on the secure-address screen checks again",
+  );
+  await settle();
+  check(
+    $(".code-view")?.getAttribute("data-state") === "insecure-page" &&
+      !$(".code-view-frame") &&
+      button("Try again")?.disabled === false,
+    "checking again on the same plain-HTTP address still explains why",
+  );
+  button("Choose another IDE")?.click();
+  await until(
+    () =>
+      Boolean(
+        button(
+          "Disable",
+          $('[aria-label="IDEs"] [data-provider="vscode"]') ?? document.body,
+        ),
+      ),
+    "Choose another IDE on the secure-address screen opens the IDE list",
+  );
   flushSync(() => plain.unmount());
+
+  await checkShowPicksServer(host, fake);
+  await checkFailures(host);
 
   // Settings shows the same rows.
   const settings = createRoot(host);
@@ -693,6 +734,272 @@ async function run() {
     "Disable stopped a server",
   );
   flushSync(() => settings.unmount());
+}
+
+/**
+ * Servers → Show brings the listed server to the front, even when another
+ * IDE was picked for that project and has no server there.
+ */
+async function checkShowPicksServer(
+  host: HTMLElement,
+  fake: ReturnType<typeof fakeClient>,
+) {
+  localStorage.clear();
+  const [, codeServer] = (await fake.client.status()).providers;
+  const running: IdeInstance = {
+    id: "browserFixture0004",
+    provider: "code-server",
+    connectionId: "local",
+    folder: "/srv/example/api",
+    state: "ready",
+    url: "/ide/browserFixture0004/",
+    startedAt: new Date().toISOString(),
+  };
+  const client: IdeClient = {
+    ...fake.client,
+    status: async () => ({
+      providers: [
+        { ...fake.vscode, enabled: true },
+        { ...codeServer!, enabled: true },
+      ],
+      instances: [running],
+      localConnections: ["local"],
+    }),
+  };
+  const root = createRoot(host);
+  flushSync(() =>
+    root.render(
+      <CodeView
+        world={world}
+        client={client}
+        secure
+        onOpenAgent={() => {}}
+        onOpenTerminal={() => {}}
+      />,
+    ),
+  );
+  const shown = () =>
+    $<HTMLIFrameElement>(".code-view-frame:not([hidden])")?.getAttribute(
+      "src",
+    ) === running.url;
+  await until(shown, "the running code-server shows before any IDE is picked");
+  const picker = $<HTMLSelectElement>(".code-view-provider select");
+  check(Boolean(picker), "two enabled IDEs show the IDE picker");
+  if (picker) {
+    picker.value = "vscode";
+    picker.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  await until(
+    () => Boolean(button("Open in Visual Studio Code")) && !shown(),
+    "picking another IDE offers Open in it",
+  );
+  [...document.querySelectorAll<HTMLButtonElement>("button")]
+    .find((entry) => entry.textContent?.startsWith("Servers"))
+    ?.click();
+  await until(
+    () => Boolean($('[aria-label="Running IDE servers"] .ide-server')),
+    "Servers lists the running code-server",
+  );
+  button("Show", $('[aria-label="Running IDE servers"] .ide-server')!)?.click();
+  await until(
+    shown,
+    "Show brings the listed code-server to the front, not the picked IDE",
+  );
+  check(
+    $<HTMLSelectElement>(".code-view-provider select")?.value === "code-server",
+    "Show selects the listed server's IDE",
+  );
+  flushSync(() => root.unmount());
+}
+
+/** The fixture client, told which connection is World's own computer. */
+function onThisComputer(client: IdeClient): IdeClient {
+  const local = (status: IdeStatus) => ({
+    ...status,
+    localConnections: ["local"],
+  });
+  return {
+    ...client,
+    status: async (refresh) => local(await client.status(refresh)),
+    enable: async (id) => local(await client.enable(id)),
+    disable: async (id) => local(await client.disable(id)),
+  };
+}
+
+const ideList = () => $('[aria-label="IDEs"]');
+const ideRow = (id: string) => $(`[aria-label="IDEs"] [data-provider="${id}"]`);
+
+/**
+ * Every failure says what went wrong and where, and offers Try again and
+ * Choose another IDE, which shows the IDE list without leaving Code.
+ */
+async function checkFailures(host: HTMLElement) {
+  const mount = (client: IdeClient) => {
+    localStorage.clear();
+    const root = createRoot(host);
+    flushSync(() =>
+      root.render(
+        <CodeView
+          world={world}
+          client={client}
+          onOpenAgent={() => {}}
+          onOpenTerminal={() => {}}
+        />,
+      ),
+    );
+    return root;
+  };
+  const failureActions = (where: string) => {
+    check(
+      Boolean(button("Try again")) && Boolean(button("Choose another IDE")),
+      `${where} offers Try again and Choose another IDE`,
+    );
+  };
+
+  // Only OpenVSCode Server is enabled and it isn't installed: refused.
+  const opens: IdeOpenRequest[] = [];
+  const notInstalled = onThisComputer(fixtureIdeClient("not-installed"));
+  const recording: IdeClient = {
+    ...notInstalled,
+    open: async (request) => {
+      opens.push(request);
+      return notInstalled.open(request);
+    },
+  };
+  let root = mount(recording);
+  await until(
+    () => Boolean(button("Open in OpenVSCode Server")),
+    "an enabled IDE that isn't installed still offers Open",
+  );
+  check(
+    Boolean(button("IDEs")),
+    "the bar keeps the IDE list one click away once an IDE is enabled",
+  );
+  button("Open in OpenVSCode Server")?.click();
+  await until(
+    () => $(".code-view")?.getAttribute("data-state") === "refused",
+    "opening an IDE that isn't installed is refused",
+  );
+  const refusal = $(".code-view-refusal")?.textContent ?? "";
+  check(
+    refusal.includes(
+      "OpenVSCode Server isn't installed on the computer World runs on",
+    ) && refusal.includes("World never installs an IDE"),
+    `the refusal names the IDE and the computer: ${refusal}`,
+  );
+  failureActions("the not-installed refusal");
+  button("Try again")?.click();
+  await until(() => opens.length === 2, "Try again opens again");
+  await settle();
+  check(
+    $(".code-view")?.getAttribute("data-state") === "refused",
+    "trying again refuses the same way",
+  );
+  button("Choose another IDE")?.click();
+  await until(
+    () => Boolean(ideRow("openvscode")),
+    "Choose another IDE shows the IDE list",
+  );
+  check(
+    ideRow("openvscode")?.textContent?.includes(
+      "opens only on a computer where it is installed",
+    ) === true,
+    "a row that isn't installed says it opens only where it is installed",
+  );
+  check(
+    $(".code-view-refusal") !== null,
+    "the failure stays beneath the list: Code doesn't navigate away",
+  );
+  button("Disable", ideRow("openvscode")!)?.click();
+  await until(
+    () => Boolean(button("Enable…", ideRow("openvscode") ?? document.body)),
+    "the list disables the IDE that isn't installed",
+  );
+  button("Enable…", ideRow("code-server")!)?.click();
+  await until(() => Boolean($(".ide-gate")), "Enable… opens the gate");
+  $<HTMLInputElement>(".ide-gate .ide-gate-check input")?.click();
+  await settle();
+  button("Enable", $(".ide-gate")!)?.click();
+  await until(
+    () => !$(".ide-gate") && Boolean(button("Open in code-server")),
+    "enabling another IDE replaces the refusal with Open in it",
+  );
+  button("Close", ideList()!)?.click();
+  await until(() => !ideList(), "the IDE list closes");
+  button("Open in code-server")?.click();
+  await until(
+    () => opens[2]?.provider === "code-server",
+    "the other IDE opens the project",
+  );
+  flushSync(() => root.unmount());
+
+  // The server stopped: why, on which computer, and the way on.
+  root = mount(onThisComputer(fixtureIdeClient("failed")));
+  await until(
+    () => Boolean(button("Open in code-server")),
+    "the failed fixture offers Open",
+  );
+  button("Open in code-server")?.click();
+  await until(
+    () => Boolean($(".code-view-failed")),
+    "a server that exits shows the failure",
+  );
+  const failed = $(".code-view-failed")?.textContent ?? "";
+  check(
+    failed.includes("code-server stopped on the computer World runs on") &&
+      failed.includes("could not bind its socket"),
+    `the failure says what stopped, where and why: ${failed}`,
+  );
+  failureActions("a stopped server");
+  button("Choose another IDE")?.click();
+  await until(
+    () => Boolean(ideRow("vscode")),
+    "Choose another IDE after a stopped server shows the IDE list",
+  );
+  flushSync(() => root.unmount());
+
+  // Any other refusal: World can't open it here, on that computer.
+  const ssh = fixtureIdeClient("ssh");
+  root = mount(
+    onThisComputer({
+      ...ssh,
+      open: async () => ({
+        ok: false,
+        refusal: {
+          code: "windows",
+          message:
+            "World can't run a web IDE server on devbox, a Windows host, yet.",
+        },
+      }),
+    }),
+  );
+  await until(
+    () => Boolean(button("Open in code-server")),
+    "the refused project offers Open",
+  );
+  const select = $<HTMLSelectElement>(".code-view-project select")!;
+  select.value = [...select.options].find((option) =>
+    option.textContent?.includes("docs"),
+  )!.value;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  await settle();
+  button("Open in code-server")?.click();
+  await until(
+    () => $(".code-view-refusal")?.getAttribute("data-code") === "windows",
+    "a Windows host is refused",
+  );
+  check(
+    $(".code-view-refusal h2")?.textContent ===
+      "World can't open docs in code-server on devbox",
+    `the refusal names the project, IDE and computer: ${$(".code-view-refusal h2")?.textContent}`,
+  );
+  failureActions("a refusal");
+  button("Choose another IDE")?.click();
+  await until(
+    () => Boolean(ideRow("code-server")),
+    "Choose another IDE after a refusal shows the IDE list",
+  );
+  flushSync(() => root.unmount());
 }
 
 run()
