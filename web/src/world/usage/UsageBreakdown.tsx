@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type {
   UsageAnalyticsGroup,
@@ -12,9 +13,12 @@ import type { WorldObject } from "../worldObject";
 import {
   usageCount,
   usageDuration,
+  usageAgentRows,
   usageHarnessName,
+  usageSumRows,
   type UsageRunView,
 } from "./usageModel";
+import type { UsageAgentFilter } from "./usageOpener";
 import { useUsageAnalytics, type UsageReadState } from "./usageStore";
 
 type Group = Exclude<UsageAnalyticsGroup, "run">;
@@ -29,36 +33,68 @@ const GROUPS: [Group, string][] = [
  * Usage per agent, project, room and day (#1029): time at work and waiting
  * on you that World measured, tokens and cost the harness logs record, and
  * pull requests. A number World has no reading for says "unknown"; a number
- * only some of whose sources were read says "partly read".
+ * only some of whose sources were read says "partly read". `filter` narrows
+ * it to one agent (a resident, #1101): its rows by agent and their total,
+ * until cleared.
  */
 export function UsageBreakdown({
   runs,
   world,
+  filter = null,
+  onClearFilter,
 }: {
   runs: readonly UsageRunView[];
   world?: WorldObject;
+  filter?: UsageAgentFilter | null;
+  onClearFilter?: () => void;
 }) {
-  const [group, setGroup] = useState<Group>("agent");
+  const [chosen, setGroup] = useState<Group>("agent");
+  const group = filter ? "agent" : chosen;
   const state = useUsageAnalytics(group, "7d");
   return (
     <div className="usage-breakdown">
       <p className="usage-lead">
-        The last seven days by {group}: time World saw at work and waiting on
-        you, tokens and cost from the harness logs, and pull requests.
+        {filter
+          ? `The last seven days of ${filter.label}`
+          : `The last seven days by ${group}`}
+        : time World saw at work and waiting on you, tokens and cost from the
+        harness logs, and pull requests.
       </p>
-      <div className="usage-group" role="group" aria-label="Group by">
-        {GROUPS.map(([id, label]) => (
+      {filter ? (
+        <p className="usage-filter">
+          <span>
+            Agent: <strong>{filter.label}</strong>
+          </span>
           <button
-            key={id}
             type="button"
-            aria-pressed={group === id}
-            onClick={() => setGroup(id)}
+            className="work-lens-icon"
+            aria-label="Show every agent"
+            title="Show every agent"
+            onClick={onClearFilter}
           >
-            {label}
+            <X size={14} aria-hidden="true" />
           </button>
-        ))}
-      </div>
-      <BreakdownTable state={state} group={group} world={world} />
+        </p>
+      ) : (
+        <div className="usage-group" role="group" aria-label="Group by">
+          {GROUPS.map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={group === id}
+              onClick={() => setGroup(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      <BreakdownTable
+        state={state}
+        group={group}
+        world={world}
+        filter={filter}
+      />
       <Coverage runs={runs} state={state} />
     </div>
   );
@@ -68,14 +104,24 @@ function BreakdownTable({
   state,
   group,
   world,
+  filter,
 }: {
   state: UsageReadState;
   group: Group;
   world?: WorldObject;
+  filter: UsageAgentFilter | null;
 }) {
   const rows = useMemo(
-    () => (state.status === "ready" ? sorted(state.data, group) : []),
-    [state, group],
+    () =>
+      state.status !== "ready"
+        ? []
+        : filter
+          ? sorted(
+              { ...state.data, rows: usageAgentRows(state.data, filter.ids) },
+              group,
+            )
+          : sorted(state.data, group),
+    [state, group, filter],
   );
   if (state.status !== "ready")
     return (
@@ -89,8 +135,11 @@ function BreakdownTable({
   if (!rows.length)
     return (
       <p className="work-lens-note">
-        Nothing measured this week: World saw no agent at work and no harness
-        log could be read.
+        {filter
+          ? filter.why
+            ? `Nothing measured for ${filter.label}: ${filter.why}.`
+            : `Nothing measured for ${filter.label} this week: World keeps seven days, and finds no run of this agent in them.`
+          : "Nothing measured this week: World saw no agent at work and no harness log could be read."}
       </p>
     );
   return (
@@ -107,17 +156,22 @@ function BreakdownTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.key}>
-              <th scope="row">{usageRowLabel(row, group, data, world)}</th>
-              <Cells metrics={row} />
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const label = usageRowLabel(row, group, data, world);
+            return (
+              <tr key={row.key}>
+                <th scope="row">
+                  {filter && label === "Earlier agent" ? filter.label : label}
+                </th>
+                <Cells metrics={row} />
+              </tr>
+            );
+          })}
         </tbody>
         <tfoot>
           <tr>
-            <th scope="row">This week</th>
-            <Cells metrics={data.total} />
+            <th scope="row">{filter ? "This agent" : "This week"}</th>
+            <Cells metrics={filter ? usageSumRows(rows) : data.total} />
           </tr>
         </tfoot>
       </table>

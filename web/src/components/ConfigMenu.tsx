@@ -22,6 +22,7 @@ import { useLayer } from "../layerStack";
 import { WORLD_OPEN_UPDATE_MENU_EVENT } from "../world/townMasterGreeting";
 import { openCommandBox } from "../commandBoxKey";
 import { ShortMenu } from "../settings/ShortMenu";
+import { openFocus } from "../world/focus";
 import { SettingsDialogs } from "../settings/SettingsDialogs";
 import { useSettingsHome } from "../settings/useSettingsHome";
 
@@ -215,6 +216,10 @@ export function ConfigMenu({
                 onFind={() => {
                   setOpen(false);
                   openCommandBox();
+                }}
+                onFocus={() => {
+                  setOpen(false);
+                  openFocus();
                 }}
                 onZen={() => {
                   onZenModeChange(!zenMode);

@@ -19,9 +19,24 @@ export type WorldHost = {
   runtime: "herdr" | "herdr-core";
   state: ConnectionLifecycleState;
   generation: number;
-  /** Equal for profiles of one runtime endpoint, which count as one host. */
+  /** Equal for profiles of one runtime endpoint. */
   endpoint: string;
+  /**
+   * This computer (`local`) or one SSH destination: the machine the runtime
+   * runs on. Town's buildings (#1213) and the Hosts filter (#1227) group by it.
+   */
+  machine: string;
 };
+
+function machineOf(
+  connection: Pick<ConnectionSummary, "id" | "type" | "ssh_destination">,
+) {
+  if (connection.type === "local") return "local";
+  if (connection.type === "ssh" && connection.ssh_destination)
+    return `ssh:${connection.ssh_destination}`;
+  // An older catalogue without profile fields: a machine of its own.
+  return `connection:${connection.id}`;
+}
 
 function tuiEndpoint(connection: ConnectionSummary): string {
   if (
@@ -93,6 +108,7 @@ export function worldHosts(sources: HostSources): WorldHost[] {
       state: connection.state,
       generation: connection.generation,
       endpoint: tuiEndpoint(connection),
+      machine: machineOf(connection),
     })),
     ...(sources.coreConnections ?? [])
       .filter(({ id }) => !tuiIds.has(id))
@@ -103,6 +119,7 @@ export function worldHosts(sources: HostSources): WorldHost[] {
         state: connection.state,
         generation: connection.generation,
         endpoint: coreEndpoint(connection),
+        machine: machineOf(connection),
       })),
   ];
   cached = {
@@ -113,9 +130,74 @@ export function worldHosts(sources: HostSources): WorldHost[] {
   return hosts;
 }
 
-/** Count runtime endpoints once; unidentified connections remain distinct. */
-export function hostCount(hosts: readonly Pick<WorldHost, "endpoint">[]) {
-  return new Set(hosts.map(({ endpoint }) => endpoint)).size;
+/** One machine of the Hosts list: every runtime World holds there. */
+export type WorldMachine = {
+  machine: string;
+  /** Its first runtime's name, as Town names the machine's building. */
+  label: string;
+  /** Its runtimes' connection IDs, in catalogue order. */
+  ids: string[];
+  /** Its runtimes' states summarised, e.g. "ready" or "1 of 2 reconnecting". */
+  status: string;
+};
+
+const machinesCache = /* @__PURE__ */ new WeakMap<
+  readonly WorldHost[],
+  WorldMachine[]
+>();
+
+/** The catalogue's machines, in the order their first runtime appears. */
+export function worldMachines(hosts: readonly WorldHost[]): WorldMachine[] {
+  const cachedMachines = machinesCache.get(hosts);
+  if (cachedMachines) return cachedMachines;
+  const byMachine = new Map<string, WorldHost[]>();
+  for (const host of hosts)
+    byMachine.set(host.machine, [...(byMachine.get(host.machine) ?? []), host]);
+  const machines = [...byMachine].map(([machine, members]) => ({
+    machine,
+    label: members[0]!.label,
+    ids: members.map(({ id }) => id),
+    status: machineStatus(members.map(({ state }) => state)),
+  }));
+  machinesCache.set(hosts, machines);
+  return machines;
+}
+
+/** One state when all runtimes share it, else how many are in each other. */
+export function machineStatus(states: readonly ConnectionLifecycleState[]) {
+  const counts = new Map<ConnectionLifecycleState, number>();
+  for (const state of states) counts.set(state, (counts.get(state) ?? 0) + 1);
+  if (counts.size === 1) return states[0]!;
+  return [...counts]
+    .filter(([state]) => state !== "ready")
+    .map(([state, count]) => `${count} of ${states.length} ${state}`)
+    .join(", ");
+}
+
+/**
+ * A Hosts filter widened to whole machines: a selected runtime selects every
+ * runtime of its machine, so a selection saved per connection (before #1227)
+ * maps to its machine. IDs the catalogue does not list are kept as they are.
+ * Returns the given list when it already covers its machines.
+ */
+export function hostsFilterByMachine<Ids extends readonly string[] | null>(
+  ids: Ids,
+  hosts: readonly Pick<WorldHost, "id" | "machine">[],
+): Ids {
+  if (ids === null) return ids;
+  const selected = new Set(ids);
+  const machines = new Set(
+    hosts.filter(({ id }) => selected.has(id)).map(({ machine }) => machine),
+  );
+  const added = hosts
+    .filter(({ id, machine }) => machines.has(machine) && !selected.has(id))
+    .map(({ id }) => id);
+  return (added.length ? [...ids, ...added] : ids) as Ids;
+}
+
+/** Count machines once; unidentified connections remain distinct. */
+export function hostCount(hosts: readonly Pick<WorldHost, "machine">[]) {
+  return new Set(hosts.map(({ machine }) => machine)).size;
 }
 
 /** How a menu names a host's runtime; Herdr (TUI) hosts read as before. */

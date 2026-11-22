@@ -116,6 +116,8 @@ export type RpcServices = {
   boardElements?: import("../world/board-element-service").BoardElementService;
   worldUsage?: import("../usage/service").WorldUsageService;
   worldUsageAnalytics?: import("../usage/analytics").WorldUsageAnalyticsService;
+  /** The owner's focus session (world.focus.*). */
+  focus?: import("../world/focus").FocusService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;

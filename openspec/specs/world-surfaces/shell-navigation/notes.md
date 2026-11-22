@@ -48,10 +48,17 @@
   **Hosts** (in the top bar; on a phone in Zen, in the corner view menu too)
   defaults to All hosts and persists an explicit host set independently
   of **Manage connections**; both places show and change one filter per
-  browser. It lists every connection of either runtime,
-  Herdr's first; a herdr-core connection reads `<name> · herdr-core · <state>`
-  and is counted, selected and remembered like a Herdr host (profiles of one
-  runtime endpoint count once). Filtering preserves open resources and terminals;
+  browser. It lists one row per machine (this computer or one SSH
+  destination, as Town's buildings), Herdr TUI and herdr-core together, named
+  by its first runtime: `<name> · ready`, or `<name> · 1 of 2 reconnecting`
+  when its runtimes differ. Checking or unchecking a machine covers all its
+  runtimes; the count and "N hosts" count machines. Unchecking the last
+  checked machine leaves **No hosts** (an empty selection, kept on reload);
+  **All hosts** brings everything back. The selection is saved
+  as connection IDs (`web/src/world/hostsFilter.ts`), so one saved before
+  #1227 shows its whole machine (`hostsFilterByMachine` in
+  `web/src/worldHosts.ts`). Each runtime's own state stays in **Manage
+  connections**. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
   when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
 ## Workspace, Tab, and Pane Navigation

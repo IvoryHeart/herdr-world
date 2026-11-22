@@ -18,6 +18,10 @@
 - `web/src/chimes/chimeHost.ts`
 - `server/src/notifications/herdr-notification-listener.ts`
 - `server/src/world/interest-prune.ts`
+- `shared/focus.ts`
+- `server/src/world/focus.ts`
+- `web/src/world/focus.ts`
+- `web/src/world/FocusControls.tsx`
 
 **Tests:**
 
@@ -25,6 +29,8 @@
 - `server/src/notifications/herdr-notification-listener.test.ts`
 - `server/src/notifications/web-push.test.ts`
 - `server/src/world/interest-prune.test.ts`
+- `server/src/world/focus.test.ts`
+- `web/src/world/town/TownFocus.test.ts`
 
 **Pitfalls:**
 
