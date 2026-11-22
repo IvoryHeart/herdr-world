@@ -77,10 +77,7 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
     // Same production selectors and hook inputs as WorldFoundationApp.
     const catalogue = useStoreSelector(worldHosts);
     const ready = useStoreSelector((state) => state.catalogueReady);
-    filter = useHostsFilter(
-      catalogue.map(({ id }) => id),
-      ready,
-    );
+    filter = useHostsFilter(catalogue, ready);
     return createElement(HostsControl, {
       connections: catalogue,
       ids: filter.ids,
@@ -204,9 +201,7 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
       'input[aria-label="Synthetic core"]',
     );
     expect(row?.checked).toBe(true);
-    expect(row?.parentElement?.textContent).toBe(
-      "Synthetic core · herdr-core · ready",
-    );
+    expect(row?.parentElement?.textContent).toBe("Synthetic core · ready");
     // Ticking a Herdr host keeps the core host selected beside it.
     await act(async () =>
       document
@@ -237,6 +232,81 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
       expect(await store.refreshConnections()).toBe(true);
     });
     expect(filter.ids).toEqual(["alpha"]);
+  });
+
+  test("one row per machine: a saved runtime shows, and unchecks, its whole machine", async () => {
+    // Saved before #1227: only the machine's Herdr TUI connection.
+    await mount('["alpha"]');
+    const local = (id: string) => ({
+      id,
+      label: `Synthetic ${id}`,
+      source: "test",
+      is_default: id === "alpha",
+      state: "ready" as const,
+      generation: 7,
+      type: "local" as const,
+      read_only: false,
+      auto_connect: true,
+      control_socket_path: "/tmp/example-control.sock",
+      client_socket_path: "/tmp/example-client.sock",
+    });
+    const core = {
+      id: "core-local",
+      label: "Synthetic core",
+      type: "local",
+      runtime: "herdr-core",
+      state: "reconnecting",
+      generation: 3,
+      core_session: "",
+      core_state_dir: "",
+      observation: null,
+    };
+    bridge.call = (async () => ({
+      connections: [local("alpha"), connections[1]],
+      core_connections: [core],
+    })) as typeof bridge.call;
+    await act(async () => {
+      expect(await store.refreshConnections()).toBe(true);
+    });
+    // The saved runtime maps to its machine; storage is left as it was.
+    expect(filter.ids).toEqual(["alpha", "core-local"]);
+    expect(saved()).toBe('["alpha"]');
+    await act(async () =>
+      (
+        document.querySelector('button[aria-label="Hosts"]') as HTMLElement
+      ).click(),
+    );
+    const rows = [
+      ...document.querySelectorAll<HTMLInputElement>(
+        '.world-hosts-menu input[type="checkbox"]',
+      ),
+    ];
+    expect(rows.map((row) => row.parentElement?.textContent)).toEqual([
+      "Synthetic alpha · 1 of 2 reconnecting",
+      "Synthetic beta · ready",
+    ]);
+    expect(rows.map((row) => row.checked)).toEqual([true, false]);
+    expect(
+      document.querySelector(".connection-switcher-label")?.textContent,
+    ).toBe("1 hosts");
+    // Unchecking the machine hides both of its runtimes.
+    await act(async () => rows[0]!.click());
+    expect(saved()).toBe("null");
+    expect(filter.ids).toBeNull();
+    await act(async () => filter.setIds(["beta"]));
+    await act(async () =>
+      document
+        .querySelector<HTMLInputElement>('input[aria-label="Synthetic alpha"]')!
+        .click(),
+    );
+    expect(saved()).toBe('["beta","alpha","core-local"]');
+    await act(async () =>
+      document
+        .querySelector<HTMLInputElement>('input[aria-label="Synthetic alpha"]')!
+        .click(),
+    );
+    expect(saved()).toBe('["beta"]');
+    expect(filter.ids).toEqual(["beta"]);
   });
 
   test("empty explicit selection means All hosts without changing operational ownership", async () => {

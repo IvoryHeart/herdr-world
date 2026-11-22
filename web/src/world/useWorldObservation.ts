@@ -63,7 +63,7 @@ export function useWorldObservation({ onPresentedWorldChange }: Input) {
   const operationalSnapshot = useStoreSelector((snapshot) => snapshot);
   const hosts = useStoreSelector(worldHosts);
   const storedHostsFilter = useHostsFilter(
-    hosts.map((host) => host.id),
+    hosts,
     connectionSelection.catalogueReady,
   );
   const hostsFilter = scene

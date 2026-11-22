@@ -33,7 +33,7 @@ import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
 import { buildWorldObject, type WorldObject } from "./worldObject";
 import { worldObjectForHosts } from "./worldFilters";
 import { useHostsFilter } from "./hostsFilter";
-import { HostsControl } from "./HostsControl";
+import { HostsControl, selectedHostCount } from "./HostsControl";
 import { worldHosts } from "../worldHosts";
 import { WorldNavigator } from "./WorldNavigator";
 import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
@@ -149,10 +149,7 @@ export default function WorldFoundationApp() {
   const catalogueReady = useStoreSelector(
     (snapshot) => snapshot.catalogueReady,
   );
-  const hostsFilter = useHostsFilter(
-    hosts.map((host) => host.id),
-    catalogueReady,
-  );
+  const hostsFilter = useHostsFilter(hosts, catalogueReady);
   const topbarWorld = useMemo(
     () =>
       worldObjectForHosts(
@@ -537,7 +534,7 @@ export default function WorldFoundationApp() {
                     selectedHostLabel={
                       hostsFilter.ids === null
                         ? "All hosts"
-                        : `${hostsFilter.ids.length} selected hosts`
+                        : `${selectedHostCount(hosts, hostsFilter.ids)} selected hosts`
                     }
                   />
                   <div
