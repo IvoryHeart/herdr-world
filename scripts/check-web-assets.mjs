@@ -62,7 +62,11 @@ const maxFileCount = 212;
 // with main's Apartments and post-office work measures 16,270,139 bytes
 // (15.5164 MiB): 17,211 bytes above 15.5 MiB. Account for the combined
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
-const maxTotalBytes = 15.6 * 1024 * 1024;
+// Town's one place window (#1170: building presses, the shared frame, and
+// Integrations and Needs you inside it) measures 16,359,148 bytes (15.601
+// MiB), 1,362 bytes above 15.6 MiB, all in lazy chunks; 15.7 MiB carries
+// it, startup budgets unchanged (2026-11-22).
+const maxTotalBytes = 15.7 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two
