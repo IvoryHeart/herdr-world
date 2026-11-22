@@ -702,7 +702,7 @@ export default function TownView({
     else void onSelect(agent.nodeId);
   };
   const center = { selectedRoomKey, townRoomActions, townSummary, openChat };
-  const townCenter = useTownCenter(world, office, preferences, center, toast);
+  const townCenter = useTownCenter(world, office, center, toast);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   /**
    * Tapping an agent opens it (openAgent). Tapping a desk opens its default

@@ -10,11 +10,11 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useSyncExternalStore,
   useState,
   type ReactNode,
 } from "react";
 import { Layers } from "lucide-react";
-import { worldLocalStorage } from "../../browserStorage";
 import type {
   WorkItem,
   WorldSourcesSnapshot,
@@ -29,7 +29,6 @@ import {
   TOWN_LENS_NAMES,
   lensView,
   townLensPlaces,
-  townLensStep,
   townLensWords,
   type LensAgent,
   type LensPlaces,
@@ -55,27 +54,11 @@ import { keyTakenByViewSearch } from "../viewSearchShortcut";
 import { useViewControlRequest } from "../../settings/viewControls";
 import "./townLens.css";
 
-const STORAGE_KEY = "townLens";
-/** The page's own copy, for browsers whose storage is blocked. */
-let lastLens: TownLensId = "idle";
-
-function rememberedLens(): TownLensId {
-  const saved = worldLocalStorage.getItem(STORAGE_KEY);
-  return (
-    TOWN_LENSES.find((lens) => lens === saved && lens !== "attention") ??
-    lastLens
-  );
-}
-
-function remember(lens: TownLensId) {
-  if (lens === "attention") return;
-  lastLens = lens;
-  try {
-    worldLocalStorage.setItem(STORAGE_KEY, lens);
-  } catch {
-    // A full or blocked storage keeps the choice for this page only.
-  }
-}
+import {
+  subscribeTownLens,
+  townLensSnapshot,
+  townLensActions,
+} from "./townLensStore";
 
 export type TownLensState = {
   lens: TownLensId;
@@ -95,44 +78,12 @@ export type TownLensState = {
 
 /** Which lens Town shows. It starts in Attention on every visit. */
 export function useTownLensState(): TownLensState {
-  const [lens, setLens] = useState<TownLensId>("attention");
-  const [choosing, setChoosing] = useState(false);
-  const shown = lens !== "attention" || choosing;
-  const pick = useCallback((next: TownLensId) => {
-    remember(next);
-    setLens(next);
-    setChoosing(next === "attention");
-  }, []);
-  const step = useCallback(
-    (direction: 1 | -1) => {
-      const next = townLensStep(lens, direction);
-      remember(next);
-      setLens(next);
-      // Stepping onto Attention keeps the legend, to step on from it.
-      setChoosing(next === "attention");
-    },
-    [lens],
-  );
-  const cycle = useCallback(
-    (direction: 1 | -1) => {
-      if (shown) step(direction);
-      else pick(rememberedLens());
-    },
-    [shown, step, pick],
-  );
-  const open = useCallback(() => {
-    setLens(rememberedLens());
-    setChoosing(true);
-  }, []);
-  const choose = useCallback(
-    () => setChoosing((was) => !was || lens === "attention"),
-    [lens],
-  );
-  const close = useCallback(() => {
-    setLens("attention");
-    setChoosing(false);
-  }, []);
-  return { lens, choosing, shown, pick, step, cycle, open, choose, close };
+  const state = useSyncExternalStore(subscribeTownLens, townLensSnapshot);
+  return {
+    ...state,
+    shown: state.lens !== "attention" || state.choosing,
+    ...townLensActions,
+  };
 }
 
 /** The ring's Lenses action, next to Summary. */
