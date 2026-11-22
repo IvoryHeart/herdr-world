@@ -230,6 +230,10 @@ describe("content-hashed assets", () => {
       await writeFile(join(root, "public/index.html"), "<title>x</title>");
       await writeFile(join(root, "public/sw.js"), script);
       await writeFile(
+        join(root, "public/manifest.json"),
+        JSON.stringify({ name: "World", short_name: "World" }),
+      );
+      await writeFile(
         join(root, "public/sw.js.br"),
         brotliCompressSync(script),
       );
@@ -362,6 +366,42 @@ describe("content-hashed assets", () => {
       expect(spa.headers.get("cache-control")).toBe(
         "private, no-cache, must-revalidate",
       );
+      // Encoded aliases that resolve outside /assets/ keep the headers and
+      // rendering of the file they name, never an asset's year-long cache.
+      const entryAlias = await get(publicDir, "/assets/..%2Findex.html", {
+        ...accept,
+        accept: "text/html",
+      });
+      expect(entryAlias.status).toBe(200);
+      expect(entryAlias.headers.get("cache-control")).toBe(
+        "private, no-cache, must-revalidate",
+      );
+      expect(entryAlias.headers.has("content-encoding")).toBe(false);
+      expect(await entryAlias.text()).toBe("<title>Herdr World</title>");
+      const manifestAlias = await get(
+        publicDir,
+        "/assets/%2e%2e/manifest.json",
+        accept,
+      );
+      expect(manifestAlias.headers.get("cache-control")).toBe(
+        "private, no-cache, must-revalidate",
+      );
+      expect(manifestAlias.headers.get("content-type")).toBe(
+        "application/json; charset=utf-8",
+      );
+      const workerAlias = await get(publicDir, "/assets/..%2Fsw.js", accept);
+      expect(workerAlias.status).toBe(200);
+      expect(workerAlias.headers.has("cache-control")).toBe(false);
+      expect(workerAlias.headers.has("content-encoding")).toBe(false);
+      expect(await workerAlias.text()).toBe(script);
+      // An alias that lands on a real asset is that asset.
+      const assetAlias = await get(
+        publicDir,
+        "/x/..%2Fassets/app-hash.js",
+        accept,
+      );
+      expect(assetAlias.headers.get("cache-control")).toBe(immutable);
+      expect(assetAlias.headers.get("content-encoding")).toBe("br");
       for (const path of [
         "/assets/..%2F..%2Foutside.js",
         "/assets/%2e%2e/%2e%2e/outside.js",

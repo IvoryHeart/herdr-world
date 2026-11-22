@@ -26,7 +26,9 @@
 - Keep one browser origin; shell and transport operations need qualified authority.
 - Only content-hashed `/assets/*` may be cached long or served precompressed, and
   always `private`: assets sit behind login, so a shared cache must not keep them.
-  Never compress a response that carries secrets or user data.
+  Never compress a response that carries secrets or user data. Classify the
+  canonical resolved path (`canonicalStaticPathname`), never the request's
+  spelling: `/assets/..%2Findex.html` is the entry page, not an asset.
 - `check-web-assets.mjs` budgets raw bytes; `.br`/`.gz` variants are reported
   beside it, not counted. Bun's `fetch` decodes by default: tests that read a
   compressed body pass `decompress: false`.

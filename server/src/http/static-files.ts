@@ -8,6 +8,7 @@ import {
 } from "../../../shared/precompressedAssets";
 import { join } from "node:path";
 import {
+  canonicalStaticPathname,
   decodeStaticPathname,
   isStaticRequestMethod,
   resolvePublicFilePath,
@@ -37,6 +38,11 @@ export async function serveStatic(
     return new Response("bad request", { status: 400 });
   }
   if (!pathname) return new Response("bad request", { status: 400 });
+  // Classify the file the request resolves to, not its spelling: an encoded
+  // alias such as /assets/..%2Findex.html is the entry document and must
+  // keep its headers and rendering, never an asset's year-long cache.
+  pathname = canonicalStaticPathname(publicDir, pathname);
+  if (!pathname) return new Response("not found", { status: 404 });
 
   const serveEntry =
     pathname !== "/manifest.json" &&

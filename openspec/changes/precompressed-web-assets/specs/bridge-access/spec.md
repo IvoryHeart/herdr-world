@@ -27,4 +27,7 @@ NOT change login, admission, origin or content security policy.
   `/assets/`
 - **THEN** it SHALL keep that response's existing cache headers and SHALL NOT
   mark it immutable, `public` or compressed, and an unadmitted request for an
-  asset SHALL still be refused before any file is read
+  asset SHALL still be refused before any file is read. World SHALL classify the
+  file a request resolves to, not its spelling: an encoded alias such as
+  `/assets/..%2Findex.html` SHALL be served as the file it names, with that
+  file's headers and rendering
