@@ -55,6 +55,11 @@ const cli = (
   );
 
 export const cliVerbs = [
+  cli("board element types", {}, "read"),
+  cli("board element list", {}, "read"),
+  cli("board element put", { element: object() }),
+  cli("board element delete", { id: text, rev: Type.Integer({ minimum: 1 }) }),
+  cli("board element read", { id: text }, "read"),
   cli("whoami", {}, "read"),
   cli("ls", {}, "read"),
   cli("usage", {}, "read"),

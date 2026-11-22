@@ -30,7 +30,7 @@ import { WORLD_SKILL } from "./world-skill";
 import { changeClaudeTap, claudeTapCurrent } from "./integration-claude";
 import { setIntegrationDisabled } from "./integration-preferences";
 
-export const WORLD_SKILL_VERSION = 4;
+export const WORLD_SKILL_VERSION = 6;
 
 function stat(path: string) {
   try {

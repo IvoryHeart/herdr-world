@@ -113,6 +113,7 @@ export type RpcServices = {
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;
   worldSnapshots: ObservedSnapshots | null;
+  boardElements?: import("../world/board-element-service").BoardElementService;
   worldUsage?: import("../usage/service").WorldUsageService;
   worldUsageAnalytics?: import("../usage/analytics").WorldUsageAnalyticsService;
   worldMemory?: import("../memory/service").MemoryService;
