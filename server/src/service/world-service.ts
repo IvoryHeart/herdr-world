@@ -74,7 +74,7 @@ import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
 import { createWorldAskPeers } from "./world-ask-peers";
 import { createAssistantLoader } from "./assistant-loader";
-import { createRuntimeMemoryService } from "../memory/runtime-service";
+import { memoryKey } from "../features/memory/register";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
 import { AgentActivityCache } from "../world/agent-activity-cache";
@@ -251,7 +251,7 @@ async function compose(
     peers: askPeers.peers,
     homeName: askPeers.homeName,
     askRuntimes: askPeers.askRuntimes,
-    memory: () => rpcServices.worldMemory!,
+    memory: () => features!.get(memoryKey),
     core: () => coreCallers,
     board,
     ledger: () => storage.ledger(),
@@ -799,11 +799,6 @@ async function compose(
     worldUsage,
     boardElements,
     worldUsageAnalytics: worldUsage.analytics,
-    worldMemory: createRuntimeMemoryService({
-      tui: () => connectionManager,
-      core: coreRpc,
-      now: () => clock.now(),
-    }),
   };
   features = composeFeatures(
     featureKernel(deps, storage, rpcServices, () => worldSources),

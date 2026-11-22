@@ -189,17 +189,24 @@ test("missing and extra RPC handlers are refused", () => {
 });
 
 test("every discovered feature implements exactly its registered RPC declarations", () => {
-  expect(serverFeatures.map((f) => String(f.id))).toEqual(["presence"]);
+  expect(serverFeatures.map((f) => String(f.id))).toEqual([
+    "memory",
+    "presence",
+  ]);
   const composed = composeFeatures(kernel);
   // No extra await in the pilot's existing teardown when a phase is unused.
   for (const phase of ["quiesce", "drain", "close"] as const)
     expect(composed.hasStop(phase)).toBe(false);
   expect([...composed.rpc.keys()].sort()).toEqual(
-    serverFeatures.flatMap((f) => f.verbs.map((v) => v.name)).sort(),
+    serverFeatures
+      .flatMap((f) =>
+        f.verbs.filter((v) => v.channel === "rpc").map((v) => v.name),
+      )
+      .sort(),
   );
   for (const feature of serverFeatures)
     for (const verb of feature.verbs)
-      expect(registeredVerb("rpc", verb.name)).toBe(verb);
+      expect(registeredVerb(verb.channel, verb.name)).toBe(verb);
   const presence = registeredVerb("rpc", "world.presence.seen")!;
   expect(presence.input).toEqual(rpcInput(presence.name));
   expect(presence.output).toEqual(rpcOutput(presence.name));
