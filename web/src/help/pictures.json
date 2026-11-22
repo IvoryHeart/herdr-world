@@ -62,6 +62,15 @@
       "chat.speak.phone.dark.webp"
     ]
   },
+  "code.project": {
+    "fingerprint": "9c9fbef7182ea09f",
+    "files": [
+      "code.project.desktop.light.webp",
+      "code.project.desktop.dark.webp",
+      "code.project.phone.light.webp",
+      "code.project.phone.dark.webp"
+    ]
+  },
   "town.apartments": {
     "fingerprint": "ac6f4a8166ded445",
     "files": [
