@@ -11,6 +11,7 @@
 
 **Code:**
 
+- `web/src/attachmentUploads.ts`
 - `web/src/components/InspectorChat.tsx`
 - `web/src/components/TerminalComposer.tsx`
 - `server/src/agent/conversation.ts`

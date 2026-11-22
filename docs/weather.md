@@ -38,7 +38,7 @@ An outage therefore can remain hidden by the cache until refresh is due. World
 continues to work while the request runs or fails. Disabling or changing settings
 aborts and retires old requests. Place lookup is cached for the active settings.
 Town's sky follows the current condition when its Sky panel is set to
-**Real weather**; FEATURES.md describes what each condition looks like.
+**Real weather**; the [appearance notes](../openspec/specs/world-surfaces/appearance/notes.md) describe what each condition looks like.
 
 Weather data: [Open-Meteo](https://open-meteo.com/),
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); place data: GeoNames.

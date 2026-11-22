@@ -202,6 +202,18 @@ or a claim about arbitrary concurrent workspace/transport schedules.
 | Q42 Preferences/filters/shortcuts | Pure bounded key parsing and browser storage tests exercise namespaces, canonicalization, quotas and newest explicit preference. | Storage quota/browser implementation behavior remains direct evidence; preferences do not authorize downstream operations. |
 | Q43 Rendering/layout/search/metrics/site | Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content. ConcurrentContexts checks phase-specific terminal lifetime and stable Board card observer registrations during status-only refreshes at desktop and phone widths; direct ref tests cover replacement, removal and abandoned renders. | Pixel/layout/performance/device outcomes require real rendering and supported browser/site checks; no model of every device or accessibility event schedule. |
 
+### OpenSpec feature map and archive (Q41)
+
+Lookup/source-admission fixtures and the JSON CLI check capability ownership directly.
+Archive calls are synchronous under one workflow concurrency group, so there are no
+independently completing item operations to model. Synthetic Git dates and actual
+pinned-CLI deltas check ordering, skipped incomplete tasks, the successful prefix
+and restoration at a real conflict. A workflow guard checks one bot branch and no
+main push/automatic merge. An interrupted disposable checkout cannot publish before
+the final commit/push; the next run rebuilds from main. Hosted concurrency, branch
+protection and independent review remain required platform evidence. This extension
+is candidate evidence, not acceptance inherited from the earlier Q41 review.
+
 ### Stored Groups (Q43)
 
 Properties come from the Stored Groups requirement: pooled lead/builder roles

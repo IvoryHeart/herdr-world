@@ -2,20 +2,18 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const MAP_PATH = "docs/knowledge-map.md";
-const WORLD_PREFIX = "web/src/world/";
-const NO_IMPACT_REASON =
-  /^\s*(?:-\s*)?Knowledge map impact:\s*unchanged\s*[-–—:]\s*(.+)$/im;
+import { readCapabilities, type Capability } from "./where";
 
 export function changedPathsBetween(
   cwd: string,
   base: string,
   head: string,
+  { includeDeleted = true }: { includeDeleted?: boolean } = {},
 ): string[] {
   for (const revision of [base, head]) {
     if (!/^[0-9a-f]{40}$/.test(revision)) {
       throw new Error(
-        "Knowledge-map check requires exact base and head commits",
+        "Source-coverage check requires exact base and head commits",
       );
     }
   }
@@ -28,6 +26,7 @@ export function changedPathsBetween(
       "--name-only",
       "-z",
       "--no-renames",
+      ...(includeDeleted ? [] : ["--diff-filter=ACMRT"]),
       `${base}...${head}`,
       "--",
     ],
@@ -36,22 +35,41 @@ export function changedPathsBetween(
   return output.split("\0").filter(Boolean);
 }
 
+/** Exact files, directory prefixes (trailing /) or repository-relative globs. */
 export function assessKnowledgeMapImpact(
   changedPaths: readonly string[],
-  body: string | null | undefined,
-): { ok: boolean; worldPaths: string[]; reason: string | null } {
-  const worldPaths = changedPaths.filter((path) =>
-    path.startsWith(WORLD_PREFIX),
+  capabilities: readonly Pick<Capability, "codePaths">[],
+): { ok: boolean; uncovered: string[] } {
+  const patterns = capabilities.flatMap((c) => c.codePaths);
+  const uncovered = changedPaths.filter(
+    (path) =>
+      (/\.(?:[cm]?[jt]sx?|css|html|sh|py|rb|ps1|qnt)$/.test(path) ||
+        path.startsWith(".githooks/") ||
+        path.startsWith(".github/workflows/")) &&
+      !patterns.some((pattern) =>
+        pattern.endsWith("/")
+          ? path.startsWith(pattern)
+          : new Bun.Glob(pattern).match(path),
+      ),
   );
-  const match = (body ?? "").match(NO_IMPACT_REASON);
-  const reason = match?.[1]?.trim() ?? null;
-  const hasReason =
-    reason !== null && reason.length >= 20 && !/^<.*>$/.test(reason);
-  return {
-    ok: worldPaths.length === 0 || changedPaths.includes(MAP_PATH) || hasReason,
-    worldPaths,
-    reason: hasReason ? reason : null,
-  };
+  return { ok: uncovered.length === 0, uncovered };
+}
+
+/** Feature contracts are deltas; only archive-only PRs synchronize current specs. */
+export function assessSpecEdits(paths: readonly string[]): string[] {
+  const direct = paths.filter((p) => /^openspec\/specs\/.+\/spec\.md$/.test(p));
+  const archiveOnly =
+    paths.some((p) => p.startsWith("openspec/changes/archive/")) &&
+    paths.every(
+      (p) =>
+        p.startsWith("openspec/changes/") ||
+        /^openspec\/specs\/.+\/(spec|notes)\.md$/.test(p),
+    );
+  return direct.length && !archiveOnly
+    ? [
+        `Put contract edits in openspec/changes/<slug>/specs/; current specs synchronize in the archive PR: ${direct.join(", ")}`,
+      ]
+    : [];
 }
 
 type PullRequestEvent = {
@@ -76,23 +94,15 @@ if (import.meta.main) {
       fileURLToPath(new URL("..", import.meta.url)),
       base,
       head,
+      { includeDeleted: false },
     );
-    const result = assessKnowledgeMapImpact(
-      changedPaths,
-      event.pull_request?.body,
-    );
+    const result = assessKnowledgeMapImpact(changedPaths, readCapabilities());
     if (!result.ok) {
       console.error(
-        `${result.worldPaths.length} World file(s) changed without a knowledge-map update or a stated no-impact reason.`,
-      );
-      console.error(result.worldPaths.slice(0, 10).join("\n"));
-      console.error(
-        "Update docs/knowledge-map.md, or put `Knowledge map impact: unchanged — <specific reason>` in the PR description.",
+        `Source files without a capability notes.md Code path:\n${result.uncovered.join("\n")}`,
       );
       process.exitCode = 1;
-    } else {
-      console.log("Knowledge-map impact accounted for.");
-    }
+    } else console.log("Changed sources are covered by capability notes.");
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

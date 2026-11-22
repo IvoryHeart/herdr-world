@@ -7,6 +7,7 @@ import {
   verifySiteReferences,
   versionSiteAssets,
 } from "./pages-content";
+import { readCapabilities, renderFeatures, renderFeatureSite } from "./where";
 import { renderHelpSite } from "./help-docs";
 import { pagesBuildConfig, filmBuildConfig } from "./site-bundles";
 
@@ -61,6 +62,15 @@ for (const [source, destination] of assets) {
   await ensureFile(sourcePath);
   await copyFile(sourcePath, join(assetDirectory, destination));
 }
+
+const features = renderFeatures(readCapabilities(root));
+await writeFile(join(root, "FEATURES.md"), features);
+await writeFile(join(outputDirectory, "FEATURES.md"), features);
+await mkdir(join(outputDirectory, "features"), { recursive: true });
+await writeFile(
+  join(outputDirectory, "features/index.html"),
+  renderFeatureSite(features),
+);
 
 const tutorialMarkdown = await Bun.file(join(root, "docs/TUTORIAL.md")).text();
 checkTutorialShape(tutorialMarkdown);

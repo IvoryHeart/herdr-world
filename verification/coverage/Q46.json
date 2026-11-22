@@ -14,6 +14,8 @@
     "server/src/verbs/dispatch.test.ts",
     "server/src/verbs/cli-entry.test.ts",
     "server/src/verbs/evidence.test.ts",
+    "server/src/features/compose.test.ts",
+    "server/src/service/rpc-dispatch.test.ts",
     "server/src/service/world-service.test.ts",
     "server/src/world/world-cli.test.ts",
     "server/src/world/world-cli-groups.test.ts",
@@ -45,12 +47,14 @@
       "server/src/verbs/dispatch.test.ts",
       "server/src/verbs/cli-entry.test.ts",
       "server/src/verbs/evidence.test.ts",
+      "server/src/features/compose.test.ts",
+      "server/src/service/rpc-dispatch.test.ts",
       "server/src/service/world-service.test.ts"
     ],
     "checks": ["bun run test server/src/verbs/"],
     "review": "Merged protocol design is not implementation acceptance. Independent PR review and selected CI remain required."
   },
-  "evidenceDecision": "P4 is finite and directly exhaustive; native runtime and storage ordering retain their existing model/consumer obligations. Mutation controls establish sensitivity of every new test, not full domain-validation or observation-delivery proof.",
+  "evidenceDecision": "P4 is finite and directly exhaustive; native runtime and storage ordering retain their existing model/consumer obligations. Mutation controls establish sensitivity of every new test, not full domain-validation or observation-delivery proof. Feature composition exhausts all three-node input orders and directly checks invalid graphs, exact handler/declaration parity and awaited reverse-phase teardown. Production dispatch refuses an unregistered feature handler before routing and retains presence replies and socket authority; the hand-recorded inventory and actor baseline remains unchanged. These synchronous graph rules add no independent runtime or storage writer, so direct finite checks suffice without a new Quint model.",
   "promotion": {
     "decision": "pending",
     "scope": "Migrated browser RPC, agent CLI and browser forge policy only; independent review and CI required."

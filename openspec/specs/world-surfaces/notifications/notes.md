@@ -11,6 +11,8 @@
 
 **Code:**
 
+- `web/src/chimes/`
+- `server/src/notifications/`
 - `shared/chimes.ts`
 - `shared/interest.ts`
 - `web/src/chimes/chimeHost.ts`

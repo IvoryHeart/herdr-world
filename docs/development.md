@@ -268,7 +268,7 @@ Feature discovery uses committed `server/src/features/index.gen.ts` and
 `register.ts` or `mount.tsx` under those roots, run `bun run features:generate`.
 Each sorted line exports one module namespace; colliding export names are refused.
 `bun run features:check` checks membership (ignoring order) in the static lane.
-The `testing/probe` features are inert fixtures: the server probe is imported only
+The `testing/probe` features are inert fixtures: the server probe is invoked only
 by tests, and the web probe declares no `Host`, so the shell never renders it. The
 proof in `scripts/features.test.ts` and `web/src/features/index.browser.test.ts`
 runs them through every build path, including a compiled probe after deleting sources.
@@ -279,6 +279,20 @@ passes (`dialogs`: the world and a launched-terminal opener, mounted in the
 control plane's AgentDialogs), renders a slot's hosts by order then id, refuses a
 duplicate id, and fails typecheck when a discovered `Host` does not fit its slot.
 A host whose UI is heavy keeps it behind `lazyWithReload`, as the Memory Library does.
+
+Server entries export `feature = defineFeature(...)` from `register.ts`.
+Declare RPC verbs there once; the generated catalogue feeds admission and the
+composer checks that factory handler keys match those declarations exactly.
+Use `featureKey<Api>(id)` for the id and dependencies, list dependencies in
+`requires`, and resolve their APIs with the factory's typed `get(key)`.
+Composition validates the entire graph before creation, then creates dependencies
+first with id order for ties. The read-only `FeatureKernel` provides service
+ports and lazy, explicitly qualified runtime access; it has no default runtime
+helper. Features receive status/listening hooks in composition order and stop
+in reverse order per phase: `quiesce` fences work, `drain` precedes runtime stop,
+and `close` precedes storage closure. Add a feature and regenerate the index
+without editing the service root, World RPC router or RPC context. Presence is
+the pilot; existing security and storage lifecycle owners remain in the root.
 
 Use `bun run ci:health --days 3` for a read-only screen of recent CI and delivery
 numbers (`gh` authentication required). `--days` accepts 1–30 and `--repo owner/name`
@@ -595,7 +609,7 @@ selected host into visual surfaces; send terminal,
 resource and mutation work through the qualified focused-runtime path.
 
 See [architecture](ARCHITECTURE.md), [deployment](DEPLOYMENT.md) and the
-[knowledge map](knowledge-map.md).
+[capability lookup](agent-development.md#find-a-feature).
 
 The optional cost metrics provider is service-owned. For local testing, set
 `HERDR_WORLD_OTEL_PROMETHEUS_URL` on `dev:server` or use the cost metrics dialog;
