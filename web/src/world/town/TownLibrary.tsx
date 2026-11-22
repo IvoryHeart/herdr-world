@@ -7,7 +7,7 @@ import {
   useMemoryStore,
 } from "../memory/memoryClient";
 import { openMemoryLibrary } from "../memory/memoryEvents";
-import { useTownPlace } from "./townPlaces";
+import { useTownPlace } from "./useTownPlace";
 import { memorySummary } from "../memory/memoryModel";
 import type { TownCenterLot } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";

@@ -1,4 +1,3 @@
-import { createContext, useContext, useEffect } from "react";
 import { townApartmentsLot } from "./townApartmentsLot";
 import { townHarbourLot } from "./townHarbour";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
@@ -122,19 +121,4 @@ export class TownPlaces {
       hoverPlace: (key: TownPlaceKey | null) => this.hover(key, root),
     };
   }
-}
-
-export const TownPlacesContext = createContext<TownPlaces | null>(null);
-
-/**
- * Registers `open` (null: nothing to open now) as what pressing the place's
- * building does. Pass a stable callback, or the latest is registered each
- * render.
- */
-export function useTownPlace(key: TownPlaceKey, open: (() => void) | null) {
-  const places = useContext(TownPlacesContext);
-  useEffect(
-    () => (places && open ? places.register(key, open) : undefined),
-    [places, key, open],
-  );
 }

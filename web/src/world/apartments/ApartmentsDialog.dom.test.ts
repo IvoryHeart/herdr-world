@@ -82,22 +82,22 @@ if (process.env.APARTMENTS_DOM !== "1") {
     // The fixture answers on the next tick.
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     const dialog = () =>
-      host.querySelector<HTMLElement>(
+      document.body.querySelector<HTMLElement>(
         '[role="dialog"][aria-label="Apartments"]',
       )!;
     return {
       dialog,
       names: () =>
-        [...host.querySelectorAll(".apartments-row strong")].map(
+        [...document.body.querySelectorAll(".apartments-row strong")].map(
           (name) => name.textContent,
         ),
       button: (text: string) =>
-        [...host.querySelectorAll<HTMLButtonElement>("button")].find((item) =>
-          item.textContent?.includes(text),
+        [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
+          (item) => item.textContent?.includes(text),
         )!,
       closed: () => closed,
       async search(text: string) {
-        const input = host.querySelector<HTMLInputElement>(
+        const input = document.body.querySelector<HTMLInputElement>(
           'input[aria-label="Search residents"]',
         )!;
         await act(async () => {

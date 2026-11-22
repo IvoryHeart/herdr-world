@@ -30,7 +30,8 @@ import { TownPostOffice } from "./TownPostOffice";
 import { TownLibrary } from "./TownLibrary";
 import { TownShipyard } from "./TownShipyard";
 import { TownWarehouse } from "./TownWarehouse";
-import { TownPlacesContext, type TownPlaces } from "./townPlaces";
+import type { TownPlaces } from "./townPlaces";
+import { TownPlacesContext } from "./useTownPlace";
 import "./townPlaces.css";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {

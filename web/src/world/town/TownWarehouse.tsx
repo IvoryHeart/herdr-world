@@ -28,7 +28,7 @@ import {
 import { useTownWarehouseSources } from "./townWarehouseFixture";
 import type { TownRendererHandle } from "./townRenderer";
 import { useOpenTownWork } from "./TownWorkLens";
-import { useTownPlace } from "./townPlaces";
+import { useTownPlace } from "./useTownPlace";
 import { townCrateUrl, type TownCrateState } from "./townHarbourArt";
 import "./townWarehouse.css";
 

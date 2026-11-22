@@ -63,7 +63,7 @@ import {
 } from "./townPostFixture";
 import { townLetterUrl } from "./townPostPaint";
 import type { TownRendererHandle } from "./townRenderer";
-import { useTownPlace } from "./townPlaces";
+import { useTownPlace } from "./useTownPlace";
 import "./townPost.css";
 
 /**

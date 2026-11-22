@@ -17,7 +17,7 @@ import {
   type TownObservatoryCell,
 } from "./townObservatoryModel";
 import { useOpenTownUsage } from "./TownUsageLens";
-import { useTownPlace } from "./townPlaces";
+import { useTownPlace } from "./useTownPlace";
 import "./townObservatory.css";
 
 /**

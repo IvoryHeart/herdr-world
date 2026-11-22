@@ -7,7 +7,7 @@ import {
 } from "./townApartmentsArrivals";
 import { townApartmentsLot } from "./townApartmentsLot";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
-import { useTownPlace } from "./townPlaces";
+import { useTownPlace } from "./useTownPlace";
 import "./townApartmentsSign.css";
 
 const openTownApartments = () => openApartments();
