@@ -27,11 +27,12 @@ import {
   coreKillRefusal,
   coreKillUnconfirmed,
 } from "./kill-plan";
-import { CORE_SPAWNED_BY_LABEL } from "./labels";
+import { CORE_SPAWNED_BY_LABEL, CORE_UNNAMED_SPACE_LABEL } from "./labels";
 import type { CoreMirrorTerminal } from "./mirror";
 import type { CoreConnectionRuntime } from "./runtime";
 import {
   CORE_MAIN_ROOM,
+  CORE_UNNAMED_SPACE,
   coreHarness,
   coreRoomOfWorkspace,
   coreRoomWorkspaceId,
@@ -210,13 +211,30 @@ function folderOf(
   return undefined;
 }
 
-/** The name World shows a read-model room by (the app's for its spaces). */
-async function roomLabelOf(lease: Lease, workspaceId: string): Promise<string> {
+/**
+ * The room's name for a launched terminal's caption (the app's for its
+ * spaces). A room with no name of its own (shown as `Herdr space` or a name
+ * World derived, display only) gets World's placeholder, marked so it never
+ * names the space.
+ */
+async function roomCaptionOf(
+  lease: Lease,
+  workspaceId: string,
+): Promise<{ label: string; placeholder: boolean }> {
   const { workspaces } = await lease.runtime.operations.listWorkspaces();
   const room = (
-    workspaces as Array<{ workspace_id: string; label?: unknown }>
+    workspaces as Array<{
+      workspace_id: string;
+      label?: unknown;
+      label_derived_from?: unknown;
+    }>
   ).find((w) => w.workspace_id === workspaceId);
-  return typeof room?.label === "string" && room.label ? room.label : "World";
+  if (room?.label_derived_from || room?.label === CORE_UNNAMED_SPACE)
+    return { label: CORE_UNNAMED_SPACE, placeholder: true };
+  return {
+    label: typeof room?.label === "string" && room.label ? room.label : "World",
+    placeholder: false,
+  };
 }
 
 /**
@@ -265,19 +283,22 @@ export async function launchCore(
       ? request.spawnedBy
       : undefined;
   const tabLabel = label || (kind ?? "Shell");
+  const caption = placed
+    ? await roomCaptionOf(lease, request.workspaceId)
+    : null;
   const labels: Record<string, string> = {
-    ...(placed
+    ...(caption
       ? {
           "herdr.space": space,
           "herdr.tab": `world-${tabId}`,
           // A terminal a client starts has seen nothing yet (labels.md).
           "herdr.seen": "0",
           // The app's caption: the IDs above are not names a person reads.
-          where:
-            `${await roomLabelOf(lease, request.workspaceId)} / ${tabLabel}`.slice(
-              0,
-              2 * CORE_TOPOLOGY_LIMITS.label + 3,
-            ),
+          where: `${caption.label} / ${tabLabel}`.slice(
+            0,
+            2 * CORE_TOPOLOGY_LIMITS.label + 3,
+          ),
+          ...(caption.placeholder ? { [CORE_UNNAMED_SPACE_LABEL]: "1" } : {}),
         }
       : {}),
     ...(spawnedBy ? { [CORE_SPAWNED_BY_LABEL]: spawnedBy } : {}),
