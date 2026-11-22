@@ -191,13 +191,24 @@ test("CI and pre-push share inventory owners and use the immutable PR head", () 
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
   const owner = "server/src/owned/example.ts";
-  const spec = "openspec/specs/world-surfaces/town/spec.md";
+  const spec = "openspec/changes/example/specs/world-surfaces/town/spec.md";
   const body = `Spec impact: world-surfaces/town\nVerification impact: ${owner}\nChangelog: none — Only synthetic regression fixtures change.\n`;
   const event = join(root, "event.json");
   try {
     git("init", "-q");
     git("config", "user.name", "Example");
     git("config", "user.email", "example@example.invalid");
+    mkdirSync(join(root, "openspec/specs/world-surfaces/town"), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(root, "openspec/specs/world-surfaces/town/spec.md"),
+      "# Town\n",
+    );
+    writeFileSync(
+      join(root, "openspec/specs/world-surfaces/town/notes.md"),
+      "**Code:**\n\n- `server/src/owned/`\n",
+    );
     mkdirSync(join(root, "verification/coverage"), { recursive: true });
     writeFileSync(join(root, "verification/coverage/_meta.json"), "{}");
     writeFileSync(
@@ -318,7 +329,7 @@ test("push policy reads the intended description or existing PR, and never inven
 });
 
 const cli = fileURLToPath(new URL("./check-pr-body.ts", import.meta.url));
-test("draft descriptions enforce the same knowledge-map and changelog rules before PR creation", () => {
+test("draft descriptions enforce the same source-coverage and changelog rules before PR creation", () => {
   const root = mkdtempSync(join(tmpdir(), "pr-body-"));
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -347,13 +358,17 @@ test("draft descriptions enforce the same knowledge-map and changelog rules befo
     };
     const invalid = run("Knowledge map impact: unchanged\nChangelog: none\n");
     expect(invalid.status).toBe(1);
-    expect(invalid.stderr).toContain("Knowledge map impact:");
+    expect(invalid.stderr).toContain("web/src/world/example.ts");
     expect(invalid.stderr).toContain("Changelog:");
     expect(invalid.stderr).toContain("Spec impact:");
     expect(invalid.stderr).toContain("Verification impact:");
-    const reason =
-      "Knowledge map impact: unchanged — Existing ownership and entry points remain accurate.\n" +
-      noImpacts;
+    mkdirSync(join(root, "openspec/specs/example"), { recursive: true });
+    writeFileSync(join(root, "openspec/specs/example/spec.md"), "# Example\n");
+    writeFileSync(
+      join(root, "openspec/specs/example/notes.md"),
+      "**Code:**\n\n- `web/src/world/`\n",
+    );
+    const reason = noImpacts;
     expect(
       run(
         reason +
@@ -401,4 +416,49 @@ test("an added feature ships a help declaration or says why it needs none", () =
   ).toEqual([]);
   for (const answer of ["Help: none", "Help: none — <reason>", "Help: yes"])
     expect(assessHelpImpact(paths, read(added), answer)).toHaveLength(1);
+});
+
+test("deleted source owners are optional while deleted current specs still require deltas", () => {
+  const root = mkdtempSync(join(tmpdir(), "pr-deleted-owner-"));
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  const body =
+    "Changelog: none — Remove a synthetic retired fixture.\nSpec impact: openspec/specs/example/notes.md — Remove retired source ownership.\nVerification impact: none — No ordering or authority behavior changes.\n";
+  try {
+    git("init", "-q");
+    git("config", "user.name", "Example");
+    git("config", "user.email", "example@example.invalid");
+    mkdirSync(join(root, "openspec/specs/example"), { recursive: true });
+    mkdirSync(join(root, "server/src"), { recursive: true });
+    writeFileSync(join(root, "openspec/specs/example/spec.md"), "# Example\n");
+    writeFileSync(
+      join(root, "openspec/specs/example/notes.md"),
+      "**Code:**\n\n- `server/src/retired.ts`\n",
+    );
+    writeFileSync(
+      join(root, "server/src/retired.ts"),
+      "export const retired = true;\n",
+    );
+    git("add", ".");
+    git("commit", "-qm", "Baseline");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    git("rm", "server/src/retired.ts");
+    writeFileSync(join(root, "openspec/specs/example/notes.md"), "**Code:**\n");
+    git("add", ".");
+    git("commit", "-qm", "Remove source and owner");
+    expect(checkPrBodyText(body, root)).toEqual([]);
+    git(
+      "rm",
+      "openspec/specs/example/spec.md",
+      "openspec/specs/example/notes.md",
+    );
+    git("commit", "-qm", "Delete current spec");
+    expect(checkPrBodyText(body, root)).toContainEqual(
+      expect.stringContaining(
+        "Put contract edits in openspec/changes/<slug>/specs/",
+      ),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

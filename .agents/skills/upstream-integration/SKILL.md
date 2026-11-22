@@ -5,7 +5,7 @@ description: Integrate a frozen Roamgate source release into Herdr World, or rep
 
 # Upstream integration
 
-Read the current repository instructions, UPSTREAM.md, the relevant knowledge-map
+Read the current repository instructions, UPSTREAM.md, the relevant capability spec and notes
 rows and affected source/tests. Use the recorded Roamgate SHA as the merge baseline;
 integrate the exact target supplied by the workflow, never a moving branch or tag.
 The prepared merge retains upstream ancestry. Resolve conflicts explicitly, keeping

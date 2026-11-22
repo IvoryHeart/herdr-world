@@ -73,7 +73,7 @@ describe("tutorial Markdown", () => {
     );
     expect(ids).not.toContain("");
     expect(new Set(ids).size).toBe(ids.length);
-    // README, FEATURES, the knowledge map and the home page link to these.
+    // README, capability notes and the home page link to these.
     for (const anchor of [
       "start",
       "town",
@@ -380,7 +380,7 @@ describe("tutorial shape", () => {
     expect(measureTutorial(markdown).longest.words).toBe(
       tutorialLimits.blockWords + 2,
     );
-    expect(() => checkTutorialShape(markdown)).toThrow(/FEATURES\.md/);
+    expect(() => checkTutorialShape(markdown)).toThrow(/notes\.md/);
   });
 
   test("measures a step as a whole, not paragraph by paragraph", () => {
@@ -418,7 +418,6 @@ describe("public documentation links", () => {
     const root = fileURLToPath(new URL("../", import.meta.url));
     for (const source of [
       "README.md",
-      "FEATURES.md",
       "SECURITY.md",
       "docs/DEPLOYMENT.md",
       "docs/ARCHITECTURE.md",

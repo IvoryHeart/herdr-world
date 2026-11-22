@@ -41,4 +41,4 @@ Service: `server/src/world/agent-move.ts`, `server/src/world/agent-rehome.ts`,
 `server/src/rpc/agent-move.ts`, `server/src/world/board-*.ts`,
 `shared/agentMove.ts`, `shared/relations.ts`. Browser: Town drag and M menu,
 Town and Board peeks. Evidence: `server/src/world/agent-move.test.ts`,
-`verification/contracts/agent-move-audit.md` (Q57). Docs: FEATURES.md.
+`verification/contracts/agent-move-audit.md` (Q57). Docs: `openspec/specs/herdr-core-runtime/notes.md`.

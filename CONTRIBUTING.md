@@ -126,10 +126,10 @@ Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook checks formatting and lint without
 writing files, and its `pre-push` hook runs the applicable check. Before that gate,
 the hook scans all pushed refs for private material and checks the complete PR's
-changelog, knowledge-map, spec and verification
+changelog, source-coverage, spec and verification
 impact policy. It reads an existing PR description, or `HERDR_WORLD_PR_BODY=<file>` for the intended description
 before a first push. Non-documentation PRs need the two impact lines even with a
-changelog fragment and knowledge-map update. API errors cannot supply an exemption.
+changelog fragment and capability Code-path coverage. API errors cannot supply an exemption.
 
 ### Privacy before publication
 
@@ -454,12 +454,13 @@ on every rendering path; do not rely on an unrelated feature being opened.
 ## Keep documentation current
 
 Every significant change must include the relevant current documentation updates
-in the same PR. Use the [knowledge map](docs/knowledge-map.md) to find affected
-guides: `FEATURES.md` for changed controls and their detail (edge cases, limits,
+in the same PR. Use [capability lookup](docs/agent-development.md#find-a-feature) to find affected
+capability notes for changed controls and their detail (edge cases, limits,
 refusals), the tutorial only when a learner's steps change, README for first-run
 changes, deployment/packaging for configuration and distribution, and
 architecture or contributor guidance for contracts and workflows. Update current
-specifications when their contracts change; preserve historical evidence.
+OpenSpec change-folder deltas when contracts change; current specs synchronize
+in the reviewed post-main archive PR. Preserve historical evidence.
 
 Name the affected docs in the PR description. If no update is needed, explain
 why the existing instructions still describe the delivered behavior. Changelog
@@ -472,16 +473,16 @@ Edit `site/` for the landing page; **only `docs/TUTORIAL.md`** for tutorial text
 `scripts/build-pages.ts` uses `site/tutorial/index.html` as the template and
 renders to `.pages-dist/tutorial/index.html`, rewrites screenshots/references,
 and checks built-site links/fragments. `check:docs` also checks repository-local
-paths and Markdown fragments in the knowledge map with
+paths and Markdown fragments in capability notes with
 `bun scripts/check-knowledge-map-links.ts`; remote URLs are not fetched.
 
 The tutorial is for someone learning World: numbered steps that say what to do
 and what they will see, ending with a "You are done when" check. It is not the
 reference. Detail a learner does not need (exceptions, refusals, staleness
-rules, limits, internals) goes in `FEATURES.md`, and the tutorial links there.
+rules, limits, internals) goes in capability `notes.md`, and the tutorial links there.
 The build fails when one step (counting all its paragraphs and sub-items) or
 paragraph passes 60 words, or the tutorial passes 6,000 words of prose
-(`tutorialLimits` in `scripts/pages-content.ts`): move detail to `FEATURES.md`
+(`tutorialLimits` in `scripts/pages-content.ts`): move detail to capability notes
 rather than raising a limit.
 
 ```bash
