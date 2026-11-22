@@ -44,6 +44,33 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Under Busy: "2 quiet 10 m+", working agents whose sessions have not moved. */
+.town-board-counts dd.town-board-note {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.town-board-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+/* Phones and touch: a 44 px tall hit area (style guide). */
+@media (max-width: 640px), (pointer: coarse) {
+  .town-board-quiet {
+    min-height: 44px;
+  }
+}
+
 .town-board-population {
   margin: 0;
   font-size: 11px;
