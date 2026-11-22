@@ -604,14 +604,20 @@ test.skipIf(!chrome)(
           room.label.includes("core-alpha"),
         )!;
         expect(await visit(mode, alpha.key, "core-alpha")).toBeNull();
-        const plus = await centre(
-          `${plaqueOf("core-alpha")}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`,
-        );
+        // As above: off the plaque first, so no card left open by a stale
+        // pointer (Chrome re-hit-tests it after the camera moves) covers the
+        // free seat, then press only where the pointer really reaches it.
+        await move({ x: 4, y: 4 });
+        const add = `${plaqueOf("core-alpha")}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`;
+        const plus = await centre(add);
         expect(plus).not.toBeNull();
+        await move(plus!);
+        const onPlus = await reach(add);
+        expect(onPlus).toMatchObject({ reached: true, disabled: false });
         await click(plus!);
         await waitFor(
           "!!document.querySelector('.agent-launcher-card:not(:disabled)')",
-          "the launcher opens on the core room",
+          `the launcher opens on the core room (${mode})`,
         );
         await click(
           (await centre(
