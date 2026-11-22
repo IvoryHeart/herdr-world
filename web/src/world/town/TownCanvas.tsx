@@ -4,9 +4,11 @@ import { TownBoard, type TownQuietMarks } from "./TownBoard";
 import {
   TownTeamsLayer,
   TownWorldLayer,
+  townHoveredRoomKey,
   type TownRoomCardPress,
 } from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
+import { TownPlaces } from "./townPlaces";
 import { TownBuildingLayers } from "./townBuildingLayers";
 import { TownBoardPlacement } from "./townBoardPlacement";
 import {
@@ -410,6 +412,7 @@ export function TownCanvas({
   const [layers] = useState(() => new TownBuildingLayers());
   const signFrame = () => rendererRef.current?.invalidate("building-sign");
   const [signs] = useState(() => new TownBuildingSigns(signFrame));
+  const [places] = useState(() => new TownPlaces()); // #1170 buildings
   const [boards] = useState(() => new TownBoardPlacement(rendererRef, view));
   const hoverEntry = useCallback(
     (key: string | null, rect?: DOMRect) =>
@@ -673,6 +676,7 @@ export function TownCanvas({
       activateRoom: (key) => latest.current.onActivateRoom(key),
       openReception: setOpenReception,
       openCenter: ring.openRing,
+      ...places.ports(document),
       move: (command) => {
         const actions = latest.current.roomActions;
         switch (command.kind) {
@@ -924,6 +928,7 @@ export function TownCanvas({
             signs={signs}
             layers={layers}
             boards={boards}
+            places={places}
             onHoverEntry={hoverEntry}
             selectedKey={selectedKey}
             blockedSince={blockedSince}
@@ -938,17 +943,7 @@ export function TownCanvas({
               (hover !== null && model.desks.has(hover) ? hover : null)
             }
             openReceptionKey={openReception}
-            openRoomKey={
-              // Zoomed out, a mouse anywhere over a room (a table or an
-              // agent in it) opens the room's card.
-              hover === null
-                ? null
-                : model.rooms.has(hover)
-                  ? hover
-                  : (model.desks.get(hover)?.roomKey ??
-                    model.agents.get(hover)?.roomKey ??
-                    null)
-            }
+            openRoomKey={townHoveredRoomKey(model, hover)}
             onActivateRoom={(key) => {
               onActivateRoom(key);
               zoomToRoomKey(key);

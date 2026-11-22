@@ -1,6 +1,7 @@
 import base64
 import contextlib
 import json
+import os
 from pathlib import Path
 import secrets
 import shutil
@@ -317,9 +318,21 @@ def chat_reply(world, fixture, agent):
     pane_for(world, connection, agent['result'], require_classified=True)
 
 
+def install(source, binary):
+    """Put a release at the binary path as a new file, like an installer does.
+
+    Copying over the previous binary rewrites the same inode. macOS caches a
+    signed executable's code signature per vnode, so the new contents can be
+    killed at exec before printing anything (darwin-x64 walk, #1246).
+    """
+    staged = binary.with_name(binary.name + '.new')
+    shutil.copy2(source, staged)
+    os.replace(staged, binary)
+
+
 def upgrade(walk, candidate, baseline, fixture):
     binary = fixture.root / 'upgrade-world'
-    shutil.copy2(baseline, binary)
+    install(baseline, binary)
     settings = fixture.root / 'world/settings.json'
     settings.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     settings.write_text(json.dumps(dict(version=1, title_suffix='Release walk preserved', repositories={},
@@ -346,7 +359,7 @@ def upgrade(walk, candidate, baseline, fixture):
         world.rpc('connections.set_default', {'id': 'walk-core'})
         cookie = world.cookie
         saved = json.loads((settings.parent / 'connections.json').read_text())
-    shutil.copy2(candidate, binary)
+    install(candidate, binary)
     with World(binary, fixture.root, env, cookie) as world:
         assert world.request('/api/login', {'password': 'wrong-synthetic-password'}).status in (401, 403), 'upgrade accepted the wrong sign-in password'
         invalid_cookie = world.cookie.split('=', 1)[0] + '=invalid-synthetic-session'

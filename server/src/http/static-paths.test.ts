@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  canonicalStaticPathname,
   decodeStaticPathname,
   isStaticRequestMethod,
   resolvePublicFilePath,
@@ -11,6 +12,22 @@ describe("static file paths", () => {
     expect(decodeStaticPathname("/")).toBe("/index.html");
     expect(decodeStaticPathname("/assets/app%20icon.svg")).toBe(
       "/assets/app icon.svg",
+    );
+  });
+
+  test("canonical paths name the resolved file and refuse escapes", () => {
+    const root = "/srv/world/public";
+    expect(canonicalStaticPathname(root, "/assets/app.js")).toBe(
+      "/assets/app.js",
+    );
+    expect(canonicalStaticPathname(root, "/assets/../index.html")).toBe(
+      "/index.html",
+    );
+    expect(canonicalStaticPathname(root, "/assets/./x/../app.js")).toBe(
+      "/assets/app.js",
+    );
+    expect(canonicalStaticPathname(root, "/assets/../../outside.js")).toBe(
+      null,
     );
   });
 

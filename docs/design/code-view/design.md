@@ -1,63 +1,15 @@
 # Code: the real IDE, in World's frame
 
-**Design study, not a shipping feature.** The owner selected real VS Code and
-IDE integrations. This revision replaces the earlier custom-editor mock.
-The three standalone assets at `/code-view-prototype.html` use fixed synthetic
-fixtures only: no IDE/extension is loaded, nothing installs, no network or storage
-is used, no desktop app opens, no command executes and no real file or PR changes.
-The workbench is a **clearly labelled stand-in**, not a screenshot or working IDE.
+**Design study.** Code's first version shipped from it (#1009); the current
+behaviour, limits and refusals are in [the Code view notes](../../../openspec/specs/world-code-view/notes.md#code-view).
+The study's standalone mock was retired when Code shipped. What follows is the
+proposal it tested. SSH hosts shipped: Code runs the host's own IDE over
+the connection's OpenSSH destination. Desktop handoff was dropped: nothing
+in Code opens an IDE on a desktop. The parts not yet built (the World
+terminal-profile extension, PR review handoff) stay open in the
+[OpenSpec change](../../../openspec/changes/world-code-view/tasks.md).
 The [research](research.md) and [architecture](../../../openspec/changes/world-code-view/design.md)
-explain the unresolved licence, single-origin and full-shell trust gates.
-
-## Try it on the preview
-
-In a desktop browser, open **`/code-view-prototype.html`** on the dispatcher's
-preview origin. No runtime,
-repository, account, query parameter or database setup is needed. The permanent
-**DESIGN STUDY / 981** banner and **LABELLED STAND-IN · NOT A RUNNING VS CODE**
-caption identify the fixture. **Return to World** leaves it. **Reset study**
-restores all initial memory-only state.
-
-1. Click **Open Orchard in Code →**. World's host/room header surrounds a VS Code
-   workbench stand-in: activity rail, Explorer, code, integrated terminals and
-   native Source Control context. Click **README.md** and **greeting.ts**.
-   The example is read-only because this study does not build a World editor.
-2. Click **Scout’s checkout**. The branch changes to `scout/welcome`. Click
-   **World: Wren** in the workbench's terminal tabs: the terminal changes, while
-   the checkout stays Scout's. Click **Attach profile (mock)**, then **Detach
-   profile (mock)**. These represent the proposed World VS Code extension
-   attaching an existing core terminal, not launching a new agent or shell.
-3. Click **Agent changes file**, then **PR #42** in the World sidebar, then
-   **Review in VS Code (mock)**. The synthetic file changes and the review request
-   selects the agent checkout. Real Git diffs, saves and conflicts belong to
-   VS Code; World supplies verified project/PR context. No actual PR is opened.
-4. Click **IDE integrations**. This host has Microsoft VS Code web detected and
-   enabled. OpenVSCode and code-server are separate providers with Open VSX
-   labels. Click **Enable (mock)** for OpenVSCode, then **Use web IDE (mock)**:
-   the provider label changes. Open the picker and return to Microsoft explicitly.
-   Each row discloses detected/enabled state and the full-shell/write trust warning.
-   Press **Escape** or **Done** to close. Nothing installs or accepts real terms.
-5. Click **Open in desktop IDE**, then **Cursor**, **JetBrains Gateway** or **Zed**.
-   The handoff preview retains the exact project, checkout and owning host. It
-   explains that the browser device's installed apps are unknown and launches
-   nothing. Press **Escape** to return to the selected project.
-6. Click **Block embedding (mock)**. The workbench is replaced by an explicit
-   webview-origin blocker with desktop handoff. No automatic CSP change or provider
-   fallback occurs. Click **Clear embed block (mock)** to restore it. Click
-   **Disconnect host (mock)**: context becomes stale, profiles detach and desktop
-   handoff refuses. **Reconnect host (mock)** restores that exact host with no
-   profile automatically reattached and no input replay.
-7. In **Project**, select **Field notes · SSH**. Its Microsoft provider is missing,
-   demonstrating independent host state. Open **IDE integrations**. Either enable
-   the detected code-server and explicitly use it, or click **Mark installed (mock)**
-   for Microsoft, **Enable (mock)**, then **Use web IDE (mock)**. Mark installed is
-   a testing-only switch; it downloads/starts nothing. The future product would
-   require owner setup and validated licence/security admission.
-8. On Field notes click **Attach profile (mock)**. Read the warning: **Herdr attach
-   resizes the pane for every viewer**, even when observing. Click **Confirm shared
-   resize (mock)** to attach Finch. Closing/detaching would leave the existing
-   agent running. Open the desktop handoff to see SSH-specific instructions,
-   rather than incorrectly treating the remote folder as client-local.
+explain the licence, single-origin and full-shell trust gates.
 
 ## Proposed interaction and ownership
 
@@ -109,14 +61,7 @@ provider evidence stays non-actionable. No new World commit/merge authority.
 | IDE update changes behavior | Revalidate actual server commit and disable incompatible embedding until verified. |
 
 Desktop gives most space to the real workbench and a narrow World context rail.
-The mock's proportions are illustrative, not a replacement IDE layout engine.
 Controls use text state labels, keyboard focus, Escape dismissal, modal focus
 containment and polite status announcements. Actual IDE browser/keyboard and
 accessibility behavior must be verified against the installed product before
 shipping; synthetic rendering cannot establish compatibility.
-
-Research/design-only changes do not alter first-run install or learner steps, so
-README and TUTORIAL remain accurate. FEATURES and the knowledge map identify the
-study and its limits. On implementation **or rejection**, retire the three mock
-assets and lower the extra asset-count allowance; the OpenSpec task list records
-this lifecycle explicitly.

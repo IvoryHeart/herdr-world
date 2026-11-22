@@ -18,6 +18,7 @@ Every World screen answers this too: press ? beside the views (on a phone, the v
 - [Focus for a while](#town-focus)
 - [Apartments: finished agents](#town-apartments)
 - [Quiet agents](#town-quiet)
+- [Your VS Code in World](#code-project)
 - [What can I do here?](#world-help)
 - [Hosts on a phone](#world-phone-hosts)
 
@@ -106,7 +107,7 @@ Agents that are not running live on in the apartment building beside the town ce
 3. Search residents by name, project, summary, pull request or date.
 4. Open one to read its history; resume a Claude or Codex agent into a room, or evict it.
 
-Where: Town, the building beside the town center; also Apartments in the town center ring and Board's hub. Since 0.3.6.
+Where: Town, the building beside the town center; also Apartments in the town center ring, and Past sessions in Board's hub. Since 0.3.6.
 
 <a id="town-quiet"></a>
 
@@ -193,6 +194,23 @@ Write a note on the board, connect it to an agent, and send it when it is ready.
 3. Press Send when the note is ready.
 
 Where: Board, anywhere on the empty board. Since 0.2.6.
+
+## Code
+
+<a id="code-project"></a>
+
+### Your VS Code in World
+
+![Your VS Code in World](../web/public/help/code.project.desktop.light.webp)
+
+Code shows the VS Code installed on the computer a project is on, this one or an SSH host, inside World. The project's agents and terminals stay beside it.
+
+1. Choose Code beside the views; on a phone, in the views menu.
+2. Pick a project in the bar at the top.
+3. Press Open; the first time, enable an IDE there first.
+4. Use the button at the bar's right end to show or hide the project's agents and terminals.
+
+Where: Code, the project picker at the left of its top bar. Since 0.3.6.
 
 ## Chat
 

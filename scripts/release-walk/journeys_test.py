@@ -235,12 +235,13 @@ class JourneyTests(unittest.TestCase):
             baseline.write_text('previous-published-binary')
             candidate.write_text('candidate-binary')
             saved = root / 'world/connections.json'
-            started = []
+            started, inodes = [], []
             startup = dict(id='startup-default', type='local',
                            control_socket_path=str(root / 'tui-control.sock'),
                            client_socket_path=str(root / 'tui-render.sock'))
             def world_process(binary, home, env, cookie=None):
                 started.append((Path(binary).read_text(), dict(env), cookie))
+                inodes.append(Path(binary).stat().st_ino)
                 if 'HERDR_SESSION' not in env:
                     profiles = json.loads(saved.read_text())['profiles']
                     self.assertEqual({item['id'] for item in profiles}, {'walk-tui', 'walk-core'})
@@ -278,6 +279,9 @@ class JourneyTests(unittest.TestCase):
             with patch('journeys.World', side_effect=world_process):
                 upgrade(Mock(), candidate, baseline, fixture)
             self.assertEqual([item[0] for item in started], ['previous-published-binary', 'previous-published-binary', 'candidate-binary'])
+            # macOS kills a signed binary rewritten in place; the candidate is a new file.
+            self.assertNotEqual(inodes[2], inodes[1])
+            self.assertFalse((root / 'upgrade-world.new').exists())
             self.assertEqual(started[0][1]['HERDR_SESSION'], fixture.env['HERDR_SESSION'])
             for _, env, cookie in started[1:]:
                 self.assertNotIn('HERDR_SESSION', env)

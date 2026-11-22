@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { currentBuildVersion } from "../scripts/build-version";
+import { precompressAssetsPlugin } from "../scripts/precompress-assets";
 import packageJson from "./package.json";
 
 const appVersion = currentBuildVersion(
@@ -15,7 +16,8 @@ export default defineConfig(({ mode }) => {
   const devtools =
     mode === "development" || process.env.HERDR_WORLD_BUILD_DEVTOOLS === "1";
   return {
-    plugins: [react()],
+    // Hashed /assets/* ship with brotli and gzip variants (#1245).
+    plugins: [react(), precompressAssetsPlugin()],
     define: {
       __HERDR_WORLD_VERSION__: JSON.stringify(appVersion),
       // World's development tools (event traces, renderer counters) exist only
@@ -126,6 +128,8 @@ export default defineConfig(({ mode }) => {
         "/api": { target: "http://127.0.0.1:8788" },
         // Installation metadata is instance-specific, including in development.
         "/manifest.json": { target: "http://127.0.0.1:8788" },
+        // Code view: installed IDEs World proxies under /ide/<instance>/.
+        "/ide/": { target: "http://127.0.0.1:8788", ws: true },
         // Let an unauthenticated dev client reach the bridge login page instead
         // of repeatedly loading the Vite SPA at /login and redirecting again.
         "/login": { target: "http://127.0.0.1:8788" },

@@ -3,13 +3,18 @@ import type { WorldView } from "../world/worldViewRouting";
 import { helpEntry } from "./entries";
 import { HelpPanel } from "./HelpPanel";
 import type { HelpEntry } from "./helpEntry";
-import { HELP_TRY_EVENT, OPEN_HELP_EVENT, type HelpTab } from "./helpEvents";
+import {
+  HELP_TRY_EVENT,
+  helpTryView,
+  OPEN_HELP_EVENT,
+  type HelpTab,
+} from "./helpEvents";
 import { spotlightHelpTarget, waitForHelpTarget } from "./helpTry";
 import "./helpPanel.css";
 
 /**
  * World's help: opens the panel on `openHelp(tab)` from any screen, and runs
- * Try. Try goes to the entry's view (Town or Board), then spotlights its
+ * Try. Try goes to the entry's view (Town, Board or Code), then spotlights its
  * control; when the control is not on screen, the panel says where it is.
  */
 export function HelpPanelHost({
@@ -45,11 +50,8 @@ export function HelpPanelHost({
         requestAnimationFrame(() => resolve()),
       );
       const { view: current, onView: go } = latest.current;
-      if (
-        (entry.place === "town" || entry.place === "board") &&
-        current !== entry.place
-      )
-        go(entry.place);
+      const destination = helpTryView(entry.place, current);
+      if (destination) go(destination);
       const target = await waitForHelpTarget(entry.control);
       if (target) spotlightHelpTarget(target);
       else setPanel({ tab: entry.place, missing: entry.id });

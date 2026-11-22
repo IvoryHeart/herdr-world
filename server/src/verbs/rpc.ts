@@ -1,5 +1,4 @@
 import { CORE_LOCAL_ADDRESS_PATTERN } from "../../../shared/coreAddress";
-import { USAGE_ANALYTICS_GROUPS } from "../../../shared/usageAnalytics";
 import { Type } from "typebox";
 import { declare, object, policies, text } from "./declaration";
 import { rpcInput, rpcOutput } from "./rpc-contracts";
@@ -553,6 +552,24 @@ export const rpcVerbs = [
     "world",
     object({ harness: text }),
   ),
+  // Installed web IDEs for the Code view and their World-owned servers.
+  rpc("world.ide.status", "read", "world"),
+  rpc("world.ide.enable", "reconcilable", "world", object({ provider: text })),
+  rpc("world.ide.disable", "reconcilable", "world", object({ provider: text })),
+  rpc(
+    "world.ide.configure",
+    "reconcilable",
+    "world",
+    object({ provider: text }),
+  ),
+  rpc("world.ide.open", "reconcilable", "world", object({ folder: text })),
+  rpc("world.ide.stop", "reconcilable", "world", object({ instanceId: text })),
+  rpc(
+    "world.ide.forget",
+    "reconcilable",
+    "world",
+    object({ instanceId: text }),
+  ),
   // The owner's focus session (#1131): held interruptions, then one recap.
   rpc("world.focus.end", "reconcilable", "world"),
   rpc("world.focus.get", "read", "world"),
@@ -572,36 +589,6 @@ export const rpcVerbs = [
   rpc("world.profiles.get", "read", "world"),
   rpc("world.profiles.save", "reconcilable", "world"),
   rpc("world.snapshot", "read", "world"),
-  rpc(
-    "world.usage.analytics",
-    "read",
-    "world",
-    object({
-      window: Type.Optional(
-        Type.Union([Type.Literal("today"), Type.Literal("7d")]),
-      ),
-      // One list for the API, CLI and screens: a group missing here refuses
-      // every read of it (the Usage screens' `run` read once was).
-      group_by: Type.Optional(
-        Type.Union(USAGE_ANALYTICS_GROUPS.map((group) => Type.Literal(group))),
-      ),
-      connection_id: Type.Optional(text),
-      connection_generation: Type.Optional(Type.Integer({ minimum: 0 })),
-      pane_id: Type.Optional(text),
-      workspace_id: Type.Optional(text),
-      project_id: Type.Optional(text),
-    }),
-  ),
-  rpc(
-    "world.usage.get",
-    "read",
-    "world",
-    object({
-      window: Type.Optional(
-        Type.Union([Type.Literal("today"), Type.Literal("7d")]),
-      ),
-    }),
-  ),
   rpc("world.town_master.set", "reconcilable", "world"),
   rpc("world.watchlist.list", "read", "world"),
   rpc("world.watchlist.pin", "reconcilable", "world"),

@@ -23,7 +23,8 @@ import { usageDigest } from "./host";
 import { agentSessionOf } from "../agent/checkout-context";
 import { agentCheckoutSessionFingerprint } from "../herdr/agent-checkout";
 
-export class UsageQueryError extends Error {}
+import { UsageQueryError } from "../features/usage/errors";
+export { UsageQueryError } from "../features/usage/errors";
 export function parseAnalyticsQuery(
   raw: Record<string, unknown> = {},
 ): UsageAnalyticsQuery {

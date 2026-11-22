@@ -1,5 +1,6 @@
 import { CHAT_HELP } from "../components/chat/chat.help";
 import { BOARD_HELP } from "../world/board/board.help";
+import { CODE_HELP } from "../world/code/code.help";
 import { TOWN_HELP } from "../world/town/town.help";
 import { WORLD_HELP } from "../world/world.help";
 import type { HelpEntry, HelpPlace } from "./helpEntry";
@@ -11,6 +12,7 @@ import type { HelpEntry, HelpPlace } from "./helpEntry";
 export const HELP_ENTRIES: readonly HelpEntry[] = [
   ...TOWN_HELP,
   ...BOARD_HELP,
+  ...CODE_HELP,
   ...CHAT_HELP,
   ...WORLD_HELP,
 ];

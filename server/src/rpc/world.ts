@@ -14,6 +14,7 @@ import { handleCoreWatchRpc } from "./core-watch";
 import { handleBinRpc } from "./bin";
 import { handleCoreRpc } from "./core";
 import { handleFloatRpc } from "./float";
+import { handleIdeRpc } from "./ide";
 import { handleWorldIntegrationRpc } from "./integration";
 import { handleCoreSharedRpc } from "./core-shared";
 import { profileWrite } from "../agent/profile-store";
@@ -22,7 +23,6 @@ import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
 import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
-import { UsageQueryError } from "../usage/analytics";
 
 /** Aggregate World methods: snapshot, board document, profiles, watchlist (world.*). */
 export function handleWorldRpc(
@@ -66,31 +66,6 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     }
     return;
   }
-  if (method === "world.usage.analytics") {
-    try {
-      const analytics = rpc.services.worldUsageAnalytics;
-      if (!analytics) throw new Error("unavailable");
-      sendReply({ id, result: await analytics.get(params ?? {}) }, method);
-    } catch (error) {
-      sendError(
-        "world-usage-error",
-        error instanceof UsageQueryError
-          ? error
-          : new Error("World usage analytics is unavailable"),
-      );
-    }
-    return;
-  }
-  if (method === "world.usage.get") {
-    try {
-      const usage = rpc.services.worldUsage;
-      if (!usage) throw new Error("World usage service is unavailable");
-      sendReply({ id, result: await usage.get(params ?? {}) }, method);
-    } catch {
-      sendError("world-usage-error", new Error("World usage is unavailable"));
-    }
-    return;
-  }
   if (method.startsWith("world.focus.")) {
     try {
       const focus = rpc.services.focus;
@@ -128,6 +103,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method.startsWith("world.float.")) return handleFloatRpc(rpc);
   if (method.startsWith("world.integration."))
     return handleWorldIntegrationRpc(rpc);
+  if (method.startsWith("world.ide.")) return handleIdeRpc(rpc);
   if (method === "world.snapshot") {
     // The snapshot lists herdr-core connections too; only Herdr (TUI)
     // connections have runtimes these Board observers act through.

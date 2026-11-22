@@ -68,7 +68,13 @@ export function UsageLens({
   onClose,
   anchor,
   world,
+  framed = false,
 }: {
+  /**
+   * Inside a window (Town's PlaceWindow, #1170), which owns the layer and
+   * the close button.
+   */
+  framed?: boolean;
   initialTab?: UsageTab;
   initialFilter?: UsageAgentFilter | null;
   onClose(): void;
@@ -76,7 +82,7 @@ export function UsageLens({
   world?: WorldObject;
 }) {
   const sectionRef = useRef<HTMLElement | null>(null);
-  useLayer(true, onClose, {
+  useLayer(!framed, onClose, {
     element: () => sectionRef.current,
     anchors: () => [anchor?.() ?? null],
   });
@@ -112,14 +118,16 @@ export function UsageLens({
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className="work-lens-icon"
-          aria-label="Close Usage"
-          onClick={onClose}
-        >
-          <X size={16} aria-hidden="true" />
-        </button>
+        {framed ? null : (
+          <button
+            type="button"
+            className="work-lens-icon"
+            aria-label="Close Usage"
+            onClick={onClose}
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        )}
       </header>
       <div
         id="usage-panel"
