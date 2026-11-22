@@ -11,6 +11,11 @@
 
 **Code:**
 
+- `web/src/world/town/legacyTownMaster.ts`
+- `web/src/world/town/useTownMaster.ts`
+- `web/src/world/town/useTownCenter.ts`
+- `web/src/world/board/BoardHub.tsx`
+- `web/src/world/officePreferences.ts`
 - `web/src/world/TownMasterGreetingHost.tsx`
 - `web/src/world/TownMasterCard.tsx`
 - `web/src/world/townMasterGreeting.ts`
@@ -18,6 +23,9 @@
 
 **Tests:**
 
+- `web/src/world/town/legacyTownMaster.test.ts`
+- `web/src/world/town/useTownMaster.test.ts`
+- `web/src/world/HostsFilter.cold.test.ts`
 - `web/src/world/townMasterGreeting.test.ts`
 - `web/src/world/TownMasterCard.test.ts`
 - `web/src/world/town/townMaster.test.ts`
@@ -76,7 +84,7 @@
     Town's setup card (**Start Herdr** or **Set up herdr-core**) is up, and
     opens once the card is gone. **✕**, Escape, Back or a press outside closes it; tap
     the figure to open it again. Untick **Show this on start** at its foot,
-    or switch **Menu → Settings → Town master greeting**, to stop it on this browser.
+    or switch **Menu → Settings → Greeting on start**, to stop it on this browser.
     Your very first visit is greeted too, without a last time. The card also
     carries [What's new](notes.md#help-and-whats-new) after an update, or **Start
     here** on a first visit.

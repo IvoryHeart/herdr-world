@@ -11,6 +11,11 @@
 
 **Code:**
 
+- `web/src/world/board/board.settings.tsx`
+- `web/src/world/board/useBoardAppearance.ts`
+- `web/src/world/board/boardPulses.ts`
+- `web/src/world/town/town.settings.tsx`
+- `web/src/world/town/townLensStore.ts`
 - `web/src/settings/`
 - `web/src/help/`
 - `web/src/settings/registry.ts`
@@ -21,6 +26,7 @@
 
 **Tests:**
 
+- `web/src/world/BoardView.test.ts`
 - `web/src/settings/settings.dom.test.ts`
 - `web/src/commandBoxKey.dom.test.ts`
 - `scripts/check-knowledge-map-links.test.ts`
@@ -58,10 +64,12 @@ also find by typing its name.
   **Automatic branch updates**) that returns to Settings at its row when
   closed. **Agent profiles** and **Chimes and who plays them** open their own
   windows.
-- Controls that stay on a view are rows too: **Board surface**, **Board status
-  colours** and **Board status pulses** switch to Board and open its settings
-  menu or colours; **Town lenses** switches to Town and opens the lens
-  chooser; **Hosts and connections** opens **Manage connections**.
+- **Board surface**, **Board status pulses** and **Town lenses** change in place
+  from Settings or Cmd+K and update an open view immediately, in the same tab.
+  Their view controls share the same values; these choices stay in this browser.
+  **Board status colours** opens Board's colours dialog; **Hosts and connections**
+  opens **Manage connections**. The one **Town master** row opens the synced agent
+  picker in **Sounds**; the separate **Greeting on start** switch is browser-only.
 - **This World** holds **Herdr and connection details** (Herdr version,
   upgrade or setup, connection address), **World name**, update checks,
   **Reload page** and **Log out**. **Help** opens the tutorial, this file,

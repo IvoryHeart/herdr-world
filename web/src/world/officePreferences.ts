@@ -28,11 +28,6 @@ export type OfficePreferences = {
   townBuildings: TownBuildings;
   /** Rooms per row in each building; Auto follows its rooms and the view. */
   townRoomsPerRow: TownRoomsPerRow;
-  /**
-   * The agent whose chat Town docks on wide screens from the start (the
-   * Town's master, FirstMate), by its name; empty docks none.
-   */
-  townMaster: string;
   /** The Town Master greets each visit (Show this on start). */
   townGreeting: boolean;
   /** The tab title and app icon show the Needs you count (this browser). */
@@ -52,7 +47,6 @@ export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
   // One building per machine: hosts are machines, runtimes are what they run (#1047).
   townBuildings: "host",
   townRoomsPerRow: "auto",
-  townMaster: "firstmate",
   townGreeting: true,
   tabBadge: true,
   townQuietMinutes: TOWN_QUIET_DEFAULT_MINUTES,
@@ -81,7 +75,6 @@ export function readOfficePreferences(
       townOpens: value.townOpens === "terminal" ? "terminal" : "chat",
       townBuildings: value.townBuildings === "runtime" ? "runtime" : "host",
       townRoomsPerRow: townRoomsPerRow(value.townRoomsPerRow),
-      townMaster: townMasterName(value.townMaster),
       townGreeting: value.townGreeting !== false,
       tabBadge: value.tabBadge !== false,
       townQuietMinutes: townQuietMinutes(value.townQuietMinutes),
@@ -105,13 +98,19 @@ export function writeOfficePreferences(
     townOpens: preferences.townOpens === "terminal" ? "terminal" : "chat",
     townBuildings: preferences.townBuildings === "runtime" ? "runtime" : "host",
     townRoomsPerRow: townRoomsPerRow(preferences.townRoomsPerRow),
-    townMaster: townMasterName(preferences.townMaster),
     townGreeting: preferences.townGreeting !== false,
     tabBadge: preferences.tabBadge !== false,
     townQuietMinutes: townQuietMinutes(preferences.townQuietMinutes),
   };
   try {
-    storage.setItem(OFFICE_PREFERENCES_KEY, JSON.stringify(admitted));
+    storage.setItem(
+      OFFICE_PREFERENCES_KEY,
+      JSON.stringify({
+        ...admitted,
+        // Preserve a pending legacy name until the synced role migration consumes it.
+        ...legacyTownMaster(storage),
+      }),
+    );
   } catch {
     // Presentation preferences must never prevent World from rendering.
   }
@@ -131,9 +130,32 @@ function isInspectorPresentation(
   return value === "docked" || value === "floating";
 }
 
-/** An agent name, at most 64 characters; anything else is the default. */
-function townMasterName(value: unknown) {
-  return typeof value === "string" && value.length <= 64
-    ? value.trim()
-    : DEFAULT_OFFICE_PREFERENCES.townMaster;
+/** Only the migration reads this retired preference; it has no default. */
+export function legacyTownMaster(storage: OfficePreferenceStorage): {
+  townMaster?: unknown;
+} {
+  try {
+    const raw = JSON.parse(storage.getItem(OFFICE_PREFERENCES_KEY) ?? "null");
+    return raw && Object.prototype.hasOwnProperty.call(raw, "townMaster")
+      ? { townMaster: raw.townMaster }
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Consume before sending: an uncertain write must never replay after reload. */
+export function forgetLegacyTownMaster(
+  storage: OfficePreferenceStorage,
+): boolean {
+  try {
+    const raw = JSON.parse(storage.getItem(OFFICE_PREFERENCES_KEY) ?? "null");
+    if (raw && Object.prototype.hasOwnProperty.call(raw, "townMaster")) {
+      delete raw.townMaster;
+      storage.setItem(OFFICE_PREFERENCES_KEY, JSON.stringify(raw));
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }

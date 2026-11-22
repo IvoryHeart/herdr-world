@@ -1,3 +1,4 @@
+import { installTownMasterFixture } from "./testing/townMasterFixture";
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installHostsFilterClock";
 import { setTownDaylightMode } from "./town/townDaylight";
@@ -2511,10 +2512,13 @@ async function run() {
     townCalm: operation === "town-walk-anchor",
   });
   if (coldMaster)
-    writeOfficePreferences(worldLocalStorage, {
-      ...readOfficePreferences(worldLocalStorage),
-      townMaster: "betamaster",
-    });
+    worldLocalStorage.setItem(
+      "officePreferences:v1",
+      JSON.stringify({
+        ...readOfficePreferences(worldLocalStorage),
+        townMaster: "betamaster",
+      }),
+    );
   history.replaceState(null, "", "/board");
   initializeLayoutPreferences();
   if (
@@ -2986,6 +2990,7 @@ async function run() {
     return focusQualifiedTarget(target);
   };
   bridge.call = client.call;
+  installTownMasterFixture();
   __storeTesting.replaceState({
     ...store.get(),
     status: "connected",
