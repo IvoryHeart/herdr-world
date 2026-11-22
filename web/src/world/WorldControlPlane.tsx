@@ -415,9 +415,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
   const stableCloseDeskReading = useStableCallback(closeDeskReading);
   const stableSelectNode = useStableCallback(selectNode);
   const stableOpenTerminalById = useStableCallback(openTerminalById);
-  const stableOpenAgentChat = useStableCallback((id: string) =>
-    applySelection(id, "history"),
-  );
   const stableOpenInspectorView = useStableCallback(
     (
       id: string,
@@ -569,7 +566,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                   ) : view === "code" ? (
                     <CodeView
                       world={world}
-                      onOpenAgent={stableOpenAgentChat}
+                      onOpenAgent={stableOpenInspectorView}
                       onOpenTerminal={stableOpenTerminalById}
                     />
                   ) : view === "town" ? (

@@ -119,7 +119,8 @@ export default function CodeView({
   secure = window.isSecureContext,
 }: {
   world: WorldObject;
-  onOpenAgent: (id: string) => unknown;
+  /** Opens an agent's Inspector at its chat history. */
+  onOpenAgent: (id: string, view: "history") => unknown;
   onOpenTerminal: (id: string) => unknown;
   client?: IdeClient;
   /** Whether this page is HTTPS or localhost; tests try a plain-HTTP one. */
@@ -509,7 +510,7 @@ export default function CodeView({
           <ProjectContext
             id={railId}
             project={project}
-            onOpenAgent={onOpenAgent}
+            onOpenAgent={(id) => onOpenAgent(id, "history")}
             onOpenTerminal={onOpenTerminal}
           />
         ) : null}
