@@ -26,8 +26,7 @@ machine as one building (#1213).
 None.
 
 ### Modified Capabilities
-- `world-surfaces/shell-navigation`: adds "Hosts filter lists machines" and
-  "Hosts filter selects whole machines";
+- `world-surfaces/shell-navigation`: adds "Hosts filter lists machines";
   modifies "Persist host filters without operational side effects" to allow
   an explicit empty selection.
 
