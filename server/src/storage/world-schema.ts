@@ -18,6 +18,7 @@ import {
   worldBoardMigration,
   worldBoardShapesMigration,
   worldRoomPinsMigration,
+  worldBoardElementsMigration,
 } from "./world-board";
 import { runtimeStatusMigration } from "./runtime-status";
 import { coreTopologyMigration } from "./core-topology";
@@ -105,8 +106,10 @@ export const worldMigrations = [
   worldRoomPinsMigration,
   coreTopologyMigration,
   worldBoardShapesMigration,
+  // Main's Apartments versions 14/15 are immutable; elements use version 16.
   apartmentsMigration,
   apartmentSessionsMigration,
+  worldBoardElementsMigration,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */
@@ -190,7 +193,27 @@ export function migrateWorldDatabase(
       : undefined;
   db.exec("BEGIN EXCLUSIVE");
   try {
+    // Early Board previews used v14 before main shipped Apartments at v14/15.
+    // Recover that specific layout inside the backed-up upgrade transaction;
+    // preserve its existing element rows and never reinterpret main's versions.
+    const boardPreview =
+      version === 14 &&
+      migrations[13] === apartmentsMigration &&
+      migrations[14] === apartmentSessionsMigration &&
+      migrations[15] === worldBoardElementsMigration &&
+      !!db
+        .query(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='board_elements'",
+        )
+        .get() &&
+      !db
+        .query(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='apartment_residents'",
+        )
+        .get();
+    if (boardPreview) db.exec(apartmentsMigration);
     for (let index = version; index < migrations.length; index++) {
+      if (boardPreview && index === 15) continue;
       const migration = migrations[index]!;
       if (typeof migration === "string") db.exec(migration);
       else migration(db, at);

@@ -8,6 +8,8 @@
 - Reception, board sign/Summary, room/table popovers and the town center ring are entry points.
 - Settings exposes lenses, calm motion and reception preferences; phones retain semantic targets.
 - TUI and core share Town; core pins derive from herdr.pinned, TUI pins from World settings.
+- Quiet working agents: Settings → Town & views → Quiet working agents; this browser's `townQuietMinutes` is stored by `officePreferences.ts`.
+- `browserStorage.ts` prefixes `officePreferences:v1` as localStorage key `herdr-world:foundation-v2:officePreferences:v1`.
 
 **Code:**
 
@@ -26,6 +28,15 @@
 - `web/src/world/usage/UsageLens.browser.tsx`
 - `web/src/world/TownView.tsx`
 - `web/src/world/town/TownCanvas.tsx`
+- `web/src/world/officePreferences.ts`
+- `web/src/browserStorage.ts`
+- `web/src/world/town/town.settings.tsx`
+- `web/src/world/town/townQuietWork.ts`
+- `web/src/world/town/useTownQuiet.ts`
+- `web/src/world/town/townRendererActors.ts`
+- `web/src/world/town/TownWorldLayer.tsx`
+- `web/src/world/town/TownStepBubble.tsx`
+- `web/src/world/town/TownBoard.tsx`
 - `web/src/world/town/townLayout.ts`
 - `server/src/world/observability.ts`
 
@@ -35,6 +46,7 @@
 - `web/src/world/town/TownCanvas.fold.test.ts`
 - `web/src/world/town/townLayout.test.ts`
 - `web/src/world/town/townReceptionFilter.test.ts`
+- `web/src/world/town/townQuietWork.test.ts`
 
 **Pitfalls:**
 
@@ -43,6 +55,8 @@
 - Pins and selection do not pull hidden desks across the fold boundary.
 - Moving rooms on the canvas is separate from moving native desks; see town-moves.
 - CLI desk pins/moves use their feature contracts, not canvas coordinates.
+- Quiet-agent data: `officePreferences.ts`/`town.settings.tsx` → `TownView.tsx` → `useTownQuiet.ts`; `townRendererActors.ts` stops typing.
+  `TownWorldLayer.tsx`/`TownStepBubble.tsx` draw the hourglass and elapsed time; `TownBoard.tsx` draws the count under Busy.
 
 ## Usage reference
 
@@ -56,6 +70,14 @@
   Agents go by the name Herdr gives them (`firstmate`), else their harness
   (`claude`); window and Inspector titles put the name first
   (`firstmate · claude`).
+  - One machine is one building: this computer's Herdr TUI and herdr-core
+    rooms stand together under one sign, each room's nameplate naming its
+    runtime (**Herdr TUI** or **herdr-core**) and keeping its own controls,
+    and every desk, agent and action stays on its own runtime's connection.
+    **Settings → Town & views → Town buildings → One per runtime** gives each
+    runtime its own building again (**One per machine** is the default).
+    Two Herdr TUI connections to the same socket (the startup default and a
+    saved profile) show its rooms once, through the writable one.
   - The Town board counts the whole town, every building, in four one-word
     columns: **Busy** (working) agents, **Waiting** (items needing
     you: blocked agents and open questions, matching the reception tray and
@@ -308,6 +330,12 @@
       requests opened and merged, and a total row. "unknown" means no
       reading; "(partly read)" means some sources were not readable. Agents
       and rooms no longer open read "Earlier agent" and "Earlier room".
+      Opened from an Apartments resident's usage line, Breakdown shows only
+      that agent: an **Agent: <name>** chip replaces **Group by**, its runs
+      read under its name, the total row reads **This agent**, and an agent
+      with no run in the seven days says "Nothing measured" and, for one
+      World never counted, why. The chip's ×
+      (**Show every agent**) shows every agent again.
       Under the table, **What World can read** names, per harness at work
       this week, whether its tokens come from its session logs or only
       World's time is known, and whether pull requests could be read.
@@ -739,11 +767,14 @@
     or pressing Escape, returns it. On a phone, drag the Move handle, or touch
     and hold the name or wall, then drag. The card's **Move before …** and
     **Move after …** arrows swap the room with its neighbour, for the
-    keyboard. Rooms stay in their own host's building. World saves where the
+    keyboard. Rooms stay in their own building; in a machine's building a room
+    can move among either runtime's rooms, while desks and agents keep to
+    their own runtime. World saves where the
     rooms stand with the Board layout (like pinned desks), so a reload and
     every device show the same arrangement, and puts Herdr's workspace order
     in reading order (top to bottom, left to right), so Spaces lists the
-    rooms as Town shows them. A building whose rooms were never moved still
+    rooms as Town shows them. herdr-core has no workspace order: its rooms
+    keep only their saved spots. A building whose rooms were never moved still
     stacks them in Herdr's order.
   - **Tidy rooms.** **Tidy rooms** (sparkles) on a building's sign, or the
     sparkles button on its reception board (next to its colour), puts every

@@ -52,10 +52,15 @@
     tab in Spaces or Herdr moves its table. Drag a table onto another table in
     its room to put it in that place, or onto the room's free spot to put it
     last of the tables shown (**M** lists the same places). Rooms extend as
-    tabs open: wide screens show three columns of rooms up to eight tables
-    wide, portrait and half-width screens two columns up to six, and phones
-    three columns up to four, growing downward, so a phone opens on compact
-    room cards spread across each building rather than one long column. A folded room normally shows up to
+    tabs open: rooms grow up to eight tables wide on wide screens, six on
+    portrait and half-width screens and four on phones, then downward. Each
+    building takes as many rooms per row as keep it about square (a little
+    wider than tall), from two up to five as the view's width allows, so a
+    machine with twenty rooms is no tall tower; phones keep three compact
+    room cards per row. **Settings → Town & views → Rooms per row** sets 2, 3,
+    4 or 5 for every building instead; it applies at once, is kept in this
+    browser, and **Auto** is the default. Moved rooms keep their spots either
+    way, and rooms never moved fill the rows around them. A folded room normally shows up to
     24 tables: pinned desks first, then the first tabs in the same order as
     Spaces, without promoting later working or recent tabs into that prefix. The bottom-right
     **» +N** tile sits beside the dashed **+** seat and counts hidden tables.

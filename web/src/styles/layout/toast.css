@@ -231,8 +231,7 @@
   }
 
   /* Follow the header when it collapses for the phone keyboard (topbar.css). */
-  &.keyboard-open:has(.app .xterm-helper-textarea:focus) .toast-viewport,
-  &.keyboard-open:has(.app .terminal-composer-input:focus) .toast-viewport {
+  &.keyboard-open[data-terminal-input-focus] .toast-viewport {
     top: calc(8px + env(safe-area-inset-top, 0px));
   }
 

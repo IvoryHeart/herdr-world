@@ -205,6 +205,56 @@ export async function requestRoomOrder(
 }
 
 /**
+ * A building's rooms split by the runtime that owns them, in reading order.
+ * A building per host (#1047) can hold the rooms of every runtime on the
+ * machine, but each runtime keeps its own room spots and workspace order.
+ */
+export function townRoomsByRuntime<
+  Room extends Pick<OfficeRoom, "workspaceRef">,
+>(rooms: readonly Room[]): Room[][] {
+  const groups = new Map<string, Room[]>();
+  for (const room of rooms) {
+    const id = room.workspaceRef.connectionId;
+    const group = groups.get(id);
+    if (group) group.push(room);
+    else groups.set(id, [room]);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * Put a building's rooms in order in each runtime that owns some of them and
+ * keeps a workspace order (`ordersRooms`: a Herdr TUI, not herdr-core, whose
+ * rooms keep only their spots), each on its own connection and generation.
+ * A stale runtime's rooms keep Herdr's order until it is back. Every
+ * runtime's ordering finishes before this does; the first refusal is the
+ * outcome.
+ */
+export async function requestBuildingRoomOrder(
+  rooms: readonly OfficeRoom[],
+  ordersRooms: (room: OfficeRoom) => boolean,
+): Promise<TownRoomMoveOutcome> {
+  const outcomes = await Promise.all(
+    townRoomsByRuntime(rooms)
+      .filter((group) => !group[0]!.stale && ordersRooms(group[0]!))
+      .map((group) =>
+        requestRoomOrder(group).catch(
+          (cause: unknown): TownRoomMoveOutcome => ({
+            status: "refused",
+            reason: "failed",
+            message: String(cause),
+          }),
+        ),
+      ),
+  );
+  return (
+    outcomes.find((outcome) => outcome.status !== "moved") ?? {
+      status: "moved",
+    }
+  );
+}
+
+/**
  * Move one agent pane to another desk. The service reads the destination's
  * full layout and joins the pane next to its last pane, so crowded desks
  * (more panes than Town draws) land correctly.

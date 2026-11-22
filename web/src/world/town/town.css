@@ -13,6 +13,9 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+  /* Never a scroll box: focusing a room's accessible target far off-screen
+     would scroll the canvas out of view, and Town would stop drawing. */
+  overflow: clip;
   font-family: var(
     --town-ui-font,
     "Rubik",
@@ -189,6 +192,20 @@
   background: #ffb547;
   border-radius: 999px;
   padding: 0 5px;
+}
+
+/* In a building of more than one runtime: the room's runtime, under its bar. */
+.town-room-card-runtime {
+  grid-row: 4;
+  grid-column: 1 / -1;
+  overflow: hidden;
+  font:
+    700 8px / 11px "Silkscreen",
+    ui-monospace,
+    monospace;
+  color: #b9c2b4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .town-room-card-meta {

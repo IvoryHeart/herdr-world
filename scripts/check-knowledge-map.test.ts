@@ -8,7 +8,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { readCapabilities } from "./where";
+import { readCapabilityNotes } from "./openspec-notes";
 
 const temporaryRepos: string[] = [];
 
@@ -16,6 +16,47 @@ afterEach(() => {
   for (const root of temporaryRepos.splice(0)) {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("source ownership reads fresh capability notes before a delta is archived", () => {
+  const root = mkdtempSync(join(tmpdir(), "capability-notes-"));
+  temporaryRepos.push(root);
+  mkdirSync(join(root, "openspec/specs/example"), { recursive: true });
+  mkdirSync(join(root, "openspec/changes/new/specs/example"), {
+    recursive: true,
+  });
+  writeFileSync(
+    join(root, "openspec/changes/new/specs/example/spec.md"),
+    "## ADDED Requirements\n\n### Requirement: New behavior\n",
+  );
+  const notes = join(root, "openspec/specs/example/notes.md");
+  writeFileSync(
+    notes,
+    "**Code:**\n\n- `server/src/example.ts`\n\n**Tests:**\n\n- `server/src/unowned.test.ts`\n",
+  );
+  expect(readCapabilityNotes(root)[0]).toMatchObject({
+    id: "example",
+    specPath: "openspec/changes/new/specs/example/spec.md",
+    notesPath: "openspec/specs/example/notes.md",
+    codePaths: ["server/src/example.ts"],
+  });
+  expect(
+    assessKnowledgeMapImpact(
+      ["server/src/unowned.test.ts"],
+      readCapabilityNotes(root),
+    ).ok,
+  ).toBe(false);
+  writeFileSync(notes, "## Code paths\n\n- `server/src/new/`\n");
+  expect(
+    assessKnowledgeMapImpact(
+      ["server/src/new/feature.ts"],
+      readCapabilityNotes(root),
+    ).ok,
+  ).toBe(true);
+  rmSync(join(root, "openspec/changes/new/specs/example/spec.md"));
+  expect(() => readCapabilityNotes(root)).toThrow(
+    "notes need a current spec or active change delta",
+  );
 });
 
 test("changed sources need actual Code ownership, with no prose exemption", () => {
@@ -158,7 +199,7 @@ test("all tracked sources have capability owners before enforcing coverage on PR
   const paths = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
     .split("\0")
     .filter(Boolean);
-  const capabilities = readCapabilities();
+  const capabilities = readCapabilityNotes();
   expect(assessKnowledgeMapImpact(paths, capabilities).uncovered).toEqual([]);
   expect(
     assessKnowledgeMapImpact(

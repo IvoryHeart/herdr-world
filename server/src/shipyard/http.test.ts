@@ -12,7 +12,8 @@ function setup() {
   const fixture = githubFixture();
   const service = new ShipyardService({
     run: fixture.run,
-    source: () => ({ enabled: true, generation: 0, repositories: [] }),
+    source: () => ({ enabled: true, generation: 0 }),
+    projects: async () => ({ projects: [], pending: 0, omitted: 0 }),
     instances: () => ({ items: [], complete: true, detail: null }),
   });
   return { fixture, service, http: createShipyardHttp(service) };

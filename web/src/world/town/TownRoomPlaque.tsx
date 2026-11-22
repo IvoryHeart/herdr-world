@@ -153,12 +153,15 @@ export function TownRoomPlaque({
   const activityLabel = `${active} of ${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} active: ${counts.working} working, ${counts.blocked} waiting on you${
     counts.outOfFuel ? `, ${counts.outOfFuel} out of fuel` : ""
   }`;
+  // In a building of more than one runtime, the room's runtime tells two
+  // rooms of the same name apart (townBuildings.ts).
+  const tag = room.runtimeTag;
   return (
     <div
       className="town-room-plaque"
       style={{ "--room-w": `${width}px` } as CSSProperties}
       role="group"
-      aria-label={`${label}: ${activityLabel}`}
+      aria-label={`${label}${tag ? ` (${tag})` : ""}: ${activityLabel}`}
       tabIndex={0}
       onPointerEnter={open}
       onFocus={open}
@@ -188,6 +191,11 @@ export function TownRoomPlaque({
         >
           {label}
         </span>
+        {tag ? (
+          <span className="town-room-plaque-runtime" title={`Runtime: ${tag}`}>
+            {tag}
+          </span>
+        ) : null}
         <span
           className={`town-room-plaque-count${active === 0 ? " is-inactive" : ""}`}
           title={activityLabel}
@@ -201,6 +209,9 @@ export function TownRoomPlaque({
         ) : null}
       </div>
       <div className="town-place-card town-room-plaque-card">
+        {tag ? (
+          <p className="town-room-plaque-runtime-line">Runtime: {tag}</p>
+        ) : null}
         {card && opened ? <TownPlaceCardSummary content={card} /> : null}
         <div
           className="town-room-plaque-actions"

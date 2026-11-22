@@ -5,6 +5,11 @@
   "requirement": "openspec/specs/world-storage/spec.md",
   "properties": "Compact dense-observation metadata plans preserve completeness/current authority and committed-state reconciliation; queued retained-payload byte reservations through guards and actual RPC admission; atomic concern rows and identity bindings; committed-only cache/reply/events; independent edits, per-note and Group revision conflicts; queued runtime authority and move/undo concurrency; exact private once-only import; source/standalone crash recovery and close drain; native-keyed layout preferences retain existing policy",
   "existingTests": [
+    "server/src/storage/board-schema-upgrade.test.ts",
+    "server/src/storage/board-elements.test.ts",
+    "server/src/rpc/board-elements.test.ts",
+    "server/src/world/board-element-service.test.ts",
+    "server/src/service/board-element-sources.test.ts",
     "server/src/storage/board-writer.test.ts",
     "server/src/storage/board-port.test.ts",
     "server/src/rpc/board-admission.test.ts",
@@ -31,6 +36,11 @@
     "models": [],
     "contracts": ["verification/contracts/board-storage.md"],
     "tests": [
+      "server/src/storage/board-schema-upgrade.test.ts",
+      "server/src/storage/board-elements.test.ts",
+      "server/src/rpc/board-elements.test.ts",
+      "server/src/world/board-element-service.test.ts",
+      "server/src/service/board-element-sources.test.ts",
       "server/src/storage/board-writer.test.ts",
       "server/src/storage/board-port.test.ts",
       "server/src/rpc/board-admission.test.ts",
@@ -53,7 +63,7 @@
     ],
     "review": "The accepted delivery link records the approved identity/storage design, not implementation acceptance. Independent review and native CI are pending."
   },
-  "evidenceDecision": "Real SQLite and process recovery establish the persistence boundary. Exhaustive operation orders and actual RPC/move/CLI consumers cover ordering and compatible projection without modeling the SQL engine. Existing binding/runtime models and mandatory browser consumers remain required. Assertion controls establish sensitivity separately.",
+  "evidenceDecision": "Real SQLite and process recovery establish the persistence boundary. Exhaustive operation orders and actual RPC/move/CLI consumers cover ordering and compatible projection without modeling the SQL engine. Existing binding/runtime models and mandatory browser consumers remain required. Assertion controls establish sensitivity separately. Registered elements add mixed-row SQLite rollback/reopen, stale update/delete/recreate conflicts and shared CLI/RPC commit evidence; exact TUI/core generation admission, in-flight retirement and real-file bounds/confinement remain direct consumer evidence. Finite release/main/early-preview schema layouts, preserved rows/backups, repeated startup and atomic rollback/retry directly cover Board schema-collision recovery. No new external effect or recovery state machine is introduced; the full gate and existing runtime models remain required.",
   "promotion": {
     "decision": "pending",
     "scope": "Board physical storage split, initial import and unchanged identity/revision/consumer boundaries only; independent acceptance required."
