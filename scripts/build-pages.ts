@@ -8,6 +8,7 @@ import {
   versionSiteAssets,
 } from "./pages-content";
 import { renderHelpSite } from "./help-docs";
+import { pagesBuildConfig, filmBuildConfig } from "./site-bundles";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const sourceDirectory = join(root, "site");
@@ -104,6 +105,7 @@ for (const picture of help.pictures) {
 }
 
 const build = await Bun.build({
+  ...pagesBuildConfig,
   entrypoints: [
     join(sourceDirectory, "main.js"),
     join(sourceDirectory, "styles.css"),
@@ -111,8 +113,6 @@ const build = await Bun.build({
     join(sourceDirectory, "tutorial.css"),
   ],
   outdir: outputDirectory,
-  minify: true,
-  target: "browser",
 });
 if (!build.success) {
   throw new AggregateError(build.logs, "Failed to optimize the Pages site");
@@ -122,11 +122,9 @@ await rm(join(outputDirectory, "home.css"));
 
 // The film draws its Town with the app's own Town code, bundled beside it.
 const filmTown = await Bun.build({
+  ...filmBuildConfig,
   entrypoints: [join(sourceDirectory, "film/town-art.ts")],
   outdir: join(outputDirectory, "film"),
-  format: "iife",
-  minify: true,
-  target: "browser",
 });
 if (!filmTown.success) {
   throw new AggregateError(filmTown.logs, "Failed to bundle the film's Town");

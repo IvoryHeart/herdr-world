@@ -1,8 +1,8 @@
 /**
  * Opening the Library (#1027) from anywhere: Town's library and center ring,
  * Board's hub and an agent's settings in the Inspector. The dialog itself is
- * lazy (WorldControlPlane.tsx mounts it on this event), so callers import only
- * this small module.
+ * lazy (its feature host, web/src/features/memory/mount.tsx, mounts it on
+ * this event), so callers import only this small module.
  */
 
 export const WORLD_MEMORY_EVENT = "herdr-world:memory";

@@ -1,0 +1,55 @@
+{
+  "id": "Q16",
+  "area": "Resource caches",
+  "owner": "web/src/workspaceResource.ts",
+  "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
+  "properties": "Cached results cannot cross connection/checkout/generation; old fetch cannot repopulate replacement cache",
+  "existingTests": [
+    "web/src/components/WorktreeLifecycleDialog.test.ts",
+    "web/src/world/HostsFilter.resources.test.ts",
+    "web/src/agentWorktreeClient.test.ts",
+    "web/src/useAgentWorktree.test.ts",
+    "web/src/world/WorldInspectorWorktree.test.ts",
+    "web/src/sourceFileLinks.test.ts",
+    "web/src/sourceFileNavigation.test.ts",
+    "web/src/sourceFileInspector.test.ts",
+    "web/src/components/AgentWorktreePicker.test.ts",
+    "web/src/workspaceResource.test.ts",
+    "web/src/components/FileExplorerDialog.test.ts",
+    "web/src/world/WorldInspectorResourceResume.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
+  "technique": "qualified-operation",
+  "assessment": "late resource completion across checkout/owner replacement",
+  "status": "shared-model",
+  "remaining": "Browser focus generation, transport epoch and runtime generation remain different tokens; the model is not a proof of every resource-cache callback.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/browser-preparation.qnt", "quint/runtime-leases.qnt"],
+    "contracts": [
+      "verification/consumer-evidence.md",
+      "verification/composition.md"
+    ],
+    "tests": [
+      "web/src/components/WorktreeLifecycleDialog.test.ts",
+      "web/src/world/HostsFilter.resources.test.ts",
+      "web/src/agentWorktreeClient.test.ts",
+      "web/src/useAgentWorktree.test.ts",
+      "web/src/world/WorldInspectorWorktree.test.ts",
+      "web/src/sourceFileLinks.test.ts",
+      "web/src/sourceFileNavigation.test.ts",
+      "web/src/sourceFileInspector.test.ts",
+      "web/src/components/AgentWorktreePicker.test.ts",
+      "web/src/workspaceResource.test.ts",
+      "web/src/components/FileExplorerDialog.test.ts"
+    ],
+    "checks": ["bun run check", "bun run verification:check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "evidenceDecision": "Runtime currency remains cache admission identity; agent-worktree candidate/revision also separates roots within one workspace. Actual Inspector delayed-preview and retained-selection tests cover same-path binding replacement independently of saved preferences. Chat source-link fixtures also reject outside-root, host/session/generation mismatches and retired callbacks; desktop/phone browser fixtures exercise the real Chat-to-Files route and repeated line targeting. Direct stale/occupant tests, all sixteen source-presence combinations and a real linked Git/HTTP fixture cover the new adapter; maintained lease/preparation models retain their existing authority bounds. WorktreeLifecycleDialog.test.ts replaces HostsFilter resource policy cases for retirement/disposal during an open, closed-target refresh/retry and failed validation, plus the live remembered-target retry count. The actual dialog and requestWorkspaceInspector run on controlled time with deliberately unfenced synthetic operational/service ports and an explicit admission-result receiver. This proves dialog cancellation and target-cache policy, not RPC lease composition or real Inspector publication. Files/Changes routes, rejection rendering/focus, browser file input/download lifecycle and qualified UI wiring remain mandatory in HostsFilter.resources.test.ts; existing store and runtime-lease consumers remain required.",
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

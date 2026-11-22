@@ -31,8 +31,9 @@ None.
 
 ### Modified Capabilities
 
-- `world-surfaces`: agent moves between runtimes; agent relations kept
-  across connections by an explicit move.
+- `world-surfaces/town-moves`: agent moves between runtimes.
+- `world-surfaces/groups`: agent relations kept across connections by an
+  explicit move.
 
 ## Impact
 

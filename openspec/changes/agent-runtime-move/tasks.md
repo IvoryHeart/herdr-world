@@ -8,4 +8,4 @@
 
 ## 2. Synchronize
 
-- [ ] 2.1 Synchronize these deltas into `world-surfaces` once the owner check passes on a real Herdr TUI and herdr-core.
+- [ ] 2.1 Synchronize these deltas into `world-surfaces/town-moves` and `world-surfaces/groups` once the owner check passes on a real Herdr TUI and herdr-core.

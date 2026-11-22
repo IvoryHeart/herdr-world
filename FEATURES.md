@@ -93,6 +93,9 @@ Per-runtime auto-connect settings remain effective after migration; a host's fla
 reflects whether any member enables it. Startup connects the saved default and
 profiles with auto-connect enabled, then discovers eligible hosts. A failed host
 or catalogue write does not prevent other startup targets from connecting.
+When automatic discovery finds only existing runtimes in a legacy registry, it
+keeps discovery metadata in memory without rewriting that registry. An explicit
+host discovery or a newly discovered runtime persists the host schema migration.
 Disconnecting one runtime keeps it stopped when a sibling reconnects or its
 per-connection Connect is used. Explicit host Connect or rediscovery connects all
 found runtimes; newly discovered runtimes connect during automatic discovery too.
@@ -333,6 +336,8 @@ filters, unsupported windows and arbitrary paths. `usage --fixture` runs a
 synthetic example offline, including an owner wait and a usage limit.
 
 ## Agent and project memory data
+
+Contract: [World memory](./openspec/specs/world-memory/spec.md).
 
 The [memory service, API and CLI](./docs/memory-api.md) browse, search, read, add,
 edit and delete harness memory on its owning local or SSH connection. Claude
@@ -2056,6 +2061,8 @@ agent session matches the report. Herdr owns expiry; the command does not infer 
 assign tasks, or provide a Clear operation.
 
 ### Apartments: finished agents
+
+Contract: [Apartments](./openspec/specs/world-surfaces/apartments/spec.md).
 
 **Apartments** holds every agent that is not running now, asleep and
 resumable: agents from before Apartments existed, on every connected host

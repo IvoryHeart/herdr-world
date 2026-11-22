@@ -1,0 +1,45 @@
+{
+  "id": "Q35",
+  "area": "Settings/private-file publication",
+  "owner": "server/src/config/",
+  "requirement": "openspec/specs/bridge-access/spec.md",
+  "properties": "Readers see old or new complete state; interrupted writes preserve valid state",
+  "existingTests": [
+    "server/src/cli/auth.test.ts",
+    "server/src/cli/config.test.ts",
+    "server/src/config/data-paths.test.ts",
+    "server/src/config/gui-settings.test.ts",
+    "server/src/config/instance-lock.test.ts",
+    "server/src/cli/connection-service.test.ts",
+    "server/src/service/connections-cli-instances.test.ts",
+    "server/src/config/session-secret.test.ts",
+    "server/src/http/auth-process.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
+  "technique": "alternative",
+  "assessment": "atomic/private publication tested on real filesystem; durable assumptions recorded for Ranger",
+  "status": "alternative-evidence",
+  "remaining": "Actual rename/fsync/permission behavior remains platform-dependent; unsupported power-loss guarantees are not inferred.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "evidenceDecision": "Owned filesystem and fresh-process tests exercise private namespaces, permissions, settings publication, durable secrets and one listener per data folder (a second real listener refuses; a dead holder is taken over). Bound-address publication and live/dead discovery use real files; two isolated services verify registry-owner/token routing, registry-path refusal and post-stop offline writes. Finite HTTP/transport cases cover unconfirmed/refused admission without offline fallback; direct implementation evidence is selected because address selection and wire responses, rather than additional interleaving states, are the changed boundary.",
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/consumer-evidence.md"],
+    "tests": [
+      "server/src/config/data-paths.test.ts",
+      "server/src/config/gui-settings.test.ts",
+      "server/src/config/instance-lock.test.ts",
+      "server/src/cli/connection-service.test.ts",
+      "server/src/service/connections-cli-instances.test.ts",
+      "server/src/config/session-secret.test.ts",
+      "server/src/http/auth-process.test.ts"
+    ],
+    "checks": ["bun run check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

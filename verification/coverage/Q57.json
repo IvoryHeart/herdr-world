@@ -1,0 +1,27 @@
+{
+  "id": "Q57",
+  "area": "Agent move between runtimes (world.agent.move)",
+  "owner": "server/src/world/agent-move.ts",
+  "requirement": "openspec/changes/agent-runtime-move/specs/world-surfaces/town-moves/spec.md",
+  "properties": "Original closes only after the destination is ready and the original is rechecked idle and alone; core ends only the admitted terminals; one owner of the desk after every outcome; an unconfirmed end or cleanup is reported",
+  "existingTests": [
+    "server/src/world/agent-move.test.ts",
+    "server/src/herdr-core/operations.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1184",
+  "status": "alternative-evidence",
+  "technique": "direct-serial-controller-matrix",
+  "assessment": "The controller awaits each port serially under a per-source service lock, so no internal completions interleave. A 108-outcome matrix (start, recheck during start or pinning, close, cleanup) checks desk ownership and reporting; a source changing during startup, a child started after admission and a lost kill reply run against the real core kill path.",
+  "remaining": "Independent Worlds, service crash during a handoff and real harness startup are not proved; the owner check on a real Herdr TUI and herdr-core covers the native paths.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/contracts/agent-move-audit.md"],
+    "tests": [
+      "server/src/world/agent-move.test.ts",
+      "server/src/herdr-core/operations.test.ts"
+    ],
+    "checks": ["bun run test server/src/world/agent-move.test.ts"],
+    "review": "Remapped from #990's controller to #1184's; independent PR review required."
+  }
+}

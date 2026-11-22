@@ -70,6 +70,7 @@ function mergeBase(ref = "origin/main") {
 }
 
 const STATIC = [
+  "features:check",
   "notices:check",
   "changelog:check",
   "check:size",
