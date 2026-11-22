@@ -30,6 +30,8 @@ import { TownPostOffice } from "./TownPostOffice";
 import { TownLibrary } from "./TownLibrary";
 import { TownShipyard } from "./TownShipyard";
 import { TownWarehouse } from "./TownWarehouse";
+import { TownPlacesContext, type TownPlaces } from "./townPlaces";
+import "./townPlaces.css";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {
   townPlaceSummary,
@@ -165,6 +167,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   signs,
   layers,
   boards,
+  places,
   summary,
   openDeskKey,
   openReceptionKey,
@@ -185,6 +188,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   layers: TownBuildingLayers;
   /** Keeps the reception boards and the billboard off what they'd cover. */
   boards: TownBoardPlacement;
+  /** What each place's building opens; place components register (#1170). */
+  places: TownPlaces;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
   /** Agents the reception filter keeps at their desks (townReceptionFilter). */
@@ -285,7 +290,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
       return null;
     };
   return (
-    <>
+    <TownPlacesContext.Provider value={places}>
       <TownCityBillboard center={layout.center} boardRef={boards.cityRef} />
       <TownPostOffice layout={layout} renderer={renderer} />
       <TownWarehouse layout={layout} renderer={renderer} />
@@ -946,6 +951,18 @@ export const TownWorldLayer = memo(function TownWorldLayer({
             : roomActions.onMoveAgent(key)
         }
       />
-    </>
+    </TownPlacesContext.Provider>
   );
 });
+
+/**
+ * The room whose card a mouse opens zoomed out: the room under it, or the
+ * room of the table or agent under it.
+ */
+export function townHoveredRoomKey(model: TownModel, hover: string | null) {
+  if (hover === null) return null;
+  if (model.rooms.has(hover)) return hover;
+  return (
+    model.desks.get(hover)?.roomKey ?? model.agents.get(hover)?.roomKey ?? null
+  );
+}

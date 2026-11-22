@@ -110,6 +110,18 @@ export class TownPlaces {
         sign.dataset.townPlace === key,
       );
   }
+
+  /** The scene's place ports (townInteraction.ts) over `root`'s signs. */
+  ports(root: ParentNode) {
+    return {
+      opensPlace: (key: TownPlaceKey) => this.opens(key),
+      openPlace: (key: TownPlaceKey) => {
+        this.hover(null, root);
+        this.open(key);
+      },
+      hoverPlace: (key: TownPlaceKey | null) => this.hover(key, root),
+    };
+  }
 }
 
 export const TownPlacesContext = createContext<TownPlaces | null>(null);

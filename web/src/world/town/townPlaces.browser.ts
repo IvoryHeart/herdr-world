@@ -1,3 +1,4 @@
+import { openLayerCount } from "../../layerStack";
 import type { TownPlaceKey } from "./townPlaces";
 
 /** The window each place's building opens (PlaceWindow's `name`). */
@@ -255,6 +256,12 @@ export async function checkTownPlaces(
           box.height < innerHeight,
         `the ${key} window is not centred over Town: ${JSON.stringify(box)}`,
       );
+    // A window that mounts through a feature host joins the layer stack an
+    // effect after it shows; a person's Escape always comes later than that.
+    await waitFor(
+      () => openLayerCount() === 1,
+      `the ${key} window is not on the layer stack`,
+    );
     (document.activeElement ?? win).dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     );
