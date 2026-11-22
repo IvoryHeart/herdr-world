@@ -6,6 +6,7 @@ import {
   formatOfficeModelNames,
   formatOfficeUsage,
 } from "../officeObservability";
+import { HELP_TRY_EVENT } from "../../help/helpEvents";
 import type {
   TownPlaceSummary,
   TownSummary,
@@ -130,6 +131,18 @@ export function TownBoard({
     return () => window.removeEventListener(FOCUS_RECAP_EVENT, show);
   }, []);
   const focusLabel = useTownFocusLabel();
+  // Help's Try for the quiet agents (town.help.ts) pins the board open, so
+  // the ring lands on the Busy line rather than on the folded chip.
+  const quietShown = Boolean(quiet && quiet.count > 0);
+  useEffect(() => {
+    if (!quietShown) return;
+    const onTry = (event: Event) => {
+      if ((event as CustomEvent<{ id?: string }>).detail?.id === "town.quiet")
+        setPinned(true);
+    };
+    window.addEventListener(HELP_TRY_EVENT, onTry);
+    return () => window.removeEventListener(HELP_TRY_EVENT, onTry);
+  }, [quietShown]);
   const hoverIn = (event: React.PointerEvent) => {
     if (event.pointerType !== "mouse") return;
     window.clearTimeout(leaveTimer.current);
@@ -167,7 +180,9 @@ export function TownBoard({
         type="button"
         className="town-board-chip"
         data-help="town.board-chip"
-        data-help-opens="town.focus"
+        // Try finds the focus controls, and the quiet line when the board
+        // was not mounted to pin itself open (Try switched to Town first).
+        data-help-opens={quietShown ? "town.focus town.quiet" : "town.focus"}
         aria-expanded={open}
         aria-controls="town-board"
         aria-label={`Town board: ${focusLabel ? `${focusLabel}; ` : ""}${summary}`}
@@ -222,6 +237,7 @@ export function TownBoard({
               <button
                 type="button"
                 className="town-board-quiet"
+                data-help="town.quiet"
                 aria-label={`Find the ${quiet.count} working ${
                   quiet.count === 1 ? "agent" : "agents"
                 } with no progress for ${quiet.minutes} minutes or more`}

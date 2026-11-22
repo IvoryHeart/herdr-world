@@ -17,6 +17,7 @@ Every World screen answers this too: press ? beside the views (on a phone, the v
 - [What's new from the Town Master](#town-master)
 - [Focus for a while](#town-focus)
 - [Apartments: finished agents](#town-apartments)
+- [Quiet agents](#town-quiet)
 - [What can I do here?](#world-help)
 - [Hosts on a phone](#world-phone-hosts)
 
@@ -106,6 +107,21 @@ Agents that are not running live on in the apartment building beside the town ce
 4. Open one to read its history; resume a Claude or Codex agent into a room, or evict it.
 
 Where: Town, the building beside the town center; also Apartments in the town center ring and Board's hub. Since 0.3.6.
+
+<a id="town-quiet"></a>
+
+### Quiet agents
+
+![Quiet agents](../web/public/help/town.quiet.desktop.light.webp)
+
+A working agent whose session has not moved for 10 minutes gets an hourglass with how long it has been quiet. The town board counts them under Busy.
+
+1. Open the town board and press the line under Busy, such as 2 quiet 10 m+.
+2. Town shows the first quiet agent; press Next to see the others.
+3. The hourglass goes as soon as the agent moves again.
+4. Change how long in Settings, Quiet working agents, or turn it off.
+
+Where: Town board, under Busy, while an agent is quiet. Since 0.3.6.
 
 ## Board
 
