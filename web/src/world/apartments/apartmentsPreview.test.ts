@@ -41,6 +41,10 @@ test("the avatars preview answers with synthetic residents for one load", async 
     residents: { name: string }[];
   };
   expect(state.residents.map((resident) => resident.name)).toContain("hopper");
+  // A harness World reads no log of: its usage says tokens are not available.
+  expect(state.residents.map((resident) => resident.name)).toContain(
+    "hamilton",
+  );
   // The next load reads the service again.
   expect(apartmentsPreviewClient(real)).toBe(real);
 });

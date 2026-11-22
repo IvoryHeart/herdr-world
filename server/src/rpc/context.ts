@@ -118,6 +118,8 @@ export type RpcServices = {
   /** Installed web IDEs and their World-owned servers (world.ide.*). */
   ide?: import("../ide/service").IdeService;
   worldUsageAnalytics?: import("../usage/analytics").WorldUsageAnalyticsService;
+  /** The owner's focus session (world.focus.*). */
+  focus?: import("../world/focus").FocusService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;

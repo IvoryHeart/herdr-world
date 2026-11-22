@@ -92,6 +92,26 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     }
     return;
   }
+  if (method.startsWith("world.focus.")) {
+    try {
+      const focus = rpc.services.focus;
+      if (!focus) throw new Error("Focus is unavailable");
+      const p = (params ?? {}) as { minutes?: unknown };
+      const result =
+        method === "world.focus.get"
+          ? focus.get()
+          : method === "world.focus.start"
+            ? await focus.begin(p.minutes)
+            : method === "world.focus.end"
+              ? await focus.end()
+              : null;
+      if (!result) throw new Error("unknown focus operation");
+      sendReply({ id, result }, "world-focus");
+    } catch (error) {
+      sendError("world-focus-error", error);
+    }
+    return;
+  }
   if (method === "world.core.seen" || method === "world.core.favourite")
     return handleCoreSharedRpc(rpc);
   if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);

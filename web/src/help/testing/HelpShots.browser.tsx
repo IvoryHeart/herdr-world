@@ -157,6 +157,7 @@ const hosts = {
       state: "ready" as const,
       generation: 1,
       endpoint: "site-host-0",
+      machine: "site-host-0",
     },
     {
       id: "site-host-1",
@@ -165,6 +166,7 @@ const hosts = {
       state: "ready" as const,
       generation: 1,
       endpoint: "site-host-1",
+      machine: "site-host-1",
     },
   ],
   ids: null,

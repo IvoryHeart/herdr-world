@@ -8,9 +8,11 @@ import type {
 import {
   APARTMENT_CAPACITY,
   apartmentSessionKey,
+  apartmentUsageAgentIds,
 } from "../../../shared/apartments";
 import type { BinEntry } from "../../../shared/bin";
 import { readTerminalSettings } from "../agent/terminal-tokens";
+import { analyticsAgentId } from "../usage/activity";
 import type { ApartmentMoveIn, ApartmentsPort } from "../storage/apartments";
 
 type Row = Record<string, unknown>;
@@ -40,6 +42,13 @@ export type ApartmentTenant = {
   away?: boolean;
   /** Its look in World as last seen live; null when World could not read it. */
   appearance: ApartmentAppearance | null;
+  /**
+   * The usage agent IDs it was counted under while live, newest last: only
+   * those of its current harness session (`usage_session`).
+   */
+  usage_agent_ids: string[];
+  /** The harness session `usage_agent_ids` belong to; null until known. */
+  usage_session?: string | null;
 };
 
 /** What World needs to read a live agent's look (its pane, room and table). */
@@ -93,6 +102,7 @@ export type ApartmentTopology = {
 
 const MAX_TENANTS_PER_HOST = 512;
 const MAX_RETIRING = 256;
+const MAX_WATCHED = 2048;
 
 const text = (value: unknown, max = 2000): string | null => {
   if (typeof value !== "string") return null;
@@ -164,6 +174,14 @@ export class WorldApartments {
   private readonly pending = new Set<Promise<unknown>>();
   /** Session reads still running, by connection:generation:terminal. */
   private readonly probing = new Map<string, Promise<unknown>>();
+  /**
+   * Usage agent IDs World counted per harness session (apartmentSessionKey),
+   * newest session last. A run that leaves its terminal into a shell and is
+   * then replaced by the next run there (a crew terminal's fixer, then its
+   * checker) is no tenant any more when the census finds its transcript, so
+   * found() reads its usage here. Memory only: a World restart forgets it.
+   */
+  private readonly watched = new Map<string, string[]>();
   /** Residents hidden because their session runs now, as last published. */
   private hidden = "";
   private stopped = false;
@@ -242,11 +260,30 @@ export class WorldApartments {
     return live;
   }
 
-  /** Residents found in the harnesses' histories move in asleep. */
+  /**
+   * Residents found in the harnesses' histories move in asleep. One whose
+   * session World watched at a desk keeps the usage World counted for it,
+   * even after another run took its terminal (#1101).
+   */
   async found(residents: readonly ApartmentMoveIn[]) {
     const port = this.deps.port;
     if (!port || this.stopped || !residents.length) return;
-    await port.found(residents);
+    await port.found(
+      this.watched.size
+        ? residents.map((resident) => {
+            const ids = this.watched.get(apartmentSessionKey(resident) ?? "");
+            return ids
+              ? {
+                  ...resident,
+                  usage_agent_ids: apartmentUsageAgentIds([
+                    ...(resident.usage_agent_ids ?? []),
+                    ...ids,
+                  ]),
+                }
+              : resident;
+          })
+        : residents,
+    );
     this.changed();
   }
 
@@ -282,6 +319,8 @@ export class WorldApartments {
       | ((pane: ApartmentPane) => ApartmentAppearance)
       | null
       | undefined;
+    // As usage's observeFresh joins them, so the agent IDs are the same.
+    const agentByPane = new Map(agents.map((row) => [row.pane_id, row]));
     for (const pane of panes) {
       const harness = text(pane.agent, 40);
       const terminal = text(pane.terminal_id, 200);
@@ -298,6 +337,20 @@ export class WorldApartments {
       const same = before && before.harness === harness;
       if (!same && host.tenants.size >= MAX_TENANTS_PER_HOST) continue;
       const reported = sessionId(pane, agent);
+      // The ID usage counts this agent under, read as usage reads it.
+      const usageAgent = analyticsAgentId(connectionId, generation, {
+        ...pane,
+        ...agentByPane.get(pane.pane_id),
+      });
+      // Usage is kept for one harness session: another session in the same
+      // terminal (a /clear, or a new run after the program left) is another
+      // agent, and its time and tokens are not this resident's.
+      const session = reported ?? (same ? before.session_id : null);
+      const bound = same ? (before.usage_session ?? null) : null;
+      const usage =
+        same && !(session && bound && session !== bound)
+          ? before.usage_agent_ids
+          : [];
       if (lookOf === undefined)
         lookOf = safe(
           () =>
@@ -339,18 +392,24 @@ export class WorldApartments {
         tab: tabs.get(pane.tab_id) ?? (same ? before.tab : null),
         summary: summaryOf(pane, agent) ?? (same ? before.summary : null),
         // Kept from before until the runtime's current answer replaces it.
-        session_id: reported ?? (same ? before.session_id : null),
+        session_id: session,
         session_holder: reported ? null : same ? before.session_holder : null,
         first_seen_at: same ? before.first_seen_at : observedAt,
         last_seen_at: observedAt,
         away: false,
         appearance: look ?? (same ? before.appearance : null),
+        usage_agent_ids:
+          usageAgent && usage.at(-1) !== usageAgent
+            ? apartmentUsageAgentIds([...usage, usageAgent])
+            : usage,
+        usage_session: session ?? bound,
       };
       // The same agent stays one object, so a session read still running
       // when it leaves lands on the record it leaves.
       const tenant = same ? Object.assign(before, seen) : seen;
       host.tenants.set(terminal, tenant);
-      if (!reported) this.probe(tenant);
+      if (reported) this.remember(tenant);
+      else this.probe(tenant);
     }
     this.liveChanged();
   }
@@ -438,8 +497,14 @@ export class WorldApartments {
       const found = validSession(id);
       const by = typeof holder === "string" ? holder : null;
       if (found) {
+        // Another session than the usage was kept for: only the current
+        // program's newest usage ID can be this session's.
+        if (tenant.usage_session && tenant.usage_session !== found)
+          tenant.usage_agent_ids = tenant.usage_agent_ids.slice(-1);
+        tenant.usage_session = found;
         tenant.session_id = found;
         tenant.session_holder = by;
+        this.remember(tenant);
       } else if (by !== tenant.session_holder) {
         tenant.session_id = null;
         tenant.session_holder = by;
@@ -457,6 +522,31 @@ export class WorldApartments {
       .then(apply, () => undefined)
       .finally(() => this.probing.delete(key));
     this.probing.set(key, task);
+  }
+
+  /**
+   * Keeps the usage IDs a tenant was counted under for its session, once the
+   * runtime has said which session it holds. Runs of one session (resumed,
+   * or in two terminals) add up.
+   */
+  private remember(tenant: ApartmentTenant) {
+    const key = apartmentSessionKey(tenant);
+    if (
+      !key ||
+      !tenant.usage_agent_ids.length ||
+      tenant.usage_session !== tenant.session_id
+    )
+      return;
+    const ids = apartmentUsageAgentIds([
+      ...(this.watched.get(key) ?? []),
+      ...tenant.usage_agent_ids,
+    ]);
+    this.watched.delete(key);
+    this.watched.set(key, ids);
+    if (this.watched.size > MAX_WATCHED) {
+      const oldest = this.watched.keys().next().value;
+      if (oldest !== undefined) this.watched.delete(oldest);
+    }
   }
 
   private host(connectionId: string, generation: number) {
@@ -493,6 +583,7 @@ export class WorldApartments {
       links: safe(() => this.deps.links?.(tenant) ?? [], []),
       session_id: tenant.session_id,
       appearance: tenant.appearance,
+      usage_agent_ids: tenant.usage_agent_ids,
     };
     const task = (async () => {
       let saved: ApartmentResident;
@@ -501,6 +592,7 @@ export class WorldApartments {
         if (reading) {
           await within(reading, SESSION_WAIT_MS);
           resident.session_id = tenant.session_id;
+          resident.usage_agent_ids = tenant.usage_agent_ids;
         }
         saved = await port.moveIn(resident);
         this.changed();

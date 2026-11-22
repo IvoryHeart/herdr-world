@@ -33,6 +33,7 @@ import {
   type TownSummaryItem,
 } from "./townSummary";
 import { TownSinceYouLeft } from "./TownSinceYouLeft";
+import { TownFocusRecap, TownRecapChip } from "./TownFocus";
 import {
   townFuelClock,
   townFuelGauge,
@@ -453,8 +454,13 @@ export function useTownSummary({
   }, []);
   const sinceYouLeft = useMemo(
     () => ({
-      board: <TownSinceYouLeft world={world} variant="board" />,
-      chip: <TownSinceYouLeft world={world} variant="chip" />,
+      board: (
+        <>
+          <TownFocusRecap world={world} variant="board" />
+          <TownSinceYouLeft world={world} variant="board" />
+        </>
+      ),
+      chip: <TownRecapChip world={world} />,
     }),
     [world],
   );

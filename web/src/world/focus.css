@@ -1,0 +1,98 @@
+/* Focus session (#1131): its controls in the Focus dialog and on the Town
+   board, the mark on the status chip, and the recap. */
+.focus-dialog {
+  width: min(420px, 100%);
+}
+
+.focus-dialog-note {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.focus-controls {
+  display: grid;
+  gap: 6px;
+}
+
+.focus-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.focus-controls-status {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.focus-choice,
+.focus-end {
+  min-height: 30px;
+  padding: 2px 10px;
+  color: inherit;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.focus-choice:hover,
+.focus-end:hover {
+  border-color: var(--accent);
+}
+
+.focus-choice:disabled,
+.focus-end:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.focus-error {
+  margin: 0;
+  color: var(--danger-text);
+  font-size: 12px;
+}
+
+/* On the Town board: the board's own glass, not the dialog's inputs. */
+.town-board .focus-controls {
+  padding: 6px 8px;
+  background: var(--town-glass-fill);
+  border-radius: var(--town-glass-inset-radius);
+  font-size: 12px;
+}
+
+.town-board .focus-choice,
+.town-board .focus-end {
+  min-height: 26px;
+  padding: 0 8px;
+  color: var(--town-glass-text);
+  background: var(--town-glass-fill);
+  border-color: var(--town-glass-line);
+}
+
+.town-board .focus-choice:hover,
+.town-board .focus-end:hover {
+  background: var(--town-glass-fill-hover);
+}
+
+.town-board .focus-title {
+  font: var(--town-glass-label);
+  letter-spacing: 0.08em;
+  color: var(--town-glass-muted);
+}
+
+/* The status chip's mark: headphones and the time left. */
+.town-focus-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+  color: var(--town-glass-muted);
+}

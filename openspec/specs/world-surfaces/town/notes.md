@@ -147,6 +147,21 @@
     which opens **Needs you**. Calm motion shows it without animation. The
     service remembers your last sighting in memory; after a service restart,
     each browser's own last sighting decides.
+  - **Focus**: hold the interruptions for a while, then get one recap. Start
+    it from the town center's ring (**Focus**), the board's **FOCUS** row,
+    **Menu → Focus** or the command box ("Focus 25 m"): 25 m, 45 m, 90 m or
+    **Until I stop**. While focused, chimes, browser and push notifications
+    and the count on the tab title and app icon hold on every device; Town,
+    marks and **Needs you** keep showing everything. The status chip shows
+    headphones and the time left; tap it and choose **End now** on the board. A
+    timed session ends on its own, even with no World open: each open device
+    plays the "for you" chime once, opens the board and shows "While you
+    focused · 45 m" with the same lines as **Since you left** over the
+    session (each opens **Needs you** at its first item; **✕** clears it on
+    this browser). **End now** shows the recap without a chime. The service
+    keeps the session across page reloads and its own restarts. Focus never
+    changes what agents see. For testing, open World with `?focusTest=1` to
+    add 1-minute sessions in that tab.
   - **Tab and app icon count**: in every view, while anything needs you, the
     browser tab reads `(N) Herdr World`, its icon carries a small yellow
     badge (the number up to 9, then `9+`), and an installed World shows the
@@ -330,6 +345,12 @@
       requests opened and merged, and a total row. "unknown" means no
       reading; "(partly read)" means some sources were not readable. Agents
       and rooms no longer open read "Earlier agent" and "Earlier room".
+      Opened from an Apartments resident's usage line, Breakdown shows only
+      that agent: an **Agent: <name>** chip replaces **Group by**, its runs
+      read under its name, the total row reads **This agent**, and an agent
+      with no run in the seven days says "Nothing measured" and, for one
+      World never counted, why. The chip's ×
+      (**Show every agent**) shows every agent again.
       Under the table, **What World can read** names, per harness at work
       this week, whether its tokens come from its session logs or only
       World's time is known, and whether pull requests could be read.

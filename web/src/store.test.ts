@@ -33,6 +33,7 @@ import {
   worktreeRemovalCompletionNotice,
 } from "./store";
 import { notifyWorldAsk } from "./store/notifications";
+import { resetFocusForTests } from "./world/focus";
 import { parseHerdrTaskNotification } from "./herdrTaskNotification";
 import type { Pane } from "./types";
 import { removeTemporaryWorkspaceSafely } from "./worktreeLifecycle";
@@ -4133,6 +4134,48 @@ describe("Herdr task notifications", () => {
       });
       expect(store.get().notice).toBeNull();
     } finally {
+      __storeTesting.replaceState(partitionState());
+    }
+  });
+
+  test("a focus session holds the toast and notification for a new ask (#1131)", () => {
+    const ask = {
+      id: "q-focus",
+      at: 1,
+      question: "Ship it?",
+      options: [],
+      owner_only: true,
+      actor: {
+        label: "Example watcher",
+        verified: true,
+        connection_id: "beta",
+        connection_generation: 1,
+        terminal_id: "beta-terminal",
+        workspace_id: "w1",
+        pane_id: "w1:p9",
+        agent: "codex",
+        agent_session_id: "original-session",
+      },
+    };
+    const now = Date.now();
+    try {
+      resetFocusForTests({
+        revision: 1,
+        now,
+        session: { id: "focus-a", started_at: now, ends_at: now + 60_000 },
+        last: null,
+      });
+      __storeTesting.replaceState(enabledState({ notice: null }));
+      notifyWorldAsk(ask);
+      expect(store.get().notice).toBeNull();
+      // Once it ends, the next one raises its toast again.
+      resetFocusForTests();
+      notifyWorldAsk(ask);
+      expect(store.get().notice).toMatchObject({
+        message: "Example watcher · for you: Ship it?",
+      });
+    } finally {
+      resetFocusForTests();
       __storeTesting.replaceState(partitionState());
     }
   });

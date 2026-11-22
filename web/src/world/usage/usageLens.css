@@ -456,3 +456,14 @@
   font-size: 13px;
   line-height: 1.45;
 }
+/* Breakdown narrowed to one agent (#1101): its name and a clear button. */
+.usage-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 2px 4px 2px 12px;
+  border: 1px solid var(--board-line);
+  border-radius: 999px;
+  font-size: 13px;
+}
