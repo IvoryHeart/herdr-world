@@ -30,7 +30,9 @@ type Profiles = {
 };
 
 /** Synthetic terminals the fixture holds; see `populate`. */
-const FIXTURE_TERMINALS = 7;
+const FIXTURE_TERMINALS = 10;
+/** Folders of the app spaces the desktop app left unnamed (#1103). */
+const FIXTURE_UNNAMED_SPACES = ["api", "docs", "infra"] as const;
 /** How long after a start the scout finishes its turn. */
 export const FIXTURE_FINISH_MS = 3_000;
 /** How often the working builder prints a line, so a watch is visibly live. */
@@ -59,7 +61,9 @@ function screen(program: string, lines: string[]) {
  * Agents as Herdr's desktop app would leave them: two placed in its "web"
  * space (one waiting for an answer, one working), one in another tab that
  * finishes soon after World connects, one harness with no status
- * integration, and a plain shell. Returns the agents the fixture drives.
+ * integration, and a plain shell; then one idle agent in each of three
+ * spaces the app left unnamed, in different folders, which World names from
+ * their folders. Returns the agents the fixture drives.
  */
 function populate(
   fake: FakeCore,
@@ -186,6 +190,20 @@ function populate(
   const helper = agent("helper", "opencode");
   fake.output(helper, screen("opencode", ["Waiting for a task."]));
   fake.create({ name: "fixture-shell" });
+  for (const folder of FIXTURE_UNNAMED_SPACES) {
+    const project = join(root, "projects", folder);
+    mkdirSync(project, { recursive: true });
+    const unnamed = fake.create({
+      name: `${folder}-agent`,
+      argv: ["codex"],
+      keep: true,
+      cwd: project,
+      // No `where`: the app's space has no name.
+      labels: { "herdr.space": `fx-${folder}`, "herdr.tab": "fx-main" },
+      foreground: { pid: 1, name: "codex", argv: ["codex"], cwd: project },
+    });
+    fake.report(unnamed, { state: "idle", app: "codex" });
+  }
   // The desktop app shows its placed agents; the unplaced helper has no
   // pane, so core runs it at its headless size.
   for (const placed of [reviewer, builder, scout])

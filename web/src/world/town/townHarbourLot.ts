@@ -58,6 +58,12 @@ export type TownHarbourLot = {
   warehouse: TownWarehouseLot;
   /** How many lanes the sea's height holds. */
   lanes: number;
+  /**
+   * Rows the sign and lanes move down from their top rows, so the drawn
+   * lanes sit vertically centred on the sea (townHarbourPlaced); 0 until
+   * placed.
+   */
+  shift: number;
 };
 
 /**
@@ -89,6 +95,7 @@ export function townHarbourGeometry(
       1,
       Math.floor((height - TOWN_LANE_TOP - 1) / TOWN_LANE_PITCH),
     ),
+    shift: 0,
   };
 }
 
