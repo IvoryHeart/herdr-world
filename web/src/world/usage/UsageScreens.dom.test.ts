@@ -367,7 +367,8 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
     await act(async () => {
       await Promise.resolve();
     });
-    const lens = () => view.host.querySelector<HTMLElement>(".usage-lens")!;
+    // Town's Usage opens in its place window, a portal on the page (#1170).
+    const lens = () => document.querySelector<HTMLElement>(".usage-lens")!;
     const bodyRows = () =>
       [...lens().querySelectorAll(".usage-breakdown-table tbody th")].map(
         (cell) => cell.textContent,

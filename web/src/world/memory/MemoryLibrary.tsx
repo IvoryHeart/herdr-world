@@ -6,8 +6,7 @@ import type {
   MemorySearch,
   MemorySource,
 } from "../../../../shared/memory";
-import { CloseButton } from "../../components/CloseButton";
-import { useLayer } from "../../layerStack";
+import { PlaceWindow } from "../PlaceWindow";
 import { townLibraryBanner } from "../town/townLibraryPaint";
 import { MemoryBook, type MemoryBookOpen } from "./MemoryBook";
 import {
@@ -65,12 +64,6 @@ export function MemoryLibrary({
   onClose(): void;
 }) {
   useMemoryStore();
-  const ref = useRef<HTMLDivElement>(null);
-  useLayer(true, () => onClose(), { element: () => ref.current });
-  // Focus starts inside, so Escape and Tab work before anything is clicked.
-  useEffect(() => {
-    if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
-  }, []);
   const hosts = memoryHosts();
   // Only an open with no host named, before any host is known, takes the
   // first one to appear; a named or picked host is never replaced silently.
@@ -201,246 +194,235 @@ export function MemoryLibrary({
   const banner = useMemo(() => townLibraryBanner(), []);
 
   return (
-    <div className="modal-backdrop">
-      <div
-        ref={ref}
-        className="modal memory-library"
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Library"
-        data-pane={pane}
-      >
-        <div className="modal-head memory-head">
-          <div className="memory-title">
-            {banner ? (
-              <img src={banner} alt="" className="memory-banner" />
-            ) : null}
-            <div>
-              <h2>Library</h2>
-              <p>What your agents and projects remember</p>
-            </div>
+    <PlaceWindow
+      name="library"
+      label="Library"
+      className="memory-library"
+      data-pane={pane}
+      closeLabel="Close library"
+      onClose={onClose}
+      title={
+        <div className="memory-title">
+          {banner ? (
+            <img src={banner} alt="" className="memory-banner" />
+          ) : null}
+          <div>
+            <h2>Library</h2>
+            <p>What your agents and projects remember</p>
           </div>
-          <CloseButton onClick={onClose} label="Close library" />
         </div>
-
-        {!host && hostId !== null ? (
-          <div className="memory-empty-state memory-gone" role="status">
-            <p>
-              {hostLabel.current ?? "This host"} is no longer connected, so its
-              memory is unavailable here.
-            </p>
-            {hosts.length ? (
-              <div className="memory-actions">
-                {hosts.map((candidate) => (
-                  <button
-                    key={candidate.connection_id}
-                    type="button"
-                    onClick={() => {
-                      setHostId(candidate.connection_id);
-                      setReader(ALL_READERS);
-                    }}
-                  >
-                    Open {candidate.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : !host ? (
-          <p className="memory-empty-state">
-            No connected host to read memory from. Connect one in Hosts, then
-            open the Library again.
+      }
+    >
+      {!host && hostId !== null ? (
+        <div className="memory-empty-state memory-gone" role="status">
+          <p>
+            {hostLabel.current ?? "This host"} is no longer connected, so its
+            memory is unavailable here.
           </p>
-        ) : (
-          <>
-            <div className="memory-toolbar">
-              {hosts.length > 1 ? (
-                <label className="memory-host">
-                  <span>Host</span>
-                  <select
-                    value={host.connection_id}
-                    onChange={(event) => {
-                      setHostId(event.target.value);
-                      setReader(ALL_READERS);
-                    }}
-                  >
-                    {hosts.map((candidate) => (
-                      <option
-                        key={candidate.connection_id}
-                        value={candidate.connection_id}
-                      >
-                        {candidate.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <span className="memory-host-name">{host.label}</span>
-              )}
-              <form
-                className="memory-search"
-                role="search"
-                onSubmit={runSearch}
-              >
-                <input
-                  type="search"
-                  value={query}
-                  maxLength={200}
-                  placeholder="Search memory"
-                  aria-label="Search memory"
-                  onChange={(event) => setQuery(event.target.value)}
-                />
+          {hosts.length ? (
+            <div className="memory-actions">
+              {hosts.map((candidate) => (
                 <button
-                  type="submit"
-                  disabled={!query.trim() || searching}
-                  aria-label="Search"
+                  key={candidate.connection_id}
+                  type="button"
+                  onClick={() => {
+                    setHostId(candidate.connection_id);
+                    setReader(ALL_READERS);
+                  }}
                 >
-                  <Search size={14} aria-hidden="true" />
+                  Open {candidate.label}
                 </button>
-              </form>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : !host ? (
+        <p className="memory-empty-state">
+          No connected host to read memory from. Connect one in Hosts, then open
+          the Library again.
+        </p>
+      ) : (
+        <>
+          <div className="memory-toolbar">
+            {hosts.length > 1 ? (
+              <label className="memory-host">
+                <span>Host</span>
+                <select
+                  value={host.connection_id}
+                  onChange={(event) => {
+                    setHostId(event.target.value);
+                    setReader(ALL_READERS);
+                  }}
+                >
+                  {hosts.map((candidate) => (
+                    <option
+                      key={candidate.connection_id}
+                      value={candidate.connection_id}
+                    >
+                      {candidate.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <span className="memory-host-name">{host.label}</span>
+            )}
+            <form className="memory-search" role="search" onSubmit={runSearch}>
+              <input
+                type="search"
+                value={query}
+                maxLength={200}
+                placeholder="Search memory"
+                aria-label="Search memory"
+                onChange={(event) => setQuery(event.target.value)}
+              />
               <button
-                type="button"
-                className="ghost memory-refresh"
-                onClick={refresh}
-                disabled={state?.status === "loading"}
-                aria-label="Read again"
-                title="Read again from the host"
+                type="submit"
+                disabled={!query.trim() || searching}
+                aria-label="Search"
               >
-                <RefreshCw
-                  size={14}
-                  aria-hidden="true"
-                  className={
-                    state?.status === "loading" ? "is-spinning" : undefined
-                  }
-                />
+                <Search size={14} aria-hidden="true" />
+              </button>
+            </form>
+            <button
+              type="button"
+              className="ghost memory-refresh"
+              onClick={refresh}
+              disabled={state?.status === "loading"}
+              aria-label="Read again"
+              title="Read again from the host"
+            >
+              <RefreshCw
+                size={14}
+                aria-hidden="true"
+                className={
+                  state?.status === "loading" ? "is-spinning" : undefined
+                }
+              />
+            </button>
+          </div>
+          {state?.status === "failed" ? (
+            <div className="memory-notice is-error" role="alert">
+              <span>Couldn't read this host's memory: {state.error}</span>
+              <button type="button" onClick={refresh}>
+                Try again
               </button>
             </div>
-            {state?.status === "failed" ? (
-              <div className="memory-notice is-error" role="alert">
-                <span>Couldn't read this host's memory: {state.error}</span>
-                <button type="button" onClick={refresh}>
-                  Try again
-                </button>
+          ) : null}
+          {searchError ? (
+            <div className="memory-notice is-error" role="alert">
+              <span>Search failed: {searchError}</span>
+            </div>
+          ) : null}
+          {!catalog ? (
+            <p className="memory-empty-state" aria-busy="true">
+              {state?.status === "failed" ? "" : "Reading the shelves…"}
+            </p>
+          ) : (
+            <div className="memory-body">
+              <MemoryReaders
+                catalog={catalog}
+                names={host.names}
+                reader={reader}
+                onSelect={(next) => {
+                  setReader(next);
+                  setSearch(null);
+                  setPane("shelves");
+                }}
+              />
+              <div className="memory-middle">
+                {search ? (
+                  <MemorySearchResults
+                    search={search}
+                    catalog={catalog}
+                    onOpen={openEntry}
+                    onClear={() => setSearch(null)}
+                  />
+                ) : (
+                  <MemoryShelves
+                    catalog={catalog}
+                    names={host.names}
+                    reader={reader}
+                    selected={
+                      live?.kind === "entry" ? entryKey(live.entry) : null
+                    }
+                    onOpen={(source, entry) => openEntry(source, entry)}
+                    onAdd={(source, path) => {
+                      setBook({ kind: "new", source, path });
+                      setPane("book");
+                    }}
+                  />
+                )}
               </div>
-            ) : null}
-            {searchError ? (
-              <div className="memory-notice is-error" role="alert">
-                <span>Search failed: {searchError}</span>
+              <div className="memory-right">
+                {live ? (
+                  <MemoryBook
+                    target={host}
+                    open={live}
+                    catalog={catalog}
+                    names={host.names}
+                    onBack={() => {
+                      setPane("shelves");
+                      if (live.kind === "new") setBook(null);
+                    }}
+                    onChanged={refresh}
+                    onDeleted={() => {
+                      setBook(null);
+                      setPane("shelves");
+                    }}
+                    onCreated={(path) => {
+                      const source = live.source;
+                      // Show the new file once the catalog has it.
+                      void requestMemoryCatalog(host, { force: true }).then(
+                        () => {
+                          const next = memoryCatalogState(host)?.catalog;
+                          const entry = next?.entries.find(
+                            (e) => e.source_id === source.id && e.path === path,
+                          );
+                          const fresh = next?.sources.find(
+                            (s) => s.id === source.id,
+                          );
+                          if (entry && fresh)
+                            setBook({ kind: "entry", source: fresh, entry });
+                          else setBook(null);
+                        },
+                      );
+                    }}
+                  />
+                ) : (
+                  <p className="memory-empty-state memory-pick">
+                    Pick a book to read it. Edits save only when you press Save.
+                  </p>
+                )}
               </div>
-            ) : null}
-            {!catalog ? (
-              <p className="memory-empty-state" aria-busy="true">
-                {state?.status === "failed" ? "" : "Reading the shelves…"}
-              </p>
-            ) : (
-              <div className="memory-body">
-                <MemoryReaders
-                  catalog={catalog}
-                  names={host.names}
-                  reader={reader}
-                  onSelect={(next) => {
-                    setReader(next);
-                    setSearch(null);
-                    setPane("shelves");
-                  }}
-                />
-                <div className="memory-middle">
-                  {search ? (
-                    <MemorySearchResults
-                      search={search}
-                      catalog={catalog}
-                      onOpen={openEntry}
-                      onClear={() => setSearch(null)}
-                    />
-                  ) : (
-                    <MemoryShelves
-                      catalog={catalog}
-                      names={host.names}
-                      reader={reader}
-                      selected={
-                        live?.kind === "entry" ? entryKey(live.entry) : null
-                      }
-                      onOpen={(source, entry) => openEntry(source, entry)}
-                      onAdd={(source, path) => {
-                        setBook({ kind: "new", source, path });
-                        setPane("book");
-                      }}
-                    />
-                  )}
-                </div>
-                <div className="memory-right">
-                  {live ? (
-                    <MemoryBook
-                      target={host}
-                      open={live}
-                      catalog={catalog}
-                      names={host.names}
-                      onBack={() => {
-                        setPane("shelves");
-                        if (live.kind === "new") setBook(null);
-                      }}
-                      onChanged={refresh}
-                      onDeleted={() => {
-                        setBook(null);
-                        setPane("shelves");
-                      }}
-                      onCreated={(path) => {
-                        const source = live.source;
-                        // Show the new file once the catalog has it.
-                        void requestMemoryCatalog(host, { force: true }).then(
-                          () => {
-                            const next = memoryCatalogState(host)?.catalog;
-                            const entry = next?.entries.find(
-                              (e) =>
-                                e.source_id === source.id && e.path === path,
-                            );
-                            const fresh = next?.sources.find(
-                              (s) => s.id === source.id,
-                            );
-                            if (entry && fresh)
-                              setBook({ kind: "entry", source: fresh, entry });
-                            else setBook(null);
-                          },
-                        );
-                      }}
-                    />
-                  ) : (
-                    <p className="memory-empty-state memory-pick">
-                      Pick a book to read it. Edits save only when you press
-                      Save.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-            {catalog ? (
-              <footer className="memory-foot">
-                <span>
-                  Read {formatAge(Date.now() - catalog.observed_at)} from{" "}
-                  {host.label}. Files are what agents would load next, not what
-                  they hold now.
+            </div>
+          )}
+          {catalog ? (
+            <footer className="memory-foot">
+              <span>
+                Read {formatAge(Date.now() - catalog.observed_at)} from{" "}
+                {host.label}. Files are what agents would load next, not what
+                they hold now.
+              </span>
+              {catalog.truncated ? (
+                <span className="memory-stale">
+                  Only the first {catalog.limits.entries} files are shown.
                 </span>
-                {catalog.truncated ? (
-                  <span className="memory-stale">
-                    Only the first {catalog.limits.entries} files are shown.
-                  </span>
-                ) : null}
-                {catalog.warnings.length ? (
-                  <details>
-                    <summary>What World can't tell</summary>
-                    <ul>
-                      {catalog.warnings.map((warning) => (
-                        <li key={warning}>{warning}</li>
-                      ))}
-                    </ul>
-                  </details>
-                ) : null}
-              </footer>
-            ) : null}
-          </>
-        )}
-      </div>
-    </div>
+              ) : null}
+              {catalog.warnings.length ? (
+                <details>
+                  <summary>What World can't tell</summary>
+                  <ul>
+                    {catalog.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </footer>
+          ) : null}
+        </>
+      )}
+    </PlaceWindow>
   );
 }

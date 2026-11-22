@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { type TownCanvasCase, townCanvasCases } from "../town/TownCanvas.cases";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
@@ -11,29 +11,7 @@ import {
 } from "../../browserChrome";
 import { chromeRenderingFlags } from "./chromeRendering";
 import { connectCapture } from "./connectCapture";
-import {
-  buildWorldBrowserBundle,
-  readWorldBrowserBundle,
-  type WorldBrowserBundle,
-} from "./browserBundles";
-let bundle: WorldBrowserBundle;
-let bundleDirectory: string | undefined;
-beforeAll(async () => {
-  if (!chrome) return;
-  if (Bun.env.HERDR_WORLD_TEST_ASSETS)
-    bundle = await readWorldBrowserBundle(
-      "town/TownCanvas",
-      Bun.env.HERDR_WORLD_TEST_ASSETS,
-    );
-  else {
-    bundleDirectory = await mkdtemp(join(tmpdir(), "town-bundle-"));
-    bundle = await buildWorldBrowserBundle("town/TownCanvas", bundleDirectory);
-  }
-});
-afterAll(async () => {
-  if (bundleDirectory)
-    await rm(bundleDirectory, { recursive: true, force: true });
-});
+import { assetUrlImports, rawSvgImports } from "./assetUrlImports";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -90,7 +68,17 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
       let browser: ReturnType<typeof Bun.spawn> | undefined;
       let devtools: Awaited<ReturnType<typeof connectCapture>> | undefined;
       try {
-        for (const [path, output] of bundle.assets) assets.set(path, output);
+        const build = await Bun.build({
+          entrypoints: [
+            join(import.meta.dir, "../town/TownCanvas.browser.tsx"),
+          ],
+          outdir: dir,
+          target: "browser",
+          plugins: [assetUrlImports, rawSvgImports],
+        });
+        expect(build.success).toBe(true);
+        for (const output of build.outputs)
+          assets.set(`/${basename(output.path)}`, output);
         const browserLog = join(dir, "browser.log");
         // Every case pins its CSS viewport over CDP: `--window-size` alone
         // gives headless Chrome a wider viewport than a 390px phone (#643),

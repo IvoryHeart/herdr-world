@@ -106,17 +106,19 @@ async function run() {
   const lamps = () => [
     ...world.querySelectorAll<HTMLElement>(".town-harbour-lamp"),
   ];
+  const more = released.length > shown ? 1 : 0;
+  const piers = () => world.querySelectorAll(".town-harbour-pier").length;
+  // Lanes appear as each project's releases arrive: with exactly `shown`
+  // projects read there are `shown` lamps but no "+N" lane yet, so wait for
+  // every pier, not only the lamps.
   await until(
     () =>
       lamps().length === shown &&
+      piers() === shown + more &&
       world.querySelector(".town-harbour-ship") !== null,
-    `${shown} lanes with ships`,
+    `${shown} lanes with ships and ${shown + more} piers`,
   );
-  const more = released.length > shown ? 1 : 0;
-  check(
-    world.querySelectorAll(".town-harbour-pier").length === shown + more,
-    `${world.querySelectorAll(".town-harbour-pier").length} piers for ${shown + more} lanes`,
-  );
+  check(piers() === shown + more, `${piers()} piers for ${shown + more} lanes`);
   check(
     !world.querySelector(`[aria-label="Shipping lane ${FIXTURE_UNRELEASED}"]`),
     "a project with no release has a lane",

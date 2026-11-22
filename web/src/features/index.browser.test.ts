@@ -114,9 +114,10 @@ test("generated web index runs in every browser build path", async () => {
     for (const [path, asset] of world.assets) assets.set(path, asset);
     script = "probe.browser.js";
     await run("browserBundles.ts");
-    // The index carries the shell's real features. Golden, site and film
-    // bundles never load the shell, so they lack its `?raw` SVG loader; a
-    // test-only stub lets them still prove the static index itself.
+    // The index carries the shell's real features. Site and film bundles
+    // never load the shell, so they lack its `?raw` SVG loader; a test-only
+    // stub lets them still prove the static index itself. Golden carries its
+    // own loader, which resolves before the stub.
     const rawSvg: Bun.BunPlugin = {
       name: "feature-index-raw-svg-stub",
       setup(builder) {

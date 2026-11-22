@@ -17,6 +17,7 @@ import {
   type TownObservatoryCell,
 } from "./townObservatoryModel";
 import { useOpenTownUsage } from "./TownUsageLens";
+import { useTownPlace } from "./useTownPlace";
 import "./townObservatory.css";
 
 /**
@@ -45,6 +46,13 @@ export const TownObservatory = memo(function TownObservatory({
     event.stopPropagation();
     open?.("budget");
   };
+  // The building opens what its sign does (#1170).
+  const built = lot !== null;
+  const openBudget = useMemo(
+    () => (open && built ? () => open("budget") : null),
+    [open, built],
+  );
+  useTownPlace("observatory", openBudget);
   if (!lot) {
     const at = townObservatoryFoldAt(layout.center);
     return (
@@ -69,6 +77,7 @@ export const TownObservatory = memo(function TownObservatory({
       <button
         type="button"
         className="town-observatory-sign"
+        data-town-place="observatory"
         data-quiet={observatory.status !== "ready" || undefined}
         style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 2 }}
         aria-label={name}

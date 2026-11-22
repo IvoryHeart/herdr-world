@@ -6,15 +6,6 @@ import { runVerificationProcess } from "./verification-process";
 import limits from "../tools/quint/resources.json";
 import { sanitizeDiagnostic } from "./verification-diagnostics";
 
-/** Read actual reports; cancellation controls also leave readiness-only directories. */
-export async function readVerificationResources(root: string) {
-  const directory = resolve(root, ".agents/verification/resources");
-  const reports = [];
-  for await (const path of new Bun.Glob("*/resources.json").scan(directory))
-    reports.push(JSON.parse(await readFile(resolve(directory, path), "utf8")));
-  return reports;
-}
-
 export async function verifyResourceCancellation(
   root: string,
   system: boolean,

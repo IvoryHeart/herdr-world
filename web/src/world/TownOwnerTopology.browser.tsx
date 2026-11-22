@@ -21,9 +21,6 @@ console.error = (...args: unknown[]) => {
 };
 
 const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
-// The runner releases the catalog after Terminal first appears. Its paint
-// recentres the dialog; the click must use the resulting geometry.
-const catalogReady = Promise.withResolvers<void>();
 const controls = new Set<(control: Record<string, unknown>) => void>();
 const observed: { snapshot: unknown; started: unknown } = {
   snapshot: null,
@@ -52,8 +49,7 @@ Object.assign(bridge, {
     calls.push({ method, params });
     if (method === "world.snapshot") return observed.snapshot;
     if (method === "world.board.get") return structuredClone(boardDocument);
-    if (method === "world.core.catalog") {
-      await catalogReady.promise;
+    if (method === "world.core.catalog")
       return {
         kinds: ["claude", "codex"],
         readiness: [
@@ -62,7 +58,6 @@ Object.assign(bridge, {
         ],
         skills: [],
       };
-    }
     if (method === "world.core.launch") {
       // The service invalidates World's observation before it answers.
       observed.snapshot = observed.started;
@@ -113,19 +108,11 @@ Object.assign(bridge, {
 
 declare global {
   interface Window {
-    __ownerTopology?: {
-      failures: string[];
-      calls: typeof calls;
-      releaseCatalog(): void;
-    };
+    __ownerTopology?: { failures: string[]; calls: typeof calls };
     __pointerTarget?: EventTarget | null;
   }
 }
-window.__ownerTopology = {
-  failures,
-  calls,
-  releaseCatalog: catalogReady.resolve,
-};
+window.__ownerTopology = { failures, calls };
 // Where the runner's last real pointer move landed, by the browser's own
 // hit test (headless Chrome leaves `:hover` behind after camera moves).
 addEventListener(

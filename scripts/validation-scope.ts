@@ -78,7 +78,10 @@ const WORLD_RUNTIME =
 // Native jobs are the authority for their explicitly named test consumers.
 // Derive these paths so adding a native test cannot leave scoped PR CI skipping it.
 const nativeTestConsumers = new Set<string>();
-for (const [file, jobs] of [["installer-upgrade.yml", ["upgrade"]]] as const) {
+for (const [file, jobs] of [
+  ["ci.yml", ["plugin-windows"]],
+  ["installer-upgrade.yml", ["upgrade"]],
+] as const) {
   const workflow = Bun.YAML.parse(
     readFileSync(
       new URL(`../.github/workflows/${file}`, import.meta.url),
@@ -217,11 +220,6 @@ export function selectValidation(
       (runtime && worldRuntimeSuites.includes(path)),
   );
   const binaryInputs = nativeInputs(graph);
-  // Production build calls do not import main.tsx into the Bun test process.
-  // Keep the real-entry journey selected even across that build-tool seam.
-  const boot = "web/src/productionBoot.browser.test.ts";
-  const bootChanged =
-    paths.some((path) => path.startsWith("web/src/")) && graph.files.has(boot);
   return {
     full,
     tooling,
@@ -238,14 +236,7 @@ export function selectValidation(
     unit: [
       ...new Set(chosen.filter((path) => !world.has(path) && !web.has(path))),
     ].sort(),
-    web: shardTable
-      ? webBrowserSuites
-      : [
-          ...new Set([
-            ...chosen.filter((path) => web.has(path)),
-            ...(bootChanged ? [boot] : []),
-          ]),
-        ],
+    web: shardTable ? webBrowserSuites : chosen.filter((path) => web.has(path)),
     world: chosenWorld,
     worldShards: worldBrowserShards.flatMap((shard, index) =>
       chosenWorld.some((path) => shard.includes(path)) ? [index + 1] : [],

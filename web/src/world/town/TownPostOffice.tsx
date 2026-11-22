@@ -63,6 +63,7 @@ import {
 } from "./townPostFixture";
 import { townLetterUrl } from "./townPostPaint";
 import type { TownRendererHandle } from "./townRenderer";
+import { useTownPlace } from "./useTownPlace";
 import "./townPost.css";
 
 /**
@@ -129,6 +130,9 @@ function useFixtureOffice(): Office | null {
   return office;
 }
 
+/** The post office's window (#1170): Needs you, from its sign or building. */
+const openPost = () => openNeedsYou(undefined, { window: true });
+
 /** Keyboard focus on an off-screen sign or letter pans `at` into view. */
 function revealer(
   renderer: { readonly current: TownRendererHandle | null },
@@ -178,6 +182,7 @@ export const TownPostOffice = memo(function TownPostOffice({
 }) {
   const source = useContext(TownPostContext);
   const fixture = useFixtureOffice();
+  useTownPlace("post", openPost);
   const folded = layout.formFactor === "narrow";
   const lot = townPostLotBeside(layout.center);
   const at = folded ? townPostFoldAt(lot) : townPostSignAt(lot);
@@ -241,9 +246,10 @@ function Sign({
       title="Post office: open Needs you"
       onPointerDown={(event) => event.stopPropagation()}
       onFocus={onFocus}
+      data-town-place="post"
       onClick={(event) => {
         event.stopPropagation();
-        openNeedsYou();
+        openPost();
       }}
     >
       {folded ? (
@@ -293,8 +299,9 @@ const letterArt = (verified: boolean) => {
 const isFixture = (letter: TownLetter) =>
   letter.id.startsWith(TOWN_POST_FIXTURE_PREFIX);
 
-/** Needs you at a letter's question. */
-const answer = (letter: TownLetter) => openNeedsYou(needsYouAskKey(letter.id));
+/** Needs you at a letter's question, in Town's one window. */
+const answer = (letter: TownLetter) =>
+  openNeedsYou(needsYouAskKey(letter.id), { window: true });
 
 /** The yard from the World ledger: open asks and answers on their way. */
 function LedgerYard({

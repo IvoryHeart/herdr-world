@@ -4,7 +4,15 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { WorldDeskStore } from "./deskStateStore";
 import { NeedsYouList, needsYouPage } from "./NeedsYouTab";
-import { needsYouCount, needsYouInTopbar, needsYouItems } from "./needsYou";
+import {
+  closeNeedsYou,
+  needsYouCount,
+  needsYouInTopbar,
+  needsYouItems,
+  needsYouState,
+  openNeedsYou,
+  resetNeedsYouForTest,
+} from "./needsYou";
 import type { WorldAsk, WorldAsksStore } from "./worldAsks";
 import type { WorldLeafObject } from "./worldObject";
 
@@ -246,4 +254,26 @@ test("the counter is one tap away on every root screen, never twice", () => {
       detail: false,
     }),
   ).toBe(false);
+});
+
+test("the post office opens Needs you as a window, and closing it leaves the tab as it was", () => {
+  resetNeedsYouForTest();
+  expect(needsYouState().open).toBe(false);
+  openNeedsYou(undefined, { window: true });
+  expect(needsYouState()).toMatchObject({ open: true, window: true });
+  closeNeedsYou();
+  expect(needsYouState()).toMatchObject({ open: false, window: false });
+  // With the tab open, the window opens over it and closes back to it.
+  openNeedsYou("ask:a1");
+  expect(needsYouState()).toMatchObject({ open: true, window: false });
+  openNeedsYou("ask:a2", { window: true });
+  expect(needsYouState()).toMatchObject({ open: true, window: true });
+  expect(needsYouState().request.itemKey).toBe("ask:a2");
+  // A second window open keeps what the tab was under the first.
+  openNeedsYou(undefined, { window: true });
+  closeNeedsYou();
+  expect(needsYouState()).toMatchObject({ open: true, window: false });
+  closeNeedsYou();
+  expect(needsYouState().open).toBe(false);
+  resetNeedsYouForTest();
 });

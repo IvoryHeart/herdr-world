@@ -15,7 +15,9 @@ import type { ConnectionStatus } from "../connections/types";
 import { rpcInput, rpcOutput } from "../verbs/rpc-contracts";
 import { registeredVerb } from "../verbs/registry";
 
-const kernel = {} as FeatureKernel;
+import { testFeatureKernel } from "../testing/features";
+import { usageKey } from "./usage/register";
+const kernel = testFeatureKernel();
 const verb = (name: string) =>
   declare(
     "rpc",
@@ -188,15 +190,28 @@ test("missing and extra RPC handlers are refused", () => {
     ).toThrow("declarations differ");
 });
 
-test("every discovered feature implements exactly its registered RPC declarations", () => {
+test("every discovered feature implements exactly its registered RPC declarations", async () => {
   expect(serverFeatures.map((f) => String(f.id))).toEqual([
     "memory",
     "presence",
+    "usage",
   ]);
   const composed = composeFeatures(kernel);
-  // No extra await in the pilot's existing teardown when a phase is unused.
-  for (const phase of ["quiesce", "drain", "close"] as const)
-    expect(composed.hasStop(phase)).toBe(false);
+  expect(composed.hasStop("quiesce")).toBe(true);
+  expect(composed.hasStop("drain")).toBe(false);
+  expect(composed.hasStop("close")).toBe(false);
+  const usage = composed.get(usageKey),
+    calls: string[] = [];
+  usage.connectionStatus = (status) => {
+    calls.push(status.id);
+  };
+  usage.close = async () => {
+    calls.push("close");
+  };
+  composed.connectionStatus({ id: "host-a" } as ConnectionStatus);
+  const stopping = composed.stop("quiesce");
+  expect(calls).toEqual(["host-a", "close"]);
+  await stopping;
   expect([...composed.rpc.keys()].sort()).toEqual(
     serverFeatures
       .flatMap((f) =>

@@ -23,7 +23,6 @@ import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
 import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
-import { UsageQueryError } from "../usage/analytics";
 
 /** Aggregate World methods: snapshot, board document, profiles, watchlist (world.*). */
 export function handleWorldRpc(
@@ -64,31 +63,6 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
       sendReply({ id, result: { ok: true } }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
-    }
-    return;
-  }
-  if (method === "world.usage.analytics") {
-    try {
-      const analytics = rpc.services.worldUsageAnalytics;
-      if (!analytics) throw new Error("unavailable");
-      sendReply({ id, result: await analytics.get(params ?? {}) }, method);
-    } catch (error) {
-      sendError(
-        "world-usage-error",
-        error instanceof UsageQueryError
-          ? error
-          : new Error("World usage analytics is unavailable"),
-      );
-    }
-    return;
-  }
-  if (method === "world.usage.get") {
-    try {
-      const usage = rpc.services.worldUsage;
-      if (!usage) throw new Error("World usage service is unavailable");
-      sendReply({ id, result: await usage.get(params ?? {}) }, method);
-    } catch {
-      sendError("world-usage-error", new Error("World usage is unavailable"));
     }
     return;
   }
