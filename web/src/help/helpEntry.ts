@@ -11,11 +11,12 @@
  */
 
 /** Where an entry lives: a World view, Chat, or everywhere. */
-export type HelpPlace = "town" | "board" | "chat" | "world";
+export type HelpPlace = "town" | "board" | "code" | "chat" | "world";
 
 export const HELP_PLACES: readonly HelpPlace[] = [
   "town",
   "board",
+  "code",
   "chat",
   "world",
 ];
@@ -23,9 +24,13 @@ export const HELP_PLACES: readonly HelpPlace[] = [
 export const HELP_PLACE_LABELS: Record<HelpPlace, string> = {
   town: "Town",
   board: "Board",
+  code: "Code",
   chat: "Chat",
   world: "Everywhere",
 };
+
+/** Places that are World views: Try switches to the view first. */
+export const HELP_VIEW_PLACES: readonly HelpPlace[] = ["town", "board", "code"];
 
 /** A picture's screen size: phone (390 × 844) or desktop (1280 × 800). */
 export type HelpPictureSize = "phone" | "desktop";
@@ -42,10 +47,10 @@ export const HELP_PICTURE_THEMES: readonly HelpPictureTheme[] = [
 
 /**
  * The synthetic scene a picture is captured from
- * (web/src/help/testing/HelpShots.browser.tsx): Town, Board or an agent's
- * Chat, each with World's view picker over it.
+ * (web/src/help/testing/HelpShots.browser.tsx): Town, Board, Code or an
+ * agent's Chat, each with World's view picker over it.
  */
-export type HelpScene = "town" | "board" | "chat";
+export type HelpScene = "town" | "board" | "code" | "chat";
 
 export type HelpPicture = {
   scene: HelpScene;
@@ -87,7 +92,7 @@ export function helpAnchor(control: string) {
   return { "data-help": control } as const;
 }
 
-const ID = /^(town|board|chat|world)\.[a-z][a-z0-9-]*$/;
+const ID = /^(town|board|code|chat|world)\.[a-z][a-z0-9-]*$/;
 const VERSION = /^\d+\.\d+\.\d+$/;
 
 /** Problems with one declaration, as plain sentences naming the entry. */

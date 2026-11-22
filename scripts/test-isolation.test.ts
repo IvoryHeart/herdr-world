@@ -153,6 +153,10 @@ test.each([
     'require("node:net").createConnection("/example/herdr.sock")',
     "runtime socket outside test scratch",
   ],
+  [
+    'new WebSocket("ws+unix:///example/ide.sock:/ide/x")',
+    "runtime socket outside test scratch",
+  ],
   ['Bun.spawnSync(["ssh", "example.invalid", "true"])', "SSH connection"],
 ])(
   "a caught forbidden operation still fails the run: %s",

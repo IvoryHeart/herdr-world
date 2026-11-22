@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 /**
  * World's private data folder. `HERDR_WORLD_DATA_DIR` gives an instance its
@@ -37,7 +37,7 @@ export function dataRoot(
   );
 }
 
-/** Every file one World service keeps in its data folder. */
+/** Storage and discovery paths used by one World service. */
 export type DataPaths = {
   /** The folder itself: instance lock, signing secret, source secrets. */
   root: string;
@@ -48,7 +48,7 @@ export type DataPaths = {
   agentProfiles: string;
   webPush: string;
   sourceSecrets: string;
-  /** Local listening World reports; previews may explicitly share this folder. */
+  /** User-wide local listening World reports, independent of the data folder. */
   instanceRegistry: string;
   sessionSecret: string;
   /** Ranger's folder. */
@@ -68,10 +68,21 @@ export function resolveDataPaths(
   // Read directly, as dataRoot does: an empty value is still an override.
   const override = (name: string) => environment[`HERDR_WORLD_${name}`];
   const settings = override("SETTINGS_PATH");
+  // Discovery belongs to the user, while questions and credentials belong to
+  // each World. XDG requires an absolute state directory; ignore relative ones.
+  const stateRoot =
+    platform === "win32"
+      ? environment.LOCALAPPDATA || join(homeDir, "AppData", "Local")
+      : platform === "darwin"
+        ? join(homeDir, "Library", "Application Support")
+        : environment.XDG_STATE_HOME && isAbsolute(environment.XDG_STATE_HOME)
+          ? environment.XDG_STATE_HOME
+          : join(homeDir, ".local", "state");
   return {
     root,
     instanceRegistry:
-      override("INSTANCE_REGISTRY_DIR") ?? join(root, "instances"),
+      override("INSTANCE_REGISTRY_DIR") ??
+      join(stateRoot, "herdr-world", "instances"),
     settings: settings ?? join(root, "settings.json"),
     connections: override("CONNECTIONS_PATH") ?? join(root, "connections.json"),
     board: override("BOARD_PATH") ?? join(root, "boards", "board.json"),
