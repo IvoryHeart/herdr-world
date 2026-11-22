@@ -895,6 +895,7 @@ function InspectorResources({
                             terminalId={conversation.terminalId}
                           />
                           <AgentMemoryLink
+                            harness={conversation.context.agent}
                             connectionId={conversation.connectionId}
                             agentId={conversation.paneId}
                           />

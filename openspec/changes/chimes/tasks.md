@@ -2,7 +2,7 @@
 
 Chimes and live Group Interest are delivered. Only tasks 3.2 (message-ledger sender identity) and 3.3 (sub-agent class) remain, pending their upstream evidence sources.
 
-Delivered requirements are synchronized into [the current contract](../../specs/world-surfaces/spec.md#requirement-chimes).
+Delivered requirements are synchronized into [the current contract](../../specs/world-surfaces/notifications/spec.md#requirement-chimes).
 No unsynchronized requirement delta remains in this record; unfinished tasks
 and acceptance above keep the change active.
 

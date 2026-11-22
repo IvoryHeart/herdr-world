@@ -1,0 +1,38 @@
+{
+  "id": "Q32",
+  "area": "File search and annotation drafts",
+  "owner": "web/src/fileSearch.ts",
+  "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
+  "properties": "Superseded queries cannot publish; draft edits survive unrelated refresh; host/checkout changes cannot misapply edits",
+  "existingTests": [
+    "web/src/fileSearch.test.ts",
+    "web/src/annotations.test.ts",
+    "web/src/components/FileExplorerDialog.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
+  "technique": "qualified-operation",
+  "assessment": "superseded resource/intent results; direct draft preservation regressions retained",
+  "status": "shared-model",
+  "remaining": "Draft persistence intentionally uses durable checkout identity rather than transient generation; glob expansion and anchor reconstruction remain pure/fixture tests.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/browser-preparation.qnt", "quint/runtime-leases.qnt"],
+    "contracts": [
+      "verification/consumer-evidence.md",
+      "verification/composition.md"
+    ],
+    "tests": [
+      "web/src/fileSearch.test.ts",
+      "web/src/annotations.test.ts",
+      "web/src/components/FileExplorerDialog.test.ts"
+    ],
+    "checks": ["bun run check", "bun run verification:check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "evidenceDecision": "Runtime-qualified late-result admission is the shared rule; real File Explorer tests exercise retired prefetch/preview and annotation tests retain durable checkout identity and stale anchors.",
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

@@ -110,6 +110,7 @@ export function townTeamActions(deps: TownTeamDeps) {
     // that closes its own, so cancelling leaves it as it was.
     const source = deps.roomForKey(desk.roomKey);
     if (
+      !desk.coreOpen &&
       !allowCloseRoom &&
       desk.roomKey !== target.roomKey &&
       (source?.observedDeskCount ?? 2) <= 1

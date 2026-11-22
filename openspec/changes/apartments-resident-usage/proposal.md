@@ -27,8 +27,8 @@ None.
 
 ### Modified Capabilities
 
-- `world-surfaces`: Apartments residents show their usage; Breakdown filters
-  to one agent.
+- `world-surfaces/apartments`: residents show their usage.
+- `world-surfaces/town`: Usage's Breakdown filters to one agent.
 - `world-storage`: resident records carry optional, leniently read usage
   agent IDs.
 
@@ -36,8 +36,6 @@ None.
 
 Server: `shared/apartments.ts`, `server/src/world/apartments.ts`,
 `server/src/storage/apartments.ts`. Browser: `web/src/world/apartments/`,
-`web/src/world/usage/`, `web/src/world/town/TownUsageLens.tsx`. Docs:
-FEATURES.md (Apartments, Usage Breakdown).
-
-Apartments (#1034) has no current capability spec yet, so this delta stays
-active and is synchronized with the Apartments capability when that lands.
+`web/src/world/usage/`, `web/src/world/town/TownUsageLens.tsx`. Notes:
+`openspec/specs/world-surfaces/apartments/notes.md` and
+`openspec/specs/world-surfaces/town/notes.md` (Usage Breakdown).

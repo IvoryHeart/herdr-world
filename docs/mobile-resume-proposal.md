@@ -76,7 +76,7 @@ only the explicit reload action may reload.
 Extend `WorldFoundationApp.test.ts`, `WorldTerminalHandoff.browser.tsx`,
 `mobileTerminal.browser.tsx`, `visibleTabLayout.test.ts` and recovery tests as
 needed. Check catalogue-before-topology and delayed-close sequences. Preserve
-Q06/Q07/Q08 consumers in `verification/coverage.json`; direct browser evidence
+Q06/Q07/Q08 consumers in `verification/coverage/`; direct browser evidence
 is necessary for renderer lifetime and event timing, beyond the existing
 ownership models. Update the current frontend guide and mobile/recovery steps
 in `docs/TUTORIAL.md` and `FEATURES.md`, with a changelog fragment.

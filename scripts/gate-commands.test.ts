@@ -43,10 +43,10 @@ function exercise(
         execFileSync("git", argv, { cwd: directory, encoding: "utf8" }).trim();
       git("config", "user.name", "Example");
       git("config", "user.email", "example@example.invalid");
-      mkdirSync(join(directory, "verification"));
+      mkdirSync(join(directory, "verification/coverage"), { recursive: true });
       writeFileSync(
-        join(directory, "verification/coverage.json"),
-        '{"areas":[]}',
+        join(directory, "verification/coverage/_meta.json"),
+        '{"schemaVersion":1}',
       );
       mkdirSync(join(directory, "scripts/agent"), { recursive: true });
       writeFileSync(
@@ -153,6 +153,7 @@ test("repository validation delegates to the static lane before running tests", 
 
 test("the static lane retains all checks and builds production assets once", () => {
   const commands = [
+    "features:check",
     "notices:check",
     "changelog:check",
     "check:size",
@@ -170,7 +171,7 @@ test("the static lane retains all checks and builds production assets once", () 
   });
   expect(
     exercise(["scripts/check-delivery.ts", "--static"], "typecheck:quick"),
-  ).toEqual({ status: 1, commands: commands.slice(0, 5) });
+  ).toEqual({ status: 1, commands: commands.slice(0, 6) });
 });
 
 test("the commit guard and source validation keep distinct acceptance boundaries", () => {
@@ -194,6 +195,7 @@ test("a changed gate always runs CI static checks and blocks size failures befor
   ]);
   expect(result.status).toBe(1);
   expect(result.commands).toEqual([
+    "run features:check",
     "run notices:check",
     "run changelog:check",
     "run check:size",
@@ -309,6 +311,7 @@ test("static failures report while all heavy check slots are held, regardless of
     );
     expect(result.status).toBe(1);
     expect(result.commands).toEqual([
+      "run features:check",
       "run notices:check",
       "run changelog:check",
       "run check:size",
