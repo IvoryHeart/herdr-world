@@ -97,3 +97,26 @@
 .town-step-label {
   color: #5d6574;
 }
+
+/* A quiet working agent (townQuietWork.ts): the canvas's run-down hourglass
+   and how long the session has gone quiet, in slate, not the step's amber
+   (amber is the long step, and needs-you on Town's overlays). */
+.town-step-quiet-glyph {
+  flex: none;
+  width: 11px;
+  height: 12px;
+  image-rendering: pixelated;
+}
+.town-step-quiet {
+  flex: none;
+  align-self: flex-start;
+  padding: 0 2px;
+  font:
+    700 6px / 1.25 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+  color: #fffaf0;
+  background: #4f6a8f;
+  border: 1px solid #1c1722;
+  border-radius: 2px;
+}

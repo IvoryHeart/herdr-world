@@ -170,6 +170,19 @@
     browser and device shows the same one. Zoomed in to desks, where the
     reception boards are put away, tap a building's reception lobby to bring
     its board and sign back; any other tap or zoom level puts it away again.
+  - A working agent whose session has not moved for 10 minutes looks quiet:
+    it stays seated with its room's working light on and its hands stop
+    typing. From the room level its step bubble adds an hourglass with how
+    long it has gone quiet, such as "23m", and keeps the step's running time
+    beside it; zoomed further out the hourglass shows alone. Its card says
+    how long, such as "No progress for 23 m (last 14:02)". The Town board adds
+    a line under **Busy**, such as "2 quiet 10 m+": it opens the first quiet
+    agent's card and **Next ›** steps through the rest. The time comes from
+    the agent's session file, so an agent without one never looks quiet. The
+    look clears as soon as the session moves again; World never nudges or
+    restarts the agent. **Quiet working agents** in Settings (search "quiet")
+    sets 5, 10, 20, 30 or 60 minutes, or **Off**. Calm and reduced motion keep
+    the hourglass, which never animates.
   - Town shows what the crew spends. The **City expenses** billboard stands
     on the lawn above the town center, never over it: the whole World's tokens
     and estimated cost, such as "Today · 1.2M tokens · $3.40 est.", with a

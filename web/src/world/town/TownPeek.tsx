@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   FolderOpen,
+  Hourglass,
   SquareTerminal,
   Terminal as ShellIcon,
 } from "lucide-react";
@@ -61,7 +62,13 @@ export function TownPeek({
   onReviewed,
   review = { ready: true, failed: false, onRetry: () => {} },
   deskColor = null,
+  quiet = null,
 }: {
+  /**
+   * A working agent whose session has not moved (townQuietWork.ts): "No
+   * progress for 23 m (last 14:02)".
+   */
+  quiet?: string | null;
   /**
    * Whether the report shown is the current stop's: Mark reviewed waits
    * while a new stop's report is read, and offers Retry when it fails.
@@ -264,6 +271,12 @@ export function TownPeek({
           ×
         </button>
       </div>
+      {quiet ? (
+        <p className="town-peek-quiet">
+          <Hourglass size={13} aria-hidden="true" />
+          {quiet}
+        </p>
+      ) : null}
       <AgentUsageLine
         pane={
           agent.harness

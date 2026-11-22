@@ -27,6 +27,7 @@ describe("View preferences", () => {
       townMaster: "firstmate",
       townGreeting: true,
       tabBadge: true,
+      townQuietMinutes: 10,
     });
   });
 
@@ -49,6 +50,17 @@ describe("View preferences", () => {
     expect(read(6)).toBe("auto");
     expect(read("3")).toBe("auto");
     expect(read("auto")).toBe("auto");
+  });
+
+  test("Town marks quiet working agents after 10 minutes unless changed", () => {
+    const read = (townQuietMinutes: unknown) =>
+      readOfficePreferences(memoryStorage(JSON.stringify({ townQuietMinutes })))
+        .townQuietMinutes;
+    expect(DEFAULT_OFFICE_PREFERENCES.townQuietMinutes).toBe(10);
+    expect(read(30)).toBe(30);
+    expect(read(0)).toBe(0);
+    expect(read(7)).toBe(10);
+    expect(read("off")).toBe(10);
   });
 
   test("the tab and app icon count is on unless it was turned off", () => {
@@ -125,6 +137,7 @@ describe("View preferences", () => {
       townMaster: "",
       townGreeting: false,
       tabBadge: false,
+      townQuietMinutes: 30,
     });
     expect(storage.value).toEqual({
       key: OFFICE_PREFERENCES_KEY,
@@ -137,6 +150,7 @@ describe("View preferences", () => {
         townMaster: "",
         townGreeting: false,
         tabBadge: false,
+        townQuietMinutes: 30,
       }),
     });
   });
