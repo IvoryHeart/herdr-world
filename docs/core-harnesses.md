@@ -2,7 +2,7 @@
 
 World's core launcher offers 30 harness kinds. Any of them can be selected
 in a saved profile; installation and authentication stay with the harness on the
-core host. See the [runtime support table](../FEATURES.md#runtime-support) for versions
+core host. See the [runtime support table](../openspec/specs/herdr-core-runtime/notes.md#runtime-support) for versions
 and platform limits. This inventory is not a core-version gate.
 
 Sources inspected on 2026-11-11:

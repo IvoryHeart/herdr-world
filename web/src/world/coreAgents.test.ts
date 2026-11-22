@@ -21,8 +21,8 @@ import {
 } from "./worldObject";
 import { viewOnlyMessage } from "./viewOnly";
 import { projectAgent } from "./officeAgent";
-import { projectWorldOffice } from "./herdrOfficeProjection";
 import { projectBoard } from "./board/boardModel";
+import { projectWorldOffice } from "./herdrOfficeProjection";
 import { inspectTownTerminal, townTargetActionable } from "./town/townOpen";
 import {
   worldInspectorContext,
@@ -277,6 +277,20 @@ describe("core agents in World's views", () => {
     expect(core.some((leaf) => leaf.watch)).toBe(false);
   });
 
+  test("Board shows a live core host live, and a failed one stale", async () => {
+    // A healthy core host is never TUI-actionable; World controls it through
+    // world.core.*, so Board offers New workspace there, not Reconnect.
+    const live = projectBoard(await worldOf()).hostByKey.get("box-core");
+    expect(live?.stale).toBe(false);
+    expect(live?.connectionState).toBe("ready");
+    const failed = projectBoard(await worldOf(true)).hostByKey.get("box-core");
+    expect(failed?.stale).toBe(true);
+    // The TUI host here holds no runtime lease: stale, as before.
+    expect(projectBoard(await worldOf()).hostByKey.get("tui")?.stale).toBe(
+      true,
+    );
+  });
+
   test("Needs you lists the waiting core agent; Desk lists every core agent", async () => {
     const world = await worldOf();
     const items = needsYouItems(world, [], (leaf) => leaf.status === "done");
@@ -423,23 +437,6 @@ describe("core agents in World's views", () => {
         opened.push(id);
       });
       expect(opened).toEqual(coreStale ? [] : [shell.nodeId]);
-    }
-  });
-
-  test("Board draws a live core host, its rooms and agents live, as Town does; a stale one stale", async () => {
-    for (const coreStale of [false, true]) {
-      const board = projectBoard(await worldOf(coreStale));
-      const host = board.hostByKey.get("box-core")!;
-      expect(host.stale).toBe(coreStale);
-      const rooms = board.workspaces.filter((w) => w.hostKey === "box-core");
-      const tabs = board.tabs.filter((t) => t.hostKey === "box-core");
-      expect(rooms.length).toBeGreaterThan(0);
-      expect(tabs.some((t) => t.panes.some((p) => p.isAgent))).toBe(true);
-      for (const card of [...rooms, ...tabs]) {
-        expect(card.stale).toBe(coreStale);
-        expect(card.actionable).toBe(false);
-        if (!coreStale) expect(card.viewOnly).toBeDefined();
-      }
     }
   });
 

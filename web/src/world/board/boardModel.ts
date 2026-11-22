@@ -7,7 +7,7 @@ import type {
   WorldObject,
   WorldSpaceObject,
 } from "../worldObject";
-import { isLiveNode, yieldWorldTask } from "../worldObject";
+import { yieldWorldTask } from "../worldObject";
 import { DEVTOOLS } from "../devtools/flag";
 import { countWorldWork } from "../devtools/renderer";
 import { cardKey, tabCardKey } from "../../../../shared/terminalColor";
@@ -143,9 +143,10 @@ function projectHost(host: WorldHostObject): HostProjection {
       generation: host.generation,
       label: host.label,
       connectionState: host.connection.state,
-      // A live herdr-core host is view-only, never actionable, yet current:
-      // its zone is drawn live, as Town draws it, not offered a Reconnect.
-      stale: !isLiveNode(host),
+      // Stale only when the host isn't live. A healthy herdr-core host is
+      // not TUI-actionable but World controls it (coreControl, world.core.*);
+      // TUI-only actions check each workspace's and tab's own `actionable`.
+      stale: host.stale || !(host.actionable || host.coreControl === true),
       workspaceKeys: [],
     };
     const workspaceIds = new Set(host.spaces.map((space) => space.nativeId));

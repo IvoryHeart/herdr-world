@@ -90,8 +90,10 @@ CLI locates its token. Preview data and built assets stay untracked.
 To include several previews in Shipyard's local instance observations, set
 `HERDR_WORLD_INSTANCE_REGISTRY_DIR` to the same private directory in each
 listener's environment at startup. Without it, each isolated data folder keeps
-its own registry. This shares display observations only; credentials, storage
-and connections stay in each preview's own folder. Reports expire after 45
+its own registry. This shares display observations and, for previews attached
+to the same runtime, their open owner questions in Needs you (each World reads
+the others over loopback with a per-run token); credentials, storage and
+connections stay in each preview's own folder. Reports expire after 45
 seconds without renewal, and stale reports have no open link. See the
 [Shipyard API guide](shipyard-api.md#local-instance-registry) for bounds and CLI
 try commands. No discovery probes or additional servers are started by Shipyard.
@@ -261,6 +263,37 @@ bun run check:delivery        # full local gate, including behavioral verificati
 ```
 
 Use `bun run test <path>` for every ordinary test, including focused cases.
+Feature discovery uses committed `server/src/features/index.gen.ts` and
+`web/src/features/index.gen.ts` indexes. After adding or removing a feature's
+`register.ts` or `mount.tsx` under those roots, run `bun run features:generate`.
+Each sorted line exports one module namespace; colliding export names are refused.
+`bun run features:check` checks membership (ignoring order) in the static lane.
+The `testing/probe` features are inert fixtures: the server probe is invoked only
+by tests, and the web probe declares no `Host`, so the shell never renders it. The
+proof in `scripts/features.test.ts` and `web/src/features/index.browser.test.ts`
+runs them through every build path, including a compiled probe after deleting sources.
+
+A web feature's `mount.tsx` holds wiring only and exports `id`, `slot`, `order`
+and `Host`. `web/src/features/FeatureHosts.tsx` names the slots and the props each
+passes (`dialogs`: the world and a launched-terminal opener, mounted in the
+control plane's AgentDialogs), renders a slot's hosts by order then id, refuses a
+duplicate id, and fails typecheck when a discovered `Host` does not fit its slot.
+A host whose UI is heavy keeps it behind `lazyWithReload`, as the Memory Library does.
+
+Server entries export `feature = defineFeature(...)` from `register.ts`.
+Declare RPC verbs there once; the generated catalogue feeds admission and the
+composer checks that factory handler keys match those declarations exactly.
+Use `featureKey<Api>(id)` for the id and dependencies, list dependencies in
+`requires`, and resolve their APIs with the factory's typed `get(key)`.
+Composition validates the entire graph before creation, then creates dependencies
+first with id order for ties. The read-only `FeatureKernel` provides service
+ports and lazy, explicitly qualified runtime access; it has no default runtime
+helper. Features receive status/listening hooks in composition order and stop
+in reverse order per phase: `quiesce` fences work, `drain` precedes runtime stop,
+and `close` precedes storage closure. Add a feature and regenerate the index
+without editing the service root, World RPC router or RPC context. Presence is
+the pilot; existing security and storage lifecycle owners remain in the root.
+
 Use `bun run ci:health --days 3` for a read-only screen of recent CI and delivery
 numbers (`gh` authentication required). `--days` accepts 1–30 and `--repo owner/name`
 selects another accessible repository. Run it again after delivery to compare the
@@ -398,7 +431,7 @@ for watch revision and unavailable-host scope policy. Actions browser cases keep
 rendered watch feedback, qualified action wiring and focus at desktop/phone widths.
 
 Keep policy checks headless once a replacement test and its mapping in
-`verification/coverage.json` exist. Retained browser cases name the behavior that
+`verification/coverage/` exist. Retained browser cases name the behavior that
 requires a browser: geometry, trusted input, focus, rendering, renderer lifecycle
 or visual comparison. For example, `useWorldCreatedTerminal.test.ts` mounts the
 production creation hook and the Inspector selection-lease effect on the test
@@ -450,8 +483,13 @@ installer loads a profile like the Chrome package's for the pinned binary, and
 then starts it headless once, so a browser that cannot start fails installation
 rather than every test. Locally it prints the two commands instead. No job retries a
 failed test. The [shard inventory](../scripts/world-browser-suites.ts) splits all
-World browser suites between the six shards; inventory checks reject missing or
-duplicate assignments. The required Delivery checks status succeeds only when
+World browser suites between the six shards, discovering `*.test.ts` and
+`*.test.tsx` files recursively under `web/src/world/` with the
+`// @world-browser-suite` marker or Chrome launch code. Measured weights in
+`scripts/world-browser-timings.json` are optional: new suites use ten seconds
+until measured, and stale weights add no suites. Shared bundle entries are
+discovered from `web/src/world/*.browser.tsx`. Inventory checks reject missing
+or duplicate assignments. The required Delivery checks status succeeds only when
 repository validation, every World shard and the web browser job pass.
 Markdown-only and exact-head reuse keep their existing shorter paths.
 Release packaging requires repository validation, all six shards and the web
@@ -571,7 +609,7 @@ selected host into visual surfaces; send terminal,
 resource and mutation work through the qualified focused-runtime path.
 
 See [architecture](ARCHITECTURE.md), [deployment](DEPLOYMENT.md) and the
-[knowledge map](knowledge-map.md).
+[capability lookup](agent-development.md#find-a-feature).
 
 The optional cost metrics provider is service-owned. For local testing, set
 `HERDR_WORLD_OTEL_PROMETHEUS_URL` on `dev:server` or use the cost metrics dialog;

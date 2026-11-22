@@ -1,0 +1,31 @@
+{
+  "id": "Q54",
+  "area": "Live catalogue writer serialization",
+  "owner": "server/src/connections/profile-service.ts",
+  "requirement": "openspec/specs/runtime-federation/spec.md",
+  "properties": "Successful unrelated edits survive, one service persistence owner, failure preserves catalogue, retry reads current state",
+  "existingTests": [
+    "quint/connection-registry.test.ts",
+    "server/src/service/connections-cli.test.ts",
+    "server/src/cli/connections.test.ts",
+    "server/src/connections/profile-service.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1004",
+  "status": "modeled",
+  "technique": "finite-model-and-exhaustive-consumer",
+  "assessment": "48 configurations: three CLI verbs, both writer orders, both arrival boundaries and independent save failures with retry",
+  "remaining": "Runtime rollback and platform durability retain existing consumers. Offline preservation and startup races use the separate registry ownership protocol and real-process consumers mapped in Q02; the live queue is not cross-process ownership.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/connection-registry.qnt"],
+    "contracts": ["verification/contracts/connection-registry.md"],
+    "tests": [
+      "quint/connection-registry.test.ts",
+      "server/src/service/connections-cli.test.ts",
+      "server/src/cli/connections.test.ts",
+      "server/src/connections/profile-service.test.ts"
+    ],
+    "checks": ["bun run verification:gate"],
+    "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+  }
+}

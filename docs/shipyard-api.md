@@ -214,6 +214,15 @@ that World recently reported; it does not promise the port still answers.
 Expired records have no open URL. A listener on a specific non-loopback interface
 also has no guessed open URL. IPv4/IPv6 loopback links contain no login token.
 
+A shared registry also lets Worlds attached to the same runtime show each
+other's open owner questions in Needs you. Each report carries a small `asks`
+block: the World's display name, a random token for this run, and hashed keys of
+the runtimes it is attached to or holds open questions for. That block is never returned by
+`shipyard.instances.get`. Another World reads or closes those questions only
+through `POST /api/world/ask-peers` on loopback, with that token and no
+browser `Origin`; the question's own World records the one answer and delivers
+it on the asker's own connection.
+
 ## Verification map
 
 - Acquisition and graph/health limits: `server/src/shipyard/github.test.ts`.

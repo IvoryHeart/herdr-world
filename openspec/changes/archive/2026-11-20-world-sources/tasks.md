@@ -10,7 +10,7 @@ qualification and badge equality retain their direct tests. Historical review
 current audit supplies the remaining source/detail/action regression evidence;
 its independent PR review remains the handoff boundary.
 
-Delivered requirements are synchronized into [the current contract](../../../specs/world-surfaces/spec.md#requirement-built-in-sources).
+Delivered requirements are synchronized into [the current contract](../../../specs/world-surfaces/work-sources/spec.md#requirement-built-in-sources).
 No unsynchronized requirement delta or unfinished implementation remains.
 
 ## 1. Service

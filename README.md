@@ -31,7 +31,7 @@ its own connection identity for safe operations.
 
 World 0.3.5's verified current Herdr TUI range is **0.9.0–0.9.5**; its verified
 core baseline is **herdr-core 0.1.21**. For older/newer versions, platform limits
-and each capability, see the [runtime support table](./FEATURES.md#runtime-support).
+and each capability, see the [runtime support table](openspec/specs/herdr-core-runtime/notes.md#runtime-support).
 Connection and retry never install or start herdr-core.
 
 ## Quick start
@@ -140,12 +140,12 @@ The process must stay running and reachable. **PWA mode is not offline access.**
   and private remote access.
 - [Chat](./docs/CHAT.md): reading and replying to agents, answering their
   prompts, and which harnesses Chat supports.
-- [Features and shortcuts](./FEATURES.md), including the
-  [agent CLI](./FEATURES.md#agent-cli-herdr-world---skill): run
+- [Features and shortcuts](openspec/specs/world-surfaces/notes.md), including the
+  [agent CLI](openspec/specs/world-surfaces/needs-you/notes.md#agent-cli-herdr-world---skill): run
   `herdr-world --skill` to teach an agent to change World.
 - [Deployment](./docs/DEPLOYMENT.md): installation, configuration, services, builds.
 - [Architecture](./docs/ARCHITECTURE.md): system contracts.
-- [Repository knowledge map](./docs/knowledge-map.md) and
+- [Repository knowledge map](docs/agent-development.md#find-a-feature) and
   [foundation source guide](./docs/foundation-guide.md): contracts, module owners,
   request paths, and focused tests for contributors and agents.
 - [Development](./docs/development.md), [packaging](./docs/packaging.md), and

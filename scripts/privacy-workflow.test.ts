@@ -20,7 +20,7 @@ type Step = {
   with?: Record<string, unknown>;
 };
 type Workflow = {
-  on: { push: unknown; pull_request: unknown };
+  on: { push: unknown; pull_request: unknown; workflow_dispatch: unknown };
   permissions: unknown;
   concurrency?: unknown;
   jobs: {
@@ -58,9 +58,32 @@ test("privacy CI covers all branches and PRs without scope or metadata bypasses"
   const scan = job.steps.find((step: { run?: string }) =>
     step.run?.includes("check-privacy.ts"),
   );
-  expect(scan?.run).toBe(
-    'bun scripts/check-privacy.ts --event "$GITHUB_EVENT_PATH"',
-  );
+  expect(workflow.on).toHaveProperty("workflow_dispatch");
+  for (const event of ["push", "pull_request", "workflow_dispatch"]) {
+    const directory = mkdtempSync(join(tmpdir(), "privacy-dispatch-"));
+    try {
+      writeFileSync(join(directory, "bun"), '#!/bin/sh\nprintf "%s" "$*"\n', {
+        mode: 0o755,
+      });
+      const result = spawnSync("bash", ["-e", "-c", scan!.run!], {
+        env: {
+          ...process.env,
+          PATH: `${directory}:${process.env.PATH}`,
+          GITHUB_EVENT_NAME: event,
+          GITHUB_EVENT_PATH: "event.json",
+        },
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe(
+        event === "workflow_dispatch"
+          ? "run check:privacy"
+          : "scripts/check-privacy.ts --event event.json",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
   expect(scan?.if).toBeUndefined();
   expect(scan?.["continue-on-error"]).toBeUndefined();
 });

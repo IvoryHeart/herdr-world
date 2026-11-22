@@ -213,7 +213,7 @@ No automatic restart across a retired connection or silently open ports on LAN.
 ## Verification and migration plan
 
 This PR changes only research, proposed deltas and isolated static fixture behavior.
-No production contract owner/adapter in `verification/coverage.json` is modified.
+No production contract owner/adapter in `verification/coverage/` is modified.
 Direct DOM interaction and rendered layout checks are appropriate evidence for a
 no-network synthetic mock; a Quint UI model would not validate an IDE proxy.
 

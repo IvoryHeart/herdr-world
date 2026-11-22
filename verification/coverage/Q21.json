@@ -1,0 +1,39 @@
+{
+  "id": "Q21",
+  "area": "Window arrangements",
+  "owner": "web/src/world/windows/windowManager.ts",
+  "requirement": "openspec/specs/world-surfaces/terminal-windows/spec.md",
+  "properties": "Focus references a live window; minimize/restore preserves geometry; closed windows cannot regain focus",
+  "existingTests": [
+    "web/src/world/windows/windowManager.test.ts",
+    "web/src/world/windows/WindowFrame.test.ts",
+    "web/src/world/windows/WorldPanel.test.ts",
+    "web/src/components/VisualPreview.test.ts",
+    "web/src/world/WorldTerminalHandoff.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/155",
+  "technique": "window-state",
+  "assessment": "membership/focus/restore ordering; actual DOM and geometry require browser evidence",
+  "status": "alternative-evidence",
+  "remaining": "Independent review of bounded exhaustive reducer alternative; arbitrary cardinalities, geometry extremes and DOM schedules retain targeted/browser evidence.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/contracts/window-ordering.md"],
+    "tests": [
+      "web/src/world/windows/windowOrdering.test.ts",
+      "web/src/world/windows/windowManager.test.ts",
+      "web/src/world/windows/WindowFrame.test.ts",
+      "web/src/world/windows/WorldPanel.test.ts",
+      "web/src/components/VisualPreview.test.ts",
+      "web/src/world/WorldTerminalHandoff.test.ts"
+    ],
+    "checks": ["bun run check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}
