@@ -400,7 +400,7 @@ async function run() {
   }));
   fake.changed();
   const framed = await until(
-    () => Boolean($<HTMLIFrameElement>(".code-view-frame:not([hidden])")),
+    () => Boolean($<HTMLIFrameElement>('.code-view-frame[data-front="true"]')),
     "a ready server shows in the frame",
   );
   if (framed) {
@@ -458,7 +458,7 @@ async function run() {
     "the rail follows the chosen project",
   );
   check(
-    $(".code-view-frame")?.hasAttribute("hidden") === true,
+    $(".code-view-frame")?.getAttribute("data-front") === "false",
     "the other project's frame is hidden, not reloaded",
   );
   check(
@@ -486,7 +486,7 @@ async function run() {
   fake.changed();
   await until(
     () =>
-      $<HTMLIFrameElement>(".code-view-frame:not([hidden])")?.getAttribute(
+      $<HTMLIFrameElement>('.code-view-frame[data-front="true"]')?.getAttribute(
         "src",
       ) === `/ide/${SSH_INSTANCE_ID}/`,
     "the SSH host's IDE shows in a frame on World's origin",
@@ -500,7 +500,7 @@ async function run() {
   select.dispatchEvent(new Event("change", { bubbles: true }));
   await settle();
   check(
-    $<HTMLIFrameElement>(".code-view-frame:not([hidden])")?.getAttribute(
+    $<HTMLIFrameElement>('.code-view-frame[data-front="true"]')?.getAttribute(
       "src",
     ) === `/ide/${INSTANCE_ID}/`,
     "coming back shows the same loaded frame",
@@ -528,6 +528,9 @@ async function run() {
   );
 
   // The SSH link drops: World lets go, the server runs on and is listed.
+  const sshFrame = $<HTMLIFrameElement>(
+    `.code-view-frame[src="/ide/${SSH_INSTANCE_ID}/"]`,
+  );
   const startedAt = new Date(Date.now() - 2 * 60_000).toISOString();
   fake.state.instances = fake.state.instances.map((entry) => ({
     ...entry,
@@ -589,6 +592,30 @@ async function run() {
     fake.state.opens[2]?.connectionId === "ssh-1" &&
       fake.state.opens[2].folder === "/srv/example/docs",
     "reattaching names the same connection and folder",
+  );
+  // While World reattaches, the loaded workbench stays loaded behind (#1262):
+  // VS Code reconnects in it; the same frame comes back, not a new load.
+  check(
+    Boolean(sshFrame) &&
+      $(`.code-view-frame[src="/ide/${SSH_INSTANCE_ID}/"]`) === sshFrame &&
+      sshFrame?.getAttribute("data-front") === "false",
+    "a detached server's loaded workbench stays mounted behind",
+  );
+  fake.state.instances = fake.state.instances.map((entry) => ({
+    ...entry,
+    state: "ready",
+    reason: undefined,
+  }));
+  fake.changed();
+  await until(
+    () =>
+      $<HTMLIFrameElement>('.code-view-frame[data-front="true"]') ===
+        sshFrame && sshFrame !== null,
+    "reattached, the same workbench frame is in front again",
+  );
+  check(
+    !$(".code-view-reloaded"),
+    "a reattached workbench didn't load again, so nothing says it did",
   );
   flushSync(() => root.unmount());
 
@@ -779,7 +806,7 @@ async function checkShowPicksServer(
     ),
   );
   const shown = () =>
-    $<HTMLIFrameElement>(".code-view-frame:not([hidden])")?.getAttribute(
+    $<HTMLIFrameElement>('.code-view-frame[data-front="true"]')?.getAttribute(
       "src",
     ) === running.url;
   await until(shown, "the running code-server shows before any IDE is picked");

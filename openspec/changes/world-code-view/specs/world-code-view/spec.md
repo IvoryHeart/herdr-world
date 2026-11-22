@@ -69,6 +69,29 @@ writing the user's IDE settings, so an explicit setting of the user's own wins.
 - **WHEN** the selected checkout is unavailable or the captured generation/session retires
 - **THEN** World revokes actionable project attachment and labels retained context stale without guessing a directory or redirecting to another host
 
+### Requirement: Workbench kept loaded across views
+
+A workbench shown once SHALL stay loaded, at its size, while another project,
+view or Spaces is in front, and while World detaches from and reattaches to its
+server; its editors, unsaved edits, terminals, webviews and scroll SHALL stay as
+they were. Only a page reload, Stop, or its server ending or failing SHALL load
+it again, and Code SHALL then say it loaded again.
+
+#### Scenario: Switch to Town and back
+
+- **WHEN** the owner edits a file without saving, opens a webview, switches to Town and back to Code
+- **THEN** the same workbench is in front with the edit and the webview unchanged, and nothing loaded again
+
+#### Scenario: Reconnect while the workbench is open
+
+- **WHEN** World detaches from a running server and reattaches to it
+- **THEN** the workbench stays loaded behind the detached screen and is in front again once ready, without loading again
+
+#### Scenario: Page reloaded
+
+- **WHEN** the page reloads while a server runs
+- **THEN** the workbench loads again and Code says the page reloaded, so it loaded again
+
 ### Requirement: Embedding feasibility and full authority admission
 
 An embedded provider SHALL remain unavailable until its distribution terms,

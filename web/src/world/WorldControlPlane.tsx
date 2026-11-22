@@ -18,7 +18,7 @@ import type { AgentStartFrom } from "./agentStarts";
 import { useDeskReveal } from "./deskReveal";
 import { DeskView } from "./DeskView";
 import { useStableCallback } from "./useStableCallback";
-import { LazyCodeView as CodeView } from "./code/LazyCodeView";
+import { KeptCodeView } from "./code/KeptCodeView";
 import { GroupsWindow } from "./groups/GroupsWindow";
 import {
   floatingTerminalGeometryId,
@@ -563,13 +563,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                       }
                       onCloseReading={stableCloseDeskReading}
                     />
-                  ) : view === "code" ? (
-                    <CodeView
-                      world={world}
-                      onOpenAgent={stableOpenInspectorView}
-                      onOpenTerminal={stableOpenTerminalById}
-                    />
-                  ) : view === "town" ? (
+                  ) : view === "code" ? null : view === "town" ? (
                     <Suspense
                       fallback={
                         <div className="world-view-loading">Loading Town…</div>
@@ -612,6 +606,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                 </WorldViewErrorBoundary>
               </Suspense>
             ) : null}
+            <KeptCodeView
+              shown={active && view === "code"}
+              world={world}
+              onOpenAgent={stableOpenInspectorView}
+              onOpenTerminal={stableOpenTerminalById}
+            />
           </section>
           {showSelectionProfile && selected ? (
             <aside
