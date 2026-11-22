@@ -22,6 +22,8 @@ export function parseBoardElementArgs(args: string[]) {
         "workspace",
         "path",
         "agent-ref",
+        "apartment",
+        "memory-source",
         "rev",
       ]
     : action === "delete"
@@ -67,21 +69,37 @@ export function parseBoardElementArgs(args: string[]) {
         values.path !== undefined)
     )
       throw new UsageError("--text is only for an inline document");
+    if (values["memory-source"] !== undefined && kind !== "memory")
+      throw new UsageError("--memory-source is only for a memory");
+    if (values.apartment !== undefined && kind !== "log")
+      throw new UsageError("--apartment is only for an agent log");
     const source =
       kind === "link"
         ? { url: required(values.url, "--url") }
         : kind === "document" && values.text !== undefined
           ? { text: values.text }
-          : {
-              connection_id: required(values.connection, "--connection"),
-              workspace_id: required(values.workspace, "--workspace"),
-              ...(values.path === undefined && kind === "memory"
-                ? {}
-                : { path: required(values.path, "--path") }),
-              ...(values["agent-ref"] === undefined
-                ? {}
-                : { agent_ref: values["agent-ref"] }),
-            };
+          : values["memory-source"] !== undefined
+            ? {
+                connection_id: required(values.connection, "--connection"),
+                ...(values.workspace === undefined
+                  ? {}
+                  : { workspace_id: values.workspace }),
+                memory_source_id: values["memory-source"],
+                path: required(values.path, "--path"),
+              }
+            : {
+                connection_id: required(values.connection, "--connection"),
+                workspace_id: required(values.workspace, "--workspace"),
+                ...(values.path === undefined && kind === "memory"
+                  ? {}
+                  : { path: required(values.path, "--path") }),
+                ...(values["agent-ref"] === undefined
+                  ? {}
+                  : { agent_ref: values["agent-ref"] }),
+                ...(values.apartment === undefined
+                  ? {}
+                  : { apartment_id: values.apartment }),
+              };
     try {
       const element: BoardElementInput & { rev?: number } = parseBoardElement(
         {

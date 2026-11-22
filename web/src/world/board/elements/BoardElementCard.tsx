@@ -6,7 +6,6 @@ import {
   baseName,
   classifyLink,
   elementKey,
-  projectSource,
 } from "./boardElementKinds";
 import type { SourcePlace } from "./boardElementRead";
 
@@ -35,7 +34,7 @@ export function BoardElementCard({
   onKeyDown,
 }: {
   element: BoardElement;
-  /** Where a project element reads from; null for inline docs and links. */
+  /** Where a project element or Library memory reads from; null for inline docs and links. */
   place: SourcePlace | null;
   selected: boolean;
   cardRef: Ref<HTMLDivElement>;
@@ -43,8 +42,7 @@ export function BoardElementCard({
 }) {
   const kind = BOARD_KIND_PRESENTATION[element.kind];
   const Icon = kind.icon;
-  const project = projectSource(element);
-  const offline = project !== null && place?.generation === null;
+  const offline = place !== null && place.generation === null;
   const key = elementKey(element.id);
   return (
     <div
@@ -76,7 +74,7 @@ export function BoardElementCard({
         <strong className="board-element-title">{element.title}</strong>
       </div>
       <ElementBody element={element} />
-      {project && place ? (
+      {place ? (
         <div className="board-element-place">
           {offline ? (
             <span className="board-element-offline-mark">offline · </span>
@@ -93,8 +91,10 @@ function ElementBody({ element }: { element: BoardElement }) {
     case "memory":
       return (
         <div className="board-element-line">
-          {/* A name without an extension is most likely a memory folder. */}
-          {baseName(element.source.path).includes(".")
+          {/* A project name without an extension is most likely a folder;
+              a Library memory is always one entry. */}
+          {"memory_source_id" in element.source ||
+          baseName(element.source.path).includes(".")
             ? baseName(element.source.path)
             : `${baseName(element.source.path)}/`}
         </div>

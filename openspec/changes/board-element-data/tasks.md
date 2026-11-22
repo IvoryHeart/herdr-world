@@ -7,3 +7,4 @@
 - [x] Preserve released migrations and recover early Board-only preview schema.
 - [x] Relocate usage, contracts and Q50 mapping to the landed repository structure.
 - [x] Validate the merged candidate and prepare the formatted delivery handoff.
+- [x] Library memory references and log apartment links, with reader actions (#1221).

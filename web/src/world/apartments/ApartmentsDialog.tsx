@@ -65,11 +65,14 @@ export function resumeRooms(
 export function ApartmentsDialog({
   world,
   initialQuery = "",
+  initialResident,
   onOpen,
   onClose,
 }: {
   world: WorldObject;
   initialQuery?: string;
+  /** A resident whose detail opens first; Back shows the list. */
+  initialResident?: string;
   onOpen(terminal: {
     connectionId: string;
     runtimeGeneration: number;
@@ -81,7 +84,7 @@ export function ApartmentsDialog({
   const apartments = useApartments();
   const profiles = useAgentProfiles().document;
   const [query, setQuery] = useState(initialQuery);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialResident ?? null);
   useLayer(true, onClose, { element: () => ref.current });
   const found = useMemo(
     () => searchApartments(apartments.residents, query),

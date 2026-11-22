@@ -18,6 +18,18 @@ import {
 } from "./board/boardDocument";
 import { fixtureHost, fixtureWorld } from "./board/boardFixture";
 import { worldSourcesStore } from "./worldSources";
+import {
+  publishMemoryHosts,
+  setMemoryClientForTests,
+} from "./memory/memoryClient";
+import { WORLD_MEMORY_EVENT } from "./memory/memoryEvents";
+import { memoryFixtureClient } from "./memory/memoryFixture";
+import { WORLD_APARTMENTS_EVENT } from "./apartments/apartmentsStore";
+import { setApartmentsClient } from "./apartments/useApartments";
+import {
+  fixtureApartmentsClient,
+  fixtureResidents,
+} from "./testing/apartmentsFixture";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "./world.css";
@@ -55,6 +67,57 @@ bridge.call = (async (method: string) => {
 }) as typeof bridge.call;
 worldSourcesStore.useFetch(async () =>
   Response.json({ observedAt: 1, sources: [], links: [], items: [] }),
+);
+
+// Apartments has the reviewer whose session the seeded log names, on the
+// log's own host, and the same session on another host (never offered).
+const reviewer = {
+  ...fixtureResidents(Date.now())[0]!,
+  id: "r-studio-reviewer",
+  connection_id: "studio",
+  connection_label: "studio",
+  name: "reviewer",
+  session_id: "reviewer",
+};
+setApartmentsClient(
+  fixtureApartmentsClient(Date.now(), [
+    reviewer,
+    { ...reviewer, id: "r-build-reviewer", connection_id: "build-box" },
+  ]),
+);
+
+/** The Library reads the synthetic memory catalog on studio, generation 1. */
+function libraryOnStudio() {
+  setMemoryClientForTests(memoryFixtureClient());
+  publishMemoryHosts([
+    {
+      connection_id: "studio",
+      connection_generation: 1,
+      label: "studio",
+      names: {},
+    },
+  ]);
+}
+const LIBRARY_MEMORY: BoardElement = {
+  id: "memory-build-notes",
+  kind: "memory",
+  title: "Build notes",
+  x: 240,
+  y: 600,
+  rev: 1,
+  source: {
+    connection_id: "studio",
+    memory_source_id: "fx-codex-memories",
+    path: "build-notes.md",
+  },
+};
+/** Every Library or Apartments open the page asked for. */
+const opened: [string, unknown][] = [];
+window.addEventListener(WORLD_MEMORY_EVENT, (event) =>
+  opened.push(["library", (event as CustomEvent).detail]),
+);
+window.addEventListener(WORLD_APARTMENTS_EVENT, (event) =>
+  opened.push(["apartments", (event as CustomEvent).detail]),
 );
 
 const panes = (label: string) => ({
@@ -327,6 +390,7 @@ async function fresh(elements: BoardElement[] = SEEDED) {
   saved = { ...emptyDocument(), elements: structuredClone(elements) };
   writes.length = 0;
   reads.length = 0;
+  opened.length = 0;
   store = newStore();
   await store.refresh();
   mount();
@@ -566,6 +630,132 @@ const scenarios: [string, () => Promise<void>][] = [
         Boolean(button(reader()!, "Show turns")),
         "raw lines can go back to turns",
       );
+    },
+  ],
+  [
+    "a log opens its agent's apartment",
+    async () => {
+      await tap(card("log-review")!);
+      await waitFor(
+        () => button(reader()!, "Open apartment")?.disabled === false,
+        "the log of a finished agent offers no Open apartment",
+      );
+      button(reader()!, "Open apartment")!.click();
+      await waitFor(() => !reader(), "Open apartment left the reader open");
+      check(
+        JSON.stringify(opened) ===
+          JSON.stringify([["apartments", { resident: "r-studio-reviewer" }]]),
+        `Open apartment opens the log's own host's resident (${JSON.stringify(opened)})`,
+      );
+    },
+  ],
+  [
+    "a moved-out agent's log says so",
+    async () => {
+      await fresh([
+        {
+          ...SEEDED[1]!,
+          source: {
+            ...(SEEDED[1]!.source as object),
+            apartment_id: "r-evicted",
+          },
+        } as BoardElement,
+      ]);
+      await tap(card("log-review")!);
+      await waitFor(
+        () => button(reader()!, "Open apartment")?.disabled === true,
+        "a log whose agent left Apartments did not show the action off",
+      );
+      check(
+        /no longer|does not live/.test(
+          button(reader()!, "Open apartment")!.title,
+        ),
+        "the unavailable action says why",
+      );
+      check(
+        /Two findings/.test(reader()!.textContent ?? ""),
+        "the log still reads its saved file",
+      );
+    },
+  ],
+  [
+    "a Library memory reads through the Library",
+    async () => {
+      libraryOnStudio();
+      try {
+        await fresh([...SEEDED, LIBRARY_MEMORY]);
+        await tap(card("memory-build-notes")!);
+        await waitFor(
+          () =>
+            /Library/.test(
+              reader()?.querySelector("small")?.textContent ?? "",
+            ) &&
+            !/Reading…/.test(reader()?.textContent ?? "") &&
+            Boolean(reader()?.querySelector(".board-reader-text")),
+          "the Library memory did not show its text",
+        );
+        check(
+          !reads.some((read) => read.id === "memory-build-notes"),
+          "Board's own read is not used for a Library memory",
+        );
+        button(reader()!, "Open in Library")!.click();
+        await waitFor(() => !reader(), "Open in Library left the reader open");
+        check(
+          JSON.stringify(opened) ===
+            JSON.stringify([["library", { connectionId: "studio" }]]),
+          `Open in Library opens the memory's host (${JSON.stringify(opened)})`,
+        );
+      } finally {
+        setMemoryClientForTests(null);
+      }
+    },
+  ],
+  [
+    "add a memory from the Library",
+    async () => {
+      libraryOnStudio();
+      try {
+        await openAdd();
+        addDialog()!
+          .querySelector<HTMLButtonElement>('[data-kind="memory"]')!
+          .click();
+        await waitFor(
+          () =>
+            addDialog()?.querySelector('[role="radio"][aria-checked="true"]')
+              ?.textContent === "From the Library",
+          "Memory did not start in the Library",
+        );
+        const memory = () =>
+          [...addDialog()!.querySelectorAll("label")]
+            .find((label) => label.textContent?.startsWith("Memory"))
+            ?.querySelector("select");
+        await waitFor(
+          () => (memory()?.querySelectorAll("option").length ?? 0) > 1,
+          "the Library's memories are not offered",
+        );
+        const notes = [...memory()!.querySelectorAll("option")].find((o) =>
+          o.textContent?.startsWith("build-notes.md"),
+        )!;
+        memory()!.value = notes.value;
+        memory()!.dispatchEvent(new Event("change", { bubbles: true }));
+        await settle();
+        button(addDialog()!, "Add")!.click();
+        await waitFor(() => !addDialog(), "a Library memory did not save");
+        const put = writes[0];
+        check(
+          put?.op === "element.put" &&
+            put.element.kind === "memory" &&
+            JSON.stringify(put.element.source) ===
+              JSON.stringify({
+                connection_id: "studio",
+                memory_source_id: "fx-codex-memories",
+                path: "build-notes.md",
+              }),
+          `the memory is saved as a Library reference (${JSON.stringify(put)})`,
+        );
+      } finally {
+        setMemoryClientForTests(null);
+      }
     },
   ],
   [

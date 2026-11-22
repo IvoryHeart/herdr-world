@@ -228,11 +228,17 @@ export class WorldApartmentsStore {
 
 export const WORLD_APARTMENTS_EVENT = "herdr-world:apartments";
 
-/** Open Apartments (Town's building, Town center, Board). */
-export function openApartments(query?: string) {
+/** What Apartments opens on: a search, or one resident's apartment. */
+export type ApartmentsRequest = { query?: string; resident?: string };
+
+/**
+ * Open Apartments (Town's building, Town center, Board), optionally on a
+ * search or on one resident's detail (a Board agent log's Open apartment).
+ */
+export function openApartments(request?: string | ApartmentsRequest) {
   window.dispatchEvent(
-    new CustomEvent<string | undefined>(WORLD_APARTMENTS_EVENT, {
-      detail: query,
+    new CustomEvent<ApartmentsRequest>(WORLD_APARTMENTS_EVENT, {
+      detail: typeof request === "string" ? { query: request } : request,
     }),
   );
 }

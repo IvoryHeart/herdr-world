@@ -16,7 +16,7 @@ bearer-authenticated `POST /api/world/cli`, with
 `types` takes `{}` and returns every built-in type plus the enforced limits:
 
 ```json
-{"types":[{"kind":"memory","renderer":"memory","source":"project-memory-files","actions":["read","edit","move","remove"],"placement":"element"}],"limits":{"count":500,"id":128,"title":200,"path":1024,"text":16000,"url":2048,"readBytes":65536,"directoryEntries":32,"concurrentReads":8}}
+{"types":[{"kind":"memory","renderer":"memory","source":"memory-library-or-project-files","actions":["read","edit","move","remove"],"placement":"element"}],"limits":{"count":500,"id":128,"title":200,"path":1024,"text":16000,"url":2048,"readBytes":65536,"directoryEntries":32,"concurrentReads":8}}
 ```
 
 The example shows one entry; the real response contains all eleven. This is a
@@ -82,8 +82,8 @@ Each element has `id`, `kind`, `title`, `x`, `y` and a typed `source`:
 
 | Kind | Example source | v1 behavior |
 | --- | --- | --- |
-| `memory` | `{"connection_id":"studio","workspace_id":"project-a","path":"memory"}` | Read a project file or browse a memory directory. Omitted path defaults to `MEMORY.md`. No automatic recursive search or memory model exists yet. |
-| `log` | `{"connection_id":"studio","workspace_id":"project-a","path":"logs/finished-agent.jsonl","agent_ref":"session-example"}` | Read an explicitly selected saved log/transcript as text, including JSONL. No live pane lookup. `agent_ref` is optional descriptive session/agent identity for future apartment mapping; it grants no authority. No apartment model/link exists yet. |
+| `memory` | `{"connection_id":"studio","workspace_id":"project-a","path":"memory"}` or `{"connection_id":"studio","workspace_id":"project-a","memory_source_id":"source-example","path":"build-notes.md"}` | Read a project file or browse a memory directory; omitted path defaults to `MEMORY.md`. Or reference a Library memory: the source ID and entry path from `world.memory.list` (`herdr-world memory list`), with the project it was chosen from optional. Board does not read a Library memory itself; see below. |
+| `log` | `{"connection_id":"studio","workspace_id":"project-a","path":"logs/finished-agent.jsonl","agent_ref":"session-example","apartment_id":"resident-example"}` | Read an explicitly selected saved log/transcript as text, including JSONL. No live pane lookup. `agent_ref` is optional descriptive session/agent identity; `apartment_id` optionally names the Apartments resident it belongs to. Neither grants authority or changes what is read. |
 | `document` | `{"text":"Draft"}` or `{"connection_id":"studio","workspace_id":"project-a","path":"docs/plan.md"}` | Inline text is editable here. File-backed content is read through Files; the element API does not edit files. |
 | `link` | `{"url":"https://github.com/example/project/pull/42"}` | Store an inert HTTP(S) target. Classify GitHub PR/issue URLs; do not fetch, resolve redirects, run forge actions or return iframe HTML. |
 
@@ -122,6 +122,24 @@ A link read instead has content:
 
 `link_kind` is `url`, `pull_request` or `issue`. The UI owns presentation and
 explicit navigation. Render text as content, never executable HTML.
+
+A Library memory read (`{"id":"notes"}`, no generation needed) makes no host
+read. Its content points at the memory service, which owns discovery, refusals
+and its generation fence:
+
+```json
+{"type":"library","connection_id":"studio","memory_source_id":"source-example","path":"build-notes.md","read_with":"world.memory.read"}
+```
+
+Read it with `world.memory.read` (`herdr-world memory read`) on that
+connection's current generation; Board's reader does so and shows at most the
+same 64 KiB. Board's reader opens the Library there with **Open in Library**.
+
+A log's apartment is the resident named by `apartment_id`, else the one whose
+harness session ID or resident ID equals `agent_ref`, from `world.apartments`
+on the log's own connection only. Board's reader opens it with **Open
+apartment**; a named resident that has moved out of Apartments leaves the
+action unavailable, never re-pointed to another resident.
 
 ## Limits and refusals
 

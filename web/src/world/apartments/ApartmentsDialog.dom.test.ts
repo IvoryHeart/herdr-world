@@ -64,7 +64,7 @@ if (process.env.APARTMENTS_DOM !== "1") {
     fixtureHost("local", [{ label: "alpha", tabs: [] }]),
   ]);
 
-  async function mount(initialQuery = "") {
+  async function mount(initialQuery = "", initialResident?: string) {
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
@@ -74,6 +74,7 @@ if (process.env.APARTMENTS_DOM !== "1") {
         createElement(ApartmentsDialog, {
           world,
           initialQuery,
+          initialResident,
           onOpen: () => undefined,
           onClose: () => (closed += 1),
         }),
@@ -144,6 +145,17 @@ if (process.env.APARTMENTS_DOM !== "1") {
     expect(view.names()).toContain("ada");
     await view.search("nobody-by-this-name");
     expect(view.dialog().textContent).toContain("No resident matches.");
+    await view.unmount();
+  });
+
+  test("Apartments can open on one resident's apartment, with Back to the list", async () => {
+    // Board's agent log opens the apartment of the agent it belongs to.
+    const view = await mount("", "r-fixture2");
+    const detail = view.dialog().querySelector(".apartments-detail");
+    expect(detail?.textContent).toContain("grace");
+    expect(view.names()).toEqual([]);
+    await act(async () => view.button("Residents").click());
+    expect(view.names()).toContain("ada");
     await view.unmount();
   });
 

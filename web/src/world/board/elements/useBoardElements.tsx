@@ -10,10 +10,21 @@ import type {
   BoardPoint,
 } from "../boardDocument";
 import type { WorldObject } from "../../worldObject";
+import { openApartments } from "../../apartments/apartmentsStore";
+import { useApartments } from "../../apartments/useApartments";
+import { memoryHosts, useMemoryStore } from "../../memory/memoryClient";
+import { openMemoryLibrary } from "../../memory/memoryEvents";
+import { libraryAvailable } from "../../memory/memoryTargets";
 import { type AddDialogHost, BoardAddDialog } from "./BoardAddDialog";
-import { BoardElementReader } from "./BoardElementReader";
+import { BoardElementReader, type ReaderLinks } from "./BoardElementReader";
 import { projectSource } from "./boardElementKinds";
-import { sourcePlace } from "./boardElementRead";
+import {
+  fromLibrary,
+  libraryPlace,
+  libraryRequestFor,
+  residentForLog,
+} from "./boardElementLinks";
+import { type SourcePlace, sourcePlace } from "./boardElementRead";
 
 /** A Board element ID the service admits: letters, digits, `-`. */
 function newElementId(kind: string) {
@@ -42,7 +53,7 @@ export function useBoardElements({
 }: {
   store: BoardDocumentStore;
   saved: BoardDocument | null;
-  world: Pick<WorldObject, "hosts">;
+  world: Pick<WorldObject, "hosts" | "leaves">;
   /** Shows a write's problem, if any. */
   report(pending: Promise<string | null>): unknown;
   /** Where a new element goes: the middle of the view, in board space. */
@@ -55,12 +66,17 @@ export function useBoardElements({
     () => new Map(elements.map((element) => [element.id, element])),
     [elements],
   );
+  // The Library's hosts and generations: a Library memory reads there.
+  const memoryVersion = useMemoryStore();
   const placeOf = useCallback(
-    (element: BoardElement) => {
+    (element: BoardElement): SourcePlace | null => {
+      void memoryVersion;
+      if (element.kind === "memory" && fromLibrary(element))
+        return libraryPlace(world, memoryHosts(), element.source);
       const project = projectSource(element);
       return project ? sourcePlace(world, project) : null;
     },
-    [world],
+    [world, memoryVersion],
   );
 
   async function save(
@@ -196,16 +212,60 @@ export function useBoardElements({
       }
       const element = byId.get(dialog.id);
       if (!element) return null;
-      return (
-        <BoardElementReader
-          element={element}
-          place={placeOf(element)}
-          read={read}
-          onEdit={() => setDialog({ type: "edit", id: element.id })}
-          onRemove={() => remove(element)}
-          onClose={close}
-        />
-      );
+      const reader = {
+        element,
+        place: placeOf(element),
+        read,
+        onEdit: () => setDialog({ type: "edit", id: element.id }),
+        onRemove: () => remove(element),
+        onClose: close,
+      };
+      if (element.kind === "log")
+        return <LogReader {...reader} element={element} />;
+      const library = libraryRequestFor(element);
+      const links: ReaderLinks =
+        library &&
+        (fromLibrary(element)
+          ? reader.place?.generation != null
+          : libraryAvailable(world, library))
+          ? {
+              openLibrary: () => {
+                close();
+                openMemoryLibrary(library);
+              },
+            }
+          : {};
+      return <BoardElementReader {...reader} links={links} />;
     },
   };
+}
+
+/**
+ * A log's reader, linked to its agent's apartment. Apartments is read only
+ * while a log is open, so Board alone never starts it.
+ */
+function LogReader(
+  props: Omit<Parameters<typeof BoardElementReader>[0], "links"> & {
+    element: Extract<BoardElement, { kind: "log" }>;
+  },
+) {
+  const apartments = useApartments();
+  const source = props.element.source;
+  const resident = residentForLog(source, apartments.residents);
+  // A saved resident that is gone shows why the action is off; an unsaved
+  // match that is not there offers nothing.
+  const links: ReaderLinks =
+    resident || (source.apartment_id && apartments.verified)
+      ? {
+          apartment: {
+            resident,
+            open: () => {
+              if (!resident) return;
+              props.onClose();
+              openApartments({ resident: resident.id });
+            },
+          },
+        }
+      : {};
+  return <BoardElementReader {...props} links={links} />;
 }

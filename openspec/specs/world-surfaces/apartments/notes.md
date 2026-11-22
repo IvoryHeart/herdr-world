@@ -5,6 +5,7 @@
 **Surfaces:**
 
 - Town's green building sign, town center ring and Board's hub open one Apartments dialog.
+- A Board Agent log's **Open apartment** opens the dialog on that resident's detail (`openApartments({ resident })`); Back returns to the list.
 - Search opens resident detail, Read history, Resume in room and confirmed Evict on desktop/phone.
 - ?apartments-preview=avatars supplies one-load synthetic appearance cases and removes itself.
 - TUI resume opens the new terminal; core reports it back. Claude/Codex resume on the original host.

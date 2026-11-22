@@ -1,4 +1,6 @@
 import {
+  Brain,
+  Building2,
   ChevronLeft,
   ExternalLink,
   File,
@@ -16,6 +18,8 @@ import {
   type BoardElementReadResult,
 } from "../../../../../shared/boardElements";
 import { CloseButton } from "../../../components/CloseButton";
+import type { ApartmentResident } from "../../../../../shared/apartments";
+import { memoryClient, memoryErrorText } from "../../memory/memoryClient";
 import { focusDialogElement } from "../../../components/dialogFocus";
 import { useLayer } from "../../../layerStack";
 import {
@@ -24,6 +28,7 @@ import {
   classifyLink,
   projectSource,
 } from "./boardElementKinds";
+import { fromLibrary } from "./boardElementLinks";
 import {
   readProblem,
   type SourcePlace,
@@ -34,8 +39,37 @@ import {
 type ReadState =
   | { phase: "reading" }
   | { phase: "offline" }
-  | { phase: "failed" }
+  | { phase: "failed"; message?: string }
   | { phase: "done"; result: BoardElementReadResult };
+
+/** Board's text bound, cut on a UTF-8 boundary, for a Library memory too. */
+function boundedText(text: string) {
+  const bytes = new TextEncoder().encode(text);
+  const truncated = bytes.length > BOARD_ELEMENT_LIMITS.readBytes;
+  return {
+    text: truncated
+      ? new TextDecoder().decode(
+          bytes.subarray(0, BOARD_ELEMENT_LIMITS.readBytes),
+          { stream: true },
+        )
+      : text,
+    truncated,
+  };
+}
+
+/**
+ * Where the reader's links go: the memory Library (a Memory element), and
+ * the apartment of the agent a log belongs to. Absent when there is none.
+ */
+export type ReaderLinks = {
+  /** Opens the Library on this memory's host and project. */
+  openLibrary?: () => void;
+  /**
+   * A log's agent in Apartments: the resident (null while it is not there,
+   * after an eviction say), and the action that opens its apartment.
+   */
+  apartment?: { resident: ApartmentResident | null; open(): void };
+};
 
 const WHO: Record<TranscriptTurn["who"], string> = {
   you: "You",
@@ -60,6 +94,7 @@ export function BoardElementReader({
   element,
   place,
   read,
+  links = {},
   onEdit,
   onRemove,
   onClose,
@@ -67,6 +102,7 @@ export function BoardElementReader({
   element: BoardElement;
   place: SourcePlace | null;
   read(params: BoardElementReadParams): Promise<BoardElementReadResult>;
+  links?: ReaderLinks;
   onEdit(): void;
   onRemove(): void;
   onClose(): void;
@@ -75,7 +111,8 @@ export function BoardElementReader({
   const kind = BOARD_KIND_PRESENTATION[element.kind];
   const Icon = kind.icon;
   const project = projectSource(element);
-  const generation = project ? (place?.generation ?? null) : null;
+  const library = fromLibrary(element);
+  const generation = project || library ? (place?.generation ?? null) : null;
   /** A file inside a memory folder, relative to the folder. */
   const [child, setChild] = useState<string | undefined>();
   const [attempt, setAttempt] = useState(0);
@@ -86,12 +123,49 @@ export function BoardElementReader({
 
   useEffect(() => {
     void attempt;
-    if (project && generation === null) {
+    if ((project || library) && generation === null) {
       setState({ phase: "offline" });
       return;
     }
     let live = true;
     setState({ phase: "reading" });
+    if (element.kind === "memory" && "memory_source_id" in element.source) {
+      // The Library's own read, on the host's current generation: the memory
+      // service owns discovery and its generation fence (world-memory).
+      const source = element.source;
+      memoryClient()
+        .read(
+          {
+            connection_id: source.connection_id,
+            connection_generation: generation!,
+          },
+          source.memory_source_id,
+          source.path,
+        )
+        .then(
+          (memory) =>
+            live &&
+            setState({
+              phase: "done",
+              result: {
+                status: "ready",
+                element,
+                content: {
+                  type: "text",
+                  ...boundedText(memory.content),
+                  size: memory.size,
+                  mtime_ms: memory.modified_at,
+                },
+              },
+            }),
+          (error: unknown) =>
+            live &&
+            setState({ phase: "failed", message: memoryErrorText(error) }),
+        );
+      return () => {
+        live = false;
+      };
+    }
     read({
       id: element.id,
       ...(generation !== null ? { connection_generation: generation } : {}),
@@ -103,16 +177,18 @@ export function BoardElementReader({
     return () => {
       live = false;
     };
-    // `project` follows the element's identity and revision.
+    // The source (project or Library) follows the element's identity and revision.
   }, [element.id, element.rev, generation, child, attempt, read]);
 
   const retry = () => setAttempt((value) => value + 1);
   const hostLabel = place?.hostLabel ?? "The host";
   const where = project
     ? `${child ? `${project.path}/${child}` : project.path} · ${place?.workspaceLabel} · ${hostLabel}`
-    : element.kind === "link"
-      ? classifyLink(element.source.url).site
-      : "Written on Board";
+    : element.kind === "memory"
+      ? `${element.source.path} · ${place?.workspaceLabel} · ${hostLabel}`
+      : element.kind === "link"
+        ? classifyLink(element.source.url).site
+        : "Written on Board";
 
   return createPortal(
     <div
@@ -197,7 +273,30 @@ export function BoardElementReader({
           <button type="button" className="ghost" onClick={onEdit}>
             <Pencil size={14} aria-hidden="true" /> Edit
           </button>
-          {element.kind === "link" ? (
+          {links.apartment ? (
+            <button
+              type="button"
+              className="board-reader-open"
+              disabled={!links.apartment.resident}
+              title={
+                links.apartment.resident
+                  ? `Opens ${links.apartment.resident.name}'s apartment, with its history and Resume.`
+                  : "This agent does not live in Apartments now."
+              }
+              onClick={links.apartment.open}
+            >
+              <Building2 size={14} aria-hidden="true" /> Open apartment
+            </button>
+          ) : links.openLibrary ? (
+            <button
+              type="button"
+              className="board-reader-open"
+              title="Opens World's memory Library on this host and project."
+              onClick={links.openLibrary}
+            >
+              <Brain size={14} aria-hidden="true" /> Open in Library
+            </button>
+          ) : element.kind === "link" ? (
             <a
               className="board-reader-open"
               href={element.source.url}
@@ -258,7 +357,11 @@ function ReadBody({
         : "";
     return (
       <div className="board-reader-status" role="alert">
-        <p>{readProblem(reason, hostLabel)}</p>
+        <p>
+          {state.phase === "failed" && state.message
+            ? state.message
+            : readProblem(reason, hostLabel)}
+        </p>
         {reason !== "missing_element" ? (
           <button type="button" className="ghost" onClick={onRetry}>
             <RotateCw size={14} aria-hidden="true" /> Try again
@@ -311,6 +414,14 @@ function ReadBody({
         ) : null}
       </>
     );
+  if (content.type === "library")
+    // The browser reads a Library memory itself (above); this is the
+    // service's pointer, shown only if it ever reaches here.
+    return (
+      <p className="board-reader-status">
+        This memory is in the Library. Use Open in Library to read it.
+      </p>
+    );
   const turns =
     element.kind === "log" && !raw
       ? transcriptTurns(content.text, content.truncated)
@@ -332,8 +443,8 @@ function ReadBody({
         <pre className="board-reader-text">{content.text}</pre>
       ) : (
         <p className="board-reader-status">
-          {projectSource(element)
-            ? `${baseName(projectSource(element)?.path ?? "")} is empty.`
+          {element.kind === "memory" || projectSource(element)
+            ? `${baseName((element.source as { path: string }).path)} is empty.`
             : "This page is empty. Use Edit to write on it."}
         </p>
       )}

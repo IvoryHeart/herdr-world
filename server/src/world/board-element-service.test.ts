@@ -274,3 +274,58 @@ test("element count, duplicate identities and invalid writes leave the prior Boa
   ).toThrow("duplicate");
   expect(board.get()).toEqual(before);
 });
+
+test("a Library memory reads as a pointer to the memory service and an apartment link persists", async () => {
+  const f = await fixture();
+  let hostReads = 0;
+  const counted = createBoardElementService({
+    board: () => f.board,
+    publish: () => {},
+    project: () => {
+      hostReads++;
+      return { files: f.files, isCurrent: () => true };
+    },
+  });
+  const library = {
+    connection_id: "studio",
+    workspace_id: "project-a",
+    memory_source_id: "source-a",
+    path: "decisions.md",
+  };
+  await counted.call("put", { element: input("library", "memory", library) });
+  // No generation is needed: Board does not read the memory itself.
+  expect(await counted.call("read", { id: "library" })).toEqual({
+    status: "ready",
+    element: expect.objectContaining({ id: "library", source: library }),
+    content: {
+      type: "library",
+      connection_id: "studio",
+      memory_source_id: "source-a",
+      path: "decisions.md",
+      read_with: "world.memory.read",
+    },
+  });
+  expect(hostReads).toBe(0);
+  const log = {
+    ...source,
+    path: "MEMORY.md",
+    agent_ref: "session-example",
+    apartment_id: "resident-example",
+  };
+  await counted.call("put", { element: input("log", "log", log) });
+  expect(
+    (
+      (await counted.call("list")) as {
+        elements: { id: string; source: unknown }[];
+      }
+    ).elements.find((entry) => entry.id === "log")?.source,
+  ).toEqual(log);
+  // The apartment is a link only: the log still reads its saved file.
+  expect(
+    await counted.call("read", { id: "log", connection_generation: 7 }),
+  ).toMatchObject({
+    status: "ready",
+    content: { type: "text", text: "Remember the release criteria." },
+  });
+  expect(hostReads).toBe(1);
+});

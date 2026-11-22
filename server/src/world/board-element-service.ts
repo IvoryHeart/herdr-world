@@ -2,6 +2,7 @@ import {
   BOARD_ELEMENT_LIMITS,
   BOARD_ELEMENT_TYPES,
   boardElementPath,
+  isLibraryMemory,
 } from "../../../shared/boardElements";
 import type {
   BoardElement,
@@ -107,6 +108,20 @@ export function createBoardElementService(deps: {
           content: { type: "link", url: url.href, link_kind, fetch: false },
         };
       }
+      // A Library memory is read by the memory service, which owns its
+      // discovery and generation fence; Board names it without a host read.
+      if (element.kind === "memory" && isLibraryMemory(element.source))
+        return {
+          status: "ready",
+          element,
+          content: {
+            type: "library",
+            connection_id: element.source.connection_id,
+            memory_source_id: element.source.memory_source_id,
+            path: element.source.path,
+            read_with: "world.memory.read",
+          },
+        };
       if ("text" in element.source)
         return {
           status: "ready",
@@ -126,7 +141,7 @@ export function createBoardElementService(deps: {
         return { status: "refused", reason: "generation_required" };
       reads++;
       try {
-        const source = element.source;
+        const source = element.source as BoardProjectSource;
         const project = deps.project(
           source,
           Number(params.connection_generation),

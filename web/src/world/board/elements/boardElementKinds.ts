@@ -17,6 +17,7 @@ import {
   type BoardElement,
   type BoardElementKind,
   type BoardRegistryKind,
+  isLibraryMemory,
 } from "../../../../../shared/boardElements";
 
 /**
@@ -93,13 +94,13 @@ export const BOARD_KIND_PRESENTATION = {
   },
   memory: {
     label: "Memory",
-    blurb: "A project's memory file or folder, read on demand.",
+    blurb: "A memory from the Library, or a project's memory file or folder.",
     icon: Brain,
     add: "form",
   },
   log: {
     label: "Agent log",
-    blurb: "A finished agent's saved log or transcript.",
+    blurb: "A saved log or transcript, linked to its agent's apartment.",
     icon: ScrollText,
     add: "form",
   },
@@ -178,6 +179,7 @@ export const baseName = (path: string) => path.split("/").pop() || path;
 export function projectSource(element: BoardElement) {
   if (element.kind === "link") return null;
   if (element.kind === "document" && "text" in element.source) return null;
+  if (element.kind === "memory" && isLibraryMemory(element.source)) return null;
   return element.source as {
     connection_id: string;
     workspace_id: string;

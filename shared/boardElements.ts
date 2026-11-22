@@ -31,7 +31,7 @@ export const BOARD_ELEMENT_TYPES = Object.freeze(
     native("note", "world.board.notes", ["edit", "move", "remove", "send"]),
     native("string", "world.board.strings", ["edit", "remove"]),
     native("work", "world.sources", ["inspect", "open"]),
-    placed("memory", "project-memory-files"),
+    placed("memory", "memory-library-or-project-files"),
     placed("log", "saved-project-transcript"),
     placed("document", "inline-or-project-file"),
     placed("link", "http-url"),
@@ -66,9 +66,31 @@ export type BoardProjectSource = {
   workspace_id: string;
   path: string;
 };
+/**
+ * A memory chosen from World's memory Library (openspec/specs/world-memory):
+ * its host, the Library's source ID and the entry inside that source, as
+ * `world.memory.read` takes them. Board keeps the reference only; the memory
+ * service reads it, at the host's current generation, when someone opens it.
+ * `workspace_id` is the project it was chosen from: Open in Library opens there.
+ */
+export type BoardLibraryMemorySource = {
+  connection_id: string;
+  workspace_id?: string;
+  memory_source_id: string;
+  path: string;
+};
+/**
+ * A saved log or transcript in a project. `agent_ref` describes the agent
+ * (a name or session ID) and grants nothing; `apartment_id` names the
+ * Apartments resident it belongs to, so the reader can open that apartment.
+ */
+export type BoardLogSource = BoardProjectSource & {
+  agent_ref?: string;
+  apartment_id?: string;
+};
 type Sources = {
-  memory: BoardProjectSource;
-  log: BoardProjectSource & { agent_ref?: string };
+  memory: BoardProjectSource | BoardLibraryMemorySource;
+  log: BoardLogSource;
   document: BoardProjectSource | { text: string };
   link: { url: string };
 };
@@ -119,6 +141,18 @@ export type BoardElementReadResult =
             url: string;
             link_kind: "url" | "pull_request" | "issue";
             fetch: false;
+          }
+        | {
+            /**
+             * A Library memory: Board does not read it. Read it with
+             * `world.memory.read` (or `herdr-world memory read`) on this
+             * connection at its current generation.
+             */
+            type: "library";
+            connection_id: string;
+            memory_source_id: string;
+            path: string;
+            read_with: "world.memory.read";
           };
     }
   | {
@@ -176,6 +210,13 @@ function project(
     path: boardElementPath(value.path ?? (memory ? "MEMORY.md" : undefined)),
   };
 }
+/** Whether a memory element names a Library memory rather than project files. */
+export function isLibraryMemory(
+  source: Sources["memory"],
+): source is BoardLibraryMemorySource {
+  return "memory_source_id" in source;
+}
+
 export function parseBoardElement(value: unknown, rev: number): BoardElement {
   const input = record(value),
     source = record(input.source);
@@ -205,7 +246,31 @@ export function parseBoardElement(value: unknown, rev: number): BoardElement {
   };
   switch (input.kind) {
     case "memory":
-      return { ...base, kind: "memory", source: project(source, true) };
+      return {
+        ...base,
+        kind: "memory",
+        source:
+          source.memory_source_id === undefined
+            ? project(source, true)
+            : {
+                connection_id: text(source.connection_id, "connection ID", 512),
+                ...(source.workspace_id === undefined
+                  ? {}
+                  : {
+                      workspace_id: text(
+                        source.workspace_id,
+                        "workspace ID",
+                        512,
+                      ),
+                    }),
+                memory_source_id: text(
+                  source.memory_source_id,
+                  "memory source ID",
+                  512,
+                ),
+                path: boardElementPath(source.path),
+              },
+      };
     case "log":
       return {
         ...base,
@@ -215,6 +280,15 @@ export function parseBoardElement(value: unknown, rev: number): BoardElement {
           ...(source.agent_ref === undefined
             ? {}
             : { agent_ref: text(source.agent_ref, "agent reference", 512) }),
+          ...(source.apartment_id === undefined
+            ? {}
+            : {
+                apartment_id: text(
+                  source.apartment_id,
+                  "apartment resident ID",
+                  512,
+                ),
+              }),
         },
       };
     case "document":
