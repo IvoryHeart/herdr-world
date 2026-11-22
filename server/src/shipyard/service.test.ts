@@ -154,7 +154,7 @@ test("the catalog is the open projects, every one, with no silent cut-off", asyn
 
 test("repository cache is bounded and unsupported names never reach gh", async () => {
   const { service, fixture } = setup();
-  for (let index = 0; index < L.repositories + 2; index++)
+  for (let index = 0; index < L.pipelines + 2; index++)
     await service.snapshot(`example-org/repo-${index}`);
   expect(service.current("example-org/repo-0").data).toBeNull();
   const count = fixture.calls.length;
@@ -169,5 +169,46 @@ test("repository cache is bounded and unsupported names never reach gh", async (
     await expect(service.snapshot(value)).rejects.toThrow("Repository");
   }
   expect(fixture.calls.length).toBe(count);
+  service.close();
+});
+
+test("a burst past the bound admits no pipeline while every held one is reading", async () => {
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const fixture = githubFixture();
+  const repos = new Set<string>();
+  const { service } = setup(async (argv, timeoutMs) => {
+    const repo = argv.join(" ").match(/repos\/([^/\s]+\/[^/?\s]+)/u)?.[1];
+    if (repo) repos.add(repo);
+    await hold;
+    return fixture.run(argv, timeoutMs);
+  }, 0);
+  const asked = Array.from(
+    { length: L.pipelines + 2 },
+    (_, index) => `example-org/repo-${index}`,
+  );
+  const first = await Promise.all(asked.map((repo) => service.snapshot(repo)));
+  // The two past the bound wait their turn, asking again soon, unread.
+  for (const snapshot of first.slice(-2)) {
+    expect(snapshot.refreshing).toBe(true);
+    expect(snapshot.retryAfterMs).toBe(L.waitMs);
+    expect(snapshot.detail).toContain("waits its turn");
+  }
+  release();
+  // Every admitted read has landed once nothing is refreshing.
+  for (
+    let index = 0;
+    index < 200 && asked.some((repo) => service.current(repo).refreshing);
+    index++
+  )
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  expect(repos.size).toBe(L.pipelines);
+  expect(repos.has(asked.at(-1)!)).toBe(false);
+  expect(service.current(asked.at(-1)!).data).toBeNull();
+  // Once reads finish, the waiting one takes a finished one's place.
+  await service.snapshot(asked.at(-1)!);
+  expect(service.current(asked[0]!).data).toBeNull();
   service.close();
 });

@@ -2,7 +2,7 @@
 
 ### Requirement: Lanes from open projects
 
-World SHALL derive Shipyard's projects from the rooms and spaces open in its runtimes (Herdr TUI and herdr-core), not from GitHub activity, running Worlds or earlier reads. A project SHALL be a room or space on a current, non-stale connection whose folder (its checkout, else its own folder, else its first terminal's) is a Git checkout, read with bounded, cached, read-only Git commands on that connection's host and qualified by connection ID and runtime generation; cached topology of a failed host SHALL contribute no project and grant no action. Its release source SHALL be the checkout's github.com remote, `origin` first; projects sharing a repository SHALL be one. A checkout with no GitHub remote SHALL be listed as such, not dropped. The catalog SHALL list every open project; folders beyond its bound SHALL be counted and shown with a way to choose a repository, never dropped silently, and folders still being read SHALL be counted so clients ask again. GitHub reads SHALL run several at once within a fixed bound, keeping per-call deadlines and the cache. The browser SHALL ask for the catalog often enough that a project that closes leaves Shipyard and one that opens joins it without a reload.
+World SHALL derive Shipyard's projects from the rooms and spaces open in its runtimes (Herdr TUI and herdr-core), not from GitHub activity, running Worlds or earlier reads. A project SHALL be a room or space on a current, non-stale connection with a folder (its checkout, else its own folder, else its first terminal's), on Unix and Windows runtimes alike, read with bounded, cached, read-only Git commands on that connection's host and qualified by connection ID and runtime generation; cached topology of a failed host SHALL contribute no project and grant no action. Its release source SHALL be the checkout's github.com remote, `origin` first; projects sharing a repository SHALL be one. A folder with no GitHub remote, because it is not a Git checkout, has none, or cannot be read, SHALL be listed as such, not dropped. The catalog SHALL list every open project; folders beyond its bound SHALL be counted and shown with a way to choose a repository, never dropped silently, and folders still being read SHALL be counted so clients ask again. GitHub reads SHALL run several at once within a fixed bound, keeping per-call deadlines and the cache; the cache SHALL hold a fixed number of repositories, and a repository asked for while every held one is reading SHALL wait its turn, not be added. The browser SHALL ask for the catalog often enough that a project that closes leaves Shipyard and one that opens joins it without a reload.
 
 #### Scenario: One project open among many repositories
 
@@ -19,10 +19,20 @@ World SHALL derive Shipyard's projects from the rooms and spaces open in its run
 - **WHEN** the room of an open project closes and no other room has that repository open
 - **THEN** its lane leaves Shipyard on the next catalog read, without a page reload
 
-#### Scenario: A checkout without GitHub
+#### Scenario: A folder without GitHub
 
-- **WHEN** an open room's checkout has no github.com remote
+- **WHEN** an open room's folder has no github.com remote, or is not a Git checkout yet
 - **THEN** the Releases tab lists it as having no GitHub remote, and no GitHub read is made for it
+
+#### Scenario: A project on a Windows runtime
+
+- **WHEN** a room is open on a GitHub checkout in a Windows runtime
+- **THEN** its project is read on that host and has its lane like any other
+
+#### Scenario: More repositories asked than the cache holds
+
+- **WHEN** a repository is asked for while every repository the cache holds is reading or waiting
+- **THEN** it is not added and no read starts for it; it says it waits its turn and is asked again
 
 ## MODIFIED Requirements
 

@@ -1,4 +1,5 @@
 import { isAbsolute } from "node:path";
+import { powershellCommand } from "../bridge/ssh-windows";
 import {
   SHIPYARD_LIMITS as L,
   shipyardRepository,
@@ -6,7 +7,7 @@ import {
 } from "../../../shared/shipyard";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import type { RunProcess } from "../sources/github";
-import type { CheckoutHost, TopologyConnection } from "../sources/links";
+import type { TopologyConnection } from "../sources/links";
 import { shQuote } from "../utils/process-utils";
 import { parseReviewRemote } from "../workspace/pull-request";
 import { record } from "./parse";
@@ -14,8 +15,10 @@ import { record } from "./parse";
 /**
  * The projects open in World's runtimes (#1226): Shipyard's lanes follow
  * them, not every repository GitHub knows of. A project is a room or space
- * (a workspace in the aggregate topology) whose folder is a Git checkout;
- * its release source is the checkout's GitHub remote (`origin` first).
+ * (a workspace in the aggregate topology) with a folder; when that folder is
+ * a Git checkout, its release source is the checkout's GitHub remote
+ * (`origin` first). A folder that is not a checkout, has no GitHub remote or
+ * cannot be read stays a project without a remote: never dropped.
  * Only current, non-stale connections count: cached topology of a failed
  * host grants nothing here. Lookups are qualified by connection ID and
  * runtime generation, bounded in number, time and concurrency, and cached.
@@ -36,6 +39,13 @@ type Folder = {
   rooms: number;
 };
 type Checkout = { toplevel: string; name: string; repo: string | null };
+/**
+ * Where a connection's folders are read: this machine or an SSH host, each
+ * running a POSIX shell or, on Windows, PowerShell.
+ */
+export type ProjectHost =
+  | { kind: "local"; windows?: boolean }
+  | { kind: "ssh"; destination: string; windows?: boolean };
 
 const LOOKUP_TIMEOUT_MS = 6_000;
 const LOOKUP_CONCURRENCY = 4;
@@ -44,7 +54,7 @@ const MAX_PATH = 1_024;
 
 export type ShipyardProjectsOptions = {
   run: RunProcess;
-  hostOf(connectionId: string): CheckoutHost | null;
+  hostOf(connectionId: string): ProjectHost | null;
   topology(): Promise<TopologyConnection[]>;
   now?: () => number;
   waitMs?: number;
@@ -108,8 +118,13 @@ export class ShipyardProjects {
         pending++;
         continue;
       }
-      const checkout = known.checkout;
-      if (!checkout) continue;
+      // Not a checkout, or not readable: still an open project, without a
+      // GitHub remote (#1226), never dropped.
+      const checkout = known.checkout ?? {
+        toplevel: folder.path,
+        name: folderName(folder.path),
+        repo: null,
+      };
       const id = checkout.repo
         ? `repo\0${checkout.repo}`
         : `folder\0${folder.connectionId}\0${checkout.toplevel}`;
@@ -136,12 +151,15 @@ export class ShipyardProjects {
     if (!host) return null;
     await this.#slot();
     try {
-      const quoted = shQuote(folder.path);
-      const command = `GIT_TERMINAL_PROMPT=0 git -C ${quoted} rev-parse --show-toplevel && GIT_TERMINAL_PROMPT=0 git -C ${quoted} remote -v`;
+      const command = host.windows
+        ? powershellCommand(windowsGitScript(folder.path))
+        : posixGitCommand(folder.path);
       const argv =
         host.kind === "ssh"
           ? sshCommandArgv(host.destination, command)
-          : ["sh", "-c", command];
+          : host.windows
+            ? command.split(" ")
+            : ["sh", "-c", command];
       const result = await this.options.run(argv, LOOKUP_TIMEOUT_MS);
       return result.code === 0 ? parseProjectCheckout(result.stdout) : null;
     } catch {
@@ -159,22 +177,47 @@ export class ShipyardProjects {
   }
 }
 
+/** The read-only Git command for a folder in a POSIX shell. */
+function posixGitCommand(path: string) {
+  const quoted = shQuote(path);
+  return `GIT_TERMINAL_PROMPT=0 git -C ${quoted} rev-parse --show-toplevel && GIT_TERMINAL_PROMPT=0 git -C ${quoted} remote -v`;
+}
+
 /**
- * Where a connection's folders are read: on this machine, or over SSH on a
- * non-Windows host. Other connections resolve no project.
+ * The same read in PowerShell. The path travels base64-encoded, so no quote
+ * character in it can end the string.
+ */
+export function windowsGitScript(path: string) {
+  const encoded = Buffer.from(path, "utf8").toString("base64");
+  return [
+    "$ErrorActionPreference = 'SilentlyContinue'",
+    "$env:GIT_TERMINAL_PROMPT = '0'",
+    `$p = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}'))`,
+    "$top = git -C $p rev-parse --show-toplevel 2>$null",
+    "if ($LASTEXITCODE -ne 0 -or -not $top) { exit 1 }",
+    "Write-Output $top",
+    "git -C $p remote -v 2>$null",
+    "exit 0",
+  ].join("\n");
+}
+
+/**
+ * Where a connection's folders are read: on this machine, or over SSH, in
+ * PowerShell on Windows. An unknown connection's folders are not read; its
+ * projects show without a GitHub remote.
  */
 export function profileCheckoutHost(
   profile:
     | { type?: string; remote_platform?: string; ssh_destination?: string }
     | undefined,
-): CheckoutHost | null {
-  if (profile?.type === "local") return { kind: "local" };
-  if (
-    profile?.type === "ssh" &&
-    profile.remote_platform !== "windows" &&
-    profile.ssh_destination
-  )
-    return { kind: "ssh", destination: profile.ssh_destination };
+  localWindows = process.platform === "win32",
+): ProjectHost | null {
+  if (profile?.type === "local")
+    return localWindows ? { kind: "local", windows: true } : { kind: "local" };
+  if (profile?.type === "ssh" && profile.ssh_destination)
+    return profile.remote_platform === "windows"
+      ? { kind: "ssh", destination: profile.ssh_destination, windows: true }
+      : { kind: "ssh", destination: profile.ssh_destination };
   return null;
 }
 
@@ -227,7 +270,7 @@ export function openFolders(
 export function parseProjectCheckout(output: string): Checkout | null {
   const [first, ...rest] = output.split(/\r?\n/u);
   const toplevel = first?.trim();
-  if (!toplevel || !isAbsolute(toplevel)) return null;
+  if (!toplevel || !absolute(toplevel)) return null;
   const remotes: { name: string; repo: string }[] = [];
   for (const line of rest) {
     const match = line.match(/^(\S+)\s+(.+)\s+\(fetch\)$/u);
@@ -246,19 +289,36 @@ export function parseProjectCheckout(output: string): Checkout | null {
   const repo =
     (remotes.find((remote) => remote.name === "origin") ?? remotes[0])?.repo ??
     null;
-  const folderName = toplevel.replace(/\/+$/u, "").split("/").pop() || toplevel;
   return {
     toplevel,
-    name: repo ? repo.slice(repo.indexOf("/") + 1) : folderName,
+    name: repo ? repo.slice(repo.indexOf("/") + 1) : folderName(toplevel),
     repo,
   };
+}
+
+function folderName(path: string) {
+  return (
+    path
+      .replace(/[\\/]+$/u, "")
+      .split(/[\\/]/u)
+      .pop() || path
+  );
+}
+
+/** POSIX, Windows drive (`C:\` or `C:/`) or UNC (`\\server\share`) paths. */
+function absolute(path: string) {
+  return (
+    isAbsolute(path) ||
+    /^[A-Za-z]:[\\/]/u.test(path) ||
+    /^[\\/]{2}[^\\/]/u.test(path)
+  );
 }
 
 function usable(value: unknown): value is string {
   return (
     typeof value === "string" &&
     value.length <= MAX_PATH &&
-    isAbsolute(value) &&
+    absolute(value) &&
     !/[\0\r\n]/u.test(value)
   );
 }

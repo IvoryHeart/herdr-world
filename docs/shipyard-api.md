@@ -79,7 +79,7 @@ Catalog example (instance records are the same as the snapshot's):
   "pending": 0,
   "omitted": 0,
   "instances": { "items": [], "complete": true, "detail": null },
-  "limits": { "repositories": 64, "concurrentReads": 4, "releases": 50, "tags": 100, "workflows": 100, "commits": 200, "prsPerCommit": 5, "instances": 64, "refreshMs": 60000, "forcedRefreshMs": 5000, "deadlineMs": 60000, "requestMs": 10000, "outputBytes": 4194304, "waitMs": 2000, "instanceLeaseMs": 45000 }
+  "limits": { "repositories": 64, "pipelines": 96, "concurrentReads": 4, "releases": 50, "tags": 100, "workflows": 100, "commits": 200, "prsPerCommit": 5, "instances": 64, "refreshMs": 60000, "forcedRefreshMs": 5000, "deadlineMs": 60000, "requestMs": 10000, "outputBytes": 4194304, "waitMs": 2000, "instanceLeaseMs": 45000 }
 }
 ```
 
@@ -187,18 +187,22 @@ Each source read has a 60-second total deadline, 10 seconds per request and a
 separately read latest stable), 100 tags, 100 head-qualified workflow runs, 200
 comparison commits, five associated PRs per commit, at most 17 external calls
 including authentication. Full release/tag display windows conservatively set `complete` false; workflow
-counts and comparison counts can prove their exact bounded window complete. At most 64 repository cache entries exist and **four** repository
-refreshes run at once; others wait for a slot. Normal reads refresh after 60 seconds; forced reads wait at least
+counts and comparison counts can prove their exact bounded window complete. At most 96 repository cache entries exist and **four** repository
+refreshes run at once; others wait for a slot. When every entry is reading or
+waiting, a new repository is not admitted: it returns `refreshing` with a retry
+hint and is asked again. Normal reads refresh after 60 seconds; forced reads wait at least
 five seconds after an attempt. Requests wait up to two seconds, then return
 `refreshing` and `retryAfterMs`. No background GitHub polling or automatic retry
 runs. While a repository waits for a slot it returns its current observation and
 a retry hint. The catalog is the projects open in World, not an inventory of
 every accessible repository: each room or space on a current, non-stale
-connection whose folder (checkout, else its own, else its first terminal's) is
-a Git checkout, read with read-only `git rev-parse`/`git remote -v` on that
-connection's host, cached per connection ID, generation and folder for 60
+connection with a folder (checkout, else its own, else its first terminal's),
+read with read-only `git rev-parse`/`git remote -v` on that connection's host
+(PowerShell on Windows), cached per connection ID, generation and folder for 60
 seconds, at most four at a time with a six-second deadline. The GitHub remote is
 `origin`'s, else the first github.com remote; projects sharing one are one.
+A folder that is not a Git checkout, has no GitHub remote or cannot be read is
+a project with `repo` null, never dropped.
 Folders past 64 are counted in `omitted`, never dropped silently. Cached
 topology of a failed host contributes nothing. Disabling/changing the GitHub settings
 invalidates its cache and fences in-flight results. Credentials stay in gh;

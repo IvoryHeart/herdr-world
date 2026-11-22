@@ -1,7 +1,13 @@
 /** Read-only contract shared by the CLI and future Town/Board consumers. */
 export const SHIPYARD_LIMITS = {
-  /** Open project folders resolved, and repository pipelines cached. */
+  /** Open project folders resolved. */
   repositories: 64,
+  /**
+   * Repository pipelines held, each with at most one read running or
+   * waiting: the open projects' plus typed ones. Past it, a repository
+   * whose slot no finished read can give up waits and is asked again.
+   */
+  pipelines: 96,
   /** GitHub repository reads running at once; more wait for a slot. */
   concurrentReads: 4,
   releases: 50,
@@ -131,9 +137,9 @@ export type ShipyardSnapshot = {
   limits: typeof SHIPYARD_LIMITS;
 };
 /**
- * A project open in a current runtime: one or more rooms or spaces whose
- * folder is a Git checkout. `repo` is its GitHub repository, or null when
- * the checkout has no GitHub remote.
+ * A project open in a current runtime: one or more rooms or spaces on one
+ * folder or Git checkout. `repo` is its GitHub repository, or null when the
+ * folder has none (not a checkout, no GitHub remote, or unreadable).
  */
 export type ShipyardProject = {
   repo: string | null;

@@ -57,9 +57,9 @@
   runs on off the map. The streets end at a stone promenade; one shipping lane
   per project crosses the water from it, each in its own colour (eight colours
   that repeat), named on a board with its flag at the pier's root. Projects are
-  the ones open in World: each room or space (Herdr TUI or herdr-core) whose
-  folder is a Git checkout with a github.com remote (`origin` first), one per
-  repository; the one chosen in **Work → Releases** comes first. A project
+  the ones open in World: each room or space (Herdr TUI or herdr-core, Unix or
+  Windows) with a folder; a Git checkout's github.com remote (`origin` first)
+  gives its lane, one per repository; the one chosen in **Work → Releases** comes first. A project
   that closes leaves within about fifteen seconds and one that opens joins,
   without a reload; each lane appears as soon as its own read lands. A project
   gets a lane once World's read of its
@@ -98,7 +98,8 @@
   Waiting changes list the merged pull requests the commit graph proves and
   the total commit count; World does not guess which commits were pushed
   directly. The repository select lists the open projects;
-  under it, checkouts without a GitHub remote are named, and open folders past
+  under it, open folders without a GitHub remote (not a Git checkout yet, no
+  github.com remote, or unreadable) are named, and open folders past
   World's bound (64) are counted. A repository typed in **Another repository…**
   is one extra lane while it is chosen; the choice is remembered per browser. **Read GitHub again** forces one bounded refresh.
 - Testing only: `?shipyardFixture` (or `=failing|stale|limited|off|empty|offline`)

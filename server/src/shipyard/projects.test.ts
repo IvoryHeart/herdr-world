@@ -113,7 +113,7 @@ test("the GitHub remote is origin's first, and a checkout without one keeps its 
   expect(parseProjectCheckout("")).toBeNull();
 });
 
-test("open projects: one per repository, checkouts without GitHub as such, plain folders none", async () => {
+test("open projects: one per repository; checkouts without GitHub, plain folders and unread ones as such", async () => {
   const { run, calls } = git({
     "/work/widgets": {
       top: "/work/widgets",
@@ -142,9 +142,12 @@ test("open projects: one per repository, checkouts without GitHub as such, plain
         { workspace_id: "w1", cwd: "/work/widgets" },
         { workspace_id: "w2", cwd: "/work/widgets-feature" },
         { workspace_id: "w3", cwd: "/work/scratch" },
+        // Before `git init`: still an open project, without a remote.
         { workspace_id: "w4", cwd: "/srv/plain-folder" },
       ]),
       connection("remote", [{ workspace_id: "r1", cwd: "/srv/zebra" }]),
+      // A connection World cannot read folders on: shown, not dropped.
+      connection("unknown", [{ workspace_id: "u1", cwd: "/srv/elsewhere" }]),
     ],
   });
   const open = await projects.read();
@@ -152,6 +155,8 @@ test("open projects: one per repository, checkouts without GitHub as such, plain
     projects: [
       { repo: "example-org/widgets", name: "widgets", rooms: 2 },
       { repo: "example-org/zebra", name: "zebra", rooms: 1 },
+      { repo: null, name: "elsewhere", rooms: 1 },
+      { repo: null, name: "plain-folder", rooms: 1 },
       { repo: null, name: "scratch", rooms: 1 },
     ],
     pending: 0,
@@ -203,8 +208,14 @@ test("a project that closes leaves; slow folders are pending, then join", async 
   expect((await projects.read()).projects).toEqual([]);
 });
 
-test("folders are read locally or over SSH, never on Windows or unknown connections", () => {
-  expect(profileCheckoutHost({ type: "local" })).toEqual({ kind: "local" });
+test("folders are read locally or over SSH, in PowerShell on Windows; unknown connections not at all", () => {
+  expect(profileCheckoutHost({ type: "local" }, false)).toEqual({
+    kind: "local",
+  });
+  expect(profileCheckoutHost({ type: "local" }, true)).toEqual({
+    kind: "local",
+    windows: true,
+  });
   expect(
     profileCheckoutHost({ type: "ssh", ssh_destination: "devbox" }),
   ).toEqual({ kind: "ssh", destination: "devbox" });
@@ -214,6 +225,57 @@ test("folders are read locally or over SSH, never on Windows or unknown connecti
       ssh_destination: "devbox",
       remote_platform: "windows",
     }),
-  ).toBeNull();
+  ).toEqual({ kind: "ssh", destination: "devbox", windows: true });
   expect(profileCheckoutHost(undefined)).toBeNull();
+});
+
+test("a Windows runtime's projects are read over SSH in PowerShell", async () => {
+  const scripts: string[] = [];
+  const run: RunProcess = async (argv) => {
+    const encoded = argv.at(-1)!.match(/-EncodedCommand (\S+)$/u)?.[1];
+    expect(argv[0]).toBe("ssh");
+    expect(encoded).toBeDefined();
+    const script = Buffer.from(encoded!, "base64").toString("utf16le");
+    scripts.push(script);
+    const path = Buffer.from(
+      script.match(/FromBase64String\('([^']+)'\)/u)![1]!,
+      "base64",
+    ).toString("utf8");
+    return path === "C:\\work\\zebra"
+      ? {
+          code: 0,
+          stdout:
+            "C:/work/zebra\r\norigin\thttps://github.com/example-org/zebra.git (fetch)\r\n",
+          stderr: "",
+        }
+      : { code: 1, stdout: "", stderr: "" };
+  };
+  const projects = new ShipyardProjects({
+    run,
+    hostOf: () =>
+      profileCheckoutHost({
+        type: "ssh",
+        ssh_destination: "winbox",
+        remote_platform: "windows",
+      }),
+    topology: async () => [
+      connection("win", [
+        { workspace_id: "w1", cwd: "C:\\work\\zebra" },
+        { workspace_id: "w2", cwd: "D:\\notes" },
+        // A quote in a folder name cannot end PowerShell's string.
+        { workspace_id: "w3", cwd: "C:\\it's'; rm -r C:\\" },
+      ]),
+    ],
+  });
+  expect(await projects.read()).toEqual({
+    projects: [
+      { repo: "example-org/zebra", name: "zebra", rooms: 1 },
+      { repo: null, name: "it's'; rm -r C:", rooms: 1 },
+      { repo: null, name: "notes", rooms: 1 },
+    ],
+    pending: 0,
+    omitted: 0,
+  });
+  expect(scripts).toHaveLength(3);
+  for (const script of scripts) expect(script).not.toContain("it's");
 });

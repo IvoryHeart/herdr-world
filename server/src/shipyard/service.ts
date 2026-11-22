@@ -82,12 +82,22 @@ export class ShipyardService {
     let entry = this.#cache.get(repo);
     if (source.enabled && !this.#closed) {
       if (!entry) {
-        if (this.#cache.size >= L.repositories) {
-          // LRU, never evicting a repository whose read is running.
+        if (this.#cache.size >= L.pipelines) {
+          // LRU, never evicting a repository whose read is running or
+          // waiting. With none to give up, admit nothing: the cache and the
+          // reads stay bounded, and the caller asks again shortly.
           const oldest = [...this.#cache.keys()].find(
             (key) => !this.#reads.has(key),
           );
-          if (oldest !== undefined) this.#cache.delete(oldest);
+          if (oldest === undefined)
+            return {
+              ...this.current(repo),
+              detail:
+                "Shipyard is reading as many repositories as it holds; this one waits its turn.",
+              refreshing: true,
+              retryAfterMs: L.waitMs,
+            };
+          this.#cache.delete(oldest);
         }
         entry = {
           data: null,
