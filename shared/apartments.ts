@@ -30,6 +30,9 @@ export const APARTMENT_LIMITS = {
   session: 200,
   links: 20,
   url: 500,
+  /** Usage agent IDs kept per resident, newest last. */
+  usage_agents: 8,
+  usage_agent: 100,
 } as const;
 
 /**
@@ -133,7 +136,31 @@ export type ApartmentResident = {
    * it. The Apartments window then shows the nearest look it has.
    */
   appearance: ApartmentAppearance | null;
+  /**
+   * The agent IDs `world.usage.analytics` counted it under while it ran
+   * (group `agent`), newest last; a new harness session in the same terminal
+   * is a new ID. Absent or empty for records from before World kept them and
+   * for residents found in a harness's history: their usage is unknown.
+   */
+  usage_agent_ids?: string[];
 };
+
+/**
+ * A resident's usage agent IDs, read leniently: bad entries are dropped, a
+ * repeat keeps its newest place and only the newest are kept.
+ */
+export function apartmentUsageAgentIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids = value.filter(
+    (id): id is string =>
+      typeof id === "string" &&
+      id.length > 0 &&
+      id.length <= APARTMENT_LIMITS.usage_agent,
+  );
+  return [...new Set(ids.reverse())]
+    .slice(0, APARTMENT_LIMITS.usage_agents)
+    .reverse();
+}
 
 export type ApartmentState = {
   revision: number;

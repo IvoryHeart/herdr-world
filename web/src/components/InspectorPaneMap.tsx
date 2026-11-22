@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Check } from "lucide-react";
 import type { Pane, PaneLayout, Workspace } from "../types";
 import { useVisibleTabLayoutState } from "../visibleTabLayout";
@@ -49,13 +49,25 @@ function PaneMapButton({
   const { layout } = useVisibleTabLayoutState(workspaceId, tabId);
   const [open, setOpen] = useState(false);
   const cells = layout ? mapPanes(layout, tabPanes, workspace) : [];
-  if (cells.length < 2) return null;
+  const shown = cells.length >= 2;
+  const glyph = useRef<HTMLButtonElement | null>(null);
+  // The window title makes room for the glyph. An attribute, not
+  // `:has(> .inspector-pane-map-glyph)`: that rule restyled the whole World
+  // on every key typed in Chat (#1231).
+  useLayoutEffect(() => {
+    const identity = glyph.current?.parentElement;
+    if (!shown || !identity) return;
+    identity.setAttribute("data-pane-map", "");
+    return () => identity.removeAttribute("data-pane-map");
+  }, [shown]);
+  if (!shown) return null;
   const selected = cells.find((cell) => cell.paneId === selectedPaneId);
   const title = `${tabLabel ? `${tabLabel} · ` : ""}${cells.length} panes`;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
+          ref={glyph}
           type="button"
           className="inspector-pane-map-glyph"
           aria-label={`Panes in this tab: ${cells.length}${

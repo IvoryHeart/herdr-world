@@ -604,15 +604,27 @@ test.skipIf(!chrome)(
           room.label.includes("core-alpha"),
         )!;
         expect(await visit(mode, alpha.key, "core-alpha")).toBeNull();
-        const plus = await centre(
-          `${plaqueOf("core-alpha")}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`,
-        );
+        // The pointer may rest where the camera just put a plaque: move it
+        // off so no plaque card covers the free seat, as the loop above does.
+        await move({ x: 4, y: 4 });
+        const alphaPlus = `${plaqueOf("core-alpha")}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`;
+        const plus = await centre(alphaPlus);
         expect(plus).not.toBeNull();
+        await move(plus!);
+        expect(await reach(alphaPlus)).toMatchObject({
+          reached: true,
+          disabled: false,
+        });
         await click(plus!);
         await waitFor(
           "!!document.querySelector('.agent-launcher-card:not(:disabled)')",
           "the launcher opens on the core room",
-        );
+        ).catch(async (error: Error) => {
+          const seen = await evaluate<string>(
+            `JSON.stringify({ took: window.__pointerTarget?.closest?.('[aria-label]')?.getAttribute('aria-label') ?? null, cards: [...document.querySelectorAll('.agent-launcher-card')].map((card) => [card.textContent?.slice(0, 40), card.disabled]) })`,
+          );
+          throw new Error(`${error.message}: ${seen}`);
+        });
         await click(
           (await centre(
             "document.querySelector('.agent-launcher-card:not(:disabled)')",

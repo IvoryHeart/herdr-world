@@ -1,3 +1,4 @@
+import { runBoardElementCommand } from "./world-cli-elements";
 import { planBoardPatch } from "./board-plan";
 import type { MemoryAction } from "../../../shared/memory";
 import { runMemoryCli } from "./world-cli-memory";
@@ -73,7 +74,6 @@ import {
   type ResultStatus,
   type LedgerStore,
 } from "./world-ledger";
-
 /**
  * The World service's side of the `herdr-world` agent CLI (cli/world.ts).
  * Agents change World objects themselves: Board cards and colours, desk order
@@ -82,7 +82,6 @@ import {
  * undone. Groups retain bounded recent attribution, separate from Board undo. Herdr changes need `herdr: true` and cannot be undone by World.
  * Nothing here merges, deletes Herdr objects or reaches outside World.
  */
-
 export type WorldCliDeps = {
   memory?(
     action: MemoryAction,
@@ -120,6 +119,7 @@ export type WorldCliDeps = {
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
+  elements?: import("./board-element-service").BoardElementService;
   usage?(params: Record<string, unknown>): Promise<unknown>;
   groupMove?(request: GroupMoveRequest, recheck?: () => void): Promise<unknown>;
   publishBoard(revision: number): void;
@@ -131,16 +131,13 @@ export type WorldCliDeps = {
 } & AskRuntimeDeps;
 
 /* ---------- Identity ---------- */
-
 /* ---------- Targets ---------- */
-
 type Topology = {
   host: CliHost;
   workspaces: Record<string, unknown>[];
   tabs: Record<string, unknown>[];
   panes: Record<string, unknown>[];
 };
-
 type Target =
   | { kind: "workspace"; id: string }
   | { kind: "tab"; id: string; workspace_id: string }
@@ -151,9 +148,7 @@ type Target =
       workspace_id: string;
       terminal_id: string;
     };
-
 const str = (value: unknown) => (typeof value === "string" ? value : "");
-
 function resolveTarget(
   spec: unknown,
   topology: Topology,
@@ -626,6 +621,8 @@ export function createWorldCli(deps: WorldCliDeps) {
     const patchBoard = patchBoardWithDeps.bind(null, deps);
     const changeBoard = changeBoardWithDeps.bind(null, deps);
     const topologyFor = topologyWithDeps.bind(null, deps);
+    if (command.startsWith("board element "))
+      return runBoardElementCommand(deps.elements, command, params, recheck);
     if (command.startsWith("group "))
       return runGroupCommand(command, params, {
         deps,
@@ -679,6 +676,7 @@ export function createWorldCli(deps: WorldCliDeps) {
           connection_id: connection.connection_id,
           connection_generation: connection.generation,
           label: connection.label,
+          generation: connection.generation,
           current: connection.actionable && !connection.stale,
           workspaces: (connection.snapshot?.workspaces ?? []).map((ws) => ({
             workspace_id: ws.workspace_id,

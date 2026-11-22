@@ -3,8 +3,11 @@ context: |
   Herdr World is one Bun service and same-origin React/TypeScript/Vite browser
   app, derived from Roamgate source. Herdr is an external runtime authority.
   Read AGENTS.md and docs/agent-development.md for delivery and knowledge rules.
-  Contracts live only in OpenSpec; start with bun run where "<words>". docs contains
-  and runbooks; docs/specs preserves historical decisions.
+  Contracts live only in OpenSpec. Start with openspec list --specs --json for
+  capabilities and openspec list --json for active changes; inspect with openspec show <id>.
+  Read the capability's spec.md and notes.md, then the Code paths those notes name.
+  Feature PRs update notes Code lists immediately, even while their deltas remain active.
+  docs contains guides and runbooks; docs/specs preserves historical decisions.
   Inspect source and tests before asserting current behavior.
   Routine fixes, refactors, dependency updates, tests, docs, and release mechanics
   need no new proposal unless the owner requests one. Feature contracts use change-folder deltas;

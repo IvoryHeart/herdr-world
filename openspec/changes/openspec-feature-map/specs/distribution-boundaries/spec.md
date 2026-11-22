@@ -1,19 +1,23 @@
 ## ADDED Requirements
 
-### Requirement: Computed capability feature map
+### Requirement: OpenSpec capability discovery
 
-The repository SHALL compute feature discovery from OpenSpec capability names, Purpose,
-requirement names and adjacent notes, including surfaces, code and pitfalls. Text and
-JSON lookup SHALL expose matching spec paths, notes paths and owning Code paths without
-a committed index. Added or modified source files SHALL match at least one capability
-Code path; the existing source tree SHALL have owners before enforcement.
+The repository SHALL use native OpenSpec capability and active-change listing as
+the single agent knowledge entry point. Agents SHALL read a capability's current
+spec and adjacent notes, consult active deltas for work not yet archived, then
+follow the notes' owning Code paths. There SHALL be no separate agent lookup
+command or maintained discovery index.
+Added or modified source files SHALL match at least one capability Code path;
+the existing source tree SHALL have owners before enforcement. Feature PRs SHALL
+update the capability notes' Code list in the same PR, including new storage and
+rendering paths, even while their spec deltas remain active.
 Usage prose SHALL live in capability notes or the tutorial; FEATURES.md SHALL be generated
 at site build and SHALL NOT be committed or edited by feature PRs.
 
-#### Scenario: Core desks cannot be dragged in Town
+#### Scenario: Find quiet-agent storage and Town drawing before archival
 
-- **WHEN** an agent runs `bun run where "drag core desk"`
-- **THEN** lookup includes the Town move requirement, Town drag code and herdr-core move path
+- **WHEN** an agent follows AGENTS.md to find the quiet-agent setting and its Town drawing
+- **THEN** native OpenSpec lists expose the Town capability and active quiet-agent change, and the Town notes name preference storage and rendering code without waiting for the archive bot
 
 #### Scenario: A new source has no capability owner
 

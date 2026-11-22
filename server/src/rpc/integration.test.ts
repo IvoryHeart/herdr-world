@@ -1,3 +1,4 @@
+import { WORLD_SKILL_VERSION } from "../cli/integration";
 import { afterEach, expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import { existsSync, mkdirSync } from "node:fs";
@@ -6,7 +7,6 @@ import { createLegacyRoutingLogger } from "../connections/protocol";
 import { runCli } from "../cli/index";
 import { createTestCli, type TestCli } from "../cli/test-context";
 import { WORLD_HARNESSES } from "../cli/integration-paths";
-import { WORLD_SKILL_VERSION } from "../cli/integration";
 import { createRpcDispatcher } from "../service/rpc-dispatch";
 import { registeredVerb } from "../verbs/registry";
 import { ACTORS } from "../verbs/types";

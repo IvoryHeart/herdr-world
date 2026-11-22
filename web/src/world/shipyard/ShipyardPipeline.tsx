@@ -13,7 +13,7 @@ import {
   type ShipyardShip,
   type ShipyardView,
 } from "./shipyardModel";
-import { shipyardStore, useShipyard } from "./shipyardStore";
+import { shipyardLanes, shipyardStore, useShipyard } from "./shipyardStore";
 import "./shipyard.css";
 
 /**
@@ -76,7 +76,7 @@ function closedWords(view: ShipyardView) {
     case "unreachable":
       return `World did not answer: ${view.detail}`;
     case "no_repo":
-      return "Choose a GitHub repository above to see its releases.";
+      return "No project open in World has a GitHub repository. Open one in a room, or type a repository above.";
     case "reading":
     case "off":
     case "closed":
@@ -95,11 +95,15 @@ function ShipyardHead({
   state: ReturnType<typeof useShipyard>;
   now: number;
 }) {
-  const suggested = state.catalog?.repositories ?? [];
-  const options =
-    state.repo && !suggested.includes(state.repo)
-      ? [state.repo, ...suggested]
-      : suggested;
+  // The open projects' repositories, and one typed while it is chosen.
+  const options = state.catalog
+    ? shipyardLanes(state.catalog, state.manual)
+    : state.repo
+      ? [state.repo]
+      : [];
+  const local = (state.catalog?.projects ?? []).filter(
+    (project) => !project.repo,
+  );
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +111,7 @@ function ShipyardHead({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     try {
-      void shipyardStore.choose(draft.trim());
+      void shipyardStore.choose(draft.trim(), true);
       setTyping(false);
       setDraft("");
       setError(null);
@@ -154,7 +158,15 @@ function ShipyardHead({
           >
             {options.map((repo) => (
               <option key={repo} value={repo}>
-                {repo}
+                {repo === state.manual &&
+                !state.catalog?.repositories.includes(repo)
+                  ? `${repo} (typed)`
+                  : repo}
+              </option>
+            ))}
+            {local.map((project) => (
+              <option key={`local:${project.name}`} disabled>
+                {`${project.name} (no GitHub remote)`}
               </option>
             ))}
             <option value={"\u0000other"}>Another repository…</option>
@@ -187,8 +199,35 @@ function ShipyardHead({
       {view.status === "open" && view.stale ? (
         <p className="shipyard-stale">{view.detail}</p>
       ) : null}
+      <ProjectsNote state={state} />
     </header>
   );
+}
+
+/**
+ * What the lanes leave out, said rather than dropped (#1226): open
+ * projects without a GitHub remote, and open folders past World's limit.
+ */
+function ProjectsNote({ state }: { state: ReturnType<typeof useShipyard> }) {
+  const catalog = state.catalog;
+  if (!catalog) return null;
+  const local = catalog.projects.filter((project) => !project.repo);
+  const parts: string[] = [];
+  if (local.length)
+    parts.push(
+      `No GitHub remote: ${local.map((project) => project.name).join(", ")}.`,
+    );
+  if (catalog.omitted)
+    parts.push(
+      `${catalog.omitted} more open folder${catalog.omitted === 1 ? " was" : "s were"} not read (World reads ${catalog.limits.repositories}); choose Another repository… to see one.`,
+    );
+  if (catalog.pending)
+    parts.push(
+      `Reading ${catalog.pending} open folder${catalog.pending === 1 ? "" : "s"}…`,
+    );
+  return parts.length ? (
+    <p className="shipyard-projects-note">{parts.join(" ")}</p>
+  ) : null;
 }
 
 function Link({ href, children }: { href: string; children: string }) {
