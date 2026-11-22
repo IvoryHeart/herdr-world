@@ -5,11 +5,18 @@ import {
   useRef,
   useState,
 } from "react";
-import { WorldViewErrorBoundary } from "../WorldViewErrorBoundary";
+import { lazyWithReload } from "../../lazyWithReload";
 import type CodeView from "./CodeView";
 import { LazyCodeView } from "./LazyCodeView";
 
 type Size = { width: number; height: number };
+
+// Lazy, as WorldControlPlane loads it: one chunk for both.
+const WorldViewErrorBoundary = lazyWithReload("world-view-boundary", () =>
+  import("../WorldViewErrorBoundary").then((module) => ({
+    default: module.WorldViewErrorBoundary,
+  })),
+);
 
 /**
  * The Code view, kept loaded once shown (#1262). Leaving Code for another
