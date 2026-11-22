@@ -119,7 +119,9 @@ module ide_lifecycle {
     wgen: s.wgen.set(slot, -1), auto: s.auto.set(slot, -1),
   }
 
-  // A start first makes its begin mark and voids every other one.
+  // A start first makes its begin mark. Only a Stop or a look voids marks:
+  // a start racing another (World's lost one, or another World's) finds it
+  // through the folder's claim instead (#1009 twin-start race).
   pure def voided(x: Script): Script = if (x.kind == "start" and x.ph == 1) { ...x, voided: true } else x
   pure def voidBegins(s: State, slot: int): State =
     if (NO_VOID) s else {
@@ -129,9 +131,8 @@ module ide_lifecycle {
       gh: s.gh.set(slot, voided(s.gh.get(slot))),
     }
   pure def sendStart(s: State, slot: int, origin: str, g: int): State =
-    val v = voidBegins(s, slot)
-    { ...v, q: v.q.set(slot, { ...IDLE, kind: "start", ph: 1, origin: origin, gen: g }),
-      ls: if (OLD_START_EPOCH) v.ls else v.ls.set(slot, staled(v.ls.get(slot))) }
+    { ...s, q: s.q.set(slot, { ...IDLE, kind: "start", ph: 1, origin: origin, gen: g }),
+      ls: if (OLD_START_EPOCH) s.ls else s.ls.set(slot, staled(s.ls.get(slot))) }
   pure def sendAttach(s: State, slot: int, origin: str, g: int): State =
     { ...s, q: s.q.set(slot, { ...IDLE, kind: "attach", ph: 1, origin: origin, gen: g }) }
   pure def idle(s: State, slot: int): State = { ...s, q: s.q.set(slot, IDLE) }

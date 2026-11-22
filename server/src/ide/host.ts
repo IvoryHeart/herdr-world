@@ -245,11 +245,12 @@ export function hostStartScript(start: IdeHostStart) {
   return [
     prelude(start.root, stopGraceMs),
     `d="$root"/${start.id}`,
-    // This start's begin mark voids any older unanswered one: only the
-    // newest may still claim the folder. Stop and Open void it in turn, so
-    // a start whose answer was lost never launches after them.
+    // The begin mark lists this start as pending until it is answered. A
+    // Stop or a look voids it, so a start whose answer was lost never
+    // launches after them. Another start leaves it: two starts for one
+    // folder meet at the claim below, where one launches and the other
+    // finds it running.
     `b="$root/.begin-${start.id}-$$"`,
-    `unbegin ${start.id}`,
     `mkdir "$b" 2>/dev/null || exit ${HOST_EXIT.voided}`,
     `trap 'rmdir "$b" 2>/dev/null' EXIT`,
     `cd ${shQuote(start.folder)} || exit ${HOST_EXIT.folder}`,

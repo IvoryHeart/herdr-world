@@ -364,18 +364,25 @@ for (const by of ["Stop", "a look"] as const)
     expect(parseHostPending(after.stdout).size).toBe(0);
   });
 
-test("a newer start voids an older one still waiting to claim", async () => {
-  const h = setup();
-  const older = h.run(pausedStart(h), "token\n");
-  await untilFile(join(h.top, "paused"));
-  // The newer start finds the older's mark and replaces it; let it claim.
-  const newer = h.start({ binary: "/bin/true" });
-  const claim = newer.indexOf('if ! mkdir "$d"');
-  await h.run(`${newer.slice(0, claim)}exit 0\n`, "token\n");
-  writeFileSync(join(h.top, "go"), "");
-  expect((await older).code).toBe(HOST_EXIT.voided);
-  expect(existsSync(join(h.root, ID))).toBe(false);
-});
+test.if(hasSetsid())(
+  "a newer start leaves an older one waiting to claim, and only one launches",
+  async () => {
+    const h = setup();
+    const older = h.run(pausedStart(h), "token-one\n");
+    await untilFile(join(h.top, "paused"));
+    // The newer start claims and launches while the older one waits.
+    const newer = await h.run(h.start(), "token-two\n");
+    expect(parseHostLines(newer.stdout).values.get("result")).toBe("started");
+    writeFileSync(join(h.top, "go"), "");
+    // The older one finds it running and keeps the newer one's token.
+    const result = await older;
+    expect(parseHostLines(result.stdout).values.get("result")).toBe("running");
+    expect(readFileSync(join(h.root, ID, "token"), "utf8")).toBe("token-two");
+    const pids = await h.standIn.started();
+    await h.run(hostStopScript({ remote: true }, ID, WORLD, GRACE));
+    expect([pids.launcher, pids.server, pids.shell].filter(alive)).toEqual([]);
+  },
+);
 
 test.if(hasSetsid())(
   "an unfinished Stop stays pending, a look says so, and the next Stop or the hand command ends it",

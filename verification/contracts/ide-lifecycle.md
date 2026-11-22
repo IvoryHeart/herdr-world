@@ -88,7 +88,7 @@ The `ide-lifecycle` case of `bun run verification:gate` runs these checks:
    counterexample in the control variant: the SSH folder only, three faults
    and five clicks. That variant is too large to check in full within the
    gate's per-command bound; it is checked in full by hand when the model
-   changes: on 2026-11-22 it gave no violation over 3,278,580 distinct
+   changes: on 2026-11-22 it gave no violation over 3,278,636 distinct
    states in under three minutes on a busy machine.
    - routes kept open;
    - a lost start counted as failed;
@@ -131,6 +131,12 @@ are:
 - the `stopping` state on attach.
 
 `server/src/ide/host.test.ts` covers them with real `sh` scripts.
+
+A start voids no other start's begin mark. A first version did, and two
+Worlds opening one folder at once could then fail the older start, or in a
+narrow window launch neither, against the spec's "the other start reattaches
+to it". Two starts meet at the folder's claim instead; `host.test.ts` checks
+both a simultaneous pair and a newer start overtaking one waiting to claim.
 
 ## Assumptions and residuals
 
