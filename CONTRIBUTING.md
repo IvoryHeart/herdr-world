@@ -126,10 +126,10 @@ Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook checks formatting and lint without
 writing files, and its `pre-push` hook runs the applicable check. Before that gate,
 the hook scans all pushed refs for private material and checks the complete PR's
-changelog, knowledge-map, spec and verification
+changelog, source-coverage, spec and verification
 impact policy. It reads an existing PR description, or `HERDR_WORLD_PR_BODY=<file>` for the intended description
 before a first push. Non-documentation PRs need the two impact lines even with a
-changelog fragment and knowledge-map update. API errors cannot supply an exemption.
+changelog fragment and capability Code-path coverage. API errors cannot supply an exemption.
 
 ### Privacy before publication
 
@@ -195,14 +195,19 @@ Verification impact: none
 ```
 
 `bun run check:pr-body <file>` checks the committed PR diff, as pre-push and CI do.
-Spec claims name a changed path, spec directory or OpenSpec change name. Verification
+Spec claims name a changed path, spec directory, complete capability ID (including
+nested IDs such as `world-surfaces/town`) or OpenSpec change name. Verification
 claims name a changed model, adapter, coverage owner or test/check path. An untouched
 claim fails. `Spec impact: none` fails when `openspec/specs/` or `openspec/changes/`
 changes; `Verification impact: none` fails when `quint/`, `verification/` or an owner
-in `verification/coverage.json` changes (including files under directory owners).
+in `verification/coverage/` changes (including files under directory owners).
 These are cheap consistency checks: reviewers still judge whether a `none` is true
 and whether the evidence is sufficient. Ordinary documentation retains its exemption;
 dependency-bot PRs and merge-only pushes retain their existing policy paths.
+
+For OpenSpec work, use the adapted `world-openspec-*` skills in the
+[agent guide](docs/agent-development.md#openspec-skills). CLI-generated `openspec-*`
+skills do not carry this repository's authorization and delivery guidance.
 
 Use focused checks
 only for a specific question while developing. For a code push, the hook runs
@@ -215,7 +220,10 @@ newly staged sources are included without changing HEAD or staged contents.
 Merge conflicts block the check. Fetch main to refresh the proposed merge input.
 For a stacked PR, run `bun run check:size origin/main <target-ref>` or set
 `HERDR_WORLD_RATCHET_TARGET=<target-ref>` for pre-push; CI supplies the exact PR
-base SHA. The local gate then runs non-browser unit tests that import or read a changed
+base SHA. Static CI checks pin the checkout to the event commit; PRs targeting
+main also use that immutable base as their ratchet baseline, so later main changes
+cannot turn inherited growth into a PR failure. Stacked PRs retain main's ceilings.
+The local gate then runs non-browser unit tests that import or read a changed
 file. Browser suites and behavioral verification run in CI;
 `HERDR_WORLD_PREPUSH=full` opts into every local lane. A deleted file runs the tests that still
 import or name it. Toolchain, lockfile, configuration and gate changes, code that
@@ -257,6 +265,11 @@ full unit inventory locally and full CI gate, even when that input is absent fro
 | World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
 | Native installation | Install/plugin/package inputs, imports of the compiled entry points or native test consumers, and build-version metadata | Installer upgrades, Windows plugin and both macOS architectures |
+| Release walk | Native installation inputs, launch/connection request builders and release-walk implementation | Exact packaged executable, real TUI/core and real signed-out Claude/Codex on Linux and macOS, through the required installer workflow |
+
+Published-release bugs add or extend a release-walk journey in the same PR as the
+fix. See the [release walk and escape rule](docs/release.md#real-runtime-release-walk),
+including the signed-in local run required before any release tag.
 
 The agent-tooling exception from #484 still covers `scripts/agent/**` (the worktree
 helper), the agent development guide and `changes/<slug>.md`: static checks and affected
@@ -370,7 +383,7 @@ Releases: package and inspect every supported archive/checksum; see
 
 ## Behavioral evidence
 
-Assess every changed contract against the [coverage inventory](verification/coverage.json).
+Assess every changed contract against the [coverage inventory](verification/coverage/).
 Use existing requirements, fixtures and regressions to state allowed and forbidden
 behavior before choosing evidence. Ordering, ownership, authority and recovery
 normally warrant maintained Quint models connected to real implementation replay.
@@ -441,12 +454,13 @@ on every rendering path; do not rely on an unrelated feature being opened.
 ## Keep documentation current
 
 Every significant change must include the relevant current documentation updates
-in the same PR. Use the [knowledge map](docs/knowledge-map.md) to find affected
-guides: `FEATURES.md` for changed controls and their detail (edge cases, limits,
+in the same PR. Use [capability lookup](docs/agent-development.md#find-a-feature) to find affected
+capability notes for changed controls and their detail (edge cases, limits,
 refusals), the tutorial only when a learner's steps change, README for first-run
 changes, deployment/packaging for configuration and distribution, and
 architecture or contributor guidance for contracts and workflows. Update current
-specifications when their contracts change; preserve historical evidence.
+OpenSpec change-folder deltas when contracts change; current specs synchronize
+in the reviewed post-main archive PR. Preserve historical evidence.
 
 Name the affected docs in the PR description. If no update is needed, explain
 why the existing instructions still describe the delivered behavior. Changelog
@@ -459,16 +473,16 @@ Edit `site/` for the landing page; **only `docs/TUTORIAL.md`** for tutorial text
 `scripts/build-pages.ts` uses `site/tutorial/index.html` as the template and
 renders to `.pages-dist/tutorial/index.html`, rewrites screenshots/references,
 and checks built-site links/fragments. `check:docs` also checks repository-local
-paths and Markdown fragments in the knowledge map with
+paths and Markdown fragments in capability notes with
 `bun scripts/check-knowledge-map-links.ts`; remote URLs are not fetched.
 
 The tutorial is for someone learning World: numbered steps that say what to do
 and what they will see, ending with a "You are done when" check. It is not the
 reference. Detail a learner does not need (exceptions, refusals, staleness
-rules, limits, internals) goes in `FEATURES.md`, and the tutorial links there.
+rules, limits, internals) goes in capability `notes.md`, and the tutorial links there.
 The build fails when one step (counting all its paragraphs and sub-items) or
 paragraph passes 60 words, or the tutorial passes 6,000 words of prose
-(`tutorialLimits` in `scripts/pages-content.ts`): move detail to `FEATURES.md`
+(`tutorialLimits` in `scripts/pages-content.ts`): move detail to capability notes
 rather than raising a limit.
 
 ```bash
@@ -492,22 +506,36 @@ drawn from these entries. The tutorial stays the short learner's path and
 links the help page.
 
 ```bash
-CHROME_BIN=/path/to/chrome bun run help:pictures   # web/public/help/*.webp
+CHROME_BIN=/path/to/chrome HELP_PICTURES_IDS="town.zoom" bun run help:pictures
 bun run help:docs                                  # docs/HELP.md
 bun run help:check                                 # check:docs and the static lane
 ```
 
-`help:pictures` captures each entry's control from the production components
-on the synthetic site scene (`web/src/help/testing/HelpShots.browser.tsx`), at
-phone and desktop sizes, light and dark, and records each picture's inputs in
-`web/src/help/pictures.json`. `HELP_PICTURES_IDS="board.next town.zoom"` limits
-a run. Nobody edits a picture by hand. `help:check` fails when an entry's
-control is no longer marked (naming the entry), a picture is missing or its
-inputs changed (its picture settings, the control's markup, or any file the
-stage renders from: every component, stylesheet, scene and script it imports),
-so any UI change regenerates the pictures; a `*.help.ts` file is not listed, a picture is left over, or
-`docs/HELP.md` is out of date. A PR whose changelog fragment has `### Added`
-changes a `*.help.ts` file or states `Help: none — <reason>`.
+Feature PRs do not regenerate or commit Help pictures unless they add or
+change a help entry. Capture only those entries with `HELP_PICTURES_IDS` (and
+commit only their pictures and manifest records); update `docs/HELP.md` when
+its declarations change. Remove pictures and manifest records for deleted entries.
+Nobody edits a picture by hand.
+
+`help:pictures` captures the production components on the synthetic site scene
+(`web/src/help/testing/HelpShots.browser.tsx`), at phone and desktop sizes in both
+themes, recording input fingerprints in `web/src/help/pictures.json`.
+`help:check`, including pre-push, checks declarations, marked controls, missing
+pictures, orphan pictures/manifest records, and the generated help page. Stale
+fingerprints warn without failing: a Town component change needs no picture commit.
+`help:check --strict` also fails for stale fingerprints.
+
+After main pushes, `.github/workflows/help-pictures.yml` checks freshness and,
+when needed, regenerates all pictures, their manifest and `docs/HELP.md` from
+current main. It creates or updates one `bot/help-pictures` PR, labelled
+`help-pictures`, `auto-merge` (the owner's merge-rule signal) and `skip-changelog`.
+It explicitly dispatches CI and Privacy checks because `GITHUB_TOKEN` commits
+and PRs do not trigger them. Only the owner's rule merges after required checks;
+the workflow never pushes to main. A merged refresh passes the strict check,
+so it produces no further refresh PR. Manual dispatch on main retries a failed run.
+
+A PR whose changelog fragment has `### Added` changes a `*.help.ts` file or
+states `Help: none — <reason>`.
 
 The build adds content versions to local CSS and JavaScript URLs so a new page
 loads its matching assets rather than a cached stylesheet from a previous deploy.
@@ -574,8 +602,10 @@ green main run at or after the red commit closes the issue and its revert PR.
 The **Web asset headroom** status on a PR projects its web asset delta onto
 current main and fails if together they would exceed the bundle budgets in
 `scripts/check-web-assets.mjs`; it warns above 95 %. Every push to main re-judges
-open PRs, so a PR that fit an older main turns red once main has grown. Trim, or
-raise the budget in a reviewed change, before merging.
+open PRs, so a PR that fit an older main turns red once main has grown. A
+stacked PR that merged newer main than its base branch has is measured against
+that base with the same main merged in, so main's growth is not counted twice.
+Trim, or raise the budget in a reviewed change, before merging.
 
 Source files may not regrow. `bun run check:size` (part of `check` and the
 static lane) allows at most 1000 lines per non-test source file; larger files are

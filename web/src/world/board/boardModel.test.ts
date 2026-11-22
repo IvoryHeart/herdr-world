@@ -5,7 +5,7 @@ import {
   prepareWorldBoard,
   projectBoard,
 } from "./boardModel";
-import { worldObjectWithWatches } from "../worldObject";
+import { CORE_VIEW_ONLY_REASON, worldObjectWithWatches } from "../worldObject";
 import { anchorFor, targetOf } from "./boardAnchors";
 
 describe("Board model", () => {
@@ -171,6 +171,32 @@ describe("Board model", () => {
       actionable: false,
     });
     expect(board.tabs[0]).toMatchObject({ stale: true, actionable: false });
+  });
+  test("a live herdr-core host is live; a failed one or an uncontrolled TUI host is stale", () => {
+    const spaces = [
+      { label: "web", tabs: [{ label: "build", panes: [["working"]] }] },
+    ] as Parameters<typeof fixtureHost>[1];
+    // As worldObject builds a healthy core host: not TUI-actionable, World
+    // controls it through world.core.* (coreControl).
+    const core = {
+      ...fixtureHost("core", spaces),
+      actionable: false,
+      viewOnly: CORE_VIEW_ONLY_REASON,
+      coreControl: true as const,
+    };
+    // A failed core host: stale, and without core control.
+    const failed = {
+      ...fixtureHost("broken", spaces, { stale: true }),
+      actionable: false,
+    };
+    // A TUI host World can't act on keeps today's rule.
+    const tui = { ...fixtureHost("tui", spaces), actionable: false };
+    const board = projectBoard(fixtureWorld([core, failed, tui]));
+    expect(board.hosts.map((h) => [h.key, h.stale])).toEqual([
+      ["core", false],
+      ["broken", true],
+      ["tui", true],
+    ]);
   });
   test("shells never colour a tab, and overview squares put agents before shells", () => {
     const board = projectBoard(

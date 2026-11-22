@@ -1,0 +1,40 @@
+{
+  "id": "Q08",
+  "area": "Terminal composition/touch/clipboard",
+  "owner": "web/src/terminalComposition.ts",
+  "requirement": "openspec/specs/world-surfaces/terminal-windows/spec.md",
+  "properties": "Composition commits once; selection gestures cannot also dispatch input; clipboard completion stays with its captured terminal",
+  "existingTests": [
+    "web/src/terminalIme.test.ts",
+    "web/src/terminalComposition.test.ts",
+    "web/src/terminalTouchSelection.test.ts",
+    "web/src/terminalClipboard.test.ts",
+    "server/src/bridge/frame-to-ansi.test.ts",
+    "web/src/endpointFrame.test.ts",
+    "web/src/mobileTerminal.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
+  "technique": "alternative",
+  "assessment": "DOM/IME/device behavior is observed directly; retain explicit event-sequence regressions",
+  "status": "alternative-evidence",
+  "remaining": "IME/browser/clipboard behavior depends on platform events; supported browser scenarios are exercised, not every device keyboard.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "evidenceDecision": "Real xterm/browser composition, touch and clipboard transitions are the executable subject; synthetic abstract key transitions would omit the shipped core duplication that the regression reproduces. v0.8.5: Hidden-cursor IME positioning is checked directly at ANSI serialization and browser-frame decoding; no ownership or ordering model changes.",
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/consumer-evidence.md"],
+    "tests": [
+      "web/src/terminalIme.test.ts",
+      "web/src/terminalComposition.test.ts",
+      "web/src/terminalTouchSelection.test.ts",
+      "web/src/terminalClipboard.test.ts"
+    ],
+    "checks": ["bun run check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

@@ -268,8 +268,11 @@ test("every main push forces all suite classes even when a tracked doc is dirty"
     git("config", "user.name", "Example");
     git("config", "user.email", "example@example.invalid");
     writeFileSync(join(root, "README.md"), "base\n");
-    mkdirSync(join(root, "verification"));
-    writeFileSync(join(root, "verification/coverage.json"), '{"areas":[]}');
+    mkdirSync(join(root, "verification/coverage"), { recursive: true });
+    writeFileSync(
+      join(root, "verification/coverage/_meta.json"),
+      '{"schemaVersion":1}',
+    );
     git("add", ".");
     git("commit", "-qm", "base");
     writeFileSync(join(root, "README.md"), "dirty docs\n");

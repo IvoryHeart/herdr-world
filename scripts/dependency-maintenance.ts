@@ -90,7 +90,7 @@ export function maintenanceBody(
       "",
     )
     .trimEnd();
-  return `${clean}\n\n<!-- dependency-maintenance -->\n${shipped ? `Changelog: changes/dependencies-${number}.md` : "Changelog: none — dependency maintenance changes only development tooling or Actions; the shipped runtime graph is unchanged."}\nSpec impact: none — dependency version updates do not change product or API contracts.\nVerification impact: none — dependency maintenance does not change ordering, ownership, authority or recovery contracts.\nKnowledge map impact: unchanged — dependency versions and notices change without moving source ownership or navigation.\nDocumentation impact: dependency notices regenerated; existing product and release instructions remain accurate.\n<!-- /dependency-maintenance -->\n`;
+  return `${clean}\n\n<!-- dependency-maintenance -->\n${shipped ? `Changelog: changes/dependencies-${number}.md` : "Changelog: none — dependency maintenance changes only development tooling or Actions; the shipped runtime graph is unchanged."}\nSpec impact: none — dependency version updates do not change product or API contracts.\nVerification impact: none — dependency maintenance does not change ordering, ownership, authority or recovery contracts.\nDocumentation impact: dependency notices regenerated; existing product and release instructions remain accurate.\n<!-- /dependency-maintenance -->\n`;
 }
 
 function git(root: string, ...args: string[]) {

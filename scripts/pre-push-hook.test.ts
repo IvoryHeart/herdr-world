@@ -116,10 +116,11 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
     git("init", "-q");
     git("config", "user.email", "example@example.invalid");
     git("config", "user.name", "Example");
-    mkdirSync(join(root, "verification"));
+    mkdirSync(join(root, "verification/coverage"), { recursive: true });
+    writeFileSync(join(root, "verification/coverage/_meta.json"), "{}");
     writeFileSync(
-      join(root, "verification/coverage.json"),
-      '{"areas":[{"owner":"server/src/config/"}]}',
+      join(root, "verification/coverage/example.json"),
+      '{"id":"example","owner":"server/src/config/"}',
     );
     writeFileSync(join(root, "README.md"), "base\n");
     git("add", ".");

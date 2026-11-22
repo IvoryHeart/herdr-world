@@ -1,0 +1,61 @@
+{
+  "id": "Q03",
+  "area": "SSH supervision",
+  "owner": "server/src/connections/ssh-profile-runtime.ts",
+  "requirement": "openspec/specs/runtime-federation/spec.md",
+  "properties": "Late process exits cannot retire a replacement; cancellation drains owned processes; classified recovery with bounded retry delays",
+  "existingTests": [
+    "server/src/connections/profile-service.test.ts",
+    "server/src/connections/ssh-profile-runtime.test.ts",
+    "server/src/connections/ssh-preflight-recovery.test.ts",
+    "server/src/utils/process-utils.test.ts",
+    "server/src/bridge/ssh-tunnel.test.ts",
+    "server/src/bridge/ssh-windows.test.ts",
+    "server/src/bridge/ssh-owner.test.ts",
+    "server/src/connections/runtime-process.test.ts",
+    "server/src/http/terminal-upload.test.ts",
+    "server/src/bridge/ssh-sessions.test.ts",
+    "server/src/bridge/ssh-master.test.ts",
+    "server/src/bridge/ssh-openssh.test.ts",
+    "server/src/bridge/forward-owner.test.ts",
+    "server/src/bridge/ssh-forward.test.ts",
+    "server/src/connections/host-discovery.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
+  "technique": "shared-lifecycle",
+  "assessment": "transport/preflight exit classification and cancellation consumer mapping; real SSH remains platform evidence",
+  "status": "shared-model",
+  "remaining": "Real OpenSSH, OS process and Windows transport semantics remain platform checks; the manager model does not simulate SSH.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/runtime-leases.qnt", "quint/runtime-drain.qnt"],
+    "contracts": [
+      "verification/consumer-evidence.md",
+      "verification/composition.md"
+    ],
+    "tests": [
+      "server/src/connections/ssh-profile-runtime.test.ts",
+      "server/src/connections/ssh-preflight-recovery.test.ts",
+      "server/src/utils/process-utils.test.ts",
+      "server/src/bridge/ssh-tunnel.test.ts",
+      "server/src/bridge/ssh-windows.test.ts",
+      "server/src/bridge/ssh-owner.test.ts",
+      "server/src/connections/runtime-process.test.ts",
+      "server/src/http/terminal-upload.test.ts",
+      "server/src/bridge/ssh-sessions.test.ts",
+      "server/src/bridge/ssh-master.test.ts",
+      "server/src/bridge/ssh-openssh.test.ts",
+      "server/src/bridge/forward-owner.test.ts",
+      "server/src/bridge/ssh-forward.test.ts",
+      "server/src/connections/host-discovery.test.ts"
+    ],
+    "checks": ["bun run check", "bun run verification:check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "evidenceDecision": "Manager currency and drain fence late transport completion. Real supervisor/tunnel tests exercise process exits, cancellation, reconnect classification and private path ownership. Candidate Roamgate transport consumers add explicit master/forward ownership, bounded session scheduling and qualified status reconciliation checks; existing model bounds and native-platform exclusions remain unchanged. Independent candidate acceptance is still required. Fixed provider probes are bounded and noninteractive, reject unsafe destinations before invocation, retain partial successful siblings, and never start/install runtimes or persist SSH policy. Direct fixed-argv tests cover discovery; real platform exclusions remain unchanged.",
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

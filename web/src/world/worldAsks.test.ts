@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { bridge, type BridgeControlMsg } from "../api";
 import {
+  askHomeHref,
   askerName,
   WorldAsksStore,
   sharedAsksStore,
@@ -186,3 +187,30 @@ test.serial(
     }
   },
 );
+
+test("a link to another World uses this page's host only when that World listens on every interface", () => {
+  const home = {
+    name: "Herdr World · release",
+    url: "http://127.0.0.1:19100/",
+    port: 19_100,
+  };
+  expect(askHomeHref(home, { hostname: "192.0.2.4" })).toBe(
+    "http://127.0.0.1:19100/",
+  );
+  expect(
+    askHomeHref({ ...home, any: true, tls: true }, { hostname: "192.0.2.4" }),
+  ).toBe("https://192.0.2.4:19100/");
+  expect(askHomeHref({ ...home, any: true }, { hostname: "::1" })).toBe(
+    "http://[::1]:19100/",
+  );
+  // Browsers report an IPv6 page host already bracketed.
+  expect(askHomeHref({ ...home, any: true }, { hostname: "[::1]" })).toBe(
+    "http://[::1]:19100/",
+  );
+  expect(
+    askHomeHref(
+      { name: "another World", url: null },
+      { hostname: "192.0.2.4" },
+    ),
+  ).toBeNull();
+});

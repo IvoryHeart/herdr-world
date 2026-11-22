@@ -1,6 +1,6 @@
 # World component routes
 
-Start from the [repository knowledge map](../../../docs/knowledge-map.md) for contracts
+Start from the [capability lookup](../../../docs/agent-development.md#find-a-feature) for contracts
 and service ownership. This file routes visual and terminal tasks to the small set of
 browser owners and focused tests. Search the **symbols** below inside large files;
 line numbers and CSS ranges change as components move.
