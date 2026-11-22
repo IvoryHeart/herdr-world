@@ -91,10 +91,10 @@ Targets are on your own host; add --connection ID for another one.
   board element put KIND ID --title TITLE [--at X,Y] [--rev REV] [--json]
          document: --text TEXT, or --connection ID --workspace ID --path PATH
          memory: --connection ID --workspace ID [--path PATH] (MEMORY.md default),
-           or a Library memory: --connection ID --memory-source SOURCE_ID
+           or one from World memory: --connection ID --memory-source SOURCE_ID
            --path ENTRY [--workspace ID] (from memory list; read it with memory read)
          log: --connection ID --workspace ID --path PATH [--agent-ref ID]
-           [--apartment RESIDENT_ID] (the Apartments resident it belongs to)
+           [--apartment RESIDENT_ID] (the finished agent it belongs to)
          link: --url HTTP_URL (stored only; no fetch or iframe)
   board element read ID [--generation N] [--path CHILD] [--json]
          project sources need the named connection's current generation from

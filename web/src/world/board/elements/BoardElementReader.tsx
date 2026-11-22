@@ -1,10 +1,10 @@
 import {
   Brain,
-  Building2,
   ChevronLeft,
   ExternalLink,
   File,
   Folder,
+  History,
   Pencil,
   RotateCw,
   Trash2,
@@ -280,21 +280,21 @@ export function BoardElementReader({
               disabled={!links.apartment.resident}
               title={
                 links.apartment.resident
-                  ? `Opens ${links.apartment.resident.name}'s apartment, with its history and Resume.`
-                  : "This agent does not live in Apartments now."
+                  ? `Opens ${links.apartment.resident.name}'s past session, with its history and Resume.`
+                  : "This agent is not in past sessions now."
               }
               onClick={links.apartment.open}
             >
-              <Building2 size={14} aria-hidden="true" /> Open apartment
+              <History size={14} aria-hidden="true" /> Open past session
             </button>
           ) : links.openLibrary ? (
             <button
               type="button"
               className="board-reader-open"
-              title="Opens World's memory Library on this host and project."
+              title="Opens Memory on this host and project."
               onClick={links.openLibrary}
             >
-              <Brain size={14} aria-hidden="true" /> Open in Library
+              <Brain size={14} aria-hidden="true" /> Open in Memory
             </button>
           ) : element.kind === "link" ? (
             <a
@@ -419,7 +419,7 @@ function ReadBody({
     // service's pointer, shown only if it ever reaches here.
     return (
       <p className="board-reader-status">
-        This memory is in the Library. Use Open in Library to read it.
+        This memory is in Memory. Use Open in Memory to read it.
       </p>
     );
   const turns =

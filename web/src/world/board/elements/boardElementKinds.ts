@@ -94,13 +94,13 @@ export const BOARD_KIND_PRESENTATION = {
   },
   memory: {
     label: "Memory",
-    blurb: "A memory from the Library, or a project's memory file or folder.",
+    blurb: "A memory from Memory, or a project's memory file or folder.",
     icon: Brain,
     add: "form",
   },
   log: {
     label: "Agent log",
-    blurb: "A saved log or transcript, linked to its agent's apartment.",
+    blurb: "A saved log or transcript, linked to its agent's past session.",
     icon: ScrollText,
     add: "form",
   },

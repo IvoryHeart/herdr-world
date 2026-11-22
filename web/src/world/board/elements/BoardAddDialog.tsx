@@ -49,8 +49,7 @@ function fieldProblem(message: string) {
   if (message.includes("text"))
     return `Keep the page under ${BOARD_ELEMENT_LIMITS.text.toLocaleString()} characters.`;
   if (message.includes("agent")) return "Shorten the agent or session name.";
-  if (message.includes("memory source"))
-    return "Choose a memory from the Library.";
+  if (message.includes("memory source")) return "Choose a memory.";
   return "Board cannot save this. Check the fields.";
 }
 
@@ -359,7 +358,7 @@ function ElementForm({
       return;
     }
     if (kind === "memory" && fromLibrary && !libraryMemory) {
-      setProblem("Choose a memory from the Library.");
+      setProblem("Choose a memory.");
       return;
     }
     const input = { kind, title: titleText.trim(), source: source() };
@@ -422,7 +421,7 @@ function ElementForm({
             aria-checked={fromLibrary}
             onClick={() => setFromLibrary(true)}
           >
-            From the Library
+            From Memory
           </button>
           <button
             type="button"
@@ -640,15 +639,15 @@ function LibraryMemoryPicker({
     !choices.some((choice) => choice.value === savedValue);
   const status = !target
     ? hosts.length
-      ? "That host is not one the Library can read now."
-      : "The Library reads memory where a supported agent runs. Start one, or use a project file."
+      ? "Memory cannot read that host now."
+      : "Memory reads where a supported agent runs. Start one, or use a project file."
     : !catalog
       ? state?.status === "failed"
         ? state.error
-        : "Reading the Library…"
+        : "Reading Memory…"
       : choices.length
-        ? "Board keeps which memory it is; the Library reads it when you open it."
-        : "The Library has no memory to read on this host yet.";
+        ? "Board keeps which memory it is; Memory reads it when you open it."
+        : "Memory has nothing to read on this host yet.";
   return (
     <>
       {hosts.length > 1 || (host && hosts.length && !target) ? (
@@ -726,7 +725,7 @@ function ResidentPicker({
         <option value="">None</option>
         {savedMissing ? (
           <option value={value}>
-            {apartments.verified ? "Not in Apartments now" : "Saved agent"}
+            {apartments.verified ? "Not in past sessions now" : "Saved agent"}
           </option>
         ) : null}
         {choices.map((resident) => (
@@ -737,8 +736,8 @@ function ResidentPicker({
       </select>
       <small>
         {choices.length || savedMissing
-          ? "Its apartment opens from the log."
-          : "Agents that finished on this host appear here, from Apartments."}
+          ? "Its past session opens from the log."
+          : "Agents that finished on this host appear here."}
       </small>
     </label>
   );

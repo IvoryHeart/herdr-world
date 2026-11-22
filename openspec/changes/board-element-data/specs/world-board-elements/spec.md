@@ -68,16 +68,19 @@ to open that resident's apartment, and SHALL show the action unavailable while a
 named resident no longer lives in Apartments. A resident link SHALL NOT grant
 authority or change what the log reads.
 
+Board's forms and readers SHALL name these plainly, as Memory and past
+sessions; Town's names for them (Library, Apartments) SHALL stay in Town.
+
 #### Scenario: Memory from the Library
 - **WHEN** a memory element references a Library memory and someone opens it
 - **THEN** the browser SHALL read it through `world.memory.read` on the saved
   connection's current generation, and Board's own read SHALL make no host read
-- **AND** Open in Library SHALL open the Library on that host and project
+- **AND** Open in Memory SHALL open the Library on that host and project
 
 #### Scenario: Log of a finished agent
 - **WHEN** a log names a resident, or its agent reference is a resident's session
   ID on the same connection
-- **THEN** its reader SHALL offer Open apartment for that resident
+- **THEN** its reader SHALL offer Open past session for that resident
 - **AND** a resident of another connection with the same session ID SHALL NOT
   be offered
 

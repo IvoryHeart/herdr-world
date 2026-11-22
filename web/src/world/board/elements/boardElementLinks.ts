@@ -24,7 +24,7 @@ export type LibraryMemoryChoice = {
   value: string;
   sourceId: string;
   path: string;
-  /** The project it is listed under; Open in Library opens there. */
+  /** The project it is listed under; Open in Memory opens there. */
   workspaceId: string | null;
   /** Its shelf: a project's label, or "Every project" for user files. */
   group: string;
@@ -98,7 +98,7 @@ export function libraryMemoryChoices(
 }
 
 /**
- * Where Open in Library goes for a memory element: its host and project.
+ * Where Open in Memory goes for a memory element: its host and project.
  * A project-file memory opens its project's readers when the Library has
  * them (the caller checks the Library is available there).
  */
@@ -196,7 +196,7 @@ export function libraryPlace(
     : undefined;
   return {
     hostLabel: live?.label ?? host?.label ?? source.connection_id,
-    workspaceLabel: space?.label ? `Library · ${space.label}` : "Library",
+    workspaceLabel: space?.label ? `Memory · ${space.label}` : "Memory",
     generation: live?.connection_generation ?? null,
   };
 }

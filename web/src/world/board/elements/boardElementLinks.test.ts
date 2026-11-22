@@ -112,7 +112,7 @@ describe("Board memory from the Library", () => {
       ),
     ).toEqual({
       hostLabel: "Studio",
-      workspaceLabel: "Library · web-app",
+      workspaceLabel: "Memory · web-app",
       generation: 7,
     });
     // Not a host the Library reads now: offline, never another host.
@@ -124,7 +124,7 @@ describe("Board memory from the Library", () => {
       ),
     ).toEqual({
       hostLabel: "studio",
-      workspaceLabel: "Library",
+      workspaceLabel: "Memory",
       generation: null,
     });
   });

@@ -111,6 +111,16 @@ const LIBRARY_MEMORY: BoardElement = {
     path: "build-notes.md",
   },
 };
+/** Board names things plainly: Town's Library and Apartments stay in Town. */
+function townNames(root: Element) {
+  const titles = [...root.querySelectorAll("[title]")].map(
+    (el) => el.getAttribute("title") ?? "",
+  );
+  return [root.textContent ?? "", ...titles]
+    .join(" ")
+    .match(/Library|[Aa]partment/g);
+}
+
 /** Every Library or Apartments open the page asked for. */
 const opened: [string, unknown][] = [];
 window.addEventListener(WORLD_MEMORY_EVENT, (event) =>
@@ -637,15 +647,19 @@ const scenarios: [string, () => Promise<void>][] = [
     async () => {
       await tap(card("log-review")!);
       await waitFor(
-        () => button(reader()!, "Open apartment")?.disabled === false,
-        "the log of a finished agent offers no Open apartment",
+        () => button(reader()!, "Open past session")?.disabled === false,
+        "the log of a finished agent offers no Open past session",
       );
-      button(reader()!, "Open apartment")!.click();
-      await waitFor(() => !reader(), "Open apartment left the reader open");
+      check(
+        !townNames(reader()!),
+        `a log's reader uses Board's names (${townNames(reader()!)})`,
+      );
+      button(reader()!, "Open past session")!.click();
+      await waitFor(() => !reader(), "Open past session left the reader open");
       check(
         JSON.stringify(opened) ===
           JSON.stringify([["apartments", { resident: "r-studio-reviewer" }]]),
-        `Open apartment opens the log's own host's resident (${JSON.stringify(opened)})`,
+        `Open past session opens the log's own host's resident (${JSON.stringify(opened)})`,
       );
     },
   ],
@@ -663,12 +677,12 @@ const scenarios: [string, () => Promise<void>][] = [
       ]);
       await tap(card("log-review")!);
       await waitFor(
-        () => button(reader()!, "Open apartment")?.disabled === true,
-        "a log whose agent left Apartments did not show the action off",
+        () => button(reader()!, "Open past session")?.disabled === true,
+        "a log whose agent left past sessions did not show the action off",
       );
       check(
-        /no longer|does not live/.test(
-          button(reader()!, "Open apartment")!.title,
+        /no longer|not in past sessions/.test(
+          button(reader()!, "Open past session")!.title,
         ),
         "the unavailable action says why",
       );
@@ -687,7 +701,7 @@ const scenarios: [string, () => Promise<void>][] = [
         await tap(card("memory-build-notes")!);
         await waitFor(
           () =>
-            /Library/.test(
+            /Memory/.test(
               reader()?.querySelector("small")?.textContent ?? "",
             ) &&
             !/Reading…/.test(reader()?.textContent ?? "") &&
@@ -698,12 +712,16 @@ const scenarios: [string, () => Promise<void>][] = [
           !reads.some((read) => read.id === "memory-build-notes"),
           "Board's own read is not used for a Library memory",
         );
-        button(reader()!, "Open in Library")!.click();
-        await waitFor(() => !reader(), "Open in Library left the reader open");
+        check(
+          !townNames(reader()!),
+          `a memory's reader uses Board's names (${townNames(reader()!)})`,
+        );
+        button(reader()!, "Open in Memory")!.click();
+        await waitFor(() => !reader(), "Open in Memory left the reader open");
         check(
           JSON.stringify(opened) ===
             JSON.stringify([["library", { connectionId: "studio" }]]),
-          `Open in Library opens the memory's host (${JSON.stringify(opened)})`,
+          `Open in Memory opens the memory's host (${JSON.stringify(opened)})`,
         );
       } finally {
         setMemoryClientForTests(null);
@@ -722,7 +740,7 @@ const scenarios: [string, () => Promise<void>][] = [
         await waitFor(
           () =>
             addDialog()?.querySelector('[role="radio"][aria-checked="true"]')
-              ?.textContent === "From the Library",
+              ?.textContent === "From Memory",
           "Memory did not start in the Library",
         );
         const memory = () =>
@@ -732,6 +750,10 @@ const scenarios: [string, () => Promise<void>][] = [
         await waitFor(
           () => (memory()?.querySelectorAll("option").length ?? 0) > 1,
           "the Library's memories are not offered",
+        );
+        check(
+          !townNames(addDialog()!),
+          `the Memory form uses Board's names (${townNames(addDialog()!)})`,
         );
         const notes = [...memory()!.querySelectorAll("option")].find((o) =>
           o.textContent?.startsWith("build-notes.md"),
@@ -769,7 +791,7 @@ const scenarios: [string, () => Promise<void>][] = [
           .querySelector<HTMLButtonElement>('[data-kind="memory"]')!
           .click();
         await settle();
-        button(addDialog()!, "From the Library")!.click();
+        button(addDialog()!, "From Memory")!.click();
         await settle();
         const memory = () =>
           [...addDialog()!.querySelectorAll("label")]

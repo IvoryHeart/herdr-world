@@ -133,12 +133,12 @@ and its generation fence:
 
 Read it with `world.memory.read` (`herdr-world memory read`) on that
 connection's current generation; Board's reader does so and shows at most the
-same 64 KiB. Board's reader opens the Library there with **Open in Library**.
+same 64 KiB. Board's reader opens World's memory there with **Open in Memory**.
 
 A log's apartment is the resident named by `apartment_id`, else the one whose
 harness session ID or resident ID equals `agent_ref`, from `world.apartments`
-on the log's own connection only. Board's reader opens it with **Open
-apartment**; a named resident that has moved out of Apartments leaves the
+on the log's own connection only. Board's reader opens that past session
+with **Open past session**; a named resident that has moved out leaves the
 action unavailable, never re-pointed to another resident.
 
 ## Limits and refusals

@@ -5,7 +5,7 @@
 **Surfaces:**
 
 - Board's **Add to Board** picker lists every registered kind; Memory, Agent log, Doc and Link are placed from it.
-- Element cards on Board open a reader (side panel on desktop, bottom sheet on phones) with Edit and Remove; a Memory's reader adds **Open in Library**, an Agent log's **Open apartment**.
+- Element cards on Board open a reader (side panel on desktop, bottom sheet on phones) with Edit and Remove; a Memory's reader adds **Open in Memory**, an Agent log's **Open past session**.
 - `herdr-world board element types|list|put|delete|read` and `world.board.elements.*` RPC share one service.
 - TUI and core hosts share the project Files handlers; a read names its saved connection and generation.
 
@@ -44,7 +44,7 @@
 - A project read never falls back to another host or a newer generation.
 - Board never fetches a link; elements are not string ends yet.
 - A Library memory is read by the browser through the memory client, never by Board's service; its offline state follows the Library's host list (`memoryHosts()`), not Board's project place.
-- A log links only to a resident on its own connection; a saved `apartment_id` that moved out disables Open apartment instead of matching by `agent_ref`.
+- A log links only to a resident on its own connection; a saved `apartment_id` that moved out disables Open past session instead of matching by `agent_ref`.
 - Apartments is read only while a log's reader or the Agent log form is open (`useApartments` starts its store).
 - Changing the `--skill` guide text (`server/src/cli/world-skill.ts`) needs a `WORLD_SKILL_VERSION` bump and digest in `integration.test.ts`.
 
@@ -53,8 +53,8 @@
 ## Board elements
 
 Board places four kinds of element beside its sticky notes, each drawn as a
-paper thing: **Memory** (a card-index drawer) is a memory from World's memory
-Library, or a project's memory file or folder, `MEMORY.md` by default;
+paper thing: **Memory** (a card-index drawer) is a memory from World's
+memory, or a project's memory file or folder, `MEMORY.md` by default;
 **Agent log** (a ruled page) reads a saved log or transcript, which stays
 readable after its pane is gone, and can name the finished agent it belongs to; **Doc** (a sheet
 with a folded corner) is a page written on Board or a project file; **Link** (a
@@ -67,11 +67,11 @@ an opener or referrer.
   workspaces, tabs, panes, strings and work items say where they come from,
   with **New workspace…** and **Open Work** where they apply. A kind's short
   form asks for a title and, for project kinds, a project on a connected host
-  and a path inside it. Memory starts on **From the Library** whenever the
-  Library can read a host: pick the host (when there are several) and a
+  and a path inside it. Memory starts on **From Memory** whenever World's
+  memory can read a host: pick the host (when there are several) and a
   memory, shelved by project with your selected workspace's project first;
   **Project file** keeps the path form. Agent log adds **Finished agent
-  (optional)**, the newest residents of Apartments on the project's host;
+  (optional)**, the newest past sessions on the project's host;
   changing to another host's project clears it. The form refuses what the service would (an empty
   title, a path outside the project, a non-HTTP(S) address or one with a user
   name or password) before anything is saved. A new element lands in the
@@ -84,13 +84,13 @@ an opener or referrer.
   say) stays in place as a note with its own text, and a log with no chat at
   all reads as plain text. **Show raw** shows the saved lines. Text is shown
   as text, never as HTML, up to 64 KiB, and the reader says when it is cut.
-- **Open in Library** (a Memory's reader) closes the reader and opens the
-  memory Library on that memory's host and project. A project-file memory
-  offers it when the Library reads that project. **Open apartment** (an
-  Agent log's reader) opens the agent's apartment in Apartments: the one
-  chosen in the form, else the one whose session the log's agent field
-  names, on the same host only. When the chosen agent has left Apartments
-  the button stays, unavailable, and says why. `?memoryFixture` gives a
+- **Open in Memory** (a Memory's reader) closes the reader and opens World's
+  memory (Town's Library) on that memory's host and project. A project-file
+  memory offers it when memory reads that project. **Open past session** (an
+  Agent log's reader) opens the agent's past session (Town's Apartments): the
+  one chosen in the form, else the one whose session the log's agent field
+  names, on the same host only. When the chosen agent is no longer among the
+  past sessions the button stays, unavailable, and says why. `?memoryFixture` gives a
   synthetic Library host for the Memory side; the log side needs an agent that
   finished on the project's own host (`?apartments-preview=avatars` residents
   live on a synthetic host, so no project matches them).
@@ -120,7 +120,8 @@ Recovery uses the normal private backup and atomic migration transaction.
 A Library memory is a reference only: the memory service reads it on the
 host's current generation, and it is offline while the Library cannot read
 that host. An Agent log still reads its saved file; its apartment is a link,
-not its content. Element edits have no CLI history/undo; existing sticky note and
+not its content. Board names things plainly (Memory, past session); Town's
+metaphors (Library, Apartments) stay in Town. Element edits have no CLI history/undo; existing sticky note and
 card behavior is unchanged.
 
 Project reads explicitly name the saved connection's current generation through

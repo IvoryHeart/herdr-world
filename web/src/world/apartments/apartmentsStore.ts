@@ -233,7 +233,7 @@ export type ApartmentsRequest = { query?: string; resident?: string };
 
 /**
  * Open Apartments (Town's building, Town center, Board), optionally on a
- * search or on one resident's detail (a Board agent log's Open apartment).
+ * search or on one resident's detail (a Board agent log's Open past session).
  */
 export function openApartments(request?: string | ApartmentsRequest) {
   window.dispatchEvent(

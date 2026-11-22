@@ -71,7 +71,7 @@ export type BoardProjectSource = {
  * its host, the Library's source ID and the entry inside that source, as
  * `world.memory.read` takes them. Board keeps the reference only; the memory
  * service reads it, at the host's current generation, when someone opens it.
- * `workspace_id` is the project it was chosen from: Open in Library opens there.
+ * `workspace_id` is the project it was chosen from: Open in Memory opens there.
  */
 export type BoardLibraryMemorySource = {
   connection_id: string;
