@@ -5,6 +5,7 @@
  */
 
 import type { TownEdgeMark } from "./townEdgeArrows";
+import { townBuildingOf } from "./townBuildings";
 
 /** The item Next showed last, and where it stood in the list then. */
 export type TownNextCursor = { key: string; index: number } | null;
@@ -48,7 +49,8 @@ type TownAgentRef = {
 export type TownEdgeMarked = {
   key: string;
   mark: TownEdgeMark;
-  hostKey: string;
+  /** The building it stands in (townBuildingOf), not its runtime host. */
+  buildingKey: string;
 };
 
 /** The Town agent a Needs you item names by its leaf ID, if Town shows it. */
@@ -82,7 +84,11 @@ export function townEdgeMarked(
     const agent = key ? agents.get(key) : undefined;
     if (!agent || agent.stale || seen.has(agent.key)) continue;
     seen.add(agent.key);
-    list.push({ key: agent.key, mark: "done", hostKey: agent.hostKey });
+    list.push({
+      key: agent.key,
+      mark: "done",
+      buildingKey: townBuildingOf(agent),
+    });
   }
   return list;
 }

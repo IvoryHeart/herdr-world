@@ -21,6 +21,7 @@
  * front door and is drawn outside by the bus layer until it is put back.
  */
 
+import { townBuildingOf } from "./townBuildings";
 import {
   TOWN_TILE as T,
   townSeat,
@@ -419,10 +420,12 @@ export class TownActors {
     const fresh = new Set<string>();
     const included = (hostKey: string) => !hosts || hosts.has(hostKey);
     for (const agent of model.agents.values()) {
-      if (!included(agent.hostKey)) continue;
+      // An actor walks in its building, a machine's for a later runtime.
+      const home = townBuildingOf(agent);
+      if (!included(home)) continue;
       const seat = model.agentSeats.get(agent.key);
       const cell = seat ? world.cells.get(seat.deskKey) : undefined;
-      const building = world.buildings.get(agent.hostKey);
+      const building = world.buildings.get(home);
       if (!building || !seat || !cell) continue;
       seen.add(agent.key);
       let actor = this.actors.get(agent.key);
@@ -430,7 +433,7 @@ export class TownActors {
         const geometry = townSeat(cell, seat.seat);
         actor = {
           key: agent.key,
-          hostKey: agent.hostKey,
+          hostKey: home,
           x: geometry.cx,
           y: geometry.seatedY,
           dir: geometry.top ? "down" : "up",
@@ -450,11 +453,7 @@ export class TownActors {
         fresh.add(agent.key);
       }
       const previousBuilding = previousWorld?.buildings.get(actor.hostKey);
-      if (
-        previousBuilding &&
-        !fresh.has(actor.key) &&
-        actor.hostKey === agent.hostKey
-      ) {
+      if (previousBuilding && !fresh.has(actor.key) && actor.hostKey === home) {
         // Reflow moves the building and its occupants together. Keeping old
         // world coordinates can put a walker outside the new navigation grid.
         const dx = (building.x - previousBuilding.x) * T;
@@ -479,13 +478,13 @@ export class TownActors {
             (spot) => spotKey(spot) === spotKey(actor.spot!),
           ) ?? -1;
         actor.spot =
-          actor.hostKey === agent.hostKey && index >= 0
+          actor.hostKey === home && index >= 0
             ? (building.lounge.spots[index] ?? null)
             : null;
         if (actor.spot && actor.goal?.kind === "lounge")
           actor.goal = { kind: "lounge", spot: actor.spot };
       }
-      actor.hostKey = agent.hostKey;
+      actor.hostKey = home;
       if (agent.semanticStatus === "blocked" && actor.blockedSince === 0)
         actor.blockedSince = this.clock || 1e-6;
       if (agent.semanticStatus !== "blocked") actor.blockedSince = 0;

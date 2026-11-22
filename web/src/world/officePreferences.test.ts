@@ -22,10 +22,33 @@ describe("View preferences", () => {
       inspectorPresentation: "docked",
       townCalm: true,
       townOpens: "chat",
+      townBuildings: "host",
+      townRoomsPerRow: "auto",
       townGreeting: true,
       tabBadge: true,
       townQuietMinutes: 10,
     });
+  });
+
+  test("Town keeps a building per host unless per runtime was chosen", () => {
+    const read = (townBuildings: unknown) =>
+      readOfficePreferences(memoryStorage(JSON.stringify({ townBuildings })))
+        .townBuildings;
+    expect(DEFAULT_OFFICE_PREFERENCES.townBuildings).toBe("host");
+    expect(read("runtime")).toBe("runtime");
+    expect(read("host")).toBe("host");
+    expect(read("machine")).toBe("host");
+  });
+
+  test("Town's rooms per row is Auto unless a count from 2 to 5 was chosen", () => {
+    const read = (townRoomsPerRow: unknown) =>
+      readOfficePreferences(memoryStorage(JSON.stringify({ townRoomsPerRow })))
+        .townRoomsPerRow;
+    expect(DEFAULT_OFFICE_PREFERENCES.townRoomsPerRow).toBe("auto");
+    for (const count of [2, 3, 4, 5] as const) expect(read(count)).toBe(count);
+    expect(read(6)).toBe("auto");
+    expect(read("3")).toBe("auto");
+    expect(read("auto")).toBe("auto");
   });
 
   test("Town marks quiet working agents after 10 minutes unless changed", () => {
@@ -106,6 +129,8 @@ describe("View preferences", () => {
       inspectorPresentation: "floating",
       townCalm: false,
       townOpens: "terminal",
+      townBuildings: "runtime",
+      townRoomsPerRow: 4,
       townGreeting: false,
       tabBadge: false,
       townQuietMinutes: 30,
@@ -116,6 +141,8 @@ describe("View preferences", () => {
         inspectorPresentation: "floating",
         townCalm: false,
         townOpens: "terminal",
+        townBuildings: "runtime",
+        townRoomsPerRow: 4,
         townGreeting: false,
         tabBadge: false,
         townQuietMinutes: 30,

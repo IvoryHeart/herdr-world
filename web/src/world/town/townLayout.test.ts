@@ -19,6 +19,7 @@ import {
   TownGround,
   type TownInput,
   type TownLayout,
+  type TownShape,
 } from "./townLayout";
 import {
   townRoomTidy,
@@ -576,11 +577,27 @@ test("a room grows to hold a held join seat", () => {
 });
 
 test("the container's size picks the shape, not one breakpoint", () => {
+  // Rooms per row on Auto: each building chooses, up to what fits the width.
+  const auto = (shape: TownShape, roomColumns: number) => ({
+    ...shape,
+    roomColumns,
+    autoRooms: true,
+  });
   expect(townShapeFor(390, 844)).toBe(TOWN_SHAPES.phone);
-  expect(townShapeFor(1080, 1920)).toBe(TOWN_SHAPES.portrait);
-  expect(townShapeFor(960, 1080)).toBe(TOWN_SHAPES.portrait);
-  expect(townShapeFor(1100, 800)).toBe(TOWN_SHAPES.medium);
-  expect(townShapeFor(1440, 900)).toBe(TOWN_SHAPES.wide);
+  expect(townShapeFor(1080, 1920)).toEqual(auto(TOWN_SHAPES.portrait, 4));
+  expect(townShapeFor(960, 1080)).toEqual(auto(TOWN_SHAPES.portrait, 4));
+  expect(townShapeFor(700, 600)).toEqual(auto(TOWN_SHAPES.medium, 2));
+  expect(townShapeFor(1100, 800)).toEqual(auto(TOWN_SHAPES.medium, 4));
+  expect(townShapeFor(1440, 900)).toEqual(auto(TOWN_SHAPES.wide, 5));
+  // A chosen count holds for every building, a phone's too.
+  expect(townShapeFor(390, 844, 2)).toEqual({
+    ...TOWN_SHAPES.phone,
+    roomColumns: 2,
+  });
+  expect(townShapeFor(1100, 800, 3)).toEqual({
+    ...TOWN_SHAPES.medium,
+    roomColumns: 3,
+  });
   for (const shape of Object.values(TOWN_SHAPES)) {
     const tiers = townRoomTiers(shape.deskColumns);
     const [cols, rows] = tiers[tiers.length - 1]!;
@@ -1334,4 +1351,102 @@ test("the Add room doorway stays beside the bar as rooms open, move and tidy", (
     expectClear(live.layout);
     expect(at("a")).toEqual(fixed);
   }
+});
+
+/** Distinct left edges of a building's rooms: how many rooms per row it has. */
+const roomsPerRowOf = (layout: TownLayout) =>
+  new Set(layout.buildings[0]!.rooms.map((room) => room.x)).size;
+
+/** A building's width over its floor's height. */
+const aspectOf = (layout: TownLayout) =>
+  layout.buildings[0]!.w / layout.buildings[0]!.floorH;
+
+test("on Auto a building of many rooms stays about square, a small one compact (#1188)", () => {
+  // The chat docked beside Town: about 1100 px wide.
+  const shape = townShapeFor(1100, 800);
+  const many = layoutTown(town({ local: Array(20).fill(1) }), shape).layout;
+  expect(roomsPerRowOf(many)).toBeGreaterThan(2);
+  expect(aspectOf(many)).toBeGreaterThanOrEqual(0.9);
+  expect(aspectOf(many)).toBeLessThanOrEqual(1.5);
+  // Two rooms per row, as this width gave before, made a tower.
+  const tower = layoutTown(town({ local: Array(20).fill(1) }), {
+    ...shape,
+    roomColumns: 2,
+    autoRooms: false,
+  }).layout;
+  expect(aspectOf(tower)).toBeLessThan(0.7);
+  const few = layoutTown(town({ local: [1, 1] }), shape).layout;
+  expect(roomsPerRowOf(few)).toBeLessThanOrEqual(2);
+  // While the scene is live, a room that grows keeps the building's rooms per
+  // row: only rooms below it in its column move.
+  const grownCounts = Array(20).fill(1);
+  grownCounts[1] = 40;
+  const first = layoutTown(town({ local: Array(20).fill(1) }), shape);
+  const grown = layoutTown(
+    town({ local: grownCounts }),
+    shape,
+    first.memory,
+  ).layout;
+  expect(roomsPerRowOf(grown)).toBe(roomsPerRowOf(first.layout));
+  const columnOf = (layout: TownLayout) => {
+    const xs = [...new Set(layout.buildings[0]!.rooms.map((r) => r.x))].sort(
+      (a, b) => a - b,
+    );
+    return layout.buildings[0]!.rooms.map((room) => xs.indexOf(room.x));
+  };
+  expect(columnOf(grown)).toEqual(columnOf(first.layout));
+  const column = columnOf(first.layout)[1];
+  first.layout.buildings[0]!.rooms.forEach((room, index) => {
+    if (columnOf(first.layout)[index] !== column)
+      expect(grown.buildings[0]!.rooms[index]!.y).toBe(room.y);
+  });
+  // Never more per row than fits the width.
+  const narrow = layoutTown(
+    town({ local: Array(40).fill(1) }),
+    townShapeFor(700, 600),
+  ).layout;
+  expect(roomsPerRowOf(narrow)).toBe(2);
+});
+
+test("a chosen rooms per row reflows at once, even with remembered columns (#1188)", () => {
+  const input = town({ local: Array(12).fill(1) });
+  const four = layoutTown(input, townShapeFor(1100, 800, 4));
+  expect(roomsPerRowOf(four.layout)).toBe(4);
+  const two = layoutTown(input, townShapeFor(1100, 800, 2), four.memory);
+  expect(roomsPerRowOf(two.layout)).toBe(2);
+  const again = layoutTown(input, townShapeFor(1100, 800, 4), two.memory);
+  expect(roomsPerRowOf(again.layout)).toBe(4);
+  // Each of the four columns holds three rooms, none left empty.
+  const columns = new Map<number, number>();
+  for (const room of again.layout.buildings[0]!.rooms)
+    columns.set(room.x, (columns.get(room.x) ?? 0) + 1);
+  expect([...columns.values()]).toEqual([3, 3, 3, 3]);
+});
+
+test("one saved room spot never narrows a building to its width (#1188)", () => {
+  // A host's building with one room moved by hand (its saved spot) and the
+  // rest never moved, as a merged runtime's rooms are: they still fill the
+  // rows the shape allows, and the saved room keeps its spot.
+  const input = town({ local: Array(21).fill(1) });
+  const saved = new Map([["local/room-0", { x: 2, y: 9 }]]);
+  const { layout } = layoutTown(
+    input,
+    TOWN_SHAPES.wide,
+    new Map(),
+    undefined,
+    saved,
+  );
+  const building = layout.buildings[0]!;
+  const first = building.rooms[0]!;
+  expect({ x: first.x - building.x, y: first.y - building.y }).toEqual({
+    x: 2,
+    y: 9,
+  });
+  expect(roomsPerRowOf(layout)).toBe(3);
+  const rooms = building.rooms;
+  for (const [i, a] of rooms.entries())
+    for (const b of rooms.slice(i + 1)) expect(overlaps(a, b)).toBe(false);
+  // Without a saved spot the same rooms stack to the same width.
+  const stacked = layoutTown(input, TOWN_SHAPES.wide).layout;
+  expect(building.w).toBe(stacked.buildings[0]!.w);
 });
