@@ -56,7 +56,8 @@ jobs:
                   if-no-files-found: warn
                   retention-days: 7
 
-    # Two isolated files per runner; each case retains its own profile and state.
+    # Chrome-driven suites outside World, one file at a time as in repository
+    # validation, which leaves them out.
     web-shards:
         name: Web browser shard (${{ matrix.shard }}/2)
         if: toJSON(fromJSON(inputs.selection).web) != '[]'
@@ -83,7 +84,7 @@ jobs:
               run: bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"
             - name: Run web browser suites
               env:
-                  HERDR_TEST_PARALLEL: "2"
+                  HERDR_TEST_PARALLEL: "1"
                   HERDR_TEST_MAX_CONCURRENCY: "2"
                   HERDR_CI_SELECTION: ${{ inputs.selection }}
               run: bun scripts/ci-tests.ts web ${{ matrix.shard }}/2

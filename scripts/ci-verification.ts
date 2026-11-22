@@ -1,11 +1,9 @@
-import { readVerificationResources } from "./verification-resources";
 import assert from "node:assert/strict";
 import { balanceShards } from "./balance-shards";
 import timings from "./verification-timings.json";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
-import { createHash } from "node:crypto";
 import { verificationModels } from "../quint/models";
 import { aggregateVerificationEvidence } from "./verification-parallel";
 import {
@@ -53,8 +51,6 @@ export type Shard = {
   run: string;
   complete: boolean;
   records: Case[];
-  reuse?: { hash: string; origin: string };
-  hash?: string;
 };
 export function selectVerificationShards(
   shards: readonly Shard[],
@@ -134,8 +130,6 @@ export async function runVerificationShard(
     run: process.env.GITHUB_RUN_ID || "local",
     complete: false,
     records: [],
-    hash: (await (await import("./ci-model-cache")).modelCacheKey(root, index))
-      .hash,
   };
   const manifest = resolve(output, "manifest.json");
   await writeFile(manifest, JSON.stringify(shard));
@@ -227,14 +221,26 @@ export async function aggregateCIShards(
     process.env.GITHUB_RUN_ID || "local",
     Number(process.env.GITHUB_RUN_ATTEMPT || 1),
   );
-  const resourceRecords = await readVerificationResources(root);
+  const resourceRecords = await Promise.all(
+    (await readdir(resolve(root, ".agents/verification/resources"))).map(
+      async (name) =>
+        JSON.parse(
+          await readFile(
+            resolve(
+              root,
+              ".agents/verification/resources",
+              name,
+              "resources.json",
+            ),
+            "utf8",
+          ),
+        ),
+    ),
+  );
   const records = [];
   const accounting: unknown[] = [];
   const identity = await source(root, signal);
   for (const shard of selected) {
-    const reused = shard.reuse
-      ? await (await import("./ci-model-cache")).readReusedBundle(root, shard)
-      : undefined;
     const path = artifacts.find((entry) => entry.shard === shard)!.path;
     const resource = resourceRecords.filter(
       (record) => record.manifest === path,
@@ -245,25 +251,10 @@ export async function aggregateCIShards(
       "Missing or duplicate shard resource accounting",
     );
     const evidence = resource[0]!;
-    if (reused)
-      assert.deepEqual(
-        evidence,
-        { ...reused.resource, manifest: path },
-        "Reused resource artifact differs from origin",
-      );
     accounting.push({
       index: shard.index,
       attempt: shard.attempt,
       ...evidence,
-      mode: reused ? "reused" : "ran",
-      hash:
-        shard.reuse?.hash ??
-        shard.hash ??
-        createHash("sha256")
-          .update(JSON.stringify(identity.inputs))
-          .digest("hex"),
-      originRevision: reused?.cases[0]?.manifest.sourceRevision,
-      originRun: reused?.shard.run,
     });
     assert.deepEqual(evidence.limits, limits, "Shard resource limits differ");
     assert(
@@ -290,36 +281,17 @@ export async function aggregateCIShards(
       const manifest = JSON.parse(
         await readFile(resolve(root, record.path), "utf8"),
       ) as VerificationManifest;
-      if (reused)
-        assert.deepEqual(
-          manifest,
-          reused.cases.find((item) => item.path === record.path)?.manifest,
-          "Reused case artifact differs from origin",
-        );
-      if (!reused)
-        assert.equal(
-          manifest.sourceRevision,
-          identity.revision,
-          "Shard revision differs from checkout",
-        );
-      if (!reused)
-        assert.deepEqual(
-          manifest.sourceInputs,
-          identity.inputs,
-          "Shard source inventory differs",
-        );
-      // Preserve original evidence in origin.json. The canonical aggregate
-      // binds today's complete inventory and explicitly records reuse above.
-      records.push({
-        ...record,
-        manifest: reused
-          ? {
-              ...manifest,
-              sourceRevision: identity.revision,
-              sourceInputs: identity.inputs,
-            }
-          : manifest,
-      });
+      assert.equal(
+        manifest.sourceRevision,
+        identity.revision,
+        "Shard revision differs from checkout",
+      );
+      assert.deepEqual(
+        manifest.sourceInputs,
+        identity.inputs,
+        "Shard source inventory differs",
+      );
+      records.push({ ...record, manifest });
     }
   }
   const manifest = await aggregateVerificationEvidence(

@@ -62,24 +62,6 @@ export function discoverWorldBrowserShards(
 export const worldBrowserShards = discoverWorldBrowserShards();
 
 export const worldBrowserSuites = worldBrowserShards.flat();
-
-// Full scenes compete for the same software-rendering CPUs on hosted runners.
-// Only these bounded DOM/transport suites are admitted to parallel file workers;
-// new suites default to isolation until their resource use is understood.
-export const worldBrowserParallelSuites = [
-  "AnswerDeliveries.browser",
-  "CoreControl.browser",
-  "CoreSharedState.browser",
-  "CoreTerminalWatch.browser",
-  "CoreViewOnly.browser",
-  "NeedsYouCard.browser",
-  "WorldNavigatorWorktree",
-  "WorldViewErrorBoundary",
-  "groups/GroupsWindow",
-  "useSpacesTabWindowArrangement.browser",
-  "windows/WindowFrame",
-  "windows/WorldPanel",
-].map((name) => `web/src/world/${name}.test.ts`);
 export const worldBrowserIgnorePattern = ignorePattern(worldBrowserSuites);
 
 /**
@@ -90,7 +72,6 @@ export const worldBrowserIgnorePattern = ignorePattern(worldBrowserSuites);
 export const webBrowserSuites = [
   "web/src/features/index.browser.test.ts",
   "web/src/appStartup.browser.test.ts",
-  "web/src/productionBoot.browser.test.ts",
   "server/src/world/appearance.browser.test.ts",
   "web/src/uiScale.test.ts",
   "web/src/filePreviewNavigation.test.ts",

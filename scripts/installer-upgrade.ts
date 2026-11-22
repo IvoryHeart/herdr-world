@@ -15,7 +15,6 @@ import { tmpdir } from "node:os";
 import { rm } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { basename, delimiter, join, resolve } from "node:path";
-import { contentKey } from "./ci-content-key";
 import { VERIFIED_HERDR_VERSION } from "../server/src/herdr/release";
 
 const repository = "IvoryHeart/herdr-world";
@@ -203,13 +202,7 @@ export async function latestStableRelease(download: typeof fetch = fetch) {
 
 export async function plan() {
   const { tag, api } = await latestStableRelease();
-  const build = await contentKey(
-    resolve(import.meta.dir, ".."),
-    "installer",
-    "native-package",
-    process.versions.bun!,
-  );
-  const version = candidateVersion(tag, contentBuildNumber(build.hash));
+  const version = candidateVersion(tag, process.env.GITHUB_RUN_ID!);
   const commit = await api(`commits/${encodeURIComponent(tag)}`);
   assert(
     /^[0-9a-f]{40}$/.test(commit.sha),
@@ -219,7 +212,6 @@ export async function plan() {
     baseline_tag: tag,
     baseline_sha: commit.sha,
     candidate_version: version,
-    build_hash: build.hash,
   };
   assert(process.env.GITHUB_OUTPUT, "GITHUB_OUTPUT is required");
   const { appendFileSync } = await import("node:fs");
@@ -389,23 +381,12 @@ const manifestAt = (root: string) =>
 const digest = (path: string) =>
   createHash("sha256").update(readFileSync(path)).digest("hex");
 
-export function contentBuildNumber(hash: string): string {
-  assert(/^[0-9a-f]{64}$/.test(hash), "Invalid installer content hash");
-  return (BigInt(`0x${hash.slice(0, 12)}`) + 1n).toString();
-}
-
 export async function verify() {
   const source = resolve(import.meta.dir, "..");
   const baseline = resolve(process.env.INSTALLER_BASELINE_DIR!);
   const tag = process.env.INSTALLER_BASELINE_TAG!;
   const version = process.env.HERDR_WORLD_BUILD_VERSION!;
-  assert.equal(
-    version,
-    candidateVersion(
-      tag,
-      contentBuildNumber(process.env.INSTALLER_BUILD_HASH!),
-    ),
-  );
+  assert.equal(version, candidateVersion(tag, process.env.GITHUB_RUN_ID!));
   assert.equal(manifestAt(baseline).version, tag.slice(1));
   const platform = `${process.platform === "win32" ? "windows" : process.platform === "darwin" ? "darwin" : "linux"}-${process.arch}`;
   const archiveName = `herdr-world-v${version}-${platform}.tar.xz`;
