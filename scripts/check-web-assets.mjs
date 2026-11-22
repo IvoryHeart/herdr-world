@@ -19,6 +19,9 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // the float shell's lazy chunk, which moves that confirmation and the float
 // shell's read model into one shared chunk and its CSS (185 files, no new
 // bytes, on 2026-11-17).
+// The #981 Code view design study adds three standalone, on-demand static
+// assets (HTML, CSS and JS), without adding to the application's eager graph.
+// Account for those files explicitly; byte and startup budgets remain binding.
 // New room's dialog reads each connection's recent folders, which splits the
 // World runtime store into a lazy chunk of its own (190 files with #981, no new
 // bytes or initial load, on 2026-11-19).
@@ -33,9 +36,6 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // dialog split its tabs into lazy Settings pages (Runtime, connection,
 // Integrations, instance name, speech, worktree command) with their
 // stylesheets: +12 files and fewer total bytes (212 files, 15.3 MiB).
-// The Code view (#1009) retired the #981 design study's three standalone
-// assets and adds its lazy chunks (JS and CSS), which Settings' IDE rows
-// share; the bundle stays within 212 (205 files on 2026-11-20).
 const maxFileCount = 212;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
@@ -64,15 +64,12 @@ const maxFileCount = 212;
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
 // Town's quiet-agent mark (#1130: rule, hourglass and Busy sub-line, all in
 // the lazy Town chunk) adds about 5 KB, still within 15.6 MiB (2026-11-21).
-// Rooms per row and one Town building per machine (#1198) add to Town's lazy
-// chunk: 16,363,027 bytes (15.605 MiB) with main, so 15.7 MiB; file,
-// help-picture and startup limits stay.
-// The Code view (#1009) with main's Apartments, post office, help, Weather
-// and Usage analytics measures 16,353,350 bytes (15.596 MiB), within 15.6
-// MiB; startup budgets unchanged (2026-11-21). Main grew under it (Town
-// host arrivals, Apartments help): together 16,365,061 bytes (15.607 MiB),
-// so 15.7 MiB; file, help-picture and startup limits stay (2026-11-22).
-const maxTotalBytes = 15.7 * 1024 * 1024;
+// The Quiet agents help card's four pictures (#1220, about 90 KB) and #1198's Town
+// buildings took main past 15.6 MiB. The maintainer approved growth up to 20 MiB on 2026-11-22.
+// 16.5 MiB leaves headroom so feature PRs stop raising this line one by one,
+// until #1228 moves the budget into a reviewed data file. A bundle-size
+// assessment is tracked separately; file, help-picture and startup limits stay.
+const maxTotalBytes = 16.5 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two

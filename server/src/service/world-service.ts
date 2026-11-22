@@ -1,3 +1,4 @@
+import { composeBoardData } from "./board-element-sources";
 import { weatherCliHandler } from "../weather/cli";
 import { composeFeatures } from "../features/compose";
 import { featureKernel } from "../features/contract";
@@ -54,11 +55,11 @@ import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
 import { composeSources, runSourceProcess } from "../sources/composition";
 import { composeShipyard } from "../shipyard/composition";
+import { profileCheckoutHost, ShipyardProjects } from "../shipyard/projects";
 import { withIntegrations } from "../integrations/http";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { afterHerdrClose } from "../world/board-closing";
-import { createBoardRecipientRecorder } from "./board-recipients";
 import { createApartmentsService } from "./apartments-service";
 import { createBinService } from "./bin-service";
 import { inFlightWork } from "./in-flight";
@@ -72,7 +73,7 @@ import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
 import { createWorldAskPeers } from "./world-ask-peers";
 import { createAssistantLoader } from "./assistant-loader";
-import { createRuntimeMemoryService } from "../memory/runtime-service";
+import { memoryKey } from "../features/memory/register";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
 import { AgentActivityCache } from "../world/agent-activity-cache";
@@ -236,11 +237,11 @@ async function compose(
     "world_board_changed",
     "world-board",
   );
-  const bindBoardRecipients = createBoardRecipientRecorder(
-    () => connectionManager,
+  const { boardElements, bindBoardRecipients } = composeBoardData({
     board,
-    publishBoardChanged,
-  );
+    publish: publishBoardChanged,
+    sources: () => ({ connectionManager, coreControl: coreRpc }),
+  });
   const askPeers = createWorldAskPeers({
     titleSuffix: async () => (await settings.read()).title_suffix,
     profiles: () => connectionProfiles.profilesById(),
@@ -249,10 +250,11 @@ async function compose(
     ledger: () => storage.ledger(),
   });
   const worldCli = createWorldCliService({
+    elements: boardElements,
     peers: askPeers.peers,
     homeName: askPeers.homeName,
     askRuntimes: askPeers.askRuntimes,
-    memory: () => rpcServices.worldMemory!,
+    memory: () => features!.get(memoryKey),
     core: () => coreCallers,
     board,
     ledger: () => storage.ledger(),
@@ -710,6 +712,17 @@ async function compose(
     vaultPath: paths.sourceSecrets,
     now: () => clock.now(),
   });
+  // Shipyard's lanes are the projects open in the runtimes (#1226).
+  const shipyardProjects = new ShipyardProjects({
+    run: runSourceProcess,
+    topology: async () =>
+      worldSnapshots ? (await worldSnapshots.snapshot()).connections : [],
+    hostOf: (id) =>
+      id === STARTUP_DEFAULT_CONNECTION_ID && config.sshHost
+        ? { kind: "ssh", destination: config.sshHost }
+        : profileCheckoutHost(connectionProfiles.profilesById().get(id)),
+    now: () => clock.now(),
+  });
   const shipyard = await composeShipyard({
     directory: paths.instanceRegistry,
     dataRoot: paths.root,
@@ -717,6 +730,7 @@ async function compose(
     version: config.appVersion,
     run: runSourceProcess,
     source: () => worldSources.shipyardSource(),
+    projects: () => shipyardProjects.read(),
     now: () => clock.now(),
     scheduler,
   });
@@ -785,12 +799,8 @@ async function compose(
     worldSnapshots,
     worldUsage,
     ide,
+    boardElements,
     worldUsageAnalytics: worldUsage.analytics,
-    worldMemory: createRuntimeMemoryService({
-      tui: () => connectionManager,
-      core: coreRpc,
-      now: () => clock.now(),
-    }),
   };
   features = composeFeatures(
     featureKernel(deps, storage, rpcServices, () => worldSources),

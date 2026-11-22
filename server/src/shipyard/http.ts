@@ -39,7 +39,7 @@ export function createShipyardHttp(service: ShipyardService) {
       params.getAll("repo").length > 1
     )
       return json({ error: "Shipyard takes one repo parameter" }, 400);
-    if (!params.has("repo") && !refresh) return json(service.catalog());
+    if (!params.has("repo") && !refresh) return json(await service.catalog());
     let repo: string;
     try {
       repo = shipyardRepository(params.get("repo"));
@@ -87,7 +87,7 @@ export function handleShipyardCli(
         };
       const actor = { label: "local Shipyard CLI", verified: false };
       if (body.command === "list")
-        return { ok: true, actor, result: deps.service.catalog() };
+        return { ok: true, actor, result: await deps.service.catalog() };
       let repo: string;
       try {
         repo = shipyardRepository(params.repo);

@@ -68,7 +68,7 @@
 
   .mobile-controls-collapsed .mobile-workspace-shortcut,
   .keyboard-open .mobile-workspace-shortcut,
-  .app:has(.terminal-composer-input:focus) .mobile-workspace-shortcut {
+  &[data-terminal-input-focus~="composer"] .app .mobile-workspace-shortcut {
     opacity: 0;
     pointer-events: none;
     transform: translate3d(0, 12px, 0) scale(0.85);

@@ -6,8 +6,9 @@ import { createLegacyRoutingLogger } from "../connections/protocol";
 import type { CoreRpcServices } from "../rpc/core";
 import type { RpcServices } from "../rpc/context";
 import { createRpcDispatcher } from "../service/rpc-dispatch";
-import { createRuntimeMemoryService } from "./runtime-service";
-import { MemoryService, type MemoryLease } from "./service";
+import { createRuntimeMemoryService } from "../features/memory/runtime-service";
+import type { MemoryLease } from "./service";
+import { withFeatures } from "../testing/features";
 import { createMemoryHost } from "./host";
 import { MEMORY_LIMITS, type MemoryCatalog } from "../../../shared/memory";
 import { admitVerb } from "../verbs/admission";
@@ -70,19 +71,17 @@ test("TUI and core owners with the same generation are isolated, and unknown IDs
     },
   });
   const service = createRuntimeMemoryService({
-    tui: () =>
+    connections: () =>
       manager(
         "tui",
         tui,
       ) as unknown as ConnectionManager<LegacyConnectionRuntime>,
-    core: {
-      manager: manager("core", core),
-      hostRuntime: (lease: unknown) => {
-        expect(lease).toBe(core);
-        return core.runtime;
-      },
-    } as unknown as CoreRpcServices,
-    now: () => 1000,
+    core: () => manager("core", core) as unknown as CoreRpcServices["manager"],
+    coreHostRuntime: (lease: unknown) => {
+      expect(lease).toBe(core);
+      return core.runtime;
+    },
+    clock: { now: () => 1000, monotonic: () => 1000 },
   });
   const a = (await service.call("list", {
     connection_id: "tui",
@@ -114,19 +113,19 @@ test("browser dispatcher requires explicit write and delete acknowledgements bef
     calls++;
     return original<T>(request);
   };
-  const service = new MemoryService({ lease: () => lease });
   const replies: Record<string, unknown>[] = [];
   const ws = {} as ServerWebSocket<unknown>;
-  const services = {
+  const services = withFeatures({
     clients: new Set([ws]),
-    worldMemory: service,
+    clock: { now: () => 1000 },
+    connectionManager: { has: () => true, readyRuntimeLease: () => lease },
     snapshotAdmission: { acknowledge: () => false },
     safeSend: (_ws: unknown, payload: string) => {
       replies.push(JSON.parse(payload));
       return true;
     },
     markRpcError: () => {},
-  } as unknown as RpcServices;
+  } as unknown as RpcServices);
   const dispatch = createRpcDispatcher(
     services,
     createLegacyRoutingLogger({ log: () => {} }),

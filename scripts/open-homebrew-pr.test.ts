@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+// Several real Git clones, commits and pushes need a bounded integration budget.
 test("tap handoff synchronizes acceptance even when the Formula is unchanged and refuses a drifting retry", () => {
   const root = mkdtempSync(join(tmpdir(), "homebrew-tap-sync-"));
   try {
@@ -226,4 +227,4 @@ esac
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-}, 30_000);
+}, 60_000);

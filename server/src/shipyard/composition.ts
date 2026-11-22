@@ -14,6 +14,8 @@ export async function composeShipyard(options: {
   version: string;
   run: RunProcess;
   source: ShipyardServiceOptions["source"];
+  /** The projects open in World's runtimes: the catalog's lanes (#1226). */
+  projects: ShipyardServiceOptions["projects"];
   now(): number;
   scheduler: Scheduler;
 }) {
@@ -32,6 +34,7 @@ export async function composeShipyard(options: {
   const service = new ShipyardService({
     run: options.run,
     source: options.source,
+    projects: options.projects,
     instances: () => instances.read(),
     now,
   });
