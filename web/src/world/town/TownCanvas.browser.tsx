@@ -1,3 +1,4 @@
+import { installTownMasterFixture } from "../testing/townMasterFixture";
 import { checkCoreDesks } from "./coreTownMoves.browser";
 import { prepareTownEdgeDrop } from "./townEdgeScroll.browser";
 import { checkTownEdgeArrows } from "./townEdgeArrows.browser";
@@ -787,6 +788,7 @@ worldBridge.call = async (method, params) => {
   }
   return bridgeCall(method, params);
 };
+const fixtureTownMaster = installTownMasterFixture();
 const bridgeOnControl = worldBridge.onControl.bind(bridge);
 worldBridge.onControl = (listener) => {
   boardListeners.add(listener);
@@ -2962,11 +2964,19 @@ async function run() {
   // The Town master's chat (FirstMate's) is docked from the start on wide
   // screens: once per visit, on Chat, without moving the pane's focus.
   inspected.length = 0;
-  writeOfficePreferences(worldLocalStorage, {
-    ...readOfficePreferences(worldLocalStorage),
-    townMaster: "codex",
-  });
-  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await fixtureTownMaster(
+    (() => {
+      const agent = worldFor(base.connections).leaves.find(
+        (leaf) =>
+          leaf.agentName?.toLowerCase() === "codex" ||
+          leaf.label.toLowerCase() === "codex",
+      )!;
+      return {
+        connection_id: agent.connectionId,
+        terminal_id: agent.terminalId,
+      };
+    })(),
+  );
   if (!phone) {
     await waitFor(
       () => inspected.length === 1 && unfocusedOpens.length === 1,
@@ -2985,28 +2995,28 @@ async function run() {
     );
   }
   // Changing views and back does not reopen it in the same visit.
-  writeOfficePreferences(worldLocalStorage, {
-    ...readOfficePreferences(worldLocalStorage),
-    townMaster: "",
-  });
-  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await fixtureTownMaster(null);
   await settle();
-  writeOfficePreferences(worldLocalStorage, {
-    ...readOfficePreferences(worldLocalStorage),
-    townMaster: "codex",
-  });
-  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await fixtureTownMaster(
+    (() => {
+      const agent = worldFor(base.connections).leaves.find(
+        (leaf) =>
+          leaf.agentName?.toLowerCase() === "codex" ||
+          leaf.label.toLowerCase() === "codex",
+      )!;
+      return {
+        connection_id: agent.connectionId,
+        terminal_id: agent.terminalId,
+      };
+    })(),
+  );
   await settle();
   await settle();
   check(
     inspected.length === (phone ? 0 : 1),
     "the Town master's chat opened again in the same visit",
   );
-  writeOfficePreferences(worldLocalStorage, {
-    ...readOfficePreferences(worldLocalStorage),
-    townMaster: "",
-  });
-  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await fixtureTownMaster(null);
   inspected.length = 0;
 
   // Activating an agent's desk opens its window on Chat, not its terminal,

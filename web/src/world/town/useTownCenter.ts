@@ -40,7 +40,6 @@ import { useFocusClock } from "../FocusControls";
 import type { WorldObject } from "../worldObject";
 import type { TownCenterAction } from "./TownCenterMenu";
 import type { TownRoomActions } from "./TownCanvas";
-import { findTownMaster } from "./townMaster";
 import { useTownMaster } from "./useTownMaster";
 
 /** What finding and opening the Town master reads of an agent. */
@@ -58,18 +57,11 @@ type RoomActions = Pick<
   | "onCreateRoom"
 >;
 
-/**
- * The Town master: the agent given the role (Settings → Sounds, Make Town
- * master), else, only when nobody holds the role, the one matching Menu →
- * Town master by Herdr name, then label, as the docked chat finds it. An
- * assigned holder absent from Town is unavailable: the name never stands in
- * for it, since a same-named agent may live on another connection.
- */
+/** Resolve only the synced holder; an absent holder never falls back to a name. */
 export async function resolveTownMaster<T extends TownMasterAgent>(
   world: Pick<WorldObject, "leaves">,
   roster: readonly { agent: T }[],
   holder: { connection_id: string; terminal_id: string } | null,
-  name: string,
 ): Promise<T | undefined> {
   if (holder) {
     const leaf = world.leaves.find(
@@ -82,7 +74,7 @@ export async function resolveTownMaster<T extends TownMasterAgent>(
       : undefined;
     return agent;
   }
-  return findTownMaster(roster, name);
+  return undefined;
 }
 
 /**
@@ -92,8 +84,6 @@ export async function resolveTownMaster<T extends TownMasterAgent>(
 export function useTownCenter(
   world: WorldObject,
   office: HerdrOfficeProjection,
-  /** Menu → Town master: the agent's Herdr name or label. */
-  { townMaster }: { townMaster: string },
   {
     selectedRoomKey,
     townRoomActions: rooms,
@@ -109,10 +99,8 @@ export function useTownCenter(
   toast: (kind: "ok" | "error", text: string) => void,
 ): TownCenterAction[] {
   const { mobile } = useLayoutPreferences();
-  useTownMaster(office.roster, townMaster, mobile, (key) =>
-    openChat(key, false),
-  );
   const holder = useAgentProfiles().document?.town_master ?? null;
+  useTownMaster(world, holder, mobile, (key) => openChat(key, false));
   const focus = useFocusClock();
   const residents = useApartments().residents.length;
   return townCenterActions({
@@ -120,7 +108,6 @@ export function useTownCenter(
     world,
     office,
     holder,
-    name: townMaster.trim(),
     selectedRoomKey,
     rooms,
     summary,
@@ -135,7 +122,6 @@ export function townCenterActions({
   world,
   office,
   holder,
-  name,
   selectedRoomKey,
   rooms,
   summary,
@@ -148,8 +134,6 @@ export function townCenterActions({
   office: Pick<HerdrOfficeProjection, "rooms" | "roster">;
   /** The agent given the Town master role, if any. */
   holder: { connection_id: string; terminal_id: string } | null;
-  /** Menu → Town master, trimmed. */
-  name: string;
   selectedRoomKey: string | null;
   rooms: RoomActions;
   summary: { summary: { counts: { needsYou: number } }; open(): void };
@@ -178,7 +162,6 @@ export function townCenterActions({
       world,
       roster: office.roster,
       holder,
-      name,
       openChat,
       toast,
     }),
@@ -219,14 +202,12 @@ export function launchAction(
 }
 
 /**
- * Talk to the Town master (resolveTownMaster), or, while nobody holds the
- * role and Menu → Town master is empty, choose one in Sounds.
+ * Talk to the synced Town master, or choose one in Sounds.
  */
 export function townMasterAction<T extends TownMasterAgent>({
   world,
   roster,
   holder,
-  name,
   openChat,
   toast,
 }: {
@@ -234,12 +215,10 @@ export function townMasterAction<T extends TownMasterAgent>({
   roster: readonly { agent: T }[];
   /** The agent given the Town master role, if any. */
   holder: { connection_id: string; terminal_id: string } | null;
-  /** Menu → Town master, trimmed. */
-  name: string;
   openChat(agentKey: string): void;
   toast(kind: "ok" | "error", text: string): void;
 }): TownCenterAction {
-  if (!holder && !name)
+  if (!holder)
     // Nobody holds the role: Sounds is where the owner gives it.
     return {
       id: "master",
@@ -249,16 +228,11 @@ export function townMasterAction<T extends TownMasterAgent>({
       run: openSounds,
     };
   const talkToMaster = async () => {
-    const master = await resolveTownMaster(world, roster, holder, name).catch(
+    const master = await resolveTownMaster(world, roster, holder).catch(
       () => undefined,
     );
     if (!master) {
-      toast(
-        "error",
-        holder
-          ? "The Town master isn't in Town now"
-          : `No Town master in Town${name ? ` named ${name}` : ""}`,
-      );
+      toast("error", "The Town master isn't in Town now");
       return;
     }
     if (master.stale || !master.canOpenInSpaces) {
@@ -271,8 +245,6 @@ export function townMasterAction<T extends TownMasterAgent>({
     id: "master",
     label: "Town master",
     icon: Crown,
-    // The role holder wins over the name; its name is its own.
-    detail: holder ? undefined : name,
     run: () => void talkToMaster(),
   };
 }

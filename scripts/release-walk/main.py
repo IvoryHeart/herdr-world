@@ -5,6 +5,7 @@ import sys
 from assets import executable, published, tools
 from contract import PAIRS, Walk, digest, print_failure, validate_receipt
 from journeys import Fixture, check_signed_out, default_connection, room, launch, input_reaches, listing, chat_reply, upgrade
+from listing_batch import listing_batch
 from processes import Telemetry, run
 from service import services, service_guard
 from validate import receipt_digest
@@ -40,6 +41,7 @@ def main(config):
     report_path = Path(config['report'])
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.with_name('listing-failure.json').unlink(missing_ok=True)
+    report_path.with_name('listing-batch.json').unlink(missing_ok=True)
     try:
         tool_dir = tools(root, config)
         baseline = published(root, config['baseline'], config['platform'])
@@ -91,6 +93,9 @@ def main(config):
                         with walk.journey(f'Prompt and Chat reply: {runtime}/{kind}'):
                             agent = launch(world, fixture, connections[runtime], runtime, kind, rooms[runtime])
                             chat_reply(world, fixture, agent)
+            listing_batch(config, candidate, tool_dir, telemetry,
+                          {key: walk.report[key] for key in
+                           ('commit', 'platform', 'archive_sha256', 'binary_sha256')})
         finally:
             telemetry.close()
     finally:
