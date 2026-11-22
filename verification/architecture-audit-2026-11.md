@@ -15,7 +15,7 @@ audited base already cover the contract; “added” names synchronization in th
 “none” means no new contract, not absence of existing tests or requirements.
 O/W/A/R = ordering / ownership / authority / recovery. Unit/DOM tests are example
 evidence unless explicitly called exhaustive; browser/platform names do not
-claim those suites were rerun by this audit. Q IDs resolve in `coverage.json`.
+claim those suites were rerun by this audit. Q IDs resolve in `coverage/`.
 
 The audit found two real bugs: [offline connection lost updates (#1084)](https://github.com/IvoryHeart/herdr-world/issues/1084)
 and [stale Claude tap publication (#1086)](https://github.com/IvoryHeart/herdr-world/issues/1086).

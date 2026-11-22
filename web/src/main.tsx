@@ -28,7 +28,11 @@ const boardTextConflictFixture = previewUrl.searchParams.has(
 );
 // Testing-only: `?focusTest=1` offers 1-minute focus sessions in this tab.
 const focusTest = consumeFocusTest(previewUrl);
+const siblingQuestionsFixture = previewUrl.searchParams.has(
+  "siblingQuestionsFixture",
+);
 if (
+  siblingQuestionsFixture ||
   titleSpinnerFixture ||
   claudeTapLockFixture ||
   boardTextConflictFixture ||
@@ -36,6 +40,7 @@ if (
   focusTest
 ) {
   previewUrl.searchParams.delete("questionBacklogFixture");
+  previewUrl.searchParams.delete("siblingQuestionsFixture");
   previewUrl.searchParams.delete("claudeTapLockFixture");
   previewUrl.searchParams.delete("titleSpinnerFixture");
   previewUrl.searchParams.delete("boardTextConflictFixture");
@@ -52,6 +57,9 @@ const BoardTextConflictFixture = React.lazy(() =>
 
 const QuestionBacklogFixture = React.lazy(
   () => import("./testing/QuestionBacklogFixture"),
+);
+const SiblingQuestionsFixture = React.lazy(
+  () => import("./testing/SiblingQuestionsFixture"),
 );
 
 class ErrorBoundary extends React.Component<
@@ -92,6 +100,7 @@ coreFixtureEnabled();
 coreInstallFake();
 integrationsFixtureEnabled();
 const stopInstanceNameSync =
+  siblingQuestionsFixture ||
   titleSpinnerFixture ||
   claudeTapLockFixture ||
   boardTextConflictFixture ||
@@ -106,6 +115,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.Suspense fallback={null}>
         {questionBacklogFixture ? (
           <QuestionBacklogFixture />
+        ) : siblingQuestionsFixture ? (
+          <SiblingQuestionsFixture />
         ) : titleSpinnerFixture ? (
           <TitleSpinnerFixture />
         ) : claudeTapLockFixture ? (

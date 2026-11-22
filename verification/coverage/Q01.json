@@ -1,0 +1,41 @@
+{
+  "id": "Q01",
+  "area": "Runtime lifecycle",
+  "owner": "server/src/connections/manager.ts",
+  "requirement": "openspec/specs/runtime-federation/spec.md",
+  "properties": "Retired leases never recover; stop/start work coalesces; shutdown prevents peer restarts; removal drains before forgetting",
+  "existingTests": [
+    "server/src/rpc/launcher-probe.test.ts",
+    "server/src/connections/manager.test.ts",
+    "server/src/connections/shutdown.test.ts",
+    "server/src/connections/runtime.test.ts",
+    "server/src/connections/ssh-profile-process.test.ts",
+    "server/src/rpc/appearance.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
+  "technique": "lifecycle",
+  "assessment": "replacement, removal, failed cleanup, current errors, duplicate tasks, reentrant observers and shutdown",
+  "status": "modeled",
+  "remaining": "external transport, reconnect timing and same-ID reincarnation remain scoped integration/platform evidence.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": [
+      "quint/runtime-leases.qnt",
+      "quint/runtime-control.qnt",
+      "quint/runtime-drain.qnt"
+    ],
+    "contracts": [
+      "verification/contracts/runtime-leases.md",
+      "verification/contracts/runtime-control.md",
+      "verification/contracts/runtime-drain.md"
+    ],
+    "checks": ["bun run verification:check", "bun run verification:typecheck"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  },
+  "evidenceDecision": "Shared appearance consumes captured ready leases and revalidates currency after native reads; its direct admission matrix supplements the unchanged manager model/replay and does not expand that model’s domain."
+}

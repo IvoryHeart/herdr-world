@@ -2,7 +2,14 @@ Stage numbers follow the committee plan. Stage 2 (shared acquisition and the pol
 replacement) is the separate `shared-acquisition` change (PR #551). Each group ships in
 its own PR. That PR carries its docs, changelog fragment, coverage updates and complete
 required verification, and syncs the requirements it implements into the current specs
-with the `openspec-sync-specs` skill.
+with the `world-openspec-sync-specs` skill.
+
+## Delta baseline (2026-11-21)
+
+This change remains active for its unchecked stages. Requirements already present
+in current specs use MODIFIED and retain the current recovery, lifetime, storage
+and preparation contracts. ADDED is reserved for requirements not yet present;
+no completed stage is permission to archive the unfinished change.
 
 ## 1. Agree the design
 
@@ -20,7 +27,7 @@ with the `openspec-sync-specs` skill.
 - [ ] 2.2 Embed the incarnation in observation bases, subscription cursors and
   persisted captures. Verify that a base or capture issued before a restart is refused
   as current after it. Add the "Service incarnation and fences" area to
-  `verification/coverage.json`, and sync the incarnation requirement into
+  `verification/coverage/`, and sync the incarnation requirement into
   `runtime-federation`.
 
 ## 3. Observation v1 (stage 3)
@@ -56,7 +63,7 @@ No v2 subscriptions or persisted-capture fences are implemented here.
   for appearance and relations. Verify the consumer-inventory cases: Town without
   Board topology, and a view switch prepared before it is presented.
 - [x] 3.6 Add the M1 `observation-base` model with replay, witnesses and controls.
-  Update Q10, Q11, Q14, Q15 and Q20 in `verification/coverage.json`, and their
+  Update Q10, Q11, Q14, Q15 and Q20 in `verification/coverage/`, and their
   contracts. Verify with a complete `bun run verification:gate`.
 - [x] 3.7 Update `docs/ARCHITECTURE.md` (observation path) and `docs/knowledge-map.md`,
   add a changelog fragment, and sync the v1 and preparation requirements into
@@ -137,7 +144,7 @@ No v2 subscriptions or persisted-capture fences are implemented here.
     eight overlapping read schedules, actual transcript/link/service consumers and
     seven compiled assertion controls pass. Independent review and CI remain required.
 - [x] 6.4 Sync the `world-identity` requirements, and add the "Durable identity and
-  bindings" area to `verification/coverage.json`. Verify with a complete
+  bindings" area to `verification/coverage/`. Verify with a complete
   `bun run verification:gate`.
 
 ## 7. Verbs, adapters and the synthetic source (stage 6)
@@ -170,11 +177,11 @@ No v2 subscriptions or persisted-capture fences are implemented here.
   behind harness adapters. Verify that the lint is clean, with the composition root and
   registry exempt.
 - [x] 7.6 Sync the `bridge-access` and `world-adapters` requirements, and add the verb
-  and adapter areas to `verification/coverage.json`. Verify with `bun run check:docs`.
+  and adapter areas to `verification/coverage/`. Verify with `bun run check:docs`.
 
 - [x] 7.6a Sync the implemented runtime-observation adapter requirements into
   `world-adapters`, document the admission boundary and add Q44 adapter conformance
-  to `verification/coverage.json`. The bridge-access/verb synchronization is delivered in 7.6b;
+  to `verification/coverage/`. The bridge-access/verb synchronization is delivered in 7.6b;
   provider-name lint in 7.5 remains separate. The spec-required synthetic v2 crossing
   is a named pending test until v2 exists.
 
@@ -207,7 +214,7 @@ No v2 subscriptions or persisted-capture fences are implemented here.
   item 2). Verify by approval in their PR. Server definitions are implemented in
   `server/src/effects/queries.ts`; this gate stays open for independent PR approval.
 - [x] 8.6 Sync the `world-effects` requirements, and add the effects area to
-  `verification/coverage.json`. Verify with a complete `bun run verification:gate`.
+  `verification/coverage/`. Verify with a complete `bun run verification:gate`.
 
 ## 9. World subscriptions v2 (stage 7)
 
@@ -242,3 +249,5 @@ No v2 subscriptions or persisted-capture fences are implemented here.
 - [ ] 10.1 After the last stage, check that every delta is synchronized and archive the
   change. If v1 ships long before the v2 gate, decide whether to split v2 into
   its own change first. Verify with `bun run spec:check`.
+
+Capability path after the feature-map split: `world-surfaces/appearance`. Existing delivery and pending tasks are unchanged.

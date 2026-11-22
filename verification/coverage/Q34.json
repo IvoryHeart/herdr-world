@@ -1,0 +1,44 @@
+{
+  "id": "Q34",
+  "area": "Worktree create/remove/hooks",
+  "owner": "server/src/worktree/",
+  "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
+  "properties": "Partial failure leaves recoverable state; removal cannot target another checkout; hooks run only at valid stages",
+  "existingTests": [
+    "web/src/components/WorktreeLifecycleDialog.test.ts",
+    "web/src/world/HostsFilter.resources.test.ts",
+    "web/src/components/WorktreePullRequestBadge.test.ts",
+    "server/src/worktree/create.test.ts",
+    "server/src/worktree/remove.test.ts",
+    "server/src/worktree/worktree-hooks.test.ts",
+    "server/src/worktree/command-template.test.ts",
+    "web/src/world/WorldNavigatorWorktree.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
+  "technique": "alternative",
+  "assessment": "real filesystem/Git cleanup/hook failure evidence and exact target checks",
+  "status": "alternative-evidence",
+  "remaining": "Native Git/filesystem/hook execution is required; shared-operation examples are bounded integration evidence, not all concurrent worktree schedules.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "evidenceDecision": "Real worktree/hook tests exercise fetch-before-create, failed fetch, one in-flight removal and retry after failure. WorktreeLifecycleDialog.test.ts replaces HostsFilter resource policy cases for retirement/disposal during an open, closed-target refresh/retry and failed validation, plus the live remembered-target retry count. The actual dialog and requestWorkspaceInspector run on controlled time with deliberately unfenced synthetic operational/service ports and an explicit admission-result receiver. This proves dialog cancellation and target-cache policy, not RPC lease composition or real Inspector publication. Files/Changes routes, rejection rendering/focus, browser file input/download lifecycle and qualified UI wiring remain mandatory in HostsFilter.resources.test.ts; existing store and runtime-lease consumers remain required. Roamgate web sync through 2b16e991 (PR3): command-template tests pass hostile values through a real sh, refuse quoted placeholders and invalid branch names, and cover SSH execution, the install probe and remove-command recovery. Settings tests keep global and per-repository commands, and Ranger's preview binds the displayed location and command, so a change blocks dispatch. A browser consumer shows the navigator's worktree actions at desktop and phone widths and leaves a stale host inert.",
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/consumer-evidence.md"],
+    "tests": [
+      "web/src/components/WorktreeLifecycleDialog.test.ts",
+      "web/src/world/HostsFilter.resources.test.ts",
+      "server/src/worktree/create.test.ts",
+      "server/src/worktree/remove.test.ts",
+      "server/src/worktree/worktree-hooks.test.ts",
+      "server/src/worktree/command-template.test.ts",
+      "web/src/world/WorldNavigatorWorktree.test.ts"
+    ],
+    "checks": ["bun run check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

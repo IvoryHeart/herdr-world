@@ -26,6 +26,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { stopChrome } from "../web/src/browserChrome";
+import { filmBuildConfig } from "./site-bundles";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const film = join(root, "site/film");
@@ -103,10 +104,8 @@ const began = performance.now();
 /** Play the film in Chrome and keep each frame, its score and captions. */
 async function capture() {
   const bundle = await Bun.build({
+    ...filmBuildConfig,
     entrypoints: [join(film, "town-art.ts")],
-    format: "iife",
-    minify: true,
-    target: "browser",
   });
   if (!bundle.success) throw new AggregateError(bundle.logs, "town-art.ts");
   const townArt = await bundle.outputs[0]!.text();

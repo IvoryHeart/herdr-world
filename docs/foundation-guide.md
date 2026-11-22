@@ -1,7 +1,7 @@
 # Foundation source guide
 
 This guide maps the implemented service and browser foundation. Start with the
-[knowledge map](knowledge-map.md) for a task-specific contract and test, then use
+[capability lookup](agent-development.md#find-a-feature) for a task-specific contract and test, then use
 this guide when a change crosses modules. [Architecture](ARCHITECTURE.md) records
 the detailed system boundaries; [deployment](DEPLOYMENT.md) records operator
 configuration. The application source is [derived from Roamgate](../UPSTREAM.md),
@@ -43,9 +43,9 @@ see [History guidance](HISTORY.md#pane-scoped-codex-launches).
 Delivered [usage](../openspec/specs/world-usage/spec.md),
 [local harness integration](../openspec/specs/world-harness-integration/spec.md),
 [answer delivery](../openspec/specs/ask-answer-delivery/spec.md),
-[profiles and launcher](../openspec/specs/world-surfaces/spec.md#requirement-agent-profiles),
-[chimes](../openspec/specs/world-surfaces/spec.md#requirement-chimes) and the
-[Town Master greeting](../openspec/specs/world-surfaces/spec.md#requirement-town-master-greeting)
+[profiles and launcher](../openspec/specs/world-surfaces/creation-profiles/spec.md#requirement-agent-profiles),
+[chimes](../openspec/specs/world-surfaces/notifications/spec.md#requirement-chimes) and the
+[Town Master greeting](../openspec/specs/world-surfaces/town-master/spec.md#requirement-town-master-greeting)
 have current requirements. Their active records retain unfinished follow-ups or
 explicit acceptance reconciliation; synchronization alone does not accept them.
 See the [usage guide](usage.md), [harness integration guide](harness-integrations.md)
@@ -53,7 +53,7 @@ and [remaining SSH/update tasks](../openspec/changes/world-harness-integration/t
 for operational details and remaining scope. Focused acquisition's
 [design](../openspec/changes/archive/2026-11-18-shared-acquisition/design.md) is archived;
 current contracts cover [focused observation](../openspec/specs/runtime-federation/spec.md#requirement-focused-observation-without-per-client-polling)
-and [bounded Desk observation](../openspec/specs/world-surfaces/spec.md#requirement-bounded-desk-observation).
+and [bounded Desk observation](../openspec/specs/world-surfaces/desk-attention/spec.md#requirement-bounded-desk-observation).
 
 ## Process and request path
 
@@ -247,7 +247,7 @@ socket on two synthetic hosts. Its independent manual clocks and completion
 signals verify shared reads, notices and the focused parity outputs through the
 actual listener and composition root, including pending generation replacement.
 [Current runtime requirements](../openspec/specs/runtime-federation/spec.md)
-and [Desk requirements](../openspec/specs/world-surfaces/spec.md#requirement-bounded-desk-observation)
+and [Desk requirements](../openspec/specs/world-surfaces/desk-attention/spec.md#requirement-bounded-desk-observation)
 contain the delivered acquisition contract.
 
 The [Desk watch owner](../server/src/world/desk-watches.ts) shares screen and
@@ -347,7 +347,7 @@ the [site workflow](../.github/workflows/pages.yml), [release workflows](../.git
 and their [script tests](../scripts/) when changing those paths.
 
 When behavior changes, update the affected [current OpenSpec contract](../openspec/specs/),
-this guide or the [knowledge map](knowledge-map.md) only where its ownership or
+this guide or the [capability lookup](agent-development.md#find-a-feature) only where its ownership or
 navigation changed. Use the OpenSpec change lifecycle for a new product decision;
 ordinary source repairs and documentation updates can amend current knowledge in
 the same PR. Keep historical specs as rationale.
@@ -376,7 +376,7 @@ History terminal input and mobile shell launching are mapped in the
 [foundation guide](foundation-guide.md) and [History guide](HISTORY.md#history-terminal-input).
 Start with [HistoryTerminalComposer](../web/src/components/HistoryTerminalComposer.tsx),
 [AgentLauncher](../web/src/components/AgentLauncher.tsx) and their Q09 consumers in
-[the coverage inventory](../verification/coverage.json).
+[the coverage inventory](../verification/coverage/).
 
 Desktop shortcut discovery lives in [the read-only cheat sheet](../web/src/components/ShortcutCheatSheet.tsx)
 and [its preset-derived rows and filtering](../web/src/shortcutCheatSheet.ts), with

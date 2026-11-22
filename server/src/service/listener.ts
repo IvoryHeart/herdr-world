@@ -61,6 +61,7 @@ import { DOWNLOAD_TIMEOUT_MS } from "../workspace/file-constants";
 import { canRevealFiles } from "../workspace/file-manager";
 import type { createOfficeObservabilityHttpHandler } from "../world/observability-http";
 import type { createWorldCliService } from "../world/world-cli-service";
+import { ASK_PEER_PATH } from "../world/ask-peers";
 import type { BrowserClients } from "./clients";
 import type { Clock } from "./ports";
 import {
@@ -363,6 +364,9 @@ export function listen(deps: ListenerDeps) {
         service: deps.shipyard.service,
       });
     }
+    if (url.pathname === ASK_PEER_PATH)
+      // Sibling World instances on this machine: their own per-run token.
+      return worldCli.peerHttp(req, server.requestIP(req)?.address);
     if (url.pathname === WORLD_CLI_PATH) {
       // `ask --wait` holds a call for up to 20 s; Bun's default idle
       // timeout (10 s) would cut it.

@@ -1,3 +1,4 @@
+import { libraryAvailable } from "../memory/memoryTargets";
 /**
  * The town center's actions (TownCenterMenu.tsx), each reusing what World
  * already has: the agent launcher and profiles, the Town master's chat,
@@ -186,7 +187,7 @@ export function townCenterActions({
     summaryAction(() => summary.open()),
     profilesAction(),
     apartmentsAction(residents),
-    libraryAction(),
+    ...(libraryAvailable(world) ? [libraryAction()] : []),
     {
       id: "room",
       label: "New room",

@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import coverage from "../verification/coverage.json";
+import { readCoverage } from "./coverage";
+
+const root = resolve(import.meta.dir, "..");
+const coverage = readCoverage(root);
 
 test("all reviewed inventory areas have explicit existing evidence and coverage decisions", () => {
   expect(coverage.schemaVersion).toBe(1);
@@ -9,9 +12,7 @@ test("all reviewed inventory areas have explicit existing evidence and coverage 
   expect(new Set(coverage.areas.map((area) => area.id)).size).toBe(
     coverage.areas.length,
   );
-  const root = resolve(import.meta.dir, "..");
-  for (const [index, area] of coverage.areas.entries()) {
-    expect(area.id).toBe(`Q${String(index + 1).padStart(2, "0")}`);
+  for (const area of coverage.areas) {
     expect([
       "pending",
       "modeled",
@@ -25,7 +26,17 @@ test("all reviewed inventory areas have explicit existing evidence and coverage 
     expect(area.acceptedDelivery).toMatch(
       /^https:\/\/github\.com\/IvoryHeart\/herdr-world\/pull\/\d+$/,
     );
-    for (const path of [area.owner, area.requirement, ...area.existingTests]) {
+    for (const path of [
+      area.owner,
+      area.requirement,
+      ...area.existingTests,
+      ...(area.supplementalContracts ?? []).flatMap((contract) => [
+        contract.requirement,
+        contract.contract,
+        ...contract.owners,
+        ...contract.tests,
+      ]),
+    ]) {
       expect(path.startsWith("/") || path.split("/").includes("..")).toBe(
         false,
       );
@@ -63,3 +74,13 @@ test("all reviewed inventory areas have explicit existing evidence and coverage 
       expect(area.remaining.length).toBeGreaterThan(0);
   }
 });
+
+// Opt-in migration proof against an immutable pre-split blob, without a second
+// inventory or shared checksum that future area PRs would have to update.
+const baseline = process.env.COVERAGE_MIGRATION_BASELINE;
+test.skipIf(!baseline)(
+  "merged folder equals the pre-split coverage.json content",
+  () => {
+    expect(coverage).toEqual(JSON.parse(readFileSync(baseline!, "utf8")));
+  },
+);

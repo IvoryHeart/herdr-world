@@ -4,6 +4,7 @@ import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
 import { FocusDialogHost } from "./FocusControls";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
 import { ConfirmDialog } from "../components/ModalDialogs";
+import { FeatureHosts } from "../features/FeatureHosts";
 import { lazyWithReload } from "../lazyWithReload";
 import { connectionSnapshot, store } from "../store";
 import { WORKSPACE_INSPECTOR_CLOSE_EVENT } from "../workspaceResource";
@@ -14,7 +15,6 @@ import {
   WORLD_AGENT_PROFILES_EVENT,
 } from "./agentProfiles";
 import type { AgentStartFrom } from "./agentStarts";
-import { MemoryLibraryHost } from "./memory/MemoryLibraryHost";
 import { useDeskReveal } from "./deskReveal";
 import { DeskView } from "./DeskView";
 import { useStableCallback } from "./useStableCallback";
@@ -27,7 +27,6 @@ import {
 import { terminalColorKey } from "./terminalColor";
 import { leafPinnedBy, setDeskPinned, useDeskPins } from "./useDeskPins";
 import { putInBin, WorldBin } from "./bin/WorldBin";
-import { ApartmentsHost } from "./apartments/ApartmentsHost";
 import { CoreKillConfirmHost } from "./CoreKillConfirm";
 import { CoreWorktreesHost } from "./CoreWorktrees";
 import { BoardHub } from "./board/BoardHub";
@@ -99,7 +98,7 @@ const ProfileEditor = lazyWithReload("world-profile-editor", () =>
 
 /**
  * The launcher and the profile editor, opened from any view by their events
- * (agentProfiles.ts), and Apartments. They see every host's rooms.
+ * (agentProfiles.ts), and feature dialogs. They see every host's rooms.
  */
 function AgentDialogs({
   world,
@@ -154,8 +153,7 @@ function AgentDialogs({
   }, []);
   return (
     <Suspense fallback={null}>
-      <ApartmentsHost world={world} onOpen={setPendingOpen} />
-      <MemoryLibraryHost world={world} />
+      <FeatureHosts slot="dialogs" world={world} onOpen={setPendingOpen} />
       {/* Focus (#1131): its dialog, and the end's chime and recap. */}
       <FocusDialogHost />
       {sounds ? (

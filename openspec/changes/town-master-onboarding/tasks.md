@@ -1,8 +1,8 @@
 ## Delivery state
 
-The greeting is delivered, with its help news (What's new, Start here). The ? help and Try's highlight are delivered as [help that ships with each feature](../../specs/world-surfaces/spec.md#requirement-help-that-ships-with-each-feature). Only the 12-step path, lessons and Guidebook in tasks 2.1–2.2 remain; they have no delivered requirement yet.
+The greeting is delivered, with its help news (What's new, Start here). The ? help and Try's highlight are delivered as [help that ships with each feature](../../specs/world-surfaces/settings/spec.md#requirement-help-that-ships-with-each-feature). Only the 12-step path, lessons and Guidebook in tasks 2.1–2.2 remain; they have no delivered requirement yet.
 
-Delivered requirements are synchronized into [the current contract](../../specs/world-surfaces/spec.md#requirement-town-master-greeting).
+Delivered requirements are synchronized into [the current contract](../../specs/world-surfaces/town-master/spec.md#requirement-town-master-greeting).
 No unsynchronized requirement delta remains in this record; unfinished tasks
 and acceptance above keep the change active.
 

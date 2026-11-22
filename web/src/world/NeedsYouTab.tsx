@@ -491,7 +491,8 @@ export function NeedsYouList({
             return problem;
           }}
           onAttach={
-            item.kind === "asks"
+            // Files stay on this World; another World's question gets text.
+            item.kind === "asks" && !item.ask.home
               ? attachmentUpload(item.ask, item.leaf)
               : undefined
           }
