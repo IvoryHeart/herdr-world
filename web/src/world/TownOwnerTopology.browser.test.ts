@@ -604,10 +604,26 @@ test.skipIf(!chrome)(
           room.label.includes("core-alpha"),
         )!;
         expect(await visit(mode, alpha.key, "core-alpha")).toBeNull();
-        const plus = await centre(
-          `${plaqueOf("core-alpha")}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`,
-        );
+        // As above: off the plaque first, so its card (open under the
+        // pointer) closes and uncovers the free seat, and press only once
+        // the pointer reaches it. Under load the card can still be open
+        // when the pointer jumps onto the seat, and then takes the press.
+        const seat = `${plaqueOf("core-alpha")}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`;
+        await move({ x: 4, y: 4 });
+        let plus: Point | null = null;
+        let reached: Awaited<ReturnType<typeof reach>> = null;
+        for (let attempt = 0; attempt < 40; attempt++) {
+          plus = await centre(seat);
+          if (plus) {
+            await move(plus);
+            reached = await reach(seat);
+            if (reached?.reached && !reached.disabled) break;
+            await move({ x: 4, y: 4 });
+          }
+          await Bun.sleep(100);
+        }
         expect(plus).not.toBeNull();
+        expect(reached).toMatchObject({ reached: true, disabled: false });
         await click(plus!);
         await waitFor(
           "!!document.querySelector('.agent-launcher-card:not(:disabled)')",
