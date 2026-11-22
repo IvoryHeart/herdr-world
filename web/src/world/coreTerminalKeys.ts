@@ -47,7 +47,8 @@ const macKeyboard = () =>
  * What a focused terminal sends for `event`, as xterm does by default
  * (normal cursor mode): text, Enter, editing and cursor keys, Ctrl codes
  * (Ctrl+C is "\x03") and Alt as an Escape prefix. Keys the browser keeps
- * (Cmd, Ctrl+V and Ctrl+Shift shortcuts, function keys) give null. The stand-in
+ * (Cmd, Ctrl+V and Ctrl+Shift shortcuts, function keys) and xterm's own
+ * scrolling (Shift+PageUp/PageDown) give null. The stand-in
  * that holds keys while the watch loads uses it, so a command cancelled or
  * edited before the terminal arrives stays cancelled or edited.
  */
@@ -59,7 +60,13 @@ export function terminalKey(event: KeyboardEvent): string | null {
   const sequence = SEQUENCES[key];
   if (sequence) {
     const [final, number] = sequence;
-    const modifier = 1 + (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0);
+    // Shift+PageUp/PageDown scroll xterm's own buffer and Shift or Ctrl with
+    // Insert sends nothing: none of them ever reaches the terminal.
+    if ((key === "PageUp" || key === "PageDown") && shift) return null;
+    if (key === "Insert") return shift || ctrl ? null : "\x1b[2~";
+    let modifier = 1 + (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0);
+    // PageUp/PageDown carry the modifiers only with Ctrl held.
+    if ((key === "PageUp" || key === "PageDown") && !ctrl) modifier = 1;
     if (modifier === 1) return number ? `\x1b[${number}~` : `\x1b[${final}`;
     return `\x1b[${number ?? 1};${modifier}${final}`;
   }

@@ -31,7 +31,10 @@ test("a terminal key held while the watch loads is what xterm would send", () =>
   expect(terminalKey(key("ArrowUp"))).toBe("\x1b[A");
   expect(terminalKey(key("ArrowLeft", { ctrlKey: true }))).toBe("\x1b[1;5D");
   expect(terminalKey(key("Delete"))).toBe("\x1b[3~");
-  expect(terminalKey(key("PageDown", { shiftKey: true }))).toBe("\x1b[6;2~");
+  expect(terminalKey(key("PageDown"))).toBe("\x1b[6~");
+  expect(terminalKey(key("PageUp", { ctrlKey: true }))).toBe("\x1b[5;5~");
+  expect(terminalKey(key("PageUp", { altKey: true }))).toBe("\x1b[5~");
+  expect(terminalKey(key("Insert"))).toBe("\x1b[2~");
 });
 
 test("keys the browser keeps are not held for the terminal", () => {
@@ -40,6 +43,10 @@ test("keys the browser keeps are not held for the terminal", () => {
   expect(terminalKey(key("I", { ctrlKey: true, shiftKey: true }))).toBeNull();
   expect(terminalKey(key("F5"))).toBeNull();
   expect(terminalKey(key("Shift", { shiftKey: true }))).toBeNull();
+  // xterm scrolls its own buffer for these; the terminal never sees them.
+  expect(terminalKey(key("PageUp", { shiftKey: true }))).toBeNull();
+  expect(terminalKey(key("PageDown", { shiftKey: true }))).toBeNull();
+  expect(terminalKey(key("Insert", { shiftKey: true }))).toBeNull();
 });
 
 test("keys typed outside the terminal stay plain text and Enter", () => {
