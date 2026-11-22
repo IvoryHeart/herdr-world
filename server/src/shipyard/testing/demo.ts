@@ -60,10 +60,11 @@ export async function demoShipyard(scenario: (typeof SHIPYARD_DEMOS)[number]) {
       failing
         ? Promise.resolve({ code: 1, stdout: "", stderr: "synthetic offline" })
         : fixture.run(argv, timeout),
-    source: () => ({
-      enabled: true,
-      generation: 0,
-      repositories: ["example-org/widgets"],
+    source: () => ({ enabled: true, generation: 0 }),
+    projects: async () => ({
+      projects: [{ repo: "example-org/widgets", name: "widgets", rooms: 1 }],
+      pending: 0,
+      omitted: 0,
     }),
     instances: () => demoInstances(now),
     now: () => now,

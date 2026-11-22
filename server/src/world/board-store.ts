@@ -1,4 +1,9 @@
 import {
+  parseBoardElement,
+  BOARD_ANCHOR_KINDS,
+} from "../../../shared/boardElements";
+import { applyBoardElementOp, checkBoardElements } from "./board-elements";
+import {
   interests,
   groupInterests,
   applyBoardInterest,
@@ -166,7 +171,7 @@ export class BoardConflictError extends Error {
 }
 
 const COLORS: readonly NoteColor[] = ["yellow", "pink", "blue", "green"];
-const KINDS: readonly BoardAnchorKind[] = ["workspace", "tab", "pane"];
+const KINDS: readonly BoardAnchorKind[] = BOARD_ANCHOR_KINDS;
 export const CARD_COLORS: readonly CardColor[] = [
   "red",
   "orange",
@@ -421,6 +426,15 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       interest: interests(layout.interest, BOARD_LIMITS.key),
       group_interest: groupInterests(layout.group_interest, BOARD_LIMITS.key),
     },
+    ...(value.elements === undefined
+      ? {}
+      : {
+          elements: Array.isArray(value.elements)
+            ? value.elements.map((entry) =>
+                parseBoardElement(entry, entry?.rev),
+              )
+            : fail("elements"),
+        }),
     notes: notes.map((entry) => {
       const rev =
         isObject(entry) && Number.isSafeInteger(entry.rev)
@@ -441,6 +455,7 @@ export function parseBoardDocument(value: unknown): BoardDocument {
 }
 
 function checkBounds(document: BoardDocument) {
+  checkBoardElements(document);
   const { layout } = document;
   if (document.notes.length > BOARD_LIMITS.notes)
     fail(`at most ${BOARD_LIMITS.notes} notes`);
@@ -610,6 +625,12 @@ function applyOp(
     }
     return;
   }
+  if (
+    applyBoardElementOp(next, op, (message) => {
+      throw new BoardConflictError(message, current);
+    })
+  )
+    return;
   switch (op.op) {
     case "note.put": {
       const existing = next.notes.findIndex(

@@ -108,6 +108,12 @@
   background: color-mix(in srgb, var(--ship-pending) 14%, transparent);
   font-size: 13px;
 }
+.shipyard-projects-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--board-soft);
+  font-size: 12px;
+}
 
 .shipyard-stages {
   flex: 1;

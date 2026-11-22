@@ -1,3 +1,4 @@
+import { BOARD_ELEMENT_CLI_COMMANDS } from "./world-cli-elements";
 import { MEMORY_ACTIONS } from "../../../shared/memory";
 import { GROUP_CLI_COMMANDS } from "./world-cli-groups";
 import type { CliActor } from "./world-ledger";
@@ -40,6 +41,7 @@ export const WORLD_CLI_COMMANDS = [
   "usage",
   "history",
   "undo",
+  ...BOARD_ELEMENT_CLI_COMMANDS,
   "board card move",
   "board card pin",
   "board card unpin",

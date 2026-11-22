@@ -17,15 +17,16 @@ import {
  *
  * - (none) or `ready`: passing main, four changes waiting, five releases
  *   (one a prerelease), three running Worlds (one stopped reporting). Three
- *   projects with releases, each a lane in Town, and a fourth with none
- *   yet (example-org/notes), which has no lane.
+ *   open projects with releases, each a lane in Town, a fourth with none
+ *   yet (example-org/notes), which has no lane, and a fifth with no GitHub
+ *   remote (scratch-notes), listed as such in the Releases tab.
  * - `failing`: main's latest checks failed.
  * - `stale`: GitHub's last refresh failed; the old pipeline stays, labelled.
  * - `limited`: more changes than one read proves; the list is partial.
  * - `off`: GitHub is switched off in Integrations; only running Worlds show.
- * - `empty`: nothing suggested and nothing running yet.
+ * - `empty`: no project open and nothing running yet.
  * - `many`: sixteen projects with releases, more lanes than a town's sea
- *   holds.
+ *   holds, and three open folders past World's limit, not read.
  * - `offline`: the first read is `ready`; every later read fails as if
  *   World stopped answering (press "Read GitHub again" to see it at once).
  *
@@ -118,7 +119,11 @@ export const FIXTURE_REPOS = [
   "example-org/flywheels",
   "example-org/bearings",
 ] as const;
-/** A suggested project that has published no release: it gets no lane. */
+/** An open project whose checkout has no GitHub remote. */
+export const FIXTURE_LOCAL_PROJECT = "scratch-notes";
+/** `many`: open folders past the limit, which World did not read. */
+export const FIXTURE_OMITTED = 3;
+/** An open project that has published no release: it gets no lane. */
 export const FIXTURE_UNRELEASED = "example-org/notes";
 const SITE = `https://example.com/${FIXTURE_REPO}`;
 const siteOf = (repo: string) => `https://example.com/${repo}`;
@@ -228,18 +233,29 @@ export function shipyardFixtureCatalog(
   mode: ShipyardFixtureMode,
   now: number,
 ): ShipyardCatalog {
+  const repositories =
+    mode === "empty"
+      ? []
+      : [
+          ...FIXTURE_REPOS.slice(0, mode === "many" ? FIXTURE_REPOS.length : 3),
+          FIXTURE_UNRELEASED,
+        ];
   return {
     observedAt: now,
-    repositories:
+    repositories,
+    projects:
       mode === "empty"
         ? []
         : [
-            ...FIXTURE_REPOS.slice(
-              0,
-              mode === "many" ? FIXTURE_REPOS.length : 3,
-            ),
-            FIXTURE_UNRELEASED,
+            ...repositories.map((repo) => ({
+              repo,
+              name: repo.slice(repo.indexOf("/") + 1),
+              rooms: 1,
+            })),
+            { repo: null, name: FIXTURE_LOCAL_PROJECT, rooms: 1 },
           ],
+    pending: 0,
+    omitted: mode === "many" ? FIXTURE_OMITTED : 0,
     instances: shipyardFixtureInstances(mode, now),
     limits: SHIPYARD_LIMITS,
   };

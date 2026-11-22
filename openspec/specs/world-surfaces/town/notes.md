@@ -8,6 +8,8 @@
 - Reception, board sign/Summary, room/table popovers and the town center ring are entry points.
 - Settings exposes lenses, calm motion and reception preferences; phones retain semantic targets.
 - TUI and core share Town; core pins derive from herdr.pinned, TUI pins from World settings.
+- Quiet working agents: Settings → Town & views → Quiet working agents; this browser's `townQuietMinutes` is stored by `officePreferences.ts`.
+- `browserStorage.ts` prefixes `officePreferences:v1` as localStorage key `herdr-world:foundation-v2:officePreferences:v1`.
 
 **Code:**
 
@@ -26,6 +28,15 @@
 - `web/src/world/usage/UsageLens.browser.tsx`
 - `web/src/world/TownView.tsx`
 - `web/src/world/town/TownCanvas.tsx`
+- `web/src/world/officePreferences.ts`
+- `web/src/browserStorage.ts`
+- `web/src/world/town/town.settings.tsx`
+- `web/src/world/town/townQuietWork.ts`
+- `web/src/world/town/useTownQuiet.ts`
+- `web/src/world/town/townRendererActors.ts`
+- `web/src/world/town/TownWorldLayer.tsx`
+- `web/src/world/town/TownStepBubble.tsx`
+- `web/src/world/town/TownBoard.tsx`
 - `web/src/world/town/townLayout.ts`
 - `server/src/world/observability.ts`
 
@@ -35,6 +46,7 @@
 - `web/src/world/town/TownCanvas.fold.test.ts`
 - `web/src/world/town/townLayout.test.ts`
 - `web/src/world/town/townReceptionFilter.test.ts`
+- `web/src/world/town/townQuietWork.test.ts`
 
 **Pitfalls:**
 
@@ -43,6 +55,8 @@
 - Pins and selection do not pull hidden desks across the fold boundary.
 - Moving rooms on the canvas is separate from moving native desks; see town-moves.
 - CLI desk pins/moves use their feature contracts, not canvas coordinates.
+- Quiet-agent data: `officePreferences.ts`/`town.settings.tsx` → `TownView.tsx` → `useTownQuiet.ts`; `townRendererActors.ts` stops typing.
+  `TownWorldLayer.tsx`/`TownStepBubble.tsx` draw the hourglass and elapsed time; `TownBoard.tsx` draws the count under Busy.
 
 ## Usage reference
 
