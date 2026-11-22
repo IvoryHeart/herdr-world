@@ -114,6 +114,8 @@ export type RpcServices = {
   worldCli: ReturnType<typeof createWorldCliService>;
   worldSnapshots: ObservedSnapshots | null;
   boardElements?: import("../world/board-element-service").BoardElementService;
+  /** The owner's focus session (world.focus.*). */
+  focus?: import("../world/focus").FocusService;
 };
 
 type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;

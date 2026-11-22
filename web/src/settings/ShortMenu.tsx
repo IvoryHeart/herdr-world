@@ -1,6 +1,7 @@
 import {
   Download,
   Focus,
+  Headphones,
   HelpCircle,
   LogOut,
   Search,
@@ -8,6 +9,7 @@ import {
 } from "lucide-react";
 import { ConfigMenuItem } from "../components/ConfigMenuItem";
 import { shortcutLabel } from "../shortcutPreferences";
+import { useFocusClock } from "../world/FocusControls";
 
 /**
  * The Menu (#1035): the few things people do every day. Everything else is
@@ -25,6 +27,7 @@ export function ShortMenu({
   logoutError,
   onSettings,
   onFind,
+  onFocus,
   onZen,
   onUpdate,
   onLogOut,
@@ -40,10 +43,13 @@ export function ShortMenu({
   logoutError: string;
   onSettings: (target: string | null) => void;
   onFind: () => void;
+  /** Opens the Focus dialog (#1131). */
+  onFocus: () => void;
   onZen: () => void;
   onUpdate: () => void;
   onLogOut: () => void;
 }) {
+  const focus = useFocusClock();
   return (
     <div className="config-section config-short-menu">
       <ConfigMenuItem
@@ -63,6 +69,17 @@ export function ShortMenu({
         }
         className="config-menu-item-row"
         onClick={onFind}
+      />
+      <ConfigMenuItem
+        icon={<Headphones size={15} />}
+        label="Focus"
+        description={
+          focus.held
+            ? `Focused · ${focus.left} · End now`
+            : "Hold chimes and notifications for a while"
+        }
+        className="config-menu-item-row"
+        onClick={onFocus}
       />
       {zenAvailable ? (
         <div className="config-preference-row">

@@ -552,6 +552,20 @@ export const rpcVerbs = [
     "world",
     object({ harness: text }),
   ),
+  // The owner's focus session (#1131): held interruptions, then one recap.
+  rpc("world.focus.end", "reconcilable", "world"),
+  rpc("world.focus.get", "read", "world"),
+  rpc(
+    "world.focus.start",
+    "reconcilable",
+    "world",
+    object({
+      minutes: Type.Union([
+        Type.Null(),
+        Type.Integer({ minimum: 1, maximum: 720 }),
+      ]),
+    }),
+  ),
   // The owner's last sighting across browsers, for "Since you left".
   rpc("world.profiles.delete", "reconcilable", "world"),
   rpc("world.profiles.get", "read", "world"),

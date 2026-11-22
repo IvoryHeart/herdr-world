@@ -69,6 +69,23 @@ describe("Apartments in the browser", () => {
     expect(parsed?.residents[0]!.links).toEqual([{ kind: "pr", number: 1 }]);
   });
 
+  test("a resident's usage agent IDs are kept; bad or missing ones read as none", () => {
+    const [resident] = fixtureResidents(NOW);
+    const parsed = parseApartmentState({
+      ...state(3),
+      residents: [
+        { ...resident, usage_agent_ids: ["agent_a", 7, "", "agent_b"] },
+        { ...resident, id: "r-old", usage_agent_ids: undefined },
+        { ...resident, id: "r-bad", usage_agent_ids: "agent_a" },
+      ],
+    });
+    expect(parsed?.residents.map((item) => item.usage_agent_ids)).toEqual([
+      ["agent_a", "agent_b"],
+      [],
+      [],
+    ]);
+  });
+
   test("refreshes on the service's change message and ignores an older revision", async () => {
     const io = client([state(2, 1), state(3, 2), state(1, 5)]);
     const store = new WorldApartmentsStore(io.fake);

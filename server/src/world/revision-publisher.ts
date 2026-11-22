@@ -9,6 +9,7 @@ export function createRevisionPublisher<Client>(
       | "world_profiles_changed"
       | "world_watchlist_changed"
       | "world_bin_changed"
+      | "world_focus_changed"
       | "world_apartments_changed",
     context: string,
   ) =>
