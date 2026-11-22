@@ -43,6 +43,12 @@
   text-transform: uppercase;
 }
 
+/* A name World derived for an unnamed space reads lighter than a given one. */
+.town-room-plaque-name.is-derived {
+  font-weight: 400;
+  opacity: 0.78;
+}
+
 /* The name is the room's handle: drag it (a touch hold) to move the room. */
 .town-room-plaque-name.is-movable,
 .town-room-plaque .town-plaque-action.town-plaque-move {

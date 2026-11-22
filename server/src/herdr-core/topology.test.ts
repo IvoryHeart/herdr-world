@@ -9,6 +9,7 @@ import {
   CORE_UNPLACED_WORKSPACE,
   CoreDeskMemory,
   CoreFirstSight,
+  CoreRoomNames,
   coreAgentStatus,
   coreDeskProcess,
   coreDeskStatus,
@@ -799,6 +800,198 @@ describe("no core room is ever unnamed", () => {
           focused: false,
         },
       ]);
+  });
+
+  // #1103: unnamed app spaces all read "Herdr space" on plates and cards.
+  const unnamedSpace = (
+    address: string,
+    space: string,
+    fields: Partial<CoreMirrorTerminal> = {},
+    where = "",
+  ) =>
+    record({
+      address,
+      labels: { "herdr.space": space, "herdr.tab": "b1", where },
+      ...fields,
+    });
+  const named = (rows: ReturnType<typeof coreTopology>) =>
+    rows.workspaces.map((w) => [w.label, w.label_derived_from ?? null]);
+
+  test("an unnamed app space is named from its oldest terminal's folder, marked as derived", () => {
+    const rows = coreTopology(
+      [
+        unnamedSpace("t3", "s1", { cwd: "/srv/example/later" }),
+        unnamedSpace("t1", "s1", { cwd: "/srv/example/api/" }),
+        unnamedSpace("t2", "s2", { cwd: "/srv/example/docs" }),
+        record({
+          address: "t4",
+          labels: { "herdr.space": "s3", where: "web / review" },
+          cwd: "/srv/example/api",
+        }),
+      ],
+      "example-host",
+    );
+    expect(named(rows)).toEqual([
+      ["api", "folder"],
+      ["docs", "folder"],
+      ["web", null],
+    ]);
+    // Tabs keep their own names; only the room is derived.
+    expect(rows.tabs.map((tab) => tab.label)).toEqual(["Tab", "Tab", "review"]);
+  });
+
+  test("the name holds while newer agents come and go", () => {
+    const oldest = unnamedSpace("t1", "s1", { cwd: "/srv/example/api" });
+    const before = coreTopology([oldest], "example-host");
+    const after = coreTopology(
+      [
+        oldest,
+        unnamedSpace("t2", "s1", {
+          cwd: "/srv/example/other",
+          name: "newcomer",
+          status: { state: "working", app: "claude-code" },
+        }),
+      ],
+      "example-host",
+    );
+    expect(named(before)).toEqual([["api", "folder"]]);
+    expect(named(after)).toEqual(named(before));
+  });
+
+  test("without a folder: World's tab name, then the first agent, else Herdr space", () => {
+    const world = {
+      core_id: "core-a",
+      rooms: [
+        {
+          id: "r1",
+          label: "",
+          app_space: "s1",
+          tabs: [{ id: "b1", label: "Builder", terminals: ["t1"] }],
+        },
+      ],
+    };
+    const rows = coreTopology(
+      [
+        unnamedSpace("t1", "s1"),
+        unnamedSpace("t2", "s2", {
+          name: "scout",
+          status: { state: "working", app: "gemini" },
+        }),
+        unnamedSpace("t3", "s3", {
+          status: { state: "idle", app: "codex" },
+        }),
+        unnamedSpace("t4", "s4"),
+      ],
+      "example-host",
+      { world: world as never },
+    );
+    expect(named(rows)).toEqual([
+      ["Builder", "tab"],
+      ["scout", "agent"],
+      ["codex", "agent"],
+      ["Herdr space", null],
+    ]);
+  });
+
+  test("rooms that would share a derived name get a number; a named room keeps its own", () => {
+    const rows = coreTopology(
+      [
+        record({
+          address: "t1",
+          labels: { "herdr.space": "s0", where: "API / main" },
+        }),
+        unnamedSpace("t2", "s1", { cwd: "/srv/a/api" }),
+        unnamedSpace("t3", "s2", { cwd: "/srv/b/api" }),
+        unnamedSpace("t4", "s3", { cwd: "/srv/c/web" }),
+      ],
+      "example-host",
+    );
+    expect(named(rows)).toEqual([
+      ["API", null],
+      ["api 2", "folder"],
+      ["api 3", "folder"],
+      ["web", "folder"],
+    ]);
+  });
+
+  test("a newer terminal's folder never outranks the oldest terminal's agent", () => {
+    const scout = unnamedSpace("t1", "s1", {
+      name: "scout",
+      status: { state: "working", app: "gemini" },
+    });
+    const newer = unnamedSpace("t2", "s1", { cwd: "/srv/example/api" });
+    expect(named(coreTopology([scout], "example-host"))).toEqual([
+      ["scout", "agent"],
+    ]);
+    expect(named(coreTopology([scout, newer], "example-host"))).toEqual([
+      ["scout", "agent"],
+    ]);
+  });
+
+  test("with World's memory, a name holds when its terminals or another room leave", () => {
+    const roomNames = new CoreRoomNames();
+    const observe = (terminals: CoreMirrorTerminal[]) =>
+      named(
+        coreTopology(terminals, "example-host", {
+          coreId: "core-a",
+          roomNames,
+        }),
+      );
+    const first = unnamedSpace("t1", "s1", { cwd: "/srv/a/api" });
+    const second = unnamedSpace("t2", "s2", { cwd: "/srv/b/api" });
+    const secondNewer = unnamedSpace("t3", "s2", { cwd: "/srv/b/docs" });
+    expect(observe([first, second, secondNewer])).toEqual([
+      ["api", "folder"],
+      ["api 2", "folder"],
+    ]);
+    // The first room leaves: the second keeps its number.
+    expect(observe([second, secondNewer])).toEqual([["api 2", "folder"]]);
+    // Its oldest terminal leaves: the name stays.
+    expect(observe([secondNewer])).toEqual([["api 2", "folder"]]);
+    // A new room that would read `api` takes the free name.
+    const third = unnamedSpace("t4", "s3", { cwd: "/srv/c/api" });
+    expect(observe([secondNewer, third])).toEqual([
+      ["api 2", "folder"],
+      ["api", "folder"],
+    ]);
+    // A room's own name that reads the same wins; the derived one renumbers.
+    const named2 = record({
+      address: "t0",
+      labels: { "herdr.space": "s0", where: "API 2 / main" },
+    });
+    expect(observe([named2, secondNewer, third])).toEqual([
+      ["API 2", null],
+      ["docs", "folder"],
+      ["api", "folder"],
+    ]);
+  });
+
+  test("the app's own `Herdr space` caption names its space; World's placeholder does not", () => {
+    const rows = coreTopology(
+      [
+        unnamedSpace(
+          "t1",
+          "s1",
+          { cwd: "/srv/example/api" },
+          "Herdr space / Review",
+        ),
+        record({
+          address: "t2",
+          cwd: "/srv/example/docs",
+          labels: {
+            "herdr.space": "s2",
+            "herdr.tab": "b1",
+            where: "Herdr space / Builder",
+            "herdr-world.unnamed-space": "1",
+          },
+        }),
+      ],
+      "example-host",
+    );
+    expect(named(rows)).toEqual([
+      ["Herdr space", null],
+      ["docs", "folder"],
+    ]);
   });
 });
 

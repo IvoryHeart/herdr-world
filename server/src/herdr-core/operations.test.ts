@@ -421,6 +421,42 @@ describe("launching in herdr-core (M2, M3)", () => {
     ]);
   });
 
+  test("a launch into an unnamed app space never writes World's derived name to core", async () => {
+    const w = await world();
+    const app = w.fake.create({
+      argv: ["/bin/sh"],
+      cwd: "/srv/example/api",
+      labels: { "herdr.space": "s1", "herdr.tab": "c1" },
+    });
+    await w.settle();
+    expect((await w.rows()).workspaces).toMatchObject([
+      {
+        workspace_id: "hc:space:s1",
+        label: "api",
+        label_derived_from: "folder",
+      },
+    ]);
+    const outcome = await launchCore(
+      w.lease(),
+      { workspaceId: "hc:space:s1", kind: "codex", label: "Builder", text: "" },
+      { topology: w.topology, resolveExecutable },
+    );
+    expect(outcome).toMatchObject({ status: "started", placed: true });
+    expect(runs(w)[0]!.params).toMatchObject({
+      labels: {
+        where: "Herdr space / Builder",
+        "herdr-world.unnamed-space": "1",
+      },
+    });
+    // Its generic caption is no name: the room stays derived after the app's
+    // terminal ends.
+    w.fake.remove(app);
+    await w.settle();
+    const [room] = (await w.rows()).workspaces;
+    expect(room).toMatchObject({ workspace_id: "hc:space:s1" });
+    expect(room).toMatchObject({ label: "api", label_derived_from: "folder" });
+  });
+
   test("a core that offers no writes refuses without sending anything", async () => {
     const w = await world({ observeOnly: true });
     const outcome = await launchCore(
