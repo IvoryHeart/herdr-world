@@ -33,6 +33,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
@@ -138,6 +139,11 @@ import {
   boardAppearanceStyle,
   boardGroundLayers,
 } from "./board/boardAppearance";
+import {
+  boardPulses,
+  setBoardPulses,
+  subscribeBoardPulses,
+} from "./board/boardPulses";
 import { useBoardAppearance } from "./board/useBoardAppearance";
 import { nextBoardAttention } from "./board/boardAttention";
 import { BoardStatusSummary } from "./board/BoardStatusSummary";
@@ -207,7 +213,6 @@ const OVERVIEW_IN = 0.44;
 const OVERVIEW_OUT = 0.5;
 const MIN_ZOOM = 0.12;
 const MAX_ZOOM = 2.4;
-const PULSES_KEY = "herdr-world.board.pulses";
 const TWEEN_SECONDS = 0.26;
 
 /** A card (note, workspace or tab) and optionally one of its panes. */
@@ -393,14 +398,6 @@ type Camera = { x: number; y: number; s: number };
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const isPhone = () => window.matchMedia("(max-width: 720px)").matches;
-
-function readPulses() {
-  try {
-    return worldLocalStorage.getItem(PULSES_KEY) !== "off";
-  } catch {
-    return true;
-  }
-}
 
 /** The pane a tab card selects or opens: its most urgent agent, else the first. */
 function primaryPane(tab: BoardTab) {
@@ -669,7 +666,7 @@ export default function BoardView({
     tabKey: string;
     stringFrom?: StringEnd;
   } | null>(null);
-  const [pulses, setPulses] = useState(readPulses);
+  const pulses = useSyncExternalStore(subscribeBoardPulses, boardPulses);
   const { appearance, change: changeAppearance } = useBoardAppearance();
   const nextAttention = useMemo(
     () => nextBoardAttention(fullModel.tabs, selectedId, asking),
@@ -3358,15 +3355,7 @@ export default function BoardView({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const togglePulses = () => {
-    const next = !pulses;
-    setPulses(next);
-    try {
-      worldLocalStorage.setItem(PULSES_KEY, next ? "on" : "off");
-    } catch {
-      // Storage unavailable: the choice lasts for this page.
-    }
-  };
+  const togglePulses = () => setBoardPulses(!boardPulses());
 
   /* ---------- Search ---------- */
   const search = useBoardSearch(world, model, onSelect);
