@@ -357,6 +357,11 @@ export function TerminalComposer({
       if (/\r|\n/.test(text) || contentHeight > oneRow + 1)
         flushSync(() => setExpanded(true));
     };
+    // Expanding inside measure() commits synchronously, so React may run this
+    // effect's cleanup (and its replacement) before measure() returns. A
+    // disposed run must not install an observer or measure with its stale
+    // draft and focus, or it could re-expand a later short draft.
+    let disposed = false;
     let observer: ResizeObserver | undefined;
     const start = () => {
       measuringFrameRef.current = true;
@@ -367,9 +372,10 @@ export function TerminalComposer({
       }
       // Keyboard/viewport rotation and UI scaling can introduce a soft wrap
       // without changing the draft. Do not refocus or replace the editor.
-      if (typeof ResizeObserver === "undefined") return;
+      if (disposed || typeof ResizeObserver === "undefined") return;
       let measuredWidth = textarea.getBoundingClientRect().width;
       observer = new ResizeObserver(() => {
+        if (disposed) return;
         const width = textarea.getBoundingClientRect().width;
         if (width === measuredWidth) return;
         measuredWidth = width;
@@ -382,6 +388,7 @@ export function TerminalComposer({
         ? (start(), undefined)
         : requestAnimationFrame(start);
     return () => {
+      disposed = true;
       if (frame !== undefined) cancelAnimationFrame(frame);
       observer?.disconnect();
     };
