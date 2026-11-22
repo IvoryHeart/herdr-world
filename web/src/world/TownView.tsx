@@ -33,13 +33,13 @@ import { townFoldedActivity } from "./town/townFoldedActivity";
 import { TownCanvas } from "./town/TownCanvas";
 import { putTownDropInBin } from "./town/townBinDrop";
 import type { TownQuestMark } from "./town/townQuestPennant";
-import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
-import { TOWN_HOST_THEMES } from "./town/townPaint";
 import {
-  hostColorKey,
-  resolveTerminal,
-  type TerminalColor,
-} from "./terminalColor";
+  townDeskColorTarget,
+  townHostColorKey,
+  townRoomColorKey,
+} from "./town/townModel";
+import { TOWN_HOST_THEMES } from "./town/townPaint";
+import { resolveTerminal, type TerminalColor } from "./terminalColor";
 import {
   setTerminalColor,
   usePlaceColorChoices,
@@ -446,7 +446,7 @@ export default function TownView({
         host.deterministicSkin.themeIndex % TOWN_HOST_THEMES.length
       ]!;
     return {
-      ...placeChoices(hostColorKey(host.connectionId)),
+      ...placeChoices(townHostColorKey(host)),
       defaultHex: theme.roof,
     };
   };

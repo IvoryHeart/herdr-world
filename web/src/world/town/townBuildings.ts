@@ -17,7 +17,10 @@
  *
  * Two Herdr TUI connections on one Herdr endpoint (a startup default and a
  * saved profile of the same socket) report the same workspaces; Town shows
- * the rooms of one of them: the live one, then the writable one.
+ * the rooms of one of them (`endpointViews`): a fixed anchor, the writable
+ * one, or another live view while the anchor is down, standing where the
+ * anchor's rooms stood and keeping their spots and colours
+ * (`placeConnectionId`).
  */
 
 import type { ConnectionSummary } from "../../api";
@@ -125,6 +128,12 @@ export function townRuntimeTag(runtime: TownRuntime["runtime"]) {
 type Plan = {
   /** Host keys whose items Town leaves out: a second view of one endpoint. */
   hidden: Set<string>;
+  /**
+   * A view Town shows in place of its endpoint's anchor (the anchor is down,
+   * this view is live), by its host key: the anchor's host. Its building
+   * stands, looks and keeps its rooms' spots as the anchor's did.
+   */
+  placeOf: Map<string, OfficeHost>;
   /** Building key by office host key, for a machine's later runtimes. */
   buildingOf: Map<string, string>;
   /** A room's runtime, in buildings of more than one runtime. */
@@ -139,6 +148,64 @@ type Plan = {
 /** Rooms of a machine's later runtimes follow its first runtime's rooms. */
 const RUNTIME_ORDER_STRIDE = 1_000_000;
 
+/**
+ * Which view of each endpoint Town shows. Views share an endpoint when
+ * worldHosts.ts gives them the same `endpoint`: the same runtime, place and
+ * socket path strings, as the service compares saved endpoints
+ * (connections/profiles.ts). Paths are not resolved: a second spelling of a
+ * socket (a symlink) stays a second view, shown twice rather than hidden.
+ *
+ * Each endpoint's anchor is chosen from its profiles alone, never their
+ * state: the first writable view in catalogue order, else the first. Town
+ * shows the anchor's rooms, unless the anchor is down and another view is
+ * live: then that view's (writable first), standing where the anchor's
+ * stood, so a takeover moves no building and no saved room.
+ */
+function endpointViews(
+  known: readonly OfficeHost[],
+  runtimeOf: ReadonlyMap<string, TownRuntime>,
+) {
+  const hidden = new Set<string>();
+  const placeOf = new Map<string, OfficeHost>();
+  const byEndpoint = new Map<string, OfficeHost[]>();
+  for (const host of known) {
+    const endpoint = runtimeOf.get(host.connectionId)!.endpoint;
+    byEndpoint.set(endpoint, [...(byEndpoint.get(endpoint) ?? []), host]);
+  }
+  const writable = (host: OfficeHost) =>
+    runtimeOf.get(host.connectionId)!.writable;
+  for (const views of byEndpoint.values()) {
+    if (views.length < 2) continue;
+    const anchor = views.find(writable) ?? views[0]!;
+    const live = views.filter((host) => !host.stale);
+    const kept = !anchor.stale
+      ? anchor
+      : (live.find(writable) ?? live[0] ?? anchor);
+    for (const host of views) if (host !== kept) hidden.add(host.key);
+    if (kept !== anchor) placeOf.set(kept.key, anchor);
+  }
+  return { hidden, placeOf };
+}
+
+/** The hosts Town shows, in order: a taken-over view in its anchor's place. */
+function shownHosts(
+  hosts: readonly OfficeHost[],
+  hidden: ReadonlySet<string>,
+  placeOf: ReadonlyMap<string, OfficeHost>,
+) {
+  const standIn = new Map<string, string>();
+  for (const [key, anchor] of placeOf) standIn.set(anchor.key, key);
+  const byKey = new Map(hosts.map((host) => [host.key, host]));
+  const shown: OfficeHost[] = [];
+  for (const host of hosts) {
+    if (placeOf.has(host.key)) continue;
+    const viewKey = standIn.get(host.key);
+    if (viewKey) shown.push(byKey.get(viewKey)!);
+    else if (!hidden.has(host.key)) shown.push(host);
+  }
+  return shown;
+}
+
 function plan(
   office: HerdrOfficeProjection,
   runtimes: readonly TownRuntime[],
@@ -146,30 +213,14 @@ function plan(
 ): Plan {
   const runtimeOf = new Map(runtimes.map((each) => [each.id, each]));
   const known = office.hosts.filter((host) => runtimeOf.has(host.connectionId));
-  // One endpoint, one set of rooms: the live view first, then the writable.
-  const hidden = new Set<string>();
-  const byEndpoint = new Map<string, OfficeHost[]>();
-  for (const host of known) {
-    const endpoint = runtimeOf.get(host.connectionId)!.endpoint;
-    byEndpoint.set(endpoint, [...(byEndpoint.get(endpoint) ?? []), host]);
-  }
-  const rank = (host: OfficeHost) =>
-    (host.stale ? 0 : 2) + (runtimeOf.get(host.connectionId)!.writable ? 1 : 0);
-  for (const views of byEndpoint.values()) {
-    if (views.length < 2) continue;
-    const kept = views.reduce((best, host) =>
-      rank(host) > rank(best) ? host : best,
-    );
-    for (const host of views) if (host !== kept) hidden.add(host.key);
-  }
+  const { hidden, placeOf } = endpointViews(known, runtimeOf);
   const buildingOf = new Map<string, string>();
   const tagOf = new Map<string, string>();
   const orderOffset = new Map<string, number>();
   const primaryStale = new Map<string, boolean>();
   if (mode === "host") {
     const byMachine = new Map<string, OfficeHost[]>();
-    for (const host of known) {
-      if (hidden.has(host.key)) continue;
+    for (const host of shownHosts(known, hidden, placeOf)) {
       const machine = runtimeOf.get(host.connectionId)!.machine;
       byMachine.set(machine, [...(byMachine.get(machine) ?? []), host]);
     }
@@ -184,11 +235,12 @@ function plan(
       members.forEach((host, index) => {
         const kind = kinds[index]!;
         const tag = townRuntimeTag(kind);
+        const label = (placeOf.get(host.key) ?? host).displayLabel;
         // Two runtimes of one kind on a machine: their names tell them apart.
         tagOf.set(
           host.key,
           kinds.filter((each) => each === kind).length > 1
-            ? `${tag} · ${host.displayLabel}`
+            ? `${tag} · ${label}`
             : tag,
         );
         if (index) orderOffset.set(host.key, index * RUNTIME_ORDER_STRIDE);
@@ -200,11 +252,20 @@ function plan(
   }
   const signature = JSON.stringify([
     [...hidden],
+    [...placeOf].map(([key, anchor]) => [key, anchor.key]),
     [...buildingOf],
     [...tagOf],
     [...primaryStale],
   ]);
-  return { hidden, buildingOf, tagOf, orderOffset, primaryStale, signature };
+  return {
+    hidden,
+    placeOf,
+    buildingOf,
+    tagOf,
+    orderOffset,
+    primaryStale,
+    signature,
+  };
 }
 
 type Caches = {
@@ -260,7 +321,7 @@ export function createTownBuildings() {
 
 function apply(
   office: HerdrOfficeProjection,
-  { hidden, buildingOf, tagOf, orderOffset, primaryStale }: Plan,
+  { hidden, placeOf, buildingOf, tagOf, orderOffset, primaryStale }: Plan,
   cache: Caches,
 ): HerdrOfficeProjection {
   if (!hidden.size && !buildingOf.size && !tagOf.size) return office;
@@ -296,11 +357,16 @@ function apply(
         }))
       : item;
   const room = (item: OfficeRoom) =>
-    tagOf.has(item.hostKey)
+    tagOf.has(item.hostKey) || placeOf.has(item.hostKey)
       ? memo(cache.rooms, item, () => ({
           ...placed(item),
-          runtimeTag: tagOf.get(item.hostKey),
-          buildingOrder: item.order + (orderOffset.get(item.hostKey) ?? 0),
+          ...(tagOf.has(item.hostKey) && {
+            runtimeTag: tagOf.get(item.hostKey),
+            buildingOrder: item.order + (orderOffset.get(item.hostKey) ?? 0),
+          }),
+          ...(placeOf.has(item.hostKey) && {
+            placeConnectionId: placeOf.get(item.hostKey)!.connectionId,
+          }),
           desks: item.desks.map(desk),
           roomAgents: item.roomAgents.map(agent),
         }))
@@ -309,15 +375,31 @@ function apply(
     buildingOf.has(item.hostKey)
       ? { ...placed(item), waitingAgents: item.waitingAgents.map(agent) }
       : item;
-  const host = (item: OfficeHost) =>
-    buildingOf.has(item.key)
-      ? { ...item, buildingKey: buildingOf.get(item.key)! }
-      : primaryStale.has(item.key)
-        ? { ...item, stale: primaryStale.get(item.key)! }
-        : item;
+  const host = (item: OfficeHost): OfficeHost => {
+    const anchor = placeOf.get(item.key);
+    if (!anchor && !buildingOf.has(item.key) && !primaryStale.has(item.key))
+      return item;
+    return {
+      ...item,
+      // A taken-over view stands, and looks, as its endpoint's anchor did.
+      ...(anchor && {
+        displayLabel: anchor.displayLabel,
+        accessibleLabel: anchor.accessibleLabel,
+        displayOrder: anchor.displayOrder,
+        deterministicSkin: anchor.deterministicSkin,
+        placeConnectionId: anchor.connectionId,
+      }),
+      ...(buildingOf.has(item.key) && {
+        buildingKey: buildingOf.get(item.key)!,
+      }),
+      ...(primaryStale.has(item.key) && {
+        stale: primaryStale.get(item.key)!,
+      }),
+    };
+  };
   const result: HerdrOfficeProjection = {
     ...office,
-    hosts: office.hosts.filter((item) => !hidden.has(item.key)).map(host),
+    hosts: shownHosts(office.hosts, hidden, placeOf).map(host),
     rooms: office.rooms.filter(shown).map(room),
     receptions: office.receptions.filter(shown).map(reception),
     barAgents: office.barAgents.filter(shown).map(agent),

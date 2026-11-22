@@ -111,6 +111,24 @@ Town SHALL present a town in which each presented host is one building along a
 road, each admitted Herdr workspace of that host is a room on a carpet inside its
 building, and each admitted tab is a desk in its room.
 
+By default the runtimes of one machine (its Herdr TUI and herdr-core) SHALL
+share one building through a display-only building key, each room naming its
+runtime there; a browser-local Town buildings setting (one per machine, the
+default, or one per runtime) SHALL restore a building per runtime. The building
+key SHALL NOT change any entity's host key, qualified references or actions,
+which stay on the owning connection and generation. Two Herdr TUI connections
+to one endpoint SHALL present its rooms once, preferring the writable
+connection.
+
+#### Scenario: One machine, two runtimes, a duplicated connection
+
+- **WHEN** a machine has two Herdr TUI connections to one socket and a
+  herdr-core, and Town buildings is one per machine
+- **THEN** Town shows one building for the machine with each TUI room once and
+  every core room, each room naming its runtime
+- **AND** each room's Move handle, arrows, Rename, Close and New agent act on
+  its own runtime's connection and generation
+
 #### Scenario: Town scene acceptance rules
 
 - **WHEN** World presents or updates Town and its qualified agents

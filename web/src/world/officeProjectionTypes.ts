@@ -137,6 +137,13 @@ export type OfficeRoom = {
   buildingKey?: string;
   /** Town only: its order in a merged building (`order` stays its own). */
   buildingOrder?: number;
+  /**
+   * Town only, display: the connection its saved spot and colour are read
+   * and saved under, when Town shows it through a second view of the same
+   * Herdr endpoint (townBuildings.ts), so a takeover moves nothing. Never
+   * identity: actions read `workspaceRef`.
+   */
+  placeConnectionId?: string;
   workspaceRef: OfficeQualifiedTarget;
   observedGeneration: number;
   displayLabel: string;

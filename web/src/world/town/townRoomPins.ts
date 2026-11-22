@@ -14,7 +14,12 @@ import type { TownRoomActions } from "./TownCanvas";
 import { townRoomDrag } from "./townDrag";
 import type { TownLayout } from "./townLayout";
 import type { OfficeRoom } from "../herdrOfficeProjection";
-import { townRoomColorKey, type RoomPins, type TownModel } from "./townModel";
+import {
+  townPlaceConnectionOf,
+  townRoomColorKey,
+  type RoomPins,
+  type TownModel,
+} from "./townModel";
 import type { TownRendererHandle } from "./townRenderer";
 import {
   townBuildingSpots,
@@ -53,16 +58,18 @@ export function useRoomPins(
 }
 
 /**
- * Room spots by owning runtime's connection ID, each keyed by the room's
- * workspace card key. A building per host (#1047) can hold several
- * runtimes' rooms, but each runtime keeps its own spots.
+ * Room spots by owning runtime's connection ID (the anchor view's, for a
+ * room Town shows through another view of its endpoint: townModel.ts
+ * `townPlaceConnectionOf`), each keyed by the room's workspace card key. A
+ * building per machine can hold several runtimes' rooms, but each runtime
+ * keeps its own spots.
  */
 export function roomSpotsByRuntime(
   placed: Iterable<readonly [OfficeRoom, RoomSpot]>,
 ): Map<string, Record<string, RoomSpot>> {
   const spots = new Map<string, Record<string, RoomSpot>>();
   for (const [room, spot] of placed) {
-    const id = room.workspaceRef.connectionId;
+    const id = townPlaceConnectionOf(room);
     const owned = spots.get(id) ?? {};
     owned[townRoomColorKey(room)] = spot;
     spots.set(id, owned);

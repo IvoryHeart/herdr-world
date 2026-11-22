@@ -460,6 +460,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   Agents go by the name Herdr gives them (`firstmate`), else their harness
   (`claude`); window and Inspector titles put the name first
   (`firstmate · claude`).
+  - One machine is one building: this computer's Herdr TUI and herdr-core
+    rooms stand together under one sign, each room's nameplate naming its
+    runtime (**Herdr TUI** or **herdr-core**) and keeping its own controls,
+    and every desk, agent and action stays on its own runtime's connection.
+    **Settings → Town & views → Town buildings → One per runtime** gives each
+    runtime its own building again (**One per machine** is the default).
+    Two Herdr TUI connections to the same socket (the startup default and a
+    saved profile) show its rooms once, through the writable one.
   - The Town board counts the whole town, every building, in four one-word
     columns: **Busy** (working) agents, **Waiting** (items needing
     you: blocked agents and open questions, matching the reception tray and
@@ -1197,7 +1205,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     or pressing Escape, returns it. On a phone, drag the Move handle, or touch
     and hold the name or wall, then drag. The card's **Move before …** and
     **Move after …** arrows swap the room with its neighbour, for the
-    keyboard. Rooms stay in their own host's building. World saves where the
+    keyboard. Rooms stay in their own building; in a machine's building a room
+    can move among either runtime's rooms, while desks and agents keep to
+    their own runtime. World saves where the
     rooms stand with the Board layout (like pinned desks), so a reload and
     every device show the same arrangement, and puts Herdr's workspace order
     in reading order (top to bottom, left to right), so Spaces lists the

@@ -199,7 +199,7 @@ export class TownInteraction {
             if (position && !position.seated)
               yield {
                 key: agent.key,
-                hostKey: townBuildingOf(agent),
+                buildingKey: townBuildingOf(agent),
                 ...position,
               };
           }

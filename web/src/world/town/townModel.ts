@@ -61,9 +61,27 @@ export const NO_PLACE_COLORS: TownPlaceColors = {
   hosts: new Map(),
 };
 
-/** What a room's colour is saved under: its workspace's card key. */
+/**
+ * What a room's colour and saved spot are kept under: its workspace's card
+ * key, on the connection Town places it by (`placeConnectionId`, the anchor
+ * view of its Herdr endpoint, townBuildings.ts), else its own.
+ */
 export const townRoomColorKey = (room: OfficeRoom) =>
-  workspaceColorKey(room.workspaceRef.connectionId, room.workspaceRef.nativeId);
+  workspaceColorKey(townPlaceConnectionOf(room), room.workspaceRef.nativeId);
+
+/** The connection a room's or building's place settings are kept under. */
+export const townPlaceConnectionOf = (
+  item:
+    | Pick<OfficeRoom, "placeConnectionId" | "workspaceRef">
+    | Pick<OfficeHost, "placeConnectionId" | "connectionId">,
+) =>
+  item.placeConnectionId ??
+  ("workspaceRef" in item ? item.workspaceRef.connectionId : item.connectionId);
+
+/** What a building's colour is kept under: its place connection's key. */
+export const townHostColorKey = (
+  host: Pick<OfficeHost, "placeConnectionId" | "connectionId">,
+) => hostColorKey(townPlaceConnectionOf(host));
 
 /** Saved room spots (Board's `room_pins`) by workspace card key. */
 export type RoomPins = Readonly<Record<string, { x: number; y: number }>>;
@@ -103,7 +121,7 @@ export function townPlaceColors(
   const hosts = new Map<string, TerminalColor>();
   // Every building, even one with no rooms shown, has its host's colour.
   for (const host of projection.hosts) {
-    const color = placeColor(colors, hostColorKey(host.connectionId));
+    const color = placeColor(colors, townHostColorKey(host));
     if (color) hosts.set(host.key, color);
   }
   return rooms.size || hosts.size ? { rooms, hosts } : NO_PLACE_COLORS;

@@ -12,8 +12,10 @@ import {
   type TownRuntime,
   townRuntimes,
 } from "./townBuildings";
+import { hostColorKey } from "../terminalColor";
 import { layoutTown } from "./townLayout";
-import { townModelFromProjection } from "./townModel";
+import { townModelFromProjection, townRoomSpots } from "./townModel";
+import { roomSpotsByRuntime } from "./townRoomPins";
 
 // The owner's shape: this computer's Herdr TUI seen through two connections
 // of one socket (the startup default and a saved profile), its herdr-core,
@@ -245,4 +247,142 @@ test("the store's connections name each runtime's machine and endpoint", () => {
   ]);
   expect(found[0]!.endpoint).toBe(found[1]!.endpoint);
   expect(townRuntimes({ ...state })).toBe(found);
+});
+
+test("endpoints compare socket path strings, as the service does", () => {
+  const tui = (id: string, socket: string) =>
+    ({
+      id,
+      label: id,
+      type: "local",
+      state: "ready",
+      generation: 1,
+      read_only: false,
+      control_socket_path: socket,
+      client_socket_path: `${socket}-client`,
+    }) as unknown as ConnectionSummary;
+  const [a, b, c] = townRuntimes({
+    connections: [
+      tui("tui-default", "/run/example/herdr.sock"),
+      tui("tui-profile", "/run/example/herdr.sock"),
+      // A symlinked spelling of the same socket is not resolved: a second
+      // view, shown twice rather than hiding a different Herdr's rooms.
+      tui("tui-link", "/run/example/link/herdr.sock"),
+    ],
+  });
+  expect(a!.endpoint).toBe(b!.endpoint);
+  expect(c!.endpoint).not.toBe(a!.endpoint);
+  const linked = projectWorldOffice(
+    fixtureWorld([
+      fixtureHost("tui-default", [
+        { label: "Web", tabs: [{ label: "Build", panes: [["idle"]] }] },
+      ]),
+      fixtureHost("tui-profile", [
+        { label: "Web", tabs: [{ label: "Build", panes: [["idle"]] }] },
+      ]),
+      fixtureHost("tui-link", [
+        { label: "Web", tabs: [{ label: "Build", panes: [["idle"]] }] },
+      ]),
+    ]),
+    0,
+  );
+  const town = createTownBuildings()(linked, [a!, b!, c!], "runtime");
+  expect(town.rooms.map((room) => room.workspaceRef.connectionId)).toEqual([
+    "tui-default",
+    "tui-link",
+  ]);
+});
+
+test("a takeover of a socket keeps its building, saved spots and colours", () => {
+  // The anchor (the writable profile) drops; the default's live view takes
+  // over, and back.
+  const twins = (down: string | null) =>
+    projectWorldOffice(
+      fixtureWorld([
+        ...["tui-default", "tui-profile"].map((id) =>
+          fixtureHost(
+            id,
+            [
+              { label: "Web", tabs: [{ label: "Build", panes: [["idle"]] }] },
+              { label: "Docs", tabs: [{ label: "Edit", panes: [["idle"]] }] },
+            ],
+            { stale: id === down },
+          ),
+        ),
+        fixtureHost("core", [
+          { label: "Core", tabs: [{ label: "Run", panes: [["idle"]] }] },
+        ]),
+      ]),
+      0,
+    );
+  const pins: Record<string, { x: number; y: number }> = {};
+  const before = createTownBuildings()(twins(null), runtimes, "host");
+  // Spots saved while the profile is shown are kept under the profile.
+  for (const [connectionId, spots] of roomSpotsByRuntime(
+    before.rooms.map((room, index) => [room, { x: index, y: 1 }] as const),
+  ))
+    for (const [key, spot] of Object.entries(spots)) {
+      expect(key.startsWith(`${connectionId}:`)).toBe(true);
+      pins[key] = spot;
+    }
+  expect(Object.keys(pins).some((key) => key.startsWith("tui-default:"))).toBe(
+    false,
+  );
+  const colors = { [hostColorKey("tui-profile")]: "teal" } as never;
+  const shown = (town: typeof office, mode = "wide" as const) => {
+    const model = townModelFromProjection(town, colors);
+    const spots = townRoomSpots(town, pins);
+    const { layout } = layoutTown(
+      model.input,
+      mode,
+      undefined,
+      undefined,
+      spots,
+    );
+    return {
+      buildings: layout.buildings.map((building) => {
+        const host = model.hosts.get(building.hostKey)!;
+        return {
+          label: host.displayLabel,
+          x: building.x,
+          y: building.y,
+          color: model.placeColors.hosts.get(building.hostKey),
+          rooms: building.rooms.map((placed) => {
+            const room = model.rooms.get(placed.key)!;
+            return [room.displayLabel, placed.x, placed.y];
+          }),
+        };
+      }),
+      shownBy: town.rooms.map((room) => room.workspaceRef.connectionId),
+    };
+  };
+  const steady = shown(before);
+  const takenOver = createTownBuildings()(
+    twins("tui-profile"),
+    runtimes,
+    "host",
+  );
+  const flipped = shown(takenOver);
+  // The live default's rooms now (their actions reach it) ...
+  expect(flipped.shownBy).toEqual(["tui-default", "tui-default", "core"]);
+  for (const room of takenOver.rooms)
+    expect(officeSpaceForRoom(world, room)?.connectionId).toBe(
+      room.workspaceRef.connectionId,
+    );
+  // ... where the profile's stood: same building, spots and colour.
+  expect(flipped.buildings).toEqual(steady.buildings);
+  expect(steady.buildings[0]!.color).toBe("teal");
+  // Moving a room then saves under the profile, so it is there on return.
+  expect([
+    ...roomSpotsByRuntime(
+      takenOver.rooms.map((room) => [room, { x: 0, y: 0 }] as const),
+    ).keys(),
+  ]).toEqual(["tui-profile", "core"]);
+  expect(shown(createTownBuildings()(twins(null), runtimes, "host"))).toEqual(
+    steady,
+  );
+  // One building per runtime keeps the same footing.
+  const perRuntime = (down: string | null) =>
+    shown(createTownBuildings()(twins(down), runtimes, "runtime")).buildings;
+  expect(perRuntime("tui-profile")).toEqual(perRuntime(null));
 });

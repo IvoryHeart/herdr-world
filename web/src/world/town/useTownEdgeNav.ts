@@ -91,7 +91,7 @@ export function useTownEdgeNav(
         list.push({
           key: agent.key,
           mark: EDGE_MARK[mark],
-          hostKey: townBuildingOf(agent),
+          buildingKey: townBuildingOf(agent),
         });
     }
     return list;
@@ -260,8 +260,9 @@ export function useTownEdgeNav(
     const mark = edgeMarked().find((agent) => agent.key === key);
     if (key) goToAgent(key, mark?.mark ?? arrow.mark);
   };
-  const buildingLabel = (hostKey: string) =>
-    latest.current.model.hosts.get(hostKey)?.displayLabel ?? "another building";
+  const buildingLabel = (buildingKey: string) =>
+    latest.current.model.hosts.get(buildingKey)?.displayLabel ??
+    "another building";
   // A new or answered mark asks for a frame, so the arrows follow it.
   useEffect(() => {
     rendererRef.current?.invalidate("edge-arrows");
