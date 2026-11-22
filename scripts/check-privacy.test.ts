@@ -1,12 +1,6 @@
 import { expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { privacyRules, scanPrivacyRange } from "./check-privacy";
@@ -375,65 +369,71 @@ test("binary additions and updates do not produce text findings", () =>
     );
   }));
 
-test("published dependency attribution is reusable only in the root generated licence artifact", () =>
-  repository(({ root, git, commit }) => {
-    const baseline = commit(
-      `- \`package@1.0.0\` — Author <${email}>\n`,
-      "DEPENDENCY_LICENSES.md",
-    );
-    git("update-ref", "refs/remotes/origin/main", baseline);
-    const updated = commit(
-      `- \`package@2.0.0\` — Author <${email}>\n`,
-      "DEPENDENCY_LICENSES.md",
-    );
-    expect(scanPrivacyRange(root, baseline, updated)).toEqual([]);
-    const outside = commit(`${email}\n`, "report.md");
-    expect(scanPrivacyRange(root, updated, outside)).toContainEqual(
-      expect.objectContaining({ file: "report.md", rule: "email" }),
-    );
-    const unknown = ["new-person", "mail-provider.com"].join("@");
-    const bad = commit(
-      `Author <${email}>\nAuthor <${unknown}>\n${login}\n${home}\n`,
-      "DEPENDENCY_LICENSES.md",
-    );
-    const findings = scanPrivacyRange(root, outside, bad);
-    for (const rule of ["email", "login-token", "home-path"])
-      expect(findings).toContainEqual(
-        expect.objectContaining({ file: "DEPENDENCY_LICENSES.md", rule }),
+test("new dependency copyright emails pass only in the root generated licence artifact", () =>
+  repository(({ root, commit, base }) => {
+    const attribution = `Copyright Author <${email}>\n`;
+    const licensed = commit(attribution, "DEPENDENCY_LICENSES.md");
+    expect(scanPrivacyRange(root, base, licensed)).toEqual([]);
+    for (const path of [
+      "report.md",
+      "DEPENDENCY_LICENSES.md.test.ts",
+      "dependency_licenses.md",
+      "nested/DEPENDENCY_LICENSES.md",
+      "web/src/fixture.test.ts",
+    ]) {
+      mkdirSync(join(root, path, ".."), { recursive: true });
+      const outside = commit(attribution, path);
+      expect(scanPrivacyRange(root, licensed, outside)).toContainEqual(
+        expect.objectContaining({ file: path, rule: "email" }),
       );
-    const actual = readFileSync(
-      join(import.meta.dir, "../DEPENDENCY_LICENSES.md"),
-      "utf8",
-    );
-    const trusted = commit(actual, "DEPENDENCY_LICENSES.md");
-    git("update-ref", "refs/remotes/origin/main", trusted);
-    const refreshed = commit(
-      actual
-        .split("\n")
-        .map((line) => (line ? ` ${line}` : line))
-        .join("\n"),
-      "DEPENDENCY_LICENSES.md",
-    );
-    expect(scanPrivacyRange(root, trusted, refreshed)).toEqual([]);
+    }
   }));
 
-test("main pushes cannot approve newly added attribution addresses", () =>
-  repository(({ root, git, commit }) => {
-    const before = commit(`Author <${email}>\n`, "DEPENDENCY_LICENSES.md");
-    const unknown = ["new-person", "mail-provider.com"].join("@");
+test("generated dependency licences retain every non-email privacy rule", () =>
+  repository(({ root, commit, base }) => {
+    const v6 = ["fd7a", "115c", "a1e0", "", "1234"].join(":");
+    const values = [
+      email,
+      ip(10, 1, 2, 3),
+      v6,
+      tailnet,
+      home,
+      login,
+      `HERDR_WORLD_PASSWORD=${"hunter2"}`,
+      `SESSION_SECRET='${secret}'`,
+    ];
+    const head = commit(values.join("\n") + "\n", "DEPENDENCY_LICENSES.md");
+    expect(
+      scanPrivacyRange(root, base, head)
+        .map(({ rule }) => rule)
+        .sort(),
+    ).toEqual([
+      "home-path",
+      "login-token",
+      "private-ip",
+      "session-secret",
+      "tailnet-host",
+      "tailnet-ipv6",
+      "world-password",
+    ]);
+  }));
+
+test("main push permits generated copyright emails while rejecting other rules", () =>
+  repository(({ root, git, commit, base }) => {
     const after = commit(
-      `Author <${email}>\nNew author <${unknown}>\n`,
+      `Author <${email}>\n${login}\n`,
       "DEPENDENCY_LICENSES.md",
     );
     git("update-ref", "refs/remotes/origin/main", after);
     const event = join(root, "event.json");
-    writeFileSync(event, JSON.stringify({ before, after }));
+    writeFileSync(event, JSON.stringify({ before: base, after }));
     const result = cli(root, ["--event", event]);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      '"DEPENDENCY_LICENSES.md":2: privacy/email',
+      '"DEPENDENCY_LICENSES.md":2: privacy/login-token',
     );
-    expect(result.stderr).not.toContain(unknown);
+    expect(result.stderr).not.toContain("privacy/email");
+    expect(result.stderr).not.toContain(email);
   }));
 
 test("pre-push scans every actual ref and ignores branch deletions", () =>

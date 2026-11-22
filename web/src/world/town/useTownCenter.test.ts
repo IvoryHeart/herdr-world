@@ -15,7 +15,6 @@ const agent = (key: string, agentName: string, extra = {}) =>
 function center(
   options: {
     holder?: { connection_id: string; terminal_id: string } | null;
-    name?: string;
     selectedRoomKey?: string | null;
     roomReason?: string | null;
     seat?: boolean;
@@ -30,6 +29,7 @@ function center(
   const actions = townCenterActions({
     world: {
       leaves: [
+        { id: "leaf-1", connectionId: "local", terminalId: "t-1" },
         {
           id: "leaf-2",
           connectionId: "local",
@@ -44,8 +44,10 @@ function center(
       rooms: [{ key: "room-a", displayLabel: "api" }] as never,
       roster: roster as never,
     },
-    holder: options.holder ?? null,
-    name: options.name ?? "firstmate",
+    holder:
+      options.holder === undefined
+        ? { connection_id: "local", terminal_id: "t-1" }
+        : options.holder,
     selectedRoomKey: options.selectedRoomKey ?? null,
     rooms: {
       canCreateSeat: () => options.seat ?? true,
@@ -81,7 +83,7 @@ test("the ring offers a new agent first, then the Town master and the town's err
   ]);
   expect(action("launch").primary).toBe(true);
   expect(action("needs-you").count).toBe(3);
-  expect(action("master").detail).toBe("firstmate");
+  expect(action("master").detail).toBeUndefined();
 });
 
 test("a new agent starts in the open room when it can take one", () => {
@@ -95,7 +97,7 @@ test("a new agent starts in the open room when it can take one", () => {
   ).toBeUndefined();
 });
 
-test("Town master opens the role holder's chat first, then the named agent", async () => {
+test("Town master opens the role holder's chat with no name fallback", async () => {
   const named = center();
   named.action("master").run();
   await settle();
@@ -111,11 +113,13 @@ test("Town master opens the role holder's chat first, then the named agent", asy
 });
 
 test("a Town master missing from Town, or unopenable, says so instead", async () => {
-  const missing = center({ name: "nobody" });
+  const missing = center({
+    holder: { connection_id: "local", terminal_id: "t-absent" },
+  });
   missing.action("master").run();
   await settle();
   expect(missing.calls).toEqual([
-    ["toast", "error", "No Town master in Town named nobody"],
+    ["toast", "error", "The Town master isn't in Town now"],
   ]);
 
   const stale = center({
@@ -141,7 +145,7 @@ test("an assigned Town master absent from Town is unavailable, never a namesake"
 });
 
 test("with no Town master set, the action offers to choose one", () => {
-  expect(center({ name: "" }).action("master").detail).toBe("Choose one");
+  expect(center({ holder: null }).action("master").detail).toBe("Choose one");
 });
 
 test("New room is shown disabled with the reason it cannot be created", () => {

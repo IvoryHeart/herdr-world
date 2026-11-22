@@ -7,6 +7,10 @@
 
 ### Fixed
 
+- Preserve generated third-party dependency copyright emails during privacy
+  checks, exempting only the root licence artifact's email rule. Keep all other
+  privacy rules active and use a synthetic path in the pane-chat fixture.
+
 - Let Ranger use workspaces it creates in the current chat and turn, and run fixed
   tasks over still-open original workspaces with restart and omission notices.
 - Synchronize Roamgate through bf3879f93 while preserving World runtime ownership,

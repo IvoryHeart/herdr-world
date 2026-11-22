@@ -241,7 +241,7 @@ test("a permission question starts under the rule over its dialog", () => {
   // Claude Code on a narrow screen: the conversation fills what is above
   // the dialog, and must not stand for the question.
   const prompt = parseAgentPrompt([
-    "⏺ I created /Users/me/repo/second.txt",
+    "⏺ I created /home/example/repo/second.txt",
     "  containing hi, using the Write tool.",
     "",
     "✻ Sautéed for 1s · done 3:33 PM",

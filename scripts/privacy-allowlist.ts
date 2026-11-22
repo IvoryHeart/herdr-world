@@ -1,7 +1,7 @@
-/** Reviewed value-level exceptions only. Never exempt an entire file or line.
+/** Reviewed rule-specific exceptions only. Never exempt an entire file or line.
  * Additions to this list need the same review as the guard itself. */
-// Reuse already-published upstream attribution only in this generated artifact.
-// Values come from main's published baseline, never from the current additions.
+// Public third-party copyright notices in this generated root artifact are
+// exempt from the email rule only. All other rules remain active.
 export const publishedAttributionFile = "DEPENDENCY_LICENSES.md";
 export const reservedEmailDomain =
   /^(?:[a-z0-9-]+\.)*(?:example\.(?:com|org|net)|example|invalid|test|localhost)$/i;

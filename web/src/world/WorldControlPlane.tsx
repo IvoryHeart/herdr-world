@@ -28,6 +28,7 @@ import { leafPinnedBy, setDeskPinned, useDeskPins } from "./useDeskPins";
 import { putInBin, WorldBin } from "./bin/WorldBin";
 import { CoreKillConfirmHost } from "./CoreKillConfirm";
 import { CoreWorktreesHost } from "./CoreWorktrees";
+import { useLegacyTownMaster } from "./town/legacyTownMaster";
 import { BoardHub } from "./board/BoardHub";
 import { requestTownSummary } from "./town/townSummaryRequest";
 import { useTerminalColorChoices } from "./useTerminalColors";
@@ -116,7 +117,8 @@ function AgentDialogs({
   const [sounds, setSounds] = useState(false);
   // Chimes need the profiles document (Town master, profile chimes) and
   // unlocked audio whichever view is open.
-  useAgentProfiles();
+  const profiles = useAgentProfiles();
+  useLegacyTownMaster(world, profiles.document);
   useChimeHost();
   // Last seen and returns for "Since you left", whichever view is open.
   usePresenceWatch();
@@ -460,7 +462,9 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
             <BoardHub
               world={presentedWorld}
               selectedId={selectedId}
-              openChat={(id) => stableOpenInspectorView(id, "history")}
+              openChat={(id, focus) =>
+                stableOpenInspectorView(id, "history", focus)
+              }
               onNewWorkspace={() => setWorkspaceCreationOpen(true)}
               onOpenSummary={() => {
                 // Town's summary, the one there is: Town opens with it.

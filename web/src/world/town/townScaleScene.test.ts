@@ -89,3 +89,35 @@ test("the scale scene's working agents have a mix of steps, some long", () => {
   expect(townScaleSceneConnection("scene-atlas")).toBe(true);
   expect(townScaleSceneConnection("example")).toBe(false);
 });
+
+test("given its load time, a few working agents went quiet 15–40 minutes before", () => {
+  const loadedAt = Date.UTC(2026, 10, 20, 14, 30);
+  const plain = townScaleConnections().flatMap((h) => h.snapshot!.panes);
+  expect(plain.some((pane) => pane.last_activity_at !== undefined)).toBe(false);
+  const panes = townScaleConnections(loadedAt).flatMap(
+    (h) => h.snapshot!.panes,
+  );
+  // The quiet agents change nothing else in the scene.
+  expect(
+    panes.map((pane): unknown => ({ ...pane, last_activity_at: undefined })),
+  ).toEqual(plain);
+  const quiet = panes.filter((pane) => pane.last_activity_at !== undefined);
+  const working = panes.filter((pane) => pane.agent_status === "working");
+  expect(quiet.length).toBeGreaterThanOrEqual(6);
+  expect(quiet.length).toBeLessThan(working.length / 4);
+  const minutes = quiet.map(
+    (pane) => (loadedAt - pane.last_activity_at!) / 60_000,
+  );
+  for (const pane of quiet) expect(pane.agent_status).toBe("working");
+  expect(Math.min(...minutes)).toBeGreaterThanOrEqual(15);
+  expect(Math.max(...minutes)).toBeLessThanOrEqual(40);
+  // A 30-minute threshold keeps some, but fewer.
+  const over30 = minutes.filter((m) => m >= 30).length;
+  expect(over30).toBeGreaterThan(0);
+  expect(over30).toBeLessThan(quiet.length);
+  // Town reads them as its leaves' activity.
+  const world = buildWorldObject(townScaleConnections(loadedAt), "scene-atlas");
+  expect(
+    world.leaves.filter((leaf) => leaf.lastActivityAt !== undefined).length,
+  ).toBe(quiet.length);
+});

@@ -5,12 +5,12 @@
  * every DOM sprite. No binary assets; everything is a pure function of its
  * kind and, for ships and flags, the project's colour.
  *
- * The renderer paints what never changes as outdoor sprites: a pier per
- * shipping lane (planks, a stone slipway at its root, bollards at the
- * berths and a lighthouse on its head) and the warehouse's house and yard.
- * The DOM layer (TownShipyard.tsx, TownWarehouse.tsx) places what the
- * Shipyard and the GitHub source change: the ships, the hull on the
- * slipway, the flags and the crates.
+ * The renderer paints what never changes as outdoor sprites: the
+ * warehouse's house and yard. The DOM layer (TownShipyard.tsx,
+ * TownWarehouse.tsx) places what the Shipyard and the GitHub source change:
+ * a pier per project with releases (planks, a stone slipway at its root and
+ * bollards at the berths), the lighthouse on its head, the ships, the hull
+ * on the slipway, the flags and the crates.
  */
 
 import { TOWN_TILE as T } from "./townLayout";
@@ -464,20 +464,19 @@ function paintCrate(state: TownCrateState) {
   });
 }
 
-/* ---------- the pier (renderer) ---------- */
+/* ---------- the pier and its lighthouse ---------- */
 
 /** The pier's drawing: its deck's top row, and its height in pixels. */
 export const TOWN_PIER_ART = { deck: 28, h: 50 } as const;
-/** The lighthouse lamp on the pier head, from the pier's deck top-right. */
-export const TOWN_BEACON_LAMP = { dx: -22, dy: -24, w: 12, h: 5 } as const;
 
 let pierCache: { w: number; canvas: TownCanvas } | null = null;
 
 /**
  * A lane's pier, `w` pixels long from the promenade: a stone slipway at its
  * root under the hull being built, then plank deck with an iron bollard at
- * each berth, out to a square head with a lighthouse. Pilings and their
- * shadow stand in the water below it.
+ * each berth, out to a square head for the lighthouse (paintTownLighthouse,
+ * drawn above the ships). Pilings and their shadow stand in the water
+ * below it.
  */
 export function paintTownPier(
   w: number,
@@ -531,15 +530,21 @@ export function paintTownPier(
       disc(x + 8, top + 5, 1, townShade(ROPE, -0.4));
     }
   }
-  paintLighthouse(rect, w - 26, top - 2);
   pierCache = { w, canvas };
   return canvas;
 }
 
 /**
- * A striped lighthouse standing on (x, foot), 20 pixels wide: its lamp
- * room's glass is dark; the DOM layer lights it in main's colour.
+ * A striped lighthouse, 20 by 28 pixels (TOWN_LIGHTHOUSE in
+ * townHarbour.ts), standing on its bottom rows: its lamp room's glass is
+ * dark; the DOM layer lights it in main's colour.
  */
+export function paintTownLighthouse(): TownCanvas {
+  const { canvas, rect } = painter(20, 28);
+  paintLighthouse(rect, 0, 26);
+  return canvas;
+}
+
 function paintLighthouse(rect: Rect, x: number, foot: number) {
   const tower = 11;
   rect(x + 1, foot - 2, 18, 3, "rgba(0,0,0,.25)");
@@ -793,6 +798,18 @@ export const townHullUrl = (color: string) =>
 
 export const townFlagUrl = (color: string, shape: "flag" | "pennant") =>
   url(`flag:${shape}:${color}`, () => paintFlag(color, shape));
+
+export const townPierUrl = (
+  w: number,
+  slipway: { x: number; w: number },
+  bollards: readonly number[],
+) =>
+  url(`pier:${w}:${slipway.x}:${slipway.w}:${bollards.join(",")}`, () =>
+    paintTownPier(w, slipway, bollards),
+  );
+
+export const townLighthouseUrl = () =>
+  url("lighthouse", () => paintTownLighthouse());
 
 export const townCrateUrl = (state: TownCrateState) =>
   url(`crate:${state}`, () => paintCrate(state));

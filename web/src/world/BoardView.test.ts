@@ -37,6 +37,7 @@ const unavailableObservability = {
 
 test.skipIf(!chrome).each([
   [1440, 900, "", ""],
+  [1440, 900, " live settings", "Settings change the open Board"],
   [390, 844, "", ""],
   // A narrow desktop: Board's controls share the bottom row with the dock.
   [

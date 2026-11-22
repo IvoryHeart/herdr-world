@@ -1,3 +1,4 @@
+import { derivedRoomNameHint } from "./derivedRoomName";
 import { officeDeskLabel, projectAgent, target } from "./officeAgent";
 import type { OfficeHost } from "./officeHost";
 import type {
@@ -136,6 +137,7 @@ export function* constructRoom(
       .sort();
     yield;
   }
+  const derivedHint = derivedRoomNameHint(space.workspace);
   return {
     host,
     source: space,
@@ -146,6 +148,7 @@ export function* constructRoom(
       observedGeneration: space.generation,
       displayLabel: space.label,
       accessibleLabel: space.label,
+      ...(derivedHint ? { derivedLabelHint: derivedHint } : {}),
       order: space.workspace.number,
       stale: space.stale,
       canOpenInSpaces: operational,

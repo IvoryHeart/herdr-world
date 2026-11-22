@@ -3,6 +3,11 @@ name: Release walk
 on:
   workflow_call:
   workflow_dispatch:
+    inputs:
+      listing_repetitions:
+        description: Extra independent listing journeys (0-100, stops on first failure)
+        type: number
+        default: 0
 
 permissions:
   contents: read
@@ -69,7 +74,8 @@ jobs:
       - name: Walk the release build on real runtimes and signed-out harnesses
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bun run test:release-walk --disposable-host --version "${{ steps.version.outputs.version }}" --baseline-tag "${{ needs.baseline.outputs.tag }}" --report "${{ runner.temp }}/release-walk/report.json"
+          LISTING_REPETITIONS: ${{ inputs.listing_repetitions || 0 }}
+        run: bun run test:release-walk --disposable-host --version "${{ steps.version.outputs.version }}" --baseline-tag "${{ needs.baseline.outputs.tag }}" --listing-repetitions "$LISTING_REPETITIONS" --report "${{ runner.temp }}/release-walk/report.json"
       - name: Record historical launch proof
         if: always() && matrix.platform == 'linux-x64'
         run: |
@@ -90,6 +96,14 @@ jobs:
           name: release-walk-listing-failure-${{ matrix.platform }}
           path: ${{ runner.temp }}/release-walk/listing-failure.json
           if-no-files-found: ignore # Other journeys do not create listing evidence.
+          retention-days: 30
+      - name: Retain listing repetition evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always() && inputs.listing_repetitions > 0
+        with:
+          name: release-walk-listing-batch-${{ matrix.platform }}
+          path: ${{ runner.temp }}/release-walk/listing-batch.json
+          if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
