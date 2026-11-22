@@ -1,4 +1,6 @@
 import { weatherCliHandler } from "../weather/cli";
+import { composeFeatures } from "../features/compose";
+import { featureKernel } from "../features/contract";
 import { findHerdrBinary } from "../herdr/bootstrap";
 import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
 import { createCoreInstall } from "../herdr-core/install";
@@ -13,7 +15,6 @@ import { createServiceForwards } from "./forward-service";
 import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
 import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
-import { authTokenPrintCommand } from "../config/auth-token";
 import { acquireInstanceLock } from "../config/instance-lock";
 import { publishInstanceAddress } from "./instance-address";
 import { listenerSessionSecret } from "../config/session-secret";
@@ -42,12 +43,10 @@ import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { createSshProfileRuntimeConfig } from "../connections/ssh-profile-runtime";
 import { bindListenerBeforeConnectionStart } from "../connections/startup";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
-import { createAuthHandlers } from "../http/auth";
 import {
   createHerdrSetupHandlers,
   herdrSetupGuardForProfile,
 } from "../http/herdr-setup";
-import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
 import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
@@ -59,7 +58,6 @@ import { createShipyardHttp } from "../shipyard/http";
 import { withIntegrations } from "../integrations/http";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
-import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
 import { createApartmentsService } from "./apartments-service";
@@ -82,6 +80,7 @@ import { AgentActivityCache } from "../world/agent-activity-cache";
 import { DeskWatches } from "../world/desk-watches";
 import { readDeskWatch } from "../world/desk-watch-read";
 import { createBrowserClients, summarizeHerdrEvent } from "./clients";
+import { createServiceHttpHandlers } from "./http-handlers";
 import { listen } from "./listener";
 import type { WorldServiceDeps } from "./ports";
 import { createRpcDispatcher } from "./rpc-dispatch";
@@ -91,10 +90,7 @@ export type { WorldServiceDeps } from "./ports";
 
 export type WorldService = Awaited<ReturnType<typeof createWorldService>>;
 
-/**
- * Claim the data folder, open storage and build one World service. Nothing
- * listens or connects until `start()`; `stop()` drains and releases it all.
- */
+/** Claim storage; start listens/connects, stop drains/releases. */
 export async function createWorldService(deps: WorldServiceDeps) {
   const { config, paths } = deps;
   // One live World per data folder; nothing in it is written before this.
@@ -151,23 +147,11 @@ async function compose(
     hasExplicitSocketPath: config.hasExplicitSocketPath,
     hasExplicitClientSocketPath: config.hasExplicitClientSocketPath,
   };
-  const auth = createAuthHandlers({
-    authRequired: config.authRequired,
-    password: config.password,
-    pin: config.pin,
+  const { auth, update } = createServiceHttpHandlers(
+    config,
     sessionSecret,
-    urlLoginToken: config.generatedAuthToken,
-    tokenCommand:
-      config.generatedAuthTokenPath &&
-      authTokenPrintCommand(config.generatedAuthTokenPath),
-    secureCookies: Boolean(config.tls),
-  });
-  const update = createUpdateHandlers({
-    appVersion: config.appVersion,
-    runProcessWithCodeTimeout,
-    shQuote,
-    scheduleProcessExit: deps.scheduleProcessExit,
-  });
+    deps.scheduleProcessExit,
+  );
   let connectionRevision = 0;
   function publishConnectionsChanged() {
     if (stopping) return;
@@ -229,6 +213,7 @@ async function compose(
   const readyConnectionGenerations = new Map<string, number>();
   let worldSnapshots: ObservedSnapshots | null = null;
   let worldUsage: ComposedWorldUsage | null = null;
+  let features: ReturnType<typeof composeFeatures> | undefined = undefined;
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
   // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
@@ -379,6 +364,7 @@ async function compose(
       );
       bin.connectionStatus(status);
       apartments.apartments.connectionStatus(status);
+      features?.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -804,6 +790,10 @@ async function compose(
       now: () => clock.now(),
     }),
   };
+  features = composeFeatures(
+    featureKernel(deps, storage, rpcServices, () => worldSources),
+  );
+  rpcServices.featureRpc = features.rpc;
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
   const { track, drained } = inFlightWork(scheduler, (requests) =>
@@ -835,10 +825,7 @@ async function compose(
     get port(): number | undefined {
       return server?.port;
     },
-    /**
-     * Bind the listener, then start configured connections and Ranger in the
-     * background; a port conflict therefore fails before any connection.
-     */
+    /** Bind before starting connections/Ranger: a port conflict starts neither. */
     start(): { port: number; connected: Promise<void> } {
       if (stopTask) throw new Error("World service is stopped");
       if (server) throw new Error("World service already started");
@@ -904,14 +891,13 @@ async function compose(
       );
       worldCli.start();
       forwards.listeningOn(server.port ?? config.port);
+      features!.listening(listenPort);
       return {
         port: server.port ?? config.port,
         connected: startTask!.catch(() => {}),
       };
     },
-    /** Drain/release once, listener last. keepListener binds until process exit:
-     * launchd waits for the port to free before restarting (service-manager.ts).
-     */
+    /** Drain once, listener last; keepListener lets launchd wait for process exit. */
     async stop(options: { keepListener?: boolean } = {}): Promise<void> {
       stopTask ??= stopService();
       await stopTask;
@@ -955,6 +941,7 @@ async function compose(
   async function stopService() {
     // Refuse requests (503), reconnects, pushes, Ranger starts and new answer waits.
     stopping = true;
+    if (features!.hasStop("quiesce")) await features!.stop("quiesce");
     worldSources.weather.close();
     shipyard.close();
     shipyardInstances.stop();
@@ -972,6 +959,7 @@ async function compose(
       // Stop Ranger then runtimes, failing pending Herdr calls; fenced startup/requests settle.
       await forwards.stop();
       await assistant.dispose();
+      if (features!.hasStop("drain")) await features!.stop("drain");
       await connectionManager.stopAll();
       await core.stop();
       await usageStopped;
@@ -984,6 +972,7 @@ async function compose(
         // a history census still reading stops.
         await apartments.stop();
         await closeTerminalMarks();
+        if (features!.hasStop("close")) await features!.stop("close");
         storageOpen = false;
         await storage.close();
       } finally {

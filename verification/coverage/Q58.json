@@ -1,0 +1,27 @@
+{
+  "id": "Q58",
+  "area": "Read-only integrations registry and private vault",
+  "owner": "server/src/integrations/",
+  "requirement": "openspec/specs/world-surfaces/integrations/spec.md",
+  "properties": "Existing owners retain control authority; owner failure is isolated; only supported secret names leave storage; private atomic publication and closure refusal",
+  "existingTests": [
+    "server/src/integrations/registry.test.ts",
+    "server/src/integrations/vault.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1026",
+  "status": "alternative-evidence",
+  "technique": "direct-owner-and-filesystem-matrices",
+  "assessment": "Read-only owner projection plus synchronous in-service vault read/replace: no independent writer completion to permute. Real tests cover owner failures, named-secret privacy, legacy migration, unsafe targets and closed storage.",
+  "remaining": "Source refresh, connection authority and integration installation retain their own consumers. Independent-process filesystem and power-loss behavior are not proved.",
+  "requiredChecks": ["bun run check"],
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/architecture-audit-2026-11.md"],
+    "tests": [
+      "server/src/integrations/registry.test.ts",
+      "server/src/integrations/vault.test.ts"
+    ],
+    "checks": ["bun run test server/src/integrations"],
+    "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+  }
+}

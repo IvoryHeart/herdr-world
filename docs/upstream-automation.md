@@ -37,7 +37,7 @@ to equal the frozen source baseline. If a manual integration advanced that recor
 obsolete work stops for reconciliation instead of downgrading it. The worker
 exports its integration report alongside the patch and forwards it as plain
 dispatch data. Initial and repair PR descriptions retain the actual checks,
-adaptations, unresolved decisions and knowledge-map explanation. Reports over
+adaptations, unresolved decisions and capability ownership explanation. Reports over
 12,000 UTF-8 bytes or containing control bytes are rejected, never truncated.
 
 Only one `upstream/roamgate` PR is active. Its upstream target freezes immediately;

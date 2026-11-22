@@ -3,10 +3,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   assessKnowledgeMapImpact,
+  assessSpecEdits,
   changedPathsBetween,
 } from "./check-knowledge-map";
 import { assessPullRequest, readFragments } from "./changelog-fragments";
 import { readCoverageScope } from "./coverage-scope";
+import { readCapabilities } from "./where";
+import { coverageDirectory } from "./coverage";
 import { ordinaryDocumentation } from "./validation-scope";
 
 function descriptionLines(body: string): string[] {
@@ -159,23 +162,30 @@ export function checkPrBodyText(
   const head = git("rev-parse", "--verify", `${headRef}^{commit}`);
   const paths = changedPathsBetween(cwd, base, head);
   readFragments(cwd);
-  const knowledge = assessKnowledgeMapImpact(paths, body);
+  const sourcePaths = changedPathsBetween(cwd, base, head, {
+    includeDeleted: false,
+  });
+  const knowledge = assessKnowledgeMapImpact(
+    sourcePaths,
+    readCapabilities(cwd),
+  );
   const changelog = assessPullRequest(
     paths,
     new Set(paths.filter((path) => existsSync(join(cwd, path)))),
     body,
   );
   return [
+    ...assessSpecEdits(paths),
     ...assessContractImpacts(
       paths,
       body,
-      existsSync(join(cwd, "verification/coverage.json"))
+      existsSync(join(cwd, coverageDirectory))
         ? readCoverageScope(cwd).owns
         : undefined,
     ),
     ...(!knowledge.ok
       ? [
-          "Update docs/knowledge-map.md, or include `Knowledge map impact: unchanged — <specific reason>` (at least 20 characters).",
+          `Source files without a capability notes.md Code path: ${knowledge.uncovered.join(", ")}`,
         ]
       : []),
     ...assessHelpImpact(

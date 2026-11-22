@@ -70,6 +70,7 @@ export const worldBrowserIgnorePattern = ignorePattern(worldBrowserSuites);
  * validation, where they took about half of the unit-test time.
  */
 export const webBrowserSuites = [
+  "web/src/features/index.browser.test.ts",
   "web/src/appStartup.browser.test.ts",
   "server/src/world/appearance.browser.test.ts",
   "web/src/uiScale.test.ts",

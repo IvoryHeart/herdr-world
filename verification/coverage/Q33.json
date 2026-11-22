@@ -1,0 +1,49 @@
+{
+  "id": "Q33",
+  "area": "Git actions/auto-sync",
+  "owner": "server/src/workspace/git-actions.ts",
+  "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
+  "properties": "Per-repository serialization; cancellation preserves user changes; late status cannot cross checkout",
+  "existingTests": [
+    "server/src/workspace/git-actions.test.ts",
+    "server/src/workspace/auto-sync.test.ts",
+    "server/src/workspace/git-snapshot.test.ts",
+    "server/src/workspace/diff-base.test.ts",
+    "server/src/workspace/files.test.ts",
+    "web/src/components/DiffViewerPanel.test.ts",
+    "web/src/gitDiffSummaryStore.test.ts",
+    "server/src/workspace/status.test.ts",
+    "server/src/workspace/git-diff.test.ts",
+    "web/src/store/gitStatusPush.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
+  "technique": "alternative",
+  "assessment": "real Git serialization and cancellation evidence; no abstract model replaces actual repository effects",
+  "status": "alternative-evidence",
+  "remaining": "Git/network/platform behavior and uncommitted user changes are not represented by an abstract branch flag.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "evidenceDecision": "Real Git repositories and process tests exercise dirty-tree refusal, fetch/merge failures, qualified actions and synchronization. Candidate Roamgate transport consumers add explicit master/forward ownership, bounded session scheduling and qualified status reconciliation checks; existing model bounds and native-platform exclusions remain unchanged. Independent candidate acceptance is still required.",
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/consumer-evidence.md"],
+    "tests": [
+      "server/src/workspace/git-actions.test.ts",
+      "server/src/workspace/auto-sync.test.ts",
+      "server/src/workspace/git-snapshot.test.ts",
+      "server/src/workspace/diff-base.test.ts",
+      "server/src/workspace/files.test.ts",
+      "web/src/components/DiffViewerPanel.test.ts",
+      "web/src/gitDiffSummaryStore.test.ts",
+      "server/src/workspace/status.test.ts",
+      "server/src/workspace/git-diff.test.ts",
+      "web/src/store/gitStatusPush.test.ts"
+    ],
+    "checks": ["bun run check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

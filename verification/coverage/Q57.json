@@ -1,0 +1,21 @@
+{
+  "id": "Q57",
+  "area": "Open agent runtime move candidate",
+  "owner": "verification/contracts/agent-move-audit.md",
+  "requirement": "verification/contracts/agent-move-audit.md",
+  "properties": "Quit before resume; at most one running conversation; details follow or loss/uncertainty reported",
+  "existingTests": ["quint/replay.test.ts", "quint/binding-resolution.test.ts"],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/990",
+  "status": "pending",
+  "technique": "external-candidate-exhaustive-assessment",
+  "assessment": "Frozen open #990 df398319a031f840668f7e6ea0dff765c5764c11: actual serial controller 576-outcome matrix ran; native and persistence consumers mapped in contract",
+  "remaining": "Feature and candidate consumer files are not merged. Current listed tests cover only existing shared runtime/binding fences; native, metadata, browser acceptance remains with #990. Independent Worlds and crash atomicity are not claimed.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/contracts/agent-move-audit.md"],
+    "tests": ["quint/replay.test.ts", "quint/binding-resolution.test.ts"],
+    "checks": ["bun run verification:gate"],
+    "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+  }
+}

@@ -20,3 +20,5 @@ can apply it without a duplicate ADDED requirement.
 - [ ] 2.3 Shared stores for view-only controls so Settings changes them directly (#1065).
 - [ ] 2.4 One Town master setting (#1066).
 - [ ] 2.5 Upstream settings proposal (#1067).
+
+Capability path after the feature-map split: `world-surfaces/settings`. Existing delivery and pending tasks are unchanged.
