@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
 import { usageFixture } from "./usageFixture";
 import {
+  residentUsageGap,
+  residentUsageSharing,
+  usageAgentFacts,
+  usageAgentRows,
   usageDuration,
+  usageSumRows,
   usageByItem,
   usageByRole,
   usageConcurrency,
@@ -234,4 +239,88 @@ test("time spent reads in minutes, then hours", () => {
   expect(usageDuration(90 * 60_000)).toBe("1.5 h");
   expect(usageDuration(3 * 3_600_000)).toBe("3 h");
   expect(usageDuration(30 * 3_600_000)).toBe("30 h");
+});
+
+test("one agent's week: its rows by agent ID, summed, in the card line's words", () => {
+  const data = usageFixture(now, "busy", { group_by: "agent", window: "7d" });
+  // Linus ran twice: a 3 h worker and a 2 h fixer, 9.4M + 4.8M tokens.
+  const rows = usageAgentRows(data, ["fixture-agent-0", "fixture-agent-2"]);
+  expect(rows.map((row) => row.dimension)).toEqual([
+    "fixture-agent-0",
+    "fixture-agent-2",
+  ]);
+  const sum = usageSumRows(rows);
+  expect(sum.active_ms).toEqual({ value: 5 * HOUR, coverage: "partial" });
+  expect(sum.total_tokens.value).toBe(14_200_000);
+  expect(usageAgentFacts(sum, "claude")).toBe(
+    "This week: at work 5 h · waited on you 0 min · 14M tokens",
+  );
+  // A harness World reads no log of: tokens are not available, never 0.
+  const logless = usageSumRows(usageAgentRows(data, ["fixture-agent-14"]));
+  expect(usageAgentFacts(logless, "cursor")).toBe(
+    "This week: at work 4.6 h · waited on you 25 min · tokens and cost not available for this harness",
+  );
+  // No row this week, or rows of another grouping: unknown.
+  expect(usageAgentRows(data, ["agent_gone"])).toEqual([]);
+  expect(
+    usageAgentRows(
+      usageFixture(now, "busy", { group_by: "run", window: "7d" }),
+      ["fixture-agent-0"],
+    ),
+  ).toEqual([]);
+  expect(usageAgentFacts(null, "claude")).toBe("This week: usage unknown");
+  // A resident's unknown usage says why (#1101).
+  const why = (move_out: string, usage_agent_ids?: string[]) =>
+    usageAgentFacts(
+      null,
+      "claude",
+      residentUsageGap({ move_out, usage_agent_ids }),
+    );
+  expect(why("found")).toBe(
+    "Usage unknown: found in its history, World kept no usage for it",
+  );
+  expect(why("ended", [])).toBe(
+    "Usage unknown: World did not record it while it ran",
+  );
+  expect(why("found", ["agent_gone"])).toBe(
+    "Usage unknown: nothing recorded this week",
+  );
+  // Runs that share a usage row (one shell terminal) say so.
+  const sharing = residentUsageSharing([
+    { id: "a", usage_agent_ids: ["agent_shell", "agent_a"] },
+    { id: "b", usage_agent_ids: ["agent_shell"] },
+    { id: "c", usage_agent_ids: ["agent_shell"] },
+    { id: "d", usage_agent_ids: ["agent_d"] },
+    { id: "e" },
+  ]);
+  expect(Object.fromEntries(sharing)).toEqual({ a: 2, b: 2, c: 2 });
+  expect(usageAgentFacts(sum, "codex", null, 1)).toStartWith(
+    "This week, with 1 other run in its terminal: at work",
+  );
+  expect(usageAgentFacts(sum, "codex", null, 2)).toStartWith(
+    "This week, with 2 other runs in its terminal: at work",
+  );
+  // Sums are honest: all unknown stays unknown; a mix is partly read.
+  const unknown = usageSumRows(
+    usageAgentRows(
+      usageFixture(now, "busy", { group_by: "agent", window: "7d" }),
+      ["fixture-agent-14"],
+    ),
+  ).total_tokens;
+  expect(unknown).toEqual({ value: null, coverage: "unknown" });
+  const observed = {
+    ...sum,
+    total_tokens: { value: 5, coverage: "observed" as const },
+  };
+  expect(usageSumRows([observed, observed]).total_tokens).toEqual({
+    value: 10,
+    coverage: "observed",
+  });
+  expect(usageSumRows([observed, logless]).total_tokens).toEqual({
+    value: 5,
+    coverage: "partial",
+  });
+  expect(usageAgentFacts(usageSumRows([logless]), "claude")).toContain(
+    "tokens unknown",
+  );
 });

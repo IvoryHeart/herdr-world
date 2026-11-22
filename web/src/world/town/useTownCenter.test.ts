@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { OfficeAgent } from "../herdrOfficeProjection";
+import { openFocus } from "../focus";
 import { townCenterActions } from "./useTownCenter";
 
 const agent = (key: string, agentName: string, extra = {}) =>
@@ -19,6 +20,7 @@ function center(
     roomReason?: string | null;
     seat?: boolean;
     roster?: OfficeAgent[];
+    focusLeft?: string | null;
     harness?: string;
   } = {},
 ) {
@@ -62,6 +64,7 @@ function center(
     },
     openChat: (key) => calls.push(["chat", key]),
     toast: (kind, text) => calls.push(["toast", kind, text]),
+    focusLeft: options.focusLeft ?? null,
   });
   const action = (id: string) => actions.find((entry) => entry.id === id)!;
   return { actions, action, calls };
@@ -75,6 +78,7 @@ test("the ring offers a new agent first, then the Town master and the town's err
     "launch",
     "master",
     "needs-you",
+    "focus",
     "summary",
     "profiles",
     "apartments",
@@ -84,6 +88,13 @@ test("the ring offers a new agent first, then the Town master and the town's err
   expect(action("launch").primary).toBe(true);
   expect(action("needs-you").count).toBe(3);
   expect(action("master").detail).toBeUndefined();
+});
+
+test("Focus opens its chooser and shows a running session's time left", () => {
+  expect(center().action("focus").detail).toBeUndefined();
+  const focused = center({ focusLeft: "18 m left" });
+  expect(focused.action("focus").detail).toBe("18 m left");
+  expect(focused.action("focus").run).toBe(openFocus);
 });
 
 test("a new agent starts in the open room when it can take one", () => {

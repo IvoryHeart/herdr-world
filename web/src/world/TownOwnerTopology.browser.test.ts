@@ -604,31 +604,27 @@ test.skipIf(!chrome)(
           room.label.includes("core-alpha"),
         )!;
         expect(await visit(mode, alpha.key, "core-alpha")).toBeNull();
-        // As above: off the plaque first, so its card (open under the
-        // pointer) closes and uncovers the free seat, and press only once
-        // the pointer reaches it. Under load the card can still be open
-        // when the pointer jumps onto the seat, and then takes the press.
-        const seat = `${plaqueOf("core-alpha")}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`;
+        // The pointer may rest where the camera just put a plaque: move it
+        // off so no plaque card covers the free seat, as the loop above does.
         await move({ x: 4, y: 4 });
-        let plus: Point | null = null;
-        let reached: Awaited<ReturnType<typeof reach>> = null;
-        for (let attempt = 0; attempt < 40; attempt++) {
-          plus = await centre(seat);
-          if (plus) {
-            await move(plus);
-            reached = await reach(seat);
-            if (reached?.reached && !reached.disabled) break;
-            await move({ x: 4, y: 4 });
-          }
-          await Bun.sleep(100);
-        }
+        const alphaPlus = `${plaqueOf("core-alpha")}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`;
+        const plus = await centre(alphaPlus);
         expect(plus).not.toBeNull();
-        expect(reached).toMatchObject({ reached: true, disabled: false });
+        await move(plus!);
+        expect(await reach(alphaPlus)).toMatchObject({
+          reached: true,
+          disabled: false,
+        });
         await click(plus!);
         await waitFor(
           "!!document.querySelector('.agent-launcher-card:not(:disabled)')",
           "the launcher opens on the core room",
-        );
+        ).catch(async (error: Error) => {
+          const seen = await evaluate<string>(
+            `JSON.stringify({ took: window.__pointerTarget?.closest?.('[aria-label]')?.getAttribute('aria-label') ?? null, cards: [...document.querySelectorAll('.agent-launcher-card')].map((card) => [card.textContent?.slice(0, 40), card.disabled]) })`,
+          );
+          throw new Error(`${error.message}: ${seen}`);
+        });
         await click(
           (await centre(
             "document.querySelector('.agent-launcher-card:not(:disabled)')",

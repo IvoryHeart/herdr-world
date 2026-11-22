@@ -271,12 +271,15 @@ export function createWebPushService(
     path?: string;
     send?: typeof webpush.sendNotification;
     warn?: (message: string) => void;
+    /** True while the owner's focus session holds notifications. */
+    held?: () => boolean;
   } = {},
 ) {
   const subject = options.subject ?? webPushSubject();
   const path = options.path ?? webPushPath();
   const send: typeof webpush.sendNotification = options.send ?? sendPushRequest;
   const warn = options.warn ?? (() => {});
+  const held = options.held ?? (() => false);
   // ponytail: one process owns this file; use a transactional store for shared deployments.
   let registry: Registry | null = null;
   let stopped = false;
@@ -354,6 +357,8 @@ export function createWebPushService(
       stopped ||
       !registry?.devices.includes(device) ||
       !isCurrent() ||
+      // A focus that began while this waited holds it too.
+      held() ||
       !device.preferences[notificationPreference(task)]
     )
       return;
@@ -473,7 +478,8 @@ export function createWebPushService(
       return Response.json({ ok: true }, { headers });
     },
     notify(task: PushNotification, isCurrent: () => boolean) {
-      if (!registry || stopped || !isCurrent()) return;
+      // Held, not queued: the focus recap lists what came in.
+      if (!registry || stopped || held() || !isCurrent()) return;
       for (const device of registry.devices) {
         if (!device.preferences[notificationPreference(task)]) continue;
         if (queue.length >= 256) {

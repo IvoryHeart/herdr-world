@@ -176,3 +176,8 @@ button.apartments-resume-button {
   border-top: 1px solid var(--border);
   padding-top: 10px;
 }
+/* A resident's week of usage (#1101), under its row in the list. */
+.apartments-list .apartments-usage {
+  margin: -4px 0 8px;
+  padding: 2px 10px;
+}
