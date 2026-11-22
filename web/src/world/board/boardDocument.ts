@@ -1,3 +1,7 @@
+import type {
+  BoardElement,
+  BoardElementInput,
+} from "../../../../shared/boardElements";
 import type { GroupOp } from "../../../../shared/groupOps";
 
 import type {
@@ -109,6 +113,7 @@ export type BoardDocument = {
     interest?: Record<string, StoredInterest>;
     group_interest?: Record<string, GroupInterest>;
   };
+  elements?: BoardElement[];
   notes: BoardNote[];
   strings: BoardString[];
   /** Drawings; absent when the board has none (shared/boardShapes.ts). */
@@ -117,6 +122,8 @@ export type BoardDocument = {
   relations?: RelationsDocument;
 };
 export type BoardOp =
+  | { op: "element.put"; element: BoardElementInput; rev?: number }
+  | { op: "element.delete"; id: string; rev: number }
   | { op: "note.put"; note: Omit<BoardNote, "rev">; rev?: number }
   | { op: "note.delete"; id: string; rev: number }
   | { op: "shape.put"; shape: Omit<BoardShape, "rev">; rev?: number }

@@ -22,7 +22,36 @@ close or database reopen from a closed read. Layout positions/pins/folds and
 workspace/host colours must not create bindings or change native-reuse policy.
 Runtime claims, configuration and secrets must not become Board records.
 
+## Registered element references
+
+The Board row family also stores memory/log/document/link references. Source
+content stays outside the database except explicit inline documents. Element
+revisions survive delete/recreate fencing by using at least the next Board
+revision; native records and bindings retain their existing policy. New sources
+read only the named current connection generation and discard a result after an
+element, request or runtime changes. These read-only Files consumers introduce
+no new external effect or recovery state machine.
+
 ## Concrete evidence
+
+- `storage/board-schema-upgrade.test.ts` pins main's Apartments versions 14/15
+  and Board elements at 16, upgrades release v13, main v14/v15, the collided
+  Board-only preview v14 and current v16, and checks row/backup preservation,
+  repeated production startup, rollback and retry. Unrecognized missing-table
+  damage still refuses. This is a single startup transaction; the finite schema
+  layouts and before/after-failure SQLite checks cover recovery without a new
+  concurrency model.
+- `storage/board-elements.test.ts` checks old-schema migration, mixed native/element
+  atomic rollback/reopen, independent order permutations, per-element conflicts
+  and delete/recreate stale-edit refusal. `rpc/board-elements.test.ts` checks
+  committed-only acknowledgement/event ordering through the real SQLite worker,
+  browser/CLI shared state and explicit conflict/refusal results.
+- `world/board-element-service.test.ts` reads real synthetic files and saved logs,
+  checks directory/UTF-8/concurrency bounds, project symlink confinement and all
+  element/request/runtime retirement boundaries. `service/board-element-sources.test.ts`
+  enumerates TUI/core exact-connection/generation acquisition and no fallback.
+  These direct consumer checks supplement Q50 without modeling the SQL engine;
+  the unfiltered verification gate and existing runtime models remain required.
 
 - `storage/board-writer.test.ts` exhausts all 24 orders of independent note,
   appearance and refused edits against SQLite, then reopens each result. A SQL

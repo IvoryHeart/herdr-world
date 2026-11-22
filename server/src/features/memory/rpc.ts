@@ -1,16 +1,21 @@
-import { MemoryError, type MemoryAction } from "../../../shared/memory";
-import type { BridgeRpcContext } from "./context";
+import { MemoryError, type MemoryAction } from "../../../../shared/memory";
+import type { MemoryService } from "../../memory/service";
+import type { FeatureKernel, FeatureRpcHandler } from "../contract";
 
 /** Global method, with the owning connection identity in params, never default routing. */
-export async function handleMemoryRpc(rpc: BridgeRpcContext) {
+export async function handleMemoryRpc(
+  rpc: Parameters<FeatureRpcHandler>[0],
+  worldMemory: MemoryService,
+  clients: FeatureKernel["clients"],
+) {
   try {
-    if (!rpc.services.worldMemory)
+    if (!worldMemory)
       throw new MemoryError("unavailable", "Memory service is unavailable");
-    const result = await rpc.services.worldMemory.call(
+    const result = await worldMemory.call(
       rpc.method.slice("world.memory.".length) as MemoryAction,
       rpc.params ?? {},
       () => {
-        if (!rpc.services.clients.has(rpc.ws))
+        if (!clients.has(rpc.ws))
           throw new MemoryError("refused", "Memory caller disconnected");
       },
     );
