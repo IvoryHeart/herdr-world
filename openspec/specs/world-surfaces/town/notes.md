@@ -11,6 +11,7 @@
 
 **Code:**
 
+- `web/src/world/town/`
 - `web/src/world/useDeskPins.ts`
 - `web/src/world/town/townLens.ts`
 - `web/src/world/town/townLens.test.ts`

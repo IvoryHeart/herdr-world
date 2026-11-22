@@ -11,6 +11,7 @@
 
 **Code:**
 
+- `web/src/world/apartments/`
 - `shared/apartments.ts`
 - `server/src/world/apartments.ts`
 - `server/src/world/apartment-census.ts`

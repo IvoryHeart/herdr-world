@@ -11,6 +11,8 @@
 
 **Code:**
 
+- `server/src/memory/`
+- `web/src/world/memory/`
 - `web/src/world/memory/memoryModel.ts`
 - `web/src/world/town/TownLibrary.tsx`
 - `web/src/world/memory/MemoryLibrary.browser.test.ts`

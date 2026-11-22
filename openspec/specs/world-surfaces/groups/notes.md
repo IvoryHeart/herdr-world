@@ -11,6 +11,7 @@
 
 **Code:**
 
+- `web/src/world/groups/`
 - `shared/groups.ts`
 - `server/src/world/board-groups.ts`
 - `server/src/world/world-cli-groups.ts`

@@ -8,6 +8,8 @@
 
 **Code:**
 
+- `server/src/workspace/`
+- `server/src/worktree/`
 - `server/src/rpc/desk.ts`
 - `server/src/rpc/desk.test.ts`
 - `server/src/storage/profile-port.ts`

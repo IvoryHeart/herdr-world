@@ -11,6 +11,7 @@
 
 **Code:**
 
+- `web/src/world/windows/`
 - `web/src/visibleTabLayout.ts`
 - `web/src/visibleTabLayout.test.ts`
 - `web/src/components/WorkspaceInspectorHost.tsx`

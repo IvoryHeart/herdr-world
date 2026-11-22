@@ -36,14 +36,20 @@ jobs:
         run: |
           set -euo pipefail
           branch=bot/openspec-archive
-          git checkout -B "$branch"
-          bun scripts/archive-changes.ts > "$RUNNER_TEMP/openspec-archive.json"
-          cat "$RUNNER_TEMP/openspec-archive.json" >> "$GITHUB_STEP_SUMMARY"
-          git add -A openspec/
-          if git diff --cached --quiet; then exit 0; fi
-          bun run spec:check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+            git checkout -b "$branch" "origin/$branch"
+            git merge --no-edit origin/main
+          else
+            git checkout -b "$branch"
+          fi
+          archive_status=0
+          bun scripts/archive-changes.ts > "$RUNNER_TEMP/openspec-archive.json" || archive_status=$?
+          cat "$RUNNER_TEMP/openspec-archive.json" >> "$GITHUB_STEP_SUMMARY"
+          git add -A openspec/
+          if git diff --cached --quiet; then exit "$archive_status"; fi
+          bun run spec:check
           git commit -m "docs: archive merged OpenSpec changes"
           bun run check:privacy
           body="$RUNNER_TEMP/openspec-archive-pr.md"
@@ -59,7 +65,7 @@ jobs:
           cat "$RUNNER_TEMP/openspec-archive.json" >> "$body"
           bun run check:pr-body "$body"
           gh auth setup-git
-          git push --force-with-lease origin "HEAD:refs/heads/$branch"
+          git push origin "HEAD:refs/heads/$branch"
           pr="$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number // empty')"
           if [ -n "$pr" ]; then
             gh pr edit "$pr" --body-file "$body"
@@ -69,3 +75,4 @@ jobs:
           # GITHUB_TOKEN events do not trigger checks; dispatch exact-branch gates.
           gh workflow run ci.yml --ref "$branch"
           gh workflow run privacy.yml --ref "$branch"
+          exit "$archive_status"

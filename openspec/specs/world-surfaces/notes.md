@@ -11,6 +11,20 @@
 
 **Code:**
 
+- `web/src/*.{ts,tsx,css}`
+- `web/src/components/`
+- `web/src/store/`
+- `web/src/styles/`
+- `web/src/world/*.{ts,tsx,css}`
+- `web/src/world/interaction/`
+- `web/src/world/testing/`
+- `web/src/world/devtools/`
+- `web/src/world/bin/`
+- `server/src/*.{ts,tsx}`
+- `server/src/rpc/`
+- `server/src/service/`
+- `server/src/cli/`
+- `server/src/utils/`
 - `server/src/world/observability.ts`
 - `web/src/world/officeObservability.test.ts`
 - `server/src/world/snapshot.ts`
@@ -30,6 +44,7 @@
 - Cached topology cannot establish absence or authorize commands.
 - Keep one terminal owner and one browser transport across view transitions.
 - CLI operations belong to their feature notes; there is no separate shell CLI.
+- Shared shell, RPC/state and reusable components use the broad owners above; focused notes retain feature entry points.
 
 ## Usage reference
 

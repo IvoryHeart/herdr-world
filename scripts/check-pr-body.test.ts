@@ -416,3 +416,48 @@ test("an added feature ships a help declaration or says why it needs none", () =
   for (const answer of ["Help: none", "Help: none — <reason>", "Help: yes"])
     expect(assessHelpImpact(paths, read(added), answer)).toHaveLength(1);
 });
+
+test("deleted source owners are optional while deleted current specs still require deltas", () => {
+  const root = mkdtempSync(join(tmpdir(), "pr-deleted-owner-"));
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  const body =
+    "Changelog: none — Remove a synthetic retired fixture.\nSpec impact: openspec/specs/example/notes.md — Remove retired source ownership.\nVerification impact: none — No ordering or authority behavior changes.\n";
+  try {
+    git("init", "-q");
+    git("config", "user.name", "Example");
+    git("config", "user.email", "example@example.invalid");
+    mkdirSync(join(root, "openspec/specs/example"), { recursive: true });
+    mkdirSync(join(root, "server/src"), { recursive: true });
+    writeFileSync(join(root, "openspec/specs/example/spec.md"), "# Example\n");
+    writeFileSync(
+      join(root, "openspec/specs/example/notes.md"),
+      "**Code:**\n\n- `server/src/retired.ts`\n",
+    );
+    writeFileSync(
+      join(root, "server/src/retired.ts"),
+      "export const retired = true;\n",
+    );
+    git("add", ".");
+    git("commit", "-qm", "Baseline");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    git("rm", "server/src/retired.ts");
+    writeFileSync(join(root, "openspec/specs/example/notes.md"), "**Code:**\n");
+    git("add", ".");
+    git("commit", "-qm", "Remove source and owner");
+    expect(checkPrBodyText(body, root)).toEqual([]);
+    git(
+      "rm",
+      "openspec/specs/example/spec.md",
+      "openspec/specs/example/notes.md",
+    );
+    git("commit", "-qm", "Delete current spec");
+    expect(checkPrBodyText(body, root)).toContainEqual(
+      expect.stringContaining(
+        "Put contract edits in openspec/changes/<slug>/specs/",
+      ),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -11,6 +11,7 @@
 
 **Code:**
 
+- `web/src/world/board/`
 - `web/src/world/board/boardAttention.ts`
 - `web/src/world/BoardView.tsx`
 - `web/src/world/board/BoardSketch.tsx`

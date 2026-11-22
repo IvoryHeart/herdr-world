@@ -8,6 +8,7 @@ export function changedPathsBetween(
   cwd: string,
   base: string,
   head: string,
+  { includeDeleted = true }: { includeDeleted?: boolean } = {},
 ): string[] {
   for (const revision of [base, head]) {
     if (!/^[0-9a-f]{40}$/.test(revision)) {
@@ -25,6 +26,7 @@ export function changedPathsBetween(
       "--name-only",
       "-z",
       "--no-renames",
+      ...(includeDeleted ? [] : ["--diff-filter=ACMRT"]),
       `${base}...${head}`,
       "--",
     ],
@@ -92,6 +94,7 @@ if (import.meta.main) {
       fileURLToPath(new URL("..", import.meta.url)),
       base,
       head,
+      { includeDeleted: false },
     );
     const result = assessKnowledgeMapImpact(changedPaths, readCapabilities());
     if (!result.ok) {

@@ -3,7 +3,7 @@
 This document describes Herdr World's current system contracts. See
 [runtime support table](../openspec/specs/herdr-core-runtime/notes.md#runtime-support) and
 [deployment guide](./DEPLOYMENT.md) for supported configurations;
-[FEATURES.md](../openspec/specs/world-surfaces/notes.md) covers controls and shortcuts.
+[Capability notes](../openspec/specs/world-surfaces/notes.md) covers controls and shortcuts.
 
 ## Runtimes: Herdr TUI and herdr-core
 

@@ -8,6 +8,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { readCapabilities } from "./where";
 
 const temporaryRepos: string[] = [];
 
@@ -74,7 +75,7 @@ test("feature contracts stay in deltas; an archive-only batch can synchronize sp
   ).toHaveLength(1);
 });
 
-test("a file moved out of World still counts as a World change", () => {
+test("a moved source checks its destination rather than its deleted owner", () => {
   const root = mkdtempSync(join(tmpdir(), "knowledge-map-check-"));
   temporaryRepos.push(root);
   const git = (...args: string[]) =>
@@ -95,9 +96,25 @@ test("a file moved out of World still counts as a World change", () => {
   git("commit", "-qm", "Move view");
   const head = git("rev-parse", "HEAD");
 
-  const changed = changedPathsBetween(root, base, head);
-  expect(changed).toContain("web/src/world/view.ts");
-  expect(assessKnowledgeMapImpact(changed, []).ok).toBe(false);
+  expect(changedPathsBetween(root, base, head)).toContain(
+    "web/src/world/view.ts",
+  );
+  const changed = changedPathsBetween(root, base, head, {
+    includeDeleted: false,
+  });
+  expect(changed).toEqual(["web/src/shared/view.ts"]);
+  expect(assessKnowledgeMapImpact(changed, []).uncovered).toEqual([
+    "web/src/shared/view.ts",
+  ]);
+  git("rm", "web/src/shared/view.ts");
+  git("commit", "-qm", "Delete source and its owner");
+  const deletedHead = git("rev-parse", "HEAD");
+  expect(
+    changedPathsBetween(root, base, deletedHead, { includeDeleted: false }),
+  ).toEqual([]);
+  expect(changedPathsBetween(root, base, deletedHead)).toEqual([
+    "web/src/world/view.ts",
+  ]);
 });
 
 test("base-only World changes do not count as pull-request changes", () => {
@@ -135,4 +152,21 @@ test("base-only World changes do not count as pull-request changes", () => {
   const changed = changedPathsBetween(root, base, head);
   expect(changed).toEqual(["README.md"]);
   expect(assessKnowledgeMapImpact(changed, []).ok).toBe(true);
+});
+
+test("all tracked sources have capability owners before enforcing coverage on PRs", () => {
+  const paths = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean);
+  const capabilities = readCapabilities();
+  expect(assessKnowledgeMapImpact(paths, capabilities).uncovered).toEqual([]);
+  expect(
+    assessKnowledgeMapImpact(
+      [
+        "web/src/new-capability/unowned.ts",
+        "server/src/new-capability/unowned.ts",
+      ],
+      capabilities,
+    ).uncovered,
+  ).toHaveLength(2);
 });

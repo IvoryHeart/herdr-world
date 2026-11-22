@@ -8,6 +8,7 @@
 
 **Code:**
 
+- `server/src/sources/`
 - `web/src/world/WeatherSourceSettings.tsx`
 - `web/src/world/worldSources.ts`
 - `server/src/weather/weather.test.ts`

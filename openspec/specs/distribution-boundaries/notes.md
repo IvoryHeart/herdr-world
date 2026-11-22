@@ -9,6 +9,17 @@
 
 **Code:**
 
+- `quint/`
+- `docs/design/`
+- `docs/evidence/`
+- `web/*.html`
+- `web/*.test.ts`
+- `web/vite.config.ts`
+- `web/public/`
+- `server/src/features/`
+- `server/src/testing/`
+- `web/src/features/`
+- `web/src/testing/`
 - `scripts/release-walk.ts`
 - `scripts/release-walk-gate.ts`
 - `scripts/release-walk/`

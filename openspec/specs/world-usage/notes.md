@@ -8,6 +8,7 @@
 
 **Code:**
 
+- `web/src/world/usage/`
 - `server/src/usage/analytics.ts`
 - `server/src/usage/activity.ts`
 - `shared/usageHarnesses.ts`

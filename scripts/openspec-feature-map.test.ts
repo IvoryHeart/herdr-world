@@ -66,7 +66,11 @@ test("feature contracts stay discoverable, concise and accompanied by source not
     for (const match of navigation.matchAll(
       /`((?:server|web|shared|scripts)\/[^`]+)`/g,
     ))
-      expect(existsSync(join(root, match[1]!)), match[1]).toBe(true);
+      expect(
+        existsSync(join(root, match[1]!)) ||
+          [...new Bun.Glob(match[1]!).scanSync({ cwd: root })].length > 0,
+        match[1],
+      ).toBe(true);
   }
 });
 

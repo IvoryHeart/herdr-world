@@ -3,7 +3,7 @@
 <!--
   This is a learner's guide: short steps, what to do and what you will see.
   Change it only when a learner's steps change. Edge cases, limits, refusals and
-  internals belong in FEATURES.md. `bun run build:site` fails when a step or
+  internals belong in capability notes. `bun run build:site` fails when a step or
   paragraph grows past its limit or the page past its word budget.
 -->
 

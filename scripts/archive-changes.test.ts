@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -39,10 +40,19 @@ test("batch uses main dates, skips incomplete work and restores a conflict befor
         cwd: root,
         env: {
           ...process.env,
-          GIT_COMMITTER_DATE: `2026-01-0${index + 1}T00:00:00Z`,
+          GIT_COMMITTER_DATE:
+            index === 0
+              ? "2026-01-01T14:00:00+14:00"
+              : `2026-01-01T0${index}:00:00Z`,
         },
       });
     }
+    writeFileSync(
+      join(root, "openspec/changes/z-first/proposal.md"),
+      "Later clarification",
+    );
+    git("add", ".");
+    git("commit", "-qm", "Clarify oldest change without reordering it");
     const attempted: string[] = [];
     const result = archiveChanges(root, (name) => {
       attempted.push(name);
@@ -103,13 +113,30 @@ test("pinned CLI archives a valid delta and stops at a real requirement conflict
     }
     git("add", ".");
     git("commit", "-qm", "merged changes");
-    const result = archiveChanges(root);
+    const receipt = Bun.spawnSync(
+      [process.execPath, join(import.meta.dir, "archive-changes.ts")],
+      { cwd: root },
+    );
+    expect(receipt.exitCode).toBe(1);
+    expect(receipt.stderr.toString()).toContain("Stopped at second");
+    const result = JSON.parse(receipt.stdout.toString());
     expect(result.archived).toEqual(["first"]);
     expect(result.stopped).toBe("second");
     expect(
       readFileSync(join(root, "openspec/specs/example/spec.md"), "utf8"),
     ).toContain("Requirement: Fresh");
     expect(existsSync(join(root, "openspec/changes/second"))).toBe(true);
+    const empty = Bun.spawnSync(
+      [process.execPath, join(import.meta.dir, "archive-changes.ts")],
+      { cwd: root },
+    );
+    expect(empty.exitCode).toBe(1);
+    expect(empty.stderr.toString()).toContain("Stopped at second");
+    expect(JSON.parse(empty.stdout.toString())).toEqual({
+      archived: [],
+      skipped: [],
+      stopped: "second",
+    });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -136,10 +163,44 @@ test("archive workflow serializes one reviewed bot branch and never publishes ma
     .map((s) => s.run ?? "")
     .join("\n");
   expect(commands).toContain("branch=bot/openspec-archive");
-  expect(commands).toContain(
-    'git push --force-with-lease origin "HEAD:refs/heads/$branch"',
-  );
+  expect(commands).toContain("git merge --no-edit origin/main");
+  expect(commands).toContain('git push origin "HEAD:refs/heads/$branch"');
+  expect(commands).not.toContain("--force");
+  expect(commands).toContain("archive_status=$?");
+  expect(commands).toContain('exit "$archive_status"');
   expect(commands).not.toMatch(
     /git push[^\n]*\bmain\b|gh pr merge|--auto|--draft/,
   );
+});
+
+test("repository completed changes archive past the legacy already-synced baseline", () => {
+  const root = mkdtempSync(join(tmpdir(), "archive-baseline-"));
+  try {
+    cpSync(join(import.meta.dir, "../openspec"), join(root, "openspec"), {
+      recursive: true,
+    });
+    const git = (...args: string[]) =>
+      execFileSync("git", args, { cwd: root, stdio: "pipe" });
+    git("init", "-q");
+    git("config", "user.name", "Example");
+    git("config", "user.email", "example@example.invalid");
+    git("add", ".");
+    git("commit", "-qm", "Merged baseline");
+    const result = archiveChanges(root);
+    expect(result.stopped).toBeUndefined();
+    const completed = [
+      ...new Bun.Glob("openspec/changes/*/tasks.md").scanSync({
+        cwd: join(import.meta.dir, ".."),
+      }),
+    ]
+      .filter((p) => {
+        const tasks = readFileSync(join(import.meta.dir, "..", p), "utf8");
+        return /- \[x\]/i.test(tasks) && !/- \[ \]/.test(tasks);
+      })
+      .map((p) => p.split("/")[2])
+      .sort();
+    expect(result.archived.sort()).toEqual(completed);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

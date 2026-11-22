@@ -161,7 +161,13 @@ export function checkPrBodyText(
   const head = git("rev-parse", "--verify", `${headRef}^{commit}`);
   const paths = changedPathsBetween(cwd, base, head);
   readFragments(cwd);
-  const knowledge = assessKnowledgeMapImpact(paths, readCapabilities(cwd));
+  const sourcePaths = changedPathsBetween(cwd, base, head, {
+    includeDeleted: false,
+  });
+  const knowledge = assessKnowledgeMapImpact(
+    sourcePaths,
+    readCapabilities(cwd),
+  );
   const changelog = assessPullRequest(
     paths,
     new Set(paths.filter((path) => existsSync(join(cwd, path)))),

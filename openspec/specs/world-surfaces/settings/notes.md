@@ -11,6 +11,8 @@
 
 **Code:**
 
+- `web/src/settings/`
+- `web/src/help/`
 - `web/src/settings/registry.ts`
 - `web/src/settings/search.ts`
 - `web/src/settings/SettingsHome.tsx`
@@ -63,7 +65,8 @@ also find by typing its name.
 - **This World** holds **Herdr and connection details** (Herdr version,
   upgrade or setup, connection address), **World name**, update checks,
   **Reload page** and **Log out**. **Help** opens the tutorial, this file,
-  troubleshooting, issues and the changelog in a new tab.
+  troubleshooting, issues and the changelog in a new tab. **Features and shortcuts**
+  opens the [generated public feature reference](https://herdr.world/features/).
 - **Commands** lists what Cmd+K offers for the open workspace, tab and pane
   (**new workspace** finds **Create workspace**). A command Cmd+K refuses is
   shown greyed with its reason, and runs only through Cmd+K for the active

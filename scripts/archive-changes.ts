@@ -30,25 +30,28 @@ export function archiveChanges(
     archived: [],
     skipped: [],
   };
+  // First appearance on main is the merge date; later clarifications do not reorder it.
   const mergedAt = (name: string) =>
-    execFileSync(
-      "git",
-      [
-        "log",
-        "--first-parent",
-        "-1",
-        "--format=%cI",
-        "--",
-        `openspec/changes/${name}`,
-      ],
-      { cwd: root, encoding: "utf8" },
-    ).trim();
+    Number(
+      execFileSync(
+        "git",
+        [
+          "log",
+          "--first-parent",
+          "--reverse",
+          "--format=%ct",
+          "--",
+          `openspec/changes/${name}`,
+        ],
+        { cwd: root, encoding: "utf8" },
+      )
+        .trim()
+        .split("\n")[0] || 0,
+    );
   const changes = readdirSync(directory, { withFileTypes: true })
     .filter((d) => d.isDirectory() && d.name !== "archive")
     .map((d) => ({ name: d.name, date: mergedAt(d.name) }))
-    .sort(
-      (a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name),
-    );
+    .sort((a, b) => a.date - b.date || a.name.localeCompare(b.name));
   for (const { name } of changes) {
     const tasks = join(directory, name, "tasks.md");
     const taskText = existsSync(tasks) ? readFileSync(tasks, "utf8") : "";
@@ -81,8 +84,10 @@ export function archiveChanges(
 if (import.meta.main) {
   const result = archiveChanges(process.cwd());
   console.log(JSON.stringify(result));
-  if (result.stopped)
+  if (result.stopped) {
+    process.exitCode = 1;
     console.error(
       `Stopped at ${result.stopped}; earlier archives remain reviewable. Resolve its delta before the next batch.`,
     );
+  }
 }
