@@ -72,6 +72,14 @@ Inspect this artifact from the failed native job before diagnosing an exit.
 The older pre-0.2.4 cookie migration remains covered by installer acceptance below.
 
 The walk installs pinned, real `claude` and `codex` executables, signed out.
+Its private signed-out Codex config disables startup update checks because the
+walk manages the pinned version. Otherwise an earlier launch can populate the
+update cache and the prompt journey's Enter can choose **Update now**, making
+Codex exit before listing. The issue #1208 artifacts showed this on Linux and
+macOS: macOS completed the update and requested a restart; Linux could not find
+the updater executable. The aggregate correctly omitted the exited terminal.
+This policy is confined to the walk's private home; dedicated signed-in homes
+retain their existing configuration.
 A transparent PTY recorder keeps the real executable in the pane's original
 foreground process group while a helper forwards terminal traffic and observes
 complete argv/settings, their own first screen and prompt input; it produces no
@@ -83,6 +91,19 @@ The TUI shell uses canonical input so command truncation is observable. CI sends
 synthetic prompt text through World's terminal input API and requires it to reach
 the real harness. It does not require model credentials. Pins live in
 `scripts/release-walk/contract.py`; Herdr uses World's verified runtime table.
+
+For intermittent listing investigations, dispatch **Release walk** with
+`listing_repetitions=20`, or add `--listing-repetitions 20` to the command above.
+After every normal journey passes, it runs 20 additional independent both-runtime
+launch/input/listing journeys, each with fresh World and runtime state. Each home
+contains a synthetic newer Codex update cache to exercise the update-policy
+regression without waiting for the network race. A real pinned-Codex control first
+proves that the legacy configuration offers the cached update, while the fixed
+configuration accepts input and stays live. The first failure stops the batch;
+it never retries a failed journey. `listing-batch.json` beside the normal receipt
+records the exact commit/package, requested count and consecutive per-run results,
+and CI retains it as `release-walk-listing-batch-PLATFORM`, including on failure.
+These diagnostic repetitions do not replace any required release journey or receipt.
 
 Linux x64 also downloads the checksum-verified **v0.3.5** executable as a negative
 control. It must fail quick Claude launch because the agent never started, with

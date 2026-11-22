@@ -20,6 +20,8 @@ import {
   type CorePins,
 } from "./corePins";
 import { worldRuntimeStore } from "./runtimeStore";
+import { store as worldStore } from "../store";
+import { townEndpointAnchors, townRuntimes } from "./town/townBuildings";
 import type { WorldLeafObject, WorldSpaceObject } from "./worldObject";
 
 /**
@@ -54,13 +56,42 @@ export function keepDeskPins(last: DeskPins, next: DeskPins): DeskPins {
     : next;
 }
 
+/** Each endpoint view's anchor (townBuildings.ts `townEndpointAnchors`). */
+const currentPinAnchors = () =>
+  townEndpointAnchors(townRuntimes(worldStore.get()));
+
+/**
+ * Two connections of one Herdr endpoint (a startup default and a saved
+ * profile of the same socket) show the same tabs, so a desk has one pin: it
+ * is kept under the endpoint's anchor, the connection Town places the
+ * endpoint's rooms by, and holds when another view takes over. Every other
+ * view reads the anchor's pins under its own connection (views of one
+ * endpoint share workspace and tab IDs), and writes go to the anchor
+ * (`setDeskPinned`), so each pin control reads what it wrote.
+ */
+export function anchoredDeskPins(
+  pins: DeskPins,
+  anchors: ReadonlyMap<string, string>,
+): DeskPins {
+  let aliased: Record<string, DeskPin> | null = null;
+  for (const [view, anchor] of anchors)
+    for (const [key, pin] of Object.entries(pins))
+      if (key.startsWith(`${anchor}:`)) {
+        aliased ??= { ...pins };
+        aliased[`${view}:${key.slice(anchor.length + 1)}`] = pin;
+      }
+  return aliased ?? pins;
+}
+
 /**
  * The desk pins Town shows, kept current from the World service: saved pins,
- * with each herdr-core tab pinned exactly when its agents' label says so.
+ * with each herdr-core tab pinned exactly when its agents' label says so,
+ * read alike by every view of one endpoint (`anchoredDeskPins`).
  */
 export function useDeskPins(
   store: BoardDocumentStore = sharedBoardStore(),
   corePins: () => CorePins = currentCorePins,
+  anchors: () => ReadonlyMap<string, string> = currentPinAnchors,
 ): DeskPins {
   useEffect(() => {
     store.start();
@@ -70,9 +101,11 @@ export function useDeskPins(
     (listener: () => void) => {
       const board = store.subscribe(listener);
       const runtime = worldRuntimeStore.subscribe(listener);
+      const catalogue = worldStore.subscribe(listener);
       return () => {
         board();
         runtime();
+        catalogue();
       };
     },
     [store],
@@ -81,7 +114,13 @@ export function useDeskPins(
   const snapshot = () => {
     last.current = keepDeskPins(
       last.current,
-      withCorePins(store.get().document?.layout.desk_pins ?? NONE, corePins()),
+      anchoredDeskPins(
+        withCorePins(
+          store.get().document?.layout.desk_pins ?? NONE,
+          corePins(),
+        ),
+        anchors(),
+      ),
     );
     return last.current;
   };
@@ -118,25 +157,35 @@ export function leafPinnedBy(
 
 /**
  * Pin a tab's desk (it goes first in its room), or unpin it. A herdr-core
- * tab's pin is written to its agents' label in Herdr's apps.
+ * tab's pin is written to its agents' label in Herdr's apps; a Herdr tab's
+ * is saved under its endpoint's anchor (`anchoredDeskPins`).
  */
 export function setDeskPinned(
   target: TerminalColorTarget,
   pinned: boolean,
   store: BoardDocumentStore = sharedBoardStore(),
   corePins: CorePins = currentCorePins(),
+  anchors: ReadonlyMap<string, string> = currentPinAnchors(),
 ) {
-  const key = terminalColorKey(target);
-  const core = corePins.get(key);
+  const own = terminalColorKey(target);
+  const core = corePins.get(own);
+  const anchor = anchors.get(target.connectionId);
+  const key = anchor
+    ? terminalColorKey({ ...target, connectionId: anchor })
+    : own;
   if (core) {
     // Unpinned here, its place on the rug goes too: pinned again, it joins
     // the end, as a Herdr desk does.
-    if (!pinned && core.live && store.get().document?.layout.desk_pins?.[key])
-      void store.patch([{ op: "desk.unpin", key }]);
+    if (!pinned && core.live && store.get().document?.layout.desk_pins?.[own])
+      void store.patch([{ op: "desk.unpin", key: own }]);
     return setCoreTabPinned(core, pinned);
   }
+  // Unpinning also clears a pin saved under this view itself.
+  const ownPin =
+    !pinned && own !== key && store.get().document?.layout.desk_pins?.[own];
   return store.patch([
     pinned ? { op: "desk.pin", key, cell: null } : { op: "desk.unpin", key },
+    ...(ownPin ? [{ op: "desk.unpin" as const, key: own }] : []),
   ]);
 }
 

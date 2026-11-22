@@ -1,3 +1,4 @@
+import { installTownMasterFixture } from "../testing/townMasterFixture";
 import { checkCoreDesks } from "./coreTownMoves.browser";
 import { prepareTownEdgeDrop } from "./townEdgeScroll.browser";
 import { checkTownEdgeArrows } from "./townEdgeArrows.browser";
@@ -787,6 +788,7 @@ worldBridge.call = async (method, params) => {
   }
   return bridgeCall(method, params);
 };
+const fixtureTownMaster = installTownMasterFixture();
 const bridgeOnControl = worldBridge.onControl.bind(bridge);
 worldBridge.onControl = (listener) => {
   boardListeners.add(listener);
@@ -2962,11 +2964,19 @@ async function run() {
   // The Town master's chat (FirstMate's) is docked from the start on wide
   // screens: once per visit, on Chat, without moving the pane's focus.
   inspected.length = 0;
-  writeOfficePreferences(worldLocalStorage, {
-    ...readOfficePreferences(worldLocalStorage),
-    townMaster: "codex",
-  });
-  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await fixtureTownMaster(
+    (() => {
+      const agent = worldFor(base.connections).leaves.find(
+        (leaf) =>
+          leaf.agentName?.toLowerCase() === "codex" ||
+          leaf.label.toLowerCase() === "codex",
+      )!;
+      return {
+        connection_id: agent.connectionId,
+        terminal_id: agent.terminalId,
+      };
+    })(),
+  );
   if (!phone) {
     await waitFor(
       () => inspected.length === 1 && unfocusedOpens.length === 1,
@@ -2985,28 +2995,28 @@ async function run() {
     );
   }
   // Changing views and back does not reopen it in the same visit.
-  writeOfficePreferences(worldLocalStorage, {
-    ...readOfficePreferences(worldLocalStorage),
-    townMaster: "",
-  });
-  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await fixtureTownMaster(null);
   await settle();
-  writeOfficePreferences(worldLocalStorage, {
-    ...readOfficePreferences(worldLocalStorage),
-    townMaster: "codex",
-  });
-  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await fixtureTownMaster(
+    (() => {
+      const agent = worldFor(base.connections).leaves.find(
+        (leaf) =>
+          leaf.agentName?.toLowerCase() === "codex" ||
+          leaf.label.toLowerCase() === "codex",
+      )!;
+      return {
+        connection_id: agent.connectionId,
+        terminal_id: agent.terminalId,
+      };
+    })(),
+  );
   await settle();
   await settle();
   check(
     inspected.length === (phone ? 0 : 1),
     "the Town master's chat opened again in the same visit",
   );
-  writeOfficePreferences(worldLocalStorage, {
-    ...readOfficePreferences(worldLocalStorage),
-    townMaster: "",
-  });
-  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await fixtureTownMaster(null);
   inspected.length = 0;
 
   // Activating an agent's desk opens its window on Chat, not its terminal,
@@ -3805,8 +3815,10 @@ async function run() {
         shown.deskColumns === expected.deskColumns,
       `the town's shape ${JSON.stringify(shown)} does not fit a ${stage.clientWidth}x${stage.clientHeight} container`,
     );
-    // Half-width windows sit in between: portrait or medium, both two
-    // columns of rooms.
+    // Half-width windows sit in between: portrait or medium. Outside phones,
+    // Rooms per row on Auto (#1188) keeps the base shape and only sets its
+    // rooms per row from the width, as the most a building takes, so the
+    // shape is the base shape with exactly that count, not the base itself.
     const fits =
       window.innerWidth < 640
         ? [TOWN_SHAPES.phone]
@@ -3815,8 +3827,21 @@ async function run() {
           : window.innerWidth >= 1200
             ? [TOWN_SHAPES.wide]
             : [TOWN_SHAPES.portrait, TOWN_SHAPES.medium];
+    const autoColumns = Math.min(
+      5,
+      Math.max(2, Math.floor(stage.clientWidth / 240)),
+    );
     check(
-      fits.some((shape) => shape === expected),
+      fits.some((shape) =>
+        shape === TOWN_SHAPES.phone
+          ? shape === expected
+          : JSON.stringify(expected) ===
+            JSON.stringify({
+              ...shape,
+              roomColumns: autoColumns,
+              autoRooms: true,
+            }),
+      ),
       `a ${window.innerWidth}x${window.innerHeight} window got ${JSON.stringify(expected)}`,
     );
 
