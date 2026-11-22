@@ -7,7 +7,7 @@
     "memory/MemoryLibraryLifecycle.browser": "2026-11-20 local focused run: about 2 s, one viewport, five scripted scenarios, bun run test web/src/world/memory/MemoryLibraryLifecycle.browser.test.ts.",
     "ApartmentsAvatars.browser": "2026-11-20 local focused run: 3.06 s file duration, one fixture across phone and desktop, bun run test web/src/world/ApartmentsAvatars.browser.test.ts.",
     "ShipyardLighthouse.browser": "2026-11-21 local focused run: 16.47 s file duration, one fixture across phone and desktop in two Shipyard modes and two town sizes, bun run test web/src/world/ShipyardLighthouse.browser.test.ts.",
-    "TownOwnerTopology.browser": "2026-11-22 local focused run: 38.4 s, two layouts, every room's controls by real pointer input, bun run test web/src/world/TownOwnerTopology.browser.test.ts."
+    "TownOwnerTopology.browser": "2026-11-22 hosted CI run 45017581877, World browser shard 1/6 job 137197559547: 170.387 s passing case across both layouts; replaces the 38.4 s local estimate. https://github.com/IvoryHeart/herdr-world/actions/runs/45017581877"
   },
   "seconds": {
     "AnswerDeliveries.browser": 3.251,
@@ -36,7 +36,7 @@
     "ProductionContexts.town": 149.832,
     "SharedViewCreation": 133.268,
     "ShipyardLighthouse.browser": 16.47,
-    "TownOwnerTopology.browser": 38.4,
+    "TownOwnerTopology.browser": 170.387,
     "WorldNavigatorWorktree": 3.156,
     "WorldTerminalHandoff": 92.266,
     "WorldViewErrorBoundary": 0.599,

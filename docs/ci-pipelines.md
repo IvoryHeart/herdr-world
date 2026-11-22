@@ -209,9 +209,17 @@ focus and capture-fencing failures. The explicit lightweight DOM/transport list 
 `scripts/world-browser-suites.ts` runs two files concurrently in a separate batch;
 new suites default to isolation. Cases within each World file remain serial.
 Each case keeps private profiles, ports, RPC state and result gates, and retains
-every viewport, assertion and existing deadline. Both batches publish distinct
-JUnit/timing artifacts; a failed batch stops the runner. Web browser shards retain
-two-file concurrency.
+every viewport, assertion and existing deadline. Pointer journeys clear hover
+cards between actions: camera moves can leave a previously hovered room summary
+over the next seat. The owner-topology journey deliberately starts that step with
+a hovered plaque and verifies the seat receives the pointer before pressing it.
+It holds the launcher's catalog until Terminal appears, then waits for the
+catalog to paint before locating and pressing Terminal: that response grows and
+recentres the dialog. Both presses verify the real pointer target.
+Its shard weight uses the retained hosted duration (170.387 seconds), replacing
+the 38.4-second local estimate; weights never set test deadlines. Both batches
+publish distinct JUnit/timing artifacts; a failed batch stops the runner. Web
+browser shards retain two-file concurrency.
 Pages reuses film media only with an exact render-input cache key, with no fallback
 prefix. A cache miss still renders the full film. Main latency measurements retain
 all four suites, paired over two quiet runners with a fresh quiet check before
@@ -306,11 +314,13 @@ staging is tracked separately in #1044.
 Town and shared-creation fixtures share immutable JS/CSS bundles across cases;
 each retains private application state and Chrome profiles. Shared creation
 waits for conditions at animation frames instead of a fixed 40 ms polling step;
-its negative-observation dwell checks remain. The 36 World weights were refreshed
-from run 44600794516's retained per-file timings (including setup), producing
-275–276 seconds of serial work per shard before two-file concurrency. Every
-viewport and behavioral assertion remains: the animated layout cases exercise
-different scales, aspect ratios, slow frames or desktop/phone controls. We did
+its negative-observation dwell checks remain. The initial 36 World weights were
+refreshed from run 44600794516's retained per-file timings (including setup).
+With subsequently added suites and the hosted owner-topology duration, the
+42-suite inventory balances to 309–312 seconds of serial work per shard before
+two-file concurrency. Every viewport and behavioral assertion remains: the
+animated layout cases exercise different scales, aspect ratios, slow frames or
+desktop/phone controls. We did
 not replace those cases with screenshots that would lose their assertions.
 
 Protocol tables reuse the official recorded native-address vectors and the

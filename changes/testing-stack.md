@@ -6,3 +6,5 @@
 - Exercise release-built browser startup with an older profile, background/resume
   and worker activation; retain recorded protocol vectors and rebalance browser
   shards using measured file durations with two independent files per runner.
+- Isolate Town's browser launcher action from preceding room hover cards and
+  catalog layout shifts; balance its shard using the passing hosted duration.
