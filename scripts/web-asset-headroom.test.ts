@@ -7,6 +7,7 @@ import {
   CONTEXT,
   judge,
   mainDescription,
+  mainReport,
   parseDelta,
   parseMain,
   settleVerdict,
@@ -52,7 +53,59 @@ test("the recorded delta round-trips through the status description", () => {
   // Main's own record is not a PR delta, and round-trips separately.
   const main = mainDescription({ files: 144, bytes: 13937949 });
   expect(parseDelta(main)).toBeUndefined();
-  expect(parseMain(main)).toEqual({ files: 144, bytes: 13937949 });
+  expect(parseMain(main)).toEqual({
+    files: 144,
+    bytes: 13937949,
+    budget: expect.any(Object),
+  });
+  expect(parseMain("main 13937949 B 144 files")).toEqual({
+    files: 144,
+    bytes: 13937949,
+  });
+});
+
+test("main publishes exact remaining headroom and retains its reviewed budget", () => {
+  const size = { files: 148, bytes: budget.bytes - 17 };
+  const description = mainDescription(size, budget);
+  expect(description).toContain("headroom 17 B 2 files");
+  expect(description.length).toBeLessThanOrEqual(140);
+  expect(parseMain(description)).toEqual({ ...size, budget });
+  expect(mainReport(size, budget)).toContain("17 bytes and 2 files");
+  expect(mainReport(size, budget)).toContain("scripts/web-asset-budget.json");
+  const over = { files: 151, bytes: budget.bytes + 9 };
+  expect(parseMain(mainDescription(over, budget))).toEqual({ ...over, budget });
+  expect(mainReport(over, budget)).toContain(
+    "bytes: 13893632 -> 13893641 (+9)",
+  );
+});
+
+test("projection boundaries and exact raise requests use both reviewed ceilings", () => {
+  expect(judge(budget, { bytes: 0, files: 0 }, budget).state).toBe("success");
+  const bytes = judge(budget, { bytes: 1, files: 0 }, budget);
+  expect(bytes.state).toBe("failure");
+  expect(bytes.request).toContain("(+1)");
+  const files = judge(budget, { bytes: -100, files: 1 }, budget);
+  expect(files.state).toBe("failure");
+  expect(files.request).toContain("files: 150 -> 151 (+1)");
+});
+
+test("a budget-only main merge re-judges a feature against the new policy", async () => {
+  for (const bytes of [90, 120]) {
+    const currentBudget = { files: 10, bytes };
+    const verdict = await settleVerdict({
+      baseSha: "main-1",
+      base: { files: 8, bytes: 95 },
+      delta: { files: 0, bytes: 10 },
+      budget: { files: 10, bytes: 100 },
+      readTip: async () => "main-2",
+      readMainSize: async () =>
+        parseMain(mainDescription({ files: 8, bytes: 95 }, currentBudget)),
+      post: async () => {},
+    });
+    expect(verdict.state).toBe(bytes === 120 ? "success" : "failure");
+    if (bytes === 90)
+      expect(verdict.request).toContain("bytes: 90 -> 105 (+15)");
+  }
 });
 
 test("the workflow judges PRs and re-judges them on every main push", async () => {
