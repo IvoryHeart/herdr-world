@@ -64,9 +64,10 @@ const maxFileCount = 212;
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
 // Town's quiet-agent mark (#1130: rule, hourglass and Busy sub-line, all in
 // the lazy Town chunk) adds about 5 KB, still within 15.6 MiB (2026-11-21).
-// Apartments resident usage lines and the Breakdown agent filter (#1101) add
-// 4,695 bytes to lazy Town/Usage chunks; main measured 16,354,314 bytes
-// (3,471 below 15.6 MiB) on 2026-11-22. 15.7 MiB carries it; file,
+// Rooms per row and one Town building per machine (#1198) add to Town's lazy
+// chunk: 16,363,027 bytes (15.605 MiB) with main, so 15.7 MiB. Apartments
+// resident usage lines and the Breakdown agent filter (#1101) add about
+// 4,695 bytes to lazy Town/Usage chunks, still within 15.7 MiB; file,
 // help-picture and startup limits stay.
 const maxTotalBytes = 15.7 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */

@@ -25,11 +25,11 @@ import {
   ROOM_TOP,
   SOFA_CORNER,
   TOWN_FACADE,
-  TOWN_PHONE_DESK_COLUMNS,
   townFloor,
   townPlaceLots,
   type TownVerticalRoad,
 } from "./townLots";
+import { TOWN_SHAPES, townRoomColumnsFor, type TownShape } from "./townShape";
 import {
   NO_ROOM_SPOTS,
   townArrangeRooms,
@@ -78,43 +78,13 @@ const tierCache = new Map<number, (readonly [number, number])[]>();
 /** The wide shape's steps: eight desks wide, then downward. */
 export const TOWN_ROOM_TIERS = townRoomTiers(8);
 
-/**
- * How the town fits its container: how many columns of rooms a building has,
- * how wide a room may grow before it extends downward, and whether buildings
- * stand side by side on one street (`wide`) or stack (`narrow`).
- */
-export type TownShape = {
-  formFactor: TownFormFactor;
-  roomColumns: number;
-  deskColumns: number;
-};
-
-export const TOWN_SHAPES = {
-  /**
-   * Phones: three columns of compact rooms, four desks wide, buildings
-   * stacked. The first view fits a building's width, so its rooms show as
-   * cards spread across the floor rather than one long column (#889).
-   */
-  phone: {
-    formFactor: "narrow",
-    roomColumns: 3,
-    deskColumns: TOWN_PHONE_DESK_COLUMNS,
-  },
-  /** Portrait monitors and half-width windows: two columns, stacked. */
-  portrait: { formFactor: "narrow", roomColumns: 2, deskColumns: 6 },
-  /** Mid-width landscape windows: buildings on one street, two columns. */
-  medium: { formFactor: "wide", roomColumns: 2, deskColumns: 6 },
-  /** Wide screens: three columns of rooms up to eight desks wide. */
-  wide: { formFactor: "wide", roomColumns: 3, deskColumns: 8 },
-} as const satisfies Record<string, TownShape>;
-
-/** The shape for a container of this size in CSS pixels. */
-export function townShapeFor(width: number, height: number): TownShape {
-  if (width < 640) return TOWN_SHAPES.phone;
-  if (height > width * 1.05) return TOWN_SHAPES.portrait;
-  if (width < 1200) return TOWN_SHAPES.medium;
-  return TOWN_SHAPES.wide;
-}
+export {
+  TOWN_SHAPES,
+  townRoomColumnsFor,
+  townShapeFor,
+  townShapeKey,
+  type TownShape,
+} from "./townShape";
 
 const shapeOf = (shape: TownFormFactor | TownShape): TownShape =>
   typeof shape === "string"
@@ -122,10 +92,6 @@ const shapeOf = (shape: TownFormFactor | TownShape): TownShape =>
       ? TOWN_SHAPES.phone
       : TOWN_SHAPES.wide
     : shape;
-
-/** A shape's identity: placement memory is kept per shape. */
-export const townShapeKey = (shape: TownShape) =>
-  `${shape.formFactor}:${shape.roomColumns}:${shape.deskColumns}`;
 
 const CELL = 5; // tiles per desk cell: aisle column plus a four-tile table
 /** The reception lobby's top row, under the back wall; rooms start below it. */
@@ -286,6 +252,10 @@ type RoomMemory = {
   cells: Map<string, { col: number; row: number }>;
   /** The building column the room keeps while the scene is live. */
   column?: number;
+  /** Its building's rooms per row when it took that column. */
+  columns?: number;
+  /** How many rooms its building had then. */
+  siblings?: number;
   /** The room's place in its building's room (workspace) order. */
   rank?: number;
 };
@@ -473,9 +443,23 @@ function draftBuilding(
   // column it was given while the scene is live (a new one joins the
   // shortest), so a room that grows moves only the rooms below it in its own
   // column. A building whose rooms were reordered (a room moved in Spaces or
-  // Herdr) is stacked afresh, as a reload would show it.
+  // Herdr) is stacked afresh, as a reload would show it, and so is one
+  // whose rooms per row changed (the setting, or Auto after rooms came or
+  // went). Rooms without a saved spot fill the rows the building takes
+  // around the saved ones, so one moved room never narrows it (#1188).
+  // On Auto, a building keeps its rooms per row while the scene is live and
+  // its room count stays the same, so a room that grows moves only the rooms
+  // below it rather than restacking the building.
+  const was = placed[0] && memory.get(placed[0].key);
+  const columns =
+    shape.autoRooms &&
+    was?.columns !== undefined &&
+    was.siblings === placed.length &&
+    was.columns <= shape.roomColumns
+      ? was.columns
+      : townRoomColumnsFor(placed, shape);
   const arranged = placed.some((room) => spots.has(room.key))
-    ? townArrangeRooms(placed, spots)
+    ? townArrangeRooms(placed, spots, [], columns)
     : null;
   let spans: ReturnType<typeof townStackRooms>["spans"];
   let x: number;
@@ -485,7 +469,10 @@ function draftBuilding(
       const spot = arranged.get(room.key)!;
       room.rx = spot.x;
       room.ry = spot.y;
-      nextMemory.get(room.key)!.rank = index;
+      const roomMemory = nextMemory.get(room.key)!;
+      roomMemory.rank = index;
+      roomMemory.columns = columns;
+      roomMemory.siblings = placed.length;
     });
   } else {
     const reordered = townRanksOutOfOrder(
@@ -493,14 +480,19 @@ function draftBuilding(
     );
     const stacked = townStackRooms(
       placed,
-      shape.roomColumns,
-      (room) => (reordered ? undefined : memory.get(room.key)?.column),
+      columns,
+      (room) => {
+        const kept = memory.get(room.key);
+        return reordered || kept?.columns !== columns ? undefined : kept.column;
+      },
       ROOM_TOP,
     );
     ({ spans, width: x } = stacked);
     placed.forEach((room, index) => {
       const roomMemory = nextMemory.get(room.key)!;
       roomMemory.column = stacked.columns[index];
+      roomMemory.columns = columns;
+      roomMemory.siblings = placed.length;
       roomMemory.rank = index;
       room.rx = stacked.positions[index]!.rx;
       room.ry = stacked.positions[index]!.ry;
