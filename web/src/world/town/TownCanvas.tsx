@@ -7,6 +7,7 @@ import {
   type TownRoomCardPress,
 } from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
+import { TownPlaces, TownPlacesContext } from "./townPlaces";
 import { TownBuildingLayers } from "./townBuildingLayers";
 import { TownBoardPlacement } from "./townBoardPlacement";
 import {
@@ -86,6 +87,7 @@ import {
 } from "./townReceptionFilter";
 import "./townBoard.css";
 import "./townOverlay.css";
+import "./townPlaces.css";
 import { useTownCanvasSearch } from "./useTownCanvasSearch";
 import "./townTeams.css";
 import { TownEdgeOverlay, TownPulseRing } from "./TownEdgeLayer";
@@ -413,6 +415,8 @@ export function TownCanvas({
   const [layers] = useState(() => new TownBuildingLayers());
   const signFrame = () => rendererRef.current?.invalidate("building-sign");
   const [signs] = useState(() => new TownBuildingSigns(signFrame));
+  // What each place's building opens: its component registers it (#1170).
+  const [places] = useState(() => new TownPlaces());
   const [boards] = useState(() => new TownBoardPlacement(rendererRef, view));
   const hoverEntry = useCallback(
     (key: string | null, rect?: DOMRect) =>
@@ -678,6 +682,12 @@ export function TownCanvas({
       activateRoom: (key) => latest.current.onActivateRoom(key),
       openReception: setOpenReception,
       openCenter: ring.openRing,
+      opensPlace: (key) => places.opens(key),
+      openPlace: (key) => {
+        places.hover(null, document);
+        places.open(key);
+      },
+      hoverPlace: (key) => places.hover(key, document),
       move: (command) => {
         const actions = latest.current.roomActions;
         switch (command.kind) {
@@ -915,60 +925,62 @@ export function TownCanvas({
           renderer={rendererRef}
         />
         <TownHudContext.Provider value={hud}>
-          <TownWorldLayer
-            hud={hud}
-            foldedActivity={foldedActivity}
-            askingKeys={askingKeys}
-            receptionHeldKeys={receptionHeldKeys}
-            receptionTakes={receptionTakes}
-            onFindHeld={onFindHeld}
-            onActivateAsk={onActivateAsk}
-            model={model}
-            layout={layout}
-            visible={visible}
-            signs={signs}
-            layers={layers}
-            boards={boards}
-            onHoverEntry={hoverEntry}
-            selectedKey={selectedKey}
-            blockedSince={blockedSince}
-            roomActions={placedRoomActions}
-            selectedRoomKey={selectedRoomKey}
-            onSelect={onSelect}
-            onActivate={onActivateAgent}
-            summary={summary}
-            openDeskKey={
-              // A mouse over a table, or a touch tap on one, opens its card.
-              tappedDesk ??
-              (hover !== null && model.desks.has(hover) ? hover : null)
-            }
-            openReceptionKey={openReception}
-            openRoomKey={
-              // Zoomed out, a mouse anywhere over a room (a table or an
-              // agent in it) opens the room's card.
-              hover === null
-                ? null
-                : model.rooms.has(hover)
-                  ? hover
-                  : (model.desks.get(hover)?.roomKey ??
-                    model.agents.get(hover)?.roomKey ??
-                    null)
-            }
-            onActivateRoom={(key) => {
-              onActivateRoom(key);
-              zoomToRoomKey(key);
-            }}
-            onRoomCardPress={(event, roomKey, press) =>
-              roomCardPress.current?.(event, roomKey, press) ?? false
-            }
-            onFocusTarget={focusTarget}
-            targets={lens.targets}
-            deskBadges={deskBadges}
-            quests={quests}
-            steps={steps}
-            renderer={rendererRef}
-            pennants={pennants.current}
-          />
+          <TownPlacesContext.Provider value={places}>
+            <TownWorldLayer
+              hud={hud}
+              foldedActivity={foldedActivity}
+              askingKeys={askingKeys}
+              receptionHeldKeys={receptionHeldKeys}
+              receptionTakes={receptionTakes}
+              onFindHeld={onFindHeld}
+              onActivateAsk={onActivateAsk}
+              model={model}
+              layout={layout}
+              visible={visible}
+              signs={signs}
+              layers={layers}
+              boards={boards}
+              onHoverEntry={hoverEntry}
+              selectedKey={selectedKey}
+              blockedSince={blockedSince}
+              roomActions={placedRoomActions}
+              selectedRoomKey={selectedRoomKey}
+              onSelect={onSelect}
+              onActivate={onActivateAgent}
+              summary={summary}
+              openDeskKey={
+                // A mouse over a table, or a touch tap on one, opens its card.
+                tappedDesk ??
+                (hover !== null && model.desks.has(hover) ? hover : null)
+              }
+              openReceptionKey={openReception}
+              openRoomKey={
+                // Zoomed out, a mouse anywhere over a room (a table or an
+                // agent in it) opens the room's card.
+                hover === null
+                  ? null
+                  : model.rooms.has(hover)
+                    ? hover
+                    : (model.desks.get(hover)?.roomKey ??
+                      model.agents.get(hover)?.roomKey ??
+                      null)
+              }
+              onActivateRoom={(key) => {
+                onActivateRoom(key);
+                zoomToRoomKey(key);
+              }}
+              onRoomCardPress={(event, roomKey, press) =>
+                roomCardPress.current?.(event, roomKey, press) ?? false
+              }
+              onFocusTarget={focusTarget}
+              targets={lens.targets}
+              deskBadges={deskBadges}
+              quests={quests}
+              steps={steps}
+              renderer={rendererRef}
+              pennants={pennants.current}
+            />
+          </TownPlacesContext.Provider>
         </TownHudContext.Provider>
         <TownPulseRing pulse={edge.pulse} />
       </div>

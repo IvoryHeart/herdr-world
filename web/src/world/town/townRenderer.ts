@@ -74,6 +74,7 @@ import {
   type TownHostTheme,
 } from "./townPaint";
 import { buildTownSprites, townCharacter, townHash } from "./townSprites";
+import { townPlaceBoxes } from "./townPlaces";
 import { townStateColorNumber } from "./townStateColors";
 
 export type { TownRendererDiagnostics } from "./townDiagnostics";
@@ -405,6 +406,7 @@ export async function createTownRenderer(
       roomColumns: layout.shape.roomColumns,
       deskColumns: layout.shape.deskColumns,
       geometry: townGeometryKey(layout),
+      places: Object.fromEntries(townPlaceBoxes(layout)),
     };
   };
 

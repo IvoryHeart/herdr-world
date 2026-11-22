@@ -27,6 +27,8 @@
 - `web/src/world/TownView.tsx`
 - `web/src/world/town/TownCanvas.tsx`
 - `web/src/world/town/townLayout.ts`
+- `web/src/world/town/townPlaces.ts`
+- `web/src/world/PlaceWindow.tsx`
 - `server/src/world/observability.ts`
 
 **Tests:**
@@ -35,6 +37,8 @@
 - `web/src/world/town/TownCanvas.fold.test.ts`
 - `web/src/world/town/townLayout.test.ts`
 - `web/src/world/town/townReceptionFilter.test.ts`
+- `web/src/world/town/townPlaces.test.ts`
+- `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases)
 
 **Pitfalls:**
 
@@ -311,6 +315,22 @@
     reached) or `?usageFixture=empty` (nothing observed); the page drops the
     parameter at once, and only the observatory, Usage and agent cards use
     synthetic runs until the next page load.
+  - Town's **places** open from their buildings as well as their signs:
+    click or tap the post office, library, Apartments, observatory or
+    warehouse house anywhere, and it opens what its sign opens (the
+    warehouse's building opens Integrations while GitHub is off, and nothing
+    while it is still being read). Hovering a building lights its sign; the
+    signs stay the keyboard targets. A phone's library and observatory fold
+    to signs on the town center, so only their signs open them. The town
+    center keeps its ring, and the Town summary its own managed window.
+  - Every place opens in **one window frame**: a centred window of one size
+    over dimmed Town, with the place's title and the same close button at
+    the top. Escape, Back, the close button or a press outside closes it,
+    topmost first; long content scrolls inside it. On a phone it is a sheet
+    from the bottom edge that leaves a strip of Town visible above it. The
+    post office opens **Needs you** in this frame; closing it leaves the Needs
+    you tab as it was (the top bar's counter and other openers still show
+    the tab).
   - When reception's queue is full, the rest crowd the lobby beside it in the
     same order, grumbling with a `#@!` bubble; after about 90 seconds a
     grumbler naps on the lobby floor with a `z`. A freed queue spot goes to

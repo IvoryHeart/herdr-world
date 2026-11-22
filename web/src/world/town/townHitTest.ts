@@ -11,6 +11,7 @@ import {
   type TownLayout,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
+import { townPlaceAt, type TownPlaceKey } from "./townPlaces";
 
 export type TownHit =
   /** `standing` when the agent was hit away from its seat (lounge, queue, walking). */
@@ -24,7 +25,9 @@ export type TownHit =
   | { kind: "reception"; key: string }
   | { kind: "building"; key: string }
   /** The town center: a tap opens its radial menu. */
-  | { kind: "center" };
+  | { kind: "center" }
+  /** A place's building (townPlaces.ts): a tap opens its window. */
+  | { kind: "place"; key: TownPlaceKey };
 
 export type TownHitContext = {
   layout: TownLayout;
@@ -44,6 +47,8 @@ export type TownHitContext = {
    */
   seated?: (agentKey: string) => boolean;
   zoom: number;
+  /** Whether a place's building opens anything; without it, none does. */
+  places?: (key: TownPlaceKey) => boolean;
 };
 
 export function townBuildingAt(
@@ -80,6 +85,10 @@ export function townHitTest(
 ): TownHit | null {
   if (townCenterContains(context.layout.center, T, x, y))
     return { kind: "center" };
+  if (context.places) {
+    const place = townPlaceAt(context.layout, x, y);
+    if (place && context.places(place)) return { kind: "place", key: place };
+  }
   const building = townBuildingAt(context.layout, x, y);
   if (!building) return null;
   if (context.roofAlpha(building.hostKey) > 0.5)
@@ -177,7 +186,8 @@ export function townHitKey(hit: TownHit | null) {
   if (
     hit.kind === "building" ||
     hit.kind === "reception" ||
-    hit.kind === "center"
+    hit.kind === "center" ||
+    hit.kind === "place"
   )
     return null;
   return hit.key;

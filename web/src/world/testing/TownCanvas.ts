@@ -9,6 +9,7 @@ import {
   waitForBrowserFixture,
   waitForChromePort,
 } from "../../browserChrome";
+import { rawSvgImports } from "./assetUrlImports";
 import { chromeRenderingFlags } from "./chromeRendering";
 
 const chrome =
@@ -72,6 +73,8 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           ],
           outdir: dir,
           target: "browser",
+          // Apartments' agent icons, for the places case (#1170).
+          plugins: [rawSvgImports],
         });
         expect(build.success).toBe(true);
         for (const output of build.outputs)

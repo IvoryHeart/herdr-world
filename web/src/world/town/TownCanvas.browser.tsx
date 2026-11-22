@@ -22,6 +22,12 @@ import {
   checkTownRoomPlates,
 } from "./townRoomPlates.browser";
 import { checkApartmentsTry, checkTownCenter } from "./townCenter.browser";
+import { checkTownPlaces } from "./townPlaces.browser";
+import { FeatureHosts } from "../../features/FeatureHosts";
+import { NeedsYouHost } from "../NeedsYouTab";
+import { setApartmentsClient } from "../apartments/useApartments";
+import { setMemoryFixtureForTests } from "../memory/memoryFixture";
+import { fixtureApartmentsClient } from "../testing/apartmentsFixture";
 import { checkTownBusTrip } from "./townBusTrip.browser";
 import type { BinState } from "../../../../shared/bin";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
@@ -71,6 +77,11 @@ import { WorldBin } from "../bin/WorldBin";
 const params = new URL(location.href).searchParams;
 const mode = params.get("mode") ?? "test";
 const scale = params.get("scale") ?? "typical";
+if (scale === "places") {
+  // Synthetic residents and memory, so Apartments and the Library open.
+  setApartmentsClient(fixtureApartmentsClient(Date.now()));
+  setMemoryFixtureForTests(true);
+}
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
@@ -1257,6 +1268,17 @@ async function run() {
             if (!focus) unfocusedOpens.push(id);
           }}
         />
+        {scale === "places" ? (
+          <>
+            {/* As World's shell mounts them, so each place's window opens. */}
+            <FeatureHosts slot="dialogs" world={world} onOpen={() => {}} />
+            <NeedsYouHost
+              world={world}
+              onChat={() => {}}
+              onOpenTerminal={() => {}}
+            />
+          </>
+        ) : null}
         {launch && scale === "plates" ? (
           <AgentLauncherDialog
             world={world}
@@ -1278,7 +1300,23 @@ async function run() {
   worldSourcesStore.useFetch(async () =>
     Response.json({
       observedAt: 1,
-      sources: [],
+      // The places case's warehouse opens Work once GitHub has answered.
+      sources:
+        scale === "places"
+          ? [
+              {
+                id: "github",
+                label: "GitHub",
+                enabled: true,
+                state: "connected",
+                detail: "Synthetic GitHub",
+                checkedAt: detailReadAt,
+                lastSuccessAt: detailReadAt,
+                itemCount: 1,
+                config: { kind: "github", mergedDays: 7 },
+              },
+            ]
+          : [],
       items: [
         {
           key: "github:pr:example-org/atlas#7",
@@ -1546,6 +1584,12 @@ async function run() {
   }
   if (scale === "typical" && mode === "test") {
     await checkTownCenter(host, check, waitFor);
+  }
+  if (scale === "places" && mode === "test") {
+    await checkTownPlaces(host, check, waitFor, phone);
+    root.unmount();
+    await settle();
+    return;
   }
   // Same seeded topology as typical, in its own case: the complete trip
   // samples every second, independently of Town's other interactions and

@@ -28,6 +28,7 @@ import {
 import { useTownWarehouseSources } from "./townWarehouseFixture";
 import type { TownRendererHandle } from "./townRenderer";
 import { useOpenTownWork } from "./TownWorkLens";
+import { useTownPlace } from "./townPlaces";
 import { townCrateUrl, type TownCrateState } from "./townHarbourArt";
 import "./townWarehouse.css";
 
@@ -234,11 +235,15 @@ export const TownWarehouse = memo(function TownWarehouse({
   const connect = office.status === "off" || office.status === "closed";
   // Work opens only once GitHub has answered; loading keeps the old sign.
   const work = office.status === "open" ? openWork : undefined;
+  // The building opens what its sign does (#1170): Integrations while GitHub
+  // is off, Work once it has answered; nothing while it is loading.
+  useTownPlace("warehouse", connect ? openSourcesSettings : (work ?? null));
   return (
     <>
       <button
         type="button"
         className="town-warehouse-sign"
+        data-town-place="warehouse"
         data-quiet={quiet || undefined}
         style={{ left: (lot.x + lot.w) * T - 12, top: lot.y * T + 34 }}
         aria-label={`Warehouse: ${spoken(office)}${work ? ". Open all pull requests" : ""}`}

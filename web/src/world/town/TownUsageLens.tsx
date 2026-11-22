@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useState } from "react";
 import { UsageLens, type UsageTab } from "../usage/UsageLens";
+import { PlaceWindow } from "../PlaceWindow";
 import type { WorldObject } from "../worldObject";
 
 /**
@@ -11,10 +12,6 @@ export const TownOpenUsageContext = createContext<
 >(null);
 export const useOpenTownUsage = () => useContext(TownOpenUsageContext);
 
-/** The observatory's signs, which the lens keeps as anchors. */
-const anchor = () =>
-  document.querySelector(".town-observatory-sign, .town-observatory-fold");
-
 /**
  * Town's Usage screens: the observatory's opener and, while open, the lens.
  * `world` names agents and rooms in the breakdown.
@@ -22,13 +19,22 @@ const anchor = () =>
 export function useTownUsage(world?: WorldObject) {
   const [tab, setTab] = useState<UsageTab | null>(null);
   const open = useCallback((next: UsageTab = "budget") => setTab(next), []);
+  // Town's one window (#1170): the observatory opens it.
   const lens = tab ? (
-    <UsageLens
-      initialTab={tab}
-      anchor={anchor}
-      world={world}
+    <PlaceWindow
+      name="usage"
+      label="Usage"
+      closeLabel="Close Usage"
+      bodyClassName="place-window-lens"
       onClose={() => setTab(null)}
-    />
+    >
+      <UsageLens
+        initialTab={tab}
+        framed
+        world={world}
+        onClose={() => setTab(null)}
+      />
+    </PlaceWindow>
   ) : null;
   return { open, lens };
 }

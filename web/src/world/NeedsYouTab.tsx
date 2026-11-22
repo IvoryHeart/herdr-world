@@ -8,6 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AgentMark } from "../components/AgentMark";
+import { PlaceWindow } from "./PlaceWindow";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
 import { useNow } from "./handoffs";
@@ -160,15 +161,50 @@ export function NeedsYouHost({
   const count = useWaitingCount(world);
   // A full screen on a phone: an agent window opened from it (Chat about
   // this) is a newer screen, so Back closes that first and returns here.
-  useSystemBack(shared.open && mobile, closeNeedsYou, "screen");
+  // The post office's window (#1170) is a layer of its own (PlaceWindow).
+  const asWindow = shared.open && shared.window === true;
+  useSystemBack(shared.open && mobile && !asWindow, closeNeedsYou, "screen");
   // Chat about this opens the Inspector; fetch it while the list is open.
   useEffect(
     () => (shared.open ? preloadWorkspaceInspector() : undefined),
     [shared.open],
   );
-  const sheet = shared.open && mobile;
+  const sheet = shared.open && mobile && !asWindow;
   const panel = useRef<HTMLElement | null>(null);
   usePhoneSheetFocus(sheet, panel, shared.request);
+  if (asWindow) {
+    // Leaving for an agent or the Outbox closes the window over the view.
+    const leaving =
+      <T extends unknown[]>(go: (...args: T) => void) =>
+      (...args: T) => {
+        closeNeedsYou();
+        go(...args);
+      };
+    const outbox = shared.openOutbox;
+    return (
+      <PlaceWindow
+        name="needs-you"
+        label="Needs you"
+        className="needs-you-window"
+        closeLabel="Hide Needs you"
+        onClose={closeNeedsYou}
+        title={
+          <>
+            <h2>Needs you</h2>
+            {count ? <b className="needs-you-head-count">{count}</b> : null}
+          </>
+        }
+      >
+        <NeedsYouList
+          world={world}
+          request={shared.request}
+          openOutbox={outbox ? leaving(outbox) : null}
+          onChat={leaving(onChat)}
+          onOpenTerminal={leaving(onOpenTerminal)}
+        />
+      </PlaceWindow>
+    );
+  }
   if (!shared.open)
     return mobile || !count ? null : (
       <button

@@ -18,7 +18,7 @@ import { AgentHistoryChat } from "../../components/AgentHistoryChat";
 import { AgentIcon } from "../../components/AgentIcon";
 import type { HistoryEntry } from "../../components/agentHistory";
 import { groupHistoryChatItems } from "../../components/agentHistoryView";
-import { CloseButton } from "../../components/CloseButton";
+import { PlaceWindow } from "../PlaceWindow";
 import { useLayer } from "../../layerStack";
 import { store } from "../../store";
 import { formatUiDateTime } from "../../uiLocale";
@@ -82,7 +82,6 @@ export function ApartmentsDialog({
   const profiles = useAgentProfiles().document;
   const [query, setQuery] = useState(initialQuery);
   const [openId, setOpenId] = useState<string | null>(null);
-  useLayer(true, onClose, { element: () => ref.current });
   const found = useMemo(
     () => searchApartments(apartments.residents, query),
     [apartments.residents, query],
@@ -93,82 +92,81 @@ export function ApartmentsDialog({
   const shown = found.slice(0, APARTMENT_ROWS_SHOWN);
 
   return (
-    <div className="modal-backdrop">
-      <div
-        ref={ref}
-        className="modal apartments-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Apartments"
-      >
-        <div className="modal-head">
-          {open ? (
-            <button type="button" onClick={() => setOpenId(null)}>
-              <ArrowLeft size={14} aria-hidden="true" /> Residents
-            </button>
-          ) : (
-            <h2>
-              <Building2 size={16} aria-hidden="true" /> Apartments
-            </h2>
-          )}
-          <CloseButton onClick={onClose} label="Close apartments" />
-        </div>
-        {open ? (
-          <ResidentDetail
-            key={open.id}
-            resident={open}
-            profiles={profiles}
-            world={world}
-            element={() => ref.current}
-            onOpen={onOpen}
-            onClose={onClose}
-            onBack={() => setOpenId(null)}
-          />
+    <PlaceWindow
+      name="apartments"
+      label="Apartments"
+      className="apartments-dialog"
+      bodyClassName="apartments-body"
+      closeLabel="Close apartments"
+      windowRef={ref}
+      onClose={onClose}
+      title={
+        open ? (
+          <button type="button" onClick={() => setOpenId(null)}>
+            <ArrowLeft size={14} aria-hidden="true" /> Residents
+          </button>
         ) : (
-          <>
-            <label className="apartments-search">
-              <Search size={14} aria-hidden="true" />
-              <input
-                type="search"
-                value={query}
-                placeholder="Name, project, summary, #PR or 2026-11-19"
-                aria-label="Search residents"
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-            <p aria-live="polite">
-              {!apartments.verified && !apartments.residents.length
-                ? "Reading residents…"
-                : query.trim()
-                  ? `${found.length} of ${apartments.residents.length} residents`
-                  : `${apartments.residents.length} residents · up to ${apartments.capacity}, newest kept`}
-              {found.length > shown.length
-                ? ` · newest ${shown.length} shown; search to find older`
-                : ""}
+          <h2>
+            <Building2 size={16} aria-hidden="true" /> Apartments
+          </h2>
+        )
+      }
+    >
+      {open ? (
+        <ResidentDetail
+          key={open.id}
+          resident={open}
+          profiles={profiles}
+          world={world}
+          element={() => ref.current}
+          onOpen={onOpen}
+          onClose={onClose}
+          onBack={() => setOpenId(null)}
+        />
+      ) : (
+        <>
+          <label className="apartments-search">
+            <Search size={14} aria-hidden="true" />
+            <input
+              type="search"
+              value={query}
+              placeholder="Name, project, summary, #PR or 2026-11-19"
+              aria-label="Search residents"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <p aria-live="polite">
+            {!apartments.verified && !apartments.residents.length
+              ? "Reading residents…"
+              : query.trim()
+                ? `${found.length} of ${apartments.residents.length} residents`
+                : `${apartments.residents.length} residents · up to ${apartments.capacity}, newest kept`}
+            {found.length > shown.length
+              ? ` · newest ${shown.length} shown; search to find older`
+              : ""}
+          </p>
+          {found.length ? (
+            <ul className="apartments-list" aria-label="Residents">
+              {shown.map((resident) => (
+                <li key={resident.id}>
+                  <ResidentRow
+                    resident={resident}
+                    profiles={profiles}
+                    onOpen={() => setOpenId(resident.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : apartments.verified || apartments.residents.length ? (
+            <p>
+              {apartments.residents.length
+                ? "No resident matches."
+                : "No one lives here yet. Agents from connected hosts' Claude, Codex and Pi histories move in asleep; an agent whose terminal ends, or that the bus takes, moves in too."}
             </p>
-            {found.length ? (
-              <ul className="apartments-list" aria-label="Residents">
-                {shown.map((resident) => (
-                  <li key={resident.id}>
-                    <ResidentRow
-                      resident={resident}
-                      profiles={profiles}
-                      onOpen={() => setOpenId(resident.id)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            ) : apartments.verified || apartments.residents.length ? (
-              <p>
-                {apartments.residents.length
-                  ? "No resident matches."
-                  : "No one lives here yet. Agents from connected hosts' Claude, Codex and Pi histories move in asleep; an agent whose terminal ends, or that the bus takes, moves in too."}
-              </p>
-            ) : null}
-          </>
-        )}
-      </div>
-    </div>
+          ) : null}
+        </>
+      )}
+    </PlaceWindow>
   );
 }
 

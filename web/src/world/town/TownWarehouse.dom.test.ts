@@ -384,7 +384,11 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
         }),
       ),
     );
-    const lens = host.querySelector<HTMLElement>(".work-lens.town-work")!;
+    // Town's one window frames it (#1170), outside the Town it covers.
+    const frame = document.querySelector<HTMLElement>(
+      '.modal.place-window[data-place-window="work"]',
+    )!;
+    const lens = frame.querySelector<HTMLElement>(".work-lens.town-work")!;
     expect(
       [...lens.querySelectorAll<HTMLElement>(".work-lens-column")].map(
         (column) => column.dataset.lane,
@@ -396,9 +400,14 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     expect(lens.textContent).toContain("Synthetic ready change");
     // Keys carry on in the lens, not the sign beneath it.
     expect(document.activeElement?.textContent).toBe("Pull requests");
+    // One close, the frame's: the lens draws none of its own.
+    expect(frame.querySelectorAll('[aria-label="Close Work"]').length).toBe(1);
+    expect(lens.querySelector('[aria-label="Close Work"]')).toBeNull();
     await act(async () =>
-      lens
-        .querySelector<HTMLButtonElement>('[aria-label="Close Work"]')!
+      frame
+        .querySelector<HTMLButtonElement>(
+          '.place-window-head [aria-label="Close Work"]',
+        )!
         .click(),
     );
     expect(closed).toBe(1);

@@ -470,7 +470,9 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
       ),
     );
     await settle();
-    const lens = host.querySelector<HTMLElement>(".work-lens")!;
+    const lens = document.querySelector<HTMLElement>(
+      '[data-place-window="work"] .work-lens',
+    )!;
     expect(
       lens.querySelector('[role="tab"][aria-selected="true"]')!.textContent,
     ).toBe("Releases");

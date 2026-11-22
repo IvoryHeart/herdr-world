@@ -1,7 +1,5 @@
-.modal.apartments-dialog {
-  width: min(640px, 100%);
-  display: flex;
-  flex-direction: column;
+/* Its frame and size are Town's one window (PlaceWindow, #1170). */
+.apartments-body {
   gap: 8px;
 }
 .apartments-dialog h2,
@@ -16,7 +14,7 @@
   min-width: 0;
 }
 .apartments-muted,
-.apartments-dialog > p {
+.apartments-body > p {
   margin: 0;
   color: var(--muted);
   font-size: 12px;

@@ -7,6 +7,7 @@ import {
   useMemoryStore,
 } from "../memory/memoryClient";
 import { openMemoryLibrary } from "../memory/memoryEvents";
+import { useTownPlace } from "./townPlaces";
 import { memorySummary } from "../memory/memoryModel";
 import type { TownCenterLot } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
@@ -62,6 +63,8 @@ export function townLibrarySignText(counts: TownLibraryCounts) {
  * minutes; it opens the Library. A narrow town folds it to a book sign on
  * the center's left wing.
  */
+const openLibrary = () => openMemoryLibrary();
+
 export const TownLibrary = memo(function TownLibrary({
   layout,
 }: {
@@ -75,6 +78,8 @@ export const TownLibrary = memo(function TownLibrary({
       void requestMemoryCatalog(host);
   }, [hostKeys]);
   const counts = townLibraryCounts();
+  // The building opens what its sign does (#1170), while a host serves it.
+  useTownPlace("library", counts.status === "none" ? null : openLibrary);
   if (counts.status === "none") return null;
   const text = townLibrarySignText(counts);
   const label = `Library: ${text === "…" ? "reading" : text}. Open`;
@@ -85,6 +90,7 @@ export const TownLibrary = memo(function TownLibrary({
     <button
       type="button"
       className="town-library-sign"
+      data-town-place="library"
       data-quiet={counts.status !== "ready" || undefined}
       style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 30 }}
       aria-label={label}
