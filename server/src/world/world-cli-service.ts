@@ -17,6 +17,7 @@ import { answerAsk, CliError, createWorldCli, dismissAsk } from "./world-cli";
 import { type CliActor, type LedgerStore } from "./world-ledger";
 import { handleAskPeerRequest, type AskPeers } from "./ask-peers";
 import { createAttentionDispatcher } from "./attention-dispatch";
+import { ownerAlertConnection } from "./owner-alert-connection";
 import type {
   StoragePorts,
   WorldLedgerStorage,
@@ -70,6 +71,12 @@ export function createWorldCliService(deps: {
   askRuntimes?(asker: CliActor): string[];
   /** This World's name, as alerts and sibling Worlds show it. */
   homeName?(): string;
+  /**
+   * The Herdr connection that alerts the owner for a herdr-core or unplaced
+   * asker (owner-alert-connection.ts); absent: the default connection when it
+   * is a Herdr one.
+   */
+  ownerAlertConnection?(): string | null;
 }) {
   const board: TownMoveContext["board"] = {
     get: () => deps.board().get(),
@@ -318,6 +325,14 @@ export function createWorldCliService(deps: {
       return core && "hosts" in core ? core : null;
     },
     defaultConnectionId: () => deps.connections().defaultId(),
+    ownerAlertConnectionId: () =>
+      deps.ownerAlertConnection
+        ? deps.ownerAlertConnection()
+        : ownerAlertConnection(
+            deps.connections().list(),
+            deps.connections().defaultId(),
+            new Map(),
+          ),
     snapshot: async () => {
       const snapshots = deps.snapshots();
       if (!snapshots) throw new Error("World snapshot service is unavailable");

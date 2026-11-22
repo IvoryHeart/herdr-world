@@ -117,6 +117,8 @@ export type WorldCliDeps = {
   /** herdr-core connections, for callers inside core terminals (P4). */
   core?(): import("./world-cli-actor").CoreCallerSource | null;
   defaultConnectionId(): string | null;
+  /** Herdr connection alerting for a core/unplaced asker; absent: default. */
+  ownerAlertConnectionId?(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
   elements?: import("./board-element-service").BoardElementService;

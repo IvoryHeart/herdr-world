@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, join } from "node:path";
 import { assetUrlImports, rawSvgImports } from "./assetUrlImports";
 
 // Entry names are checked against the source files at runtime.

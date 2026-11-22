@@ -21,6 +21,12 @@ import {
   type CoreCallerSource,
 } from "../world/world-cli-actor";
 import { createWorldCliService } from "../world/world-cli-service";
+import { ownerAlertConnection } from "../world/owner-alert-connection";
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
+import {
+  askDeliveryMessage,
+  type WorldAsk,
+} from "../../../web/src/world/worldAsks";
 import { productionAnswerFixture } from "../world/testing/answer-delivery-fixture";
 import { coreCallerSource, coreOccupantFingerprint } from "./ask-caller";
 import { coreWorld, until } from "./testing/core-world";
@@ -708,3 +714,126 @@ test.skipIf(process.platform !== "linux")(
     }
   },
 );
+
+// #1156: a herdr-core default host made every core agent's owner alert target
+// the core connection, which has no toasts, so all of them were refused.
+test.skipIf(process.platform !== "linux").each([
+  ["alerts the owner through this computer's Herdr connection", true],
+  ["says the owner was not alerted when no Herdr connection can", false],
+] as const)("a core agent's question %s", async (_name, withHerdr) => {
+  const root = mkdtempSync(join(tmpdir(), "core-ask-alert-"));
+  const w = await world();
+  const address = await agent(w, process.pid);
+  const f = await productionAnswerFixture(join(root, "answers"));
+  const board = new BoardStore(join(root, "board.json"));
+  const shown: Array<{ connection: string; method: string; title: unknown }> =
+    [];
+  const herdr = withHerdr ? [{ id: "studio" }] : [];
+  // The owner's set-up: the herdr-core connection is the default host.
+  const connections = {
+    list: () => herdr,
+    defaultId: () => "box",
+    readyRuntimeLease: (id: string) =>
+      id === "studio" && withHerdr
+        ? {
+            connectionId: "studio",
+            generation: 2,
+            isCurrent: () => true,
+            runtime: {
+              sshHost: () => null,
+              ...herdrRuntimeFixture({
+                async call(method: string, params: Record<string, unknown>) {
+                  shown.push({ connection: id, method, title: params.title });
+                  return { shown: true, reason: "shown" };
+                },
+              }),
+            },
+          }
+        : null,
+  };
+  const profiles = new Map<string, object>([
+    ["studio", { id: "studio", type: "local" }],
+    ["box", { id: "box", type: "local", runtime: "herdr-core" }],
+  ]);
+  const service = createWorldCliService({
+    ledger: () => f.storage.ledger,
+    attention: () => f.storage.outbox,
+    effects: () => f.storage.effects,
+    scheduler: f.scheduler,
+    clock: f.clock,
+    now: f.clock.now,
+    incarnation: f.storage.incarnation,
+    board: () => board,
+    connections: () => connections as never,
+    core: () => source([{ w, id: "box" }]),
+    ownerAlertConnection: () =>
+      ownerAlertConnection(connections.list(), "box", profiles),
+    snapshots: () => null,
+    townMoveQueues: new Map(),
+    publishBoard: () => {},
+    broadcast: () => {},
+  });
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: (request, server) =>
+      service.http(
+        request,
+        server.requestIP(request),
+        server.port!,
+        () => true,
+      ),
+  });
+  try {
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        "-e",
+        "const response = await fetch(process.argv[1], { method: 'POST', body: process.argv[2] }); console.log(await response.text());",
+        `http://127.0.0.1:${server.port}/api/world/cli`,
+        JSON.stringify({
+          command: "ask",
+          params: { question: "Which branch?" },
+          caller: { core_terminal: address },
+        }),
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const asked = JSON.parse(await new Response(child.stdout).text());
+    expect(asked.actor).toMatchObject({ verified: true, connection_id: "box" });
+    const [entry] = await f.storage.outbox.forRecord(asked.result.id);
+    const { asks } = (await service.rpc("world.asks.get", {})) as {
+      asks: WorldAsk[];
+    };
+    const ask = asks.find((item) => item.id === asked.result.id)!;
+    if (withHerdr) {
+      expect(asked.notified).toMatchObject({ shown: true });
+      expect(entry).toMatchObject({
+        target: { connection_id: "studio" },
+        state: "delivered",
+      });
+      expect(shown).toEqual([
+        {
+          connection: "studio",
+          method: "notification.show",
+          title: `${ask.actor.name ?? ask.actor.label} asks`,
+        },
+      ]);
+      expect(askDeliveryMessage(ask)).toBeNull();
+    } else {
+      // Never the core connection: no target, so nothing is sent, and the
+      // question in Needs you says the owner was not alerted.
+      expect(asked.notified.shown).toBe(false);
+      expect(entry).toMatchObject({ target: null, state: "refused" });
+      expect(shown).toEqual([]);
+      expect(askDeliveryMessage(ask)).toBe(
+        "World did not alert you about this question.",
+      );
+    }
+  } finally {
+    await service.stop();
+    await server.stop(true);
+    await f.stop();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
