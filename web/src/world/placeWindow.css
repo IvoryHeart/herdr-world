@@ -1,0 +1,94 @@
+/* PlaceWindow (#1170): the one window Town's places open. One size for all,
+   so a building never opens a small overlay, a large one or a full screen;
+   content scrolls inside the body. The frame is base.css's modal; the
+   backdrop's placement is repeated here so the window never depends on
+   which stylesheet loads first. */
+.place-window-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--modal-backdrop, rgb(6 8 12 / 0.62));
+}
+
+.modal.place-window {
+  position: relative;
+  margin: auto;
+  width: min(1040px, 100%);
+  height: min(760px, calc(100dvh - 36px));
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 14px 18px 14px;
+}
+
+.place-window-head {
+  flex: none;
+  margin-bottom: 10px;
+}
+
+.place-window-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.place-window-title h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.place-window-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.place-window-actions + .close-button {
+  margin-left: 0;
+}
+
+.place-window-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* A phone: a sheet from the bottom, a strip of the view still above it. */
+@media (max-width: 640px) {
+  .modal-backdrop.place-window-backdrop {
+    align-items: flex-end;
+    padding: max(72px, 14dvh) 0 0;
+  }
+
+  .modal.place-window {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+  }
+}
+
+/* A lens (Work, Usage) fills the body on its own ground and scrolls
+   inside; the window, not the lens, covers the view. */
+.place-window-body.place-window-lens > .work-lens {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 10px;
+  border-radius: 12px;
+  overflow: auto;
+}

@@ -38,6 +38,9 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     getComputedStyle: browser.getComputedStyle.bind(browser),
     requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
     cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
+    // Settings' lazy IDE rows keep their reload guard in session storage.
+    localStorage: browser.localStorage,
+    sessionStorage: browser.sessionStorage,
   }))
     Object.defineProperty(globalThis, key, {
       value,
@@ -54,6 +57,8 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     "./TownWarehouse"
   );
   const { TownOpenWorkContext, TownWorkLens } = await import("./TownWorkLens");
+  const { TownPlaces } = await import("./townPlaces");
+  const { TownPlacesContext } = await import("./useTownPlace");
   const { fixtureWorld } = await import("../board/boardFixture");
   const { PULL_REQUEST_LANES } = await import(
     "../../../../shared/worldSources"
@@ -113,19 +118,25 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     host.className = "town-world";
     document.body.append(host);
     const root = createRoot(host);
+    const places = new TownPlaces();
     await act(async () =>
       root.render(
         createElement(
-          TownOpenWorkContext.Provider,
-          { value: work },
-          createElement(TownWarehouse, {
-            layout: town(narrow),
-            renderer: { current: null },
-          }),
+          TownPlacesContext.Provider,
+          { value: places },
+          createElement(
+            TownOpenWorkContext.Provider,
+            { value: work },
+            createElement(TownWarehouse, {
+              layout: town(narrow),
+              renderer: { current: null },
+            }),
+          ),
         ),
       ),
     );
     return {
+      places,
       host,
       sign: () => host.querySelector<HTMLButtonElement>(".town-warehouse-sign"),
       parcels: () => [
@@ -150,12 +161,38 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     expect(sign.title).toBe("Sign in with gh auth login.");
     expect(sign.textContent).not.toMatch(/\d/);
     expect(office.parcels()).toEqual([]);
-    let opened = 0;
-    const onSettings = () => (opened += 1);
+    // Integrations opens in Town's one window (#1170), not in Settings.
+    let settings = 0;
+    const onSettings = () => (settings += 1);
     window.addEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
     await act(async () => sign.click());
     window.removeEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
-    expect(opened).toBe(1);
+    expect(settings).toBe(0);
+    const frame = () =>
+      document.querySelector<HTMLElement>(
+        '.modal.place-window[data-place-window="integrations"]',
+      );
+    expect(frame()?.getAttribute("aria-label")).toBe("Integrations");
+    await act(async () =>
+      frame()!
+        .querySelector<HTMLButtonElement>(
+          '.place-window-head [aria-label="Close Integrations"]',
+        )!
+        .click(),
+    );
+    expect(frame()).toBeNull();
+    // The building itself opens the same window as its sign.
+    await act(async () => {
+      office.places.open("warehouse");
+    });
+    expect(frame()).not.toBeNull();
+    // A press on dimmed Town around the window closes it.
+    await act(async () => {
+      frame()!.parentElement!.dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true }),
+      );
+    });
+    expect(frame()).toBeNull();
     await publish([fixturePullRequest(9)], "disabled");
     expect(office.sign()!.textContent).toContain("GitHub source is off");
     expect(office.parcels()).toEqual([]);
@@ -325,17 +362,14 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     // Without GitHub, the sign still says how to connect and opens Integrations.
     await publish([], "not_connected", "Sign in with gh auth login.");
     const closed = await mount(false, work);
-    let settings = 0;
-    const onSettings = () => {
-      settings += 1;
-    };
-    window.addEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
     expect(closed.sign()!.getAttribute("aria-label")).toBe(
       "Warehouse: Closed · connect GitHub in Integrations",
     );
     await act(async () => closed.sign()!.click());
-    window.removeEventListener(WORLD_INTEGRATIONS_EVENT, onSettings);
-    expect([settings, opened]).toEqual([1, 3]);
+    const integrations = document.querySelector<HTMLElement>(
+      '.modal.place-window[data-place-window="integrations"]',
+    );
+    expect([integrations !== null, opened]).toEqual([true, 3]);
     await closed.close();
   });
 
@@ -384,7 +418,11 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
         }),
       ),
     );
-    const lens = host.querySelector<HTMLElement>(".work-lens.town-work")!;
+    // Town's one window frames it (#1170), outside the Town it covers.
+    const frame = document.querySelector<HTMLElement>(
+      '.modal.place-window[data-place-window="work"]',
+    )!;
+    const lens = frame.querySelector<HTMLElement>(".work-lens.town-work")!;
     expect(
       [...lens.querySelectorAll<HTMLElement>(".work-lens-column")].map(
         (column) => column.dataset.lane,
@@ -396,9 +434,14 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     expect(lens.textContent).toContain("Synthetic ready change");
     // Keys carry on in the lens, not the sign beneath it.
     expect(document.activeElement?.textContent).toBe("Pull requests");
+    // One close, the frame's: the lens draws none of its own.
+    expect(frame.querySelectorAll('[aria-label="Close Work"]').length).toBe(1);
+    expect(lens.querySelector('[aria-label="Close Work"]')).toBeNull();
     await act(async () =>
-      lens
-        .querySelector<HTMLButtonElement>('[aria-label="Close Work"]')!
+      frame
+        .querySelector<HTMLButtonElement>(
+          '.place-window-head [aria-label="Close Work"]',
+        )!
         .click(),
     );
     expect(closed).toBe(1);
