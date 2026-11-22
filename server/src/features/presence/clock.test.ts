@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { OwnerPresenceClock } from "./presence";
+import { OwnerPresenceClock } from "./clock";
 
 test("each sighting returns the previous one by the service's clock", () => {
   let now = 1_000;
