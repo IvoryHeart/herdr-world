@@ -19,10 +19,12 @@ import {
   hostAttachScript,
   hostListScript,
   hostStartScript,
+  hostStopByHand,
   hostStopScript,
   type IdeHostStart,
   parseHostLines,
   parseHostList,
+  parseHostPending,
 } from "./host";
 import { systemHostRun } from "./hosts";
 import {
@@ -321,3 +323,96 @@ test("looking and stopping create nothing on a host World never used", async () 
   expect(parseHostLines(stop.stdout).values.get("result")).toBe("gone");
   expect(existsSync(join(h.home, ".local/state"))).toBe(false);
 });
+
+/**
+ * Pauses a start script just before it claims the folder, until `go`
+ * exists: what a lost, slow start reply looks like on the host.
+ */
+function pausedStart(h: ReturnType<typeof setup>) {
+  const script = h.start();
+  const claim = script.indexOf('if ! mkdir "$d"');
+  expect(claim).toBeGreaterThan(0);
+  const wait = `: > "${h.top}/paused"; while [ ! -e "${h.top}/go" ]; do nap; done\n`;
+  return `${script.slice(0, claim)}${wait}${script.slice(claim)}`;
+}
+
+async function untilFile(path: string) {
+  for (let i = 0; i < 200 && !existsSync(path); i++) await Bun.sleep(20);
+  expect(existsSync(path)).toBe(true);
+}
+
+for (const by of ["Stop", "a look"] as const)
+  test(`a start ${by} overtook before it claimed the folder launches nothing`, async () => {
+    const h = setup();
+    const started = h.run(pausedStart(h), "token\n");
+    await untilFile(join(h.top, "paused"));
+    // Listed meanwhile as pending: neither failed nor gone.
+    const list = await h.run(hostListScript({ remote: true }, WORLD, GRACE));
+    expect([...parseHostPending(list.stdout)]).toEqual([ID]);
+    if (by === "Stop") {
+      const stop = await h.run(
+        hostStopScript({ remote: true }, ID, WORLD, GRACE),
+      );
+      expect(parseHostLines(stop.stdout).values.get("result")).toBe("gone");
+    } else expect((await h.attach()).values.get("state")).toBe("gone");
+    writeFileSync(join(h.top, "go"), "");
+    const result = await started;
+    expect(result.code).toBe(HOST_EXIT.voided);
+    expect(existsSync(join(h.root, ID))).toBe(false);
+    expect(existsSync(join(h.top, "launcher.pid"))).toBe(false);
+    const after = await h.run(hostListScript({ remote: true }, WORLD, GRACE));
+    expect(parseHostPending(after.stdout).size).toBe(0);
+  });
+
+test("a newer start voids an older one still waiting to claim", async () => {
+  const h = setup();
+  const older = h.run(pausedStart(h), "token\n");
+  await untilFile(join(h.top, "paused"));
+  // The newer start finds the older's mark and replaces it; let it claim.
+  const newer = h.start({ binary: "/bin/true" });
+  const claim = newer.indexOf('if ! mkdir "$d"');
+  await h.run(`${newer.slice(0, claim)}exit 0\n`, "token\n");
+  writeFileSync(join(h.top, "go"), "");
+  expect((await older).code).toBe(HOST_EXIT.voided);
+  expect(existsSync(join(h.root, ID))).toBe(false);
+});
+
+test.if(hasSetsid())(
+  "an unfinished Stop stays pending, a look says so, and the next Stop or the hand command ends it",
+  async () => {
+    for (const finish of ["Stop", "by hand"] as const) {
+      const h = setup();
+      expect((await h.run(h.start(), "token\n")).code).toBe(0);
+      const pids = await h.standIn.started();
+      // A Stop that moved the folder aside, then lost its host.
+      const aside = join(h.root, `.stop-${ID}-4242`);
+      Bun.spawnSync(["mv", join(h.root, ID), aside]);
+      const list = await h.run(hostListScript({ remote: true }, WORLD, GRACE));
+      expect(parseHostList(list.stdout)).toEqual([]);
+      expect([...parseHostPending(list.stdout)]).toEqual([ID]);
+      expect((await h.attach()).values.get("state")).toBe("stopping");
+      // A start meanwhile launches nothing new.
+      const again = await h.run(h.start(), "token\n");
+      expect(parseHostLines(again.stdout).values.get("result")).toBe("running");
+      if (finish === "Stop") {
+        const stop = await h.run(
+          hostStopScript({ remote: true }, ID, WORLD, GRACE),
+        );
+        expect(parseHostLines(stop.stdout).values.get("result")).toBe(
+          "stopped",
+        );
+      } else {
+        const command = hostStopByHand(ID);
+        const byHand = await h.run(command);
+        expect(byHand.code).toBe(0);
+      }
+      // The hand command sends TERM only; the stand-in's server ignores it.
+      const ended =
+        finish === "Stop" ? [pids.launcher, pids.server] : [pids.launcher];
+      for (let i = 0; i < 100 && ended.some(alive); i++) await Bun.sleep(50);
+      expect(ended.filter(alive)).toEqual([]);
+      expect(existsSync(aside)).toBe(false);
+    }
+  },
+  30_000,
+);

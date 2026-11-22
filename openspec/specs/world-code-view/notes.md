@@ -28,6 +28,9 @@ Navigation guidance only; OpenSpec ignores this file.
 - `server/src/ide/instances.test.ts`
 - `server/src/ide/workbench-theme.test.ts`
 - `?ideFixture=` preview states (below).
+- `quint/ide-lifecycle.qnt` with its replay (`quint/ide-lifecycle.ts`) and
+  [contract](../../../verification/contracts/ide-lifecycle.md): start, Stop,
+  lost answers, restart, reconnect and removal orderings.
 
 **Pitfalls:**
 
@@ -141,7 +144,10 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   hosts and terminal shells, even ones in their own session whose parent
   already exited. They get SIGTERM, then SIGKILL after five seconds. If the
   host can't be reached, the server stays listed with why and **Stop** can be
-  tried again. A server that exits on its own has what it started ended the
+  tried again. A Stop cut off on the host (its answer lost, or World
+  restarting) leaves the server listed with **A Stop of it didn't finish**;
+  no other server starts for that folder until **Stop** or the by-hand
+  command ends what is left. A server that exits on its own has what it started ended the
   same way. Other IDE servers and Herdr agents are untouched.
 - **Disable and Remove stop nothing.** Disabling an IDE that has servers
   running lists them in its confirmation, each with its own **Stop…**;
@@ -171,7 +177,8 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   missing on the host or World couldn't make its private folder there). An IDE
   not installed on the project's host is refused by name. These offer **Try
   again**. Looking for the IDE on an SSH host gives up after 20 seconds. A
-  stale connection must reconnect first. Windows hosts and folders that are
+  stale connection must reconnect first; an Open that waited behind another
+  operation while its connection changed is refused the same way. Windows hosts and folders that are
   gone are refused. A process that clears its environment and leaves the
   server's process tree is out of World's reach, and on an SSH host whose login
   manager ends a user's processes at logout (systemd-logind

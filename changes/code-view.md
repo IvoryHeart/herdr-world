@@ -25,7 +25,8 @@
   command to stop it there). Only pressing Stop on a server stops it, after
   a warning, and that ends its whole process tree on World's computer or the
   SSH host, terminals that left the tree included; disabling the IDE,
-  removing the connection or reaching the limit of four stops none.
+  removing the connection or reaching the limit of four stops none. A Stop
+  cut off on its host keeps the server listed until you stop it again.
   code-server's port proxies are off.
 
 ### Removed

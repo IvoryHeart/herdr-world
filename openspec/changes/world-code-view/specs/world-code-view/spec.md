@@ -276,6 +276,16 @@ forgets it.
 - **WHEN** the owner stops a server while World is reattaching to it or opening it again
 - **THEN** every process of the old server has ended before any new start for that folder
 
+#### Scenario: A Stop that did not finish
+
+- **WHEN** a Stop was cut off on the host after it began, by a lost answer or a World restart
+- **THEN** World keeps the server listed with that reason, starts no other server for that folder meanwhile, and the next Stop or the by-hand command ends what is left
+
+#### Scenario: Open queued behind a connection change
+
+- **WHEN** an Open waits behind another operation on its folder and the connection is removed, reconnects or the provider is disabled meanwhile
+- **THEN** the Open starts nothing and is refused (as stale, or as disabled), and the person chooses the project again
+
 #### Scenario: Stop a server with a re-parented terminal
 
 - **WHEN** the owner confirms Stop and a terminal in its own session has lost its parent inside the server

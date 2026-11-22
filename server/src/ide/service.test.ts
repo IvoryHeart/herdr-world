@@ -345,9 +345,7 @@ test("a removed SSH host's servers stay listed as unreachable, with how to stop 
     sshDestination: SSH_CONNECTION.sshDestination,
     hostLabel: "devbox",
     unreachable: expect.stringContaining("connection was removed"),
-    stopByHand: expect.stringContaining(
-      `herdr-world/ide/${result.instance.id}`,
-    ),
+    stopByHand: expect.stringContaining(`"$r/${result.instance.id}"`),
   });
   expect(after.scripts.some((entry) => entry.target !== "local")).toBe(false);
   const refused = await after.service.stop(result.instance.id);

@@ -7,6 +7,7 @@ import {
   IdeInstances,
   type IdeInstanceView,
   IdeLimitError,
+  IdeStaleError,
   type IdeStopResult,
 } from "./instances";
 import {
@@ -140,6 +141,7 @@ export class IdeService {
       localRoot: deps.localRoot,
       worldId: () => this.worldId(),
       onChange: deps.onChange,
+      admits: (entry) => this.admitted(entry),
       inventory: {
         read: () => deps.settings.read().servers ?? [],
         write: (servers) =>
@@ -406,6 +408,10 @@ export class IdeService {
       return { ok: true, instance };
     } catch (error) {
       if (error instanceof IdeLimitError) return refuse("limit", error.message);
+      if (error instanceof IdeStaleError)
+        return this.enabled(provider)
+          ? refuse("stale", error.message)
+          : refuse("disabled", "Enable an IDE in the Code view first.");
       throw error;
     }
   }

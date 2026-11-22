@@ -54,6 +54,8 @@ export const HOST_EXIT = {
   dir: 90,
   token: 91,
   folder: 92,
+  /** A Stop or a look voided this start before it claimed the folder. */
+  voided: 93,
 } as const;
 
 /** How long the host lets the server's processes stop after SIGTERM. */
@@ -146,6 +148,10 @@ function prelude(
     `if [ ! -d "$root" ] || [ -L "$root" ] || [ ! -O "$root" ]; then exit ${HOST_EXIT.dir}; fi`,
     'printf "root=%s\\n" "$root"',
     functions(stopGraceMs),
+    // Begin marks (`.begin-<id>-<pid>`) are starts not yet answered; Stop
+    // leaves `.stop-<id>-<pid>` until every process is ended.
+    'unbegin() { rmdir "$root"/.begin-"$1"-* 2>/dev/null; return 0; }',
+    'stop_left() { for x in "$root"/.stop-"$1"-*; do [ -d "$x" ] && return 0; done; return 1; }',
   ].join("\n");
 }
 
@@ -239,7 +245,16 @@ export function hostStartScript(start: IdeHostStart) {
   return [
     prelude(start.root, stopGraceMs),
     `d="$root"/${start.id}`,
+    // This start's begin mark voids any older unanswered one: only the
+    // newest may still claim the folder. Stop and Open void it in turn, so
+    // a start whose answer was lost never launches after them.
+    `b="$root/.begin-${start.id}-$$"`,
+    `unbegin ${start.id}`,
+    `mkdir "$b" 2>/dev/null || exit ${HOST_EXIT.voided}`,
+    `trap 'rmdir "$b" 2>/dev/null' EXIT`,
     `cd ${shQuote(start.folder)} || exit ${HOST_EXIT.folder}`,
+    // An unfinished Stop: report it there, so World looks and says so.
+    `if stop_left ${start.id}; then echo result=running; exit 0; fi`,
     'if ! mkdir "$d" 2>/dev/null; then',
     '  if [ "$(state_of "$d")" != exited ]; then echo result=running; exit 0; fi',
     // It exited (or the host restarted): clear it, then claim afresh.
@@ -247,6 +262,9 @@ export function hostStartScript(start: IdeHostStart) {
     '  mv "$d" "$g" 2>/dev/null && rm -rf "$g"',
     '  mkdir "$d" 2>/dev/null || { echo result=running; exit 0; }',
     "fi",
+    // Claimed; now spend the begin mark. Voided meanwhile: give the claim
+    // back (the claim is still empty here).
+    `rmdir "$b" 2>/dev/null || { rmdir "$d" 2>/dev/null; exit ${HOST_EXIT.voided}; }`,
     `n=${shQuote(start.nonce)}`,
     // This launch's own files, then the record linked into place: `ln`
     // fails once a record is there, so if another start took the folder
@@ -315,7 +333,9 @@ export function hostAttachScript(attach: IdeHostAttach) {
       "echo state=gone",
     ),
     `d="$root"/${attach.id}`,
-    '[ -f "$d/record" ] || { [ -d "$d" ] && echo state=starting || echo state=gone; exit 0; }',
+    // Looking voids an unanswered start: what it shows stays true.
+    `unbegin ${attach.id}`,
+    `[ -f "$d/record" ] || { if [ -d "$d" ]; then echo state=starting; elif stop_left ${attach.id}; then echo state=stopping; else echo state=gone; fi; exit 0; }`,
     `${expect("world", attach.worldId)} && ${expect("provider", attach.provider)} && ${expect("folder", attach.folder)} || { echo state=foreign; exit 0; }`,
     'st=$(state_of "$d")',
     'echo "state=$st"',
@@ -337,8 +357,14 @@ export function hostListScript(
 ) {
   return [
     prelude(root, stopGraceMs, ""),
+    // `pending=` names one that may yet run: a start not yet answered or
+    // a claim without its record, or a Stop not finished.
+    'for x in "$root"/.begin-* "$root"/.stop-*; do',
+    '  [ -d "$x" ] || continue',
+    '  y=${x##*/}; y=${y#.begin-}; y=${y#.stop-}; printf "pending=%s\\n" "${y%-*}"',
+    "done",
     'for d in "$root"/*; do',
-    '  [ -f "$d/record" ] || continue',
+    '  [ -f "$d/record" ] || { [ -d "$d" ] && printf "pending=%s\\n" "${d##*/}"; continue; }',
     `  grep -qxF ${shQuote(`world=${recordValue(worldId)}`)} "$d/record" || continue`,
     '  printf "id=%s\\n" "${d##*/}"',
     "  grep -E '^(provider|folder|connection|started)=' \"$d/record\"",
@@ -351,8 +377,9 @@ export function hostListScript(
 }
 
 /**
- * Stops one server completely. Prints `result=stopped`, or `result=gone`
- * when there is nothing (left) to stop.
+ * Stops one server completely, and finishes any Stop of it that didn't.
+ * Prints `result=stopped`, or `result=gone` when there is nothing (left)
+ * to stop.
  */
 export function hostStopScript(
   root: IdeHostRoot,
@@ -364,14 +391,17 @@ export function hostStopScript(
   return [
     prelude(root, stopGraceMs, "echo result=gone"),
     `d="$root"/${id}`,
-    '[ -d "$d" ] || { echo result=gone; exit 0; }',
+    `unbegin ${id}`,
     `if [ -f "$d/record" ] && ! grep -qxF ${shQuote(`world=${recordValue(worldId)}`)} "$d/record"; then echo result=foreign; exit 0; fi`,
-    `g="$root/.stop-${id}-$$"`,
-    'mv "$d" "$g" 2>/dev/null || { echo result=gone; exit 0; }',
-    'n=$(nonce_of "$g")',
-    '[ -n "$n" ] && end_all "$n" "$$"',
-    'rm -rf "$g"',
-    "echo result=stopped",
+    `[ -d "$d" ] && mv "$d" "$root/.stop-${id}-$$" 2>/dev/null`,
+    "r=gone",
+    `for g in "$root"/.stop-${id}-*; do`,
+    '  [ -d "$g" ] || continue',
+    '  n=$(nonce_of "$g")',
+    '  [ -n "$n" ] && end_all "$n" "$$"',
+    '  rm -rf "$g"; r=stopped',
+    "done",
+    'echo "result=$r"',
   ].join("\n");
 }
 
@@ -387,7 +417,8 @@ export function hostStopByHand(id: string) {
   // `-s TERM --` works in dash, bash and zsh alike. Without a group of its
   // own (a host with neither setsid nor perl) only the supervisor gets the
   // signal, and the IDE under it needs ending by name.
-  return `d="${REMOTE_IDE_ROOT}/${id}"; p=$(cat "$d/pid") && { kill -s TERM -- "-$p" 2>/dev/null || kill -s TERM "$p"; } && rm -rf "$d"`;
+  // It voids an unanswered start first and covers an unfinished Stop too.
+  return `r="${REMOTE_IDE_ROOT}"; rmdir "$r"/.begin-${id}-* 2>/dev/null; for d in "$r/${id}" "$r"/.stop-${id}-*; do [ -d "$d" ] || continue; p=$(cat "$d/pid" 2>/dev/null) && { kill -s TERM -- "-$p" 2>/dev/null || kill -s TERM "$p"; }; rm -rf "$d"; done`;
 }
 
 /** `key=value` lines into a map; later keys win, `log=` lines collect. */
@@ -452,6 +483,15 @@ export function parseHostList(stdout: string): IdeHostRecord[] {
   return records;
 }
 
+/** IDs a list names as possibly running without a record yet (`pending=`). */
+export function parseHostPending(stdout: string) {
+  const pending = new Set<string>();
+  for (const line of stdout.split(/\r?\n/))
+    if (line.startsWith("pending=") && ID.test(line.slice(8)))
+      pending.add(line.slice(8));
+  return pending;
+}
+
 export function plainExitReason(lines: string[], code: number | null) {
   const last = [...lines]
     .reverse()
@@ -478,7 +518,9 @@ export function startWaitReason(
 
 /** Exit codes a start script gives only before it launches anything. */
 export const definiteStartFailure = (code: number | null) =>
-  [HOST_EXIT.dir, HOST_EXIT.token, HOST_EXIT.folder].some((c) => c === code);
+  [HOST_EXIT.dir, HOST_EXIT.token, HOST_EXIT.folder, HOST_EXIT.voided].some(
+    (c) => c === code,
+  );
 
 export function hostFailure(
   code: number | null,
@@ -491,6 +533,8 @@ export function hostFailure(
     return `World couldn't hand the IDE its access token on ${hostLabel}.`;
   if (code === HOST_EXIT.folder)
     return `The project folder doesn't exist on ${hostLabel}.`;
+  if (code === HOST_EXIT.voided)
+    return `It was stopped or looked at on ${hostLabel} before it started. Open it again.`;
   if (remote && (code === 255 || code === null))
     return `World couldn't reach ${hostLabel} over SSH. Check the connection, then try again.`;
   return `World couldn't run its IDE helper on ${hostLabel}${code === null ? "" : ` (exit ${code})`}.`;

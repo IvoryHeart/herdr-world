@@ -12,6 +12,7 @@ import {
   type IdeHostRoot,
   parseHostLines,
   parseHostList,
+  parseHostPending,
   plainExitReason,
   startWaitReason,
 } from "./host";
@@ -31,6 +32,24 @@ import {
 import { IDE_TOKEN_COOKIE, type IdeUpstream, ideBasePath } from "./proxy";
 import type { IdeServerRecord } from "./settings";
 
+export type {
+  IdeInstanceOptions,
+  IdeInstanceState,
+  IdeInstanceView,
+  IdeInventory,
+  IdeOpenRequest,
+  IdeProbe,
+  IdeStopResult,
+} from "./instance-types";
+import type {
+  IdeInstanceOptions,
+  IdeInstanceState,
+  IdeInstanceView,
+  IdeOpenRequest,
+  IdeProbe,
+  IdeStopResult,
+} from "./instance-types";
+
 /**
  * The IDE servers World started (#1009): at most one per (connection, host,
  * provider, folder). Each lives on its host, detached from World (host.ts):
@@ -43,38 +62,6 @@ import type { IdeServerRecord } from "./settings";
  * in a durable inventory until Stop succeeds or the host shows them gone,
  * so none runs unseen after a restart, even on a host it can't reach.
  */
-export type IdeInstanceState =
-  /** Attaching, or waiting for the server to answer. */
-  | "starting"
-  | "ready"
-  /** Runs on its host; World isn't attached (Open attaches again). */
-  | "detached"
-  /** Exited on its own, or never started. */
-  | "failed";
-
-export type IdeInstanceView = {
-  id: string;
-  provider: IdeProviderId;
-  connectionId: string;
-  /** The connection's runtime generation World is attached under; -1 when not attached. */
-  generation: number;
-  /** The SSH destination it runs on; absent on World's own computer. */
-  sshDestination?: string;
-  /** The host's name when World last reached it. */
-  hostLabel: string;
-  folder: string;
-  state: IdeInstanceState;
-  /** The same-origin address the Code view frames. */
-  url: string;
-  /** When it started on its host. */
-  startedAt: string;
-  /** Why it failed or is detached, in plain words. */
-  reason?: string;
-  /** True while the first start downloads the provider's web server. */
-  downloading?: boolean;
-  /** True while Stop is ending it. */
-  stopping?: boolean;
-};
 
 type Instance = IdeInstanceView & {
   key: string;
@@ -86,55 +73,9 @@ type Instance = IdeInstanceView & {
   autoAttached?: number;
 };
 
-/** Asks the upstream for its base page; resolves to the HTTP status or null. */
-export type IdeProbe = (upstream: IdeUpstream) => Promise<number | null>;
-
-export type IdeInstanceOptions = {
-  /** World's private folder: servers on this computer and SSH forward sockets. */
-  localRoot: string;
-  /** This World's identity on every host. */
-  worldId: () => string;
-  run?: IdeHostRun;
-  forward?: IdeForward;
-  probe?: IdeProbe;
-  now?: () => Date;
-  /** Waits between readiness probes. */
-  sleep?: (ms: number) => Promise<void>;
-  /** Whole start budget, including the first-start download. */
-  startTimeoutMs?: number;
-  /** Servers at once, running anywhere; not measured, a conservative guard. */
-  maxInstances?: number;
-  /** Local servers leave World's systemd cgroup (World runs as a unit). */
-  systemdScope?: boolean;
-  /** The host's SIGTERM grace before SIGKILL; tests shorten it. */
-  stopGraceMs?: number;
-  onChange?: () => void;
-  /**
-   * Where World keeps the servers it started across restarts. Without it
-   * the list lives only as long as World.
-   */
-  inventory?: IdeInventory;
-};
-
-/** The durable list of servers World started and hasn't seen end. */
-export type IdeInventory = {
-  read(): IdeServerRecord[];
-  write(records: IdeServerRecord[]): void;
-};
-
-export type IdeOpenRequest = {
-  provider: IdeProviderId;
-  binary: string;
-  connectionId: string;
-  generation: number;
-  folder: string;
-  /** It runs on this SSH host instead of World's computer. */
-  ssh?: { destination: string; hostLabel: string };
-};
-
-export type IdeStopResult = { ok: true } | { ok: false; reason: string };
-
 export class IdeLimitError extends Error {}
+/** The connection changed while an Open waited its turn. */
+export class IdeStaleError extends Error {}
 
 const DEFAULT_START_TIMEOUT_MS = 180_000;
 const DEFAULT_MAX_INSTANCES = 4;
@@ -194,6 +135,11 @@ export class IdeInstances {
   private readonly revoked = new Set<(instanceId: string) => void>();
   /** One operation at a time per server: open, reattach and stop queue. */
   private readonly queues = new Map<string, Promise<unknown>>();
+  /**
+   * Bumped on every attach, detach, start and new entry, World-wide: a host
+   * answer or list sent before is stale, even for a recreated entry.
+   */
+  private epochs = 0;
 
   constructor(private readonly options: IdeInstanceOptions) {
     this.run = options.run ?? systemHostRun();
@@ -245,7 +191,7 @@ export class IdeInstances {
         startedAt: record.started_at,
         upstream: null,
         forward: null,
-        epoch: 0,
+        epoch: ++this.epochs,
       });
     }
     this.persisted = JSON.stringify(this.records());
@@ -377,6 +323,18 @@ export class IdeInstances {
       request.folder,
     );
     return this.serial(key, async () => {
+      // Queued behind another operation: the connection may have changed.
+      if (
+        this.options.admits?.({
+          provider: request.provider,
+          connectionId: request.connectionId,
+          generation: request.generation,
+          ...(request.ssh ? { sshDestination: request.ssh.destination } : {}),
+        }) === false
+      )
+        throw new IdeStaleError(
+          "The connection changed while the IDE was starting. Choose the project again.",
+        );
       const id = this.idFor({
         ...request,
         sshDestination: request.ssh?.destination,
@@ -411,7 +369,7 @@ export class IdeInstances {
           startedAt: this.now().toISOString(),
           upstream: null,
           forward: null,
-          epoch: 0,
+          epoch: ++this.epochs,
           autoAttached: request.generation,
         };
         this.byId.set(id, instance);
@@ -420,6 +378,8 @@ export class IdeInstances {
         return view(instance);
       }
       if (request.ssh) instance.hostLabel = request.ssh.hostLabel;
+      // Retire an attachment under an older generation before re-stamping.
+      this.release(instance);
       instance.autoAttached = request.generation;
       const known = instance.state;
       instance.generation = request.generation;
@@ -451,7 +411,8 @@ export class IdeInstances {
       if (
         this.byId.get(id) !== instance ||
         instance.state !== "detached" ||
-        instance.stopping
+        instance.stopping ||
+        this.options.admits?.({ ...view(instance), generation }) === false
       )
         return;
       if (hostLabel) instance.hostLabel = hostLabel;
@@ -517,7 +478,8 @@ export class IdeInstances {
       this.fail(instance, (error as Error).message);
       return;
     }
-    const epoch = instance.epoch;
+    // A list sent before this start can't see it: it must not forget it.
+    const epoch = (instance.epoch = ++this.epochs);
     const result = await this.run(this.target(instance), script, {
       stdin: token ? `${token}\n` : undefined,
       timeoutMs: HOST_RUN_TIMEOUT_MS,
@@ -626,6 +588,15 @@ export class IdeInstances {
       );
       return "done";
     }
+    if (state === "stopping") {
+      // A Stop of it didn't finish on its host: it may still run.
+      this.setState(
+        instance,
+        "detached",
+        `A Stop of it didn't finish on ${instance.hostLabel}; Stop it again.`,
+      );
+      return "done";
+    }
     if (state === "foreign") {
       this.fail(
         instance,
@@ -648,7 +619,7 @@ export class IdeInstances {
     generation: number,
   ) {
     this.release(instance);
-    const epoch = ++instance.epoch;
+    const epoch = (instance.epoch = ++this.epochs);
     instance.generation = generation;
     const remoteSocket = `${hostRoot}/${instance.id}/ide.sock`;
     let socketPath = remoteSocket;
@@ -774,7 +745,7 @@ export class IdeInstances {
 
   /** Ends World's attachment: its streams and forward. The server runs on. */
   private release(instance: Instance) {
-    instance.epoch++;
+    instance.epoch = ++this.epochs;
     // Streams only exist through an upstream; say so once per attachment.
     if (instance.upstream)
       for (const listener of this.revoked) listener(instance.id);
@@ -910,20 +881,34 @@ export class IdeInstances {
     );
     if (result.code !== 0) return false;
     const records = parseHostList(result.stdout);
-    const seen = new Set(records.map((record) => record.id));
+    // A pending one may still be launching (or a Stop of it unfinished):
+    // neither failed nor gone yet.
+    const pending = parseHostPending(result.stdout);
+    const seen = new Set([...records.map((record) => record.id), ...pending]);
     let changed = false;
     for (const record of records) {
       const known = this.byId.get(record.id);
       if (known) {
-        if (
-          record.state === "exited" &&
-          known.state !== "failed" &&
+        const quiet =
           !known.stopping &&
           !this.busy(known.key) &&
-          before.get(known.id) === known.epoch
+          before.get(known.id) === known.epoch;
+        if (
+          quiet &&
+          record.state === "exited" &&
+          known.state !== "failed" &&
+          !pending.has(known.id)
         ) {
           this.fail(known, plainExitReason([], record.exitCode ?? null));
           changed = true;
+        } else if (
+          quiet &&
+          record.state !== "exited" &&
+          known.state === "failed"
+        ) {
+          // Marked failed, yet it runs (a start that answered late): Stop
+          // must still reach it.
+          this.setState(known, "detached");
         }
         continue;
       }
@@ -952,7 +937,7 @@ export class IdeInstances {
         startedAt: record.startedAt,
         upstream: null,
         forward: null,
-        epoch: 0,
+        epoch: ++this.epochs,
       });
       changed = true;
     }
