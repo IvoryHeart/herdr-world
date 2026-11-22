@@ -38,9 +38,16 @@ export async function composeShipyard(options: {
   return {
     service,
     http: createShipyardHttp(service),
-    /** Reports this instance once World is listening. */
-    start: (port: number, host: string, tls: boolean) =>
-      instances.start(identity, port, host, tls),
+    /** This instance's report id. */
+    id: instances.id,
+    /** Reports this instance once World is listening; `extra` adds fields. */
+    start: (
+      port: number,
+      host: string,
+      tls: boolean,
+      extra?: () => Record<string, unknown>,
+    ) => instances.start(identity, port, host, tls, extra),
+    republish: () => instances.republish(),
     stop() {
       service.close();
       instances.stop();

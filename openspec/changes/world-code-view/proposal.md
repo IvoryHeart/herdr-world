@@ -38,7 +38,7 @@ The owner's real-IDE direction supersedes the earlier native-editor proposal.
 
 ### Modified Capabilities
 
-- `world-surfaces`: add Code and `/code` to the shared navigation/frame while
+- `world-surfaces/shell-navigation`: add Code and `/code` to the shared navigation/frame while
   retaining the same entity context and all existing projections.
 
 ## Impact

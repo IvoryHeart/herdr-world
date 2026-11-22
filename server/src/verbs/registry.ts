@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { serverFeatures } from "../features/catalog";
 import { cliVerbs } from "./cli";
 import { effectVerbs } from "./effects";
 import { declare, object, policies, result, text } from "./declaration";
@@ -25,6 +26,7 @@ const sourceVerbs = (["merge", "close", "ready"] as const).map((action) =>
 /** Service-owned registry. Adapters never register or override actor policy. */
 export const VERBS: readonly Verb[] = Object.freeze([
   ...rpcVerbs,
+  ...serverFeatures.flatMap((feature) => feature.verbs),
   ...memoryVerbs,
   ...cliVerbs,
   ...sourceVerbs,

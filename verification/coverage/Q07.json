@@ -1,0 +1,40 @@
+{
+  "id": "Q07",
+  "area": "Terminal input/reconnect",
+  "owner": "web/src/terminalConnection.ts",
+  "requirement": "openspec/specs/runtime-federation/spec.md",
+  "properties": "Uncertain input/mutations are not replayed; response IDs and connection epochs remain isolated",
+  "existingTests": [
+    "web/src/api.test.ts",
+    "web/src/terminalRecovery.test.ts",
+    "web/src/reconnectRetry.test.ts",
+    "web/src/world/WorldTerminalHandoff.test.ts",
+    "web/src/mobileTerminal.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
+  "technique": "qualified-operation",
+  "assessment": "late replies, uncertain mutation outcomes and absence of automatic replay",
+  "status": "shared-model",
+  "remaining": "Creation is not a model of terminal bytes or resume clocks; uncertain input, compressed frames and browser lifecycle remain direct/browser tests.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/chunk-assembly.qnt", "quint/creation-flow.qnt"],
+    "contracts": [
+      "verification/consumer-evidence.md",
+      "verification/composition.md"
+    ],
+    "tests": [
+      "web/src/api.test.ts",
+      "web/src/terminalRecovery.test.ts",
+      "web/src/reconnectRetry.test.ts"
+    ],
+    "checks": ["bun run check", "bun run verification:check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "evidenceDecision": "Real Bridge replay covers transport retirement and late-socket replies; creation replay covers uncertain dispatched mutation without retry. API and terminal recovery tests supply input-specific consumers.",
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

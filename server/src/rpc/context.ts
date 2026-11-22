@@ -33,6 +33,10 @@ export type ObservedSnapshots = WorldSnapshotService<
 >;
 
 export type RpcServices = {
+  featureRpc?: ReadonlyMap<
+    string,
+    import("../features/contract").FeatureRpcHandler
+  >;
   persistentMarks?: import("../world/persistent-terminal-marks").PersistentTerminalMarks;
   clock: import("../service/ports").Clock;
   bindings?: import("../storage/world-bindings").WorldBindings;

@@ -64,8 +64,10 @@ const maxFileCount = 212;
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
 // The Code view (#1009) with main's Apartments, post office, help, Weather
 // and Usage analytics measures 16,353,350 bytes (15.596 MiB), within 15.6
-// MiB; startup budgets unchanged (2026-11-21).
-const maxTotalBytes = 15.6 * 1024 * 1024;
+// MiB; startup budgets unchanged (2026-11-21). Main grew under it (Town
+// host arrivals, Apartments help): together 16,365,061 bytes (15.607 MiB),
+// so 15.7 MiB; file, help-picture and startup limits stay (2026-11-22).
+const maxTotalBytes = 15.7 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two

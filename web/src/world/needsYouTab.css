@@ -233,6 +233,16 @@ button.needs-you-icon:hover:not(:disabled) {
 .needs-you-notice[role="alert"] {
   color: var(--danger-text);
 }
+/* A question another World instance holds: where it lives, linked. */
+.needs-you-home {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.needs-you-home a {
+  color: inherit;
+  text-decoration: underline;
+}
 /* Row 3, only for a real question: quick replies, the first primary. */
 .needs-you-replies {
   display: flex;

@@ -1,7 +1,7 @@
 # Code: the real IDE, in World's frame
 
 **Design study.** Code's first version shipped from it (#1009); the current
-behaviour, limits and refusals are in [FEATURES.md](../../../FEATURES.md#code-view).
+behaviour, limits and refusals are in [the Code view notes](../../../openspec/specs/world-code-view/notes.md#code-view).
 The study's standalone mock was retired when Code shipped. What follows is the
 proposal it tested. SSH hosts shipped: Code runs the host's own IDE over
 the connection's OpenSSH destination. Desktop handoff was dropped: nothing

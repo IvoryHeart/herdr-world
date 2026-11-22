@@ -60,7 +60,7 @@ names the other two that also lose the file.
 
 ## IDE integrations
 
-The [Code view](../FEATURES.md#code-view) adds a distinct IDE kind beside these
+The [Code view](../openspec/specs/world-code-view/notes.md#code-view) adds a distinct IDE kind beside these
 harness integrations: Visual Studio Code (`code serve-web`), code-server and
 OpenVSCode Server, installed on the host each project is on. Each is enabled
 once behind the trust and licence gate, detected read-only (on World's
@@ -85,7 +85,7 @@ missing transcripts do not prevent native core input. The Claude limits tap
 can be installed with either runtime. World's numeric usage/fuel collector reads
 Unix TUI and core hosts through the same bounded reader; core attribution uses
 explicit session/resume arguments or uniquely resolved Codex title evidence.
-See [analytics coverage](usage-analytics.md), the [runtime support table](../FEATURES.md#runtime-support)
+See [analytics coverage](usage-analytics.md), the [runtime support table](../openspec/specs/herdr-core-runtime/notes.md#runtime-support)
 and [harness inventory](core-harnesses.md).
 
 ## Herdr integration upgrades

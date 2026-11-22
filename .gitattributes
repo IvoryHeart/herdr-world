@@ -2,3 +2,4 @@
 # platform, so a Windows build ships the same bytes as Linux and macOS and the
 # web asset budget (scripts/check-web-assets.mjs) measures the same total.
 web/public/** text=auto eol=lf
+*.gen.ts merge=union

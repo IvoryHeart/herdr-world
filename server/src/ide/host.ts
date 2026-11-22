@@ -20,12 +20,9 @@ import {
  * host, provider and folder. It holds `record` (which World, provider,
  * folder, connection, since when, and this launch's random nonce), the
  * access token, the server's Unix socket, its log, the supervisor's PID
- * and, once the server exits on its own, its exit code. Creating that
- * folder and then its `claim` file with the shell's no-clobber redirect
- * (an exclusive create) is the claim: a second start for the same folder
- * finds it and reports `running`, and World reattaches instead of starting
- * another. `mkdir` alone is no claim: uutils coreutils (Ubuntu 26.04's
- * default) lets two racing `mkdir`s of one folder both succeed.
+ * and, once the server exits on its own, its exit code. `mkdir` of that
+ * folder is the claim: a second start for the same folder finds it and
+ * reports `running`, and World reattaches instead of starting another.
  *
  * Ownership: every process the launch starts inherits HERDR_WORLD_IDE=<nonce>
  * in its environment, including terminal shells in sessions of their own
@@ -119,8 +116,6 @@ function functions(stopGraceMs: number) {
     '  if [ -n "$s" ]; then kill -KILL $s 2>/dev/null; nap; s=$(owned "$s $(marked "$1")" "$2"); [ -n "$s" ] && kill -KILL $s 2>/dev/null; fi',
     "  return 0",
     "}",
-    // The folder in $1 is this script's alone, or it fails.
-    'claim() { mkdir "$1" 2>/dev/null && ( set -C; : > "$1/claim" ) 2>/dev/null; }',
     "nonce_of() { sed -n 's/^nonce=//p' \"$1/record\" 2>/dev/null; }",
     // starting: claimed, its launch not yet marked; running; exited: nothing left.
     "state_of() {",
@@ -245,22 +240,33 @@ export function hostStartScript(start: IdeHostStart) {
     prelude(start.root, stopGraceMs),
     `d="$root"/${start.id}`,
     `cd ${shQuote(start.folder)} || exit ${HOST_EXIT.folder}`,
-    'if ! claim "$d"; then',
+    'if ! mkdir "$d" 2>/dev/null; then',
     '  if [ "$(state_of "$d")" != exited ]; then echo result=running; exit 0; fi',
     // It exited (or the host restarted): clear it, then claim afresh.
     `  g="$root/.gone-${start.id}-$$"`,
     '  mv "$d" "$g" 2>/dev/null && rm -rf "$g"',
-    '  claim "$d" || { echo result=running; exit 0; }',
+    '  mkdir "$d" 2>/dev/null || { echo result=running; exit 0; }',
     "fi",
+    `n=${shQuote(start.nonce)}`,
+    // This launch's own files, then the record linked into place: `ln`
+    // fails once a record is there, so if another start took the folder
+    // over meanwhile exactly one of them launches and the other reports
+    // the server running, without either clobbering the other's token.
     ...(start.token
       ? [
           `IFS= read -r t || { rm -rf "$d"; exit ${HOST_EXIT.token}; }`,
-          `printf '%s' "$t" > "$d/token" || { rm -rf "$d"; exit ${HOST_EXIT.token}; }`,
+          `printf '%s' "$t" > "$d/token.$n" || { [ -d "$d" ] || { echo result=running; exit 0; }; rm -rf "$d"; exit ${HOST_EXIT.token}; }`,
           "t=",
         ]
       : []),
-    `{ ${record}; } > "$d/record.new" && mv "$d/record.new" "$d/record" || { rm -rf "$d"; exit ${HOST_EXIT.dir}; }`,
-    `n=${shQuote(start.nonce)}`,
+    `{ ${record}; } > "$d/record.$n" || { [ -d "$d" ] || { echo result=running; exit 0; }; rm -rf "$d"; exit ${HOST_EXIT.dir}; }`,
+    'if ! ln "$d/record.$n" "$d/record" 2>/dev/null; then rm -f "$d/record.$n" "$d/token.$n"; echo result=running; exit 0; fi',
+    'rm -f "$d/record.$n"',
+    ...(start.token
+      ? [
+          `mv "$d/token.$n" "$d/token" || { rm -rf "$d"; exit ${HOST_EXIT.token}; }`,
+        ]
+      : []),
     // A session of its own (`setsid` doesn't fork here: a background job
     // is never a group leader), else a process group, else as it is.
     "if command -v setsid >/dev/null 2>&1; then set -- setsid",

@@ -7,6 +7,7 @@ import hashlib
 import fcntl
 import secrets
 import errno
+import re
 
 
 class Refusal(Exception):
@@ -42,17 +43,17 @@ def directory(path, create=False):
         raise
 
 
-def relative(value):
+def relative(value, rule=False):
     if (not isinstance(value, str) or len(value) > 1024 or value.startswith('/')
             or '\\' in value or any(ord(c) < 32 for c in value)
             or any(p in ('', '.', '..') for p in value.split('/'))
-            or not value.lower().endswith('.md')):
+            or not (value.lower().endswith('.md') or (rule and value.lower().endswith('.mdc')))):
         refuse('invalid', 'Entry must be a relative Markdown filename without traversal')
     return value
 
 
 def target(source, path):
-    relative(path)
+    relative(path, source['kind'] == 'rules' and any(h in source['harnesses'] for h in ('cursor', 'omp')))
     if source['shape'] == 'file':
         if path != os.path.basename(source['path']):
             refuse('refused', 'Entry is outside this instruction source')
@@ -162,7 +163,50 @@ def environment(paths):
             'claude': claude, 'pi': configured('PI_CODING_AGENT_DIR', home + '/.pi/agent'),
             'claude_memory': custom,
             'claude_project_name': os.environ.get('CLAUDE_CODE_PROJECT_DIR_NAME'),
+            'config_home': configured('XDG_CONFIG_HOME', home + '/.config'),
+            'copilot': configured('COPILOT_HOME', home + '/.copilot'),
+            'hermes': configured('HERMES_HOME', home + '/.hermes'),
+            'kimi': configured('KIMI_CODE_HOME', home + '/.kimi-code'),
+            'qwen': configured('QWEN_HOME', home + '/.qwen'),
             'contexts': contexts}
+
+
+def rule_name(source, name):
+    harnesses = source['harnesses']
+    if source['kind'] == 'rules' and name.lower().endswith('.mdc'):
+        return any(h in harnesses for h in ('cursor', 'omp'))
+    if source['kind'] == 'rules' and harnesses == ['copilot']:
+        return name.lower().endswith('.instructions.md')
+    # Cursor's rules system ignores plain .md files; other adapters accept them.
+    return name.lower().endswith('.md') and harnesses != ['cursor']
+
+
+def rule_loads(source, path, info):
+    # Read only bounded rule metadata; never interpret YAML tags, imports or globs.
+    harnesses = [h for h in source['harnesses'] if h in ('cursor', 'omp', 'qwen', 'antigravity-cli')]
+    if source['kind'] != 'rules' or not harnesses or info.st_size > LIMITS['file_bytes']:
+        return {}
+    try:
+        full = target(source, path)
+        fd = directory(os.path.dirname(full))
+        try:
+            text = read_at(fd, os.path.basename(full), LIMITS['file_bytes'])[0]
+        finally:
+            os.close(fd)
+    except (OSError, Refusal):
+        return {}
+    header = re.match(r'\A---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)', text)
+    front = header.group(1) if header else ''
+    always = bool(re.search(r"(?m)^alwaysApply:\s*['\"]?true['\"]?\s*(?:\#.*)?$", front))
+    modes = {}
+    for harness in harnesses:
+        startup = always
+        if harness == 'qwen':
+            startup = not re.search(r'(?m)^paths\s*:', front)
+        elif harness == 'antigravity-cli':
+            startup = bool(re.search(r"(?m)^trigger:\s*['\"]?always_on['\"]?\s*(?:\#.*)?$", front))
+        modes[harness] = {'mode': 'startup-candidate' if startup else 'on-demand'}
+    return modes
 
 
 def entry(source, path, info):
@@ -171,10 +215,11 @@ def entry(source, path, info):
     full = target(source, path)
     return {'id': hashlib.sha256(full.encode()).hexdigest()[:24],
             'source_id': source['id'], 'path': path, 'size': info.st_size,
+            'harness_loads': rule_loads(source, path, info) if normal and size_ok else {},
             'modified_at': info.st_mtime_ns // 1000000,
             'state': 'available' if normal and size_ok else 'refused',
             **({} if normal and size_ok else {'reason': 'unsupported_file' if not normal else 'too_large'}),
-            'load': 'on-demand' if source['kind'] == 'memory' and path != 'MEMORY.md' else source['load']}
+            'load': 'on-demand' if source['shape'] == 'directory' and source['kind'] == 'memory' and path != 'MEMORY.md' else source['load']}
 
 
 def listing(sources):
@@ -193,6 +238,8 @@ def listing(sources):
                 path = prefix + item.name
                 info = item.stat(follow_symlinks=False)
                 if stat.S_ISDIR(info.st_mode):
+                    if source['harnesses'] == ['antigravity-cli']:
+                        continue  # Maker's default rules scan is flat; configured extras are not expanded.
                     if depth >= LIMITS['depth']:
                         truncated = True
                         continue
@@ -201,7 +248,7 @@ def listing(sources):
                         walk(source, child, path + '/', depth + 1)
                     finally:
                         os.close(child)
-                elif path.lower().endswith('.md'):
+                elif rule_name(source, path):
                     entries.append(entry(source, path, info))
     for source in sources:
         state = {'id': source['id'], 'state': 'available'}
@@ -289,6 +336,8 @@ def operate(request):
         if action == 'delete' and request.get('confirmed') is not True:
             refuse('refused', 'Deletion requires confirmation')
     source, path = request['source'], request['path']
+    if action in ('create', 'update', 'delete'):
+        relative(path)  # MDC rules remain browse-only.
     full = target(source, path)
     parent = directory(os.path.dirname(full), action == 'create')
     name = os.path.basename(full)

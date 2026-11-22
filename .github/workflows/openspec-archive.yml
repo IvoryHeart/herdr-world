@@ -1,0 +1,78 @@
+name: Archive merged OpenSpec changes
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: openspec-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.4"
+          no-cache: true
+      - run: bun install --frozen-lockfile
+      - name: Archive in merge date order and publish one review PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branch=bot/openspec-archive
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+            git checkout -b "$branch" "origin/$branch"
+            git merge --no-edit origin/main
+          else
+            git checkout -b "$branch"
+          fi
+          archive_status=0
+          bun scripts/archive-changes.ts > "$RUNNER_TEMP/openspec-archive.json" || archive_status=$?
+          cat "$RUNNER_TEMP/openspec-archive.json" >> "$GITHUB_STEP_SUMMARY"
+          git add -A openspec/
+          if git diff --cached --quiet; then exit "$archive_status"; fi
+          bun run spec:check
+          git commit -m "docs: archive merged OpenSpec changes"
+          bun run check:privacy
+          body="$RUNNER_TEMP/openspec-archive-pr.md"
+          cat > "$body" <<'BODY'
+          Synchronize completed merged deltas into current capability contracts and archive them in merge date order. The batch stops before the first conflicting change; incomplete tasks stay active. Earlier successful archives remain in this PR.
+
+          Try: Read the changed capability specs and compare each archived delta with its resulting requirement. Review the batch receipt below for a stopped change.
+
+          Changelog: none — synchronize already delivered contracts.
+          Spec impact: openspec/changes/archive — apply and archive merged deltas.
+          Verification impact: none — documentation synchronization changes no runtime authority, ordering or recovery behavior.
+          BODY
+          cat "$RUNNER_TEMP/openspec-archive.json" >> "$body"
+          bun run check:pr-body "$body"
+          gh auth setup-git
+          git push origin "HEAD:refs/heads/$branch"
+          pr="$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --body-file "$body"
+          else
+            gh pr create --head "$branch" --base main --title "docs: archive merged OpenSpec changes" --body-file "$body"
+          fi
+          # GITHUB_TOKEN events do not trigger checks; dispatch exact-branch gates.
+          gh workflow run ci.yml --ref "$branch"
+          gh workflow run privacy.yml --ref "$branch"
+          exit "$archive_status"

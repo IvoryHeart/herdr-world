@@ -206,26 +206,10 @@ test.if(hasSetsid())(
   20_000,
 );
 
-/**
- * A `mkdir` that succeeds on a folder that already exists, as uutils
- * coreutils (Ubuntu 26.04's default) does when two create it at once. The
- * scripts' PATH puts the host's ~/bin first, so they run this one.
- */
-function lenientMkdir(home: string) {
-  const bin = join(home, "bin");
-  mkdirSync(bin, { recursive: true });
-  writeFileSync(
-    join(bin, "mkdir"),
-    '#!/bin/sh\nfor last; do :; done\n/bin/mkdir "$@" 2>/dev/null || [ -d "$last" ]\n',
-  );
-  chmodSync(join(bin, "mkdir"), 0o755);
-}
-
-test.if(hasSetsid()).each([["an exclusive"], ["a lenient"]])(
-  "two starts for the same folder at once launch one server, with %s mkdir",
-  async (kind) => {
+test.if(hasSetsid())(
+  "two starts for the same folder at once launch one server",
+  async () => {
     const h = setup();
-    if (kind === "a lenient") lenientMkdir(h.home);
     const results = await Promise.all([
       h.run(h.start(), "token-one\n"),
       h.run(h.start(), "token-two\n"),
@@ -245,6 +229,32 @@ test.if(hasSetsid()).each([["an exclusive"], ["a lenient"]])(
   },
   20_000,
 );
+
+test("a start whose folder another start claimed meanwhile launches nothing and keeps the other's token", async () => {
+  const h = setup();
+  const script = h.start();
+  const link = script.indexOf('if ! ln "$d/record.$n"');
+  expect(link).toBeGreaterThan(0);
+  // The other start links its record and moves its token in first.
+  const other = [
+    'printf "world=%s\\n" other > "$d/record"',
+    'printf other-token > "$d/token"',
+    "",
+  ].join("\n");
+  const raced = await h.run(
+    `${script.slice(0, link)}${other}${script.slice(link)}`,
+    "token-one\n",
+  );
+  expect(parseHostLines(raced.stdout).values.get("result")).toBe("running");
+  await Bun.sleep(200);
+  expect(existsSync(join(h.top, "launcher.pid"))).toBe(false);
+  const folder = join(h.root, ID);
+  expect(readFileSync(join(folder, "token"), "utf8")).toBe("other-token");
+  expect(readFileSync(join(folder, "record"), "utf8")).toBe("world=other\n");
+  expect(
+    Bun.spawnSync(["ls", "-A", folder]).stdout.toString().trim().split("\n"),
+  ).toEqual(["record", "token"]);
+});
 
 test.if(hasSetsid())(
   "a server that exits on its own says why, ends what it left behind, and the next start starts afresh",

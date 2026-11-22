@@ -1,0 +1,27 @@
+{
+  "id": "Q55",
+  "area": "Claude limits stale-lock ownership",
+  "owner": "server/src/usage/claude-tap.ts",
+  "requirement": "openspec/specs/world-usage/spec.md",
+  "properties": "Comparable window maxima must not decrease after stale-lock recovery; a retired holder must not publish",
+  "existingTests": [
+    "quint/claude-tap-lock.test.ts",
+    "server/src/usage/claude-tap.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/853",
+  "status": "pending",
+  "technique": "finite-model-with-production-replay",
+  "assessment": "Positive TLC invariant and real filesystem replay cover eight live/dead acquisition, preparation, final-rename and release schedules; age-stealing remains a rejected model and production fault control.",
+  "remaining": "Independent acceptance of the repaired protocol and Q55 mapping; host-local PID identity and platform filesystem semantics remain direct consumer assumptions.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/claude-tap-lock.qnt"],
+    "contracts": ["verification/contracts/claude-tap-lock.md"],
+    "tests": [
+      "quint/claude-tap-lock.test.ts",
+      "server/src/usage/claude-tap.test.ts"
+    ],
+    "checks": ["bun run verification:gate"],
+    "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+  }
+}

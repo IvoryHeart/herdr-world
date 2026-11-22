@@ -4,38 +4,44 @@ Give World-owned records stable identity that survives World and Herdr restarts.
 records to source entities only by evidence that each record kind declares, keep
 runtime fences apart from identity, and let several sources make claims about one field.
 
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: World IDs
 
-Every World-owned record SHALL have a World ID that is unique within its instance's
-data folder. A record imported from an earlier World store SHALL keep its existing ID
-as its World ID. Every new World ID SHALL be:
-- short;
-- issued by the instance's store;
-- checked against existing IDs before use.
+Every World-owned record SHALL have a store-issued World ID unique within its
+instance's data folder, and SHALL retain its ID across World, Herdr and connection
+restarts. Records imported from any earlier World store SHALL keep their existing IDs.
 
-A new World ID SHALL NOT come from a counter or clock that restoring a backup could roll
-back, so a restored data folder does not reissue IDs. A new World ID SHALL NOT be
-derived from a source's native ID, a label, a path or a runtime generation. No World ID
-SHALL change when World, Herdr or a connection restarts.
+WorldStorage SHALL provide a shared asynchronous ID allocator for new World-owned
+records in `world.sqlite`. Each new ID SHALL contain a lowercase kind prefix and
+eight random base32 symbols. The store SHALL check existing reservations and
+reserve the ID durably before returning it. IDs SHALL NOT derive from counters,
+clocks, source native IDs, labels, paths or runtime fences.
 
-#### Scenario: Herdr reuses a workspace ID
-- **WHEN** Herdr restarts and a new workspace reuses the ID of one a World note
-  described
-- **THEN** the note keeps its own World ID and is not merged with any record for the
-  new workspace
+Existing SQLite IDs and record IDs imported from the ledger JSON store SHALL
+remain unchanged and SHALL be reserved against new allocation. Allocation SHALL
+check all registered families, regardless of a legacy ID's prefix. Reservations
+SHALL survive record deletion, history retention and restart. A restored stopped
+backup SHALL resume with fresh entropy and its saved registry, rather than a
+rolled-back sequence. Closing storage SHALL refuse new allocation and drain
+admitted allocations before releasing the worker.
 
-#### Scenario: Import from the JSON store
-- **WHEN** World moves records from a JSON store into its database
-- **THEN** each record keeps its existing ID and new records receive IDs that collide
-  with none of them
+#### Scenario: Imported IDs collide with new candidates
+- **WHEN** a random candidate equals an existing imported ID, including one in a
+  different record family
+- **THEN** the store retries without changing the imported record's ID
 
-#### Scenario: Restored backup
-- **WHEN** the user restores a stopped World's data folder from an earlier copy and
-  World then creates new records
-- **THEN** the new records do not receive IDs that the restored copy's later records
-  had been given
+#### Scenario: An old record is trimmed
+- **WHEN** retention removes a SQLite record and its replay history
+- **THEN** its ID remains reserved and cannot be allocated to another record
+
+#### Scenario: Restore a stopped backup
+- **WHEN** World opens an earlier stopped copy of its database
+- **THEN** new IDs use fresh randomness and exclude that copy's reserved IDs
+
+#### Scenario: Acknowledgement is lost
+- **WHEN** ID reservation commits but the caller never receives the reply
+- **THEN** reopening the store retains that reservation and never reissues it
 
 ### Requirement: Verified source bindings
 
@@ -211,13 +217,32 @@ Several claims SHALL coexist for one field.
 
 Each kind of World record SHALL declare what happens when its binding ends: archive,
 clear, keep unresolved, or move to "Needs a home". Durable identity alone SHALL NOT
-extend a record's lifetime. Records whose current contract clears them on restart or
-runtime replacement SHALL keep that contract until it is changed by its own approved
-requirement. This includes the watchlist, Desk marks and completion "seen".
+extend a record's lifetime. Desk marks/recent opens and the watchlist have these lifetimes:
+
+- Watchlist follows its witnessed terminal on its original source, including a
+  uniquely observed terminal move. Complete current absence clears it.
+- Desk metadata requires its captured known session. Complete current terminal
+  absence or a replacement ends the capture as bounded unassociated history.
+  Missing known-session evidence never silently retargets a saved mark.
+- Unknown-session Desk captures require process-local live ownership; terminal
+  reuse cannot carry review through World/runtime restart or null-to-known
+  ownership. A later returning known fingerprint cannot inherit an intervening
+  owner's review. No durable runtime/incarnation identity is invented.
+- Offline, partial, stale and duplicate observations attach nothing. Known
+  restart captures remain unresolved/protected until fresh complete source
+  classification or confirmed unavailability. Fresh native progress names a new
+  Desk stop; older progress cannot erase a newer mark. Exact Undo and bounded
+  recency/display expiry retain their existing behavior.
+- Retired completion receipts remain in a private draining archive under the
+  storage contract. Only fresh same-source/terminal/known-session/unchanged native
+  sequence evidence can convert one into Desk. Unknown receipts never resolve;
+  neither a name nor terminal-only evidence establishes continuity.
 
 #### Scenario: Watchlist after a restart
-- **WHEN** World restarts after this change while its watchlist contract is unchanged
-- **THEN** the watchlist is empty, as before, even though durable bindings exist
+- **WHEN** World restarts and then verifies the original terminal in a complete,
+  current, unambiguous observation of its original source
+- **THEN** its saved watch reappears with the same World ID and a fresh runtime
+  projection; before verification it remains unresolved
 
 #### Scenario: A bound tab closes
 - **WHEN** a tab bound to a Board string is closed on the current runtime

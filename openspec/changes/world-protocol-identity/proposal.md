@@ -98,7 +98,7 @@ evidence, and syncs its own deltas into the current specs.
 - `runtime-federation`: service incarnation, observation v1, incremental preparation,
   the Herdr observation baseline and World subscriptions v2.
 - `bridge-access`: registered verbs with actor policy and staged command evidence.
-- `world-surfaces`: per-terminal settings live with the terminal in Herdr.
+- `world-surfaces/appearance`: per-terminal settings live with the terminal in Herdr.
 
 ## Impact
 
@@ -109,7 +109,7 @@ Later implementation PRs touch:
 - **Command surfaces:** RPC dispatch, `server/src/sources/` and the agent CLI;
 - **Settings:** `server/src/agent/profile-store.ts` and the Herdr metadata writers;
 - **New modules:** identity, effects and adapters;
-- **Evidence:** the Quint models, `verification/coverage.json` and its contracts.
+- **Evidence:** the Quint models, `verification/coverage/` and its contracts.
 
 No new dependency is required:
 - TypeBox is already a server dependency, and verbs are validated on the service.

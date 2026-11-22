@@ -11,7 +11,7 @@ Everything else stays open.
 - [ ] 1.2 (#1009: base path, authenticated HTTP and WebSocket, cookie scoping and the workbench assets proved against installed VS Code 1.146 through the proxy; stock VS Code and OpenVSCode webviews load from vscode-cdn.net, which the IDE routes' frame rule admits as the one cross-origin exception (#1053; World's own pages keep one origin, product files are never rewritten, and webviews need a secure page because VS Code hashes their origin with crypto.subtle) while code-server self-hosts webviews; installed VS Code 1.147 takes the connection token in its WebSocket handshake, which World fills in, and signs that handshake with crypto.subtle, so on a plain-HTTP (non-secure) page it is blocked with the reason and HTTPS/localhost as the remedy; sign-in and workers/PWA scopes remain unverified.) Run a bounded installed `code serve-web` compatibility spike: prove base path, authenticated HTTP/WS, cookies, redirects, sign-in, workers/PWA scopes, webview origins and secure-context behavior without relaxing global CSP; record blockers and explicit handoff if any gate fails.
 - [ ] 1.3 Test exact Copilot, Pylance, Remote and C# Dev Kit versions/entitlements in the supported web/remote extension hosts, plus settings/profiles/Sync and updates; publish a compatibility matrix rather than infer desktop parity.
 - [ ] 1.4 Measure per-host server/cache/browser and per-project extension-host cold/warm, idle/active resource use on supported local/SSH platforms; derive tested server/window/idle limits.
-- [ ] 1.5 Derive qualification, authentication, ownership and revocation invariants; map verification/coverage.json and mandatory consumers, selecting maintained models or justified platform/browser alternatives before code changes.
+- [ ] 1.5 Derive qualification, authentication, ownership and revocation invariants; map verification/coverage/ and mandatory consumers, selecting maintained models or justified platform/browser alternatives before code changes.
 
 ## 2. Extend integrations and qualified lifecycle
 
@@ -32,3 +32,5 @@ Everything else stays open.
 - [ ] 4.1 Run complete required consumer/model/browser/platform/security gates for changed production owners, retain independent review, and record measured resources and remaining exclusions before enabling the integration.
 - [ ] 4.2 Update FEATURES, knowledge map, integration guide and affected architecture/deployment/tutorial docs for accepted delivered behavior; synchronize/archive only after authorized implementation and acceptance.
 - [x] 4.3 When Code ships or the proposal is rejected, delete the three public mock assets and obsolete fixture tests/references, lower the asset-count allowance, and verify the build/asset gate. (#1009: 189 to 188; Code's own lazy chunk adds two files.)
+
+Capability path after the feature-map split: `world-surfaces/shell-navigation`. Existing delivery and pending tasks are unchanged.

@@ -21,7 +21,7 @@ function environment(
     realpath: (path) => links[path] ?? path,
     isExecutableFile: (path) => files[path] === true,
     version: async () => "1.99.0",
-    homeDir: "/home/user",
+    homeDir: "/home/example",
     ...overrides,
   };
 }
