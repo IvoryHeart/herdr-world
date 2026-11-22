@@ -15,6 +15,8 @@
     "server/src/verbs/cli-entry.test.ts",
     "server/src/verbs/evidence.test.ts",
     "server/src/features/compose.test.ts",
+    "server/src/features/memory/register.test.ts",
+    "server/src/memory/routing.test.ts",
     "server/src/service/rpc-dispatch.test.ts",
     "server/src/service/world-service.test.ts",
     "server/src/world/world-cli.test.ts",
@@ -32,7 +34,8 @@
   "requiredChecks": [
     "bun run check",
     "bun run test server/src/verbs/",
-    "bun run check:changed"
+    "bun run check:changed",
+    "bun run verification:gate"
   ],
   "partialEvidence": {
     "models": [],
@@ -48,13 +51,27 @@
       "server/src/verbs/cli-entry.test.ts",
       "server/src/verbs/evidence.test.ts",
       "server/src/features/compose.test.ts",
+      "server/src/features/memory/register.test.ts",
+      "server/src/memory/routing.test.ts",
       "server/src/service/rpc-dispatch.test.ts",
       "server/src/service/world-service.test.ts"
     ],
     "checks": ["bun run test server/src/verbs/"],
     "review": "Merged protocol design is not implementation acceptance. Independent PR review and selected CI remain required."
   },
-  "evidenceDecision": "P4 is finite and directly exhaustive; native runtime and storage ordering retain their existing model/consumer obligations. Mutation controls establish sensitivity of every new test, not full domain-validation or observation-delivery proof. Feature composition exhausts all three-node input orders and directly checks invalid graphs, exact handler/declaration parity and awaited reverse-phase teardown. Production dispatch refuses an unregistered feature handler before routing and retains presence replies and socket authority; the hand-recorded inventory and actor baseline remains unchanged. These synchronous graph rules add no independent runtime or storage writer, so direct finite checks suffice without a new Quint model.",
+  "evidenceDecision": "P4 is finite and directly exhaustive; native runtime and storage ordering retain their existing model/consumer obligations. Mutation controls establish sensitivity of every new test, not full domain-validation or observation-delivery proof. Feature composition exhausts all three-node input orders and directly checks invalid graphs, exact handler/declaration parity and awaited reverse-phase teardown. Production dispatch refuses an unregistered feature handler before routing and retains presence replies and socket authority; the hand-recorded inventory and actor baseline remains unchanged. Memory registration checks all six RPC handlers against the same typed CLI service, independent service instances, unchanged error replies and disconnected-caller fences; the existing routing consumers cover exact TUI/core ownership and acknowledgements. These synchronous graph rules and wiring moves add no independent runtime or storage writer, so direct finite checks suffice without a new Quint model.",
+  "supplementalContracts": [
+    {
+      "requirement": "openspec/specs/bridge-access/spec.md",
+      "contract": "verification/contracts/verb-policy.md",
+      "owners": ["server/src/features/", "server/src/testing/features.ts"],
+      "tests": [
+        "server/src/features/compose.test.ts",
+        "server/src/features/memory/register.test.ts",
+        "server/src/memory/routing.test.ts"
+      ]
+    }
+  ],
   "promotion": {
     "decision": "pending",
     "scope": "Migrated browser RPC, agent CLI and browser forge policy only; independent review and CI required."

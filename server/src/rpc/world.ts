@@ -15,7 +15,6 @@ import { handleCoreRpc } from "./core";
 import { handleFloatRpc } from "./float";
 import { handleWorldIntegrationRpc } from "./integration";
 import { handleCoreSharedRpc } from "./core-shared";
-import { handleMemoryRpc } from "./memory";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
@@ -81,7 +80,6 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     }
     return;
   }
-  if (method.startsWith("world.memory.")) return handleMemoryRpc(rpc);
   if (method === "world.usage.get") {
     try {
       const usage = rpc.services.worldUsage;
