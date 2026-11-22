@@ -89,6 +89,15 @@
       "town.daylight.phone.dark.webp"
     ]
   },
+  "town.focus": {
+    "fingerprint": "f941825b9f70c462",
+    "files": [
+      "town.focus.desktop.light.webp",
+      "town.focus.desktop.dark.webp",
+      "town.focus.phone.light.webp",
+      "town.focus.phone.dark.webp"
+    ]
+  },
   "town.master": {
     "fingerprint": "be480f45e405a9bc",
     "files": [
