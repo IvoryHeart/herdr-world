@@ -6,6 +6,7 @@
 
 - [Real-runtime release walk and pre-tag gate](../../../docs/release.md#real-runtime-release-walk) covers packaged runtime/agent launch journeys and receipts.
 - Installers, updates, releases, contributor delivery and the public documentation site.
+- Server feature wiring and presence composition: [contributor guide](../../../docs/development.md#verification).
 
 **Code:**
 
@@ -22,6 +23,9 @@
 - `web/vite.config.ts`
 - `web/public/`
 - `server/src/features/`
+- `server/src/features/contract.ts`
+- `server/src/features/compose.ts`
+- `server/src/features/presence/register.ts`
 - `server/src/testing/`
 - `web/src/features/`
 - `web/src/testing/`
@@ -36,6 +40,11 @@
 - `.github/workflows/`
 - `.githooks/`
 - `site/`
+
+**Tests:**
+
+- `server/src/features/compose.test.ts`
+- `server/src/service/rpc-dispatch.test.ts`
 
 **Pitfalls:**
 
