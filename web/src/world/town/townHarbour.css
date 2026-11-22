@@ -133,13 +133,37 @@
   }
 }
 
-/* The lighthouse lamp: main's checks as light. */
+/* A lane's pier, under its ships (townHarbourArt.ts). */
+.town-world .town-harbour-pier {
+  position: absolute;
+  z-index: 0;
+  height: 50px;
+  background: transparent no-repeat 0 0 / 100% 100%;
+  image-rendering: pixelated;
+}
+
+/* The lighthouse on the pier head, past the last berth: above every ship,
+   hull, board and tag in the harbour, so main's light always shows (#1148). */
+.town-world .town-harbour-lighthouse {
+  position: absolute;
+  z-index: 4;
+  width: 20px;
+  height: 28px;
+  background: transparent no-repeat 0 0 / 20px 28px;
+  image-rendering: pixelated;
+}
+
+/* The lighthouse lamp: main's checks as light. Zoomed out, it keeps its
+   size on screen with no cap, so red or green still reads at the widest
+   view of any town, however many hosts and rooms shrink that zoom. */
 .town-world .town-harbour-lamp {
   position: absolute;
   width: 12px;
   height: 5px;
   background: var(--harbour-tone, #2b2f3a);
   box-shadow: 0 0 8px 3px var(--harbour-tone, transparent);
+  transform: scale(max(1, var(--iz, 1)));
+  transform-origin: 50% 50%;
 }
 [data-tone="pass"]:is(
   .town-harbour-lamp,
