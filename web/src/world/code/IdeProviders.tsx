@@ -193,13 +193,6 @@ function IdeProviderRow({
           World looks for it when you open one.
         </p>
       ) : null}
-      {!provider.webviewsInWorld ? (
-        <p className="ide-provider-reason">
-          Its webviews, such as Markdown preview and some extension panels, load
-          from another site, so they stay blank inside World. Editing,
-          terminals, Git and debugging work.
-        </p>
-      ) : null}
       {provider.needsSecurePage ? (
         <p className="ide-provider-reason">
           It opens only when World is on HTTPS, or at localhost on the computer

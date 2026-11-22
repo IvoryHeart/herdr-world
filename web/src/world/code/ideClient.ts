@@ -40,12 +40,6 @@ export type IdeProviderStatus = {
   setupUrl: string;
   detection: IdeDetection;
   /**
-   * False for IDEs whose webviews (Markdown preview, some extension
-   * panels) load from another origin, such as stock VS Code's
-   * vscode-cdn.net: the workbench works in World, those panels stay blank.
-   */
-  webviewsInWorld: boolean;
-  /**
    * True for Microsoft's VS Code: its workbench connects only from HTTPS or
    * localhost (it signs with crypto.subtle), never a plain-HTTP address.
    */
@@ -194,7 +188,6 @@ function parseProvider(value: unknown): IdeProviderStatus | null {
         ? value.setupUrl
         : "",
     detection: parseDetection(value.detection),
-    webviewsInWorld: value.webviewsInWorld === true,
     needsSecurePage: value.needsSecurePage === true,
     enabled: value.enabled === true,
     trustedAt: text(value.trustedAt) ? value.trustedAt : null,
@@ -381,7 +374,6 @@ const FIXTURE_PROVIDERS = (
             reason: "VS Code isn't installed on this computer.",
             configured: false,
           },
-    webviewsInWorld: false,
     needsSecurePage: true,
     enabled: false,
     trustedAt: null,
@@ -407,7 +399,6 @@ const FIXTURE_PROVIDERS = (
             reason: "code-server isn't installed on this computer.",
             configured: false,
           },
-    webviewsInWorld: true,
     needsSecurePage: false,
     enabled,
     trustedAt: enabled ? new Date(0).toISOString() : null,
@@ -425,7 +416,6 @@ const FIXTURE_PROVIDERS = (
       reason: "OpenVSCode Server isn't installed on this computer.",
       configured: false,
     },
-    webviewsInWorld: false,
     needsSecurePage: false,
     enabled: false,
     trustedAt: null,

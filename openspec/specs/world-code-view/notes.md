@@ -24,6 +24,7 @@ Navigation guidance only; OpenSpec ignores this file.
 
 - `web/src/world/code/CodeView.browser.test.ts`
 - `server/src/ide/ide-route.test.ts`
+- `server/src/ide/webview-origin.browser.test.ts`
 - `server/src/ide/remote.test.ts`
 - `server/src/ide/instances.test.ts`
 - `server/src/ide/workbench-theme.test.ts`
@@ -33,7 +34,8 @@ Navigation guidance only; OpenSpec ignores this file.
 
 - The browser never holds the IDE token; the proxy adds it to requests and the first WebSocket message.
 - Only Stop ends an IDE server; disable, removal, reconnect and World exit only let go.
-- Never open a TCP port or a second origin; SSH uses OpenSSH socket forwards.
+- Never open a TCP port or a second origin; SSH uses OpenSSH socket forwards. Sole
+  exception: IDE pages' frame rule admits VS Code's webview origin (`https://*.vscode-cdn.net`).
 - Never rewrite the IDE's files; the workbench page only gains a theme default.
 
 **See also:** [research and gates](../../../docs/design/code-view/research.md),
@@ -59,11 +61,21 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   …** (its download page) and **Use a program path…** (an absolute path to an
   executable on World's computer). The same rows are in Settings →
   Integrations, where the refresh button looks again.
-- **Webviews.** Stock VS Code and OpenVSCode Server load webviews (Markdown
-  preview and some extension panels) from another site, vscode-cdn.net. World
-  keeps one origin and never rewrites the IDE's files, so those panels stay
-  blank inside World; the row says so. Editing, terminals, Git, search and
-  debugging work. code-server serves its webviews itself, so they work.
+- **Webviews.** Markdown preview and extension panels (GitLens, Copilot
+  Chat and the like) work in all three IDEs. Stock VS Code and OpenVSCode
+  Server load them, and their web worker extension host, from VS Code's own
+  webview site, `https://<hash>.vscode-cdn.net`, as they do anywhere else;
+  World changes none of the IDE's files. This is the one exception to World's
+  one-address rule: only the frame rule World adds to IDE pages (`/ide/<id>/`)
+  admits `https://*.vscode-cdn.net`, and World's own pages still frame only
+  World. It is safe because that content stays on another site: it can't
+  reach World's window, storage, cookies or API, and its service worker
+  covers only its own site. The IDE still can't widen a service worker over
+  World's pages or set cookies outside its route. Webviews need internet
+  access to vscode-cdn.net and a secure address (HTTPS or localhost): VS Code
+  makes each webview's site name with browser cryptography, so on plain HTTP
+  OpenVSCode Server's webviews stay blank. code-server serves its webviews
+  itself.
 - **Secure address.** Microsoft's VS Code connects only from a page on HTTPS
   or at localhost: it signs its connection with browser cryptography that a
   plain-HTTP LAN or Tailscale address doesn't have, and its server refuses
@@ -113,7 +125,8 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   of its WebSockets, where VS Code's handshake expects it. Either way the workbench is
   framed from `/ide/<id>/` on World's own origin, behind World's sign-in;
   World's own Content Security Policy is unchanged and the IDE keeps its own,
-  with World's frame rule added (frames only from World's own address).
+  with World's frame rule added (frames only from World's own address and
+  VS Code's webview site).
   code-server's port proxies (`/proxy/<port>`, `/absproxy/<port>`) are off and
   World refuses them (403) for pages and WebSockets. **New tab** opens the same
   address. Switching projects keeps a loaded workbench in memory, hidden. The

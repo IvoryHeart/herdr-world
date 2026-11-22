@@ -68,13 +68,6 @@ describe("parseIdeStatus", () => {
       version: null,
     });
     expect(status.instances).toHaveLength(1);
-    // Webviews in World are opt-in per provider: unknown means blank panels.
-    expect(status.providers[0]!.webviewsInWorld).toBe(false);
-    expect(
-      parseIdeStatus({
-        providers: [{ id: "code-server", webviewsInWorld: true }],
-      }).providers[0]!.webviewsInWorld,
-    ).toBe(true);
     expect(status.providers[0]!.needsSecurePage).toBe(false);
     expect(
       parseIdeStatus({ providers: [{ id: "vscode", needsSecurePage: true }] })
@@ -160,10 +153,7 @@ describe("fixtureIdeClient", () => {
     const embeddable = (await client.status()).providers.find(
       (entry) => entry.id === "code-server",
     );
-    expect(embeddable).toMatchObject({
-      webviewsInWorld: true,
-      enabled: false,
-    });
+    expect(embeddable).toMatchObject({ enabled: false });
     await client.enable("code-server");
     const result = await client.open({
       connectionId: "c1",
