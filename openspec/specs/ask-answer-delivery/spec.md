@@ -116,8 +116,13 @@ authority: its ledger accepts at most one answer or dismissal, and answer
 delivery SHALL use only the home's own qualified connection and generation.
 A herdr-core or Herdr runtime SHALL NOT hold the ask record.
 
-Other World instances on the same machine that share the home's local instance
-registry and at least one runtime (the same connection target) SHALL show the
+World instances running as the same user on the same machine SHALL share a
+private per-user instance registry by default, independently of their data
+folders. `HERDR_WORLD_INSTANCE_REGISTRY_DIR` SHALL override that location;
+question storage SHALL remain in each World's own data folder. Registry
+directories and reports SHALL be user-only (0700 and 0600 on Unix).
+Other World instances that share the home's registry and at least one runtime
+(the same connection target) SHALL show the
 home's open asks for that runtime in Needs you, with the home's name. An ask's
 runtimes SHALL be captured when it is recorded (the asker's connection target,
 and the default Herdr target that alerts for a herdr-core or unplaced asker)
@@ -149,6 +154,12 @@ memory and closed by hiding them or once the home shares the ask.
 - **WHEN** the owner answers in A and B at the same moment
 - **THEN** exactly one answer is recorded and the other is refused as closed
 
+#### Scenario: Different data folders discover by default
+
+- **WHEN** Worlds A and B run as the same user on this machine with different data folders, no registry override and the same runtime target
+- **THEN** a question recorded in A appears in Needs you in both Worlds
+- **AND** answering in either World closes it in both, with A retaining the only record
+
 #### Scenario: Connection edited after the ask
 
 - **WHEN** an agent asks through saved connection S on runtime A and S is then edited to target runtime B
@@ -156,6 +167,8 @@ memory and closed by hiding them or once the home shares the ask.
 
 #### Scenario: Home down, older or not shared
 
+- **WHEN** an older World (including 0.3.5) publishes no registry report
+- **THEN** it contributes no peer questions and its absence causes no discovery error
 - **WHEN** the home stops, its report leaves the registry
 - **THEN** other Worlds stop listing its asks at their next read and refuse to forward answers
 - **WHEN** a read fails while the home still reports
