@@ -25,15 +25,6 @@ export type IdeProviderInfo = {
   /** Where to install it when it is missing. */
   setupUrl: string;
   /**
-   * Whether its webviews (Markdown preview, extension panels) load inside
-   * World. code-server serves them under its own route. Stock VS Code and
-   * OpenVSCode Server frame them from `*.vscode-cdn.net`, the template in
-   * their product.json; World's frame policy keeps those frames out, since
-   * the Code view never admits another origin and World never rewrites the
-   * product's own files (#988). The rest of the workbench works.
-   */
-  webviewsInWorld: boolean;
-  /**
    * Whether its workbench connects only from a secure page (HTTPS or
    * localhost). Microsoft's VS Code signs its connection with code that
    * needs the browser's crypto.subtle, which plain-HTTP LAN and Tailscale
@@ -59,7 +50,6 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
       },
     ],
     setupUrl: "https://code.visualstudio.com/download",
-    webviewsInWorld: false,
     needsSecurePage: true,
   },
   "code-server": {
@@ -68,7 +58,6 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     marketplace: "Open VSX",
     terms: [],
     setupUrl: "https://coder.com/docs/code-server/install",
-    webviewsInWorld: true,
     needsSecurePage: false,
   },
   openvscode: {
@@ -77,7 +66,6 @@ export const IDE_PROVIDERS: Record<IdeProviderId, IdeProviderInfo> = {
     marketplace: "Open VSX",
     terms: [],
     setupUrl: "https://github.com/gitpod-io/openvscode-server#getting-started",
-    webviewsInWorld: false,
     needsSecurePage: false,
   },
 };

@@ -115,6 +115,10 @@ test("responses lose service-worker widening and get a private cache policy", ()
   ]);
   expect(headers.get("cache-control")).toBe("private, no-cache");
   expect(headers.get("content-security-policy")).toBe(IDE_FRAME_POLICY);
+  // World's own origin and VS Code's webview origin, nothing else (#1053).
+  expect(IDE_FRAME_POLICY).toBe(
+    "frame-src 'self' blob: data: https://*.vscode-cdn.net",
+  );
   // The IDE's own policy stays; World's frame policy is a second one, and
   // the browser enforces both.
   const framed = ideResponseHeaders(
