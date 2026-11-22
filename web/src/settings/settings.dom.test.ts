@@ -445,24 +445,183 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     defineSettings("page-test", []);
   });
 
-  test("controls that stay on a view are found and opened there", async () => {
+  test("view settings change subscribed consumers through search and Cmd+K", async () => {
+    const { useBoardAppearance } = await import(
+      "../world/board/useBoardAppearance"
+    );
+    const { boardPulses, subscribeBoardPulses } = await import(
+      "../world/board/boardPulses"
+    );
+    const { useTownLensState } = await import("../world/town/TownLenses");
+    const { useSyncExternalStore } = await import("react");
+    let appearance: ReturnType<typeof useBoardAppearance>;
+    let lens: ReturnType<typeof useTownLensState>;
+    let pulses = true;
+    function Views() {
+      appearance = useBoardAppearance();
+      lens = useTownLensState();
+      pulses = useSyncExternalStore(subscribeBoardPulses, boardPulses);
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    await act(async () => root.render(createElement(Views)));
+    const { host } = makeHost();
+    const view = await render(host);
+    await view.type("surface");
+    const row = view.dialog().querySelector('[data-setting="board.surface"]')!;
+    const whiteboard = [...row.querySelectorAll("button")].find(
+      (button) => button.textContent === "Whiteboard",
+    )!;
+    await act(async () => whiteboard.click());
+    expect(appearance!.appearance.surface).toBe("whiteboard");
+    expect(whiteboard.getAttribute("aria-pressed")).toBe("true");
+    const run = async (query: string, key: string) => {
+      const action = settingsCommandGroups(registryEntries(), host, query)
+        .flatMap((group) => group.actions)
+        .find((action) => action.key === key)!;
+      expect(action).toBeDefined();
+      await act(async () => action.run());
+    };
+    await run("blackboard", "setting:board.surface:blackboard");
+    expect(appearance!.appearance.surface).toBe("blackboard");
+    await run("pulses", "setting:board.pulses");
+    expect(pulses).toBe(false);
+    await run("lens idle", "setting:town.lenses:idle");
+    expect(lens!.lens).toBe("idle");
+    await view.type("lens");
+    expect(
+      view
+        .dialog()
+        .querySelector<HTMLSelectElement>('[data-setting="town.lenses"] select')
+        ?.value,
+    ).toBe("idle");
+    await act(async () => lens!.pick("spend"));
+    expect(
+      view
+        .dialog()
+        .querySelector<HTMLSelectElement>('[data-setting="town.lenses"] select')
+        ?.value,
+    ).toBe("spend");
+    expect(location.pathname).not.toBe("/board");
+    await view.unmount();
+    await act(async () => root.unmount());
+  });
+
+  test("view stores persist valid values, suppress unchanged notifications and survive refused storage", async () => {
+    const appearance = await import("../world/board/useBoardAppearance");
+    const pulses = await import("../world/board/boardPulses");
+    const lensStore = await import("../world/town/townLensStore");
+    const { worldLocalStorage } = await import("../browserStorage");
+    const { BOARD_APPEARANCE_KEY } = await import(
+      "../world/board/boardAppearance"
+    );
+    appearance.setBoardAppearance({
+      surface: "whiteboard",
+      statusColors: { working: "#abcdef" },
+    });
+    pulses.setBoardPulses(true);
+    let changes = 0;
+    const off = appearance.subscribeBoardAppearance(() => {
+      changes++;
+    });
+    const offPulses = pulses.subscribeBoardPulses(() => {
+      changes++;
+    });
+    appearance.setBoardAppearance(appearance.boardAppearanceSnapshot());
+    pulses.setBoardPulses(true);
+    expect(changes).toBe(0);
+    const surface = registryEntry("board.surface")!;
+    if (surface.kind !== "setting" || surface.control.type !== "choice")
+      throw new Error("surface control");
+    surface.control.set(makeHost().host, "blackboard");
+    expect(appearance.boardAppearanceSnapshot().statusColors).toEqual({
+      working: "#abcdef",
+    });
+    expect(
+      JSON.parse(worldLocalStorage.getItem(BOARD_APPEARANCE_KEY)!),
+    ).toEqual(appearance.boardAppearanceSnapshot());
+    pulses.setBoardPulses(false);
+    expect(worldLocalStorage.getItem(pulses.BOARD_PULSES_KEY)).toBe("off");
+    expect(changes).toBe(2);
+    off();
+    offPulses();
+    const write = spyOn(worldLocalStorage, "setItem").mockImplementation(() => {
+      throw new Error("refused");
+    });
+    try {
+      appearance.setBoardAppearance({ surface: "theme", statusColors: {} });
+      pulses.setBoardPulses(true);
+      lensStore.setTownLens("harness");
+      lensStore.townLensActions.close();
+      lensStore.townLensActions.open();
+      expect(lensStore.townLensSnapshot().lens).toBe("harness");
+      lensStore.townLensActions.close();
+      const again = appearance.subscribeBoardAppearance(() => {});
+      const againPulses = pulses.subscribeBoardPulses(() => {});
+      expect(appearance.boardAppearanceSnapshot().surface).toBe("theme");
+      expect(pulses.boardPulses()).toBe(true);
+      again();
+      againPulses();
+    } finally {
+      write.mockRestore();
+    }
+    appearance.setBoardAppearance({ surface: "theme", statusColors: {} });
+    pulses.setBoardPulses(true);
+  });
+
+  test("the development migration switch removes itself and seeds only the retired name", async () => {
+    const { seedLegacyTownMasterPreview } = await import(
+      "../world/town/legacyTownMaster"
+    );
+    const { worldLocalStorage } = await import("../browserStorage");
+    const {
+      OFFICE_PREFERENCES_KEY,
+      forgetLegacyTownMaster,
+      readOfficePreferences,
+    } = await import("../world/officePreferences");
+    history.replaceState(null, "", "/board?legacyTownMaster=Lead&keep=yes");
+    seedLegacyTownMasterPreview();
+    expect(location.search).toBe("?keep=yes");
+    expect(
+      JSON.parse(worldLocalStorage.getItem(OFFICE_PREFERENCES_KEY)!).townMaster,
+    ).toBe("Lead");
+    expect(readOfficePreferences(worldLocalStorage)).not.toHaveProperty(
+      "townMaster",
+    );
+    forgetLegacyTownMaster(worldLocalStorage);
+    seedLegacyTownMasterPreview();
+    expect(
+      JSON.parse(worldLocalStorage.getItem(OFFICE_PREFERENCES_KEY)!),
+    ).not.toHaveProperty("townMaster");
+    history.replaceState(null, "", "/town");
+  });
+
+  test("Town master has one synced row leading to the existing agent picker", () => {
+    const entry = registryEntry("town.master")!;
+    expect(entry.title).toBe("Town master");
+    expect(ids("Town master")).toEqual(["town.master"]);
+    expect(entry.kind !== "command" && entry.scope).toBe("world");
+    expect(entry.kind).toBe("panel");
+    const { host, calls } = makeHost();
+    if (entry.kind === "panel") entry.open?.(host);
+    expect(calls).toEqual(["panel:sounds"]);
+    expect(
+      registryEntries().filter((entry) => entry.title === "Town master"),
+    ).toHaveLength(1);
+  });
+
+  test("controls that require their view are found and opened there", async () => {
     expect(ids("status pulses")[0]).toBe("board.pulses");
     expect(ids("whiteboard")[0]).toBe("board.surface");
     expect(ids("town lens")[0]).toBe("town.lenses");
-    const commands = (query: string) =>
-      settingsCommandGroups(registryEntries(), makeHost().host, query).flatMap(
-        (group) => group.actions.map((action) => action.key),
-      );
-    expect(commands("whiteboard")).toContain("setting:board.surface");
-
     const opened: string[] = [];
     function BoardMenu() {
-      useViewControlRequest("board.settings", () => opened.push("board"));
+      useViewControlRequest("board.colours", () => opened.push("board"));
       return null;
     }
     history.replaceState(null, "", "/town");
-    const entry = registryEntry("board.pulses")!;
-    if (entry.kind !== "panel") throw new Error("board.pulses is a panel");
+    const entry = registryEntry("board.status-colours")!;
+    if (entry.kind !== "panel") throw new Error("status colours is a panel");
     entry.open?.(makeHost().host);
     expect(location.pathname).toBe("/board");
     // Board mounts after the address changes and answers the request once.
@@ -474,7 +633,7 @@ if (process.env.SETTINGS_HOME_DOM !== "1") {
     await act(async () => root.render(createElement(BoardMenu)));
     expect(opened).toEqual(["board"]);
     // Already on the view: the request is answered at once.
-    openViewControl("board", "board.settings");
+    openViewControl("board", "board.colours");
     expect(opened).toEqual(["board", "board"]);
     await act(async () => root.unmount());
 

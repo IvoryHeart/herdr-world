@@ -107,8 +107,22 @@ function herdrStatus(state: TownScaleState) {
   return state === "asking" ? "blocked" : state;
 }
 
-function host(index: number, random: () => number): WorldRuntimeConnection {
+/**
+ * Every `QUIET_EVERY`th working agent of a host has gone quiet (#1130): its
+ * session last moved 15–40 minutes before the page loaded, so the Town
+ * board's "quiet 10 m+" line counts them and a 30-minute threshold keeps
+ * fewer. Other agents carry no activity time and are never quiet.
+ */
+const QUIET_EVERY = 8;
+const quietMinutes = (n: number) => 15 + ((n * 11) % 26);
+
+function host(
+  index: number,
+  random: () => number,
+  loadedAt: number | undefined,
+): WorldRuntimeConnection {
   const name = HOSTS[index]!;
+  let working = 0;
   const workspaces: Workspace[] = [];
   const tabs: Tab[] = [];
   const panes: Pane[] = [];
@@ -131,6 +145,10 @@ function host(index: number, random: () => number): WorldRuntimeConnection {
         const status = state ? herdrStatus(state) : "unknown";
         if (status === "working" || deskStatus === "unknown")
           deskStatus = status;
+        const quiet =
+          loadedAt !== undefined &&
+          state === "working" &&
+          working++ % QUIET_EVERY === QUIET_EVERY - 1;
         panes.push({
           pane_id: `${tabId}-p${p}`,
           terminal_id: `${tabId}-term${p}`,
@@ -143,6 +161,9 @@ function host(index: number, random: () => number): WorldRuntimeConnection {
             : "",
           agent_status: status,
           task_summary: state ? SUMMARY[state] : undefined,
+          ...(quiet
+            ? { last_activity_at: loadedAt - quietMinutes(working) * 60_000 }
+            : {}),
           revision: 1,
         });
       }
@@ -183,10 +204,15 @@ function host(index: number, random: () => number): WorldRuntimeConnection {
   };
 }
 
-/** The scene's three synthetic hosts, identical on every call. */
-export function townScaleConnections(): WorldRuntimeConnection[] {
+/**
+ * The scene's three synthetic hosts, identical on every call. Given the
+ * page's load time, some working agents have gone quiet before it.
+ */
+export function townScaleConnections(
+  loadedAt?: number,
+): WorldRuntimeConnection[] {
   const random = sequence(0x7363616c);
-  return HOSTS.map((_, index) => host(index, random));
+  return HOSTS.map((_, index) => host(index, random, loadedAt));
 }
 
 /** Whether this page asked for the scale scene (`?scene=town-scale`). */

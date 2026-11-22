@@ -56,6 +56,15 @@ export type TownActorViewsContext = {
   visible(sprite: Sprite | Graphics): boolean;
 };
 
+/**
+ * Whether a seated agent types: it is working and not quiet. A quiet working
+ * agent (townQuietWork.ts) sits with its hands still.
+ */
+export const townTypes = (
+  agent: { key: string; semanticStatus: string },
+  quietKeys: ReadonlySet<string> | undefined,
+) => agent.semanticStatus === "working" && !quietKeys?.has(agent.key);
+
 export function createTownActorViews(ctx: TownActorViewsContext) {
   const { camera, actors, sprites, screenLayer, lookOf } = ctx;
   const actorViews = new Map<string, ActorView>();
@@ -180,6 +189,7 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
         if (!agent || actor.mode === "out") continue;
         const status = agent.semanticStatus;
         const near = level === "room" || level === "desk";
+        const quiet = state.quietKeys?.has(agent.key) ?? false;
         // A working agent's step bubble (TownStepBubble) replaces its
         // typing dots.
         const chatting =
@@ -203,6 +213,7 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
           Math.floor(clock * 3),
           mood,
           Boolean(agent.usageStop),
+          quiet,
         );
         let headX = actor.x;
         let headY = actor.y - 20 * TOWN_AGENT_SCALE;
@@ -232,6 +243,7 @@ export function createTownActorViews(ctx: TownActorViewsContext) {
         if (
           near &&
           status === "working" &&
+          !quiet &&
           actor.mode === "seat" &&
           !state.askingKeys?.has(agent.key) &&
           !state.stepGlyph?.(agent.key)
