@@ -8,8 +8,6 @@
 
 **Code:**
 
-- `server/src/config/data-paths.ts`
-- `server/src/config/data-paths.test.ts`
 - `server/src/world/ask-peers.ts`
 - `web/src/world/NeedsYouItem.tsx`
 - `server/src/service/world-ask-peers.test.ts`

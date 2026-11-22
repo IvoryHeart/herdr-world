@@ -87,12 +87,11 @@ it; leave other worktrees' listeners and data alone. For CLI checks, point
 `HERDR_WORLD_URL` at this listener and use the same `HERDR_WORLD_DATA_DIR` so the
 CLI locates its token. Preview data and built assets stay untracked.
 
-Previews share Shipyard's private per-user instance registry by default, even
-with different data folders. Set `HERDR_WORLD_INSTANCE_REGISTRY_DIR` in a
-listener's environment at startup to select a separate private registry; use
-the same override for previews that should discover one another. This shares
-display observations and, for previews attached to the same runtime, their open
-owner questions in Needs you (each World reads
+To include several previews in Shipyard's local instance observations, set
+`HERDR_WORLD_INSTANCE_REGISTRY_DIR` to the same private directory in each
+listener's environment at startup. Without it, each isolated data folder keeps
+its own registry. This shares display observations and, for previews attached
+to the same runtime, their open owner questions in Needs you (each World reads
 the others over loopback with a per-run token); credentials, storage and
 connections stay in each preview's own folder. Reports expire after 45
 seconds without renewal, and stale reports have no open link. See the

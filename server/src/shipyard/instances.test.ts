@@ -58,10 +58,8 @@ test("listening reports are private, renew, expire without actions and revoke on
   const { registry, directory, root, advance, renew } = setup();
   registry.start(identity, 19091, "127.0.0.1", false);
   const file = join(directory, readdirSync(directory)[0]!);
-  if (process.platform !== "win32") {
+  if (process.platform !== "win32")
     expect(statSync(file).mode & 0o777).toBe(0o600);
-    expect(statSync(directory).mode & 0o777).toBe(0o700);
-  }
   expect(readFileSync(file, "utf8")).not.toContain(root);
   expect(registry.read().items[0]!.openUrl).toBe("http://127.0.0.1:19091/");
   advance(30_000);

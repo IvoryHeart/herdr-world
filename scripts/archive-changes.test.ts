@@ -173,8 +173,6 @@ test("archive workflow serializes one reviewed bot branch and never publishes ma
   );
 });
 
-// This launches the pinned CLI for every completed delta, so its work grows
-// with the repository and exceeds Bun's five-second default under the full lane.
 test("repository completed changes archive past the legacy already-synced baseline", () => {
   const root = mkdtempSync(join(tmpdir(), "archive-baseline-"));
   try {
@@ -205,4 +203,4 @@ test("repository completed changes archive past the legacy already-synced baseli
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-}, 30_000);
+});
