@@ -220,7 +220,8 @@ describe("startup web asset budget", () => {
   });
 
   test("fails closed when the World app or Town chunk is missing", () => {
-    const { [town]: _, ...withoutTown } = manifest;
+    const withoutTown = { ...manifest };
+    delete withoutTown[town];
     expect(() => startupAssetFiles(withoutTown)).toThrow(
       `Missing Vite startup chunk: ${town}`,
     );
