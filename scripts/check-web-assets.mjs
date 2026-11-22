@@ -293,10 +293,6 @@ async function checkAssets() {
     (exceeded ? process.stderr : process.stdout).write(message);
     if (exceeded) process.exitCode = 1;
   }
-  // Reported beside the raw budget: what browsers download from World.
-  process.stdout.write(
-    `web asset precompressed: brotli ${(brotliBytes / 1024 / 1024).toFixed(1)} MiB, gzip ${(gzipBytes / 1024 / 1024).toFixed(1)} MiB\n`,
-  );
   if (process.env.HERDR_WORLD_BUILD_DEVTOOLS !== "1") {
     const shipped = devtoolsAssets(await textAssets(publicRoot));
     if (shipped.length) {
@@ -306,6 +302,10 @@ async function checkAssets() {
       process.exitCode = 1;
     } else process.stdout.write("web assets: no development tools\n");
   }
+  // Reported after the raw budget: what browsers download from World.
+  process.stdout.write(
+    `web asset precompressed: brotli ${(brotliBytes / 1024 / 1024).toFixed(1)} MiB, gzip ${(gzipBytes / 1024 / 1024).toFixed(1)} MiB\n`,
+  );
 }
 
 /** Every text asset (scripts, styles, pages) under the public root. */
