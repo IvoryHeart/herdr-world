@@ -1,6 +1,6 @@
 import { useDrawReadiness } from "../useDrawReadiness";
 import "../worldAsks.css";
-import { TownBoard } from "./TownBoard";
+import { TownBoard, type TownQuietMarks } from "./TownBoard";
 import {
   TownTeamsLayer,
   TownWorldLayer,
@@ -117,6 +117,7 @@ export function TownCanvas({
   receptionHeldKeys = NO_KEYS,
   receptionTakes = townReceptionTakesAll,
   onFindHeld,
+  quiet = { keys: NO_KEYS },
   onActivateAsk,
   quests = NO_QUESTS,
   steps,
@@ -197,6 +198,7 @@ export function TownCanvas({
     keys: readonly string[],
     anchor: { x: number; y: number },
   ) => void;
+  quiet?: TownQuietMarks;
   onActivateAsk?: (nodeId: string) => void;
   /** Quest progress by agent key, marked over each agent's desk. */
   quests?: ReadonlyMap<string, TownQuestMark>;
@@ -345,6 +347,7 @@ export function TownCanvas({
     completionSeenKeys,
     summonedKeys: deskKeys,
     askingKeys,
+    quietKeys: quiet.keys,
     awayKeys,
     arrivingKeys,
     receptionHeldKeys,
@@ -362,14 +365,12 @@ export function TownCanvas({
   };
   const latest = useRef(current);
   latest.current = current;
-
   const placedRoomActions = useTownRoomMoves(
     roomActions,
     model,
     layout,
     rendererRef,
   );
-
   const anchorFrame = useRef<(() => void) | null>(null);
   const reportAnchors = () => {
     const { onAnchorChange: report, onSelectedAnchorChange: reportSelected } =
@@ -408,7 +409,6 @@ export function TownCanvas({
       reportRef.current();
     });
   };
-
   const levelRef = useRef<TownLevel>("overview");
   const [layers] = useState(() => new TownBuildingLayers());
   const signFrame = () => rendererRef.current?.invalidate("building-sign");
@@ -481,9 +481,7 @@ export function TownCanvas({
       scheduleAnchors();
   };
   const onFrameRef = useRef(onFrame);
-
   onFrameRef.current = onFrame;
-
   const viewport = () => {
     const host = hostRef.current!;
     return townViewport(
@@ -509,6 +507,7 @@ export function TownCanvas({
     completionSeenKeys: latest.current.completionSeenKeys,
     summonedKeys: latest.current.summonedKeys,
     askingKeys: latest.current.askingKeys,
+    quietKeys: latest.current.quietKeys,
     awayKeys: latest.current.awayKeys,
     arrivingKeys: latest.current.arrivingKeys,
     heldKeys: latest.current.receptionHeldKeys,
@@ -608,7 +607,6 @@ export function TownCanvas({
     const host = hostRef.current;
     return host ? holdTownReflowOnInput(scene, host) : undefined;
   }, [scene]);
-
   useEffect(() => {
     const { model: m, layout: l } = latest.current;
     rendererRef.current?.apply(diff.next(m, l, sceneState()));
@@ -620,6 +618,7 @@ export function TownCanvas({
     completionSeenKeys,
     deskKeys,
     askingKeys,
+    quiet.keys,
     awayKeys,
     arrivingKeys,
     receptionHeldKeys,
@@ -843,7 +842,6 @@ export function TownCanvas({
     if (rendererRef.current)
       view.stepZoom(direction, latest.current.layout, viewport());
   };
-
   const focusTarget = (target: TownTarget) => {
     lens.focus(target.key);
     view.focusTarget(target);
@@ -919,6 +917,7 @@ export function TownCanvas({
             hud={hud}
             foldedActivity={foldedActivity}
             askingKeys={askingKeys}
+            quiet={quiet.since}
             receptionHeldKeys={receptionHeldKeys}
             receptionTakes={receptionTakes}
             onFindHeld={onFindHeld}
@@ -976,6 +975,7 @@ export function TownCanvas({
       <TownLensBoard lens={lens} hover={hover} selected={selectedKey}>
         <TownBoard
           counts={summary.counts}
+          quiet={quiet.board}
           harnesses={summary.harnesses}
           onOpenSummary={onOpenSummary}
           sinceYouLeft={sinceYouLeft}

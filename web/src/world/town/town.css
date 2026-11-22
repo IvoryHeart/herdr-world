@@ -846,6 +846,16 @@
   line-height: 1;
 }
 
+/* A working agent whose session has not moved (#1130): how long, and since. */
+.town-peek-quiet {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #b9c6d3;
+}
+
 .town-peek-screen {
   margin: 8px 0 0;
   padding: 8px 10px;

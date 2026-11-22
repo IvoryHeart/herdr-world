@@ -22,10 +22,21 @@ describe("View preferences", () => {
       inspectorPresentation: "docked",
       townCalm: true,
       townOpens: "chat",
-      townMaster: "firstmate",
       townGreeting: true,
       tabBadge: true,
+      townQuietMinutes: 10,
     });
+  });
+
+  test("Town marks quiet working agents after 10 minutes unless changed", () => {
+    const read = (townQuietMinutes: unknown) =>
+      readOfficePreferences(memoryStorage(JSON.stringify({ townQuietMinutes })))
+        .townQuietMinutes;
+    expect(DEFAULT_OFFICE_PREFERENCES.townQuietMinutes).toBe(10);
+    expect(read(30)).toBe(30);
+    expect(read(0)).toBe(0);
+    expect(read(7)).toBe(10);
+    expect(read("off")).toBe(10);
   });
 
   test("the tab and app icon count is on unless it was turned off", () => {
@@ -58,15 +69,13 @@ describe("View preferences", () => {
     expect(read("browser")).toBe("chat");
   });
 
-  test("the Town master defaults to firstmate and keeps a chosen name", () => {
-    const read = (townMaster: unknown) =>
-      readOfficePreferences(memoryStorage(JSON.stringify({ townMaster })))
-        .townMaster;
-    expect(DEFAULT_OFFICE_PREFERENCES.townMaster).toBe("firstmate");
-    expect(read(" lead ")).toBe("lead");
-    expect(read("")).toBe("");
-    expect(read(7)).toBe("firstmate");
-    expect(read("x".repeat(65))).toBe("firstmate");
+  test("the retired Town master name is not a view preference", () => {
+    expect(
+      readOfficePreferences(
+        memoryStorage(JSON.stringify({ townMaster: "lead" })),
+      ),
+    ).toEqual(DEFAULT_OFFICE_PREFERENCES);
+    expect(DEFAULT_OFFICE_PREFERENCES).not.toHaveProperty("townMaster");
   });
 
   test("admits only known choices", () => {
@@ -97,9 +106,9 @@ describe("View preferences", () => {
       inspectorPresentation: "floating",
       townCalm: false,
       townOpens: "terminal",
-      townMaster: "",
       townGreeting: false,
       tabBadge: false,
+      townQuietMinutes: 30,
     });
     expect(storage.value).toEqual({
       key: OFFICE_PREFERENCES_KEY,
@@ -107,9 +116,9 @@ describe("View preferences", () => {
         inspectorPresentation: "floating",
         townCalm: false,
         townOpens: "terminal",
-        townMaster: "",
         townGreeting: false,
         tabBadge: false,
+        townQuietMinutes: 30,
       }),
     });
   });

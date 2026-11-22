@@ -52,3 +52,96 @@ test("the overflow crowd curses then snores over any status, and unknown is conf
     "sleep",
   );
 });
+
+test("a quiet working agent shows an hourglass at its seat instead of typing", () => {
+  // From the room level the step bubble carries the hourglass and its time
+  // (TownStepBubble), so the canvas neither types nor repeats it.
+  for (const level of ["room", "desk"])
+    expect(
+      townBubbleKind(
+        "working",
+        false,
+        false,
+        level,
+        "seat",
+        true,
+        1,
+        null,
+        false,
+        true,
+      ),
+    ).toBeNull();
+  for (const level of ["overview"])
+    expect(
+      townBubbleKind(
+        "working",
+        false,
+        false,
+        level,
+        "seat",
+        true,
+        1,
+        null,
+        false,
+        true,
+      ),
+    ).toBe("quiet");
+  // Not working, asking or away from its seat: the usual marks.
+  expect(
+    townBubbleKind(
+      "idle",
+      false,
+      false,
+      "room",
+      "seat",
+      false,
+      0,
+      null,
+      false,
+      true,
+    ),
+  ).toBe("sleep");
+  expect(
+    townBubbleKind(
+      "working",
+      true,
+      false,
+      "room",
+      "seat",
+      false,
+      0,
+      null,
+      false,
+      true,
+    ),
+  ).toBe("ask");
+  expect(
+    townBubbleKind(
+      "working",
+      false,
+      false,
+      "room",
+      "walk",
+      false,
+      0,
+      null,
+      false,
+      true,
+    ),
+  ).toBeNull();
+  // Once the session moves again it types as before.
+  expect(
+    townBubbleKind(
+      "working",
+      false,
+      false,
+      "room",
+      "seat",
+      true,
+      1,
+      null,
+      false,
+      false,
+    ),
+  ).toBe("typing1");
+});
