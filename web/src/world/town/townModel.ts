@@ -19,6 +19,7 @@ import {
 import type { DeskPins } from "../useDeskPins";
 import type { TownInput } from "./townLayout";
 import { NO_ROOM_SPOTS, type TownRoomSpots } from "./townRoomPlace";
+import { townBuildingOf } from "./townBuildings";
 
 export type TownSeatRef = { deskKey: string; seat: number };
 
@@ -60,9 +61,27 @@ export const NO_PLACE_COLORS: TownPlaceColors = {
   hosts: new Map(),
 };
 
-/** What a room's colour is saved under: its workspace's card key. */
+/**
+ * What a room's colour and saved spot are kept under: its workspace's card
+ * key, on the connection Town places it by (`placeConnectionId`, the anchor
+ * view of its Herdr endpoint, townBuildings.ts), else its own.
+ */
 export const townRoomColorKey = (room: OfficeRoom) =>
-  workspaceColorKey(room.workspaceRef.connectionId, room.workspaceRef.nativeId);
+  workspaceColorKey(townPlaceConnectionOf(room), room.workspaceRef.nativeId);
+
+/** The connection a room's or building's place settings are kept under. */
+export const townPlaceConnectionOf = (
+  item:
+    | Pick<OfficeRoom, "placeConnectionId" | "workspaceRef">
+    | Pick<OfficeHost, "placeConnectionId" | "connectionId">,
+) =>
+  item.placeConnectionId ??
+  ("workspaceRef" in item ? item.workspaceRef.connectionId : item.connectionId);
+
+/** What a building's colour is kept under: its place connection's key. */
+export const townHostColorKey = (
+  host: Pick<OfficeHost, "placeConnectionId" | "connectionId">,
+) => hostColorKey(townPlaceConnectionOf(host));
 
 /** Saved room spots (Board's `room_pins`) by workspace card key. */
 export type RoomPins = Readonly<Record<string, { x: number; y: number }>>;
@@ -102,7 +121,7 @@ export function townPlaceColors(
   const hosts = new Map<string, TerminalColor>();
   // Every building, even one with no rooms shown, has its host's colour.
   for (const host of projection.hosts) {
-    const color = placeColor(colors, hostColorKey(host.connectionId));
+    const color = placeColor(colors, townHostColorKey(host));
     if (color) hosts.set(host.key, color);
   }
   return rooms.size || hosts.size ? { rooms, hosts } : NO_PLACE_COLORS;
@@ -159,6 +178,49 @@ const deskTarget = (
   workspaceIds: ids.get(desk.tabRef.connectionId) ?? new Set(),
 });
 
+/**
+ * Each place connection's workspace IDs (`townPlaceConnectionOf`), which
+ * qualify a colliding tab key in a desk's pin key.
+ */
+function placeWorkspaceIdsOf(projection: HerdrOfficeProjection) {
+  const ids = new Map<string, Set<string>>();
+  for (const room of projection.rooms) {
+    const connectionId = townPlaceConnectionOf(room);
+    if (!ids.has(connectionId)) ids.set(connectionId, new Set());
+    ids.get(connectionId)!.add(room.workspaceRef.nativeId);
+  }
+  return ids;
+}
+
+/**
+ * What a desk's pin is kept under: its tab's card key on the connection Town
+ * places its room by, so a takeover of its endpoint (townBuildings.ts) keeps
+ * the pin. Presentation and World's own pin order only: actions read the
+ * desk's `tabRef`.
+ */
+function deskPinKey(
+  room: OfficeRoom,
+  desk: OfficeDesk,
+  ids: ReadonlyMap<string, ReadonlySet<string>>,
+) {
+  const connectionId = townPlaceConnectionOf(room);
+  return terminalColorKey({
+    connectionId,
+    workspaceId: room.workspaceRef.nativeId,
+    tabId: desk.tabRef.nativeId,
+    workspaceIds: ids.get(connectionId) ?? new Set(),
+  });
+}
+
+/** The key a Town desk's pin is saved under (`deskPinKey`), if it has a room. */
+export function townDeskPinKey(
+  projection: HerdrOfficeProjection,
+  desk: OfficeDesk,
+): string | null {
+  const room = projection.rooms.find((entry) => entry.key === desk.roomKey);
+  return room ? deskPinKey(room, desk, placeWorkspaceIdsOf(projection)) : null;
+}
+
 /** What a desk's colour is saved under: its Herdr tab on its connection. */
 export function townDeskColorTarget(
   projection: HerdrOfficeProjection,
@@ -197,10 +259,10 @@ export function townDeskPins(
 ): ReadonlyMap<string, TownDeskPin> {
   const deskPins = new Map<string, TownDeskPin>();
   if (!Object.keys(pins).length) return deskPins;
-  const ids = workspaceIdsOf(projection);
+  const ids = placeWorkspaceIdsOf(projection);
   for (const room of projection.rooms)
     for (const desk of room.desks) {
-      const key = terminalColorKey(deskTarget(room, desk, ids));
+      const key = deskPinKey(room, desk, ids);
       const pin = pins[key];
       if (pin) deskPins.set(desk.key, { key, rank: pin.rank ?? null });
     }
@@ -262,15 +324,16 @@ export function townModelFromProjection(
   return {
     projection,
     input: {
-      hosts: projection.hosts.map(({ key, displayOrder }) => ({
-        key,
-        displayOrder,
-      })),
+      // A machine's later runtimes have no building of their own: their
+      // rooms stand in its first runtime's (townBuildings.ts).
+      hosts: projection.hosts
+        .filter((host) => !host.buildingKey)
+        .map(({ key, displayOrder }) => ({ key, displayOrder })),
       rooms: projection.rooms.map((room) => ({
         deskFold: room.deskFold,
         key: room.key,
-        hostKey: room.hostKey,
-        order: room.order,
+        hostKey: townBuildingOf(room),
+        order: room.buildingOrder ?? room.order,
         deskKeys: room.desks.map((desk) => desk.key),
         deskSeats: room.desks.map((desk) =>
           Math.max(1, Math.min(4, desk.paneDevices.length)),

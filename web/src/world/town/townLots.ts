@@ -12,7 +12,7 @@ import {
   townCenterWidth,
   type TownCenterLot,
 } from "./townCenter";
-import type { TownShape } from "./townLayout";
+import type { TownShape } from "./townShape";
 import { TOWN_LIBRARY_ROOM } from "./townLibraryLot";
 import { TOWN_OBSERVATORY_ROOM } from "./townObservatoryLot";
 import { TOWN_POST_ROOM } from "./townPostLot";

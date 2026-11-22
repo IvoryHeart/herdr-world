@@ -15,7 +15,8 @@ export type TownEdgeMark = "needs" | "asks" | "done";
 export type TownEdgeTarget = {
   key: string;
   mark: TownEdgeMark;
-  hostKey: string;
+  /** The building it stands in (townBuildingOf), not its runtime host. */
+  buildingKey: string;
   x: number;
   y: number;
 };
@@ -47,7 +48,7 @@ export type TownEdgeArrow = {
   /** Its agents, most urgent and nearest first: a tap goes to the first. */
   keys: string[];
   /** Their buildings, in the order their agents come. */
-  hostKeys: string[];
+  buildingKeys: string[];
   /** Its centre on screen. */
   x: number;
   y: number;
@@ -213,7 +214,9 @@ export function townEdgeArrows(
   }
   // Merge until no two arrows point the same way or at one building nearby.
   const sameBuilding = (a: Group, b: Group) =>
-    a.members.some((m) => b.members.some((n) => n.hostKey === m.hostKey));
+    a.members.some((m) =>
+      b.members.some((n) => n.buildingKey === m.buildingKey),
+    );
   for (let merged = true; merged; ) {
     merged = false;
     outer: for (let i = 0; i < groups.length; i += 1)
@@ -259,7 +262,7 @@ export function townEdgeArrows(
         counts,
         count: members.length,
         keys,
-        hostKeys: [...new Set(members.map((member) => member.hostKey))],
+        buildingKeys: [...new Set(members.map((member) => member.buildingKey))],
         x: group.x,
         y: group.y,
         angle: group.angle,
@@ -301,8 +304,8 @@ const PHRASES: Record<TownEdgeMark, [string, string]> = {
  * there". `buildingLabel` names a building by its host key.
  */
 export function townEdgeArrowLabel(
-  arrow: Pick<TownEdgeArrow, "counts" | "hostKeys" | "compass">,
-  buildingLabel: (hostKey: string) => string,
+  arrow: Pick<TownEdgeArrow, "counts" | "buildingKeys" | "compass">,
+  buildingLabel: (buildingKey: string) => string,
 ) {
   const parts = TOWN_EDGE_MARKS.filter((mark) => arrow.counts[mark] > 0).map(
     (mark) => {
@@ -314,7 +317,7 @@ export function townEdgeArrowLabel(
     parts.length > 1
       ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
       : parts[0];
-  const names = arrow.hostKeys.map(buildingLabel);
+  const names = arrow.buildingKeys.map(buildingLabel);
   const where =
     names.length > 1
       ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`

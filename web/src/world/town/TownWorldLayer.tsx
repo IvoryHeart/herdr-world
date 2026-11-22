@@ -66,6 +66,7 @@ import {
 import type { TownTarget } from "./townTargets";
 import { townWallPath, type TownTeams } from "./townTeams";
 import type { TownVisible } from "./townVisibleHosts";
+import { townBuildingOf } from "./townBuildings";
 
 const WALL_RADIUS = 10;
 
@@ -251,18 +252,20 @@ export const TownWorldLayer = memo(function TownWorldLayer({
     if (!askingKeys.size) return byHost;
     for (const { device } of model.projection.paneRoster) {
       if (device.agentKey || !askingKeys.has(device.nodeId)) continue;
-      const group = byHost.get(device.hostKey) ?? [];
+      const home = townBuildingOf(device);
+      const group = byHost.get(home) ?? [];
       group.push(device);
-      byHost.set(device.hostKey, group);
+      byHost.set(home, group);
     }
     return byHost;
   }, [model.projection.paneRoster, askingKeys]);
   const attention = townAttention(model, blockedSince, askingKeys);
   // Waiting ages move on every 15 s while anyone waits (scene/townHud.ts).
   const now = useTownAges(hud, attention.length > 0);
-  const selectedHost = selectedRoomKey
-    ? model.rooms.get(selectedRoomKey)?.hostKey
-    : undefined;
+  const selectedRoom = selectedRoomKey
+    ? model.rooms.get(selectedRoomKey)
+    : null;
+  const selectedHost = selectedRoom ? townBuildingOf(selectedRoom) : undefined;
   /** A room's carpet: its workspace's chosen colour, else its own default. */
   const roomCarpet = (roomKey: string) => {
     const chosen = model.placeColors.rooms.get(roomKey);
@@ -312,12 +315,12 @@ export const TownWorldLayer = memo(function TownWorldLayer({
         const hostColor = roomActions.placeColor("host", building.hostKey);
         const queue = attention.filter(
           (agent) =>
-            agent.hostKey === building.hostKey &&
+            townBuildingOf(agent) === building.hostKey &&
             agent.semanticStatus === "blocked",
         );
         const questions = attention.filter(
           (agent) =>
-            agent.hostKey === building.hostKey &&
+            townBuildingOf(agent) === building.hostKey &&
             askingKeys.has(agent.key) &&
             agent.semanticStatus !== "blocked",
         );
@@ -674,7 +677,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                             touchAction: "none",
                           } as React.CSSProperties
                         }
-                        aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
+                        aria-label={`${label}${room.runtimeTag ? ` (${room.runtimeTag})` : ""}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
                         onPointerDown={(event) => {
                           cardPressTaken.current =
                             onRoomCardPress?.(
@@ -696,6 +699,11 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                         tabIndex={-1}
                       >
                         <span className="town-room-card-name">{label}</span>
+                        {room.runtimeTag ? (
+                          <span className="town-room-card-runtime">
+                            {room.runtimeTag}
+                          </span>
+                        ) : null}
                         {c.blocked ? (
                           <span className="town-room-card-badge">
                             !{c.blocked}

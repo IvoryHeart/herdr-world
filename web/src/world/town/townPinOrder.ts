@@ -9,10 +9,9 @@ import type {
   HerdrOfficeProjection,
   OfficeRoom,
 } from "../herdrOfficeProjection";
-import { terminalColorKey } from "../terminalColor";
 import type { DeskPins } from "../useDeskPins";
 import { townPinnedOrder } from "./townLayout";
-import { townDeskColorTarget } from "./townModel";
+import { townDeskPinKey } from "./townModel";
 
 /** A pinned desk: its desk key and the key its pin is saved under. */
 export type TownPinnedSeat = { deskKey: string; pinKey: string };
@@ -26,8 +25,7 @@ export function townRoomPinnedSeats(
   const pinKeys = new Map<string, string>();
   const ranks = new Map<string, number | null>();
   for (const desk of room.desks) {
-    const target = townDeskColorTarget(office, desk);
-    const pinKey = target ? terminalColorKey(target) : null;
+    const pinKey = townDeskPinKey(office, desk);
     const pin = pinKey ? deskPins[pinKey] : undefined;
     if (!pinKey || !pin) continue;
     pinKeys.set(desk.key, pinKey);

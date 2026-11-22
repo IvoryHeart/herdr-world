@@ -40,6 +40,7 @@ import type { TownPlaceKey } from "../townPlaces";
 import type { TownTeams } from "../townTeams";
 import type { TownClock, TownFrames } from "./ports";
 import type { TownSceneCamera } from "./townSceneCamera";
+import { townBuildingOf } from "../townBuildings";
 
 type Point = { x: number; y: number };
 
@@ -205,7 +206,11 @@ export class TownInteraction {
           for (const agent of model.agents.values()) {
             const position = stage.actorPosition(agent.key);
             if (position && !position.seated)
-              yield { key: agent.key, hostKey: agent.hostKey, ...position };
+              yield {
+                key: agent.key,
+                buildingKey: townBuildingOf(agent),
+                ...position,
+              };
           }
         },
         seated: (key) => stage.actorPosition(key)?.seated ?? true,

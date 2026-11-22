@@ -68,6 +68,9 @@ const maxFileCount = 212;
 // Integrations and Needs you inside it) measures 16,359,148 bytes (15.601
 // MiB), 1,362 bytes above 15.6 MiB, all in lazy chunks; 15.7 MiB carries
 // it, startup budgets unchanged (2026-11-22).
+// Rooms per row and one Town building per machine (#1198) add to Town's lazy
+// chunk: 16,363,027 bytes (15.605 MiB) with main, so 15.7 MiB; file,
+// help-picture and startup limits stay.
 const maxTotalBytes = 15.7 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };

@@ -92,7 +92,7 @@ test("a Needs you item finds its Town agent by key or node ID", () => {
 test("finished work awaiting review gets an arrow though Town shows it idle", () => {
   // After a reload Town never saw b busy, so b has no mark in Town; Needs
   // you still lists its unreviewed stop.
-  const own = [{ key: "a", mark: "needs" as const, hostKey: "north" }];
+  const own = [{ key: "a", mark: "needs" as const, buildingKey: "north" }];
   const order = [
     { leafId: "leaf-a", mark: "needs" as const },
     { leafId: "leaf-b", mark: "done" as const },
@@ -100,16 +100,16 @@ test("finished work awaiting review gets an arrow though Town shows it idle", ()
     { leafId: null, mark: "asks" as const },
   ];
   expect(townEdgeMarked(own, order, agents)).toEqual([
-    { key: "a", mark: "needs", hostKey: "north" },
-    { key: "b", mark: "done", hostKey: "south" },
+    { key: "a", mark: "needs", buildingKey: "north" },
+    { key: "b", mark: "done", buildingKey: "south" },
   ]);
   // Town's own mark wins; reviewed work (not in Needs you) gets none.
   expect(
     townEdgeMarked(
-      [{ key: "b", mark: "asks", hostKey: "south" }],
+      [{ key: "b", mark: "asks", buildingKey: "south" }],
       [{ leafId: "leaf-b", mark: "done" }],
       agents,
     ),
-  ).toEqual([{ key: "b", mark: "asks", hostKey: "south" }]);
+  ).toEqual([{ key: "b", mark: "asks", buildingKey: "south" }]);
   expect(townEdgeMarked([], [], agents)).toEqual([]);
 });

@@ -37,7 +37,8 @@ export type TownHitContext = {
   /** Standing or walking agents only; seated agents are found through their seat. */
   standing: () => Iterable<{
     key: string;
-    hostKey: string;
+    /** The building it stands in (townBuildingOf), not its runtime host. */
+    buildingKey: string;
     x: number;
     y: number;
   }>;
@@ -96,7 +97,7 @@ export function townHitTest(
   const pad = context.zoom < 0.9 ? 6 : 0;
   if (context.level !== "overview" || context.zoom >= 0.5) {
     const standing = [...context.standing()]
-      .filter((actor) => actor.hostKey === building.hostKey)
+      .filter((actor) => actor.buildingKey === building.hostKey)
       .sort((a, b) => b.y - a.y);
     for (const actor of standing)
       if (
