@@ -95,3 +95,54 @@ test("the keyboard move of a pinned desk offers only pinned places; others offer
   const other = townMoveMenu({ step: "room", deskKey: "t2" }, deps);
   expect(other.entries.map((entry) => entry.key)).toEqual(["t4", "t2:last"]);
 });
+
+test("the keyboard move of a pinned core desk offers other core rooms; it stays pinned there", () => {
+  // A desk moved in from Herdr TUI arrives pinned (agent-move.ts); it can
+  // still go to another core room, or back to another runtime.
+  const core = { connectionId: "core" };
+  const coreDesk = (key: string, roomKey: string) => ({
+    ...desk(key),
+    roomKey,
+    coreOpen: core,
+    observedPaneCount: 1,
+    paneDevices: [{}],
+    tabRef: { connectionId: "core", nativeId: key },
+  });
+  const coreRoom = (key: string, desks: unknown[]) => ({
+    ...ROOM,
+    key,
+    displayLabel: key,
+    desks,
+    stale: false,
+    coreOpen: core,
+    observedDeskCount: desks.length,
+    workspaceRef: { connectionId: "core", nativeId: key },
+  });
+  const moved = coreDesk("c1", "core-a");
+  const rooms = [
+    coreRoom("core-a", [moved]),
+    coreRoom("core-b", [coreDesk("c2", "core-b")]),
+    { ...ROOM, stale: false, canOpenInSpaces: true, observedDeskCount: 4 },
+  ];
+  const moves: [string, string][] = [];
+  const deps = {
+    office: { rooms, hosts: [] },
+    deskForKey: () => moved,
+    roomForKey: (key: string) => rooms.find((room) => room.key === key),
+    agentOf: () => undefined,
+    pinnedSeats: () => ["c1"],
+    close: () => {},
+    runDeskReorder: async () => {},
+    runDeskMove: async (deskKey: string, roomKey: string) => {
+      moves.push([deskKey, roomKey]);
+      return "moved" as const;
+    },
+    runAgentMove: async () => {},
+    teams: { teamEntries: () => [] },
+  } as unknown as TownMoveMenuDeps;
+  const menu = townMoveMenu({ step: "room", deskKey: "c1" }, deps);
+  expect(menu.entries.map((entry) => entry.key)).toEqual(["core-b", "r1"]);
+  expect(menu.detail).toBe("Choose a room: it stays pinned there.");
+  menu.entries[0]!.onChoose();
+  expect(moves).toEqual([["c1", "core-b"]]);
+});

@@ -5,7 +5,7 @@ import type {
   OfficeRoom,
 } from "../herdrOfficeProjection";
 import { TOWN_PINNED_HINT } from "./townDrag";
-import { canMoveDeskToRoom, needsAgentHandoff } from "./townMoveEligibility";
+import { canMoveDeskToRoom } from "./townMoveEligibility";
 import type { TownMoveResult } from "./townMoves";
 import type { townTeamActions, TownMenuEntry } from "./townTeamActions";
 
@@ -73,16 +73,19 @@ export function townMoveMenu(
         void deps.runDeskMove(flow.deskKey, room.key);
       },
     });
-    // A pinned desk moves only among the pinned seats, and an unpinned one
-    // takes none of them, as in a drag. To another runtime it goes pinned.
+    // In its room a pinned desk moves only among the pinned seats, and an
+    // unpinned one takes none of them, as in a drag. To another room it goes
+    // pinned.
     const pinned = home ? deps.pinnedSeats(home) : [];
     if (desk && pinned.includes(desk.key)) {
       const seats = pinned.filter((key) => key !== desk.key);
       return {
         title: `Move ${desk.displayLabel}`,
-        detail: seats.length
-          ? `Choose a pinned desk’s place. ${TOWN_PINNED_HINT}`
-          : `No other pinned desk in this room. ${TOWN_PINNED_HINT}`,
+        detail: rooms.length
+          ? `Choose ${seats.length ? "a pinned desk’s place or " : ""}a room: it stays pinned there.`
+          : seats.length
+            ? `Choose a pinned desk’s place. ${TOWN_PINNED_HINT}`
+            : `No other pinned desk in this room. ${TOWN_PINNED_HINT}`,
         entries: [
           ...seats.map((key) => ({
             key,
@@ -90,9 +93,7 @@ export function townMoveMenu(
             detail: `Pinned desk ${pinned.indexOf(key) + 1} in ${home?.displayLabel}`,
             onChoose: reorder(key),
           })),
-          ...rooms
-            .filter((room) => needsAgentHandoff(desk, room))
-            .map(roomEntry),
+          ...rooms.map(roomEntry),
           ...deps.teams.teamEntries(desk),
         ],
       };

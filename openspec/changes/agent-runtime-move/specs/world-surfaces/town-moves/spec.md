@@ -53,6 +53,11 @@ and Board peeks. A move within one runtime SHALL use that runtime's own move.
 - **WHEN** the user drags an idle Claude desk from a Herdr TUI room into a herdr-core room of the same machine
 - **THEN** the agent runs there with its conversation resumed, its desk keeps its pin, colour and spawn lines, and the original closes
 
+#### Scenario: A moved desk moves again
+
+- **WHEN** a pinned desk moved from Herdr TUI to herdr-core is moved again, to another herdr-core room or back to a Herdr TUI room
+- **THEN** Town offers that room in the drag and the M list, the agent moves there, and its desk stays pinned
+
 #### Scenario: Nothing to resume
 
 - **WHEN** the user moves a plain terminal, or an agent whose conversation World cannot find, to the other runtime

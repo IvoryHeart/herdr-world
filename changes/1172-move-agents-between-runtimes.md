@@ -16,3 +16,6 @@
 - A Codex agent on herdr-core now resumes its conversation when it moves to
   Herdr TUI, and Apartments keep its session, instead of World saying it
   can't find the conversation.
+- A pinned desk moved to herdr-core can move again, to another core room or
+  back to Herdr TUI. A pinned desk now moves to any other room it can go to
+  and stays pinned there; within its room it still takes only pinned seats.

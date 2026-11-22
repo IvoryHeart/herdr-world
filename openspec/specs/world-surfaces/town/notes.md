@@ -728,9 +728,11 @@
     tab-order seat. Pinned desks reorder on the rug, as pinned browser tabs
     do: drag a pinned desk (mouse or touch) onto another pinned desk of its
     room and it takes that desk's place, or press **M** on a focused pinned
-    table and choose a pinned desk's place. Dropped anywhere else (off the
-    rug, on an unpinned desk, in another room) it glides back to its seat;
-    while you drag, the hint says **Unpin to move it out of the front row**.
+    table and choose a pinned desk's place. Dropped in another room it can
+    go to (or chosen there from **M**), it moves and stays pinned, in that
+    room's front row. Dropped anywhere else in its room (off the rug, on an
+    unpinned desk) it glides back to its seat; while you drag, the hint says
+    **Unpin to move it out of the front row**.
     A drag never unpins it, and an unpinned desk cannot take a pinned seat.
     The order is a World view setting saved with the pin (for a core agent,
     beside its shared pin, since Herdr's apps have no order for pins), so

@@ -175,8 +175,9 @@ export function townMagnetDesk(
  * still on it for TOWN_MAGNET_MS (`magnet`), it snaps to that desk and groups
  * with it, so moving, reordering and grouping stay separate gestures. A
  * pinned desk moves as a pinned browser tab does: only onto another pinned
- * seat of its room (or into a team there); unpinned desks cannot take a
- * pinned seat. A carried room is aimed by townRoomDropTarget.
+ * seat of its room (or into a team there), or to another room, where it
+ * stays pinned; unpinned desks cannot take a pinned seat. A carried room is
+ * aimed by townRoomDropTarget.
  */
 export function townDropTarget(
   drag: TownDrag,
@@ -233,12 +234,13 @@ export function townDropTarget(
       if (room?.key === drag.from && hit?.kind === "room")
         if (groupedDesks.has(drag.key))
           return { key: room.key, label: "Leave the team", action: "ungroup" };
-      // To another runtime a pinned desk goes, pinned there.
+      // To another room a pinned desk goes, pinned there: the move carries
+      // its pin (town-move.ts, agent-move.ts; a core pin is the terminal's).
       const desk = model.desks.get(drag.key);
       if (
         room &&
         desk &&
-        needsAgentHandoff(desk, room) &&
+        room.key !== drag.from &&
         canMoveDeskToRoom(desk, room)
       )
         return {

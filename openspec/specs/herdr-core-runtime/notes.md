@@ -164,8 +164,9 @@ no control for it. Platform and harness limits apply across the table.
   same folder. It waits until the new one is
   ready, carries the desk's colour, pin, Board place, strings and spawn lines
   to the new desk, then closes the original. Moves within one runtime still
-  use that runtime's own move and keep the agent running. A pinned desk can
-  move only to the other runtime, where it stays pinned. Refused, with the
+  use that runtime's own move and keep the agent running. A pinned desk moves
+  to any room it can go to, on either runtime, and stays pinned there, so a
+  desk moved in from Herdr TUI (pinned) moves on again. Refused, with the
   reason, and nothing started: a working agent or one waiting for an answer,
   a plain terminal running a program, a desk with more than one terminal, a
   core agent whose own

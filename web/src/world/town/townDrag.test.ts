@@ -140,6 +140,39 @@ test("a desk lands on another room of its host, never its own or another host's"
   ).toMatchObject({ key: "r3", action: "move" });
 });
 
+test("a pinned desk goes to another room of its runtime, pinned there, on Herdr TUI and on core", () => {
+  // The move carries the pin: a TUI pin follows its tab (town-move.ts), a
+  // core pin is its terminal's label, which a core move keeps.
+  const tui = model(["d1"]);
+  const core = model(["d1"]);
+  for (const key of ["d1", "d2", "d3"])
+    Object.assign(core.desks.get(key)!, {
+      canOpenInSpaces: false,
+      coreOpen: { connectionId: "a" },
+    });
+  for (const key of ["r1", "r2"])
+    Object.assign(core.rooms.get(key)!, {
+      canOpenInSpaces: false,
+      coreOpen: { connectionId: "a" },
+    });
+  for (const m of [tui, core]) {
+    const drag = townDragFor({ kind: "desk", key: "d1" }, m, "room")!;
+    for (const hit of [
+      { kind: "room", key: "r2" },
+      { kind: "desk", key: "d3" },
+    ] as const)
+      expect(townDropTarget(drag, hit, m)).toMatchObject({
+        key: "r2",
+        action: "move",
+      });
+    // Its own room's floor still sends it back.
+    expect(townDropTarget(drag, { kind: "room", key: "r1" }, m)).toEqual({
+      key: null,
+      label: TOWN_PINNED_HINT,
+    });
+  }
+});
+
 test("an agent lands on another desk of its host", () => {
   const m = model();
   const drag = townDragFor({ kind: "agent", key: "ag" }, m, "desk")!;
@@ -275,12 +308,10 @@ test("a pinned desk reorders among its room's pinned seats and goes back from an
       label: "Put d2 in d1’s place",
       action: "reorder",
     });
-  // Off the rug, in another room or host, on nothing: back, with the hint.
+  // Off the rug, in a room it can't go to, on nothing: back, with the hint.
   for (const hit of [
     { kind: "cell", roomKey: "r1", cellIndex: 2 },
     { kind: "room", key: "r1" },
-    { kind: "room", key: "r2" },
-    { kind: "desk", key: "d3" },
     { kind: "room", key: "r3" },
     { kind: "desk", key: "d2" },
     null,

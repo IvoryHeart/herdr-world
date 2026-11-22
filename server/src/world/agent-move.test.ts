@@ -20,8 +20,10 @@ import {
   tabCardKey,
 } from "../../../shared/terminalColor";
 import { rehomeAgent } from "./agent-rehome";
-import { emptyBoardDocument } from "./board-store";
+import { BoardStore, emptyBoardDocument } from "./board-store";
 import type { BoardOp } from "./board-types";
+
+const text = (value: unknown) => (typeof value === "string" ? value : "");
 
 const source: AgentAddress = {
   connection_id: "tui",
@@ -686,4 +688,121 @@ test("a TUI shell that exits at once is not taken as ready", async () => {
     terminal_id: "term-9",
   });
   expect(calls).toEqual(["tab.create", "tab.create", "pane.process_info"]);
+});
+
+test("an agent moves again and again, both ways, keeping its colour, pin and conversation", async () => {
+  // Two runtimes with two rooms each; panes and pins live where each runtime
+  // keeps them: Herdr TUI pins on the Board, core pins on the terminal.
+  const panes: Record<string, TerminalRow[]> = { tui: [], core: [] };
+  const rooms: Record<string, string[]> = {
+    tui: ["w1", "w2"],
+    core: ["c1", "c2"],
+  };
+  const corePinned = new Set<string>();
+  const sessions = new Map<string, string>();
+  const log: string[] = [];
+  let next = 0;
+  const initial = emptyBoardDocument();
+  initial.layout.colors[source.color_key] = "teal";
+  initial.layout.desk_pins[source.color_key] = { cell: null };
+  const board = new BoardStore({ read: () => initial, commit: () => {} });
+  const runtime = (id: string): MoveSide => ({
+    ...side(id, [], log),
+    rows: async () => ({
+      workspaces: rooms[id]!,
+      panes: panes[id]!,
+      names: new Map(panes[id]!.map((pane) => [text(pane.pane_id), "Ada"])),
+    }),
+    session: async (pane) => sessions.get(text(pane.terminal_id)) ?? null,
+    pinned: (pane, colorKey) =>
+      id === "core"
+        ? corePinned.has(text(pane.terminal_id))
+        : Boolean(board.get().layout.desk_pins[colorKey]),
+    async start(request) {
+      const n = ++next;
+      const pane: TerminalRow = {
+        pane_id: `${id}-p${n}`,
+        terminal_id: `${id}-term-${n}`,
+        tab_id: `${request.workspaceId}:t${n}`,
+        workspace_id: request.workspaceId,
+        agent: request.kind ?? undefined,
+        agent_status: "idle",
+        cwd: request.cwd,
+      };
+      // The resumed harness keeps the conversation it was given.
+      const resumed = request.args[request.args.indexOf("--resume") + 1];
+      if (resumed) sessions.set(text(pane.terminal_id), resumed);
+      log.push(`start ${id} ${request.args.join(" ")}`);
+      panes[id]!.push(pane);
+      return {
+        tab_id: text(pane.tab_id),
+        pane_id: text(pane.pane_id),
+        terminal_id: text(pane.terminal_id),
+      };
+    },
+    async close(pane) {
+      panes[id] = panes[id]!.filter((row) => row.pane_id !== pane.pane_id);
+      return {};
+    },
+    async pin(desk) {
+      if (id === "core") {
+        corePinned.add(desk.terminal_id);
+        return [];
+      }
+      return [{ op: "desk.pin", key: desk.color_key, cell: null }];
+    },
+  });
+  const sides: Record<string, MoveSide> = {
+    tui: runtime("tui"),
+    core: runtime("core"),
+  };
+  const deps: AgentMoveDeps = {
+    side: (id) => sides[id] ?? null,
+    board: (() => board) as unknown as AgentMoveDeps["board"],
+    publishBoardChanged: () => {},
+    publishWorldInvalidation: () => {},
+  };
+  panes.tui!.push({
+    pane_id: source.pane_id,
+    terminal_id: source.terminal_id,
+    tab_id: source.tab_id,
+    workspace_id: source.workspace_id,
+    agent: "claude",
+    agent_status: "idle",
+    cwd: "/synthetic/project",
+  });
+  sessions.set(source.terminal_id, "session-1");
+
+  let at: AgentAddress = source;
+  const route = [
+    ["core", 2, "c1"],
+    ["tui", 1, "w2"],
+    ["core", 2, "c2"],
+    ["tui", 1, "w1"],
+    ["core", 2, "c1"],
+  ] as const;
+  for (const [connection_id, generation, workspace_id] of route) {
+    const result = await moveAgentAcross(deps, {
+      source: at,
+      destination: { connection_id, generation, workspace_id },
+    });
+    expect(result).toMatchObject({
+      status: "moved",
+      target: { connection_id, workspace_id },
+    });
+    at = (result as { target: AgentAddress }).target;
+    // One agent, at its new address, after every move.
+    expect(
+      [...panes.tui!, ...panes.core!].map((pane) => pane.terminal_id),
+    ).toEqual([at.terminal_id]);
+    const { layout } = board.get();
+    expect(layout.colors).toEqual({ [at.color_key]: "teal" });
+    // The pin follows: on the Board (a core desk's saved rank there), and on
+    // core as the terminal's own pin.
+    expect(Object.keys(layout.desk_pins)).toEqual([at.color_key]);
+    if (connection_id === "core")
+      expect(corePinned.has(at.terminal_id)).toBe(true);
+  }
+  // Every start resumed the same conversation; nothing asked to start fresh.
+  expect(log).toEqual(route.map(([id]) => `start ${id} --resume session-1`));
 });
