@@ -107,7 +107,7 @@ Agents that are not running live on in the apartment building beside the town ce
 3. Search residents by name, project, summary, pull request or date.
 4. Open one to read its history; resume a Claude or Codex agent into a room, or evict it.
 
-Where: Town, the building beside the town center; also Apartments in the town center ring and Board's hub. Since 0.3.6.
+Where: Town, the building beside the town center; also Apartments in the town center ring, and Past sessions in Board's hub. Since 0.3.6.
 
 <a id="town-quiet"></a>
 

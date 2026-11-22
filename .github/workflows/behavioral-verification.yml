@@ -52,32 +52,10 @@ jobs:
         run: |
           bun run verification:typecheck
           bun run verification:notices:check
-      - name: Hash model, adapter, replay, tooling and seed inputs
-        id: content
-        run: bun scripts/ci-model-cache.ts key ${{ matrix.shard }}
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: github.event_name == 'pull_request'
-        with:
-          path: .agents/model-cache/${{ matrix.shard }}
-          key: model-evidence-v1-${{ matrix.shard }}-${{ steps.content.outputs.hash }}
-      - name: Validate reusable model evidence
-        id: reuse
-        if: github.event_name == 'pull_request'
-        run: bun scripts/ci-model-cache.ts restore ${{ matrix.shard }}
       - name: Run all accepted models within enforced resource limits
-        if: steps.reuse.outputs.reused != 'true'
         run: bun run verification:resources --system --shard=${{ matrix.shard }}/3
       - name: Exercise a failing candidate and verify retained diagnostics
-        if: steps.reuse.outputs.reused != 'true'
         run: bun run verification:diagnostic-control
-      - name: Prepare passing model evidence for reuse
-        if: steps.reuse.outputs.reused != 'true'
-        run: bun scripts/ci-model-cache.ts save ${{ matrix.shard }}
-      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: success() && steps.reuse.outputs.reused != 'true'
-        with:
-          path: .agents/model-cache/${{ matrix.shard }}
-          key: model-evidence-v1-${{ matrix.shard }}-${{ steps.content.outputs.hash }}
       - name: Retain source-bound evidence manifests
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -85,7 +63,6 @@ jobs:
           name: behavioral-shard-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: |
             .agents/verification/runs/**/manifest.json
-            .agents/verification/runs/**/origin.json
             .agents/verification/diagnostics/**
             .agents/verification/resources/**/resources.json
           include-hidden-files: true
@@ -107,9 +84,6 @@ jobs:
         with:
           bun-version: "1.4.4"
           no-cache: true
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24.19.0"
       - name: Install pinned verification Java
         uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:

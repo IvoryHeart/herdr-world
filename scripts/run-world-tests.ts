@@ -57,10 +57,6 @@ try {
   console.info(
     `[world-test-runner] ${label}: ${files.length} files; shared bundles built in ${Math.round(performance.now() - began)}ms`,
   );
-  if (files.some((path) => path.includes("/town/TownCanvas")))
-    await buildWorldBrowserBundle("town/TownCanvas", directory);
-  if (files.some((path) => path.includes("/SharedViewCreation")))
-    await buildWorldBrowserBundle("SharedViewCreation", directory);
   const child = Bun.spawn(
     [
       process.execPath,

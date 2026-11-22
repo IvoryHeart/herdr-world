@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { assertDeliveryResults } from "./ci-delivery-result";
 
-const ok = ["success", "success"];
-const skip = ["skipped", "success"];
+const ok = ["success", "success", "success"];
+const skip = ["skipped", "skipped", "success"];
 
 test("full delivery requires both repository validation and every World shard to succeed", () => {
   expect(() =>
@@ -104,7 +104,7 @@ test("behavioral failure, cancellation and missing evidence block full delivery"
 
 test("every native result is required, including macOS jobs that skip native steps", () => {
   for (const result of ["failure", "cancelled", "skipped", undefined]) {
-    for (const index of [0, 1]) {
+    for (const index of [0, 1, 2]) {
       const packaging: Array<string | undefined> = [...ok];
       packaging[index] = result;
       expect(() =>
@@ -131,7 +131,7 @@ test("every native result is required, including macOS jobs that skip native ste
     "skipped",
     undefined,
   ]) {
-    for (const index of [0, 1]) {
+    for (const index of [0, 1, 2]) {
       if (result === skip[index]) continue;
       const packaging: Array<string | undefined> = [...skip];
       packaging[index] = result;
@@ -163,6 +163,7 @@ test("tooling delivery requires validation and protected macOS reports, with hea
   const results = [
     "success",
     "success",
+    "skipped",
     "skipped",
     "skipped",
     "skipped",
@@ -207,6 +208,7 @@ test("scoped delivery accepts only its planned jobs and rejects every absent or 
           "success",
           browser ? "success" : "skipped",
           verification ? "success" : "skipped",
+          packaging ? "success" : "skipped",
           packaging ? "success" : "skipped",
           "success",
         ];

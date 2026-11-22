@@ -1,19 +1,7 @@
 /* The Library (#1027): readers | shelves | the open book on desktop; one
    pane at a time on a phone. Books carry the Town library's spine colours. */
 
-.modal.memory-library {
-  width: min(1120px, 100%);
-  height: min(780px, calc(100vh - 36px));
-  max-height: none;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 16px 18px 12px;
-}
-
-.memory-head {
-  margin-bottom: 10px;
-}
+/* Its frame and size are Town's one window (PlaceWindow, #1170). */
 
 .memory-title {
   display: flex;
@@ -726,11 +714,6 @@ button.memory-primary:hover:not(:disabled) {
 
 /* A phone shows the shelves or the open book, with Back between them. */
 @media (max-width: 640px) {
-  .modal.memory-library {
-    height: calc(100dvh - 24px);
-    padding: 12px;
-  }
-
   .memory-banner {
     width: 48px;
   }

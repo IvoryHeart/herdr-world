@@ -1,4 +1,11 @@
-import { memo, useEffect, useRef, useState, type FocusEvent } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FocusEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import type { WorldSourcesSnapshot } from "../../../../shared/worldSources";
 import {
@@ -6,7 +13,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "../../components/ui/popover";
-import { openIntegrations } from "../../integrations";
 import { PullRequestCard } from "../PullRequestCard";
 import { BadgePopover } from "./DeskWorkBadge";
 import type { TownCenterLot } from "./townCenter";
@@ -28,6 +34,8 @@ import {
 import { useTownWarehouseSources } from "./townWarehouseFixture";
 import type { TownRendererHandle } from "./townRenderer";
 import { useOpenTownWork } from "./TownWorkLens";
+import { TownIntegrationsWindow } from "./TownIntegrationsWindow";
+import { useTownPlace } from "./useTownPlace";
 import { townCrateUrl, type TownCrateState } from "./townHarbourArt";
 import "./townWarehouse.css";
 
@@ -39,8 +47,6 @@ const crateArt = (state: TownCrateState) => {
 
 /** How long a parcel takes to leave the yard (townWarehouse.css). */
 export const TOWN_WAREHOUSE_LEAVE_MS = 1_400;
-
-const openSourcesSettings = () => openIntegrations("source:github");
 
 /** A parcel leaving the yard: carried off when merged, else just gone. */
 type Leaving = {
@@ -178,6 +184,9 @@ export const TownWarehouse = memo(function TownWarehouse({
   const openWork = useOpenTownWork();
   const leaving = useLeaving(office, snapshot);
   const [cardKey, setCardKey] = useState<string | null>(null);
+  // Integrations at the GitHub row, in Town's one window (#1170).
+  const [connecting, setConnecting] = useState(false);
+  const openConnect = useCallback(() => setConnecting(true), []);
   const cardAnchor = useRef<HTMLElement | null>(null);
   const yardRef = useRef<HTMLDivElement | null>(null);
   const item = cardKey
@@ -234,11 +243,16 @@ export const TownWarehouse = memo(function TownWarehouse({
   const connect = office.status === "off" || office.status === "closed";
   // Work opens only once GitHub has answered; loading keeps the old sign.
   const work = office.status === "open" ? openWork : undefined;
+  // The building opens what its sign does (#1170): Integrations while GitHub
+  // is off, Work once it has answered, both in Town's one window; nothing
+  // while it is loading.
+  useTownPlace("warehouse", connect ? openConnect : (work ?? null));
   return (
     <>
       <button
         type="button"
         className="town-warehouse-sign"
+        data-town-place="warehouse"
         data-quiet={quiet || undefined}
         style={{ left: (lot.x + lot.w) * T - 12, top: lot.y * T + 34 }}
         aria-label={`Warehouse: ${spoken(office)}${work ? ". Open all pull requests" : ""}`}
@@ -247,7 +261,7 @@ export const TownWarehouse = memo(function TownWarehouse({
         onFocus={reveal}
         onClick={(event) => {
           event.stopPropagation();
-          if (connect) openSourcesSettings();
+          if (connect) openConnect();
           else if (work) work();
           else
             yardRef.current
@@ -345,10 +359,14 @@ export const TownWarehouse = memo(function TownWarehouse({
           office={office}
           onOpen={openCard}
           onOpenWork={openWork}
+          onConnect={openConnect}
           onFocus={reveal}
         />
       ) : null}
       {card}
+      {connecting ? (
+        <TownIntegrationsWindow onClose={() => setConnecting(false)} />
+      ) : null}
     </>
   );
 });
@@ -514,12 +532,14 @@ function FoldedSign({
   office,
   onOpen,
   onOpenWork,
+  onConnect,
   onFocus,
 }: {
   center: TownCenterLot;
   office: Office;
   onOpen(key: string, anchor: HTMLElement | null): void;
   onOpenWork: (() => void) | null;
+  onConnect(): void;
   onFocus(event: FocusEvent<HTMLElement>): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -592,7 +612,7 @@ function FoldedSign({
               className="town-warehouse-setup"
               onClick={() => {
                 setOpen(false);
-                openSourcesSettings();
+                onConnect();
               }}
             >
               Connect GitHub

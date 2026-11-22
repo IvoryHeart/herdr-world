@@ -114,10 +114,8 @@ export type RpcServices = {
   worldCli: ReturnType<typeof createWorldCliService>;
   worldSnapshots: ObservedSnapshots | null;
   boardElements?: import("../world/board-element-service").BoardElementService;
-  worldUsage?: import("../usage/service").WorldUsageService;
   /** Installed web IDEs and their World-owned servers (world.ide.*). */
   ide?: import("../ide/service").IdeService;
-  worldUsageAnalytics?: import("../usage/analytics").WorldUsageAnalyticsService;
   /** The owner's focus session (world.focus.*). */
   focus?: import("../world/focus").FocusService;
 };

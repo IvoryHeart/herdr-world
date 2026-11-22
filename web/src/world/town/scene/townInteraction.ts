@@ -36,6 +36,7 @@ import { townHitKey, townHitTest, type TownHit } from "../townHitTest";
 import type { TownLayout } from "../townLayout";
 import type { TownModel } from "../townModel";
 import type { TownMoveResult } from "../townMoves";
+import type { TownPlaceKey } from "../townPlaces";
 import type { TownTeams } from "../townTeams";
 import type { TownClock, TownFrames } from "./ports";
 import type { TownSceneCamera } from "./townSceneCamera";
@@ -108,6 +109,14 @@ export type TownInteractionPorts = {
   openReception?(hostKey: string | null): void;
   /** Open the town center's radial menu. */
   openCenter(): void;
+  /**
+   * Whether a place's building opens a window (townPlaces.ts), and opening
+   * it, as its sign does. Without them a building is only scenery.
+   */
+  opensPlace?(key: TownPlaceKey): boolean;
+  openPlace?(key: TownPlaceKey): void;
+  /** The place a mouse is over, or null: its sign lights. */
+  hoverPlace?(key: TownPlaceKey | null): void;
   move(command: TownMoveCommand): Promise<TownMoveResult>;
   /** The label that follows a carry: shown on lift, aimed as it moves. */
   ghost: {
@@ -205,6 +214,9 @@ export class TownInteraction {
           }
         },
         seated: (key) => stage.actorPosition(key)?.seated ?? true,
+        places: this.ports.opensPlace
+          ? (key) => this.ports.opensPlace?.(key) ?? false
+          : undefined,
       },
       world.x,
       world.y,
@@ -299,6 +311,7 @@ export class TownInteraction {
         ? `building:${hit.key}`
         : townHitKey(hit);
     if (key !== this.ports.hovered()) this.ports.setHovered(key);
+    this.ports.hoverPlace?.(hit?.kind === "place" ? hit.key : null);
     this.ports.cursor(
       hit?.kind === "room" &&
         hit.edge &&
@@ -339,6 +352,7 @@ export class TownInteraction {
     if (!this.gesture.pointers.size) {
       this.ports.setHovered(null);
       this.ports.hover(null);
+      this.ports.hoverPlace?.(null);
     }
   }
 
@@ -591,6 +605,10 @@ export class TownInteraction {
     const { layout } = this.ports.world();
     if (hit.kind === "center") {
       this.ports.openCenter();
+      return;
+    }
+    if (hit.kind === "place") {
+      this.ports.openPlace?.(hit.key);
       return;
     }
     if (hit.kind === "reception") {

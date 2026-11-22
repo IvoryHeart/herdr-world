@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { WorkLens, type WorkLensTab } from "../board/WorkLens";
+import { PlaceWindow } from "../PlaceWindow";
 import type { WorldObject } from "../worldObject";
 import { AnswerOutboxContext } from "./answerOutbox";
 import { TownOpenUsageContext, useTownUsage } from "./TownUsageLens";
@@ -49,16 +50,26 @@ export function TownWorkLens({
       )
       ?.focus({ preventScroll: true });
   }, []);
+  // Town's one window (#1170): the warehouse and the Shipyard open it.
   return (
-    <WorkLens
-      world={world}
-      sources={sources}
-      className="town-work"
-      initialTab={tab}
-      agentAction={(label) => `Open agent ${label}`}
-      onSelectAgent={onSelectAgent}
+    <PlaceWindow
+      name="work"
+      label="Work"
+      closeLabel="Close Work"
+      bodyClassName="place-window-lens"
       onClose={onClose}
-    />
+    >
+      <WorkLens
+        world={world}
+        sources={sources}
+        className="town-work"
+        initialTab={tab}
+        framed
+        agentAction={(label) => `Open agent ${label}`}
+        onSelectAgent={onSelectAgent}
+        onClose={onClose}
+      />
+    </PlaceWindow>
   );
 }
 

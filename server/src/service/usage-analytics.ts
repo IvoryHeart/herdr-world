@@ -1,8 +1,5 @@
-import type { ConnectionManager } from "../connections/manager";
-import type { LegacyConnectionRuntime } from "../connections/runtime";
+import type { FeatureKernel } from "../features/contract";
 import type { ConnectionProfileService } from "../connections/profile-service";
-import type { CoreConnections } from "../herdr-core/connections";
-import type { CoreRpcServices } from "../rpc/core";
 import type { ObservedSnapshots } from "../rpc/context";
 import type { WorldRuntimeStatus } from "../world/runtime-registry";
 import type { GuiSettingsStore } from "../config/gui-settings";
@@ -22,9 +19,9 @@ import { join } from "node:path";
 
 /** One shared read service for both runtime kinds; all host reads keep their lease. */
 export function composeWorldUsage(args: {
-  connectionManager: ConnectionManager<LegacyConnectionRuntime>;
-  core: CoreConnections;
-  coreRpc: CoreRpcServices;
+  connectionManager: ReturnType<FeatureKernel["connections"]>;
+  core: { manager: ReturnType<FeatureKernel["core"]> };
+  coreRpc: { host: FeatureKernel["coreHost"]; git: FeatureKernel["coreGit"] };
   connectionProfiles: Pick<ConnectionProfileService, "list">;
   observedConnections: { list(): WorldRuntimeStatus[] };
   worldSnapshots: ObservedSnapshots;
@@ -146,7 +143,7 @@ export function composeWorldUsage(args: {
         if (!usageCurrent(id, generation)) return null;
         if (core.manager.has(id)) {
           const lease = core.manager.readyRuntimeLease(id);
-          return lease ? coreRpc.hostRuntime(lease).worktreeGit : null;
+          return lease ? coreRpc.git(lease) : null;
         }
         const lease = connectionManager.readyRuntimeLease(id);
         if (!lease || lease.generation !== generation) return null;

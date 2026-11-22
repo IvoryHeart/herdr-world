@@ -12,6 +12,7 @@ import {
 import { townModelFromProjection } from "../townModel";
 import type { TownMoveResult } from "../townMoves";
 import { townRoomSpotAt, type TownRoomPlacement } from "../townRoomPlace";
+import { townPlaceBoxes } from "../townPlaces";
 import { NO_TOWN_TEAMS, type TownTeams } from "../townTeams";
 import type { TownFrames } from "./ports";
 import {
@@ -141,6 +142,9 @@ function setup(
     activateRoom: (key) => log.push(["room", key]),
     openReception: (key) => log.push(["reception", key]),
     openCenter: () => log.push(["center"]),
+    opensPlace: (key) => key === "post",
+    openPlace: (key) => log.push(["place", key]),
+    hoverPlace: (key) => log.push(["hoverPlace", key]),
     move: (command) => {
       moves.push(command);
       return result;
@@ -319,6 +323,46 @@ test("a tap on the town center opens its menu; a touch hold there pans", () => {
     false,
   );
   expect(t.reasons).toContain("pan");
+});
+
+test("a tap on a place's building opens its window; hovering it lights the sign", () => {
+  const t = setup();
+  const [, box] = townPlaceBoxes(t.layout).find(([key]) => key === "post")!;
+  const world = { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 };
+  t.camera.jumpTo(world.x, world.y, 1);
+  t.draw();
+  const at = t.screen(world);
+  t.interaction.move({ id: 99, at, pointerType: "mouse", client: at });
+  expect(t.log).toContainEqual(["hoverPlace", "post"]);
+  expect(t.log).toContainEqual(["cursor", "pointer"]);
+  t.log.length = 0;
+  t.lift(t.press(at), at);
+  expect(t.log).toContainEqual(["place", "post"]);
+  expect(t.log.some(([kind]) => kind === "select" || kind === "center")).toBe(
+    false,
+  );
+  t.interaction.leave();
+  expect(t.log).toContainEqual(["hoverPlace", null]);
+  // A touch tap opens it the same way.
+  t.log.length = 0;
+  t.time.advance(1000);
+  t.lift(t.press(at, "touch"), at);
+  expect(t.log).toContainEqual(["place", "post"]);
+  // A place that opens nothing is no target.
+  const [, library] = townPlaceBoxes(t.layout).find(
+    ([key]) => key === "library",
+  )!;
+  const shelf = {
+    x: (library.x0 + library.x1) / 2,
+    y: (library.y0 + library.y1) / 2,
+  };
+  t.camera.jumpTo(shelf.x, shelf.y, 1);
+  t.draw();
+  t.log.length = 0;
+  t.time.advance(1000);
+  const there = t.screen(shelf);
+  t.lift(t.press(there), there);
+  expect(t.log.some(([kind]) => kind === "place")).toBe(false);
 });
 
 test("a tap on a roofed building zooms to it", () => {

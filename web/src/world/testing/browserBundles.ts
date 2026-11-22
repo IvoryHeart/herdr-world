@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
-import { assetUrlImports } from "./assetUrlImports";
+import { basename, join } from "node:path";
+import { assetUrlImports, rawSvgImports } from "./assetUrlImports";
 
 // Entry names are checked against the source files at runtime.
 export type WorldBrowserEntry = string;
@@ -17,14 +17,9 @@ export async function discoverWorldBrowserEntries(
 async function entryDirectory(
   entry: WorldBrowserEntry,
   root: string,
-  source = join(import.meta.dir, ".."),
+  source?: string,
 ) {
-  if (
-    !/^[A-Za-z][\w-]*(?:\/[A-Za-z][\w-]*)*$/.test(entry) ||
-    !(await discoverWorldBrowserEntries(join(source, dirname(entry)))).includes(
-      basename(entry),
-    )
-  )
+  if (!(await discoverWorldBrowserEntries(source)).includes(entry))
     throw new Error(`Unknown World browser entry: ${entry}`);
   return join(root, entry);
 }
@@ -46,28 +41,7 @@ export async function buildWorldBrowserBundle(
     entrypoints: [join(source, `${entry}.browser.tsx`)],
     outdir: directory,
     target: "browser",
-    plugins: [
-      assetUrlImports,
-      {
-        name: "world-raw-svg",
-        setup(builder) {
-          builder.onResolve({ filter: /\.svg\?raw$/ }, (args) => ({
-            path: Bun.resolveSync(
-              args.path.slice(0, -4),
-              dirname(args.importer),
-            ),
-            namespace: "raw-svg",
-          }));
-          builder.onLoad(
-            { filter: /.*/, namespace: "raw-svg" },
-            async (args) => ({
-              contents: `export default ${JSON.stringify(await Bun.file(args.path).text())}`,
-              loader: "js",
-            }),
-          );
-        },
-      },
-    ],
+    plugins: [assetUrlImports, rawSvgImports],
   });
   if (!build.success) throw new Error(build.logs.join("\n"));
   const assets = new Map<string, Blob>();
@@ -80,7 +54,7 @@ export async function buildWorldBrowserBundle(
   }
   await Bun.write(
     join(directory, "index.html"),
-    `<link rel="stylesheet" href="/${basename(entry)}.browser.css"><script type="module" src="/${basename(entry)}.browser.js"></script>`,
+    `<link rel="stylesheet" href="/${entry}.browser.css"><script type="module" src="/${entry}.browser.js"></script>`,
   );
   return { directory, assets };
 }

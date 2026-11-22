@@ -64,6 +64,7 @@ import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
+import { usageKey } from "../features/usage/register";
 import { composeWorldUsage, type ComposedWorldUsage } from "./usage-analytics";
 import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
@@ -359,7 +360,7 @@ async function compose(
   const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
     connectionBootstrap.defaultConnectionId,
     (status) => {
-      worldUsage?.connectionStatus(status);
+      features?.connectionStatus(status);
       focusedAcquisition.reconcile();
       deskWatches.reconcile();
       publishConnectionsChanged();
@@ -371,7 +372,6 @@ async function compose(
       );
       bin.connectionStatus(status);
       apartments.apartments.connectionStatus(status);
-      features?.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -724,22 +724,6 @@ async function compose(
     scheduler,
   });
 
-  worldUsage = composeWorldUsage({
-    connectionManager,
-    core,
-    coreRpc,
-    connectionProfiles,
-    observedConnections,
-    worldSnapshots,
-    worldSources,
-    settings,
-    officeObservability,
-    clock,
-    scheduler,
-    serviceIncarnation,
-    config,
-    dataRoot: paths.root,
-  });
   const ide = (worldIde = createWorldIde({
     root: paths.root,
     sshHost: config.sshHost,
@@ -787,14 +771,20 @@ async function compose(
     apartments,
     worldCli,
     worldSnapshots,
-    worldUsage,
     ide,
     boardElements,
-    worldUsageAnalytics: worldUsage.analytics,
   };
   features = composeFeatures(
-    featureKernel(deps, storage, rpcServices, () => worldSources),
+    featureKernel(
+      deps,
+      storage,
+      rpcServices,
+      () => worldSources,
+      { observedConnections, worldSnapshots, officeObservability },
+      composeWorldUsage,
+    ),
   );
+  worldUsage = features.get(usageKey);
   rpcServices.featureRpc = features.rpc;
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
@@ -938,11 +928,10 @@ async function compose(
   async function stopService() {
     // Refuse requests (503), reconnects, pushes, Ranger starts and new answer waits.
     stopping = true;
-    if (features!.hasStop("quiesce")) await features!.stop("quiesce");
     worldSources.weather.close();
     shipyard.stop();
     askPeers.stop();
-    const usageStopped = worldUsage!.close();
+    const featuresStopped = features!.stop("quiesce");
     focusedAcquisition.stop();
     deskWatches.stop();
     connectionProfiles.stopSupervision();
@@ -960,7 +949,7 @@ async function compose(
       if (features!.hasStop("drain")) await features!.stop("drain");
       await connectionManager.stopAll();
       await core.stop();
-      await usageStopped;
+      await featuresStopped;
       await startTask?.catch(() => {});
       await assistant.dispose();
       await drained();

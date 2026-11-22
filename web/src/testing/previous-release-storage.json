@@ -1,5 +1,0 @@
-{
-  "release": "v0.3.5",
-  "source": "web/src/App.tsx loadSidebarWidth/loadTheme, shared browser profile before foundation-v2",
-  "storage": { "sidebarWidth": "310", "theme": "light" }
-}

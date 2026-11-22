@@ -2,3 +2,4 @@
 export * as feature_memory from "./memory/register";
 export * as feature_presence from "./presence/register";
 export * as feature_testing_probe from "./testing/probe/register";
+export * as feature_usage from "./usage/register";
