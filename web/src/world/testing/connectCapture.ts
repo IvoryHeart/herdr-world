@@ -19,9 +19,15 @@ export async function connectCapture(port: string) {
       timer: ReturnType<typeof setTimeout>;
     }
   >();
+  const listeners = new Map<string, Set<(params: any) => void>>();
   socket.onmessage = (event) => {
     const message = JSON.parse(String(event.data)),
       request = pending.get(message.id);
+    if (message.method) {
+      for (const listener of listeners.get(message.method) ?? [])
+        listener(message.params);
+      return;
+    }
     if (!request) return;
     pending.delete(message.id);
     clearTimeout(request.timer);
@@ -45,5 +51,12 @@ export async function connectCapture(port: string) {
     }
     pending.clear();
   };
-  return { command, close: () => socket.close() };
+  /** Subscribes to a CDP event; returns the unsubscribe. */
+  const on = (method: string, listener: (params: any) => void) => {
+    const set = listeners.get(method) ?? new Set();
+    set.add(listener);
+    listeners.set(method, set);
+    return () => set.delete(listener);
+  };
+  return { command, on, close: () => socket.close() };
 }

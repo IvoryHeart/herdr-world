@@ -200,6 +200,10 @@ import { orderTabsForDisplay, tabPinsFor } from "./tabPins";
 import { copyTextFromUserGesture } from "./terminalClipboard";
 import { terminalPasteRequest } from "./terminalPaste";
 import {
+  installTerminalInputFocusFlag,
+  syncTerminalInputFocus,
+} from "./terminalInputFocus";
+import {
   readTerminalComposerDraft,
   subscribeTerminalComposerDraft,
   terminalComposerDraftKey,
@@ -561,6 +565,9 @@ function useVisualViewportCssVars(uiScale: number) {
       );
       const keyboardOpen = keyboardInset > 24;
       root.classList.toggle("keyboard-open", keyboardOpen);
+      // Firefox removes a focused input without focusout; the keyboard
+      // closing then brings the focus flag up to date.
+      syncTerminalInputFocus();
       root.style.setProperty(
         "--app-viewport-height",
         `${Math.round(height / geometryScale)}px`,
@@ -937,6 +944,7 @@ export default function App({
   );
   const [uiScale, setUiScale] = useState<number>(() => loadUiScale());
   useVisualViewportCssVars(uiScale);
+  useEffect(() => installTerminalInputFocusFlag(), []);
   const [terminalFontScale, setTerminalFontScale] = useState<number>(() =>
     loadTerminalFontScale(),
   );

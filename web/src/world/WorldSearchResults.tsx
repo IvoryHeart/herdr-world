@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useRootFlag } from "../rootFlag";
 import { AgentMark } from "../components/AgentMark";
 import { agentMarkKind } from "./agentMarks";
 import type { WorldObject } from "./worldObject";
@@ -105,6 +106,8 @@ export function WorldSearchResults({
   offscreen?: number;
 }) {
   const [pageState, setPageState] = useState({ query, page: 0 });
+  // The phone overlay drops its own count while these show (world-shell.css).
+  useRootFlag("data-world-search-results", Boolean(query.trim()));
   if (!query.trim()) return null;
   const matches = given ?? worldSearchResults(world, query);
   const pages = Math.max(1, Math.ceil(matches.length / PAGE));
