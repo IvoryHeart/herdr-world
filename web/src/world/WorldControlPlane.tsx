@@ -17,6 +17,7 @@ import type { AgentStartFrom } from "./agentStarts";
 import { useDeskReveal } from "./deskReveal";
 import { DeskView } from "./DeskView";
 import { useStableCallback } from "./useStableCallback";
+import { LazyCodeView as CodeView } from "./code/LazyCodeView";
 import { GroupsWindow } from "./groups/GroupsWindow";
 import {
   floatingTerminalGeometryId,
@@ -79,9 +80,6 @@ const BoardView = memo(
   lazyWithReload("world-board", () => import("./BoardView")),
 );
 const MemoDeskView = memo(DeskView);
-const CodeView = memo(
-  lazyWithReload("world-code", () => import("./code/CodeView")),
-);
 
 const AgentLauncherDialog = lazyWithReload("world-agent-launcher", () =>
   import("./AgentLauncherDialog").then((module) => ({
