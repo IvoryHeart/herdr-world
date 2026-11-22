@@ -26,6 +26,7 @@ import {
   type TownRoadGraph,
 } from "./townBusDrive";
 import type { TownDirection } from "./townSprites";
+import { townBuildingOf } from "./townBuildings";
 
 /** A street is five tiles: pavement, three lanes, pavement. */
 const STREET = 5;
@@ -300,7 +301,8 @@ export function townBinRiders(
     if (!agentKey) continue;
     away.add(agentKey);
     const agent = model.agents.get(agentKey)!;
-    const building = layout.buildings.find((b) => b.hostKey === agent.hostKey);
+    const home = townBuildingOf(agent);
+    const building = layout.buildings.find((b) => b.hostKey === home);
     const stop = building
       ? townNearestStop(route, layout, building, agent.roomKey)
       : null;

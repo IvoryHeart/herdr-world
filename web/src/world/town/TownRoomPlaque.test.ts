@@ -221,6 +221,41 @@ test("a folded plaque totals hidden agents as well as its 24 visible desks", asy
   }
 });
 
+test("a room's plaque and card name its runtime when its building has two", async () => {
+  const office = roomWith(["working"]);
+  const counts = townModelFromProjection(office).roomCounts.get(
+    office.rooms[0]!.key,
+  )!;
+  const browser = new Window();
+  try {
+    for (const tag of [undefined, "herdr-core"]) {
+      browser.document.body.innerHTML = renderToStaticMarkup(
+        createElement(TownRoomPlaque, {
+          room: { ...office.rooms[0]!, runtimeTag: tag },
+          label: "Studio",
+          width: 176,
+          counts,
+          color: null,
+          actions,
+        }),
+      );
+      const plaque = browser.document.querySelector(".town-room-plaque")!;
+      expect(
+        plaque.querySelector(".town-room-plaque-runtime")?.textContent ?? null,
+      ).toBe(tag ?? null);
+      expect(
+        plaque.querySelector(".town-room-plaque-runtime-line")?.textContent ??
+          null,
+      ).toBe(tag ? `Runtime: ${tag}` : null);
+      expect(plaque.getAttribute("aria-label")!.split(":")[0]).toBe(
+        tag ? `Studio (${tag})` : "Studio",
+      );
+    }
+  } finally {
+    await browser.happyDOM.close();
+  }
+});
+
 test("a name World derived for an unnamed space reads lighter and says where it came from (#1103)", async () => {
   const browser = new Window();
   try {
