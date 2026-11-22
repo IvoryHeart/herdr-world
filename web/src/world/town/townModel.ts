@@ -178,6 +178,49 @@ const deskTarget = (
   workspaceIds: ids.get(desk.tabRef.connectionId) ?? new Set(),
 });
 
+/**
+ * Each place connection's workspace IDs (`townPlaceConnectionOf`), which
+ * qualify a colliding tab key in a desk's pin key.
+ */
+function placeWorkspaceIdsOf(projection: HerdrOfficeProjection) {
+  const ids = new Map<string, Set<string>>();
+  for (const room of projection.rooms) {
+    const connectionId = townPlaceConnectionOf(room);
+    if (!ids.has(connectionId)) ids.set(connectionId, new Set());
+    ids.get(connectionId)!.add(room.workspaceRef.nativeId);
+  }
+  return ids;
+}
+
+/**
+ * What a desk's pin is kept under: its tab's card key on the connection Town
+ * places its room by, so a takeover of its endpoint (townBuildings.ts) keeps
+ * the pin. Presentation and World's own pin order only: actions read the
+ * desk's `tabRef`.
+ */
+function deskPinKey(
+  room: OfficeRoom,
+  desk: OfficeDesk,
+  ids: ReadonlyMap<string, ReadonlySet<string>>,
+) {
+  const connectionId = townPlaceConnectionOf(room);
+  return terminalColorKey({
+    connectionId,
+    workspaceId: room.workspaceRef.nativeId,
+    tabId: desk.tabRef.nativeId,
+    workspaceIds: ids.get(connectionId) ?? new Set(),
+  });
+}
+
+/** The key a Town desk's pin is saved under (`deskPinKey`), if it has a room. */
+export function townDeskPinKey(
+  projection: HerdrOfficeProjection,
+  desk: OfficeDesk,
+): string | null {
+  const room = projection.rooms.find((entry) => entry.key === desk.roomKey);
+  return room ? deskPinKey(room, desk, placeWorkspaceIdsOf(projection)) : null;
+}
+
 /** What a desk's colour is saved under: its Herdr tab on its connection. */
 export function townDeskColorTarget(
   projection: HerdrOfficeProjection,
@@ -216,10 +259,10 @@ export function townDeskPins(
 ): ReadonlyMap<string, TownDeskPin> {
   const deskPins = new Map<string, TownDeskPin>();
   if (!Object.keys(pins).length) return deskPins;
-  const ids = workspaceIdsOf(projection);
+  const ids = placeWorkspaceIdsOf(projection);
   for (const room of projection.rooms)
     for (const desk of room.desks) {
-      const key = terminalColorKey(deskTarget(room, desk, ids));
+      const key = deskPinKey(room, desk, ids);
       const pin = pins[key];
       if (pin) deskPins.set(desk.key, { key, rank: pin.rank ?? null });
     }

@@ -316,8 +316,13 @@ export function townMoveActions({
         toast("error", `${label} not moved: ${conflict}`);
         return "returned";
       }
+      // herdr-core keeps no workspace order: its rooms keep their spots.
       const outcome = await requestBuildingRoomOrder(
         rooms as OfficeRoom[],
+        (each) =>
+          world.hosts.find(
+            (host) => host.connectionId === each.workspaceRef.connectionId,
+          )?.connection.runtime !== "herdr-core",
       ).catch((cause: unknown) => ({
         status: "refused" as const,
         reason: "failed",

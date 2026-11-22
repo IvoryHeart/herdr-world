@@ -161,30 +161,73 @@ const RUNTIME_ORDER_STRIDE = 1_000_000;
  * live: then that view's (writable first), standing where the anchor's
  * stood, so a takeover moves no building and no saved room.
  */
-function endpointViews(
-  known: readonly OfficeHost[],
+function endpointViews<View extends { connectionId: string; stale: boolean }>(
+  known: readonly View[],
   runtimeOf: ReadonlyMap<string, TownRuntime>,
 ) {
-  const hidden = new Set<string>();
-  const placeOf = new Map<string, OfficeHost>();
-  const byEndpoint = new Map<string, OfficeHost[]>();
-  for (const host of known) {
-    const endpoint = runtimeOf.get(host.connectionId)!.endpoint;
-    byEndpoint.set(endpoint, [...(byEndpoint.get(endpoint) ?? []), host]);
+  const hidden = new Set<View>();
+  const placeOf = new Map<View, View>();
+  const byEndpoint = new Map<string, View[]>();
+  for (const view of known) {
+    const endpoint = runtimeOf.get(view.connectionId)!.endpoint;
+    byEndpoint.set(endpoint, [...(byEndpoint.get(endpoint) ?? []), view]);
   }
-  const writable = (host: OfficeHost) =>
-    runtimeOf.get(host.connectionId)!.writable;
+  const writable = (view: View) => runtimeOf.get(view.connectionId)!.writable;
   for (const views of byEndpoint.values()) {
     if (views.length < 2) continue;
     const anchor = views.find(writable) ?? views[0]!;
-    const live = views.filter((host) => !host.stale);
+    const live = views.filter((view) => !view.stale);
     const kept = !anchor.stale
       ? anchor
       : (live.find(writable) ?? live[0] ?? anchor);
-    for (const host of views) if (host !== kept) hidden.add(host.key);
-    if (kept !== anchor) placeOf.set(kept.key, anchor);
+    for (const view of views) if (view !== kept) hidden.add(view);
+    if (kept !== anchor) placeOf.set(kept, anchor);
   }
   return { hidden, placeOf };
+}
+
+/**
+ * The live view Town shows for each endpoint whose anchor is down, by
+ * connection ID: the anchor's connection ID. Town's room spots, colours and
+ * desk pins are read and saved under the anchor's (`placeConnectionId`), and
+ * the office projection admits a folded room's pinned desks by them too
+ * (useTownOffice.ts), so a takeover keeps every pinned desk at its seat.
+ * `hosts` are World's hosts, stale as the office projection reads them.
+ */
+export function townEndpointStandIns(
+  hosts: readonly { connectionId: string; stale: boolean }[],
+  runtimes: readonly TownRuntime[],
+): Map<string, string> {
+  const runtimeOf = new Map(runtimes.map((each) => [each.id, each]));
+  const { placeOf } = endpointViews(
+    hosts.filter((host) => runtimeOf.has(host.connectionId)),
+    runtimeOf,
+  );
+  return new Map(
+    [...placeOf].map(([kept, anchor]) => [
+      kept.connectionId,
+      anchor.connectionId,
+    ]),
+  );
+}
+
+/**
+ * Pinned tab card keys with each stand-in's copy of its anchor's pins, so
+ * the projection admits the stand-in's pinned desks first in folded rooms,
+ * as it did the anchor's. Views of one endpoint share workspace and tab IDs,
+ * so only the connection prefix differs.
+ */
+export function townStandInPins(
+  pinned: ReadonlySet<string>,
+  standIns: ReadonlyMap<string, string>,
+): ReadonlySet<string> {
+  if (!pinned.size || !standIns.size) return pinned;
+  const aliased = new Set(pinned);
+  for (const [kept, anchor] of standIns)
+    for (const key of pinned)
+      if (key.startsWith(`${anchor}:`))
+        aliased.add(`${kept}:${key.slice(anchor.length + 1)}`);
+  return aliased;
 }
 
 /** The hosts Town shows, in order: a taken-over view in its anchor's place. */
@@ -213,7 +256,11 @@ function plan(
 ): Plan {
   const runtimeOf = new Map(runtimes.map((each) => [each.id, each]));
   const known = office.hosts.filter((host) => runtimeOf.has(host.connectionId));
-  const { hidden, placeOf } = endpointViews(known, runtimeOf);
+  const views = endpointViews(known, runtimeOf);
+  const hidden = new Set([...views.hidden].map((host) => host.key));
+  const placeOf = new Map(
+    [...views.placeOf].map(([kept, anchor]) => [kept.key, anchor]),
+  );
   const buildingOf = new Map<string, string>();
   const tagOf = new Map<string, string>();
   const orderOffset = new Map<string, number>();

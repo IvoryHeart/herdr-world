@@ -645,6 +645,58 @@ test.skipIf(!chrome)(
           page.calls.filter((call) => /^(tui-|remote)/.test(call.method)),
         ).toEqual([]);
         expect(page.failures).toEqual([]);
+
+        // A TUI room moved by its arrow in the machine's building, which
+        // holds core rooms too: World saves the spots, then orders only the
+        // TUI's workspaces, on the TUI's connection and generation.
+        if (mode === "machine") {
+          const room05 = tuiRooms.find((room) =>
+            room.label.includes("Room 05"),
+          )!;
+          expect(await visit(mode, room05.key, "Room 05")).toBeNull();
+          const name = await centre(
+            `${plaqueOf("Room 05")}?.querySelector('.town-room-plaque-name')`,
+          );
+          expect(name).not.toBeNull();
+          await move(name!);
+          const arrow = await evaluate<string | null>(
+            `[...${plaqueOf("Room 05")}.querySelectorAll('[aria-label^="Move room "]')].map((b) => b.getAttribute('aria-label')).find((n) => n.includes(' before ') || n.includes(' after ')) ?? null`,
+          );
+          expect(arrow).not.toBeNull();
+          const point = await centre(control(plaqueOf("Room 05"), arrow!));
+          expect(point).not.toBeNull();
+          await click(point!);
+          await waitFor(
+            "window.__ownerTopology.calls.some((c) => c.method === 'tui-default@1:workspace.move')",
+            "the TUI's workspace order",
+          );
+          await settled();
+          await Bun.sleep(300);
+          const after = await evaluate<{
+            failures: string[];
+            calls: { method: string; params: Record<string, unknown> }[];
+          }>("window.__ownerTopology");
+          const ordered = after.calls
+            .map((call) => call.method)
+            .filter((method) => /:workspace\./.test(method));
+          expect(ordered.length).toBeGreaterThan(1);
+          expect(
+            ordered.every((method) => method.startsWith("tui-default@1:")),
+          ).toBe(true);
+          expect(
+            after.calls.some(
+              (call) =>
+                call.method === "world.board.patch" &&
+                JSON.stringify(call.params).includes('"room.place"'),
+            ),
+          ).toBe(true);
+          const toasts = await evaluate<string>(
+            "[...document.querySelectorAll('.toast-viewport, [role=status], [role=alert]')].map((each) => each.textContent).join(' | ')",
+          );
+          expect(toasts).not.toContain("not moved");
+          expect(toasts).not.toContain("old order");
+          expect(after.failures).toEqual([]);
+        }
       }
     } finally {
       connection?.close();

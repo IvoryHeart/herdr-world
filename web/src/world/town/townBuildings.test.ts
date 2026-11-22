@@ -9,12 +9,15 @@ import {
   createTownBuildings,
   townBuildingOf,
   townBuildingsMode,
+  townEndpointStandIns,
   type TownRuntime,
   townRuntimes,
+  townStandInPins,
 } from "./townBuildings";
 import { hostColorKey } from "../terminalColor";
 import { layoutTown } from "./townLayout";
 import { townModelFromProjection, townRoomSpots } from "./townModel";
+import { townRoomPinnedSeats } from "./townPinOrder";
 import { roomSpotsByRuntime } from "./townRoomPins";
 
 // The owner's shape: this computer's Herdr TUI seen through two connections
@@ -385,4 +388,75 @@ test("a takeover of a socket keeps its building, saved spots and colours", () =>
   const perRuntime = (down: string | null) =>
     shown(createTownBuildings()(twins(down), runtimes, "runtime")).buildings;
   expect(perRuntime("tui-profile")).toEqual(perRuntime(null));
+});
+
+test("a takeover of a socket keeps its pinned desks at their seats", () => {
+  // Ten desks in a room folded to eight: only a pin admits the first. The
+  // pin was saved on the writable profile, which then drops.
+  const tabs = Array.from({ length: 10 }, (_, n) => ({
+    label: `Tab ${n + 1}`,
+    panes: [["idle"]] as [string][],
+  }));
+  const twins = (down: string | null) =>
+    fixtureWorld([
+      ...["tui-default", "tui-profile"].map((id) =>
+        fixtureHost(id, [{ label: "Web", tabs }] as never, {
+          stale: id === down,
+        }),
+      ),
+      fixtureHost("core", [
+        { label: "Core", tabs: [{ label: "Run", panes: [["idle"]] }] },
+      ]),
+    ]);
+  const pin = "tui-profile:w1:t1";
+  const deskPins = { [pin]: { cell: null, rank: 0 } } as never;
+  const pinned = (down: string | null) => {
+    const shownWorld = twins(down);
+    const standIns = townEndpointStandIns(
+      shownWorld.hosts.map((host) => ({
+        connectionId: host.connectionId,
+        stale: host.stale || host.hostState === "offline-stale",
+      })),
+      runtimes,
+    );
+    const town = createTownBuildings()(
+      projectWorldOffice(
+        shownWorld,
+        0,
+        null,
+        undefined,
+        townStandInPins(new Set([pin]), standIns),
+      ),
+      runtimes,
+      "host",
+    );
+    const model = townModelFromProjection(town, {}, deskPins);
+    const room = town.rooms.find((each) => each.displayLabel === "Web")!;
+    return {
+      standIns: [...standIns],
+      tabs: room.desks.map((desk) => desk.tabRef.nativeId),
+      pins: [...model.deskPins.values()],
+      seats: townRoomPinnedSeats(town, room, deskPins).map(
+        (seat) => seat.pinKey,
+      ),
+      // The pinned desk's actions reach the view Town shows.
+      actsOn: room.desks.find((desk) => model.deskPins.has(desk.key))?.tabRef
+        .connectionId,
+    };
+  };
+  const steady = pinned(null);
+  expect(steady.standIns).toEqual([]);
+  expect(steady.tabs).toContain("w1:t1");
+  expect(steady.pins).toEqual([{ key: pin, rank: 0 }]);
+  expect(steady.actsOn).toBe("tui-profile");
+  const takenOver = pinned("tui-profile");
+  expect(takenOver.standIns).toEqual([["tui-default", "tui-profile"]]);
+  // Admitted, pinned and ordered under the same key; acting on the default.
+  expect(takenOver.tabs).toEqual(steady.tabs);
+  expect(takenOver.pins).toEqual(steady.pins);
+  expect(takenOver.seats).toEqual([pin]);
+  expect(takenOver.actsOn).toBe("tui-default");
+  // Without a stand-in, the pins are as saved.
+  const saved = new Set([pin]);
+  expect(townStandInPins(saved, new Map())).toBe(saved);
 });

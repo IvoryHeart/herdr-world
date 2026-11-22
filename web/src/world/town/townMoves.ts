@@ -223,17 +223,29 @@ export function townRoomsByRuntime<
 }
 
 /**
- * Put a building's rooms in order in each runtime that owns some of them,
- * each on its own connection and generation. A stale runtime's rooms keep
- * Herdr's order until it is back; the first refusal is the outcome.
+ * Put a building's rooms in order in each runtime that owns some of them and
+ * keeps a workspace order (`ordersRooms`: a Herdr TUI, not herdr-core, whose
+ * rooms keep only their spots), each on its own connection and generation.
+ * A stale runtime's rooms keep Herdr's order until it is back. Every
+ * runtime's ordering finishes before this does; the first refusal is the
+ * outcome.
  */
 export async function requestBuildingRoomOrder(
   rooms: readonly OfficeRoom[],
+  ordersRooms: (room: OfficeRoom) => boolean,
 ): Promise<TownRoomMoveOutcome> {
   const outcomes = await Promise.all(
     townRoomsByRuntime(rooms)
-      .filter((group) => !group[0]!.stale)
-      .map(requestRoomOrder),
+      .filter((group) => !group[0]!.stale && ordersRooms(group[0]!))
+      .map((group) =>
+        requestRoomOrder(group).catch(
+          (cause: unknown): TownRoomMoveOutcome => ({
+            status: "refused",
+            reason: "failed",
+            message: String(cause),
+          }),
+        ),
+      ),
   );
   return (
     outcomes.find((outcome) => outcome.status !== "moved") ?? {

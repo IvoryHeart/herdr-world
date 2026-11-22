@@ -87,6 +87,15 @@ Object.assign(bridge, {
         method: `${connectionId}@${generation}:${method}`,
         params,
       });
+      // Herdr's workspace order, for a room move's ordering (the runner's
+      // rooms w01..w18); herdr-core has none and is never asked.
+      if (connectionId.startsWith("tui-") && method === "workspace.list")
+        return {
+          workspaces: Array.from({ length: 18 }, (_, index) => ({
+            workspace_id: `w${String(index + 1).padStart(2, "0")}`,
+            number: index + 1,
+          })),
+        };
       return null;
     },
   }),
