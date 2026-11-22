@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cp, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { features } from "./features";
@@ -48,11 +48,25 @@ test("committed index runs in Bun test, dev, and a binary without sources", asyn
     return result.stdout.toString().trim();
   };
   try {
-    await cp(resolve("server/src/features"), source, { recursive: true });
+    // Production features can import service code and shared dependencies.
+    for (const directory of ["server/src", "shared"])
+      await cp(resolve(directory), join(source, directory), {
+        recursive: true,
+      });
+    await symlink(
+      resolve("node_modules"),
+      join(source, "node_modules"),
+      "junction",
+    );
+    await symlink(
+      resolve("server/node_modules"),
+      join(source, "server/node_modules"),
+      "junction",
+    );
     const entry = join(source, "probe.ts");
     await Bun.write(
       entry,
-      'import { feature_testing_probe } from "./index.gen"; console.log(feature_testing_probe.register());',
+      'import { feature_testing_probe } from "./server/src/features/index.gen"; console.log(feature_testing_probe.register());',
     );
     expect(command([bun, "run", entry])).toBe("server-feature");
     console.info("PASS bun run: server-feature");

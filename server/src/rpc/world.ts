@@ -13,7 +13,6 @@ import { handleBinRpc } from "./bin";
 import { handleCoreRpc } from "./core";
 import { handleFloatRpc } from "./float";
 import { handleWorldIntegrationRpc } from "./integration";
-import { ownerPresence } from "./presence";
 import { handleCoreSharedRpc } from "./core-shared";
 import { handleMemoryRpc } from "./memory";
 import { profileWrite } from "../agent/profile-store";
@@ -29,6 +28,8 @@ export function handleWorldRpc(
   rpc: BridgeRpcContext,
 ): false | Promise<false | void> {
   const { method } = rpc;
+  const feature = rpc.services.featureRpc?.get(method);
+  if (feature) return (async () => feature(rpc))();
   if (!method.startsWith("world.")) return false;
   return dispatchWorldRpc(rpc);
 }
@@ -86,10 +87,6 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
     } catch {
       sendError("world-usage-error", new Error("World usage is unavailable"));
     }
-    return;
-  }
-  if (method === "world.presence.seen") {
-    sendReply({ id, result: ownerPresence.seen() }, method);
     return;
   }
   if (method === "world.core.seen" || method === "world.core.favourite")
