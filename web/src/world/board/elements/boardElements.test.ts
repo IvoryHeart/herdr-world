@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { BOARD_ELEMENT_TYPES } from "../../../../../shared/boardElements";
+import { BOARD_HELP } from "../board.help";
 import { fixtureHost, fixtureWorld } from "../boardFixture";
 import {
   ARRIVING_KINDS,
   BOARD_KIND_PRESENTATION,
   classifyLink,
+  DEFAULT_TITLES,
   PLACED_KINDS,
 } from "./boardElementKinds";
 import {
@@ -41,6 +43,21 @@ describe("Board kinds", () => {
       "document",
       "link",
     ]);
+  });
+  test("Board names kinds plainly; Town's metaphors stay in Town", () => {
+    const town = /apartment|library|shipyard|resident|town/i;
+    const add = BOARD_HELP.find((entry) => entry.id === "board.add")!;
+    const words = [
+      ...Object.values(BOARD_KIND_PRESENTATION).flatMap((kind) => [
+        kind.label,
+        kind.blurb,
+      ]),
+      ...Object.values(DEFAULT_TITLES),
+      add.title,
+      add.summary,
+      ...add.steps,
+    ];
+    expect(words.filter((word) => town.test(word))).toEqual([]);
   });
 });
 

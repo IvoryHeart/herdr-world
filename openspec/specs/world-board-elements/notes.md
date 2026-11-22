@@ -117,12 +117,12 @@ New elements persist locally with titles, positions, source references and
 revision conflicts. Upgrades preserve existing Board and Apartments records,
 including early Board previews that shared schema version 14 with Apartments.
 Recovery uses the normal private backup and atomic migration transaction.
-A Library memory is a reference only: the memory service reads it on the
-host's current generation, and it is offline while the Library cannot read
-that host. An Agent log still reads its saved file; its apartment is a link,
-not its content. Board names things plainly (Memory, past session); Town's
-metaphors (Library, Apartments) stay in Town. Element edits have no CLI history/undo; existing sticky note and
-card behavior is unchanged.
+A Memory from World's memory store is a reference only: the memory service
+reads it on the host's current generation, and it is offline while the store
+cannot read that host. An Agent log still reads its saved file; its past
+session is a link, not its content. Board names things plainly (Memory, past
+session); Town's metaphors (Library, Apartments) stay in Town. Element edits
+have no CLI history/undo; existing sticky note and card behavior is unchanged.
 
 Project reads explicitly name the saved connection's current generation through
 shared TUI/core Files handlers. `herdr-world ls --json` returns each connection's
