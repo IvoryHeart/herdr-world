@@ -87,6 +87,7 @@ test.skipIf(!chrome)(
     const KEYS: Record<string, { code: string; vk: number; text?: string }> = {
       a: { code: "KeyA", vk: 65, text: "a" },
       b: { code: "KeyB", vk: 66, text: "b" },
+      c: { code: "KeyC", vk: 67, text: "c" },
       Escape: { code: "Escape", vk: 27 },
     };
     const server = Bun.serve({
@@ -102,13 +103,17 @@ test.skipIf(!chrome)(
         if (path === "/pushes") return new Response(pushes);
         if (path === "/key") {
           const key = url.searchParams.get("key")!;
-          const { code, vk, text } = KEYS[key]!;
+          // With Ctrl held a key types no text (Ctrl+C is a control code).
+          const ctrl = url.searchParams.has("ctrl");
+          const { code, vk } = KEYS[key]!;
+          const text = ctrl ? undefined : KEYS[key]!.text;
           for (const type of ["keyDown", "keyUp"] as const)
             await connection!.command("Input.dispatchKeyEvent", {
               type: type === "keyDown" && text ? "keyDown" : type,
               key,
               code,
               windowsVirtualKeyCode: vk,
+              ...(ctrl ? { modifiers: 2 } : {}),
               ...(type === "keyDown" && text ? { text } : {}),
             });
           return new Response("ok");

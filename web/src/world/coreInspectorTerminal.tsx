@@ -13,7 +13,7 @@ import {
   focusMovesToTerminal,
   inspectorKey,
   releasePageKeys,
-  typedKey,
+  terminalKey,
 } from "./coreTerminalKeys";
 import type { WorldObjectNode } from "./worldObject";
 // The "not live now" notice is drawn here, before any watch loads.
@@ -178,7 +178,7 @@ export function CoreWatchLoading({
       if (!activeRef.current || event.defaultPrevented || !section) return;
       const inside =
         event.target instanceof Node && section.contains(event.target);
-      const key = inside ? typedKey(event) : inspectorKey(event, section);
+      const key = inside ? terminalKey(event) : inspectorKey(event, section);
       if (key === null) return;
       event.preventDefault();
       section.focus();

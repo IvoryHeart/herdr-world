@@ -83,7 +83,8 @@ const viewport = async (width: number, height: number) => {
   await frames(4);
 };
 /** A real key press (CDP), into whatever has focus. */
-const press = (key: string) => fetch(`/key?key=${encodeURIComponent(key)}`);
+const press = (key: string, ctrl = false) =>
+  fetch(`/key?key=${encodeURIComponent(key)}${ctrl ? "&ctrl" : ""}`);
 /** Real text input (CDP), as a phone keyboard inserts it. */
 const insert = (text: string) =>
   fetch(`/insert?text=${encodeURIComponent(text)}`);
@@ -349,9 +350,10 @@ async function run() {
 }
 
 /**
- * The Terminal tab's first key while the watch's code (and xterm) is still
- * downloading: the tab's stand-in keeps it, and it goes once, before later
- * keys, when the watch has loaded and opened.
+ * Keys typed in the Terminal tab while the watch's code (and xterm) is still
+ * downloading, Ctrl+C included: the tab's stand-in keeps them as the terminal
+ * would send them, and they go once, before later keys, when the watch has
+ * loaded and opened.
  */
 async function loadingKeys() {
   let release = () => {};
@@ -395,10 +397,11 @@ async function loadingKeys() {
     "the loading tab takes focus as its terminal would",
   );
   await press("a");
+  await press("c", true);
   await pause(100);
   check(
-    typed.join("") === "a" && !root.querySelector(".core-watch-host"),
-    `a key typed while the watch loads is kept: ${JSON.stringify(typed)}`,
+    typed.join("") === "a\x03" && !root.querySelector(".core-watch-host"),
+    `keys typed while the watch loads are kept, Ctrl+C too: ${JSON.stringify(typed)}`,
   );
   release();
   const watch = () =>
@@ -426,10 +429,10 @@ async function loadingKeys() {
     "the loaded terminal takes focus",
   );
   await press("b");
-  await until(() => typedOn().length > 1);
+  await until(() => typedOn().length > 2);
   await pause(100);
   check(
-    typedOn() === "ab",
+    typedOn() === "a\x03b",
     `the kept key goes once, before later keys: ${JSON.stringify(typedOn())}`,
   );
   flushSync(() => app.unmount());
