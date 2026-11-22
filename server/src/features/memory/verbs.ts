@@ -1,6 +1,12 @@
 import { Type } from "typebox";
-import { MEMORY_ACTIONS } from "../../../shared/memory";
-import { declare, object, policies, result, text } from "./declaration";
+import { MEMORY_ACTIONS } from "../../../../shared/memory";
+import {
+  declare,
+  object,
+  policies,
+  result,
+  text,
+} from "../../verbs/declaration";
 
 /** Explicit mutation acknowledgement is independent of delete confirmation. */
 export const memoryVerbs = MEMORY_ACTIONS.flatMap((action) => {

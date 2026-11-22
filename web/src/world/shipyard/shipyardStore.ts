@@ -10,12 +10,14 @@ import { shipyardFixtureFetch } from "./shipyardFixture";
 /**
  * The browser's Shipyard (#1028): one shared read of World's Shipyard API
  * (docs/shipyard-api.md) for Town's harbour and the Work lens's Releases
- * tab. It reads the catalog (suggested repositories and running Worlds),
- * then every suggested repository's pipeline, one shipping lane each in
- * Town, and the chosen one's for the Releases tab. It asks again every minute while a
- * view shows it, sooner while the service says it is still refreshing, and
- * never while the page is hidden. The service bounds every GitHub read;
- * this only asks for what it last saw.
+ * tab. It reads the catalog (the projects open in World's runtimes, #1226,
+ * and running Worlds), then each open project's pipeline, one shipping lane
+ * each in Town, plus a repository typed in "Another repository…" while it
+ * is chosen. Each lane shows as soon as its own read lands. It asks for the
+ * catalog every fifteen seconds while a view shows it, so lanes follow
+ * projects opening and closing; a lane's pipeline every minute, sooner
+ * while the service is still reading it; never while the page is hidden.
+ * The service bounds every GitHub read; this only asks for what it last saw.
  */
 
 type FetchLike = (
@@ -24,17 +26,27 @@ type FetchLike = (
 ) => Promise<Response>;
 
 const PATH = "/api/world/shipyard";
-const POLL_MS = 60_000;
+/** How often the open projects are asked for. */
+const POLL_MS = 15_000;
+/** How often a lane's pipeline is asked for while it is not being read. */
+const LANE_MS = 60_000;
 /** The follow-up while the service refreshes: its hint, within these. */
 const FOLLOW_UP = { min: 1_000, max: 10_000 } as const;
 /** The repository last chosen, a preference on this browser only. */
 export const SHIPYARD_REPO_KEY = "worldShipyardRepo.v1";
+/** The repository typed in "Another repository…", while it is chosen. */
+export const SHIPYARD_MANUAL_KEY = "worldShipyardManual.v1";
 
 export type ShipyardState = {
   /** Null until the service first answers. */
   catalog: ShipyardCatalog | null;
-  /** The chosen repository, or null when none is chosen or suggested. */
+  /** The chosen repository, or null when none is chosen or open. */
   repo: string | null;
+  /**
+   * A repository typed in "Another repository…": an extra lane while it is
+   * the chosen one, dropped when an open project is chosen.
+   */
+  manual: string | null;
   /** The chosen repository's pipeline; null until it is read. */
   snapshot: ShipyardSnapshot | null;
   /**
@@ -54,6 +66,7 @@ export type ShipyardState = {
 export const EMPTY_SHIPYARD: ShipyardState = {
   catalog: null,
   repo: null,
+  manual: null,
   snapshot: null,
   snapshots: {},
   laneErrors: {},
@@ -67,9 +80,12 @@ class ShipyardStore {
   #listeners = new Set<Listener>();
   #timer: ReturnType<typeof setTimeout> | null = null;
   #fetch: FetchLike | null = null;
-  /** The latest request started, and the newest one published. */
+  /** The latest request started, and the newest catalog published. */
   #requested = 0;
   #published = 0;
+  /** Per lane: the newest read published, and when it was last asked. */
+  #lanePublished = new Map<string, number>();
+  #laneAsked = new Map<string, number>();
   #inFlight: Promise<void> | null = null;
 
   subscribe = (listener: Listener) => {
@@ -93,15 +109,24 @@ class ShipyardStore {
     this.#stop();
     this.#requested = 0;
     this.#published = 0;
+    this.#lanePublished.clear();
+    this.#laneAsked.clear();
     this.#inFlight = null;
     this.#state = EMPTY_SHIPYARD;
   }
 
-  /** Show another repository, remembered on this browser. */
-  choose(value: string) {
+  /**
+   * Show another repository, remembered on this browser. `typed` marks one
+   * entered in "Another repository…": it gets an extra lane while chosen.
+   */
+  choose(value: string, typed = false) {
     const repo = shipyardRepository(value);
+    const state = this.#state;
+    const manual = typed || repo === state.manual ? repo : null;
     try {
       worldLocalStorage.setItem(SHIPYARD_REPO_KEY, repo);
+      if (manual) worldLocalStorage.setItem(SHIPYARD_MANUAL_KEY, manual);
+      else worldLocalStorage.removeItem(SHIPYARD_MANUAL_KEY);
     } catch {
       // A private window keeps the choice for this page only.
     }
@@ -109,7 +134,6 @@ class ShipyardStore {
     // answer reads as out of date (its own lane's failure, or the last
     // read's, which may have been the service's), and the project left
     // keeps the failure it had as the chosen one.
-    const state = this.#state;
     const left = state.repo;
     const laneErrors = { ...state.laneErrors };
     if (left && left !== repo && state.error) laneErrors[left] = state.error;
@@ -118,6 +142,7 @@ class ShipyardStore {
     this.#set({
       ...state,
       repo,
+      manual,
       snapshot:
         state.snapshot?.repo === repo
           ? state.snapshot
@@ -129,14 +154,16 @@ class ShipyardStore {
   }
 
   /**
-   * Read the catalog, then the chosen repository. `force` asks the service
-   * to refresh GitHub now (it keeps its own five-second cooldown);
-   * `restart` starts a new read even while one runs (a new choice).
+   * Read the catalog, then the lanes due. `force` asks the service to
+   * refresh the chosen repository now (it keeps its own five-second
+   * cooldown); `restart` starts a new read even while one runs (a new
+   * choice). A timed `poll` asks only for lanes that are new, being read,
+   * failed or a minute old; any other read asks for every lane.
    */
-  read(force = false, restart = false): Promise<void> {
+  read(force = false, restart = false, poll = false): Promise<void> {
     if (this.#inFlight && !force && !restart) return this.#inFlight;
     const sequence = ++this.#requested;
-    const task = this.#read(sequence, force)
+    const task = this.#read(sequence, force, poll)
       .catch((error: unknown) => {
         if (sequence < this.#published) return;
         this.#published = sequence;
@@ -153,53 +180,109 @@ class ShipyardStore {
     return task;
   }
 
-  async #read(sequence: number, force: boolean) {
+  async #read(sequence: number, force: boolean, poll: boolean) {
     const catalog = await this.#json<ShipyardCatalog>(PATH, "GET");
-    const repo = pickRepo(this.#state.repo, catalog);
-    const lanes = shipyardLanes(catalog, repo);
-    const ask = (name: string) => {
-      const refresh = force && name === repo;
-      return this.#json<ShipyardSnapshot>(
-        `${PATH}${refresh ? "/refresh" : ""}?repo=${encodeURIComponent(name)}`,
-        refresh ? "POST" : "GET",
-      );
-    };
-    // The chosen repository's read decides the Shipyard's health; another
-    // lane's failure keeps that lane's last answer, as out of date.
-    const rest = lanes.filter((name) => name !== repo);
-    const [chosen, ...others] = await Promise.allSettled(
-      [repo, ...rest].map((name) => (name ? ask(name) : Promise.resolve(null))),
-    );
-    if (chosen!.status === "rejected") throw chosen!.reason;
-    const snapshot = chosen!.value;
     if (sequence < this.#published) return;
     this.#published = sequence;
+    // Lanes follow the open projects: a closed project's lane goes now.
+    const before = this.#state;
+    const lanes = shipyardLanes(catalog, before.manual);
+    const repo = pickRepo(before.repo, catalog, before.manual);
     const snapshots: Record<string, ShipyardSnapshot> = {};
-    for (const name of lanes) {
-      const last = this.#state.snapshots[name];
-      if (last) snapshots[name] = last;
-    }
     const laneErrors: Record<string, string> = {};
-    if (chosen!.status === "fulfilled" && chosen!.value)
-      snapshots[chosen!.value.repo] = chosen!.value;
-    others.forEach((result, index) => {
-      if (result.status === "fulfilled") {
-        if (result.value) snapshots[result.value.repo] = result.value;
-      } else
-        laneErrors[rest[index]!] =
-          result.reason instanceof Error
-            ? result.reason.message
-            : "Shipyard failed";
-    });
-    // A choice made while this read ran wins over the repository it read.
-    const picked = pickRepo(this.#state.repo, catalog);
+    for (const name of lanes) {
+      if (before.snapshots[name]) snapshots[name] = before.snapshots[name]!;
+      if (before.laneErrors[name]) laneErrors[name] = before.laneErrors[name]!;
+    }
+    const error =
+      repo === before.repo
+        ? repo
+          ? before.error
+          : null
+        : repo
+          ? (laneErrors[repo] ?? null)
+          : null;
+    if (repo) delete laneErrors[repo];
     this.#set({
       catalog,
-      repo: picked,
-      snapshot: snapshot && snapshot.repo === picked ? snapshot : null,
+      repo,
+      manual: before.manual,
+      snapshot: repo ? (snapshots[repo] ?? null) : null,
       snapshots,
       laneErrors,
-      error: null,
+      error,
+    });
+    const now = Date.now();
+    const due = lanes.filter((name) => {
+      if (!poll || name === repo) return true;
+      const last = snapshots[name];
+      const asked = this.#laneAsked.get(name);
+      return (
+        !last ||
+        last.refreshing ||
+        name in laneErrors ||
+        asked === undefined ||
+        now - asked >= LANE_MS
+      );
+    });
+    // The chosen repository first; each lane is shown as its read lands.
+    due.sort((a, b) => Number(b === repo) - Number(a === repo));
+    await Promise.all(
+      due.map(async (name) => {
+        this.#laneAsked.set(name, now);
+        const refresh = force && name === repo;
+        try {
+          const snapshot = await this.#json<ShipyardSnapshot>(
+            `${PATH}${refresh ? "/refresh" : ""}?repo=${encodeURIComponent(name)}`,
+            refresh ? "POST" : "GET",
+          );
+          this.#lane(sequence, name, snapshot, null);
+        } catch (failure) {
+          this.#lane(
+            sequence,
+            name,
+            null,
+            failure instanceof Error ? failure.message : "Shipyard failed",
+          );
+        }
+      }),
+    );
+  }
+
+  /** One lane's read landed: show it, unless a newer read of it already did. */
+  #lane(
+    sequence: number,
+    name: string,
+    snapshot: ShipyardSnapshot | null,
+    failure: string | null,
+  ) {
+    if ((this.#lanePublished.get(name) ?? 0) > sequence) return;
+    this.#lanePublished.set(name, sequence);
+    const state = this.#state;
+    if (!state.catalog) return;
+    // A project that closed while it was read has no lane to fill.
+    if (
+      name !== state.repo &&
+      !shipyardLanes(state.catalog, state.manual).includes(name)
+    )
+      return;
+    const chosen = name === state.repo;
+    const snapshots = { ...state.snapshots };
+    const laneErrors = { ...state.laneErrors };
+    if (snapshot) {
+      snapshots[name] = snapshot;
+      delete laneErrors[name];
+    } else if (!chosen) laneErrors[name] = failure!;
+    this.#set({
+      ...state,
+      snapshots,
+      laneErrors,
+      ...(chosen
+        ? {
+            snapshot: snapshot ?? state.snapshot,
+            error: snapshot ? null : failure,
+          }
+        : {}),
     });
   }
 
@@ -237,7 +320,13 @@ class ShipyardStore {
     if (this.#state.repo === null) {
       try {
         const stored = worldLocalStorage.getItem(SHIPYARD_REPO_KEY);
-        if (stored) this.#state = { ...this.#state, repo: stored };
+        const manual = worldLocalStorage.getItem(SHIPYARD_MANUAL_KEY);
+        if (stored)
+          this.#state = {
+            ...this.#state,
+            repo: stored,
+            manual: manual === stored ? manual : null,
+          };
       } catch {
         // No stored choice.
       }
@@ -250,14 +339,17 @@ class ShipyardStore {
   #schedule() {
     this.#clearTimer();
     if (!this.#listeners.size || this.#hidden()) return;
-    const snapshot = this.#state.snapshot;
-    const delay = snapshot?.refreshing
-      ? Math.min(
-          FOLLOW_UP.max,
-          Math.max(FOLLOW_UP.min, snapshot.retryAfterMs || 0),
-        )
+    // Sooner while any lane, or an open folder, is still being read.
+    const hints = Object.values(this.#state.snapshots)
+      .filter((snapshot) => snapshot.refreshing)
+      .map((snapshot) => snapshot.retryAfterMs || 0);
+    if (this.#state.snapshot?.refreshing)
+      hints.push(this.#state.snapshot.retryAfterMs || 0);
+    if (this.#state.catalog?.pending) hints.push(0);
+    const delay = hints.length
+      ? Math.min(FOLLOW_UP.max, Math.max(FOLLOW_UP.min, Math.min(...hints)))
       : POLL_MS;
-    this.#timer = setTimeout(() => void this.read(), delay);
+    this.#timer = setTimeout(() => void this.read(false, false, true), delay);
   }
 
   #clearTimer() {
@@ -273,33 +365,36 @@ class ShipyardStore {
 }
 
 /**
- * The repository to show: the one chosen (kept even when the catalog no
- * longer suggests it), else the catalog's first suggestion.
+ * The repository to show: the one chosen while it still has a lane (an
+ * open project, or the one typed), else the first open project's.
  */
 export function pickRepo(
   chosen: string | null,
   catalog: ShipyardCatalog,
+  manual: string | null = null,
 ): string | null {
+  const lanes = shipyardLanes(catalog, manual);
   if (chosen) {
     try {
-      return shipyardRepository(chosen);
+      const repo = shipyardRepository(chosen);
+      if (lanes.includes(repo)) return repo;
     } catch {
       // A stored value that is no longer a repository name.
     }
   }
-  return catalog.repositories[0] ?? null;
+  return lanes[0] ?? null;
 }
 
 /**
- * The repositories with a shipping lane in Town: every one the catalog
- * suggests, and the chosen one first when the catalog no longer does.
+ * The repositories with a shipping lane in Town: every open project's, and
+ * the one typed in "Another repository…" first when no open project has it.
  */
 export function shipyardLanes(
   catalog: ShipyardCatalog,
-  chosen: string | null,
+  manual: string | null,
 ): string[] {
   const lanes = [...catalog.repositories];
-  if (chosen && !lanes.includes(chosen)) lanes.unshift(chosen);
+  if (manual && !lanes.includes(manual)) lanes.unshift(manual);
   return lanes;
 }
 

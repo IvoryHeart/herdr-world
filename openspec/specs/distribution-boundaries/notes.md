@@ -14,6 +14,10 @@
 - `scripts/coverage.test.ts`
 - `quint/models.ts`
 - `scripts/features.ts`
+- `scripts/build-pages.ts`
+- `scripts/pages-features.ts`
+- `scripts/openspec-notes.ts`
+- `scripts/check-knowledge-map.ts`
 - `web/src/features/FeatureHosts.tsx`
 - `quint/`
 - `docs/design/`
@@ -43,6 +47,9 @@
 
 **Tests:**
 
+- `scripts/pages-features.test.ts`
+- `scripts/pages-workflow.test.ts`
+- `scripts/check-knowledge-map.test.ts`
 - `server/src/features/compose.test.ts`
 - `server/src/service/rpc-dispatch.test.ts`
 
@@ -55,6 +62,9 @@
   Main's commit status and workflow summary show remaining bytes/files, and its
   recorded policy re-judges open PRs after budget-only merges. See
   [contributor guidance](../../../CONTRIBUTING.md) for the unchanged other limits.
+- Agent discovery starts with native OpenSpec capability and active-change lists,
+  then capability specs, notes and their Code paths. Public feature rendering
+  belongs to `build:site`; internal notes parsing also serves source-ownership checks.
 
 ## Usage reference
 
