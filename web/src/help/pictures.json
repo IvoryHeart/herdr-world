@@ -96,15 +96,6 @@
       "town.master.desktop.dark.webp"
     ]
   },
-  "town.quiet": {
-    "fingerprint": "109d278628afa516",
-    "files": [
-      "town.quiet.desktop.light.webp",
-      "town.quiet.desktop.dark.webp",
-      "town.quiet.phone.light.webp",
-      "town.quiet.phone.dark.webp"
-    ]
-  },
   "town.zoom": {
     "fingerprint": "2d1af8bb6e06b91c",
     "files": [

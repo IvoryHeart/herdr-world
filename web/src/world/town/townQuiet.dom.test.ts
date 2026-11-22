@@ -25,13 +25,10 @@ test("the board's Busy count carries the quiet working agents and their find", (
   expect(board).toContain(
     'aria-label="Find the 2 working agents with no progress for 10 minutes or more"',
   );
-  // Help's Try finds the line, and the chip that opens the board.
-  expect(board).toContain('data-help="town.quiet"');
-  expect(board).toContain('data-help-opens="town.quiet"');
-  // Nobody quiet: no line, and nothing for Try to open.
-  const calm = renderToStaticMarkup(createElement(TownBoard, { counts }));
-  expect(calm).not.toContain("town-board-quiet");
-  expect(calm).not.toContain("data-help-opens");
+  // Nobody quiet: no line.
+  expect(
+    renderToStaticMarkup(createElement(TownBoard, { counts })),
+  ).not.toContain("town-board-quiet");
 });
 
 if (process.env.TOWN_QUIET_DOM !== "1") {
@@ -143,42 +140,6 @@ if (process.env.TOWN_QUIET_DOM !== "1") {
     await render();
     expect(quiet.keys.size).toBe(0);
     expect(quiet.board).toBeUndefined();
-    await act(async () => root.unmount());
-    host.remove();
-  });
-
-  test("help's Try for quiet agents pins the town board open on the Busy line", async () => {
-    const { HELP_TRY_EVENT } = await import("../../help/helpEvents");
-    const host = document.createElement("div");
-    document.body.append(host);
-    const root = createRoot(host);
-    const show = (quiet?: { count: number; minutes: number; onFind(): void }) =>
-      act(async () => root.render(createElement(TownBoard, { counts, quiet })));
-    const tryHelp = (id: string) =>
-      act(async () => {
-        // The test DOM's own event class: Bun's global one is not its Event.
-        const { CustomEvent } = window as unknown as typeof globalThis;
-        window.dispatchEvent(
-          new CustomEvent(HELP_TRY_EVENT, { detail: { id } }),
-        );
-      });
-    const open = () =>
-      host.querySelector("#town-board")?.getAttribute("data-open");
-
-    // Nobody quiet: Try leaves the board folded (the panel says where).
-    await show();
-    await tryHelp("town.quiet");
-    expect(open()).toBe("false");
-
-    await show({ count: 2, minutes: 10, onFind() {} });
-    // Another entry's Try does not open it.
-    await tryHelp("town.zoom");
-    expect(open()).toBe("false");
-    await tryHelp("town.quiet");
-    expect(open()).toBe("true");
-    expect(
-      host.querySelector("#town-board [data-help='town.quiet']")?.textContent,
-    ).toBe("2 quiet 10 m+");
     await act(async () => root.unmount());
     host.remove();
   });

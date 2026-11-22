@@ -53,11 +53,9 @@
   there, and rings the control for a moment. A Town control off camera (the
   Apartments sign below a phone's first view) is flown into view at the same
   zoom; Town itself never scrolls. A control inside a closed menu
-  rings the button that opens it. **Quiet agents** opens the Town board and
-  rings its line under **Busy**. When the control is not on this screen
-  (Chat's controls without an open Chat, a phone-only control on a desktop,
-  the quiet line while no agent is quiet), help reopens on that tab and says
-  where to find it.
+  rings the button that opens it. When the control is not on this screen
+  (Chat's controls without an open Chat, a phone-only control on a desktop),
+  help reopens on that tab and says where to find it.
 - **What's new from the Town Master**: after an update, the greeting lists up
   to four things new since the last version it showed in this browser, each
   with a picture and **Try**, and a link to all of them in help. A first

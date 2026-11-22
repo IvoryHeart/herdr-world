@@ -16,11 +16,9 @@ Math.random = () => {
   return seed / 0x100000000;
 };
 
-import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AgentChat } from "../../components/AgentChat";
 import type { Pane } from "../../types";
-import type { TownQuietMarks } from "../../world/town/TownBoard";
 import BoardView from "../../world/BoardView";
 import { TownMasterFigure } from "../../world/TownMasterCard";
 import { quietGreetingForTest } from "../../world/townMasterGreeting";
@@ -182,12 +180,7 @@ const chatPane: Pane = {
   revision: 1,
 };
 
-/** Shows or clears the quiet marks; set while the Town stage is mounted. */
-let setQuietShown: (shown: boolean) => void = noAction;
-
 function Stage() {
-  const [quietShown, setShown] = useState(false);
-  setQuietShown = setShown;
   if (scene === "board")
     return (
       <div style={{ position: "fixed", inset: 0, display: "flex" }}>
@@ -226,33 +219,12 @@ function Stage() {
   return (
     <div className="town-stage" style={{ position: "fixed", inset: 0 }}>
       <TownMasterFigure />
-      <SiteTown scene={town!} quiet={quietShown ? quiet! : undefined} />
+      <SiteTown scene={town!} />
     </div>
   );
 }
 
 const town = scene === "town" ? siteTownScene() : null;
-
-/**
- * Two working agents have gone quiet (useTownQuiet.ts), so the town board
- * carries its "2 quiet 10 m+" line and their desks their hourglasses. Only
- * the quiet agents' own picture shows them (helpShots.show), so the other
- * Town pictures stay as they were.
- */
-function quietMarks(scene: NonNullable<typeof town>): TownQuietMarks {
-  const now = Date.now();
-  const keys = scene.projection.roster
-    .map(({ agent }) => agent)
-    .filter((agent) => agent.semanticStatus === "working")
-    .slice(0, 2)
-    .map((agent) => agent.key);
-  return {
-    keys: new Set(keys),
-    since: new Map(keys.map((key, n) => [key, now - (23 + 14 * n) * 60_000])),
-    board: { count: keys.length, minutes: 10, onFind: noAction },
-  };
-}
-const quiet = town ? quietMarks(town) : null;
 const boardStore = scene === "board" ? siteBoardStore() : null;
 const boardWorld = scene === "board" ? siteBoardWorld() : null;
 
@@ -293,10 +265,6 @@ const helpShots = {
    * returns its box, or null when it is not there.
    */
   async show(control: string, press: readonly string[] = []) {
-    if (control === "town.quiet" && quiet) {
-      setQuietShown(true);
-      await frames(20);
-    }
     if (!onScreen(document.querySelector(`[data-help="${control}"]`))) {
       for (const selector of press) {
         const button = document.querySelector<HTMLElement>(selector);
@@ -327,7 +295,6 @@ const helpShots = {
     ringed = null;
     for (const button of pressed.reverse()) button.click();
     pressed = [];
-    setQuietShown(false);
     await frames(20);
   },
 };
