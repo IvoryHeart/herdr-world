@@ -118,10 +118,12 @@ for (const state of ["uncertain", "refused", "pending"] as const)
     );
     expect(html).toContain('role="status"');
     expect(html).toContain(
-      "your question is saved".replace(
-        "your",
-        state === "uncertain" ? "your" : "Your",
-      ),
+      state === "refused"
+        ? "World did not alert you about this question."
+        : "your question is saved".replace(
+            "your",
+            state === "uncertain" ? "your" : "Your",
+          ),
     );
     expect(html).toContain("Still stored?");
   });
