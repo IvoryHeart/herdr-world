@@ -28,6 +28,7 @@ import {
   type FixtureSpace,
 } from "./board/boardFixture";
 import { defaultRoomColor } from "./terminalColor";
+import { CORE_VIEW_ONLY_REASON } from "./worldObject";
 import { worldRelationInputs } from "./relations";
 import {
   joinGroup,
@@ -3740,6 +3741,61 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         mount(2);
         await settle(200);
       }
+    },
+  ],
+  [
+    "live herdr-core host",
+    async () => {
+      await seedStrungNote();
+      // As worldObject builds a healthy herdr-core host: not TUI-actionable,
+      // controlled through world.core.* (coreControl). Board shows it live:
+      // no Reconnect, its "+" and firm strings (#1171).
+      const core = fixtureWorld(
+        world.hosts.map((h) => ({
+          ...h,
+          actionable: false,
+          viewOnly: CORE_VIEW_ONLY_REASON,
+          coreControl: true as const,
+        })),
+      );
+      mount(2, core);
+      await settle(300);
+      check(
+        !host.querySelector(".connection-recovery"),
+        "a live core host shows no Stale · Reconnect",
+      );
+      check(
+        host.querySelectorAll(".board-zone-add").length === world.hosts.length,
+        "each live core host offers New workspace",
+      );
+      check(
+        !host.querySelector(".board-stale"),
+        "a live core host's zone is not drawn stale",
+      );
+      check(
+        !host.querySelector(".board-yarn-loose"),
+        "strings to a live core host's panes stay firm",
+      );
+      // A failed core host is stale: Reconnect, no "+".
+      mount(
+        2,
+        fixtureWorld(
+          world.hosts.map((h) => ({
+            ...h,
+            stale: true,
+            actionable: false,
+            connection: { ...h.connection, state: "reconnecting" as const },
+          })),
+        ),
+      );
+      await settle(300);
+      check(
+        host.querySelectorAll(".connection-recovery").length ===
+          world.hosts.length && !host.querySelector(".board-zone-add"),
+        "a failed core host offers Reconnect instead of New workspace",
+      );
+      mount(2);
+      await settle(200);
     },
   ],
   [

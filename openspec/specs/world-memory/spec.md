@@ -7,10 +7,20 @@ persisting its contents in World or inventing proof that a harness loaded it.
 ## Requirements
 
 ### Requirement: One bounded memory model
+
 World SHALL expose sources, Markdown entries, supported harness adapters,
 project/agent associations, sizes, modification times, age hints and load evidence
-through one model for TUI and core connections. Missing sources SHALL be visible;
-unsupported harnesses and incomplete discovery SHALL be explicit.
+through one model for TUI and core connections.
+
+#### Scenario: One bounded memory model acceptance rules
+
+- **WHEN** World discovers or presents memory sources and their Library readers
+- **THEN** Missing sources SHALL be visible;
+  unsupported harnesses and incomplete discovery SHALL be explicit in the API.
+  Only observed agents with a registered memory adapter SHALL contribute sources;
+  empty projects and unsupported harnesses SHALL NOT synthesize sources. New
+  adapters SHALL cite maker documentation for their default paths and loading
+  semantics. Supported harnesses with missing files SHALL retain missing candidates.
 
 #### Scenario: Shared project memory
 - **WHEN** two live agents have the same project memory directory
@@ -19,6 +29,14 @@ unsupported harnesses and incomplete discovery SHALL be explicit.
 #### Scenario: Bounded observation
 - **WHEN** discovery or search exceeds a count, byte or depth limit
 - **THEN** it stops and marks the result truncated without mutating any files
+
+#### Scenario: Documented OpenCode instructions
+- **WHEN** a project's observed agent uses OpenCode
+- **THEN** its project `AGENTS.md` and owning-host user instructions are described as startup candidates through the same CLI/API model
+
+#### Scenario: No supported reader
+- **WHEN** a project has only unsupported harnesses, only shells, or no agents
+- **THEN** it contributes no memory sources even when instruction files exist on disk
 
 ### Requirement: Files belong to their connection
 Every call SHALL require an immutable connection ID and observed generation and
@@ -46,6 +64,10 @@ unchanged. An uncertain transport outcome SHALL NOT be retried automatically.
 - **WHEN** a caller deletes without confirmed=true
 - **THEN** admission or the service refuses before filesystem mutation
 
+#### Scenario: Browse-only rule format
+- **WHEN** a Cursor or oh-my-pi rule uses `.mdc`
+- **THEN** World can list, read and search it with the existing file/byte/connection protections, but refuses management outside the existing `.md` boundary
+
 ### Requirement: Shared CLI and API contract
 World SHALL expose list/search/read/create/update/delete through authenticated
 local CLI and same-origin RPC using the same service and limits. API documentation
@@ -56,18 +78,37 @@ SHALL describe each call, data, examples and refusal handling for downstream UI.
 - **THEN** the owning host's file changes accordingly and stale revisions refuse
 
 ### Requirement: Library in the browser
+
 World SHALL present memory as one Library dialog, opened from Town's library
 building, the town center ring, Board's hub and an agent's settings, with the
-same components for TUI and core connections. It SHALL show readers (a host, a
-project or an agent, with an agent's candidate load), shelves per source with
-size, age, staleness and sharing, and one open entry read fresh from its host.
-Contents SHALL live only in the dialog; only catalog metadata may be cached, for
-counts. Every call SHALL name the Library's chosen connection and generation.
-A missing, non-refused source SHALL offer explicit creation of its first entry.
+same components for TUI and core connections.
+
+#### Scenario: Library in the browser acceptance rules
+
+- **WHEN** World discovers or presents memory sources and their Library readers
+- **THEN** It SHALL show readers (a host, a
+  project or an agent, with an agent's candidate load), shelves per source with
+  size, age, staleness and sharing, and one open entry read fresh from its host.
+  Contents SHALL live only in the dialog; only catalog metadata may be cached, for
+  counts. Every call SHALL name the Library's chosen connection and generation.
+  The Library's host, project and agent choices, entry points and Town sign SHALL
+  appear only where an observed harness has an adapter; unsupported harnesses
+  SHALL NOT appear with zero memory counts. Visibility SHALL depend on adapter
+  support rather than the presence or count of files. A missing, non-refused
+  source within the managed `.md` format SHALL offer explicit creation of its
+  first entry. Browse-only rule formats SHALL NOT offer ineffective creation.
 
 #### Scenario: Fresh project memory
 - **WHEN** a project's memory folder does not exist yet
 - **THEN** its shelf offers to add the first note, and creating it makes the folder
+
+#### Scenario: Unsupported-only host
+- **WHEN** a live host has no agent whose harness has a memory adapter
+- **THEN** it has no Library host choice, Town sign, Town/Board Library entry or Settings Library entry
+
+#### Scenario: Mixed project readers
+- **WHEN** a supported and an unsupported agent share a project
+- **THEN** the project and supported agent have Library entries, while the unsupported agent has none and is never presented as zero memories
 
 ### Requirement: Library keeps its host and reader
 The Library's chosen host SHALL be explicit (the opener's or the user's pick). If its
@@ -93,3 +134,40 @@ revision, so a further save refuses if anyone else changed the file.
 #### Scenario: Uncertain save over an external edit
 - **WHEN** a save's outcome is uncertain and another editor changed the file
 - **THEN** the draft stays, a second save sends the original revision and refuses, and Load latest shows the external text
+
+### Requirement: Explicit discovery and search limits
+
+Memory discovery SHALL stop at 32 projects, 128 agents, 256 sources, 512 entries,
+four directory levels and 256 KiB per file. Literal case-insensitive search SHALL
+scan at most 2 MiB and return at most 100 results. Partial results SHALL report
+`truncated` and count skipped reads. Every host request SHALL have a 15-second
+deadline.
+
+#### Scenario: A host exceeds the scan budget
+
+- **WHEN** discovery or search reaches one of its count, depth, byte or time bounds
+- **THEN** it stops with explicit partial/refusal evidence rather than claiming complete coverage
+
+### Requirement: Supported host and file boundary
+
+Memory access SHALL require Python 3 on a Unix host. Windows, symlinks, hardlinks,
+special files, binary files, non-UTF-8 data and non-Markdown entries SHALL refuse.
+Cursor and oh-my-pi `.mdc` rules SHALL remain readable and searchable under the
+same protections, with editing limited to `.md`.
+
+#### Scenario: Browse a rule that cannot be edited
+
+- **WHEN** the user opens a supported `.mdc` rule
+- **THEN** read and search work under the ordinary limits and management is refused
+
+### Requirement: CLI mutation intent
+
+CLI writes SHALL require `--user-action`; update and delete SHALL require a current
+read revision, and delete SHALL also require `--yes`. A conflict SHALL preserve
+the current file. An unknown write outcome SHALL require a fresh read and SHALL
+NOT be retried automatically.
+
+#### Scenario: A script omits user intent
+
+- **WHEN** a CLI mutation lacks `--user-action`, or deletion lacks `--yes`
+- **THEN** the command refuses without changing a file

@@ -31,13 +31,18 @@ const claudeTapLockFixture = previewUrl.searchParams.has(
 const boardTextConflictFixture = previewUrl.searchParams.has(
   "boardTextConflictFixture",
 );
+const siblingQuestionsFixture = previewUrl.searchParams.has(
+  "siblingQuestionsFixture",
+);
 if (
+  siblingQuestionsFixture ||
   titleSpinnerFixture ||
   claudeTapLockFixture ||
   boardTextConflictFixture ||
   questionBacklogFixture
 ) {
   previewUrl.searchParams.delete("questionBacklogFixture");
+  previewUrl.searchParams.delete("siblingQuestionsFixture");
   previewUrl.searchParams.delete("claudeTapLockFixture");
   previewUrl.searchParams.delete("titleSpinnerFixture");
   previewUrl.searchParams.delete("boardTextConflictFixture");
@@ -54,6 +59,9 @@ const BoardTextConflictFixture = React.lazy(() =>
 
 const QuestionBacklogFixture = React.lazy(
   () => import("./testing/QuestionBacklogFixture"),
+);
+const SiblingQuestionsFixture = React.lazy(
+  () => import("./testing/SiblingQuestionsFixture"),
 );
 
 class ErrorBoundary extends React.Component<
@@ -94,6 +102,7 @@ coreFixtureEnabled();
 coreInstallFake();
 integrationsFixtureEnabled();
 const stopInstanceNameSync =
+  siblingQuestionsFixture ||
   titleSpinnerFixture ||
   paneChatFixture ||
   claudeTapLockFixture ||
@@ -111,6 +120,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <PaneChatFixture />
         ) : questionBacklogFixture ? (
           <QuestionBacklogFixture />
+        ) : siblingQuestionsFixture ? (
+          <SiblingQuestionsFixture />
         ) : titleSpinnerFixture ? (
           <TitleSpinnerFixture />
         ) : claudeTapLockFixture ? (

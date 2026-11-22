@@ -182,10 +182,10 @@ older `Claude AI usage limit reached|<time>` text counts too). The agent read
 model (`agent_quest.list` and Chat's conversation) returns it as `usage_stop`
 (`harness`, `at`, `resets_at` or null) while its reset is ahead and nothing
 newer from the agent follows; Town shows that agent out of fuel (see
-FEATURES.md).
+[Town usage notes](../openspec/specs/world-surfaces/town/notes.md)).
 
 Town shows these as fuel gauges on the board sign and per host in the Summary;
-see FEATURES.md. The board re-reads them every 30 seconds while it is shown,
+see [Town usage notes](../openspec/specs/world-surfaces/town/notes.md). The board re-reads them every 30 seconds while it is shown,
 so a new reading reaches the sign within about a minute. A harness reported as `unsupported` appears on the sign as
 **not available** with its reason, never as an empty or full gauge; a
 `missing` harness with agents in Town reads **no reading yet**. The wire is
@@ -222,7 +222,7 @@ reading never says zero or full on missing evidence.
 
 Town reads `contexts` every 30 seconds while it or an agent window is shown:
 the peek and the window bar show the fill, and an agent at 85% or more looks
-tired at its desk; see FEATURES.md.
+tired at its desk; see [Town usage notes](../openspec/specs/world-surfaces/town/notes.md).
 
 ## Town expenses boards
 

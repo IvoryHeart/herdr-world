@@ -465,7 +465,7 @@ defineSettings("help", [
     description: "Every feature, its limits and its keys",
     words: ["documentation", "docs", "manual"],
     icon: <LayoutList size={15} />,
-    run: () => openLink(`${REPOSITORY}/blob/main/FEATURES.md`),
+    run: () => openLink("https://herdr.world/features/"),
   },
   {
     kind: "command",

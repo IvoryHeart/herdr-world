@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -14,6 +14,7 @@ import {
   worldLatencyTrendSuites,
   worldRuntimeSuites,
   includesBrowserSuites,
+  discoverWorldBrowserShards,
 } from "./world-browser-suites";
 
 test("World selections and unknown selectors take the browser slot", () => {
@@ -95,20 +96,32 @@ test("Bun excludes registered World browsers while retaining upstream and World 
   }
 });
 
-test("an unassigned World browser suite fails inventory validation", async () => {
+test("World suites are discovered without timing entries; stale weights add no suites", async () => {
   const root = await mkdtemp(join(tmpdir(), "world-inventory-"));
   try {
-    await mkdir(join(root, "web/src/world"), { recursive: true });
-    for (const path of worldBrowserSuites)
-      await Bun.write(join(root, path), "// @world-browser-suite\n");
-    await assertWorldBrowserInventory(root);
-    await Bun.write(
-      join(root, "web/src/world/Unassigned.test.ts"),
-      "// @world-browser-suite\n",
-    );
-    await expect(assertWorldBrowserInventory(root)).rejects.toThrow(
-      "unassigned=web/src/world/Unassigned.test.ts",
-    );
+    for (const [path, source] of [
+      ["New.browser.test.ts", "// @world-browser-suite\n"],
+      ["nested/Legacy.test.tsx", 'const args = ["--headless"];\n'],
+      ["Measured.test.ts", "const chrome = Bun.env.CHROME_BIN;\n"],
+      ["Light.test.ts", "// @world-browser-suite\n"],
+      ["Unit.test.ts", "export const unit = true;\n"],
+      ["Ignored.browser.tsx", "// @world-browser-suite\n"],
+    ])
+      await Bun.write(join(root, "web/src/world", path!), source!);
+    const shards = discoverWorldBrowserShards(root, {
+      Measured: 20,
+      Light: 5,
+      Deleted: 100,
+    });
+    expect(shards).toEqual([
+      ["web/src/world/Measured.test.ts"],
+      ["web/src/world/New.browser.test.ts"],
+      ["web/src/world/nested/Legacy.test.tsx"],
+      ["web/src/world/Light.test.ts"],
+      [],
+      [],
+    ]);
+    await assertWorldBrowserInventory(root, shards.flat());
   } finally {
     await rm(root, { recursive: true, force: true });
   }

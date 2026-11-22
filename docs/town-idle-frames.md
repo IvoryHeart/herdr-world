@@ -150,7 +150,7 @@ capture results, not timing gates or proof for every device/load. Blink/bubble
 phase and dust can differ; the recordings supply motion evidence alongside the
 static-view work ceiling.
 
-The rendering/lifetime boundary remains Q39 in `verification/coverage.json`.
+The rendering/lifetime boundary remains Q39 in `verification/coverage/`.
 Actual browser rendering, frame counts and destruction are the appropriate
 evidence here; no ordering, authority, runtime ownership or recovery contract
 changes, so a new Quint model would not establish the claim. Q39 now maps the

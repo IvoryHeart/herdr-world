@@ -72,35 +72,33 @@ Admission and checks:
   - pull request merge, close and ready keep the user's browser confirmation;
   - merges and deletions from the CLI stay refused
 
+## MODIFIED Requirements
+
 ### Requirement: Staged command evidence
 
-Command results SHALL report stages backed by evidence. The stages SHALL be:
-- `accepted`: held in memory;
-- `stored`: durably committed;
-- `sent`: dispatched and acknowledged by the source;
-- `observed`: a later observation shows the effect, naming that observation;
-- `refused`;
-- `failed`;
-- `uncertain`.
-
-A reply SHALL prove only what World did: that it committed the intent or dispatched it,
-not that the source has observed it. World SHALL NOT present a stage it has no evidence
-for. In particular, it SHALL NOT present memory-only acceptance as stored.
-
-An `observed` stage SHALL name the observation sequence or snapshot revision that
-showed the effect. A client can then await that observation instead of polling.
+Command evidence SHALL distinguish accepted, stored, sent, observed, refused,
+failed and uncertain. Memory admission SHALL report accepted; stored SHALL
+require a durable commit receipt; sent SHALL require native acknowledgement and
+name its owning connection and runtime generation. Observed SHALL require an
+explicit observation identifier and SHALL NOT be inferred from successful dispatch.
+Legacy handlers MAY conservatively report accepted rather than claim an
+unproven stronger stage. Uncertain native input SHALL name its owning runtime
+and SHALL NOT be automatically retried.
 
 #### Scenario: Memory-only acceptance
-- **WHEN** World accepts a command into memory without a durable commit
-- **THEN** the command shows accepted, not stored
+- **WHEN** a command completes against an in-memory store without a durable receipt
+- **THEN** its evidence reports accepted, not stored
+
+#### Scenario: Durable record committed
+- **WHEN** the durable ledger commits an ask, answer, result or change and supplies
+  the committed record's receipt
+- **THEN** its CLI reply can report stored with that receipt
+
+#### Scenario: Native acknowledgement lost
+- **WHEN** opaque native input may have been dispatched but no acknowledgement arrives
+- **THEN** World reports uncertain with the captured runtime and does not retry it
 
 #### Scenario: Effect observed later
 - **WHEN** a dispatched rename is followed by an observation that shows the new name
 - **THEN** the command moves to observed, naming that observation, and a client awaiting
   that observation sees the new name
-
-#### Scenario: Outcome unknown
-- **WHEN** an interactive command's dispatch may have reached the source but no
-  acknowledgement or decisive read exists
-- **THEN** the command shows uncertain, naming its owning host, and is not retried
-  automatically

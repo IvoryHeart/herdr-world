@@ -2101,10 +2101,7 @@ async function run() {
   try {
     for (const [label, url] of [
       ["Tutorial", "https://herdr.world/tutorial/"],
-      [
-        "Features and shortcuts",
-        "https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md",
-      ],
+      ["Features and shortcuts", "https://herdr.world/features/"],
       [
         "Troubleshooting",
         "https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#troubleshooting",

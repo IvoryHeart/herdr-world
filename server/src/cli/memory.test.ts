@@ -157,6 +157,23 @@ test("testing-only demo exercises rare states and CRUD without a running service
   expect(JSON.parse(f.output[0]!)).toMatchObject({
     fixture: true,
     shared_agents: ["p1", "p2"],
+    opencode_sources: [
+      {
+        name: "AGENTS.md",
+        scope: "user",
+        kind: "instructions",
+        load: "startup-candidate",
+        description: "OpenCode user instructions",
+      },
+      {
+        name: "AGENTS.md",
+        scope: "project",
+        kind: "instructions",
+        load: "startup-candidate",
+        description: "OpenCode ancestor instructions",
+      },
+    ],
+    unsupported_sources: 0,
     stale: true,
     created: "created",
     updated: "updated",

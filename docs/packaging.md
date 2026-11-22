@@ -2,7 +2,7 @@
 
 Release archives contain one compiled `herdr-world` executable, embedded web
 assets, version, lineage and licence material. Runtimes are separate. See the
-[runtime support table](../FEATURES.md#runtime-support).
+[runtime support table](../openspec/specs/herdr-core-runtime/notes.md#runtime-support).
 
 The executable pins a verified **Herdr TUI** release and its platform/Windows
 installer checksums in `server/src/herdr/release.ts`. Fresh standalone installs
