@@ -14,9 +14,7 @@ import { useStoreSelector } from "../../store";
 import {
   createTownBuildings,
   townBuildingsMode,
-  townEndpointStandIns,
   townRuntimes,
-  townStandInPins,
 } from "./townBuildings";
 import { worldLocalStorage } from "../../browserStorage";
 import {
@@ -85,30 +83,11 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
     });
   }, []);
   const runtimes = useStoreSelector(townRuntimes);
-  // A live view standing in for its endpoint's down anchor admits the
-  // anchor's pinned desks first (townBuildings.ts `townStandInPins`).
-  const standIns = [
-    ...townEndpointStandIns(
-      world.hosts.map((host) => ({
-        connectionId: host.connectionId,
-        stale: host.stale || host.hostState === "offline-stale",
-      })),
-      runtimes,
-    ),
-  ]
-    .map((pair) => pair.join("\n"))
-    .join("\n\n");
+  // Every view of an endpoint reads its anchor's pins (useDeskPins.ts
+  // `anchoredDeskPins`), so a stand-in admits them first in folded rooms.
   const pinnedTabs = useMemo(
-    () =>
-      townStandInPins(
-        new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
-        new Map(
-          (standIns ? standIns.split("\n\n") : []).map(
-            (pair) => pair.split("\n") as [string, string],
-          ),
-        ),
-      ),
-    [pinnedTabKeys, standIns],
+    () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
+    [pinnedTabKeys],
   );
   const buildings = useMemo(() => createTownBuildings(), []);
   // The Town buildings setting; the page flag, read once per mount, compares

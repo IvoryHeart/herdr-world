@@ -148,6 +148,36 @@ type Plan = {
 /** Rooms of a machine's later runtimes follow its first runtime's rooms. */
 const RUNTIME_ORDER_STRIDE = 1_000_000;
 
+const anchorsCache = new WeakMap<readonly TownRuntime[], Map<string, string>>();
+
+/**
+ * Each endpoint's anchor by connection ID, for the views that are not their
+ * endpoint's anchor: its first writable view in catalogue order (the order
+ * `townRuntimes` lists), else its first. Profiles alone decide it, never
+ * state, so what is kept under the anchor (desk pins, useDeskPins.ts) holds
+ * through a takeover.
+ */
+export function townEndpointAnchors(
+  runtimes: readonly TownRuntime[],
+): ReadonlyMap<string, string> {
+  const cached = anchorsCache.get(runtimes);
+  if (cached) return cached;
+  const byEndpoint = new Map<string, TownRuntime[]>();
+  for (const each of runtimes)
+    byEndpoint.set(each.endpoint, [
+      ...(byEndpoint.get(each.endpoint) ?? []),
+      each,
+    ]);
+  const anchors = new Map<string, string>();
+  for (const views of byEndpoint.values()) {
+    const anchor = views.find((view) => view.writable) ?? views[0]!;
+    for (const view of views)
+      if (view !== anchor) anchors.set(view.id, anchor.id);
+  }
+  anchorsCache.set(runtimes, anchors);
+  return anchors;
+}
+
 /**
  * Which view of each endpoint Town shows. Views share an endpoint when
  * worldHosts.ts gives them the same `endpoint`: the same runtime, place and
@@ -155,8 +185,9 @@ const RUNTIME_ORDER_STRIDE = 1_000_000;
  * (connections/profiles.ts). Paths are not resolved: a second spelling of a
  * socket (a symlink) stays a second view, shown twice rather than hidden.
  *
- * Each endpoint's anchor is chosen from its profiles alone, never their
- * state: the first writable view in catalogue order, else the first. Town
+ * Each endpoint's anchor (`townEndpointAnchors`) is chosen from its
+ * profiles alone, never their state: the first writable view in catalogue
+ * order, else the first. Town
  * shows the anchor's rooms, unless the anchor is down and another view is
  * live: then that view's (writable first), standing where the anchor's
  * stood, so a takeover moves no building and no saved room.
@@ -165,6 +196,7 @@ function endpointViews<View extends { connectionId: string; stale: boolean }>(
   known: readonly View[],
   runtimeOf: ReadonlyMap<string, TownRuntime>,
 ) {
+  const anchors = townEndpointAnchors([...runtimeOf.values()]);
   const hidden = new Set<View>();
   const placeOf = new Map<View, View>();
   const byEndpoint = new Map<string, View[]>();
@@ -175,7 +207,12 @@ function endpointViews<View extends { connectionId: string; stale: boolean }>(
   const writable = (view: View) => runtimeOf.get(view.connectionId)!.writable;
   for (const views of byEndpoint.values()) {
     if (views.length < 2) continue;
-    const anchor = views.find(writable) ?? views[0]!;
+    const anchorId =
+      anchors.get(views[0]!.connectionId) ?? views[0]!.connectionId;
+    const anchor =
+      views.find((view) => view.connectionId === anchorId) ??
+      views.find(writable) ??
+      views[0]!;
     const live = views.filter((view) => !view.stale);
     const kept = !anchor.stale
       ? anchor
@@ -184,50 +221,6 @@ function endpointViews<View extends { connectionId: string; stale: boolean }>(
     if (kept !== anchor) placeOf.set(kept, anchor);
   }
   return { hidden, placeOf };
-}
-
-/**
- * The live view Town shows for each endpoint whose anchor is down, by
- * connection ID: the anchor's connection ID. Town's room spots, colours and
- * desk pins are read and saved under the anchor's (`placeConnectionId`), and
- * the office projection admits a folded room's pinned desks by them too
- * (useTownOffice.ts), so a takeover keeps every pinned desk at its seat.
- * `hosts` are World's hosts, stale as the office projection reads them.
- */
-export function townEndpointStandIns(
-  hosts: readonly { connectionId: string; stale: boolean }[],
-  runtimes: readonly TownRuntime[],
-): Map<string, string> {
-  const runtimeOf = new Map(runtimes.map((each) => [each.id, each]));
-  const { placeOf } = endpointViews(
-    hosts.filter((host) => runtimeOf.has(host.connectionId)),
-    runtimeOf,
-  );
-  return new Map(
-    [...placeOf].map(([kept, anchor]) => [
-      kept.connectionId,
-      anchor.connectionId,
-    ]),
-  );
-}
-
-/**
- * Pinned tab card keys with each stand-in's copy of its anchor's pins, so
- * the projection admits the stand-in's pinned desks first in folded rooms,
- * as it did the anchor's. Views of one endpoint share workspace and tab IDs,
- * so only the connection prefix differs.
- */
-export function townStandInPins(
-  pinned: ReadonlySet<string>,
-  standIns: ReadonlyMap<string, string>,
-): ReadonlySet<string> {
-  if (!pinned.size || !standIns.size) return pinned;
-  const aliased = new Set(pinned);
-  for (const [kept, anchor] of standIns)
-    for (const key of pinned)
-      if (key.startsWith(`${anchor}:`))
-        aliased.add(`${kept}:${key.slice(anchor.length + 1)}`);
-  return aliased;
 }
 
 /** The hosts Town shows, in order: a taken-over view in its anchor's place. */
