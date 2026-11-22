@@ -8,3 +8,4 @@
   shards using measured file durations with two independent files per runner.
 - Isolate Town's browser launcher action from preceding room hover cards and
   catalog layout shifts; balance its shard using the passing hosted duration.
+- Keep existing focus-session browser keys in the checked storage catalog.
