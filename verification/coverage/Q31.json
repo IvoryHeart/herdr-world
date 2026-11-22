@@ -5,6 +5,7 @@
   "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
   "properties": "Captured roots/owners survive async work; partial upload cleanup; preview admission has no authority escalation",
   "existingTests": [
+    "server/src/http/static-files.test.ts",
     "server/src/workspace/file-mutations.test.ts",
     "server/src/workspace/path.test.ts",
     "web/src/components/fileExplorerSelection.test.ts",
@@ -19,11 +20,12 @@
   "status": "alternative-evidence",
   "remaining": "Filesystem permissions, symlink/path and upload semantics require implementation/platform evidence; no universal filesystem or remote atomicity claim.",
   "requiredChecks": ["bun run check", "bun run verification:gate"],
-  "evidenceDecision": "Real filesystem/upload/path tests exercise traversal, native cwd, publication and cancellation using owned synthetic fixtures.",
+  "evidenceDecision": "Real filesystem/upload/path tests exercise traversal, native cwd, publication and cancellation using owned synthetic fixtures. Mutation regressions execute static serving against encoded traversal with an existing escaped file, and remote upload scripts against foreign-uid and writable roots before sweeping or staging. Exact size and deadline boundaries remain direct checks.",
   "partialEvidence": {
     "models": [],
     "contracts": ["verification/consumer-evidence.md"],
     "tests": [
+      "server/src/http/static-files.test.ts",
       "server/src/workspace/files.test.ts",
       "server/src/workspace/file-paths.test.ts",
       "server/src/workspace/local-files.test.ts",

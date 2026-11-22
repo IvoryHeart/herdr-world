@@ -6,6 +6,27 @@ import { serveStatic } from "./static-files";
 
 const web = resolve(import.meta.dir, "../../../web");
 
+test("serveStatic refuses encoded traversal even when the escaped file exists", async () => {
+  const root = await mkdtemp(join(tmpdir(), "static-traversal-"));
+  const publicDir = await mkdtemp(join(root, "public-"));
+  try {
+    await writeFile(join(root, "secret.txt"), "private fixture");
+    await writeFile(join(publicDir, "index.html"), "SPA fixture");
+    for (const path of ["/..%2fsecret.txt", "/%2e%2e%2fsecret.txt"]) {
+      const response = await serveStatic(
+        new Request(`https://world.example${path}`, {
+          headers: { accept: "text/html" },
+        }),
+        publicDir,
+      );
+      expect(response.status).toBe(404);
+      expect(await response.text()).toBe("not found");
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("the app links a credentialed standalone manifest with existing install icons", async () => {
   const html = await Bun.file(resolve(web, "index.html")).text();
   const link = html.match(/<link\b[^>]*\brel="manifest"[^>]*>/)?.[0];
