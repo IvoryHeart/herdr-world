@@ -154,6 +154,9 @@ function fakeClient() {
     opens: [] as IdeOpenRequest[],
     enables: 0,
     stops: [] as string[],
+    // As the service when the host can't be reached: the stop fails and the
+    // server stays listed, detached.
+    failStop: false,
   };
   const status = (): IdeStatus => ({
     providers: [vscode, provider(state.enabled)],
@@ -210,7 +213,17 @@ function fakeClient() {
     },
     stop: async (id) => {
       state.stops.push(id);
-      state.instances = state.instances.filter((entry) => entry.id !== id);
+      state.instances = state.failStop
+        ? state.instances.map((entry) =>
+            entry.id === id
+              ? {
+                  ...entry,
+                  state: "detached",
+                  reason: "World couldn't stop it. It still runs there.",
+                }
+              : entry,
+          )
+        : state.instances.filter((entry) => entry.id !== id);
       return status();
     },
     forget: async (id) => {
@@ -617,6 +630,26 @@ async function run() {
     !$(".code-view-reloaded"),
     "a reattached workbench didn't load again, so nothing says it did",
   );
+
+  // A Stop that fails (the host can't be reached) leaves the server
+  // running: its loaded workbench stays, the same frame (#1262).
+  fake.state.failStop = true;
+  button("Stop")?.click();
+  await until(() => Boolean($(".modal[role=dialog]")), "Stop asks first");
+  const failedActions = [
+    ...document.querySelectorAll<HTMLButtonElement>(".modal-actions button"),
+  ];
+  failedActions[failedActions.length - 1]?.click();
+  await until(
+    () => fake.state.stops.includes(SSH_INSTANCE_ID),
+    "Stop asks World to stop the SSH server",
+  );
+  await settle();
+  check(
+    $(`.code-view-frame[src="/ide/${SSH_INSTANCE_ID}/"]`) === sshFrame,
+    "a Stop that failed keeps the still-running server's workbench loaded",
+  );
+  fake.state.failStop = false;
   flushSync(() => root.unmount());
 
   // Microsoft's VS Code on a plain-HTTP address: World says why and what to

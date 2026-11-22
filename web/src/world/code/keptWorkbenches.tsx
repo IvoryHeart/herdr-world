@@ -45,9 +45,10 @@ const live = (listed: readonly IdeInstance[], id: string) =>
  * Workbenches loaded on this page stay loaded while another project is in
  * front, and while World reattaches to their server (its connection
  * changed, World restarted): the frame keeps its page and VS Code
- * reconnects on its own, so nothing reloads (#1262). Only Stop, or a server
- * that failed or is gone, lets its frame go. `reloaded` is a workbench that
- * loaded again, and why, until dismissed.
+ * reconnects on its own, so nothing reloads (#1262). Only a server that
+ * failed or is gone (a Stop that ended it) lets its frame go; a failed Stop
+ * keeps it. `reloaded` is a workbench that loaded again, and why, until
+ * dismissed.
  */
 export function useKeptWorkbenches(
   instance: IdeInstance | undefined,
@@ -90,8 +91,6 @@ export function useKeptWorkbenches(
 
   return {
     visited,
-    forget: (gone: string) =>
-      setVisited((current) => current.filter((kept) => kept !== gone)),
     reloaded:
       showing && reloaded && reloaded.id === instance?.id ? reloaded.why : null,
     dismiss: () => setReloaded(null),

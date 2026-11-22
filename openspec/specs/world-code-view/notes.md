@@ -148,10 +148,13 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   minute. Either way the server keeps running until **Stop**.
 - **Kept loaded.** Once shown, a workbench stays loaded in the page while
   another project, Town, Board, Desk or Spaces is in front, and while World
-  lets go of its server and reattaches (a reconnect or World restarting):
+  lets go of its server and reattaches (a reconnect or World restarting),
+  and behind the connection welcome after the last host is removed
+  (`WorldControlPlane.tsx` keeps the view layout mounted, hidden and inert):
   open editors, unsaved edits, terminals, webviews and scroll stay as they
-  were, and VS Code reconnects on its own. Only reloading the page, **Stop**,
-  or a server that ended or failed loads it again, and then Code says so
+  were, and VS Code reconnects on its own. Only reloading the page, a **Stop**
+  that ended the server (a failed Stop keeps it), or a server that ended or
+  failed loads it again, and then Code says so
   (**This page reloaded, so <IDE> loaded again**). Each kept workbench holds
   VS Code's page memory in the browser (a few hundred MB, more with
   webviews), at most four with the server limit; there is no idle release.

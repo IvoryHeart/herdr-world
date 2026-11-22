@@ -271,8 +271,9 @@ export default function CodeView({
 
   const stop = async (target: IdeInstance) => {
     try {
+      // The frame goes only once the status shows its server gone or
+      // failed: a failed stop leaves it running, its workbench loaded.
       ide.apply(await client.stop(target.id));
-      kept.forget(target.id);
     } catch (cause) {
       setOpenError(cause instanceof Error ? cause.message : String(cause));
     }

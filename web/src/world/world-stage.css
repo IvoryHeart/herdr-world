@@ -166,6 +166,14 @@ body:has(.app.zen) {
   min-height: 0;
   overflow: hidden;
 }
+/* Behind the welcome that asks for a connection, only to keep loaded Code
+   workbenches (#1262): out of the flow, unseen, unclickable. */
+.world-view-layout[inert] {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
 .world-view-stage {
   width: 100%;
   height: 100%;

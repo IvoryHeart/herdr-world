@@ -72,10 +72,12 @@ writing the user's IDE settings, so an explicit setting of the user's own wins.
 ### Requirement: Workbench kept loaded across views
 
 A workbench shown once SHALL stay loaded, at its size, while another project,
-view or Spaces is in front, and while World detaches from and reattaches to its
-server; its editors, unsaved edits, terminals, webviews and scroll SHALL stay as
-they were. Only a page reload, Stop, or its server ending or failing SHALL load
-it again, and Code SHALL then say it loaded again.
+view or Spaces is in front, while World detaches from and reattaches to its
+server, and while World asks for a connection after the last one was removed;
+its editors, unsaved edits, terminals, webviews and scroll SHALL stay as they
+were. Only a page reload, a Stop that ended the server, or its server ending or
+failing SHALL load it again, and Code SHALL then say it loaded again. A Stop
+that fails leaves the server running and its workbench loaded.
 
 #### Scenario: Switch to Town and back
 
@@ -86,6 +88,16 @@ it again, and Code SHALL then say it loaded again.
 
 - **WHEN** World detaches from a running server and reattaches to it
 - **THEN** the workbench stays loaded behind the detached screen and is in front again once ready, without loading again
+
+#### Scenario: Last connection removed
+
+- **WHEN** the owner removes the last connection while a workbench is loaded
+- **THEN** World asks for a connection, the workbench stays loaded hidden behind it, and it is unchanged when a connection is back
+
+#### Scenario: Stop fails
+
+- **WHEN** the owner confirms Stop and World cannot stop the server
+- **THEN** the server stays listed and its workbench stays loaded
 
 #### Scenario: Page reloaded
 
