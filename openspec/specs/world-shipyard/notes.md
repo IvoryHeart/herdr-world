@@ -46,7 +46,7 @@
   “nothing waiting” or permission to release. The existing GitHub Sources switch
   and service user's `gh` sign-in apply. Reads share a bounded cache and deadline.
 - Running World listeners report their versions, ports and known source branches
-  in a private local registry. Isolated previews can opt into one shared registry;
+  in a private per-user registry shared by default, including isolated previews;
   expired reports are stale and have no open action. Only fresh loopback reports
   provide navigation URLs, usable from the service machine. No remote host or
   port discovery runs, and agent runtimes are not treated as World deployments.

@@ -72,14 +72,19 @@ Inspect this artifact from the failed native job before diagnosing an exit.
 The older pre-0.2.4 cookie migration remains covered by installer acceptance below.
 
 The walk installs pinned, real `claude` and `codex` executables, signed out.
-Its private signed-out Codex config disables startup update checks because the
-walk manages the pinned version. Otherwise an earlier launch can populate the
-update cache and the prompt journey's Enter can choose **Update now**, making
+Harness auto-update prompts are disabled: Claude through `DISABLE_AUTOUPDATER`
+and Codex through the recorder's launch-only `-c check_for_update_on_startup=false`
+override, including signed-in journeys. Synthetic prompt input cannot select an
+update and replace or exit the pinned executable. Recorded launch arguments stay
+exactly as World supplied them; version and authentication probes are unchanged.
+The private signed-out Codex config also disables startup update checks because
+the walk manages the pinned version. Otherwise an earlier launch can populate
+the update cache and the prompt journey's Enter can choose **Update now**, making
 Codex exit before listing. The issue #1208 artifacts showed this on Linux and
 macOS: macOS completed the update and requested a restart; Linux could not find
 the updater executable. The aggregate correctly omitted the exited terminal.
-This policy is confined to the walk's private home; dedicated signed-in homes
-retain their existing configuration.
+The config-file policy is confined to the walk's private home; dedicated
+signed-in homes retain their existing configuration files.
 A transparent PTY recorder keeps the real executable in the pane's original
 foreground process group while a helper forwards terminal traffic and observes
 complete argv/settings, their own first screen and prompt input; it produces no
