@@ -1,3 +1,4 @@
+import { usageRpc } from "../features/usage/rpc";
 import { expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import { createRpcDispatcher } from "../service/rpc-dispatch";
@@ -9,15 +10,18 @@ test("analytics RPC uses admitted World reads, validates filters and hides raw s
   const ws = {} as ServerWebSocket<unknown>,
     replies: any[] = [];
   let failed = false;
-  const services = {
-    clients: new Set([ws]),
-    snapshotAdmission: { acknowledge: () => false },
-    worldUsageAnalytics: {
+  const reads = {
+    analytics: {
       get: async (params: Record<string, unknown>) => {
         if (failed) throw new Error("PRIVATE_SOURCE_ERROR");
         return usageAnalyticsFixture(params);
       },
     },
+  };
+  const services = {
+    clients: new Set([ws]),
+    snapshotAdmission: { acknowledge: () => false },
+    featureRpc: new Map(Object.entries(usageRpc(reads))),
     safeSend: (_ws: unknown, payload: string) => {
       replies.push(JSON.parse(payload));
       return true;
@@ -84,15 +88,16 @@ test("usage is a registered World read with bounded windows and no default-runti
   const ws = {} as ServerWebSocket<unknown>,
     replies: any[] = [],
     windows: unknown[] = [];
+  const reads = {
+    get: async (params: unknown) => {
+      windows.push(params);
+      return { version: 1, entities: [] };
+    },
+  };
   const services = {
     clients: new Set([ws]),
     snapshotAdmission: { acknowledge: () => false },
-    worldUsage: {
-      get: async (params: unknown) => {
-        windows.push(params);
-        return { version: 1, entities: [] };
-      },
-    },
+    featureRpc: new Map(Object.entries(usageRpc(reads))),
     safeSend: (_ws: unknown, payload: string) => {
       replies.push(JSON.parse(payload));
       return true;
