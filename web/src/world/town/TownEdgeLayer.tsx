@@ -43,7 +43,7 @@ export function TownEdgeArrows({
   onGo,
 }: {
   store: TownEdgeArrowStore;
-  buildingLabel: (hostKey: string) => string;
+  buildingLabel: (buildingKey: string) => string;
   onGo: (arrow: TownEdgeArrow) => void;
 }) {
   const arrows = useSyncExternalStore(store.subscribe, store.get, store.get);
@@ -131,7 +131,7 @@ export function TownEdgeOverlay({
 }: {
   edge: {
     arrowStore: TownEdgeArrowStore;
-    buildingLabel: (hostKey: string) => string;
+    buildingLabel: (buildingKey: string) => string;
     goToArrow: (arrow: TownEdgeArrow) => void;
     nextText: string;
   };

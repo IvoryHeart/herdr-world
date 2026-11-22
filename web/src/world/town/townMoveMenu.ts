@@ -8,6 +8,14 @@ import { TOWN_PINNED_HINT } from "./townDrag";
 import type { TownMoveResult } from "./townMoves";
 import type { townTeamActions, TownMenuEntry } from "./townTeamActions";
 
+/** A room's name in a menu, with its runtime when its building has two. */
+function townRoomName(room: OfficeRoom | null) {
+  if (!room) return "";
+  return room.runtimeTag
+    ? `${room.displayLabel} · ${room.runtimeTag}`
+    : room.displayLabel;
+}
+
 /** A move being chosen in Town: a desk's place or room, its team, or an agent's desk. */
 export type TownMoveFlow =
   | { step: "room"; deskKey: string }
@@ -114,7 +122,7 @@ export function townMoveMenu(
         ...rooms.map((room) => ({
           key: room.key,
           label: room.displayLabel,
-          detail: `${room.observedDeskCount} desks`,
+          detail: `${room.observedDeskCount} desks${room.runtimeTag ? ` · ${room.runtimeTag}` : ""}`,
           onChoose: () => {
             deps.close();
             void deps.runDeskMove(flow.deskKey, room.key);
@@ -145,7 +153,7 @@ export function townMoveMenu(
     entries: desks.map((desk) => ({
       key: desk.key,
       label: desk.displayLabel,
-      detail: deps.roomForKey(desk.roomKey)?.displayLabel ?? "",
+      detail: townRoomName(deps.roomForKey(desk.roomKey)),
       onChoose: () => {
         deps.close();
         void deps.runAgentMove(flow.agentKey, desk.key);

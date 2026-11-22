@@ -64,8 +64,8 @@ const maxFileCount = 212;
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
 // Town's quiet-agent mark (#1130: rule, hourglass and Busy sub-line, all in
 // the lazy Town chunk) adds about 5 KB, still within 15.6 MiB (2026-11-21).
-// The Quiet agents help card's four pictures (#1220, about 90 KB) took main
-// past 15.6 MiB. The maintainer approved growth up to 20 MiB on 2026-11-22.
+// The Quiet agents help card's four pictures (#1220, about 90 KB) and #1198's Town
+// buildings took main past 15.6 MiB. The maintainer approved growth up to 20 MiB on 2026-11-22.
 // 16.5 MiB leaves headroom so feature PRs stop raising this line one by one,
 // until #1228 moves the budget into a reviewed data file. A bundle-size
 // assessment is tracked separately; file, help-picture and startup limits stay.
