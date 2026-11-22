@@ -1,9 +1,10 @@
-export type WorldView = "desk" | "spaces" | "town" | "board";
+export type WorldView = "desk" | "spaces" | "town" | "board" | "code";
 
 export const WORLD_VIEWS: readonly WorldView[] = [
   "town",
   "board",
   "desk",
+  "code",
   "spaces",
 ];
 
@@ -12,6 +13,7 @@ export const WORLD_VIEW_PATHS: Record<WorldView, string> = {
   spaces: "/spaces",
   town: "/town",
   board: "/board",
+  code: "/code",
 };
 
 /**

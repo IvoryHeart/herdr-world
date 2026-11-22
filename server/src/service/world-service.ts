@@ -43,6 +43,8 @@ import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { createSshProfileRuntimeConfig } from "../connections/ssh-profile-runtime";
 import { bindListenerBeforeConnectionStart } from "../connections/startup";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
+import type { IdeService } from "../ide/service";
+import { createWorldIde } from "../ide/world-ide";
 import {
   createHerdrSetupHandlers,
   herdrSetupGuardForProfile,
@@ -51,10 +53,7 @@ import { createWebPushService } from "../notifications/web-push";
 import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
 import { composeSources, runSourceProcess } from "../sources/composition";
-import { ShipyardService } from "../shipyard/service";
-import { ShipyardInstances } from "../shipyard/instances";
-import { shipyardInstanceIdentity } from "../shipyard/identity";
-import { createShipyardHttp } from "../shipyard/http";
+import { composeShipyard } from "../shipyard/composition";
 import { withIntegrations } from "../integrations/http";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
@@ -153,8 +152,12 @@ async function compose(
     deps.scheduleProcessExit,
   );
   let connectionRevision = 0;
+  let worldIde: IdeService | null = null;
   function publishConnectionsChanged() {
     if (stopping) return;
+    // A reconnect or change detaches IDEs attached under the old one (they
+    // run on), and reattaches to those whose connection is back.
+    void worldIde?.reconcile();
     broadcast(
       JSON.stringify({
         control: {
@@ -707,24 +710,16 @@ async function compose(
     vaultPath: paths.sourceSecrets,
     now: () => clock.now(),
   });
-  const shipyardInstances = new ShipyardInstances(
-    paths.instanceRegistry,
-    paths.root,
-    () => clock.now(),
-    scheduler,
-  );
-  const shipyardIdentity = await shipyardInstanceIdentity(
-    serviceIncarnation,
-    config.appVersion,
-    clock.now(),
-  );
-  const shipyard = new ShipyardService({
+  const shipyard = await composeShipyard({
+    directory: paths.instanceRegistry,
+    dataRoot: paths.root,
+    incarnation: serviceIncarnation,
+    version: config.appVersion,
     run: runSourceProcess,
     source: () => worldSources.shipyardSource(),
-    instances: () => shipyardInstances.read(),
     now: () => clock.now(),
+    scheduler,
   });
-  const shipyardHttp = createShipyardHttp(shipyard);
 
   worldUsage = composeWorldUsage({
     connectionManager,
@@ -742,6 +737,12 @@ async function compose(
     config,
     dataRoot: paths.root,
   });
+  const ide = (worldIde = createWorldIde({
+    root: paths.root,
+    sshHost: config.sshHost,
+    profiles: connectionProfiles,
+    notify: (message) => stopping || broadcast(message, "world-ide-changed"),
+  }));
   const rpcServices: RpcServices = {
     clock,
     bindings: storage.bindings,
@@ -783,6 +784,7 @@ async function compose(
     worldCli,
     worldSnapshots,
     worldUsage,
+    ide,
     worldUsageAnalytics: worldUsage.analytics,
     worldMemory: createRuntimeMemoryService({
       tui: () => connectionManager,
@@ -855,8 +857,9 @@ async function compose(
             herdrSetup,
             officeObservability: handleOfficeObservability,
             sources: handleWorldSources,
+            ide,
             weatherCli: weatherCliHandler(worldSources),
-            shipyard: { service: shipyard, http: shipyardHttp },
+            shipyard,
             track,
             stopping: () => stopping,
           }),
@@ -874,21 +877,15 @@ async function compose(
       const listenPort = server.port ?? config.port;
       const asksReport = askPeers.start(listenPort, {
         directory: paths.instanceRegistry,
-        selfId: shipyardInstances.id,
+        selfId: shipyard.id,
         now: () => clock.now(),
         scheduler,
         any: ["0.0.0.0", "::"].includes(config.host),
         changed: () => worldCli.peersChanged(),
-        reportChanged: () => shipyardInstances.republish(),
+        reportChanged: () => shipyard.republish(),
         log: (message) => logger.warn(message),
       });
-      shipyardInstances.start(
-        shipyardIdentity,
-        listenPort,
-        config.host,
-        !!config.tls,
-        asksReport,
-      );
+      shipyard.start(listenPort, config.host, !!config.tls, asksReport);
       worldCli.start();
       forwards.listeningOn(server.port ?? config.port);
       features!.listening(listenPort);
@@ -943,8 +940,7 @@ async function compose(
     stopping = true;
     if (features!.hasStop("quiesce")) await features!.stop("quiesce");
     worldSources.weather.close();
-    shipyard.close();
-    shipyardInstances.stop();
+    shipyard.stop();
     askPeers.stop();
     const usageStopped = worldUsage!.close();
     focusedAcquisition.stop();
@@ -958,6 +954,7 @@ async function compose(
     try {
       // Stop Ranger then runtimes, failing pending Herdr calls; fenced startup/requests settle.
       await forwards.stop();
+      ide.closeAll(); // IDE servers run on; World only lets go.
       await assistant.dispose();
       if (features!.hasStop("drain")) await features!.stop("drain");
       await connectionManager.stopAll();

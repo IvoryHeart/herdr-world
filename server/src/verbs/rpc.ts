@@ -538,6 +538,24 @@ export const rpcVerbs = [
     "world",
     object({ harness: text }),
   ),
+  // Installed web IDEs for the Code view and their World-owned servers.
+  rpc("world.ide.status", "read", "world"),
+  rpc("world.ide.enable", "reconcilable", "world", object({ provider: text })),
+  rpc("world.ide.disable", "reconcilable", "world", object({ provider: text })),
+  rpc(
+    "world.ide.configure",
+    "reconcilable",
+    "world",
+    object({ provider: text }),
+  ),
+  rpc("world.ide.open", "reconcilable", "world", object({ folder: text })),
+  rpc("world.ide.stop", "reconcilable", "world", object({ instanceId: text })),
+  rpc(
+    "world.ide.forget",
+    "reconcilable",
+    "world",
+    object({ instanceId: text }),
+  ),
   // The owner's last sighting across browsers, for "Since you left".
   rpc("world.profiles.delete", "reconcilable", "world"),
   rpc("world.profiles.get", "read", "world"),
