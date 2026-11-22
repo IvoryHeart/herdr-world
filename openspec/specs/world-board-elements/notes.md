@@ -93,9 +93,10 @@ New elements persist locally with titles, positions, source references and
 revision conflicts. Upgrades preserve existing Board and Apartments records,
 including early Board previews that shared schema version 14 with Apartments.
 Recovery uses the normal private backup and atomic migration transaction.
-A Memory element reads project files; it does not open World's memory
-Library. An Agent log element reads a saved file; it does not link to
-Apartments. Element edits have no CLI history/undo; existing sticky note and
+A Memory element reads project files; it does not open World's memory store.
+An Agent log element reads a saved file; it does not link to past sessions.
+Board names things plainly; Town's metaphors (Library, Apartments) stay in
+Town. Element edits have no CLI history/undo; existing sticky note and
 card behavior is unchanged.
 
 Project reads explicitly name the saved connection's current generation through
