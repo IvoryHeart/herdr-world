@@ -39,6 +39,8 @@ export const CORE_HOST_METHODS = [
   "agent_conversation.unwatch",
   "agent_history.get",
   "agent_history.entry",
+  "agent_commands.get",
+  "agent_artifacts.get",
   "agent_session.get",
   "agent_session.link_preview",
   "agent_session.link",

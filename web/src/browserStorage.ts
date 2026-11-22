@@ -1,12 +1,15 @@
 const PREFIX = "herdr-world:foundation-v2:";
 
 /** Isolate the new foundation from both old World and upstream browser state. */
-export function worldStorage(storage: Storage): Storage {
+export type RoamgateStorage = Storage & { keys(): string[] };
+
+export function worldStorage(storage: Storage): RoamgateStorage {
   const keys = () =>
     Array.from({ length: storage.length }, (_, index) => storage.key(index))
       .filter((key): key is string => key?.startsWith(PREFIX) ?? false)
       .map((key) => key.slice(PREFIX.length));
   return {
+    keys,
     get length() {
       return keys().length;
     },
@@ -30,9 +33,14 @@ export function worldStorage(storage: Storage): Storage {
   };
 }
 
-function browserStorage(kind: "localStorage" | "sessionStorage"): Storage {
+function browserStorage(
+  kind: "localStorage" | "sessionStorage",
+): RoamgateStorage {
   const get = () => worldStorage(globalThis[kind]);
   return {
+    keys() {
+      return get().keys();
+    },
     get length() {
       return get().length;
     },

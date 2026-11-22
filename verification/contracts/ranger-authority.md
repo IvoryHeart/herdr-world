@@ -64,3 +64,17 @@ Durability/recovery has a separate contract; permission must be re-admitted ther
 
 Run maintained verification/typecheck and normal Bun tests, retaining actual
 service/context/task integration suites.   Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); accepted PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+
+## Source sync through bf3879f93
+
+Scope extension retains each held lease and mention guard and rejects a different
+generation before widening. Existing context and service consumers cover creation
+within one turn, later chat use, removal and continued global-task restrictions.
+Fresh fixed-task admission has a direct exhaustive identity table in
+`server/src/assistant/task-scope-recovery.test.ts`: restart, endpoint replacement,
+workspace replacement, missing target and host order (32 combinations). Service
+cases cover closed/recreated IDs, mixed boot identities, revoked permission and
+interrupted runs. These checks exercise the actual finite identity comparison;
+the existing authority model remains the ordering evidence for dispatch waits,
+stop and revocation. No new atomic remote-workspace or automatic recovery claim is
+made. The full canonical gate remains required after these consumer/owner changes.

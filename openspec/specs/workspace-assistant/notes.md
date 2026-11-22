@@ -45,3 +45,13 @@
   host, and set a distinct browser instance title.
 - Login is required on localhost and other listeners, using a generated token or
   a configured 15–1024-character password, with throttling for failed attempts.
+
+## Created workspaces and fixed tasks
+
+Ranger can continue in a workspace it created
+in that chat without widening global task grants. Fixed-scope tasks skip closed
+original workspaces with a notice, refuse replaced identities, and re-check the
+original workspace before a fresh run after Herdr restarts. An interrupted run
+never resumes against a replacement server. World keeps its schema-v4 task store.
+
+Scope extension: `server/src/assistant/scope-extension.ts`; task context and recovery: `server/src/assistant/task-run-context.ts`, `server/src/assistant/task-scope-recovery.ts`. Consumers: `server/src/assistant/context.test.ts`, `server/src/assistant/service.test.ts`, `server/src/assistant/task-scope-recovery.test.ts`.

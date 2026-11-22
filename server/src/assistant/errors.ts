@@ -27,3 +27,16 @@ export function surfaceAssistantUserError(
   if (surfaced(error)) throw error;
   throw new Error(masked);
 }
+
+/**
+ * A connection's Herdr restarted (its boot identity changed) since a task's
+ * workspaces were checked: what was checked then may not hold any more, so
+ * an interrupted run cannot resume over it. A new run checks them again.
+ */
+export class AssistantServerRestartedError extends AssistantUserError {
+  constructor(readonly connection: string) {
+    super(
+      `Herdr on ${connection} restarted since the task's workspaces were checked (its server identity changed).`,
+    );
+  }
+}

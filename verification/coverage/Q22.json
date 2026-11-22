@@ -13,7 +13,9 @@
     "web/src/store.test.ts",
     "web/src/tabStripScroll.test.ts",
     "web/src/world/board/boardPaneMove.test.ts",
-    "web/src/world/BoardView.test.ts"
+    "web/src/world/BoardView.test.ts",
+    "server/src/connections/tab-auto-rename.test.ts",
+    "server/src/connections/agent-tab-title.test.ts"
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
   "technique": "alternative",
@@ -21,7 +23,7 @@
   "status": "alternative-evidence",
   "remaining": "All tab cardinalities and asynchronous native layout responses are not exhausted; captured generation checks retain their implementation regressions.",
   "requiredChecks": ["bun run check", "bun run verification:gate"],
-  "evidenceDecision": "Direct pure layout/pin/reorder tests plus queued visible-layout retirement tests cover owner-keyed state; Q21 adds bounded window reducer exploration.",
+  "evidenceDecision": "Direct pure layout/pin/reorder tests plus queued visible-layout retirement tests cover owner-keyed state; Q21 adds bounded window reducer exploration. Roamgate sync through bf3879f93 adds per-runtime tab naming. Direct tab-auto-rename and bound-title tests enumerate default/custom ownership, late disk/SSH reads, settings cancellation, disposal, replaced occupants and manual names; no cross-runtime allocation is introduced.",
   "partialEvidence": {
     "models": [],
     "contracts": ["verification/consumer-evidence.md"],
@@ -32,7 +34,9 @@
       "web/src/tabReorder.test.ts",
       "web/src/components/PaneMoveMenu.test.ts",
       "web/src/store.test.ts",
-      "web/src/tabStripScroll.test.ts"
+      "web/src/tabStripScroll.test.ts",
+      "server/src/connections/tab-auto-rename.test.ts",
+      "server/src/connections/agent-tab-title.test.ts"
     ],
     "checks": ["bun run check"],
     "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

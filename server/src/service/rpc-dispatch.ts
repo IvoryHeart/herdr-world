@@ -501,6 +501,11 @@ async function handleRpc(
         // Input still goes; only its clipboard routing is unknown.
       }
     }
+    if (method === "tab.rename" && typeof params?.tab_id === "string")
+      connection.tabAutoRenamer.markManualRename(
+        params.tab_id,
+        typeof params.label === "string" ? params.label : undefined,
+      );
     const rawResult = await tui.call(method, params ?? {}, 8000, () => {
       recheck();
       if (inputTerminalId)

@@ -62,6 +62,7 @@ const LATE_SHORTCUT_IDS: ShortcutId[] = [
   "town.previous",
   "window.fitRight",
   "window.fitLeft",
+  "pane.chat",
 ];
 export function validateShortcutPreset(value: unknown): ShortcutPreset {
   if (!value || typeof value !== "object")

@@ -388,6 +388,60 @@ test("version two retains existing plans, admissions, proposals and notification
   expect(open(path).load()).toEqual(loaded);
 });
 
+test("a task over all workspaces and its run notices survive reload", () => {
+  const path = directory();
+  const saved = state();
+  const entry = saved.tasks[0]!;
+  entry.input.all_workspaces = true;
+  entry.runs[0]!.input!.all_workspaces = true;
+  entry.runs[0]!.notice = "Herdr on Local restarted since the task was saved.";
+  entry.runs[1]!.notice = "Skipped a workspace no longer open: Local / Gone.";
+  const storage = open(path);
+  storage.save(saved);
+  const loaded = storage.load();
+  expect(loaded.tasks[0]!.input.all_workspaces).toBe(true);
+  expect(loaded.tasks[0]!.runs.map((run) => run.notice)).toEqual([
+    entry.runs[0]!.notice,
+    entry.runs[1]!.notice,
+  ]);
+  storage.close();
+  expect(open(path).load()).toEqual(loaded);
+  // A notice goes with its run.
+  inspect(path, (db) =>
+    expect(
+      db
+        .query("SELECT count(*) AS count FROM runs WHERE notice IS NOT NULL")
+        .get(),
+    ).toEqual({ count: 2 }),
+  );
+});
+
+test("World version three upgrades task scopes and notices atomically", () => {
+  const path = directory();
+  const saved = state();
+  createVersionOne(path, saved);
+  inspect(path, (db) =>
+    db.exec(
+      `ALTER TABLE tasks ADD COLUMN notification_mode TEXT; ALTER TABLE tasks ADD COLUMN notifications TEXT NOT NULL DEFAULT '[]'; ALTER TABLE tasks ADD COLUMN mentions TEXT; PRAGMA user_version = 3;`,
+    ),
+  );
+  const storage = open(path);
+  const loaded = storage.load();
+  loaded.tasks[0]!.input.all_workspaces = true;
+  loaded.tasks[0]!.runs[1]!.notice = "Skipped a workspace.";
+  storage.save(loaded);
+  storage.close();
+  inspect(path, (db) =>
+    expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 4 }),
+  );
+  const reloaded = open(path);
+  try {
+    expect(reloaded.load()).toEqual(loaded);
+  } finally {
+    reloaded.close();
+  }
+});
+
 test("mention bindings round trip tasks, proposals and admitted runs without keeping completed admissions", () => {
   const path = directory();
   const saved = state();

@@ -955,3 +955,18 @@ agent session and has no TTL or renewal job. It disappears from the Inspector wh
 the session changes, the pane closes, or Herdr restarts. Do not use real paths or
 repository links in shared harness output. `--clear` and `--ttl-ms` are rejected
 before any metadata request because delayed cleanup could erase a newer report.
+
+### Synthetic pane-chat preview
+
+Open the worktree preview with `?paneChatFixture` to render the actual pane-chat
+components against a synthetic client. The parameter is removed immediately.
+Choose **question** to try the question buttons, **working** for activity,
+**missing** for the absent-transcript editor, or **send-error** and send text to
+see explicit retry/discard behavior. **Show the terminal** leaves the fixture.
+Every fixture RPC terminates in the page; no terminal receives input. Ordinary
+preview navigation remains available after reloading without the parameter.
+
+The pinned `@pierre/theming` patch keeps only GitHub's two grammar-check presets
+in its optional Shiki registry. World offers Pierre's existing light/dark diff
+appearances; its registry is unchanged. On a dependency update, rebuild and run
+the diff highlighting checks before replacing/removing this asset-size adaptation.

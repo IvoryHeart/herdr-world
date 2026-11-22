@@ -58,7 +58,8 @@
     "server/src/agent/conversation-send-menu.test.ts",
     "server/src/agent/conversation-send-boundaries.test.ts",
     "server/src/agent/conversation-send-repair.test.ts",
-    "web/src/components/chat/pendingSends.test.ts"
+    "web/src/components/chat/pendingSends.test.ts",
+    "server/src/rpc/agent-metadata.test.ts"
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
   "technique": "alternative",
@@ -104,7 +105,8 @@
       "server/src/agent/conversation-send-menu.test.ts",
       "server/src/agent/conversation-send-boundaries.test.ts",
       "server/src/agent/conversation-send-repair.test.ts",
-      "web/src/components/chat/pendingSends.test.ts"
+      "web/src/components/chat/pendingSends.test.ts",
+      "server/src/rpc/agent-metadata.test.ts"
     ],
     "checks": ["bun run check", "bun run verification:check"],
     "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

@@ -39,15 +39,20 @@ standalone compiled fixture copied away from its source. It records the SQLite
 version actually linked by each platform; a Bun version alone does not establish
 identical SQLite versions or filesystem durability behavior across platforms.
 
-The web build is limited to 190 files and 15.3 MiB total embedded assets,
+The web build is limited to 310 files and 16.5 MiB total embedded assets,
 including lazy features such as Ranger, commit history, the diff worker, the
 Town and Board views and PDF.js with its worker, which load only when a browser
 without a PDF viewer opens a PDF. Startup limits remain 660 KiB
 JavaScript (202 KiB gzip) and 196 KiB CSS. The Code view design study accounts
 for three standalone HTML/CSS/JS assets loaded only at
 `/code-view-prototype.html`; it adds nothing to the application's eager graph.
-Small highlighting themes share a
-lazy chunk to control file count. `bun run build` enforces these limits, and it
+The accepted Roamgate diffs 1.6.1 upgrade adds lazy backend/theme assets.
+World retains its curated language registry and removes worker-side loaders
+because grammars and themes arrive pre-resolved from the main thread. The
+increased total/file limits cover the remaining dependency assets and their
+delta on current main, including the Settings registry and lazy pages; startup
+limits are unchanged. Small highlighting themes
+share a lazy chunk to control file count. `bun run build` enforces these limits, and it
 fails when a static import elsewhere keeps a lazy import in the eager chunk,
 when PDF.js reaches the initial load, or when the shipped PDF.js compiles code
 at run time.

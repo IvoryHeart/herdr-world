@@ -305,7 +305,9 @@ File operations and previews work locally and over SSH.
   diffs start collapsed and render on expansion.
 - Choose desktop side-by-side/unified views; mobile is unified. Wrapping saves
   independently for desktop/mobile. Search with `Cmd/Ctrl+F`, Enter/Shift+Enter,
-  or previous/next controls. Text is syntax-highlighted; images have previews.
+  or previous/next controls. Text is syntax-highlighted with Shiki in a background
+  worker using the same supported languages as Files Preview (plus richer Shiki
+  variants); unknown languages stay plain text. Images have previews.
 - Jump to File Explorer from a diff. Working-tree context menus (right-click,
   long-press, or keyboard menu key) offer open, copy relative/absolute path, and
   status-matched stage, unstage, mark resolved, discard unstaged, or delete

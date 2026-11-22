@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createAssistantContext,
+  AssistantServerRestartedError,
   type RecoveryTarget,
 } from "../server/src/assistant/context";
 import {
@@ -227,10 +228,20 @@ export async function replayRangerRecovery(
             result = "accepted";
           } catch (error) {
             assert(error instanceof Error);
-            assert.match(
-              error.message,
-              /recovery (endpoint|server identity|workspace) changed/,
-            );
+            if (error instanceof AssistantServerRestartedError) {
+              assert.equal(
+                boot,
+                false,
+                "Restart refusal requires a changed boot identity",
+              );
+              assert.equal(error.connection, "Synthetic host");
+              assert.match(error.message, /server identity changed/);
+            } else {
+              assert.match(
+                error.message,
+                /recovery (endpoint|workspace) changed/,
+              );
+            }
             result = "rejected";
           }
           if (restored) {

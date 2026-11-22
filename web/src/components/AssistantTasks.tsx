@@ -599,6 +599,16 @@ export function AssistantTasks({
                           <li key={workspaceKey(ref)}>
                             <span>{ref.connection_label} / </span>
                             {ref.label}
+                            {/* Two workspaces may share a name, like a
+                                checkout and its worktree: tell them apart. */}
+                            {task.workspaces.some(
+                              (other) =>
+                                other !== ref &&
+                                other.connection_id === ref.connection_id &&
+                                other.label === ref.label,
+                            ) ? (
+                              <small> ({ref.workspace_id})</small>
+                            ) : null}
                           </li>
                         ))}
                       </ul>
@@ -678,6 +688,25 @@ export function AssistantTasks({
                     <p className="assistant-task-error" role="alert">
                       {selectedRun.error}
                     </p>
+                  ) : null}
+                  {/* The last run failed (say, it could not resume after its
+                      Herdr restarted): a fresh one checks the workspaces
+                      again. */}
+                  {task &&
+                  selectedRun.status === "failed" &&
+                  task.last_run?.id === selectedRun.id &&
+                  task.status !== "cancelled" &&
+                  !liveRun(task.current_run?.status) ? (
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={busy || !connected}
+                      onClick={() =>
+                        void mutate("run_now", { task_id: task.id })
+                      }
+                    >
+                      Start a fresh run
+                    </button>
                   ) : null}
                   {selectedRun.messages.map((message) => (
                     <section

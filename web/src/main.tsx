@@ -15,6 +15,12 @@ import ClaudeTapLockFixture from "./testing/ClaudeTapLockFixture";
 
 // Testing-only preview: consume the switch before view routing rewrites the URL.
 const previewUrl = new URL(location.href);
+const paneChatFixture = previewUrl.searchParams.has("paneChatFixture");
+if (paneChatFixture) {
+  previewUrl.searchParams.delete("paneChatFixture");
+  history.replaceState(history.state, "", previewUrl);
+}
+const PaneChatFixture = React.lazy(() => import("./testing/PaneChatFixture"));
 const questionBacklogFixture = previewUrl.searchParams.has(
   "questionBacklogFixture",
 );
@@ -98,6 +104,7 @@ integrationsFixtureEnabled();
 const stopInstanceNameSync =
   siblingQuestionsFixture ||
   titleSpinnerFixture ||
+  paneChatFixture ||
   claudeTapLockFixture ||
   boardTextConflictFixture ||
   questionBacklogFixture
@@ -109,7 +116,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <React.Suspense fallback={null}>
-        {questionBacklogFixture ? (
+        {paneChatFixture ? (
+          <PaneChatFixture />
+        ) : questionBacklogFixture ? (
           <QuestionBacklogFixture />
         ) : siblingQuestionsFixture ? (
           <SiblingQuestionsFixture />

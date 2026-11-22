@@ -1,6 +1,3 @@
-import type { ConnectionClient } from "./api";
-import { prepareTerminalPasteText } from "./terminalPaste";
-
 /**
  * Draft storage for the mobile terminal composer.
  *
@@ -158,6 +155,25 @@ export function writeTerminalComposerSelection(
   selections.set(key, { start, end });
 }
 
+/**
+ * Puts text at the end of a pane's composer draft, after a blank line: the
+ * draft its terminal composer and its agent chat's message box share.
+ */
+export function appendToPaneComposerDraft(
+  connectionId: string,
+  connectionGeneration: number,
+  pane: { pane_id: string; terminal_id?: string },
+  text: string,
+): void {
+  const key = terminalComposerDraftKey(
+    connectionId,
+    connectionGeneration,
+    pane.pane_id,
+  );
+  const draft = readTerminalComposerDraft(key).trimEnd();
+  writeTerminalComposerDraft(key, draft ? `${draft}\n\n${text}` : text);
+}
+
 export function writeTerminalComposerDraft(key: string, text: string): void {
   if (!text) {
     clearTerminalComposerDraft(key);
@@ -194,14 +210,27 @@ export function terminalComposerSubmissionPending(key: string): boolean {
   return pendingSubmissions.has(key);
 }
 
+/** Text was pasted, but delivery of its separate submit key is uncertain. */
+export class TerminalComposerSubmitKeyError extends Error {
+  readonly cause: unknown;
+
+  constructor(cause?: unknown) {
+    super(
+      "Text reached the terminal, but the submit key could not be confirmed. Check the terminal and submit there if needed; do not send the message again.",
+    );
+    this.cause = cause;
+    this.name = "TerminalComposerSubmitKeyError";
+  }
+}
+
 /**
  * Sends `draft` from the shared pane draft under the composer submission
  * contract. At most one submission runs per draft key. The submitted prefix
  * leaves the draft before the request, so an unmount/remount cannot expose it
  * as a second send while the first is pending; text typed meanwhile stays in
- * the draft. On failure the submitted text is restored ahead of that newer
- * text and the error is rethrown. Returns false when another submission for
- * the key is already pending. `onBegin` runs once the submission is claimed.
+ * the draft. On failure the submitted text is restored unless it has already
+ * reached the terminal; the error is rethrown. Returns false when another
+ * submission for the key is already pending. `onBegin` runs once it is claimed.
  */
 export async function submitTerminalComposerDraft(
   key: string,
@@ -221,8 +250,10 @@ export async function submitTerminalComposerDraft(
     try {
       await send(draft);
     } catch (error) {
-      const pendingText = readTerminalComposerDraft(key);
-      writeTerminalComposerDraft(key, `${draft}${pendingText}`);
+      if (!(error instanceof TerminalComposerSubmitKeyError)) {
+        const pendingText = readTerminalComposerDraft(key);
+        writeTerminalComposerDraft(key, `${draft}${pendingText}`);
+      }
       throw error;
     }
     return true;
@@ -428,101 +459,12 @@ export function terminalComposerCloseWarning(draftCount: number): string {
     : ` ${draftCount} unsent composer drafts will be discarded.`;
 }
 
-/**
- * Builds the mode-aware pane input request for a composer submission. The
- * server wraps the text in bracketed-paste markers only when the PTY has
- * bracketed paste enabled, and encodes the Enter key for the active terminal
- * mode. `submit: false` inserts the draft without executing it.
- */
-export function terminalComposerRequest(
-  paneId: string,
-  text: string,
-  submit: boolean,
-) {
-  return {
-    method: "pane.send_input" as const,
-    params: {
-      pane_id: paneId,
-      text: prepareTerminalPasteText(text),
-      keys: submit ? ["enter"] : ([] as string[]),
-    },
-  };
-}
-
-// An image path World's terminal upload put in the text.
-// Keep adjacent quoted segments and escaped characters in one shell word,
-// including the Unix and PowerShell apostrophe forms from terminal-path-text.
-const COMPOSER_WORD = /(?:'[^']*'|"[^"]*"|\\.|[^\s'"\\])+/g;
-const UPLOADED_PATH = /[\\/]herdr-world-uploads-[^\\/\s]+[\\/]/;
-/**
- * How long an agent gets to take a pasted image in before what follows it.
- * Claude Code reads a pasted image path into an attachment and drops an
- * Enter that arrives meanwhile, leaving the message unsent.
- */
-export const IMAGE_SETTLE_MS = 400;
-
-/** The text cut around the uploaded image paths in it. */
-export function uploadedPathPieces(
-  text: string,
-): Array<{ text: string; path: boolean }> {
-  const pieces: Array<{ text: string; path: boolean }> = [];
-  let last = 0;
-  for (const match of text.matchAll(COMPOSER_WORD)) {
-    const word = match[0];
-    if (!/^['"]?(?:[a-z]:[\\/]|\/)/i.test(word) || !UPLOADED_PATH.test(word))
-      continue;
-    // Quoted names retain punctuation; unquoted sentence endings stay text.
-    const path = /['"]/.test(word) ? word : word.replace(/[.,;:!?)\]]+$/, "");
-    if (match.index > last)
-      pieces.push({ text: text.slice(last, match.index), path: false });
-    pieces.push({ text: path, path: true });
-    last = match.index + path.length;
-  }
-  if (last < text.length) pieces.push({ text: text.slice(last), path: false });
-  return pieces;
-}
-
-/**
- * Types composer text into a pane, optionally followed by Enter.
- *
- * Claude Code only turns a paste into an image attachment when the paste is
- * the image path alone; within a sentence the path stays text. So when the
- * text holds an uploaded path and anything else, each path goes in as its
- * own paste, followed by a pause for the attachment, and the words around
- * it as theirs.
- */
-export async function sendTerminalComposerText(
-  client: Pick<ConnectionClient, "call">,
-  paneId: string | null | undefined,
-  text: string,
-  submit: boolean,
-  wait: (ms: number) => Promise<void> = (ms) =>
-    new Promise((resolve) => setTimeout(resolve, ms)),
-): Promise<void> {
-  if (!paneId) throw new Error("No active pane");
-  const pieces = uploadedPathPieces(text);
-  const imageOnly = pieces.every((piece) => piece.path || !piece.text.trim());
-  if (!pieces.some((piece) => piece.path) || (!submit && imageOnly)) {
-    const request = terminalComposerRequest(paneId, text, submit);
-    await client.call(request.method, request.params);
-    return;
-  }
-  for (const [index, piece] of pieces.entries()) {
-    const last = index === pieces.length - 1;
-    if (!piece.path) {
-      const typed = terminalComposerRequest(paneId, piece.text, last && submit);
-      await client.call(typed.method, typed.params);
-      continue;
-    }
-    const typed = terminalComposerRequest(paneId, piece.text, false);
-    await client.call(typed.method, typed.params);
-    await wait(IMAGE_SETTLE_MS);
-    if (last && submit) {
-      const enter = terminalComposerRequest(paneId, "", true);
-      await client.call(enter.method, enter.params);
-    }
-  }
-}
+export {
+  sendTerminalComposerText,
+  terminalComposerRequest,
+  uploadedPathPieces,
+  IMAGE_SETTLE_MS,
+} from "./terminalComposerSend";
 
 /**
  * Inserts an uploaded image path at the composer caret, replacing the current

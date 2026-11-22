@@ -37,7 +37,7 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | @babel/parser | 8.0.8 | MIT |
 | @babel/runtime | 7.29.7 | MIT |
 | @babel/types | 8.0.8 | MIT |
-| @biomejs/biome | 2.6.2 | MIT OR Apache-2.0 |
+| @biomejs/biome | 2.6.4 | MIT OR Apache-2.0 |
 | @bramus/specificity | 2.4.3 | MIT |
 | @codemirror/autocomplete | 6.20.3 | MIT |
 | @codemirror/commands | 6.11.1 | MIT |
@@ -130,9 +130,10 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | @nodelib/fs.stat | 2.0.5 | MIT |
 | @nodelib/fs.walk | 1.2.8 | MIT |
 | @oxc-project/types | 0.156.0 | MIT |
-| @pierre/diffs | 1.5.2 | apache-2.0 |
+| @pierre/diffs | 1.6.1 | apache-2.0 |
+| @pierre/highlights | 0.2.0 | apache-2.0 |
 | @pierre/theme | 2.0.0 | apache-2.0 |
-| @pierre/theming | 1.0.1 | apache-2.0 |
+| @pierre/theming | 1.0.2 | apache-2.0 |
 | @pixi/colord | 2.9.6 | MIT |
 | @profoundlogic/hogan | 3.0.4 | Apache-2.0 |
 | @protobufjs/aspromise | 1.1.2 | BSD-3-Clause |
@@ -182,19 +183,17 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | @radix-ui/react-use-rect | 1.1.4 | MIT |
 | @radix-ui/react-use-size | 1.1.5 | MIT |
 | @radix-ui/rect | 1.1.3 | MIT |
+| @replit/codemirror-vim-core | 0.1.0 | MIT |
+| @replit/codemirror-vim | 6.4.0 | MIT |
 | @rolldown/pluginutils | 1.0.1 | MIT |
-| @shikijs/core | 4.4.3 | MIT |
-| @shikijs/core | 4.5.0 | MIT |
-| @shikijs/engine-javascript | 4.5.0 | MIT |
-| @shikijs/engine-oniguruma | 4.5.0 | MIT |
-| @shikijs/langs | 4.5.0 | MIT |
-| @shikijs/primitive | 4.4.3 | MIT |
-| @shikijs/primitive | 4.5.0 | MIT |
-| @shikijs/themes | 4.5.0 | MIT |
-| @shikijs/transformers | 4.4.3 | MIT |
-| @shikijs/types | 4.4.3 | MIT |
-| @shikijs/types | 4.5.0 | MIT |
-| @shikijs/vscode-textmate | 10.0.2 | MIT |
+| @shikijs/core | 4.6.0 | MIT |
+| @shikijs/engine-javascript | 4.6.0 | MIT |
+| @shikijs/engine-oniguruma | 4.6.0 | MIT |
+| @shikijs/langs | 4.6.0 | MIT |
+| @shikijs/primitive | 4.6.0 | MIT |
+| @shikijs/themes | 4.6.0 | MIT |
+| @shikijs/types | 4.6.0 | MIT |
+| @shikijs/vscode-textmate | 10.1.0 | MIT |
 | @silvia-odwyer/photon-node | 0.3.4 | Apache-2.0 |
 | @silvia-odwyer/photon | 0.3.3 | Apache-2.0 |
 | @smithy/core | 3.35.1 | Apache-2.0 |
@@ -225,9 +224,9 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | @webgpu/types | 0.1.74 | BSD-3-Clause |
 | @xmldom/xmldom | 0.8.15 | MIT |
 | @xterm/addon-clipboard | 0.2.0 | MIT |
-| @xterm/addon-fit | 0.12.0-beta.311 | MIT |
+| @xterm/addon-fit | 0.12.0-beta.332 | MIT |
 | @xterm/addon-unicode-graphemes | 0.4.0 | MIT |
-| @xterm/xterm | 6.1.0-beta.315 | MIT |
+| @xterm/xterm | 6.1.0-beta.336 | MIT |
 | abbrev | 1.1.1 | ISC |
 | agent-base | 7.1.4 | MIT |
 | agent-base | 9.0.0 | MIT |
@@ -305,6 +304,7 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | grok-mermaid | 0.2.3 | Apache-2.0 |
 | happy-dom | 21.0.4 | MIT |
 | hast-util-to-html | 9.0.5 | MIT |
+| hast-util-to-html | 9.0.7 | MIT |
 | hast-util-whitespace | 3.0.0 | MIT |
 | highlight.js | 11.12.0 | BSD-3-Clause |
 | hosted-git-info | 9.0.3 | ISC |
@@ -366,7 +366,7 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | oniguruma-to-es | 4.3.6 | MIT |
 | openai | 7.19.0 | Apache-2.0 |
 | ora | 9.4.1 | MIT |
-| oxlint | 1.89.0 | MIT |
+| oxlint | 1.90.0 | MIT |
 | p-retry | 4.6.2 | MIT |
 | parse-svg-path | 0.2.0 | MIT |
 | parse5 | 8.0.1 | MIT |
@@ -408,7 +408,7 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | semver | 7.8.5 | ISC |
 | shebang-command | 2.0.0 | MIT |
 | shebang-regex | 3.0.0 | MIT |
-| shiki | 4.5.0 | MIT |
+| shiki | 4.6.0 | MIT |
 | signal-exit | 3.0.7 | ISC |
 | signal-exit | 4.1.0 | ISC |
 | source-map-js | 1.2.2 | BSD-3-Clause |
@@ -430,7 +430,7 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | ts-algebra | 2.0.0 | MIT |
 | tslib | 2.8.1 | 0BSD |
 | typebox | 1.3.27 | MIT |
-| typebox | 1.3.37 | MIT |
+| typebox | 1.4.4 | MIT |
 | typescript | 7.0.2 | Apache-2.0 |
 | undici-types | 8.11.2 | MIT |
 | undici-types | 8.3.0 | MIT |

@@ -198,6 +198,15 @@ export function sanitizeMarkdownHtml(
         continue;
       }
       if (
+        name === "start" &&
+        tag === "ol" &&
+        /^\d{1,9}$/.test(attr.value.trim())
+      ) {
+        // A list marked splits in parts (an item, then a code block not
+        // indented under it, then the next item) keeps its numbers.
+        continue;
+      }
+      if (
         name.startsWith("on") ||
         name === "style" ||
         !MARKDOWN_ALLOWED_ATTRS.has(name)

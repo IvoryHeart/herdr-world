@@ -8,7 +8,8 @@
     "server/src/assistant/tasks.test.ts",
     "server/src/assistant/task-schedule.test.ts",
     "web/src/components/AssistantTasks.test.ts",
-    "server/src/assistant/task-storage.test.ts"
+    "server/src/assistant/task-storage.test.ts",
+    "server/src/assistant/task-scope-recovery.test.ts"
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
   "technique": "ranger-authority",
@@ -27,7 +28,8 @@
       "server/src/assistant/tasks.test.ts",
       "server/src/assistant/task-schedule.test.ts",
       "web/src/components/AssistantTasks.test.ts",
-      "server/src/assistant/task-storage.test.ts"
+      "server/src/assistant/task-storage.test.ts",
+      "server/src/assistant/task-scope-recovery.test.ts"
     ],
     "checks": ["bun run verification:check", "bun run verification:typecheck"],
     "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -37,5 +39,5 @@
     "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
     "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
   },
-  "evidenceDecision": " Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required. Real SQLite v1-v3 migration and reopen controls preserve dynamic membership intent and completed omission notices; model-tool creation/edit proposals confirm through storage, and restart admission follows only current explicit workspace grants."
+  "evidenceDecision": " Candidate Ranger/transcript integration adds concrete Claude driver/MCP, continuation/append and qualified navigation/task-membership consumers. Existing model bounds, mandatory native/platform consumers and excluded claims remain unchanged; independent candidate acceptance is required. Real SQLite v1-v3 migration and reopen controls preserve dynamic membership intent and completed omission notices; model-tool creation/edit proposals confirm through storage, and restart admission follows only current explicit workspace grants. Roamgate sync through bf3879f93: service/context consumers now cover chat-created workspace extension, retained leases/mention guards, closed fixed-task membership, original workspace reidentification after server restart and omission notices. Task-run and task-recovery helpers retain the existing Ranger-authority model and full canonical replay; explicit consumer permutations cover missing/recreated IDs and mixed old/new boot identities beyond the model boundary. The fresh-run helper is exhaustively checked over restart × endpoint replacement × workspace replacement × missing target × host order (32 combinations). This finite data-validation boundary adds no new concurrent scheduler states; service cases retain revocation, draining and persisted admission evidence."
 }

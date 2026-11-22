@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import {
   activateTerminalComposerDraftScope,
+  appendToPaneComposerDraft,
   beginTerminalComposerSubmission,
   beginTerminalComposerUpload,
   clearTerminalComposerDraft,
@@ -21,14 +22,21 @@ import {
   terminalComposerScopeGeneration,
   terminalComposerDraftPaneIds,
   terminalComposerInsertAtCaret,
-  sendTerminalComposerText,
-  uploadedPathPieces,
-  terminalComposerRequest,
+  TerminalComposerSubmitKeyError,
   terminalComposerSubmissionPending,
   terminalComposerUploadCount,
   writeTerminalComposerDraft,
   writeTerminalComposerSelection,
 } from "./terminalComposer";
+import {
+  sendTerminalComposerText,
+  terminalComposerRequest,
+  uploadedPathPieces,
+} from "./terminalComposerSend";
+import { worldLocalStorage } from "./browserStorage";
+
+// A pane running oh-my-pi, the agent the stored choices name.
+const omp = (paneId: string) => ({ paneId, agent: "omp" });
 
 describe("terminal composer drafts", () => {
   test("scopes drafts by connection, generation, and pane", () => {
@@ -62,6 +70,17 @@ describe("terminal composer drafts", () => {
 
     clearTerminalComposerDraft(first);
     clearTerminalComposerDraft(second);
+  });
+
+  test("appends to the draft the pane's composer and chat box read", () => {
+    const pane = { pane_id: "pane-append", terminal_id: "term-append" };
+    const key = terminalComposerDraftKey("conn-a", 1, "pane-append");
+    appendToPaneComposerDraft("conn-a", 1, pane, "first");
+    expect(readTerminalComposerDraft(key)).toBe("first");
+    writeTerminalComposerDraft(key, "mine\n");
+    appendToPaneComposerDraft("conn-a", 1, pane, "feedback");
+    expect(readTerminalComposerDraft(key)).toBe("mine\n\nfeedback");
+    clearTerminalComposerDraft(key);
   });
 
   test("drops empty drafts instead of retaining them", () => {
@@ -166,6 +185,35 @@ describe("terminal composer drafts", () => {
     expect(readTerminalComposerDraft(key)).toBe("retry later");
     expect(terminalComposerSubmissionPending(key)).toBe(false);
     clearTerminalComposerDraft(key);
+  });
+
+  test("retains only newer draft text if the modified submit key fails after paste", async () => {
+    const key = terminalComposerDraftKey("submit-helper", 1, "p1");
+    const read = spyOn(worldLocalStorage, "getItem").mockImplementation(
+      (name) =>
+        name === "terminalSubmitKeys.v1" ? '{"omp":"meta-enter"}' : null,
+    );
+    const client = {
+      call: async (method: string) => {
+        if (method === "pane.send_keys") {
+          writeTerminalComposerDraft(key, "new text");
+          throw new Error("connection lost");
+        }
+      },
+    } as Parameters<typeof sendTerminalComposerText>[0];
+    try {
+      writeTerminalComposerDraft(key, "pasted");
+      await expect(
+        submitTerminalComposerDraft(key, "pasted", (text) =>
+          sendTerminalComposerText(client, omp("p1"), text, true),
+        ),
+      ).rejects.toBeInstanceOf(TerminalComposerSubmitKeyError);
+      expect(readTerminalComposerDraft(key)).toBe("new text");
+      expect(terminalComposerSubmissionPending(key)).toBe(false);
+    } finally {
+      read.mockRestore();
+      clearTerminalComposerDraft(key);
+    }
   });
 
   test("tracks uploads across composer remounts", () => {
@@ -335,6 +383,125 @@ describe("terminal composer request", () => {
     expect(request.params.text).toBe("one\rtwo\rthree");
   });
 
+  test("sends the selected modified key after text, including image-only messages", async () => {
+    const read = spyOn(worldLocalStorage, "getItem");
+    const calls: unknown[] = [];
+    const client = {
+      call: async (method: string, params: unknown) => {
+        calls.push([method, params]);
+      },
+    } as Parameters<typeof sendTerminalComposerText>[0];
+    try {
+      for (const [key, expectedKey] of [
+        ["shift-enter", "shift+enter"],
+        ["alt-enter", "alt+enter"],
+        ["ctrl-enter", "ctrl+enter"],
+        ["meta-enter", "super+enter"],
+      ]) {
+        read.mockImplementation((name) =>
+          name === "terminalSubmitKeys.v1"
+            ? JSON.stringify({ omp: key })
+            : null,
+        );
+        calls.length = 0;
+        await sendTerminalComposerText(client, omp("p3"), "one\ntwo", true);
+        expect(calls).toEqual([
+          ["pane.send_input", { pane_id: "p3", text: "one\rtwo", keys: [] }],
+          ["pane.send_keys", { pane_id: "p3", keys: [expectedKey] }],
+        ]);
+      }
+      calls.length = 0;
+      const path = "/tmp/herdr-world-uploads-501/upload-abc/img-1.png";
+      await sendTerminalComposerText(
+        client,
+        omp("p3"),
+        path,
+        true,
+        async () => {
+          calls.push("wait");
+        },
+      );
+      expect(calls).toEqual([
+        ["pane.send_input", { pane_id: "p3", text: path, keys: [] }],
+        "wait",
+        ["pane.send_keys", { pane_id: "p3", keys: ["super+enter"] }],
+      ]);
+      calls.length = 0;
+      await sendTerminalComposerText(client, omp("p3"), "draft", false);
+      // Panes without an agent, and other agents, keep Enter.
+      await sendTerminalComposerText(client, { paneId: "p3" }, "ls", true);
+      await sendTerminalComposerText(
+        client,
+        { paneId: "p3", agent: "claude" },
+        "hi",
+        true,
+      );
+      expect(calls).toEqual([
+        ["pane.send_input", { pane_id: "p3", text: "draft", keys: [] }],
+        ["pane.send_input", { pane_id: "p3", text: "ls", keys: ["enter"] }],
+        ["pane.send_input", { pane_id: "p3", text: "hi", keys: ["enter"] }],
+      ]);
+    } finally {
+      read.mockRestore();
+    }
+  });
+
+  test("preserves the submit key error after text reaches the pane", async () => {
+    const read = spyOn(worldLocalStorage, "getItem").mockImplementation(
+      (name) =>
+        name === "terminalSubmitKeys.v1" ? '{"omp":"meta-enter"}' : null,
+    );
+    const failure = new Error("pane unavailable");
+    const calls: unknown[] = [];
+    const client = {
+      call: async (method: string, params: unknown) => {
+        calls.push([method, params]);
+        if (method === "pane.send_keys") throw failure;
+      },
+    } as Parameters<typeof sendTerminalComposerText>[0];
+    try {
+      const error = await sendTerminalComposerText(
+        client,
+        omp("p3"),
+        "hello",
+        true,
+      ).then(
+        () => null,
+        (reason: unknown) => reason,
+      );
+      expect(error).toBeInstanceOf(TerminalComposerSubmitKeyError);
+      expect((error as TerminalComposerSubmitKeyError).cause).toBe(failure);
+      expect(calls).toEqual([
+        ["pane.send_input", { pane_id: "p3", text: "hello", keys: [] }],
+        ["pane.send_keys", { pane_id: "p3", keys: ["super+enter"] }],
+      ]);
+    } finally {
+      read.mockRestore();
+    }
+  });
+
+  test("does not send a modified key if the paste fails", async () => {
+    const read = spyOn(worldLocalStorage, "getItem").mockImplementation(
+      (name) =>
+        name === "terminalSubmitKeys.v1" ? '{"omp":"meta-enter"}' : null,
+    );
+    const calls: string[] = [];
+    const client = {
+      call: async (method: string) => {
+        calls.push(method);
+        throw new Error("paste failed");
+      },
+    } as Parameters<typeof sendTerminalComposerText>[0];
+    try {
+      await expect(
+        sendTerminalComposerText(client, omp("p3"), "hello", true),
+      ).rejects.toThrow("paste failed");
+      expect(calls).toEqual(["pane.send_input"]);
+    } finally {
+      read.mockRestore();
+    }
+  });
+
   test("an uploaded image gets time to attach before Enter", async () => {
     const calls: unknown[] = [];
     const waits: number[] = [];
@@ -346,7 +513,7 @@ describe("terminal composer request", () => {
     const path = "/tmp/herdr-world-uploads-501/upload-abc/img-1.png";
     await sendTerminalComposerText(
       client,
-      "p3",
+      { paneId: "p3" },
       `${path} look`,
       true,
       async (ms) => {
@@ -364,9 +531,15 @@ describe("terminal composer request", () => {
 
     // An image alone still gets its pause before Enter.
     calls.length = 0;
-    await sendTerminalComposerText(client, "p3", path, true, async () => {
-      calls.push("wait");
-    });
+    await sendTerminalComposerText(
+      client,
+      { paneId: "p3" },
+      path,
+      true,
+      async () => {
+        calls.push("wait");
+      },
+    );
     expect(calls).toEqual([
       ["pane.send_input", { pane_id: "p3", text: path, keys: [] }],
       "wait",
@@ -375,12 +548,18 @@ describe("terminal composer request", () => {
 
     // Plain text, or an image only typed in, goes in one request.
     calls.length = 0;
-    await sendTerminalComposerText(client, "p3", "ls", true, async () => {
-      calls.push("wait");
-    });
     await sendTerminalComposerText(
       client,
-      "p3",
+      { paneId: "p3" },
+      "ls",
+      true,
+      async () => {
+        calls.push("wait");
+      },
+    );
+    await sendTerminalComposerText(
+      client,
+      { paneId: "p3" },
       `${path} `,
       false,
       async () => {
@@ -438,7 +617,7 @@ describe("uploaded image paths in composer text", () => {
     } as Parameters<typeof sendTerminalComposerText>[0];
     await sendTerminalComposerText(
       client,
-      "p3",
+      { paneId: "p3" },
       `compare ${quoted} with ${path}`,
       true,
       async () => {
@@ -459,7 +638,7 @@ describe("uploaded image paths in composer text", () => {
     calls.length = 0;
     await sendTerminalComposerText(
       client,
-      "p3",
+      { paneId: "p3" },
       `see ${path}`,
       false,
       async () => {

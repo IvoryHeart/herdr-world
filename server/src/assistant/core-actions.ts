@@ -222,11 +222,19 @@ export async function prepareCoreAssistantAction(args: {
             if (hook?.status === "failed")
               return {
                 status: "failed",
+                created: {
+                  connection_id: target.connection_id,
+                  workspace_id: created,
+                },
                 detail:
                   "The worktree and its room were created, but its setup hook failed. Inspect it before retrying.",
               };
             return {
               status: "succeeded",
+              created: {
+                connection_id: target.connection_id,
+                workspace_id: created,
+              },
               detail:
                 "The worktree was created on the herdr-core host and opened as a World room.",
             };

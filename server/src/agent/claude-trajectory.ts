@@ -1,3 +1,4 @@
+import { attachedImages } from "./session-images";
 import type { AtifStep, SessionFile } from "./session-types";
 import {
   cleanMessageText,
@@ -305,6 +306,7 @@ export function projectClaudeTrajectory(
       return;
     }
     if (!text && !usage) return;
+    const images = role === "user" ? attachedImages(parts) : [];
     steps.push({
       timestamp,
       source:
@@ -316,6 +318,7 @@ export function projectClaudeTrajectory(
         model: modelNameFromRecord(record) || undefined,
         // The summary Claude Code writes when it compacts the conversation.
         compact_summary: record.isCompactSummary === true || undefined,
+        ...(images.length ? { images } : {}),
       },
     });
   });

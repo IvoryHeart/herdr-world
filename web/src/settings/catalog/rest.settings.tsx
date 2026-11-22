@@ -15,6 +15,7 @@ import {
   FileClock,
   FolderGit2,
   Keyboard,
+  MessageSquare,
   LayoutList,
   LifeBuoy,
   LogOut,
@@ -36,6 +37,16 @@ import { openCommandBox } from "../../commandBoxKey";
 import { helpTabForPath, openHelp } from "../../help/helpEvents";
 import { shortcutLabel } from "../../shortcutPreferences";
 import { store } from "../../store";
+import {
+  defaultPaneView,
+  setDefaultPaneView,
+  subscribePaneView,
+} from "../../paneView";
+import {
+  composerVimKeys,
+  setComposerVimKeys,
+  subscribeComposerVimKeys,
+} from "../../composerVim";
 import {
   setTerminalOptionAsMeta,
   subscribeTerminalOptionAsMeta,
@@ -61,6 +72,34 @@ function openLink(url: string) {
 const REPOSITORY = "https://github.com/IvoryHeart/herdr-world";
 
 defineSettings("agents", [
+  {
+    kind: "setting",
+    id: "agents.open-as-chat",
+    category: "agents",
+    title: "Open agents as a chat",
+    description: "An agent pane shows its chat once the agent starts",
+    words: ["pane", "terminal", "conversation", "default view"],
+    icon: <MessageSquare size={15} />,
+    scope: "browser",
+    subscribe: subscribePaneView,
+    control: {
+      type: "toggle",
+      get: () => defaultPaneView() === "chat",
+      set: (_host, on) => setDefaultPaneView(on ? "chat" : "terminal"),
+    },
+  },
+  {
+    kind: "panel",
+    id: "agents.automatic-tab-renaming",
+    category: "agents",
+    title: "Automatic tab renaming",
+    description:
+      "Name default tabs from active agent sessions; keep custom names",
+    words: ["tab name", "title", "auto rename", "connection"],
+    icon: <Sparkles size={15} />,
+    scope: "connection",
+    page: { ...connectionPage, focus: "auto-rename" },
+  },
   {
     kind: "panel",
     id: "agents.profiles",
@@ -97,6 +136,22 @@ defineSettings("agents", [
 ]);
 
 defineSettings("keyboard", [
+  {
+    kind: "setting",
+    id: "keyboard.agent-chat-vim",
+    category: "keyboard",
+    title: "Vim keys in agent chats",
+    description: "Message boxes start in insert mode; :w sends",
+    words: ["message", "composer", "vim", "insert mode"],
+    icon: <Keyboard size={15} />,
+    scope: "browser",
+    subscribe: subscribeComposerVimKeys,
+    control: {
+      type: "toggle",
+      get: () => composerVimKeys(),
+      set: (_host, on) => setComposerVimKeys(on),
+    },
+  },
   {
     kind: "command",
     id: "keyboard.cheat-sheet",

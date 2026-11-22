@@ -1,3 +1,12 @@
+import {
+  workspaceIdentity,
+  identifier,
+  limitedText,
+  records,
+  count,
+  relativePath,
+} from "./context-values";
+import { createScopeExtension } from "./scope-extension";
 import { mapScopeReads } from "./scope-reads";
 import {
   assistantCoreRuntime,
@@ -8,7 +17,7 @@ import {
   type RuntimeLease,
 } from "./core-context";
 export { CORE_HISTORY_UNAVAILABLE } from "./core-context";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type {
   AssistantActionKind,
   AssistantMentionCatalog,
@@ -24,10 +33,10 @@ import {
   isAssistantMentionTarget,
 } from "../../../shared/assistant";
 import { isRecord } from "../agent/session-utils";
-import { validateConnectionId } from "../connections/protocol";
+
 import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { assertUnixHost } from "../connections/unix-only";
-import { sanitizeExplorerPath } from "../workspace/file-paths";
+
 import {
   prepareAssistantAction,
   readAssistantPaneOccupant,
@@ -38,7 +47,7 @@ import {
   type AssistantCoreWorktreeCreator,
   prepareCoreAssistantAction,
 } from "./core-actions";
-import { AssistantUserError } from "./errors";
+import { AssistantUserError, AssistantServerRestartedError } from "./errors";
 import { terminalReadLines } from "./tools";
 
 const MAX_ITEMS = 80;
@@ -55,57 +64,7 @@ export type RecoveryTarget = AssistantWorkspaceRef & {
 
 export class AssistantRecoveryNotReadyError extends Error {}
 
-function workspaceIdentity(workspace: Record<string, unknown>): string {
-  const worktree = isRecord(workspace.worktree) ? workspace.worktree : {};
-  return createHash("sha256")
-    .update(
-      JSON.stringify([
-        workspace.cwd ?? null,
-        worktree.repo_key ?? null,
-        worktree.repo_root ?? null,
-        worktree.checkout_path ?? null,
-      ]),
-    )
-    .digest("hex");
-}
-
-function identifier(value: unknown, name: string): string {
-  try {
-    return validateConnectionId(value);
-  } catch {
-    throw new Error(`Invalid ${name}`);
-  }
-}
-
-function limitedText(value: unknown, limit = 200): string {
-  if (typeof value !== "string") return "";
-  return value.length > limit ? `${value.slice(0, limit)} [truncated]` : value;
-}
-
-function records(value: unknown): Record<string, unknown>[] {
-  return Array.isArray(value) ? value.filter(isRecord) : [];
-}
-
-function count(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
-    ? value
-    : undefined;
-}
-
-function relativePath(value: unknown): string {
-  if (
-    typeof value !== "string" ||
-    !value ||
-    value.length > 1024 ||
-    /^[\\/:]|^[a-z]:/i.test(value) ||
-    /[\u0000-\u001f\u007f]/.test(value)
-  ) {
-    throw new Error("Diff path must be a relative workspace path");
-  }
-  const path = sanitizeExplorerPath(value);
-  if (!path) throw new Error("Diff path must be a relative workspace path");
-  return path;
-}
+export { AssistantServerRestartedError } from "./errors";
 
 export function createAssistantContext(args: {
   catalog(): { id: string; label: string }[];
@@ -623,7 +582,9 @@ export function createAssistantContext(args: {
           }
           const bootId = await pending;
           if (!bootId || bootId !== expected.herdr_boot_id)
-            throw new Error("Ranger recovery server identity changed");
+            throw new AssistantServerRestartedError(
+              limitedText(connection.label) || connectionId,
+            );
         }
         const item = await workspace(lease, workspaceId, readSignal);
         const identity = workspaceIdentity(item);
@@ -653,6 +614,14 @@ export function createAssistantContext(args: {
     workspaceIdentities.set(captured, identities);
     return captured;
   }
+
+  const extendScope = createScopeExtension({
+    scopes,
+    workspaceIdentities,
+    mentionGuards,
+    captureScope,
+    assertCurrent,
+  });
 
   async function recoveryScope(
     captured: AssistantWorkspace[],
@@ -743,8 +712,14 @@ export function createAssistantContext(args: {
       if (
         connections.has(target.connection_id) &&
         connections.get(target.connection_id) !== identity
-      )
-        throw new Error("Inconsistent Ranger recovery connection identity");
+      ) {
+        const label = args
+          .catalog()
+          .find((item) => item.id === target.connection_id)?.label;
+        throw new Error(
+          `Inconsistent Ranger recovery connection identity: the workspaces on ${limitedText(label) || target.connection_id} were checked on different Herdr servers`,
+        );
+      }
       connections.set(target.connection_id, identity);
     }
     return captureScope(expected, signal, expected);
@@ -1146,6 +1121,7 @@ export function createAssistantContext(args: {
   return {
     catalog,
     captureScope,
+    extendScope,
     recoveryScope,
     restoreScope,
     mentionCatalog,
@@ -1157,6 +1133,7 @@ export function createAssistantContext(args: {
 
 export type AssistantContext = Omit<
   ReturnType<typeof createAssistantContext>,
+  | "extendScope"
   | "prepareAction"
   | "recoveryScope"
   | "restoreScope"
@@ -1166,6 +1143,7 @@ export type AssistantContext = Omit<
   Partial<
     Pick<
       ReturnType<typeof createAssistantContext>,
+      | "extendScope"
       | "prepareAction"
       | "recoveryScope"
       | "restoreScope"

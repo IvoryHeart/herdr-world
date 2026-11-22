@@ -46,7 +46,8 @@
     "web/src/coreFixture.test.ts",
     "server/src/herdr-core/history.test.ts",
     "server/src/herdr-core/harnesses.live.test.ts",
-    "server/src/herdr-core/launch-brief.test.ts"
+    "server/src/herdr-core/launch-brief.test.ts",
+    "server/src/rpc/agent-metadata.test.ts"
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
   "technique": "composed-design-model",
@@ -102,7 +103,8 @@
       "web/src/coreFixture.test.ts",
       "server/src/herdr-core/history.test.ts",
       "server/src/herdr-core/launch-brief.test.ts",
-      "server/src/herdr-core/harnesses.live.test.ts"
+      "server/src/herdr-core/harnesses.live.test.ts",
+      "server/src/rpc/agent-metadata.test.ts"
     ],
     "checks": [
       "bun quint/run.ts --case herdr-core-runtime",

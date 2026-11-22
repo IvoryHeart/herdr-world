@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { build as viteBuild } from "vite";
 import { assetUrlImports } from "./world/testing/assetUrlImports";
 import {
   stopChrome,
@@ -168,50 +169,80 @@ test.skipIf(!chrome).concurrent.each([
     let socket: WebSocket | undefined;
     const timers = new Set<ReturnType<typeof setTimeout>>();
     try {
-      const build = await Bun.build({
-        entrypoints: [
-          join(
-            import.meta.dir,
-            `${entry}.browser.${fixture === "terminalLinkProvider" ? "ts" : "tsx"}`,
-          ),
-        ],
-        outdir: dir,
-        target: "browser",
-        splitting: true,
-        plugins: [
-          assetUrlImports,
-          {
-            name: "vite-raw-test-assets",
-            setup(build) {
-              build.onResolve({ filter: /\?raw$/ }, (args) => ({
-                path: Bun.resolveSync(args.path.slice(0, -4), args.resolveDir),
-                namespace: "raw-text",
-              }));
-              build.onLoad(
-                { filter: /.*/, namespace: "raw-text" },
-                async (args) => ({
-                  contents: await readFile(args.path, "utf8"),
-                  loader: "text",
-                }),
-              );
+      if (fixture === "diffViewer") {
+        // Exercise the production aliases and real diff worker, which Bun's
+        // fixture bundler cannot resolve from new URL(..., import.meta.url).
+        await viteBuild({
+          root: join(import.meta.dir, ".."),
+          configFile: join(import.meta.dir, "../vite.config.ts"),
+          logLevel: "silent",
+          build: {
+            outDir: dir,
+            manifest: false,
+            rolldownOptions: {
+              input: join(import.meta.dir, "diffViewer.browser.tsx"),
+              // A standalone fixture has a different eager graph from the app.
+              onLog(level, log, handler) {
+                handler(level, log);
+              },
+              output: {
+                entryFileNames: "[name].js",
+                assetFileNames: "[name][extname]",
+              },
             },
           },
-        ],
-      });
-      expect(build.success).toBe(true);
-      for (const asset of build.outputs) {
-        const path = `/${basename(asset.path)}`;
-        assets.set(path, asset);
-        if (
-          fixture === "configuration" &&
-          !menuOnly &&
-          !viewportSmoke &&
-          asset.kind === "chunk" &&
-          /function (SettingsHome|MobileLayoutDialog)\(/.test(
-            await asset.text(),
+        });
+        for await (const path of new Bun.Glob("**/*").scan(dir))
+          assets.set(`/${path}`, Bun.file(join(dir, path)));
+      } else {
+        const build = await Bun.build({
+          entrypoints: [
+            join(
+              import.meta.dir,
+              `${entry}.browser.${fixture === "terminalLinkProvider" ? "ts" : "tsx"}`,
+            ),
+          ],
+          outdir: dir,
+          target: "browser",
+          splitting: true,
+          plugins: [
+            assetUrlImports,
+            {
+              name: "vite-raw-test-assets",
+              setup(build) {
+                build.onResolve({ filter: /\?raw$/ }, (args) => ({
+                  path: Bun.resolveSync(
+                    args.path.slice(0, -4),
+                    args.resolveDir,
+                  ),
+                  namespace: "raw-text",
+                }));
+                build.onLoad(
+                  { filter: /.*/, namespace: "raw-text" },
+                  async (args) => ({
+                    contents: await readFile(args.path, "utf8"),
+                    loader: "text",
+                  }),
+                );
+              },
+            },
+          ],
+        });
+        expect(build.success).toBe(true);
+        for (const asset of build.outputs) {
+          const path = `/${basename(asset.path)}`;
+          assets.set(path, asset);
+          if (
+            fixture === "configuration" &&
+            !menuOnly &&
+            !viewportSmoke &&
+            asset.kind === "chunk" &&
+            /function (SettingsHome|MobileLayoutDialog)\(/.test(
+              await asset.text(),
+            )
           )
-        )
-          heldChunks.set(path, Promise.withResolvers<void>());
+            heldChunks.set(path, Promise.withResolvers<void>());
+        }
       }
       const errorOutput = join(dir, "browser.log");
       child = Bun.spawn(

@@ -29,6 +29,10 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // usage-metrics and connection-manager modules with World's views, so they
 // become their own small chunks (+3 files after removing the two retired
 // dialogs, no new bytes on the initial load).
+// Roamgate's accepted diffs 1.6.1 upgrade adds lazy backend/theme chunks.
+// World keeps its curated shiki/langs registry and pre-resolves worker inputs,
+// avoiding the full language bundle and duplicate worker grammars. The branch
+// measures 276 files / 15.1 MiB; allow the delta on main plus modest headroom.
 // #1035 Settings (one registry and one search) loads as two lazy
 // chunks and a stylesheet; its catalog shares small stores with Town, chat and
 // the command box, which split into chunks of their own (+6 files and about
@@ -36,7 +40,8 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // dialog split its tabs into lazy Settings pages (Runtime, connection,
 // Integrations, instance name, speech, worktree command) with their
 // stylesheets: +12 files and fewer total bytes (212 files, 15.3 MiB).
-const maxFileCount = 212;
+// Carry that Settings split over the accepted diffs budget (290 + 20 files).
+const maxFileCount = 310;
 // PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
 // browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
 // total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
@@ -63,8 +68,9 @@ const maxFileCount = 212;
 // (15.5164 MiB): 17,211 bytes above 15.5 MiB. Account for the combined
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
 // Town's quiet-agent mark (#1130: rule, hourglass and Busy sub-line, all in
-// the lazy Town chunk) adds about 5 KB, still within 15.6 MiB (2026-11-21).
-const maxTotalBytes = 15.6 * 1024 * 1024;
+// the lazy Town chunk) adds about 5 KB, still within main's 15.6 MiB total.
+// Retain the accepted diffs 1.6.1 headroom above when combining these assets.
+const maxTotalBytes = 16.5 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 // Help pictures (#1025, web/public/help/) are generated per help entry at two

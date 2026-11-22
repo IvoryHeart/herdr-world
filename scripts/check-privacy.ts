@@ -34,7 +34,6 @@ function emailMatches(line: string) {
 /** Only rule IDs escape this function: never return matched private material. */
 export function privacyRules(
   line: string,
-  publishedEmails: ReadonlySet<string> = new Set(),
   syntheticWorldPasswordBinding?: string,
 ): Rule[] {
   const rules = new Set<Rule>();
@@ -58,11 +57,7 @@ export function privacyRules(
   for (const match of line.matchAll(/\/(?:home|Users)\/([^/\s"'`]+)/g))
     if (!syntheticHomeUsers.has(match[1])) rules.add("home-path");
   for (const match of emailMatches(line))
-    if (
-      !reservedEmailDomain.test(match[1]) &&
-      !publishedEmails.has(match[0].toLowerCase())
-    )
-      rules.add("email");
+    if (!reservedEmailDomain.test(match[1])) rules.add("email");
 
   // Quoted literals, shell assignments and copied links; interpolation stays
   // synthetic. Token/session literals need a plausible length; passwords do not.
@@ -134,21 +129,6 @@ function mainBaseline(cwd: string): string | null {
   }
 }
 
-function publishedAttribution(cwd: string, main: string | null): Set<string> {
-  if (main) {
-    try {
-      return new Set(
-        emailMatches(
-          git(cwd, ["show", `${main}:${publishedAttributionFile}`]),
-        ).map((match) => match[0].toLowerCase()),
-      );
-    } catch {
-      /* No published attribution: keep the email rule strict. */
-    }
-  }
-  return new Set();
-}
-
 function addedLines(diff: string): Map<number, string> {
   const lines = new Map<number, string>();
   let line = 0;
@@ -187,14 +167,6 @@ export function scanPrivacyRange(
     .filter(Boolean);
   const emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
   const findings: PrivacyFinding[] = [];
-  const main = mainBaseline(cwd);
-  // On a main push checkout's remote ref already points at the new head.
-  // Only its prior baseline may approve attribution, never this push's additions.
-  const attributionBase =
-    main === after
-      ? (before.find((revision) => revision !== after) ?? null)
-      : main;
-  const publishedEmails = publishedAttribution(cwd, attributionBase);
   for (const commit of commits) {
     const parents = git(cwd, ["rev-list", "--parents", "-n", "1", commit])
       .trim()
@@ -231,13 +203,15 @@ export function scanPrivacyRange(
             if (!lines.has(line)) additions.delete(line);
         if (!additions.size) break;
       }
+      // Only this generated root artifact contains public licence emails.
+      // Every other rule still applies, including on the same line.
       for (const [line, text] of additions ?? [])
         for (const rule of privacyRules(
           text,
-          file === publishedAttributionFile ? publishedEmails : undefined,
           syntheticWorldPasswordBindings.get(file),
         ))
-          findings.push({ file, line, rule });
+          if (file !== publishedAttributionFile || rule !== "email")
+            findings.push({ file, line, rule });
     }
   }
   return findings;

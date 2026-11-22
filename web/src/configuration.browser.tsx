@@ -332,6 +332,10 @@ Object.defineProperty(window, "fetch", {
 let active = "alpha";
 let generation = 1;
 const settings: Record<string, boolean> = { alpha: true, beta: false };
+const autoRenameSettings: Record<string, boolean> = {
+  alpha: true,
+  beta: false,
+};
 const listeners = new Set<(event: HerdrEventMsg) => void>();
 const calls: Array<{ id: string; method: string; params: any }> = [];
 let pendingRead: Promise<{ surface_codecs: boolean }> | null = null;
@@ -423,6 +427,12 @@ bridge.connection = (id) => {
     acceptsServerGeneration: (value) => value === lease,
     call: async (method, params) => {
       calls.push({ id: connectionId, method, params });
+      if (method === "settings.agent_auto_rename.get")
+        return { enabled: autoRenameSettings[connectionId] };
+      if (method === "settings.agent_auto_rename.update") {
+        autoRenameSettings[connectionId] = params!.enabled as boolean;
+        return { enabled: autoRenameSettings[connectionId] };
+      }
       if (method === "settings.terminal_transport.get") {
         if (failRead) throw new Error("Load failed");
         return pendingRead ?? { surface_codecs: settings[connectionId] };
@@ -1255,6 +1265,29 @@ async function run() {
   check(document.activeElement === firstControl, "Tab escaped Settings");
   await key(firstControl, "Tab", true);
   check(document.activeElement === lastControl, "Shift+Tab escaped Settings");
+  flushSync(() => tab("Agents").click());
+  check(
+    button("Open agents as a chat").getAttribute("aria-checked") === "false",
+    "default pane view lost during Settings migration",
+  );
+  click("Open agents as a chat");
+  check(
+    button("Open agents as a chat").getAttribute("aria-checked") === "true",
+    "Settings did not update the pane view",
+  );
+  click("Open agents as a chat");
+  flushSync(() => tab("Keyboard").click());
+  check(
+    button("Vim keys in agent chats").getAttribute("aria-checked") === "false",
+    "default Vim preference lost during Settings migration",
+  );
+  click("Vim keys in agent chats");
+  check(
+    button("Vim keys in agent chats").getAttribute("aria-checked") === "true",
+    "Settings did not update the Vim preference",
+  );
+  click("Vim keys in agent chats");
+  flushSync(() => tab("All").click());
   click("Open Layout");
   await waitFor(
     () =>
@@ -1269,6 +1302,18 @@ async function run() {
   await waitFor(() => !!document.querySelector(".settings-home"));
   dialog = document.querySelector<HTMLElement>(".settings-home")!;
   await waitFor(() => document.activeElement === button("Open Layout"));
+  await openPage("Automatic tab renaming");
+  await waitFor(() => !button("Automatic tab renaming").disabled);
+  check(
+    button("Automatic tab renaming").getAttribute("aria-checked") === "true",
+    "default auto-rename preference missing",
+  );
+  click("Automatic tab renaming");
+  await waitFor(
+    () =>
+      button("Automatic tab renaming").getAttribute("aria-checked") === "false",
+  );
+  check(autoRenameSettings.alpha === false, "auto-rename preference not saved");
   await openPage("Terminal transport");
   await waitFor(
     () =>
@@ -1379,6 +1424,12 @@ async function run() {
     "closing Settings did not restore Menu focus",
   );
   dialog = await openSettings();
+  await openPage("Automatic tab renaming");
+  await waitFor(() => !button("Automatic tab renaming").disabled);
+  check(
+    button("Automatic tab renaming").getAttribute("aria-checked") === "false",
+    "reopening discarded the auto-rename preference",
+  );
   await openPage("Terminal transport");
   await waitFor(
     () =>
