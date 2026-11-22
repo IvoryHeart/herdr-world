@@ -70,9 +70,12 @@
     and the new agent's card appears on Board), the crown opens the **Town
     master**'s Chat (found as the town center finds it) and **⋯** lists
     **New agent**, **Town master**, **Needs you**, **Summary** (which takes
-    you to Town with the Town summary open), **Profiles** and **New
-    workspace** (disabled with the reason when no host is ready) in a plain
-    menu. Arrow keys, Home and End move through the menu; Escape, a press
+    you to Town with the Town summary open), **Profiles**, **Past sessions**
+    (Town's Apartments, with how many finished agents), **Memory** (Town's
+    Library, on the selected agent or workspace) and **New workspace**
+    (disabled with the reason when no host is ready) in a plain menu. Names
+    follow the view: Town's building names stay in Town, and the dialogs
+    keep their own titles. Arrow keys, Home and End move through the menu; Escape, a press
     outside or **Back** on a phone closes it. Board's controls leave the hub
     and bin room on their row, folding into Board's **⋯** menu as needed.
     The bin itself works as before.

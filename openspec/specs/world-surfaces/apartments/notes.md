@@ -4,7 +4,7 @@
 
 **Surfaces:**
 
-- Town's green building sign, town center ring and Board's hub open one Apartments dialog.
+- Town's green building sign, town center ring and Board's hub (**Past sessions**) open one Apartments dialog.
 - A Board Agent log's **Open past session** opens the dialog on that resident's detail (`openApartments({ resident })`); Back returns to the list.
 - Search opens resident detail, Read history, Resume in room and confirmed Evict on desktop/phone.
 - ?apartments-preview=avatars supplies one-load synthetic appearance cases and removes itself.
@@ -76,8 +76,9 @@ resident: an ending World sees replaces the found record of that session.
   binned agents to its door and the sign's count goes up as each walks in
   (see **Bin and bus** under [Visual control plane](../notes.md#visual-control-plane)),
   from **Apartments** in
-  the town center ring, or from **Apartments** in Board's hub. All three read
-  the same residents, and the ring and hub show how many live there.
+  the town center ring, or from **Past sessions** in Board's hub (Board's
+  plain name). All three read the same residents, and the ring and hub show
+  how many live there.
 - Each resident shows its avatar, as Town and Inspector show a live agent:
   its Town character on its terminal colour, with its harness's icon, in the
   list (with its harness, project, room and host) and larger in the opened
