@@ -8,7 +8,7 @@ import {
 } from "./check-knowledge-map";
 import { assessPullRequest, readFragments } from "./changelog-fragments";
 import { readCoverageScope } from "./coverage-scope";
-import { readCapabilities } from "./where";
+import { readCapabilityNotes } from "./openspec-notes";
 import { coverageDirectory } from "./coverage";
 import { ordinaryDocumentation } from "./validation-scope";
 
@@ -167,7 +167,7 @@ export function checkPrBodyText(
   });
   const knowledge = assessKnowledgeMapImpact(
     sourcePaths,
-    readCapabilities(cwd),
+    readCapabilityNotes(cwd),
   );
   const changelog = assessPullRequest(
     paths,

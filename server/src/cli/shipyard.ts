@@ -78,7 +78,7 @@ Usage:
   herdr-world shipyard show <owner/repository> [--refresh] [--json]
   herdr-world shipyard demo [--scenario ${SHIPYARD_DEMOS.join("|")}] [--json]
 
-list suggests repositories from Sources, observed instances and recent reads.
+list shows the projects open in World's rooms and spaces, by GitHub repository.
 show uses the running local World, its GitHub source switch and gh sign-in.
 --refresh requests a read now (at least ${SHIPYARD_LIMITS.forcedRefreshMs / 1000}s between reads).
 The CLI uses HERDR_WORLD_URL and the matching HERDR_WORLD_DATA_DIR/token, as
@@ -156,12 +156,23 @@ export function shipyardHuman(
   value: ShipyardCatalog | ShipyardSnapshot,
 ): string {
   const lines: string[] = [];
-  if ("repositories" in value)
+  if ("repositories" in value) {
     lines.push(
-      "Shipyard repositories",
-      ...value.repositories.map((repo) => `  ${repo}`),
+      "Shipyard projects (open in World)",
+      ...value.projects.map(
+        (project) =>
+          `  ${project.repo ?? `${project.name} (no GitHub remote)`}`,
+      ),
     );
-  else {
+    if (value.pending)
+      lines.push(
+        `${value.pending} open folder(s) still being read; run again.`,
+      );
+    if (value.omitted)
+      lines.push(
+        `${value.omitted} open folder(s) past the limit of ${value.limits.repositories} were not read; use show <owner/repository>.`,
+      );
+  } else {
     lines.push(
       `${value.repo}: ${value.state}${value.refreshing ? " (refreshing)" : ""}`,
       value.detail,

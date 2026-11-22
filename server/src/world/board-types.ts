@@ -1,4 +1,8 @@
 import type {
+  BoardElement,
+  BoardElementInput,
+} from "../../../shared/boardElements";
+import type {
   AppearanceFields,
   AppearanceTarget,
   AppearanceRecord,
@@ -92,6 +96,7 @@ export type BoardDocument = {
   version: 1;
   revision: number;
   layout: BoardLayoutDocument;
+  elements?: BoardElement[];
   notes: BoardNote[];
   strings: BoardString[];
   /**
@@ -109,6 +114,8 @@ export type BoardOp =
       from: import("../../../shared/agentMove").AgentAddress;
       to: import("../../../shared/agentMove").AgentAddress;
     }
+  | { op: "element.put"; element: BoardElementInput; rev?: number }
+  | { op: "element.delete"; id: string; rev: number }
   | { op: "appearance.prune"; keys: string[] }
   | { op: "appearance.set"; target: AppearanceTarget; fields: AppearanceFields }
   | {

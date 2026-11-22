@@ -290,6 +290,21 @@ export const rpcVerbs = [
   rpc("world.bin.pause", "reconcilable", "world"),
   rpc("world.bin.restore", "reconcilable", "world", object({ id: text })),
   rpc("world.bin.resume", "reconcilable", "world"),
+  rpc("world.board.elements.types", "read", "world"),
+  rpc("world.board.elements.list", "read", "world"),
+  rpc(
+    "world.board.elements.put",
+    "reconcilable",
+    "world",
+    object({ element: object() }),
+  ),
+  rpc(
+    "world.board.elements.delete",
+    "reconcilable",
+    "world",
+    object({ id: text, rev: Type.Integer({ minimum: 1 }) }),
+  ),
+  rpc("world.board.elements.read", "read", "world", object({ id: text })),
   rpc("world.board.get", "read", "world"),
   // herdr-core control: the handler takes the lease from the core manager
   // only and checks the generation the browser saw (rpc/core.ts).

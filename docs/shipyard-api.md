@@ -48,7 +48,7 @@ errors appear in responses. Each response is a point-in-time observation.
 
 | Call | Input | Response |
 | --- | --- | --- |
-| `GET /api/world/shipyard` | None | Catalog: `observedAt`, up to eight repository suggestions, `instances`, `limits`. No GitHub refresh. |
+| `GET /api/world/shipyard` | None | Catalog: `observedAt`, the GitHub `repositories` of the projects open in World's rooms and spaces, `projects` (each `{repo, name, rooms}`, `repo` null without a GitHub remote), `pending` (folders still being read), `omitted` (open folders past the bound), `instances`, `limits`. No GitHub refresh. |
 | `GET /api/world/shipyard?repo=example-org/widgets` | One `repo`, github.com `owner/repository` only | Snapshot described below; starts a due bounded read. |
 | `POST /api/world/shipyard/refresh?repo=example-org/widgets` | One `repo`, **no body** | Same snapshot; requests a refresh subject to five-second cooldown. |
 | `POST /api/world/shipyard/cli` | Local CLI only: `{ "command": "list", "params": {} }` or `{ "command": "show", "params": { "repo": "example-org/widgets", "refresh": true } }` | `{ "ok": true, "actor": { "label": "local Shipyard CLI", "verified": false }, "result": <catalog or snapshot> }`. Errors use existing `{ok:false, code, error}`. |
@@ -72,8 +72,14 @@ Catalog example (instance records are the same as the snapshot's):
 {
   "observedAt": 1767484800000,
   "repositories": ["example-org/widgets"],
+  "projects": [
+    { "repo": "example-org/widgets", "name": "widgets", "rooms": 2 },
+    { "repo": null, "name": "scratch-notes", "rooms": 1 }
+  ],
+  "pending": 0,
+  "omitted": 0,
   "instances": { "items": [], "complete": true, "detail": null },
-  "limits": { "repositories": 8, "releases": 50, "tags": 100, "workflows": 100, "commits": 200, "prsPerCommit": 5, "instances": 64, "refreshMs": 60000, "forcedRefreshMs": 5000, "deadlineMs": 60000, "requestMs": 10000, "outputBytes": 4194304, "waitMs": 2000, "instanceLeaseMs": 45000 }
+  "limits": { "repositories": 64, "pipelines": 96, "concurrentReads": 4, "releases": 50, "tags": 100, "workflows": 100, "commits": 200, "prsPerCommit": 5, "instances": 64, "refreshMs": 60000, "forcedRefreshMs": 5000, "deadlineMs": 60000, "requestMs": 10000, "outputBytes": 4194304, "waitMs": 2000, "instanceLeaseMs": 45000 }
 }
 ```
 
@@ -181,13 +187,24 @@ Each source read has a 60-second total deadline, 10 seconds per request and a
 separately read latest stable), 100 tags, 100 head-qualified workflow runs, 200
 comparison commits, five associated PRs per commit, at most 17 external calls
 including authentication. Full release/tag display windows conservatively set `complete` false; workflow
-counts and comparison counts can prove their exact bounded window complete. At most eight repository cache entries and **one** in-flight repository
-refresh exist. Normal reads refresh after 60 seconds; forced reads wait at least
+counts and comparison counts can prove their exact bounded window complete. At most 96 repository cache entries exist and **four** repository
+refreshes run at once; others wait for a slot. When every entry is reading or
+waiting, a new repository is not admitted: it returns `refreshing` with a retry
+hint and is asked again. Normal reads refresh after 60 seconds; forced reads wait at least
 five seconds after an attempt. Requests wait up to two seconds, then return
 `refreshing` and `retryAfterMs`. No background GitHub polling or automatic retry
-runs. If another repository is refreshing, this repository returns its current
-observation and a retry hint. Catalog entries are bounded suggestions, not an
-inventory of every accessible repository. Disabling/changing the GitHub settings
+runs. While a repository waits for a slot it returns its current observation and
+a retry hint. The catalog is the projects open in World, not an inventory of
+every accessible repository: each room or space on a current, non-stale
+connection with a folder (checkout, else its own, else its first terminal's),
+read with read-only `git rev-parse`/`git remote -v` on that connection's host
+(PowerShell on Windows), cached per connection ID, generation and folder for 60
+seconds, at most four at a time with a six-second deadline. The GitHub remote is
+`origin`'s, else the first github.com remote; projects sharing one are one.
+A folder that is not a Git checkout, has no GitHub remote or cannot be read is
+a project with `repo` null, never dropped.
+Folders past 64 are counted in `omitted`, never dropped silently. Cached
+topology of a failed host contributes nothing. Disabling/changing the GitHub settings
 invalidates its cache and fences in-flight results. Credentials stay in gh;
 World stores no new credentials.
 

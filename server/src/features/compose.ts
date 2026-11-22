@@ -20,8 +20,7 @@ export function composeFeatures(
       throw new Error(`Duplicate feature: ${feature.id}`);
     pending.set(feature.id, feature);
     for (const verb of feature.verbs) {
-      if (verb.channel !== "rpc")
-        throw new Error(`Non-RPC feature verb: ${verb.name}`);
+      if (verb.channel !== "rpc") continue;
       if (methods.has(verb.name))
         throw new Error(`Duplicate feature method: ${verb.name}`);
       methods.add(verb.name);
@@ -50,7 +49,10 @@ export function composeFeatures(
         throw new Error(`Undeclared feature dependency: ${key}`);
       return instances.get(key)!.api as T;
     });
-    const declared = feature.verbs.map((verb) => verb.name).sort();
+    const declared = feature.verbs
+      .filter((verb) => verb.channel === "rpc")
+      .map((verb) => verb.name)
+      .sort();
     const handlers = Object.keys(instance.rpc).sort();
     if (
       declared.length !== handlers.length ||
@@ -64,6 +66,10 @@ export function composeFeatures(
   const forward = [...instances.values()];
   const reverse = [...forward].reverse();
   return {
+    get<T>(key: FeatureKey<T>): T {
+      if (!instances.has(key)) throw new Error(`Missing feature: ${key}`);
+      return instances.get(key)!.api as T;
+    },
     rpc: rpc as ReadonlyMap<string, FeatureRpcHandler>,
     connectionStatus: (status: ConnectionStatus) => {
       for (const f of forward) f.connectionStatus?.(status);

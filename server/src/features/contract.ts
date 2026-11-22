@@ -18,6 +18,7 @@ type Connections<T extends ConnectionRuntime> = Pick<
 export type FeatureKernel = Readonly<
   Pick<WorldServiceDeps, "clock" | "scheduler"> & {
     logger: RpcServices["logger"];
+    clients: Pick<RpcServices["clients"], "has">;
     settings: WorldStorage["settings"];
     storage: Readonly<
       Omit<
@@ -28,6 +29,9 @@ export type FeatureKernel = Readonly<
     revisionPublisher: ReturnType<typeof createRevisionPublisher>;
     connections(): Connections<LegacyConnectionRuntime>;
     core(): Connections<CoreConnectionRuntime>;
+    coreHostRuntime: (
+      ...args: Parameters<import("../rpc/core").CoreRpcServices["hostRuntime"]>
+    ) => import("../memory/service").MemoryLease["runtime"];
     sources(): Awaited<ReturnType<typeof composeSources>>;
     board: WorldStorage["board"];
   }
@@ -43,12 +47,14 @@ export function featureKernel(
     clock: deps.clock,
     scheduler: deps.scheduler,
     logger: rpc.logger,
+    clients: rpc.clients,
     settings: storage.settings,
     storage,
     board: () => storage.board(),
     revisionPublisher: createRevisionPublisher(rpc.clients, rpc.safeSend),
     connections: () => rpc.connectionManager,
     core: () => rpc.core!.manager,
+    coreHostRuntime: (lease) => rpc.coreControl!.hostRuntime(lease),
     sources,
   });
 }

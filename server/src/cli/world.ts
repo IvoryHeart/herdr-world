@@ -1,3 +1,4 @@
+import { parseBoardElementArgs } from "./world-elements";
 import {
   type CliCommand,
   type CliContext,
@@ -383,6 +384,7 @@ export function parseWorldArgs(
       };
     }
     case "board": {
+      if (sub === "element") return parseBoardElementArgs(rest);
       if (sub !== "card") throw new UsageError("use `board card <verb>`");
       const verb = rest[0];
       const tail = rest.slice(1);
@@ -885,8 +887,8 @@ const WORDS: { name: string; summary: string; actions?: string[] }[] = [
   },
   {
     name: "board",
-    summary: "agents: move, pin, group or colour Board cards",
-    actions: ["card"],
+    summary: "agents: Board cards and registry elements",
+    actions: ["card", "element"],
   },
   {
     name: "town",

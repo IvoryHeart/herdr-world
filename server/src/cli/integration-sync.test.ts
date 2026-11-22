@@ -1,9 +1,9 @@
+import { WORLD_SKILL_VERSION } from "./integration";
 import { afterEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runCli } from "./index";
 import { integrationPaths, WORLD_HARNESSES } from "./integration-paths";
-import { WORLD_SKILL_VERSION } from "./integration";
 import { createTestCli, type TestCli } from "./test-context";
 
 let cli: TestCli;

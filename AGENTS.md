@@ -38,14 +38,23 @@ One Bun service and same-origin React Web/PWA; Herdr TUI and herdr-core are exte
 - Aggregate: `server/src/world/snapshot.ts`, `server/src/world/runtime-registry.ts`.
 - Distribution: `scripts/`, `herdr-plugin.toml`.
 
-Start with `bun run where "<words>"` (`--json` for agents) or `openspec list --specs --json`.
-Read the capability's spec and adjacent `notes.md`, then check every listed surface,
-including other views, CLI entry points and both runtimes. Contracts live only in
-OpenSpec; notes own navigation and usage. Do not use `-m` when searching docs.
+Start with OpenSpec (`bun run spec -- <arguments>` invokes this checkout's pinned CLI):
+
+1. Run `openspec list --specs --json` for capabilities and `openspec list --json`
+   for work in progress. Use `openspec show <id>` to inspect a capability or change.
+2. Read the capability's `openspec/specs/<capability>/spec.md` and adjacent
+   `notes.md`; active changes hold requirements not yet archived into the current spec.
+3. Follow the notes' Code paths to source and tests, checking every listed surface,
+   including other views, CLI entry points and both runtimes.
+
+Contracts live only in OpenSpec; notes own navigation and usage. Do not use `-m` when searching docs.
 `docs/specs/` is history. Read relevant source/tests before editing.
 Feature PRs edit `openspec/changes/<slug>/` deltas, code and capability notes, never
-current `openspec/specs/**/spec.md` directly. After main changes, one bot PR applies
-and archives completed deltas in merge date order, stopping at the first conflict.
+current `openspec/specs/**/spec.md` directly. Update the capability's `notes.md`
+Code list in the same feature PR, including new storage and rendering paths, even
+while its spec delta remains active; notes must not wait for the archive bot.
+After main changes, one bot PR applies and archives completed deltas in merge date
+order, stopping at the first conflict.
 Review that PR normally; never push to main. Keep one coherent change as direction changes.
 
 ## Work loop

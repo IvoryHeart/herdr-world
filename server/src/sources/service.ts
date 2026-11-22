@@ -203,13 +203,6 @@ export class SourcesService {
     return {
       enabled: this.enabled("github"),
       generation: this.#sources.github.generation,
-      repositories: [
-        ...new Set(
-          this.#sources.github.items.flatMap((item) =>
-            item.repo ? [item.repo] : [],
-          ),
-        ),
-      ],
     };
   }
 
