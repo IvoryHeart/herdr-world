@@ -72,7 +72,7 @@ if (process.env.WORLD_VIEW_PICKER_TEST !== "1") {
   // The same wiring as WorldFoundationApp: one filter feeds the corner menu
   // and the topbar's Hosts control.
   function Harness({ mobile }: { mobile: boolean }) {
-    const filter = useHostsFilter(hosts.map(({ id }) => id));
+    const filter = useHostsFilter(hosts);
     const control = {
       connections: hosts,
       ids: filter.ids,

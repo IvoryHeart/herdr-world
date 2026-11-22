@@ -7,6 +7,7 @@ import {
   parseApartmentAppearance,
   type ApartmentResident,
   apartmentSessionKey,
+  apartmentUsageAgentIds,
 } from "../../../shared/apartments";
 
 import { newWorldId } from "./world-identifiers";
@@ -160,6 +161,7 @@ export function parseApartmentMoveIn(value: unknown): ApartmentMoveIn {
       .slice(0, APARTMENT_LIMITS.links),
     session_id: text(value.session_id, "session", APARTMENT_LIMITS.session),
     appearance: parseApartmentAppearance(value.appearance),
+    usage_agent_ids: apartmentUsageAgentIds(value.usage_agent_ids),
   };
 }
 
@@ -211,7 +213,22 @@ export function writeApartments(
     const resident = parseApartmentMoveIn(operation.resident);
     const key = apartmentSessionKey(resident);
     if (key) {
-      // The same session moving in again (resumed and ended) is one agent.
+      // The same session moving in again (resumed and ended) is one agent,
+      // and keeps the usage it was counted under before.
+      const before = (
+        db
+          .query(
+            "SELECT body FROM apartment_residents WHERE session_key=? ORDER BY moved_out_at,id",
+          )
+          .all(key) as { body: string }[]
+      ).flatMap(
+        ({ body }) =>
+          (JSON.parse(body) as ApartmentMoveIn).usage_agent_ids ?? [],
+      );
+      resident.usage_agent_ids = apartmentUsageAgentIds([
+        ...before,
+        ...(resident.usage_agent_ids ?? []),
+      ]);
       db.query("DELETE FROM apartment_residents WHERE session_key=?").run(key);
       db.query("DELETE FROM apartment_evictions WHERE session_key=?").run(key);
     }
@@ -254,6 +271,11 @@ export function writeApartments(
           JSON.stringify({
             ...resident,
             summary: before.summary ?? resident.summary,
+            // Usage World counted for the session is kept (#1101).
+            usage_agent_ids: apartmentUsageAgentIds([
+              ...(before.usage_agent_ids ?? []),
+              ...(resident.usage_agent_ids ?? []),
+            ]),
           }),
           known.id,
         );
@@ -383,6 +405,13 @@ export function memoryApartmentsPort(
       const resident = parseApartmentMoveIn(operation.resident);
       const key = apartmentSessionKey(resident);
       if (key) {
+        resident.usage_agent_ids = apartmentUsageAgentIds([
+          ...rows
+            .filter((row) => apartmentSessionKey(row) === key)
+            .sort((a, b) => a.moved_out_at - b.moved_out_at)
+            .flatMap((row) => row.usage_agent_ids ?? []),
+          ...(resident.usage_agent_ids ?? []),
+        ]);
         rows = rows.filter((row) => apartmentSessionKey(row) !== key);
         evicted.delete(key);
       }
@@ -400,6 +429,10 @@ export function memoryApartmentsPort(
         )
           Object.assign(known, resident, {
             summary: known.summary ?? resident.summary,
+            usage_agent_ids: apartmentUsageAgentIds([
+              ...(known.usage_agent_ids ?? []),
+              ...(resident.usage_agent_ids ?? []),
+            ]),
           });
       }
     } else if (operation.type === "report") {
