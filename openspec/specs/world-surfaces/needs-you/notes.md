@@ -84,8 +84,9 @@
   grouped. Testing only: open `?questionBacklogFixture` (removed immediately)
   for 20 synthetic Atlas questions and one Beacon question; dismiss Atlas and
   Beacon stays. The fixture never contacts a runtime; reload to leave it.
-  Worlds started with the same `HERDR_WORLD_INSTANCE_REGISTRY_DIR` and attached
-  to the same runtime show each other's open questions (up to 60 per World,
+  Worlds running as the same user on this machine share a private registry by
+  default, even with different data folders. Those attached to the same runtime
+  show each other's open questions (up to 60 per World,
   from up to 8 Worlds, refreshed every 5 seconds and on each question alert),
   marked **Asked in [World]** with a link. Answering or dismissing one there
   closes it in the World that holds it, which records exactly one answer and
@@ -216,9 +217,11 @@ merges, deletes panes, tabs or workspaces, or reaches outside World.
   closed. A question stays with the runtime it was asked on, even if that saved
   connection is later edited to target another. A long question is shortened
   in the alert so its World's name always arrives. Places, IDs and attachments
-  stay with that World. When it stops, its
-  questions leave the others at the next read (a failed read keeps them 15
-  seconds); answering then says it is not running. An alert whose question this
+  stay with that World. `HERDR_WORLD_INSTANCE_REGISTRY_DIR` overrides discovery
+  for Worlds that need a separate registry. An older World that does not publish
+  (including 0.3.5) contributes no peer questions or discovery errors. When a
+  home stops, its questions leave the others at the next read (a failed read
+  keeps them 15 seconds); answering then says it is not running. An alert whose question this
   World cannot read (no shared registry, an older World, or another runtime)
   shows as **Asked in [World]** with a link when known, no answer field, and
   **Hide alert**; up to 20 are kept until World restarts. Testing only: open

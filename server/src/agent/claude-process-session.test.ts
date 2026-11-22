@@ -140,8 +140,17 @@ describe.skipIf(process.platform !== "linux")(
       // its open stdin until the test kills it.
       const odd = join(dir, "a) b c");
       symlinkSync(Bun.which("sh")!, odd);
-      const child = Bun.spawn([odd, "-c", "read line"], { stdin: "pipe" });
+      const child = Bun.spawn([odd, "-c", "printf 'ready\n'; read line"], {
+        stdin: "pipe",
+        stdout: "pipe",
+      });
       children.push(child);
+      // Spawn can return before exec: wait for the renamed shell itself.
+      const ready = child.stdout.getReader();
+      expect(new TextDecoder().decode((await ready.read()).value)).toBe(
+        "ready\n",
+      );
+      ready.releaseLock();
       const stat = readFileSync(`/proc/${child.pid}/stat`, "utf8");
       const start = stat.slice(stat.lastIndexOf(")") + 2).split(" ")[19]!;
       expect(stat).toContain("(a) b c)");
