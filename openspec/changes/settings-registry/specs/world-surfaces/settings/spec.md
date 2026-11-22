@@ -25,9 +25,12 @@ panels and commands, and Settings SHALL be the common settings menu.
   offers SHALL be listed in the registry with the command box's admission: an action
   it refuses SHALL be shown disabled with its reason, it SHALL run only through the
   command box for the current connection, and the entries SHALL be withdrawn when the
-  command box unmounts. A control that stays on a view SHALL be listed and SHALL open
-  that view's control. An entry whose availability depends on another value SHALL
-  appear or disappear as soon as that value changes. A dialog opened from a Settings
+  command box unmounts. Board surface, Board status pulses and Town lens SHALL share
+  subscribed browser stores with their view controls. Settings and command-box choices
+  SHALL update an already open view in the same tab without a reload, and each row SHALL
+  say where its view control also appears. Other controls that require their view SHALL
+  be listed and SHALL open that view's control. An entry whose availability depends on
+  another value SHALL appear or disappear as soon as that value changes. A dialog opened from a Settings
   row SHALL return to Settings at that row when it closes.
 
   `?setting=<entry id>` SHALL open Settings at that entry and `?setting=<category>` at
@@ -40,6 +43,15 @@ panels and commands, and Settings SHALL be the common settings menu.
 - **WHEN** a user searches Settings or the command box for "lighting" or "night"
 - **THEN** Town time of day is a result and choosing Night changes Town's lighting
   without opening Town's control
+
+#### Scenario: Change the open Board or Town from Settings search
+
+- **WHEN** the user chooses a Board surface, toggles Board status pulses or chooses
+  a Town lens from Settings or the command box
+- **THEN** the open view SHALL reflect that choice immediately in the same tab
+- **AND** changing the same control on the view SHALL update Settings's value
+- **AND** a fresh page SHALL start Town in Attention, remembering the last other lens
+  for L and the ring; a choice from Settings before Town mounts SHALL still apply
 
 #### Scenario: One command inventory
 

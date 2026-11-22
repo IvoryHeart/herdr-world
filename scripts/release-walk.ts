@@ -30,13 +30,14 @@ export async function releaseWalk(args: string[]) {
       "baseline-tag": { type: "string" },
       report: { type: "string" },
       "signed-in-home": { type: "string" },
+      "listing-repetitions": { type: "string" },
       "disposable-host": { type: "boolean" },
       help: { type: "boolean" },
     },
   });
   if (values.help) {
     console.info(
-      "bun run test:release-walk --disposable-host [--archive PACKAGE.tar.xz --version X.Y.Z] [--signed-in-home DEDICATED_HOME] [--baseline-tag vX.Y.Z] [--report FILE]\nRuns every journey on a disposable Linux/macOS user account or VM. Without --archive, builds the native release package. Requires Bun, Node/npm, Python/venv, gh and a native user service manager. No journey may be skipped.",
+      "bun run test:release-walk --disposable-host [--archive PACKAGE.tar.xz --version X.Y.Z] [--signed-in-home DEDICATED_HOME] [--baseline-tag vX.Y.Z] [--report FILE] [--listing-repetitions 0-100]\nRuns every journey on a disposable Linux/macOS user account or VM. Without --archive, builds the native release package. Requires Bun, Node/npm, Python/venv, gh and a native user service manager. No journey may be skipped. Optional repetitions add independent listing journeys and stop at the first failure.",
     );
     return;
   }
@@ -44,6 +45,9 @@ export async function releaseWalk(args: string[]) {
     throw new Error(
       "Service journey requires --disposable-host in a disposable OS account or VM",
     );
+  const repetitions = values["listing-repetitions"] ?? "0";
+  if (!/^(?:0|[1-9]\d?|100)$/.test(repetitions))
+    throw new Error("Listing repetitions must be an integer from 0 to 100");
   if (process.platform !== "linux" && process.platform !== "darwin")
     throw new Error("Release walk requires Linux or macOS");
   const target = resolveHerdrReleaseTarget(process.platform, process.arch);
@@ -104,6 +108,7 @@ export async function releaseWalk(args: string[]) {
         baseline,
         report,
         disposable: values["disposable-host"],
+        listing_repetitions: Number(repetitions),
         signed_home: values["signed-in-home"]
           ? resolve(values["signed-in-home"])
           : null,
