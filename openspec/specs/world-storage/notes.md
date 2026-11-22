@@ -2,6 +2,8 @@
 
 [Contract](spec.md). Navigation and usage guidance; contracts live in OpenSpec.
 
+`server/src/storage/catalog.ts` is the single source of truth for what data lives where.
+
 **Surfaces:**
 
 - Shared settings, runtime status, durable Board layout and terminal marks.
