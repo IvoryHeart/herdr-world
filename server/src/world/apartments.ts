@@ -102,6 +102,7 @@ export type ApartmentTopology = {
 
 const MAX_TENANTS_PER_HOST = 512;
 const MAX_RETIRING = 256;
+const MAX_WATCHED = 2048;
 
 const text = (value: unknown, max = 2000): string | null => {
   if (typeof value !== "string") return null;
@@ -173,6 +174,14 @@ export class WorldApartments {
   private readonly pending = new Set<Promise<unknown>>();
   /** Session reads still running, by connection:generation:terminal. */
   private readonly probing = new Map<string, Promise<unknown>>();
+  /**
+   * Usage agent IDs World counted per harness session (apartmentSessionKey),
+   * newest session last. A run that leaves its terminal into a shell and is
+   * then replaced by the next run there (a crew terminal's fixer, then its
+   * checker) is no tenant any more when the census finds its transcript, so
+   * found() reads its usage here. Memory only: a World restart forgets it.
+   */
+  private readonly watched = new Map<string, string[]>();
   /** Residents hidden because their session runs now, as last published. */
   private hidden = "";
   private stopped = false;
@@ -253,28 +262,16 @@ export class WorldApartments {
 
   /**
    * Residents found in the harnesses' histories move in asleep. One whose
-   * agent World watched until it left into a shell (its terminal still
-   * open) keeps the usage World counted for that session (#1101).
+   * session World watched at a desk keeps the usage World counted for it,
+   * even after another run took its terminal (#1101).
    */
   async found(residents: readonly ApartmentMoveIn[]) {
     const port = this.deps.port;
     if (!port || this.stopped || !residents.length) return;
-    const watched = new Map<string, string[]>();
-    for (const host of this.hosts.values())
-      for (const tenant of host.tenants.values()) {
-        const key = apartmentSessionKey(tenant);
-        // Only usage known to be this session's, never another's.
-        if (
-          key &&
-          tenant.usage_agent_ids.length &&
-          tenant.usage_session === tenant.session_id
-        )
-          watched.set(key, tenant.usage_agent_ids);
-      }
     await port.found(
-      watched.size
+      this.watched.size
         ? residents.map((resident) => {
-            const ids = watched.get(apartmentSessionKey(resident) ?? "");
+            const ids = this.watched.get(apartmentSessionKey(resident) ?? "");
             return ids
               ? {
                   ...resident,
@@ -411,7 +408,8 @@ export class WorldApartments {
       // when it leaves lands on the record it leaves.
       const tenant = same ? Object.assign(before, seen) : seen;
       host.tenants.set(terminal, tenant);
-      if (!reported) this.probe(tenant);
+      if (reported) this.remember(tenant);
+      else this.probe(tenant);
     }
     this.liveChanged();
   }
@@ -506,6 +504,7 @@ export class WorldApartments {
         tenant.usage_session = found;
         tenant.session_id = found;
         tenant.session_holder = by;
+        this.remember(tenant);
       } else if (by !== tenant.session_holder) {
         tenant.session_id = null;
         tenant.session_holder = by;
@@ -523,6 +522,31 @@ export class WorldApartments {
       .then(apply, () => undefined)
       .finally(() => this.probing.delete(key));
     this.probing.set(key, task);
+  }
+
+  /**
+   * Keeps the usage IDs a tenant was counted under for its session, once the
+   * runtime has said which session it holds. Runs of one session (resumed,
+   * or in two terminals) add up.
+   */
+  private remember(tenant: ApartmentTenant) {
+    const key = apartmentSessionKey(tenant);
+    if (
+      !key ||
+      !tenant.usage_agent_ids.length ||
+      tenant.usage_session !== tenant.session_id
+    )
+      return;
+    const ids = apartmentUsageAgentIds([
+      ...(this.watched.get(key) ?? []),
+      ...tenant.usage_agent_ids,
+    ]);
+    this.watched.delete(key);
+    this.watched.set(key, ids);
+    if (this.watched.size > MAX_WATCHED) {
+      const oldest = this.watched.keys().next().value;
+      if (oldest !== undefined) this.watched.delete(oldest);
+    }
   }
 
   private host(connectionId: string, generation: number) {

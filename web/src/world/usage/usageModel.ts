@@ -782,9 +782,11 @@ export function usageSumRows(
 
 /**
  * Why World has no usage for a resident (#1101): World counts only agents
- * it watched at work, so one found in its harness's history (ended before
- * World saw it, or run outside it) has none; nor do records from before
- * World kept usage. Otherwise nothing of it was counted this week.
+ * it watched at work and keeps which runs they were in memory until the
+ * census finds them, so one found in its harness's history (ended before
+ * World saw it, run outside it, or left before a World restart) has none;
+ * nor do records from before World kept usage. Otherwise nothing of it was
+ * counted this week.
  */
 export function residentUsageGap(resident: {
   move_out?: string;
@@ -792,27 +794,58 @@ export function residentUsageGap(resident: {
 }) {
   if (resident.usage_agent_ids?.length) return "nothing recorded this week";
   return resident.move_out === "found"
-    ? "World did not see it run, only found it in its history"
+    ? "found in its history, World kept no usage for it"
     : "World did not record it while it ran";
+}
+
+/**
+ * For each resident, how many others were counted under one of its usage
+ * agent IDs. Usage counts a core terminal's program as one agent, so the
+ * runs that follow each other in one shell terminal share a row (#1101).
+ */
+export function residentUsageSharing(
+  residents: readonly { id: string; usage_agent_ids?: readonly string[] }[],
+): Map<string, number> {
+  const holders = new Map<string, Set<string>>();
+  for (const resident of residents)
+    for (const id of resident.usage_agent_ids ?? []) {
+      let set = holders.get(id);
+      if (!set) holders.set(id, (set = new Set()));
+      set.add(resident.id);
+    }
+  const sharing = new Map<string, number>();
+  for (const resident of residents) {
+    const others = new Set<string>();
+    for (const id of resident.usage_agent_ids ?? [])
+      for (const other of holders.get(id) ?? [])
+        if (other !== resident.id) others.add(other);
+    if (others.size) sharing.set(resident.id, others.size);
+  }
+  return sharing;
 }
 
 /**
  * One agent's week in words, as its card says a run's: time at work,
  * waiting on you, and tokens, or that its harness's tokens are not
  * available. Null `metrics` (no row this week) is "usage unknown", with
- * `why` when known. Like the card line it leaves "(partly read)" to the
- * Breakdown it opens.
+ * `why` when known. `shared` other runs counted with it are named, since
+ * the numbers include theirs. Like the card line it leaves "(partly read)"
+ * to the Breakdown it opens.
  */
 export function usageAgentFacts(
   metrics: UsageAnalyticsMetrics | null,
   harness: string | null,
   why?: string | null,
+  shared = 0,
 ) {
   if (!metrics)
     return why ? `Usage unknown: ${why}` : "This week: usage unknown";
   const { active_ms: active, waiting_on_you_ms: waiting } = metrics;
   const tokens = metrics.total_tokens;
-  return `This week: ${[
+  const alongside = shared
+    ? `, with ${shared} other run${shared === 1 ? "" : "s"} in its terminal`
+    : "";
+  return `This week${alongside}: ${[
     active.value === null
       ? "at work unknown"
       : `at work ${usageDuration(active.value)}`,

@@ -6,6 +6,7 @@
 - [x] 1.4 Cover storage, observation, parsing, wording and the filtered Breakdown with unit and DOM tests.
 - [x] 1.5 Document the behaviour in the Apartments and Town capability notes (Apartments, Usage Breakdown).
 - [x] 1.6 Say why a resident's usage is unknown, in its line and its filtered Breakdown; keep the watched usage of an agent that left into a shell when the census finds it.
+- [x] 1.7 Keep each watched session's usage after a later run takes its shell terminal, and say when residents share a terminal's usage agent.
 
 ## 2. Synchronize
 

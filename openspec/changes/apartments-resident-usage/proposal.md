@@ -11,13 +11,15 @@ Breakdown on that agent alone.
   `world.usage.analytics` counted it under while World watched it, newest
   last and bounded. A resumed session adds its new ID to the record it
   replaces. Older and found records read as none, except a found record
-  of a session World watched until it left into a shell; no migration.
+  of a session World watched until it left into a shell, also after a later
+  run took that terminal; no migration.
 - The Apartments list and the opened resident show "This week: at work … ·
   waited on you … · … tokens", "tokens and cost not available for this
   harness" for a harness World reads no log of, and "Usage unknown" with
   its reason when no counted run is in the seven days Usage keeps: World
-  did not see it run (found in its history), did not record it, or recorded
-  nothing this week.
+  kept no usage for it (found in its history), did not record it, or recorded
+  nothing this week. Residents that share a usage agent (runs that followed
+  each other in one shell terminal) say "with N other runs in its terminal".
 - In Town the line opens Usage on Breakdown filtered to that resident: an
   Agent chip replaces Group by, the total reads "This agent", and the chip's
   × shows every agent again.

@@ -15,13 +15,16 @@ import "./agentUsageLine.css";
  * run line: time at work, waiting on you, and tokens or that its harness's
  * are not available. It reads the agent rows of the IDs the resident was
  * counted under; with none this week it says "usage unknown" and why
- * (residentUsageGap). While the read is not in it says nothing. With `onOpen` (Town is shown) every resident
+ * (residentUsageGap). Numbers other residents share (runs in one shell
+ * terminal, residentUsageSharing) say so. While the read is not in it says
+ * nothing. With `onOpen` (Town is shown) every resident
  * opens Usage's Breakdown on that agent, even one with no usage this week:
  * Breakdown then says nothing was measured for it.
  */
 export function ResidentUsageLine({
   resident,
   usage,
+  shared = 0,
   onOpen,
 }: {
   resident: Pick<
@@ -30,6 +33,8 @@ export function ResidentUsageLine({
   >;
   /** The one `agent`/7d read the Apartments window shares. */
   usage: UsageReadState;
+  /** Other residents counted under one of its usage agent IDs. */
+  shared?: number;
   onOpen?: OpenUsage | null;
 }) {
   const ids = resident.usage_agent_ids;
@@ -40,7 +45,7 @@ export function ResidentUsageLine({
   }, [usage, ids]);
   if (usage.status !== "ready") return null;
   const why = metrics ? null : residentUsageGap(resident);
-  const facts = usageAgentFacts(metrics, resident.harness, why);
+  const facts = usageAgentFacts(metrics, resident.harness, why, shared);
   return onOpen ? (
     <button
       type="button"

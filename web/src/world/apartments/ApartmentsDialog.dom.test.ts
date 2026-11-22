@@ -349,8 +349,19 @@ if (process.env.APARTMENTS_DOM !== "1") {
   test("each resident shows its own week of usage; unknown and not-available say so", async () => {
     usageFixtureOn(true);
     const now = Date.now();
+    const ada = fixtureResidents(now).find((r) => r.name === "ada")!;
     setApartmentsClient(
-      fixtureApartmentsClient(now, [fixtureLoglessResident(now)]),
+      fixtureApartmentsClient(now, [
+        fixtureLoglessResident(now),
+        // The next run in ada's shell terminal: usage counted them as one.
+        {
+          ...ada,
+          id: "r-fixture-next-run",
+          name: "babbage",
+          session_id: "0f0e0d0c-0000-4000-8000-0000000000bb",
+          moved_out_at: ada.moved_out_at - 1000,
+        },
+      ]),
     );
     const view = await mount();
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
@@ -368,8 +379,10 @@ if (process.env.APARTMENTS_DOM !== "1") {
       );
     const shown = lines();
     expect(shown.ada!.text).toMatch(
-      /^This week: at work .+ · waited on you .+ · .+ tokens$/,
+      /^This week, with 1 other run in its terminal: at work .+ · waited on you .+ · .+ tokens$/,
     );
+    expect(shown.babbage!.text).toBe(shown.ada!.text);
+    expect(shown.grace!.text).toMatch(/^This week: at work /);
     // Two runs of linus (a resumed session) add up.
     expect(shown.linus!.text).toBe(
       "This week: at work 5 h · waited on you 0 min · 14M tokens",

@@ -33,6 +33,7 @@ import { launchConfirmedTerminal, noteAgentStarted } from "../agentStarts";
 import { ProfileSprite } from "../ProfileSprite";
 import { TERMINAL_COLOR_HEX } from "../terminalColor";
 import { ResidentUsageLine } from "../usage/ResidentUsageLine";
+import { residentUsageSharing } from "../usage/usageModel";
 import { type OpenUsage, useUsageOpener } from "../usage/usageOpener";
 import { useUsageAnalytics, type UsageReadState } from "../usage/usageStore";
 import type { WorldObject, WorldSpaceObject } from "../worldObject";
@@ -104,6 +105,11 @@ export function ApartmentsDialog({
     () => searchApartments(apartments.residents, query),
     [apartments.residents, query],
   );
+  // Runs in one shell terminal share usage rows; their lines say so.
+  const sharing = useMemo(
+    () => residentUsageSharing(apartments.residents),
+    [apartments.residents],
+  );
   const open = openId
     ? (apartments.residents.find((item) => item.id === openId) ?? null)
     : null;
@@ -137,6 +143,7 @@ export function ApartmentsDialog({
             profiles={profiles}
             world={world}
             usage={usage}
+            usageShared={sharing.get(open.id) ?? 0}
             onOpenUsage={openUsage}
             element={() => ref.current}
             onOpen={onOpen}
@@ -177,6 +184,7 @@ export function ApartmentsDialog({
                     <ResidentUsageLine
                       resident={resident}
                       usage={usage}
+                      shared={sharing.get(resident.id) ?? 0}
                       onOpen={openUsage}
                     />
                   </li>
@@ -290,6 +298,7 @@ function ResidentDetail({
   profiles,
   world,
   usage,
+  usageShared,
   onOpenUsage,
   element,
   onOpen,
@@ -300,6 +309,7 @@ function ResidentDetail({
   profiles: Pick<ProfilesDocument, "profiles"> | null;
   world: WorldObject;
   usage: UsageReadState;
+  usageShared: number;
   onOpenUsage: OpenUsage | null;
   element(): Element | null;
   onOpen(terminal: {
@@ -412,6 +422,7 @@ function ResidentDetail({
           <ResidentUsageLine
             resident={resident}
             usage={usage}
+            shared={usageShared}
             onOpen={onOpenUsage}
           />
         </div>

@@ -95,9 +95,13 @@ resident: an ending World sees replaces the found record of that session.
   this harness". World counts a resident under the usage agents it ran as
   while World watched it, in its own harness session only (a resumed
   session adds its new run; another session later in the same terminal
-  starts its own count). World counts only agents it watched at work, so
-  an unknown line says why: "World did not see it run, only found it in its
-  history" (ended before this World watched it, or ran outside it), "World
+  starts its own count). Runs of one harness that follow each other in one
+  shell terminal (a crew terminal's fixer, then its next fixer) share one
+  usage agent, so their lines read "This week, with 1 other run in its
+  terminal: …" with the shared numbers. World counts only agents it watched
+  at work, so an unknown line says why: "found in its history, World kept no
+  usage for it" (ended before this World watched it, ran outside it, or left
+  into a shell before a World restart), "World
   did not record it while it ran" (from before World kept usage), or
   "nothing recorded this week". A fresh World data folder therefore shows
   usage only for agents that end after it started watching them: close an

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { usageFixture } from "./usageFixture";
 import {
   residentUsageGap,
+  residentUsageSharing,
   usageAgentFacts,
   usageAgentRows,
   usageDuration,
@@ -276,13 +277,28 @@ test("one agent's week: its rows by agent ID, summed, in the card line's words",
       residentUsageGap({ move_out, usage_agent_ids }),
     );
   expect(why("found")).toBe(
-    "Usage unknown: World did not see it run, only found it in its history",
+    "Usage unknown: found in its history, World kept no usage for it",
   );
   expect(why("ended", [])).toBe(
     "Usage unknown: World did not record it while it ran",
   );
   expect(why("found", ["agent_gone"])).toBe(
     "Usage unknown: nothing recorded this week",
+  );
+  // Runs that share a usage row (one shell terminal) say so.
+  const sharing = residentUsageSharing([
+    { id: "a", usage_agent_ids: ["agent_shell", "agent_a"] },
+    { id: "b", usage_agent_ids: ["agent_shell"] },
+    { id: "c", usage_agent_ids: ["agent_shell"] },
+    { id: "d", usage_agent_ids: ["agent_d"] },
+    { id: "e" },
+  ]);
+  expect(Object.fromEntries(sharing)).toEqual({ a: 2, b: 2, c: 2 });
+  expect(usageAgentFacts(sum, "codex", null, 1)).toStartWith(
+    "This week, with 1 other run in its terminal: at work",
+  );
+  expect(usageAgentFacts(sum, "codex", null, 2)).toStartWith(
+    "This week, with 2 other runs in its terminal: at work",
   );
   // Sums are honest: all unknown stays unknown; a mix is partly read.
   const unknown = usageSumRows(

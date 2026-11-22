@@ -15,11 +15,25 @@ read is not in.
 - **WHEN** a resident ran twice this week under two usage agent IDs
 - **THEN** its line shows the two runs' time and tokens added together
 
+### Requirement: Resident usage shared with other runs
+
+When other listed residents share any of a resident's usage agent IDs (runs
+of one harness that followed each other in one shell terminal are counted
+as one agent), its line SHALL say so after "This week": "This week, with 1
+other run in its terminal: …" or "with N other runs".
+
+#### Scenario: Two runs in one shell terminal
+
+- **WHEN** two residents ran one after the other in one shell terminal and
+  carry the same usage agent ID
+- **THEN** both lines read "This week, with 1 other run in its terminal:"
+  followed by the shared time and tokens
+
 ### Requirement: Resident unknown usage says why
 
 A resident's unknown usage SHALL name its reason: one found in its
-harness's history without usage agent IDs reads "Usage unknown: World did
-not see it run, only found it in its history"; another without them reads
+harness's history without usage agent IDs reads "Usage unknown: found in
+its history, World kept no usage for it"; another without them reads
 "Usage unknown: World did not record it while it ran"; one with IDs but no
 row this week reads "Usage unknown: nothing recorded this week". Breakdown
 opened from a resident without IDs SHALL give the same reason.
@@ -27,8 +41,8 @@ opened from a resident without IDs SHALL give the same reason.
 #### Scenario: Resident found in a harness history
 
 - **WHEN** a resident World found asleep in its harness's history is listed
-- **THEN** its line reads "Usage unknown: World did not see it run, only
-  found it in its history"
+- **THEN** its line reads "Usage unknown: found in its history, World kept
+  no usage for it"
 
 ### Requirement: Resident usage opens Breakdown
 

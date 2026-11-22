@@ -34,9 +34,11 @@ dropped, without rejecting the resident. Writing it SHALL need no migration.
 
 A resident found in a harness's history whose session World watched at
 work until it left into a shell (its terminal still open) SHALL carry that
-session's usage agent IDs, and only when World knows the IDs are that
-session's. A later census refresh of a found record SHALL keep the IDs it
-has.
+session's usage agent IDs, also when a later run has since taken that
+terminal, and only when World knows the IDs are that session's. World keeps
+them in memory until the census finds the session, so a World restart in
+between forgets them. A later census refresh of a found record SHALL keep
+the IDs it has.
 
 #### Scenario: Agent left into a shell
 
@@ -44,3 +46,9 @@ has.
   terminal stays open, and the census finds A in its harness's history
 - **THEN** the found resident carries A's usage agent IDs, and a found
   session World never watched carries none
+
+#### Scenario: Runs that follow each other in one shell terminal
+
+- **WHEN** World watched session A at work in a shell terminal, A left,
+  session B then ran and left in that terminal, and the census finds both
+- **THEN** A carries A's usage agent IDs and B carries B's

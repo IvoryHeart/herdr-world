@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { BinEntry } from "../../../shared/bin";
 import { memoryApartmentsPort } from "../storage/apartments";
-import { analyticsAgentId } from "../usage/activity";
+import { coreOccupantFingerprint } from "../herdr-core/occupant";
+import { analyticsAgentId, UsageActivity } from "../usage/activity";
 import { WorldApartments } from "./apartments";
 
 const NOW = 1_800_000_000_000;
@@ -384,6 +385,94 @@ describe("finished agents move into apartments", () => {
     const other = await resident("session-b");
     expect(other?.session_id).toBe("session-b");
     expect(other?.usage_agent_ids).toEqual([usageId("occ-2")]);
+  });
+
+  test("runs that follow each other in one core shell terminal keep their usage when found", async () => {
+    // Real key shapes: a core terminal address as pane and terminal ID, the
+    // occupant fingerprint of the terminal's own program (the shell, so it
+    // is the same for every run in it), core's harness names, a Claude UUID
+    // and a Codex UUIDv7 read from the runtime, as knownSession answers.
+    const occupant = coreOccupantFingerprint(
+      "core-example",
+      { address: "t6p", pid: 4242, argv: ["/bin/bash"] },
+      1,
+    )!;
+    const row = (agent?: string) => ({
+      pane_id: "t6p",
+      terminal_id: "t6p",
+      workspace_id: "core-space",
+      tab_id: "core-space:tab",
+      runtime: "herdr-core",
+      cwd: "/srv/example/worktrees/item-1",
+      core_occupant_fingerprint: occupant,
+      ...(agent ? { agent, agent_status: "working" } : {}),
+    });
+    const fixerA = "8c58744b-0000-4000-8000-00000000000a";
+    const checker = "01a20399-0000-7000-8000-00000000000c";
+    const fixerB = "8c58744b-0000-4000-8000-00000000000b";
+    let answer: { id: string; holder: string } | null = null;
+    const { apartments } = tracker({
+      host: (id) => ({ label: `host ${id}`, runtime: "herdr-core" }),
+      session: () => answer,
+    });
+    const activity = new UsageActivity();
+    const observe = (agent: string | undefined, at: number) => {
+      apartments.fresh("core-local", 1, [row(agent)], at, []);
+      activity.observeFresh("core-local", 1, [row(agent)], at, []);
+    };
+    // The fixer's claude, the checker's codex, then the next fixer's claude,
+    // each leaving the terminal to its shell; the census comes later.
+    answer = { id: fixerA, holder: "[1,5001]" };
+    observe("claude", NOW - 9000);
+    observe(undefined, NOW - 8000);
+    answer = { id: checker, holder: "[1,5002]" };
+    observe("codex", NOW - 7000);
+    observe(undefined, NOW - 6000);
+    answer = { id: fixerB, holder: "[1,5003]" };
+    observe("claude", NOW - 5000);
+    observe(undefined, NOW - 4000);
+    const history = (harness: string, session: string) => ({
+      name: harness,
+      harness,
+      cwd: "/srv/example/worktrees/item-1",
+      room: null,
+      tab: null,
+      connection_id: "core-local",
+      connection_label: "host core-local",
+      runtime: "herdr-core" as const,
+      terminal_id: `session:${session}`,
+      first_seen_at: NOW - 60_000,
+      moved_out_at: NOW - 4000,
+      move_out: "found" as const,
+      summary: null,
+      last_report: null,
+      links: [],
+      session_id: session,
+      appearance: null,
+    });
+    await apartments.found([
+      history("claude", fixerA),
+      history("codex", checker),
+      history("claude", fixerB),
+      history("claude", "8c58744b-0000-4000-8000-0000000000ff"),
+    ]);
+    const bySession = Object.fromEntries(
+      apartments
+        .list()
+        .residents.map((r) => [r.session_id, r.usage_agent_ids ?? []]),
+    );
+    // The IDs are the agent rows usage counted them under.
+    const counted = new Map(
+      activity.read(NOW).map((r) => [r.harness, r.agent_id]),
+    );
+    expect(counted.size).toBe(2);
+    expect(bySession).toEqual({
+      [fixerA]: [counted.get("claude")],
+      [checker]: [counted.get("codex")],
+      // Usage counts the shell terminal's claude runs as one agent.
+      [fixerB]: [counted.get("claude")],
+      "8c58744b-0000-4000-8000-0000000000ff": [],
+    });
   });
 
   test("evict removes residents and publishes", async () => {

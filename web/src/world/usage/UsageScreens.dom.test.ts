@@ -425,7 +425,7 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
         initialFilter: {
           ids: [],
           label: "zed",
-          why: "World did not see it run, only found it in its history",
+          why: "found in its history, World kept no usage for it",
         },
         onClose: () => {},
       }),
@@ -434,7 +434,7 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
       await Promise.resolve();
     });
     expect(found.host.querySelector(".usage-lens")!.textContent).toContain(
-      "Nothing measured for zed: World did not see it run, only found it in its history.",
+      "Nothing measured for zed: found in its history, World kept no usage for it.",
     );
     await found.close();
   });
