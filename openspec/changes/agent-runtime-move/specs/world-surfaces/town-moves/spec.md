@@ -34,7 +34,9 @@ and Board peeks. A move within one runtime SHALL use that runtime's own move.
   close. If the original refuses to close, World SHALL put the desk back, close
   the new copy and say the original still runs. When an end was asked but not
   confirmed, World SHALL say which agent may still be running instead of
-  reporting a move or a clean refusal.
+  reporting a move or a clean refusal; this includes a lost close reply after
+  which the original can't be read (World keeps the new copy) and a lost start
+  reply (the original keeps running and the copy may be).
 
 #### Scenario: Agent moves between runtimes desk rules
 

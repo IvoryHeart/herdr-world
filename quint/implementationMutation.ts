@@ -40,7 +40,8 @@ export type ImplementationFault =
   | "seen-hidden-look"
   | "seen-stale-look"
   | "seen-blind-write"
-  | "core-missing-foreground";
+  | "core-missing-foreground"
+  | "move-assume-alive";
 export async function mutateImplementation(
   name: Model,
   fault: ImplementationFault,
@@ -63,6 +64,7 @@ export async function mutateImplementation(
       "core-seat-gap",
       "core-missing-foreground",
     ],
+    "agent-move": ["primary", "move-assume-alive"],
     "herdr-core-seen": [
       "seen-forget-look",
       "seen-hidden-look",
@@ -105,6 +107,7 @@ export async function mutateImplementation(
     "claude-tap-lock": "server/src/usage/claude-tap.ts",
     "herdr-core-runtime": "server/src/herdr-core/mirror.ts",
     "herdr-core-seen": "web/src/world/coreShared.ts",
+    "agent-move": "server/src/world/agent-move.ts",
     "binding-resolution": "server/src/world/binding-resolution.ts",
     "observation-base": "server/src/world/observation-v1.ts",
     "runtime-leases": "server/src/connections/manager.ts",
@@ -228,6 +231,21 @@ export async function mutateImplementation(
         "    this.opening = { ...size };\n    this.deps.open(size);",
         "    if (this.seat) {\n      this.leave(this.seat, this.touched);\n      this.seat = null;\n      this.seatSize = null;\n      this.touched = false;\n    }\n    this.opening = { ...size };\n    this.deps.open(size);",
       ],
+    };
+    const [guard, replacement] = guards[fault]!;
+    assert.equal(original.split(guard).length, 2, `${fault} target changed`);
+    contents = original.replace(guard, replacement);
+  } else if (name === "agent-move") {
+    const guards: Record<string, [string, string]> = {
+      // The second recheck before the close goes: a source that changed
+      // while the desk moved is closed anyway.
+      primary: [
+        "      rehomed = true;\n      await recheck();",
+        "      rehomed = true;",
+      ],
+      // An unreadable source after a lost close counts as still running,
+      // so the copy is closed and the agent may be left nowhere.
+      "move-assume-alive": ["        () => null,\n", "        () => true,\n"],
     };
     const [guard, replacement] = guards[fault]!;
     assert.equal(original.split(guard).length, 2, `${fault} target changed`);

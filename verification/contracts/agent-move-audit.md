@@ -18,31 +18,56 @@ within the admitted set. A refused close puts the desk back and closes the
 copy; a Board that refuses putting it back is named and the copy still goes. An unconfirmed end returns `uncertain`; an unconfirmed cleanup names
 the copy that may still run.
 
-## Why a direct matrix is enough
+## Model and replay
 
 The controller awaits each port in turn, and a per-source lock in the service
 keeps a second request out until the first ends, so its own steps never
-overlap. What can change meanwhile is outside: the source agent (working,
-split, gone, a new child) and the runtimes' replies (refused, lost). Those are
-inputs to the serial steps, so enumerating them covers the controller:
+overlap. What changes meanwhile is outside: the source agent (working, split,
+gone, a new child), either connection (dropped, or reconnected at a new
+generation) and the runtimes' replies (refused, lost, unconfirmed).
+`quint/agent-move.qnt` interleaves those with every step, in both directions.
+Its invariant, checked by TLC over every bounded run:
 
-- `agent-move.test.ts` runs 108 combinations of start (ready, failed, failed
-  with a partial copy), recheck (same, working during start, working during
-  pinning), source close (ended,
-  uncertain, refused, failed but gone) and cleanup (ended, uncertain, throws).
-  Each asserts one owner of the desk, the original still running after any
-  refusal, and that every copy or original that may still run is named.
-- The same file changes the source during startup (working, split, gone) and
-  runs the real herdr-core close against the in-process core: a child started
-  after admission refuses the kill with both alive, and a lost kill reply is
-  `uncertain`. `herdr-core/operations.test.ts` keeps killCore's own plan and
-  confirmation checks.
+- once settled, exactly one of the original and the copy runs, unless the
+  report names the one that may also run (or the person ended the source);
+- a refused move leaves the original running with its desk and a reason, and
+  names a copy that may still run or a desk that could not be put back;
+- `moved` means the original ended and the desk is on the copy; `uncertain`
+  keeps the copy and the desk and names the original;
+- a busy, split or child-starting source is refused before anything starts;
+- no effect lands on a dropped or reconnected side, and the original is never
+  closed while busy.
 
-A model would explore the same serial states and adds no schedule.
+A pinned desk is not refused: the town-moves requirement carries the pin with
+the agent, so the model pins the copy before the desk moves, and a refused pin
+fails the move with the original intact.
+
+`quint/agent-move.ts` replays sampled traces through the real
+`moveAgentAcross`, with both sides scripted by the trace and fenced like a
+runtime lease. It compares the outcome, the calls made, who runs and owns the
+desk, what the report names, and that each side was resolved once by its
+admitted connection ID and generation. Four model faults (no second recheck,
+a call reaching a reconnected side, assuming an unreadable source still runs,
+an unnamed lost start) and two production mutants must be rejected.
+
+The model found two faults in the first version, both fixed and kept as
+replay witnesses in `quint/agent-move.test.ts`: a lost close reply followed by
+an unreadable source put the desk back and closed the copy, though the
+original may have ended (now `uncertain`, copy kept); a lost start reply did
+not name the copy that may be running.
+
+The 108-outcome matrix in `agent-move.test.ts` stays as consumer evidence. It
+also runs the real herdr-core close against the in-process core: a child
+started after admission refuses the kill with both alive, and a lost kill
+reply is `uncertain`. `herdr-core/operations.test.ts` keeps killCore's own
+plan and confirmation checks.
 
 ## Limits
 
-The lock is per service: independent Worlds or external clients acting on the
+The model assumes nothing but a core child (fenced by core's admitted kill
+set) or a connection change happens between the last re-read and the close; a
+source turning busy in that window is not excluded. The lock is per service:
+independent Worlds or external clients acting on the
 same agent are not excluded. A service crash between start and close can leave
 both copies; World does not recover it automatically. Real harness startup,
 login and readiness are checked by the owner check on a real Herdr TUI and

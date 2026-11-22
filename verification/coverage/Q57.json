@@ -3,25 +3,27 @@
   "area": "Agent move between runtimes (world.agent.move)",
   "owner": "server/src/world/agent-move.ts",
   "requirement": "openspec/changes/agent-runtime-move/specs/world-surfaces/town-moves/spec.md",
-  "properties": "Original closes only after the destination is ready and the original is rechecked idle and alone; core ends only the admitted terminals; one owner of the desk after every outcome; an unconfirmed end or cleanup is reported",
+  "properties": "Original closes only after the destination is ready and the original is rechecked idle and alone; core ends only the admitted terminals; one owner of the agent and its desk after every outcome; every call is bound to the admitted connection ID and generation; a failed or abandoned move leaves the source intact with a reason; an unconfirmed end or cleanup is reported",
   "existingTests": [
+    "quint/agent-move.test.ts",
     "server/src/world/agent-move.test.ts",
     "server/src/herdr-core/operations.test.ts"
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1184",
-  "status": "alternative-evidence",
-  "technique": "direct-serial-controller-matrix",
-  "assessment": "The controller awaits each port serially under a per-source service lock, so no internal completions interleave. A 108-outcome matrix (start, recheck during start or pinning, close, cleanup) checks desk ownership and reporting; a source changing during startup, a child started after admission and a lost kill reply run against the real core kill path.",
-  "remaining": "Independent Worlds, service crash during a handoff and real harness startup are not proved; the owner check on a real Herdr TUI and herdr-core covers the native paths.",
+  "status": "pending",
+  "technique": "finite-model-with-production-replay",
+  "assessment": "TLC explores both directions through admission, start, recheck, pin and desk move, second recheck, close and cleanup, interleaved with the source turning busy, splitting, ending or starting a child, either connection dropping or reconnecting, and lost or unconfirmed start, close and cleanup replies (6,592 states). Three sampled seeds replay through the real moveAgentAcross with lease-fenced sides; four model faults and two production mutants are rejected. The model found that an unreadable source after a lost close used to drop the copy, leaving no agent, and that a lost start reply did not name the copy; both are fixed and kept as replay witnesses. The 108-outcome matrix stays as consumer evidence.",
+  "remaining": "Independent acceptance of the model and Q57 mapping. Pinned desks are carried with the agent rather than refused, as the town-moves requirement asks. A source turning busy between the last recheck and the close, independent Worlds, a service crash during a handoff and real harness startup are not proved; the owner check on a real Herdr TUI and herdr-core covers the native paths.",
   "requiredChecks": ["bun run check", "bun run verification:gate"],
   "partialEvidence": {
-    "models": [],
+    "models": ["quint/agent-move.qnt"],
     "contracts": ["verification/contracts/agent-move-audit.md"],
     "tests": [
+      "quint/agent-move.test.ts",
       "server/src/world/agent-move.test.ts",
       "server/src/herdr-core/operations.test.ts"
     ],
-    "checks": ["bun run test server/src/world/agent-move.test.ts"],
-    "review": "Remapped from #990's controller to #1184's; independent PR review required."
+    "checks": ["bun run verification:gate"],
+    "review": "Remapped from the serial-controller matrix to a finite model with production replay; independent PR review required."
   }
 }

@@ -170,8 +170,10 @@ no control for it. Platform and harness limits apply across the table.
   half-started one is closed and the original keeps running. If the original
   starts working, splits or starts agents of its own before it closes, the new
   one is closed and the original stays, desk and all. When a runtime
-  does not confirm that an agent ended, World says which one may still be
-  running instead of reporting a move.
+  does not confirm that an agent ended, or a reply is lost, World says which
+  one may still be running instead of reporting a move: a lost start keeps the
+  original and names the new one; a lost close that leaves the original
+  unreadable keeps the new one and its desk.
 - **Core agent environment (Unix):** New agent finds and starts the harness
   through the core host's `$SHELL` (`/bin/sh` when unset): interactive on Linux,
   login and interactive on macOS. Supported shells are sh, bash, zsh, dash,

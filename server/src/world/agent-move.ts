@@ -215,13 +215,20 @@ export async function moveAgentAcross(
     deps.publishBoardChanged(record.revision);
 
     const cwd = text(pane.cwd) || text(pane.foreground_cwd);
-    const started = await target!.start({
-      workspaceId: to.workspace_id,
-      kind,
-      label: name.slice(0, 64),
-      args: resume ?? [],
-      ...(to.cwd || cwd ? { cwd: to.cwd || cwd } : {}),
-    });
+    const started = await target!
+      .start({
+        workspaceId: to.workspace_id,
+        kind,
+        label: name.slice(0, 64),
+        args: resume ?? [],
+        ...(to.cwd || cwd ? { cwd: to.cwd || cwd } : {}),
+      })
+      .catch((error: unknown) => {
+        // A lost reply: World can't tell whether the copy started.
+        throw new Refused(
+          `${name} didn't start there: ${reason(error)} It still runs where it was. The new copy there may still be running: close it there.`,
+        );
+      });
     if ("message" in started) {
       const left = started.pane_id
         ? await discard(target!, { pane_id: started.pane_id, terminal_id: "" })
@@ -296,13 +303,19 @@ export async function moveAgentAcross(
         (closing as { admitted: unknown }).admitted,
       );
     } catch (error) {
-      const still = await source!
-        .rows()
-        .then((now) =>
-          now.panes.some((row) => row.terminal_id === from.terminal_id),
-        )
-        .catch(() => true);
-      if (!still) return { status: "moved", target: moved };
+      const still = await source!.rows().then(
+        (now) => now.panes.some((row) => row.terminal_id === from.terminal_id),
+        () => null,
+      );
+      if (still === false) return { status: "moved", target: moved };
+      // Unreadable after a failed or lost close: it may have ended, so the
+      // copy stays (Q57 model: dropping it could leave the agent nowhere).
+      if (still === null)
+        return {
+          status: "uncertain",
+          target: moved,
+          message: `${name} runs in its new room, but World can't tell whether the original ended: ${reason(error)}`,
+        };
       // The original stays: so do its desk and links.
       const kept = await unhome(moved);
       refuse(
@@ -411,9 +424,9 @@ export function moveSide(
           for (let waited = 0; waited < READY_MS; waited += 1_000) {
             if (!resolved.isCurrent())
               return { message: "The host reconnected.", pane_id };
-            const live = (await rows()).panes.find(
-              (row) => row.pane_id === pane_id,
-            );
+            const now = await rows().catch(() => null);
+            if (!now) return { message: "World lost the host.", pane_id };
+            const live = now.panes.find((row) => row.pane_id === pane_id);
             if (!live) return { message: "Its shell exited at once.", pane_id };
             if (!(await busy(live))) return { tab_id, pane_id, terminal_id };
             await sleep(1_000);
@@ -506,7 +519,10 @@ export function moveSide(
       for (let waited = 0; waited < READY_MS; waited += 1_000) {
         if (!resolved.isCurrent())
           return { message: "The host reconnected.", pane_id: outcome.pane_id };
-        const pane = (await rows()).panes.find(
+        const now = await rows().catch(() => null);
+        if (!now)
+          return { message: "World lost the host.", pane_id: outcome.pane_id };
+        const pane = now.panes.find(
           (row) => row.terminal_id === outcome.terminal_id,
         );
         if (!pane)
