@@ -10,6 +10,7 @@ import { useState } from "react";
 import { bridge } from "../../../api";
 import type { ConnectionClient } from "../../../connectionClient";
 import { BoardDocumentStore } from "../../board/boardDocument";
+import type { TownQuietMarks } from "../../town/TownBoard";
 import { TownCanvas, type TownRoomActions } from "../../town/TownCanvas";
 import { TownStepStore } from "../../town/townStepStore";
 import { useTownStepReads } from "../../town/useTownStepReads";
@@ -120,8 +121,11 @@ export function siteTownScene(now = Date.now()) {
 
 export function SiteTown({
   scene,
+  quiet,
 }: {
   scene: ReturnType<typeof siteTownScene>;
+  /** Quiet working agents' marks and the board's line (useTownQuiet.ts). */
+  quiet?: TownQuietMarks;
 }) {
   const [store] = useState(() => new TownStepStore());
   useTownStepReads(store, scene.world.leaves, false);
@@ -139,6 +143,7 @@ export function SiteTown({
       roomActions={roomActions}
       selectedRoomKey={null}
       observability={EMPTY_OFFICE_OBSERVABILITY}
+      quiet={quiet}
     />
   );
 }
