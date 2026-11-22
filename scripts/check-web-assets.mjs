@@ -49,9 +49,12 @@ export function budgetRaiseRequest(size, budget = BUNDLE_BUDGET) {
 export const HELP_PICTURE_DIRECTORY = "help";
 const maxHelpPictureFiles = 240;
 const maxHelpPictureBytes = 5 * 1024 * 1024;
-const maxInitialJsBytes = 660 * 1024;
-const maxInitialJsGzipBytes = 202 * 1024;
-const maxInitialCssBytes = 196 * 1024;
+// A first load: the entry, the World app main.tsx always mounts and the
+// default Town view (STARTUP_SOURCES); fonts load on first use of a glyph.
+// About 5 % above the 2026-11-22 measurement (#1230).
+const maxStartupJsBytes = 2870 * 1024;
+const maxStartupJsGzipBytes = 920 * 1024;
+const maxStartupCssBytes = 476 * 1024;
 
 /** Follow eager imports only, from app entries or explicitly selected features. */
 export function initialAssetFiles(
@@ -72,6 +75,99 @@ export function initialAssetFiles(
   }
   for (const entry of entries) visit(entry);
   return [...files];
+}
+
+/**
+ * main.tsx mounts the World app as soon as the entry runs, and the World app
+ * opens Town by default, so a first load fetches all three graphs together.
+ */
+export const STARTUP_SOURCES = [
+  "src/world/WorldFoundationApp.tsx",
+  "src/world/TownView.tsx",
+];
+
+/** Every JS and CSS file a first load of World fetches. */
+export function startupAssetFiles(manifest) {
+  const entries = Object.keys(manifest).filter((key) => manifest[key].isEntry);
+  if (!entries.length) throw new Error("Vite manifest has no entry points");
+  for (const source of STARTUP_SOURCES)
+    if (!manifest[source])
+      throw new Error(`Missing Vite startup chunk: ${source}`);
+  return initialAssetFiles(manifest, [...entries, ...STARTUP_SOURCES]);
+}
+
+/**
+ * Code that must stay out of the first load or out of the bundle, found by a
+ * string only that library carries: xterm (Terminal.open) loads with the
+ * first terminal, and Shiki's JavaScript regex engine (oniguruma-to-es) is
+ * never shipped because diffs always use the WASM engine.
+ */
+export const XTERM_MARKER = "Terminal requires a parent element";
+export const JS_REGEX_ENGINE_MARKER = "Unsupported absence function";
+
+export function startupXtermFiles(startupTexts) {
+  return startupTexts
+    .filter(({ content }) => content.includes(XTERM_MARKER))
+    .map(({ name }) => name);
+}
+
+export function jsRegexEngineFiles(texts) {
+  return texts
+    .filter(({ content }) => content.includes(JS_REGEX_ENGINE_MARKER))
+    .map(({ name }) => name);
+}
+
+/**
+ * Diffs load only Pierre's default pair; any other Shiki or Pierre theme in
+ * the manifest means the theme filter in web/vite.config.ts stopped working.
+ */
+export function unusedThemeChunks(manifest) {
+  return Object.keys(manifest).filter(
+    (key) =>
+      /[\\/]@shikijs[\\/]themes[\\/]/.test(key) ||
+      (/[\\/]@pierre[\\/]theme[\\/]dist[\\/]/.test(key) &&
+        !/[\\/]pierre-(?:dark|light)\.mjs$/.test(key)),
+  );
+}
+
+export const COMMON_GRAMMARS = [
+  "javascript",
+  "css",
+  "html",
+  "markdown",
+  "shellscript",
+  "sql",
+  "c",
+  "java",
+];
+
+/**
+ * Common grammars keep their own chunk: no grammar a family group embeds
+ * (javascript, css, shellscript…) may pull a `syntax-*` group in, so its
+ * diff fetches only that grammar.
+ */
+export function groupedGrammarLeaks(manifest, languages = COMMON_GRAMMARS) {
+  const groups = new Set(
+    Object.keys(manifest).filter((key) =>
+      manifest[key].name?.startsWith("syntax-"),
+    ),
+  );
+  const leaks = [];
+  for (const language of languages) {
+    const key = Object.keys(manifest).find(
+      (candidate) =>
+        candidate.endsWith(`/@shikijs/langs/dist/${language}.mjs`) ||
+        (!manifest[candidate].src && manifest[candidate].name === language),
+    );
+    if (!key) {
+      leaks.push(`${language} (no chunk of its own)`);
+      continue;
+    }
+    for (const file of initialAssetFiles(manifest, [key]))
+      for (const group of groups)
+        if (manifest[group].file === file) leaks.push(`${language} -> ${file}`);
+  }
+  return leaks;
 }
 
 /**
@@ -220,26 +316,43 @@ async function checkAssets() {
         file,
         await readFile(`${publicRoot}/${file}`, "utf8"),
       );
+  const failures = [
+    ...unusedThemeChunks(manifest).map(
+      (key) => `web assets ship an unused syntax theme: ${key}`,
+    ),
+    ...groupedGrammarLeaks(manifest).map(
+      (leak) => `a common grammar fetches a grammar group: ${leak}`,
+    ),
+  ];
   let jsBytes = 0;
   let jsGzipBytes = 0;
   let cssBytes = 0;
-  for (const file of initialAssetFiles(manifest)) {
+  const startupTexts = [];
+  for (const file of startupAssetFiles(manifest)) {
     const content = await readFile(`${publicRoot}/${file}`);
     if (file.endsWith(".js")) {
       jsBytes += content.length;
       jsGzipBytes += gzipSync(content).length;
+      startupTexts.push({ name: file, content: content.toString("utf8") });
     } else if (file.endsWith(".css")) {
       cssBytes += content.length;
     }
   }
+  for (const file of startupXtermFiles(startupTexts))
+    failures.push(`The startup load includes xterm: ${file}`);
+  const texts = await textAssets(publicRoot);
+  for (const file of jsRegexEngineFiles(texts))
+    failures.push(`web assets ship Shiki's JavaScript regex engine: ${file}`);
+  for (const failure of failures) process.stderr.write(`${failure}\n`);
+  if (failures.length) process.exitCode = 1;
   const checks = [
     ["files", fileCount, BUNDLE_BUDGET.files, 1, "files"],
     ["total", totalBytes, BUNDLE_BUDGET.bytes, 1024 * 1024, "MiB"],
     ["help pictures", help.fileCount, maxHelpPictureFiles, 1, "files"],
     ["help pictures", help.totalBytes, maxHelpPictureBytes, 1024 * 1024, "MiB"],
-    ["initial JS", jsBytes, maxInitialJsBytes, 1024, "KiB"],
-    ["initial JS gzip", jsGzipBytes, maxInitialJsGzipBytes, 1024, "KiB"],
-    ["initial CSS", cssBytes, maxInitialCssBytes, 1024, "KiB"],
+    ["startup JS", jsBytes, maxStartupJsBytes, 1024, "KiB"],
+    ["startup JS gzip", jsGzipBytes, maxStartupJsGzipBytes, 1024, "KiB"],
+    ["startup CSS", cssBytes, maxStartupCssBytes, 1024, "KiB"],
   ];
   for (const [name, actual, max, unit, suffix] of checks) {
     const exceeded = actual > max;
@@ -250,7 +363,7 @@ async function checkAssets() {
   const request = budgetRaiseRequest({ files: fileCount, bytes: totalBytes });
   if (request) process.stderr.write(`${request}\n`);
   if (process.env.HERDR_WORLD_BUILD_DEVTOOLS !== "1") {
-    const shipped = devtoolsAssets(await textAssets(publicRoot));
+    const shipped = devtoolsAssets(texts);
     if (shipped.length) {
       process.stderr.write(
         `web assets contain World development tools: ${shipped.join(", ")}\n`,

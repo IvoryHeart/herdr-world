@@ -3,12 +3,12 @@ import { flushSync } from "react-dom";
 import { bridge } from "../api";
 import { type CoreTerminalPush, MIN_WATCH_SCALE } from "../coreWatch";
 import { useState } from "react";
+import { CoreTerminalWatch } from "./CoreTerminalWatch";
 import {
-  CoreTerminalWatch,
   type CoreWatchTarget,
   coreInspectorTerminal,
   useCoreTerminalDrafts,
-} from "./CoreTerminalWatch";
+} from "./coreInspectorTerminal";
 import type { WorldObjectNode } from "./worldObject";
 import {
   activateTerminalComposerDraftScope,
@@ -782,7 +782,8 @@ async function reconnects() {
   const latest = () => watches()[watches().length - 1]?.params.generation;
   const before = watches().length;
   flushSync(() => createRoot(root).render(<Harness />));
-  await frames(2);
+  // The Terminal tab loads the watch (and xterm) lazily.
+  await until(() => watches().length > before);
   check(
     watches().length === before + 1 && latest() === 1,
     "the tab watches the current generation",

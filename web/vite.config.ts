@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { currentBuildVersion } from "../scripts/build-version";
 import packageJson from "./package.json";
@@ -9,13 +9,36 @@ const appVersion = currentBuildVersion(
   packageJson.version,
 );
 
+// Diffs request only Pierre's default pair (DEFAULT_THEMES in @pierre/diffs),
+// yet its theme registry names every Shiki and Pierre theme as a lazy import,
+// which shipped about 1.6 MB of themes no page could load. Every other theme
+// resolves to one module that refuses to load. A theme picker would widen this.
+export const BUNDLED_DIFF_THEMES = new Set(["pierre-dark", "pierre-light"]);
+export const UNBUNDLED_THEME = "\0herdr-world-unbundled-theme";
+export function onlyBundledDiffThemes(): Plugin {
+  return {
+    name: "herdr-world-bundled-diff-themes",
+    enforce: "pre",
+    resolveId(source) {
+      const theme =
+        /^@shikijs\/themes\/([\w-]+)$/.exec(source)?.[1] ??
+        /^@pierre\/theme\/(pierre-[\w-]+)$/.exec(source)?.[1];
+      if (theme && !BUNDLED_DIFF_THEMES.has(theme)) return UNBUNDLED_THEME;
+    },
+    load(id) {
+      if (id === UNBUNDLED_THEME)
+        return 'throw new Error("This syntax theme is not bundled with Herdr World");';
+    },
+  };
+}
+
 // In dev, the web app talks to the bridge through Vite's proxy so the
 // frontend can use a relative /ws URL (same origin, no hardcoded port).
 export default defineConfig(({ mode }) => {
   const devtools =
     mode === "development" || process.env.HERDR_WORLD_BUILD_DEVTOOLS === "1";
   return {
-    plugins: [react()],
+    plugins: [react(), onlyBundledDiffThemes()],
     define: {
       __HERDR_WORLD_VERSION__: JSON.stringify(appVersion),
       // World's development tools (event traces, renderer counters) exist only
@@ -37,6 +60,14 @@ export default defineConfig(({ mode }) => {
               },
             ]),
         {
+          // Diffs always use Shiki's WASM engine ("shiki-wasm"); keep the
+          // never-selected JavaScript regex engine out of the app and worker.
+          find: /^shiki\/engine\/javascript$/,
+          replacement: fileURLToPath(
+            new URL("./src/shikiJavaScriptEngine.ts", import.meta.url),
+          ),
+        },
+        {
           find: /^shiki\/wasm$/,
           replacement: fileURLToPath(
             new URL("./src/shikiWasm.ts", import.meta.url),
@@ -52,6 +83,7 @@ export default defineConfig(({ mode }) => {
     },
     worker: {
       format: "es",
+      plugins: () => [onlyBundledDiffThemes()],
     },
     build: {
       // Retain Vite 5's browser baseline instead of Vite 7's newer default.
@@ -100,17 +132,18 @@ export default defineConfig(({ mode }) => {
                 name: "code-preview",
                 test: /node_modules[\\/](?:@codemirror|@lezer|codemirror)[\\/]/,
               },
-              {
-                // Theme presets are small and share their lazy highlighting boundary.
-                name: "highlight-themes",
-                test: /@shikijs\/themes\/dist\/.*\.mjs$/,
-              },
+              // Rare grammars share one lazy chunk per family, but only the
+              // grammars named here: one they embed (javascript, css, shell,
+              // markdown, c, java…) keeps its own chunk, so a common
+              // language's diff never fetches the whole family.
               {
                 name: "syntax-config",
+                includeDependenciesRecursively: false,
                 test: /@shikijs\/langs\/dist\/(awk|diff|docker|ini|json5|jsonl|make|nginx|proto|toml|xml|yaml)\.mjs$/,
               },
               {
                 name: "syntax-extra",
+                includeDependenciesRecursively: false,
                 test: /@shikijs\/langs\/dist\/(clojure|crystal|elixir|elm|erlang|fsharp|groovy|haskell|kotlin|common-lisp|lua|r|scala)\.mjs$/,
               },
             ],

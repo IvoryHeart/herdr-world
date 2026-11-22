@@ -72,7 +72,7 @@ import { worldInspectorWindowId } from "./worldTerminalPresentation";
 import {
   coreInspectorTerminal,
   useCoreTerminalDrafts,
-} from "./CoreTerminalWatch";
+} from "./coreInspectorTerminal";
 
 // Memoized: an agent window opening, moving or updating changes none of a
 // view's data, so the view must not re-render with the control plane.

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { answersOnCore } from "../../../shared/coreHostMethods";
-import { coreInspectorTerminal } from "./CoreTerminalWatch";
+import { coreInspectorTerminal } from "./coreInspectorTerminal";
 import { useDrawReadiness } from "./useDrawReadiness";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
