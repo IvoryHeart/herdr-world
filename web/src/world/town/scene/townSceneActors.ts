@@ -11,6 +11,7 @@
 
 import type { TownLayout } from "../townLayout";
 import type { TownModel } from "../townModel";
+import { townBuildingOf } from "../townBuildings";
 
 /** Each host's actor inputs, by host key. */
 export type TownActorKeys = ReadonlyMap<string, string>;
@@ -27,7 +28,8 @@ export function townActorKeys(
   const agents = new Map<string, string[]>();
   for (const agent of model.agents.values()) {
     const seat = model.agentSeats.get(agent.key);
-    const list = agents.get(agent.hostKey) ?? [];
+    const home = townBuildingOf(agent);
+    const list = agents.get(home) ?? [];
     list.push(
       [
         agent.key,
@@ -42,7 +44,7 @@ export function townActorKeys(
         arriving.has(agent.key) ? "arriving" : "",
       ].join("|"),
     );
-    agents.set(agent.hostKey, list);
+    agents.set(home, list);
   }
   const keys = new Map<string, string>();
   const buildings = new Map(layout.buildings.map((b) => [b.hostKey, b]));

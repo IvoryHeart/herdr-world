@@ -14,6 +14,7 @@ import {
   townPlaceLots,
   type TownColumnSpan,
 } from "./townLots";
+import { townRoomColumnsFor } from "./townShape";
 
 /** A room's top-left in its building: tiles from the building's corner. */
 export type TownRoomSpot = { x: number; y: number };
@@ -86,9 +87,12 @@ export function townStackRooms<R extends { w: number; h: number }>(
  * Place rooms (in workspace order) at their spots, each clear of the rooms
  * placed before it: a room that would overlap moves down until it is clear.
  * The `first` rooms (the one just dropped) keep their spots; the others go
- * in reading order of their spots. A room without a spot (one opened since)
- * takes the first free place, reading from the top, within the width the
- * placed rooms already take, or else below them.
+ * in reading order of their spots. A room without a spot (one opened since,
+ * or one of another runtime's building merged in) takes the first free
+ * place, reading from the top, within the width the placed rooms take or
+ * the width all rooms would take stacked in `columns` columns, whichever is
+ * wider, or else below them. So a few saved rooms never narrow the
+ * building to their own width (#1188).
  */
 export function townArrangeRooms<
   R extends { key: string; w: number; h: number },
@@ -96,7 +100,10 @@ export function townArrangeRooms<
   rooms: readonly R[],
   spots: TownRoomSpots,
   first: readonly string[] = [],
+  columns = 1,
 ): Map<string, TownRoomSpot> {
+  const fill =
+    townStackRooms(rooms, columns, () => undefined, ROOM_TOP).width - GAP;
   const placed: Box[] = [];
   const out = new Map<string, TownRoomSpot>();
   const put = (room: R, x: number, y: number) => {
@@ -132,7 +139,7 @@ export function townArrangeRooms<
   }
   for (const room of rooms) {
     if (spots.has(room.key)) continue;
-    const right = Math.max(0, ...placed.map((box) => box.x + box.w));
+    const right = Math.max(fill, ...placed.map((box) => box.x + box.w));
     const xs = [GAP, ...placed.map((box) => box.x + box.w + GAP)];
     const ys = [ROOM_TOP, ...placed.map((box) => box.y + box.h + GAP)];
     const free = ys
@@ -290,7 +297,7 @@ export function townRoomTidy(
   if (!building) return null;
   const { positions } = townStackRooms(
     building.rooms,
-    layout.shape.roomColumns,
+    townRoomColumnsFor(building.rooms, layout.shape),
     () => undefined,
     ROOM_TOP,
   );

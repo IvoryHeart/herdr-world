@@ -13,7 +13,13 @@ import {
 import type { TownRoomActions } from "./TownCanvas";
 import { townRoomDrag } from "./townDrag";
 import type { TownLayout } from "./townLayout";
-import type { RoomPins, TownModel } from "./townModel";
+import type { OfficeRoom } from "../herdrOfficeProjection";
+import {
+  townPlaceConnectionOf,
+  townRoomColorKey,
+  type RoomPins,
+  type TownModel,
+} from "./townModel";
 import type { TownRendererHandle } from "./townRenderer";
 import {
   townBuildingSpots,
@@ -52,17 +58,42 @@ export function useRoomPins(
 }
 
 /**
- * Save where a host's rooms stand (spots by workspace card key): replaces
- * that host's saved spots. Resolves with a conflict message, or null.
+ * Room spots by owning runtime's connection ID (the anchor view's, for a
+ * room Town shows through another view of its endpoint: townModel.ts
+ * `townPlaceConnectionOf`), each keyed by the room's workspace card key. A
+ * building per machine can hold several runtimes' rooms, but each runtime
+ * keeps its own spots.
+ */
+export function roomSpotsByRuntime(
+  placed: Iterable<readonly [OfficeRoom, RoomSpot]>,
+): Map<string, Record<string, RoomSpot>> {
+  const spots = new Map<string, Record<string, RoomSpot>>();
+  for (const [room, spot] of placed) {
+    const id = townPlaceConnectionOf(room);
+    const owned = spots.get(id) ?? {};
+    owned[townRoomColorKey(room)] = spot;
+    spots.set(id, owned);
+  }
+  return spots;
+}
+
+/**
+ * Save where rooms stand (spots by workspace card key, by owning runtime's
+ * connection ID): replaces each of those runtimes' saved spots, in one patch,
+ * so a building holding several runtimes' rooms saves them together.
+ * Resolves with a conflict message, or null.
  */
 export function saveRoomSpots(
-  connectionId: string,
-  spots: Record<string, RoomSpot>,
+  spotsByConnection: ReadonlyMap<string, Record<string, RoomSpot>>,
   store: BoardDocumentStore = sharedBoardStore(),
 ) {
-  return store.patch([
-    { op: "room.place", connection_id: connectionId, spots },
-  ]);
+  return store.patch(
+    [...spotsByConnection].map(([connectionId, spots]) => ({
+      op: "room.place" as const,
+      connection_id: connectionId,
+      spots,
+    })),
+  );
 }
 
 /** What Tidy rooms' Undo reads later: the actions and town shown by then. */

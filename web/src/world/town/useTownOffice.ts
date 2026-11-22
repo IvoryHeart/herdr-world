@@ -10,6 +10,17 @@ import { useRoomPins } from "./townRoomPins";
 import { DEVTOOLS } from "../devtools/flag";
 import { countWorldWork } from "../devtools/renderer";
 import type { WorldObject } from "../worldObject";
+import { useStoreSelector } from "../../store";
+import {
+  createTownBuildings,
+  townBuildingsMode,
+  townRuntimes,
+} from "./townBuildings";
+import { worldLocalStorage } from "../../browserStorage";
+import {
+  readOfficePreferences,
+  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+} from "../officePreferences";
 
 /** Town reveals the first 24 native-order tabs, then 20 more per expansion. */
 export function useTownOffice(world: WorldObject, selectedId: string | null) {
@@ -22,10 +33,6 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
   const roomPins = useRoomPins();
   // Preserve the pin-key identity; pinned tabs are admitted first in folded rooms.
   const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
-  const pinnedTabs = useMemo(
-    () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
-    [pinnedTabKeys],
-  );
   const sequence = useRef(0);
   const [requestedRoom, requestRoom] = useState<{
     roomKey: string;
@@ -75,9 +82,36 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       return next;
     });
   }, []);
+  const runtimes = useStoreSelector(townRuntimes);
+  // Every view of an endpoint reads its anchor's pins (useDeskPins.ts
+  // `anchoredDeskPins`), so a stand-in admits them first in folded rooms.
+  const pinnedTabs = useMemo(
+    () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
+    [pinnedTabKeys],
+  );
+  const buildings = useMemo(() => createTownBuildings(), []);
+  // The Town buildings setting; the page flag, read once per mount, compares
+  // the two building layouts (townBuildings.ts).
+  const [buildingsFlag] = useState(() => globalThis.location?.search ?? "");
+  const [buildingsSetting, setBuildingsSetting] = useState(
+    () => readOfficePreferences(worldLocalStorage).townBuildings,
+  );
+  useEffect(() => {
+    const refresh = () =>
+      setBuildingsSetting(
+        readOfficePreferences(worldLocalStorage).townBuildings,
+      );
+    window.addEventListener(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT, refresh);
+    return () =>
+      window.removeEventListener(
+        WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+        refresh,
+      );
+  }, []);
+  const buildingsMode = townBuildingsMode(buildingsFlag, buildingsSetting);
   const observedOffice = useMemo((): HerdrOfficeProjection => {
     if (DEVTOOLS) countWorldWork("office.project");
-    return projectOffice(
+    const office = projectOffice(
       world,
       Date.now(),
       selectedId,
@@ -86,7 +120,11 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       roomFocus?.roomKey ?? null,
       expandedDeskLimits,
     );
+    return buildings(office, runtimes, buildingsMode);
   }, [
+    buildings,
+    runtimes,
+    buildingsMode,
     world,
     selectedId,
     projectOffice,
