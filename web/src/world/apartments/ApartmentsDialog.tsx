@@ -32,6 +32,10 @@ import {
 import { launchConfirmedTerminal, noteAgentStarted } from "../agentStarts";
 import { ProfileSprite } from "../ProfileSprite";
 import { TERMINAL_COLOR_HEX } from "../terminalColor";
+import { ResidentUsageLine } from "../usage/ResidentUsageLine";
+import { residentUsageSharing } from "../usage/usageModel";
+import { type OpenUsage, useUsageOpener } from "../usage/usageOpener";
+import { useUsageAnalytics, type UsageReadState } from "../usage/usageStore";
 import type { WorldObject, WorldSpaceObject } from "../worldObject";
 import { residentLook, residentLookNote } from "./residentLook";
 import { useApartments, worldApartmentsStore } from "./useApartments";
@@ -60,7 +64,9 @@ export function resumeRooms(
 
 /**
  * Apartments: every agent not running now, searchable; one opens with its
- * history and resumes into a room on the host where it ran.
+ * history and resumes into a room on the host where it ran. Each resident
+ * shows its week of usage, which opens Usage's Breakdown on that agent
+ * while Town is shown (#1101).
  */
 export function ApartmentsDialog({
   world,
@@ -83,9 +89,26 @@ export function ApartmentsDialog({
   const [query, setQuery] = useState(initialQuery);
   const [openId, setOpenId] = useState<string | null>(null);
   useLayer(true, onClose, { element: () => ref.current });
+  // One usage read for every resident's line.
+  const usage = useUsageAnalytics("agent", "7d");
+  const opener = useUsageOpener();
+  const openUsage = useMemo<OpenUsage | null>(
+    () =>
+      opener &&
+      ((tab, filter) => {
+        onClose();
+        opener(tab, filter);
+      }),
+    [opener, onClose],
+  );
   const found = useMemo(
     () => searchApartments(apartments.residents, query),
     [apartments.residents, query],
+  );
+  // Runs in one shell terminal share usage rows; their lines say so.
+  const sharing = useMemo(
+    () => residentUsageSharing(apartments.residents),
+    [apartments.residents],
   );
   const open = openId
     ? (apartments.residents.find((item) => item.id === openId) ?? null)
@@ -119,6 +142,9 @@ export function ApartmentsDialog({
             resident={open}
             profiles={profiles}
             world={world}
+            usage={usage}
+            usageShared={sharing.get(open.id) ?? 0}
+            onOpenUsage={openUsage}
             element={() => ref.current}
             onOpen={onOpen}
             onClose={onClose}
@@ -154,6 +180,12 @@ export function ApartmentsDialog({
                       resident={resident}
                       profiles={profiles}
                       onOpen={() => setOpenId(resident.id)}
+                    />
+                    <ResidentUsageLine
+                      resident={resident}
+                      usage={usage}
+                      shared={sharing.get(resident.id) ?? 0}
+                      onOpen={openUsage}
                     />
                   </li>
                 ))}
@@ -265,6 +297,9 @@ function ResidentDetail({
   resident,
   profiles,
   world,
+  usage,
+  usageShared,
+  onOpenUsage,
   element,
   onOpen,
   onClose,
@@ -273,6 +308,9 @@ function ResidentDetail({
   resident: ApartmentResident;
   profiles: Pick<ProfilesDocument, "profiles"> | null;
   world: WorldObject;
+  usage: UsageReadState;
+  usageShared: number;
+  onOpenUsage: OpenUsage | null;
   element(): Element | null;
   onOpen(terminal: {
     connectionId: string;
@@ -381,6 +419,12 @@ function ResidentDetail({
               .filter(Boolean)
               .join(" · ")}
           </p>
+          <ResidentUsageLine
+            resident={resident}
+            usage={usage}
+            shared={usageShared}
+            onOpen={onOpenUsage}
+          />
         </div>
       </header>
       <dl className="apartments-facts">
