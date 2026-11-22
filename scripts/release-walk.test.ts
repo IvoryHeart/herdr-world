@@ -7,6 +7,14 @@ import { BoardStore } from "../server/src/world/board-store";
 import { createWorldCli } from "../server/src/world/world-cli";
 import { WorldLedger } from "../server/src/world/world-ledger";
 import { isReleaseWalkInput } from "./validation-scope";
+import { releaseWalk } from "./release-walk";
+
+test("listing repetition input is bounded before any runtime is started", async () => {
+  for (const count of ["-1", "101", "1.5", "twenty", "1; echo unsafe"])
+    await expect(
+      releaseWalk(["--disposable-host", `--listing-repetitions=${count}`]),
+    ).rejects.toThrow("Listing repetitions must be an integer from 0 to 100");
+});
 
 test("release walk fixture, recorder and receipt regressions pass", () => {
   const result = Bun.spawnSync(
@@ -25,7 +33,7 @@ test("release walk fixture, recorder and receipt regressions pass", () => {
       stderr: "pipe",
     },
   );
-  expect(result.stderr.toString()).toContain("Ran 39 tests");
+  expect(result.stderr.toString()).toContain("Ran 41 tests");
   expect(result.exitCode).toBe(0);
 });
 
@@ -176,6 +184,15 @@ test("required native workflow runs every release walk without tolerating failur
     "${{ runner.temp }}/release-walk/listing-failure.json",
   );
   expect(diagnostics.with["if-no-files-found"]).toBe("ignore");
+  expect(step.env.LISTING_REPETITIONS).toBe(
+    "${{ inputs.listing_repetitions || 0 }}",
+  );
+  const batch = job.steps.find(
+    (step: any) =>
+      step.with?.name === "release-walk-listing-batch-${{ matrix.platform }}",
+  );
+  expect(batch.if).toBe("always() && inputs.listing_repetitions > 0");
+  expect(batch.with["if-no-files-found"]).toBe("error");
 });
 
 test("tag creation follows exact-revision walk approval; publication reuses tested Unix bytes", () => {

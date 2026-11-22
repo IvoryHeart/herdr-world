@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import stat
 import tempfile
+import tomllib
 import unittest
 from unittest.mock import Mock, patch
 from assets import environment
@@ -10,6 +11,23 @@ from journeys import default_connection
 
 
 class FixtureTests(unittest.TestCase):
+    def test_pinned_codex_cannot_accept_a_startup_update_from_prompt_enter(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env = environment(root / 'home', root / 'tools', 'walk-update', True, root / 'events.sock')
+            config = Path(env['CODEX_HOME']) / 'config.toml'
+            self.assertTrue(config.exists(), 'pinned Codex needs its own update policy')
+            self.assertIs(tomllib.loads(config.read_text())['check_for_update_on_startup'], False)
+            signed = root / 'signed'
+            (signed / '.claude').mkdir(parents=True)
+            (signed / '.codex').mkdir()
+            existing = signed / '.codex/config.toml'
+            existing.write_text('model = "synthetic-model"\n')
+            env = environment(root / 'other', root / 'tools', 'walk-signed', True,
+                              root / 'events.sock', signed_home=signed)
+            self.assertEqual(Path(env['CODEX_HOME']), signed / '.codex')
+            self.assertEqual(existing.read_text(), 'model = "synthetic-model"\n')
+
     def test_private_runtime_paths_fit_macos_even_for_holder_sockets(self):
         with tempfile.TemporaryDirectory(prefix='world-walk-', dir='/tmp') as directory:
             root = Path(directory)
