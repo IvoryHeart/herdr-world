@@ -1,0 +1,55 @@
+{
+  "id": "Q39",
+  "area": "Renderer and lazy-module lifetime",
+  "owner": "web/src/world/town/townRenderer.ts",
+  "requirement": "openspec/specs/world-surfaces/town/spec.md",
+  "properties": "Unmount disposes one renderer; late initialization cannot resurrect it; reload attempts stay bounded; GPU restoration repaints a sleeping renderer and defers while hidden; capture receipts require current committed owner/revision/viewport, assets, semantic layout and a painted draw",
+  "existingTests": [
+    "web/src/world/drawReadiness.test.ts",
+    "web/src/world/captureAssets.test.ts",
+    "web/src/world/testing/testClock.test.ts",
+    "web/src/world/BoardView.test.ts",
+    "web/src/world/HostsFilter.test.ts",
+    "web/src/world/town/TownCanvas.test.ts",
+    "web/src/world/town/TownCanvas.extended.test.ts",
+    "web/src/world/town/TownCanvas.portrait.test.ts",
+    "web/src/world/town/TownCanvas.fold.test.ts",
+    "web/src/world/town/TownCanvas.navigation.test.ts",
+    "web/src/world/town/townBuildingSigns.test.ts",
+    "web/src/world/town/TownBuildingSign.test.ts",
+    "web/src/lazyWithReload.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
+  "technique": "alternative",
+  "assessment": "actual resource lifetime and unmount/late-init evidence; DOM/GPU assumptions stay explicit",
+  "status": "alternative-evidence",
+  "remaining": "GPU/browser/URL behavior requires the actual implementation; arbitrary device/driver failure schedules are excluded.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "evidenceDecision": "Capture aborts revision-owned resource waiters on invalidation/deadline and recovers without settling obsolete assets. Capture uses finite injected asset/frame/deadline schedules and the production Town/Board/Desk browser consumer in BoardView.test.ts (controlled slow assets/fonts, same-topology resize, view replacement, valid empty scenes, missing/blank output, screenshot-time invalidation and never-ready no-artifact failure). No maintained model covers GPU paint or browser font/layout; existing lifecycle consumers and work ceilings remain mandatory. The HostsFilter town-idle-draws case exercises native WEBGL_lose_context loss/restoration on the production Pixi renderer at desktop and phone widths with controlled visibility and the test clock: recovery paints once after sleep, remains pending while hidden, resumes once when visible and returns to zero idle draws; a restoration event after disposal cannot draw. The Town renderer browser test (StrictMode double mount leaves one renderer and canvas; unmount leaves none) and the lazy-module tests exercise graphics destruction and reload/lifetime behavior. Committed building-sign lifecycle fixtures cover cold commit, ref stability across status renders, cull/remount, suspended uncommitted nodes and replacement-safe cleanup. Maintained phone/wide browser cases require visible building/reception recovery after cold mount and camera culling with normal roof fading; their execution and the production suites' runner-independent work ceilings remain closing browser acceptance; input-delay timing is reported by the non-blocking World latency trend (same-CPU comparison with main) and is not a pass/fail claim.",
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/consumer-evidence.md"],
+    "tests": [
+      "web/src/world/drawReadiness.test.ts",
+      "web/src/world/captureAssets.test.ts",
+      "web/src/world/testing/testClock.test.ts",
+      "web/src/world/BoardView.test.ts",
+      "web/src/world/HostsFilter.test.ts",
+      "web/src/world/town/TownCanvas.test.ts",
+      "web/src/world/town/TownCanvas.extended.test.ts",
+      "web/src/world/town/TownCanvas.portrait.test.ts",
+      "web/src/world/town/TownCanvas.fold.test.ts",
+      "web/src/world/town/TownCanvas.navigation.test.ts",
+      "web/src/world/town/townBuildingSigns.test.ts",
+      "web/src/world/town/TownBuildingSign.test.ts",
+      "web/src/lazyWithReload.test.ts"
+    ],
+    "checks": ["bun run check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

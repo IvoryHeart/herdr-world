@@ -268,9 +268,17 @@ Feature discovery uses committed `server/src/features/index.gen.ts` and
 `register.ts` or `mount.tsx` under those roots, run `bun run features:generate`.
 Each sorted line exports one module namespace; colliding export names are refused.
 `bun run features:check` checks membership (ignoring order) in the static lane.
-The `testing/probe` features are inert fixtures, invoked only by tests. The proof
-in `scripts/features.test.ts` and `web/src/features/index.browser.test.ts` runs
-them through every build path, including a compiled probe after deleting sources.
+The `testing/probe` features are inert fixtures: the server probe is invoked only
+by tests, and the web probe declares no `Host`, so the shell never renders it. The
+proof in `scripts/features.test.ts` and `web/src/features/index.browser.test.ts`
+runs them through every build path, including a compiled probe after deleting sources.
+
+A web feature's `mount.tsx` holds wiring only and exports `id`, `slot`, `order`
+and `Host`. `web/src/features/FeatureHosts.tsx` names the slots and the props each
+passes (`dialogs`: the world and a launched-terminal opener, mounted in the
+control plane's AgentDialogs), renders a slot's hosts by order then id, refuses a
+duplicate id, and fails typecheck when a discovered `Host` does not fit its slot.
+A host whose UI is heavy keeps it behind `lazyWithReload`, as the Memory Library does.
 
 Server entries export `feature = defineFeature(...)` from `register.ts`.
 Declare RPC verbs there once; the generated catalogue feeds admission and the
@@ -423,7 +431,7 @@ for watch revision and unavailable-host scope policy. Actions browser cases keep
 rendered watch feedback, qualified action wiring and focus at desktop/phone widths.
 
 Keep policy checks headless once a replacement test and its mapping in
-`verification/coverage.json` exist. Retained browser cases name the behavior that
+`verification/coverage/` exist. Retained browser cases name the behavior that
 requires a browser: geometry, trusted input, focus, rendering, renderer lifecycle
 or visual comparison. For example, `useWorldCreatedTerminal.test.ts` mounts the
 production creation hook and the Inspector selection-lease effect on the test

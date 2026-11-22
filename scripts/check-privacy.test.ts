@@ -181,6 +181,32 @@ function cli(root: string, args: string[]) {
   });
 }
 
+test("release walk allows only its reviewed unquoted synthetic password binding", () =>
+  repository(({ root, base, commit }) => {
+    const path = "scripts/release-walk/world.py";
+    mkdirSync(join(root, "scripts/release-walk"), { recursive: true });
+    const fixture = "PASSWORD = 'release-walk-synthetic-password'\n";
+    const key = "HERDR_WORLD_PASSWORD";
+    const binding = `{'${key}': PASSWORD}\n`;
+    const clean = commit(fixture + binding, path);
+    expect(scanPrivacyRange(root, base, clean)).toEqual([]);
+    commit(
+      fixture +
+        binding +
+        ["'PASSWORD'", "'hunter2'", "OTHER_PASSWORD"]
+          .map((value) => `{'HERDR_WORLD_PASSWORD': ${value}}\n`)
+          .join(""),
+      path,
+    );
+    const head = commit(binding);
+    expect(scanPrivacyRange(root, base, head)).toEqual([
+      { file: path, line: 3, rule: "world-password" },
+      { file: path, line: 4, rule: "world-password" },
+      { file: path, line: 5, rule: "world-password" },
+      { file: "report.md", line: 1, rule: "world-password" },
+    ]);
+  }));
+
 test("scans added lines in every commit, including leaks removed before HEAD", () =>
   repository(({ root, base, commit }) => {
     const clean = commit(`Existing legacy context ${home}\nSafe addition\n`);

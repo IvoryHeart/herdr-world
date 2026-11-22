@@ -1,0 +1,39 @@
+{
+  "id": "Q20",
+  "area": "Shared entity identity",
+  "owner": "web/src/world/worldObject.ts",
+  "requirement": "openspec/specs/world-surfaces/spec.md",
+  "properties": "Same native ID on different hosts never aliases; child ancestry and omission counts stay consistent",
+  "existingTests": [
+    "web/src/world/worldObject.test.ts",
+    "web/src/world/treeProjection.test.ts",
+    "web/src/world/incrementalPreparation.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
+  "technique": "alternative",
+  "assessment": "direct qualified identity/ancestry projections; retain fixed-domain and structural regressions",
+  "status": "shared-model",
+  "remaining": "Model preparation uses small synthetic topology; dense cardinalities, labels and layout require implementation/browser tests.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/browser-preparation.qnt", "quint/space-admission.qnt"],
+    "contracts": [
+      "verification/consumer-evidence.md",
+      "verification/composition.md",
+      "verification/contracts/observation-base.md"
+    ],
+    "tests": [
+      "web/src/world/worldObject.test.ts",
+      "web/src/world/treeProjection.test.ts",
+      "web/src/world/incrementalPreparation.test.ts"
+    ],
+    "checks": ["bun run check", "bun run verification:check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "evidenceDecision": "Real object preparation and allocation preserve qualified host identity; object/tree tests check dense cancellation, colliding IDs and ancestry projection. Observation v1 adds bounded base admission and/or incremental consumer evidence; historical acceptance remains scoped to the existing models and consumers. M1/P6 additions require independent candidate review. Service scheduling progress and Q12/Q13 transport claims are unchanged.",
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

@@ -57,6 +57,9 @@ async function run(
   return { code, text: out + err };
 }
 
+// This cold-start control launches nested Bun processes and builds an isolated
+// tool directory. Loaded CI runners can exceed Bun's default five seconds
+// before the probe starts; keep a bounded startup budget for this test only.
 test("the wrapper sets HOME before Bun caches homedir and removes host state/tools", async () => {
   const root = scratch();
   const bin = join(root, "user-bin");
@@ -94,7 +97,7 @@ test("isolated startup", () => {
   expect(result.text).toContain("HOME=");
   expect(result.code).toBe(0);
   expect(homedir()).toBe(process.env.HOME!);
-});
+}, 30_000);
 
 test.each([
   ['Bun.spawnSync(["herdr", "--version"])', "runtime command herdr"],

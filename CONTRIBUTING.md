@@ -200,7 +200,7 @@ nested IDs such as `world-surfaces/town`) or OpenSpec change name. Verification
 claims name a changed model, adapter, coverage owner or test/check path. An untouched
 claim fails. `Spec impact: none` fails when `openspec/specs/` or `openspec/changes/`
 changes; `Verification impact: none` fails when `quint/`, `verification/` or an owner
-in `verification/coverage.json` changes (including files under directory owners).
+in `verification/coverage/` changes (including files under directory owners).
 These are cheap consistency checks: reviewers still judge whether a `none` is true
 and whether the evidence is sufficient. Ordinary documentation retains its exemption;
 dependency-bot PRs and merge-only pushes retain their existing policy paths.
@@ -265,6 +265,11 @@ full unit inventory locally and full CI gate, even when that input is absent fro
 | World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
 | Native installation | Install/plugin/package inputs, imports of the compiled entry points or native test consumers, and build-version metadata | Installer upgrades, Windows plugin and both macOS architectures |
+| Release walk | Native installation inputs, launch/connection request builders and release-walk implementation | Exact packaged executable, real TUI/core and real signed-out Claude/Codex on Linux and macOS, through the required installer workflow |
+
+Published-release bugs add or extend a release-walk journey in the same PR as the
+fix. See the [release walk and escape rule](docs/release.md#real-runtime-release-walk),
+including the signed-in local run required before any release tag.
 
 The agent-tooling exception from #484 still covers `scripts/agent/**` (the worktree
 helper), the agent development guide and `changes/<slug>.md`: static checks and affected
@@ -378,7 +383,7 @@ Releases: package and inspect every supported archive/checksum; see
 
 ## Behavioral evidence
 
-Assess every changed contract against the [coverage inventory](verification/coverage.json).
+Assess every changed contract against the [coverage inventory](verification/coverage/).
 Use existing requirements, fixtures and regressions to state allowed and forbidden
 behavior before choosing evidence. Ordering, ownership, authority and recovery
 normally warrant maintained Quint models connected to real implementation replay.

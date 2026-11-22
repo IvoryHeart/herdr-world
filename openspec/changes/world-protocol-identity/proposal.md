@@ -109,7 +109,7 @@ Later implementation PRs touch:
 - **Command surfaces:** RPC dispatch, `server/src/sources/` and the agent CLI;
 - **Settings:** `server/src/agent/profile-store.ts` and the Herdr metadata writers;
 - **New modules:** identity, effects and adapters;
-- **Evidence:** the Quint models, `verification/coverage.json` and its contracts.
+- **Evidence:** the Quint models, `verification/coverage/` and its contracts.
 
 No new dependency is required:
 - TypeBox is already a server dependency, and verbs are validated on the service.

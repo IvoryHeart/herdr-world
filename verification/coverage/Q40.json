@@ -1,0 +1,35 @@
+{
+  "id": "Q40",
+  "area": "Binary/control protocol parsing",
+  "owner": "server/src/bridge/endpoint-client.ts",
+  "requirement": "openspec/specs/world-surfaces/spec.md",
+  "properties": "Framing and negotiation reject unsupported states; partial messages never dispatch prematurely",
+  "existingTests": [
+    "server/src/bridge/endpoint-client.test.ts",
+    "server/src/bridge/thin-client.test.ts",
+    "server/src/bridge/herdr-client.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
+  "technique": "alternative",
+  "assessment": "real byte framing/protocol negotiation and parser fixtures; ownership covered separately",
+  "status": "alternative-evidence",
+  "remaining": "Chunk ownership has maintained models; byte parsing remains direct fixture/protocol evidence across supported versions, not all byte strings.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "evidenceDecision": "Wire fixtures and actual endpoint/thin-client/Herdr parsers exercise protocol versions, truncation, close buffering and codec negotiation.",
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/consumer-evidence.md"],
+    "tests": [
+      "server/src/bridge/endpoint-client.test.ts",
+      "server/src/bridge/thin-client.test.ts",
+      "server/src/bridge/herdr-client.test.ts"
+    ],
+    "checks": ["bun run check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

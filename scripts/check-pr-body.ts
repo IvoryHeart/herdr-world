@@ -7,6 +7,7 @@ import {
 } from "./check-knowledge-map";
 import { assessPullRequest, readFragments } from "./changelog-fragments";
 import { readCoverageScope } from "./coverage-scope";
+import { coverageDirectory } from "./coverage";
 import { ordinaryDocumentation } from "./validation-scope";
 
 function descriptionLines(body: string): string[] {
@@ -169,7 +170,7 @@ export function checkPrBodyText(
     ...assessContractImpacts(
       paths,
       body,
-      existsSync(join(cwd, "verification/coverage.json"))
+      existsSync(join(cwd, coverageDirectory))
         ? readCoverageScope(cwd).owns
         : undefined,
     ),
