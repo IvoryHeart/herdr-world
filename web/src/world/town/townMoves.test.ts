@@ -4,6 +4,7 @@ import { moveTabInList } from "../../tabReorder";
 import type { OfficeDesk, OfficeRoom } from "../herdrOfficeProjection";
 import {
   deskReorderIndex,
+  requestBuildingRoomOrder,
   requestDeskReorder,
   requestRoomOrder,
   townRoomOrderMoves,
@@ -219,6 +220,73 @@ test("a building's rooms are put in order through workspace.move", async () => {
       await requestRoomOrder([room("w1"), room("w2", "remote")]),
     ).toMatchObject({ status: "refused", reason: "other_host" });
     expect(calls).toEqual([]);
+  } finally {
+    bridge.connection = connection;
+  }
+});
+
+test("a building of two runtimes orders only the TUI's rooms, on its own connection", async () => {
+  // The owner's machine building: Herdr TUI rooms and herdr-core rooms side
+  // by side, plus a second TUI whose ordering fails.
+  const calls: [string, string, number][] = [];
+  let finished = 0;
+  const connection = bridge.connection;
+  bridge.connection = ((connectionId: string, generation: number) => ({
+    connectionId,
+    generation,
+    serverRuntimeGeneration: generation,
+    isCurrent: () => true,
+    acceptsServerGeneration: () => true,
+    call: async (method: string) => {
+      calls.push([method, connectionId, generation]);
+      if (connectionId === "core")
+        throw new Error("core has no workspace.list");
+      if (connectionId === "broken") throw new Error("socket closed");
+      // The working TUI answers last, so a fast refusal elsewhere would
+      // otherwise end the order before it finished.
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      if (method === "workspace.list")
+        return {
+          workspaces: [
+            { workspace_id: "w1", number: 1 },
+            { workspace_id: "w2", number: 2 },
+          ],
+        };
+      finished += 1;
+      return { type: "ok" };
+    },
+  })) as unknown as typeof bridge.connection;
+  const ordersRooms = (each: OfficeRoom) =>
+    each.workspaceRef.connectionId !== "core";
+  try {
+    expect(
+      await requestBuildingRoomOrder(
+        [room("w2"), room("c1", "core", 7), room("w1"), room("c2", "core", 7)],
+        ordersRooms,
+      ),
+    ).toEqual({ status: "moved" });
+    // herdr-core is never asked for a TUI workspace order.
+    expect(calls).toEqual([
+      ["workspace.list", "local", 3],
+      ["workspace.move", "local", 3],
+    ]);
+    expect(finished).toBe(1);
+    // One TUI's failure is the outcome, but only after every other TUI's
+    // ordering has finished.
+    calls.length = 0;
+    finished = 0;
+    expect(
+      await requestBuildingRoomOrder(
+        [room("x1", "broken"), room("w2"), room("c1", "core", 7), room("w1")],
+        ordersRooms,
+      ),
+    ).toEqual({
+      status: "refused",
+      reason: "failed",
+      message: "Error: socket closed",
+    });
+    expect(finished).toBe(1);
+    expect(calls.some(([, id]) => id === "core")).toBe(false);
   } finally {
     bridge.connection = connection;
   }

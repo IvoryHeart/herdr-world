@@ -8,6 +8,7 @@ import {
   townRoomSpotAt,
   type TownRoomPlacement,
 } from "./townRoomPlace";
+import { townBuildingOf } from "./townBuildings";
 
 /** A desk, agent or room being dragged, and where it would land. */
 export type TownDrag = {
@@ -51,17 +52,29 @@ export function townRoomDrag(
     return null;
   if (
     ![...model.rooms.values()].some(
-      (other) => other.key !== room.key && other.hostKey === room.hostKey,
+      (other) =>
+        other.key !== room.key &&
+        townBuildingOf(other) === townBuildingOf(room),
     )
   )
     return null;
+  // A room moves in its building, which may hold another runtime's rooms
+  // (townBuildings.ts); desks and agents keep to their own runtime's.
   return {
     kind: "room",
     key: room.key,
-    hostKey: room.hostKey,
+    hostKey: townBuildingOf(room),
     from: room.key,
     label: `Move ${room.displayLabel}`,
   };
+}
+
+/** Another runtime's item in the same building (one per machine). */
+function sameBuilding(
+  a: { hostKey: string; buildingKey?: string },
+  b: { hostKey: string; buildingKey?: string } | undefined,
+) {
+  return !!b && townBuildingOf(a) === townBuildingOf(b);
 }
 
 /**
@@ -299,7 +312,12 @@ export function townDropTarget(
   const desk = deskKey ? model.desks.get(deskKey) : undefined;
   if (!desk) return { key: null, label: `${drag.label}: drop on a desk` };
   if (desk.hostKey !== drag.hostKey)
-    return { key: null, label: "Agents move only within one host" };
+    return {
+      key: null,
+      label: sameBuilding(desk, model.agents.get(drag.key))
+        ? "Agents move only within one runtime"
+        : "Agents move only within one host",
+    };
   if (desk.key === drag.from)
     return { key: null, label: `${drag.label}: already at this desk` };
   return { key: desk.key, label: `${drag.label} to ${desk.displayLabel}` };

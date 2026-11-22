@@ -22,6 +22,7 @@ import type { TownModel } from "./townModel";
 import { townNearestStop, type TownBusRoute } from "./townBus";
 import { TOWN_WALK_SPEED } from "./townActors";
 import type { TownDirection } from "./townSprites";
+import { townBuildingOf } from "./townBuildings";
 
 /** Arrivals that start together set off this far apart. */
 export const TOWN_ARRIVAL_STAGGER_MS = 700;
@@ -182,10 +183,11 @@ const at = (tx: number, ty: number): TownPoint => ({
 export function townArrivalPath(
   layout: TownLayout,
   route: TownBusRoute,
-  agent: { hostKey: string; roomKey: string },
+  agent: { hostKey: string; buildingKey?: string; roomKey: string },
   from: TownArrivalFrom,
 ): TownPoint[] | null {
-  const building = layout.buildings.find((b) => b.hostKey === agent.hostKey);
+  const home = townBuildingOf(agent);
+  const building = layout.buildings.find((b) => b.hostKey === home);
   if (!building) return null;
   const door = at(building.entryX, building.y + 1);
   const roads = [...new Set(layout.roads)].sort((a, b) => a - b);

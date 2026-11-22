@@ -68,6 +68,9 @@ const maxFileCount = 212;
 // the handoff request) adds 4,703 bytes to lazy chunks on a main that measures
 // 16,354,314 bytes (3,471 below 15.6 MiB) on 2026-11-22. 15.7 MiB carries it;
 // file, help-picture and startup limits stay.
+// Rooms per row and one Town building per machine (#1198) add to Town's lazy
+// chunk: 16,363,027 bytes (15.605 MiB) with main, so 15.7 MiB; file,
+// help-picture and startup limits stay.
 const maxTotalBytes = 15.7 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };

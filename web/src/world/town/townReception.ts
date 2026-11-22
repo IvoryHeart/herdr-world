@@ -3,6 +3,7 @@ import {
   townReceptionMark,
   type TownReceptionMark,
 } from "./townReceptionFilter";
+import { townBuildingOf } from "./townBuildings";
 
 /** Reception keeps urgent blocking, owner questions and finishes in that order. */
 export function townReceptionVisitors(
@@ -38,7 +39,7 @@ export function townReceptionBoard(
   const keep = (mark: TownReceptionMark, n = 1) =>
     keptCounts.set(mark, (keptCounts.get(mark) ?? 0) + n);
   const agents = attention.filter((agent) => {
-    if (agent.hostKey !== hostKey) return false;
+    if (townBuildingOf(agent) !== hostKey) return false;
     const mark = townReceptionMark(agent.semanticStatus, asking.has(agent.key));
     if (!mark) return false;
     if (!held.has(agent.key)) return true;

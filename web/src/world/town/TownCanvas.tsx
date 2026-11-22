@@ -37,7 +37,7 @@ import type {
 } from "../worldConnectorGeometry";
 import type { OfficeObservability } from "../officeObservability";
 import { TownCamera, type TownLevel } from "./townCamera";
-import { townShapeFor, townShapeKey, type TownShape } from "./townLayout";
+import { useTownShape } from "./useTownShape";
 import { useTownCenterRing } from "./useTownCenterRing";
 import {
   TownCenterMenu,
@@ -244,12 +244,9 @@ export function TownCanvas({
     () => setTownRealWeather(sources.weather ?? unavailableWeather("disabled")),
     [sources.weather],
   );
-  // The town's shape follows its container, measured on every resize.
-  const [shape, setShape] = useState<TownShape>(() =>
-    typeof window !== "undefined"
-      ? townShapeFor(window.innerWidth, window.innerHeight)
-      : townShapeFor(1440, 900),
-  );
+  // The town's shape follows its container, measured on every resize, and
+  // the Rooms per row setting.
+  const [shape, fitShape] = useTownShape();
   // The scene model derives what the town is; a held reflow wakes it again.
   const [, wakeReflow] = useState(0);
   // What the renderer has applied, and so what it must apply next.
@@ -572,8 +569,7 @@ export function TownCanvas({
       const renderer = rendererRef.current;
       if (!renderer || !hostRef.current) return;
       const next = viewport();
-      const fit = townShapeFor(next.width, next.height);
-      setShape((was) => (townShapeKey(was) === townShapeKey(fit) ? was : fit));
+      fitShape(next.width, next.height);
       renderer.setViewport(next);
     });
     observer.observe(host);
@@ -589,7 +585,7 @@ export function TownCanvas({
       rendererRef.current?.destroy();
       rendererRef.current = null;
     };
-  }, [view, diff, capture]);
+  }, [view, diff, capture, fitShape]);
 
   // Before the browser paints the new layout's DOM: the renderer keeps
   // drawing the old frame until its next one, so each building's layer
