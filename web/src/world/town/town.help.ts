@@ -74,7 +74,7 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     steps: [
       "Open the town board from the chip in the top left corner.",
       "Under Focus, press 25 m, 45 m, 90 m or Until I stop.",
-      "The chip shows a moon and the time left; press End now to stop early.",
+      "The chip shows headphones and the time left; press End now to stop early.",
       'When it ends, "While you focused" lists what arrived; each line opens Needs you.',
     ],
     place: "town",

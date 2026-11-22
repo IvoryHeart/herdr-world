@@ -88,7 +88,7 @@ A focus session holds chimes, notifications and the tab count on every device wh
 
 1. Open the town board from the chip in the top left corner.
 2. Under Focus, press 25 m, 45 m, 90 m or Until I stop.
-3. The chip shows a moon and the time left; press End now to stop early.
+3. The chip shows headphones and the time left; press End now to stop early.
 4. When it ends, "While you focused" lists what arrived; each line opens Needs you.
 
 Where: Town, the town board at the top left; also the town center ring and Menu. Since 0.3.6.

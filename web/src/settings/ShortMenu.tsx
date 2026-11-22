@@ -1,9 +1,9 @@
 import {
   Download,
   Focus,
+  Headphones,
   HelpCircle,
   LogOut,
-  Moon,
   Search,
   Settings,
 } from "lucide-react";
@@ -71,7 +71,7 @@ export function ShortMenu({
         onClick={onFind}
       />
       <ConfigMenuItem
-        icon={<Moon size={15} />}
+        icon={<Headphones size={15} />}
         label="Focus"
         description={
           focus.held

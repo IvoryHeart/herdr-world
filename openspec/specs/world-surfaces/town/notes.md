@@ -152,8 +152,8 @@
     **Menu → Focus** or the command box ("Focus 25 m"): 25 m, 45 m, 90 m or
     **Until I stop**. While focused, chimes, browser and push notifications
     and the count on the tab title and app icon hold on every device; Town,
-    marks and **Needs you** keep showing everything. The status chip shows a
-    moon and the time left; tap it and choose **End now** on the board. A
+    marks and **Needs you** keep showing everything. The status chip shows
+    headphones and the time left; tap it and choose **End now** on the board. A
     timed session ends on its own, even with no World open: each open device
     plays the "for you" chime once, opens the board and shows "While you
     focused · 45 m" with the same lines as **Since you left** over the

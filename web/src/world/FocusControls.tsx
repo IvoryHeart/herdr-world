@@ -1,4 +1,4 @@
-import { Moon } from "lucide-react";
+import { Headphones } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { playFocusEnd } from "../chimes/chimeCenter";
 import { focusChoiceLabel } from "../../../shared/focus";
@@ -54,7 +54,7 @@ export function FocusControls({ onDone }: { onDone?: () => void }) {
       {held ? (
         <div className="focus-controls-row">
           <span className="focus-controls-status">
-            <Moon size={13} aria-hidden="true" />
+            <Headphones size={13} aria-hidden="true" />
             Focused · {left}
           </span>
           <button

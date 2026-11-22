@@ -120,7 +120,7 @@ test("an empty session still says so; the chip line falls back to Since you left
   expect(chip).not.toContain("While you focused");
 });
 
-test("while focused the chip shows the moon and time left, the board End now", () => {
+test("while focused the chip shows headphones and time left, the board End now", () => {
   expect(renderToStaticMarkup(createElement(TownFocusMark))).toBe("");
   resetFocusForTests({
     revision: 1,

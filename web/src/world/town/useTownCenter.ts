@@ -11,9 +11,9 @@ import {
   ClipboardList,
   Crown,
   DoorOpen,
+  Headphones,
   Inbox,
   LibraryBig,
-  Moon,
   Shirt,
   UserPlus,
 } from "lucide-react";
@@ -265,7 +265,7 @@ export const needsYouAction = (count?: number): TownCenterAction => ({
 export const focusAction = (left: string | null = null): TownCenterAction => ({
   id: "focus",
   label: "Focus",
-  icon: Moon,
+  icon: Headphones,
   detail: left ?? undefined,
   run: openFocus,
 });

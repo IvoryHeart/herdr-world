@@ -88,7 +88,7 @@
   color: var(--town-glass-muted);
 }
 
-/* The status chip's mark: a moon and the time left. */
+/* The status chip's mark: headphones and the time left. */
 .town-focus-mark {
   display: inline-flex;
   align-items: center;

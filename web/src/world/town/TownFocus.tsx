@@ -1,4 +1,4 @@
-import { Moon } from "lucide-react";
+import { Headphones } from "lucide-react";
 import { focusLength } from "../../../../shared/focus";
 import { FocusControls, useFocusClock } from "../FocusControls";
 import {
@@ -21,7 +21,7 @@ import { useWorldSources } from "../worldSources";
 import { TownSinceYouLeft } from "./TownSinceYouLeft";
 
 /**
- * The status chip's focus mark (#1131): a moon and the time left while a
+ * The status chip's focus mark (#1131): headphones and the time left while a
  * session runs. The chip opens the board, where End now is.
  */
 export function TownFocusMark() {
@@ -30,7 +30,7 @@ export function TownFocusMark() {
   const short = left === "Until you stop" ? "" : left!.replace(" left", "");
   return (
     <span className="town-focus-mark" title={`Focused · ${left}`}>
-      <Moon size={12} aria-hidden="true" />
+      <Headphones size={12} aria-hidden="true" />
       {short}
     </span>
   );

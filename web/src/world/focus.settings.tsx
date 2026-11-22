@@ -4,7 +4,7 @@
  * ring and the Town board offer the same through the Focus controls.
  */
 
-import { Moon, MoonStar } from "lucide-react";
+import { HeadphoneOff, Headphones } from "lucide-react";
 import { focusChoiceLabel } from "../../../shared/focus";
 import { defineSettings, type CommandEntry } from "../settings/registry";
 import { store } from "../store";
@@ -43,7 +43,7 @@ const start = (minutes: number | null): CommandEntry => ({
   description:
     "Hold chimes, notifications and the tab count on every device, then get one recap",
   words: WORDS,
-  icon: <Moon size={15} />,
+  icon: <Headphones size={15} />,
   // The 1-minute choice is a testing switch (?focusTest=1).
   available: () => focusChoices().includes(minutes),
   subscribe: subscribeFocus,
@@ -59,7 +59,7 @@ defineSettings("focus", [
     title: "End focus now",
     description: "End the focus session on every device",
     words: WORDS,
-    icon: <MoonStar size={15} />,
+    icon: <HeadphoneOff size={15} />,
     available: () => focusHeld(),
     subscribe: subscribeFocus,
     run: () => endFocus().catch(failed),
@@ -72,7 +72,7 @@ defineSettings("focus", [
     title: "Focus",
     description: "Start a focus session, or see the time left",
     words: WORDS,
-    icon: <Moon size={15} />,
+    icon: <Headphones size={15} />,
     open: () => openFocus(),
   },
 ]);
