@@ -61,6 +61,11 @@ export interface Workspace {
   active_tab_id?: string;
   agent_status: string;
   worktree?: WorktreeInfo;
+  /**
+   * The runtime gave the room no name; World named it for display from this
+   * evidence (herdr-core's unnamed app spaces). Never written back.
+   */
+  label_derived_from?: "folder" | "tab" | "agent";
 }
 
 export interface Tab {

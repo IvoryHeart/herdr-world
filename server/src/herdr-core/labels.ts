@@ -12,9 +12,14 @@ import { isLocalCoreAddress } from "../../../shared/coreAddress";
  * - `herdr-world.spawned-by`: a spawn stamp (M7), the address of the
  *   terminal whose agent started this one. A display relation only: it
  *   never makes a native parent, so a kill never follows it.
+ * - `herdr-world.unnamed-space`: the terminal's `where` caption is World's
+ *   placeholder for a space with no name (`Herdr space / <tab>`), written
+ *   when World starts an agent there. That caption names nothing; the same
+ *   words without this label are the app's own name for the space.
  */
 export const CORE_SUMMARY_LABEL = "herdr-world.summary";
 export const CORE_SPAWNED_BY_LABEL = "herdr-world.spawned-by";
+export const CORE_UNNAMED_SPACE_LABEL = "herdr-world.unnamed-space";
 
 type Occupied = { address: string; pid?: unknown; argv?: unknown };
 

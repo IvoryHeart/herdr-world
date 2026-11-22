@@ -57,15 +57,25 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     "../shipyard/shipyardStore"
   );
   const { worldLocalStorage } = await import("../../browserStorage");
-  const { FIXTURE_REPO, shipyardFixtureCatalog, shipyardFixtureSnapshot } =
-    await import("../shipyard/shipyardFixture");
+  const {
+    FIXTURE_REPO,
+    FIXTURE_UNRELEASED,
+    shipyardFixtureCatalog,
+    shipyardFixtureSnapshot,
+  } = await import("../shipyard/shipyardFixture");
+  /** The fixture's projects with releases: the ones with a lane. */
+  const released = (mode: Mode) =>
+    shipyardFixtureCatalog(mode, Date.now()).repositories.filter(
+      (repo) => repo !== FIXTURE_UNRELEASED,
+    );
   const {
     TOWN_PROJECT_COLORS,
     townHarbourLot,
+    townHarbourPlaced,
+    townHarbourSignRow,
     townLanePierAt,
     townLanesShown,
   } = await import("./townHarbour");
-  const { TOWN_HARBOUR_SIGN_ROW } = await import("./townHarbourLot");
   const { TownCamera } = await import("./townCamera");
   const T = (await import("./townLayout")).TOWN_TILE;
   type TownRendererHandle = import("./townRenderer").TownRendererHandle;
@@ -172,14 +182,28 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
   test("one lane per project: board, lighthouse, slipway and ships", async () => {
     serve("ready");
     const harbour = await mount();
-    const repos = shipyardFixtureCatalog("ready", Date.now()).repositories;
+    const repos = released("ready");
     expect(harbour.sign()!.getAttribute("aria-label")).toBe(
       `Shipyard: ${repos.length} projects. Open releases`,
     );
-    // Every project has its lane, in the catalog's order, each its colour.
+    // Every project with releases has its lane, in the catalog's order,
+    // each its colour; the suggested project with none has no lane.
     expect(
       harbour.lanes().map((lane) => lane.getAttribute("aria-label")),
     ).toEqual(repos.map((repo) => `Shipping lane ${repo}`));
+    expect(shipyardFixtureCatalog("ready", Date.now()).repositories).toContain(
+      FIXTURE_UNRELEASED,
+    );
+    // A pier and a lighthouse for each lane, and no other (#1148).
+    expect(harbour.host.querySelectorAll(".town-harbour-pier").length).toBe(
+      repos.length,
+    );
+    for (const lane of harbour.lanes()) {
+      expect(lane.querySelectorAll(".town-harbour-pier").length).toBe(1);
+      expect(
+        lane.querySelector(".town-harbour-lighthouse > .town-harbour-lamp"),
+      ).not.toBeNull();
+    }
     const colours = harbour
       .lanes()
       .map((lane) => lane.style.getPropertyValue("--lane"));
@@ -258,7 +282,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
   test("more projects than the sea holds: the last lane lists the rest", async () => {
     serve("many");
     const harbour = await mount();
-    const repos = shipyardFixtureCatalog("many", Date.now()).repositories;
+    const repos = released("many");
     const lot = townHarbourLot(harbour.layout);
     const shown = townLanesShown(lot, repos.length);
     expect(harbour.lanes().length).toBe(shown);
@@ -363,17 +387,82 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     await harbour.close();
   });
 
-  test("GitHub off: no ships, no slipway, the board says why", async () => {
+  test("GitHub off: no releases known, so no lane; the sign says why", async () => {
     serve("off");
     const harbour = await mount();
-    expect(harbour.host.querySelectorAll(".town-harbour-ship").length).toBe(0);
-    expect(harbour.host.querySelector(".town-harbour-hull")).toBeNull();
-    expect(harbour.lamp().dataset.tone).toBe("unknown");
-    expect(harbour.board().getAttribute("aria-label")).toContain(
-      "GitHub source is off",
-    );
-    expect(harbour.sign()!.textContent).toContain("closed");
+    expect(harbour.lanes()).toEqual([]);
+    for (const part of ["pier", "lighthouse", "ship", "hull", "board"])
+      expect(harbour.host.querySelector(`.town-harbour-${part}`)).toBeNull();
+    expect(harbour.sign()!.textContent).toContain("GitHub source is off");
     await harbour.close();
+  });
+
+  test("a project gets its lane with its first release, and none before", async () => {
+    serve("ready");
+    const harbour = await mount();
+    const repos = released("ready");
+    expect(harbour.lanes().length).toBe(repos.length);
+    expect(
+      harbour.host.querySelector(
+        `[aria-label="Shipping lane ${FIXTURE_UNRELEASED}"]`,
+      ),
+    ).toBeNull();
+    edit = (snapshot) =>
+      snapshot.repo !== FIXTURE_UNRELEASED || !snapshot.data
+        ? snapshot
+        : {
+            ...snapshot,
+            data: {
+              ...snapshot.data,
+              releases: {
+                ...snapshot.data.releases,
+                items: [
+                  {
+                    id: 901,
+                    tag: "v0.1.0",
+                    version: "0.1.0",
+                    name: "v0.1.0",
+                    channel: "stable",
+                    publishedAt: Date.now(),
+                    url: "https://example.com/example-org/notes/releases/tag/v0.1.0",
+                  },
+                ],
+              },
+            },
+          };
+    await settle();
+    expect(harbour.lanes().length).toBe(repos.length + 1);
+    expect(harbour.ships(FIXTURE_UNRELEASED).map((s) => s.textContent)).toEqual(
+      ["v0.1.0"],
+    );
+    expect(harbour.host.querySelectorAll(".town-harbour-pier").length).toBe(
+      repos.length + 1,
+    );
+    await harbour.close();
+  });
+
+  test("before the first read answers, no lane or pier stands", async () => {
+    serve("ready");
+    shipyardStore.useFetch(() => new Promise<Response>(() => {}));
+    const host = document.createElement("div");
+    host.className = "town-world";
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () =>
+      root.render(
+        createElement(TownShipyard, {
+          layout: town(false),
+          renderer: { current: null },
+        }),
+      ),
+    );
+    expect(host.querySelector(".town-harbour-lane")).toBeNull();
+    expect(host.querySelector(".town-harbour-pier")).toBeNull();
+    expect(host.querySelector(".town-harbour-sign")!.textContent).toContain(
+      "Opening",
+    );
+    await act(async () => root.unmount());
+    host.remove();
   });
 
   test("a shortened comparison never shows a complete count", async () => {
@@ -407,7 +496,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
       invalidate: (reason?: string) => void invalidated.push(reason),
     } as unknown as TownRendererHandle;
     const harbour = await mount(true, { current: handle });
-    const repos = shipyardFixtureCatalog("ready", Date.now()).repositories;
+    const repos = released("ready");
     // The harbour itself: its sign and a lane per project, on the sea right
     // of the stacked buildings.
     expect(harbour.sign()).not.toBeNull();
@@ -432,8 +521,12 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     await act(async () => fold.click());
     expect(harbour.opened).toEqual([]);
     expect(invalidated).toEqual(["harbour"]);
-    const pier = townLanePierAt(lot, 0);
-    const from = camera.toScreen(lot.streetEnd * T, TOWN_HARBOUR_SIGN_ROW * T);
+    const placed = townHarbourPlaced(lot, repos.length);
+    const pier = townLanePierAt(placed, 0);
+    const from = camera.toScreen(
+      lot.streetEnd * T,
+      townHarbourSignRow(placed) * T,
+    );
     const to = camera.toScreen(pier.x + pier.w, pier.y);
     expect(from.x).toBeGreaterThanOrEqual(viewport.inset.left - 1);
     expect(to.x).toBeLessThanOrEqual(viewport.width - viewport.inset.right + 1);
