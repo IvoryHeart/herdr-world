@@ -14,9 +14,11 @@ After a family's import is recorded, World SHALL move its legacy JSON (Board,
 ledger, agent profiles) and that file's backup copies into `<data>/legacy/` by
 hard link, verified as the same file before the old name is removed. World
 SHALL NOT delete them; a name used by other content SHALL receive a numbered
-suffix, and a failed move SHALL leave the file in place without blocking startup.
+suffix; a file already inside `<data>/legacy/` SHALL stay there; and a failed
+discovery or move SHALL leave the file in place without blocking startup.
 Future schema upgrades SHALL take a private consistent SQLite backup first and
-reject a foreign application ID. The newest three schema snapshots SHALL stay
+reject a foreign application ID. The three most recently written schema
+snapshots SHALL stay
 beside the database; older snapshots SHALL move to `<data>/legacy/` and SHALL
 NOT be deleted automatically. Configuration and secrets SHALL remain files.
 

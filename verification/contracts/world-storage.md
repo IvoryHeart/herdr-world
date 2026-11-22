@@ -91,9 +91,12 @@ move to `<data>/legacy/` inside the worker's exclusive open, after every import
 commits. One writer holds the folder, so no second mover races it. A move has
 three states: not linked, linked under both names, old name removed. A crash in
 the linked state is finished on the next open without another copy; the other
-two are idempotent. `legacy-archive.test.ts` covers that state, a pre-SQLite
-folder reopened with identical Board, profile and ask state, older importers
-skipping the moved files, and snapshot placement. These finite cases exhaust
+two are idempotent. A source already inside `legacy/` is its own target and
+stays put. Discovery and move failures are logged and never block the open.
+`legacy-archive.test.ts` covers the linked state, a pre-SQLite folder reopened
+with identical Board, profile and ask state, older importers skipping the moved
+files, a ledger configured inside `legacy/`, an unreadable retired import path,
+and snapshot placement by write time rather than schema version. These finite cases exhaust
 the move's states, so no Quint model is added. Nothing is deleted; physical
 power loss between link and unlink stays excluded as above.
 

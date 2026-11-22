@@ -111,7 +111,8 @@ Never copy only a live `world.sqlite`: committed data can still be in its WAL.
 Restore into a private directory with the service stopped. Before a future
 schema upgrade, World makes a private `world.sqlite.v<old-version>.<8-random-base32>.bak` snapshot. Each upgrade
 keeps a new snapshot, so restoring and upgrading again preserves earlier copies.
-The newest three stay beside `world.sqlite`; older ones move to `legacy/` and are
+The three most recently written stay beside `world.sqlite`, whatever their
+version; older ones move to `legacy/` and are
 never deleted.
 An older binary refuses an unsupported newer schema. Restore that matching
 snapshot with the service stopped, after preserving the current whole-directory

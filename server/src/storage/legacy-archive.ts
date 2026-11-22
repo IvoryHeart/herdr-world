@@ -8,6 +8,7 @@ import {
   mkdirSync,
   openSync,
   readdirSync,
+  statSync,
   unlinkSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -54,16 +55,27 @@ function syncDirectory(path: string) {
   }
 }
 
+/** Same directory by identity, so symlinks and case folding cannot hide it. */
+function sameDirectory(a: string, b: string) {
+  const left = statSync(a);
+  const right = statSync(b);
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
 /**
  * Move by hard link plus verify, then drop only the old name: the bytes are
  * never copied or deleted. A name taken by other content gets a numbered
- * suffix; a crash after linking is finished on the next open.
+ * suffix; a crash after linking is finished on the next open. A file already
+ * in `legacy` stays put and returns null.
  */
 export function moveIntoLegacy(source: string, legacy: string) {
   assertSafeDataPath(source);
   const before = lstatSync(source);
   if (!before.isFile()) throw new Error(`not a regular file: ${source}`);
   mkdirSync(legacy, { recursive: true, mode: 0o700 });
+  // A source configured inside legacy/ is its own target; unlinking it would
+  // remove the only name.
+  if (sameDirectory(dirname(source), legacy)) return null;
   for (let index = 0; index < 1000; index++) {
     const target = join(
       legacy,
@@ -111,7 +123,10 @@ function backupCopies(path: string) {
     .map((entry) => join(dirname(path), entry));
 }
 
-/** `world.sqlite.v<N>.<id>.bak` snapshots, newest first. */
+/**
+ * `world.sqlite.v<N>.<id>.bak` snapshots, newest first by write time: after a
+ * restore and re-upgrade the latest snapshot can carry a lower version.
+ */
 export function schemaSnapshots(database: string) {
   const prefix = `${basename(database)}.v`;
   return readdirSync(dirname(database))
@@ -126,8 +141,8 @@ export function schemaSnapshots(database: string) {
     })
     .sort(
       (a, b) =>
-        b.version - a.version ||
         b.mtime - a.mtime ||
+        b.version - a.version ||
         b.name.localeCompare(a.name),
     )
     .map(({ name }) => join(dirname(database), name));
@@ -146,17 +161,28 @@ export function archiveLegacyFiles(
 ) {
   const legacy = join(dirname(database), "legacy");
   const candidates: string[] = [];
-  for (const { path, marker } of sources) {
-    if (!db.query("SELECT 1 FROM imports WHERE name=?").get(marker)) continue;
-    if (lstatIfPresent(path)) candidates.push(path);
-    candidates.push(...backupCopies(path));
-  }
-  candidates.push(...schemaSnapshots(database).slice(KEPT_SCHEMA_SNAPSHOTS));
+  // Discovery failures (an unreadable or replaced path) are as nonfatal as a
+  // failed move: the committed SQLite state stays authoritative.
+  const discover = (label: string, find: () => string[]) => {
+    try {
+      candidates.push(...find());
+    } catch (error) {
+      log(`Legacy files not checked at ${label}: ${(error as Error).message}`);
+    }
+  };
+  for (const { path, marker } of sources)
+    discover(path, () =>
+      db.query("SELECT 1 FROM imports WHERE name=?").get(marker)
+        ? [...(lstatIfPresent(path) ? [path] : []), ...backupCopies(path)]
+        : [],
+    );
+  discover(dirname(database), () =>
+    schemaSnapshots(database).slice(KEPT_SCHEMA_SNAPSHOTS),
+  );
   let moved = 0;
   for (const path of candidates) {
     try {
-      moveIntoLegacy(path, legacy);
-      moved++;
+      if (moveIntoLegacy(path, legacy)) moved++;
     } catch (error) {
       log(`Legacy file left in place at ${path}: ${(error as Error).message}`);
     }

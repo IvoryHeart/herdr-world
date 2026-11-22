@@ -7,12 +7,13 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { parseProfilesDocument, seededProfiles } from "../agent/profile-store";
 import { resolveDataPaths } from "../config/data-paths";
 import { openStorage } from "../service/storage";
@@ -157,4 +158,62 @@ test("a move interrupted after linking finishes without another copy", () => {
   );
   expect(existsSync(source)).toBe(false);
   expect(readdirSync(join(root, "legacy"))).toEqual(["agent-profiles.json"]);
+});
+
+test("a ledger configured inside legacy/ stays there with its import backup", async () => {
+  const root = fresh().root;
+  const legacy = join(root, "legacy");
+  const plain = writePreSqliteFolder(root);
+  mkdirSync(legacy, { mode: 0o700 });
+  const ledger = join(legacy, "world-ledger.json");
+  renameSync(plain.ledger, ledger);
+  const source = readFileSync(ledger, "utf8");
+  const paths = resolveDataPaths({
+    HERDR_WORLD_DATA_DIR: root,
+    HERDR_WORLD_LEDGER_PATH: ledger,
+  });
+  const first = await dump(paths);
+  expect(first.asks.map((row) => row.id)).toEqual([LEGACY_FIXTURE_ASK.id]);
+  expect(await dump(paths)).toEqual(first);
+  expect(readFileSync(ledger, "utf8")).toBe(source);
+  const kept = readdirSync(legacy).filter((name) =>
+    name.startsWith("world-ledger.json"),
+  );
+  expect(kept).toHaveLength(2);
+  expect(kept.some((name) => name.endsWith(".sqlite-import.bak"))).toBe(true);
+});
+
+test("the snapshot from the latest upgrade stays even with a lower version", () => {
+  const root = fresh().root;
+  // Restored v11 and upgraded again: the newest snapshot is v11.
+  const names = [
+    "world.sqlite.v12.aaa.bak",
+    "world.sqlite.v13.bbb.bak",
+    "world.sqlite.v14.ccc.bak",
+    "world.sqlite.v11.ddd.bak",
+  ];
+  names.forEach((name, index) => {
+    writeFileSync(join(root, name), name);
+    utimesSync(join(root, name), 1000 + index, 1000 + index);
+  });
+  const db = new Database(":memory:");
+  try {
+    archiveLegacyFiles(db, join(root, "world.sqlite"), [], () => {});
+  } finally {
+    db.close();
+  }
+  expect(readdirSync(join(root, "legacy")).sort()).toEqual([
+    "README.md",
+    "world.sqlite.v12.aaa.bak",
+  ]);
+  expect(existsSync(join(root, "world.sqlite.v11.ddd.bak"))).toBe(true);
+});
+
+test("an unreadable retired import path does not block startup", async () => {
+  const paths = preSqliteFolder();
+  const first = await dump(paths);
+  const retired = dirname(paths.board);
+  rmSync(retired, { recursive: true });
+  writeFileSync(retired, "not a folder");
+  expect(await dump(paths)).toEqual(first);
 });
