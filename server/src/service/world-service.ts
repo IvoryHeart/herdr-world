@@ -13,6 +13,7 @@ import { createServiceForwards } from "./forward-service";
 import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
 import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
+import { authTokenPrintCommand } from "../config/auth-token";
 import { acquireInstanceLock } from "../config/instance-lock";
 import { publishInstanceAddress } from "./instance-address";
 import { listenerSessionSecret } from "../config/session-secret";
@@ -41,10 +42,12 @@ import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { createSshProfileRuntimeConfig } from "../connections/ssh-profile-runtime";
 import { bindListenerBeforeConnectionStart } from "../connections/startup";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
+import { createAuthHandlers } from "../http/auth";
 import {
   createHerdrSetupHandlers,
   herdrSetupGuardForProfile,
 } from "../http/herdr-setup";
+import { createUpdateHandlers } from "../http/update";
 import { createWebPushService } from "../notifications/web-push";
 import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
@@ -56,6 +59,7 @@ import { createShipyardHttp } from "../shipyard/http";
 import { withIntegrations } from "../integrations/http";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
+import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { afterHerdrClose } from "../world/board-closing";
 import { createBoardRecipientRecorder } from "./board-recipients";
 import { createApartmentsService } from "./apartments-service";
@@ -78,7 +82,6 @@ import { AgentActivityCache } from "../world/agent-activity-cache";
 import { DeskWatches } from "../world/desk-watches";
 import { readDeskWatch } from "../world/desk-watch-read";
 import { createBrowserClients, summarizeHerdrEvent } from "./clients";
-import { createServiceHttpHandlers } from "./http-handlers";
 import { listen } from "./listener";
 import type { WorldServiceDeps } from "./ports";
 import { createRpcDispatcher } from "./rpc-dispatch";
@@ -148,11 +151,23 @@ async function compose(
     hasExplicitSocketPath: config.hasExplicitSocketPath,
     hasExplicitClientSocketPath: config.hasExplicitClientSocketPath,
   };
-  const { auth, update } = createServiceHttpHandlers(
-    config,
+  const auth = createAuthHandlers({
+    authRequired: config.authRequired,
+    password: config.password,
+    pin: config.pin,
     sessionSecret,
-    deps.scheduleProcessExit,
-  );
+    urlLoginToken: config.generatedAuthToken,
+    tokenCommand:
+      config.generatedAuthTokenPath &&
+      authTokenPrintCommand(config.generatedAuthTokenPath),
+    secureCookies: Boolean(config.tls),
+  });
+  const update = createUpdateHandlers({
+    appVersion: config.appVersion,
+    runProcessWithCodeTimeout,
+    shQuote,
+    scheduleProcessExit: deps.scheduleProcessExit,
+  });
   let connectionRevision = 0;
   function publishConnectionsChanged() {
     if (stopping) return;

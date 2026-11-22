@@ -201,8 +201,6 @@ export class ConnectionProfileService<
     this.hosts = new HostConnectionService({
       profiles: () => [...this.profiles.values()].map(({ profile }) => profile),
       saved: () => this.registry?.hosts ?? [],
-      hasLegacyRegistry: () =>
-        this.registry !== null && this.registry.hosts === undefined,
       status: (id) => this.managerOf(id).status(id),
       defaultId: () => args.manager.defaultId(),
       readOnly: (id) =>

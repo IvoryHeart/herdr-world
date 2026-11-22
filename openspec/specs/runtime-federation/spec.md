@@ -198,11 +198,6 @@ their saved auto-connect policy. Saved startup targets SHALL start independently
 before discovery; a host discovery or persistence failure SHALL NOT prevent other
 hosts from starting or reject whole-service startup.
 
-When automatic startup or reconnect discovery finds only existing runtimes and
-the saved registry has no host catalogue, World SHALL expose discovery metadata
-in memory without rewriting the saved registry or its schema version. An explicit
-host discovery or a newly discovered runtime SHALL persist the host migration.
-
 Automatic rediscovery and per-connection Connect SHALL preserve each existing
 runtime's connection intent. Explicit Disconnect SHALL cancel that runtime's intent
 and retries; sibling reconnection SHALL NOT restore them. Temporary discovery
@@ -217,14 +212,6 @@ per-connection arrays. Host snapshot runtime entries SHALL carry their own gener
 staleness and actionability; topology SHALL remain indexed by connection ID.
 `herdr-world connections` SHALL list hosts and runtimes. `herdr-world ls` SHALL
 return hosts with their runtimes and rooms, retaining the per-connection projection.
-
-The packaged-release consumer is `scripts/release-walk/journeys.py`: its listing
-journey checks that projection and the aggregate for every launched agent's
-connection, generation, room and pane/terminal binding. Its upgrade journey permits
-new host catalogue metadata while requiring every previously saved registry field
-to remain exact. `scripts/release-walk.test.ts` feeds real service/CLI output into
-the listing consumer; `scripts/release-walk/journeys_test.py` covers migration and
-rejected omissions or identity changes. Native Linux/macOS walks remain required.
 
 #### Scenario: Both runtimes on this computer
 - **WHEN** herdr-core and the Herdr TUI are installed on this computer

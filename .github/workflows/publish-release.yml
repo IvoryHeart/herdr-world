@@ -9,23 +9,6 @@ on:
         description: Version to publish (X.Y.Z or X.Y.Z-rc.N)
         required: true
         type: string
-      create_tag:
-        description: Create the authorized tag automatically only if the tag ruleset permits the workflow token
-        required: false
-        default: false
-        type: boolean
-      walk_run_id:
-        description: Successful main CI run containing the exact release walk packages
-        required: true
-        type: string
-      release_pr:
-        description: Merged release PR recording the signed-in receipt digest
-        required: true
-        type: string
-      signed_in_receipt:
-        description: JSON receipt from the local signed-in walk of a downloaded CI package
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -41,7 +24,7 @@ jobs:
     name: Tag and start release
     runs-on: ubuntu-latest
     outputs:
-      tag: ${{ steps.authorize.outputs.tag }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -52,15 +35,11 @@ jobs:
         with:
           bun-version: "1.4.4"
           no-cache: true
-      - id: authorize
-        name: Verify metadata and authorize before tagging
+      - id: tag
+        name: Verify metadata and create tag
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
-          WALK_RUN_ID: ${{ inputs.walk_run_id }}
-          RELEASE_PR: ${{ inputs.release_pr }}
-          RELEASE_WALK_SIGNED_RECEIPT: ${{ inputs.signed_in_receipt }}
-          RELEASE_WALK_AUTHORIZATION: ${{ runner.temp }}/authorization.json
         run: |
           set -euo pipefail
           if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]; then
@@ -98,37 +77,21 @@ jobs:
             test "$(git show "$release_sha:$manifest" | bun -e 'console.log(JSON.parse(await Bun.stdin.text()).version)')" = "0.0.0"
           done
 
-          if git rev-parse --verify --quiet "refs/tags/v$VERSION" >/dev/null; then
-            echo "error: tag already exists; reuse its original pre-tag authorization run" >&2
-            exit 1
+          tag="v$VERSION"
+          if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
+            test "$(git cat-file -t "refs/tags/$tag")" = "tag"
+            test "$(git rev-list -n 1 "$tag")" = "$release_sha"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "Herdr World $VERSION" "$release_sha"
+            gh auth setup-git
+            git push origin "$tag"
           fi
-          # The exact Linux/macOS bytes and signed-in receipt pass before any tag exists.
-          bun scripts/release-walk-gate.ts authorize "$release_sha" "$VERSION" "$WALK_RUN_ID" "$RELEASE_PR"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "sha=$release_sha" >> "$GITHUB_OUTPUT"
-          echo "Authorized v$VERSION at $release_sha. A maintainer may now create this annotated tag and dispatch Release with publish_run_id=$GITHUB_RUN_ID." >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: release-walk-authorization
-          path: ${{ runner.temp }}/authorization.json
-          if-no-files-found: error
-          retention-days: 30
-      - name: Create the authorized tag
-        if: inputs.create_tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.authorize.outputs.tag }}
-          RELEASE_SHA: ${{ steps.authorize.outputs.sha }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "Herdr World $TAG" "$RELEASE_SHA"
-          gh auth setup-git
-          git push origin "$TAG"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: Start Release workflow
-        if: inputs.create_tag
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.authorize.outputs.tag }}
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          gh workflow run "Release" --ref "$TAG" -f dry_run=false -f publish_run_id="$GITHUB_RUN_ID"
+          gh workflow run "Release" --ref "$TAG" -f dry_run=false

@@ -65,7 +65,6 @@
     "test:quick": "bun scripts/run-tests.ts --path-ignore-patterns '**/{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,ThemedSelect.browser,HerdrSetupCard}.test.ts'",
     "test:browser": "bun scripts/check-delivery.ts --browser",
     "test:install-linux": "bun scripts/install-linux.ts",
-    "test:release-walk": "bun scripts/release-walk.ts",
     "typecheck": "tsc --noEmit && bun run --filter herdr-world-web typecheck && bun run --filter herdr-world-server typecheck",
     "typecheck:quick": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json && tsc --noEmit -p server/tsconfig.json",
     "check:agents": "bun scripts/check-staged-agents.ts",

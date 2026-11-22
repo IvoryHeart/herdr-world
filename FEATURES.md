@@ -93,9 +93,6 @@ Per-runtime auto-connect settings remain effective after migration; a host's fla
 reflects whether any member enables it. Startup connects the saved default and
 profiles with auto-connect enabled, then discovers eligible hosts. A failed host
 or catalogue write does not prevent other startup targets from connecting.
-When automatic discovery finds only existing runtimes in a legacy registry, it
-keeps discovery metadata in memory without rewriting that registry. An explicit
-host discovery or a newly discovered runtime persists the host schema migration.
 Disconnecting one runtime keeps it stopped when a sibling reconnects or its
 per-connection Connect is used. Explicit host Connect or rediscovery connects all
 found runtimes; newly discovered runtimes connect during automatic discovery too.

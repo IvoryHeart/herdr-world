@@ -17,7 +17,7 @@ for compatibility with branch rules.
 | Web asset headroom | Compare PR asset deltas with current main and re-evaluate open PRs after merges | Catches concurrent budget consumption beyond one PR's tested base |
 | Town golden images | Compare five synthetic Town screenshots with stored reference PNGs on PR changes and main | Advisory, separate from Delivery checks; exact pixels with pinned Chrome, fonts, clock and SwiftShader |
 | Prepare Release | Generate and validate release files in a checkout, then open a PR and dispatch CI | Generated files need validation before review |
-| Publish Release and Release | Authorize exact Linux/macOS release-walk bytes and signed-in local evidence before the maintainer tags; publish the same tested Unix packages | Publication requires the retained pre-tag authorization; tag protection remains in force |
+| Publish Release and Release | Require reviewed, green main; create the tag; validate and package the tagged source before publishing | Publication and archive smoke tests cover artifacts beyond source checks |
 | Deploy Pages | Build and publish the documentation site and film | Site publication is separate from application release acceptance |
 | Upstream automation | Detect a frozen source release, request local integration and independently review it | External runtime adoption remains a separate decision |
 

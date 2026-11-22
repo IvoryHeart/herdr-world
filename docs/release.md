@@ -3,134 +3,6 @@
 Releases are prepared and reviewed through pull requests. Never commit or push a
 release change directly to `main`.
 
-## Real-runtime release walk
-
-`bun run test:release-walk --disposable-host` builds the native release package
-and walks that executable against checksum-verified Herdr TUI and herdr-core
-releases. Run it in a disposable Linux or macOS OS account or VM with Bun,
-Node/npm, Python with venv, GitHub CLI and a working user service manager. The
-service journey uses the account's real systemd/launchd manager, so a temporary
-HOME alone is insufficient. The walk refuses existing World service definitions
-(including alternate systemd/launchd labels) or configuration. It uses loopback
-port 0 for direct listeners and an OS-assigned nonzero loopback port for each
-native service install, private World data, a named Herdr session and a separate core session/state
-folder with a short private runtime directory so macOS holder sockets fit the
-native path limit; it never attaches to an owner's runtime. There are no browser
-journeys.
-
-The native walk runs on both Linux architectures and both macOS architectures
-inside the installer-upgrade workflow required by **Delivery checks**. Server,
-shared, install, service and package inputs select it, as do the browser's launch
-and connection request builders and the walk itself. Every main commit selects
-it. Docs-only and previously proven exact-head reuse runs keep their existing
-suite-selection rules. A missing runtime, network failure, unavailable service
-manager, failed journey or skipped journey fails the gate.
-
-The printed journeys cover fresh core-only discovery/defaults, TUI-only startup,
-both runtimes, profile launches of Claude and Codex in both kinds of room, quick
-Claude launch, prompt delivery, aggregate/CLI listing, previous stable upgrade
-preservation and fresh/previous-version native service uninstall. The both-runtime
-journey checks the global default ID from the browser connection catalogue,
-preserves the TUI default and adds core through the same connection API
-as the selector. Upgrade checks keep saved connection profiles and the default,
-settings, password login, anonymous refusal and the existing signed-in session.
-It prepares the upgrade data folder with mode `0700` and settings with mode `0600`,
-then explicitly saves both isolated runtime profiles, including the TUI's observed
-socket paths: a pinned startup connection is read-only and is not automatically
-persisted when adding core. It then restarts the previous binary
-without `HERDR_SESSION` before changing the saved default: an explicit session
-intentionally pins the process default. Listing checks the requested rooms and
-the observed pane/terminal identities, since TUI launch replies omit room IDs.
-Upgrade permits newly discovered host catalogue metadata in an older registry;
-every previously saved field, including the profiles and default, must stay exact.
-Automatic discovery of existing runtimes keeps a legacy registry unchanged;
-host metadata remains in memory until an explicit host discovery or a newly
-discovered runtime persists the migration.
-After prompt input, listing waits for server-pushed topology changes until both
-the aggregate and CLI contain every launched agent in the same observation.
-It checks the CLI result's `connections` array when the result includes the host
-catalogue, and the direct connection array returned by older releases. A regression
-feeds the real service and CLI output into the journey to keep this consumer aligned.
-It never accumulates partial passes or retries on a timer. A missing agent,
-stale topology or changed runtime generation still fails the bounded wait;
-the failure names the runtime and harness and the last unmet assertion.
-Listing failures also print bounded booleans for the aggregate's pane, room and
-harness binding. For the unchanged isolated core generation, one native read
-reports liveness, exit code and whether the foreground matches the harness.
-Diagnostics never print arguments, paths or transcripts and cannot turn a failure
-into a pass or replace its original reason.
-Before teardown, listing failures also save `listing-failure.json` beside the
-receipt. CI retains it as `release-walk-listing-failure-PLATFORM`: the core
-Codex terminal's final screen (or an explicit unavailable result), the recorder's
-termination reason and bounded output tail, and that runtime's aggregate snapshot.
-The artifact binds the expected generation and exact package/commit; a changed
-generation refuses the terminal read. Sign-in URLs, tokens, device codes,
-paths and sensitive settings are redacted before writing. Raw recorder traffic
-is never uploaded. If the native terminal is already gone, the recorder tail
-retains its last output; no termination event is reported explicitly as such.
-Inspect this artifact from the failed native job before diagnosing an exit.
-The older pre-0.2.4 cookie migration remains covered by installer acceptance below.
-
-The walk installs pinned, real `claude` and `codex` executables, signed out.
-A transparent PTY recorder keeps the real executable in the pane's original
-foreground process group while a helper forwards terminal traffic and observes
-complete argv/settings, their own first screen and prompt input; it produces no
-agent state or transcript. World must list each actual agent with an explicit
-status. Signed-out onboarding may show the documented **unknown** status before
-any activity report; the signed-in prompt/reply journey requires a classified
-idle, working, blocked or done status.
-The TUI shell uses canonical input so command truncation is observable. CI sends
-synthetic prompt text through World's terminal input API and requires it to reach
-the real harness. It does not require model credentials. Pins live in
-`scripts/release-walk/contract.py`; Herdr uses World's verified runtime table.
-
-Linux x64 also downloads the checksum-verified **v0.3.5** executable as a negative
-control. It must fail quick Claude launch because the agent never started, with
-the real terminal left at its continuation prompt. A setup/network failure or
-another failed journey is not proof of #984. The workflow summary and receipt
-retain this result. To walk a downloaded old archive directly, supply
-`--archive PACKAGE.tar.xz --version 0.3.5`; its first journey must fail at
-**New agent starts: TUI quick Claude**, saying **agent never started**.
-
-Before tagging, download `release-walk-package-PLATFORM` from the successful
-**main CI run for the release commit**. Each contains the actual archives and
-checksums later used by Release; these packages are retained for 30 days.
-In a disposable native account, create a dedicated test home with
-`mkdir -p TEST_HOME/.claude TEST_HOME/.codex`, then sign Claude and Codex in
-using `CLAUDE_CONFIG_DIR=TEST_HOME/.claude claude auth login` and
-`CODEX_HOME=TEST_HOME/.codex codex login`. Then run:
-
-```bash
-bun run test:release-walk --disposable-host \
-  --archive PACKAGE.tar.xz --version X.Y.Z --baseline-tag vPREVIOUS \
-  --signed-in-home TEST_HOME --report signed-in.json
-```
-
-Use the checkout at that exact release commit and the baseline tag in its CI
-receipt. This runs every signed-out journey plus a signed-in launch, Chat send
-and readable assistant reply for both harnesses on both runtimes. It prints
-`Release walk signed-in receipt: DIGEST`. Edit the merged release PR body to add
-that line and the run/platform details, retaining the JSON receipt locally.
-The receipt contains synthetic evidence and digests, never credentials or chat
-transcripts. Never upload the dedicated credential home.
-
-Dispatch **Publish Release** with the version, successful CI run ID for main's release commit, merged
-release PR number and signed-in JSON receipt. Before creating any tag it checks
-all four native receipts, the v0.3.5 proof, exact commit/version, matching archive
-and executable digests and the release PR's recorded local receipt. Leave its
-**create_tag** option off under the current maintainer-only tag ruleset; the
-maintainer tags the authorized SHA after this run succeeds. **Release**
-requires that pre-tag authorization and publishes the same tested Unix archives;
-it does not rebuild them. A direct tag or dispatch without authorization cannot
-publish. Expired artifacts require fresh evidence; they are not waived.
-
-### Escapes become journeys
-
-A bug found in a published release adds or extends a release-walk journey in the
-same PR as its fix. If the walk exposes a product bug, file an issue and identify
-the failing journey with that issue number, at most until the next release.
-Known failures remain failed journeys and block release; never turn them into skips.
-
 ## Dependency security gate
 
 Maintainers own the dependency alert queue. Shipped high/critical advisories must
@@ -378,38 +250,42 @@ release's generated Formula.
    remain at `0.0.0`; tagged builds inject the reviewed release version into binaries,
    archives and update metadata. Run the repository checks on the prepared branch;
    the tracked pre-push hook runs the full gate when pushing it.
-3. After independent review and merge, identify the exact release PR merge
-   commit on `main`. It needs successful CI for that exact commit, including
-   the native release walk. Main's push queue can batch merges; if that leaves
-   the release commit without its own run, create a `release-check/vX.Y.Z`
-   branch at that immutable commit and dispatch CI there. Use that successful
-   run's exact packages for the signed-in local walk above. Add its receipt
-   digest to the merged release PR, then dispatch **Publish Release** with all
-   four evidence inputs and leave **create_tag** off.
-
-   Wait for its green pre-tag authorization and retained authorization artifact.
-   Only then create and push the annotated tag using the maintainer account
-   authorized by the release tag ruleset. For example:
+3. After independent review and merge, identify the exact release PR merge commit
+   on `main` and wait for its CI: tag only a main commit with a successful **CI**
+   run for that exact commit, never while it is pending or red (see the Main gate
+   in [CONTRIBUTING](../CONTRIBUTING.md#pull-requests)). Main's push CI checks a
+   batch of merges once, at its newest commit, so a release commit merged with
+   others may have no run of its own; then dispatch CI on a branch at exactly that
+   commit, as below, and wait for it. With
+   the current repository settings, create and push the annotated
+   `vX.Y.Z[-rc.N]` tag on that commit using a maintainer account authorized by the
+   release tag ruleset. Verify the tag does not exist and the commit has the expected
+   plugin version before pushing. For example:
 
    ```bash
    git fetch origin main
    release_sha="$(gh pr view PR_NUMBER --json mergeCommit --jq .mergeCommit.oid)"
    git merge-base --is-ancestor "$release_sha" origin/main
+   # Only when the release commit has no CI run of its own (a batch skipped it):
+   #   git push origin "$release_sha:refs/heads/release-check/vX.Y.Z-rc.N"
+   #   gh workflow run CI --ref release-check/vX.Y.Z-rc.N
+   #   gh run watch "$(gh run list --workflow CI --commit "$release_sha" \
+   #     --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"
+   # Either way, a successful CI run for exactly this commit must exist:
+   gh run list --workflow CI --commit "$release_sha" --json event,conclusion \
+     --jq '[.[] | select(.conclusion == "success" and (.event == "push" or .event == "workflow_dispatch"))] | length' # must print 1 or more
    git show "$release_sha:herdr-plugin.toml" | rg '^version = "X.Y.Z-rc.N"$'
    git ls-remote --tags origin "refs/tags/vX.Y.Z-rc.N" # must print nothing
-   # PUBLISH_RUN_ID is the successful pre-tag authorization run for this SHA.
    git tag -a vX.Y.Z-rc.N -m "Herdr World X.Y.Z-rc.N" "$release_sha"
    git push origin refs/tags/vX.Y.Z-rc.N
-   gh workflow run Release --ref vX.Y.Z-rc.N -f dry_run=false -f publish_run_id=PUBLISH_RUN_ID
    ```
 
-   Tag pushes alone do not publish. Release requires the retained authorization
-   from before that tag existed and checks the native and signed-in receipts
-   again. Reuse the original authorization when retrying an existing tag.
-   Current repository settings prohibit Actions from creating PRs and permit
-   only the maintainer account to create `v*` tags. Preserve those rules. If the
-   tag ruleset later permits the workflow token, **create_tag** can perform the
-   same authorized tagging and dispatch steps automatically.
+   The tag push starts **Release** automatically. Do not also dispatch **Publish
+   Release** for that tag. The **Prepare Release** and **Publish Release** workflows
+   require repository settings that currently block their GitHub token: Actions
+   cannot create pull requests, and the release tag ruleset permits only the
+   maintainer account to create `v*` tags. If those settings change, the automated
+   path can be used after confirming its token has the required access.
 4. The Release workflow revalidates metadata and repository tests with one file
    worker and at most two concurrent cases. Its World browser tests use the same
    [World browser workflow](../.github/workflows/world-browser.yml) as PR CI: six
@@ -418,8 +294,7 @@ release's generated Formula.
    before any platform package builds. Prepare Release validates its generated
    working tree in one checkout with one file worker and retains the complete World
    suite; its World cases run one at a time.
-   Release reuses the four Unix archives that passed the pre-tag walk and builds
-   the two Windows archives, then verifies all six platform archives, their aliases,
+   Release then builds and verifies all six platform archives, their aliases,
    checksums, update manifests and installer. Before any publication it packs all
    seven npm tarballs and smoke-installs the launcher, generates the stable or RC
    Homebrew Formula, syntax-checks it and stage-checks it against all four Unix
@@ -492,10 +367,8 @@ gh workflow run release.yml --ref main -f dry_run=true -f version=0.3.6
 ```
 
 Dispatch defaults to a dry run, including on tag refs. Publication dispatches must
-explicitly pass `-f dry_run=false -f publish_run_id=PUBLISH_RUN_ID` on the matching
-reviewed tag using its successful pre-tag authorization; **Publish Release**
-does this automatically when **create_tag** is enabled. Tag pushes alone do not
-publish. A dry-run
+explicitly pass `-f dry_run=false` on the matching reviewed tag; **Publish Release**
+does this automatically. Tag pushes retain normal publication behavior. A dry-run
 version overrides the build version without modifying tracked release metadata;
 missing final release notes are replaced with an explicitly dry-run note. Final
 publication still requires reviewed metadata, release notes and stable changelog.
@@ -507,9 +380,6 @@ from the run's **Artifacts** section to inspect `tap/pr.patch`, `tap/pr-body.md`
 `tap/Formula/` and `manifest.json`. No tag, GitHub release, npm package, tap commit,
 branch or PR is created. This read-only tap generation uses the workflow token;
 it does not prove the separate tap publication token's write permissions.
-Channel rehearsal does not replace the required real-runtime release walk or
-produce its receipts. Publication still reuses the exact Unix archives approved
-before tagging, alongside the channel verification barrier.
 
 ## Resume a partial publication without rebuilding
 

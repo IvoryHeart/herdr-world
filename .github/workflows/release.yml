@@ -1,8 +1,9 @@
 name: Release
 
 on:
-  # Dispatches on main/PR branches rehearse every channel without publishing.
-  # Publication on a tag requires authorization retained before that tag existed.
+  push:
+    tags: ["v*"]
+  # Dispatch on main/PR branches to rehearse before a tag exists.
   workflow_dispatch:
     inputs:
       dry_run:
@@ -13,14 +14,9 @@ on:
         description: Candidate version for a dry run (defaults to plugin version)
         type: string
         required: false
-      publish_run_id:
-        description: Publish Release run that authorized this tag before its creation (required for publication)
-        required: false
-        type: string
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: release-publication
@@ -32,7 +28,6 @@ jobs:
     name: Validate release
     outputs:
       selection: ${{ steps.scope.outputs.selection }}
-      walk_run_id: ${{ steps.walk.outputs.walk_run_id }}
       version: ${{ steps.metadata.outputs.version }}
       tag: ${{ steps.metadata.outputs.tag }}
       dry_run: ${{ steps.metadata.outputs.dry_run }}
@@ -61,19 +56,6 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
           VERSION_INPUT: ${{ inputs.version }}
         run: bun scripts/release-plan.ts
-      - name: Require pre-tag release walk authorization
-        id: walk
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PUBLISH_RUN_ID: ${{ inputs.publish_run_id }}
-          DRY_RUN: ${{ steps.metadata.outputs.dry_run }}
-        run: |
-          set -euo pipefail
-          if [ "$DRY_RUN" = true ]; then
-            echo "Channel rehearsal only; publication still requires the pre-tag release walk."
-          else
-            bun scripts/release-walk-gate.ts publication "$GITHUB_SHA" "${GITHUB_REF_NAME#v}" "$PUBLISH_RUN_ID"
-          fi
       - name: Verify npm package bootstrap before publication
         shell: bash
         run: |
@@ -124,22 +106,7 @@ jobs:
           bun-version: "1.4.4"
           no-cache: true
       - run: bun install --frozen-lockfile
-      - name: Download the exact Unix package that passed the pre-tag walk
-        if: needs.validate.outputs.dry_run == 'false' && !startsWith(matrix.platform, 'windows-')
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          github-token: ${{ github.token }}
-          run-id: ${{ needs.validate.outputs.walk_run_id }}
-          name: release-walk-package-${{ matrix.platform }}
-          path: dist
       - name: Build release package
-        if: startsWith(matrix.platform, 'windows-')
-        shell: bash
-        run: |
-          version="$RELEASE_VERSION"
-          HERDR_WORLD_BUILD_VERSION="$version" bun run package:${{ matrix.platform }}
-      - name: Build Unix channel rehearsal package
-        if: needs.validate.outputs.dry_run == 'true' && !startsWith(matrix.platform, 'windows-')
         shell: bash
         run: |
           version="$RELEASE_VERSION"

@@ -21,7 +21,6 @@ import type { ConnectionStatus } from "./types";
 export type HostServicePorts = {
   profiles(): ConnectionProfile[];
   saved(): readonly HostProfile[];
-  hasLegacyRegistry?(): boolean;
   status(id: string): ConnectionStatus;
   defaultId(): string;
   readOnly?(id: string): boolean;
@@ -38,35 +37,13 @@ export type HostServicePorts = {
 /** Host ownership groups runtimes; it never issues a downstream operation. */
 export class HostConnectionService {
   private readonly errors = new Map<string, string>();
-  private readonly observed = new Map<string, HostProfile["discovered"]>();
   private stopped = false;
   private readonly reconnecting = new Set<string>();
 
   constructor(private readonly ports: HostServicePorts) {}
 
   catalogue(): HostProfile[] {
-    const profiles = this.ports.profiles();
-    const owners = new Map(
-      profiles.map((profile) => [profile.id, hostId(profile)]),
-    );
-    const hosts = migrateHosts(profiles, this.ports.saved());
-    const ids = new Set(hosts.map((host) => host.id));
-    for (const id of this.observed.keys())
-      if (!ids.has(id)) this.observed.delete(id);
-    return hosts.map((host) => ({
-      ...host,
-      ...(host.discovered || !this.observed.has(host.id)
-        ? {}
-        : {
-            discovered: structuredClone(
-              this.observed
-                .get(host.id)
-                ?.filter(
-                  (record) => owners.get(record.connection_id) === host.id,
-                ),
-            ),
-          }),
-    }));
+    return migrateHosts(this.ports.profiles(), this.ports.saved());
   }
 
   list(): WorldHost[] {
@@ -245,7 +222,6 @@ export class HostConnectionService {
           .map((profile) => profile.id),
       );
       this.errors.delete(host.id);
-      this.observed.delete(host.id);
       return result;
     });
   }
@@ -281,7 +257,6 @@ export class HostConnectionService {
               targets.has(profile.id) &&
               (this.ports.wantsConnection?.(profile.id) ?? true),
             new Set(targets),
-            true,
           ),
         )
         .catch((error) => {
@@ -304,8 +279,6 @@ export class HostConnectionService {
           await this.discoverAndConnect(
             id,
             (profile) => this.ports.wantsConnection?.(profile.id) ?? false,
-            new Set(),
-            true,
           );
       })
       .catch(() => undefined)
@@ -316,7 +289,6 @@ export class HostConnectionService {
     id: string,
     shouldStartExisting: (profile: ConnectionProfile) => boolean = () => true,
     attempted = new Set<string>(),
-    automatic = false,
   ): Promise<WorldHost> {
     if (this.stopped) throw new Error("host discovery is stopping");
     const host = this.require(id);
@@ -427,20 +399,10 @@ export class HostConnectionService {
         })),
       ],
     };
-    if (automatic && !additions.length && this.ports.hasLegacyRegistry?.()) {
-      // Observing existing runtimes must not rewrite a legacy registry on
-      // startup/reconnect. Keep discovery visible in memory; an explicit host
-      // edit or a newly discovered runtime commits the schema migration.
-      this.observed.set(id, replacement.discovered);
-    } else {
-      await this.ports.persist(
-        this.catalogue().map((entry) =>
-          entry.id === id ? replacement : entry,
-        ),
-        additions,
-      );
-      this.observed.clear();
-    }
+    await this.ports.persist(
+      this.catalogue().map((entry) => (entry.id === id ? replacement : entry)),
+      additions,
+    );
     if (discoveryError) this.errors.set(id, discoveryError);
     else this.errors.delete(id);
     await Promise.allSettled(

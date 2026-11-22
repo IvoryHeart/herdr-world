@@ -48,11 +48,14 @@ test.skipIf(process.platform !== "win32")(
       writeFileSync(
         fixture,
         [
-          // The HTTP handshake returns only after the real Windows file lock
-          // is held. The parent releases it after the installer exits.
-          `if (process.argv[2] === "--version" && process.env.STAGING_LOCK_URL) {`,
-          `  const locked = await fetch(process.env.STAGING_LOCK_URL, { method: "POST", body: process.execPath });`,
-          `  if (!locked.ok) throw new Error("staging lock acquisition failed");`,
+          // The test's holder opens this executable without delete sharing,
+          // as an antivirus scan can right after the installer runs it. The
+          // binary announces itself and returns only once the hold is in place.
+          `if (process.argv[2] === "--version" && process.env.STAGING_LOCK_MS) {`,
+          `  await Bun.write(process.execPath + ".running", "");`,
+          `  let held = false;`,
+          `  for (let i = 0; i < 400 && !(held = await Bun.file(process.execPath + ".held").exists()); i++) await Bun.sleep(50);`,
+          `  if (!held) console.error("staging hold timed out");`,
           `}`,
           `if (process.argv[2] === "--version" && process.env.WRONG_VERSION) console.log("herdr-world 0.0.0");`,
           `else if (process.argv[2] === "version" || process.argv[2] === "--version" || (process.argv[2] === "plugin" && process.argv[3] === "version" && !process.env.PLUGIN_REJECT_NATIVE)) console.log("herdr-world 9.8.7"); else process.exit(2);`,
@@ -94,42 +97,15 @@ test.skipIf(process.platform !== "win32")(
       const validArchive = packageArchive("9.8.7");
       const invalidArchive = packageArchive("9.8.6");
       let failure = "none";
-      const holders: Array<Bun.Subprocess<"pipe", "pipe", "pipe">> = [];
+      // PowerShell holders for the locked cases; they release after 6 s.
+      const holders: Array<ReturnType<typeof Bun.spawn>> = [];
       host = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
-        async fetch(request) {
+        fetch(request) {
           if (failure === "download")
             return new Response("unavailable", { status: 503 });
           const name = new URL(request.url).pathname.slice(1);
-          if (request.method === "POST" && name === "staging-lock") {
-            const holder = Bun.spawn(
-              [
-                powershell,
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "$f = [IO.File]::Open($env:HOLD_FILE, 'Open', 'Read', 'Read'); try { [Console]::WriteLine('locked'); [Console]::Out.Flush(); [void][Console]::In.ReadLine() } finally { $f.Dispose() }",
-              ],
-              {
-                env: { ...process.env, HOLD_FILE: await request.text() },
-                stdin: "pipe",
-                stdout: "pipe",
-                stderr: "pipe",
-                timeout: 120_000,
-              },
-            );
-            holders.push(holder);
-            const reader = holder.stdout.getReader();
-            try {
-              const ready = await reader.read();
-              if (new TextDecoder().decode(ready.value).trim() !== "locked")
-                return new Response("lock acquisition failed", { status: 500 });
-            } finally {
-              reader.releaseLock();
-            }
-            return new Response("locked");
-          }
           return name === archiveName || name === `${archiveName}.sha256`
             ? new Response(Bun.file(join(root, "assets", name)))
             : new Response("missing", { status: 404 });
@@ -180,7 +156,23 @@ test.skipIf(process.platform !== "win32")(
           failure === "launcher-replacement"
             ? `$locked = [IO.File]::Open('${compatibilityPath}', [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read); try { & '${scriptPath}' } finally { $locked.Dispose() }`
             : `& '${scriptPath}'`;
-        const firstHolder = holders.length;
+        if (failure.startsWith("locked-"))
+          holders.push(
+            Bun.spawn(
+              [
+                powershell,
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$deadline=[DateTime]::UtcNow.AddSeconds(60); do { $m = Get-ChildItem -LiteralPath $env:HOLD_ROOT -Recurse -Force -Filter 'herdr-world.exe.running' -ErrorAction SilentlyContinue | Where-Object { !(Test-Path -LiteralPath ($_.FullName -replace '\\.running$', '.held')) } | Select-Object -First 1; if (!$m) { Start-Sleep -Milliseconds 20 } } until ($m -or [DateTime]::UtcNow -gt $deadline); $exe = $m.FullName -replace '\\.running$', ''; $f = [IO.File]::Open($exe, 'Open', 'Read', 'Read'); New-Item -ItemType File -Path ($exe + '.held') | Out-Null; Start-Sleep -Milliseconds 6000; $f.Dispose()",
+              ],
+              {
+                env: { ...process.env, HOLD_ROOT: join(root, "server") },
+                stdout: "ignore",
+                stderr: "inherit",
+              },
+            ),
+          );
         const child = Bun.spawn(
           [
             powershell,
@@ -196,38 +188,21 @@ test.skipIf(process.platform !== "win32")(
               ...installerEnv,
               HERDR_WORLD_RELEASE_BASE_URL: `http://127.0.0.1:${host.port}`,
               PLUGIN_REJECT_NATIVE: failure === "native-command" ? "1" : "",
-              STAGING_LOCK_URL: failure.startsWith("locked-")
-                ? `http://127.0.0.1:${host.port}/staging-lock`
-                : "",
+              STAGING_LOCK_MS: failure.startsWith("locked-") ? "6000" : "",
               WRONG_VERSION: failure === "locked-failure" ? "1" : "",
             },
             stdout: "pipe",
             stderr: "pipe",
           },
         );
-        let code: number;
-        let stderr: string;
-        try {
-          [code, stderr] = await Promise.all([
-            child.exited,
-            new Response(child.stderr).text(),
-          ]);
-        } finally {
-          for (const holder of holders.slice(firstHolder)) holder.stdin.end();
-          for (const holder of holders.slice(firstHolder)) {
-            const [exit, error] = await Promise.all([
-              holder.exited,
-              new Response(holder.stderr).text(),
-            ]);
-            expect(exit, error).toBe(0);
-          }
-        }
+        const [code, stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stderr).text(),
+        ]);
         if (failure.startsWith("locked-")) {
           // A held staging copy is reported and left behind, never fatal, and
           // never hides the real outcome.
-          expect(stderr, failure).toContain(
-            "could not remove the temporary folder",
-          );
+          expect(stderr).toContain("could not remove the temporary folder");
           if (failure === "locked-failure") {
             expect(code).not.toBe(0);
             expect(stderr).toContain("Binary version mismatch");
@@ -266,8 +241,9 @@ test.skipIf(process.platform !== "win32")(
         "'",
         "''",
       );
-      // The next install sweeps leftovers older than an hour and keeps a
-      // recent one, which may belong to a running install.
+      // Once the holders exit, the next install sweeps leftovers older than an
+      // hour and keeps a recent one, which may belong to a running install.
+      for (const holder of holders) await holder.exited;
       const server = join(root, "server");
       const recent = join(server, ".plugin-install-recent");
       mkdirSync(recent);

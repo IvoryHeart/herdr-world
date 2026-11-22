@@ -152,82 +152,6 @@ test("migration groups two runtimes per machine without renaming resource/filter
   expect(hostId(tui("alias", "other-alias"))).not.toBe(hostId(profiles[2]!));
 });
 
-test("automatic discovery preserves a legacy registry until a host is explicitly saved", async () => {
-  let rounds = 0;
-  const reconnected = Promise.withResolvers<void>();
-  const { service, store, manager, coreManager } = await fixture(
-    [core("saved-core"), tui("saved-tui")],
-    async (_host, profiles) => {
-      rounds++;
-      return profiles.map((profile) => ({ profile, version: "0.9.5" }));
-    },
-    {
-      changed: () => {
-        if (rounds === 2) reconnected.resolve();
-      },
-    },
-  );
-  const saved = store.load();
-  await service.startConfigured();
-  expect(coreManager.readyRuntimeLease("saved-core")?.isCurrent()).toBeTrue();
-  expect(manager.readyRuntimeLease("saved-tui")?.isCurrent()).toBeTrue();
-  expect(service.hosts.list()[0]).toMatchObject({
-    discovery: "complete",
-    connection_ids: ["saved-core", "saved-tui"],
-  });
-  expect(store.load()).toEqual(saved);
-  service.hosts.reconnected("host-local", () => true);
-  await reconnected.promise;
-  expect(store.load()).toEqual(saved);
-
-  // An explicit host operation may commit the catalogue's schema migration.
-  await service.hosts.connect("host-local");
-  expect(store.load()).toMatchObject({
-    version: CONNECTION_PROFILE_FILE_VERSION,
-    profiles: saved!.profiles,
-    default_connection_id: saved!.default_connection_id,
-    hosts: service.hosts.catalogue(),
-  });
-});
-
-test("saving another host drops discovery metadata for a removed legacy connection", async () => {
-  const { service, store } = await fixture(
-    [core("saved-core"), tui("removed-tui")],
-    async (_host, profiles) =>
-      profiles.map((profile) => ({ profile, version: null })),
-  );
-  await service.startConfigured();
-  await service.remove("removed-tui");
-  await service.hosts.add({
-    type: "ssh",
-    ssh_destination: "sample@new.example",
-    auto_connect: false,
-  });
-  expect(store.load()?.profiles.map((profile) => profile.id)).toEqual([
-    "saved-core",
-  ]);
-  expect(
-    store
-      .load()
-      ?.hosts?.find((host) => host.id === "host-local")
-      ?.discovered?.map((record) => record.connection_id),
-  ).toEqual(["saved-core"]);
-});
-
-test("automatic discovery still persists a fresh implicit runtime when no registry exists", async () => {
-  const { service, store } = await fixture([], async (_host, profiles) =>
-    profiles.map((profile) => ({ profile, version: "0.9.5" })),
-  );
-  expect(store.load()).toBeNull();
-  await service.startConfigured();
-  expect(store.load()?.profiles.map((profile) => profile.id)).toEqual([
-    "startup-default",
-  ]);
-  expect(store.load()?.hosts?.[0]?.discovered?.[0]?.connection_id).toBe(
-    "startup-default",
-  );
-});
-
 test("first host persistence keeps the implicit runtime's ID across restart", async () => {
   const { service, store } = await fixture([], async (_host, profiles) =>
     profiles.map((profile) => ({ profile, version: "0.9.5" })),
@@ -308,7 +232,6 @@ test("all found runtimes connect; a failed sibling never captures another runtim
   const { service, store, manager, coreManager, failures } = await fixture(
     profiles,
     async () => profiles.map((profile) => ({ profile, version: "1.2.3" })),
-    { hosts: migrateHosts(profiles) },
   );
   failures.add("core-old");
   await service.startConfigured();
@@ -536,7 +459,6 @@ test("removing a host drains only its runtimes and forgets its discovery records
       profiles
         .filter((profile) => hostId(profile) === host.id)
         .map((profile) => ({ profile, version: null })),
-    { hosts: migrateHosts(profiles) },
   );
   await service.startConfigured();
   const sibling = manager.readyRuntimeLease("local-old")!;
