@@ -1,0 +1,7 @@
+{
+  "bytes": 17301504,
+  "files": 212,
+  "history": [
+    "2026-11-22: Seed at the owner-approved 16.5 MiB interim ceiling from #1220; retain the 212-file limit. Startup and help-picture limits stay separate."
+  ]
+}
