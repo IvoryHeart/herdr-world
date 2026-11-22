@@ -55,7 +55,7 @@ in the PR description.
 Prepare the PR body in a local file after committing the candidate. Run
 `bun run check:pr-body <file>` (append the base ref for a stacked PR), then use
 that same file with `gh pr create --body-file <file>` to open one ready PR.
-The check shares CI's changelog, knowledge-map, spec and verification impact
+The check shares CI's changelog, source-coverage, spec and verification impact
 policies against the committed PR diff. Every non-documentation PR needs two
 plain lines without bold labels:
 
@@ -81,7 +81,7 @@ Verification impact: none
 Claims must name changed paths (or a spec/change directory or name); an untouched
 claim fails. Changes under `openspec/specs/` or `openspec/changes/` forbid
 `Spec impact: none`. Changes under `quint/`, `verification/` or an owner in
-`verification/coverage.json` forbid `Verification impact: none`, including files
+`verification/coverage/` forbid `Verification impact: none`, including files
 under directory owners. This is a cheap consistency check, not a substitute for
 review of the assessment and evidence. Before the first push, supply the intended
 body through `HERDR_WORLD_PR_BODY=<file>` so the same policy runs locally.

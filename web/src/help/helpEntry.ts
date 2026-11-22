@@ -106,7 +106,9 @@ export function helpEntryProblems(entry: HelpEntry): string[] {
   if (!entry.steps.length || entry.steps.some((step) => !step.trim()))
     problems.push(`${at}: needs at least one step, none empty`);
   if (entry.steps.length > 5)
-    problems.push(`${at}: keep it to five steps; detail goes in FEATURES.md`);
+    problems.push(
+      `${at}: keep it to five steps; detail goes in capability notes`,
+    );
   if (!VERSION.test(entry.since))
     problems.push(`${at}: since must be a version such as 0.3.6`);
   if (!/^[a-z][a-z0-9.-]*$/.test(entry.control))

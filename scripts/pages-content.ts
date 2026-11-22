@@ -10,7 +10,7 @@ export interface TutorialPage {
 }
 
 /**
- * The tutorial teaches a learner; FEATURES.md is the reference. These limits
+ * The tutorial teaches a learner; capability notes hold the reference. These limits
  * keep each step readable and stop edge cases accumulating in the tutorial.
  */
 export const tutorialLimits = { words: 6000, blockWords: 60 } as const;
@@ -87,7 +87,7 @@ export function measureTutorial(markdown: string): TutorialShape {
 export function checkTutorialShape(markdown: string): void {
   const { words, longest } = measureTutorial(markdown);
   const advice =
-    "Keep tutorial steps short; put reference detail, edge cases and limits in FEATURES.md.";
+    "Keep tutorial steps short; put reference detail, edge cases and limits in capability notes.md.";
   if (longest.words > tutorialLimits.blockWords) {
     const start = longest.text.split(/\s+/).slice(0, 12).join(" ");
     throw new Error(

@@ -11,6 +11,9 @@ export const townCanvasCases = {
   baseline: [
     [1440, 900, "typical", 0],
     [390, 900, "typical", 0],
+    // Keep the complete bus trip out of the general interaction deadline.
+    [1440, 900, "bus", 0],
+    [390, 900, "bus", 0],
     [390, 844, "recovery", 0],
     [1440, 900, "recovery", 0],
     [1440, 900, "max", 0],

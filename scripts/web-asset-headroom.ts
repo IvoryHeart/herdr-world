@@ -106,6 +106,59 @@ export async function settleVerdict(options: {
   return verdict;
 }
 
+async function git(args: string[], cwd: string) {
+  const child = Bun.spawn(
+    [
+      "git",
+      "-c",
+      "user.name=web-asset-headroom",
+      "-c",
+      "user.email=headroom@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
+      ...args,
+    ],
+    { cwd, stdout: "pipe", stderr: "pipe" },
+  );
+  const [out, code] = await Promise.all([
+    new Response(child.stdout).text(),
+    child.exited,
+  ]);
+  return { ok: code === 0, out: out.trim() };
+}
+
+/**
+ * A stacked PR (based on another PR's branch) may have merged newer main
+ * commits that its base branch lacks. Measured against the bare base, main's
+ * own growth would count as the PR's delta and then be added to main a second
+ * time. With the base checked out, merge in the main the PR already contains,
+ * so the delta is the PR's own. Returns what it did, for the log.
+ */
+export async function alignStackedBase(options: {
+  cwd?: string;
+  prHead: string;
+  mainRef?: string;
+}): Promise<string> {
+  const cwd = options.cwd ?? process.cwd();
+  const mainRef = options.mainRef ?? "origin/main";
+  const seen = await git(["merge-base", options.prHead, mainRef], cwd);
+  if (!seen.ok) return `base kept: no merge base with ${mainRef}`;
+  const contained = await git(
+    ["merge-base", "--is-ancestor", seen.out, "HEAD"],
+    cwd,
+  );
+  if (contained.ok) return "base kept: it already contains the PR's main";
+  // Where the base and main both changed a file (regenerated pictures, say),
+  // main's side is enough for a size measurement.
+  const merged = await git(
+    ["merge", "--quiet", "--no-edit", "-X", "theirs", seen.out],
+    cwd,
+  );
+  if (merged.ok) return `base aligned with main ${seen.out.slice(0, 12)}`;
+  await git(["merge", "--abort"], cwd);
+  return `base kept: merging main ${seen.out.slice(0, 12)} conflicts`;
+}
+
 async function sh(command: string[], cwd = process.cwd()) {
   const child = Bun.spawn(command, { cwd, stdout: "pipe", stderr: "inherit" });
   const [out, code] = await Promise.all([
@@ -166,8 +219,11 @@ async function main() {
   if (process.argv[2] === "pr") {
     const head = Bun.env.PR_HEAD_SHA!;
     const merged = await measure();
+    const prHead = await sh(["git", "rev-parse", "HEAD^2"]);
     await sh(["git", "checkout", "--quiet", "HEAD^1"]);
     const baseSha = await sh(["git", "rev-parse", "HEAD"]);
+    if (Bun.env.PR_BASE_REF !== "main")
+      console.info(await alignStackedBase({ prHead }));
     const base = await measure();
     const delta = {
       files: merged.files - base.files,

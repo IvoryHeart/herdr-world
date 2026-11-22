@@ -5,6 +5,9 @@ on:
         branches: [main]
         paths:
             - site/**
+            - openspec/specs/**
+            - openspec/changes/**
+            - scripts/where.ts
             - docs/TUTORIAL.md
             - docs/images/**
             - web/src/world/town/**

@@ -1,0 +1,61 @@
+{
+  "id": "Q02",
+  "area": "Profile service and persistence",
+  "owner": "server/src/connections/profile-service.ts",
+  "requirement": "openspec/specs/runtime-federation/spec.md",
+  "properties": "Replacement uses the new factory; retries are host-local; persisted catalogue and default remain consistent",
+  "existingTests": [
+    "server/src/connections/profile-service.test.ts",
+    "server/src/connections/ssh-preflight-recovery.test.ts",
+    "server/src/connections/profiles.test.ts",
+    "server/src/connections/first-run.test.ts",
+    "server/src/cli/connections.test.ts",
+    "server/src/connections/registry-process.test.ts",
+    "server/src/connections/local-recovery.test.ts",
+    "server/src/service/local-recovery.test.ts",
+    "server/src/connections/host-service.test.ts",
+    "server/src/cli/host-connections.test.ts",
+    "server/src/service/host-connections.test.ts",
+    "server/src/connections/profile-process.test.ts",
+    "server/src/assistant.integration.test.ts",
+    "server/src/assistant-recovery.integration.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
+  "technique": "shared-lifecycle",
+  "assessment": "profile replacement/retry admission consumer mapping; classified default recovery beyond six failures, capped jitter and explicit finite-policy/cancellation fixtures",
+  "status": "shared-model",
+  "remaining": "Persistence atomicity and retry clock/jitter remain real integration evidence; manager readiness alone does not prove catalogue consistency.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/runtime-control.qnt", "quint/runtime-drain.qnt"],
+    "contracts": [
+      "verification/consumer-evidence.md",
+      "verification/composition.md",
+      "verification/contracts/connection-registry.md"
+    ],
+    "tests": [
+      "server/src/connections/profile-service.test.ts",
+      "server/src/cli/connections.test.ts",
+      "server/src/connections/registry-process.test.ts",
+      "server/src/connections/first-run.test.ts",
+      "server/src/connections/ssh-preflight-recovery.test.ts",
+      "server/src/connections/profiles.test.ts",
+      "server/src/connections/local-recovery.test.ts",
+      "server/src/service/local-recovery.test.ts",
+      "server/src/connections/host-service.test.ts",
+      "server/src/cli/host-connections.test.ts",
+      "server/src/service/host-connections.test.ts",
+      "server/src/connections/profile-process.test.ts",
+      "server/src/assistant.integration.test.ts",
+      "server/src/assistant-recovery.integration.test.ts"
+    ],
+    "checks": ["bun run check", "bun run verification:check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "evidenceDecision": "Manager replacement and drain guarantees are consumed by profile persistence/retry admission; real profile tests retain default persistence, rollback and cancellation during cleanup. Local initial-socket retry consumes the same unchanged runtime-control/drain transitions; deterministic scheduler cancellation/backoff tests and a production-composition native-socket test verify late readiness, fresh admission and retired-generation refusal. This does not establish macOS login activation. Host catalogue migration preserves runtime IDs; serialized discovery, empty-host durability, disappearance/rediscovery, independent sibling failure, host removal and discovery during shutdown consume the same unchanged manager transitions. Real composition tests cover authenticated host RPC/CLI admission and no offline fallback. Host admission additionally exhausts eight saved-host/profile auto-connect combinations and four recovering-runtime/sibling-disconnect combinations with the actual retry scheduler. Persistence reload, deferred-start Disconnect, explicit absent-endpoint Connect, retained intent across temporary absence and failed-write startup isolation are direct finite consumer evidence; manager transitions remain unchanged. See the host ownership consumer decision. Saved registry ownership adds direct exhaustive CLI admission orders and actual independent-process startup/crash consumers (verification/contracts/connection-registry.md); these establish the native file-lock and consumer boundaries without expanding the manager models.",
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

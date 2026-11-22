@@ -827,7 +827,7 @@ moving it later keeps its scope, confirmation, recovery and held-queue contracts
 
 See `verification-plan.md` for the models, property suites and coverage re-mapping per
 stage. Every implementation PR does three things:
-- updates its contracts, adapters, consumer tests and `verification/coverage.json`;
+- updates its contracts, adapters, consumer tests and `verification/coverage/`;
 - runs the complete gate;
 - syncs its own deltas into the current specs.
 

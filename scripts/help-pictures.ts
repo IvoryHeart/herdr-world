@@ -84,6 +84,12 @@ export function clipAround(
 
 const page = join(ROOT, "web/src/help/testing/HelpShots.browser.tsx");
 
+export const helpPictureBuildConfig = {
+  target: "browser",
+  define: { __HERDR_WORLD_VERSION__: JSON.stringify("help") },
+  plugins: [RAW_TEXT],
+} satisfies Partial<Bun.BuildConfig>;
+
 export async function runHelpPictures(options: {
   chrome: string;
   /** Only these entries; all by default. */
@@ -135,11 +141,9 @@ export async function runHelpPictures(options: {
   let cdp: Cdp | undefined;
   try {
     const build = await Bun.build({
+      ...helpPictureBuildConfig,
       entrypoints: [page],
       outdir: join(scratch, "bundle"),
-      target: "browser",
-      define: { __HERDR_WORLD_VERSION__: JSON.stringify("help") },
-      plugins: [RAW_TEXT],
     });
     if (!build.success)
       throw new AggregateError(build.logs, "Help stage build failed");

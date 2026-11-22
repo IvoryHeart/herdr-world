@@ -2,7 +2,7 @@
 
 The reference renders the production TownCanvas and DOM overlays with synthetic
 data. This is visual evidence, separate from the ownership, lifecycle and gesture
-claims already mapped in `verification/coverage.json`. It adds no model claim or
+claims already mapped in `verification/coverage/`. It adds no model claim or
 mandatory consumer, and removes no existing browser check. Direct pixel comparison
 is the appropriate evidence for this rendering boundary; a state-machine model
 cannot establish its appearance.

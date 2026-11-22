@@ -307,6 +307,27 @@ export const rpcVerbs = [
     }),
   ),
   rpc(
+    "world.core.move",
+    "reconcilable",
+    "world",
+    Type.Union([
+      object({
+        connection_id: text,
+        connection_generation: Type.Integer({ minimum: 0 }),
+        kind: Type.Literal("pane"),
+        pane_id: Type.String({ pattern: CORE_LOCAL_ADDRESS_PATTERN }),
+        tab_id: text,
+      }),
+      object({
+        connection_id: text,
+        connection_generation: Type.Integer({ minimum: 0 }),
+        kind: Type.Literal("desk"),
+        tab_id: text,
+        workspace_id: text,
+      }),
+    ]),
+  ),
+  rpc(
     "world.core.kill_plan",
     "read",
     "world",
@@ -518,7 +539,6 @@ export const rpcVerbs = [
     object({ harness: text }),
   ),
   // The owner's last sighting across browsers, for "Since you left".
-  rpc("world.presence.seen", "reconcilable", "world"),
   rpc("world.profiles.delete", "reconcilable", "world"),
   rpc("world.profiles.get", "read", "world"),
   rpc("world.profiles.save", "reconcilable", "world"),

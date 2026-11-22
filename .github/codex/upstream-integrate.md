@@ -18,7 +18,7 @@ decision is required or a fix cannot be justified, leave the problem unresolved
 and explain it. Never weaken tests, checks or access policy to obtain a pass.
 
 Write an integration report to .agents/upstream/report.md. State adopted changes,
-retained downstream divergences, conflicts resolved, affected coverage.json IDs,
+retained downstream divergences, conflicts resolved, affected coverage/ IDs,
 focused checks actually run, and unresolved decisions or risks. Include a specific
 "Knowledge map impact: unchanged — <reason>" line only if source ownership and
 navigation truly remain unchanged; otherwise update docs/knowledge-map.md.

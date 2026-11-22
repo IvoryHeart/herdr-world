@@ -14,6 +14,7 @@ import {
   MEMORY_FIXTURE_TARGET,
   memoryFixtureClient,
   memoryFixtureOn,
+  memoryFixtureHasMemory,
 } from "./memoryFixture";
 
 /**
@@ -205,7 +206,7 @@ const emit = () => {
   version += 1;
   for (const listener of listeners) listener();
 };
-const subscribe = (listener: () => void) => {
+export const subscribeMemory = (listener: () => void) => {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
@@ -239,7 +240,8 @@ const fixtureHosts: readonly MemoryHostTarget[] = [
 
 /** The hosts to offer: the published ones, or the testing switch's one. */
 export function memoryHosts(): readonly MemoryHostTarget[] {
-  if (!override && memoryFixtureOn()) return fixtureHosts;
+  if (!override && memoryFixtureOn())
+    return memoryFixtureHasMemory() ? fixtureHosts : [];
   return hosts;
 }
 
@@ -301,5 +303,5 @@ export function requestMemoryCatalog(
 
 /** Re-renders on any host or catalog change; returns the store's version. */
 export function useMemoryStore() {
-  return useSyncExternalStore(subscribe, () => version);
+  return useSyncExternalStore(subscribeMemory, () => version);
 }
