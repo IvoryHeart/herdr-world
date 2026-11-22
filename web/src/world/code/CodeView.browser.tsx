@@ -605,13 +605,17 @@ async function run() {
     url: "/ide/browserFixture0003/",
     startedAt: new Date().toISOString(),
   };
+  let insecureReads = 0;
   const insecureClient: IdeClient = {
     ...fake.client,
-    status: async () => ({
-      providers: [{ ...fake.vscode, enabled: true }],
-      instances: [ready],
-      localConnections: ["local"],
-    }),
+    status: async () => {
+      insecureReads++;
+      return {
+        providers: [{ ...fake.vscode, enabled: true }],
+        instances: [ready],
+        localConnections: ["local"],
+      };
+    },
   };
   flushSync(() =>
     plain.render(
@@ -647,6 +651,23 @@ async function run() {
     insecureText.includes("It can run on the computer World runs on"),
     "the secure-address screen names the project's computer",
   );
+  check(
+    Boolean(button("Try again")) && Boolean(button("Choose another IDE")),
+    "the secure-address screen offers Try again and Choose another IDE",
+  );
+  const readsBeforeRetry = insecureReads;
+  button("Try again")?.click();
+  await until(
+    () => insecureReads > readsBeforeRetry,
+    "Try again on the secure-address screen checks again",
+  );
+  await settle();
+  check(
+    $(".code-view")?.getAttribute("data-state") === "insecure-page" &&
+      !$(".code-view-frame") &&
+      button("Try again")?.disabled === false,
+    "checking again on the same plain-HTTP address still explains why",
+  );
   button("Choose another IDE")?.click();
   await until(
     () =>
@@ -660,6 +681,7 @@ async function run() {
   );
   flushSync(() => plain.unmount());
 
+  await checkShowPicksServer(host, fake);
   await checkFailures(host);
 
   // Settings shows the same rows.
@@ -712,6 +734,82 @@ async function run() {
     "Disable stopped a server",
   );
   flushSync(() => settings.unmount());
+}
+
+/**
+ * Servers → Show brings the listed server to the front, even when another
+ * IDE was picked for that project and has no server there.
+ */
+async function checkShowPicksServer(
+  host: HTMLElement,
+  fake: ReturnType<typeof fakeClient>,
+) {
+  localStorage.clear();
+  const [, codeServer] = (await fake.client.status()).providers;
+  const running: IdeInstance = {
+    id: "browserFixture0004",
+    provider: "code-server",
+    connectionId: "local",
+    folder: "/srv/example/api",
+    state: "ready",
+    url: "/ide/browserFixture0004/",
+    startedAt: new Date().toISOString(),
+  };
+  const client: IdeClient = {
+    ...fake.client,
+    status: async () => ({
+      providers: [
+        { ...fake.vscode, enabled: true },
+        { ...codeServer!, enabled: true },
+      ],
+      instances: [running],
+      localConnections: ["local"],
+    }),
+  };
+  const root = createRoot(host);
+  flushSync(() =>
+    root.render(
+      <CodeView
+        world={world}
+        client={client}
+        secure
+        onOpenAgent={() => {}}
+        onOpenTerminal={() => {}}
+      />,
+    ),
+  );
+  const shown = () =>
+    $<HTMLIFrameElement>(".code-view-frame:not([hidden])")?.getAttribute(
+      "src",
+    ) === running.url;
+  await until(shown, "the running code-server shows before any IDE is picked");
+  const picker = $<HTMLSelectElement>(".code-view-provider select");
+  check(Boolean(picker), "two enabled IDEs show the IDE picker");
+  if (picker) {
+    picker.value = "vscode";
+    picker.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  await until(
+    () => Boolean(button("Open in Visual Studio Code")) && !shown(),
+    "picking another IDE offers Open in it",
+  );
+  [...document.querySelectorAll<HTMLButtonElement>("button")]
+    .find((entry) => entry.textContent?.startsWith("Servers"))
+    ?.click();
+  await until(
+    () => Boolean($('[aria-label="Running IDE servers"] .ide-server')),
+    "Servers lists the running code-server",
+  );
+  button("Show", $('[aria-label="Running IDE servers"] .ide-server')!)?.click();
+  await until(
+    shown,
+    "Show brings the listed code-server to the front, not the picked IDE",
+  );
+  check(
+    $<HTMLSelectElement>(".code-view-provider select")?.value === "code-server",
+    "Show selects the listed server's IDE",
+  );
+  flushSync(() => root.unmount());
 }
 
 /** The fixture client, told which connection is World's own computer. */

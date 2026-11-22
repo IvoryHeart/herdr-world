@@ -156,6 +156,7 @@ export default function CodeView({
   const railId = useId();
   const [refusals, setRefusals] = useState<Record<string, ProjectRefusal>>({});
   const [opening, setOpening] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
   const [stopping, setStopping] = useState<IdeInstance | null>(null);
   const [serversOpen, setServersOpen] = useState(false);
@@ -246,6 +247,20 @@ export default function CodeView({
       setOpenError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setOpening(null);
+    }
+  };
+
+  /**
+   * Try again where nothing was opened (the secure-address screen): read
+   * the IDEs again, so a change made elsewhere (another IDE enabled in
+   * Settings, World opened over HTTPS in a new tab) shows here.
+   */
+  const checkAgain = async () => {
+    setChecking(true);
+    try {
+      await ide.reload(true);
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -439,8 +454,11 @@ export default function CodeView({
                 ide.apply(await client.forget(entry.id))
               }
               onShow={(entry) => {
+                // Show this server: its project and its IDE, so a picked
+                // IDE without a server doesn't stand in front of it.
                 const target = projectOf(entry);
                 if (target) choose(target.key);
+                setProviderChoice(entry.provider);
                 setServersOpen(false);
               }}
             />
@@ -568,6 +586,8 @@ export default function CodeView({
         <InsecurePage
           label={insecure.label}
           computer={computer}
+          busy={checking}
+          onRetry={() => void checkAgain()}
           onChoose={chooseIde}
         />
       );
@@ -725,7 +745,7 @@ export default function CodeView({
 /**
  * The way on from a failure: the same again, and back to the IDE list to
  * choose another IDE or option. Try again is left out only where the screen
- * already has it (Open) or where the same page can't succeed (plain HTTP).
+ * already has it (Open).
  */
 function FailureActions({
   busy = false,
@@ -760,10 +780,15 @@ function FailureActions({
 function InsecurePage({
   label,
   computer,
+  busy,
+  onRetry,
   onChoose,
 }: {
   label: string;
   computer: string;
+  busy: boolean;
+  /** Checks again: this address stays plain HTTP until World is opened on HTTPS. */
+  onRetry: () => void;
   onChoose: () => void;
 }) {
   return (
@@ -781,7 +806,7 @@ function InsecurePage({
         computer World runs on, localhost works too. code-server and OpenVSCode
         Server work on this address: choose one of them instead.
       </p>
-      <FailureActions onChoose={onChoose} />
+      <FailureActions busy={busy} onRetry={onRetry} onChoose={onChoose} />
     </div>
   );
 }

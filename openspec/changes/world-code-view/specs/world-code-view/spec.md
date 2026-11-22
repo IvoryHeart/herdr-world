@@ -19,9 +19,9 @@ VS Code desktop, Cursor, JetBrains Gateway and Zed SHALL be distinct provider
 choices/capability records rather than aliases claiming identical functionality.
 Every failure to open a project in Code (provider missing on the project's
 host, server stopped, open refused, page not secure enough) SHALL say what went
-wrong and on which computer, and SHALL offer the same open again, unless the
-same page cannot succeed, and a way back to the provider list (enable, disable,
-setup) without leaving Code. A failure SHALL belong to its provider: choosing
+wrong and on which computer, and SHALL offer both Try again (the same open,
+or on a page not secure enough a fresh check) and a way back to the provider
+list (enable, disable, setup) without leaving Code. A failure SHALL belong to its provider: choosing
 another provider SHALL NOT keep showing it.
 
 #### Scenario: Detect without starting

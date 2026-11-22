@@ -177,7 +177,7 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   reattaches to them on its own computer, and on each SSH host once that
   connection is ready. A start whose answer from the SSH host was lost stays
   listed and counted as possibly running until the host shows otherwise.
-  **Show** brings that project to the front.
+  **Show** brings that project and that server's IDE to the front.
 - **Limits and refusals.** At most four servers run or wait to be reattached at
   once, unreachable ones included; a fifth is refused (**Too many IDEs are
   running**) with **Show running servers**, and World never stops one to make
@@ -198,9 +198,9 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   computer (the project's host, or the computer World runs on): **<IDE> isn't
   installed on <computer>**, **<IDE> stopped on <computer>** with its last
   error line, **World can't open <project> in <IDE> on <computer>** with why,
-  and the secure-address screen. Each offers **Try again** (the secure-address
-  screen leaves it out: the same address can't succeed) and **Choose another
-  IDE**, which opens the IDE list over the view without leaving Code: disable
+  and the secure-address screen. Each offers **Try again** (on the
+  secure-address screen it checks again, and the screen stays until World is
+  opened over HTTPS or at localhost) and **Choose another IDE**, which opens the IDE list over the view without leaving Code: disable
   the failing IDE, enable another, and the screen becomes **Open in** that
   IDE. Enabling an IDE there makes it the one projects open with. A refusal
   or stopped server belongs to its IDE; another IDE chosen doesn't show it.
