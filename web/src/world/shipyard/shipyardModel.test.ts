@@ -22,6 +22,7 @@ function state(mode: ShipyardFixtureMode): ShipyardState {
   return {
     catalog,
     repo,
+    manual: null,
     snapshot: repo ? shipyardFixtureSnapshot(mode, NOW, repo) : null,
     snapshots: {},
     laneErrors: {},
@@ -40,6 +41,7 @@ describe("shipyard view", () => {
     const empty = {
       catalog: null,
       repo: null,
+      manual: null,
       snapshot: null,
       snapshots: {},
       laneErrors: {},
@@ -192,7 +194,7 @@ describe("shipyard view", () => {
     expect(shipyardSignText(off)).toBe("Closed · GitHub source is off");
     const none = shipyardView(state("empty"), NOW);
     expect(none.status).toBe("no_repo");
-    expect(shipyardSignText(none)).toBe("Choose a repository");
+    expect(shipyardSignText(none)).toBe("No open project on GitHub");
   });
 
   test("running Worlds in words", () => {

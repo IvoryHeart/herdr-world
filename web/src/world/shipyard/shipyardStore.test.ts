@@ -7,6 +7,7 @@ import {
 } from "./shipyardFixture";
 import {
   pickRepo,
+  SHIPYARD_MANUAL_KEY,
   SHIPYARD_REPO_KEY,
   shipyardLanes,
   shipyardStore,
@@ -57,6 +58,7 @@ afterEach(() => {
   shipyardStore.reset();
   shipyardStore.useFetch(null);
   worldLocalStorage.removeItem(SHIPYARD_REPO_KEY);
+  worldLocalStorage.removeItem(SHIPYARD_MANUAL_KEY);
 });
 
 describe("shipyard store", () => {
@@ -151,13 +153,87 @@ describe("shipyard store", () => {
     expect(state.laneErrors[other]).toBeTruthy();
   });
 
-  test("a chosen repository the catalog no longer suggests keeps its lane", () => {
+  test("lanes are the open projects, plus a typed repository first", () => {
     const catalog = shipyardFixtureCatalog("ready", NOW);
+    expect(shipyardLanes(catalog, null)).toEqual(catalog.repositories);
     expect(shipyardLanes(catalog, FIXTURE_REPO)).toEqual(catalog.repositories);
     expect(shipyardLanes(catalog, "example-org/other")).toEqual([
       "example-org/other",
       ...catalog.repositories,
     ]);
+  });
+
+  test("lanes follow the projects: one that closes goes, one that opens joins", async () => {
+    const open = shipyardFixtureCatalog("ready", NOW);
+    let catalog = open;
+    shipyardStore.useFetch(async (input) => {
+      const repo = new URL(String(input), "http://x.invalid").searchParams.get(
+        "repo",
+      );
+      return Response.json(
+        repo ? shipyardFixtureSnapshot("ready", NOW, repo) : catalog,
+      );
+    });
+    await shipyardStore.read();
+    const [chosen, closing] = open.repositories;
+    expect(shipyardStore.state().snapshots[closing!]).toBeDefined();
+    catalog = {
+      ...open,
+      repositories: open.repositories.filter((repo) => repo !== closing),
+    };
+    await shipyardStore.read();
+    expect(shipyardStore.state().snapshots[closing!]).toBeUndefined();
+    expect(shipyardStore.state().repo).toBe(chosen!);
+    // The chosen project closes too: the first open one is shown instead.
+    catalog = { ...open, repositories: ["example-org/late-zebra"] };
+    await shipyardStore.read();
+    expect(shipyardStore.state().repo).toBe("example-org/late-zebra");
+    expect(shipyardStore.state().snapshot?.repo).toBe("example-org/late-zebra");
+    expect(Object.keys(shipyardStore.state().snapshots)).toEqual([
+      "example-org/late-zebra",
+    ]);
+  });
+
+  test("each lane shows as soon as its own read lands", async () => {
+    const repos = shipyardFixtureCatalog("ready", NOW).repositories;
+    const slow = repos[2]!;
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    service((call) =>
+      call.path.includes(encodeURIComponent(slow)) ? held : undefined,
+    );
+    const reading = shipyardStore.read();
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const early = shipyardStore.state();
+    expect(early.snapshots[repos[0]!]).toBeDefined();
+    expect(early.snapshots[repos[1]!]).toBeDefined();
+    expect(early.snapshots[slow]).toBeUndefined();
+    release();
+    await reading;
+    expect(shipyardStore.state().snapshots[slow]).toBeDefined();
+  });
+
+  test("a typed repository is an extra lane only while it is chosen", async () => {
+    service();
+    await shipyardStore.choose("example-org/elsewhere", true);
+    let state = shipyardStore.state();
+    expect(state.manual).toBe("example-org/elsewhere");
+    expect(shipyardLanes(state.catalog!, state.manual)[0]).toBe(
+      "example-org/elsewhere",
+    );
+    expect(state.snapshot?.repo).toBe("example-org/elsewhere");
+    // It survives the next read, as a lane of its own.
+    await shipyardStore.read();
+    expect(shipyardStore.state().repo).toBe("example-org/elsewhere");
+    // Choosing an open project drops it.
+    await shipyardStore.choose(FIXTURE_REPO);
+    state = shipyardStore.state();
+    expect(state.manual).toBeNull();
+    expect(state.snapshots["example-org/elsewhere"]).toBeUndefined();
+    expect(worldLocalStorage.getItem(SHIPYARD_MANUAL_KEY)).toBeNull();
   });
 
   test("a chosen repository is read and remembered on this browser", async () => {
@@ -219,7 +295,11 @@ describe("shipyard store", () => {
   test("a stored name that is no longer a repository falls back", () => {
     const catalog = shipyardFixtureCatalog("ready", NOW);
     expect(pickRepo("not a repository", catalog)).toBe(FIXTURE_REPO);
-    expect(pickRepo("example-org/other", catalog)).toBe("example-org/other");
+    // A stored choice that is no longer open falls back, unless it was typed.
+    expect(pickRepo("example-org/other", catalog)).toBe(FIXTURE_REPO);
+    expect(pickRepo("example-org/other", catalog, "example-org/other")).toBe(
+      "example-org/other",
+    );
     expect(pickRepo(null, shipyardFixtureCatalog("empty", NOW))).toBeNull();
   });
 });

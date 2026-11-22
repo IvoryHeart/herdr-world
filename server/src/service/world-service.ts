@@ -52,6 +52,7 @@ import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
 import { composeSources, runSourceProcess } from "../sources/composition";
 import { ShipyardService } from "../shipyard/service";
+import { profileCheckoutHost, ShipyardProjects } from "../shipyard/projects";
 import { ShipyardInstances } from "../shipyard/instances";
 import { shipyardInstanceIdentity } from "../shipyard/identity";
 import { createShipyardHttp } from "../shipyard/http";
@@ -718,9 +719,21 @@ async function compose(
     config.appVersion,
     clock.now(),
   );
+  // Shipyard's lanes are the projects open in the runtimes (#1226).
+  const shipyardProjects = new ShipyardProjects({
+    run: runSourceProcess,
+    topology: async () =>
+      worldSnapshots ? (await worldSnapshots.snapshot()).connections : [],
+    hostOf: (id) =>
+      id === STARTUP_DEFAULT_CONNECTION_ID && config.sshHost
+        ? { kind: "ssh", destination: config.sshHost }
+        : profileCheckoutHost(connectionProfiles.profilesById().get(id)),
+    now: () => clock.now(),
+  });
   const shipyard = new ShipyardService({
     run: runSourceProcess,
     source: () => worldSources.shipyardSource(),
+    projects: () => shipyardProjects.read(),
     instances: () => shipyardInstances.read(),
     now: () => clock.now(),
   });

@@ -290,8 +290,8 @@ export function shipyardSignText(view: ShipyardView): string {
       return "Closed · World did not answer";
     case "no_repo":
       return view.running.length
-        ? `${runningCount(view.running)} · choose a repository`
-        : "Choose a repository";
+        ? `${runningCount(view.running)} · no open project on GitHub`
+        : "No open project on GitHub";
     case "reading":
       return "Reading GitHub…";
     case "off":

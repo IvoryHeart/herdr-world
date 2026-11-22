@@ -9,6 +9,7 @@ import {
 } from "../../../shared/shipyard";
 import type { RunProcess } from "../sources/github";
 import { readShipyardGitHub } from "./github";
+import type { OpenProjects } from "./projects";
 
 type Entry = {
   data: ShipyardPipeline | null;
@@ -19,7 +20,9 @@ type Entry = {
 };
 export type ShipyardServiceOptions = {
   run: RunProcess;
-  source(): { enabled: boolean; generation: number; repositories: string[] };
+  source(): { enabled: boolean; generation: number };
+  /** The projects open in World's runtimes: the catalog's lanes (#1226). */
+  projects(): Promise<OpenProjects>;
   instances(): ShipyardWindow<ShipyardInstance>;
   now?: () => number;
   waitMs?: number;
@@ -27,7 +30,10 @@ export type ShipyardServiceOptions = {
 
 export class ShipyardService {
   #cache = new Map<string, Entry>();
-  #active: { repo: string; task: Promise<void> } | null = null;
+  /** Reads running or waiting for one of `concurrentReads` slots. */
+  #reads = new Map<string, Promise<void>>();
+  #running = 0;
+  #queue: (() => void)[] = [];
   #generation: number | null = null;
   #closed = false;
   #now: () => number;
@@ -42,28 +48,33 @@ export class ShipyardService {
     }
     return source;
   }
-  catalog(): ShipyardCatalog {
-    const source = this.#source();
-    const instances = this.options.instances();
-    const suggestions = [
-      ...(source.enabled ? source.repositories : []),
-      ...instances.items.flatMap((i) => (i.repo ? [i.repo] : [])),
-      ...this.#cache.keys(),
-    ];
+  /**
+   * The open projects, one per GitHub repository, every one of them: a
+   * folder past the limit is counted in `omitted`, never dropped silently.
+   */
+  async catalog(): Promise<ShipyardCatalog> {
+    const open = await this.options.projects();
     const repositories = new Set<string>();
-    for (const value of suggestions) {
-      try {
-        repositories.add(shipyardRepository(value));
-      } catch {
-        /* Not a GitHub repository. */
-      }
-    }
+    for (const project of open.projects)
+      if (project.repo) repositories.add(shipyardRepository(project.repo));
     return {
       observedAt: this.#now(),
-      repositories: [...repositories].sort().slice(0, L.repositories),
-      instances,
+      repositories: [...repositories].sort(),
+      projects: open.projects,
+      pending: open.pending,
+      omitted: open.omitted,
+      instances: this.options.instances(),
       limits: L,
     };
+  }
+  async #slot() {
+    if (this.#running >= L.concurrentReads)
+      await new Promise<void>((resolve) => this.#queue.push(resolve));
+    this.#running++;
+  }
+  #release() {
+    this.#running--;
+    this.#queue.shift()?.();
   }
   async snapshot(input: string, force = false): Promise<ShipyardSnapshot> {
     const repo = shipyardRepository(input);
@@ -71,10 +82,13 @@ export class ShipyardService {
     let entry = this.#cache.get(repo);
     if (source.enabled && !this.#closed) {
       if (!entry) {
-        if (this.#cache.size >= L.repositories)
-          this.#cache.delete(
-            [...this.#cache.keys()].find((key) => key !== this.#active?.repo)!,
+        if (this.#cache.size >= L.repositories) {
+          // LRU, never evicting a repository whose read is running.
+          const oldest = [...this.#cache.keys()].find(
+            (key) => !this.#reads.has(key),
           );
+          if (oldest !== undefined) this.#cache.delete(oldest);
+        }
         entry = {
           data: null,
           state: "unavailable",
@@ -84,27 +98,32 @@ export class ShipyardService {
         };
         this.#cache.set(repo, entry);
       } else {
-        // LRU, excluding the one in-flight entry from eviction.
         this.#cache.delete(repo);
         this.#cache.set(repo, entry);
       }
       const interval = force ? L.forcedRefreshMs : L.refreshMs;
       if (
-        !this.#active &&
+        !this.#reads.has(repo) &&
         (entry.checkedAt === null || this.#now() - entry.checkedAt >= interval)
       ) {
         const target = entry;
         const generation = source.generation;
-        const task = readShipyardGitHub(this.options.run, repo).then(
-          (result) => {
-            const current = this.#source();
-            if (
-              this.#closed ||
-              !current.enabled ||
-              current.generation !== generation ||
-              this.#cache.get(repo) !== target
-            )
-              return;
+        const fenced = () => {
+          const current = this.#source();
+          return (
+            this.#closed ||
+            !current.enabled ||
+            current.generation !== generation ||
+            this.#cache.get(repo) !== target
+          );
+        };
+        const task = (async () => {
+          await this.#slot();
+          try {
+            // Superseded while waiting for a slot: read nothing.
+            if (fenced()) return;
+            const result = await readShipyardGitHub(this.options.run, repo);
+            if (fenced()) return;
             target.checkedAt = this.#now();
             if (result.ok) {
               target.data = result.data;
@@ -116,17 +135,20 @@ export class ShipyardService {
               target.state = result.state;
               target.detail = result.detail;
             }
-          },
-        );
-        this.#active = { repo, task };
+          } finally {
+            this.#release();
+          }
+        })();
+        this.#reads.set(repo, task);
         void task.finally(() => {
-          if (this.#active?.task === task) this.#active = null;
+          if (this.#reads.get(repo) === task) this.#reads.delete(repo);
         });
       }
-      if (this.#active?.repo === repo) {
+      const running = this.#reads.get(repo);
+      if (running) {
         let timer: ReturnType<typeof setTimeout> | undefined;
         await Promise.race([
-          this.#active.task,
+          running,
           new Promise<void>((resolve) => {
             timer = setTimeout(resolve, this.options.waitMs ?? L.waitMs);
           }),
@@ -170,8 +192,8 @@ export class ShipyardService {
         : (entry?.detail ?? "Release pipeline is unavailable."),
       checkedAt: entry?.checkedAt ?? null,
       lastSuccessAt: entry?.lastSuccessAt ?? null,
-      refreshing: source.enabled && this.#active?.repo === repo,
-      retryAfterMs: this.#active
+      refreshing: source.enabled && this.#reads.has(repo),
+      retryAfterMs: this.#reads.has(repo)
         ? L.waitMs
         : Math.max(
             0,
