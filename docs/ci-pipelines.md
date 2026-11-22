@@ -1,8 +1,7 @@
 # CI pipeline ownership
 
 CI makes one validation-scope decision and passes it to repository validation,
-World browser tests, behavioral verification, native plugin checks and installer
-upgrades. Delivery checks aggregates their results, including both macOS
+World browser tests, behavioral verification and native installer/platform checks. Delivery checks aggregates their results, including both macOS
 lifecycle architectures. The two macOS job names remain separate required checks
 for compatibility with branch rules.
 
@@ -12,10 +11,10 @@ for compatibility with branch rules.
 | Local pre-push | `check:changed`: static checks and affected non-browser units; gate/configuration changes run all non-browser units | Affected tests save local work; CI remains authoritative |
 | Privacy on every branch push and PR | Scan added lines in every introduced commit for private material, with redacted diagnostics | Independent of PR creation and validation scope; local pre-push scans the actual pushed refs too |
 | CI on a PR | Validate the proposed merge; check its description and changelog policy | One shared scope decision; native platforms and browser shards keep separate runners |
-| CI on main | Validate the integrated main tree | PR success cannot prove the result of later merges |
+| CI on main | Execute the complete integrated matrix, without model-result or installer-build reuse | PR success cannot prove the result of later merges |
 | Main gate | Classify failed push CI, rerun a recognized infrastructure failure once, or prepare an issue and revert | Does not merge a revert; green main resolves earlier alerts |
 | Web asset headroom | Compare PR asset deltas with current main and re-evaluate open PRs after merges | Catches concurrent budget consumption beyond one PR's tested base |
-| Town golden images | Compare five synthetic Town screenshots with stored reference PNGs on PR changes and main | Advisory, separate from Delivery checks; exact pixels with pinned Chrome, fonts, clock and SwiftShader |
+| Town golden images | Compare five synthetic Town screenshots for renderer/assets PR inputs, every main push and nightly | Advisory, separate from Delivery checks; exact pixels with pinned Chrome, fonts, clock and SwiftShader |
 | Prepare Release | Generate and validate release files in a checkout, then open a PR and dispatch CI | Generated files need validation before review |
 | Publish Release and Release | Authorize exact Linux/macOS release-walk bytes and signed-in local evidence before the maintainer tags; publish the same tested Unix packages | Publication requires the retained pre-tag authorization; tag protection remains in force |
 | Deploy Pages | Build and publish the documentation site and film | Site publication is separate from application release acceptance |
@@ -83,7 +82,10 @@ closed. Main retains both native architectures and every lifecycle assertion.
 The installer baseline is frozen once in Validation scope; the platform matrix
 then starts alongside the other suites. Standalone installer dispatches keep
 their resolver job. This removes one runner allocation from native PR plans
-without resolving different releases on different platforms.
+without resolving different releases on different platforms. Windows Bun-free plugin,
+frozen-action and command assertions now run in both Windows installer jobs;
+there is no separate Windows runner. Fixtures keep their isolated homes/state.
+The two protected macOS names still aggregate the complete native workflow.
 
 Native packaging also runs `test:install-linux` in the existing Linux x64
 installer-upgrade matrix job. The shared selection explicitly includes installation
@@ -148,7 +150,7 @@ World/web suites, without escalating to native or model work. Executable gate
 policy still selects the full matrix. Browser jobs use the pinned test Chrome
 (`tools/chrome/test-chrome.json`) and never retry. Timing is not a CI check: the
 separate, non-blocking World latency trend workflow measures the dense suites on
-quiet runners for main pushes and `latency-trend`-labelled PRs and reports them
+quiet runners nightly, for main pushes and `latency-trend`-labelled PRs and reports them
 beside main's recent runs on the same CPU model.
 
 The [Town golden-image report](SCREENSHOTS.md#town-golden-image-report) ordinarily runs once
@@ -194,16 +196,30 @@ separate real-storage tests. Ranger replay initializes the current empty schema
 through production storage once per process and copies that closed fixture into
 each trace’s private directory. Every trace still runs real SQLite save, rollback,
 close and reopen with FULL durability; constructor mutants keep cold initialization.
-No replay result is cached and all sampled traces still execute.
+Each fresh model execution still replays every sampled trace. Complete passing group evidence may be reused as described below.
 Local model pools retain sequential controls by default. Progress snapshots are
 serialized and cancellation drains all admitted controls. The verified checker
 cache is keyed by its committed lock and revalidated by setup; it contains no run
 evidence. A failure before execution can have no manifest: upload warns in that
 case, while the primary step stays red and aggregation still refuses missing evidence.
 
-HostsFilter's Town frame cases run serially on each browser shard so simultaneous
-software GL renderers do not starve their clocks. DOM cases retain concurrency;
-the Town cases retain every viewport/assertion and the original 45-second hang guard.
+World browser shards run full scenes one file at a time. Two simultaneous
+SwiftShader scenes competed for hosted-runner CPUs and caused progressive-control,
+focus and capture-fencing failures. The explicit lightweight DOM/transport list in
+`scripts/world-browser-suites.ts` runs two files concurrently in a separate batch;
+new suites default to isolation. Cases within each World file remain serial.
+Each case keeps private profiles, ports, RPC state and result gates, and retains
+every viewport, assertion and existing deadline. Pointer journeys clear hover
+cards between actions: camera moves can leave a previously hovered room summary
+over the next seat. The owner-topology journey deliberately starts that step with
+a hovered plaque and verifies the seat receives the pointer before pressing it.
+It holds the launcher's catalog until Terminal appears, then waits for the
+catalog to paint before locating and pressing Terminal: that response grows and
+recentres the dialog. Both presses verify the real pointer target.
+Its shard weight uses the retained hosted duration (170.387 seconds), replacing
+the 38.4-second local estimate; weights never set test deadlines. Both batches
+publish distinct JUnit/timing artifacts; a failed batch stops the runner. Web
+browser shards retain two-file concurrency.
 Pages reuses film media only with an exact render-input cache key, with no fallback
 prefix. A cache miss still renders the full film. Main latency measurements retain
 all four suites, paired over two quiet runners with a fresh quiet check before
@@ -241,11 +257,101 @@ gate accounts for the intervening merges when attributing a later failure.
 Avoid a second scheduler or independent platform scope decisions around this
 shared policy.
 
+## Content reuse and test placement
+
+PR selection remains conservative: static checks and affected non-browser units
+run before push; affected browser suites and applicable complete model groups
+run in CI. Gate/configuration and unknown inputs still select everything. The
+budgets are targets: two minutes before push, eight minutes median PR feedback
+and about ten jobs for web-only work. Native-sensitive changes retain their full
+platform assertions and can exceed that target. Main executes everything fresh.
+
+`scripts/ci-content-key.ts` walks the maintained import graph from the runner or
+compiled application entries, including the standalone storage worker. Explicit
+inventories bind models, adapters, seeds, tooling/locks, workflow commands,
+packaged public assets and notices. Newly imported production dependencies and
+new inventory files enter the hash automatically. Unresolved relative imports
+widen to every tracked byte. The shared model runner imports all adapters, so its
+closure is deliberately conservative; this is not a manually maintained list of
+production owners. Group membership, actual Bun/Node/Java identities, OS and
+architecture also enter each model key.
+
+On a PR, an exact model-cache hit is validated against current fingerprints,
+canonical group membership, complete original manifests, current tools and the
+successful enforced resource record. Cache saving and aggregation read actual
+`resources.json` reports, excluding readiness-only cancellation-control directories;
+each group must still have exactly one valid enforced report. Missing, malformed or changed evidence runs
+the entire group afresh. Restore/publication errors cannot silently combine
+partial and fresh evidence. Original manifests and resource accounting remain in
+an `origin.json` artifact. Aggregation checks restored artifacts against that
+origin, binds the current complete source inventory and records `ran`/`reused`,
+content hash and origin run/revision for each group. Reuse does not claim a new
+execution at the current revision. The checker cache is separate. Main, nightly
+and release events never restore model results. GitHub cache visibility still
+applies: default-branch evidence is available to PRs; unrelated branch-local
+caches are not a global trusted store. A miss always executes.
+
+Installer package keys bind the same production input graph plus platform,
+runner-image version and frozen stable baseline. The synthetic RC build number
+derives from the content hash so an unchanged build does not acquire a different
+embedded version on every run. Only builds are reused: native installation,
+upgrade, rollback, SQLite crash, plugin and launchd assertions still execute.
+Main and nightly rebuild packages. The nightly installer workflow retains all
+six platforms. Newest-core drift continues in its existing nightly workflow;
+latency keeps its optional PR label; golden images retain all five viewports.
+The golden workflow first checks the renderer import graph and asset inventories;
+unrelated web edits stop after the cheap scope step without installing Chrome.
+
+The production boot browser journey builds with the release Vite configuration
+and loads the unchanged packaged index/main entry from a loopback static fixture.
+It seeds sanitized v0.3.5 browser preferences, checks startup, actually backgrounds
+and freezes/resumes Chrome, observes the offered build update without a reload,
+and replaces an older worker URL with the real activated notification worker.
+The previous release had no notification worker: that stale-worker case is a
+separate #965 scenario, not a fabricated v0.3.5 artifact. HTTP runtime responses
+are synthetic; no World server or real terminal starts in this small browser test.
+Real agent/terminal/channel journeys belong to #1023's release walk; its command
+and workflow are not present on this change's base. All-channel prepublication
+staging is tracked separately in #1044.
+
+Town and shared-creation fixtures share immutable JS/CSS bundles across cases;
+each retains private application state and Chrome profiles. Shared creation
+waits for conditions at animation frames instead of a fixed 40 ms polling step;
+its negative-observation dwell checks remain. The initial 36 World weights were
+refreshed from run 44600794516's retained per-file timings (including setup).
+With subsequently added suites and the hosted owner-topology duration, the
+43-suite inventory balances to 311–313 seconds of serial work per shard before
+two-file concurrency. Every viewport and behavioral assertion remains: the
+animated layout cases exercise different scales, aspect ratios, slow frames or
+desktop/phone controls. We did
+not replace those cases with screenshots that would lose their assertions.
+
+Protocol tables reuse the official recorded native-address vectors and the
+reported prefixed spinner titles. Real sanitized Codex/Claude screen captures
+inside synthetic transcript envelopes exercise same-size, same-metadata cache
+rewrites; provenance stays in the adjacent captured-layout README. These cheap
+seam tests add no model or product contract.
+
+Workflow source assertions for static/docs command spelling, the duplicate shared
+scope block and the standalone ratchet environment check were removed.
+`scripts/gate-commands.test.ts` executes gate coverage/order/failure propagation;
+`validation-scope.test.ts` exercises selection, native consumers and the built-entry
+boundary; `ci-delivery-result.test.ts` exhausts failed/missing/skipped dependency
+results. Workflow dependency, protected-name and native-assertion wiring checks
+remain. These deletions reduce duplicated maintenance, with no claimed CI minutes.
+
 ## Health and delivery measures
 
 `bun run ci:health --days 3` uses authenticated `gh` reads and prints one report;
 it writes no files and never retries. Days are a rolling UTC window, 1–30.
-The fixed budget is 100 GitHub API requests: at most ten 100-run pages, fifty PR
+`bun run ci:health --reference-run RUN_ID` uses two reads for a completed successful
+run and reports summed runner-minutes, active jobs and event-to-result time. It
+also prints this checkout's web-only, server-only and install-touching scope
+projections against that measured full reference. The after runner-minute figures
+are conservative full-work estimates; cache-hit savings and hosted queue behavior
+need a delivered CI run. Do not present a projection as measured after feedback.
+
+The rolling report's fixed budget is 100 GitHub API requests: at most ten 100-run pages, fifty PR
 job pages spread evenly across the window, six other workflow job pages, eight
 earlier rerun attempts, one delivery query and twenty immutable release comparisons.
 Caps and incomplete inventories are printed. Required inventory/query errors fail

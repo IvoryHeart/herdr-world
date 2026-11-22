@@ -18,7 +18,12 @@ export type Job = {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
-  steps: { name: string; conclusion: string | null }[];
+  steps: {
+    name: string;
+    conclusion: string | null;
+    started_at?: string;
+    completed_at?: string;
+  }[];
 };
 export type Pull = {
   number: number;

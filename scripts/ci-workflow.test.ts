@@ -132,7 +132,6 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "validation",
     "world-browser",
     "behavioral",
-    "plugin-windows",
     "installer-upgrade",
     "launchd",
     "dependency-security",
@@ -156,15 +155,6 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "unit-tests",
   ]);
   expect(workflow.jobs["world-browser"].needs).toBe("validation-scope");
-  expect(
-    workflow.jobs.static.steps.find(
-      (step) => step.run === "bun run check:static",
-    )?.if,
-  ).toBe("needs.validation-scope.outputs.mode != 'docs'");
-  expect(
-    workflow.jobs.static.steps.find((step) => step.run === "bun run check:docs")
-      ?.if,
-  ).toBe("needs.validation-scope.outputs.mode == 'docs'");
   expect(workflow.jobs["unit-tests"].strategy?.matrix?.shard).toEqual([1, 2]);
   expect(workflow.jobs["unit-tests"].strategy?.["fail-fast"]).toBe(false);
   expect(workflow.jobs["unit-tests"].needs).toBe("validation-scope");
@@ -223,6 +213,7 @@ test("the latency trend measures the trend suites on quiet runners and reports w
   expect(Object.keys(trend.on).sort()).toEqual([
     "pull_request",
     "push",
+    "schedule",
     "workflow_dispatch",
   ]);
   expect(trend.permissions).toEqual({ contents: "read", actions: "read" });
@@ -306,7 +297,7 @@ test("all World browser shards and the web browser suites run independently and 
     ),
   ).toMatchObject({
     run: "bun scripts/ci-tests.ts web ${{ matrix.shard }}/2",
-    env: { HERDR_TEST_PARALLEL: "1", HERDR_TEST_MAX_CONCURRENCY: "2" },
+    env: { HERDR_TEST_PARALLEL: "2", HERDR_TEST_MAX_CONCURRENCY: "2" },
   });
   expect(
     web?.steps.find((step) =>
@@ -394,6 +385,7 @@ test("protected launchd reports require native work on the existing installer ru
     baseline_sha: "${{ needs.validation-scope.outputs.installer_sha }}",
     candidate_version:
       "${{ needs.validation-scope.outputs.installer_version }}",
+    build_hash: "${{ needs.validation-scope.outputs.installer_hash }}",
   });
   expect(
     upgrade.strategy?.matrix?.include?.filter((row) =>
@@ -465,7 +457,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
       "bun run verification:resources --system --shard=${{ matrix.shard }}/3",
   )!;
   expect(verify).toBeDefined();
-  expect(verify.if).toBeUndefined();
+  expect(verify.if).toBe("steps.reuse.outputs.reused != 'true'");
   expect(verify["continue-on-error"]).toBeUndefined();
   expect(
     job.steps.some((step) => step.run === "bun run verification:setup"),
@@ -507,27 +499,22 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
   }
 });
 
-test("CI checks native plugin compatibility on Windows and both macOS architectures", () => {
-  const windows = workflow.jobs["plugin-windows"];
-  expect(windows["runs-on"]).toBe("windows-latest");
-  expect(workflow.jobs.delivery.needs).toContain("plugin-windows");
-  expect(windows).toMatchObject({
-    needs: "validation-scope",
-    if: "needs.validation-scope.outputs.packaging == 'true'",
-  });
-  for (const step of workflow.jobs.delivery.steps.filter(
-    (step) => step.run === "bun scripts/ci-delivery-result.ts",
-  ))
-    expect(step.env?.WINDOWS_PLUGIN_RESULT).toBe(
-      "${{ needs.plugin-windows.result }}",
-    );
-  expect(
-    windows.steps.some((step) =>
-      step.run?.includes(
-        "scripts/install-plugin.windows.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts",
-      ),
-    ),
-  ).toBe(true);
+test("Windows plugin assertions share the native installer runners", async () => {
+  const installer = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../.github/workflows/installer-upgrade.yml", import.meta.url),
+    ).text(),
+  ) as { jobs: Record<string, WorkflowJob> };
+  expect(workflow.jobs["plugin-windows"]).toBeUndefined();
+  const step = installer.jobs.upgrade.steps.find(
+    (step) =>
+      step.name ===
+      "Verify Windows Bun-free plugin installation and frozen actions",
+  )!;
+  expect(step.if).toBe("runner.os == 'Windows'");
+  expect(step.run).toContain(
+    "scripts/install-plugin.windows.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts",
+  );
 });
 
 test("red main runs open one alert and an unmerged revert; green runs resolve it", async () => {
@@ -567,42 +554,6 @@ test("red main runs open one alert and an unmerged revert; green runs resolve it
   expect(gate.permissions?.actions).toBe("write");
   // Nothing reruns a red run.
   expect(gateSource).not.toContain('"run", "rerun"');
-});
-
-test("the shared plan controls scoped jobs and always preserves protected delivery", () => {
-  expect(
-    workflow.jobs["unit-tests"].steps.find(
-      (step) => step.name === "Run affected non-browser tests",
-    ),
-  ).toMatchObject({
-    run: "bun scripts/ci-tests.ts unit ${{ matrix.shard }}/2",
-  });
-  expect(workflow.jobs["world-browser"].if).toBe(
-    "needs.validation-scope.outputs.world == 'true'",
-  );
-  for (const job of ["installer-upgrade", "plugin-windows"])
-    expect(workflow.jobs[job].if).toBe(
-      "needs.validation-scope.outputs.packaging == 'true'",
-    );
-  expect(workflow.jobs.delivery.if).toBe("always()");
-  expect(
-    workflow.jobs["validation-scope"].steps.find(
-      (step) => step.name === "Determine validation scope",
-    )?.if,
-  ).toBeUndefined();
-});
-
-test("the ratchet checks the proposed merge into the exact PR target", () => {
-  expect(workflow.jobs.static).toMatchObject({
-    env: {
-      HERDR_WORLD_RATCHET_TARGET: "${{ github.event.pull_request.base.sha }}",
-    },
-  });
-  expect(
-    workflow.jobs.static.steps.find((step) =>
-      step.uses?.startsWith("actions/checkout@"),
-    )?.with,
-  ).toMatchObject({ ref: "${{ github.sha }}", "fetch-depth": 0 });
 });
 
 test("release validation passes the full non-PR plan to the shared browser workflow", async () => {

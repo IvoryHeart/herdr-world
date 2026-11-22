@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 import type { ValidationSelection } from "./validation-scope";
-import { worldBrowserShards } from "./world-browser-suites";
+import {
+  worldBrowserParallelSuites,
+  worldBrowserShards,
+} from "./world-browser-suites";
 
 export function selectedCITests(
   selection: ValidationSelection,
@@ -37,14 +40,30 @@ export function selectedCITests(
   return files;
 }
 
+export function ciTestBatches(
+  selection: ValidationSelection,
+  lane: string,
+  shard?: string,
+) {
+  const files = selectedCITests(selection, lane, shard);
+  if (lane !== "world")
+    return files.length ? [{ files, parallel: lane === "unit" ? 1 : 2 }] : [];
+  const parallel = new Set(worldBrowserParallelSuites);
+  return [
+    { files: files.filter((file) => !parallel.has(file)), parallel: 1 },
+    { files: files.filter((file) => parallel.has(file)), parallel: 2 },
+  ].filter((batch) => batch.files.length);
+}
+
 if (import.meta.main) {
   const [lane, shard] = process.argv.slice(2);
   const selection = JSON.parse(
     process.env.HERDR_CI_SELECTION || "null",
   ) as ValidationSelection;
   assert(selection && lane, "Missing CI selection");
-  const files = selectedCITests(selection, lane, shard);
-  if (files.length) {
+  const batches = ciTestBatches(selection, lane, shard);
+  if (!batches.length) console.info(`${lane}: no affected suites`);
+  for (const { files, parallel } of batches) {
     mkdirSync(".agents/delivery", { recursive: true });
     const child = Bun.spawn(
       [
@@ -53,8 +72,8 @@ if (import.meta.main) {
           ? "scripts/run-world-tests.ts"
           : "scripts/run-tests.ts",
         ...files,
-        "--parallel=1",
-        "--max-concurrency=2",
+        `--parallel=${parallel}`,
+        `--max-concurrency=${lane === "world" ? 1 : 2}`,
         ...(lane === "web"
           ? [
               "--reporter=junit",
@@ -62,7 +81,19 @@ if (import.meta.main) {
             ]
           : []),
       ],
-      { stdin: "inherit", stdout: "inherit", stderr: "inherit" },
+      {
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+        env: {
+          ...process.env,
+          ...(lane === "world"
+            ? {
+                HERDR_WORLD_TEST_LABEL: `${process.env.HERDR_WORLD_TEST_LABEL || "local"}-${parallel === 1 ? "isolated" : "parallel"}`,
+              }
+            : {}),
+        },
+      },
     );
     const stop = () => child.kill("SIGTERM");
     process.on("SIGINT", stop);
@@ -73,5 +104,6 @@ if (import.meta.main) {
       process.off("SIGINT", stop);
       process.off("SIGTERM", stop);
     }
-  } else console.info(`${lane}: no affected suites`);
+    if (process.exitCode !== 0) break;
+  }
 }

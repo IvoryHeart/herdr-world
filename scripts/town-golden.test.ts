@@ -143,7 +143,7 @@ test("the report workflow stays advisory and retains diagnostic artifacts", asyn
   ).toBe(true);
   expect(
     steps.find((s) => s.uses?.startsWith("actions/upload-artifact"))!.if,
-  ).toBe("always()");
+  ).toBe("always() && steps.scope.outputs.run == 'true'");
   const ci = Bun.YAML.parse(
     await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),
