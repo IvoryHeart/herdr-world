@@ -49,6 +49,12 @@
 **Pitfalls:**
 
 - Herdr stays an external runtime. Changes synchronize through reviewed archive PRs.
+- Whole-bundle ceilings and reason history live in `scripts/web-asset-budget.json`.
+  Feature builders request a separate owner-approved data PR for the exact raise
+  printed by Web asset headroom; they leave the budget and checker unchanged.
+  Main's commit status and workflow summary show remaining bytes/files, and its
+  recorded policy re-judges open PRs after budget-only merges. See
+  [contributor guidance](../../../CONTRIBUTING.md) for the unchanged other limits.
 
 ## Usage reference
 
