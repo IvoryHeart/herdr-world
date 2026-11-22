@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   Blocks,
   Bot,
@@ -12,7 +12,7 @@ import {
   Square,
   SquareTerminal,
 } from "lucide-react";
-import { worldLocalStorage, worldSessionStorage } from "../../browserStorage";
+import { worldLocalStorage } from "../../browserStorage";
 import { AgentIcon } from "../../components/AgentIcon";
 import { CloseButton } from "../../components/CloseButton";
 import { useViewTheme } from "../../themeScope";
@@ -31,6 +31,11 @@ import {
   type IdeRefusal,
   pageIdeClient,
 } from "./ideClient";
+import {
+  ReloadedNote,
+  useKeptWorkbenches,
+  WorkbenchFrames,
+} from "./keptWorkbenches";
 import { IdeProviderList } from "./IdeProviders";
 import {
   IdeServerList,
@@ -47,11 +52,6 @@ export { IdeIntegrationsSettings } from "./IdeIntegrationsSettings";
 
 const PROJECT_KEY = "code.project";
 const RAIL_KEY = "code.rail";
-/** The servers whose workbench this browser tab loaded, across page reloads. */
-const LOADED_KEY = "code.loaded";
-const LOADED_LIMIT = 16;
-/** The ones this page loaded. */
-const loadedThisPage = new Set<string>();
 /** Below this width the rail starts collapsed, leaving VS Code the room. */
 const RAIL_OPEN_MIN_WIDTH = 1100;
 
@@ -89,33 +89,6 @@ function readRailOpen() {
     // Storage off: fall back to the width.
   }
   return window.innerWidth >= RAIL_OPEN_MIN_WIDTH;
-}
-
-/**
- * Notes that this page loads a server's workbench, and says whether it is a
- * load again: "page" when an earlier page of this tab had it (the page
- * reloaded), "page-again" when this page had it and let it go (its server
- * ended or failed and started again), else null.
- */
-function noteLoaded(id: string): "page" | "page-again" | null {
-  const again = loadedThisPage.has(id);
-  loadedThisPage.add(id);
-  let earlier: string[] = [];
-  try {
-    const saved = JSON.parse(worldSessionStorage.getItem(LOADED_KEY) ?? "[]");
-    if (Array.isArray(saved))
-      earlier = saved.filter((entry) => typeof entry === "string");
-    worldSessionStorage.setItem(
-      LOADED_KEY,
-      JSON.stringify(
-        [...earlier.filter((entry) => entry !== id), id].slice(-LOADED_LIMIT),
-      ),
-    );
-  } catch {
-    // Storage off: a reloaded page can't tell, and says nothing.
-  }
-  if (again) return "page-again";
-  return earlier.includes(id) ? "page" : null;
 }
 
 function writeRailOpen(open: boolean) {
@@ -196,18 +169,6 @@ export default function CodeView({
   // The IDE list (Enable, Disable, Connect): the way back from any failure.
   const [idesOpen, setIdesOpen] = useState(false);
   const running = runningIdeServers(ide.status);
-  // Workbenches loaded on this page stay loaded while another project is
-  // in front, and while World reattaches to their server (its connection
-  // changed, World restarted): the frame keeps its page and VS Code
-  // reconnects on its own, so nothing reloads (#1262). Only Stop, or a
-  // server that failed or is gone, lets its frame go.
-  const [visited, setVisited] = useState<string[]>([]);
-  const noted = useRef(new Set<string>());
-  // A workbench that loaded again, and why, until dismissed.
-  const [reloaded, setReloaded] = useState<{
-    id: string;
-    why: "page" | "page-again";
-  } | null>(null);
   const selectId = useId();
 
   const providers = ide.status?.providers ?? [];
@@ -249,39 +210,8 @@ export default function CodeView({
       : providers.find((entry) => entry.id === id && entry.needsSecurePage);
   const insecure = insecureFor(instance?.provider ?? provider?.id);
 
-  useEffect(() => {
-    if (
-      instance?.state !== "ready" ||
-      insecure ||
-      visited.includes(instance.id)
-    )
-      return;
-    // Once per frame: StrictMode runs an effect twice.
-    if (!noted.current.has(instance.id)) {
-      noted.current.add(instance.id);
-      const why = noteLoaded(instance.id);
-      setReloaded(why ? { id: instance.id, why } : null);
-    }
-    setVisited((current) =>
-      current.includes(instance.id) ? current : [...current, instance.id],
-    );
-  }, [instance?.id, instance?.state, insecure, visited]);
-
-  // A server that failed or is no longer listed lets its frame go: a new
-  // start loads afresh, and the screen before said why.
-  const listed = ide.status?.instances;
-  useEffect(() => {
-    if (!listed) return;
-    for (const id of noted.current)
-      if (!listed.some((entry) => entry.id === id && entry.state !== "failed"))
-        noted.current.delete(id);
-    setVisited((current) => {
-      const next = current.filter((id) =>
-        listed.some((entry) => entry.id === id && entry.state !== "failed"),
-      );
-      return next.length === current.length ? current : next;
-    });
-  }, [listed]);
+  const showingFrame = instance?.state === "ready" && !insecure;
+  const kept = useKeptWorkbenches(instance, showingFrame, ide.status);
 
   const choose = (key: string) => {
     setChosen(key);
@@ -342,7 +272,7 @@ export default function CodeView({
   const stop = async (target: IdeInstance) => {
     try {
       ide.apply(await client.stop(target.id));
-      setVisited((current) => current.filter((id) => id !== target.id));
+      kept.forget(target.id);
     } catch (cause) {
       setOpenError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -362,12 +292,9 @@ export default function CodeView({
   const keptFrames = instances.filter(
     (entry) =>
       entry.state !== "failed" &&
-      visited.includes(entry.id) &&
+      kept.visited.includes(entry.id) &&
       !insecureFor(entry.provider),
   );
-  const showingFrame = instance?.state === "ready" && !insecure;
-  const reloadNote =
-    showingFrame && reloaded?.id === instance.id ? reloaded.why : null;
 
   return (
     <div
@@ -561,32 +488,20 @@ export default function CodeView({
           </section>
         ) : null}
         <section className="code-view-stage" aria-label="IDE">
-          {keptFrames.map((entry) => {
-            // Behind: hidden in place at full size, keeping its layout.
-            const front = showingFrame && entry.id === instance.id;
-            return (
-              <iframe
-                key={entry.id}
-                className="code-view-frame"
-                data-front={front ? "true" : "false"}
-                aria-hidden={front ? undefined : true}
-                tabIndex={front ? undefined : -1}
-                src={entry.url}
-                title={`${providerLabel(entry)} — ${displayFolder(entry.folder)}`}
-                style={{ colorScheme: theme }}
-                allow="clipboard-read; clipboard-write"
-              />
-            );
-          })}
-          {reloadNote && instance ? (
-            <p className="code-view-reloaded" role="status">
-              <span>
-                {reloadNote === "page"
-                  ? `This page reloaded, so ${providerLabel(instance)} loaded again. Its server kept running.`
-                  : `${providerLabel(instance)} loaded again: its server started again, or World reopened the Code view.`}
-              </span>
-              <CloseButton onClick={() => setReloaded(null)} />
-            </p>
+          <WorkbenchFrames
+            frames={keptFrames}
+            front={showingFrame ? instance.id : null}
+            title={(entry) =>
+              `${providerLabel(entry)} — ${displayFolder(entry.folder)}`
+            }
+            theme={theme}
+          />
+          {kept.reloaded && instance ? (
+            <ReloadedNote
+              why={kept.reloaded}
+              ide={providerLabel(instance)}
+              onClose={kept.dismiss}
+            />
           ) : null}
           {showingFrame ? null : (
             <div className="code-view-panel">{panel()}</div>
@@ -714,7 +629,7 @@ export default function CodeView({
           {instance.reason ? (
             <p className="code-view-muted">{instance.reason}</p>
           ) : null}
-          {visited.includes(instance.id) ? (
+          {kept.visited.includes(instance.id) ? (
             <p className="code-view-muted">
               Its open editors and unsaved changes stay as they are: VS Code
               reconnects when World attaches again.
