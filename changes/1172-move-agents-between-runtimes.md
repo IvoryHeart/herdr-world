@@ -13,3 +13,6 @@
   connection".
 - A herdr-core agent's window no longer shows as stale while the Herdr TUI
   session is disconnected.
+- A Codex agent on herdr-core now resumes its conversation when it moves to
+  Herdr TUI, and Apartments keep its session, instead of World saying it
+  can't find the conversation.
