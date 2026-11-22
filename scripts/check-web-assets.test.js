@@ -3,16 +3,74 @@ import {
   assertLazyGrammarAssets,
   assertLazyPdfAssets,
   assertNoRuntimeCode,
+  BUNDLE_BUDGET,
+  budgetRaiseRequest,
   collectAssetStats,
   DEVTOOLS_MARKER,
   devtoolsAssets,
   initialAssetFiles,
   pdfAssetFiles,
+  parseBundleBudget,
 } from "./check-web-assets.mjs";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { URL } from "node:url";
 import { DEVTOOLS_MARKER as SOURCE_MARKER } from "../web/src/world/devtools/trace";
+
+describe("reviewed whole-bundle budget", () => {
+  const policy = { bytes: 100, files: 10, history: ["Initial reviewed limit"] };
+
+  test("loads both ceilings from the reviewed data without fixing their values in code", () => {
+    const data = readFileSync(
+      new URL("./web-asset-budget.json", import.meta.url),
+      "utf8",
+    );
+    expect(parseBundleBudget(data)).toEqual(BUNDLE_BUDGET);
+    const { bytes, files } = JSON.parse(data);
+    expect(BUNDLE_BUDGET).toEqual({ bytes, files });
+  });
+
+  test("accepts lower ceilings and requires valid counts and reason history", () => {
+    expect(parseBundleBudget(JSON.stringify(policy))).toEqual({
+      bytes: 100,
+      files: 10,
+    });
+    for (const invalid of [
+      { ...policy, bytes: 0 },
+      { ...policy, bytes: 1.5 },
+      { ...policy, files: -1 },
+      { ...policy, files: "10" },
+      { ...policy, history: [] },
+      { ...policy, history: [" "] },
+      { ...policy, history: undefined },
+    ])
+      expect(() => parseBundleBudget(JSON.stringify(invalid))).toThrow(
+        "web-asset-budget.json",
+      );
+  });
+
+  test("reports the exact raise and requests a separate owner-approved data PR", () => {
+    const request = budgetRaiseRequest({ bytes: 105, files: 12 }, policy);
+    expect(request).toContain("bytes: 100 -> 105 (+5)");
+    expect(request).toContain("files: 10 -> 12 (+2)");
+    expect(request).toContain("separate owner-approved PR");
+    expect(request).toContain("scripts/web-asset-budget.json");
+    expect(request).toContain("history");
+    expect(
+      budgetRaiseRequest({ bytes: 100, files: 10 }, policy),
+    ).toBeUndefined();
+    expect(budgetRaiseRequest({ bytes: 101, files: 9 }, policy)).not.toContain(
+      "files:",
+    );
+  });
+});
 
 describe("release web assets carry no development tools", () => {
   test("an asset holding the devtools marker is named, others pass", () => {

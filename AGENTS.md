@@ -9,6 +9,7 @@
 - Use synthetic data and reserved domains; never publish private hosts, usernames, paths, sockets, keys, tokens, sessions or repository contents. Inspect diff/history before pushing.
 - Scan committed additions with `bun run check:privacy` before any push. Never copy material from `.agents/` into tracked paths without that scan; keep owner-only research in gitignored `research-local/`. CI checks every branch push and PR even when local hooks are skipped.
 - Local-first, trusted-single-user: LAN binding, authentication, uploads, shell/terminal operations and update installation are security-sensitive.
+- Storage catalog rule: changes that add or alter persisted data (a table, data-folder file, browser storage key or Board document field) must list it in `server/src/storage/catalog.ts` with its owner, identity and limit; prefer an existing store; a new table or data file needs the owner's approval in the mandate; never automatically trim user data.
 - Qualify downstream operations by immutable connection ID and runtime generation; never fall back to another connection.
 - Aggregate observation is bounded and read-only; failed-host cached topology is stale and non-actionable.
 - Keep the browser on one World origin; never restore bridge Host, Origin or cross-origin CSP configuration.
@@ -16,6 +17,7 @@
 - Feature PRs do not regenerate Help pictures unless adding or changing a help entry; capture only those entries with `HELP_PICTURES_IDS="<id>" bun run help:pictures`. Stale fingerprints warn; main refreshes the full set through one bot PR.
 - Never commit generated `web/dist/`, `server/public/`, binaries, `.pages-dist/` or `dist/`.
 - Add a changelog fragment before pushing, or state `Changelog: none — <reason>` in the PR; [format](changes/README.md). Never edit `CHANGELOG.md` directly.
+- Feature PRs never edit `scripts/web-asset-budget.json` or `scripts/check-web-assets.mjs` to accommodate bundle growth. Request a separate owner-approved budget-data PR with the exact raise printed by Web asset headroom and a short reason history; main's status and workflow summary show remaining headroom. Lowering the budget is free; other asset limits stay unchanged.
 - Non-documentation PRs require plain `Spec impact:` and `Verification impact:` lines naming changed specs/OpenSpec changes and evidence/owners/checks, or `none — <reason>`; `check:pr-body` enforces presence and diff consistency, and reviewers assess the decision.
 - Update current docs with significant product, API, configuration, installation or workflow changes:
   - Capability `notes.md`: controls, menu paths, shortcuts, edge cases and source ownership.
