@@ -122,13 +122,12 @@ test("World proxies an enabled IDE on its own origin and keeps its credentials a
       version: "1.99.0",
     });
     expect(vscode.enabled).toBe(false);
-    expect(vscode.webviewsInWorld).toBe(false);
     expect(vscode.needsSecurePage).toBe(true);
     // The local connection is one Code can open on this computer.
     expect(status.localConnections).toEqual([connection.id]);
 
-    // Stock VS Code is embedded too, behind the same gate; its CDN webview
-    // frames stay out by World's frame policy.
+    // Stock VS Code is embedded too, behind the same gate; its webviews
+    // load from vscode-cdn.net, the one origin the IDE frame rule admits.
     await expect(
       browser.call("world.ide.enable", { provider: "vscode", trust: true }),
     ).rejects.toThrow(/terms/);

@@ -17,6 +17,12 @@ provider or overwrite user-managed configuration. Existing harness integration
 behavior SHALL remain unchanged. Microsoft VS Code web, OpenVSCode, code-server,
 VS Code desktop, Cursor, JetBrains Gateway and Zed SHALL be distinct provider
 choices/capability records rather than aliases claiming identical functionality.
+Every failure to open a project in Code (provider missing on the project's
+host, server stopped, open refused, page not secure enough) SHALL say what went
+wrong and on which computer, and SHALL offer both Try again (the same open,
+or on a page not secure enough a fresh check) and a way back to the provider
+list (enable, disable, setup) without leaving Code. A failure SHALL belong to its provider: choosing
+another provider SHALL NOT keep showing it.
 
 #### Scenario: Detect without starting
 
@@ -27,6 +33,11 @@ choices/capability records rather than aliases claiming identical functionality.
 
 - **WHEN** the selected provider is disabled, absent or incompatible on the project's host
 - **THEN** World explains the state and offers explicit enablement/setup guidance or another deliberate provider selection without opening another host's IDE
+
+#### Scenario: Recover from a failed open
+
+- **WHEN** opening a project fails because the only enabled provider isn't installed on the project's host
+- **THEN** Code names the provider and that computer, offers Try again and Choose another IDE, and choosing another provider from the list it shows replaces the failure with Open in that provider, without installing anything
 
 ### Requirement: Real workbench in the common World frame
 
@@ -68,42 +79,32 @@ IDE is not confined to the selected project and same-origin workbench/extension
 code shares World's browser authority. Failed licence, frame, worker,
 secure-context or origin compatibility SHALL block embedding with a concrete
 reason and an explicit desktop handoff option. World SHALL NOT silently relax
-its global origin/CSP policy, rewrite restricted product assets (apart from the
-one webview host page edit below) or assert desktop extension parity based only
-on Marketplace availability.
+its global origin/CSP policy, rewrite restricted product assets or assert desktop
+extension parity based only on Marketplace availability.
 
-Webviews load from World's own origin. Stock VS Code and OpenVSCode Server take
-their webview origin (`*.vscode-cdn.net`) from their product configuration;
-World SHALL instead point the workbench's own `webviewEndpoint` option at the
-IDE's webview host page under the instance route and SHALL serve that page with
-only its host-name parent check made same-origin and its CSP script hash
-recomputed. World SHALL NOT admit the provider's webview origin, open a second
-World origin for webviews or change `product.json`, and its own origin and CSP
-policy SHALL stay unchanged. Webview content (extension panels, notebook outputs,
-previews of repository files) is untrusted and runs with World's browser
-authority, as code-server's self-hosted webviews already do; the admission
-disclosure of same-origin workbench/extension authority covers it. The host page
-SHALL hand its message port only to a parent on its own origin, and a page World
-cannot match exactly SHALL be forwarded unchanged so webviews stay blank. A
-second, isolated webview origin requires a reviewed change to World's one-origin
-rule and an HTTPS name with wildcard certificate first. The decision, its threat
-model and the rejected options are recorded in
+Webviews load from VS Code's own webview origin. Stock VS Code and OpenVSCode
+Server frame webviews and their web worker extension host from
+`https://<hash>.vscode-cdn.net`, as their product configuration says; the frame
+rule World adds to IDE route responses SHALL admit `https://*.vscode-cdn.net` as
+the one origin besides World's own. World SHALL NOT rewrite the webview host page
+or `product.json`, serve webviews from its own origin, open a second World origin
+for them, or change the policy of World's own pages or any other route. Webview
+content (extension panels, notebook outputs, previews of repository files) is
+untrusted; it stays cross-origin to World, so it cannot reach World's window,
+storage, cookies or API, and its service worker's scope is its own origin. The
+decision, its threat model and the rejected options are recorded in
 `docs/design/code-view/webview-origin.md`.
 
-#### Scenario: Official webviews require another origin
+#### Scenario: Official webviews load from VS Code's webview origin
 
-- **WHEN** an installed stock VS Code or OpenVSCode Server provider names a CDN webview origin incompatible with World's current policy
-- **THEN** its webviews such as Markdown preview load from World's origin under the instance route, and embedding is not blocked for them; no CSP exception, second origin, `product.json` change or Open VSX substitution occurs
+- **WHEN** stock VS Code or OpenVSCode Server frames a webview or its web worker extension host from `https://<hash>.vscode-cdn.net`
+- **THEN** the frame rule World adds to IDE route responses admits `https://*.vscode-cdn.net` as the one origin besides World's own, and no product file is rewritten
+- **AND** World's own pages and every other route keep World's one-origin policy, the webview content stays cross-origin to World so it cannot reach World's window, storage, cookies or API, and its service worker's scope is its own origin
 
-#### Scenario: Another origin frames the webview host page
+#### Scenario: Webview origin incompatible
 
-- **WHEN** a page on another origin frames World's copy of the webview host page, naming itself or World as parent
-- **THEN** the page never hands it a message port, so it cannot drive a webview with World's authority
-
-#### Scenario: Webview host page World cannot match
-
-- **WHEN** a provider's workbench page or webview host page does not match the check and CSP hash World expects
-- **THEN** World forwards it unchanged, webviews stay blank, and the rest of the workbench keeps working
+- **WHEN** an installed provider requires a webview origin other than VS Code's own `https://*.vscode-cdn.net`
+- **THEN** its webviews stay blank with the reason; no further frame exception or Open VSX substitution occurs
 
 #### Scenario: First enable grants broad authority
 

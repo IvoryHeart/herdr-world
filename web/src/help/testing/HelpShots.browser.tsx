@@ -1,13 +1,14 @@
 /*
  * The help pictures' stage (scripts/help-pictures.ts): the production Town,
- * Board or an agent's Chat with the website's synthetic scene
- * (web/src/world/testing/site-shots/), World's view picker over it, in one
+ * Board, Code or an agent's Chat with the website's synthetic scene
+ * (web/src/world/testing/site-shots/), World's view picker over it (not
+ * over Code, whose picture is the whole view at the crop's size), in one
  * size and theme. `window.helpShots.show(control, press)` presses what opens
  * the control or brings it into view, rings it as Try does and returns where
  * it is; `hide()` undoes
  * that. Nothing contacts World, Herdr or GitHub.
  *
- *   ?scene=town|board|chat&theme=light|dark&phone=1
+ *   ?scene=town|board|code|chat&theme=light|dark&phone=1
  */
 window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 let seed = 0x68656c70;
@@ -22,6 +23,8 @@ import { AgentChat } from "../../components/AgentChat";
 import type { Pane } from "../../types";
 import type { TownQuietMarks } from "../../world/town/TownBoard";
 import BoardView from "../../world/BoardView";
+import CodeView from "../../world/code/CodeView";
+import { fixtureIdeClient, type IdeClient } from "../../world/code/ideClient";
 import { TownMasterFigure } from "../../world/TownMasterCard";
 import { quietGreetingForTest } from "../../world/townMasterGreeting";
 import {
@@ -29,6 +32,7 @@ import {
   noAction,
   siteBoardStore,
   siteBoardWorld,
+  siteCodeWorld,
   SiteTown,
   siteTownScene,
 } from "../../world/testing/site-shots/siteStage";
@@ -47,7 +51,11 @@ import "../../world/windows/windows.css";
 import "../helpPanel.css";
 
 const params = new URLSearchParams(location.search);
-const scene = (params.get("scene") ?? "town") as "town" | "board" | "chat";
+const scene = (params.get("scene") ?? "town") as
+  | "town"
+  | "board"
+  | "code"
+  | "chat";
 const phone = params.get("phone") === "1";
 const theme = params.get("theme") === "light" ? "light" : "dark";
 document.documentElement.dataset.theme = theme;
@@ -138,7 +146,8 @@ async function settle(limit = 8000) {
   }
 }
 
-const view: WorldView = scene === "board" ? "board" : "town";
+const view: WorldView =
+  scene === "board" ? "board" : scene === "code" ? "code" : "town";
 const hosts = {
   connections: [
     {
@@ -200,6 +209,29 @@ function Stage() {
         />
       </div>
     );
+  if (scene === "code")
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          // The picture's crop (scripts/help-declarations.ts): the whole
+          // view fits one picture, its project and Open button in reach.
+          width: phone ? 390 : 640,
+          height: phone ? 300 : 400,
+          overflow: "hidden",
+        }}
+      >
+        <CodeView
+          world={codeWorld!}
+          onOpenAgent={noAction}
+          onOpenTerminal={noAction}
+          client={codeClient!}
+          secure
+        />
+      </div>
+    );
   if (scene === "chat")
     return (
       <div
@@ -255,6 +287,20 @@ function quietMarks(scene: NonNullable<typeof town>): TownQuietMarks {
 const quiet = town ? quietMarks(town) : null;
 const boardStore = scene === "board" ? siteBoardStore() : null;
 const boardWorld = scene === "board" ? siteBoardWorld() : null;
+const codeWorld = scene === "code" ? siteCodeWorld() : null;
+// code-server enabled and nothing started: a project on this computer ready
+// to open, with its agents and terminals beside it. Opening is never pressed.
+const codeClient = scene === "code" ? siteIdeClient() : null;
+function siteIdeClient(): IdeClient {
+  const client = fixtureIdeClient("ssh");
+  return {
+    ...client,
+    status: async (refresh) => ({
+      ...(await client.status(refresh)),
+      localConnections: ["site-host-0"],
+    }),
+  };
+}
 
 /** Shown and inside the screen: a Town sign can be out of the camera's view. */
 function onScreen(element: Element | null) {
@@ -277,7 +323,11 @@ const helpShots = {
     createRoot(document.getElementById("root")!).render(
       <>
         <Stage />
-        {phone ? picker : <div className="zen-dock">{picker}</div>}
+        {scene === "code" ? null : phone ? (
+          picker
+        ) : (
+          <div className="zen-dock">{picker}</div>
+        )}
       </>,
     );
     if (scene === "town") {

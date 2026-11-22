@@ -36,11 +36,14 @@ export function IdeProviderList({
   status,
   client,
   onStatus,
+  onEnabled,
   only,
 }: {
   status: IdeStatus;
   client: IdeClient;
   onStatus: (status: IdeStatus) => void;
+  /** Called once a provider is enabled here, to open projects with it. */
+  onEnabled?: (provider: IdeProviderId) => void;
   /** Show one provider only. */
   only?: IdeProviderId;
 }) {
@@ -134,8 +137,10 @@ export function IdeProviderList({
           provider={gate}
           onClose={() => setGate(null)}
           onEnable={async () => {
-            if (await run(`enable:${gate.id}`, () => client.enable(gate.id)))
+            if (await run(`enable:${gate.id}`, () => client.enable(gate.id))) {
               setGate(null);
+              onEnabled?.(gate.id);
+            }
           }}
           busy={busy !== null}
         />
@@ -189,15 +194,9 @@ function IdeProviderRow({
       )}
       {detection.state === "missing" ? (
         <p className="ide-provider-reason">
-          Projects on an SSH host use the {provider.label} installed there:
-          World looks for it when you open one.
-        </p>
-      ) : null}
-      {!provider.webviewsInWorld ? (
-        <p className="ide-provider-reason">
-          Its webviews, such as Markdown preview and some extension panels, load
-          from another site, so they stay blank inside World. Editing,
-          terminals, Git and debugging work.
+          It opens only on a computer where it is installed, such as an SSH host
+          that has it: World looks for it there when you open a project, and
+          never installs it.
         </p>
       ) : null}
       {provider.needsSecurePage ? (
@@ -382,6 +381,13 @@ export function IdeEnableDialog({
                 extensions aren't available there.
               </li>
             )}
+            {detection.state !== "detected" ? (
+              <li>
+                <strong>Not installed on World's computer.</strong> It opens
+                only on a computer where it is installed, such as an SSH host
+                that has it; elsewhere Code says it isn't installed there.
+              </li>
+            ) : null}
             {!window.isSecureContext ? (
               <li>
                 <strong>This address isn't secure.</strong>{" "}

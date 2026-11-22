@@ -7,7 +7,10 @@
  * shows that state from synthetic data instead of the service's:
  * `missing` (no IDE installed), `detected` (installed, not enabled),
  * `ssh` (starting on an SSH host), `downloading` (first start), `failed`
- * (the server exited) or `restored` (World restarted and found the IDE
+ * (the server exited), `not-installed` (only OpenVSCode Server is enabled
+ * and it isn't installed where the project is, so opening is refused; the
+ * others are installed and can be enabled instead) or `restored` (World
+ * restarted and found the IDE
  * servers it had started still running: one here, one on an SSH host, and
  * one on a host whose connection was removed, which World can't reach).
  * Nothing is detected, started or stored.
@@ -39,12 +42,6 @@ export type IdeProviderStatus = {
   terms: IdeTerm[];
   setupUrl: string;
   detection: IdeDetection;
-  /**
-   * False for IDEs whose webviews (Markdown preview, some extension
-   * panels) load from another origin, such as stock VS Code's
-   * vscode-cdn.net: the workbench works in World, those panels stay blank.
-   */
-  webviewsInWorld: boolean;
   /**
    * True for Microsoft's VS Code: its workbench connects only from HTTPS or
    * localhost (it signs with crypto.subtle), never a plain-HTTP address.
@@ -194,7 +191,6 @@ function parseProvider(value: unknown): IdeProviderStatus | null {
         ? value.setupUrl
         : "",
     detection: parseDetection(value.detection),
-    webviewsInWorld: value.webviewsInWorld === true,
     needsSecurePage: value.needsSecurePage === true,
     enabled: value.enabled === true,
     trustedAt: text(value.trustedAt) ? value.trustedAt : null,
@@ -318,6 +314,7 @@ export type IdeFixture =
   | "ssh"
   | "downloading"
   | "failed"
+  | "not-installed"
   | "restored";
 const FIXTURES = new Set<string>([
   "missing",
@@ -325,6 +322,7 @@ const FIXTURES = new Set<string>([
   "ssh",
   "downloading",
   "failed",
+  "not-installed",
   "restored",
 ]);
 const PARAM = "ideFixture";
@@ -351,7 +349,20 @@ export function resetIdeFixture() {
 
 const FIXTURE_PROVIDERS = (
   state: "missing" | "detected",
-  enabled: boolean,
+  enabled: ReadonlySet<IdeProviderId>,
+): IdeProviderStatus[] =>
+  FIXTURE_PROVIDER_ROWS(state).map((provider) => {
+    const on = enabled.has(provider.id);
+    return {
+      ...provider,
+      enabled: on,
+      trustedAt: on ? new Date(0).toISOString() : null,
+      termsAcceptedAt: on ? new Date(0).toISOString() : null,
+    };
+  });
+
+const FIXTURE_PROVIDER_ROWS = (
+  state: "missing" | "detected",
 ): IdeProviderStatus[] => [
   {
     id: "vscode",
@@ -381,7 +392,6 @@ const FIXTURE_PROVIDERS = (
             reason: "VS Code isn't installed on this computer.",
             configured: false,
           },
-    webviewsInWorld: false,
     needsSecurePage: true,
     enabled: false,
     trustedAt: null,
@@ -407,11 +417,10 @@ const FIXTURE_PROVIDERS = (
             reason: "code-server isn't installed on this computer.",
             configured: false,
           },
-    webviewsInWorld: true,
     needsSecurePage: false,
-    enabled,
-    trustedAt: enabled ? new Date(0).toISOString() : null,
-    termsAcceptedAt: enabled ? new Date(0).toISOString() : null,
+    enabled: false,
+    trustedAt: null,
+    termsAcceptedAt: null,
     binary: null,
   },
   {
@@ -425,7 +434,6 @@ const FIXTURE_PROVIDERS = (
       reason: "OpenVSCode Server isn't installed on this computer.",
       configured: false,
     },
-    webviewsInWorld: false,
     needsSecurePage: false,
     enabled: false,
     trustedAt: null,
@@ -441,11 +449,16 @@ const FIXTURE_PROVIDERS = (
  */
 export function fixtureIdeClient(kind: IdeFixture): IdeClient {
   const listeners = new Set<() => void>();
-  let enabled = kind !== "missing" && kind !== "detected";
-  let providers = FIXTURE_PROVIDERS(
-    kind === "missing" ? "missing" : "detected",
-    enabled,
+  const detection = kind === "missing" ? "missing" : "detected";
+  const enabled = new Set<IdeProviderId>(
+    kind === "missing" || kind === "detected"
+      ? []
+      : kind === "not-installed"
+        ? ["openvscode"]
+        : ["code-server"],
   );
+  let providers = FIXTURE_PROVIDERS(detection, enabled);
+  let started = 0;
   let instances: IdeInstance[] = kind === "restored" ? RESTORED() : [];
   // Unknown to the switch: the view then prefers no host over another.
   const status = (): IdeStatus => ({
@@ -458,29 +471,26 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
   };
   return {
     status: async () => status(),
-    enable: async () => {
+    enable: async (provider) => {
       // As the service: enabling doesn't need it on World's computer.
-      enabled = true;
-      providers = FIXTURE_PROVIDERS(
-        kind === "missing" ? "missing" : "detected",
-        true,
-      );
+      enabled.add(provider);
+      providers = FIXTURE_PROVIDERS(detection, enabled);
       changed();
       return status();
     },
-    disable: async () => {
-      enabled = false;
-      providers = FIXTURE_PROVIDERS(
-        kind === "missing" ? "missing" : "detected",
-        false,
-      );
+    disable: async (provider) => {
+      enabled.delete(provider);
+      providers = FIXTURE_PROVIDERS(detection, enabled);
+      const label =
+        providers.find((entry) => entry.id === provider)?.label ?? provider;
       // As the service: its servers keep running, listed, until Stop.
       instances = instances.map((instance) =>
-        instance.state === "ready" || instance.state === "starting"
+        instance.provider === provider &&
+        (instance.state === "ready" || instance.state === "starting")
           ? {
               ...instance,
               state: "detached",
-              reason: "code-server is disabled; it still runs.",
+              reason: `${label} is disabled; it still runs.`,
             }
           : instance,
       );
@@ -489,7 +499,9 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
     },
     configure: async () => status(),
     open: async (request) => {
-      if (!enabled)
+      const provider =
+        request.provider ?? providers.find((entry) => entry.enabled)?.id;
+      if (!provider || !enabled.has(provider))
         return {
           ok: false,
           refusal: {
@@ -497,10 +509,26 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
             message: "Enable an IDE in the Code view first.",
           },
         };
+      const using = providers.find((entry) => entry.id === provider);
+      // Not installed where the project is: the refusal being shown. Other
+      // states treat a missing one as installed on the SSH host.
+      if (
+        kind === "not-installed" &&
+        using &&
+        using.detection.state !== "detected"
+      )
+        return {
+          ok: false,
+          refusal: {
+            code: "missing",
+            message: `${using.label} isn't installed on the project's computer. Install it there, then open the project again.`,
+          },
+        };
       const known = instances.find(
         (entry) =>
           entry.connectionId === request.connectionId &&
-          entry.folder === request.folder,
+          entry.folder === request.folder &&
+          entry.provider === provider,
       );
       if (known) {
         // Reattaching: there is no server to reach, so it stays starting.
@@ -515,18 +543,19 @@ export function fixtureIdeClient(kind: IdeFixture): IdeClient {
         changed();
         return { ok: true, instance };
       }
+      // One server per IDE and folder, as the service: each its own id.
+      const id = `fixtureInstance${String(++started).padStart(4, "0")}`;
       const instance: IdeInstance = {
-        id: "fixtureFixtureFixture0",
-        provider: request.provider ?? "code-server",
+        id,
+        provider,
         connectionId: request.connectionId,
         folder: request.folder,
         state: kind === "failed" ? "failed" : "starting",
-        url: "/ide/fixtureFixtureFixture0/",
+        url: `/ide/${id}/`,
         startedAt: new Date().toISOString(),
         ...(kind === "failed"
           ? {
-              reason:
-                "code-server stopped: error: the server could not bind its socket",
+              reason: `${using?.label ?? provider} stopped: error: the server could not bind its socket`,
             }
           : kind === "downloading"
             ? { downloading: true }

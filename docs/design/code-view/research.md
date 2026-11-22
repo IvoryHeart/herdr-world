@@ -136,8 +136,9 @@ The remaining decisions do not require an answer during this research run:
 2. If official webviews require their CDN origin, may a future separately reviewed
    policy permit an isolated IDE origin/external webview, or must embed remain
    unavailable? Recommend preserving the current single-origin rule for now.
-   Decided in [webview-origin.md](webview-origin.md): one origin stays, and stock
-   VS Code and OpenVSCode webviews load from World's own origin.
+   Decided in [webview-origin.md](webview-origin.md): World's pages keep one origin,
+   and IDE pages admit VS Code's own webview origin, so stock VS Code and
+   OpenVSCode webviews load from it.
 3. Will the owner trust installed IDEs/extensions with the same browser authority
    as World? Recommend explicit opt-in; isolation needs a different origin design.
 4. Should a later implementation offer host installation assistance, and which
