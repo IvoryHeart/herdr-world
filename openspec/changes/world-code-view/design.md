@@ -225,6 +225,17 @@ listed and counted as possibly running, not failed; reconcile the captured
 instance before retry, avoid duplicate server processes.
 No automatic restart across a retired connection or silently open ports on LAN.
 
+Ordering on the host and in World, as `quint/ide-lifecycle.qnt` found it must be:
+a start first leaves a begin mark, and a Stop or a look voids every begin mark of
+the folder, so a start they overtook launches nothing (exit 93). A host's list
+reports claims, begin marks and the renamed leftovers of an unfinished Stop as
+pending, so none is forgotten; an attach to a folder with a leftover reports it
+as still stopping, and the next Stop or the by-hand command ends it. Each start,
+attach and release takes a new epoch, so a list sent before it cannot forget the
+entry. An Open or reattach queued behind another operation re-checks that its
+connection, generation and provider are still the ones it was asked under, and
+otherwise refuses as stale.
+
 ## Risks / Trade-offs
 
 - Official ecosystem compatibility vs Microsoft distribution terms and CDN webviews
@@ -240,10 +251,11 @@ No automatic restart across a retired connection or silently open ports on LAN.
 
 ## Verification and migration plan
 
-This PR changes only research, proposed deltas and isolated static fixture behavior.
-No production contract owner/adapter in `verification/coverage/` is modified.
-Direct DOM interaction and rendered layout checks are appropriate evidence for a
-no-network synthetic mock; a Quint UI model would not validate an IDE proxy.
+The server lifecycle is modelled in `quint/ide-lifecycle.qnt` and replayed
+through World's real IDE service (`quint/ide-lifecycle.ts`); its coverage area is
+`verification/coverage/ide-lifecycle.json` and its contract
+`verification/contracts/ide-lifecycle.md`. The proxy and one browser origin are
+covered by route and proxy tests, not by the model.
 
 For future implementation derive invariants from requirements first. Assess Q01,
 Q16, Q19, Q20, Q23, Q31, Q33, Q40, Q43 and core Q52/Q53 against actual ownership;

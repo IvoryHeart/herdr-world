@@ -40,7 +40,9 @@ export type ImplementationFault =
   | "seen-hidden-look"
   | "seen-stale-look"
   | "seen-blind-write"
-  | "core-missing-foreground";
+  | "core-missing-foreground"
+  | "ide-queue"
+  | "ide-start-epoch";
 export async function mutateImplementation(
   name: Model,
   fault: ImplementationFault,
@@ -69,6 +71,7 @@ export async function mutateImplementation(
       "seen-stale-look",
       "seen-blind-write",
     ],
+    "ide-lifecycle": ["ide-queue", "ide-start-epoch"],
     "effect-recovery": [
       "primary",
       "effect-authorization",
@@ -105,6 +108,7 @@ export async function mutateImplementation(
     "claude-tap-lock": "server/src/usage/claude-tap.ts",
     "herdr-core-runtime": "server/src/herdr-core/mirror.ts",
     "herdr-core-seen": "web/src/world/coreShared.ts",
+    "ide-lifecycle": "server/src/ide/instances.ts",
     "binding-resolution": "server/src/world/binding-resolution.ts",
     "observation-base": "server/src/world/observation-v1.ts",
     "runtime-leases": "server/src/connections/manager.ts",
@@ -248,6 +252,24 @@ export async function mutateImplementation(
       ],
       // The service writes over a label another client changed meanwhile.
       "seen-blind-write": ["  if (shared !== expected) return null;\n", ""],
+    };
+    const [guard, replacement] = guards[fault]!;
+    assert.equal(original.split(guard).length, 2, `${fault} target changed`);
+    contents = original.replace(guard, replacement);
+  } else if (name === "ide-lifecycle") {
+    const guards: Record<string, [string, string]> = {
+      // An open queued behind another operation runs on a connection that
+      // changed or went away meanwhile.
+      "ide-queue": [
+        "if (\n        this.options.admits?.({\n          provider: request.provider,",
+        "if (\n        false &&\n        this.options.admits?.({\n          provider: request.provider,",
+      ],
+      // A start keeps the epoch of the look it overtook, so that look's
+      // answer forgets a server the start may have launched.
+      "ide-start-epoch": [
+        "const epoch = (instance.epoch = ++this.epochs);\n    const result = await this.run(this.target(instance), script, {",
+        "const epoch = instance.epoch;\n    const result = await this.run(this.target(instance), script, {",
+      ],
     };
     const [guard, replacement] = guards[fault]!;
     assert.equal(original.split(guard).length, 2, `${fault} target changed`);
@@ -503,9 +525,11 @@ export async function mutateImplementation(
               ? "quint/herdr-core-subjects.ts"
               : name === "herdr-core-seen"
                 ? "quint/herdr-core-seen-subjects.ts"
-                : name === "observation-base"
-                  ? "quint/observation-subjects.ts"
-                  : owner,
+                : name === "ide-lifecycle"
+                  ? "quint/ide-lifecycle.ts"
+                  : name === "observation-base"
+                    ? "quint/observation-subjects.ts"
+                    : owner,
       ),
     ],
     target: "bun",
