@@ -179,8 +179,12 @@ export function TownRoomPlaque({
           />
         ) : null}
         <span
-          className={`town-room-plaque-name${movable ? " is-movable" : ""}`}
-          title={label}
+          className={`town-room-plaque-name${movable ? " is-movable" : ""}${
+            room.derivedLabelHint ? " is-derived" : ""
+          }`}
+          title={
+            room.derivedLabelHint ? `${label}: ${room.derivedLabelHint}` : label
+          }
           onPointerDown={
             movable && onNamePress ? carry("plaque-name") : undefined
           }

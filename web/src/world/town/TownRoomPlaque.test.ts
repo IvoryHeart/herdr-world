@@ -14,7 +14,10 @@ import type { TownRoomActions } from "./TownCanvas";
 import { townModelFromProjection } from "./townModel";
 import { TownRoomPlaque } from "./TownRoomPlaque";
 
-function roomWith(statuses: readonly WorldAgentStatus[]) {
+function roomWith(
+  statuses: readonly WorldAgentStatus[],
+  fields: Partial<Workspace> = {},
+) {
   // Several agent-report panes share one desk, with two plain terminals too.
   const panes: Pane[] = [...statuses, null, null].map((status, index) => ({
     pane_id: `p${index}`,
@@ -35,6 +38,7 @@ function roomWith(statuses: readonly WorldAgentStatus[]) {
     pane_count: panes.length,
     active_tab_id: "desk",
     agent_status: "",
+    ...fields,
   };
   const tab: Tab = {
     workspace_id: "room",
@@ -245,6 +249,37 @@ test("a room's plaque and card name its runtime when its building has two", asyn
       ).toBe(tag ? `Runtime: ${tag}` : null);
       expect(plaque.getAttribute("aria-label")!.split(":")[0]).toBe(
         tag ? `Studio (${tag})` : "Studio",
+      );
+    }
+  } finally {
+    await browser.happyDOM.close();
+  }
+});
+
+test("a name World derived for an unnamed space reads lighter and says where it came from (#1103)", async () => {
+  const browser = new Window();
+  try {
+    for (const [fields, derived] of [
+      [{ label: "api", label_derived_from: "folder" }, true],
+      [{ label: "api" }, false],
+    ] as const) {
+      const office = roomWith(["idle"], fields);
+      const room = office.rooms[0]!;
+      browser.document.body.innerHTML = renderToStaticMarkup(
+        createElement(TownRoomPlaque, {
+          room,
+          label: room.displayLabel,
+          width: 176,
+          counts: townModelFromProjection(office).roomCounts.get(room.key)!,
+          color: null,
+          actions,
+        }),
+      );
+      const name = browser.document.querySelector(".town-room-plaque-name")!;
+      expect(name.textContent).toBe("api");
+      expect(name.classList.contains("is-derived")).toBe(derived);
+      expect(name.getAttribute("title")).toBe(
+        derived ? "api: Named from its folder; the space has no name" : "api",
       );
     }
   } finally {

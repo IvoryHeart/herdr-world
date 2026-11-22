@@ -148,6 +148,8 @@ export type OfficeRoom = {
   observedGeneration: number;
   displayLabel: string;
   accessibleLabel?: string;
+  /** Set when World named the room because its runtime left it unnamed. */
+  derivedLabelHint?: string;
   order: number;
   stale: boolean;
   canOpenInSpaces: boolean;

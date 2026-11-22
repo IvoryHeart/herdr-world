@@ -122,6 +122,12 @@
 - **Core rooms and launches.** Core agents appear in Town, Board, Desk and
   Needs you. App-placed agents share rooms from their app space/tab labels;
   subagents join their parent's room; others use the core's main room.
+  An app space with no name is named once, for display only, from its oldest
+  terminal's folder, else its tab, else its agent, and keeps that name while
+  the space lasts; plates and Board cards show such a name in lighter letters
+  with a tooltip saying where it came from, and a repeated name gets a number
+  (`api`, `api 2`) that stays when other rooms leave. World never renames the
+  space; with nothing to name it from, it reads `Herdr space`.
   **New agent** defaults to core when ready. Choose a TUI room to use that
   runtime. Profiles resolve an installed executable on the selected host;
   installation and harness sign-in remain yours. Claude and Codex receive
