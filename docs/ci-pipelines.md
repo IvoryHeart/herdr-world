@@ -32,7 +32,7 @@ for compatibility with branch rules.
 | `check` | Static lane followed by tests; CI separates browsers through its existing environment selection |
 | `check:changed` | Unqueued static lane plus affected non-browser units; browsers and verification run in CI |
 | `check:delivery` | Static lane plus all test lanes and behavioral verification |
-| `check:pr-body <file>` | CI knowledge-map and changelog policy against a committed PR diff and draft description; optional base ref follows the file |
+| `check:pr-body <file>` | CI capability source-coverage and changelog policy against a committed PR diff and draft description; optional base ref follows the file |
 | `check:privacy` | Committed additions since `origin/main`, or `--range <base-ref> <head-ref>`; [privacy policy and reviewed exceptions](../CONTRIBUTING.md#privacy-before-publication) |
 | `check:docs` | Notices, fragments, formatting, site and specs for qualifying Markdown changes |
 | `test:install-linux` | Real Linux x64 installer, runtime downloads, systemd user unit/reboot, RPC setup and stable upgrade in disposable Docker containers; [runbook](development.md#linux-installation-acceptance) |
@@ -231,7 +231,7 @@ policy functions as Validation scope.
 Pre-push also checks those policies against the complete PR diff and the existing
 PR body, or the intended body named by `HERDR_WORLD_PR_BODY`. Existing PRs use
 their immutable base commit, including stacked PRs. A first push without
-a body must carry the fragment/knowledge-map changes needed to pass on their own.
+a body must carry the fragment/capability notes changes needed to pass on their own.
 
 Main pushes keep a running check and retain only the newest pending run. Main
 gate accounts for the intervening merges when attributing a later failure.

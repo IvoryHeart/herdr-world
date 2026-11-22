@@ -56,13 +56,21 @@ test("feature contracts stay discoverable, concise and accompanied by source not
       expect(requirement).toMatch(/^#### Scenario:/m);
     }
     const notes = readFileSync(join(root, capability, "notes.md"), "utf8");
-    expect(notes.trimEnd().split("\n").length, capability).toBeLessThan(60);
+    // Keep discovery short; the migrated user reference follows it separately.
+    const navigation = notes.split("\n## Usage reference\n")[0]!;
+    expect(navigation.trimEnd().split("\n").length, capability).toBeLessThan(
+      60,
+    );
     for (const section of ["Surfaces", "Code", "Tests", "Pitfalls"])
-      expect(notes).toContain(`**${section}:**`);
-    for (const match of notes.matchAll(
+      expect(navigation).toContain(`**${section}:**`);
+    for (const match of navigation.matchAll(
       /`((?:server|web|shared|scripts)\/[^`]+)`/g,
     ))
-      expect(existsSync(join(root, match[1]!)), match[1]).toBe(true);
+      expect(
+        existsSync(join(root, match[1]!)) ||
+          [...new Bun.Glob(match[1]!).scanSync({ cwd: root })].length > 0,
+        match[1],
+      ).toBe(true);
   }
 });
 

@@ -21,7 +21,11 @@
     "scripts/upstream-sync-cli.test.ts",
     "scripts/upstream-dispositions.test.ts",
     "scripts/install-herdr-world.test.ts",
-    "scripts/installer-upgrade.test.ts"
+    "scripts/installer-upgrade.test.ts",
+    "scripts/where.test.ts",
+    "scripts/check-knowledge-map.test.ts",
+    "scripts/archive-changes.test.ts",
+    "scripts/check-pr-body.test.ts"
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
   "technique": "alternative",
@@ -29,7 +33,7 @@
   "status": "alternative-evidence",
   "remaining": "Local tests cannot establish every packaged platform or published asset. Protected validation and release checks remain required.",
   "requiredChecks": ["bun run check", "bun run verification:gate"],
-  "evidenceDecision": "Real packaging/installer/release/CI tests exercise archive validation and dependency gates; actual platform/release workflows supply distribution evidence. Upstream-sync tests directly enumerate bounded repair/authority cases and reconstruct conflicting Git merges with exact ancestry and binary patches; hosted App eligibility, model quality and API execution remain platform evidence (docs/upstream-automation.md). Proposed installer-upgrade CI builds real native candidate archives and exercises latest-stable plugin installation, authenticated runtime/session migration and failed-checksum retention in isolated state. This direct platform evidence is more useful than a model of OS packaging; OS service/channel upgrades and older release combinations remain excluded (docs/release.md).",
+  "evidenceDecision": "Real packaging/installer/release/CI tests exercise archive validation and dependency gates; actual platform/release workflows supply distribution evidence. Upstream-sync tests directly enumerate bounded repair/authority cases and reconstruct conflicting Git merges with exact ancestry and binary patches; hosted App eligibility, model quality and API execution remain platform evidence (docs/upstream-automation.md). Proposed installer-upgrade CI builds real native candidate archives and exercises latest-stable plugin installation, authenticated runtime/session migration and failed-checksum retention in isolated state. This direct platform evidence is more useful than a model of OS packaging; OS service/channel upgrades and older release combinations remain excluded (docs/release.md). Feature-map lookup and source admission use direct fixture/JSON regressions; synchronous OpenSpec batch archives use real Git and the pinned CLI to cover merge-date ordering, incomplete tasks, successful-prefix retention and restored conflict boundaries. Workflow wiring checks one serialized bot branch with no automatic main publication; hosted execution and review remain platform evidence. The feature-map repair additionally checks the complete tracked-source baseline, deleted-source admission without weakening spec deletion policy, the real legacy archive baseline and visible empty-batch failures.",
   "partialEvidence": {
     "models": [],
     "contracts": ["verification/consumer-evidence.md"],
@@ -49,7 +53,11 @@
       "scripts/upstream-sync-cli.test.ts",
       "scripts/upstream-dispositions.test.ts",
       "scripts/install-herdr-world.test.ts",
-      "scripts/installer-upgrade.test.ts"
+      "scripts/installer-upgrade.test.ts",
+      "scripts/where.test.ts",
+      "scripts/check-knowledge-map.test.ts",
+      "scripts/archive-changes.test.ts",
+      "scripts/check-pr-body.test.ts"
     ],
     "checks": ["bun run check"],
     "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
