@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "source": "6c04e935",
+    "acceptedSpike": "5d73319b",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188",
+    "executedCI": "https://github.com/IvoryHeart/herdr-world/actions/runs/38408289166",
+    "claim": "Existing example, integration and browser evidence; not exhaustive ordering coverage. Environment-gated live tests may be skipped."
+  },
+  "promotionReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+  "adoptionAcceptance": {
+    "pullRequest": "https://github.com/IvoryHeart/herdr-world/pull/188",
+    "mergeCommit": "481ca1e817bb1fefb7ea1e24fe4adc2a8021333e",
+    "finalReview": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140",
+    "archive": "openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification",
+    "claim": "Accepted documented bounds, mandatory consumers and exclusions; subsequent changes require fresh applicable evidence and review."
+  }
+}

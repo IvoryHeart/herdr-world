@@ -14,7 +14,7 @@ import {
   appearanceKey,
   parseAppearanceTarget,
 } from "../../../shared/appearance";
-import { handleWorldAsk } from "./world-cli-asks";
+import { handleWorldAsk, type AskRuntimeDeps } from "./world-cli-asks";
 export { answerAsk, ASK_WAIT_MAX_MS, dismissAsk } from "./world-cli-asks";
 import { teamMembers } from "../../../shared/groups";
 import { runGroupCommand, type GroupMoveRequest } from "./world-cli-groups";
@@ -128,7 +128,7 @@ export type WorldCliDeps = {
   now?: () => number;
   /** Aborted when the service stops: calls that wait return early. */
   signal?: AbortSignal;
-};
+} & AskRuntimeDeps;
 
 /* ---------- Identity ---------- */
 /* ---------- Targets ---------- */

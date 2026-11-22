@@ -1,3 +1,4 @@
+import { memoryHarness, memorySourceEditable } from "../../../../shared/memory";
 import { BookOpen, FilePlus2, Plus } from "lucide-react";
 import type {
   MemoryCatalog,
@@ -315,7 +316,8 @@ export function MemoryShelves({
                   {source.harnesses.map(harnessLabel).join(" · ")}
                 </span>
                 {source.state === "available" &&
-                source.shape === "directory" ? (
+                source.shape === "directory" &&
+                memorySourceEditable(source) ? (
                   <button
                     type="button"
                     className="ghost memory-add"
@@ -327,6 +329,11 @@ export function MemoryShelves({
                   </button>
                 ) : null}
               </div>
+              <p className="memory-hint">
+                {source.details[
+                  memoryHarness(harness) ?? source.harnesses[0]!
+                ] ?? source.description}
+              </p>
               <p className="memory-shelf-sharing">
                 {sharingText(source, catalog, names)}
                 {entries.length > 1
@@ -346,7 +353,7 @@ export function MemoryShelves({
                   <FilePlus2 size={14} aria-hidden="true" /> Create{" "}
                   {fileSourceName(source)}
                 </button>
-              ) : source.state === "missing" ? (
+              ) : source.state === "missing" && memorySourceEditable(source) ? (
                 // A fresh project has no auto-memory folder yet; the first
                 // note creates it (the API makes a missing source folder).
                 <button

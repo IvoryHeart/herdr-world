@@ -1,0 +1,38 @@
+{
+  "id": "Q19",
+  "area": "Presentation capacity",
+  "owner": "web/src/world/spaceAdmission.ts",
+  "requirement": "openspec/specs/world-surfaces/spec.md",
+  "properties": "Relevant ancestry reserved; bounded unique output; ordinary hosts receive round-robin capacity",
+  "existingTests": [
+    "web/src/world/treeProjection.test.ts",
+    "web/src/world/board/boardModel.test.ts",
+    "quint/replay.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
+  "technique": "space-admission",
+  "assessment": "complete fixed-domain sweep exists; other layouts and relevance classification use projection regressions",
+  "status": "shared-model",
+  "remaining": "Finite three-host allocation does not prove arbitrary tree or Board projections or all capacity domains; projection integration remains necessary.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/space-admission.qnt"],
+    "contracts": [
+      "verification/consumer-evidence.md",
+      "verification/composition.md"
+    ],
+    "tests": [
+      "web/src/world/treeProjection.test.ts",
+      "web/src/world/board/boardModel.test.ts",
+      "quint/replay.test.ts"
+    ],
+    "checks": ["bun run check", "bun run verification:check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "evidenceDecision": "Real allocation is compared with the independent exhaustive finite allocator across 5,103 configurations and six asymmetric host orders. Tree and Board projection tests retain ancestor reservations and projection capacity.",
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

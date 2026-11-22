@@ -5,6 +5,7 @@ import {
   reservedEmailDomain,
   syntheticCredential,
   syntheticHomeUsers,
+  syntheticWorldPasswordBindings,
 } from "./privacy-allowlist";
 
 type Rule =
@@ -34,6 +35,7 @@ function emailMatches(line: string) {
 export function privacyRules(
   line: string,
   publishedEmails: ReadonlySet<string> = new Set(),
+  syntheticWorldPasswordBinding?: string,
 ): Rule[] {
   const rules = new Set<Rule>();
   for (const match of line.matchAll(
@@ -89,6 +91,12 @@ export function privacyRules(
         rule === "session-secret" &&
         match[3] !== undefined &&
         !/^[a-z0-9+/_=-]{32,}$/i.test(literal)
+      )
+        continue;
+      if (
+        rule === "world-password" &&
+        syntheticWorldPasswordBinding !== undefined &&
+        match[3] === syntheticWorldPasswordBinding
       )
         continue;
       if (literal.length >= minimum && !syntheticCredential(literal))
@@ -227,6 +235,7 @@ export function scanPrivacyRange(
         for (const rule of privacyRules(
           text,
           file === publishedAttributionFile ? publishedEmails : undefined,
+          syntheticWorldPasswordBindings.get(file),
         ))
           findings.push({ file, line, rule });
     }

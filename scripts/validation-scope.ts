@@ -1,6 +1,7 @@
 import { affected, buildGraph, gitChanges, TEST, type Graph } from "./affected";
 import { readFileSync } from "node:fs";
 import { readCoverageScope } from "./coverage-scope";
+import { isCoveragePath } from "./coverage";
 import {
   worldBrowserSuites,
   worldBrowserShards,
@@ -59,6 +60,12 @@ export type ValidationSelection = {
 
 const NATIVE =
   /^(?:scripts\/(?:install|installer|package|release|prepare-release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
+/** Native acceptance also owns browser request builders for launch/connection setup. */
+export function isReleaseWalkInput(path: string): boolean {
+  return /^(?:scripts\/release-walk(?:\/|\.|-)|web\/src\/(?:.*(?:[Cc]onnection|[Ll]aunch)[^/]*\.[jt]sx?|creationRequests\.ts|api\.ts|world\/(?:agentProfiles\.ts|coreControl\.ts|town\/useTownRoomActions\.tsx))$)/.test(
+    path,
+  );
+}
 /** Real systemd acceptance is part of the Linux x64 native installation job. */
 export function isInstallationInput(path: string): boolean {
   return /^(?:scripts\/(?:install[^/]*|installer[^/]*|herdr-core-install\.[^/]+|herdr-bootstrap[^/]*|(?:generate-|check-)?homebrew[^/]*|package-release\.sh)$|scripts\/install-linux\/|server\/src\/(?:herdr-core\/install\.[^/]+|connections\/|cli\/connections\.ts))/.test(
@@ -179,10 +186,7 @@ export function selectValidation(
       : tests.full
         ? allTests
         : tests.unit;
-  if (
-    !full &&
-    paths.some((path) => path === "verification/coverage.json" || owns(path))
-  )
+  if (!full && paths.some((path) => isCoveragePath(path) || owns(path)))
     chosen.push("scripts/verification-coverage.test.ts");
   const browserPlanPaths = [
     "scripts/world-browser-suites.ts",
@@ -245,6 +249,7 @@ export function selectValidation(
         paths.some(
           (path) =>
             isInstallationInput(path) ||
+            isReleaseWalkInput(path) ||
             nativeTestConsumers.has(path) ||
             (!browserPlanOnly && binaryInputs.has(path)) ||
             // Incomplete graphs cannot establish absence from a binary.

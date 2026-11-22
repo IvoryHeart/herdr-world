@@ -1,0 +1,40 @@
+{
+  "id": "Q31",
+  "area": "Files/uploads/previews",
+  "owner": "server/src/workspace/files.ts",
+  "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
+  "properties": "Captured roots/owners survive async work; partial upload cleanup; preview admission has no authority escalation",
+  "existingTests": [
+    "server/src/workspace/file-mutations.test.ts",
+    "server/src/workspace/path.test.ts",
+    "web/src/components/fileExplorerSelection.test.ts",
+    "server/src/workspace/files.test.ts",
+    "server/src/workspace/file-paths.test.ts",
+    "server/src/workspace/local-files.test.ts",
+    "server/src/http/terminal-upload.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
+  "technique": "alternative",
+  "assessment": "real filesystem/path/upload boundaries need integration evidence; runtime capture mapped by qualified-operation",
+  "status": "alternative-evidence",
+  "remaining": "Filesystem permissions, symlink/path and upload semantics require implementation/platform evidence; no universal filesystem or remote atomicity claim.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "evidenceDecision": "Real filesystem/upload/path tests exercise traversal, native cwd, publication and cancellation using owned synthetic fixtures.",
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/consumer-evidence.md"],
+    "tests": [
+      "server/src/workspace/files.test.ts",
+      "server/src/workspace/file-paths.test.ts",
+      "server/src/workspace/local-files.test.ts",
+      "server/src/http/terminal-upload.test.ts"
+    ],
+    "checks": ["bun run check"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

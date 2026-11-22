@@ -14,6 +14,11 @@ repeated here so a copied task prompt can apply it directly.
 > CI uses documentation checks for Markdown-only PR diffs and reuses exact-head
 > full results for description edits. Do not run a duplicate full check before push.
 >
+> Do not regenerate Help pictures unless adding or changing a help entry;
+> then use `HELP_PICTURES_IDS="<id>" bun run help:pictures` and commit only
+> that entry's pictures and manifest record. Stale fingerprints only warn;
+> main owns the full refresh through a bot PR.
+>
 > In Codex, when a command returns a running session, call `write_stdin` on
 > that session with empty `chars` and `yield_time_ms: 300000`; wait again only
 > if it actually times out and remains running. Apply the same rule to

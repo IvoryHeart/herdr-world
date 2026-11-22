@@ -2,6 +2,7 @@ name: Privacy
 
 # Independent of PR creation, validation scope and the main-only full matrix.
 on:
+    workflow_dispatch:
     push:
         branches: ["**"]
     pull_request:
@@ -27,4 +28,9 @@ jobs:
                   bun-version: "1.4.4"
                   no-cache: true
             - name: Scan every introduced commit without exposing matches
-              run: bun scripts/check-privacy.ts --event "$GITHUB_EVENT_PATH"
+              run: |
+                  if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+                    bun run check:privacy
+                  else
+                    bun scripts/check-privacy.ts --event "$GITHUB_EVENT_PATH"
+                  fi

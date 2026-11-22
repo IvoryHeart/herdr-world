@@ -74,7 +74,9 @@ reads "Usage unavailable". Town's time of day
 is held at night, so the image never depends on the runner's clock or time zone
 and shows the status lighting. It does not start
 World or Herdr, contact a runtime, or capture a user's browser. The surrounding World shell, rail,
-Inspector, gestures and runtime effects retain their existing tests.
+Inspector, gestures and runtime effects retain their existing tests. The isolated
+canvas does not publish Library hosts, so it shows no Library sign; supported-host
+signs and unsupported-host absence are covered by the Library tests.
 
 The fixture fixes its random seed, wall clock, 16 ms frame clock, dark theme,
 100% interface scale and DPR 1. Motion stays enabled. Fonts load before layout;

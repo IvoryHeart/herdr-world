@@ -1,0 +1,33 @@
+{
+  "id": "Q56",
+  "area": "First-run and immutable launch preparation",
+  "owner": "server/src/connections/first-run.ts",
+  "requirement": "openspec/specs/herdr-core-runtime/spec.md",
+  "properties": "Saved/explicit authority wins, no unsaved default or launch before preparation, complete retry after uncertain file publication",
+  "existingTests": [
+    "server/src/connections/first-run.test.ts",
+    "server/src/usage/claude-launch-settings.test.ts",
+    "server/src/herdr-core/shell.test.ts",
+    "server/src/herdr-core/operations.test.ts",
+    "server/src/rpc/launcher-tap.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/984",
+  "status": "alternative-evidence",
+  "technique": "finite-failure-matrix-and-native-subprocess",
+  "assessment": "One async discovery save with before/after failure and retry; equal-content cache publications commute; real subprocess/PTY tests retain byte transport",
+  "remaining": "Cross-process startup ownership uses the Q02 registry-process consumers and connection-registry contract. Native harness/macOS acceptance and power loss remain platform checks; existing creation/core models own post-preparation launch.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": [],
+    "contracts": ["verification/contracts/launch-preparation.md"],
+    "tests": [
+      "server/src/connections/first-run.test.ts",
+      "server/src/usage/claude-launch-settings.test.ts",
+      "server/src/herdr-core/shell.test.ts",
+      "server/src/herdr-core/operations.test.ts",
+      "server/src/rpc/launcher-tap.test.ts"
+    ],
+    "checks": ["bun run verification:gate"],
+    "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+  }
+}

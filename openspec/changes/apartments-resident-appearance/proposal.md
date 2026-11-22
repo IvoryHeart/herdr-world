@@ -29,7 +29,7 @@ None.
 
 ### Modified Capabilities
 
-- `world-surfaces`: Apartments residents show their kept or nearest avatar.
+- `world-surfaces/apartments`: Apartments residents show their kept or nearest avatar.
 - `world-storage`: resident records carry an optional, leniently read
   appearance.
 
