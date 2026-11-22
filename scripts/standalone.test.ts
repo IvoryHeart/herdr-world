@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { brotliCompressSync, brotliDecompressSync } from "node:zlib";
 import serverPackage from "../server/package.json";
 
 test("standalone serves native assets without ambient config and retains source maps", async () => {
@@ -37,6 +38,11 @@ test("standalone serves native assets without ambient config and retains source 
     await Bun.write(
       join(dir, "public/assets/app-hash.js"),
       "export const value = 42;",
+    );
+    // The build's precompressed variant rides in the binary beside its file.
+    await Bun.write(
+      join(dir, "public/assets/app-hash.js.br"),
+      brotliCompressSync("export const value = 42;"),
     );
     await Bun.write(
       join(dir, "public/assets/font.woff2"),
@@ -77,7 +83,7 @@ const server = Bun.serve({
 });
 const results = [];
 try {
-  for (const [path, method, accept] of [
+  for (const [path, method, accept, encoding] of [
     ["/", "GET", "text/html"],
     ["/workspace", "GET", "text/html"],
     ["/assets/app-hash.js", "GET", "*/*"],
@@ -87,10 +93,13 @@ try {
     ["/", "POST", "text/html"],
     ["/%ZZ", "GET", "text/html"],
     ["/..%2Foutside.txt", "GET", "text/html"],
+    ["/assets/app-hash.js", "GET", "*/*", "br"],
   ]) {
-    const response = await fetch(new URL(path, server.url), { method, headers: { accept } });
+    const response = await fetch(new URL(path, server.url), { method, decompress: false,
+      headers: { accept, "accept-encoding": encoding ?? "identity" } });
     results.push({ status: response.status, type: response.headers.get("content-type"),
-      cache: response.headers.get("cache-control"), body: Buffer.from(await response.arrayBuffer()).toString("base64") });
+      cache: response.headers.get("cache-control"), encoding: response.headers.get("content-encoding"),
+      body: Buffer.from(await response.arrayBuffer()).toString("base64") });
   }
     console.log(JSON.stringify({ standalone: Bun.isStandaloneExecutable,
     ambient: process.env.HERDR_WORLD_STANDALONE_TEST ?? null, worker, results }));
@@ -119,8 +128,19 @@ try {
     expect(result.worker).toBe("embedded worker");
     expect(
       result.results.map((item: { status: number }) => item.status),
-    ).toEqual([200, 200, 200, 200, 404, 200, 405, 400, 404]);
+    ).toEqual([200, 200, 200, 200, 404, 200, 405, 400, 404, 200]);
     expect(result.results[0].cache).toBe("private, no-cache, must-revalidate");
+    expect(result.results[2].cache).toBe(
+      "private, max-age=31536000, immutable",
+    );
+    expect(result.results[2].encoding).toBeNull();
+    expect(result.results[9].encoding).toBe("br");
+    expect(result.results[9].type).toContain("javascript");
+    expect(
+      brotliDecompressSync(
+        Buffer.from(result.results[9].body, "base64"),
+      ).toString(),
+    ).toBe("export const value = 42;");
     expect(Buffer.from(result.results[1].body, "base64").toString()).toBe(
       "embedded entry",
     );
