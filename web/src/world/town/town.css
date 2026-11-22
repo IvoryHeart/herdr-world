@@ -13,6 +13,9 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+  /* Never a scroll box: focusing a room's accessible target far off-screen
+     would scroll the canvas out of view, and Town would stop drawing. */
+  overflow: clip;
   font-family: var(
     --town-ui-font,
     "Rubik",
