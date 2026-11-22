@@ -62,6 +62,8 @@ const maxFileCount = 212;
 // with main's Apartments and post-office work measures 16,270,139 bytes
 // (15.5164 MiB): 17,211 bytes above 15.5 MiB. Account for the combined
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
+// Town's quiet-agent mark (#1130: rule, hourglass and Busy sub-line, all in
+// the lazy Town chunk) adds about 5 KB, still within 15.6 MiB (2026-11-21).
 // Town's one place window (#1170: building presses, the shared frame, and
 // Integrations and Needs you inside it) measures 16,359,148 bytes (15.601
 // MiB), 1,362 bytes above 15.6 MiB, all in lazy chunks; 15.7 MiB carries

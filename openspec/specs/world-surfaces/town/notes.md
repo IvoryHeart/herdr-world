@@ -166,6 +166,19 @@
     browser and device shows the same one. Zoomed in to desks, where the
     reception boards are put away, tap a building's reception lobby to bring
     its board and sign back; any other tap or zoom level puts it away again.
+  - A working agent whose session has not moved for 10 minutes looks quiet:
+    it stays seated with its room's working light on and its hands stop
+    typing. From the room level its step bubble adds an hourglass with how
+    long it has gone quiet, such as "23m", and keeps the step's running time
+    beside it; zoomed further out the hourglass shows alone. Its card says
+    how long, such as "No progress for 23 m (last 14:02)". The Town board adds
+    a line under **Busy**, such as "2 quiet 10 m+": it opens the first quiet
+    agent's card and **Next ›** steps through the rest. The time comes from
+    the agent's session file, so an agent without one never looks quiet. The
+    look clears as soon as the session moves again; World never nudges or
+    restarts the agent. **Quiet working agents** in Settings (search "quiet")
+    sets 5, 10, 20, 30 or 60 minutes, or **Off**. Calm and reduced motion keep
+    the hourglass, which never animates.
   - Town shows what the crew spends. The **City expenses** billboard stands
     on the lawn above the town center, never over it: the whole World's tokens
     and estimated cost, such as "Today · 1.2M tokens · $3.40 est.", with a
@@ -398,9 +411,8 @@
     the building's lounge and shows the center from its plaque down. Tapping it, or its **Town center** plaque (Tab to it, then Enter),
     opens a ring of actions around its doors: **New agent** (World's launcher,
     preselecting the open room when it can start one there), **Town master**
-    (the role holder from **Settings → Chimes and who plays them**, else the
-    agent named in **Settings → Town master** when nobody holds the role, opened on Chat; a holder not in
-    Town says so; with neither set it opens **Sounds**),
+    (the synced role holder from **Settings → Town master**, opened on Chat;
+    a holder not in Town says so; with nobody assigned it opens **Sounds**),
     **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
     **New room** (disabled with the reason when no room can be created). With
     no room open, New room asks for the **Destination host**, herdr-core hosts
@@ -429,9 +441,10 @@
     one's share. Desks and agents with nothing to show stay plain. Screen readers
     hear each place's reading in its name. A lens changes only how Town is
     drawn: taps open what they always do, nothing moves, Escape or **✕**
-    returns Town exactly as it was, and Town always opens in **Attention**
-    (Town as usual). A search with a lens on outlines its matches over the
-    lens's colours, and ending it returns to the lens. The browser remembers
+    returns Town exactly as it was. A fresh page starts in **Attention**
+    (Town as usual); a lens chosen in Settings also applies before Town opens.
+    A search with a lens on outlines its matches over the lens's colours, and
+    ending it returns to the lens. The browser remembers
     the last lens for `L` and **Lenses**. With `?scene=town-scale` every lens
     has synthetic data.
     Board offers the same lenses over its cards (see Board below).
@@ -516,10 +529,17 @@
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.
-  - The Town master's chat (**Settings → Town master**, `firstmate` by default,
-    matched against the agent's Herdr name, then its label) opens docked on
-    Chat once per visit on wide screens, without moving the pane's focus;
-    the town center's **Town master** opens it on demand.
+  - The Town master's chat (**Settings → Town master**, the same synced role
+    in every browser) opens docked on Chat once per visit on wide screens in
+    Town and Board, without moving the pane's focus. The town center and
+    Board hub open it on demand. There is no default name or name fallback.
+    An explicitly saved browser name migrates once when it uniquely matches a
+    current agent and no synced holder exists; ambiguous or unavailable agents
+    wait. An existing holder wins. The old name is forgotten before the qualified
+    assignment attempt; a failure reports that you can choose an agent in Settings.
+    On a development preview, after clearing the synced role in Sounds, open
+    `/board?legacyTownMaster=<agent-name>` to exercise migration without editing
+    browser storage; the parameter removes itself and never clears an existing role.
   - Hovering an agent shows a small card as a preview: its latest message from
     Chat's conversation read model, rendered as Chat renders it (never terminal
     text; an unavailable conversation shows Chat's reason), a question when

@@ -138,11 +138,13 @@ export const TownTeamsLayer = memo(function TownTeamsLayer({
     </svg>
   );
 });
+const NO_QUIET: ReadonlyMap<string, number> = new Map();
 export const TownWorldLayer = memo(function TownWorldLayer({
   hud,
   model,
   foldedActivity,
   askingKeys,
+  quiet = NO_QUIET,
   receptionHeldKeys,
   receptionTakes,
   onFindHeld,
@@ -193,6 +195,11 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   places: TownPlaces;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
+  /**
+   * Quiet working agents (townQuietWork.ts), with when each last moved: their
+   * step bubble adds an hourglass and how long they have gone quiet.
+   */
+  quiet?: ReadonlyMap<string, number>;
   /** Agents the reception filter keeps at their desks (townReceptionFilter). */
   receptionHeldKeys: ReadonlySet<string>;
   /** The marks each building's reception takes. */
@@ -804,13 +811,16 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                                   >
                                     {device.displayLabel}
                                   </span>
-                                  {steps &&
-                                  device.agentKey &&
+                                  {device.agentKey &&
+                                  (steps || quiet.has(device.agentKey)) &&
                                   !askingKeys.has(device.agentKey) &&
                                   model.agents.get(device.agentKey)
                                     ?.semanticStatus === "working" ? (
                                     <TownStepBubble
                                       steps={steps}
+                                      quietSince={
+                                        quiet.get(device.agentKey) ?? null
+                                      }
                                       hud={hud}
                                       agentKey={device.agentKey}
                                       top={slot.top}

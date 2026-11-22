@@ -26,7 +26,7 @@ import {
 } from "../worldFrameScheduler";
 import { registerTownFrames } from "./townFrameLifecycle";
 import { createTownDragEffects } from "./townRendererDrag";
-import { createTownActorViews } from "./townRendererActors";
+import { createTownActorViews, townTypes } from "./townRendererActors";
 import { textureOf } from "./townRendererScene";
 import { createTownTopology } from "./townRendererTopology";
 import type { TownSceneFrame, TownSceneState } from "./scene/townSceneDiff";
@@ -483,10 +483,10 @@ export async function createTownRenderer(
           const seated = Boolean(info.agent && info.seated);
           person.visible = seated && peopleBlend > 0.02;
           if (person.visible && info.agent) {
-            const typing =
-              info.agent.semanticStatus === "working"
-                ? Math.floor(clock * 7 + (townHash(info.agent.key) % 7)) % 2
-                : 0;
+            const types = townTypes(info.agent, state.quietKeys);
+            const typing = types
+              ? Math.floor(clock * 7 + (townHash(info.agent.key) % 7)) % 2
+              : 0;
             // Confused agents scratch their heads, then look up again;
             // calm motion holds the scratch.
             const confused = info.agent.semanticStatus === "unknown";
@@ -511,7 +511,7 @@ export async function createTownRenderer(
               ),
             );
             person.alpha = peopleBlend;
-            if (info.agent.semanticStatus === "working" && visible(person))
+            if (types && visible(person))
               ambient.every(7, townHash(info.agent.key) % 7);
           }
           const glowSprite = view.glow;
