@@ -453,6 +453,15 @@ Keep class names prefixed with the component name (for example
 Media queries (including mobile adaptations) live in the owning file next to
 the rules they adjust; do not create a separate mobile stylesheet.
 
+Do not hang `:has()` on the page or World shell (`body`, `html`, `:root`,
+`.app`, `.world-foundation-shell`, `.world-view-layout`): Chrome then restyles
+most of the page on each typed key or streamed line. Set the state as an
+`<html>` attribute from JavaScript instead (`web/src/rootFlag.ts`,
+`web/src/terminalInputFocus.ts`). `bun run lint` refuses new ones
+([check](scripts/check-has-selectors.ts)), and
+`web/src/world/ComposerTypingStyle.browser.test.ts` traces how many elements
+each composer key restyles.
+
 App shell and Suspense fallback styles must load before the lazy content they
 surround: use `styles/base.css` or `styles/layout/`. Styles shared across
 independently loaded features belong in a shared stylesheet imported by each

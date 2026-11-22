@@ -12,6 +12,7 @@
 **Code:**
 
 - `server/src/memory/`
+- `server/src/features/memory/` owns construction, RPC handlers and shared RPC/CLI verb declarations; the CLI resolves its service by typed feature key. Memory has no background lifecycle hooks.
 - `web/src/world/memory/`
 - `web/src/world/memory/memoryModel.ts`
 - `web/src/world/town/TownLibrary.tsx`

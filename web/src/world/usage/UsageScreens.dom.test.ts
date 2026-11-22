@@ -51,7 +51,10 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
   const { bridge } = await import("../../api");
   const { layoutTown, TOWN_SHAPES } = await import("../town/townLayout");
   const { TownObservatory } = await import("../town/TownObservatory");
-  const { TownOpenUsageContext } = await import("../town/TownUsageLens");
+  const { TownOpenUsageContext, useTownUsage } = await import(
+    "../town/TownUsageLens"
+  );
+  const { useUsageOpener } = await import("./usageOpener");
   const { UsageLens } = await import("./UsageLens");
   const { AgentUsageLine } = await import("./AgentUsageLine");
   const { resetUsageFixture, usageFixture } = await import("./usageFixture");
@@ -334,5 +337,105 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
     );
     expect(other.host.textContent).toBe("This run: usage unknown");
     await other.close();
+  });
+
+  test("Town's opener opens Breakdown on one agent, and clearing it shows every agent", async () => {
+    fixture("busy");
+    let open: ReturnType<typeof useUsageOpener> = null;
+    function Town() {
+      return useTownUsage().lens;
+    }
+    function Apartments() {
+      open = useUsageOpener();
+      return null;
+    }
+    const view = await mount(
+      createElement(
+        "div",
+        null,
+        createElement(Town),
+        createElement(Apartments),
+      ),
+    );
+    expect(open).not.toBeNull();
+    await act(async () =>
+      open!("breakdown", {
+        ids: ["fixture-agent-0", "fixture-agent-2"],
+        label: "linus",
+      }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const lens = () => view.host.querySelector<HTMLElement>(".usage-lens")!;
+    const bodyRows = () =>
+      [...lens().querySelectorAll(".usage-breakdown-table tbody th")].map(
+        (cell) => cell.textContent,
+      );
+    expect(lens().dataset.tab).toBe("breakdown");
+    expect(lens().querySelector(".usage-filter")!.textContent).toBe(
+      "Agent: linus",
+    );
+    expect(lens().querySelector('[aria-label="Group by"]')).toBeNull();
+    // Its two runs, named by the resident; the total is this agent's.
+    expect(bodyRows()).toEqual(["linus", "linus"]);
+    const total = lens().querySelector(".usage-breakdown-table tfoot tr")!;
+    expect(total.querySelector("th")!.textContent).toBe("This agent");
+    expect(total.textContent).toContain("5 h (partly read)");
+    expect(total.textContent).toContain("14M (partly read)");
+    // Clearing the filter shows every agent and the grouping again.
+    await act(async () =>
+      lens()
+        .querySelector<HTMLButtonElement>('[aria-label="Show every agent"]')!
+        .click(),
+    );
+    expect(lens().querySelector(".usage-filter")).toBeNull();
+    expect(lens().querySelector('[aria-label="Group by"]')).not.toBeNull();
+    expect(bodyRows()).toHaveLength(16);
+    expect(
+      lens().querySelector(".usage-breakdown-table tfoot th")!.textContent,
+    ).toBe("This week");
+    await view.close();
+    // Town gone: no opener for windows outside it.
+    const after = await mount(createElement(Apartments));
+    expect(open).toBeNull();
+    await after.close();
+  });
+
+  test("an agent with no run this week reads as nothing measured, not zeros", async () => {
+    fixture("busy");
+    const view = await mount(
+      createElement(UsageLens, {
+        initialTab: "breakdown",
+        initialFilter: { ids: ["agent_gone"], label: "hopper" },
+        onClose: () => {},
+      }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const lens = view.host.querySelector(".usage-lens")!;
+    expect(lens.textContent).toContain("Nothing measured for hopper this week");
+    expect(lens.querySelector(".usage-breakdown-table")).toBeNull();
+    await view.close();
+    // An agent World never counted: Breakdown says why.
+    const found = await mount(
+      createElement(UsageLens, {
+        initialTab: "breakdown",
+        initialFilter: {
+          ids: [],
+          label: "zed",
+          why: "found in its history, World kept no usage for it",
+        },
+        onClose: () => {},
+      }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(found.host.querySelector(".usage-lens")!.textContent).toContain(
+      "Nothing measured for zed: found in its history, World kept no usage for it.",
+    );
+    await found.close();
   });
 }

@@ -1,6 +1,7 @@
 import { Search, X } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useRootFlag } from "../rootFlag";
 import {
   useFoldingSearch,
   usePhoneViewport,
@@ -53,6 +54,8 @@ export function WorldViewToolbar({
   // Leaving the phone layout closes its search overlay. Adjusted while
   // rendering, not in an effect, so mounting commits no extra render.
   if (!compact && compactSearchOpen) setCompactSearchOpen(false);
+  // The phone overlay restyles the view's results (world-shell.css).
+  useRootFlag("data-world-search-overlay", compact && compactSearchOpen);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

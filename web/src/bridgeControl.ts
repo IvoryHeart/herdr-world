@@ -16,6 +16,8 @@ export interface BridgeControlMsg {
     | "agent_conversation_changed"
     | "world_agent_activity"
     | "world_focused_changed"
+    // The focus session (#1131, server/src/world/focus.ts).
+    | "world_focus_changed"
     | "world_connections_changed"
     | "world_desk_reads"
     // World's float shell on herdr-core (server/src/rpc/float.ts).

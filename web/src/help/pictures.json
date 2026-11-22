@@ -89,11 +89,29 @@
       "town.daylight.phone.dark.webp"
     ]
   },
+  "town.focus": {
+    "fingerprint": "f941825b9f70c462",
+    "files": [
+      "town.focus.desktop.light.webp",
+      "town.focus.desktop.dark.webp",
+      "town.focus.phone.light.webp",
+      "town.focus.phone.dark.webp"
+    ]
+  },
   "town.master": {
     "fingerprint": "be480f45e405a9bc",
     "files": [
       "town.master.desktop.light.webp",
       "town.master.desktop.dark.webp"
+    ]
+  },
+  "town.quiet": {
+    "fingerprint": "109d278628afa516",
+    "files": [
+      "town.quiet.desktop.light.webp",
+      "town.quiet.desktop.dark.webp",
+      "town.quiet.phone.light.webp",
+      "town.quiet.phone.dark.webp"
     ]
   },
   "town.zoom": {

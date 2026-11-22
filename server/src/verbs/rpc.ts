@@ -284,6 +284,21 @@ export const rpcVerbs = [
   rpc("world.bin.pause", "reconcilable", "world"),
   rpc("world.bin.restore", "reconcilable", "world", object({ id: text })),
   rpc("world.bin.resume", "reconcilable", "world"),
+  rpc("world.board.elements.types", "read", "world"),
+  rpc("world.board.elements.list", "read", "world"),
+  rpc(
+    "world.board.elements.put",
+    "reconcilable",
+    "world",
+    object({ element: object() }),
+  ),
+  rpc(
+    "world.board.elements.delete",
+    "reconcilable",
+    "world",
+    object({ id: text, rev: Type.Integer({ minimum: 1 }) }),
+  ),
+  rpc("world.board.elements.read", "read", "world", object({ id: text })),
   rpc("world.board.get", "read", "world"),
   // herdr-core control: the handler takes the lease from the core manager
   // only and checks the generation the browser saw (rpc/core.ts).
@@ -537,6 +552,20 @@ export const rpcVerbs = [
     "reconcilable",
     "world",
     object({ harness: text }),
+  ),
+  // The owner's focus session (#1131): held interruptions, then one recap.
+  rpc("world.focus.end", "reconcilable", "world"),
+  rpc("world.focus.get", "read", "world"),
+  rpc(
+    "world.focus.start",
+    "reconcilable",
+    "world",
+    object({
+      minutes: Type.Union([
+        Type.Null(),
+        Type.Integer({ minimum: 1, maximum: 720 }),
+      ]),
+    }),
   ),
   // The owner's last sighting across browsers, for "Since you left".
   rpc("world.profiles.delete", "reconcilable", "world"),

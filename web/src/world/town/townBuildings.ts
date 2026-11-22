@@ -63,22 +63,12 @@ export function townBuildingsMode(
 export type TownRuntime = {
   id: string;
   runtime: "herdr" | "herdr-core";
-  /** This computer, or one SSH destination, as the service groups hosts. */
+  /** This computer, or one SSH destination (worldHosts.ts `machine`). */
   machine: string;
   /** Equal for connections of one runtime endpoint (worldHosts.ts). */
   endpoint: string;
   writable: boolean;
 };
-
-function machineOf(
-  connection: Pick<ConnectionSummary, "id" | "type" | "ssh_destination">,
-) {
-  if (connection.type === "local") return "local";
-  if (connection.type === "ssh" && connection.ssh_destination)
-    return `ssh:${connection.ssh_destination}`;
-  // An older catalogue without profile fields: a machine of its own.
-  return `connection:${connection.id}`;
-}
 
 let cachedRuntimes: {
   connections: State["connections"];
@@ -96,18 +86,15 @@ export function townRuntimes(
     cachedRuntimes.coreConnections === state.coreConnections
   )
     return cachedRuntimes.runtimes;
-  const profiles = new Map<
-    string,
-    Pick<ConnectionSummary, "id" | "type" | "ssh_destination" | "read_only">
-  >();
+  const profiles = new Map<string, Pick<ConnectionSummary, "read_only">>();
   for (const each of state.coreConnections ?? []) profiles.set(each.id, each);
   for (const each of state.connections) profiles.set(each.id, each);
   const runtimes = worldHosts(state).map((host): TownRuntime => {
-    const profile = profiles.get(host.id) ?? { id: host.id };
+    const profile = profiles.get(host.id) ?? {};
     return {
       id: host.id,
       runtime: host.runtime,
-      machine: machineOf(profile),
+      machine: host.machine,
       endpoint: host.endpoint,
       writable: profile.read_only !== true,
     };

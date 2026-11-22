@@ -8,7 +8,7 @@ import {
   PopoverTrigger,
 } from "../components/ui/popover";
 import type { HostsFilter } from "./hostsFilter";
-import { hostCount, hostRuntimeLabel, type WorldHost } from "../worldHosts";
+import { hostCount, worldMachines, type WorldHost } from "../worldHosts";
 import { useViewControlRequest } from "../settings/viewControls";
 
 export type HostsControlProps = {
@@ -18,13 +18,22 @@ export type HostsControlProps = {
   onChange(ids: HostsFilter): void;
 };
 
-/** "All hosts", or how many hosts the filter shows. */
+/** How many machines an explicit Hosts selection shows. */
+export function selectedHostCount(
+  connections: readonly WorldHost[],
+  ids: readonly string[],
+) {
+  return hostCount(connections.filter(({ id }) => ids.includes(id)));
+}
+
+/** "All hosts", "No hosts", or how many hosts (machines) the filter shows. */
 export function hostsSelectionLabel(
   connections: readonly WorldHost[],
   ids: HostsFilter,
 ) {
   if (ids === null) return "All hosts";
-  return `${hostCount(connections.filter(({ id }) => ids.includes(id)))} hosts`;
+  if (!ids.length) return "No hosts";
+  return `${selectedHostCount(connections, ids)} hosts`;
 }
 
 /**
@@ -49,6 +58,9 @@ export function useConnectionManager() {
 /**
  * The Hosts filter itself, shared by the top bar's Hosts menu and the phone's
  * corner view menu so both show and change the one filter of this browser.
+ * One row per machine (#1227), as Town has one building per machine: a row
+ * shows or hides every runtime World holds there, and its status sums theirs
+ * up. Each runtime's own detail stays in Manage connections.
  */
 export function HostsFilterOptions({
   connections,
@@ -61,30 +73,23 @@ export function HostsFilterOptions({
       <button type="button" onClick={() => onChange(null)}>
         All hosts
       </button>
-      {connections.map((connection) => (
-        <label key={connection.id}>
+      {worldMachines(connections).map((machine) => (
+        <label key={machine.machine}>
           <input
             type="checkbox"
-            aria-label={connection.label}
-            checked={ids === null || ids.includes(connection.id)}
+            aria-label={machine.label}
+            checked={ids === null || machine.ids.some((id) => ids.includes(id))}
             onChange={(event) => {
               const selected =
                 ids === null ? connections.map((host) => host.id) : [...ids];
               onChange(
                 event.target.checked
-                  ? [...new Set([...selected, connection.id])]
-                  : selected.filter((id) => id !== connection.id),
+                  ? [...new Set([...selected, ...machine.ids])]
+                  : selected.filter((id) => !machine.ids.includes(id)),
               );
             }}
           />
-          {connection.label}
-          {hostRuntimeLabel(connection) ? (
-            <span className="world-hosts-runtime">
-              {" "}
-              · {hostRuntimeLabel(connection)}
-            </span>
-          ) : null}{" "}
-          · {connection.state}
+          {machine.label} · {machine.status}
         </label>
       ))}
       {!connections.length ? (
@@ -98,8 +103,8 @@ export function HostsFilterOptions({
 }
 
 /**
- * The overview's Hosts menu: every host of `worldHosts`, Herdr (TUI) and
- * herdr-core alike, to show or hide in World's views.
+ * The overview's Hosts menu: every machine of `worldHosts`, with its Herdr
+ * (TUI) and herdr-core runtimes, to show or hide in World's views.
  */
 export function HostsControl({
   connections,

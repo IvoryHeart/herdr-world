@@ -1504,7 +1504,7 @@ async function operationalScenario(unmount: () => void) {
     await phoneHostsMenuScenario();
     return;
   }
-  if (operation === "nonempty-filter") {
+  if (operation === "empty-filter") {
     namedButton("Hosts")!.click();
     await frame();
     for (const id of ["alpha", "beta", "offline"]) {
@@ -1514,9 +1514,19 @@ async function operationalScenario(unmount: () => void) {
         await frame();
       }
     }
+    // Unchecking every host is an explicit empty filter (#1227), not All hosts.
+    await waitFor(
+      () => anchors().size === 0,
+      "An empty Hosts filter still shows rooms",
+    );
     check(
-      anchors().size > 0,
-      "Hosts permits an empty explicit filter, contrary to the nonempty selection contract",
+      ["alpha", "beta", "offline"].every((id) => !hostCheckbox(id)!.checked),
+      "An empty Hosts filter re-checked a host",
+    );
+    check(
+      document.querySelector(".topbar .connection-switcher-label")
+        ?.textContent === "No hosts",
+      "An empty Hosts filter is not labelled No hosts",
     );
     check(
       store.get().activeConnectionId === "alpha",

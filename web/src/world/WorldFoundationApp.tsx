@@ -33,7 +33,7 @@ import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
 import { buildWorldObject, type WorldObject } from "./worldObject";
 import { worldObjectForHosts } from "./worldFilters";
 import { useHostsFilter } from "./hostsFilter";
-import { HostsControl } from "./HostsControl";
+import { HostsControl, selectedHostCount } from "./HostsControl";
 import { worldHosts } from "../worldHosts";
 import { WorldNavigator } from "./WorldNavigator";
 import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
@@ -149,10 +149,7 @@ export default function WorldFoundationApp() {
   const catalogueReady = useStoreSelector(
     (snapshot) => snapshot.catalogueReady,
   );
-  const hostsFilter = useHostsFilter(
-    hosts.map((host) => host.id),
-    catalogueReady,
-  );
+  const hostsFilter = useHostsFilter(hosts, catalogueReady);
   const topbarWorld = useMemo(
     () =>
       worldObjectForHosts(
@@ -238,6 +235,15 @@ export default function WorldFoundationApp() {
       worldRuntimeStore.stop();
     };
   }, []);
+
+  // The view on <html> too, for surfaces portaled to <body> (the phone's
+  // Needs you sheet). `body:has(.world-foundation-shell[data-view])` would
+  // restyle the page on every DOM change, typing included (#1231).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-world-view", view);
+    return () => root.removeAttribute("data-world-view");
+  }, [view]);
 
   useEffect(() => {
     // The root, retired views (/office, /graph, /tree) and unknown paths
@@ -537,7 +543,7 @@ export default function WorldFoundationApp() {
                     selectedHostLabel={
                       hostsFilter.ids === null
                         ? "All hosts"
-                        : `${hostsFilter.ids.length} selected hosts`
+                        : `${selectedHostCount(hosts, hostsFilter.ids)} selected hosts`
                     }
                   />
                   <div

@@ -317,7 +317,7 @@ waits for conditions at animation frames instead of a fixed 40 ms polling step;
 its negative-observation dwell checks remain. The initial 36 World weights were
 refreshed from run 44600794516's retained per-file timings (including setup).
 With subsequently added suites and the hosted owner-topology duration, the
-42-suite inventory balances to 309–312 seconds of serial work per shard before
+43-suite inventory balances to 311–313 seconds of serial work per shard before
 two-file concurrency. Every viewport and behavioral assertion remains: the
 animated layout cases exercise different scales, aspect ratios, slow frames or
 desktop/phone controls. We did

@@ -629,7 +629,12 @@ test.skipIf(!chrome)(
         await waitFor(
           "!!document.querySelector('.agent-launcher-card:not(:disabled)')",
           "the launcher opens on the core room",
-        );
+        ).catch(async (error: Error) => {
+          const seen = await evaluate<string>(
+            `JSON.stringify({ took: window.__pointerTarget?.closest?.('[aria-label]')?.getAttribute('aria-label') ?? null, cards: [...document.querySelectorAll('.agent-launcher-card')].map((card) => [card.textContent?.slice(0, 40), card.disabled]) })`,
+          );
+          throw new Error(`${error.message}: ${seen}`);
+        });
         // Terminal is enabled before the catalog arrives. Its response grows
         // and recentres the dialog, so do not carry pre-catalog coordinates
         // into the click. The fixture holds that response to exercise the race.

@@ -6,6 +6,7 @@ import {
   formatOfficeModelNames,
   formatOfficeUsage,
 } from "../officeObservability";
+import { HELP_TRY_EVENT } from "../../help/helpEvents";
 import type {
   TownPlaceSummary,
   TownSummary,
@@ -35,6 +36,12 @@ import {
   townFuelLowestText,
 } from "./TownFuelGauge";
 import { TownExpenseCaveats } from "./TownExpenseCaveats";
+import { FOCUS_RECAP_EVENT } from "../focus";
+import {
+  TownFocusMark,
+  TownFocusSection,
+  useTownFocusLabel,
+} from "./TownFocus";
 
 /**
  * Working agents whose sessions have not moved (townQuietWork.ts), under the
@@ -117,6 +124,25 @@ export function TownBoard({
     };
   }, [open]);
   useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
+  // A focus session that ends here opens the board on its recap (#1131).
+  useEffect(() => {
+    const show = () => setPinned(true);
+    window.addEventListener(FOCUS_RECAP_EVENT, show);
+    return () => window.removeEventListener(FOCUS_RECAP_EVENT, show);
+  }, []);
+  const focusLabel = useTownFocusLabel();
+  // Help's Try for the quiet agents (town.help.ts) pins the board open, so
+  // the ring lands on the Busy line rather than on the folded chip.
+  const quietShown = Boolean(quiet && quiet.count > 0);
+  useEffect(() => {
+    if (!quietShown) return;
+    const onTry = (event: Event) => {
+      if ((event as CustomEvent<{ id?: string }>).detail?.id === "town.quiet")
+        setPinned(true);
+    };
+    window.addEventListener(HELP_TRY_EVENT, onTry);
+    return () => window.removeEventListener(HELP_TRY_EVENT, onTry);
+  }, [quietShown]);
   const hoverIn = (event: React.PointerEvent) => {
     if (event.pointerType !== "mouse") return;
     window.clearTimeout(leaveTimer.current);
@@ -154,9 +180,12 @@ export function TownBoard({
         type="button"
         className="town-board-chip"
         data-help="town.board-chip"
+        // Try finds the focus controls, and the quiet line when the board
+        // was not mounted to pin itself open (Try switched to Town first).
+        data-help-opens={quietShown ? "town.focus town.quiet" : "town.focus"}
         aria-expanded={open}
         aria-controls="town-board"
-        aria-label={`Town board: ${summary}`}
+        aria-label={`Town board: ${focusLabel ? `${focusLabel}; ` : ""}${summary}`}
         data-attention={counts.needsYou > 0}
         // A click pins the board a hover opened; the next one closes it.
         onClick={() => (pinned ? close() : setPinned(true))}
@@ -165,6 +194,7 @@ export function TownBoard({
         onKeyDown={closeOnEscape}
       >
         <Activity size={14} aria-hidden="true" />
+        <TownFocusMark />
         {counts.needsYou > 0 ? (
           <span data-status="blocked" data-attention="true">
             !{counts.needsYou}
@@ -207,6 +237,7 @@ export function TownBoard({
               <button
                 type="button"
                 className="town-board-quiet"
+                data-help="town.quiet"
                 aria-label={`Find the ${quiet.count} working ${
                   quiet.count === 1 ? "agent" : "agents"
                 } with no progress for ${quiet.minutes} minutes or more`}
@@ -223,6 +254,7 @@ export function TownBoard({
             ) : null
           }
         />
+        <TownFocusSection />
         <p className="town-board-population">
           {population}
           {counts.unknown ? ` · ${counts.unknown} unknown` : ""}
