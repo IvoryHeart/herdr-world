@@ -271,6 +271,11 @@ export function writeApartments(
           JSON.stringify({
             ...resident,
             summary: before.summary ?? resident.summary,
+            // Usage World counted for the session is kept (#1101).
+            usage_agent_ids: apartmentUsageAgentIds([
+              ...(before.usage_agent_ids ?? []),
+              ...(resident.usage_agent_ids ?? []),
+            ]),
           }),
           known.id,
         );
@@ -424,6 +429,10 @@ export function memoryApartmentsPort(
         )
           Object.assign(known, resident, {
             summary: known.summary ?? resident.summary,
+            usage_agent_ids: apartmentUsageAgentIds([
+              ...(known.usage_agent_ids ?? []),
+              ...(resident.usage_agent_ids ?? []),
+            ]),
           });
       }
     } else if (operation.type === "report") {

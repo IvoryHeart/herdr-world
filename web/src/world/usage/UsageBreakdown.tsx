@@ -136,7 +136,9 @@ function BreakdownTable({
     return (
       <p className="work-lens-note">
         {filter
-          ? `Nothing measured for ${filter.label} this week: World keeps seven days, and finds no run of this agent in them.`
+          ? filter.why
+            ? `Nothing measured for ${filter.label}: ${filter.why}.`
+            : `Nothing measured for ${filter.label} this week: World keeps seven days, and finds no run of this agent in them.`
           : "Nothing measured this week: World saw no agent at work and no harness log could be read."}
       </p>
     );

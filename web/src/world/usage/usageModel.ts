@@ -781,16 +781,35 @@ export function usageSumRows(
 }
 
 /**
+ * Why World has no usage for a resident (#1101): World counts only agents
+ * it watched at work, so one found in its harness's history (ended before
+ * World saw it, or run outside it) has none; nor do records from before
+ * World kept usage. Otherwise nothing of it was counted this week.
+ */
+export function residentUsageGap(resident: {
+  move_out?: string;
+  usage_agent_ids?: readonly string[];
+}) {
+  if (resident.usage_agent_ids?.length) return "nothing recorded this week";
+  return resident.move_out === "found"
+    ? "World did not see it run, only found it in its history"
+    : "World did not record it while it ran";
+}
+
+/**
  * One agent's week in words, as its card says a run's: time at work,
  * waiting on you, and tokens, or that its harness's tokens are not
- * available. Null `metrics` (no row this week) is "usage unknown". Like the
- * card line it leaves "(partly read)" to the Breakdown it opens.
+ * available. Null `metrics` (no row this week) is "usage unknown", with
+ * `why` when known. Like the card line it leaves "(partly read)" to the
+ * Breakdown it opens.
  */
 export function usageAgentFacts(
   metrics: UsageAnalyticsMetrics | null,
   harness: string | null,
+  why?: string | null,
 ) {
-  if (!metrics) return "This week: usage unknown";
+  if (!metrics)
+    return why ? `Usage unknown: ${why}` : "This week: usage unknown";
   const { active_ms: active, waiting_on_you_ms: waiting } = metrics;
   const tokens = metrics.total_tokens;
   return `This week: ${[

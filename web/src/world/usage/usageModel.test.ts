@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { usageFixture } from "./usageFixture";
 import {
+  residentUsageGap,
   usageAgentFacts,
   usageAgentRows,
   usageDuration,
@@ -267,6 +268,22 @@ test("one agent's week: its rows by agent ID, summed, in the card line's words",
     ),
   ).toEqual([]);
   expect(usageAgentFacts(null, "claude")).toBe("This week: usage unknown");
+  // A resident's unknown usage says why (#1101).
+  const why = (move_out: string, usage_agent_ids?: string[]) =>
+    usageAgentFacts(
+      null,
+      "claude",
+      residentUsageGap({ move_out, usage_agent_ids }),
+    );
+  expect(why("found")).toBe(
+    "Usage unknown: World did not see it run, only found it in its history",
+  );
+  expect(why("ended", [])).toBe(
+    "Usage unknown: World did not record it while it ran",
+  );
+  expect(why("found", ["agent_gone"])).toBe(
+    "Usage unknown: nothing recorded this week",
+  );
   // Sums are honest: all unknown stays unknown; a mix is partly read.
   const unknown = usageSumRows(
     usageAgentRows(

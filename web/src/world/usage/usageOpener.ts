@@ -1,8 +1,15 @@
 import { useSyncExternalStore } from "react";
 import type { UsageTab } from "./UsageLens";
 
-/** Breakdown narrowed to one agent: its usage agent IDs and its name. */
-export type UsageAgentFilter = { ids: readonly string[]; label: string };
+/**
+ * Breakdown narrowed to one agent: its usage agent IDs and its name, and
+ * why World may have none of its usage (residentUsageGap).
+ */
+export type UsageAgentFilter = {
+  ids: readonly string[];
+  label: string;
+  why?: string | null;
+};
 
 /** Opens the Usage screens on `tab`, Breakdown narrowed by `filter`. */
 export type OpenUsage = (tab?: UsageTab, filter?: UsageAgentFilter) => void;

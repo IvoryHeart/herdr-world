@@ -298,7 +298,8 @@
       Opened from an Apartments resident's usage line, Breakdown shows only
       that agent: an **Agent: <name>** chip replaces **Group by**, its runs
       read under its name, the total row reads **This agent**, and an agent
-      with no run in the seven days says "Nothing measured". The chip's ×
+      with no run in the seven days says "Nothing measured" and, for one
+      World never counted, why. The chip's ×
       (**Show every agent**) shows every agent again.
       Under the table, **What World can read** names, per harness at work
       this week, whether its tokens come from its session logs or only

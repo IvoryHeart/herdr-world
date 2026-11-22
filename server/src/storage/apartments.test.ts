@@ -229,7 +229,33 @@ describe("apartment residents live in World's SQLite", () => {
     } finally {
       db.close();
     }
+    // A found record's later refresh keeps the usage World counted for it.
+    const found2 = database();
+    try {
+      writeApartments(
+        found2,
+        {
+          type: "found",
+          residents: [found("bo", at - DAY, { usage_agent_ids: [a(3)] })],
+        },
+        at,
+      );
+      writeApartments(
+        found2,
+        { type: "found", residents: [found("bo", at)] },
+        at,
+      );
+      expect(readApartments(found2)).toMatchObject([
+        { name: "bo", moved_out_at: at, usage_agent_ids: [a(3)] },
+      ]);
+    } finally {
+      found2.close();
+    }
     const port = memoryApartmentsPort([], () => at);
+    await port.found([found("bo", at - DAY, { usage_agent_ids: [a(3)] })]);
+    await port.found([found("bo", at)]);
+    expect(port.list().map((row) => row.usage_agent_ids)).toEqual([[a(3)]]);
+    await port.evict(port.list().map((row) => row.id));
     await port.moveIn(resident("ada", at - DAY, { usage_agent_ids: [a(1)] }));
     await port.moveIn(resident("ada", at, { usage_agent_ids: [a(2)] }));
     expect(port.list().map((row) => row.usage_agent_ids)).toEqual([

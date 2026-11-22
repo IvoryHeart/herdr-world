@@ -374,9 +374,9 @@ if (process.env.APARTMENTS_DOM !== "1") {
     expect(shown.linus!.text).toBe(
       "This week: at work 5 h · waited on you 0 min · 14M tokens",
     );
-    // A resident World never counted (from before, or found asleep).
+    // A resident World never counted says why its usage is unknown.
     expect(shown.hopper).toEqual({
-      text: "This week: usage unknown",
+      text: "Usage unknown: World did not record it while it ran",
       tag: "P",
     });
     expect(shown.hamilton!.text).toEndWith(
@@ -407,7 +407,7 @@ if (process.env.APARTMENTS_DOM !== "1") {
     await act(async () => line()!.click());
     expect(view.closed()).toBe(1);
     expect(opened).toEqual([
-      ["breakdown", { ids: ["fixture-agent-5"], label: "ada" }],
+      ["breakdown", { ids: ["fixture-agent-5"], label: "ada", why: null }],
     ]);
     // A resident with no usage this week still opens its own Breakdown.
     const hopper = view
@@ -415,11 +415,17 @@ if (process.env.APARTMENTS_DOM !== "1") {
       .querySelector<HTMLButtonElement>(
         'button.apartments-usage[aria-label$="Open hopper in Usage"]',
       );
-    expect(hopper?.textContent).toBe("This week: usage unknown");
+    expect(hopper?.textContent).toBe(
+      "Usage unknown: World did not record it while it ran",
+    );
     await act(async () => hopper!.click());
     expect(opened[opened.length - 1]).toEqual([
       "breakdown",
-      { ids: [], label: "hopper" },
+      {
+        ids: [],
+        label: "hopper",
+        why: "World did not record it while it ran",
+      },
     ]);
     // The opened resident shows the same line under its heading.
     await act(async () => view.button("grace").click());

@@ -95,9 +95,14 @@ resident: an ending World sees replaces the found record of that session.
   this harness". World counts a resident under the usage agents it ran as
   while World watched it, in its own harness session only (a resumed
   session adds its new run; another session later in the same terminal
-  starts its own count); a resident
-  from before World kept them, or found in its harness's history, or with
-  no run in the seven days Usage keeps, reads "This week: usage unknown".
+  starts its own count). World counts only agents it watched at work, so
+  an unknown line says why: "World did not see it run, only found it in its
+  history" (ended before this World watched it, or ran outside it), "World
+  did not record it while it ran" (from before World kept usage), or
+  "nothing recorded this week". A fresh World data folder therefore shows
+  usage only for agents that end after it started watching them: close an
+  agent's terminal, or leave it into a shell, and it moves in with its
+  usage.
   While the read is not in the line is empty. In Town, clicking the line
   closes Apartments and opens Usage on **Breakdown** filtered to that
   resident, even when its usage is unknown (Breakdown then says "Nothing

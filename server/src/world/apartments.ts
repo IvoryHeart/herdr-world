@@ -251,11 +251,42 @@ export class WorldApartments {
     return live;
   }
 
-  /** Residents found in the harnesses' histories move in asleep. */
+  /**
+   * Residents found in the harnesses' histories move in asleep. One whose
+   * agent World watched until it left into a shell (its terminal still
+   * open) keeps the usage World counted for that session (#1101).
+   */
   async found(residents: readonly ApartmentMoveIn[]) {
     const port = this.deps.port;
     if (!port || this.stopped || !residents.length) return;
-    await port.found(residents);
+    const watched = new Map<string, string[]>();
+    for (const host of this.hosts.values())
+      for (const tenant of host.tenants.values()) {
+        const key = apartmentSessionKey(tenant);
+        // Only usage known to be this session's, never another's.
+        if (
+          key &&
+          tenant.usage_agent_ids.length &&
+          tenant.usage_session === tenant.session_id
+        )
+          watched.set(key, tenant.usage_agent_ids);
+      }
+    await port.found(
+      watched.size
+        ? residents.map((resident) => {
+            const ids = watched.get(apartmentSessionKey(resident) ?? "");
+            return ids
+              ? {
+                  ...resident,
+                  usage_agent_ids: apartmentUsageAgentIds([
+                    ...(resident.usage_agent_ids ?? []),
+                    ...ids,
+                  ]),
+                }
+              : resident;
+          })
+        : residents,
+    );
     this.changed();
   }
 

@@ -29,3 +29,18 @@ dropped, without rejecting the resident. Writing it SHALL need no migration.
 - **WHEN** a resident's session runs again in a new terminal and ends
 - **THEN** the one resident record holds the earlier run's ID and then the
   new run's ID
+
+### Requirement: Found residents keep watched usage
+
+A resident found in a harness's history whose session World watched at
+work until it left into a shell (its terminal still open) SHALL carry that
+session's usage agent IDs, and only when World knows the IDs are that
+session's. A later census refresh of a found record SHALL keep the IDs it
+has.
+
+#### Scenario: Agent left into a shell
+
+- **WHEN** World watched session A at work, A's program leaves while its
+  terminal stays open, and the census finds A in its harness's history
+- **THEN** the found resident carries A's usage agent IDs, and a found
+  session World never watched carries none

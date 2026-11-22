@@ -418,5 +418,24 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
     expect(lens.textContent).toContain("Nothing measured for hopper this week");
     expect(lens.querySelector(".usage-breakdown-table")).toBeNull();
     await view.close();
+    // An agent World never counted: Breakdown says why.
+    const found = await mount(
+      createElement(UsageLens, {
+        initialTab: "breakdown",
+        initialFilter: {
+          ids: [],
+          label: "zed",
+          why: "World did not see it run, only found it in its history",
+        },
+        onClose: () => {},
+      }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(found.host.querySelector(".usage-lens")!.textContent).toContain(
+      "Nothing measured for zed: World did not see it run, only found it in its history.",
+    );
+    await found.close();
   });
 }

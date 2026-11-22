@@ -299,6 +299,58 @@ describe("finished agents move into apartments", () => {
     expect(resident?.usage_agent_ids).toEqual([usageId(b, "agent-b")]);
   });
 
+  test("an agent left into a shell and found in its history keeps its usage", async () => {
+    const { apartments } = tracker();
+    const a = "0f0e0d0c-0000-4000-8000-000000000001";
+    const usageId = analyticsAgentId("local", 1, {
+      ...pane("t1"),
+      ...agents[0],
+    })!;
+    apartments.fresh("local", 1, [pane("t1")], NOW - 9000, agents);
+    // The program leaves; its terminal stays open with a shell.
+    apartments.fresh(
+      "local",
+      1,
+      [pane("t1", { agent: undefined, agent_session: undefined })],
+      NOW - 6000,
+      [],
+    );
+    const history = (session: string, name: string) => ({
+      name,
+      harness: "claude",
+      cwd: null,
+      room: null,
+      tab: null,
+      connection_id: "local",
+      connection_label: "host local",
+      runtime: "herdr" as const,
+      terminal_id: `session:${session}`,
+      first_seen_at: NOW - 60_000,
+      moved_out_at: NOW - 6000,
+      move_out: "found" as const,
+      summary: null,
+      last_report: null,
+      links: [],
+      session_id: session,
+      appearance: null,
+    });
+    // The census finds its session, and an unwatched one, in the history.
+    await apartments.found([
+      history(a, "ada"),
+      history("0f0e0d0c-0000-4000-8000-0000000000ff", "zed"),
+    ]);
+    const byName = Object.fromEntries(
+      apartments.list().residents.map((r) => [r.name, r.usage_agent_ids]),
+    );
+    expect(byName).toEqual({ ada: [usageId], zed: [] });
+    // A later census refresh of the record keeps it.
+    await apartments.found([{ ...history(a, "ada"), moved_out_at: NOW }]);
+    expect(
+      apartments.list().residents.find((r) => r.name === "ada")
+        ?.usage_agent_ids,
+    ).toEqual([usageId]);
+  });
+
   test("a core agent keeps the usage of every run of its own session only", async () => {
     const run = (occupant: string) => [
       pane("t1", {
