@@ -14,9 +14,10 @@ import {
 
 /**
  * Owner questions across World instances (#1152): two Worlds attached to one
- * synthetic runtime (the same Herdr socket paths) and sharing one instance
- * registry. The World the CLI reached holds the question; the other shows it
- * in Needs you and answers or dismisses it there, exactly once.
+ * synthetic runtime (the same Herdr socket paths), with different data folders
+ * and the default per-user registry. The World the CLI reached holds the
+ * question; the other shows it in Needs you and answers or dismisses it there,
+ * exactly once.
  */
 
 beforeAll(() => configureServerLogger("error"));
@@ -44,14 +45,14 @@ type Ask = {
 async function worlds(runtime: "shared" | "separate" = "shared") {
   const root = mkdtempSync(join(tmpdir(), "world-ask-peers-"));
   roots.push(root);
-  const registry = join(root, "instances");
   const socket = (name: string) => ({
     socketPath: join(root, `${name}-control.sock`),
     clientSocketPath: join(root, `${name}-render.sock`),
   });
   const start = async (name: string, sockets: ReturnType<typeof socket>) => {
     const started = await startTestService(join(root, name), sockets, {
-      HERDR_WORLD_INSTANCE_REGISTRY_DIR: registry,
+      XDG_STATE_HOME: join(root, "state"),
+      LOCALAPPDATA: join(root, "local"),
     });
     running.push(started);
     await started.connected;
@@ -92,6 +93,12 @@ async function ask(started: TestService, question: string) {
 
 test("a question asked in one World is answered from another, exactly once", async () => {
   const { home, sibling } = await worlds();
+  expect(home.started.service.paths.root).not.toBe(
+    sibling.started.service.paths.root,
+  );
+  expect(home.started.service.paths.instanceRegistry).toBe(
+    sibling.started.service.paths.instanceRegistry,
+  );
   const id = await ask(home.started, "Ship the release?");
   const [shown] = await until(
     () => asks(sibling.page),
@@ -156,6 +163,27 @@ test("a dismissal from another World closes the question at home", async () => {
   await sibling.page.call("world.ask.dismiss", { id: shown!.id });
   expect(await asks(home.page)).toEqual([]);
   expect(await asks(sibling.page)).toEqual([]);
+}, 30_000);
+
+test("default discovery closes the question in both Worlds when answered in either", async () => {
+  const { home, sibling } = await worlds();
+  for (const answerAt of [home, sibling]) {
+    const id = await ask(home.started, "Continue the synthetic check?");
+    const [shown] = await until(
+      () => asks(sibling.page),
+      (list) => list.length === 1,
+    );
+    expect((await asks(home.page)).map((entry) => entry.id)).toEqual([id]);
+    await answerAt.page.call("world.ask.answer", {
+      id: answerAt === home ? id : shown!.id,
+      answer: "Continue",
+    });
+    expect(await asks(home.page)).toEqual([]);
+    await until(
+      () => asks(sibling.page),
+      (list) => list.length === 0,
+    );
+  }
 }, 30_000);
 
 test("a World on another runtime does not see the question", async () => {

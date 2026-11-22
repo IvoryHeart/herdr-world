@@ -200,6 +200,19 @@ errors soft-success, disable a consumer regression or weaken an intended propert
 to recover a green build. Tool caches and generated traces are ignored and may
 be recreated through `verification:setup`; production code does not depend on Quint.
 
+## Content-matched CI evidence
+
+Applicable PR model groups may reuse a complete passing result with the exact
+model/adapter/production import closure, tool/lock/workflow and seed hash. Main,
+nightly and release executions remain fresh; model inventories, bounds, witnesses,
+mutations and replay are unchanged. The shared runner's adapter imports widen
+the closure conservatively. Cache misses and invalid evidence execute the entire
+group. Original manifests and enforced resource records are retained, and the
+aggregate records each group's `ran` or `reused` mode, hash and origin revision/run
+while binding the current complete source inventory. Reused evidence never claims
+execution on that current revision. See [the CI guide](../docs/ci-pipelines.md#content-reuse-and-test-placement)
+for provenance validation, cache visibility and negative/round-trip tests.
+
 ## Failure diagnostics and progress review
 
 Node, Java and Git identity probes have a bounded 30-second startup allowance,

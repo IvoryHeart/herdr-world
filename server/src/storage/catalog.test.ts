@@ -26,6 +26,9 @@ import {
   updateCatalogNotes,
 } from "../../../scripts/storage-catalog";
 
+const catalogRule =
+  "Follow AGENTS.md's Storage catalog rule: list added or altered data in server/src/storage/catalog.ts with its owner, identity and limit; prefer an existing store; new tables or data files need the owner's approval in the mandate; never automatically trim user data.";
+
 const locations = (store: string) =>
   storageCatalog
     .filter((entry) => entry.store === store)
@@ -48,7 +51,7 @@ test("every migrated World table and every Ranger table has exactly one catalog 
   const db = new Database(":memory:");
   try {
     migrateWorldDatabase(db, ":memory:", undefined, 1000);
-    expect(locations("world.sqlite").sort()).toEqual(tables(db));
+    expect(locations("world.sqlite").sort(), catalogRule).toEqual(tables(db));
   } finally {
     db.close();
   }
@@ -58,7 +61,7 @@ test("every migrated World table and every Ranger table has exactly one catalog 
     tasks.close();
     const taskDb = new Database(join(root, "tasks.sqlite"), { readonly: true });
     try {
-      expect(locations("assistant/tasks.sqlite").sort()).toEqual(
+      expect(locations("assistant/tasks.sqlite").sort(), catalogRule).toEqual(
         tables(taskDb),
       );
     } finally {
@@ -76,9 +79,10 @@ test("every migrated World table and every Ranger table has exactly one catalog 
       { readonly: true },
     );
     try {
-      expect(locations("assistant/execution.sqlite").sort()).toEqual(
-        tables(execution),
-      );
+      expect(
+        locations("assistant/execution.sqlite").sort(),
+        catalogRule,
+      ).toEqual(tables(execution));
     } finally {
       execution.close();
     }
@@ -88,30 +92,31 @@ test("every migrated World table and every Ranger table has exactly one catalog 
 });
 
 test("every DataPaths property points to a cataloged file family", () => {
-  expect(Object.keys(dataPathCatalog).sort()).toEqual(
+  expect(Object.keys(dataPathCatalog).sort(), catalogRule).toEqual(
     Object.keys(resolveDataPaths({})).sort(),
   );
   for (const location of Object.values(dataPathCatalog))
-    expect(locations("file").filter((name) => name === location)).toHaveLength(
-      1,
-    );
+    expect(
+      locations("file").filter((name) => name === location),
+      `${location}: ${catalogRule}`,
+    ).toHaveLength(1);
 });
 
 test("browserStorage consumers have exactly one home per discovered key family", () => {
   const unresolved: string[] = [];
   const keys = browserKeys(undefined, unresolved);
-  expect(unresolved).toEqual([]);
+  expect(unresolved, catalogRule).toEqual([]);
   expect(keys.length).toBeGreaterThan(70);
   for (const key of keys)
     expect(
       locations("browser").filter((pattern) => match(pattern, key)),
-      key,
+      `${key}: ${catalogRule}`,
     ).toHaveLength(1);
   for (const pattern of locations("browser")) {
     if (pattern === "update-notifications/versions") continue; // IndexedDB, not Storage.
     expect(
       keys.some((key) => match(pattern, key)),
-      pattern,
+      `${pattern}: ${catalogRule}`,
     ).toBe(true);
   }
 }, 20_000);
@@ -121,18 +126,21 @@ test("stateful domain classes and named functional stores are cataloged", () => 
   for (const owner of memorySources())
     expect(
       memory.filter((name) => name === owner),
-      owner,
+      `${owner}: ${catalogRule}`,
     ).toHaveLength(1);
   for (const owner of memory) {
     const [path, name] = owner.split("#");
-    expect(readFileSync(path!, "utf8").includes(name!), owner).toBe(true);
+    expect(
+      readFileSync(path!, "utf8").includes(name!),
+      `${owner}: ${catalogRule}`,
+    ).toBe(true);
   }
 });
 
 test("catalog metadata is complete, unique and refers to existing owning code", () => {
   const identities = new Set<string>();
   for (const entry of storageCatalog) {
-    expect(["source", "cache", "derived"]).toContain(entry.role);
+    expect(["source", "cache", "derived"], catalogRule).toContain(entry.role);
     for (const value of [
       entry.meaning,
       entry.feature,
@@ -141,17 +149,17 @@ test("catalog metadata is complete, unique and refers to existing owning code", 
       entry.limit,
       entry.code,
     ])
-      expect(value.trim().length).toBeGreaterThan(0);
+      expect(value.trim().length, catalogRule).toBeGreaterThan(0);
     for (const path of entry.code.split(" "))
-      expect(existsSync(path), path).toBe(true);
+      expect(existsSync(path), `${path}: ${catalogRule}`).toBe(true);
     for (const location of entry.locations) {
       const id = `${entry.store}:${location}`;
-      expect(identities.has(id), id).toBe(false);
+      expect(identities.has(id), `${id}: ${catalogRule}`).toBe(false);
       identities.add(id);
     }
   }
   const notes = readFileSync(catalogNotes, "utf8");
-  expect(notes).toBe(updateCatalogNotes(notes));
+  expect(notes, catalogRule).toBe(updateCatalogNotes(notes));
 });
 
 test("declareData is an inert feature declaration seam", () => {

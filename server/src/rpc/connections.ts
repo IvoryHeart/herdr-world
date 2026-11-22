@@ -55,6 +55,8 @@ async function dispatchConnectionsRpc(
         );
       } else if (method === "connections.remove") {
         result = await connectionProfiles.remove(params?.id);
+        // The IDE servers World started for it keep running, listed.
+        rpc.services.ide?.connectionRemoved(params?.id);
       } else if (method === "connections.set_default") {
         result = await connectionProfiles.setDefault(params?.id);
       } else if (method === "connections.connect") {

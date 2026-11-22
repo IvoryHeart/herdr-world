@@ -20,6 +20,8 @@ export interface BridgeControlMsg {
     | "world_focus_changed"
     | "world_connections_changed"
     | "world_desk_reads"
+    // The Code view's installed IDEs or their servers changed.
+    | "world_ide_changed"
     // World's float shell on herdr-core (server/src/rpc/float.ts).
     | "float_output"
     | "float_closed";

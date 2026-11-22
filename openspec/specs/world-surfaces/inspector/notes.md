@@ -74,30 +74,6 @@ If a previewed file becomes unavailable, its preview shows a notice instead of
 closing the window: choose a current worktree or another file, then **Retry
 preview**. Chat and its draft stay open.
 
-## Code view design preview
-
-Code is a proposal to show the user's installed real VS Code web workbench inside
-World, projecting the same hosts, rooms, projects, agents and terminals. IDEs fit
-the existing integrations direction: detect and enable per host, open per project,
-with desktop handoffs to VS Code, Cursor, JetBrains Gateway and Zed. The
-[research and recommendation](../../../../docs/design/code-view/research.md) compare Microsoft
-`code serve-web`, OpenVSCode and code-server, marketplace/settings differences,
-licence, origin/authentication, SSH, terminal and resource hurdles. The
-[design walkthrough](../../../../docs/design/code-view/design.md) gives exact preview clicks.
-No live editor, server, extension, installer, proxy or navigation is delivered.
-
-Open **`/code-view-prototype.html`** on your World/preview origin. The standalone
-**DESIGN STUDY / 981** uses a clearly labelled VS Code **stand-in**, an IDE picker
-and an **Open in desktop IDE** handoff preview. All data/actions are synthetic;
-nothing installs, connects, saves, executes or launches an app. **Block embedding
-(mock)**, **Disconnect host (mock)** and the SSH host's missing-provider fixture
-expose failure states; **Mark installed (mock)** only changes fixture state.
-**Attach profile (mock)** demonstrates existing agent terminals; Herdr TUI requires
-acknowledging that attach resizes the pane for every viewer. The mock presents
-the desktop workbench in World's frame. **Reset study** clears memory-only state.
-Real embedding remains gated on upstream terms, same-origin/worker/webview compatibility and
-explicit trust in full shell/write and same-origin extension authority.
-
 ## Workspace Inspector
 
 Open Files, Changes, or Chat with the TabBar Inspector button,

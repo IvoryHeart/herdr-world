@@ -38,6 +38,9 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     getComputedStyle: browser.getComputedStyle.bind(browser),
     requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
     cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
+    // Settings' lazy IDE rows keep their reload guard in session storage.
+    localStorage: browser.localStorage,
+    sessionStorage: browser.sessionStorage,
   }))
     Object.defineProperty(globalThis, key, {
       value,

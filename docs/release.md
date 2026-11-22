@@ -72,14 +72,19 @@ Inspect this artifact from the failed native job before diagnosing an exit.
 The older pre-0.2.4 cookie migration remains covered by installer acceptance below.
 
 The walk installs pinned, real `claude` and `codex` executables, signed out.
-Its private signed-out Codex config disables startup update checks because the
-walk manages the pinned version. Otherwise an earlier launch can populate the
-update cache and the prompt journey's Enter can choose **Update now**, making
+Harness auto-update prompts are disabled: Claude through `DISABLE_AUTOUPDATER`
+and Codex through the recorder's launch-only `-c check_for_update_on_startup=false`
+override, including signed-in journeys. Synthetic prompt input cannot select an
+update and replace or exit the pinned executable. Recorded launch arguments stay
+exactly as World supplied them; version and authentication probes are unchanged.
+The private signed-out Codex config also disables startup update checks because
+the walk manages the pinned version. Otherwise an earlier launch can populate
+the update cache and the prompt journey's Enter can choose **Update now**, making
 Codex exit before listing. The issue #1208 artifacts showed this on Linux and
 macOS: macOS completed the update and requested a restart; Linux could not find
 the updater executable. The aggregate correctly omitted the exited terminal.
-This policy is confined to the walk's private home; dedicated signed-in homes
-retain their existing configuration.
+The config-file policy is confined to the walk's private home; dedicated
+signed-in homes retain their existing configuration files.
 A transparent PTY recorder keeps the real executable in the pane's original
 foreground process group while a helper forwards terminal traffic and observes
 complete argv/settings, their own first screen and prompt input; it produces no
@@ -175,21 +180,24 @@ Registry failures also fail closed. Do not disable the gate to publish.
 
 ## Pre-merge installer upgrades
 
-Every CI run with code changes calls `.github/workflows/installer-upgrade.yml`, and
-Delivery checks requires the entire native matrix: Linux x64/ARM64, macOS Intel/Apple Silicon, and
+Installation/package/compiled-entry inputs select
+`.github/workflows/installer-upgrade.yml` on PRs. Every main push and the nightly
+schedule run it in full. Delivery checks requires every selected native assertion: Linux x64/ARM64, macOS Intel/Apple Silicon, and
 Windows x64/ARM64 on standard hosted runners. The workflow can also be dispatched
 manually against a selected ref. It publishes no release, tag, npm package or Formula.
 Documentation-only runs (Markdown outside the packaged notices, which run
-`check:docs`) and exact-head reuse runs skip it and the Windows plugin check;
-Delivery checks then requires both to be skipped.
+`check:docs`), unrelated scoped PRs and exact-head reuse runs skip native work.
+Windows plugin assertions share both Windows platform jobs; macOS lifecycle
+assertions share both Darwin jobs. The protected macOS reports remain and require
+the correct selected success or skip.
 
 Compact installer evidence uploads retry once after an upload failure, including
 transient artifact-service DNS errors. The retry replaces any partial artifact;
 a second upload failure still fails the job. Native checks remain strict.
 
 One planning job freezes the current latest stable World release tag and its source
-SHA. Each runner builds the proposed merge revision with `scripts/package-release.sh`
-and a synthetic next-patch release-candidate version unique to the CI run. It uses
+SHA. Each runner builds the proposed merge revision (or restores its exact content-keyed PR build) with `scripts/package-release.sh`
+and a synthetic next-patch release-candidate version derived from the production input hash. It uses
 a loopback artifact server to exercise the same candidate installers before public
 release assets exist. The baseline uses its published tag's real plugin build
 command and downloaded release executable; older baselines may require Bun at setup.
@@ -249,6 +257,20 @@ installer fault/rollback tests, release archive checks and npm/Homebrew package 
 They do not claim every historical upgrade, real Herdr plugin registration, OS service
 upgrade/reboot, npm/Homebrew channel upgrade or manual browser interaction. Test the
 published RC on an existing installation before promoting a stable release.
+
+## Production browser and release-walk boundaries
+
+The small production boot journey loads the release-built browser assets through
+index/main, with sanitized v0.3.5 browser profile state. It covers background,
+freeze/resume, the new-build offer and real service-worker update/activation.
+It uses a static fixture and synthetic HTTP responses, so it does not establish
+that a real agent starts in a packaged service. That acceptance belongs to the
+Linux/macOS exact-build release walk in #1023 (PR #1031), which is still an open
+dependency on this base. The release must retain its signed-in prompt/reply and
+every distribution-channel requirement. The all-channel staging and verification
+from #1044 runs before any public channel is published; its channel ordering and
+retry rules remain required. A release escape should add its seam scenario to the
+appropriate journey, rather than only another source-text workflow assertion.
 
 ## Linux systemd installation gate
 

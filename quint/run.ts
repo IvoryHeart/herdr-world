@@ -3,6 +3,7 @@ import { composedCases, replayTracesPerSeed } from "./composed-cases";
 import { runRegistryVerification } from "./connection-registry-verification";
 import { runCoreVerification } from "./herdr-core-verification";
 import { runSeenVerification } from "./herdr-core-seen";
+import { runIdeLifecycleVerification } from "./ide-lifecycle-verification";
 import { replayEffectRecovery } from "./effect-recovery";
 import { verificationModels } from "./models";
 import {
@@ -679,20 +680,21 @@ export async function runReviewedQuintModels(
     );
     const results = [];
     for (const item of runCases) {
-      if (
-        item.name === "claude-tap-lock" ||
-        item.name === "connection-registry"
-      ) {
-        const verify =
-          item.name === "claude-tap-lock"
-            ? runTapLockVerification
-            : runRegistryVerification;
-        const result = await verify({
+      const composed = {
+        "claude-tap-lock": runTapLockVerification,
+        "connection-registry": runRegistryVerification,
+        "herdr-core-seen": runSeenVerification,
+        "ide-lifecycle": runIdeLifecycleVerification,
+      } as const;
+      if (item.name in composed) {
+        const { name } = item;
+        const result = await composed[name as keyof typeof composed]({
           root,
           output,
           artifacts,
           command,
-          mutate: () => implementationMutation(item.name),
+          mutate: (fault?: ImplementationFault) =>
+            implementationMutation(name, fault),
         });
         results.push(result);
         console.log(JSON.stringify(result));
@@ -709,18 +711,6 @@ export async function runReviewedQuintModels(
           withControlWorker: checkerSessions.withWorker,
           mutate: (fault) =>
             implementationMutation("herdr-core-runtime", fault),
-        });
-        results.push(result);
-        console.log(JSON.stringify(result));
-        continue;
-      }
-      if (item.name === "herdr-core-seen") {
-        const result = await runSeenVerification({
-          root,
-          output,
-          artifacts,
-          command,
-          mutate: (fault) => implementationMutation("herdr-core-seen", fault),
         });
         results.push(result);
         console.log(JSON.stringify(result));
