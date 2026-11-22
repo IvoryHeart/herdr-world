@@ -64,10 +64,15 @@ const maxFileCount = 212;
 // delivered features at 15.6 MiB; file, help-picture and startup limits stay.
 // Town's quiet-agent mark (#1130: rule, hourglass and Busy sub-line, all in
 // the lazy Town chunk) adds about 5 KB, still within 15.6 MiB (2026-11-21).
+// Rooms per row and one Town building per machine (#1198) add to Town's lazy
+// chunk: 16,363,027 bytes (15.605 MiB) with main, so 15.7 MiB; file,
+// help-picture and startup limits stay.
 // Focus sessions (#1131: Town's focus controls, recap card and the held
 // notification paths) merged with main's feature hosts and central wiring
 // measure 16,364,150 bytes (15.6061 MiB): 6,364 bytes above 15.6 MiB. 15.7 MiB
 // carries them; file, help-picture and initial budgets unchanged (2026-11-22).
+// Focus merged with #1198 measures 16,387,249 bytes (15.628 MiB), still
+// within 15.7 MiB (2026-11-22).
 const maxTotalBytes = 15.7 * 1024 * 1024;
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
 export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
