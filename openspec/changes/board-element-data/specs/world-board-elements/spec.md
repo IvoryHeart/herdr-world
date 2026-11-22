@@ -6,7 +6,7 @@ Provide one small built-in registry and durable source references for Board.
 This capability covers data, service, API and CLI; presentation is a separate
 consumer. It introduces no plugin protocol, memory service or apartment model.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: One typed built-in element registry
 

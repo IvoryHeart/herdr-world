@@ -1,6 +1,6 @@
 # Board elements notes
 
-[Contract](spec.md). Navigation and usage guidance; contracts live in OpenSpec.
+[Contract](../../changes/board-element-data/specs/world-board-elements/spec.md). Navigation and usage guidance; contracts live in OpenSpec.
 
 **Surfaces:**
 
@@ -18,6 +18,7 @@
 - `server/src/service/board-element-sources.ts`
 - `server/src/rpc/board-elements.ts`
 - `server/src/cli/world-elements.ts`
+- `web/src/world/board/boardDocument.ts`
 - `web/src/world/board/elements/`
 - `web/src/world/BoardElements.browser.tsx`
 
