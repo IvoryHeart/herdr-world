@@ -14,6 +14,7 @@ import { handleCoreWatchRpc } from "./core-watch";
 import { handleBinRpc } from "./bin";
 import { handleCoreRpc } from "./core";
 import { handleFloatRpc } from "./float";
+import { handleIdeRpc } from "./ide";
 import { handleWorldIntegrationRpc } from "./integration";
 import { handleCoreSharedRpc } from "./core-shared";
 import { profileWrite } from "../agent/profile-store";
@@ -128,6 +129,7 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method.startsWith("world.float.")) return handleFloatRpc(rpc);
   if (method.startsWith("world.integration."))
     return handleWorldIntegrationRpc(rpc);
+  if (method.startsWith("world.ide.")) return handleIdeRpc(rpc);
   if (method === "world.snapshot") {
     // The snapshot lists herdr-core connections too; only Herdr (TUI)
     // connections have runtimes these Board observers act through.

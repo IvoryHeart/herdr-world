@@ -12,7 +12,7 @@
 - Storage catalog rule: changes that add or alter persisted data (a table, data-folder file, browser storage key or Board document field) must list it in `server/src/storage/catalog.ts` with its owner, identity and limit; prefer an existing store; a new table or data file needs the owner's approval in the mandate; never automatically trim user data.
 - Qualify downstream operations by immutable connection ID and runtime generation; never fall back to another connection.
 - Aggregate observation is bounded and read-only; failed-host cached topology is stale and non-actionable.
-- Keep the browser on one World origin; never restore bridge Host, Origin or cross-origin CSP configuration.
+- Keep the browser on one World origin; never restore bridge Host, Origin or cross-origin CSP configuration. Sole exception: IDE pages may frame VS Code's webview origin (`https://*.vscode-cdn.net`).
 - SSH profiles accept OpenSSH aliases or `user@host`; policy belongs in OpenSSH config. Never persist passwords, keys, passphrases or arbitrary SSH options.
 - Feature PRs do not regenerate Help pictures unless adding or changing a help entry; capture only those entries with `HELP_PICTURES_IDS="<id>" bun run help:pictures`. Stale fingerprints warn; main refreshes the full set through one bot PR.
 - Never commit generated `web/dist/`, `server/public/`, binaries, `.pages-dist/` or `dist/`.

@@ -256,6 +256,7 @@ describe("World view preference", () => {
     expect(parseWorldView("board")).toBe("board");
     expect(parseWorldView("spaces")).toBe("spaces");
     expect(parseWorldView("desk")).toBe("desk");
+    expect(parseWorldView("code")).toBe("code");
     expect(parseWorldView("town")).toBe("town");
     expect(parseWorldView("legacy-world")).toBe("town");
     expect(parseWorldView(null)).toBe("town");
@@ -281,6 +282,7 @@ describe("World view preference", () => {
     expect(worldViewFromPath("/desk")).toBe("desk");
     expect(worldViewFromPath("/spaces")).toBe("spaces");
     expect(worldViewFromPath("/board")).toBe("board");
+    expect(worldViewFromPath("/code")).toBe("code");
     expect(worldViewFromPath("/office")).toBe("town");
     expect(worldViewFromPath("/tree")).toBe("board");
     expect(worldViewFromPath("/graph")).toBe("board");
@@ -290,7 +292,7 @@ describe("World view preference", () => {
   test("the root, retired and unknown addresses are replaced by the canonical one", () => {
     for (const path of ["/", "/office", "/graph", "/tree", "/other"])
       expect(worldPathNeedsCanonical(path)).toBe(true);
-    for (const path of ["/town", "/board", "/desk", "/spaces"])
+    for (const path of ["/town", "/board", "/desk", "/code", "/spaces"])
       expect(worldPathNeedsCanonical(path)).toBe(false);
   });
 

@@ -1,5 +1,5 @@
 import { worldViewFromPath, type WorldView } from "../world/worldViewRouting";
-import type { HelpPlace } from "./helpEntry";
+import { HELP_VIEW_PLACES, type HelpPlace } from "./helpEntry";
 
 /** A tab of the help panel: what is new, or what you can do in a place. */
 export type HelpTab = "new" | HelpPlace;
@@ -21,9 +21,18 @@ export function tryHelp(id: string) {
   );
 }
 
-/** The help tab for a World view: Town, Board, or what works everywhere. */
+/** The help tab for a World view: Town, Board, Code, or what works everywhere. */
 export function helpTabForView(view: WorldView): HelpTab {
-  return view === "town" || view === "board" ? view : "world";
+  return view === "town" || view === "board" || view === "code"
+    ? view
+    : "world";
+}
+
+/** The view Try switches to before it spotlights, or null to stay. */
+export function helpTryView(place: HelpPlace, current: WorldView) {
+  return HELP_VIEW_PLACES.includes(place) && place !== current
+    ? (place as WorldView)
+    : null;
 }
 
 export function helpTabForPath(pathname: string) {

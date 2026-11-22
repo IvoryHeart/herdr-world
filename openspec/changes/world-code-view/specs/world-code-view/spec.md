@@ -17,6 +17,12 @@ provider or overwrite user-managed configuration. Existing harness integration
 behavior SHALL remain unchanged. Microsoft VS Code web, OpenVSCode, code-server,
 VS Code desktop, Cursor, JetBrains Gateway and Zed SHALL be distinct provider
 choices/capability records rather than aliases claiming identical functionality.
+Every failure to open a project in Code (provider missing on the project's
+host, server stopped, open refused, page not secure enough) SHALL say what went
+wrong and on which computer, and SHALL offer both Try again (the same open,
+or on a page not secure enough a fresh check) and a way back to the provider
+list (enable, disable, setup) without leaving Code. A failure SHALL belong to its provider: choosing
+another provider SHALL NOT keep showing it.
 
 #### Scenario: Detect without starting
 
@@ -28,6 +34,11 @@ choices/capability records rather than aliases claiming identical functionality.
 - **WHEN** the selected provider is disabled, absent or incompatible on the project's host
 - **THEN** World explains the state and offers explicit enablement/setup guidance or another deliberate provider selection without opening another host's IDE
 
+#### Scenario: Recover from a failed open
+
+- **WHEN** opening a project fails because the only enabled provider isn't installed on the project's host
+- **THEN** Code names the provider and that computer, offers Try again and Choose another IDE, and choosing another provider from the list it shows replaces the failure with Open in that provider, without installing anything
+
 ### Requirement: Real workbench in the common World frame
 
 Code SHALL project the same qualified hosts, rooms, projects, agent occurrences
@@ -38,11 +49,20 @@ profiles and Workspace Trust. World SHALL retain host/room/agent/PR context.
 Opening a project SHALL preserve the exact connection, runtime generation,
 workspace and admitted checkout; ambiguous roots SHALL require explicit selection.
 Selecting an agent terminal SHALL NOT silently change the checkout or branch.
+The workbench's light or dark appearance SHALL follow World's resolved theme
+(the system's when World follows the system) and change live with it; World
+SHALL do this through configuration defaults on the workbench page, never by
+writing the user's IDE settings, so an explicit setting of the user's own wins.
 
 #### Scenario: Open a room and an agent checkout
 
 - **WHEN** the owner opens a qualified room in Code and explicitly selects an agent's linked checkout
 - **THEN** the real workbench opens that checkout on its owning host and the World frame keeps the same room and agents without creating replacements
+
+#### Scenario: World's theme changes while the workbench is open
+
+- **WHEN** the owner switches World from dark to light, or World follows the system and the system switches
+- **THEN** the open workbench switches to the user's preferred light theme without reloading, and switches back with World
 
 #### Scenario: Project evidence disappears
 
@@ -56,16 +76,35 @@ owner licence acceptance, same-origin behavior and explicit full shell/file-writ
 trust pass admission. World SHALL call installed servers only and SHALL NOT claim
 that nonbundling alone grants embedding rights. The owner SHALL be told that an
 IDE is not confined to the selected project and same-origin workbench/extension
-code shares World's browser authority. Failed licence, frame, webview, worker,
+code shares World's browser authority. Failed licence, frame, worker,
 secure-context or origin compatibility SHALL block embedding with a concrete
 reason and an explicit desktop handoff option. World SHALL NOT silently relax
 its global origin/CSP policy, rewrite restricted product assets or assert desktop
 extension parity based only on Marketplace availability.
 
-#### Scenario: Official webviews require another origin
+Webviews load from VS Code's own webview origin. Stock VS Code and OpenVSCode
+Server frame webviews and their web worker extension host from
+`https://<hash>.vscode-cdn.net`, as their product configuration says; the frame
+rule World adds to IDE route responses SHALL admit `https://*.vscode-cdn.net` as
+the one origin besides World's own. World SHALL NOT rewrite the webview host page
+or `product.json`, serve webviews from its own origin, open a second World origin
+for them, or change the policy of World's own pages or any other route. Webview
+content (extension panels, notebook outputs, previews of repository files) is
+untrusted; it stays cross-origin to World, so it cannot reach World's window,
+storage, cookies or API, and its service worker's scope is its own origin. The
+decision, its threat model and the rejected options are recorded in
+`docs/design/code-view/webview-origin.md`.
 
-- **WHEN** an installed Microsoft provider requires a CDN webview origin incompatible with World's current policy
-- **THEN** embedding remains blocked with the compatibility reason and explicit handoff; no automatic CSP exception or Open VSX substitution occurs
+#### Scenario: Official webviews load from VS Code's webview origin
+
+- **WHEN** stock VS Code or OpenVSCode Server frames a webview or its web worker extension host from `https://<hash>.vscode-cdn.net`
+- **THEN** the frame rule World adds to IDE route responses admits `https://*.vscode-cdn.net` as the one origin besides World's own, and no product file is rewritten
+- **AND** World's own pages and every other route keep World's one-origin policy, the webview content stays cross-origin to World so it cannot reach World's window, storage, cookies or API, and its service worker's scope is its own origin
+
+#### Scenario: Webview origin incompatible
+
+- **WHEN** an installed provider requires a webview origin other than VS Code's own `https://*.vscode-cdn.net`
+- **THEN** its webviews stay blank with the reason; no further frame exception or Open VSX substitution occurs
 
 #### Scenario: First enable grants broad authority
 
@@ -82,7 +121,8 @@ upstream destinations SHALL be refused. Server tokens SHALL NOT enter browser
 URLs, history, logs or persistent browser storage. Cookies, redirects and worker
 scope SHALL NOT overwrite World authentication or intercept World/PWA resources.
 Logout, disablement and connection retirement SHALL revoke proxy authority and
-close attached streams; unsupported platforms SHALL be explained without fallback.
+close attached streams; retirement SHALL NOT stop the server itself.
+Unsupported platforms SHALL be explained without fallback.
 
 #### Scenario: SSH project opens
 
@@ -175,17 +215,99 @@ non-actionable. This view SHALL NOT add World commit/push/approve/merge authorit
 
 Servers SHALL start only on explicit admitted demand, reuse only compatible proven
 host/user/provider/profile instances and use measured active-server/window limits.
-World SHALL distinguish external from World-started processes and expose stop/idle
-behavior. Closing Code SHALL detach clients without killing Herdr agents or an
-externally owned IDE server. Uncertain starts SHALL be reconciled against the
-captured instance before retry; retiring a connection SHALL NOT restart it elsewhere.
+World SHALL distinguish external from World-started processes. Closing Code SHALL
+detach clients without killing Herdr agents or an externally owned IDE server.
+Uncertain starts SHALL be reconciled against the captured instance before retry;
+retiring a connection SHALL NOT restart it elsewhere.
+
+Going away SHALL NOT stop a World-started server: closing Code or the browser,
+World stopping, restarting or updating, a connection reconnecting or changing
+destination, the SSH link dropping and the host being unreachable SHALL leave the
+server and every process under it running on its host, with no idle timeout. Such
+a server SHALL NOT be tied to World's process or to the transport that started it.
+It SHALL carry an identity on its host (World, connection, provider, folder and its
+own token) that a later World verifies before reattaching; World SHALL reattach
+only to its own server for the same provider and folder, under the connection's
+current generation, and a concurrent second start for the same folder SHALL find
+the first instead of starting another.
+
+Only the person pressing Stop on that server SHALL stop a World-started server,
+after saying that everything running in it ends. Nothing else SHALL stop one:
+not closing the view, World restarting or updating, a dropped connection, the
+server limit, an idle period, disabling its provider or removing its host's
+connection. Disabling a provider or removing a connection with servers still
+running SHALL list them first, each with Stop as a separate, explicit choice.
+At the server limit World SHALL refuse another start and show the running ones;
+it SHALL NOT stop one to make room. Stopping SHALL end the server's whole process
+tree on its host, including descendants re-parented out of it. A stop that
+cannot reach the host SHALL leave the server listed with the reason.
+
+Every World-started server not known to have ended SHALL be listed per host and
+folder with since-when and Stop, and counted against the limit. World SHALL keep
+that list durably, so a restart lists every server before any host answers,
+including servers on a host World no longer has a connection for. A start whose
+answer is lost SHALL count as possibly running, not failed. A server whose SSH
+connection was removed SHALL be listed as running but unreachable from World,
+with the command that stops it on that host; World SHALL NOT reach it through
+another connection, and SHALL drop it from the list only when the person
+forgets it.
 
 #### Scenario: Close a project using an external server
 
 - **WHEN** the owner closes Code while its installed server was started outside World
 - **THEN** World releases its own attachments/transport demand without stopping the server, deleting IDE state or ending agents
 
+#### Scenario: World restarts while an IDE server runs
+
+- **WHEN** World stops, restarts or updates while a World-started IDE server runs a long task
+- **THEN** the server and the task keep running, the restarted World lists the server with since-when and Stop, and reattaches to it without starting another
+
+#### Scenario: SSH link drops
+
+- **WHEN** the SSH forward to a World-started IDE server drops or its connection reconnects
+- **THEN** World closes the route and its streams, the server keeps running on the host, and Open reattaches to the same server
+
+#### Scenario: Two starts for one folder
+
+- **WHEN** two starts for the same World, provider and folder race on one host
+- **THEN** exactly one server starts and the other start reattaches to it
+
+#### Scenario: Stop races a reattach
+
+- **WHEN** the owner stops a server while World is reattaching to it or opening it again
+- **THEN** every process of the old server has ended before any new start for that folder
+
+#### Scenario: A Stop that did not finish
+
+- **WHEN** a Stop was cut off on the host after it began, by a lost answer or a World restart
+- **THEN** World keeps the server listed with that reason, starts no other server for that folder meanwhile, and the next Stop or the by-hand command ends what is left
+
+#### Scenario: Open queued behind a connection change
+
+- **WHEN** an Open waits behind another operation on its folder and the connection is removed, reconnects or the provider is disabled meanwhile
+- **THEN** the Open starts nothing and is refused (as stale, or as disabled), and the person chooses the project again
+
+#### Scenario: Stop a server with a re-parented terminal
+
+- **WHEN** the owner confirms Stop and a terminal in its own session has lost its parent inside the server
+- **THEN** World ends that terminal with the rest of the server's tree on its host, local or SSH
+
 #### Scenario: Start reply lost
 
 - **WHEN** a start may have succeeded but its result is unknown
-- **THEN** World reports uncertainty and reconciles that captured instance before any retry instead of launching duplicate servers or switching hosts
+- **THEN** World lists and counts it as possibly running, reports uncertainty and reconciles that captured instance before any retry instead of launching duplicate servers or switching hosts
+
+#### Scenario: Disable or remove with servers running
+
+- **WHEN** the owner disables an IDE provider or removes a connection while servers World started for it run
+- **THEN** the confirmation lists them with Stop for each, confirming stops none of them, and they stay listed until stopped
+
+#### Scenario: Removed SSH host after a restart
+
+- **WHEN** World restarts after the SSH connection of a running server was removed
+- **THEN** the server is listed and counted as running but unreachable from World, with the command that stops it on its host, and only Forget takes it off the list
+
+#### Scenario: Server limit reached
+
+- **WHEN** the owner opens another project while the limit of servers runs
+- **THEN** World refuses the start, offers the running servers, and stops none of them

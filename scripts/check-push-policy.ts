@@ -17,11 +17,44 @@ export function pushPolicyBody(
   }
 }
 
+/** GitHub records a PR's baseRefOid at its last push, while CI judges each
+ * push against the base branch's current tip. When the recorded base is an
+ * ancestor of origin/<baseRefName>, the branch only moved forward, so judge
+ * against that newer commit; otherwise (a rewritten stacked parent, an
+ * unknown or stale local ref) keep the recorded immutable base. */
+export function currentPullBase(
+  cwd: string,
+  baseRefOid: string,
+  baseRefName: string | undefined,
+): string {
+  if (!baseRefName) return baseRefOid;
+  const git = (...args: string[]) =>
+    execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  try {
+    const tip = git(
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `refs/remotes/origin/${baseRefName}^{commit}`,
+    );
+    if (!/^[0-9a-f]{40}$/.test(tip) || tip === baseRefOid) return baseRefOid;
+    git("merge-base", "--is-ancestor", baseRefOid, tip);
+    return tip;
+  } catch {
+    return baseRefOid;
+  }
+}
+
 /** Resolve the existing PR once, even with an intended replacement body.
  * Immutable base identity makes stacked policy checks agree with CI. */
 export function pushPolicyContext(
   file: string | undefined,
-  existing: () => { body: string; baseRefOid: string },
+  existing: () => { body: string; baseRefOid: string; baseRefName?: string },
+  cwd = process.cwd(),
 ) {
   let pull: ReturnType<typeof existing> | undefined;
   try {
@@ -31,18 +64,24 @@ export function pushPolicyContext(
     throw new Error("Existing PR has no valid immutable base");
   return {
     body: pushPolicyBody(file, () => pull?.body ?? ""),
-    base: pull?.baseRefOid ?? "origin/main",
+    base: pull
+      ? currentPullBase(cwd, pull.baseRefOid, pull.baseRefName)
+      : "origin/main",
   };
 }
 
 if (import.meta.main) {
   const policy = pushPolicyContext(process.env.HERDR_WORLD_PR_BODY, () =>
     JSON.parse(
-      execFileSync("gh", ["pr", "view", "--json", "body,baseRefOid"], {
-        encoding: "utf8",
-        timeout: 15_000,
-        stdio: ["ignore", "pipe", "pipe"],
-      }),
+      execFileSync(
+        "gh",
+        ["pr", "view", "--json", "body,baseRefOid,baseRefName"],
+        {
+          encoding: "utf8",
+          timeout: 15_000,
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      ),
     ),
   );
   const problems = checkPrBodyText(policy.body, process.cwd(), policy.base);

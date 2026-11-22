@@ -18,6 +18,7 @@ import type { AgentStartFrom } from "./agentStarts";
 import { useDeskReveal } from "./deskReveal";
 import { DeskView } from "./DeskView";
 import { useStableCallback } from "./useStableCallback";
+import { LazyCodeView as CodeView } from "./code/LazyCodeView";
 import { GroupsWindow } from "./groups/GroupsWindow";
 import {
   floatingTerminalGeometryId,
@@ -561,6 +562,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         deskReadingPane ? stablePreviewTerminalById : null
                       }
                       onCloseReading={stableCloseDeskReading}
+                    />
+                  ) : view === "code" ? (
+                    <CodeView
+                      world={world}
+                      onOpenAgent={stableOpenInspectorView}
+                      onOpenTerminal={stableOpenTerminalById}
                     />
                   ) : view === "town" ? (
                     <Suspense
