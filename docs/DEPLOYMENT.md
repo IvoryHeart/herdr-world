@@ -43,13 +43,19 @@ intervals never resume after restart, and unobserved time stays unknown. See
 [usage coverage](usage-analytics.md#meaning-gaps-and-limits).
 
 At startup, World checks `boards/world-ledger.json` (or the configured
-`HERDR_WORLD_LEDGER_PATH`). Before importing a changed file, it makes a private,
-byte-identical `<ledger>.<content-hash>.sqlite-import.bak` beside it. An unchanged
-file causes no import writes. Changed legacy files contribute only missing IDs;
-existing SQLite records take precedence. Historical imports create no alerts or answer sends.
-The original remains untouched. An unreadable legacy file is reported in the
+`HERDR_WORLD_LEDGER_PATH`) once. Before importing, it makes a private,
+byte-identical `<ledger>.<content-hash>.sqlite-import.bak` beside it. Only missing
+IDs are imported; existing SQLite records take precedence. Historical imports
+create no alerts or answer sends. After a completed import World never reads the
+file again, even if it changes. An unreadable legacy file is reported in the
 local service log and left alone; World uses its current store, and checks again
 after the file is repaired.
+
+Once a legacy file (Board, ledger or agent profiles) is imported, World moves it
+and its backup copies into `legacy/` in the data directory. The move is a hard
+link checked to be the same file before the old name goes, so the bytes are
+never copied or deleted; a clashing name gets a numbered suffix. World never
+deletes anything in `legacy/`; remove files yourself when you no longer need them.
 New questions from a verified local Linux CLI caller capture the original
 connection, terminal and supported Chat session. Recording an answer atomically
 adds a reference-only `world.ask.deliver-answer` intent; it stores no second copy
@@ -105,13 +111,15 @@ Never copy only a live `world.sqlite`: committed data can still be in its WAL.
 Restore into a private directory with the service stopped. Before a future
 schema upgrade, World makes a private `world.sqlite.v<old-version>.<8-random-base32>.bak` snapshot. Each upgrade
 keeps a new snapshot, so restoring and upgrading again preserves earlier copies.
+The newest three stay beside `world.sqlite`; older ones move to `legacy/` and are
+never deleted.
 An older binary refuses an unsupported newer schema. Restore that matching
 snapshot with the service stopped, after preserving the current whole-directory
 backup. Never overwrite a live database or mix WAL files from different copies.
 
-A binary predating SQLite uses the retained JSON and cannot see newer SQLite
-answers. On upgrading again, World merges missing legacy IDs; it never overwrites
-an existing SQLite record. Conflicting edits to the same record require explicit
+A binary predating SQLite finds no JSON once it has moved to `legacy/`, and
+starts empty; it cannot see SQLite data. On upgrading again, World does not
+re-import JSON that binary wrote. Conflicting edits to the same record require explicit
 reconciliation from the preserved backups. Keep the JSON, content-hash import
 backups, schema snapshots and your backups private. Remove migration backups
 only after verifying the upgrade and deciding that their rollback/reconciliation
@@ -156,7 +164,8 @@ preferences. Runtime claims remain in memory.
 
 Before the first Board import, World preserves exact `boards/board.json` bytes
 (or `HERDR_WORLD_BOARD_PATH`) beside the source as
-`<source>.<sha256>.sqlite-import.bak`, private to the service user. Rows, bindings
+`<source>.<sha256>.sqlite-import.bak`, private to the service user; both move to
+`legacy/` after the import. Rows, bindings
 and the completion marker commit together before the listener starts. A missing
 source initializes an empty Board once. The override selects the legacy import
 source; new Board writes go only to the instance database. Later starts ignore
@@ -182,7 +191,8 @@ never makes its old settings authoritative over an already imported connection.
 
 On the first start using this store, World reads `agent-profiles.json` (or
 `HERDR_WORLD_AGENT_PROFILES_PATH`) and preserves exact bytes beside it as
-`<source>.<sha256>.sqlite-import.bak`, private to the service user. The rows and
+`<source>.<sha256>.sqlite-import.bak`, private to the service user; both move to
+`legacy/` after the import. The rows and
 completion marker commit together before startup exposes profiles. A missing
 source seeds the starter profiles once. Later starts ignore the retained source,
 even if it changes; edits go only to SQLite and deleted starters stay deleted.

@@ -54,6 +54,9 @@ export function importLegacyLedger(
   at: number,
   log: (message: string) => void = console.warn,
 ) {
+  // Import once: a completed import never consults the retained JSON again,
+  // even when an older binary rewrites it (each concept has one source).
+  if (db.query("SELECT 1 FROM imports WHERE name='ledger-json'").get()) return;
   assertSafeDataPath(path);
   if (!existsSync(path)) return;
   let contents: string;
@@ -70,10 +73,6 @@ export function importLegacyLedger(
     return;
   }
   const hash = createHash("sha256").update(contents).digest("hex");
-  const previous = db
-    .query("SELECT content_hash FROM imports WHERE name='ledger-json'")
-    .get() as { content_hash: string } | null;
-  if (previous?.content_hash === hash) return;
   const backup = `${path}.${hash}.sqlite-import.bak`;
   assertSafeDataPath(backup);
   publishDataFile(backup, contents);
@@ -135,7 +134,7 @@ export function importLegacyLedger(
       document.revision,
     );
     db.query(
-      "INSERT INTO imports(name,content_hash,completed_at) VALUES('ledger-json',?,?) ON CONFLICT(name) DO UPDATE SET content_hash=excluded.content_hash,completed_at=excluded.completed_at",
+      "INSERT INTO imports(name,content_hash,completed_at) VALUES('ledger-json',?,?)",
     ).run(hash, at);
     db.exec("COMMIT");
   } catch (error) {

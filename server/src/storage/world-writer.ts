@@ -42,6 +42,7 @@ import { dirname } from "node:path";
 import { assertSafeDataPath } from "../config/data-paths";
 import type { LedgerAsk, LedgerDocument } from "../world/world-ledger";
 import { importLegacyLedger } from "./world-import";
+import { archiveLegacyFiles } from "./legacy-archive";
 import {
   migrateWorldDatabase,
   worldDatabaseVersion,
@@ -184,6 +185,15 @@ export function openWorldWriter(
   try {
     if (boardImport)
       importBoard(db, boardImport.path, at, bindings, boardImport.fault);
+    archiveLegacyFiles(db, path, [
+      { path: legacy, marker: "ledger-json" },
+      ...(legacyProfiles !== undefined
+        ? [{ path: legacyProfiles, marker: "agent-profiles-json" }]
+        : []),
+      ...(boardImport
+        ? [{ path: boardImport.path, marker: "board-json" }]
+        : []),
+    ]);
   } catch (error) {
     db.close();
     throw error;

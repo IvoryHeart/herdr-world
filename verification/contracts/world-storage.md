@@ -28,8 +28,8 @@ source-map flags, preserving the production worker's embedded path. The large
 real-FULL-sync history fixture has an explicit watchdog, not a latency claim.
 `world-storage.test.ts` must cover exclusive ownership, isolated roots, reopen,
 an abandoned open that closes its database before it rejects,
-hash-named private import backup, changed-source missing-ID merge, malformed
-legacy input and recovered uncertainty. `world-worker.test.ts` keeps the
+hash-named private import backup, a changed source never re-imported after
+the import marker (#1253), malformed legacy input and recovered uncertainty. `world-worker.test.ts` keeps the
 service composition out of the worker's import graph, which each open re-parses.
 
 The storage, Board, profile, runtime-status, terminal-mark and answer-delivery
@@ -83,6 +83,19 @@ coverage retains question counts, shows failure/uncertainty and consumes a newer
 query revision for delivery-only evidence. Ordinary successful markup stays
 unchanged. Native/platform and independent review acceptance remain separate.
 
+
+## Legacy folder (#1253)
+
+Imported legacy JSON, its backups and schema snapshots beyond the newest three
+move to `<data>/legacy/` inside the worker's exclusive open, after every import
+commits. One writer holds the folder, so no second mover races it. A move has
+three states: not linked, linked under both names, old name removed. A crash in
+the linked state is finished on the next open without another copy; the other
+two are idempotent. `legacy-archive.test.ts` covers that state, a pre-SQLite
+folder reopened with identical Board, profile and ask state, older importers
+skipping the moved files, and snapshot placement. These finite cases exhaust
+the move's states, so no Quint model is added. Nothing is deleted; physical
+power loss between link and unlink stays excluded as above.
 
 ## Question ownership and cap admission (#1128)
 

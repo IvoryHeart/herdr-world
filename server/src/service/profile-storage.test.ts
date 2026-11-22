@@ -57,16 +57,22 @@ test("the real storage port backs up and imports profile JSON once, then uses SQ
   };
   const legacy = JSON.stringify(document);
   writeFileSync(paths.agentProfiles, legacy, { mode: 0o600 });
-  const backup = `${paths.agentProfiles}.${createHash("sha256").update(legacy).digest("hex")}.sqlite-import.bak`;
+  const backup = join(
+    paths.root,
+    "legacy",
+    `agent-profiles.json.${createHash("sha256").update(legacy).digest("hex")}.sqlite-import.bak`,
+  );
   const store = await open(paths);
-  expect(existsSync(backup)).toBe(true);
+  expect(existsSync(paths.agentProfiles)).toBe(false);
   expect(readFileSync(backup, "utf8")).toBe(legacy);
   expect(store.profiles().get()).toEqual(document);
   const saved = await store.profiles().save({
     ...store.profiles().profile("builder")!,
     name: "Synthetic builder",
   });
-  expect(readFileSync(paths.agentProfiles, "utf8")).toBe(legacy);
+  expect(
+    readFileSync(join(paths.root, "legacy", "agent-profiles.json"), "utf8"),
+  ).toBe(legacy);
   const cache = store.profiles();
   await store.close();
   const inspected = new Database(join(paths.root, "world.sqlite"), {

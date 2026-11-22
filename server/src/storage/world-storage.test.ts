@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
+  existsSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -154,7 +155,7 @@ test("abandoning a pending open closes its database before the open settles", as
   ).toBeInstanceOf(Error);
 });
 
-test("import is exact, hash-backed and idempotent; changed legacy input only merges missing IDs", async () => {
+test("import is exact, hash-backed and once only; a rewritten legacy file is archived, never re-imported", async () => {
   const target = paths();
   const original = JSON.stringify({
     version: 1,
@@ -175,8 +176,14 @@ test("import is exact, hash-backed and idempotent; changed legacy input only mer
   });
   writeFileSync(target.ledger, original);
   const first = await open(target);
-  const backup = `${target.ledger}.${createHash("sha256").update(original).digest("hex")}.sqlite-import.bak`;
+  const legacy = join(roots.at(-1)!, "legacy");
+  const backup = join(
+    legacy,
+    `ledger.json.${createHash("sha256").update(original).digest("hex")}.sqlite-import.bak`,
+  );
   expect(readFileSync(backup, "utf8")).toBe(original);
+  expect(readFileSync(join(legacy, "ledger.json"), "utf8")).toBe(original);
+  expect(existsSync(target.ledger)).toBe(false);
   expect(first.ledger.get().revision).toBe(8);
   expect(first.ledger.ask("q-import")?.delivery).toBeUndefined();
   expect(await first.outbox.list()).toEqual([]);
@@ -197,16 +204,19 @@ test("import is exact, hash-backed and idempotent; changed legacy input only mer
       results: [],
     }),
   );
+  // An older binary rewriting the JSON is not a second source.
   const merged = await open(target);
   expect(merged.ledger.ask("q-import")?.answer?.text).toBe("Recorded");
-  expect(merged.ledger.ask("q-legacy-new")).toBeDefined();
-  expect(merged.ledger.get().revision).toBe(11);
+  expect(merged.ledger.ask("q-legacy-new")).toBeUndefined();
+  expect(merged.ledger.get().revision).toBe(9);
   expect(await merged.outbox.list()).toEqual([]);
+  expect(existsSync(target.ledger)).toBe(false);
+  expect(readFileSync(join(legacy, "ledger.json.1"), "utf8")).toContain(
+    "q-legacy-new",
+  );
   expect(
-    readdirSync(roots.at(-1)!).filter((name) =>
-      name.endsWith(".sqlite-import.bak"),
-    ),
-  ).toHaveLength(2);
+    readdirSync(legacy).filter((name) => name.endsWith(".sqlite-import.bak")),
+  ).toHaveLength(1);
 });
 
 test("malformed retired JSON stays untouched and can be repaired without blocking current state", async () => {
