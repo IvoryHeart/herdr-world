@@ -287,6 +287,39 @@ describe("herdr-core connections", () => {
       stage: "dispatch",
       reason: "lease",
     });
+    const calls = fake.calls.length;
+    for (const operation of [
+      () => b.runtime.inspect(fromA),
+      () => b.runtime.label(fromA, { "herdr.pinned": "1" }),
+      () => b.runtime.run(fromA, { argv: [], keep: false }),
+      () => b.runtime.kill(fromA),
+      () => b.runtime.keys(fromA, ["Enter"]),
+      () =>
+        b.runtime.send(
+          fromA,
+          { text: "Answer", force: false },
+          { cancel: new AbortController().signal },
+        ),
+      () =>
+        b.runtime.shells.run(fromA, {
+          name: "shell",
+          cwd: "/tmp",
+          labels: {},
+          size: { cols: 80, rows: 24 },
+        }),
+      () =>
+        b.runtime.shells.attach(
+          fromA,
+          t1,
+          { cols: 80, rows: 24 },
+          { data() {}, end() {} },
+        ),
+      () => b.runtime.shells.kill(fromA),
+    ])
+      await expect(
+        Promise.resolve().then<unknown>(operation),
+      ).rejects.toMatchObject({ stage: "dispatch", reason: "lease" });
+    expect(fake.calls).toHaveLength(calls);
     expect(fake.calls.some((c) => c.method === "terminal.read")).toBe(false);
   });
 

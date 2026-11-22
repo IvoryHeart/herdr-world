@@ -5,6 +5,7 @@
   "requirement": "openspec/specs/world-effects/spec.md",
   "properties": "Atomic domain/intent commit; current incarnation and attempt CAS; fresh captured targets; Herdr driver World-run authority refuses restart replay without native continuity proof; no blind opaque retry or external run relaunch; stable keyed retries; decisive reconciliation; repeatable duplicates; current authorization; pinned operation versions; retained receipts and handles; durable wall deadlines",
   "existingTests": [
+    "server/src/assistant/context.core.test.ts",
     "server/src/effects/recovery-matrix.test.ts",
     "server/src/effects/admission.test.ts",
     "server/src/storage/effect-contract.test.ts",
@@ -20,10 +21,13 @@
   "status": "modeled",
   "remaining": "Independent model, replay, consumer and query-contract acceptance is pending this PR review. Native filesystem/power loss, source deduplication and external run execution remain outside the bounded proof; the real source/compiled and existing Chat consumer tests remain required.",
   "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "evidenceDecision": "Mutation regressions hold the real Bin closer at the final socket-open guard, fail the decisive pre-dispatch pane read, and exercise TUI service forwarding plus shutdown drain. Ranger prompt tests distinguish revocation before dispatch from a lost send reply, with no automatic retry. Existing recovery exploration remains required; these are targeted consumer sensitivity checks, not new exhaustive claims.",
   "partialEvidence": {
     "models": ["quint/effect-recovery.qnt"],
     "contracts": ["verification/contracts/effect-recovery.md"],
     "tests": [
+      "server/src/world/bin-close.test.ts",
+      "server/src/assistant/context.core.test.ts",
       "server/src/effects/recovery-matrix.test.ts",
       "server/src/effects/admission.test.ts",
       "server/src/world/effect-restart.test.ts",

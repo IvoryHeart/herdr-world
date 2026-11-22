@@ -305,6 +305,37 @@ describe("Ranger over herdr-core workspaces", () => {
     expect(writes(w).map((c) => c.method)).toEqual(["terminal.send"]);
   });
 
+  test.each(["revoked", "lost"])(
+    "native prompt recovery distinguishes %s authorization or reply",
+    async (fault) => {
+      const { w, agent, context, coreRef } = await setup();
+      const scope = await context.captureScope([coreRef]);
+      const action = await context.prepareAction("send_prompt", scope, {
+        ...coreRef,
+        pane_id: agent,
+        prompt: "hello",
+      });
+      let authorized = true;
+      w.fake.onCall = (method) => {
+        if (method === "terminal.get" && fault === "revoked")
+          authorized = false;
+        if (method === "terminal.send" && fault === "lost") {
+          w.fake.dropNextWriteReply = true;
+          queueMicrotask(() => w.fake.kill(w.socket));
+        }
+      };
+      const result = await action.execute(() => authorized);
+      expect(result.status).toBe(fault === "revoked" ? "failed" : "uncertain");
+      expect(result.detail).toContain(
+        fault === "revoked" ? "Nothing was submitted" : "will not be retried",
+      );
+      expect(await action.execute(() => true)).toEqual(result);
+      expect(
+        w.fake.calls.filter((c) => c.method === "terminal.send"),
+      ).toHaveLength(fault === "revoked" ? 0 : 1);
+    },
+  );
+
   test("a changed setup hook invalidates Ranger's worktree preview before creating anything", async () => {
     const settings = defaultGuiSettings();
     const { context, coreRef, repo, root } = await setup({

@@ -447,7 +447,11 @@ describe("simultaneous qualified runtime admission", () => {
       ])
         socket.receive({ connection_id, connection_generation, ...payload });
     };
-    push("beta", 3);
+    bridge.setConnectionRuntimeGenerations([
+      { id: "alpha", generation: 7 },
+      { id: "beta", generation: 7 },
+    ]);
+    push("beta", 7);
     expect(received).toEqual([]);
     bridge.setActiveConnection("beta");
     push("alpha", 7);
@@ -628,6 +632,40 @@ describe("simultaneous qualified runtime admission", () => {
     bridge.disconnect();
     expect((await outcome).message).toContain("outcome is uncertain");
     expect(socket.sent).toHaveLength(1);
+  });
+
+  test("host-scoped timeouts report uncertainty without retrying", async () => {
+    const { bridge, socket } = setup();
+    for (const method of ["terminal.input", "tab.new", "workspace.new"]) {
+      await expect(
+        bridge.connection("alpha", 7).call(method, {}, 5),
+      ).rejects.toThrow("outcome is uncertain");
+    }
+    expect(socket.sent.map((request) => request.method)).toEqual([
+      "terminal.input",
+      "tab.new",
+      "workspace.new",
+    ]);
+  });
+
+  test("unexpected socket close settles runtime and global requests without deadlines", async () => {
+    const { bridge, socket } = setup();
+    const runtime = bridge
+      .connection("alpha", 7)
+      .call("terminal.input", {}, null)
+      .catch((error) => error.message);
+    const global = bridge
+      .call("connections.list", {}, null)
+      .catch((error) => error.message);
+    socket.onclose?.({ code: 1006 } as CloseEvent);
+    await Promise.resolve();
+    expect(
+      await Promise.race([runtime, Promise.resolve("still pending")]),
+    ).toContain("outcome is uncertain");
+    expect(
+      await Promise.race([global, Promise.resolve("still pending")]),
+    ).toContain("bridge disconnected");
+    expect(socket.sent).toHaveLength(2);
   });
 
   test("restoring readiness with the same server generation cannot revive a retired lease", async () => {

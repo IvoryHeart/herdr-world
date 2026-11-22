@@ -7,6 +7,7 @@ import {
   openWorldLedger,
   type WorldLedgerStorage,
 } from "../storage/world-storage";
+import { createBinService } from "../service/bin-service";
 import { BIN_CLOSE_VERB, createBinCloser, type BinLease } from "./bin-close";
 
 type Pane = {
@@ -66,6 +67,8 @@ function fakeHerdr(connectionId: string, panes: Pane[]) {
     /** Called after each pane read with its index (1-based). */
     afterList: null as ((count: number) => void) | null,
     lists: 0,
+    failReadAt: 0,
+    beforeClose: null as (() => void) | null,
     replyDelay: 0,
   };
   const workspaces = () => [...new Set(host.panes.map((p) => p.workspace_id))];
@@ -76,15 +79,19 @@ function fakeHerdr(connectionId: string, panes: Pane[]) {
           generation: host.generation,
           isCurrent: () => host.current,
           async call(method, params, _timeout, beforeSend) {
+            if (method === "pane.close" || method === "workspace.close")
+              host.beforeClose?.();
             beforeSend?.();
             if (host.replyDelay) await Bun.sleep(host.replyDelay);
             if (method === "pane.list") {
+              host.lists += 1;
+              if (host.lists === host.failReadAt)
+                throw new Error("temporary pane read failure");
               host.reading.open();
               if (host.listGate) await host.listGate.opened;
               const panes = host.panes.filter(
                 (p) => p.workspace_id === params.workspace_id,
               );
-              host.lists += 1;
               host.afterList?.(host.lists);
               return { panes };
             }
@@ -230,6 +237,36 @@ test("closes a pane that shares its workspace with pane.close", async () => {
   await closer.commit([one]);
   expect(await settled(1)).toEqual([
     { id: one.id, result: "closed", closed_tab: true },
+  ]);
+  expect(studio.host.calls).toEqual(['pane.close {"pane_id":"p1"}']);
+});
+
+test("the final socket-open fence prevents a close after runtime retirement", async () => {
+  const studio = fakeHerdr("studio", [pane("p1"), pane("p2")]);
+  const { closer, state } = await fixture({ studio });
+  const one = entry("studio", pane("p1"));
+  const reached = gate();
+  studio.host.beforeClose = () => {
+    studio.host.current = false;
+    reached.open();
+  };
+  await closer.commit([one]);
+  await reached.opened;
+  await closer.stop();
+  expect(studio.host.calls).toEqual([]);
+  expect(studio.host.panes).toHaveLength(2);
+  expect(await state(one.id)).toBe("pending");
+});
+
+test("a failed pre-dispatch pane read retries rather than reporting the target gone", async () => {
+  const studio = fakeHerdr("studio", [pane("p1"), pane("p2")]);
+  // invoke reads first; resolve reads again immediately before marking dispatch.
+  studio.host.failReadAt = 2;
+  const { closer, settled } = await fixture({ studio });
+  const one = entry("studio", pane("p1"));
+  await closer.commit([one]);
+  expect(await settled(1)).toEqual([
+    { id: one.id, result: "closed", closed_tab: false },
   ]);
   expect(studio.host.calls).toEqual(['pane.close {"pane_id":"p1"}']);
 });
@@ -641,3 +678,84 @@ test("an unconfirmed write that did commit is tracked; a refused write is not re
   );
   expect(studio.host.calls).toEqual(['pane.close {"pane_id":"p1"}']);
 });
+
+test.each([false, true])(
+  "Bin service wires TUI closes and drains final socket checks on stop=%j",
+  async (stop) => {
+    const studio = fakeHerdr("studio", [pane("p1"), pane("p2")]);
+    const storage = await openWorldLedger(storagePaths(), realTime);
+    storages.push(storage);
+    const events = signals();
+    const connected = gate();
+    const release = gate();
+    stalls.push(release);
+    const retired: string[] = [];
+    const service = createBinService({
+      incarnation: storage.incarnation,
+      ...realTime,
+      ledger: () => storage.ledger,
+      outbox: () => storage.outbox,
+      effects: () => storage.effects,
+      connections: () => ({
+        list: () => [{ id: "studio" }],
+        readyRuntimeLease: () => {
+          const lease = studio.lease();
+          return (
+            lease && {
+              ...lease,
+              runtime: {
+                tui: {
+                  async call(method, params, timeout, beforeSend) {
+                    if (method === "pane.close") {
+                      connected.open();
+                      if (stop) await release.opened;
+                    }
+                    return lease.call(
+                      method,
+                      params,
+                      timeout ?? 30_000,
+                      beforeSend,
+                    );
+                  },
+                },
+              },
+            }
+          );
+        },
+      }),
+      retiring: (entries) => retired.push(...entries.map((item) => item.id)),
+      publish: () => events.fire(),
+      log: () => {},
+    });
+    closers.push(service);
+    expect(service.lease("studio")).toMatchObject({
+      connectionId: "studio",
+      generation: 1,
+    });
+    await service.start();
+    const id = service.registry.add(entry("studio", pane("p1"))).entries[0]!.id;
+    service.registry.closeNow([id]);
+    await connected.opened;
+    expect(retired).toEqual([id]);
+    if (stop) {
+      let stopped = false;
+      const stopping = service.stop().then(() => {
+        stopped = true;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(stopped).toBe(false);
+      release.open();
+      await stopping;
+      expect(studio.host.calls).toEqual([]);
+      expect(studio.host.panes).toHaveLength(2);
+    } else {
+      await events.until(() => service.registry.list().outcomes.length === 1);
+      expect(service.registry.list().outcomes[0]).toMatchObject({
+        id,
+        result: "closed",
+      });
+      expect(studio.host.calls).toEqual(['pane.close {"pane_id":"p1"}']);
+    }
+  },
+);

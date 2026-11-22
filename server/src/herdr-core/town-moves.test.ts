@@ -250,6 +250,17 @@ test("World-started agents and shells move between World rooms, app spaces and e
 
 test("a whole core desk moves all its terminals and preserves their identities and other labels", async () => {
   const w = await fixture();
+  const sibling = w.fake.create({
+    argv: ["claude"],
+    labels: {
+      "herdr.space": "one",
+      "herdr.tab": "sibling",
+      where: "one / sibling",
+    },
+  });
+  await w.settle();
+  const untouched = structuredClone(w.fake.terminal(sibling));
+  const location = (await w.rows()).panes.find((p) => p.pane_id === sibling)!;
   const original = ["t1", "t2"].map((a) =>
     structuredClone(w.fake.terminal(a)!),
   );
@@ -279,6 +290,11 @@ test("a whole core desk moves all its terminals and preserves their identities a
       },
     });
   }
+  expect(w.fake.terminal(sibling)).toEqual(untouched);
+  expect(after.panes.find((p) => p.pane_id === sibling)).toMatchObject({
+    workspace_id: location.workspace_id,
+    tab_id: location.tab_id,
+  });
   expect(await tabFor(w, "t1")).toBe(await tabFor(w, "t2"));
   expect(
     w.fake.calls.filter((c) => c.method === "terminal.label"),
