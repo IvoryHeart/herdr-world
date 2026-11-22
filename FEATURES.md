@@ -1211,7 +1211,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     rooms stand with the Board layout (like pinned desks), so a reload and
     every device show the same arrangement, and puts Herdr's workspace order
     in reading order (top to bottom, left to right), so Spaces lists the
-    rooms as Town shows them. A building whose rooms were never moved still
+    rooms as Town shows them. herdr-core has no workspace order: its rooms
+    keep only their saved spots. A building whose rooms were never moved still
     stacks them in Herdr's order.
   - **Tidy rooms.** **Tidy rooms** (sparkles) on a building's sign, or the
     sparkles button on its reception board (next to its colour), puts every
