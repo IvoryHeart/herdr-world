@@ -13,11 +13,21 @@ export type OfficeInspectorPresentation = "docked" | "floating";
 /** What opening an agent shows in Town, Board and Desk (the Agents open setting). */
 export type TownOpens = "chat" | "terminal";
 
+/** Town's buildings: one per host (machine), or one per runtime (#1047). */
+export type TownBuildings = "host" | "runtime";
+
+/** Rooms per row in a Town building: Auto keeps each one about square (#1188). */
+export type TownRoomsPerRow = "auto" | 2 | 3 | 4 | 5;
+
 export type OfficePreferences = {
   inspectorPresentation: OfficeInspectorPresentation;
   /** Less ambient motion and shorter camera moves in Town. */
   townCalm: boolean;
   townOpens: TownOpens;
+  /** A building per host holding every runtime's rooms, or one per runtime. */
+  townBuildings: TownBuildings;
+  /** Rooms per row in each building; Auto follows its rooms and the view. */
+  townRoomsPerRow: TownRoomsPerRow;
   /** The Town Master greets each visit (Show this on start). */
   townGreeting: boolean;
   /** The tab title and app icon show the Needs you count (this browser). */
@@ -34,6 +44,9 @@ export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
   inspectorPresentation: "docked",
   townCalm: false,
   townOpens: "chat",
+  // One building per machine: hosts are machines, runtimes are what they run (#1047).
+  townBuildings: "host",
+  townRoomsPerRow: "auto",
   townGreeting: true,
   tabBadge: true,
   townQuietMinutes: TOWN_QUIET_DEFAULT_MINUTES,
@@ -60,6 +73,8 @@ export function readOfficePreferences(
         : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
       townCalm: value.townCalm === true,
       townOpens: value.townOpens === "terminal" ? "terminal" : "chat",
+      townBuildings: value.townBuildings === "runtime" ? "runtime" : "host",
+      townRoomsPerRow: townRoomsPerRow(value.townRoomsPerRow),
       townGreeting: value.townGreeting !== false,
       tabBadge: value.tabBadge !== false,
       townQuietMinutes: townQuietMinutes(value.townQuietMinutes),
@@ -81,6 +96,8 @@ export function writeOfficePreferences(
       : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
     townCalm: preferences.townCalm === true,
     townOpens: preferences.townOpens === "terminal" ? "terminal" : "chat",
+    townBuildings: preferences.townBuildings === "runtime" ? "runtime" : "host",
+    townRoomsPerRow: townRoomsPerRow(preferences.townRoomsPerRow),
     townGreeting: preferences.townGreeting !== false,
     tabBadge: preferences.tabBadge !== false,
     townQuietMinutes: townQuietMinutes(preferences.townQuietMinutes),
@@ -98,6 +115,13 @@ export function writeOfficePreferences(
     // Presentation preferences must never prevent World from rendering.
   }
   return admitted;
+}
+
+/** A saved Rooms per row, or Auto for anything else. */
+export function townRoomsPerRow(value: unknown): TownRoomsPerRow {
+  return value === 2 || value === 3 || value === 4 || value === 5
+    ? value
+    : "auto";
 }
 
 function isInspectorPresentation(
