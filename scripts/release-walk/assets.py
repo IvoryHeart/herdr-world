@@ -96,6 +96,9 @@ def environment(root, tools_dir, session, tui, telemetry, signed_home=None, core
     config.mkdir(exist_ok=True)
     for name in ('.claude', '.codex'):
         (root / name).mkdir(mode=0o700, exist_ok=True)
+    # The pinned Codex offers "Update now" as the default choice once a newer
+    # release exists; the walk's Enter would pick it and Codex exits (no npm).
+    (root / '.codex/config.toml').write_text('check_for_update_on_startup = false\n')
     (config / 'herdr-core').mkdir(exist_ok=True)
     (config / 'herdr-core/config.toml').write_text('notes = false\nshell = ["/bin/sh"]\n')
     # Allowlist: never inherit owner sockets, sessions, credentials or config roots.

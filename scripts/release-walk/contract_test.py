@@ -124,6 +124,8 @@ class ReceiptTests(unittest.TestCase):
             self.assertEqual(env['HC_SESSION'], 'walk-isolated')
             self.assertNotIn(str(root / 'tools/tui'), env['PATH'])
             self.assertEqual(env['CLAUDE_CONFIG_DIR'], str(root / 'home/.claude'))
+            self.assertIn('check_for_update_on_startup = false',
+                          (Path(env['CODEX_HOME']) / 'config.toml').read_text())
 
     def test_service_guard_refuses_existing_configuration_and_implicit_consent(self):
         with tempfile.TemporaryDirectory() as directory:
