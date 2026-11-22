@@ -23,6 +23,12 @@ import {
 } from "../coreTyping";
 import { CoreTerminalComposer } from "./CoreTerminalComposer";
 import type { CoreWatchTarget } from "./coreInspectorTerminal";
+import {
+  claimPageKeys,
+  focusMovesToTerminal,
+  inspectorKey,
+  releasePageKeys,
+} from "./coreTerminalKeys";
 import "./coreWatch.css";
 
 const pageTheme = (): ResolvedTheme =>
@@ -60,30 +66,6 @@ function useBridgeEpoch() {
   return epoch;
 }
 
-/** Keys a person types to a terminal, as xterm sends them. */
-function typedKey(event: KeyboardEvent): string | null {
-  if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing)
-    return null;
-  if (event.key === "Enter") return "\r";
-  if (event.key === "Backspace") return "\x7f";
-  return event.key.length === 1 ? event.key : null;
-}
-
-/**
- * The core terminal a key typed on the bare page goes to: the one shown or
- * touched last, so two open Inspectors never both take it.
- */
-let pageKeyOwner: Element | null = null;
-
-/** A control that takes typing itself: a key there is never the terminal's. */
-function takesTyping(element: Element): boolean {
-  return Boolean(
-    element.closest(
-      'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="tab"], [role="menu"], [role="dialog"]',
-    ),
-  );
-}
-
 /**
  * A herdr-core terminal, watched and typed into: the Terminal tab of World's
  * Inspector. Core's grid is adopted exactly and the drawing is only scaled
@@ -99,11 +81,14 @@ export function CoreTerminalWatch({
   target,
   title,
   active = true,
+  typedEarly,
 }: {
   target: CoreWatchTarget;
   title: string;
   /** Its tab is the one shown: keys typed in the Inspector come here. */
   active?: boolean;
+  /** Keys typed for this terminal while it loaded, sent once it is here. */
+  typedEarly?: string[];
 }) {
   const sectionRef = useRef<HTMLElement | null>(null);
   const viewRef = useRef<HTMLDivElement | null>(null);
@@ -344,15 +329,22 @@ export function CoreTerminalWatch({
   // and the next key goes there (keyboard navigation between tabs stays).
   useEffect(() => {
     if (!active) return;
-    pageKeyOwner = sectionRef.current;
-    const focused = document.activeElement;
-    if (
-      !focused ||
-      focused === document.body ||
-      (focused.closest('[role="tab"]') && !focused.matches(":focus-visible"))
-    )
-      termRef.current?.focus();
+    claimPageKeys(sectionRef.current);
+    if (focusMovesToTerminal()) termRef.current?.focus();
   }, [active]);
+
+  // Keys typed while the watch was still loading go now, once, in order;
+  // like any early key they wait for the watch to open.
+  useEffect(() => {
+    const term = termRef.current;
+    const early = typedEarly?.splice(0) ?? [];
+    if (!term || early.length === 0) return;
+    if (activeRef.current) term.focus();
+    if (!term.options.disableStdin)
+      for (const key of early) term.input(key, true);
+    // The keys are taken once, when the watch arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // A key typed in this Inspector while nothing there takes typing (its
   // frame, its title bar, the page itself) focuses the terminal and is sent
@@ -363,18 +355,8 @@ export function CoreTerminalWatch({
       const section = sectionRef.current;
       if (!activeRef.current || event.defaultPrevented || !term || !section)
         return;
-      const key = typedKey(event);
-      if (key === null || section.offsetParent === null) return;
-      const target = event.target instanceof Element ? event.target : null;
-      if (target && section.contains(target)) return;
-      const scope = section.closest(".workspace-inspector");
-      const page = !target || target === document.body;
-      if (page ? pageKeyOwner !== section : !scope?.contains(target!)) return;
-      if (!page && takesTyping(target!)) return;
-      if (!page && target!.closest("button, a")) {
-        // A button's own keys (Enter, Space) stay the button's.
-        if (key === "\r" || key === " ") return;
-      }
+      const key = inspectorKey(event, section);
+      if (key === null) return;
       event.preventDefault();
       term.focus();
       if (!term.options.disableStdin) term.input(key, true);
@@ -383,7 +365,7 @@ export function CoreTerminalWatch({
     const section = sectionRef.current;
     return () => {
       document.removeEventListener("keydown", onKey, true);
-      if (pageKeyOwner === section) pageKeyOwner = null;
+      releasePageKeys(section);
     };
   }, []);
 
@@ -394,9 +376,7 @@ export function CoreTerminalWatch({
       aria-label={`${title}'s terminal`}
       data-core-watch={target.address}
       data-held={held ? `${held.cols}x${held.rows}` : undefined}
-      onPointerDownCapture={() => {
-        pageKeyOwner = sectionRef.current;
-      }}
+      onPointerDownCapture={() => claimPageKeys(sectionRef.current)}
     >
       <header className="core-watch-head">
         <small className="core-watch-grid" data-core-watch-grid>

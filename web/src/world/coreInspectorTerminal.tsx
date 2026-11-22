@@ -8,6 +8,13 @@ import {
 } from "react";
 import { lazyWithReload } from "../lazyWithReload";
 import { holdTerminalComposerDraftScope } from "../terminalComposer";
+import {
+  claimPageKeys,
+  focusMovesToTerminal,
+  inspectorKey,
+  releasePageKeys,
+  typedKey,
+} from "./coreTerminalKeys";
 import type { WorldObjectNode } from "./worldObject";
 // The "not live now" notice is drawn here, before any watch loads.
 import "./coreWatch.css";
@@ -122,17 +129,78 @@ function CoreInspectorTerminal({
   shown: boolean;
 }) {
   const [watching, setWatching] = useState(selected && shown);
+  // Keys typed for this terminal before its watch has loaded.
+  const [typedEarly] = useState<string[]>(() => []);
   if (watching && !shown) setWatching(false);
   else if (!watching && shown && selected) setWatching(true);
+  const active = selected && shown;
   return watching ? (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <CoreWatchLoading title={title} active={active} typed={typedEarly} />
+      }
+    >
       <CoreTerminalWatch
         target={target}
         title={title}
-        active={selected && shown}
+        active={active}
+        typedEarly={typedEarly}
       />
     </Suspense>
   ) : null;
+}
+
+/**
+ * Stands in for the watch while its code loads. It takes focus and keys as
+ * the terminal would, so the first key typed after opening the tab is kept
+ * and sent once the watch is here.
+ */
+export function CoreWatchLoading({
+  title,
+  active,
+  typed,
+}: {
+  title: string;
+  active: boolean;
+  typed: string[];
+}) {
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  useEffect(() => {
+    if (!active) return;
+    claimPageKeys(sectionRef.current);
+    if (focusMovesToTerminal()) sectionRef.current?.focus();
+  }, [active]);
+  useEffect(() => {
+    const section = sectionRef.current;
+    const onKey = (event: KeyboardEvent) => {
+      if (!activeRef.current || event.defaultPrevented || !section) return;
+      const inside =
+        event.target instanceof Node && section.contains(event.target);
+      const key = inside ? typedKey(event) : inspectorKey(event, section);
+      if (key === null) return;
+      event.preventDefault();
+      section.focus();
+      typed.push(key);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      releasePageKeys(section);
+    };
+  }, [typed]);
+  return (
+    <section
+      ref={sectionRef}
+      className="core-watch"
+      aria-label={`${title}'s terminal`}
+      aria-busy="true"
+      data-core-watch-loading=""
+      tabIndex={-1}
+      onPointerDownCapture={() => claimPageKeys(sectionRef.current)}
+    />
+  );
 }
 
 /** Every live core generation in `worlds` keeps its composer drafts. */
