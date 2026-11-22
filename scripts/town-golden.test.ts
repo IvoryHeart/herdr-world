@@ -100,7 +100,7 @@ test("report output cannot overwrite the stored references", async () => {
   ).rejects.toThrow("separate from stored goldens");
 });
 
-test("the report workflow stays advisory and retains diagnostic artifacts", async () => {
+test("the quarantined report runs only on manual dispatch and retains diagnostics", async () => {
   type Step = {
     name?: string;
     uses?: string;
@@ -115,12 +115,16 @@ test("the report workflow stays advisory and retains diagnostic artifacts", asyn
   ) as {
     jobs: {
       report: {
+        if: string;
         "continue-on-error": boolean;
         "timeout-minutes": string;
         steps: Step[];
       };
     };
   };
+  expect(workflow.jobs.report.if).toBe(
+    "github.event_name == 'workflow_dispatch'",
+  );
   expect(workflow.jobs.report["continue-on-error"]).toBe(true);
   expect(workflow.jobs.report["timeout-minutes"]).toContain("&& 40 || 15");
   const steps = workflow.jobs.report.steps;

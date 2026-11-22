@@ -63,8 +63,11 @@ receipts and inspect all five originals, especially Town floors/buildings/desks.
 ## Town golden-image report
 
 The advisory [Town golden images workflow](../.github/workflows/town-golden.yml)
-compares the production `TownCanvas` (Pixi scene and DOM overlays) with five stored
-PNGs on PR changes and main pushes. It is separate from required Delivery checks.
+compares the production `TownCanvas` (Pixi scene and DOM overlays) with stored
+PNGs at five viewports, including weather scenes (19 captures per run), on manual
+workflow dispatch. Automatic PR/main captures are quarantined
+under [#1259](https://github.com/IvoryHeart/herdr-world/issues/1259); the report
+remains separate from required Delivery checks.
 The fixture contains only synthetic hosts, four rooms, sixteen desks and mixed
 working, blocked, finished and idle agents, and the harbour shows the synthetic
 `ready` Shipyard pipeline read in memory. Its usage read is synthetic and
@@ -101,6 +104,19 @@ font hinting, and compares decoded RGBA pixels exactly. There is **no tolerance*
 mask or automatic golden refresh. Chrome, fonts and goldens must be reviewed
 together when the reference renderer changes.
 
+The quarantine concerns fractional DOM antialiasing in pinned Chrome 156: the
+Add room doorway can differ by one channel level even with identical final
+transforms and bounds. CI run
+[45070932409](https://github.com/IvoryHeart/herdr-world/actions/runs/45070932409)
+completed all 19 captures but differed at 134 linux-half pixels and one portrait
+pixel. A local four-runner, four-core batch completed 380 captures across twenty
+fresh-browser runs and reproduced these differences; it did not establish
+stability. CPU rasterization, explicit repaint/frame barriers, compositor-stage
+barriers and a single raster worker did not reliably remove the variation. The
+precise Chromium rasterizer cause remains open. Keep exact manual comparisons
+and the production visual negative control available; restore automatic captures
+only after twenty loaded runs and hosted stability acceptance pass.
+
 Install the pinned browser using the existing [development guidance](development.md#verification),
 then run through the browser queue:
 
@@ -111,8 +127,8 @@ TOWN_GOLDEN=1 TOWN_GOLDEN_RUNS=20 TOWN_GOLDEN_OUTPUT=.agents/town-golden-stabili
 ```
 
 `CHROME_BIN` must name the pinned browser. A run uses a fresh Chrome profile;
-each viewport gets a new page. The ordinary report captures five images once;
-stability mode allows at most twenty runs (100 captures). The five images total
+each viewport gets a new page. The ordinary report captures nineteen images once;
+stability mode allows at most twenty runs (380 captures). The five base images total
 under 12 million pixels at DPR 1; ordinary CI has a 15-minute job ceiling. Ordinary test
 gates skip the opt-in visual test, while the comparison's unit tests stay required.
 
@@ -132,14 +148,13 @@ below, which still require real synthetic runtime work.
 
 ### Hosted stability and production visual negative control
 
-Opt into hosted acceptance by applying the `town-golden-stability` PR label before
-pushing the candidate, or by selecting `stability: true` in workflow dispatch
-once the workflow is available on the default branch. Label changes alone do not
-start or cancel a report. Remove the label when later candidates need only the ordinary
-one-run report. Both modes stay advisory; the stability job has a finite 40-minute
-ceiling to cover twenty runs plus the negative control.
+While quarantined, open **Actions → Town golden images → Run workflow**, choose
+the candidate branch and select **stability** for hosted acceptance. The PR label
+`town-golden-stability` does not bypass the manual-only job condition. Both manual
+modes stay advisory; stability has a finite 40-minute ceiling to cover twenty runs
+plus the negative control. Automatic PR/main workflow runs skip the report job.
 
-Stability mode first compares 100 captures against unchanged stored goldens.
+Stability mode first compares 380 captures against unchanged stored goldens.
 It then temporarily moves the actual production `.town-zoom` control by one CSS
 pixel (`right: 16px` → `17px`) in `web/src/world/town/town.css`
 and runs the same five-viewport harness in a

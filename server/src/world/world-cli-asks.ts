@@ -185,11 +185,14 @@ export async function handleWorldAsk(
       // ledger mutation, so concurrent requests cannot bypass admission.
       const asker = await placeAsker(deps.hosts(), actor);
       // Owner alerts go through Herdr's toasts; a herdr-core asker has none,
-      // so its alert goes through the default Herdr connection.
+      // so its alert goes through the Herdr connection that alerts the owner
+      // (owner-alert-connection.ts), never the default when that is herdr-core.
       const notificationConnection =
         asker.connection_id && !deps.core?.()?.has(asker.connection_id)
           ? asker.connection_id
-          : deps.defaultConnectionId();
+          : deps.ownerAlertConnectionId
+            ? deps.ownerAlertConnectionId()
+            : deps.defaultConnectionId();
       if (key) {
         const known = deps.ledger
           .get()
