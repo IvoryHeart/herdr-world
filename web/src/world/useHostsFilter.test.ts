@@ -289,10 +289,15 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
     expect(
       document.querySelector(".connection-switcher-label")?.textContent,
     ).toBe("1 hosts");
-    // Unchecking the machine hides both of its runtimes.
+    // Unchecking the last selected machine hides both of its runtimes and
+    // stays an explicit empty selection, not All hosts.
     await act(async () => rows[0]!.click());
-    expect(saved()).toBe("null");
-    expect(filter.ids).toBeNull();
+    expect(saved()).toBe("[]");
+    expect(filter.ids).toEqual([]);
+    expect(rows.map((row) => row.checked)).toEqual([false, false]);
+    expect(
+      document.querySelector(".connection-switcher-label")?.textContent,
+    ).toBe("No hosts");
     await act(async () => filter.setIds(["beta"]));
     await act(async () =>
       document
@@ -309,16 +314,24 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
     expect(filter.ids).toEqual(["beta"]);
   });
 
-  test("empty explicit selection means All hosts without changing operational ownership", async () => {
+  test("empty explicit selection shows no hosts without changing operational ownership", async () => {
     await mount('["beta"]', true);
     await act(() => filter.setIds([]));
-    expect(filter.ids).toBeNull();
-    expect(saved()).toBe("null");
+    expect(filter.ids).toEqual([]);
+    expect(saved()).toBe("[]");
     expect(store.get().activeConnectionId).toBe("alpha");
     expect(store.get().connections).toEqual(connections);
+    // It survives a reload, and All hosts clears it.
+    await act(() => root.unmount());
+    root = createRoot(document.getElementById("root")!);
+    await act(() => root.render(createElement(Harness)));
+    expect(filter.ids).toEqual([]);
+    expect(filter.explanation).toBe("");
+    await act(() => filter.setIds(null));
+    expect(saved()).toBe("null");
   });
 
-  test.each(["[]", "null", '{"id":"beta"}', '[""]', "[7]", "invalid"])(
+  test.each(["null", '{"id":"beta"}', '[""]', "[7]", "invalid"])(
     "invalid saved scope falls back to All hosts: %s",
     async (value) => {
       await mount(value, true);

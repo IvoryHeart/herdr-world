@@ -16,6 +16,9 @@ machine as one building (#1213).
 - The saved selection keeps its connection-ID form; a selection saved per
   connection widens to that connection's whole machine. The Hosts count and
   "N hosts" label count machines.
+- Unchecking the last selected machine leaves an explicit empty selection
+  ("No hosts") instead of falling back to All hosts, so a single machine can
+  be hidden.
 
 ## Capabilities
 
@@ -23,7 +26,9 @@ machine as one building (#1213).
 None.
 
 ### Modified Capabilities
-- `world-surfaces/shell-navigation`: adds "Hosts filter lists machines".
+- `world-surfaces/shell-navigation`: adds "Hosts filter lists machines";
+  modifies "Persist host filters without operational side effects" to allow
+  an explicit empty selection.
 
 ## Impact
 

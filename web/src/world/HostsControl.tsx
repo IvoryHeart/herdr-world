@@ -26,12 +26,13 @@ export function selectedHostCount(
   return hostCount(connections.filter(({ id }) => ids.includes(id)));
 }
 
-/** "All hosts", or how many hosts (machines) the filter shows. */
+/** "All hosts", "No hosts", or how many hosts (machines) the filter shows. */
 export function hostsSelectionLabel(
   connections: readonly WorldHost[],
   ids: HostsFilter,
 ) {
   if (ids === null) return "All hosts";
+  if (!ids.length) return "No hosts";
   return `${selectedHostCount(connections, ids)} hosts`;
 }
 

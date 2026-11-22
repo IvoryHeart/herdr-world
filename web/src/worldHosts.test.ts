@@ -227,6 +227,7 @@ test("a selection saved per connection widens to its whole machine", () => {
     coreConnections: [core("local-core")],
   });
   expect(hostsFilterByMachine(null, hosts)).toBeNull();
+  expect(hostsFilterByMachine([], hosts)).toEqual([]);
   expect(hostsFilterByMachine(["local"], hosts)).toEqual([
     "local",
     "local-core",

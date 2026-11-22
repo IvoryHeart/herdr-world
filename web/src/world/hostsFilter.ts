@@ -9,8 +9,8 @@ export type HostsFilter = readonly string[] | null;
 function read(): HostsFilter {
   try {
     const value: unknown = JSON.parse(worldLocalStorage.getItem(KEY) ?? "null");
+    // An empty list is an explicit choice (every host unchecked), not All hosts.
     return Array.isArray(value) &&
-      value.length > 0 &&
       value.every((id) => typeof id === "string" && id.length > 0)
       ? [...new Set(value)]
       : null;
@@ -20,7 +20,6 @@ function read(): HostsFilter {
 }
 
 export function writeHostsFilter(ids: HostsFilter) {
-  if (ids?.length === 0) ids = null;
   try {
     worldLocalStorage.setItem(KEY, JSON.stringify(ids));
   } catch {

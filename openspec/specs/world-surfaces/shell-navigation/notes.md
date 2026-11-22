@@ -52,7 +52,9 @@
   destination, as Town's buildings), Herdr TUI and herdr-core together, named
   by its first runtime: `<name> · ready`, or `<name> · 1 of 2 reconnecting`
   when its runtimes differ. Checking or unchecking a machine covers all its
-  runtimes; the count and "N hosts" count machines. The selection is saved
+  runtimes; the count and "N hosts" count machines. Unchecking the last
+  checked machine leaves **No hosts** (an empty selection, kept on reload);
+  **All hosts** brings everything back. The selection is saved
   as connection IDs (`web/src/world/hostsFilter.ts`), so one saved before
   #1227 shows its whole machine (`hostsFilterByMachine` in
   `web/src/worldHosts.ts`). Each runtime's own state stays in **Manage
