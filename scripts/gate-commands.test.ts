@@ -43,10 +43,10 @@ function exercise(
         execFileSync("git", argv, { cwd: directory, encoding: "utf8" }).trim();
       git("config", "user.name", "Example");
       git("config", "user.email", "example@example.invalid");
-      mkdirSync(join(directory, "verification"));
+      mkdirSync(join(directory, "verification/coverage"), { recursive: true });
       writeFileSync(
-        join(directory, "verification/coverage.json"),
-        '{"areas":[]}',
+        join(directory, "verification/coverage/_meta.json"),
+        '{"schemaVersion":1}',
       );
       mkdirSync(join(directory, "scripts/agent"), { recursive: true });
       writeFileSync(

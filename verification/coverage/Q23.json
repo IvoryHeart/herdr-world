@@ -1,0 +1,44 @@
+{
+  "id": "Q23",
+  "area": "Inspector intent and navigation",
+  "owner": "web/src/world/worldInspectorSelection.ts",
+  "requirement": "openspec/specs/world-surfaces/inspector/spec.md",
+  "properties": "Selection survives only for exact owners; delayed opens cannot override later intent",
+  "existingTests": [
+    "web/src/world/inspectorTerminalHandoff.test.ts",
+    "web/src/world/deskReveal.test.ts",
+    "web/src/world/DeskView.browser.test.ts",
+    "web/src/store.test.ts",
+    "web/src/world/HostsFilter.test.ts",
+    "web/src/browserNavigation.test.ts",
+    "web/src/store/refresh.test.ts",
+    "web/src/world/WorldTerminalHandoff.test.ts",
+    "web/src/world/useWorldCreatedTerminal.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/175",
+  "technique": "creation-composition",
+  "assessment": "captured intent version and conditional focus consumer mapping; real hook exit/return, unmount and replacement plus queued native-focus cancellation consumers",
+  "status": "shared-model",
+  "remaining": "Workspace/shared/bootstrap branches, real UI wiring, opener cancellation and deadlines retain existing store/browser evidence.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/creation-flow.qnt"],
+    "contracts": [
+      "verification/contracts/creation-flow.md",
+      "verification/composition.md"
+    ],
+    "tests": [
+      "quint/creation-flow.test.ts",
+      "web/src/worldCreation.test.ts",
+      "web/src/world/SharedViewCreation.test.ts",
+      "web/src/world/WorldTerminalHandoff.test.ts"
+    ],
+    "checks": ["bun run verification:check", "bun run verification:typecheck"],
+    "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
+  },
+  "promotion": {
+    "decision": "accepted",
+    "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
+    "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
+  }
+}

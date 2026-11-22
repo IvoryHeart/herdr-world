@@ -46,7 +46,7 @@ test("only the explicit agent tooling paths qualify", () => {
     ".githooks/pre-push",
     "package.json",
     "bun.lock",
-    "verification/coverage.json",
+    "verification/coverage/Q01.json",
     "quint/runtime.qnt",
     "tools/quint/execution.json",
     "AGENTS.md",
@@ -358,7 +358,7 @@ test("an incremental-only deletion keeps the repository's affected unit scope", 
     git("init", "-q");
     git("config", "user.name", "Scope Test");
     git("config", "user.email", "scope@example.invalid");
-    write("verification/coverage.json", '{"areas": []}\n');
+    write("verification/coverage/_meta.json", '{"schemaVersion": 1}\n');
     write(chat, "export const value = 1;\n");
     write(unit, 'import "./components/chat/Example";\n');
     write("web/src/unrelated.test.ts", "export {};\n");
@@ -500,4 +500,29 @@ test("the real shard-table graph does not mistake installer test imports for nat
     selectValidation(realGraph, mixed, coverage.owns, mixed, coverage.models)
       .packaging,
   ).toBe(true);
+});
+
+test("area files and shared metadata select the inventory check and preserve model policy", () => {
+  for (const path of [
+    "verification/coverage/Q01.json",
+    "verification/coverage/new-area.json",
+    "verification/coverage/_meta.json",
+  ]) {
+    const inventoryGraph: Graph = {
+      ...graph,
+      files: new Set([...graph.files, path]),
+    };
+    for (const models of [false, true]) {
+      const selection = selectValidation(
+        inventoryGraph,
+        [path],
+        () => false,
+        [path],
+        () => models,
+      );
+      expect(selection.full).toBe(false);
+      expect(selection.unit).toContain("scripts/verification-coverage.test.ts");
+      expect(selection.verification).toBe(models);
+    }
+  }
 });

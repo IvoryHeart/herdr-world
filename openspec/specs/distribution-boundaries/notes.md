@@ -9,6 +9,11 @@
 
 **Code:**
 
+- `scripts/coverage.ts`
+- `scripts/coverage.test.ts`
+- `quint/models.ts`
+- `scripts/features.ts`
+- `web/src/features/FeatureHosts.tsx`
 - `quint/`
 - `docs/design/`
 - `docs/evidence/`

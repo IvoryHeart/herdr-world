@@ -23,6 +23,7 @@
 - `server/src/memory/worker.py`
 - `server/src/cli/memory.ts`
 - `web/src/world/memory/MemoryLibrary.tsx`
+- `web/src/features/memory/mount.tsx`
 
 **Tests:**
 

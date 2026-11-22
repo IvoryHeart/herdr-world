@@ -18,6 +18,7 @@
 - `server/src/world/apartment-resume.ts`
 - `server/src/storage/apartments.ts`
 - `web/src/world/apartments/ApartmentsDialog.tsx`
+- `web/src/features/apartments/mount.tsx`
 
 **Tests:**
 
