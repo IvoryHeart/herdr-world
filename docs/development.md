@@ -51,6 +51,11 @@ maintenance](react-19.md).
 
 ## Isolated worktree preview
 
+For acceptance checks against both real runtimes, use the
+[isolated runtime kit](isolated-runtimes.md). It creates and cleans up its own
+TUI session, core, World and scratch harness configurations, including after a
+crash; its self-test is run on demand.
+
 Keep one preview per worktree, on its own unused loopback port and data folder.
 Use a synthetic Herdr TUI session, with demo agents/repositories only, so a
 preview cannot act on real work. The standard `dev:server` script fixes port

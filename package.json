@@ -51,6 +51,7 @@
     "label:pr": "bun scripts/classify-pr-label.ts",
     "upstream:work": "bun scripts/upstream-local.ts",
     "agent:worktree": "bun scripts/agent/worktree.mjs",
+    "runtime:isolated": "bun scripts/runtime-isolated.ts",
     "agent:stamp": "bun server/src/index.ts stamp",
     "notices:generate": "bun scripts/dependency-notices.ts",
     "notices:check": "bun scripts/dependency-notices.ts --check",
