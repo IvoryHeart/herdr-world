@@ -780,6 +780,7 @@ export default function App({
   presentedSpacesTabId,
   onSelectSpacesTab,
   onSpacesWindowLayerReady,
+  spacesSurface = null,
   onInspectorVisibilityChange,
   onInspectorViewChange,
   onTerminalPopOut,
@@ -817,6 +818,11 @@ export default function App({
   presentedSpacesTabId?: string | null;
   onSelectSpacesTab?: (tabId: string) => void;
   onSpacesWindowLayerReady?: (element: HTMLDivElement | null) => void;
+  /**
+   * What Spaces shows in place of a Herdr TUI tab: a herdr-core terminal
+   * (#1329). A new key brings the phone to it from the list.
+   */
+  spacesSurface?: { key: string; content: ReactNode } | null;
   onInspectorVisibilityChange?: (open: boolean) => void;
   onInspectorViewChange?: (view: InspectorView) => void;
   onTerminalPopOut?: () => void;
@@ -839,6 +845,7 @@ export default function App({
   const creationSources = useCreationSources();
   const hasWorkspaceSurface =
     workspaceSurface !== null && workspaceSurfaceVisible;
+  const spacesSurfaceShown = !hasWorkspaceSurface && spacesSurface !== null;
   const focusExplicitTab = useCallback(
     async (tabId: string) => {
       if (hasWorkspaceSurface && onWorkspaceSurfaceSelect) {
@@ -1668,6 +1675,11 @@ export default function App({
       });
     }
   }, [mobile, updateInspectorState]);
+  // A terminal Spaces is sent to shows on a phone, as a Herdr one does.
+  const spacesSurfaceKey = spacesSurface?.key ?? null;
+  useEffect(() => {
+    if (spacesSurfaceKey !== null && mobile) setMobileView("session");
+  }, [spacesSurfaceKey, mobile]);
   const toggleSidebar = useCallback(() => {
     setMobileView("session");
     setSidebarHidden((value) => !value);
@@ -4707,23 +4719,25 @@ export default function App({
           <OperationalContext.Provider
             value={hasWorkspaceSurface ? workspaceSurfaceContext : null}
           >
-            <TabBar
-              key={`${hasWorkspaceSurface && workspaceSurfaceContext ? JSON.stringify(workspaceSurfaceContext) : resourceUiKey}:tabs`}
-              mobile={mobile}
-              inspectorOpen={
-                !hasWorkspaceSurface && inspectorState?.open === true
-              }
-              showInspector={!hasWorkspaceSurface}
-              annotationsOpen={annotationsOpen}
-              annotationCount={annotations.length}
-              onToggleInspector={toggleWorkspaceInspector}
-              onToggleAnnotations={toggleAnnotations}
-              onFocusSurface={onWorkspaceSurfaceSelect}
-              onSelectTab={
-                operationalShortcutsEnabled ? onSelectSpacesTab : undefined
-              }
-              tabColors={worldTabColors}
-            />
+            {spacesSurfaceShown ? null : (
+              <TabBar
+                key={`${hasWorkspaceSurface && workspaceSurfaceContext ? JSON.stringify(workspaceSurfaceContext) : resourceUiKey}:tabs`}
+                mobile={mobile}
+                inspectorOpen={
+                  !hasWorkspaceSurface && inspectorState?.open === true
+                }
+                showInspector={!hasWorkspaceSurface}
+                annotationsOpen={annotationsOpen}
+                annotationCount={annotations.length}
+                onToggleInspector={toggleWorkspaceInspector}
+                onToggleAnnotations={toggleAnnotations}
+                onFocusSurface={onWorkspaceSurfaceSelect}
+                onSelectTab={
+                  operationalShortcutsEnabled ? onSelectSpacesTab : undefined
+                }
+                tabColors={worldTabColors}
+              />
+            )}
           </OperationalContext.Provider>
           <div
             className={`workspace-surfaces ${annotationsDocked ? "has-annotations" : ""} ${assistantDocked ? "has-assistant" : ""}`}
@@ -4752,7 +4766,13 @@ export default function App({
                     {workspaceSurface}
                   </div>
                 ) : null}
+                {spacesSurfaceShown ? (
+                  <div className="spaces-surface-owner">
+                    {spacesSurface.content}
+                  </div>
+                ) : null}
                 {onSpacesWindowLayerReady &&
+                !spacesSurfaceShown &&
                 !hasWorkspaceSurface &&
                 terminalPresentation === "spaces" ? (
                   <div
@@ -4761,6 +4781,7 @@ export default function App({
                   />
                 ) : null}
                 {!hasWorkspaceSurface &&
+                !spacesSurfaceShown &&
                 terminalPresentation === "spaces" &&
                 (!focusedWorkspace || !activeSpacesTabId) ? (
                   <TerminalView
@@ -4777,6 +4798,7 @@ export default function App({
                   />
                 ) : null}
                 {!hasWorkspaceSurface &&
+                !spacesSurfaceShown &&
                 terminalPresentation === "spaces" &&
                 visibleSpacesTabWindows.length === 0 &&
                 !spacesWindowsSuspended &&

@@ -25,6 +25,9 @@
 - `web/src/world/visualRouteActions.ts`
 - `web/src/world/worldSearch.ts`
 - `web/src/world/worldCommandBox.tsx`
+- `web/src/world/SpacesCoreTerminal.tsx`
+- `web/src/world/spacesCore.ts`
+- `web/src/world/spacesCoreTerminal.css`
 - `web/src/components/CommandCombobox.tsx`
 - `web/src/components/CommandActionItem.tsx`
 - `shared/harnessLabels.ts`
@@ -92,7 +95,9 @@
   from a terminal or text field). A workspace-relative or
   absolute path opens the file. Agents are found in its **In World** group,
   in every view (see Find or act in terminal-windows notes); Spaces has no
-  separate list of its own connection's agents.
+  separate list of its own connection's agents. Enter on a herdr-core agent
+  shows its terminal in Spaces' terminal area in place of the Herdr tab
+  (`web/src/world/SpacesCoreTerminal.tsx`); **Close** returns to the tab.
 - Toggle **Zen mode** (`Cmd+Shift+Z` on macOS, `Ctrl+Alt+Z` elsewhere) to hide
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
   Hovering the Exit Zen tab slides the topbar back, and it stays while one of its

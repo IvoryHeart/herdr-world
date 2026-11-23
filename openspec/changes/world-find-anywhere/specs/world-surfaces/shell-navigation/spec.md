@@ -5,8 +5,9 @@
 The command box SHALL find World's agents, rooms, tables and terminals on every
 connected runtime and machine from every view, reading the one World object whatever
 the Hosts filter shows; Spaces SHALL NOT keep its own agent list beside it. Enter SHALL
-open a result on its own connection and runtime generation, never another; a second
-action SHALL show it in Town, Board or Desk when that view shows its host.
+open a result's terminal in Spaces on its own connection and runtime generation,
+whichever runtime runs it, never another connection; a second action SHALL show it in
+Town, Board or Desk when that view shows its host.
 
 #### Scenario: Find an agent by any of its facts
 
@@ -23,12 +24,15 @@ action SHALL show it in Town, Board or Desk when that view shows its host.
 - **THEN** World focuses B's exact workspace, tab and pane at B's current runtime
   generation and shows Spaces on B
 
-#### Scenario: Open a herdr-core terminal
+#### Scenario: Open a herdr-core agent in Spaces
 
-- **WHEN** the user presses Enter on a live herdr-core terminal World watches, which
-  is never actionable as a Herdr node
-- **THEN** World's window admits it as a core resource and opens its Terminal tab,
-  as Spaces shows Herdr TUI workspaces only
+- **WHEN** the user finds a live herdr-core agent from Town, Board, Desk or Spaces and
+  presses Enter
+- **THEN** World switches to Spaces and shows that agent's terminal there, on its
+  connection at that connection's current runtime generation, named with its room
+  and tab and marked herdr-core, as it opens a Herdr TUI agent
+- **AND** a core room opens its focused terminal, else its first agent or terminal,
+  and Spaces never follows the agent to another generation or connection
 
 #### Scenario: Find an agent on a host the Hosts filter hides
 

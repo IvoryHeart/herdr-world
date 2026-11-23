@@ -156,11 +156,17 @@
 - **Enter** or a click opens what was found: a Herdr TUI agent, terminal,
   table or room opens in Spaces on its own connection, with its tab focused
   and pane selected, even when another host was Spaces' host
-  (`openWorldFind`, through the store's qualified Spaces target). A
-  herdr-core terminal opens in World's window Terminal tab (Spaces shows
-  Herdr TUI workspaces only); a core room opens its Files. The window admits
-  them through `inspectorAdmits`, as live core resources are never
-  actionable. An agent on an
+  (`openWorldFind`, through the store's qualified Spaces target). A live
+  herdr-core agent or terminal opens in Spaces too: Spaces' terminal area
+  shows World's watch of it (`SpacesCoreTerminal`, the same
+  `coreInspectorTerminal` as the window's Terminal tab) under a bar with its
+  name, `host › room › tab`, a **herdr-core** chip, its status mark and
+  **Close**, which returns to the Herdr TUI tab. A core room opens its focused
+  terminal, else its first agent or terminal (`coreSpacesLeaf`); a core room
+  with none says so. Spaces keeps the choice by World node, connection and
+  generation (`spacesCore.ts`) and shows "no longer where World last saw it"
+  rather than follow a reconnected core. Choosing a core agent in Spaces'
+  navigator opens it the same way. An agent on an
   offline, stale or reconnecting host stays listed with its Offline mark,
   and opening it says why it cannot. In Town, Board and Desk, **Shift+Enter**
   or the row's **Show in …** button selects it in that view instead, as

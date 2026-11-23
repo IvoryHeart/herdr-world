@@ -30,7 +30,11 @@ import {
 } from "../workspaceResource";
 import { coreAuthorityFrom, provideFloatShellAuthority } from "./floatShell";
 import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
-import { buildWorldObject, type WorldObject } from "./worldObject";
+import {
+  buildWorldObject,
+  type WorldLeafObject,
+  type WorldObject,
+} from "./worldObject";
 import { worldObjectForHosts } from "./worldFilters";
 import { useHostsFilter } from "./hostsFilter";
 import { HostsControl, selectedHostCount } from "./HostsControl";
@@ -80,6 +84,9 @@ import { terminalColor } from "./terminalColor";
 import { NeedsYouCounter } from "./NeedsYouTab";
 import { needsYouInTopbar } from "./needsYou";
 import { WorldControlPlane } from "./WorldControlPlane";
+import { SpacesCoreTerminal } from "./SpacesCoreTerminal";
+import { spacesCoreChoice, type SpacesCoreChoice } from "./spacesCore";
+import { coreSpacesLeaf } from "./worldCommandBox";
 import {
   WorldPanelsContext,
   useWorldPanelRegistry,
@@ -126,6 +133,17 @@ export default function WorldFoundationApp() {
   const [dockedInspectorId, setDockedInspectorId] = useState<string | null>(
     null,
   );
+  // The herdr-core terminal Spaces shows in place of a Herdr tab (#1329).
+  // Each open is a new choice, so a phone comes back to it from the list.
+  const [spacesCore, setSpacesCore] = useState<
+    (SpacesCoreChoice & { opened: number }) | null
+  >(null);
+  const spacesCoreOpens = useRef(0);
+  const showCoreInSpaces = (leaf: WorldLeafObject) =>
+    setSpacesCore({
+      ...spacesCoreChoice(leaf),
+      opened: ++spacesCoreOpens.current,
+    });
   const [inspectorTerminalPortals, setInspectorTerminalPortals] = useState<
     Record<string, HTMLDivElement | null>
   >({});
@@ -294,8 +312,9 @@ export default function WorldFoundationApp() {
 
   // World's finds (#1329): one search of the whole World object, in every
   // view, on every connected host whatever the Hosts filter shows. Enter opens
-  // what was found wherever it is; in a visual view the second action shows
-  // it there, as clicking it does, when the view shows its host.
+  // what was found in Spaces, whichever runtime runs it; in a visual view the
+  // second action shows it there, as clicking it does, when the view shows
+  // its host.
   const terminalColors = useTerminalColors();
   // Only the views that draw World's nodes can show one; Code and Spaces can't.
   const showNode =
@@ -306,19 +325,20 @@ export default function WorldFoundationApp() {
     worldFindGroup(fullWorld, search, {
       open: (node) =>
         void openWorldFind(node, {
-          activateSpacesTarget: (target) =>
-            store.activateQualifiedSpacesTarget(target),
-          activateHost: (host) => activateWorldNodeHost(host),
-          goToSpaces: () => setView("spaces"),
-          openInWorldWindow: ({ view: opens, paneId, ...target }) => {
-            // World's window shows on Town, Board or Desk.
-            if (view === "spaces" || view === "code")
-              setView(visualView === "code" ? "town" : visualView);
-            const open = workspaceSurfaceSelectionRef.current;
-            return open
-              ? open({ ...target, ...(paneId ? { paneId } : {}), view: opens })
-              : Promise.resolve(false);
+          activateSpacesTarget: async (target) => {
+            const opened = await store.activateQualifiedSpacesTarget(target);
+            if (opened) setSpacesCore(null);
+            return opened;
           },
+          activateHost: async (host) => {
+            await activateWorldNodeHost(host);
+            setSpacesCore(null);
+          },
+          openCoreInSpaces: (leaf) => {
+            showCoreInSpaces(leaf);
+            return true;
+          },
+          goToSpaces: () => setView("spaces"),
           notify: (message, detail) =>
             store.notify({ kind: "error", message, detail }),
         }),
@@ -474,6 +494,17 @@ export default function WorldFoundationApp() {
               onSelect={async (node, requestedView) => {
                 if (node.kind === "host") return;
                 if (view === "spaces") {
+                  // A live herdr-core terminal shows in Spaces as Cmd+K's
+                  // Enter shows it (#1329); a Herdr one leaves it.
+                  const coreLeaf = requestedView
+                    ? undefined
+                    : coreSpacesLeaf(node);
+                  if (coreLeaf) {
+                    showCoreInSpaces(coreLeaf);
+                    onSelectionAdmitted();
+                    return;
+                  }
+                  if (!node.coreControl) setSpacesCore(null);
                   if (store.get().activeConnectionId !== node.connectionId)
                     await activateWorldNodeHost(node);
                   const resourceView =
@@ -651,6 +682,20 @@ export default function WorldFoundationApp() {
           }
           onSelectSpacesTab={spaces.resumeTab}
           onSpacesWindowLayerReady={spaces.onSpacesWindowLayerReady}
+          spacesSurface={
+            view === "spaces" && spacesCore
+              ? {
+                  key: String(spacesCore.opened),
+                  content: (
+                    <SpacesCoreTerminal
+                      world={fullWorld}
+                      choice={spacesCore}
+                      onClose={() => setSpacesCore(null)}
+                    />
+                  ),
+                }
+              : null
+          }
           workspaceSurfaceInspector={
             view !== "spaces" && workspaceSurfaceInspectorConversation
               ? {

@@ -2,8 +2,8 @@
  * World's part of the command box (#782, #1329): what a search finds in World
  * on every runtime and machine, with the views' own matching (worldSearch.ts),
  * and the views to go to. Every view, Spaces included, lists the same finds
- * from the one World object. Enter opens what was found (its terminal in
- * Spaces, or a herdr-core terminal in World's window); the second action
+ * from the one World object. Enter opens what was found in Spaces, its
+ * terminal on its own connection whichever runtime runs it; the second action
  * (Shift+Enter, or the row's button) shows it in the current view as clicking
  * it there does.
  */
@@ -26,7 +26,6 @@ import type {
 import { AgentIcon } from "../components/AgentIcon";
 import { AgentMark } from "../components/AgentMark";
 import type { QualifiedFocusTarget } from "../store/types";
-import type { InspectorView } from "../workspaceResource";
 import { AGENT_MARKS, agentMarkKind } from "./agentMarks";
 import {
   TERMINAL_COLOR_HEX,
@@ -34,7 +33,6 @@ import {
   type TerminalColorTarget,
 } from "./terminalColor";
 import {
-  inspectorAdmits,
   type WorldLeafObject,
   type WorldObject,
   type WorldObjectNode,
@@ -97,6 +95,28 @@ export function worldFoundTarget(
 }
 
 /**
+ * The live herdr-core terminal Spaces shows for a found core node: the agent
+ * or terminal itself, or for a core room the one it focuses, else its first
+ * agent, else its first terminal. Undefined for a Herdr TUI node, or a core
+ * one World does not watch (stale, or watched from another machine).
+ */
+export function coreSpacesLeaf(
+  node: WorldObjectNode,
+): WorldLeafObject | undefined {
+  const watched = (leaf: WorldLeafObject) =>
+    leaf.coreControl === true && !leaf.stale && leaf.watch !== undefined;
+  if (node.kind === "agent" || node.kind === "terminal")
+    return watched(node) ? node : undefined;
+  if (node.kind !== "space" || node.coreControl !== true || node.stale) return;
+  const live = node.children.filter(watched);
+  return (
+    live.find((leaf) => leaf.focused) ??
+    live.find((leaf) => leaf.kind === "agent") ??
+    live[0]
+  );
+}
+
+/**
  * Why Enter cannot open a found node, or null when it can. An offline or
  * reconnecting host's agents stay listed, marked, and opening one says this.
  */
@@ -107,12 +127,15 @@ export function worldFindOpenReason(node: WorldObjectNode): string | null {
     return `${node.hostLabel} is offline. World shows what it last saw there.`;
   if (node.kind === "host")
     return node.viewOnly
-      ? `${node.hostLabel} runs herdr-core, which Spaces doesn't show. Find one of its agents instead.`
+      ? `${node.hostLabel} runs herdr-core. Find one of its agents or rooms to open it in Spaces.`
       : null;
   if (node.capabilities.openSpaces) return null;
-  // World's window opens a live herdr-core terminal or room (inspectorAdmits).
-  if (inspectorAdmits(node)) return null;
-  if (node.kind === "space") return `World can't open ${node.label} here.`;
+  // Spaces shows a live herdr-core terminal World watches (coreSpacesLeaf).
+  if (coreSpacesLeaf(node)) return null;
+  if (node.kind === "space")
+    return node.coreControl
+      ? `${node.label} has no terminal open.`
+      : `World can't open ${node.label} here.`;
   return node.viewOnly
     ? "World only watches this herdr-core terminal from another machine, so it can't open it here."
     : `World can't open ${node.label} here.`;
@@ -124,22 +147,20 @@ export type WorldFindOpenDeps = {
   activateSpacesTarget(target: QualifiedFocusTarget): Promise<boolean>;
   /** Make a ready Herdr host Spaces' host. */
   activateHost(node: WorldObjectNode): Promise<void>;
-  goToSpaces(): void;
   /**
-   * Open a node in World's window on a visual view (a herdr-core terminal's
-   * Terminal tab, or a core room's Files), leaving Spaces first.
+   * Show a live herdr-core terminal in Spaces, on its own connection and
+   * runtime generation; false when World no longer sees it there.
    */
-  openInWorldWindow(
-    target: QualifiedFocusTarget & { view: InspectorView },
-  ): Promise<boolean>;
+  openCoreInSpaces(leaf: WorldLeafObject): boolean;
+  goToSpaces(): void;
   notify(message: string, detail: string): void;
 };
 
 /**
- * Open a found node (#1329): a Herdr TUI agent, terminal, table or room in
- * Spaces, on its own connection with its tab and pane focused, whichever host
- * Spaces showed; a herdr-core terminal in World's window (Spaces shows Herdr
- * TUI workspaces only). What cannot open says why.
+ * Open a found node (#1329) in Spaces, on its own connection with its tab and
+ * pane focused, whichever host Spaces showed: a Herdr TUI agent, terminal,
+ * table or room through Herdr's focus, a herdr-core terminal (or a core
+ * room's terminal) through World's watch of it. What cannot open says why.
  */
 export async function openWorldFind(
   node: WorldObjectNode,
@@ -151,26 +172,24 @@ export async function openWorldFind(
   };
   const reason = worldFindOpenReason(node);
   if (reason) return fail(reason);
+  const moved = () =>
+    fail(`${node.label} is no longer where World last saw it.`);
   try {
     if (node.kind === "host") {
       if (node.capabilities.activateHost) await deps.activateHost(node);
       deps.goToSpaces();
       return true;
     }
-    const target = worldFoundTarget(node);
     if (node.capabilities.openSpaces) {
-      if (!(await deps.activateSpacesTarget(target)))
-        return fail(`${node.label} is no longer where World last saw it.`);
+      if (!(await deps.activateSpacesTarget(worldFoundTarget(node))))
+        return moved();
       deps.goToSpaces();
       return true;
     }
-    const opened = await deps.openInWorldWindow({
-      ...target,
-      view: node.kind === "space" ? "files" : "terminal",
-    });
-    return (
-      opened || fail(`${node.label} is no longer where World last saw it.`)
-    );
+    const leaf = coreSpacesLeaf(node);
+    if (!leaf || !deps.openCoreInSpaces(leaf)) return moved();
+    deps.goToSpaces();
+    return true;
   } catch (cause) {
     return fail(cause instanceof Error ? cause.message : String(cause));
   }

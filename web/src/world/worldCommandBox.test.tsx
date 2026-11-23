@@ -4,7 +4,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { TERMINAL_COLOR_HEX } from "./terminalColor";
 import { townScaleConnections } from "./town/townScaleScene";
+import { spacesCoreChoice, spacesCoreLeaf } from "./spacesCore";
+import { SpacesCoreTerminal } from "./SpacesCoreTerminal";
 import {
+  coreSpacesLeaf,
   openWorldFind,
   WORLD_COMMAND_FINDS,
   withWorldViews,
@@ -23,6 +26,15 @@ const scene = townScaleConnections();
 const world = buildWorldObject(scene, scene[0]!.connectionId);
 
 const none = { open: () => {} };
+
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  '"': "&quot;",
+  "<": "&lt;",
+  ">": "&gt;",
+};
+const escapeHtml = (text: string) =>
+  text.replace(/[&"<>]/g, (char) => HTML_ESCAPES[char]!);
 
 /** A copy of a scene host on another connection, in another state. */
 function variant(
@@ -254,8 +266,10 @@ describe("opening a find", () => {
         calls.push(`host ${node.connectionId}`);
       },
       goToSpaces: () => calls.push("go spaces"),
-      openInWorldWindow: async (target) => {
-        calls.push(`window ${target.view} ${target.paneId}`);
+      openCoreInSpaces: (leaf) => {
+        calls.push(
+          `core ${leaf.connectionId} ${leaf.generation} ${leaf.nativeId}`,
+        );
         return true;
       },
       notify: (message, detail) => notes.push(`${message}: ${detail}`),
@@ -332,15 +346,101 @@ describe("opening a find", () => {
     expect(found?.detail).toContain("Offline");
   });
 
-  test("a herdr-core agent opens in World's window, not Spaces", async () => {
+  test("a herdr-core agent opens in Spaces on its own connection, as a Herdr one does", async () => {
     const agent = agentOn("core-local");
     expect(agent.watch).toBeDefined();
+    expect(agent.capabilities.openSpaces).toBe(false);
     expect(worldFindOpenReason(agent)).toBeNull();
-    const { calls, value } = deps();
+    const { calls, notes, value } = deps();
     expect(await openWorldFind(agent, value)).toBe(true);
-    expect(calls).toEqual([`window terminal ${agent.nativeId}`]);
+    expect(calls).toEqual([
+      `core core-local ${agent.generation} ${agent.nativeId}`,
+      "go spaces",
+    ]);
+    expect(notes).toEqual([]);
     const host = all.hosts.find((item) => item.connectionId === "core-local")!;
     expect(worldFindOpenReason(host)).toMatch(/runs herdr-core/);
+  });
+
+  test("a herdr-core room opens its terminal in Spaces, an agent first", async () => {
+    const room = all.spaces.find(
+      (space) => space.connectionId === "core-local",
+    )!;
+    const leaf = coreSpacesLeaf(room)!;
+    expect(room.children).toContain(leaf);
+    expect(
+      leaf.focused ||
+        leaf.kind === "agent" ||
+        room.children.every((child) => child.kind !== "agent"),
+    ).toBe(true);
+    const { calls, value } = deps();
+    expect(await openWorldFind(room, value)).toBe(true);
+    expect(calls).toEqual([
+      `core core-local ${leaf.generation} ${leaf.nativeId}`,
+      "go spaces",
+    ]);
+    // A room with no terminal open says so and opens nothing.
+    const empty = { ...room, children: [] };
+    expect(worldFindOpenReason(empty)).toBe(
+      `${room.label} has no terminal open.`,
+    );
+    const second = deps();
+    expect(await openWorldFind(empty, second.value)).toBe(false);
+    expect(second.calls).toEqual([]);
+  });
+
+  test("Spaces shows a core terminal only on the generation it was opened on", () => {
+    const agent = agentOn("core-local");
+    const choice = spacesCoreChoice(agent);
+    expect(spacesCoreLeaf(all, choice)?.id).toBe(agent.id);
+    // A reconnected core is a new generation: Spaces does not follow it.
+    expect(
+      spacesCoreLeaf(all, { ...choice, generation: choice.generation + 1 }),
+    ).toBeUndefined();
+    // Never another connection's node of the same id.
+    expect(
+      spacesCoreLeaf(all, { ...choice, connectionId: "elsewhere" }),
+    ).toBeUndefined();
+    // Nor a Herdr TUI pane.
+    const herdr = agentOn(scene[0]!.connectionId);
+    expect(spacesCoreLeaf(all, spacesCoreChoice(herdr))).toBeUndefined();
+  });
+
+  test("Spaces' terminal area shows the core agent's watch under its bar", () => {
+    const agent = agentOn("core-local");
+    const choice = spacesCoreChoice(agent);
+    // The watch reads the page's visibility and theme as it renders.
+    const page = globalThis as { document?: unknown };
+    const before = page.document;
+    page.document = {
+      visibilityState: "visible",
+      documentElement: { dataset: {} },
+    };
+    let html: string;
+    try {
+      html = renderToStaticMarkup(
+        <SpacesCoreTerminal world={all} choice={choice} onClose={() => {}} />,
+      );
+    } finally {
+      page.document = before;
+    }
+    expect(html).toContain(`data-spaces-core="${escapeHtml(agent.id)}"`);
+    expect(html).toContain(escapeHtml(agent.label));
+    expect(html).toContain(escapeHtml(agent.hostLabel));
+    expect(html).toContain("herdr-core");
+    expect(html).toContain('aria-label="Close herdr-core terminal"');
+    // The same watched terminal World's window shows.
+    expect(html).toContain('class="core-watch"');
+    // On a reconnected core it says so instead of following it.
+    const gone = renderToStaticMarkup(
+      <SpacesCoreTerminal
+        world={all}
+        choice={{ ...choice, generation: choice.generation + 1 }}
+        onClose={() => {}}
+      />,
+    );
+    expect(gone).not.toContain('class="core-watch"');
+    expect(gone).toContain("no longer where World last saw it");
   });
 
   test("World's window admits a live herdr-core agent and room it is sent", () => {
