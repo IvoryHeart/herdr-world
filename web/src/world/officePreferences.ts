@@ -24,7 +24,11 @@ export type OfficePreferences = {
   /** Less ambient motion and shorter camera moves in Town. */
   townCalm: boolean;
   townOpens: TownOpens;
-  /** A building per host holding every runtime's rooms, or one per runtime. */
+  /**
+   * Legacy (#1307): Town's pre-"Group runtimes" choice, read once by
+   * runtimeGrouping.ts to move it to the World service. Nothing reads it
+   * after that; kept for one release.
+   */
   townBuildings: TownBuildings;
   /** Rooms per row in each building; Auto follows its rooms and the view. */
   townRoomsPerRow: TownRoomsPerRow;

@@ -27,26 +27,25 @@
 - `web/src/world/town/townObservatory.test.ts`
 - `web/src/world/usage/UsageLens.browser.tsx`
 - `web/src/world/TownView.tsx`
-- `web/src/world/town/TownCanvas.tsx`
+- `web/src/world/town/TownCanvas.tsx`; frames: `web/src/world/town/townWorldTransform.ts` (overlay, zoom readers), `web/src/world/town/townHostRect.ts`, `web/src/world/worldFrameScheduler.ts` (typing quiet)
 - `web/src/world/officePreferences.ts`
 - `web/src/browserStorage.ts`
 - `web/src/world/town/town.settings.tsx`
 - `web/src/world/town/townQuietWork.ts`
 - `web/src/world/town/useTownQuiet.ts`
 - `web/src/world/town/townRendererActors.ts`
-- `web/src/world/town/TownWorldLayer.tsx`
-- `web/src/world/town/TownStepBubble.tsx`, `web/src/world/town/TownBoard.tsx`
+- `web/src/world/town/TownWorldLayer.tsx`, `web/src/world/town/TownStepBubble.tsx`, `web/src/world/town/TownBoard.tsx`
 - `web/src/world/town/townLayout.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
 - Bin and bus: `web/src/world/town/TownBusLayer.tsx` (the next trip's route report, the bus's speed and distance plate), `web/src/world/town/townBus.ts` (`townTourRouteM`, `townBusSign`, metres per pixel), `web/src/world/town/townBusDrive.ts` (`townBusTimeline`, `townBusLeft`), `web/src/world/bin/binStore.ts` (`binBusClock`, the countdown labels); tests `townBus.test.ts`, `townBusCountdown.dom.test.ts`, `web/src/world/bin/binStore.test.ts`
 - `server/src/world/observability.ts`
 
 **Tests:**
 
-- `web/src/world/town/TownCanvas.test.ts`
-- `web/src/world/town/TownCanvas.fold.test.ts`
+- `web/src/world/town/TownCanvas.test.ts`, `web/src/world/town/TownCanvas.fold.test.ts`
 - `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases)
 - `web/src/world/town/townReceptionFilter.test.ts`
 - `web/src/world/town/townQuietWork.test.ts`
+- Frames: `web/src/world/town/townWorldTransform.test.ts`, `web/src/world/worldFrameScheduler.test.ts`, `web/src/world/town/TownFrameBudget.browser.test.ts` (budget on the town-scale page)
 
 **Pitfalls:**
 
@@ -55,6 +54,8 @@
 - Pins and selection do not pull hidden desks across the fold boundary.
 - Moving rooms on the canvas is separate from moving native desks; see town-moves.
 - CLI desk pins/moves use their feature contracts, not canvas coordinates.
+- `--z`/`--iz` are not inherited: a rule reading them needs its class in `TOWN_ZOOM_READERS` (`:focus` rules: `TOWN_ZOOM_FOCUS_READERS`).
+  Never read layout inside a Town frame: use `townHostRect.ts`, or measure in a task of its own as `useTownEdgeNav.ts` does.
 - Quiet-agent data: `officePreferences.ts`/`town.settings.tsx` → `TownView.tsx` → `useTownQuiet.ts`; `townRendererActors.ts` stops typing.
   `TownWorldLayer.tsx`/`TownStepBubble.tsx` draw the hourglass and elapsed time; `TownBoard.tsx` draws the count under Busy.
 
@@ -74,8 +75,9 @@
     rooms stand together under one sign, each room's nameplate naming its
     runtime (**Herdr TUI** or **herdr-core**) and keeping its own controls,
     and every desk, agent and action stays on its own runtime's connection.
-    **Settings → Town & views → Town buildings → One per runtime** gives each
-    runtime its own building again (**One per machine** is the default).
+    **Settings → This World → Group runtimes → One per runtime** gives each
+    runtime its own building again (**One per machine** is the default); the
+    same setting groups World's navigator and Desk (`web/src/world/runtimeGrouping.ts`).
     Two Herdr TUI connections to the same socket (the startup default and a
     saved profile) show its rooms once, through the writable one.
   - The Town board counts the whole town, every building, in four one-word

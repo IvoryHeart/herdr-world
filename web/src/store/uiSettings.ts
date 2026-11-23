@@ -10,6 +10,11 @@ import {
   adoptTownReceptionFilter,
   connectTownReceptionFilter,
 } from "../world/town/townReceptionSetting";
+import {
+  RUNTIME_GROUPING_SETTING_KEY,
+  adoptRuntimeGrouping,
+  connectRuntimeGrouping,
+} from "../world/runtimeGrouping";
 
 /**
  * Reads interface preferences from the World service and installs their write
@@ -59,6 +64,25 @@ async function hydrateUiSettings() {
         ? ui[TOWN_RECEPTION_SETTING_KEY]
         : latestReceptionPush,
     );
+    connectRuntimeGrouping(async (value, options) => {
+      const answer = await bridge.call("bridge.ui_settings.update", {
+        key: RUNTIME_GROUPING_SETTING_KEY,
+        value,
+        ...(options?.onlyIfAbsent ? { only_if_absent: true } : {}),
+      });
+      return {
+        value: answer?.value,
+        revision:
+          typeof answer?.revision === "number" ? answer.revision : undefined,
+      };
+    });
+    // Ordered by the service's revision against pushes that arrived first
+    // (world/runtimeGrouping.ts). Adopting a missing value may offer this
+    // browser's older Town choice, so the write path is installed first.
+    adoptRuntimeGrouping(
+      ui[RUNTIME_GROUPING_SETTING_KEY],
+      typeof result?.revision === "number" ? result.revision : undefined,
+    );
   } catch {
     // Either the call lost a race with socket setup, or the service predates
     // the RPC. Clear the flag so the next trigger retries; the browser cache
@@ -76,9 +100,14 @@ export function installUiSettings(): void {
       uiSettingsHydrated = false;
       disconnectShortcutPreferences();
       connectTownReceptionFilter(null);
+      connectRuntimeGrouping(null);
     }
   });
   bridge.onUiSetting((push) => {
+    if (push.key === RUNTIME_GROUPING_SETTING_KEY) {
+      adoptRuntimeGrouping(push.value, push.revision);
+      return;
+    }
     if (push.key === TOWN_RECEPTION_SETTING_KEY) {
       receptionPushVersion += 1;
       latestReceptionPush = push.value;

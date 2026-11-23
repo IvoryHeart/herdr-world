@@ -35,12 +35,21 @@ test("a shell-launched Codex shows core's real status, including a missing repor
       agent: "codex",
       agent_status: "working",
     });
+    // Codex's own start: working for a moment, then idle with nothing to
+    // review (#1310). Core counts a turn; World shows it ready.
     w.fake.report(address, { app: "codex", state: "idle" });
+    expect(await status()).toMatchObject({
+      agent: "codex",
+      agent_status: "idle",
+    });
+    // A real turn ends with done and stays done until someone sees it.
+    w.fake.report(address, { app: "codex", state: "working" });
+    w.fake.report(address, { app: "codex", state: "done" });
     expect(await status()).toMatchObject({
       agent: "codex",
       agent_status: "done",
     });
-    w.fake.label(address, { "herdr.seen": "1" });
+    w.fake.label(address, { "herdr.seen": "2" });
     expect(await status()).toMatchObject({
       agent: "codex",
       agent_status: "idle",

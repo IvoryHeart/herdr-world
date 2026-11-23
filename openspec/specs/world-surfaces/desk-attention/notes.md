@@ -14,6 +14,7 @@
 - `web/src/world/useReviewedWork.ts`
 - `web/src/world/useReviewedWork.test.ts`
 - `web/src/world/DeskView.tsx`
+- `web/src/world/DeskOtherHosts.tsx`
 - `web/src/world/handoffs.ts`
 - `server/src/world/desk-watches.ts`
 - `server/src/rpc/desk.ts`

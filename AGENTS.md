@@ -10,6 +10,7 @@
 - Scan committed additions with `bun run check:privacy` before any push. Never copy material from `.agents/` into tracked paths without that scan; keep owner-only research in gitignored `research-local/`. CI checks every branch push and PR even when local hooks are skipped.
 - Local-first, trusted-single-user: LAN binding, authentication, uploads, shell/terminal operations and update installation are security-sensitive.
 - Storage catalog rule: changes that add or alter persisted data (a table, data-folder file, browser storage key or Board document field) must list it in `server/src/storage/catalog.ts` with its owner, identity and limit; prefer an existing store; a new table or data file needs the owner's approval in the mandate; never automatically trim user data.
+- World is one unified object. It is derived from the sources of record (the runtimes, git, harness files, deployments, integrations, World's own stores and any other files it reads) and given to the views (Town, Desk, Board, Spaces, CLI) to display. A change made in any view goes through World to its source of record, and a change at a source reaches every view through World. Views never keep their own copy of World state, never derive the same fact (a name, colour, room, grouping) in their own code, and never write to a runtime or store around World. New state joins the World object and its source of record, not a view. A fix that works in one view only is not a fix.
 - Qualify downstream operations by immutable connection ID and runtime generation; never fall back to another connection.
 - Aggregate observation is bounded and read-only; failed-host cached topology is stale and non-actionable.
 - Keep the browser on one World origin; never restore bridge Host, Origin or cross-origin CSP configuration. Sole exception: IDE pages may frame VS Code's webview origin (`https://*.vscode-cdn.net`).
@@ -64,6 +65,7 @@ Review that PR normally; never push to main. Keep one coherent change as directi
 Install: `bun install --frozen-lockfile`; hooks: `bun run install-hooks` once per clone.
 Tests sit beside source: `bun run test <path>`; direct `bun test` refuses.
 `bun scripts/affected.ts origin/main` lists branch impact.
+`bun run check:dead` reports production-only unused code (new findings fail) and largest copied blocks (report only) in `.agents/dead-code/`; place test support in `testing/` or `*.{fixture,cases,browserMock}.*` (development-only entries), move renamed nonstandard test helpers there, and mark intentional test-seam exports in production code `/** @internal */`; never pad the baseline, and commit automatically pruned `scripts/dead-code-baseline.json` entries with their fixes before pushing.
 Browser suites need Chrome/Chromium (`CHROME_BIN`) and queue machine-wide.
 Use one preview per worktree, with its own port/data folder and synthetic Herdr session: [recipe](docs/development.md#isolated-worktree-preview).
 Pre-push runs static checks and affected non-browser units; browser/behavioural acceptance runs in CI. `check:delivery` or `HERDR_WORLD_PREPUSH=full` runs all local lanes.

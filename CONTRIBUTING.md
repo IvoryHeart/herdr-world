@@ -160,8 +160,10 @@ credentials and synthetic home usernames; changing it requires review. There
 is one narrow attribution rule: `DEPENDENCY_LICENSES.md` may reuse exact public
 email addresses already published in that file on `origin/main` before the push, preserving
 upstream licence attribution across dependency refreshes. New addresses require
-a reviewed allowlist change. All other privacy rules still apply there, and the
-same emails remain disallowed elsewhere. Package versions such as
+a reviewed allowlist change. The owner-approved Knip copyright exception in that
+allowlist permits one exact upstream address only in `DEPENDENCY_LICENSES.md`.
+All other privacy rules still apply there, and the same emails remain disallowed
+elsewhere. Package versions such as
 `react-dom@19.3.1.patch` are not emails. There are no whole-file exclusions or
 inline bypasses. Keep credentials, runtime state,
 `*.local.md` notes and owner-only material in gitignored paths; `research-local/`

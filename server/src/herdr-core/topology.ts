@@ -30,7 +30,12 @@ import {
   SPAWNED_BY_TERMINAL_TOKEN,
   SPAWNED_BY_TOKEN,
 } from "../../../shared/relations";
-import { coreTurn, isFavourite, sharedSeen } from "./shared-state";
+import {
+  coreTurn,
+  isFavourite,
+  sharedSeen,
+  waitsWithoutResult,
+} from "./shared-state";
 
 /**
  * World's read model of one core: the same rows the TUI runtime lists, so
@@ -142,6 +147,10 @@ export class CoreFirstSight {
  * needs you; working is working; otherwise done when the turn is above the
  * shared `herdr.seen`, else idle. Without a shared seen, World's own first
  * sight stands in for it. No word at all is unknown: core never guesses.
+ * One exception: a harness that says `done` when a turn has a result and
+ * now says idle has none (`waitsWithoutResult`). Codex's start ends a turn
+ * that way, and a desk World just started (`herdr.seen=0`) is idle, ready
+ * for its first message, not done.
  */
 export function coreAgentStatus(
   record: CoreMirrorTerminal,
@@ -151,6 +160,7 @@ export function coreAgentStatus(
   if (!word) return "unknown";
   if (word === "working") return "working";
   if (word === "blocked" || word === "error") return "blocked";
+  if (waitsWithoutResult(record)) return "idle";
   const turn = coreTurn(record);
   const seen = sharedSeen(record) ?? firstSight ?? turn;
   return turn > seen ? "done" : "idle";
