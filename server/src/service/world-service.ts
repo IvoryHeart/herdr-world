@@ -73,6 +73,7 @@ import { startSettingsFocus } from "../world/focus";
 import { profileRuntimeConfig } from "./profile-runtime-config";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
+import { ownerAlertConnection } from "../world/owner-alert-connection";
 import { createWorldAskPeers } from "./world-ask-peers";
 import { createAssistantLoader } from "./assistant-loader";
 import { memoryKey } from "../features/memory/register";
@@ -247,11 +248,18 @@ async function compose(
     publish: publishBoardChanged,
     sources: () => ({ connectionManager, coreControl: coreRpc }),
   });
+  // herdr-core has no toasts: alert through a Herdr connection (#1156).
+  const ownerAlert = () =>
+    ownerAlertConnection(
+      connectionManager.list(),
+      connectionManager.defaultId(),
+      connectionProfiles.profilesById(),
+    );
   const askPeers = createWorldAskPeers({
     titleSuffix: async () => (await settings.read()).title_suffix,
     profiles: () => connectionProfiles.profilesById(),
     coreIds: () => connectionProfiles.coreList().map((entry) => entry.id),
-    defaultId: () => connectionManager.defaultId(),
+    alertConnectionId: () => ownerAlert(),
     ledger: () => storage.ledger(),
   });
   const worldCli = createWorldCliService({
@@ -259,6 +267,7 @@ async function compose(
     peers: askPeers.peers,
     homeName: askPeers.homeName,
     askRuntimes: askPeers.askRuntimes,
+    ownerAlertConnection: ownerAlert,
     memory: () => features!.get(memoryKey),
     core: () => coreCallers,
     board,

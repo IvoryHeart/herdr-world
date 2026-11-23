@@ -40,6 +40,20 @@ new MutationObserver((records) => {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
 
 async function run() {
+  // Headless Chrome can deliver its startup resize after this classic script
+  // runs. A menu opened while the document is loading correctly closes on that
+  // resize (#1259); begin the user interaction after load and its first paint.
+  if (document.readyState !== "complete")
+    await new Promise<void>((resolve) =>
+      window.addEventListener("load", () => resolve(), { once: true }),
+    );
+  await new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  );
+  check(
+    document.readyState === "complete",
+    "user interactions must start after document startup",
+  );
   const root = createRoot(document.getElementById("root")!);
   flushSync(() =>
     root.render(
@@ -152,6 +166,12 @@ async function run() {
     document.activeElement === trigger,
     "Escape must restore trigger focus",
   );
+
+  trigger.click();
+  await settle();
+  window.dispatchEvent(new Event("resize"));
+  await settle();
+  check(!document.querySelector('[role="menu"]'), "resize must close the menu");
 
   document.getElementById("root")!.style.cssText =
     "position:fixed;right:8px;bottom:8px";
