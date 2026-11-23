@@ -19,10 +19,6 @@
 - `server/src/herdr-core/headless-chat.test.ts`
 - `server/src/herdr-core/harness.ts`
 - `server/src/herdr-core/history.test.ts`
-- `server/src/herdr-core/shared-state.ts` (`waitsWithoutResult`: started-harness readiness)
-- `server/src/herdr-core/harness-start.test.ts`
-- `server/src/herdr-core/testing/capture-harness-start.ts`
-- `server/src/herdr-core/testing/recorded/core-0.1.21-harness-start.json`
 - `server/src/herdr-core/`
 
 **Pitfalls:**
@@ -206,16 +202,6 @@ no control for it. Platform and harness limits apply across the table.
   limitation needs a fix in the runtime or harness. Linux core **0.1.21** with
   Codex **0.167.0** can publish idle/working; the missing-report case is not
   a general Linux status-mapping restriction in World.
-- **Started agents show ready:** Codex reports working for a moment while it
-  starts, so core counts a turn before anyone asked it anything, and World's
-  launch sets `herdr.seen=0`. Claude Code and Codex end a turn that has a
-  result with `done`, so World shows them **idle** whenever they say idle,
-  and pushes no finished alert for that turn. Other harnesses keep Herdr's
-  rule (idle above seen is done). A World page looking at the desk raises
-  `herdr.seen`, which is why older builds only sometimes showed `done`. To
-  re-record with a new core or harness:
-  `HERDR_CORE_BIN=<herdr-core> bun server/src/herdr-core/testing/capture-harness-start.ts <out.json>`
-  (scratch core and harness config; it copies only the sign-in files).
 - **Terminal size:** watching never sends a resize. An open core Terminal tab
   also holds an interactive viewer: it fits the terminal only when no Herdr
   app pane holds it. Typing takes the size by core's rule; using an app pane
