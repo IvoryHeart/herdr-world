@@ -19,6 +19,7 @@ Every World screen answers this too: press ? beside the views (on a phone, the v
 - [Focus for a while](#town-focus)
 - [Apartments: finished agents](#town-apartments)
 - [Quiet agents](#town-quiet)
+- [Which runtime a room runs on](#town-runtimes)
 - [Your VS Code in World](#code-project)
 - [What can I do here?](#world-help)
 - [Hosts on a phone](#world-phone-hosts)
@@ -139,6 +140,20 @@ A working agent whose session has not moved for 10 minutes gets an hourglass wit
 4. Change how long in Settings, Quiet working agents, or turn it off.
 
 Where: Town board, under Busy, while an agent is quiet. Since 0.3.6.
+
+<a id="town-runtimes"></a>
+
+### Which runtime a room runs on
+
+![Which runtime a room runs on](../web/public/help/town.runtimes.desktop.light.webp)
+
+When one building holds rooms of both runtimes, a small icon before each room's name tells them apart: a terminal window for the Herdr TUI, a diamond for herdr-core.
+
+1. Zoom into a building until the rooms' name plates show.
+2. Point at the icon before a room's name, or tap it on a phone, to read its runtime.
+3. Buildings with one runtime show no icon.
+
+Where: Town, before a room's name on its plate and its card. Since 0.3.6.
 
 ## Board
 

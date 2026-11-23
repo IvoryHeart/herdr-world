@@ -288,10 +288,17 @@ async function compose(
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
   });
+  // The bin is made below; a core runtime seen before then holds nothing.
+  const binCore: {
+    generation?(connectionId: string, generation: number): void;
+  } = {};
   const { core, rpc: coreRpc } = composeCore({
     logger: logger.child("connections"),
     changed: publishConnectionsChanged,
-    observed: publishWorldInvalidation,
+    observed: (connectionId, generation) => {
+      binCore.generation?.(connectionId, generation);
+      publishWorldInvalidation(connectionId, generation);
+    },
     profiles: () => connectionProfiles,
     topology: storage.coreTopology,
     // Its pages are always this service's sockets.
@@ -313,9 +320,12 @@ async function compose(
     connections: () => connectionManager,
     publish: revisionPublisher("world_bin_changed", "world-bin"),
     log: (message) => logger.warn(message),
+    info: (message) => logger.info(message),
     retiring: (entries) =>
       features!.get(apartmentsKey).apartments.retire(entries),
   });
+  binCore.generation = (connectionId, generation) =>
+    bin.registry.retireConnectionGeneration(connectionId, generation);
   void bin.start();
   const {
     observe: observeHost,
@@ -484,10 +494,13 @@ async function compose(
             observeHost(id, generation, panes, at, agents);
           worldUsage?.activity.observeFresh(id, generation, panes, at, agents);
         })(...args),
-    (...args) =>
+    (...args) => {
+      // Both runtimes: a held agent that ended by itself leaves the bin.
+      bin.registry.observeComplete(...args);
       features!
         .get(apartmentsKey)
-        .complete(ownedBy(connectionManager, observeTerminalSettings))(...args),
+        .complete(ownedBy(connectionManager, observeTerminalSettings))(...args);
+    },
     serviceIncarnation,
   );
 

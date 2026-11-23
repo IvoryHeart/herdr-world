@@ -132,6 +132,15 @@
       "town.quiet.phone.dark.webp"
     ]
   },
+  "town.runtimes": {
+    "fingerprint": "3501e027f6c42d66",
+    "files": [
+      "town.runtimes.desktop.light.webp",
+      "town.runtimes.desktop.dark.webp",
+      "town.runtimes.phone.light.webp",
+      "town.runtimes.phone.dark.webp"
+    ]
+  },
   "town.zoom": {
     "fingerprint": "687dc22c82c9cd4a",
     "files": [

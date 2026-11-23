@@ -65,6 +65,7 @@ Review that PR normally; never push to main. Keep one coherent change as directi
 Install: `bun install --frozen-lockfile`; hooks: `bun run install-hooks` once per clone.
 Tests sit beside source: `bun run test <path>`; direct `bun test` refuses.
 `bun scripts/affected.ts origin/main` lists branch impact.
+`bun run check:dead` reports production-only unused code (new findings fail) and largest copied blocks (report only) in `.agents/dead-code/`; place test support in `testing/` or `*.{fixture,cases,browserMock}.*` (development-only entries), move renamed nonstandard test helpers there, and mark intentional test-seam exports in production code `/** @internal */`; never pad the baseline, and commit automatically pruned `scripts/dead-code-baseline.json` entries with their fixes before pushing.
 Browser suites need Chrome/Chromium (`CHROME_BIN`) and queue machine-wide.
 Use one preview per worktree, with its own port/data folder and synthetic Herdr session: [recipe](docs/development.md#isolated-worktree-preview).
 Pre-push runs static checks and affected non-browser units; browser/behavioural acceptance runs in CI. `check:delivery` or `HERDR_WORLD_PREPUSH=full` runs all local lanes.
