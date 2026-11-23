@@ -75,6 +75,23 @@ export function isInstallationInput(path: string): boolean {
 const WORLD_RUNTIME =
   /^(?:web\/src\/world\/|server\/src\/(?:world|connections|bridge)\/|server\/src\/index\.ts$|web\/src\/(?:store(?:\/|\.ts$)|api\.ts$|worldSnapshotDecode\.ts$)|shared\/world)/;
 
+/** Runtime directory scans have no import edges from their guarded inputs. */
+const STRUCTURE_CHECKS = [
+  [
+    /^openspec\//,
+    [
+      "scripts/openspec-feature-map.test.ts",
+      "scripts/check-knowledge-map.test.ts",
+      "scripts/check-knowledge-map-links.test.ts",
+      "scripts/pages-features.test.ts",
+    ],
+  ],
+  [
+    /^(?:(?:web\/src\/|server\/src\/(?:world|features|shipyard)\/).*\.tsx?$|openspec\/specs\/world-storage\/notes\.md$)/,
+    ["server/src/storage/catalog.test.ts"],
+  ],
+] as const;
+
 // Native jobs are the authority for their explicitly named test consumers.
 // Derive these paths so adding a native test cannot leave scoped PR CI skipping it.
 const nativeTestConsumers = new Set<string>();
@@ -185,6 +202,14 @@ export function selectValidation(
         : tests.unit;
   if (!full && paths.some((path) => isCoveragePath(path) || owns(path)))
     chosen.push("scripts/verification-coverage.test.ts");
+  // Use the complete PR even when a local push narrows affected units.
+  for (const [inputs, checks] of STRUCTURE_CHECKS)
+    if ([...paths, ...testPaths].some((path) => inputs.test(path)))
+      chosen.push(
+        ...checks.filter(
+          (path) => graph.files.has(path) && !graph.gone.has(path),
+        ),
+      );
   const browserPlanPaths = [
     "scripts/world-browser-suites.ts",
     "scripts/world-browser-timings.json",

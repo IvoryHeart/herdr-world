@@ -90,6 +90,55 @@ const graph: Graph = {
   ]),
 };
 
+const openspecChecks = [
+  "scripts/openspec-feature-map.test.ts",
+  "scripts/check-knowledge-map.test.ts",
+  "scripts/check-knowledge-map-links.test.ts",
+  "scripts/pages-features.test.ts",
+];
+const catalogCheck = "server/src/storage/catalog.test.ts";
+
+test.each([
+  "openspec/changes/example/specs/world-surfaces/town/spec.md",
+  "openspec/specs/world-surfaces/town/notes.md",
+  "openspec/changes/archive/example/tasks.md",
+  "openspec/config.yaml",
+])(
+  "OpenSpec-only diff %s selects structure checks in CI and pre-push",
+  (path) => {
+    const known = {
+      ...graph,
+      files: new Set([...graph.files, path, ...openspecChecks]),
+    };
+    // Local pushes may narrow units to changes since the preceding push.
+    for (const testPaths of [[path], []]) {
+      const selection = selectValidation(known, [path], () => false, testPaths);
+      expect(selection).toMatchObject({ full: false, documentation: false });
+      expect(selection.unit).toEqual([...openspecChecks].sort());
+      expect(selectedCITests(selection, "unit")).toEqual(selection.unit);
+    }
+  },
+);
+
+test.each([
+  "web/src/example.ts",
+  "server/src/world/example.ts",
+  "server/src/features/example.ts",
+  "server/src/shipyard/example.ts",
+  "openspec/specs/world-storage/notes.md",
+])("catalog scan input %s selects its guard beyond imports", (path) => {
+  const known = {
+    ...graph,
+    files: new Set([...graph.files, path, catalogCheck]),
+    deps: new Map([...graph.deps, [unit, new Set([path])]]),
+  };
+  for (const testPaths of [[path], []]) {
+    const selection = selectValidation(known, [path], () => false, testPaths);
+    expect(selection.full).toBe(false);
+    expect(selection.unit).toContain(catalogCheck);
+  }
+});
+
 test("installation inputs require the native job containing systemd acceptance", () => {
   for (const path of [
     "scripts/install-herdr-world.sh",

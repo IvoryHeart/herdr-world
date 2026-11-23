@@ -109,6 +109,13 @@ Main pushes and explicit full local gates always run everything.
 
 ### Shared suite plan and sharding
 
+Any `openspec/` change selects the feature-map, notes/link and feature-reference
+tests in CI and pre-push, including delta-only edits and incremental pushes.
+Strict OpenSpec validation and capability-notes link checks run in the static lane.
+Catalog checks are selected for browser sources, scanned server memory-store
+directories and storage notes, whose runtime scans have no import edges.
+Help and file-size checks already run for every static selection.
+
 `validation-scope.ts` applies the affected import graph to the complete PR; unknown
 paths, workflow/gate policy and configuration select every suite. A full-gate
 incremental delta also escalates all suite families, including World,
