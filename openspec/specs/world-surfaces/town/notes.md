@@ -44,7 +44,7 @@
 
 - `web/src/world/town/TownCanvas.test.ts`
 - `web/src/world/town/TownCanvas.fold.test.ts`
-- `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases)
+- `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases); town center ring: `web/src/world/town/townCenterBuildings.dom.test.ts`
 - `web/src/world/town/townReceptionFilter.test.ts`
 - `web/src/world/town/townQuietWork.test.ts`
 
