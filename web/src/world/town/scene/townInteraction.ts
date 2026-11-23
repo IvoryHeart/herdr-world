@@ -737,7 +737,12 @@ export class TownInteraction {
         this.tap(effect.target);
         return;
       case "doubleTap": {
-        if (effect.target.nameOnly) return;
+        // A plaque's name is its card's switch, however fast the presses
+        // come: a quick second click or tap closes the card it opened.
+        if (effect.target.nameOnly) {
+          this.tap(effect.target);
+          return;
+        }
         const hit = effect.target.hit;
         const key = townHitKey(hit);
         if (

@@ -254,7 +254,7 @@
 }
 
 .town-world[data-level="overview"]
-  .town-room-overview:is(.is-open, :has(.town-room-card:hover))
+  .town-room-overview:is(.is-open, :has(.town-room-card-frame:hover))
   .town-room-overview-card {
   opacity: 1;
   visibility: visible;

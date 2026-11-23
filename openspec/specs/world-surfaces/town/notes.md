@@ -36,7 +36,7 @@
 - `web/src/world/town/townRendererActors.ts`
 - `web/src/world/town/TownWorldLayer.tsx`
 - `web/src/world/town/TownStepBubble.tsx`
-- `web/src/world/town/TownBoard.tsx`; plaques: `web/src/world/town/TownRoomPlaque.tsx`, `web/src/world/town/townPlaqueCard.ts` (one open card); runtime icons: `web/src/world/town/TownRuntimeIcon.tsx`, `web/src/world/town/townMoveMenu.ts` (menu words)
+- `web/src/world/town/TownBoard.tsx`; plaques: `web/src/world/town/TownRoomPlaque.tsx`, `web/src/world/town/townPlaqueCard.ts` (one open card); runtime icons: `web/src/world/town/TownRuntimeIcon.tsx`, `web/src/world/town/TownRoomOverviewCard.tsx` (a room's overview card, its icon a press of its own), `web/src/world/town/townMoveMenu.ts` (menu words)
 - `web/src/world/town/townLayout.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
 - `server/src/world/observability.ts`
 

@@ -1319,11 +1319,26 @@ test("a room's name carries the room: dragged, or held by a touch; a tap is the 
   t.lift(down("touch"), name);
   expect(t.log.filter(([kind]) => kind === "plaqueCard")).toHaveLength(2);
   t.time.advance(1000);
+  // Two quick presses are two switches, not a double tap: the second closes
+  // the card the first opened, by mouse and by touch.
+  for (const pointerType of ["mouse", "touch"]) {
+    const before = t.log.filter(([kind]) => kind === "plaqueCard").length;
+    t.lift(down(pointerType), name);
+    t.time.advance(200);
+    t.lift(down(pointerType), name);
+    expect(t.log.filter(([kind]) => kind === "plaqueCard")).toHaveLength(
+      before + 2,
+    );
+    expect(t.log.some(([kind]) => kind === "room" || kind === "activate")).toBe(
+      false,
+    );
+    t.time.advance(1000);
+  }
   // A drag from the name carries the room and opens no card.
   const dragged = down("mouse");
   t.moveTo(dragged, offset(name, 40));
   t.lift(dragged, offset(name, 40));
-  expect(t.log.filter(([kind]) => kind === "plaqueCard")).toHaveLength(2);
+  expect(t.log.filter(([kind]) => kind === "plaqueCard")).toHaveLength(6);
   t.time.advance(1000);
   // A touch held still lifts the room.
   const touch = down("touch");

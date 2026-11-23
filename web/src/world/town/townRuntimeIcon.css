@@ -73,8 +73,36 @@
   vertical-align: -2px;
 }
 
-/* On a room's overview card, the icon leads its name. */
-.town-room-card .town-runtime-mark .town-runtime-tip {
+/* On a room's overview card, the icon leads its name: it stands in the card's
+   frame over the card's slot (town.css), not inside the card's button, so its
+   press stays its own. Centred on the slot: the card's 1px border and 7px
+   padding plus half the 10px slot across; its 2px top border and 2px padding
+   plus half the 13px name row down. Shown with the card (town.css). */
+.town-room-card-frame > .town-room-card-runtime {
+  position: absolute;
+  left: 13px;
+  top: 10.5px;
+  width: 16px;
+  height: 16px;
+  background: none;
+  border: 0;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s;
+}
+
+.town-room-card-runtime .town-runtime-tip {
   font-size: 9px;
   line-height: 12px;
+}
+
+@media (pointer: coarse) {
+  .town-room-card-frame > .town-room-card-runtime {
+    width: 24px;
+    height: 24px;
+  }
 }

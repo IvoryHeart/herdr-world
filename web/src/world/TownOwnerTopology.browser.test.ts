@@ -410,6 +410,45 @@ test.skipIf(!chrome)(
         }
         for (let attempt = 0; attempt < 6; attempt++) {
           const now = await level();
+          if (now === "overview") {
+            // The card's runtime icon is its own control: a tap names the
+            // runtime and zooms nowhere, and the keyboard reaches it.
+            const frame = `${plaqueOf(label)}?.closest('.town-room')?.querySelector('.town-room-card-frame')`;
+            const icon = `${frame}?.querySelector('.town-room-card-runtime')`;
+            // One per machine, every room's building holds both runtimes.
+            if (mode === "machine" && !(await evaluate<boolean>(`!!(${icon})`)))
+              return "its card has no runtime icon";
+            const at = await centre(`(window.__runtimeIcon = ${icon} ?? null)`);
+            if (at) {
+              await click(at);
+              await frames();
+              const after = await evaluate<{
+                tapped: boolean;
+                shown: boolean;
+                focusable: boolean;
+                level: string;
+                flying: boolean;
+              }>(`(() => {
+                const icon = window.__runtimeIcon;
+                const renderer = window.__HERDR_TOWN_RENDERER__;
+                return {
+                  tapped: icon.isConnected && icon.classList.contains('is-shown'),
+                  shown: getComputedStyle(icon.querySelector('.town-runtime-tip')).visibility === 'visible',
+                  focusable: icon.tagName === 'BUTTON' && icon.tabIndex >= 0,
+                  level: renderer.level,
+                  flying: renderer.flying,
+                };
+              })()`);
+              if (
+                !after.tapped ||
+                !after.shown ||
+                !after.focusable ||
+                after.level !== "overview" ||
+                after.flying
+              )
+                return `a tap on its card's runtime icon: ${JSON.stringify(after)}`;
+            }
+          }
           if (now !== "desk") {
             const card = await centre(
               `${plaqueOf(label)}?.closest('.town-room')?.querySelector('.town-room-card')`,

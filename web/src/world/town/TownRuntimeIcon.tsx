@@ -49,17 +49,23 @@ export function TownRuntimeGlyph({
 }
 
 /**
- * A room's runtime beside its name on a plaque: the icon, which names the
- * runtime in words in a small tooltip on hover, keyboard focus or a tap.
- * Its press stays its own, so it never opens the plaque's card.
+ * A room's runtime beside its name, on its plaque or its overview card: the
+ * icon, which names the runtime in words in a small tooltip on hover,
+ * keyboard focus or a tap. Its press stays its own, so it never opens the
+ * plaque's card or zooms into the room.
  */
 export function TownRuntimeIcon({
   kind,
   tag,
+  size,
+  className,
 }: {
   kind: TownRuntimeKind;
   /** The runtime in words: "Herdr TUI", "herdr-core". */
   tag: string;
+  size?: number;
+  /** Where it stands (a room's overview card places it over its slot). */
+  className?: string;
 }) {
   const [tapped, setTapped] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,7 +78,7 @@ export function TownRuntimeIcon({
   return (
     <button
       type="button"
-      className={`town-runtime-icon${tapped ? " is-shown" : ""}`}
+      className={`town-runtime-icon${tapped ? " is-shown" : ""}${className ? ` ${className}` : ""}`}
       data-runtime={kind}
       aria-label={`Runtime: ${tag}`}
       {...helpAnchor("town.runtime")}
@@ -87,7 +93,7 @@ export function TownRuntimeIcon({
       }}
       onBlur={() => setTapped(false)}
     >
-      <TownRuntimeGlyph kind={kind} />
+      <TownRuntimeGlyph kind={kind} size={size} />
       <span className="town-runtime-tip" aria-hidden="true">
         {tag}
       </span>
@@ -96,28 +102,21 @@ export function TownRuntimeIcon({
 }
 
 /**
- * The runtime's mark where the icon cannot take a press of its own (a room's
- * overview card, a menu entry): it names the runtime on hover, and its words
- * stay in the accessible name.
+ * The runtime's mark where the icon cannot take a press of its own (a move
+ * menu's entry, itself a button): it names the runtime on hover, and its
+ * words stay in the accessible name.
  */
 export function TownRuntimeMark({
   kind,
   tag,
   size,
-  help = false,
 }: {
   kind: TownRuntimeKind;
   tag: string;
   size?: number;
-  /** Help's Try rings it, as the plaque's icon (a room's overview card). */
-  help?: boolean;
 }) {
   return (
-    <span
-      className="town-runtime-mark"
-      data-runtime={kind}
-      {...(help ? helpAnchor("town.runtime") : {})}
-    >
+    <span className="town-runtime-mark" data-runtime={kind}>
       <TownRuntimeGlyph kind={kind} size={size} />
       <span className="town-runtime-tip" aria-hidden="true">
         {tag}
