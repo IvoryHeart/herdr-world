@@ -216,36 +216,41 @@ export async function runTownGolden(options: {
       assets.set("/" + basename(output.path), output);
     if (options.update) await mkdir(goldenDirectory, { recursive: true });
     for (let run = 1; run <= runs; run++) {
-      const browser = Bun.spawn(
-        [
-          options.chrome,
-          "--headless=new",
-          "--remote-debugging-port=0",
-          "--remote-debugging-address=127.0.0.1",
-          "--enable-webgl",
-          ...SWIFTSHADER_FLAGS,
-          "--force-device-scale-factor=1",
-          "--force-color-profile=srgb",
-          "--disable-lcd-text",
-          "--font-render-hinting=none",
-          "--disable-background-networking",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(scratch, "profile-" + run)}`,
-          "about:blank",
-        ],
-        { stdout: "ignore", stderr: "pipe" },
-      );
-      let cdp: Cdp | undefined;
-      try {
-        cdp = await Cdp.connect(await endpoint(browser.stderr));
-        const version = await cdp.command("Browser.getVersion");
-        browserVersion = version.product;
-        if (!browserVersion.endsWith("/" + pin.version))
-          throw new Error(
-            `Use pinned Chrome ${pin.version}; received ${browserVersion}`,
-          );
-        for (const viewport of townGoldenCaptures) {
+      for (const [index, viewport] of townGoldenCaptures.entries()) {
+        // A fresh Chrome per capture: the GPU process keeps raster caches (Skia
+        // path masks and atlases) across pages and purges them on real-time
+        // timers, so a capture sharing a browser with earlier captures could
+        // draw an icon edge from another viewport's cached mask or a fresh one.
+        const profile = join(scratch, `profile-${run}-${index}`);
+        const browser = Bun.spawn(
+          [
+            options.chrome,
+            "--headless=new",
+            "--remote-debugging-port=0",
+            "--remote-debugging-address=127.0.0.1",
+            "--enable-webgl",
+            ...SWIFTSHADER_FLAGS,
+            "--force-device-scale-factor=1",
+            "--force-color-profile=srgb",
+            "--disable-lcd-text",
+            "--font-render-hinting=none",
+            "--disable-background-networking",
+            "--no-first-run",
+            "--no-default-browser-check",
+            `--user-data-dir=${profile}`,
+            "about:blank",
+          ],
+          { stdout: "ignore", stderr: "pipe" },
+        );
+        let cdp: Cdp | undefined;
+        try {
+          cdp = await Cdp.connect(await endpoint(browser.stderr));
+          const version = await cdp.command("Browser.getVersion");
+          browserVersion = version.product;
+          if (!browserVersion.endsWith("/" + pin.version))
+            throw new Error(
+              `Use pinned Chrome ${pin.version}; received ${browserVersion}`,
+            );
           const { targetId } = await cdp.command("Target.createTarget", {
             url: "about:blank",
           });
@@ -349,19 +354,16 @@ export async function runTownGolden(options: {
           } finally {
             await cdp.command("Target.closeTarget", { targetId });
           }
+        } finally {
+          cdp?.close();
+          browser.kill();
+          await browser.exited;
+          await rm(profile, { recursive: true, force: true });
         }
-        console.info(
-          `[town-golden] run ${run}/${runs}: ${townGoldenCaptures.length} captures`,
-        );
-      } finally {
-        cdp?.close();
-        browser.kill();
-        await browser.exited;
-        await rm(join(scratch, "profile-" + run), {
-          recursive: true,
-          force: true,
-        });
       }
+      console.info(
+        `[town-golden] run ${run}/${runs}: ${townGoldenCaptures.length} captures`,
+      );
     }
   } catch (error) {
     failures.push(error instanceof Error ? error.message : String(error));

@@ -83,6 +83,11 @@ The fixture fixes its random seed, wall clock, 16 ms frame clock, dark theme,
 WebGL initializes before mounting, then the production scene runs for 6,000 ms of
 test time after its first frame so actors, roofs, camera, textures and shaders
 settle before capture. CSS transitions and animations are disabled in this fixture.
+Town's DOM overlays keep their layout but stay unpainted until that checkpoint:
+they are compositor layers scaled by the camera's zoom, and Chrome keeps a
+layer's raster scale once that scale changes outside a CSS animation, so painting
+them while the camera settles left edges at whichever intermediate zoom the
+compositor happened to commit (one colour level apart between runs).
 All production scene/animation steps run. A fixture-only Pixi render wrapper
 rasterizes the first warm-up frame and the final checkpoint; intermediate GPU
 paints are batched. Receipts record scene steps and GPU paints, with at most two
@@ -110,8 +115,13 @@ TOWN_GOLDEN=1 TOWN_GOLDEN_RUNS=20 TOWN_GOLDEN_OUTPUT=.agents/town-golden-stabili
   bun run test scripts/town-golden.browser.test.ts
 ```
 
-`CHROME_BIN` must name the pinned browser. A run uses a fresh Chrome profile;
-each viewport gets a new page. The ordinary report captures five images once;
+`CHROME_BIN` must name the pinned browser. Every capture starts its own Chrome
+process with a fresh profile: a shared GPU process keeps Skia path caches between
+pages and purges them on real-time timers, so an icon edge could otherwise come
+from an earlier viewport's cached mask. The stored images come from four CPUs, as on the hosted
+runner: Chrome sizes its raster work by core count, and on a much larger machine
+one portrait icon-edge pixel differs every run. Run locally under
+`taskset -c 0-3` to match. The ordinary report captures five images once;
 stability mode allows at most twenty runs (100 captures). The five images total
 under 12 million pixels at DPR 1; ordinary CI has a 15-minute job ceiling. Ordinary test
 gates skip the opt-in visual test, while the comparison's unit tests stay required.

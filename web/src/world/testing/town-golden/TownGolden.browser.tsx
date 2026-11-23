@@ -158,6 +158,8 @@ async function prepare() {
   // Motion stays enabled. Fixed steps settle camera, roofs and walking actors;
   // elapsed simulation time is relative to the first production renderer frame.
   await clock.advance(6000);
+  // First paint of the DOM overlays, at the settled camera (install.ts).
+  document.documentElement.classList.remove("golden-settling");
   paints.pending();
   WebGLRenderer.prototype.render = originalPaint;
   const stats = window.__HERDR_TOWN_RENDERER__!;
