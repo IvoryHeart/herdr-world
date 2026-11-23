@@ -392,12 +392,22 @@ for (const host of hosts) {
     },
   });
 }
-function view(name: string) {
+async function view(name: string) {
   const select = document.querySelector<HTMLSelectElement>(
     '[aria-label="World view"]',
   )!;
   select.value = name;
   select.dispatchEvent(new Event("change", { bubbles: true }));
+  // Navigation updates the URL before React commits. Release held creation
+  // replies only once the destination view has rendered and run its effects.
+  await until(
+    () =>
+      document
+        .querySelector(".world-foundation-shell")
+        ?.getAttribute("data-view") === name &&
+      document.documentElement.getAttribute("data-world-view") === name,
+    `Committed ${name} view`,
+  );
 }
 function visiblePane(paneId: string) {
   return [
@@ -1061,8 +1071,7 @@ async function run() {
     `Add room created in ${String(roomCreate.params.cwd)}, not the chosen folder`,
   );
   for (const name of ["town", "desk", "board"]) {
-    view(name);
-    await settle();
+    await view(name);
     const beforeTab = created;
     await action("New tab");
     await createdInspector(beforeTab + 1);
@@ -1110,8 +1119,7 @@ async function run() {
       viewChangeCount + 1,
     "held creation dispatched before view change",
   );
-  view("board");
-  await settle();
+  await view("board");
   heldMutation = null;
   viewGate.resolve();
   await createdInspector(viewChangeCount + 1);
@@ -1151,8 +1159,7 @@ async function run() {
     lastCreated && !visiblePane(lastCreated.pane_id),
     "Late creation reopened an Inspector after explicit close",
   );
-  view("spaces");
-  await settle();
+  await view("spaces");
   const count = created;
   await store.createTab("a");
   await until(
@@ -1174,8 +1181,7 @@ async function run() {
     ["town", "spaces"],
   ] as const) {
     for (const kind of ["tab", "workspace"] as const) {
-      view(from);
-      await settle();
+      await view(from);
       await store.focusWorkspace("a");
       const gate = Promise.withResolvers<void>();
       heldMutation = gate.promise;
@@ -1191,8 +1197,7 @@ async function run() {
           calls.filter((call) => call.method === method).length > beforeCalls,
         `${from} ${kind} pending dispatch`,
       );
-      view(to);
-      await settle();
+      await view(to);
       const inspectorsBeforeCompletion = document.querySelectorAll(
         ".world-managed-window",
       ).length;
@@ -1215,8 +1220,7 @@ async function run() {
     }
   }
 
-  view("spaces");
-  await settle();
+  await view("spaces");
   const first = alpha.panes.find((pane) => pane.pane_id === "a-1-pane")!;
   const sibling = {
     ...first,
