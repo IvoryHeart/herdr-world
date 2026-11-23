@@ -233,8 +233,6 @@ export const rpcVerbs = [
   rpc("worktree.list", "read", "runtime"),
   rpc("worktree.open", "reconcilable", "runtime"),
   rpc("worktree.remove", "reconcilable", "runtime"),
-  rpc("world.appearance.patch", "reconcilable", "world"),
-  rpc("world.appearance.rename", "reconcilable", "world"),
   rpc("world.ask.answer", "reconcilable", "world"),
   rpc("world.ask.deliveries.get", "read", "world"),
   rpc("world.ask.delivery.close", "reconcilable", "world"),
@@ -524,10 +522,6 @@ export const rpcVerbs = [
   ),
   rpc("world.float.hide", "reconcilable", "world", object({ stream: text })),
   rpc("world.float.stop", "reconcilable", "world", object({ stream: text })),
-  rpc("world.desk.get", "read", "world"),
-  rpc("world.desk.observe", "reconcilable", "world"),
-  rpc("world.desk.open", "reconcilable", "world"),
-  rpc("world.desk.review", "reconcilable", "world"),
   rpc("world.focused.observe", "reconcilable", "world"),
   // World's skill per harness on the service's host; browser (operator) only.
   rpc(

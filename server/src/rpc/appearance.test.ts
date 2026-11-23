@@ -4,7 +4,18 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BoardStore } from "../world/board-store";
-import { handleAppearanceRpc } from "./appearance";
+import { composeFeatures } from "../features/compose";
+import { feature } from "../features/appearance/register";
+import { testFeatureKernel } from "../testing/features";
+
+const handleAppearanceRpc = (rpc: BridgeRpcContext) =>
+  composeFeatures(
+    testFeatureKernel({
+      connections: () => rpc.services.connectionManager,
+      appearanceRpc: rpc.services,
+    }),
+    [feature],
+  ).rpc.get(rpc.method)!(rpc);
 import type { BridgeRpcContext } from "./context";
 const roots: string[] = [];
 afterEach(() => {

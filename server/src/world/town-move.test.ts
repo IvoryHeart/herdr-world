@@ -14,7 +14,7 @@ import {
   type AppearanceFields,
 } from "../../../shared/appearance";
 import { tabCardKey } from "../../../shared/terminalColor";
-import { handleAppearanceRpc } from "../rpc/appearance";
+import { handleAppearanceRpc } from "../features/appearance/rpc";
 import type { BridgeRpcContext } from "../rpc/context";
 
 const directories: string[] = [];

@@ -16,7 +16,10 @@
 - `web/src/world/DeskView.tsx`
 - `web/src/world/handoffs.ts`
 - `server/src/world/desk-watches.ts`
-- `server/src/rpc/desk.ts`
+- `server/src/features/desk/register.ts` (RPCs and lifecycle)
+- `server/src/features/desk/service.ts` (early construction shared with mark recovery)
+- `server/src/features/desk/verbs.ts`
+- `server/src/features/desk/rpc.ts`
 - `server/src/storage/terminal-marks.ts`
 
 **Tests:**

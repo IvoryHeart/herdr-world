@@ -14,9 +14,11 @@
 - `shared/terminalColor.ts`
 - `web/src/world/TerminalAppearanceEditor.tsx`
 - `web/src/world/terminalColor.ts`
-- `server/src/rpc/appearance.ts`
+- `server/src/features/appearance/register.ts` (construction, RPCs and lifecycle)
+- `server/src/features/appearance/verbs.ts`
+- `server/src/features/appearance/rpc.ts`
 - `server/src/agent/terminal-settings.ts`
-- `server/src/agent/profile-service.ts`
+- `server/src/features/appearance/service.ts`
 
 **Tests:**
 

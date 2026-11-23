@@ -17,6 +17,14 @@ type Connections<T extends ConnectionRuntime> = Pick<
 /** Ports only: no listener, shutdown, authentication or default runtime authority. */
 export type FeatureKernel = Readonly<
   Pick<WorldServiceDeps, "clock" | "scheduler"> & {
+    desk: ReturnType<typeof import("./desk/service").createDesk>;
+    send: RpcServices["safeSend"];
+    deskMarks(): Pick<RpcServices, "persistentMarks">;
+    appearanceRpc: Pick<
+      RpcServices,
+      "board" | "publishBoardChanged" | "publishWorldInvalidation"
+    >;
+    createAppearance: typeof import("./appearance/service").createProfileServices;
     createUsage: typeof import("../service/usage-analytics").composeWorldUsage;
     createApartments: typeof import("./apartments/service").createApartmentsService;
     paths: Pick<WorldServiceDeps["paths"], "root">;
@@ -35,7 +43,7 @@ export type FeatureKernel = Readonly<
       >;
     };
     logger: RpcServices["logger"];
-    clients: Pick<RpcServices["clients"], "has">;
+    clients: Pick<RpcServices["clients"], "has" | typeof Symbol.iterator>;
     settings: WorldStorage["settings"];
     storage: Readonly<
       Omit<
@@ -71,8 +79,19 @@ export function featureKernel(
   observations: FeatureKernel["observations"],
   createUsage: FeatureKernel["createUsage"],
   createApartments: FeatureKernel["createApartments"],
+  desk: FeatureKernel["desk"],
+  createAppearance: FeatureKernel["createAppearance"],
 ): FeatureKernel {
   return Object.freeze({
+    createAppearance,
+    desk,
+    send: rpc.safeSend,
+    deskMarks: () => ({ persistentMarks: rpc.persistentMarks }),
+    appearanceRpc: {
+      board: rpc.board,
+      publishBoardChanged: rpc.publishBoardChanged,
+      publishWorldInvalidation: rpc.publishWorldInvalidation,
+    },
     createUsage,
     createApartments,
     paths: deps.paths,
@@ -108,6 +127,10 @@ export type StopPhase = "quiesce" | "drain" | "close";
 export type FeatureInstance<T = unknown> = {
   api: T;
   rpc: Readonly<Record<string, FeatureRpcHandler>>;
+  acquisition?: import("../service/clients").SocketOwner & {
+    reconcile(): void;
+    stop(): void;
+  };
   connectionStatus?(status: ConnectionStatus): void;
   listening?(port: number): void;
   stop?: Partial<Record<StopPhase, () => void | Promise<void>>>;

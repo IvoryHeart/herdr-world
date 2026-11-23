@@ -1,9 +1,19 @@
-import { validDeskIdentity } from "../../../shared/deskState";
-import { deskSessionFingerprint } from "../world/desk-observation";
-import type { BridgeRpcContext } from "./context";
+import { validDeskIdentity } from "../../../../shared/deskState";
+import { deskSessionFingerprint } from "../../world/desk-observation";
+import type { BridgeRpcContext, RpcServices } from "../../rpc/context";
+import type { FeatureKernel } from "../contract";
+
+type Context = Omit<BridgeRpcContext, "services"> & {
+  services: Pick<
+    RpcServices,
+    "worldDesk" | "publishDeskChanged" | "deskWatches" | "persistentMarks"
+  > & {
+    connectionManager: ReturnType<FeatureKernel["connections"]>;
+  };
+};
 
 /** Service-owned metadata only; this never sends input to an agent. */
-export async function handleDeskRpc(rpc: BridgeRpcContext): Promise<void> {
+export async function handleDeskRpc(rpc: Context): Promise<void> {
   const { id, method, params, sendReply, sendError } = rpc;
   if (method === "world.desk.observe") {
     try {

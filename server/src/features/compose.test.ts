@@ -194,6 +194,8 @@ test("missing and extra RPC handlers are refused", () => {
 test("every discovered feature implements exactly its registered RPC declarations", async () => {
   expect(serverFeatures.map((f) => String(f.id))).toEqual([
     "apartments",
+    "appearance",
+    "desk",
     "memory",
     "presence",
     "usage",

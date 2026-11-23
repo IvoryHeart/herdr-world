@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { BoardStore } from "./board-store";
-import { handleAppearanceRpc } from "../rpc/appearance";
+import { handleAppearanceRpc } from "../features/appearance/rpc";
 import type { BridgeRpcContext } from "../rpc/context";
 import {
   stopChrome,

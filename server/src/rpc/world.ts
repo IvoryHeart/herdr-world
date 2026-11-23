@@ -7,8 +7,6 @@ import {
   legacyAppearanceObservations,
   legacyAppearanceObservationOps,
 } from "../world/appearance-observation";
-import { handleAppearanceRpc } from "./appearance";
-import { handleDeskRpc } from "./desk";
 import { handleCoreWatchRpc } from "./core-watch";
 import { handleBinRpc } from "./bin";
 import { handleCoreRpc } from "./core";
@@ -87,8 +85,6 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   }
   if (method === "world.core.seen" || method === "world.core.favourite")
     return handleCoreSharedRpc(rpc);
-  if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
-  if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
   if (
     method === "world.core.watch" ||
     method === "world.core.unwatch" ||
