@@ -43,7 +43,8 @@ import { AgentState } from "../components/AgentMark";
 import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import type { WorldDeskStore } from "./deskStateStore";
 import type { DeskRevealResult } from "./deskReveal";
-import { DeskOtherHosts } from "./DeskOtherHosts";
+import { DeskOtherHosts, deskHostLabel } from "./DeskOtherHosts";
+import { useHostGroupOf } from "./useHostGroups";
 import { leafPinnedBy, useDeskPins } from "./useDeskPins";
 import { useGreetingAnchor } from "./townMasterGreeting";
 import {
@@ -248,6 +249,7 @@ export function DeskBoard({
 }) {
   // The Town Master's greeting opens at the summary on wide screens.
   const greetingAnchor = useGreetingAnchor();
+  const groupOf = useHostGroupOf();
   const now = useNow(10_000);
   const asks = useWorldAsks();
   const asking = useMemo(() => asksForWorld(asks, world), [asks, world]);
@@ -374,10 +376,7 @@ export function DeskBoard({
               ].map((leaf) => [leaf.id, { leaf }]),
             ).values(),
           ];
-  const hostLabel =
-    world.hosts.length === 1
-      ? world.hosts[0]?.label
-      : `${world.hosts.length} hosts`;
+  const hostLabel = deskHostLabel(world, groupOf);
   const oldestWait = needs[0]?.since ? formatSpan(now - needs[0].since) : null;
 
   const previewTimer = useRef<number | undefined>(undefined);
@@ -891,6 +890,7 @@ export function DeskBoard({
           world={aggregate ?? world}
           filtered={world}
           label={hostLabel}
+          groupOf={groupOf}
           pinned={pinned}
           onReveal={
             onReveal

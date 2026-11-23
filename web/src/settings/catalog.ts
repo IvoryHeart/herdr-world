@@ -9,4 +9,5 @@ import "../world/board/board.settings";
 import "../world/memory/memory.settings";
 import "./catalog/notifications.settings";
 import "../world/focus.settings";
+import "../world/runtimeGrouping.settings";
 import "./catalog/rest.settings";
