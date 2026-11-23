@@ -27,7 +27,7 @@
 - `web/src/world/town/townObservatory.test.ts`
 - `web/src/world/usage/UsageLens.browser.tsx`
 - `web/src/world/TownView.tsx`
-- `web/src/world/town/TownCanvas.tsx`
+- `web/src/world/town/TownCanvas.tsx`; town center: `web/src/world/town/TownCenterMenu.tsx`, `web/src/world/town/townCenterBuildings.ts`
 - `web/src/world/officePreferences.ts`
 - `web/src/browserStorage.ts`
 - `web/src/world/town/town.settings.tsx`
@@ -452,12 +452,19 @@
     preselecting the open room when it can start one there), **Town master**
     (the synced role holder from **Settings → Town master**, opened on Chat;
     a holder not in Town says so; with nobody assigned it opens **Sounds**),
-    **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
-    **New room** (disabled with the reason when no room can be created). With
-    no room open, New room asks for the **Destination host**, herdr-core hosts
-    included (`· herdr-core`); an empty core room name becomes "Room". Arrow
-    keys, Home and End move around the ring; Escape, a press outside, the
-    centre **✕** or **Back** on a phone closes it.
+    **Buildings**, **Focus** ("On" while one runs), **Summary**, **Lenses**,
+    **Profiles** and **New room** (disabled with the reason when no room can
+    be created). First-ring entries show no counts; those stay on the
+    buildings' signs. With no room open, New room asks for the **Destination
+    host**, herdr-core hosts included (`· herdr-core`); an empty core room name
+    becomes "Room". **Buildings** opens a second ring in place with every place
+    that opens now (Apartments, Library, Post office for Needs you,
+    Observatory, Warehouse; a folded phone sign still counts); choosing one
+    opens what its building opens (`townCenterBuildings.ts`, from the
+    `townPlaces.ts` registry). Its centre becomes **←** Back; Back, Escape or
+    **Back** on a phone return to the first ring with Buildings focused. Arrow
+    keys, Home and End move around either ring; Escape, a press outside, the
+    centre **✕** or **Back** on a phone closes the first ring.
   - **Lenses** colour the whole map by one fact, as strategy games' map
     overlays do, so you see at a glance where it is high or low. Turn one on
     from the town center's **Lenses** or with `L` (`Shift+L` steps back); the

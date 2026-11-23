@@ -67,6 +67,23 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     picture: { scene: "town", sizes: ["desktop"] },
   },
   {
+    id: "town.center",
+    title: "The town center's ring",
+    summary:
+      "Tap the town center to open a ring of actions around its doors: start an agent, talk to the Town master, focus, and more. Buildings opens a second ring with every place in Town.",
+    steps: [
+      "Tap the town center, or Tab to its plaque and press Enter.",
+      "Choose an action, or Buildings to see Town's places.",
+      "In Buildings, choose a place to open it, as tapping its building does.",
+      "Press the centre arrow or Escape to go back; Escape again closes the ring.",
+    ],
+    place: "town",
+    where: "Town, the domed building at the top of the town",
+    control: "town.center",
+    since: "0.3.6",
+    picture: { scene: "town", press: ['[data-help-opens~="town.center"]'] },
+  },
+  {
     id: "town.focus",
     title: "Focus for a while",
     summary:

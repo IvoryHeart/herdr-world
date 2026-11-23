@@ -201,6 +201,7 @@ export function TownCenterMenu({
         <div
           key={`track:${ringKey}`}
           className="town-center-track"
+          data-help="town.center"
           aria-hidden="true"
         />
         {/* Keyed by ring, so a ring's medallions open afresh. */}
@@ -297,7 +298,7 @@ export function TownCenterSign({
     <button
       type="button"
       className="town-center-sign"
-      data-help="town.center"
+      data-help-opens="town.center"
       style={{ left: at.x, top: at.y }}
       aria-haspopup="menu"
       aria-expanded={open}
