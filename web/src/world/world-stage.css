@@ -166,6 +166,14 @@ body:has(.app.zen) {
   min-height: 0;
   overflow: hidden;
 }
+/* Behind the welcome that asks for a connection, only to keep loaded Code
+   workbenches (#1262): out of the flow, unseen, unclickable. */
+.world-view-layout[inert] {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
 .world-view-stage {
   width: 100%;
   height: 100%;
@@ -173,6 +181,19 @@ body:has(.app.zen) {
   min-height: 0;
   overflow: auto;
   padding: 22px;
+}
+/* The Code view kept loaded behind another view (#1262): at its last size, so
+   VS Code keeps its layout, and neither seen nor clickable. */
+.world-code-keeper {
+  height: 100%;
+  min-height: 0;
+}
+.world-code-keeper[data-shown="false"] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 .world-selection-panel {
   position: relative;

@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   Blocks,
   Bot,
@@ -31,6 +31,11 @@ import {
   type IdeRefusal,
   pageIdeClient,
 } from "./ideClient";
+import {
+  ReloadedNote,
+  useKeptWorkbenches,
+  WorkbenchFrames,
+} from "./keptWorkbenches";
 import { IdeProviderList } from "./IdeProviders";
 import {
   IdeServerList,
@@ -164,9 +169,6 @@ export default function CodeView({
   // The IDE list (Enable, Disable, Connect): the way back from any failure.
   const [idesOpen, setIdesOpen] = useState(false);
   const running = runningIdeServers(ide.status);
-  // Ready workbenches shown this visit stay loaded while another project
-  // is in front, so switching back does not reload VS Code.
-  const [visited, setVisited] = useState<string[]>([]);
   const selectId = useId();
 
   const providers = ide.status?.providers ?? [];
@@ -208,12 +210,8 @@ export default function CodeView({
       : providers.find((entry) => entry.id === id && entry.needsSecurePage);
   const insecure = insecureFor(instance?.provider ?? provider?.id);
 
-  useEffect(() => {
-    if (instance?.state !== "ready") return;
-    setVisited((current) =>
-      current.includes(instance.id) ? current : [...current, instance.id],
-    );
-  }, [instance?.id, instance?.state]);
+  const showingFrame = instance?.state === "ready" && !insecure;
+  const kept = useKeptWorkbenches(instance, showingFrame, ide.status);
 
   const choose = (key: string) => {
     setChosen(key);
@@ -273,8 +271,9 @@ export default function CodeView({
 
   const stop = async (target: IdeInstance) => {
     try {
+      // The frame goes only once the status shows its server gone or
+      // failed: a failed stop leaves it running, its workbench loaded.
       ide.apply(await client.stop(target.id));
-      setVisited((current) => current.filter((id) => id !== target.id));
     } catch (cause) {
       setOpenError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -291,13 +290,12 @@ export default function CodeView({
         candidate.folder === entry.folder,
     );
 
-  const readyVisited = instances.filter(
+  const keptFrames = instances.filter(
     (entry) =>
-      entry.state === "ready" &&
-      visited.includes(entry.id) &&
+      entry.state !== "failed" &&
+      kept.visited.includes(entry.id) &&
       !insecureFor(entry.provider),
   );
-  const showingFrame = instance?.state === "ready" && !insecure;
 
   return (
     <div
@@ -491,17 +489,21 @@ export default function CodeView({
           </section>
         ) : null}
         <section className="code-view-stage" aria-label="IDE">
-          {readyVisited.map((entry) => (
-            <iframe
-              key={entry.id}
-              className="code-view-frame"
-              src={entry.url}
-              title={`${providerLabel(entry)} — ${displayFolder(entry.folder)}`}
-              hidden={entry.id !== instance?.id}
-              style={{ colorScheme: theme }}
-              allow="clipboard-read; clipboard-write"
+          <WorkbenchFrames
+            frames={keptFrames}
+            front={showingFrame ? instance.id : null}
+            title={(entry) =>
+              `${providerLabel(entry)} — ${displayFolder(entry.folder)}`
+            }
+            theme={theme}
+          />
+          {kept.reloaded && instance ? (
+            <ReloadedNote
+              why={kept.reloaded}
+              ide={providerLabel(instance)}
+              onClose={kept.dismiss}
             />
-          ))}
+          ) : null}
           {showingFrame ? null : (
             <div className="code-view-panel">{panel()}</div>
           )}
@@ -627,6 +629,12 @@ export default function CodeView({
           </p>
           {instance.reason ? (
             <p className="code-view-muted">{instance.reason}</p>
+          ) : null}
+          {kept.visited.includes(instance.id) ? (
+            <p className="code-view-muted">
+              Its open editors and unsaved changes stay as they are: VS Code
+              reconnects when World attaches again.
+            </p>
           ) : null}
           {project.stale ? (
             <p role="alert">

@@ -23,6 +23,7 @@ Navigation guidance only; OpenSpec ignores this file.
 **Tests:**
 
 - `web/src/world/code/CodeView.browser.test.ts`
+- `web/src/world/code/KeptCodeView.browser.test.ts`: kept loaded behind Town and Spaces.
 - `server/src/ide/ide-route.test.ts`
 - `server/src/ide/webview-origin.browser.test.ts`
 - `server/src/ide/remote.test.ts`
@@ -40,6 +41,8 @@ Navigation guidance only; OpenSpec ignores this file.
 - Never open a TCP port or a second origin; SSH uses OpenSSH socket forwards. Sole
   exception: IDE pages' frame rule admits VS Code's webview origin (`https://*.vscode-cdn.net`).
 - Never rewrite the IDE's files; the workbench page only gains a theme default.
+- Never unmount, move or `display:none` a loaded workbench frame: it reloads or
+  loses its size. `KeptCodeView.tsx` keeps Code mounted; hidden frames use `visibility`.
 
 **See also:** [research and gates](../../../docs/design/code-view/research.md),
 [webview origin decision](../../../docs/design/code-view/webview-origin.md).
@@ -136,13 +139,25 @@ installs or updates one, and nothing in Code opens an IDE on a desktop.
   VS Code's webview site).
   code-server's port proxies (`/proxy/<port>`, `/absproxy/<port>`) are off and
   World refuses them (403) for pages and WebSockets. **New tab** opens the same
-  address. Switching projects keeps a loaded workbench in memory, hidden. The
+  address. The
   first VS Code start on a host downloads VS Code's web server there, about a
   minute. VS Code retries a failed download without saying why; when World
   sees it retry, it stops waiting and says the download needs about 1 GB free
   in the home folder and access to update.code.visualstudio.com. A download
   still under way when World's three-minute wait ends says to open again in a
   minute. Either way the server keeps running until **Stop**.
+- **Kept loaded.** Once shown, a workbench stays loaded in the page while
+  another project, Town, Board, Desk or Spaces is in front, and while World
+  lets go of its server and reattaches (a reconnect or World restarting),
+  and behind the connection welcome after the last host is removed
+  (`WorldControlPlane.tsx` keeps the view layout mounted, hidden and inert):
+  open editors, unsaved edits, terminals, webviews and scroll stay as they
+  were, and VS Code reconnects on its own. Only reloading the page, a **Stop**
+  that ended the server (a failed Stop keeps it), or a server that ended or
+  failed loads it again, and then Code says so
+  (**This page reloaded, so <IDE> loaded again**). Each kept workbench holds
+  VS Code's page memory in the browser (a few hundred MB, more with
+  webviews), at most four with the server limit; there is no idle release.
 - **Lifetime.** An IDE server runs until you stop it, so builds, terminals,
   tasks and extensions in it keep going. Leaving Code, closing the browser,
   World stopping, restarting or updating, the SSH link dropping and the host
