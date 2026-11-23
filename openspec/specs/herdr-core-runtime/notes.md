@@ -19,6 +19,13 @@
 - `server/src/herdr-core/headless-chat.test.ts`
 - `server/src/herdr-core/harness.ts`
 - `server/src/herdr-core/history.test.ts`
+- `server/src/world/agent-move.ts`
+- `server/src/world/agent-move.test.ts`
+- `server/src/world/agent-move-sides.ts`
+- `server/src/world/move-settle.ts`
+- `server/src/world/agent-rehome.ts`
+- `server/src/rpc/agent-move.ts`
+- `shared/agentMove.ts`
 - `server/src/herdr-core/`
 
 **Pitfalls:**
@@ -179,6 +186,19 @@ no control for it. Platform and harness limits apply across the table.
   one may still be running instead of reporting a move: a lost start keeps the
   original and names the new one; a lost close that leaves the original
   unreadable keeps the new one and its desk.
+  Codex keeps one conversation open at a time, so a Codex agent closes first
+  and then resumes in the new room; if it doesn't start there it resumes back
+  in its own room, and if that fails too the message says which `codex
+  resume` command continues it. A Claude copy that reports a new
+  conversation instead of its own is closed and the move goes the same way.
+  Two connections that reach the same Herdr are one runtime: Move to…
+  doesn't offer the other's rooms as another runtime, and a move between them
+  is Herdr's own. A core desk moved to another core room keeps running and
+  keeps its Board colour, pin and links. Each move step is logged by the
+  service under `agent-move` (`move admit`, `move start`, `move recheck`,
+  `move rehome`, `move close`, `move outcome`), and a refused move's toast
+  shows the reason. A moved agent can't
+  move again for about 20 seconds ("still settling").
 - **Core agent environment (Unix):** New agent finds and starts the harness
   through the core host's `$SHELL` (`/bin/sh` when unset): interactive on Linux,
   login and interactive on macOS. Supported shells are sh, bash, zsh, dash,

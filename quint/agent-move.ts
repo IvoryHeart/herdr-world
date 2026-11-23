@@ -8,6 +8,7 @@ import {
   type MoveSide,
 } from "../server/src/world/agent-move";
 import { emptyBoardDocument } from "../server/src/world/board-store";
+import { createMoveSettle } from "../server/src/world/move-settle";
 import type { BoardOp } from "../server/src/world/board-types";
 import { observe } from "./observations";
 
@@ -46,6 +47,19 @@ export type MoveState = {
   envStart: string;
   envRehome: string;
   envClose: string;
+  harness: "resume" | "lock" | "fork";
+  route: "across" | "native";
+  closeFirst: boolean;
+  copyConv: boolean;
+  namesSaved: boolean;
+  resumeReply: string;
+  resumeTruth: boolean;
+  resumeCleanup: string;
+  resumeCleanupTruth: boolean;
+  backReply: string;
+  backTruth: boolean;
+  nativeReply: string;
+  again: string;
 };
 
 export const moveWitnesses = [
@@ -60,6 +74,12 @@ export const moveWitnesses = [
   "lostCloseUnread",
   "regenFenced",
   "cleanupNamed",
+  "forkClosedFirst",
+  "lockClosedFirst",
+  "resumedBack",
+  "savedNamed",
+  "nativeMoved",
+  "settleRefused",
 ] as const;
 export const moveMismatches = [
   "move.outcome",
@@ -67,6 +87,7 @@ export const moveMismatches = [
   "move.owners",
   "move.report",
   "move.fence",
+  "move.settle",
 ] as const;
 
 const fields: Record<string, "string" | "boolean" | "number" | "array"> = {
@@ -103,6 +124,19 @@ const fields: Record<string, "string" | "boolean" | "number" | "array"> = {
   envStart: "string",
   envRehome: "string",
   envClose: "string",
+  harness: "string",
+  route: "string",
+  closeFirst: "boolean",
+  copyConv: "boolean",
+  namesSaved: "boolean",
+  resumeReply: "string",
+  resumeTruth: "boolean",
+  resumeCleanup: "string",
+  resumeCleanupTruth: "boolean",
+  backReply: "string",
+  backTruth: "boolean",
+  nativeReply: "string",
+  again: "string",
 };
 
 /** Check a decoded ITF trace: every state a full move record, one scenario. */
@@ -122,12 +156,16 @@ export function validateMoveTrace(states: unknown): MoveState[] {
         `move.${name} malformed`,
       );
     assert(["tui-core", "core-tui"].includes(m.dir as string));
+    assert(["resume", "lock", "fork"].includes(m.harness as string));
+    assert(["across", "native"].includes(m.route as string));
     return m as unknown as MoveState;
   });
   for (const m of moves) {
     assert.equal(m.dir, moves[0]!.dir);
     assert.equal(m.shape, moves[0]!.shape);
     assert.equal(m.pinned, moves[0]!.pinned);
+    assert.equal(m.harness, moves[0]!.harness);
+    assert.equal(m.route, moves[0]!.route);
   }
   return moves;
 }
@@ -158,6 +196,12 @@ export function moveWitnessesOf(m: MoveState): string[] {
     seen.push("regenFenced");
   if (m.outcome === "refused" && m.namesCopy && m.copy)
     seen.push("cleanupNamed");
+  if (m.outcome === "moved" && m.closeFirst)
+    seen.push(m.harness === "fork" ? "forkClosedFirst" : "lockClosedFirst");
+  if (m.backReply === "ready") seen.push("resumedBack");
+  if (m.namesSaved) seen.push("savedNamed");
+  if (m.route === "native" && m.outcome === "moved") seen.push("nativeMoved");
+  if (m.again === "early") seen.push("settleRefused");
   return seen;
 }
 
@@ -173,8 +217,10 @@ export async function replayMove(
 ): Promise<string[]> {
   const m = trace.at(-1)!;
   assert.equal(m.pc, "done", "move trace did not settle");
-  const [sourceId, targetId] =
+  const [sourceId, otherId] =
     m.dir === "tui-core" ? ["tui", "core"] : ["core", "tui"];
+  // Native: a second view of the source's own runtime.
+  const targetId = m.route === "native" ? `${sourceId}-view` : otherId;
   const world = {
     src: m.shape,
     srcConn: "up",
@@ -182,6 +228,9 @@ export async function replayMove(
     alive: true,
     copy: false,
     desk: "src" as "src" | "dst",
+    copyConv: false,
+    // The copy started after a close-first close.
+    afterClose: false,
     closing: false,
     events: [] as string[],
   };
@@ -218,7 +267,7 @@ export async function replayMove(
     terminal_id: "term-1",
     tab_id: "w1:t1",
     workspace_id: "w1",
-    agent: "claude",
+    agent: m.harness === "lock" ? "codex" : "claude",
     agent_status: status,
     cwd: "/synthetic/project",
   });
@@ -245,7 +294,39 @@ export async function replayMove(
     session: async () => "session-1",
     shellBusy: async () => false,
     pinned: () => m.pinned,
-    start: async () => assert.fail("the source never starts"),
+    // Close-first resumes the agent back here when the new start fails.
+    async start() {
+      effects.push("resume");
+      fenced(world.srcConn);
+      if (m.backReply === "ready") {
+        world.alive = true;
+        return { tab_id: "w1:t9", pane_id: "p9", terminal_id: "term-9" };
+      }
+      if (m.backReply === "failed") return { message: "It did not resume." };
+      world.alive = m.backTruth;
+      throw new Error("The reply was lost.");
+    },
+    async moveDesk() {
+      effects.push("native");
+      if (m.nativeReply === "moved") {
+        world.desk = "dst";
+        return {
+          status: "moved",
+          tab_id: "w2:t1",
+          workspace_id: "w2",
+          panes: [{ previous: "p1", current: "p1" }],
+        };
+      }
+      if (m.nativeReply === "refused")
+        return { status: "refused", reason: "stale", message: "Refused." };
+      return {
+        status: "failed",
+        message: "It may have moved.",
+        rolled_back: m.nativeReply === "rolledBack",
+        topology_known: false,
+        topology: [],
+      };
+    },
     async close() {
       effects.push("close");
       outside(m.envClose);
@@ -263,43 +344,73 @@ export async function replayMove(
       if (m.closeReply === "lostEnded") world.alive = false;
       throw new Error("The reply was lost.");
     },
-    pin: async () => assert.fail("the source is never pinned"),
+    async pin() {
+      effects.push("pin");
+      if (m.pinReply === "fail") throw new Error("The pin was refused.");
+      return [];
+    },
+  };
+  const copyPane: TerminalRow = {
+    pane_id: "c5",
+    terminal_id: "c5",
+    tab_id: "c1:t5",
+    workspace_id: "c1",
+    agent: pane("idle").agent,
+    agent_status: "idle",
   };
   const target: MoveSide = {
     machine: "",
     async rows() {
       fenced(world.dstConn);
-      return { workspaces: ["c1"], panes: [], names: new Map() };
+      return {
+        workspaces: ["c1"],
+        panes: world.copy ? [copyPane] : [],
+        names: new Map(),
+      };
     },
     admit: async () => ({ admitted: null }),
-    session: async () => null,
+    // A forking harness's copy beside its open original reports a new
+    // conversation; otherwise the copy continues the agent's own.
+    session: async () => (world.copyConv ? "session-1" : "session-forked"),
     shellBusy: async () => false,
     pinned: () => false,
     async start() {
       effects.push("start");
-      if (m.startReply === "ready") {
+      // After a close-first close, the resume's own script.
+      world.afterClose = world.closing;
+      fenced(world.dstConn);
+      const [reply, truth] = world.afterClose
+        ? [m.resumeReply, m.resumeTruth]
+        : [m.startReply, m.startTruth];
+      const conv = m.harness === "resume" || !world.alive;
+      if (reply === "ready") {
         world.copy = true;
-        outside(m.envStart);
+        world.copyConv = conv;
+        if (!world.closing) outside(m.envStart);
         return { tab_id: "c1:t5", pane_id: "c5", terminal_id: "c5" };
       }
-      if (m.startReply === "failed") return { message: "It did not start." };
-      if (m.startReply === "partial") {
+      if (reply === "failed") return { message: "It did not start." };
+      if (reply === "partial") {
         world.copy = true;
+        world.copyConv = conv;
         return { message: "It wasn't ready in time.", pane_id: "c5" };
       }
-      world.copy = m.startTruth;
+      world.copy = truth;
+      world.copyConv = conv;
       throw new Error("The reply was lost.");
     },
     async close() {
       effects.push("discard");
       fenced(world.dstConn);
-      if (m.cleanupReply === "ended") {
+      const [reply, truth] = world.afterClose
+        ? [m.resumeCleanup, m.resumeCleanupTruth]
+        : [m.cleanupReply, m.cleanupTruth];
+      if (reply === "ended") {
         world.copy = false;
         return {};
       }
-      world.copy = world.copy && m.cleanupTruth;
-      if (m.cleanupReply === "uncertain")
-        return { uncertain: "it didn't confirm." };
+      world.copy = world.copy && truth;
+      if (reply === "uncertain") return { uncertain: "it didn't confirm." };
       throw new Error("The cleanup reply was lost.");
     },
     async pin() {
@@ -308,7 +419,10 @@ export async function replayMove(
       return [];
     },
   };
+  let now = 1_000;
   const deps: AgentMoveDeps = {
+    sameRuntime: (a, b) => m.route === "native" && a !== b,
+    settle: createMoveSettle(() => now),
     side(id, generation) {
       resolved.push([id, generation]);
       const conn = id === sourceId ? world.srcConn : world.dstConn;
@@ -320,9 +434,9 @@ export async function replayMove(
       async patch(plan: (d: unknown) => BoardOp[] | null) {
         const ops = plan(emptyBoardDocument()) ?? [];
         const rehome = ops.find((op) => op.op === "agent.rehome") as
-          | { from: AgentAddress }
+          | { from: AgentAddress; to: AgentAddress }
           | undefined;
-        if (rehome && rehome.from.connection_id === sourceId) {
+        if (rehome && rehome.to.connection_id === targetId) {
           if (m.rehomeReply === "fail") throw new Error("Board refused.");
           effects.push("rehome");
           world.desk = "dst";
@@ -343,9 +457,35 @@ export async function replayMove(
     destination: { connection_id: targetId, generation: 1, workspace_id: "c1" },
   });
   const message = "message" in result ? result.message : "";
+  const before = effects.length;
+  const firstResolved = [...resolved];
+  // A second move once this one landed: refused inside the settle window;
+  // once settled it gets past the window (no runtime answers this one).
+  if (m.again !== "-" && "target" in result) {
+    if (m.again === "late") now += 60_000;
+    const side = deps.side;
+    if (m.again === "late") deps.side = () => null;
+    const second = await move(deps, {
+      source: result.target,
+      destination: {
+        connection_id: sourceId,
+        generation: 1,
+        workspace_id: "w1",
+      },
+    });
+    deps.side = side;
+    observe(
+      "move.settle",
+      {
+        settling: second.status === "refused" && second.reason === "settling",
+        effects: effects.length - before,
+      },
+      { settling: m.again === "early", effects: 0 },
+    );
+  }
   observe(
     "move.fence",
-    { resolved, unfenced: false },
+    { resolved: firstResolved, unfenced: false },
     {
       resolved: [
         [sourceId, 1],
@@ -358,8 +498,13 @@ export async function replayMove(
   observe("move.effects", effects, m.effects);
   observe(
     "move.owners",
-    { alive: world.alive, copy: world.copy, desk: world.desk },
-    { alive: m.alive, copy: m.copy, desk: m.desk },
+    {
+      alive: world.alive,
+      copy: world.copy,
+      desk: world.desk,
+      own: world.copy && world.copyConv,
+    },
+    { alive: m.alive, copy: m.copy, desk: m.desk, own: m.copy && m.copyConv },
   );
   observe(
     "move.report",
@@ -367,13 +512,15 @@ export async function replayMove(
       reason: result.status !== "refused" || message.length > 0,
       namesCopy: /new copy there may still be running/.test(message),
       namesOrig: result.status === "uncertain",
-      namesDesk: /desk details stay on the new copy/.test(message),
+      namesDesk: /desk details stay(ed behind| on the new copy)/.test(message),
+      namesSaved: /Its conversation is saved/.test(message),
     },
     {
       reason: m.reason !== "" || m.outcome !== "refused",
       namesCopy: m.namesCopy && m.outcome === "refused",
       namesOrig: m.namesOrig,
       namesDesk: m.namesDesk,
+      namesSaved: m.namesSaved,
     },
   );
   return moveWitnessesOf(m);

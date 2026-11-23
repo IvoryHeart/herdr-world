@@ -40,6 +40,21 @@ import type { ReadyRuntimeLease } from "../connections/manager";
 import { defaultGuiSettings, type GuiSettings } from "../config/gui-settings";
 import type { CoreTopologyPort } from "../storage/core-topology";
 import type { BridgeRpcContext } from "./context";
+import { followCoreDeskMove } from "../world/agent-move-sides";
+import { settlingMessage } from "../world/move-settle";
+
+/** A core connection's rooms and terminals, as a desk move reads them. */
+async function coreDeskRows(lease: ReadyRuntimeLease<CoreConnectionRuntime>) {
+  const operations = lease.runtime.operations;
+  const [{ workspaces = [] }, { panes = [] }] = await Promise.all([
+    operations.listWorkspaces(),
+    operations.listTerminals(),
+  ]);
+  return {
+    workspaces: workspaces.map((row) => String(row.workspace_id ?? "")),
+    panes,
+  };
+}
 
 /** What the world.core.* handlers act through. */
 export type CoreRpcServices = {
@@ -212,12 +227,96 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
         return reply(result);
       }
       case "world.core.move": {
-        const result = await moveCore(lease, core.topology, {
-          kind: p.kind === "desk" ? "desk" : "pane",
+        const request = {
+          kind: p.kind === "desk" ? ("desk" as const) : ("pane" as const),
           tab_id: String(p.tab_id ?? ""),
           pane_id: String(p.pane_id ?? ""),
           workspace_id: String(p.workspace_id ?? ""),
-        });
+        };
+        const log = rpc.services.logger?.child("agent-move");
+        const fields = {
+          from: `${connectionId}#${lease.generation}`,
+          kind: request.kind,
+          tab: request.tab_id,
+          ...(request.kind === "pane"
+            ? { pane: request.pane_id }
+            : { room: request.workspace_id }),
+        };
+        // One move per agent until it settles (world/move-settle.ts).
+        const moving = {
+          connection_id: connectionId,
+          ...(request.kind === "desk"
+            ? { tab_id: request.tab_id }
+            : { terminal_id: request.pane_id }),
+        };
+        const settling = rpc.services.moveSettle?.wait(moving) ?? 0;
+        if (settling) {
+          log?.warn("move outcome", {
+            ...fields,
+            outcome: "refused",
+            reason: "settling",
+          });
+          return reply({
+            status: "refused",
+            reason: "stale",
+            message: settlingMessage("This desk", settling),
+          });
+        }
+        const before =
+          request.kind === "desk" ? await coreDeskRows(lease) : null;
+        const result = await moveCore(lease, core.topology, request);
+        if (result.status === "moved") {
+          rpc.services.moveSettle?.mark({
+            connection_id: connectionId,
+            tab_id: result.tab_id,
+          });
+          for (const pane of result.panes)
+            rpc.services.moveSettle?.mark({
+              connection_id: connectionId,
+              terminal_id: pane.current,
+            });
+        }
+        // Core gives a moved desk a new tab ID: its Board facts follow.
+        const revision =
+          before && result.status === "moved"
+            ? await followCoreDeskMove(
+                {
+                  board: rpc.services.board,
+                  publishBoardChanged: rpc.services.publishBoardChanged,
+                },
+                {
+                  connection_id: connectionId,
+                  generation: lease.generation,
+                  tab_id: request.tab_id,
+                },
+                before,
+                result,
+                (await coreDeskRows(lease).catch(() => before)).workspaces,
+              ).catch((error: unknown) => {
+                log?.warn("move rehome", {
+                  ...fields,
+                  outcome: "failed",
+                  message: String(error),
+                });
+                return null;
+              })
+            : null;
+        (result.status === "moved" ? log?.info : log?.warn)?.call(
+          log,
+          "move outcome",
+          {
+            ...fields,
+            outcome: result.status,
+            ...(result.status === "moved"
+              ? {
+                  at_tab: result.tab_id,
+                  room_at: result.workspace_id,
+                  revision,
+                }
+              : { message: result.message }),
+            ...(result.status === "refused" ? { reason: result.reason } : {}),
+          },
+        );
         invalidate();
         return reply(result);
       }

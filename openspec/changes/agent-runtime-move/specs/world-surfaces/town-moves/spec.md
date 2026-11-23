@@ -5,7 +5,14 @@
 World SHALL let the user move an agent's desk to a room of another runtime of
 the same machine (Herdr TUI to herdr-core or back) by dragging the desk into
 that room in Town, from Town's M list, and with Move to… on the desk's Town
-and Board peeks. A move within one runtime SHALL use that runtime's own move.
+and Board peeks. A move within one runtime SHALL use that runtime's own move;
+two connections that reach the same runtime are one runtime, so Move to…
+SHALL NOT offer the same Herdr's rooms as another runtime and the service SHALL
+move such a desk natively. A herdr-core desk moved to another core room SHALL
+keep running and keep its Board colour, pin and links under its new tab.
+Every move step SHALL be logged by the service, and a refusal SHALL tell the
+user its reason. Once an agent moves, World SHALL refuse to move it again until
+the move settles.
 
 #### Scenario: Agent moves between runtimes refusals
 
@@ -15,7 +22,8 @@ and Board peeks. A move within one runtime SHALL use that runtime's own move.
   across machines, for a desk with more than one terminal, for an agent that is
   working or waiting for an answer, for a plain terminal running a program
   other than its shell, and for a herdr-core agent whose own agents would end
-  with it. One service SHALL hand over one agent at a time.
+  with it. One service SHALL hand over one agent at a time, and an agent that
+  just moved SHALL be refused with "settling" until its move settles.
 
 #### Scenario: Agent moves between runtimes handoff rules
 
@@ -37,6 +45,11 @@ and Board peeks. A move within one runtime SHALL use that runtime's own move.
   reporting a move or a clean refusal; this includes a lost close reply after
   which the original can't be read (World keeps the new copy) and a lost start
   reply (the original keeps running and the copy may be).
+  A harness that refuses or forks a conversation open elsewhere (Codex; or a
+  copy that reports another conversation) SHALL be closed first and then
+  resumed on the destination; if the destination does not start it, World
+  SHALL resume it back where it was, and if that fails too World SHALL name
+  the saved conversation and how to continue it.
 
 #### Scenario: Agent moves between runtimes desk rules
 
@@ -72,3 +85,18 @@ and Board peeks. A move within one runtime SHALL use that runtime's own move.
 
 - **WHEN** herdr-core does not confirm that the original ended
 - **THEN** World says the agent runs in its new room and the original may still be running
+
+#### Scenario: Codex closes before it resumes
+
+- **WHEN** the user moves an idle Codex agent to the other runtime and the destination does not start it
+- **THEN** World resumes the agent back in its room with its desk, and says it didn't start there
+
+#### Scenario: Two connections of one Herdr
+
+- **WHEN** two connections reach the same Herdr and the user opens Move to… on a desk
+- **THEN** the other connection's rooms are not offered as another runtime, and a move between them runs natively with nothing closed
+
+#### Scenario: A moved agent moves again too soon
+
+- **WHEN** the user moves an agent again before its last move has settled
+- **THEN** World refuses with the reason that the agent is still settling

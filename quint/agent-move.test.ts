@@ -43,6 +43,20 @@ const initial: MoveState = {
   envStart: "-",
   envRehome: "-",
   envClose: "-",
+  harness: "resume",
+  route: "across",
+  closeFirst: false,
+  // Claude re-attaches: any copy continues the agent's own conversation.
+  copyConv: true,
+  namesSaved: false,
+  resumeReply: "-",
+  resumeTruth: false,
+  resumeCleanup: "-",
+  resumeCleanupTruth: false,
+  backReply: "-",
+  backTruth: false,
+  nativeReply: "-",
+  again: "-",
 };
 const quiet = { envStart: "none", envRehome: "none", envClose: "none" };
 const moved = {

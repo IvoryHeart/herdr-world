@@ -16,7 +16,11 @@ link now does.
 - The handoff resumes on the destination, waits until it is ready, checks the
   original again, carries the desk over, then closes the original. It
   reports a refusal, or an uncertain outcome when an end was asked but not
-  confirmed.
+  confirmed. A harness that locks its open conversation (Codex) or forks it
+  closes first and resumes there, resuming back on failure. Every step is
+  logged, and a just-moved agent can't move again until it settles.
+- Two connections of one Herdr are one runtime: their moves are native, and
+  a herdr-core move to another core room re-keys the desk's Board details.
 - A new Board operation, `agent.rehome`, moves a desk's saved layout, colour,
   pin, appearance, strings and spawn links to the new address; a spawn claim
   keeps the superseded parents in `moved_from`.
@@ -37,7 +41,8 @@ None.
 
 ## Impact
 
-Service: `server/src/world/agent-move.ts`, `server/src/world/agent-rehome.ts`,
+Service: `server/src/world/agent-move.ts`, `server/src/world/move-settle.ts`,
+`server/src/world/agent-rehome.ts`, `server/src/rpc/core.ts`,
 `server/src/rpc/agent-move.ts`, `server/src/world/board-*.ts`,
 `shared/agentMove.ts`, `shared/relations.ts`. Browser: Town drag and M menu,
 Town and Board peeks. Evidence: `server/src/world/agent-move.test.ts`,

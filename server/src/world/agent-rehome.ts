@@ -109,6 +109,8 @@ export function rehomeAgent(
     connection_id: to.connection_id,
     terminal_id: to.terminal_id,
   };
+  // A native move keeps the terminal: its links already name it.
+  if (terminalKey(from) === terminalKey(to)) return;
   // A child's live token still names the old parent: moved_from says it moved.
   document.relations.spawns = document.relations.spawns.map((claim) => ({
     ...claim,

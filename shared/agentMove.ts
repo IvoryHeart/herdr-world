@@ -20,9 +20,24 @@ export type AgentMoveRequest = {
   /** Confirmed: start it fresh there when nothing can be resumed. */
   fresh?: boolean;
 };
+/** Why a move was refused (the message says it in plain words). */
+export type AgentMoveRefusal =
+  | "busy"
+  | "gone"
+  | "changed"
+  | "split"
+  | "children"
+  | "settling"
+  | "moving"
+  | "reconnected"
+  | "other_machine"
+  | "start_failed"
+  | "close_failed"
+  | "resume_failed"
+  | "native_refused";
 export type AgentMoveOutcome =
   | { status: "moved"; target: AgentAddress }
-  | { status: "refused"; message: string }
+  | { status: "refused"; reason?: AgentMoveRefusal; message: string }
   /** Nothing to resume: ask, then send again with `fresh`. */
   | { status: "confirm"; message: string }
   /** The new copy runs, but the original may still run too. */

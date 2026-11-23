@@ -5,10 +5,11 @@ import { createCoreRoom, launchCore } from "../herdr-core/operations";
 import { coreWorld } from "../herdr-core/testing/core-world";
 import {
   moveAgentAcross,
-  moveSide,
   type AgentMoveDeps,
   type MoveSide,
 } from "./agent-move";
+import { followCoreDeskMove, moveSide } from "./agent-move-sides";
+import { createMoveSettle } from "./move-settle";
 import {
   relationsOf,
   type TerminalRef,
@@ -129,19 +130,22 @@ test("an idle agent resumes on the other runtime before its original closes", as
 
 test("busy, many-pane and same-runtime moves are refused and nothing starts", async () => {
   const cases = [
-    [setup("working"), "Ada is working. Let it finish, then move it."],
+    [setup("working"), "busy", "Ada is working. Let it finish, then move it."],
     [
       setup("blocked"),
+      "busy",
       "Ada is waiting for an answer. Answer it, then move it.",
     ],
     [
       setup("idle", [{ pane_id: "p2", terminal_id: "t2", tab_id: "w1:t1" }]),
+      "split",
       "Only a desk with one terminal moves between runtimes.",
     ],
   ] as const;
-  for (const [{ deps, log }, message] of cases) {
+  for (const [{ deps, log }, reason, message] of cases) {
     expect(await moveAgentAcross(deps, { source, destination })).toEqual({
       status: "refused",
+      reason,
       message,
     });
     expect(log).toEqual([]);
@@ -160,6 +164,7 @@ test("a failed start closes only the partial new agent and keeps the original", 
   sides.core!.start = async () => ({ message: "No harness.", pane_id: "c5" });
   expect(await moveAgentAcross(deps, { source, destination })).toEqual({
     status: "refused",
+    reason: "start_failed",
     message: "Ada didn't start there: No harness. It still runs where it was.",
   });
   expect(log).toEqual(["close core c5"]);
@@ -203,6 +208,7 @@ test("a plain terminal moves as a new shell once confirmed; a busy one is refuse
     await moveAgentAcross(deps, { source, destination, fresh: true }),
   ).toEqual({
     status: "refused",
+    reason: "busy",
     message: "This terminal is running a program. Let it finish, then move it.",
   });
   expect(log).toEqual([]);
@@ -231,6 +237,7 @@ test("a Board that refuses the undo still drops the copy and says where the desk
   const result = await moveAgentAcross(deps, { source, destination });
   expect(result).toEqual({
     status: "refused",
+    reason: "close_failed",
     message:
       "Ada didn't close where it was: Refused. It still runs there. Its desk details stay on the new copy: storage unavailable.",
   });
@@ -296,6 +303,7 @@ test("a refused close (a child started meanwhile) undoes the desk and drops the 
   const result = await moveAgentAcross(deps, { source, destination });
   expect(result).toEqual({
     status: "refused",
+    reason: "close_failed",
     message:
       "Ada didn't close where it was: A new agent would end with it. It still runs there.",
   });
@@ -332,6 +340,7 @@ test("an unconfirmed close reports both may run; a failed cleanup says the copy 
   };
   expect(await moveAgentAcross(two.deps, { source, destination })).toEqual({
     status: "refused",
+    reason: "start_failed",
     message:
       "Ada didn't start there: Not ready. It still runs where it was. The new copy there may still be running: close it there.",
   });
@@ -611,6 +620,82 @@ test("a herdr-core original moves to a Herdr TUI room and closes there", async (
   }
 });
 
+test("a herdr-core desk moved to another core room keeps running, and its Board colour and pin follow the new tab", async () => {
+  const w = await coreWorld();
+  try {
+    await w.connect();
+    const a = await createCoreRoom(w.lease(), w.topology, "A");
+    const b = await createCoreRoom(w.lease(), w.topology, "B");
+    await launchCore(
+      w.lease(),
+      { workspaceId: a.workspace_id, kind: "claude", label: "Ada", text: "" },
+      {
+        topology: w.topology,
+        resolveExecutable: async (kind) => `/opt/example/bin/${kind}`,
+      },
+    );
+    w.fake.status("t1", "idle");
+    await w.settle();
+    const initial = emptyBoardDocument();
+    const board = new BoardStore({ read: () => initial, commit: () => {} });
+    const services = {
+      connectionManager: { has: () => false },
+      coreControl: {
+        manager: w.core.manager,
+        topology: w.topology,
+        hostRuntime: () => ({ sshHost: () => null }),
+        host: () => null,
+      },
+      board: () => board,
+      publishBoardChanged: () => {},
+    } as unknown as Parameters<typeof moveSide>[0];
+    const generation = w.lease().generation;
+    const core = moveSide(services, "box", generation)!;
+    const { workspaces, panes } = await core.rows();
+    const pane = panes.find((row) => row.terminal_id === "t1")!;
+    const key = tabCardKey("box", String(pane.tab_id), new Set(workspaces));
+    await board.patch([
+      { op: "card.color", key, color: "teal" },
+      { op: "desk.pin", key, cell: null },
+    ]);
+    const { deps, log } = setup();
+    deps.side = (id) => (id === "box" ? core : null);
+    deps.board = (() => board) as unknown as AgentMoveDeps["board"];
+    const outcome = await moveAgentAcross(deps, {
+      source: {
+        connection_id: "box",
+        generation,
+        workspace_id: a.workspace_id,
+        tab_id: String(pane.tab_id),
+        pane_id: "t1",
+        terminal_id: "t1",
+        color_key: key,
+      },
+      destination: {
+        connection_id: "box",
+        generation,
+        workspace_id: b.workspace_id,
+      },
+    });
+    expect(outcome).toMatchObject({
+      status: "moved",
+      target: { workspace_id: b.workspace_id, terminal_id: "t1" },
+    });
+    const target = (outcome as { target: AgentAddress }).target;
+    expect(target.tab_id).not.toBe(pane.tab_id);
+    expect(target.color_key).not.toBe(key);
+    // Native: nothing started or closed; the same terminal keeps running.
+    expect(log).toEqual([]);
+    await w.settle();
+    expect(w.fake.terminal("t1")!.state).toBe("live");
+    const { layout } = board.get();
+    expect(layout.colors).toEqual({ [target.color_key]: "teal" });
+    expect(Object.keys(layout.desk_pins)).toEqual([target.color_key]);
+  } finally {
+    await w.dispose();
+  }
+});
+
 test("a core terminal is idle only while its own shell is alone in front", async () => {
   const w = await coreWorld();
   try {
@@ -805,4 +890,350 @@ test("an agent moves again and again, both ways, keeping its colour, pin and con
   }
   // Every start resumed the same conversation; nothing asked to start fresh.
   expect(log).toEqual(route.map(([id]) => `start ${id} --resume session-1`));
+});
+
+describe("harness semantics (probe 2026-11-23: Claude re-attaches, Codex locks)", () => {
+  test("a copy that reports another conversation forked: it goes, the original closes first, one conversation continues", async () => {
+    const { deps, log, ops, sides } = setup();
+    // The first copy came up as a new conversation; a later resume, once the
+    // original has closed, keeps the conversation it was given.
+    let copies = 0;
+    const start = sides.core!.start;
+    sides.core!.start = async (request) => {
+      copies++;
+      return start(request);
+    };
+    sides.core!.rows = async () => ({
+      workspaces: ["c1"],
+      panes: [{ pane_id: "c5", terminal_id: "c5", tab_id: "c1:t5" }],
+      names: new Map(),
+    });
+    sides.core!.session = async () =>
+      copies === 1 ? "session-forked" : "session-1";
+    const result = await moveAgentAcross(deps, { source, destination });
+    expect(result).toMatchObject({
+      status: "moved",
+      target: { connection_id: "core", terminal_id: "c5" },
+    });
+    expect(log).toEqual([
+      "start core claude --resume session-1 in /synthetic/project",
+      "close core c5",
+      "close tui p1 tui-root-only",
+      "start core claude --resume session-1 in /synthetic/project",
+      "pin core c5",
+    ]);
+    expect(ops.filter((op) => op.op === "agent.rehome")).toHaveLength(1);
+  });
+
+  test("Codex closes before its copy resumes, so its conversation is never open twice", async () => {
+    const { deps, log, pane } = setup();
+    pane.agent = "codex";
+    const result = await moveAgentAcross(deps, { source, destination });
+    expect(result).toMatchObject({ status: "moved" });
+    expect(log).toEqual([
+      "close tui p1 tui-root-only",
+      "start core codex resume session-1 in /synthetic/project",
+      "pin core c5",
+    ]);
+  });
+
+  test("a Codex copy that fails to start resumes back where it was; when that fails too, the message says how to resume it", async () => {
+    const one = setup();
+    one.pane.agent = "codex";
+    one.sides.core!.start = async () => ({ message: "No harness." });
+    one.sides.tui!.start = async (request) => {
+      one.log.push(`start tui ${request.kind} ${request.args.join(" ")}`);
+      return { tab_id: "w1:t8", pane_id: "p8", terminal_id: "term-8" };
+    };
+    const result = await moveAgentAcross(one.deps, { source, destination });
+    expect(result).toEqual({
+      status: "refused",
+      reason: "start_failed",
+      message: "Ada didn't start there: No harness. It resumed where it was.",
+    });
+    expect(one.log).toEqual([
+      "close tui p1 tui-root-only",
+      "start tui codex resume session-1",
+      "pin tui term-8",
+    ]);
+    expect(one.ops.at(-1)).toMatchObject({
+      op: "agent.rehome",
+      from: source,
+      to: { connection_id: "tui", terminal_id: "term-8" },
+    });
+
+    const two = setup();
+    two.pane.agent = "codex";
+    two.sides.core!.start = async () => ({ message: "No harness." });
+    two.sides.tui!.start = async () => ({ message: "Herdr refused." });
+    expect(await moveAgentAcross(two.deps, { source, destination })).toEqual({
+      status: "refused",
+      reason: "resume_failed",
+      message:
+        "Ada didn't start there: No harness. It didn't resume where it was either: Herdr refused. Its conversation is saved: run `codex resume session-1` in /synthetic/project to continue it.",
+    });
+  });
+
+  test("a host that reconnects just before a Codex close is a refusal, and nothing closes", async () => {
+    const { deps, log, pane, sides } = setup();
+    pane.agent = "codex";
+    const rows = sides.tui!.rows;
+    let reads = 0;
+    sides.tui!.rows = async () => {
+      if (++reads > 1) throw new Error("The host reconnected.");
+      return rows();
+    };
+    expect(await moveAgentAcross(deps, { source, destination })).toEqual({
+      status: "refused",
+      reason: "reconnected",
+      message: "The host reconnected. It still runs where it was.",
+    });
+    expect(log).toEqual([]);
+  });
+});
+
+test("two connections of one Herdr move the desk natively: nothing closes or restarts", async () => {
+  const { deps, log, sides } = setup();
+  // A startup default (tui) and a saved profile (tui-saved) of one socket.
+  sides["tui-saved"] = side("tui-saved", [], log);
+  sides.tui!.moveDesk = async (request) => {
+    log.push(`native ${request.tab_id} -> ${request.workspace_id}`);
+    return {
+      status: "moved",
+      tab_id: "w2:t1",
+      workspace_id: request.workspace_id,
+      panes: [{ previous: "p1", current: "p1" }],
+    };
+  };
+  deps.sameRuntime = (a, b) => a.startsWith("tui") && b.startsWith("tui");
+  const result = await moveAgentAcross(deps, {
+    source,
+    destination: {
+      connection_id: "tui-saved",
+      generation: 1,
+      workspace_id: "w2",
+    },
+  });
+  expect(result).toEqual({
+    status: "moved",
+    target: {
+      ...source,
+      workspace_id: "w2",
+      tab_id: "w2:t1",
+      color_key: "tui:w2:t1",
+    },
+  });
+  expect(log).toEqual(["native w1:t1 -> w2"]);
+});
+
+test("a Herdr TUI desk pinned under another view of its Herdr reads as pinned, and that pin is dropped once it moves", () => {
+  const document = emptyBoardDocument();
+  document.layout.desk_pins["anchor:w1:t1"] = { cell: null };
+  const lease = {
+    generation: 1,
+    isCurrent: () => true,
+    runtime: {
+      sshHost: () => null,
+      operations: {},
+      tui: { call: async () => ({}) },
+    },
+  };
+  const services = {
+    connectionManager: { has: () => true, readyRuntimeLease: () => lease },
+    board: () => ({ get: () => document }),
+  } as unknown as Parameters<typeof moveSide>[0];
+  const view = moveSide(services, "view", 1, async () => {}, [
+    "anchor",
+    "view",
+  ])!;
+  const pane = { pane_id: "p1", terminal_id: "term-1" } as TerminalRow;
+  expect(view.pinned(pane, "view:w1:t1")).toBe(true);
+  expect(view.unpinAliases!("view:w1:t1")).toEqual([
+    { op: "desk.unpin", key: "anchor:w1:t1" },
+  ]);
+});
+
+test("an agent that just moved refuses another move until it settles, and every step is logged", async () => {
+  let now = 1_000;
+  const { deps, log } = setup();
+  const lines: [string, Record<string, unknown>][] = [];
+  deps.settle = createMoveSettle(() => now, 20_000);
+  deps.log = (step, fields) => lines.push([step, fields]);
+  const first = await moveAgentAcross(deps, { source, destination });
+  expect(first).toMatchObject({ status: "moved" });
+  const moved = (first as { target: AgentAddress }).target;
+  expect(lines.map(([step]) => step)).toEqual([
+    "admit",
+    "start",
+    "recheck",
+    "rehome",
+    "recheck",
+    "close",
+    "outcome",
+  ]);
+  expect(lines.at(-1)![1]).toMatchObject({
+    from: "tui#1",
+    tab: "w1:t1",
+    terminal: "term-1",
+    to: "core#2",
+    outcome: "moved",
+    at: "core#2",
+    at_terminal: "c5",
+  });
+  const back = { connection_id: "tui", generation: 1, workspace_id: "w1" };
+  log.length = 0;
+  expect(
+    await moveAgentAcross(deps, { source: moved, destination: back }),
+  ).toEqual({
+    status: "refused",
+    reason: "settling",
+    message:
+      "This agent just moved. Give it 20 s to settle, then move it again.",
+  });
+  expect(log).toEqual([]);
+  expect(lines.at(-1)![1]).toMatchObject({
+    outcome: "refused",
+    reason: "settling",
+  });
+  now += 20_000;
+  // Settled: the move is admitted again (this fake core has no rows, so it
+  // then finds the agent gone; that is not a settle refusal).
+  expect(
+    await moveAgentAcross(deps, { source: moved, destination: back }),
+  ).toMatchObject({ status: "refused", reason: "gone" });
+});
+
+test("a chain with a native core→core leg keeps one desk on the Board: colour and pin follow every hop", async () => {
+  // TUI w1 → core c1 → (native) core c2 → TUI w2 → core c1.
+  const panes: Record<string, TerminalRow[]> = { tui: [], core: [] };
+  const rooms: Record<string, string[]> = {
+    tui: ["w1", "w2"],
+    core: ["c1", "c2"],
+  };
+  const corePinned = new Set<string>();
+  const sessions = new Map<string, string>();
+  let next = 0;
+  const initial = emptyBoardDocument();
+  initial.layout.colors[source.color_key] = "teal";
+  initial.layout.desk_pins[source.color_key] = { cell: null };
+  const board = new BoardStore({ read: () => initial, commit: () => {} });
+  const log: string[] = [];
+  const runtime = (id: string): MoveSide => ({
+    ...side(id, [], log),
+    rows: async () => ({
+      workspaces: rooms[id]!,
+      panes: panes[id]!,
+      names: new Map(panes[id]!.map((pane) => [text(pane.pane_id), "Ada"])),
+    }),
+    session: async (pane) => sessions.get(text(pane.terminal_id)) ?? null,
+    pinned: (pane, colorKey) =>
+      id === "core"
+        ? corePinned.has(text(pane.terminal_id))
+        : Boolean(board.get().layout.desk_pins[colorKey]),
+    async start(request) {
+      const n = ++next;
+      const tab_id =
+        id === "core"
+          ? `${request.workspaceId}:tab:world-b${n}`
+          : `${request.workspaceId}:t${n}`;
+      const pane: TerminalRow = {
+        pane_id: `${id}-p${n}`,
+        terminal_id: `${id}-term-${n}`,
+        tab_id,
+        workspace_id: request.workspaceId,
+        agent: request.kind ?? undefined,
+        agent_status: "idle",
+        cwd: request.cwd,
+      };
+      sessions.set(text(pane.terminal_id), request.args.at(-1)!);
+      log.push(`start ${id} ${request.workspaceId}`);
+      panes[id]!.push(pane);
+      return {
+        tab_id,
+        pane_id: text(pane.pane_id),
+        terminal_id: text(pane.terminal_id),
+      };
+    },
+    async close(pane) {
+      panes[id] = panes[id]!.filter((row) => row.pane_id !== pane.pane_id);
+      return {};
+    },
+    async pin(desk) {
+      if (id === "core") {
+        corePinned.add(desk.terminal_id);
+        return [];
+      }
+      return [{ op: "desk.pin", key: desk.color_key, cell: null }];
+    },
+  });
+  const sides: Record<string, MoveSide> = {
+    tui: runtime("tui"),
+    core: runtime("core"),
+  };
+  // core's own desk move: a new tab ID, the same terminal, Board follows.
+  sides.core!.moveDesk = async (request) => {
+    const pane = panes.core!.find((row) => row.tab_id === request.tab_id)!;
+    const before = { workspaces: rooms.core!, panes: [{ ...pane }] };
+    const moved = {
+      status: "moved" as const,
+      tab_id: `${request.workspace_id}:tab:world-b${++next}`,
+      workspace_id: request.workspace_id,
+      panes: [{ previous: text(pane.pane_id), current: text(pane.pane_id) }],
+    };
+    pane.tab_id = moved.tab_id;
+    pane.workspace_id = moved.workspace_id;
+    log.push(`native core ${request.workspace_id}`);
+    await followCoreDeskMove(
+      { board: () => board, publishBoardChanged: () => {} } as never,
+      { connection_id: "core", generation: 2, tab_id: request.tab_id },
+      before,
+      moved,
+      rooms.core!,
+    );
+    return moved;
+  };
+  const deps: AgentMoveDeps = {
+    side: (id) => sides[id] ?? null,
+    board: (() => board) as unknown as AgentMoveDeps["board"],
+    publishBoardChanged: () => {},
+    publishWorldInvalidation: () => {},
+  };
+  panes.tui!.push({
+    pane_id: source.pane_id,
+    terminal_id: source.terminal_id,
+    tab_id: source.tab_id,
+    workspace_id: source.workspace_id,
+    agent: "claude",
+    agent_status: "idle",
+    cwd: "/synthetic/project",
+  });
+  sessions.set(source.terminal_id, "session-1");
+  let at: AgentAddress = source;
+  const route = [
+    ["core", 2, "c1"],
+    ["core", 2, "c2"],
+    ["tui", 1, "w2"],
+    ["core", 2, "c1"],
+  ] as const;
+  for (const [connection_id, generation, workspace_id] of route) {
+    const result = await moveAgentAcross(deps, {
+      source: at,
+      destination: { connection_id, generation, workspace_id },
+    });
+    expect(result).toMatchObject({
+      status: "moved",
+      target: { connection_id, workspace_id },
+    });
+    at = (result as { target: AgentAddress }).target;
+    const { layout } = board.get();
+    // One desk, at its current key: no orphan from the native leg.
+    expect(layout.colors).toEqual({ [at.color_key]: "teal" });
+    expect(Object.keys(layout.desk_pins)).toEqual([at.color_key]);
+  }
+  expect(log).toEqual([
+    "start core c1",
+    "native core c2",
+    "start tui w2",
+    "start core c1",
+  ]);
 });

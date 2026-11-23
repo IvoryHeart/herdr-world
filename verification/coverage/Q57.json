@@ -3,17 +3,18 @@
   "area": "Agent move between runtimes (world.agent.move)",
   "owner": "server/src/world/agent-move.ts",
   "requirement": "openspec/changes/agent-runtime-move/specs/world-surfaces/town-moves/spec.md",
-  "properties": "Original closes only after the destination is ready and the original is rechecked idle and alone; core ends only the admitted terminals; one owner of the agent and its desk after every outcome; every call is bound to the admitted connection ID and generation; a failed or abandoned move leaves the source intact with a reason; an unconfirmed end or cleanup is reported",
+  "properties": "Native move when both connections reach one runtime; across runtimes a re-attaching harness starts first and the original closes only after the destination is ready and the original is rechecked idle and alone; a harness that locks or forks its conversation closes first and resumes there, resuming back on a failed start and naming the saved conversation if both fail; core ends only the admitted terminals; one owner of the agent and its desk after every outcome; every call is bound to the admitted connection ID and generation; a failed or abandoned move leaves the source intact with a reason; an unconfirmed end or cleanup is reported; a moved agent refuses a second move until it settles",
   "existingTests": [
     "quint/agent-move.test.ts",
     "server/src/world/agent-move.test.ts",
+    "server/src/rpc/core.test.ts",
     "server/src/herdr-core/operations.test.ts"
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1184",
   "status": "pending",
   "technique": "finite-model-with-production-replay",
-  "assessment": "TLC explores both directions through admission, start, recheck, pin and desk move, second recheck, close and cleanup, interleaved with the source turning busy, splitting, ending or starting a child, either connection dropping or reconnecting, and lost or unconfirmed start, close and cleanup replies (6,592 states). Three sampled seeds replay through the real moveAgentAcross with lease-fenced sides; four model faults and two production mutants are rejected. The model found that an unreadable source after a lost close used to drop the copy, leaving no agent, and that a lost start reply did not name the copy; both are fixed and kept as replay witnesses. The 108-outcome matrix stays as consumer evidence.",
-  "remaining": "Independent acceptance of the model and Q57 mapping. Pinned desks are carried with the agent rather than refused, as the town-moves requirement asks. A source turning busy between the last recheck and the close, independent Worlds, a service crash during a handoff and real harness startup are not proved; the owner check on a real Herdr TUI and herdr-core covers the native paths.",
+  "assessment": "TLC explores both directions and the native route through admission, start, the fork check, recheck, pin and desk move, second recheck, close-first close and resume, resume back, close and cleanup, and a second move, interleaved with the source turning busy, splitting, ending or starting a child, either connection dropping or reconnecting, and lost or unconfirmed replies (14,086 states). Three sampled seeds replay through the real moveAgentAcross with lease-fenced sides; seven model faults and six production mutants are rejected. The first model found that an unreadable source after a lost close dropped the copy and that a lost start reply did not name the copy. Both are fixed and kept as replay witnesses. The close-first extension found that a reconnect during the pre-close recheck escaped as a raw error instead of a refusal; it is fixed and has a unit test. Probes of Claude Code 2.1.330 and Codex CLI 0.171 (verification/contracts/agent-move-audit.md) fixed which harness starts first.",
+  "remaining": "Independent acceptance of the model and Q57 mapping. A source turning busy between the last recheck and the close, independent Worlds, a service crash during a handoff and real harness startup are not proved. A close-first move whose Board update fails leaves the desk details on the old address; the agent itself moved. A forking harness that does not report its session is not detected and falls to start-first. Chains of moves are covered by unit tests, not the model, beyond the settle refusal.",
   "requiredChecks": ["bun run check", "bun run verification:gate"],
   "partialEvidence": {
     "models": ["quint/agent-move.qnt"],
@@ -21,6 +22,7 @@
     "tests": [
       "quint/agent-move.test.ts",
       "server/src/world/agent-move.test.ts",
+      "server/src/rpc/core.test.ts",
       "server/src/herdr-core/operations.test.ts"
     ],
     "checks": ["bun run verification:gate"],

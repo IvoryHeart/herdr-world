@@ -1,5 +1,7 @@
 import type { AgentAddress, AgentMoveRequest } from "../../../shared/agentMove";
-import { moveAgentAcross, moveSide } from "../world/agent-move";
+import { connectionRecoveryFingerprint } from "../connections/profiles";
+import { moveAgentAcross } from "../world/agent-move";
+import { moveSide } from "../world/agent-move-sides";
 import type { BridgeRpcContext } from "./context";
 
 const object = (value: unknown): Record<string, unknown> => {
@@ -48,12 +50,32 @@ export async function handleAgentMoveRpc(rpc: BridgeRpcContext): Promise<void> {
       ...(rpc.params?.fresh === true ? { fresh: true } : {}),
     };
     const { services } = rpc;
+    // Connections of one runtime endpoint (a startup default and a saved
+    // profile of one Herdr socket or core) are one runtime.
+    const profiles = services.connectionProfiles.profilesById();
+    const endpointOf = (id: string) => {
+      const profile = profiles.get(id);
+      return profile ? connectionRecoveryFingerprint(profile) : `id:${id}`;
+    };
+    const aliases = (id: string) =>
+      [...profiles.keys()].filter(
+        (other) => endpointOf(other) === endpointOf(id),
+      );
+    const logger = services.logger.child("agent-move");
     const result = await moveAgentAcross(
       {
-        side: (id, generation) => moveSide(services, id, generation),
+        side: (id, generation) =>
+          moveSide(services, id, generation, undefined, aliases(id)),
         board: services.board,
         publishBoardChanged: services.publishBoardChanged,
         publishWorldInvalidation: services.publishWorldInvalidation,
+        sameRuntime: (a, b) => endpointOf(a) === endpointOf(b),
+        ...(services.moveSettle ? { settle: services.moveSettle } : {}),
+        log: (step, fields) =>
+          step === "outcome" &&
+          ["refused", "uncertain", "error"].includes(String(fields.outcome))
+            ? logger.warn(`move ${step}`, fields)
+            : logger.info(`move ${step}`, fields),
       },
       request,
     );

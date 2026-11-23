@@ -120,5 +120,31 @@ export async function requestAgentHandoff(
           rolled_back: false,
           topology_known: false,
         }
-      : { status: "refused", reason: "agent_busy", message: result.message };
+      : {
+          status: "refused",
+          // The service's own reason and words (world/agent-move.ts).
+          reason: result.reason ?? "refused",
+          message: result.message,
+        };
+}
+
+/**
+ * Board's Move to… rooms for `source`: rooms of another runtime only. Two
+ * connections of one Herdr (a startup default and a saved profile of the
+ * same socket) are one runtime (equal `endpoint`, townBuildings.ts), so its
+ * rooms are not "another runtime".
+ */
+export function otherRuntimeRooms<
+  Room extends { connectionId: string; stale: boolean },
+>(
+  rooms: readonly Room[],
+  source: { connection_id: string },
+  endpointOf: (connectionId: string) => string | undefined,
+): Room[] {
+  const home = endpointOf(source.connection_id) ?? source.connection_id;
+  return rooms.filter(
+    (room) =>
+      !room.stale &&
+      (endpointOf(room.connectionId) ?? room.connectionId) !== home,
+  );
 }

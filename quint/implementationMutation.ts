@@ -42,6 +42,10 @@ export type ImplementationFault =
   | "seen-blind-write"
   | "core-missing-foreground"
   | "move-assume-alive"
+  | "move-start-first-codex"
+  | "move-no-fork-guard"
+  | "move-native-handoff"
+  | "move-no-settle"
   | "ide-queue"
   | "ide-start-epoch";
 export async function mutateImplementation(
@@ -66,7 +70,14 @@ export async function mutateImplementation(
       "core-seat-gap",
       "core-missing-foreground",
     ],
-    "agent-move": ["primary", "move-assume-alive"],
+    "agent-move": [
+      "primary",
+      "move-assume-alive",
+      "move-start-first-codex",
+      "move-no-fork-guard",
+      "move-native-handoff",
+      "move-no-settle",
+    ],
     "herdr-core-seen": [
       "seen-forget-look",
       "seen-hidden-look",
@@ -244,12 +255,32 @@ export async function mutateImplementation(
       // The second recheck before the close goes: a source that changed
       // while the desk moved is closed anyway.
       primary: [
-        "      rehomed = true;\n      await recheck();",
+        '      rehomed = true;\n      await recheck("after-rehome");',
         "      rehomed = true;",
       ],
       // An unreadable source after a lost close counts as still running,
       // so the copy is closed and the agent may be left nowhere.
-      "move-assume-alive": ["        () => null,\n", "        () => true,\n"],
+      "move-assume-alive": [
+        "      () => null,\n    );\n    log(",
+        "      () => true,\n    );\n    log(",
+      ],
+      // Codex starts beside its open original: the copy waits on a lock.
+      "move-start-first-codex": ['new Set(["codex"])', "new Set<string>()"],
+      // A copy that reported another conversation is kept.
+      "move-no-fork-guard": [
+        "if (copySession && copySession !== session) {",
+        "if (false) {",
+      ],
+      // Two views of one runtime are handed off by kill and resume.
+      "move-native-handoff": [
+        "    deps.sameRuntime?.(from.connection_id, to.connection_id)",
+        "    false",
+      ],
+      // A chained move acts before the first one settled.
+      "move-no-settle": [
+        '  if (settling) refuse(settlingMessage("This agent", settling), "settling");\n',
+        "",
+      ],
     };
     const [guard, replacement] = guards[fault]!;
     assert.equal(original.split(guard).length, 2, `${fault} target changed`);

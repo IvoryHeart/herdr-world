@@ -20,11 +20,18 @@ export const moveModelFaults = [
   "fallback",
   "assume-alive",
   "unnamed-start",
+  "start-first-lock",
+  "no-fork-guard",
+  "native-handoff",
 ] as const;
 /** Production faults in server/src/world/agent-move.ts. */
 export const moveImplementationFaults = [
   "primary",
   "move-assume-alive",
+  "move-start-first-codex",
+  "move-no-fork-guard",
+  "move-native-handoff",
+  "move-no-settle",
 ] as const;
 
 type Harness = {

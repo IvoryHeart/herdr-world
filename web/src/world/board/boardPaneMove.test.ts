@@ -4,6 +4,7 @@ import { projectBoard } from "./boardModel";
 import { moveBoardPane, type BoardPaneMoveRequest } from "./boardPaneMove";
 import {
   cardAgentAddress,
+  otherRuntimeRooms,
   requestAgentHandoff,
   workspaceRoom,
 } from "../town/townRuntimeMove";
@@ -193,4 +194,47 @@ test("with nothing to resume the move asks, and goes fresh only once confirmed",
   ).toMatchObject({ status: "moved", tab_id: "t9" });
   expect(sent).toEqual([false, false, true]);
   expect(asked).toEqual(["It starts fresh there. Move it anyway?"]);
+});
+
+test("a refused move shows the service's own reason and words, not a blanket busy", async () => {
+  const { model, request } = fixture();
+  const target = model.tabs.find(
+    (tab) => tab.hostKey !== request.target.hostKey,
+  )!;
+  const room = workspaceRoom(model.workspaceByKey.get(target.workspaceKey)!);
+  const source = cardAgentAddress(request.target, request.targetWorkspace);
+  const message =
+    "Ada didn't start there: No harness. It resumed where it was.";
+  const call = (async () => ({
+    status: "refused",
+    reason: "start_failed",
+    message,
+  })) as never;
+  expect(await requestAgentHandoff(source, room, call)).toEqual({
+    status: "refused",
+    reason: "start_failed",
+    message,
+  });
+});
+
+test("Move to… offers only rooms of another runtime: a second view of the same Herdr is not one", () => {
+  const rooms = [
+    { key: "a", connectionId: "tui", stale: false },
+    { key: "b", connectionId: "tui-saved", stale: false },
+    { key: "c", connectionId: "core", stale: false },
+    { key: "d", connectionId: "core-old", stale: true },
+  ];
+  const endpoint = new Map([
+    ["tui", "herdr:local:/synthetic/herdr.sock"],
+    ["tui-saved", "herdr:local:/synthetic/herdr.sock"],
+    ["core", "core:local:/synthetic/core.sock"],
+    ["core-old", "core:local:/synthetic/old.sock"],
+  ]);
+  const keys = (from: string) =>
+    otherRuntimeRooms(rooms, { connection_id: from }, (id) =>
+      endpoint.get(id),
+    ).map((room) => room.key);
+  expect(keys("tui")).toEqual(["c"]);
+  expect(keys("tui-saved")).toEqual(["c"]);
+  expect(keys("core")).toEqual(["a", "b"]);
 });
