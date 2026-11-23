@@ -38,10 +38,6 @@ concurrency:
 
 jobs:
     report:
-        # Quarantine #1259: pinned Chrome varies fractional DOM edge pixels
-        # under load despite identical geometry. Keep exact manual evidence
-        # while the rasterization follow-up is investigated.
-        if: github.event_name == 'workflow_dispatch'
         name: Town golden report (advisory)
         runs-on: ubuntu-24.04
         timeout-minutes: ${{ (inputs.stability || contains(github.event.pull_request.labels.*.name, 'town-golden-stability')) && 40 || 15 }}

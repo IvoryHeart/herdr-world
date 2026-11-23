@@ -1,13 +1,5 @@
-FROM ubuntu:24.04
-ENV container=docker DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    systemd systemd-sysv dbus-user-session libpam-systemd ca-certificates \
-    curl xz-utils python3 python3-websocket \
-    && rm -rf /var/lib/apt/lists/* \
-    && userdel -r ubuntu && useradd -m -u 1000 -s /bin/bash tester \
-    && mkdir -p /var/lib/systemd/linger && touch /var/lib/systemd/linger/tester \
-    && systemctl mask systemd-remount-fs.service systemd-udevd.service \
-       systemd-udev-trigger.service console-getty.service
+ARG INSTALL_TEST_BASE
+FROM ${INSTALL_TEST_BASE}
 COPY scenarios.py boot.py /opt/install-test/
 COPY curl.py /usr/local/bin/curl
 RUN chmod 755 /usr/local/bin/curl
