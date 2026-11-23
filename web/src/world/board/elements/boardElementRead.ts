@@ -1,5 +1,10 @@
-import type { BoardProjectSource } from "../../../../../shared/boardElements";
-import type { WorldObject } from "../../worldObject";
+import type {
+  BoardArtefactSource,
+  BoardProjectSource,
+} from "../../../../../shared/boardElements";
+import { agentName } from "../../deskAgentLabels";
+import { harnessLabel } from "../../memory/memoryModel";
+import type { WorldLeafObject, WorldObject } from "../../worldObject";
 
 /**
  * Where a project element reads from, as World sees it now: the saved
@@ -12,6 +17,14 @@ export type SourcePlace = {
   workspaceLabel: string;
   /** Set only while the saved connection is live; reads must name it. */
   generation: number | null;
+  /** An artefact's maker as World names it now; the name is never saved. */
+  maker?: string;
+  /**
+   * The live agent whose Inspector opens an artefact file in World's Files
+   * viewer: its maker, else another agent on that connection (same room
+   * first). Null while none is live there.
+   */
+  viewerId?: string | null;
 };
 
 export function sourcePlace(
@@ -28,6 +41,39 @@ export function sourcePlace(
     hostLabel: host?.label ?? source.connection_id,
     workspaceLabel: space?.label ?? source.workspace_id,
     generation: host && !host.stale ? host.generation : null,
+  };
+}
+
+/**
+ * Where an artefact on Board comes from, as World sees it now. The element
+ * keeps only World's reference to its maker (connection, pane, harness and
+ * creator room); the maker's name comes from the live World, never from the
+ * view or the saved element. Only the saved connection is searched.
+ */
+export function artefactPlace(
+  world: Pick<WorldObject, "hosts">,
+  source: BoardArtefactSource,
+): SourcePlace {
+  const place = sourcePlace(world, source);
+  const host = world.hosts.find(
+    (entry) => entry.connectionId === source.connection_id && !entry.stale,
+  );
+  const agents: WorldLeafObject[] = (host?.spaces ?? []).flatMap((space) =>
+    space.children.filter((leaf) => leaf.kind === "agent" && !leaf.stale),
+  );
+  const maker = agents.find(
+    (leaf) =>
+      leaf.pane.pane_id === source.pane_id &&
+      (!source.agent || !leaf.pane.agent || leaf.pane.agent === source.agent),
+  );
+  const viewer =
+    maker ??
+    agents.find((leaf) => leaf.pane.workspace_id === source.workspace_id) ??
+    agents[0];
+  return {
+    ...place,
+    maker: maker ? agentName(maker) : harnessLabel(source.agent || null),
+    viewerId: viewer?.id ?? null,
   };
 }
 

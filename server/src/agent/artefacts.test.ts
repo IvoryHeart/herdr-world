@@ -3,10 +3,14 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  artefactId,
+  callWorkingDirectories,
   localArtefactStat,
+  ownedArtefacts,
   sessionArtefacts,
   withArtefactPresence,
 } from "./artefacts";
+import { projectAgentTrajectory } from "./session-trajectory";
 import type { AtifStep, AtifTrajectory } from "./session-types";
 import {
   artefactKindForPath,
@@ -163,7 +167,13 @@ test("presence: a deleted file is gone, links and unchecked hosts are unknown", 
     const remote = await withArtefactPresence(candidates, null);
     expect(remote.every((entry) => entry.exists === null)).toBe(true);
     // Every record survives the browser's wire check unchanged.
-    expect(local.map(parseAgentArtefact)).toEqual(local);
+    const owned = ownedArtefacts(local, "host-a", () => ({
+      connection_id: "host-a",
+      pane_id: "w1:p1",
+      agent: "claude",
+      workspace_id: "w1",
+    }));
+    expect(owned.map(parseAgentArtefact)).toEqual(owned);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -178,4 +188,117 @@ test("kinds come from the file name", () => {
   expect(artefactKindForPath("/a/main.go")).toBeNull();
   expect(artefactKindForPath("/a/.env")).toBeNull();
   expect(parseAgentArtefact({ id: "x" })).toBeNull();
+});
+
+test("the same path on two connections is two artefacts; one host's place is one", () => {
+  const found = sessionArtefacts(
+    trajectory([call("1", "Write", { file_path: "/work/report.md" })]),
+  );
+  const maker = (connection_id: string) => () => ({
+    connection_id,
+    pane_id: "w1:p1",
+    agent: "codex",
+    workspace_id: "w1",
+  });
+  const present = found.map((entry) => ({ ...entry, exists: true }));
+  const [first] = ownedArtefacts(present, "host-a", maker("host-a"));
+  const [second] = ownedArtefacts(present, "host-b", maker("host-b"));
+  expect(first!.id).not.toBe(second!.id);
+  expect(first!.id).toBe(artefactId("host-a", "file:/work/report.md"));
+  expect(first!.made_by.connection_id).toBe("host-a");
+  expect(second!.made_by.connection_id).toBe("host-b");
+});
+
+const file = { path: "/sessions/rollout.jsonl", mtimeMs: 0 };
+
+test("Codex: a relative Add File resolves against the cwd of its own turn", () => {
+  const patch = (name: string) =>
+    `*** Begin Patch\n*** Add File: ${name}\n+# x\n*** End Patch`;
+  const records = [
+    { type: "session_meta", payload: { cwd: "/work/first" } },
+    { type: "turn_context", payload: { cwd: "/work/first" } },
+    {
+      type: "response_item",
+      timestamp: "2026-11-23T10:00:00.000Z",
+      payload: {
+        type: "custom_tool_call",
+        call_id: "c1",
+        name: "apply_patch",
+        input: patch("report.md"),
+      },
+    },
+    { type: "turn_context", payload: { cwd: "/work/second" } },
+    {
+      type: "response_item",
+      timestamp: "2026-11-23T10:05:00.000Z",
+      payload: {
+        type: "custom_tool_call",
+        call_id: "c2",
+        name: "apply_patch",
+        input: patch("notes.md"),
+      },
+    },
+    {
+      type: "response_item",
+      timestamp: "2026-11-23T10:06:00.000Z",
+      payload: {
+        type: "function_call",
+        call_id: "c3",
+        name: "shell",
+        // A shell call's own workdir wins over its turn's cwd.
+        arguments: JSON.stringify({
+          command: ["apply_patch", patch("plan.md")],
+          workdir: "/work/third",
+        }),
+      },
+    },
+  ];
+  const found = sessionArtefacts(
+    projectAgentTrajectory("codex", file, records),
+    callWorkingDirectories("codex", records),
+  );
+  expect(found.map((entry) => entry.where)).toEqual([
+    { type: "file", path: "/work/third/plan.md" },
+    { type: "file", path: "/work/second/notes.md" },
+    { type: "file", path: "/work/first/report.md" },
+  ]);
+});
+
+test("Claude Code: each tool_use resolves against its own record's cwd", () => {
+  const write = (id: string, cwd: string, path: string) => ({
+    type: "assistant",
+    uuid: id,
+    cwd,
+    timestamp: "2026-11-23T10:00:00.000Z",
+    message: {
+      role: "assistant",
+      content: [
+        {
+          type: "tool_use",
+          id,
+          name: "NotebookEdit",
+          input: { notebook_path: path },
+        },
+      ],
+    },
+  });
+  const records = [
+    write("t1", "/work/first", "analysis.ipynb"),
+    write("t2", "/work/second", "findings.ipynb"),
+  ];
+  const cwdOf = callWorkingDirectories("claude", records);
+  expect([cwdOf("t1"), cwdOf("t2"), cwdOf("unknown")]).toEqual([
+    "/work/first",
+    "/work/second",
+    // Two cwds: a call the records do not place is not guessed.
+    undefined,
+  ]);
+  expect(
+    sessionArtefacts(projectAgentTrajectory("claude", file, records), cwdOf)
+      .map((entry) => entry.where)
+      .reverse(),
+  ).toEqual([
+    { type: "file", path: "/work/first/analysis.ipynb" },
+    { type: "file", path: "/work/second/findings.ipynb" },
+  ]);
 });

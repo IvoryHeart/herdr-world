@@ -4281,6 +4281,7 @@ export default function BoardView({
             const host = model.hostByKey.get(hostKey);
             if (host) setNewWorkspaceOn(host);
           },
+          onOpenFiles: (nodeId) => (onOpenFiles ?? onOpen)(nodeId),
         })}
         {newWorkspaceOn ? (
           <Suspense fallback={null}>

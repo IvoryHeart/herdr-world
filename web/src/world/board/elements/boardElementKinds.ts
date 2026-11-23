@@ -196,7 +196,6 @@ export function projectSource(element: BoardElement) {
           connection_id: element.source.connection_id,
           workspace_id: element.source.workspace_id,
           path: element.source.file,
-          agent_ref: element.source.agent_ref,
         }
       : null;
   if (element.kind === "document" && "text" in element.source) return null;

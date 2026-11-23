@@ -72,15 +72,18 @@ export type BoardProjectSource = {
   path: string;
 };
 /**
- * An agent's artefact on Board: the agent's connection and workspace, who
- * made it and either the absolute `file` its transcript names (read through
- * the same Files seam as the Inspector) or its published `url` (never
- * fetched).
+ * An agent's artefact on Board, as World's record names it
+ * (shared/agentArtefacts.ts `made_by`): the source connection, the room it
+ * was made in, the maker's pane and harness, and either the absolute `file`
+ * its transcript names (read through the same Files seam as the Inspector)
+ * or its published `url` (never fetched). Board keeps no maker name of its
+ * own; it shows World's name for that agent while it is there.
  */
 export type BoardArtefactSource = {
   connection_id: string;
   workspace_id: string;
-  agent_ref: string;
+  pane_id: string;
+  agent: string;
   artefact_kind: ArtefactKind;
 } & ({ file: string } | { url: string });
 type Sources = {
@@ -284,7 +287,8 @@ export function parseBoardElement(value: unknown, rev: number): BoardElement {
       const owner = {
         connection_id: text(source.connection_id, "connection ID", 512),
         workspace_id: text(source.workspace_id, "workspace ID", 512),
-        agent_ref: text(source.agent_ref, "agent reference", 512),
+        pane_id: text(source.pane_id, "pane ID", 512),
+        agent: text(source.agent, "agent", 128),
         artefact_kind: source.artefact_kind as ArtefactKind,
       };
       if ("file" in source === "url" in source)

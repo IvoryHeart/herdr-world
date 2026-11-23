@@ -9,9 +9,11 @@ import {
   artefactLinkTitle,
   type AgentArtefact,
   type ArtefactEvidence,
+  type ArtefactMaker,
 } from "../../../shared/agentArtefacts";
 import { isConversationStep } from "./session-messages";
 import type { AtifTrajectory } from "./session-types";
+import { isRecord, stringValue } from "./session-utils";
 
 /**
  * Artefact discovery from a bound transcript (Claude Code and Codex share
@@ -19,7 +21,8 @@ import type { AtifTrajectory } from "./session-types";
  *
  * - Reliable: a file-writing tool call (`Write`, `NotebookEdit`, `create`)
  *   naming its path, and an `apply_patch` "Add File" header (Codex), resolved
- *   against the session's own cwd.
+ *   against the working directory the transcript records for that call (its
+ *   own `workdir`, else the turn's cwd), never a later turn's.
  * - Reliable for links: URLs a publishing command printed (`gh pr create`,
  *   `gh issue create`, `gh gist create`, `gh release create`, deploy/publish).
  * - A guess: URLs the agent wrote in its replies.
@@ -39,10 +42,73 @@ const URL_TEXT = /https?:\/\/[^\s<>()[\]{}"'`|\\^]+/g;
 const IGNORED_PATH =
   /\/(?:\.git|node_modules)\/|\/\.claude\/(?:projects|todos|statsig|shell-snapshots)\/|\/\.codex\/(?:sessions|log)\//;
 
-type Candidate = Omit<AgentArtefact, "exists">;
+/**
+ * What one transcript shows, before World names its maker: `key` is the
+ * place (`file:<path>` or `link:<url>`), unique only on its own host.
+ */
+export type ArtefactCandidate = Omit<
+  AgentArtefact,
+  "id" | "exists" | "made_by"
+> & {
+  key: string;
+};
+type Candidate = ArtefactCandidate;
 
-const artefactId = (key: string) =>
-  `artefact-${createHash("sha256").update(key).digest("hex").slice(0, 16)}`;
+/**
+ * An artefact's identity: its place on its source connection. The same path
+ * on two hosts is two artefacts; the same place on one host is one.
+ */
+export const artefactId = (connectionId: string, key: string) =>
+  `artefact-${createHash("sha256").update(`${connectionId}\0${key}`).digest("hex").slice(0, 16)}`;
+
+/** The working directory a call ran in, by its transcript call ID. */
+export type CallWorkingDirectory = (callId: string) => string | undefined;
+
+const absolute = (value: unknown) => {
+  const path = stringValue(value);
+  return path.startsWith("/") && !path.includes("\0") ? path : undefined;
+};
+
+/**
+ * The cwd each tool call ran in, from the harness's own records in order:
+ * Codex's `session_meta`/`turn_context` cwd before its calls, Claude Code's
+ * per-record `cwd` beside its `tool_use` parts. A call the records do not
+ * place is answered only when the whole transcript has one cwd.
+ */
+export function callWorkingDirectories(
+  agent: string,
+  records: readonly Record<string, unknown>[],
+): CallWorkingDirectory {
+  const byCall = new Map<string, string>();
+  const seen = new Set<string>();
+  let current: string | undefined;
+  for (const record of records) {
+    const payload = isRecord(record.payload) ? record.payload : null;
+    if (agent === "codex") {
+      if (
+        (record.type === "session_meta" || record.type === "turn_context") &&
+        payload
+      ) {
+        current = absolute(payload.cwd) ?? current;
+        if (current) seen.add(current);
+      } else if (record.type === "response_item" && payload && current) {
+        const id = stringValue(payload.call_id) || stringValue(payload.id);
+        if (id) byCall.set(id, current);
+      }
+      continue;
+    }
+    const cwd = absolute(record.cwd);
+    if (!cwd) continue;
+    seen.add(cwd);
+    const message = isRecord(record.message) ? record.message : null;
+    const parts = Array.isArray(message?.content) ? message.content : [];
+    for (const part of parts)
+      if (isRecord(part) && part.type === "tool_use" && stringValue(part.id))
+        byCall.set(stringValue(part.id), cwd);
+  }
+  const only = seen.size === 1 ? [...seen][0] : undefined;
+  return (callId) => byCall.get(callId) ?? only;
+}
 
 function clipTitle(title: string) {
   return title.length > ARTEFACT_TITLE_LIMIT
@@ -64,7 +130,7 @@ function fileCandidate(
   const kind = artefactKindForPath(path);
   if (!kind) return null;
   return {
-    id: artefactId(`file:${path}`),
+    key: `file:${path}`,
     title: clipTitle(posix.basename(path)),
     kind,
     where: { type: "file", path },
@@ -90,7 +156,7 @@ function linkCandidates(
     if (url.username || url.password || url.href.length > 2048) continue;
     const kind = artefactKindForPath(url.pathname);
     found.push({
-      id: artefactId(`link:${url.href}`),
+      key: `link:${url.href}`,
       title: artefactLinkTitle(url),
       kind: kind ?? "page",
       where: { type: "link", url: url.href, link_kind: artefactLinkKind(url) },
@@ -104,8 +170,10 @@ function linkCandidates(
 /** Newest first, one record per place, at most ARTEFACT_LIMIT. */
 export function sessionArtefacts(
   trajectory: AtifTrajectory,
-  cwd?: string,
+  cwdOf?: string | CallWorkingDirectory,
 ): Candidate[] {
+  const callCwd: CallWorkingDirectory =
+    typeof cwdOf === "function" ? cwdOf : () => cwdOf;
   const byId = new Map<string, Candidate>();
   const strength: Record<ArtefactEvidence, number> = {
     agent_message: 0,
@@ -115,11 +183,11 @@ export function sessionArtefacts(
   };
   const add = (candidate: Candidate | null) => {
     if (!candidate) return;
-    const known = byId.get(candidate.id);
+    const known = byId.get(candidate.key);
     // The latest mention dates it; the strongest evidence names it.
-    if (known) byId.delete(candidate.id);
+    if (known) byId.delete(candidate.key);
     byId.set(
-      candidate.id,
+      candidate.key,
       known && strength[known.evidence] > strength[candidate.evidence]
         ? { ...candidate, evidence: known.evidence }
         : candidate,
@@ -130,6 +198,8 @@ export function sessionArtefacts(
     const made_at = step.timestamp ?? null;
     for (const call of step.tool_calls ?? []) {
       const args = call.arguments ?? {};
+      // A shell call's own working directory wins over its turn's cwd.
+      const cwd = absolute(args.workdir) ?? callCwd(call.tool_call_id);
       if (WRITE_TOOL.test(call.function_name))
         for (const key of PATH_KEYS) {
           const value = args[key];
@@ -166,7 +236,7 @@ export function sessionArtefacts(
 export async function withArtefactPresence(
   candidates: readonly Candidate[],
   stat: ((path: string) => Promise<unknown>) | null,
-): Promise<AgentArtefact[]> {
+): Promise<(Candidate & Pick<AgentArtefact, "exists">)[]> {
   return Promise.all(
     candidates.map(async (candidate) => {
       if (candidate.where.type !== "file" || !stat)
@@ -181,6 +251,21 @@ export async function withArtefactPresence(
       }
     }),
   );
+}
+
+/**
+ * The records an agent's desk shows: each place named on its connection
+ * (artefactId) and stamped with the agent and the room that made it.
+ */
+export function ownedArtefacts(
+  found: readonly (Candidate & Pick<AgentArtefact, "exists">)[],
+  connectionId: string,
+  maker: (id: string) => ArtefactMaker,
+): AgentArtefact[] {
+  return found.map(({ key, ...artefact }) => {
+    const id = artefactId(connectionId, key);
+    return { ...artefact, id, made_by: maker(id) };
+  });
 }
 
 /** Presence on this machine: null when the path is gone or not a file. */

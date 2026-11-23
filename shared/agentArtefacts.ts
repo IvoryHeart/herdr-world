@@ -35,8 +35,27 @@ export type ArtefactWhere =
     }
   | { type: "link"; url: string; link_kind: ArtefactLinkKind };
 
+/**
+ * Who made it, as World derived it once: the agent's pane on its immutable
+ * source connection, its harness, and the room (Herdr workspace) it was in
+ * when World first saw the artefact. Views display these; none rebuilds them
+ * from where the agent is now.
+ */
+export type ArtefactMaker = {
+  connection_id: string;
+  pane_id: string;
+  /** The harness, e.g. `claude` or `codex`. */
+  agent: string;
+  /** Null when the agent's room was unknown when World first saw it. */
+  workspace_id: string | null;
+};
+
 export type AgentArtefact = {
-  /** Stable for the same place: `artefact-<hash of where>`. */
+  /**
+   * Stable for the same place on the same source connection:
+   * `artefact-<hash of connection and where>`. The same path on two hosts is
+   * two artefacts.
+   */
   id: string;
   title: string;
   kind: ArtefactKind;
@@ -50,6 +69,7 @@ export type AgentArtefact = {
    * probed on every read).
    */
   exists: boolean | null;
+  made_by: ArtefactMaker;
 };
 
 /** The most artefacts one agent session reports, newest first. */
@@ -143,7 +163,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** Validates one wire record; the browser drops anything else. */
 export function parseAgentArtefact(value: unknown): AgentArtefact | null {
   if (!isRecord(value) || !isRecord(value.where)) return null;
-  const { id, title, kind, made_at, evidence, exists, where } = value;
+  const { id, title, kind, made_at, evidence, exists, where, made_by } = value;
+  if (
+    !isRecord(made_by) ||
+    typeof made_by.connection_id !== "string" ||
+    typeof made_by.pane_id !== "string" ||
+    typeof made_by.agent !== "string" ||
+    !(made_by.workspace_id === null || typeof made_by.workspace_id === "string")
+  )
+    return null;
   if (
     typeof id !== "string" ||
     typeof title !== "string" ||
@@ -178,5 +206,11 @@ export function parseAgentArtefact(value: unknown): AgentArtefact | null {
     made_at: made_at as string | null,
     evidence: evidence as ArtefactEvidence,
     exists: exists as boolean | null,
+    made_by: {
+      connection_id: made_by.connection_id,
+      pane_id: made_by.pane_id,
+      agent: made_by.agent,
+      workspace_id: made_by.workspace_id as string | null,
+    },
   };
 }

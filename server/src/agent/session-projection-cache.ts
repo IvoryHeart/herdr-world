@@ -1,6 +1,8 @@
 import { sessionWorktreeMetadata } from "./worktree-session";
 import {
+  callWorkingDirectories,
   localArtefactStat,
+  ownedArtefacts,
   sessionArtefacts,
   withArtefactPresence,
 } from "./artefacts";
@@ -54,7 +56,6 @@ export async function readSessionProjection(
     projectionFile,
     trajectory,
   );
-  const worktree = sessionWorktreeMetadata(agent, records);
   return {
     file,
     trajectory,
@@ -62,8 +63,12 @@ export async function readSessionProjection(
     entries: historyEntriesFromTrajectory(projectionFile, trajectory),
     quest: questFromSession(agent, trajectory, records),
     usage_stop: usageStopFromRecords(agent, records),
-    worktree,
-    artefacts: sessionArtefacts(trajectory, worktree?.cwd),
+    worktree: sessionWorktreeMetadata(agent, records),
+    // Relative paths resolve against the cwd recorded for their own call.
+    artefacts: sessionArtefacts(
+      trajectory,
+      callWorkingDirectories(agent, records),
+    ),
     stats: {
       turns: messages.filter((message) => message.role === "user").length,
       records: records.length,
@@ -154,8 +159,13 @@ export function createSessionProjectionCache(
     entries: 16,
     bytes: 32 * 1024 * 1024,
   },
+  /** The immutable connection these sessions are read through. */
+  connectionId = "",
 ) {
   const cache = new Map<string, Cached>();
+  // The room each artefact's agent was in when World first saw it, so a
+  // later move does not reassign where it was made (bounded, references only).
+  const origins = new Map<string, string | null>();
   const pending = new Map<string, Promise<Cached>>();
   // Quests are small, so many more are kept than projections: an agent's
   // quest can be shown without rereading a transcript that has not changed.
@@ -390,16 +400,33 @@ export function createSessionProjectionCache(
     /**
      * The desk record with each file artefact's presence checked on every
      * read, so a deleted file shows as gone; remote hosts are not probed.
+     * Each artefact is named on this connection and stamped with `maker`,
+     * in the room it was in when World first saw that artefact.
      */
-    async desk(resolved: AgentSessionResolved) {
+    async desk(
+      resolved: AgentSessionResolved,
+      maker: { pane_id: string; agent: string | null; room?: unknown },
+    ) {
+      const room =
+        typeof maker.room === "string" && maker.room ? maker.room : null;
       const found = await record(resolved);
-      return {
-        ...found,
-        artefacts: await withArtefactPresence(
-          found.artefacts,
-          files.remote ? null : localArtefactStat,
-        ),
-      };
+      const present = await withArtefactPresence(
+        found.artefacts,
+        files.remote ? null : localArtefactStat,
+      );
+      const artefacts = ownedArtefacts(present, connectionId, (id) => {
+        if (!origins.has(id) && room !== null) {
+          origins.set(id, room);
+          if (origins.size > 4096) origins.delete(origins.keys().next().value!);
+        }
+        return {
+          connection_id: connectionId,
+          pane_id: maker.pane_id,
+          agent: maker.agent ?? "",
+          workspace_id: origins.get(id) ?? room,
+        };
+      });
+      return { ...found, artefacts };
     },
     /** The session's quest, reusing its unchanged projection. */
     async quest(resolved: AgentSessionResolved) {

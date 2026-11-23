@@ -3,6 +3,7 @@ import {
   ExternalLink,
   File,
   Folder,
+  FolderOpen,
   Pencil,
   RotateCw,
   Trash2,
@@ -60,6 +61,7 @@ export function BoardElementReader({
   element,
   place,
   read,
+  onOpenFiles,
   onEdit,
   onRemove,
   onClose,
@@ -67,6 +69,11 @@ export function BoardElementReader({
   element: BoardElement;
   place: SourcePlace | null;
   read(params: BoardElementReadParams): Promise<BoardElementReadResult>;
+  /**
+   * Opens an artefact file in World's Files viewer: undefined for anything
+   * else, null while no agent on its connection is live to open it.
+   */
+  onOpenFiles?: (() => void) | null;
   onEdit(): void;
   onRemove(): void;
   onClose(): void;
@@ -166,6 +173,7 @@ export function BoardElementReader({
             element={element}
             state={state}
             hostLabel={hostLabel}
+            filesHint={onOpenFiles !== undefined}
             raw={raw}
             onOpen={(name) => setChild(child ? `${child}/${name}` : name)}
             onRetry={retry}
@@ -204,6 +212,21 @@ export function BoardElementReader({
           <button type="button" className="ghost" onClick={onEdit}>
             <Pencil size={14} aria-hidden="true" /> Edit
           </button>
+          {onOpenFiles !== undefined ? (
+            <button
+              type="button"
+              className="ghost board-reader-files-open"
+              disabled={!onOpenFiles}
+              title={
+                onOpenFiles
+                  ? "Opens it in World's Files viewer"
+                  : `No agent is live on ${hostLabel} to open it`
+              }
+              onClick={() => onOpenFiles?.()}
+            >
+              <FolderOpen size={14} aria-hidden="true" /> Open in Files
+            </button>
+          ) : null}
           {url ? (
             <a
               className="board-reader-open"
@@ -234,6 +257,7 @@ function ReadBody({
   element,
   state,
   hostLabel,
+  filesHint,
   raw,
   onOpen,
   onRetry,
@@ -241,6 +265,8 @@ function ReadBody({
   element: BoardElement;
   state: ReadState;
   hostLabel: string;
+  /** Files can show what Board cannot (an image, a PDF). */
+  filesHint: boolean;
   raw: boolean;
   onOpen(name: string): void;
   onRetry(): void;
@@ -265,7 +291,11 @@ function ReadBody({
         : "";
     return (
       <div className="board-reader-status" role="alert">
-        <p>{readProblem(reason, hostLabel)}</p>
+        <p>
+          {filesHint && reason === "not_text"
+            ? "Board shows only text. Use Open in Files to see this file."
+            : readProblem(reason, hostLabel)}
+        </p>
         {reason !== "missing_element" ? (
           <button type="button" className="ghost" onClick={onRetry}>
             <RotateCw size={14} aria-hidden="true" /> Try again

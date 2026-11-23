@@ -258,8 +258,10 @@ test("CLI puts an agent's artefact as a file or link reference", () => {
     "c1",
     "--workspace",
     "w1",
-    "--agent-ref",
-    "Claude",
+    "--pane",
+    "w1:p2",
+    "--agent",
+    "claude",
   ];
   expect(
     parseWorldArgs("board", [
@@ -280,7 +282,8 @@ test("CLI puts an agent's artefact as a file or link reference", () => {
       source: {
         connection_id: "c1",
         workspace_id: "w1",
-        agent_ref: "Claude",
+        pane_id: "w1:p2",
+        agent: "claude",
         artefact_kind: "report",
         file: "/work/report.md",
       },

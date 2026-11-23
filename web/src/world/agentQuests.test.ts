@@ -174,19 +174,20 @@ test("a usage-limit stop is read with the quest, without one, and ends with the 
   expect(titleOf(reads)).toBe("Next");
 });
 
-test("a herdr-core agent is never asked for a quest; a Herdr agent beside it is", async () => {
-  // Recorded on a core preview: agent_quest.list went to `local-core`
-  // every few seconds and core refused each one.
-  const calls: string[][] = [];
-  const client = {
-    connectionId: "example",
-    generation: 1,
-    isCurrent: () => true,
-    call: async (_method: string, params: { pane_ids: string[] }) => {
-      calls.push(params.pane_ids);
-      return { quests: [] };
-    },
-  } as unknown as ConnectionClient;
+test("a herdr-core agent is asked through its own core connection, as a Herdr agent is", async () => {
+  // Core answers agent_quest.list (shared/coreHostMethods.ts), so Desk and
+  // Town show core agents' quests and artefacts too.
+  const calls: [string, string[]][] = [];
+  const clientOf = (connectionId: string) =>
+    ({
+      connectionId,
+      generation: 1,
+      isCurrent: () => true,
+      call: async (_method: string, params: { pane_ids: string[] }) => {
+        calls.push([connectionId, params.pane_ids]);
+        return { quests: [] };
+      },
+    }) as unknown as ConnectionClient;
   const core = {
     ...leaf("L1"),
     id: "core-1",
@@ -196,11 +197,14 @@ test("a herdr-core agent is never asked for a quest; a Herdr agent beside it is"
   const asked: string[] = [];
   const reads = new AgentQuestReads((candidate) => {
     asked.push(candidate.id);
-    return client;
+    return clientOf(candidate.connectionId);
   });
   await reads.read([core, leaf("L1")]);
-  expect(asked).toEqual(["leaf-1"]);
-  expect(calls).toEqual([["w1:p1"]]);
+  expect(asked).toEqual(["core-1", "leaf-1"]);
+  expect(calls).toEqual([
+    ["core", ["w1:p2"]],
+    ["example", ["w1:p1"]],
+  ]);
 });
 
 test("artefacts are read with the quest, kept per agent, and a deleted file reads as gone", async () => {
@@ -214,6 +218,12 @@ test("artefacts are read with the quest, kept per agent, and a deleted file read
     made_at: "2026-11-23T10:00:00.000Z",
     evidence: "file_write",
     exists: true,
+    made_by: {
+      connection_id: "example",
+      pane_id: "w1:p1",
+      agent: "claude",
+      workspace_id: "w1",
+    },
   };
   const first = reads.read([leaf("L1")]);
   pending[0]!({

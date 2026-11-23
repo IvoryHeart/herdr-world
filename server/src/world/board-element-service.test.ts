@@ -282,7 +282,8 @@ test("an agent's artefact reads its absolute file through the named connection; 
   const owner = {
     connection_id: "studio",
     workspace_id: "project-a",
-    agent_ref: "claude · reviews",
+    pane_id: "w1:p2",
+    agent: "claude",
     artefact_kind: "report",
   };
   await f.service.call("put", {

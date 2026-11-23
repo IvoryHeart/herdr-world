@@ -13,7 +13,8 @@ import type { WorldObject } from "../../worldObject";
 import { type AddDialogHost, BoardAddDialog } from "./BoardAddDialog";
 import { BoardElementReader } from "./BoardElementReader";
 import { projectSource } from "./boardElementKinds";
-import { sourcePlace } from "./boardElementRead";
+import { requestArtefactFile } from "../../artefactOpen";
+import { artefactPlace, sourcePlace } from "./boardElementRead";
 
 /** A Board element ID the service admits: letters, digits, `-`. */
 function newElementId(kind: string) {
@@ -57,6 +58,8 @@ export function useBoardElements({
   );
   const placeOf = useCallback(
     (element: BoardElement) => {
+      if (element.kind === "artefact")
+        return artefactPlace(world, element.source);
       const project = projectSource(element);
       return project ? sourcePlace(world, project) : null;
     },
@@ -164,6 +167,8 @@ export function useBoardElements({
       onNote(): void;
       onWork(): void;
       onNewWorkspace(hostKey: string): void;
+      /** Opens an agent's Inspector on its Files view. */
+      onOpenFiles(nodeId: string): unknown;
     }) {
       if (!dialog) return null;
       const close = () => setDialog(null);
@@ -196,11 +201,32 @@ export function useBoardElements({
       }
       const element = byId.get(dialog.id);
       if (!element) return null;
+      const place = placeOf(element);
+      // An artefact file, text or not (an image, a PDF), opens in World's
+      // Files viewer through a live agent on its saved connection.
+      const file =
+        element.kind === "artefact" && "file" in element.source
+          ? element.source.file
+          : null;
+      const viewerId = place?.generation != null ? place.viewerId : null;
+      const openFiles =
+        file !== null
+          ? viewerId
+            ? () => {
+                close();
+                requestArtefactFile(viewerId, file);
+                void Promise.resolve(routes.onOpenFiles(viewerId)).catch(
+                  () => undefined,
+                );
+              }
+            : null
+          : undefined;
       return (
         <BoardElementReader
           element={element}
-          place={placeOf(element)}
+          place={place}
           read={read}
+          onOpenFiles={openFiles}
           onEdit={() => setDialog({ type: "edit", id: element.id })}
           onRemove={() => remove(element)}
           onClose={close}

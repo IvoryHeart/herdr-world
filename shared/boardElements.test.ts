@@ -83,7 +83,8 @@ test("an agent's artefact keeps its agent and an absolute file or a link, never 
   const owner = {
     connection_id: "studio",
     workspace_id: "project-a",
-    agent_ref: "claude · reviews",
+    pane_id: "w1:p2",
+    agent: "claude",
     artefact_kind: "report",
   };
   const artefact = {
@@ -119,7 +120,8 @@ test("an agent's artefact keeps its agent and an absolute file or a link, never 
     { ...owner },
     { ...owner, url: "javascript:alert(1)" },
     { ...owner, artefact_kind: "binary", file: "/work/a.md" },
-    { ...owner, agent_ref: "", file: "/work/a.md" },
+    { ...owner, pane_id: "", file: "/work/a.md" },
+    { ...owner, agent: undefined, file: "/work/a.md" },
   ])
     expect(() => parseBoardElement({ ...artefact, source }, 1)).toThrow();
 });

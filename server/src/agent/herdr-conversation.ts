@@ -785,8 +785,9 @@ export function createHerdrConversationSource(args: {
             session_fingerprint: base.session_fingerprint,
           };
           try {
+            const room = listed.get(pane_id)?.workspace_id;
             const desk = resolved.file
-              ? await args.cache.desk(resolved)
+              ? await args.cache.desk(resolved, { ...found, room })
               : { quest: null, usage_stop: null, artefacts: [] };
             return {
               ...found,
@@ -796,8 +797,7 @@ export function createHerdrConversationSource(args: {
                 : null,
             };
           } catch {
-            // The session is known: say which, so a browser keeps the last
-            // quest only if it came from this session.
+            // Known session: a browser keeps its last quest only for it.
             return { ...found, quest: null, read_failed: true };
           }
         },

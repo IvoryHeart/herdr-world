@@ -76,8 +76,9 @@ export function BoardElementCard({
         <Icon size={15} aria-hidden="true" />
         <strong className="board-element-title">{element.title}</strong>
       </div>
-      <ElementBody element={element} />
-      {project && place ? (
+      <ElementBody element={element} place={place} />
+      {/* An artefact names the room it was made in, link or file. */}
+      {(project || element.kind === "artefact") && place ? (
         <div className="board-element-place">
           {offline ? (
             <span className="board-element-offline-mark">offline · </span>
@@ -89,7 +90,13 @@ export function BoardElementCard({
   );
 }
 
-function ElementBody({ element }: { element: BoardElement }) {
+function ElementBody({
+  element,
+  place,
+}: {
+  element: BoardElement;
+  place: SourcePlace | null;
+}) {
   switch (element.kind) {
     case "memory":
       return (
@@ -128,7 +135,7 @@ function ElementBody({ element }: { element: BoardElement }) {
         <>
           <div className="board-element-line board-element-agent">
             {ARTEFACT_KIND_LABELS[element.source.artefact_kind]} · by{" "}
-            {element.source.agent_ref}
+            {place?.maker ?? element.source.agent}
           </div>
           <div className="board-element-line">
             {"file" in element.source

@@ -589,11 +589,11 @@ describe("simultaneous qualified runtime admission", () => {
 
   test("a herdr-core connection gets only the methods core answers; Herdr-only calls never leave the page", async () => {
     // Recorded on a core preview: the page sent these to `local-core` and
-    // the service refused each one (agent_quest.list every few seconds).
+    // the service refused each one.
     const { bridge, socket } = setup();
     bridge.setCoreRuntimeGenerations([{ id: "core", generation: 2 }]);
     const core = bridge.connection("core", 2);
-    for (const method of ["agent_quest.list", "pane.read", "terminal.input"]) {
+    for (const method of ["pane.read", "terminal.input"]) {
       const refused = await core.call(method, {}).catch((error) => error);
       expect(refused).toBeInstanceOf(Error);
       expect(refused.message).toBe(
@@ -601,8 +601,12 @@ describe("simultaneous qualified runtime admission", () => {
       );
     }
     expect(socket.sent).toHaveLength(0);
-    // Files, Git, worktrees and Chat go to core; Herdr hosts are unchanged.
+    // Files, Git, worktrees, Chat and the desk read (quests and artefacts)
+    // go to core; Herdr hosts are unchanged.
     void core.call("file.list", { path: "." }).catch(() => undefined);
+    void core
+      .call("agent_quest.list", { pane_ids: ["t1"] })
+      .catch(() => undefined);
     void core.call("file.reveal", { path: "." }).catch(() => undefined);
     void core
       .call("agent_conversation.latest", { pane_id: "t1" })
@@ -613,6 +617,7 @@ describe("simultaneous qualified runtime admission", () => {
       .catch(() => undefined);
     expect(socket.sent.map((request) => request.method)).toEqual([
       "file.list",
+      "agent_quest.list",
       "file.reveal",
       "agent_conversation.latest",
       "agent_quest.list",

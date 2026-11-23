@@ -23,6 +23,7 @@
 - `web/src/world/board/elements/`
 - `web/src/world/BoardElements.browser.tsx`
 - `web/src/world/artefactOpen.ts` (adds an agent's artefact to Board)
+- `web/src/world/board/elements/boardElementRead.ts` (`artefactPlace`: maker name and Files viewer from the live World)
 
 **Tests:**
 
@@ -40,7 +41,7 @@
 - Board's presentation table (`boardElementKinds.ts`) must name every registry kind; a test fails otherwise.
 - Selectors for element cards need `.board-card.board-element*`; `.board-card` alone overrides the paper background.
 - A project read never falls back to another host or a newer generation.
-- An `artefact` file is the one absolute Board path; it reads through the same Files seam as the Inspector ([contract](../../changes/agent-artefacts/specs/world-board-elements/spec.md)).
+- An `artefact` file is the one absolute Board path; it reads through the same Files seam as the Inspector ([contract](../../changes/agent-artefacts/specs/world-board-elements/spec.md)). Its source keeps `pane_id`, `agent` and the creator room, never a maker name; Board names the maker from the live World. Any artefact file offers **Open in Files**.
 - Board never fetches a link; elements are not string ends yet.
 
 ## Usage reference

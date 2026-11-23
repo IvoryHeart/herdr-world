@@ -7,7 +7,7 @@ file is opened and nothing is typed into an agent.
 | Source | Harness | Reliability |
 | --- | --- | --- |
 | `Write`/`NotebookEdit` tool call naming a path | Claude Code | Reliable: the harness's record of creating the file |
-| `apply_patch` `*** Add File:` header, resolved against the session cwd | Codex | Reliable |
+| `apply_patch` `*** Add File:` header, resolved against that turn's cwd (or the call's `workdir`) | Codex | Reliable |
 | URLs printed by `gh pr/issue/gist/release create`, deploy or publish commands | both | Reliable for "published" |
 | URLs in the agent's own reply | both | A guess: it may only mention a link; shown in italics |
 | Files written by shell redirection or scripts | both | Not detected |
@@ -18,6 +18,19 @@ Kinds come from the file name: Markdown/text/PDF are documents, or reports
 when the name says report/plan/proposal/summary/review and similar; HTML is a
 page; PNG/JPEG/SVG and similar are images; CSV, diagrams and notebooks are
 files.
+
+Relative paths resolve per call: Codex records its cwd in `session_meta` and
+each `turn_context`, Claude Code on every record. A call the transcript does
+not place resolves only when the session had one folder.
+
+## Identity and maker
+
+An artefact ID hashes the connection ID with the place, so the same path on
+two hosts is two artefacts. The service attaches `made_by` (connection, pane,
+harness, room) once per desk read. The room is first-seen per connection in a
+bounded in-memory map, so a moved agent keeps its artefact's room until the
+service restarts; after a restart the current room is used. Board saves
+`made_by` as the element source and names the maker from the live World.
 
 ## Presence
 
@@ -35,4 +48,5 @@ quest pennant; it hides with the pennant while the agent is away.
 
 Each needs an ATIF projection of its transcript plus the names of its
 file-creating tool and its patch format: Pi, Kimi and OpenCode once their
-transcripts are bound; herdr-core agents once core quest reads exist.
+transcripts are bound. herdr-core agents answer the same desk read
+(`agent_quest.list` is a core host method).

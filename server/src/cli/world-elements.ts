@@ -22,6 +22,8 @@ export function parseBoardElementArgs(args: string[]) {
         "workspace",
         "path",
         "agent-ref",
+        "pane",
+        "agent",
         "artefact-kind",
         "rev",
       ]
@@ -75,7 +77,8 @@ export function parseBoardElementArgs(args: string[]) {
           ? {
               connection_id: required(values.connection, "--connection"),
               workspace_id: required(values.workspace, "--workspace"),
-              agent_ref: required(values["agent-ref"], "--agent-ref"),
+              pane_id: required(values.pane, "--pane"),
+              agent: required(values.agent, "--agent"),
               artefact_kind: values["artefact-kind"] ?? "file",
               ...(values.url === undefined
                 ? { file: required(values.path, "--path") }

@@ -75,6 +75,7 @@ export function ArtefactList({
   const [notice, setNotice] = useState<{ id: string; text: string } | null>(
     null,
   );
+  const [expanded, setExpanded] = useState(false);
   const artefacts = items ?? NONE;
   if (!artefacts.length) return null;
   const openFile = (path: string) => {
@@ -82,10 +83,11 @@ export function ArtefactList({
     requestArtefactFile(leaf.id, path);
     void Promise.resolve(onOpen(leaf.id)).catch(() => undefined);
   };
-  const shown = artefacts.slice(0, limit);
+  // Every record stays reachable: "+N more" shows the rest in place.
+  const shown = expanded ? artefacts : artefacts.slice(0, limit);
   const add = (artefact: AgentArtefact) => {
     setNotice({ id: artefact.id, text: "Adding…" });
-    void addArtefactToBoard(leaf, artefact).then(
+    void addArtefactToBoard(artefact).then(
       (problem) =>
         setNotice({ id: artefact.id, text: problem ?? "Added to Board." }),
       () => setNotice({ id: artefact.id, text: "Could not add it to Board." }),
@@ -161,10 +163,15 @@ export function ArtefactList({
           );
         })}
       </ul>
-      {artefacts.length > shown.length ? (
-        <span className="artefact-more">
-          +{artefacts.length - shown.length} more
-        </span>
+      {artefacts.length > limit ? (
+        <button
+          type="button"
+          className="artefact-more"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? "Show fewer" : `+${artefacts.length - limit} more`}
+        </button>
       ) : null}
     </div>
   );

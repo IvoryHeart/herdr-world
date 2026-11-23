@@ -3,8 +3,6 @@ import type { AgentArtefact } from "../../../shared/agentArtefacts";
 import type { FileExplorerEntry } from "../types";
 import type { BoardElementInput } from "../../../shared/boardElements";
 import { sharedBoardStore } from "./board/boardDocument";
-import { agentName } from "./deskAgentLabels";
-import type { WorldLeafObject } from "./worldObject";
 
 /**
  * Opening an agent's artefact. A file opens in World's own viewer: the
@@ -69,23 +67,19 @@ export function useArtefactFileRequests(
   }, [enabled, nodeId]);
 }
 
-/** Who made it, as Board shows it: the agent's name and its tab. */
-export function artefactAgentRef(leaf: WorldLeafObject) {
-  return [agentName(leaf) || "agent", leaf.tabLabel]
-    .filter(Boolean)
-    .join(" · ")
-    .slice(0, 512);
-}
-
 /**
- * Put the artefact on Board as a reference: its agent's connection and
- * workspace, who made it and where it lives. The same place is one element
- * (its ID is the artefact's), so adding it twice says so instead.
+ * Put the artefact on Board as a reference to what World derived: the maker
+ * (its connection, pane and harness) and the room it was made in, both from
+ * the record, never from the card it was pinned from. Board shows the
+ * maker's name from the live World. The same artefact is one element (its
+ * ID is the artefact's), so adding it twice says so instead.
  */
 export async function addArtefactToBoard(
-  leaf: WorldLeafObject,
   artefact: AgentArtefact,
 ): Promise<string | null> {
+  const maker = artefact.made_by;
+  if (!maker.workspace_id)
+    return "World does not know which room made it, so it cannot go on Board.";
   const store = sharedBoardStore();
   if (!store.get().document) await store.refresh();
   const document = store.get().document;
@@ -100,9 +94,10 @@ export async function addArtefactToBoard(
     x: 40 + step,
     y: 40 + step,
     source: {
-      connection_id: leaf.connectionId,
-      workspace_id: leaf.pane.workspace_id,
-      agent_ref: artefactAgentRef(leaf),
+      connection_id: maker.connection_id,
+      workspace_id: maker.workspace_id,
+      pane_id: maker.pane_id,
+      agent: maker.agent,
       artefact_kind: artefact.kind,
       ...(artefact.where.type === "file"
         ? { file: artefact.where.path }

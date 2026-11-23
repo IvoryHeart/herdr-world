@@ -506,6 +506,71 @@ describe("quests", () => {
     ]);
   });
 
+  test("an artefact is named on its connection and keeps the room it was made in", async () => {
+    const dir = await mkdtemp(join(root, "quest-"));
+    const path = join(dir, "session.jsonl");
+    await writeFile(
+      path,
+      `${JSON.stringify({
+        type: "assistant",
+        uuid: "w1",
+        cwd: "/work/demo",
+        timestamp: "2026-10-22T10:00:01Z",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "call_w1",
+              name: "Write",
+              input: { file_path: "report.md", content: "# Report" },
+            },
+          ],
+        },
+      })}\n`,
+    );
+    const agent = pane("claude", {
+      source: "herdr:claude",
+      agent: "claude",
+      kind: "path",
+      value: path,
+    });
+    const on = (connectionId: string) =>
+      createHerdrConversationSource({
+        herdrCall: herdr(agent),
+        files: localAgentSessionFiles,
+        context: createAgentSessionResolverContext(),
+        cache: createSessionProjectionCache(
+          localAgentSessionFiles,
+          undefined,
+          connectionId,
+        ),
+      });
+    const hostA = on("host-a");
+    const [first] = (await hostA.quests())[0]!.artefacts!;
+    expect(first).toMatchObject({
+      title: "report.md",
+      where: { type: "file", path: "/work/demo/report.md" },
+      made_by: {
+        connection_id: "host-a",
+        pane_id: "w1:p1",
+        agent: "claude",
+        workspace_id: "w1",
+      },
+    });
+    // The agent moves to another room: where it was made stays.
+    agent.workspace_id = "w2";
+    const [later] = (await hostA.quests())[0]!.artefacts!;
+    expect(later!.made_by.workspace_id).toBe("w1");
+    // The same path on another host is another artefact.
+    const [other] = (await on("host-b").quests())[0]!.artefacts!;
+    expect(other!.id).not.toBe(first!.id);
+    expect(other!.made_by).toMatchObject({
+      connection_id: "host-b",
+      workspace_id: "w2",
+    });
+  });
+
   test.each(["conversation", "quests"] as const)(
     "a usage-limit stop clears after a same-metadata rewrite, reading %s first",
     async (firstRead) => {

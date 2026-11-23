@@ -8,3 +8,6 @@
 - [x] Open files in the Inspector Files view; links in a new tab.
 - [x] Board `artefact` element (reference only) read through the Files seam.
 - [x] Unit coverage for discovery, presence, desk reads and Board reads.
+- [x] Connection-qualified IDs; per-call working folder; maker and creator room on the record.
+- [x] herdr-core agents answer the desk read.
+- [x] Board Open in Files for any artefact file; every record reachable from a card.

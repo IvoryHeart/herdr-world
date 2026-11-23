@@ -10,6 +10,7 @@ import {
   PLACED_KINDS,
 } from "./boardElementKinds";
 import {
+  artefactPlace,
   projectChoices,
   readProblem,
   sourcePlace,
@@ -119,6 +120,41 @@ describe("where a project element reads from", () => {
     expect(readProblem("changed_or_unavailable", "studio")).toContain(
       "studio reconnected",
     );
+  });
+});
+
+describe("an artefact on Board", () => {
+  const made = (fields: Record<string, string>) =>
+    ({
+      connection_id: "studio",
+      workspace_id: "w2",
+      pane_id: "w1:p1",
+      agent: "codex",
+      artefact_kind: "report",
+      file: "/work/example/report.md",
+      ...fields,
+    }) as never;
+  test("names its live maker from World and opens through it", () => {
+    const place = artefactPlace(world, made({}));
+    expect(place.maker).toBe("main 1");
+    expect(place.viewerId).toBe("leaf:studio:w1:p1");
+    // The room is the one it was made in, not where the maker is now.
+    expect(place.workspaceLabel).toBe("docs-site");
+  });
+  test("a gone or replaced maker shows its harness; Files opens through its room", () => {
+    const gone = artefactPlace(world, made({ pane_id: "w1:p9" }));
+    expect(gone.maker).toBe("Codex");
+    expect(gone.viewerId).toBe("leaf:studio:w2:p1");
+    const replaced = artefactPlace(world, made({ agent: "claude" }));
+    expect(replaced.maker).toBe("Claude");
+  });
+  test("an offline connection is never swapped for another one", () => {
+    const place = artefactPlace(
+      world,
+      made({ connection_id: "build-box", workspace_id: "w1" }),
+    );
+    expect(place.generation).toBeNull();
+    expect(place.viewerId).toBeNull();
   });
 });
 
