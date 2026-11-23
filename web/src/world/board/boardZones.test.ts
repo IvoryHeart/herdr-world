@@ -109,3 +109,48 @@ test("saved anchors survive a grouping switch, and a runtime joining a placed ma
   expect(coreAnchor.y).toBeGreaterThan(tuiBottom);
   expect(coreAnchor.x).toBeLessThan(next.anchors.get("remote")!.x);
 });
+
+test("runtimes joining a placed machine together each get their own place", () => {
+  const machine = [
+    catalogue("tui", "herdr", "local"),
+    catalogue("core-a", "herdr-core", "local"),
+    catalogue("core-b", "herdr-core", "local"),
+  ];
+  const coreHost = (id: string) => {
+    const host = fixtureHost(id, spaces(1));
+    host.connection = { ...host.connection, runtime: "herdr-core" };
+    return host;
+  };
+  const before = groupBoardZones(
+    projectBoard(fixtureWorld([fixtureHost("tui", spaces(1))])),
+    hostGroupOf(machine, "machine"),
+  );
+  const after = groupBoardZones(
+    projectBoard(
+      fixtureWorld([
+        fixtureHost("tui", spaces(1)),
+        coreHost("core-a"),
+        coreHost("core-b"),
+      ]),
+    ),
+    hostGroupOf(machine, "machine"),
+  );
+  for (const phone of [false, true]) {
+    const saved = placeNew(before, emptyLayout(), { phone });
+    const next = placeNew(after, saved, { phone });
+    const anchors = ["tui", "core-a", "core-b"].map(
+      (key) => next.anchors.get(key)!,
+    );
+    expect(anchors[0]).toEqual(saved.anchors.get("tui")!);
+    const at = positions(after, next);
+    const cards = ["tui", "core-a", "core-b"].map(
+      (key) => at.get(after.hostByKey.get(key)!.workspaceKeys[0]!)!,
+    );
+    // Across the hosts' flow (down on desktop, right on a phone), apart.
+    const across = cards.map((point) => (phone ? point.x : point.y));
+    const along = cards.map((point) => (phone ? point.y : point.x));
+    expect(new Set(along).size).toBe(1);
+    expect(across[1]).toBeGreaterThan(across[0]!);
+    expect(across[2]).toBeGreaterThan(across[1]!);
+  }
+});
