@@ -1,6 +1,6 @@
 {
   "board.arrange": {
-    "fingerprint": "ad347cee4bee9a44",
+    "fingerprint": "97c9031333d85ffc",
     "files": [
       "board.arrange.desktop.light.webp",
       "board.arrange.desktop.dark.webp",
@@ -9,7 +9,7 @@
     ]
   },
   "board.camera": {
-    "fingerprint": "b3fb87fe0c4a194d",
+    "fingerprint": "09a6e0742c27dfdd",
     "files": [
       "board.camera.desktop.light.webp",
       "board.camera.desktop.dark.webp",
@@ -18,7 +18,7 @@
     ]
   },
   "board.lenses": {
-    "fingerprint": "0d03a8ca46ab04d2",
+    "fingerprint": "de2723f2870412e5",
     "files": [
       "board.lenses.desktop.light.webp",
       "board.lenses.desktop.dark.webp",
@@ -27,7 +27,7 @@
     ]
   },
   "board.next": {
-    "fingerprint": "6e5b21b81db9d8bb",
+    "fingerprint": "aa2646f635749705",
     "files": [
       "board.next.desktop.light.webp",
       "board.next.desktop.dark.webp",
@@ -36,7 +36,7 @@
     ]
   },
   "board.notes": {
-    "fingerprint": "ad347cee4bee9a44",
+    "fingerprint": "97c9031333d85ffc",
     "files": [
       "board.notes.desktop.light.webp",
       "board.notes.desktop.dark.webp",
@@ -45,7 +45,7 @@
     ]
   },
   "chat.composer": {
-    "fingerprint": "e5c96f9e62b518af",
+    "fingerprint": "f1416729094d3e63",
     "files": [
       "chat.composer.desktop.light.webp",
       "chat.composer.desktop.dark.webp",
@@ -54,7 +54,7 @@
     ]
   },
   "chat.speak": {
-    "fingerprint": "49f696690218edc6",
+    "fingerprint": "37198fbd81727b78",
     "files": [
       "chat.speak.desktop.light.webp",
       "chat.speak.desktop.dark.webp",
@@ -63,7 +63,7 @@
     ]
   },
   "code.project": {
-    "fingerprint": "493cb9a23558f92a",
+    "fingerprint": "8fd1239c87791512",
     "files": [
       "code.project.desktop.light.webp",
       "code.project.desktop.dark.webp",
@@ -72,7 +72,7 @@
     ]
   },
   "town.apartments": {
-    "fingerprint": "4f0bfecc2a3adfc8",
+    "fingerprint": "62700c8e41e190b0",
     "files": [
       "town.apartments.desktop.light.webp",
       "town.apartments.desktop.dark.webp",
@@ -81,7 +81,7 @@
     ]
   },
   "town.board-chip": {
-    "fingerprint": "b3ee85a8aaceb193",
+    "fingerprint": "3221d4891c415c05",
     "files": [
       "town.board-chip.desktop.light.webp",
       "town.board-chip.desktop.dark.webp",
@@ -90,7 +90,7 @@
     ]
   },
   "town.daylight": {
-    "fingerprint": "aa2f24bad34239e2",
+    "fingerprint": "8a89bb602e544dbe",
     "files": [
       "town.daylight.desktop.light.webp",
       "town.daylight.desktop.dark.webp",
@@ -99,7 +99,7 @@
     ]
   },
   "town.focus": {
-    "fingerprint": "d3f2850af75e46ca",
+    "fingerprint": "b56d7b2ebf008f42",
     "files": [
       "town.focus.desktop.light.webp",
       "town.focus.desktop.dark.webp",
@@ -108,14 +108,14 @@
     ]
   },
   "town.master": {
-    "fingerprint": "f9917dac0fc5a84f",
+    "fingerprint": "9b2992621f969a84",
     "files": [
       "town.master.desktop.light.webp",
       "town.master.desktop.dark.webp"
     ]
   },
   "town.quiet": {
-    "fingerprint": "a87511f24f12fb88",
+    "fingerprint": "6a0c0d9e09b47480",
     "files": [
       "town.quiet.desktop.light.webp",
       "town.quiet.desktop.dark.webp",
@@ -124,7 +124,7 @@
     ]
   },
   "town.zoom": {
-    "fingerprint": "687dc22c82c9cd4a",
+    "fingerprint": "a2bf95d8cf244a75",
     "files": [
       "town.zoom.desktop.light.webp",
       "town.zoom.desktop.dark.webp",
@@ -133,14 +133,14 @@
     ]
   },
   "world.command-box": {
-    "fingerprint": "d1f984971fb1e1ba",
+    "fingerprint": "14cc077057fb324d",
     "files": [
       "world.command-box.desktop.light.webp",
       "world.command-box.desktop.dark.webp"
     ]
   },
   "world.help": {
-    "fingerprint": "573a44692837e12e",
+    "fingerprint": "a3e7a1afdc025633",
     "files": [
       "world.help.desktop.light.webp",
       "world.help.desktop.dark.webp",
@@ -149,7 +149,7 @@
     ]
   },
   "world.phone-hosts": {
-    "fingerprint": "da015dd74617ba17",
+    "fingerprint": "132653ba9312a2ef",
     "files": [
       "world.phone-hosts.phone.light.webp",
       "world.phone-hosts.phone.dark.webp"
