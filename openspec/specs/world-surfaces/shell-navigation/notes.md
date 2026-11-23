@@ -24,6 +24,9 @@
 - `web/src/world/WorldFoundationApp.tsx`
 - `web/src/world/visualRouteActions.ts`
 - `web/src/world/worldSearch.ts`
+- `web/src/world/worldCommandBox.tsx`
+- `web/src/components/CommandCombobox.tsx`
+- `web/src/components/CommandActionItem.tsx`
 - `web/src/layerStack.ts`
 
 **Tests:**
@@ -31,6 +34,8 @@
 - `web/src/world/WorldFoundationApp.test.ts`
 - `web/src/world/visualRouteActions.test.ts`
 - `web/src/world/worldSearch.test.ts`
+- `web/src/world/worldCommandBox.test.tsx`
+- `web/src/commandBoxKey.dom.test.ts`
 - `web/src/systemBack.browser.tsx`
 
 **Pitfalls:**
@@ -81,10 +86,12 @@
   Drag a pane handle onto another tab in the same workspace, onto a pane edge
   in that tab, or onto **+** to break it into a new tab. Hover a tab to open its
   panes before dropping. Overflowing desktop tab strips offer scroll controls.
-- Search workspace, worktree, file, tab, pane, and agent actions in the command
+- Search workspace, worktree, file, tab and pane actions in the command
   menu (`Cmd+K` on macOS, `Ctrl+K` elsewhere, or `Cmd+Option+K`/`Ctrl+Alt+K`
   from a terminal or text field). A workspace-relative or
-  absolute path opens the file.
+  absolute path opens the file. Agents are found in its **In World** group,
+  in every view (see Find or act in terminal-windows notes); Spaces has no
+  separate list of its own connection's agents.
 - Toggle **Zen mode** (`Cmd+Shift+Z` on macOS, `Ctrl+Alt+Z` elsewhere) to hide
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
   Hovering the Exit Zen tab slides the topbar back, and it stays while one of its

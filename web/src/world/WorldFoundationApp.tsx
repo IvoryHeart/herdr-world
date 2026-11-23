@@ -69,7 +69,14 @@ import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldViewPicker } from "./WorldViewPicker";
 import { HelpPanelHost } from "../help/HelpPanelHost";
 import { applyWhatsNewSwitch } from "../help/greetingNews";
-import { withWorldViews } from "./worldCommandBox";
+import {
+  openWorldFind,
+  withWorldViews,
+  worldFindGroup,
+  worldLeafColorTarget,
+} from "./worldCommandBox";
+import { useTerminalColors } from "./useTerminalColors";
+import { terminalColor } from "./terminalColor";
 import { NeedsYouCounter } from "./NeedsYouTab";
 import { needsYouInTopbar } from "./needsYou";
 import { WorldControlPlane } from "./WorldControlPlane";
@@ -284,6 +291,47 @@ export default function WorldFoundationApp() {
     }
   };
 
+  // World's finds (#1329): one search of the World object, in every view.
+  // Enter opens what was found wherever it is; in a visual view the second
+  // action shows it there, as clicking it does.
+  const terminalColors = useTerminalColors();
+  // Only the views that draw World's nodes can show one; Code and Spaces can't.
+  const showNode =
+    view === "town" || view === "board" || view === "desk"
+      ? visualActionExtension.showNode
+      : undefined;
+  const worldFind = (search: string) =>
+    worldFindGroup(topbarWorld, search, {
+      open: (node) =>
+        void openWorldFind(node, {
+          activateSpacesTarget: (target) =>
+            store.activateQualifiedSpacesTarget(target),
+          activateHost: (host) => activateWorldNodeHost(host),
+          goToSpaces: () => setView("spaces"),
+          openInWorldWindow: ({ view: opens, paneId, ...target }) => {
+            // World's window shows on Town, Board or Desk.
+            if (view === "spaces" || view === "code")
+              setView(visualView === "code" ? "town" : visualView);
+            const open = workspaceSurfaceSelectionRef.current;
+            return open
+              ? open({ ...target, ...(paneId ? { paneId } : {}), view: opens })
+              : Promise.resolve(false);
+          },
+          notify: (message, detail) =>
+            store.notify({ kind: "error", message, detail }),
+        }),
+      ...(showNode
+        ? {
+            show: {
+              label: `Show in ${worldViewLabel(view)}`,
+              run: (node) => showNode(node.id),
+            },
+          }
+        : {}),
+      colorOf: (leaf) =>
+        terminalColor(terminalColors, worldLeafColorTarget(topbarWorld, leaf)),
+    });
+
   // Panel windows (Town's summary and the like) beside the Inspectors.
   const panelRegistry = useWorldPanelRegistry();
   const canReturnToView =
@@ -412,7 +460,7 @@ export default function WorldFoundationApp() {
           onZenActiveChange={setZenActive}
           topbarPortal={topbarPortal}
           visualActionExtension={withWorldViews(
-            visualActionExtension,
+            { ...visualActionExtension, find: worldFind },
             view,
             setView,
           )}

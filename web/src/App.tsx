@@ -4162,6 +4162,8 @@ export default function App({
             extension={
               operationalShortcutsEnabled ? undefined : visualActionExtension
             }
+            // World's finds in every view, Spaces included (#1329).
+            find={visualActionExtension?.find}
             onOpenFileExplorer={openFileExplorer}
             onOpenFile={openFileExplorerFile}
             onOpenDiffViewer={openDiffViewer}

@@ -1,0 +1,318 @@
+import { describe, expect, test } from "bun:test";
+import type { ReactElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { WorldRuntimeConnection } from "./runtimeStore";
+import { TERMINAL_COLOR_HEX } from "./terminalColor";
+import { townScaleConnections } from "./town/townScaleScene";
+import {
+  openWorldFind,
+  WORLD_COMMAND_FINDS,
+  withWorldViews,
+  worldFindGroup,
+  worldFindOpenReason,
+  worldFoundTarget,
+  worldViewGroup,
+  type WorldFindOpenDeps,
+} from "./worldCommandBox";
+import { buildWorldObject } from "./worldObject";
+import { worldSearchResults } from "./worldSearch";
+
+const scene = townScaleConnections();
+const world = buildWorldObject(scene, scene[0]!.connectionId);
+
+const none = { open: () => {} };
+
+/** A copy of a scene host on another connection, in another state. */
+function variant(
+  index: number,
+  id: string,
+  change: Partial<WorldRuntimeConnection>,
+): WorldRuntimeConnection {
+  const base = townScaleConnections()[index]!;
+  return { ...base, connectionId: id, label: id, ...change };
+}
+
+/** A herdr-core host on this machine: its panes have core's own addresses. */
+function coreHost(): WorldRuntimeConnection {
+  const base = variant(2, "core-local", { runtime: "herdr-core" });
+  const panes = base.snapshot!.panes.map((pane, index) => ({
+    ...pane,
+    pane_id: `t${index + 1}`,
+  }));
+  return { ...base, snapshot: { ...base.snapshot!, panes } };
+}
+
+describe("the command box finds what the views' search finds", () => {
+  test("an empty search or no match finds nothing", () => {
+    expect(worldFindGroup(world, "  ", none)).toBeNull();
+    expect(worldFindGroup(world, "no-such-place-anywhere", none)).toBeNull();
+  });
+
+  test("names first, at most a page, and choosing opens the node", () => {
+    const chosen: string[] = [];
+    const group = worldFindGroup(world, "harbor", {
+      open: (node) => chosen.push(node.id),
+    })!;
+    const results = worldSearchResults(world, "harbor");
+    expect(results.length).toBeGreaterThan(WORLD_COMMAND_FINDS);
+    expect(group.heading).toBe("In World");
+    // A page of finds, then how many more a narrower search would show.
+    expect(group.actions).toHaveLength(WORLD_COMMAND_FINDS + 1);
+    const more = group.actions[WORLD_COMMAND_FINDS]!;
+    expect(more.title).toBe(
+      `${results.length - WORLD_COMMAND_FINDS} more in World`,
+    );
+    expect(more.disabledReason).toBe("Add a word to narrow the search");
+    const [room] = group.actions;
+    expect(room!.title).toBe("harbor");
+    expect(room!.detail).toBe("Room · atlas");
+    expect(room!.score).toBe(0.95);
+    // The rest match by place: below names, above summaries.
+    expect(group.actions[1]!.score).toBe(0.8);
+    room!.run();
+    expect(chosen).toEqual([results[0]!.nodeId]);
+    // Without a view to show it in (Spaces), there is no second action.
+    expect(room!.secondary).toBeUndefined();
+  });
+
+  test("an agent shows its icon in its tab's colour, its place, mark and runtime", () => {
+    const colored: string[] = [];
+    const group = worldFindGroup(world, "harbor migration", {
+      ...none,
+      colorOf: (leaf) => {
+        colored.push(leaf.id);
+        return "teal";
+      },
+    })!;
+    const agent = group.actions[0]!;
+    const icon = agent.icon as ReactElement<{
+      className: string;
+      style: Record<string, string>;
+    }>;
+    expect(icon.props.className).toBe("world-find-icon");
+    expect(icon.props.style["--world-find-color"]).toBe(
+      TERMINAL_COLOR_HEX.teal,
+    );
+    expect(colored).toHaveLength(1);
+    expect(agent.detail).toMatch(
+      /^Agent · Needs you · atlas › harbor › \w+ · .*migration/,
+    );
+    expect(agent.score).toBe(0.6);
+    const trailing = renderToStaticMarkup(<>{agent.trailing}</>);
+    expect(trailing).toContain('aria-label="Herdr TUI"');
+    expect(trailing).toContain("Needs you");
+  });
+
+  test("the second action shows the node in the current view", () => {
+    const shown: string[] = [];
+    const opened: string[] = [];
+    const group = worldFindGroup(world, "harbor", {
+      open: (node) => opened.push(node.id),
+      show: { label: "Show in Town", run: (node) => shown.push(node.id) },
+    })!;
+    const room = group.actions[0]!;
+    expect(room.secondary?.label).toBe("Show in Town");
+    room.secondary!.run();
+    expect(shown).toEqual([worldSearchResults(world, "harbor")[0]!.nodeId]);
+    expect(opened).toEqual([]);
+  });
+
+  test("finds agents by harness, status and runtime", () => {
+    const words = (search: string) =>
+      worldSearchResults(world, search).filter(
+        (result) => result.kind === "agent",
+      );
+    const agents = world.leaves.filter((leaf) => leaf.kind === "agent");
+    const blocked = agents.filter((leaf) => leaf.status === "blocked");
+    expect(blocked.length).toBeGreaterThan(0);
+    expect(words("needs you").length).toBeGreaterThanOrEqual(blocked.length);
+    for (const result of words("needs you"))
+      expect(blocked.some((leaf) => leaf.id === result.nodeId)).toBe(true);
+    const codex = agents.filter(
+      (leaf) => leaf.kind === "agent" && leaf.pane.agent === "codex",
+    );
+    expect(codex.length).toBeGreaterThan(0);
+    expect(new Set(words("codex").map((result) => result.nodeId))).toEqual(
+      new Set(codex.map((leaf) => leaf.id)),
+    );
+    const mixed = [...scene, coreHost()];
+    const both = buildWorldObject(mixed, scene[0]!.connectionId);
+    const core = worldSearchResults(both, "herdr-core").filter(
+      (result) => result.kind === "agent",
+    );
+    expect(core.length).toBeGreaterThan(0);
+    for (const result of core)
+      expect(both.nodeById.get(result.nodeId)?.connectionId).toBe("core-local");
+    const group = worldFindGroup(both, "herdr-core", none)!;
+    expect(renderToStaticMarkup(<>{group.actions[0]!.trailing}</>)).toContain(
+      'aria-label="herdr-core"',
+    );
+  });
+
+  test("finds among 300 agents within 100 ms a keystroke", () => {
+    const many = [
+      ...scene,
+      ...scene.map((connection) => ({
+        ...connection,
+        connectionId: `${connection.connectionId}-2`,
+        label: `${connection.label}-2`,
+      })),
+    ];
+    const large = buildWorldObject(many, many[0]!.connectionId);
+    expect(
+      large.leaves.filter((leaf) => leaf.kind === "agent").length,
+    ).toBeGreaterThanOrEqual(300);
+    const typed = "harbor migration";
+    for (let end = 1; end <= typed.length; end++) {
+      const started = performance.now();
+      worldFindGroup(large, typed.slice(0, end), none);
+      expect(performance.now() - started).toBeLessThan(100);
+    }
+  });
+});
+
+describe("opening a find", () => {
+  const mixed = [
+    ...scene,
+    variant(0, "lost", { state: "disconnected", stale: true }),
+    variant(1, "returning", { state: "reconnecting" }),
+    coreHost(),
+  ];
+  const all = buildWorldObject(mixed, scene[0]!.connectionId);
+  const agentOn = (connectionId: string) =>
+    all.leaves.find(
+      (leaf) => leaf.kind === "agent" && leaf.connectionId === connectionId,
+    )!;
+
+  function deps(spacesFound = true) {
+    const calls: string[] = [];
+    const notes: string[] = [];
+    const value: WorldFindOpenDeps = {
+      activateSpacesTarget: async (target) => {
+        calls.push(
+          `spaces ${target.connectionId} ${target.workspaceId} ${target.paneId}`,
+        );
+        return spacesFound;
+      },
+      activateHost: async (node) => {
+        calls.push(`host ${node.connectionId}`);
+      },
+      goToSpaces: () => calls.push("go spaces"),
+      openInWorldWindow: async (target) => {
+        calls.push(`window ${target.view} ${target.paneId}`);
+        return true;
+      },
+      notify: (message, detail) => notes.push(`${message}: ${detail}`),
+    };
+    return { calls, notes, value };
+  }
+
+  test("a Herdr agent on a host Spaces doesn't show opens there, its pane selected", async () => {
+    const agent = agentOn(scene[1]!.connectionId);
+    expect(agent.hostState).toBe("ready-inactive");
+    const target = worldFoundTarget(agent);
+    expect(target).toMatchObject({
+      connectionId: agent.connectionId,
+      runtimeGeneration: agent.generation,
+      workspaceId: agent.workspaceId,
+      paneId: agent.nativeId,
+    });
+    const { calls, notes, value } = deps();
+    expect(await openWorldFind(agent, value)).toBe(true);
+    expect(calls).toEqual([
+      `spaces ${agent.connectionId} ${agent.workspaceId} ${agent.nativeId}`,
+      "go spaces",
+    ]);
+    expect(notes).toEqual([]);
+  });
+
+  test("a room opens in Spaces with no pane, a host becomes Spaces' host", async () => {
+    const room = all.spaces.find(
+      (space) => space.connectionId === scene[2]!.connectionId,
+    )!;
+    const first = deps();
+    expect(await openWorldFind(room, first.value)).toBe(true);
+    expect(first.calls).toEqual([
+      `spaces ${room.connectionId} ${room.nativeId} null`,
+      "go spaces",
+    ]);
+    const host = all.hosts.find(
+      (item) => item.connectionId === scene[2]!.connectionId,
+    )!;
+    const second = deps();
+    expect(await openWorldFind(host, second.value)).toBe(true);
+    expect(second.calls).toEqual([`host ${host.connectionId}`, "go spaces"]);
+  });
+
+  test("a pane that moved away says so", async () => {
+    const agent = agentOn(scene[0]!.connectionId);
+    const { notes, value } = deps(false);
+    expect(await openWorldFind(agent, value)).toBe(false);
+    expect(notes).toEqual([
+      `Can't open ${agent.label}: ${agent.label} is no longer where World last saw it.`,
+    ]);
+  });
+
+  test("an agent on an offline or reconnecting host is listed, marked, and says why", async () => {
+    const lost = agentOn("lost");
+    expect(worldFindOpenReason(lost)).toBe(
+      "lost is offline. World shows what it last saw there.",
+    );
+    const returning = agentOn("returning");
+    expect(worldFindOpenReason(returning)).toBe(
+      "returning is reconnecting. Try again when it is back.",
+    );
+    const { calls, notes, value } = deps();
+    expect(await openWorldFind(lost, value)).toBe(false);
+    expect(calls).toEqual([]);
+    expect(notes).toEqual([
+      `Can't open ${lost.label}: lost is offline. World shows what it last saw there.`,
+    ]);
+    // Found by its machine's name too, so two agents of one name are told apart.
+    const group = worldFindGroup(all, `${lost.label} lost`, none)!;
+    const found = group.actions.find(
+      (action) => action.key === `world-find-${lost.id}`,
+    );
+    expect(found?.detail).toContain("Offline");
+  });
+
+  test("a herdr-core agent opens in World's window, not Spaces", async () => {
+    const agent = agentOn("core-local");
+    expect(agent.watch).toBeDefined();
+    expect(worldFindOpenReason(agent)).toBeNull();
+    const { calls, value } = deps();
+    expect(await openWorldFind(agent, value)).toBe(true);
+    expect(calls).toEqual([`window terminal ${agent.nativeId}`]);
+    const host = all.hosts.find((item) => item.connectionId === "core-local")!;
+    expect(worldFindOpenReason(host)).toMatch(/runs herdr-core/);
+  });
+});
+
+describe("the command box's views", () => {
+  test("goes to every view but the current one", () => {
+    const went: string[] = [];
+    const group = worldViewGroup("town", (view) => went.push(view));
+    expect(group.actions.map((action) => action.title)).toEqual([
+      "Go to Board",
+      "Go to Desk",
+      "Go to Code",
+      "Go to Spaces",
+    ]);
+    group.actions[0]!.run();
+    expect(went).toEqual(["board"]);
+  });
+
+  test("join the view's actions, never replacing an empty set", () => {
+    const empty = { captureKey: null, groups: [] };
+    expect(withWorldViews(empty, "town", () => {})).toBe(empty);
+    const actions = {
+      captureKey: null,
+      groups: [{ heading: "Create", actions: [] }],
+    };
+    expect(
+      withWorldViews(actions, "board", () => {}).groups.map(
+        (group) => group.heading,
+      ),
+    ).toEqual(["Create", "Views"]);
+  });
+});
