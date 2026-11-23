@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import type { BinEntry } from "../../../../shared/bin";
+import {
+  BIN_BUS_SPEED_KMH,
+  binBusTripMs,
+  type BinEntry,
+} from "../../../../shared/bin";
 import {
   TOWN_QUEUE_ROW,
   TOWN_QUEUE_ROWS,
@@ -18,6 +22,8 @@ import {
   townRiderWalkMs,
   townWalkAlong,
   townWalkLength,
+  townStopRouteM,
+  TOWN_METRES_PER_PX,
   type TownBusRoute,
   type TownBusStop,
 } from "./townBus";
@@ -25,6 +31,7 @@ import {
   TOWN_BUS_DWELL_MS,
   TOWN_BUS_IN_BEFORE_END_S,
   townBusDoor,
+  townBusLeft,
   townBusPose,
   townBusTimeline,
   townBusWay,
@@ -239,6 +246,8 @@ test("bin entries become Town riders by connection, generation and pane", () => 
     view: "town",
     riding: false,
     preserve_tab: false,
+    route_m: null,
+    stop: null,
   });
   const route = townBusRoute(layout);
   const { away, riders } = townBinRiders(
@@ -404,6 +413,59 @@ test("many stops with riders share under half the trip, so the bus still drives 
   );
 });
 
+test("World times the bus by the route Town measures, and Town drives it at about that speed", () => {
+  // 36 km/h is 10 m a second; a tile is 2 m.
+  const speed = BIN_BUS_SPEED_KMH / 3.6 / TOWN_METRES_PER_PX;
+  expect(speed).toBe(80);
+  for (const shape of shapes)
+    for (const hosts of towns) {
+      const { layout } = layoutTown(town(hosts), shape);
+      const route = townBusRoute(layout);
+      const terminus = route.terminus!;
+      const measured = route.stops.map((stop) => ({
+        stop,
+        route_m: townStopRouteM(route, stop)!,
+      }));
+      for (const { stop, route_m } of measured) {
+        expect(route_m).toBeGreaterThan(0);
+        const trip = binBusTripMs(route_m, 1);
+        const timeline = townBusTimeline(
+          route.graph,
+          terminus.halt,
+          haltsAt([stop]),
+          1,
+          walkOf(route),
+          trip,
+        );
+        // Town drives what World measured (give or take its rounded
+        // corners): the whole way at the start, less as it goes, none once
+        // it is back.
+        expect(
+          Math.abs(townBusLeft(timeline, 0) * TOWN_METRES_PER_PX - route_m),
+        ).toBeLessThanOrEqual(Math.max(4, route_m * 0.05));
+        let previous = Infinity;
+        for (let ms = 0; ms <= trip; ms += 250) {
+          const left = townBusLeft(timeline, ms);
+          expect(left).toBeLessThanOrEqual(previous + 1e-6);
+          previous = left;
+        }
+        expect(townBusLeft(timeline, trip)).toBe(0);
+        // Out along a street it drives at about the bus's speed. (Its
+        // allowances for pulling away, turning and stepping off are a few
+        // seconds, so on a short hop it takes the spare time gently.)
+        expect(timeline.cruise).toBeLessThanOrEqual(speed * 1.15);
+        if (route_m >= 200)
+          expect(timeline.cruise).toBeGreaterThanOrEqual(speed * 0.85);
+      }
+      // A stop farther along the roads is a longer route and a longer trip.
+      const [near, far] = [...measured].sort((a, b) => a.route_m - b.route_m);
+      if (far && far.route_m > near!.route_m)
+        expect(binBusTripMs(far.route_m, 1)).toBeGreaterThan(
+          binBusTripMs(near!.route_m, 1),
+        );
+    }
+});
+
 test("a binned agent walks out to its stop as it walks indoors, then stands there", () => {
   const door = { x: 100, y: 200 };
   const stop = { x: 40, y: 152 };
@@ -487,6 +549,8 @@ function crowd(count: number, shape: TownShape = TOWN_SHAPES.wide) {
       view: "town",
       riding: false,
       preserve_tab: false,
+      route_m: null,
+      stop: null,
     }),
   );
   const route = townBusRoute(layout);

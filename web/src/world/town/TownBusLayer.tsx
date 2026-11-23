@@ -20,6 +20,8 @@ import {
   townRiderReturns,
   townRiderWalk,
   townRiderWalkBack,
+  townStopRouteM,
+  TOWN_METRES_PER_PX,
   townWalkAlong,
   townWalkLength,
   type TownBinRider,
@@ -29,6 +31,7 @@ import {
 } from "./townBus";
 import {
   townBusDoor,
+  townBusLeft,
   townBusParked,
   townBusPose,
   townBusTimeline,
@@ -57,6 +60,19 @@ import {
 } from "./townSprites";
 import "./townBus.css";
 
+/**
+ * The plate over the bus: its speed and a distance in metres, rounded to
+ * 10 m ("36 km/h · 420 m left").
+ */
+export function townBusSign(
+  speedKmh: number,
+  metres: number,
+  what: "left" | "route",
+) {
+  const m = Math.max(0, Math.round(metres / 10) * 10);
+  return `${speedKmh} km/h · ${m} m ${what}`;
+}
+
 /** Riders at one stop step aboard at most this far apart, in seconds. */
 const BOARD_STEP_S = 0.6;
 /** The queue's drop area reaches this far past its last agent. */
@@ -69,6 +85,8 @@ const QUEUE_DROP_PAD = 14;
 const shownOutside = new Set<string>();
 /** Riders this page has counted in at Apartments' door, across mounts. */
 const arrived = new Set<string>();
+/** Entries whose route this page has sent World (world.bin.route). */
+const measured = new Set<string>();
 
 const reducedMotion = () =>
   matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -110,6 +128,28 @@ export function useTownBin(model: TownModel, layout: TownLayout) {
     () => townBinRiders(bin.entries, bin.closing, model, layout, route),
     [bin.entries, bin.closing, model, layout, route],
   );
+  // World times the bus by its route (binBusTripMs): tell it where on this
+  // town's roads each waiting agent's stop is. The first measure stands.
+  useEffect(() => {
+    if (demoBin) return;
+    const held = new Set(served.entries.map((entry) => entry.id));
+    for (const id of measured) if (!held.has(id)) measured.delete(id);
+    const routes = placed.riders.flatMap(({ entry, stop }) => {
+      if (entry.riding || entry.route_m !== null || measured.has(entry.id))
+        return [];
+      const route_m = townStopRouteM(route, stop);
+      return route_m === null
+        ? []
+        : [{ id: entry.id, route_m, stop: stop.key }];
+    });
+    if (!routes.length) return;
+    for (const { id } of routes) measured.add(id);
+    void worldBinStore()
+      .route(routes)
+      .then((error) => {
+        if (error) for (const { id } of routes) measured.delete(id);
+      });
+  }, [demoBin, served.entries, placed.riders, route]);
   // Riders put back walk home from the queue; kept from the riders before.
   const [walks, setWalks] = useState<{
     riders: readonly TownBinRider[];
@@ -260,6 +300,7 @@ export const TownBusLayer = memo(function TownBusLayer({
   demo?: boolean;
 }) {
   const bus = useRef<HTMLButtonElement>(null);
+  const sign = useRef<HTMLSpanElement>(null);
   const riderRefs = useRef(new Map<string, HTMLElement>());
   const passengerRefs = useRef(new Map<string, HTMLCanvasElement>());
   const endRefs = useRef(new Map<string, HTMLCanvasElement>());
@@ -297,6 +338,8 @@ export const TownBusLayer = memo(function TownBusLayer({
     ...plan.current.order,
     ...riding.map((rider) => rider.entry.id),
   ]).size;
+  // The trip out, or parked, the next one for those waiting now.
+  const tripMs = bin.bus.trip_ms || bin.bus.next_trip_ms;
   const timeline = useMemo(
     () =>
       terminus
@@ -306,10 +349,10 @@ export const TownBusLayer = memo(function TownBusLayer({
             haltsOf(route, haltKey),
             seated,
             walkS,
-            bin.bus.trip_ms,
+            tripMs,
           )
         : null,
-    [route, terminus, haltKey, seated, walkS, bin.bus.trip_ms],
+    [route, terminus, haltKey, seated, walkS, tripMs],
   );
   if (timeline) {
     const haltAt = (rider: TownBinRider) =>
@@ -398,6 +441,23 @@ export const TownBusLayer = memo(function TownBusLayer({
           element.toggleAttribute("data-moving", pose.moving && !still);
           element.toggleAttribute("data-braking", pose.braking);
         }
+      }
+      // Its speed, and how far it has still to drive on its trip (or, at
+      // home with someone waiting, its next route there and back).
+      const plate = sign.current;
+      if (plate) {
+        const words =
+          elapsed !== null && timeline
+            ? townBusSign(
+                bin.bus.speed_kmh,
+                townBusLeft(timeline, elapsed) * TOWN_METRES_PER_PX,
+                "left",
+              )
+            : riders.length && bin.bus.next_ms !== null
+              ? townBusSign(bin.bus.speed_kmh, bin.bus.next_route_m, "route")
+              : "";
+        if (plate.textContent !== words) plate.textContent = words;
+        if (plate.hidden !== !words) plate.hidden = !words;
       }
       const handle = renderer.current;
       handle?.setWaitingStops(waitingStops);
@@ -733,10 +793,10 @@ export const TownBusLayer = memo(function TownBusLayer({
         data-trip={onTrip || undefined}
         aria-label={
           !onTrip
-            ? `The bus, at ${home}`
+            ? `The bus, at ${home}, ${bin.bus.speed_kmh} km/h`
             : bin.bus.stopped
               ? `The bus, stopped, ${passengers.length} aboard`
-              : `The bus to ${home}, ${passengers.length} aboard; stop it`
+              : `The bus to ${home}, ${bin.bus.speed_kmh} km/h, ${passengers.length} aboard; stop it`
         }
         onClick={() => {
           // Stopped, nothing closes until it goes on: from the tray, or as
@@ -759,6 +819,13 @@ export const TownBusLayer = memo(function TownBusLayer({
             {endSeats[1]}
           </span>
         </span>
+        <span
+          ref={sign}
+          className="town-bus-sign"
+          data-testid="town-bus-sign"
+          aria-hidden="true"
+          hidden
+        />
       </button>
     </div>
   );

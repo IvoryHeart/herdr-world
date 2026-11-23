@@ -7,7 +7,11 @@
  * parameter at once; the agents stay away (moved in) until the page reloads.
  */
 
-import type { BinEntry } from "../../../../shared/bin";
+import {
+  BIN_BUS_ROUTE_M,
+  BIN_BUS_SPEED_KMH,
+  type BinEntry,
+} from "../../../../shared/bin";
 import type { WorldBin } from "../bin/binStore";
 import type { TownModel } from "./townModel";
 
@@ -75,6 +79,8 @@ export function townBusDemoBin(
       view: "town",
       riding,
       preserve_tab: false,
+      route_m: null,
+      stop: null,
     }),
   );
   return {
@@ -85,12 +91,15 @@ export function townBusDemoBin(
     closing: over ? entries : [],
     outcomes: [],
     bus: {
-      interval_ms: 240_000,
-      trip_ms: TOWN_BUS_DEMO_TRIP_MS,
-      next_ms: riding ? 240_000 : TOWN_BUS_DEMO_WAIT_MS - since,
+      speed_kmh: BIN_BUS_SPEED_KMH,
+      route_m: riding && !over ? BIN_BUS_ROUTE_M : 0,
+      trip_ms: riding && !over ? TOWN_BUS_DEMO_TRIP_MS : 0,
       elapsed_ms: riding && !over ? since - TOWN_BUS_DEMO_WAIT_MS : null,
       stopped: false,
-      trip: riding ? 1 : null,
+      trip: riding && !over ? 1 : null,
+      next_ms: riding ? null : TOWN_BUS_DEMO_WAIT_MS - since,
+      next_route_m: riding ? 0 : BIN_BUS_ROUTE_M,
+      next_trip_ms: riding ? 0 : TOWN_BUS_DEMO_TRIP_MS,
     },
     readAt: now,
     verified: true,

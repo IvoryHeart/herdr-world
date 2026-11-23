@@ -9,7 +9,11 @@ import {
 
 function fixture(
   epoch = "run1",
-  options: { failCommit?: "not-recorded" | "unknown" } = {},
+  options: {
+    failCommit?: "not-recorded" | "unknown";
+    /** The trip's length for a route; a fixed 10 s unless given. */
+    trip_ms?: (route_m: number, stops: number) => number;
+  } = {},
 ) {
   let now = 0;
   const timers = new Set<{ at: number; run(): void }>();
@@ -34,8 +38,8 @@ function fixture(
     },
     publish: (revision) => revisions.push(revision),
     info: (message) => journal.push(message),
-    interval_ms: 60_000,
-    trip_ms: 10_000,
+    boarding_ms: 60_000,
+    trip_ms: options.trip_ms ?? (() => 10_000),
   });
   /** Runs every timer due by then, in order, including those they schedule. */
   const advance = async (ms: number) => {
@@ -79,27 +83,44 @@ const agent = (pane: string, extra: Partial<BinAdd> = {}): BinAdd => ({
 const ids = (batches: BinEntry[][]) =>
   batches.map((batch) => batch.map((entry) => entry.pane_id));
 
-test("holding closes nothing until the scheduled bus leaves the map", async () => {
+test("holding closes nothing until the bus that takes it is back", async () => {
   const { registry, committed, advance } = fixture();
   await advance(20_000);
+  // Nobody waits: no bus is due.
+  expect(registry.list().bus.next_ms).toBeNull();
   const state = registry.add(agent("p1"));
   const id = state.entries[0]!.id;
   expect(id).toStartWith("bin-run1-");
-  expect(state.entries[0]!.riding).toBe(false);
-  // The schedule is fixed from the service's start, not from the add.
+  expect(state.entries[0]).toMatchObject({
+    riding: false,
+    route_m: null,
+    stop: null,
+  });
+  // The bus sets off a minute after the first agent starts waiting.
   expect(state.bus).toEqual({
-    interval_ms: 60_000,
-    trip_ms: 10_000,
-    next_ms: 40_000,
+    speed_kmh: 36,
+    route_m: 0,
+    trip_ms: 0,
     elapsed_ms: null,
     stopped: false,
     trip: null,
+    next_ms: 60_000,
+    next_route_m: 500,
+    next_trip_ms: 10_000,
   });
+  await advance(20_000);
+  expect(registry.list().bus.next_ms).toBe(40_000);
   await advance(39_999);
   expect(registry.list().entries[0]!.riding).toBe(false);
   await advance(1);
   expect(registry.list().entries[0]!.riding).toBe(true);
-  expect(registry.list().bus.elapsed_ms).toBe(0);
+  expect(registry.list().bus).toMatchObject({
+    elapsed_ms: 0,
+    route_m: 500,
+    trip_ms: 10_000,
+    next_ms: null,
+    next_trip_ms: 0,
+  });
   await advance(9_999);
   expect(committed).toEqual([]);
   await advance(1);
@@ -456,9 +477,103 @@ test("the bin journals each step of the journey", async () => {
   expect(journal).toEqual([
     `Bin holds ${first}: herdr studio generation 3 pane p1 terminal term-p1`,
     `Bin holds ${second}: herdr studio generation 3 pane p2 terminal term-p2`,
-    "Bin bus 1 set off with 2 aboard",
+    "Bin bus 1 set off with 2 aboard: 500 m there and back, 10000 ms",
     `Bin dropped ${first}: pane p1 terminal term-p1 ended on the bus`,
     `Bin closing ${second}`,
     `Bin close of ${second}: closed`,
   ]);
+});
+
+test("a Town's route times the bus: the first measure stands, and a farther stop takes longer", async () => {
+  const trips: [number, number][] = [];
+  const { registry, committed, advance } = fixture("run1", {
+    trip_ms: (route_m, stops) => {
+      trips.push([route_m, stops]);
+      return route_m * 20 + stops * 1_000;
+    },
+  });
+  const a = registry.add(agent("p1")).entries[0]!.id;
+  const b = registry.add(agent("p2")).entries.at(-1)!.id;
+  // Unmeasured, each counts as its own stop on the default route.
+  expect(registry.list().bus).toMatchObject({
+    next_route_m: 500,
+    next_trip_ms: 500 * 20 + 2_000,
+  });
+  const state = registry.route([
+    { id: a, route_m: 300.4, stop: "stop:park" },
+    { id: b, route_m: 300, stop: "stop:park" },
+  ]);
+  expect(state.entries.map((entry) => [entry.route_m, entry.stop])).toEqual([
+    [300, "stop:park"],
+    [300, "stop:park"],
+  ]);
+  // One stop for both now.
+  expect(state.bus).toMatchObject({
+    next_route_m: 300,
+    next_trip_ms: 300 * 20 + 1_000,
+  });
+  // Another page's measure of the same agent does not move it.
+  registry.route([{ id: a, route_m: 900, stop: "stop:far" }]);
+  expect(registry.list().entries[0]).toMatchObject({ route_m: 300 });
+  // One farther out: the trip is out to it, halting at both stops.
+  const c = registry.add(agent("p3")).entries.at(-1)!.id;
+  registry.route([{ id: c, route_m: 800, stop: "stop:harbour" }]);
+  expect(registry.list().bus).toMatchObject({
+    next_route_m: 800,
+    next_trip_ms: 800 * 20 + 2_000,
+  });
+  await advance(60_000);
+  expect(registry.list().bus).toMatchObject({
+    route_m: 800,
+    trip_ms: 18_000,
+    elapsed_ms: 0,
+  });
+  // Aboard, its route is fixed.
+  registry.route([{ id: c, route_m: 100, stop: "stop:near" }]);
+  expect(registry.list().entries.at(-1)).toMatchObject({ route_m: 800 });
+  await advance(17_999);
+  expect(committed).toEqual([]);
+  await advance(1);
+  expect(ids(committed)).toEqual([["p1", "p2", "p3"]]);
+});
+
+test("a route report for nothing held, or out of range, changes nothing", () => {
+  const { registry, revisions } = fixture();
+  const id = registry.add(agent("p1")).entries[0]!.id;
+  const before = revisions.length;
+  registry.route([{ id: "bin-run1-missing", route_m: 100, stop: "s" }]);
+  expect(revisions.length).toBe(before);
+  for (const bad of [
+    { id, route_m: -1, stop: "s" },
+    { id, route_m: Number.NaN, stop: "s" },
+    { id, route_m: 50_001, stop: "s" },
+    { id, route_m: 100, stop: "" },
+    { id, route_m: 100, stop: "x".repeat(129) },
+  ])
+    expect(() => registry.route([bad])).toThrow("invalid bin route");
+  expect(registry.list().entries[0]).toMatchObject({
+    route_m: null,
+    stop: null,
+  });
+  registry.route([{ id, route_m: 100, stop: "s" }]);
+  expect(revisions.length).toBe(before + 1);
+});
+
+test("the next bus waits for the one out to come back", async () => {
+  const { registry, advance } = fixture("run1", {
+    trip_ms: () => 90_000,
+  });
+  registry.add(agent("p1"));
+  await advance(60_000);
+  await advance(5_000);
+  registry.add(agent("p2"));
+  // Its minute's wait ends at 125 s, but the bus is out until 150 s.
+  expect(registry.list().bus.next_ms).toBe(85_000);
+  const p2 = () =>
+    registry.list().entries.find((entry) => entry.pane_id === "p2")!;
+  await advance(84_999);
+  expect(p2().riding).toBe(false);
+  await advance(1);
+  expect(p2().riding).toBe(true);
+  expect(registry.list().bus.trip).toBe(2);
 });

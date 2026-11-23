@@ -21,6 +21,7 @@ import {
 } from "./townApartmentsLot";
 import {
   TOWN_BUS_DOOR_DX,
+  townBusWay,
   townLaneY,
   townRoadGraph,
   type TownRoadGraph,
@@ -197,6 +198,26 @@ export function townBusRoute(layout: TownLayout): TownBusRoute {
     ...(terminus ? [terminus.halt] : []),
   ]);
   return { stops, terminus, graph };
+}
+
+/** Town's scale for the bus: one tile is two metres of road. */
+export const TOWN_METRES_PER_PX = 2 / T;
+
+/**
+ * A stop's route, as World times the bus by it (world.bin.route): from the
+ * terminus by the nearest roads to where the bus halts for the stop and
+ * back, in whole metres. Null when the stop is off the bus's roads.
+ */
+export function townStopRouteM(
+  route: TownBusRoute,
+  stop: TownBusStop,
+): number | null {
+  if (!route.terminus) return null;
+  const way = townBusWay(route.graph, route.terminus.halt, [
+    { key: stop.key, at: stop.halt },
+  ]);
+  if (!way.order.length) return null;
+  return Math.round(way.length * TOWN_METRES_PER_PX);
 }
 
 /**

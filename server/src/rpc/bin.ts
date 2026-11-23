@@ -1,5 +1,5 @@
 import { binEmptiesTab } from "../../../shared/bin";
-import type { BinAdd } from "../world/bin";
+import type { BinAdd, BinRouteReport } from "../world/bin";
 import type { BridgeRpcContext } from "./context";
 import { coreKillRefusal } from "../herdr-core/kill-plan";
 import {
@@ -27,6 +27,12 @@ export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
       return reply(registry.restore(String(p.id)));
     if (method === "world.bin.pause") return reply(registry.stopBus());
     if (method === "world.bin.resume") return reply(registry.goBus());
+    if (method === "world.bin.route")
+      return reply(
+        registry.route(
+          Array.isArray(p.routes) ? (p.routes as BinRouteReport[]) : [],
+        ),
+      );
     if (method === "world.bin.close_now")
       return reply(
         registry.closeNow(

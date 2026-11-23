@@ -59,6 +59,8 @@ export async function checkTownBusTrip(
     view: "town",
     riding: false,
     preserve_tab: false,
+    route_m: null,
+    stop: null,
   };
   let revision = 1_000;
   const show = async (
@@ -74,12 +76,15 @@ export async function checkTownBusTrip(
       closing: over ? [{ ...entry, riding }] : [],
       outcomes: [],
       bus: {
-        interval_ms: 240_000,
-        trip_ms: TRIP,
-        next_ms: riding ? 240_000 : 60_000,
+        speed_kmh: 36,
+        route_m: riding ? 500 : 0,
+        trip_ms: riding ? TRIP : 0,
         elapsed_ms: elapsed,
         stopped: elapsed !== null,
         trip: riding ? 1 : null,
+        next_ms: riding ? null : 60_000,
+        next_route_m: riding ? 0 : 500,
+        next_trip_ms: riding ? 0 : TRIP,
       },
     });
     await worldBinStore().refresh();

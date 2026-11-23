@@ -35,9 +35,9 @@
 - `web/src/world/town/useTownQuiet.ts`
 - `web/src/world/town/townRendererActors.ts`
 - `web/src/world/town/TownWorldLayer.tsx`
-- `web/src/world/town/TownStepBubble.tsx`
-- `web/src/world/town/TownBoard.tsx`
+- `web/src/world/town/TownStepBubble.tsx`, `web/src/world/town/TownBoard.tsx`
 - `web/src/world/town/townLayout.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
+- Bin and bus: `web/src/world/town/TownBusLayer.tsx` (route reports, the bus's speed and distance plate), `web/src/world/town/townBus.ts` (`townStopRouteM`, metres per pixel), `web/src/world/town/townBusDrive.ts` (`townBusTimeline`, `townBusLeft`), `web/src/world/bin/binStore.ts` (`binBusClock`, the countdown labels); tests `townBus.test.ts`, `townBusCountdown.dom.test.ts`, `web/src/world/bin/binStore.test.ts`
 - `server/src/world/observability.ts`
 
 **Tests:**
@@ -838,16 +838,22 @@
     under labels and panels, and shrinking with the town as it zooms out (on
     a phone zoomed far out, the floating bin is the easier target). A
     countdown board over those
-    waiting shows the bin's own countdown, from the one bus timetable: the
-    time until the next bus sets off from Apartments, **on its way** while a
-    trip is out and **stopped** while it stands. Every stop and the bin read
+    waiting shows the bin's own countdown, from World's one bus: the time
+    until the bus that takes them is back at Apartments (when they close),
+    and **stopped** while it stands. World times each trip by the bus's
+    speed (36 km/h) and its route out to the farthest stop with riders and
+    back, which Town measures on its roads and reports for each waiting
+    agent (`townStopRouteM`, `world.bin.route`; a tile is 2 m), so a
+    farther stop gives a longer time. Every stop and the bin read
     the same value at the same moment. The bin floats at the bottom of the screen and
     lights up during a drag, so a phone needs only a short drag, and the town
     does not scroll while the drag rests on it. A red
     double-decker lives at Apartments' stop, on the last street by a
     footpath down to the building's door (its green house sign marks it),
-    and sets off every four minutes on a fixed schedule when someone is
-    waiting. It drives only the town's roads, by the nearest way round the
+    and sets off a minute after the first agent starts waiting (never
+    before the bus out is back). A plate over it shows its speed and the
+    route it is to drive (**36 km/h · 420 m route**), then on its trip how
+    far it has left (**… m left**). It drives only the town's roads, by the nearest way round the
     stops with riders and back, never off the map: it turns its corners,
     slows to each stop and waits there about ten seconds with its door open
     while its riders step on, and its riders show in its windows the whole
@@ -862,7 +868,7 @@
     is and opens the tray (nothing closes while it stands); **Let the bus
     go**, or closing the tray, sends it on. The bin (always shown in Town and on Board, in other views while
     it holds agents; on a phone, also a stop or the bus in Town) opens the
-    tray: who waits, the time to the next bus, **Put back** (until the trip
+    tray: who waits, when the bus is back (**bus back in 1:45**), **Put back** (until the trip
     ends, even after boarding; it walks back to its desk from its stop) and
     **Close now**. A pinned desk's or pinned tab's last agent cannot go
     in the bin, and its close never takes a pinned tab's last pane. Closes are qualified by host

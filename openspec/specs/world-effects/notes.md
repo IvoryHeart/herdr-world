@@ -8,10 +8,14 @@
 
 **Code:**
 
-- `shared/bin.ts`
-- `server/src/world/bin.ts`: holding, the bus schedule and the journal lines
-  (`Bin holds …`, `Bin bus N set off …`, `Bin dropped …`, `Bin closing …`,
-  `Bin close of …`) at info level in the service journal.
+- `shared/bin.ts`: the bus's speed and `binBusTripMs`/`binBusRoute`, the
+  trip rule the service times by and Town drives to.
+- `server/src/world/bin.ts`: holding, departures (a minute after the first
+  waiter, never before the bus out is back), route reports (`route`, the
+  first per entry stands) and the journal lines
+  (`Bin holds …`, `Bin bus N set off with … aboard: … m there and back, … ms`,
+  `Bin dropped …`, `Bin closing …`, `Bin close of …`) at info level in the
+  service journal.
 - `server/src/service/bin-service.ts`; wired in
   `server/src/service/world-service.ts` (complete pane lists from
   `server/src/world/snapshot.ts`, both runtimes' generations).

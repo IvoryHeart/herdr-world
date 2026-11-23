@@ -1,24 +1,72 @@
 /**
  * The agent bin and Town's bus. An agent put in the bin is held: nothing is
- * closed. A bus runs on one fixed schedule: every `BIN_BUS_INTERVAL_MS` it
- * sets off, everyone waiting boards, and it drives them to Apartments. When
- * the trip ends, `BIN_BUS_TRIP_MS` later, World records one durable close
- * intent per rider, which the effect runner dispatches under its recovery
- * rules. Until the trip ends, Put back takes an agent out again,
- * even one Town shows aboard, and the bus can be stopped where it is so
- * nothing closes until it is let go. Holding and the
- * trip are reversible staging in the service's memory: a reload keeps them
- * and a service restart drops them without closing anything.
+ * closed. The bus lives at Apartments. Once someone waits for it, it sets off
+ * `BIN_BUS_BOARDING_MS` later (never before it is back from a trip), everyone
+ * waiting boards, and it drives the route out to their stops and back at
+ * `BIN_BUS_SPEED_KMH`: its trip's length is `binBusTripMs`, so the countdown
+ * is when the bus is back at Apartments. When the trip ends World records one
+ * durable close intent per rider, which the effect runner dispatches under
+ * its recovery rules. Until the trip ends, Put back takes an agent out
+ * again, even one Town shows aboard, and the bus can be stopped where it is
+ * so nothing closes until it is let go. Holding and the trip are reversible
+ * staging in the service's memory: a reload keeps them and a service restart
+ * drops them without closing anything.
  */
 
-/** The bus sets off this often, on a fixed schedule. */
-export const BIN_BUS_INTERVAL_MS = 240_000;
+/** The bus's speed along the route, in km/h (36 km/h is 10 m a second). */
+export const BIN_BUS_SPEED_KMH = 36;
+/** It sets off this long after the first agent starts waiting for it. */
+export const BIN_BUS_BOARDING_MS = 60_000;
+/** It waits about this long at each stop where someone boards. */
+export const BIN_BUS_DWELL_MS = 10_000;
+/** Pulling away from a stand and pulling in at the next, per leg of the drive. */
+export const BIN_BUS_PULL_MS = 2_500;
 /**
- * How long a trip lasts; its riders close when it ends. Town fits the bus's
- * drive into it: from Apartments by road to each stop with riders, where it
- * waits about 10 s, and back, its riders walking in as the trip ends.
+ * Turning round where it must go back the way it came, and back at
+ * Apartments its doors opening and its riders stepping off and walking in.
  */
-export const BIN_BUS_TRIP_MS = 120_000;
+export const BIN_BUS_ARRIVE_MS = 10_000;
+/**
+ * A rider's route, Apartments to its stop and back, in metres, until a Town
+ * has measured its stop on its roads (world.bin.route).
+ */
+export const BIN_BUS_ROUTE_M = 500;
+/** The longest route a Town may report, in metres. */
+export const BIN_BUS_ROUTE_MAX_M = 50_000;
+
+/**
+ * How long the bus's trip lasts, in ms: the route at its speed, a pull away
+ * and a pull in for each leg (Apartments to each stop, and back), its wait
+ * at each stop, and its riders stepping off at Apartments. The service
+ * times the trip by it; Town fits the bus's drive into it.
+ */
+export function binBusTripMs(route_m: number, stops: number): number {
+  const legs = Math.max(1, stops + 1);
+  return (
+    Math.round((route_m / (BIN_BUS_SPEED_KMH / 3.6)) * 1000) +
+    legs * BIN_BUS_PULL_MS +
+    Math.max(0, stops) * BIN_BUS_DWELL_MS +
+    BIN_BUS_ARRIVE_MS
+  );
+}
+
+/**
+ * The route a bus takes for `riders`: out to the farthest of their stops and
+ * back (each rider's measured route, or `BIN_BUS_ROUTE_M`), halting once at
+ * each stop. A rider with no measured stop counts as a stop of its own.
+ */
+export function binBusRoute(
+  riders: readonly Pick<BinEntry, "id" | "route_m" | "stop">[],
+): { route_m: number; stops: number } {
+  if (!riders.length) return { route_m: 0, stops: 0 };
+  const stops = new Set(riders.map((rider) => rider.stop ?? `\0${rider.id}`));
+  return {
+    route_m: Math.max(
+      ...riders.map((rider) => rider.route_m ?? BIN_BUS_ROUTE_M),
+    ),
+    stops: stops.size,
+  };
+}
 
 /** The view an agent was put in the bin from (reported back with its outcome). */
 export type BinView = "board" | "town" | "desk" | "other";
@@ -63,6 +111,13 @@ export type BinEntry = BinTarget & {
   riding: boolean;
   /** Its tab is pinned: the close never takes the tab's last pane. */
   preserve_tab: boolean;
+  /**
+   * Its route, Apartments to the stop it waits at and back, in metres, as
+   * the first Town to place it measured it on its roads; null until then.
+   */
+  route_m: number | null;
+  /** That stop, as the same Town names it; null until measured. */
+  stop: string | null;
 };
 
 export type BinOutcome = {
@@ -80,18 +135,28 @@ export type BinOutcome = {
   detail?: string;
 };
 
-/** The bus's schedule, as it stood when the state was read. */
+/** The bus, as it stood when the state was read. */
 export type BinBus = {
-  interval_ms: number;
+  /** Its speed along the route, in km/h. */
+  speed_kmh: number;
+  /** The bus on the map: its route there and back, in metres (0 at home). */
+  route_m: number;
+  /** Its trip's length (binBusTripMs), or 0 while it is at home. */
   trip_ms: number;
-  /** Until the next bus sets off. */
-  next_ms: number;
   /** How long the bus has been out on its trip, or null when none is out. */
   elapsed_ms: number | null;
   /** The bus out on its trip was stopped: it stands, and nothing closes, until it goes. */
   stopped: boolean;
   /** The trip on the map, counted from 1 in this service run, or null. */
   trip: number | null;
+  /**
+   * Until the next bus sets off for those waiting, or null when nobody waits
+   * for one or the bus out is stopped.
+   */
+  next_ms: number | null;
+  /** The next bus's route and trip, for those waiting now (0 with nobody). */
+  next_route_m: number;
+  next_trip_ms: number;
 };
 
 export type BinState = {
@@ -118,12 +183,15 @@ export const EMPTY_BIN: BinState = {
   closing: [],
   outcomes: [],
   bus: {
-    interval_ms: BIN_BUS_INTERVAL_MS,
-    trip_ms: BIN_BUS_TRIP_MS,
-    next_ms: BIN_BUS_INTERVAL_MS,
+    speed_kmh: BIN_BUS_SPEED_KMH,
+    route_m: 0,
+    trip_ms: 0,
     elapsed_ms: null,
     stopped: false,
     trip: null,
+    next_ms: null,
+    next_route_m: 0,
+    next_trip_ms: 0,
   },
 };
 

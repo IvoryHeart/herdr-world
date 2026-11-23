@@ -76,9 +76,27 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
   // The service's bin, as World's bridge serves it.
   let served: BinState;
   let notify: ((control: { type: string }) => void) | null = null;
-  bridge.call = (async (method: string) => {
-    if (method !== "world.bin.list") throw new Error(`unexpected ${method}`);
-    return served;
+  /** The routes Town measured and sent World (world.bin.route). */
+  const reported: { id: string; route_m: number; stop: string }[] = [];
+  /** When `served` was read; a later reply is the same state, read now. */
+  let servedAt = 0;
+  bridge.call = (async (method: string, params?: { routes?: never[] }) => {
+    if (method === "world.bin.route") reported.push(...(params?.routes ?? []));
+    else if (method !== "world.bin.list")
+      throw new Error(`unexpected ${method}`);
+    const since = clock - servedAt;
+    const { bus } = served;
+    return {
+      ...served,
+      bus: {
+        ...bus,
+        next_ms: bus.next_ms === null ? null : Math.max(0, bus.next_ms - since),
+        elapsed_ms:
+          bus.elapsed_ms === null || bus.stopped
+            ? bus.elapsed_ms
+            : bus.elapsed_ms + since,
+      },
+    };
   }) as typeof bridge.call;
   bridge.onControl = ((callback: (control: { type: string }) => void) => {
     notify = callback;
@@ -142,15 +160,14 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
     view: "town",
     riding,
     preserve_tab: false,
+    route_m: null,
+    stop: null,
   });
-  const INTERVAL = 240_000;
   const TRIP = 45_000;
   let revision = 0;
-  const serve = (
-    entries: BinEntry[],
-    bus: Partial<BinState["bus"]> & { next_ms: number },
-  ) => {
+  const serve = (entries: BinEntry[], bus: Partial<BinState["bus"]>) => {
     revision += 1;
+    servedAt = clock;
     served = {
       epoch: "run",
       revision,
@@ -158,11 +175,15 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
       closing: [],
       outcomes: [],
       bus: {
-        interval_ms: INTERVAL,
-        trip_ms: TRIP,
+        speed_kmh: 36,
+        route_m: 0,
+        trip_ms: 0,
         elapsed_ms: null,
         stopped: false,
         trip: null,
+        next_ms: null,
+        next_route_m: 0,
+        next_trip_ms: 0,
         ...bus,
       },
     };
@@ -205,7 +226,7 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
   const agree = () => {
     const { chip, stops } = shown();
     expect(stops.length).toBeGreaterThan(0);
-    const countdown = chip.replace(/^bus (in )?/, "");
+    const countdown = chip.replace(/^bus (back in )?/, "");
     expect(chip).not.toBe(countdown);
     for (const stop of stops) expect(stop).toBe(countdown);
     return countdown;
@@ -225,82 +246,108 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
   };
 
   test("stop clocks and the bin read one countdown at every instant", async () => {
-    // One rider waits for a bus that sets off in a minute.
-    serve([entry("a", false)], { next_ms: 60_000 });
+    const sign = () => host.querySelector<HTMLElement>(".town-bus-sign");
+    // One rider waits for a bus that sets off in a minute and is back at
+    // Apartments 45 s after that.
+    const waitA = { next_ms: 60_000, next_route_m: 300, next_trip_ms: TRIP };
+    serve([entry("a", false)], waitA);
     await act(async () => {
       root.render(createElement(Scene, { town: false }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(shown().chip).toBe("bus in 1:00");
+    expect(shown().chip).toBe("bus back in 1:45");
     // Town opens a little later: its stops tick with the bin, not out of
     // step with it.
     await act(async () => advanceTo(600));
-    await act(async () => root.render(createElement(Scene, { town: true })));
-    expect(agree()).toBe("1:00");
+    await act(async () => {
+      root.render(createElement(Scene, { town: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(agree()).toBe("1:45");
+    // Town measured the rider's stop on its roads and told World.
+    expect(reported).toEqual([
+      { id: "bin-a", route_m: expect.any(Number), stop: expect.any(String) },
+    ]);
+    expect(reported[0]!.route_m).toBeGreaterThan(0);
+    // Parked, the bus shows its speed and the route it is to drive.
+    expect(sign()?.hidden).toBe(false);
+    expect(sign()?.textContent).toBe("36 km/h · 300 m route");
     await runTo(3_600);
-    expect(agree()).toBe("0:57");
+    expect(agree()).toBe("1:42");
 
-    // A late rider joins at another stop: both stops and the bin still agree.
+    // A late rider joins at another stop, farther out: the next trip is
+    // longer, and both stops and the bin still agree.
     clock = 3_700;
     serve([entry("a", false), entry("b", false)], {
+      ...waitA,
       next_ms: 60_000 - 3_700,
+      next_route_m: 400,
+      next_trip_ms: TRIP + 10_000,
     });
     await changed();
     expect(shown().stops).toHaveLength(2);
-    expect(agree()).toBe("0:57");
+    expect(reported.map((route) => route.id)).toEqual(["bin-a", "bin-b"]);
+    expect(reported[1]!.stop).not.toBe(reported[0]!.stop);
+    expect(agree()).toBe("1:52");
     await runTo(9_100);
-    expect(agree()).toBe("0:51");
+    expect(agree()).toBe("1:46");
 
-    // The trip sets off: on its way, everywhere.
+    // The trip sets off: its riders' countdown is the trip's end.
     clock = 60_000;
-    serve([entry("a", true), entry("b", true)], {
-      next_ms: INTERVAL,
-      elapsed_ms: 0,
-      trip: 1,
-    });
+    const out = { route_m: 400, trip_ms: TRIP + 10_000, trip: 1 };
+    serve([entry("a", true), entry("b", true)], { ...out, elapsed_ms: 0 });
     await changed();
-    expect(agree()).toBe("on its way");
-    // One joins while it is out: it waits for the next, and agrees too.
+    expect(agree()).toBe("0:55");
+    expect(sign()?.textContent).toMatch(/^36 km\/h · \d+ m left$/);
+    // One joins while it is out: it waits for the next, which leaves once
+    // this one is back; the clocks show the bus out's riders.
     clock = 70_000;
     serve([entry("a", true), entry("b", true), entry("c", false)], {
-      next_ms: INTERVAL - 10_000,
+      ...out,
       elapsed_ms: 10_000,
-      trip: 1,
+      next_ms: 45_000,
+      next_route_m: 300,
+      next_trip_ms: TRIP,
     });
     await changed();
-    expect(agree()).toBe("on its way");
+    expect(agree()).toBe("0:45");
     await runTo(72_000);
+    expect(agree()).toBe("0:43");
     // Stopped on the map: the same word at the stop and on the bin.
     serve([entry("a", true), entry("b", true), entry("c", false)], {
-      next_ms: INTERVAL - 12_000,
+      ...out,
       elapsed_ms: 12_000,
       stopped: true,
-      trip: 1,
     });
     await changed();
     expect(agree()).toBe("stopped");
 
-    // The trip ends and the timetable restarts for the one left waiting.
-    clock = 110_000;
-    serve([entry("c", false)], { next_ms: INTERVAL - 50_000 });
+    // The trip ends; the one left waiting is due a minute after joining.
+    clock = 125_000;
+    serve([entry("c", false)], {
+      next_ms: 5_000,
+      next_route_m: 300,
+      next_trip_ms: TRIP,
+    });
     await changed();
-    expect(agree()).toBe("3:10");
-    await runTo(114_500);
-    expect(agree()).toBe("3:06");
+    expect(agree()).toBe("0:50");
+    await runTo(129_500);
+    expect(agree()).toBe("0:46");
     // Its trip sets off on time.
-    clock = 300_000;
+    clock = 130_000;
     serve([entry("c", true)], {
-      next_ms: INTERVAL,
+      route_m: 300,
+      trip_ms: TRIP,
       elapsed_ms: 0,
       trip: 2,
     });
     await changed();
-    expect(agree()).toBe("on its way");
+    expect(agree()).toBe("0:45");
     await act(async () => root.unmount());
   });
 
   test("with ?townBusDemo, the bin counts down from the demo's bus too", async () => {
-    serve([], { next_ms: 60_000 });
+    serve([], {});
     Object.assign(globalThis, {
       location: window.location,
       history: window.history,
@@ -313,9 +360,10 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(window.location.search).toBe("");
-    expect(agree()).toBe("0:06");
+    // The demo's bus sets off in 6 s and is back 45 s later.
+    expect(agree()).toBe("0:51");
     await runTo(clock + 2_200);
-    expect(agree()).toBe("0:04");
+    expect(agree()).toBe("0:49");
     await act(async () => demoRoot.unmount());
     // Town closed, the bin is the service's again.
     expect(townBusDemoShown.get()).toBeNull();
