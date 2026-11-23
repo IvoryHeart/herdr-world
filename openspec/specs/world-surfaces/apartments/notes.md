@@ -13,6 +13,7 @@
 
 - `web/src/world/apartments/`
 - `shared/apartments.ts`
+- `server/src/features/apartments/` (construction, RPC declarations/handlers and close lifecycle)
 - `server/src/world/apartments.ts`
 - `server/src/world/apartment-census.ts`
 - `server/src/world/apartment-resume.ts`

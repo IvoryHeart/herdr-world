@@ -1,4 +1,5 @@
 import { composeWorldUsage } from "../service/usage-analytics";
+import { createApartmentsService } from "../features/apartments/service";
 import { composeFeatures } from "../features/compose";
 import type { FeatureKernel } from "../features/contract";
 import type { RpcServices } from "../rpc/context";
@@ -6,6 +7,11 @@ import type { RpcServices } from "../rpc/context";
 export const testFeatureKernel = (ports: Partial<FeatureKernel> = {}) =>
   ({
     createUsage: composeWorldUsage,
+    createApartments: createApartmentsService,
+    clock: { now: () => 0, monotonic: () => 0 },
+    storage: {},
+    revisionPublisher: () => () => {},
+    logger: { warn() {} },
     paths: { root: "/dev/null" },
     connections: () => undefined,
     core: () => undefined,
@@ -17,10 +23,11 @@ export const testFeatureKernel = (ports: Partial<FeatureKernel> = {}) =>
 export function withFeatures(services: RpcServices): RpcServices {
   const kernel = testFeatureKernel({
     clients: services.clients,
-    clock: services.clock,
+    ...(services.clock ? { clock: services.clock } : {}),
     connections: () => services.connectionManager,
     core: () => services.core?.manager as ReturnType<FeatureKernel["core"]>,
     coreHostRuntime: (lease) => services.coreControl!.hostRuntime(lease),
+    coreApartmentRuntime: (lease) => services.coreControl!.hostRuntime(lease),
   });
   const features = composeFeatures(kernel);
   return { ...services, featureRpc: features.rpc };

@@ -934,6 +934,8 @@ limiting, multi-user roles, or a sandbox.
 
 ## Native HTTPS
 
+The **Code** view requires trusted HTTPS or loopback (`http://localhost:<port>`) to open Visual Studio Code.
+
 Supply a PEM certificate chain (leaf first) and a matching unencrypted private
 key, through flags or the environment settings above:
 
@@ -960,6 +962,13 @@ Protect certificate keys, keep them out of Git, and use absolute paths readable
 by the service user. Issuance and renewal are external; restart World after
 replacing the files. An HTTPS reverse proxy is another option; preserve its
 public Host and configure `--public-origin` when proxying to loopback.
+
+### Known issues
+
+- [Code view needs a secure address (#1271)](https://github.com/IvoryHeart/herdr-world/issues/1271):
+  plain `http://<lan-ip>:<port>` shows **Visual Studio Code needs a secure address**.
+  Use localhost on the computer running World, or follow the
+  [Tailscale Serve steps](./TUTORIAL.md#tailscale) for HTTPS on other devices.
 
 ## Web Push notifications
 

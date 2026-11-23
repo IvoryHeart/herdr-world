@@ -36,7 +36,7 @@ None.
 ## Impact
 
 Server: `shared/apartments.ts`, `server/src/world/apartments.ts`,
-`server/src/service/apartments-service.ts`, `shared/relations.ts`
+`server/src/features/apartments/service.ts`, `shared/relations.ts`
 (`withInheritedColors`, now shared by the browser and the service).
 Browser: `web/src/world/apartments/`. Docs: FEATURES.md (Apartments).
 

@@ -58,7 +58,8 @@ import { withIntegrations } from "../integrations/http";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { afterHerdrClose } from "../world/board-closing";
-import { createApartmentsService } from "./apartments-service";
+import { apartmentsKey } from "../features/apartments/register";
+import { createApartmentsService } from "../features/apartments/service";
 import { createBinService } from "./bin-service";
 import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
@@ -312,21 +313,10 @@ async function compose(
     connections: () => connectionManager,
     publish: revisionPublisher("world_bin_changed", "world-bin"),
     log: (message) => logger.warn(message),
-    retiring: (entries) => apartments.apartments.retire(entries),
+    retiring: (entries) =>
+      features!.get(apartmentsKey).apartments.retire(entries),
   });
   void bin.start();
-  /** Apartments: the records finished agents leave (shared/apartments.ts). */
-  const apartments = createApartmentsService({
-    port: storage.apartments,
-    now: () => clock.now(),
-    tui: () => connectionManager,
-    core: () => coreRpc,
-    sources: () => worldSources.current(),
-    board,
-    profiles: () => storage.profiles(),
-    publish: revisionPublisher("world_apartments_changed", "world-apartments"),
-    log: (message) => logger.warn(message),
-  });
   const {
     observe: observeHost,
     retire: retireTerminalMarks,
@@ -380,7 +370,6 @@ async function compose(
         !["error", "disconnected"].includes(status.state),
       );
       bin.connectionStatus(status);
-      apartments.apartments.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -487,12 +476,18 @@ async function compose(
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    apartments.fresh((id, generation, panes, at, agents) => {
-      if (connectionManager.has(id))
-        observeHost(id, generation, panes, at, agents);
-      worldUsage?.activity.observeFresh(id, generation, panes, at, agents);
-    }),
-    apartments.complete(ownedBy(connectionManager, observeTerminalSettings)),
+    (...args) =>
+      features!
+        .get(apartmentsKey)
+        .fresh((id, generation, panes, at, agents) => {
+          if (connectionManager.has(id))
+            observeHost(id, generation, panes, at, agents);
+          worldUsage?.activity.observeFresh(id, generation, panes, at, agents);
+        })(...args),
+    (...args) =>
+      features!
+        .get(apartmentsKey)
+        .complete(ownedBy(connectionManager, observeTerminalSettings))(...args),
     serviceIncarnation,
   );
 
@@ -777,7 +772,6 @@ async function compose(
     ...terminalMarks,
     bin,
     focus,
-    apartments,
     worldCli,
     worldSnapshots,
     ide,
@@ -791,9 +785,11 @@ async function compose(
       () => worldSources,
       { observedConnections, worldSnapshots, officeObservability },
       composeWorldUsage,
+      createApartmentsService,
     ),
   );
   worldUsage = features.get(usageKey);
+  rpcServices.apartments = features.get(apartmentsKey);
   rpcServices.featureRpc = features.rpc;
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
@@ -966,9 +962,8 @@ async function compose(
       try {
         // Finished agents seen so far are written before storage closes;
         // a history census still reading stops.
-        await apartments.stop();
+        await features!.stop("close");
         await closeTerminalMarks();
-        if (features!.hasStop("close")) await features!.stop("close");
         storageOpen = false;
         await storage.close();
       } finally {
