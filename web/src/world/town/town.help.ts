@@ -120,4 +120,23 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     since: "0.3.6",
     picture: { scene: "town", press: ['[data-help="town.board-chip"]'] },
   },
+  {
+    id: "town.runtimes",
+    title: "Which runtime a room runs on",
+    summary:
+      "When one building holds rooms of both runtimes, a small icon before each room's name tells them apart: a terminal window for the Herdr TUI, a diamond for herdr-core.",
+    steps: [
+      "Zoom into a building until the rooms' name plates show.",
+      "Point at the icon before a room's name, or tap it on a phone, to read its runtime.",
+      "Buildings with one runtime show no icon.",
+    ],
+    place: "town",
+    where: "Town, before a room's name on its plate and its card",
+    control: "town.runtime",
+    since: "0.3.6",
+    picture: {
+      scene: "town",
+      press: ['.town-room-card[aria-label*="(herdr-core"]'],
+    },
+  },
 ];

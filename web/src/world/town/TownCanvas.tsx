@@ -28,7 +28,7 @@ import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
 import { TownZoomControls } from "./TownZoomControls";
-import { townDeskOpensAtOnce } from "./townOpen";
+import { townDeskCardOpens } from "./townOpen";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type {
   WorldCanvasAnchor,
@@ -79,6 +79,7 @@ import {
   NO_FOLDED_ACTIVITY,
   type TownFoldedActivity,
 } from "./townFoldedActivity";
+import { townPlaqueCard } from "./townPlaqueCard";
 import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
 import { TownBusLayer, useTownBin } from "./TownBusLayer";
@@ -668,21 +669,15 @@ export function TownCanvas({
       tapCard: (deskKey) => {
         const { tappedDesk: open, model: m, projection: p } = latest.current;
         const roomKey = deskKey ? m.desks.get(deskKey)?.roomKey : undefined;
-        // Only a table drawn with its nameplate, and with no pane a tap
-        // opens at once (townDeskOpensAtOnce), has a card; a second tap on
-        // the same table does what a tap always did.
-        const opens =
-          deskKey !== null &&
-          deskKey !== open &&
-          !townDeskOpensAtOnce(p, deskKey) &&
-          !!roomKey &&
-          hud.visible.tagRooms.has(roomKey);
+        const shown = hud.visible.tagRooms;
+        const opens = townDeskCardOpens(p, deskKey, open, roomKey, shown);
         setTappedDesk(opens ? deskKey : null);
         return opens;
       },
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
       openReception: setOpenReception,
+      tapRoomName: townPlaqueCard.toggle,
       openCenter: ring.openRing,
       ...places.ports(document),
       move: (command) => {
