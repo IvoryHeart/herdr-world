@@ -25,6 +25,13 @@
 - `web/src/world/visualRouteActions.ts`
 - `web/src/world/worldSearch.ts`
 - `web/src/layerStack.ts`
+- `web/src/world/runtimeGrouping.ts`
+- `web/src/world/runtimeGrouping.settings.tsx`
+- `web/src/world/useHostGroups.ts`
+- `web/src/world/navigatorGroups.ts`
+- `web/src/world/WorldNavigator.tsx`
+- `web/src/worldHosts.ts`
+- `web/src/store/uiSettings.ts`
 
 **Tests:**
 
@@ -32,6 +39,9 @@
 - `web/src/world/visualRouteActions.test.ts`
 - `web/src/world/worldSearch.test.ts`
 - `web/src/systemBack.browser.tsx`
+- `web/src/world/runtimeGrouping.test.ts`
+- `web/src/world/navigatorGroups.test.ts`
+- `web/src/worldHosts.test.ts`
 
 **Pitfalls:**
 
@@ -72,7 +82,20 @@
   ready connection's workspaces and agents from World's shared observation,
   labels each with its server and keeps worktrees nested. Selecting a row opens
   its server; another server's menu only navigates. Stale hosts stay out, and a
-  failed observation shows its error. World's navigator keeps one tree per host.
+  failed observation shows its error.
+- **Settings → This World → Group runtimes** decides how Town's buildings,
+  World's navigator and Desk's other-host summaries group a machine's
+  runtimes, for every browser. **One per machine** (the default) puts this
+  computer's Herdr TUI and herdr-core under one navigator heading with a
+  **Herdr TUI** row and a **herdr-core** row (each with its own tree, colour
+  and actions), one Town building and one Desk host; **One per runtime** shows
+  each runtime apart. A machine on its own runtime keeps a plain host row.
+  The value lives in the service's settings (`ui.runtimeGrouping`), with a
+  browser copy (`runtimeGrouping.v1`) for the first paint; one browser's
+  earlier Town buildings choice moves there once. Groups come from one
+  derivation (`worldHostGroups` / `hostGroupOf` in `web/src/worldHosts.ts`);
+  Board keeps a zone per connection and the Hosts filter always lists
+  machines.
 - Workspace rows show numbered tab chips with each tab's agent status, folding
   extra tabs into **+N**, and keep the server badge in the right column. In
   Spaces a chip focuses its tab; in World's navigator it selects the workspace

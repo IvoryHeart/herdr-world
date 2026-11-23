@@ -10,6 +10,11 @@ import {
   adoptTownReceptionFilter,
   connectTownReceptionFilter,
 } from "../world/town/townReceptionSetting";
+import {
+  RUNTIME_GROUPING_SETTING_KEY,
+  adoptRuntimeGrouping,
+  connectRuntimeGrouping,
+} from "../world/runtimeGrouping";
 
 /**
  * Reads interface preferences from the World service and installs their write
@@ -26,6 +31,8 @@ let uiSettingsPushVersion = 0;
 let latestShortcutPush: unknown;
 let receptionPushVersion = 0;
 let latestReceptionPush: unknown;
+let groupingPushVersion = 0;
+let latestGroupingPush: unknown;
 
 async function hydrateUiSettings() {
   if (uiSettingsHydrated) return;
@@ -33,6 +40,7 @@ async function hydrateUiSettings() {
   const epoch = uiSettingsEpoch;
   const pushVersion = uiSettingsPushVersion;
   const receptionVersion = receptionPushVersion;
+  const groupingVersion = groupingPushVersion;
   try {
     const result = await bridge.call("bridge.ui_settings.get");
     if (epoch !== uiSettingsEpoch) return;
@@ -59,6 +67,19 @@ async function hydrateUiSettings() {
         ? ui[TOWN_RECEPTION_SETTING_KEY]
         : latestReceptionPush,
     );
+    connectRuntimeGrouping(async (value) => {
+      await bridge.call("bridge.ui_settings.update", {
+        key: RUNTIME_GROUPING_SETTING_KEY,
+        value,
+      });
+    });
+    // Adopting a missing value may send this browser's older Town choice
+    // once (world/runtimeGrouping.ts), so the write path is installed first.
+    adoptRuntimeGrouping(
+      groupingVersion === groupingPushVersion
+        ? ui[RUNTIME_GROUPING_SETTING_KEY]
+        : latestGroupingPush,
+    );
   } catch {
     // Either the call lost a race with socket setup, or the service predates
     // the RPC. Clear the flag so the next trigger retries; the browser cache
@@ -76,9 +97,16 @@ export function installUiSettings(): void {
       uiSettingsHydrated = false;
       disconnectShortcutPreferences();
       connectTownReceptionFilter(null);
+      connectRuntimeGrouping(null);
     }
   });
   bridge.onUiSetting((push) => {
+    if (push.key === RUNTIME_GROUPING_SETTING_KEY) {
+      groupingPushVersion += 1;
+      latestGroupingPush = push.value;
+      adoptRuntimeGrouping(push.value);
+      return;
+    }
     if (push.key === TOWN_RECEPTION_SETTING_KEY) {
       receptionPushVersion += 1;
       latestReceptionPush = push.value;
