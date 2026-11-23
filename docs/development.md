@@ -156,6 +156,11 @@ to Ubuntu, GitHub releases and releases.herdr.dev. No root shell or
 cgroups or a failed download fails the run. `--version` selects the candidate
 build version (or exact package in `dist/` with `--reuse`).
 
+The image build allows one additional package-index refresh when a mirror fails
+(including HTTP 520, which APT's native retries do not cover). Every index must
+refresh successfully before package installation; signature checks stay enabled.
+Repeated refresh failures and package installation failures still fail the run.
+
 Every default run uses five fresh containers:
 
 | Case | Checks |

@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, existsSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  existsSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -12,6 +18,83 @@ import {
 import { latestStableRelease } from "./installer-upgrade";
 
 const python = Bun.which("python3") ?? Bun.which("python");
+
+for (const mode of ["success", "transient", "permanent", "install-failure"]) {
+  test.skipIf(process.platform === "win32")(
+    `image package setup handles ${mode} fetches without hiding failures`,
+    () => {
+      const root = mkdtempSync(join(tmpdir(), "install-apt-"));
+      try {
+        // Execute only package setup, never the container's user/system changes.
+        const dockerfile = readFileSync(
+          "scripts/install-linux/Dockerfile",
+          "utf8",
+        );
+        const setup = dockerfile.match(
+          /^RUN ([\s\S]*?)\s+&& rm -rf \/var\/lib\/apt\/lists\/\*/m,
+        )?.[1];
+        expect(setup).toBeDefined();
+        writeFileSync(
+          join(root, "apt-get"),
+          `#!/bin/sh
+printf '%s\\n' "$*" >> "$APT_FIXTURE/calls"
+case " $* " in
+  *' update '*)
+    case "$APT_MODE" in
+      permanent) exit 100 ;;
+      transient)
+        if [ ! -f "$APT_FIXTURE/failed" ]; then
+          : > "$APT_FIXTURE/failed"
+          echo '520 from fixture package mirror' >&2
+          exit 100
+        fi ;;
+    esac ;;
+  *' install '*) [ "$APT_MODE" != install-failure ] || exit 100 ;;
+esac
+`,
+          { mode: 0o755 },
+        );
+        const result = spawnSync(
+          "/bin/sh",
+          ["-c", setup!.replaceAll(/\\\r?\n/g, " ")],
+          {
+            encoding: "utf8",
+            env: {
+              ...process.env,
+              PATH: root,
+              APT_FIXTURE: root,
+              APT_MODE: mode,
+            },
+          },
+        );
+        expect(result.error).toBeUndefined();
+        expect(result.status).toBe(
+          mode === "permanent" || mode === "install-failure" ? 100 : 0,
+        );
+        const calls = readFileSync(join(root, "calls"), "utf8")
+          .trim()
+          .split("\n");
+        const updates = calls.filter((line) => line.includes("update"));
+        const installs = calls.filter((line) => line.includes("install"));
+        expect(updates).toHaveLength(
+          mode === "transient" || mode === "permanent" ? 2 : 1,
+        );
+        expect(installs).toHaveLength(mode === "permanent" ? 0 : 1);
+        for (const update of updates)
+          expect(update).toContain("APT::Update::Error-Mode=any");
+        for (const call of calls) {
+          expect(call).toContain("Acquire::Retries=3");
+          expect(call).not.toMatch(
+            /AllowInsecure|AllowUnauthenticated|allow-unauthenticated/,
+          );
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+}
+
 test.skipIf(!python)(
   "installer assertions preserve runtime identity and tolerate setup completion ordering",
   () => {
