@@ -1,39 +1,39 @@
-import type { AgentProfile } from "../../../shared/agentProfile";
+import type { AgentProfile } from "../../../../shared/agentProfile";
 import type {
   ApartmentAppearance,
   ApartmentLink,
-} from "../../../shared/apartments";
+} from "../../../../shared/apartments";
 import {
   type AppearanceDocument,
   appearanceFor,
   avatarLook,
-} from "../../../shared/appearance";
+} from "../../../../shared/appearance";
 import {
   resolveTerminalColorByKeys,
   tabCardKey,
   TERMINAL_COLOR_NAMES,
   type TerminalColorName,
   workspaceColorKey,
-} from "../../../shared/terminalColor";
+} from "../../../../shared/terminalColor";
 import {
   relationsOf,
   type RelationsDocument,
   type TerminalPlace,
   terminalKey,
   withInheritedColors,
-} from "../../../shared/relations";
-import type { WorldSourcesSnapshot } from "../../../shared/worldSources";
-import type { AgentSessionFileAccess } from "../agent/session-file-access";
-import type { ApartmentsPort } from "../storage/apartments";
-import { ApartmentCensus } from "../world/apartment-census";
-import { readApartmentHistory } from "../world/apartment-history";
+} from "../../../../shared/relations";
+import type { WorldSourcesSnapshot } from "../../../../shared/worldSources";
+import type { AgentSessionFileAccess } from "../../agent/session-file-access";
+import type { ApartmentsPort } from "../../storage/apartments";
+import { ApartmentCensus } from "../../world/apartment-census";
+import { readApartmentHistory } from "../../world/apartment-history";
 import {
   type ApartmentHost,
   type ApartmentPane,
   type ApartmentTenant,
   WorldApartments,
-} from "../world/apartments";
-import type { Complete, Fresh } from "../world/snapshot-observers";
+} from "../../world/apartments";
+import type { Complete, Fresh } from "../../world/snapshot-observers";
 
 type Status = { id: string; label: string };
 type Manager<Lease> = {

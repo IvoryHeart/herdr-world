@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { memoryApartmentsPort } from "../storage/apartments";
-import { createApartmentsService } from "./apartments-service";
+import { createApartmentsService } from "../features/apartments/service";
 
 const NOW = 1_800_000_000_000;
 const SESSION = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";

@@ -239,15 +239,6 @@ export const rpcVerbs = [
     "world",
     object({ source: Type.Unknown(), destination: Type.Unknown() }),
   ),
-  // Apartments: finished agents' records. Evict names explicit residents.
-  rpc(
-    "world.apartments.evict",
-    "reconcilable",
-    "world",
-    object({ ids: Type.Array(text, { minItems: 1, maxItems: 500 }) }),
-  ),
-  rpc("world.apartments.history", "read", "world", object({ id: text })),
-  rpc("world.apartments.list", "read", "world"),
   rpc("world.appearance.patch", "reconcilable", "world"),
   rpc("world.appearance.rename", "reconcilable", "world"),
   rpc("world.ask.answer", "reconcilable", "world"),
