@@ -501,6 +501,7 @@ describe("quests", () => {
           set_by: "call_q1",
         }),
         usage_stop: null,
+        artefacts: [],
       },
     ]);
   });

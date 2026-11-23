@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   Link2,
   type LucideIcon,
+  PackageOpen,
   ScrollText,
   Server,
   Spline,
@@ -38,7 +39,9 @@ export type BoardKindAdd =
   /** Comes from Herdr itself; the hint says where. */
   | "topology"
   /** Drawn by dragging a card's handle. */
-  | "string";
+  | "string"
+  /** Made by an agent: Add to Board on the agent's card. */
+  | "agent";
 
 export type BoardKindPresentation = {
   label: string;
@@ -115,6 +118,13 @@ export const BOARD_KIND_PRESENTATION = {
     icon: Link2,
     add: "form",
   },
+  artefact: {
+    label: "Made by an agent",
+    blurb:
+      "A report, page or link an agent made. Use Add to Board on the agent's card.",
+    icon: PackageOpen,
+    add: "agent",
+  },
 } as const satisfies Record<BoardRegistryKind, BoardKindPresentation>;
 
 /** Every registered kind, in registry order, with its presentation. */
@@ -125,7 +135,9 @@ export const BOARD_KINDS = BOARD_ELEMENT_TYPES.map((type) => ({
 
 /** Kinds a person places on Board themselves (new elements and notes). */
 export const PLACED_KINDS = BOARD_KINDS.filter(
-  (kind) => kind.placement === "element" || kind.add === "note",
+  (kind) =>
+    (kind.placement === "element" && kind.add === "form") ||
+    kind.add === "note",
 );
 /** Kinds that arrive from hosts and sources; the dialog says how. */
 export const ARRIVING_KINDS = BOARD_KINDS.filter(
@@ -141,6 +153,7 @@ export const DEFAULT_TITLES: Record<BoardElementKind, string> = {
   log: "Agent log",
   document: "Doc",
   link: "Link",
+  artefact: "Made by an agent",
 };
 
 export type LinkKind = "url" | "pull_request" | "issue";
@@ -177,6 +190,15 @@ export const baseName = (path: string) => path.split("/").pop() || path;
 /** Whether an element reads from a project on a host (not inline or a URL). */
 export function projectSource(element: BoardElement) {
   if (element.kind === "link") return null;
+  if (element.kind === "artefact")
+    return "file" in element.source
+      ? {
+          connection_id: element.source.connection_id,
+          workspace_id: element.source.workspace_id,
+          path: element.source.file,
+          agent_ref: element.source.agent_ref,
+        }
+      : null;
   if (element.kind === "document" && "text" in element.source) return null;
   return element.source as {
     connection_id: string;

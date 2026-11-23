@@ -202,3 +202,48 @@ test("a herdr-core agent is never asked for a quest; a Herdr agent beside it is"
   expect(asked).toEqual(["leaf-1"]);
   expect(calls).toEqual([["w1:p1"]]);
 });
+
+test("artefacts are read with the quest, kept per agent, and a deleted file reads as gone", async () => {
+  const { client, pending } = fakeClient();
+  const reads = new AgentQuestReads(() => client);
+  const report = {
+    id: "artefact-0000000000000001",
+    title: "weekly-report.md",
+    kind: "report",
+    where: { type: "file", path: "/work/example/weekly-report.md" },
+    made_at: "2026-11-23T10:00:00.000Z",
+    evidence: "file_write",
+    exists: true,
+  };
+  const first = reads.read([leaf("L1")]);
+  pending[0]!({
+    quests: [
+      entry({
+        quest: null,
+        // A malformed record is dropped; the valid one is kept.
+        artefacts: [report, { id: "broken" }] as AgentQuest["artefacts"],
+      }),
+    ],
+  });
+  expect(await first).toEqual({
+    changed: true,
+    working: false,
+    artefacts: true,
+  });
+  expect(reads.artefacts().get("leaf-1")).toEqual([report] as never);
+  const second = reads.read([leaf("L1")]);
+  pending[1]!({
+    quests: [
+      entry({
+        quest: null,
+        artefacts: [{ ...report, exists: false }] as AgentQuest["artefacts"],
+      }),
+    ],
+  });
+  expect(await second).toEqual({
+    changed: true,
+    working: false,
+    artefacts: true,
+  });
+  expect(reads.artefacts().get("leaf-1")?.[0]?.exists).toBe(false);
+});

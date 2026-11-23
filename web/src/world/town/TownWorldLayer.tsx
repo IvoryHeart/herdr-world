@@ -49,6 +49,7 @@ import { TOWN_TILE as T, townDeskSlots, type TownLayout } from "./townLayout";
 import { townAttention, townRoomCounts, type TownModel } from "./townModel";
 import { townCarpetFor, townCarpetOf } from "./townPaint";
 import { TownQuestPennant, type TownQuestMark } from "./townQuestPennant";
+import { TownArtefactStack, type TownArtefactMark } from "./TownArtefactStack";
 import { TownTiredMark } from "./TownTiredMark";
 import { agentContextFill, useContextUsage } from "../agentContextFill";
 import { townReceptionBoard } from "./townReception";
@@ -137,6 +138,7 @@ export const TownTeamsLayer = memo(function TownTeamsLayer({
   );
 });
 const NO_QUIET: ReadonlyMap<string, number> = new Map();
+const NO_MADE: ReadonlyMap<string, TownArtefactMark> = new Map();
 export const TownWorldLayer = memo(function TownWorldLayer({
   hud,
   model,
@@ -162,6 +164,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   targets,
   deskBadges,
   quests,
+  made = NO_MADE,
   steps,
   renderer,
   pennants,
@@ -214,6 +217,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   deskBadges: ReadonlyMap<string, TownDeskBadge>;
   /** Quests by agent key, as pennants at their seats. */
   quests: ReadonlyMap<string, TownQuestMark>;
+  /** What each agent made, by agent key, as a paper stack at its seat. */
+  made?: ReadonlyMap<string, TownArtefactMark>;
   /** Working agents' current steps, as thought bubbles at their seats. */
   steps?: TownStepStore;
   /** Tells a pennant whether its agent is seated. */
@@ -793,6 +798,9 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                               const quest = device?.agentKey
                                 ? quests.get(device.agentKey)
                                 : undefined;
+                              const madeMark = device?.agentKey
+                                ? made.get(device.agentKey)
+                                : undefined;
                               const fill =
                                 device?.agentKey && !device.stale
                                   ? agentContextFill(usage, {
@@ -852,6 +860,17 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                                       agentLabel={device.displayLabel}
                                       renderer={renderer}
                                       pennants={pennants}
+                                      top={slot.top}
+                                      x={slot.chairX + 7}
+                                    />
+                                  ) : null}
+                                  {madeMark ? (
+                                    <TownArtefactStack
+                                      mark={madeMark}
+                                      agentKey={device.agentKey!}
+                                      agentLabel={device.displayLabel}
+                                      renderer={renderer}
+                                      marks={pennants}
                                       top={slot.top}
                                       x={slot.chairX + 7}
                                     />

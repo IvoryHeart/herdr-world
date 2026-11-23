@@ -1,6 +1,7 @@
 import { CircleDot, GitPullRequest, Link2 } from "lucide-react";
 import type { KeyboardEvent, Ref } from "react";
 import type { BoardElement } from "../../../../../shared/boardElements";
+import { ARTEFACT_KIND_LABELS } from "../../../../../shared/agentArtefacts";
 import {
   BOARD_KIND_PRESENTATION,
   baseName,
@@ -121,6 +122,21 @@ function ElementBody({ element }: { element: BoardElement }) {
         <div className="board-element-line">
           {baseName(element.source.path)}
         </div>
+      );
+    case "artefact":
+      return (
+        <>
+          <div className="board-element-line board-element-agent">
+            {ARTEFACT_KIND_LABELS[element.source.artefact_kind]} · by{" "}
+            {element.source.agent_ref}
+          </div>
+          <div className="board-element-line">
+            {"file" in element.source
+              ? baseName(element.source.file)
+              : (classifyLink(element.source.url).ref ??
+                classifyLink(element.source.url).site)}
+          </div>
+        </>
       );
     case "link": {
       const link = classifyLink(element.source.url);

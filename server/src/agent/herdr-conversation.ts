@@ -787,10 +787,10 @@ export function createHerdrConversationSource(args: {
           try {
             const desk = resolved.file
               ? await args.cache.desk(resolved)
-              : { quest: null, usage_stop: null };
+              : { quest: null, usage_stop: null, artefacts: [] };
             return {
               ...found,
-              quest: desk.quest,
+              ...desk,
               usage_stop: usageStopCurrent(desk.usage_stop, Date.now())
                 ? desk.usage_stop
                 : null,

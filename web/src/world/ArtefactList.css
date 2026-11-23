@@ -1,0 +1,93 @@
+/* What an agent made: one row per artefact, on Desk and Town cards. */
+.artefact-list {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+.artefact-list-head,
+.artefact-more {
+  color: var(--muted, #9da7b4);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.artefact-list ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.artefact-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.artefact-open {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.artefact-open:hover:not(:disabled),
+.artefact-open:focus-visible {
+  border-color: var(--border, #343942);
+}
+.artefact-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artefact-row.is-guess .artefact-title {
+  font-style: italic;
+}
+.artefact-row.is-gone .artefact-open {
+  cursor: default;
+  opacity: 0.6;
+}
+.artefact-row.is-gone .artefact-title {
+  text-decoration: line-through;
+}
+.artefact-gone {
+  flex: none;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 10px;
+}
+.artefact-board {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border, #343942);
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.artefact-board:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+.artefact-notice {
+  flex-basis: 100%;
+  padding-left: 25px;
+  color: var(--muted, #9da7b4);
+  font-size: 11px;
+}

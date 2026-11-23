@@ -24,6 +24,34 @@ export type BoardElementProject = {
   files: BoardElementFiles;
   isCurrent(): boolean;
 };
+/** A link is classified by its shape only; it is never fetched. */
+function linkContent(href: string) {
+  const url = new URL(href);
+  const link_kind =
+    url.hostname === "github.com" &&
+    /^\/[^/]+\/[^/]+\/pull\/\d+\/?$/.test(url.pathname)
+      ? "pull_request"
+      : url.hostname === "github.com" &&
+          /^\/[^/]+\/[^/]+\/issues\/\d+\/?$/.test(url.pathname)
+        ? "issue"
+        : "url";
+  return { type: "link", url: url.href, link_kind, fetch: false } as const;
+}
+
+/** Where an element's file is read: a project file, or an agent's artefact. */
+function fileSource(element: BoardElement): BoardProjectSource | null {
+  if (element.kind === "link") return null;
+  if (element.kind === "artefact")
+    return "file" in element.source
+      ? {
+          connection_id: element.source.connection_id,
+          workspace_id: element.source.workspace_id,
+          path: element.source.file,
+        }
+      : null;
+  return "text" in element.source ? null : element.source;
+}
+
 export type BoardElementAction = "types" | "list" | "put" | "delete" | "read";
 export class BoardSourceRefusal extends Error {}
 
@@ -91,23 +119,11 @@ export function createBoardElementService(deps: {
         .get()
         .elements?.find((entry) => entry.id === params.id);
       if (!element) return { status: "unavailable", reason: "missing_element" };
-      if (element.kind === "link") {
-        const url = new URL(element.source.url);
-        const link_kind =
-          url.hostname === "github.com" &&
-          /^\/[^/]+\/[^/]+\/pull\/\d+\/?$/.test(url.pathname)
-            ? "pull_request"
-            : url.hostname === "github.com" &&
-                /^\/[^/]+\/[^/]+\/issues\/\d+\/?$/.test(url.pathname)
-              ? "issue"
-              : "url";
-        return {
-          status: "ready",
-          element,
-          content: { type: "link", url: url.href, link_kind, fetch: false },
-        };
-      }
-      if ("text" in element.source)
+      const url =
+        "url" in element.source ? (element.source.url as string) : null;
+      if (url !== null)
+        return { status: "ready", element, content: linkContent(url) };
+      if (element.kind === "document" && "text" in element.source)
         return {
           status: "ready",
           element,
@@ -124,9 +140,10 @@ export function createBoardElementService(deps: {
         Number(params.connection_generation) < 0
       )
         return { status: "refused", reason: "generation_required" };
+      const source = fileSource(element);
+      if (!source) return { status: "unavailable", reason: "missing_element" };
       reads++;
       try {
-        const source = element.source;
         const project = deps.project(
           source,
           Number(params.connection_generation),

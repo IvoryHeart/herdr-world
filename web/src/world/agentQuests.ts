@@ -8,6 +8,10 @@ import { useEffect, useRef, useState } from "react";
 import { bridge, type ConnectionClient } from "../api";
 import type { AgentQuest, Quest } from "../../../server/src/agent/quest";
 import type { AgentUsageStop } from "../../../shared/usageStop";
+import {
+  parseAgentArtefact,
+  type AgentArtefact,
+} from "../../../shared/agentArtefacts";
 import { deskClient } from "./handoffs";
 import type { WorldLeafObject } from "./worldObject";
 
@@ -15,6 +19,11 @@ export type { Quest };
 
 /** How often quests are reread while an agent is working. */
 export const QUEST_REFRESH_MS = 15_000;
+/**
+ * How often an idle agent's artefacts are rechecked, so a new link or a
+ * deleted file shows within a minute.
+ */
+export const ARTEFACT_REFRESH_MS = 30_000;
 /**
  * The least time between reads. Statuses can flip many times a second in a
  * busy World; each flip asks for a read, and they share one.
@@ -25,14 +34,21 @@ export const QUEST_PANE_LIMIT = 200;
 
 const EMPTY: ReadonlyMap<string, Quest> = new Map();
 const NO_STOPS: ReadonlyMap<string, AgentUsageStop> = new Map();
+const NO_ARTEFACTS: ReadonlyMap<string, readonly AgentArtefact[]> = new Map();
 
 /** What a desk read gives each agent: its quest and its usage-limit stop. */
 export type AgentDeskReads = {
   quests: ReadonlyMap<string, Quest>;
   /** Agents stopped on a usage limit, by leaf ID (see shared/usageStop.ts). */
   stops: ReadonlyMap<string, AgentUsageStop>;
+  /** What each agent made, newest first, by leaf ID (shared/agentArtefacts.ts). */
+  artefacts: ReadonlyMap<string, readonly AgentArtefact[]>;
 };
-const EMPTY_READS: AgentDeskReads = { quests: EMPTY, stops: NO_STOPS };
+const EMPTY_READS: AgentDeskReads = {
+  quests: EMPTY,
+  stops: NO_STOPS,
+  artefacts: NO_ARTEFACTS,
+};
 
 export const QUEST_SOURCE_LABELS: Record<Quest["source"], string> = {
   todo: "Checklist",
@@ -81,6 +97,7 @@ const leafClient = (leaf: WorldLeafObject): ConnectionClient | null =>
 type ShownQuest = {
   quest: Quest | null;
   stop: AgentUsageStop | null;
+  artefacts: readonly AgentArtefact[];
   /** The service's fingerprint of the session, when it binds one. */
   session: string | null;
   /** The World's fingerprint of the pane's session when it was read. */
@@ -121,14 +138,26 @@ export class AgentQuestReads {
     );
   }
 
+  /** What each agent made, by leaf ID; agents with none are left out. */
+  artefacts(): ReadonlyMap<string, readonly AgentArtefact[]> {
+    return new Map(
+      [...this.shown].flatMap(([id, shown]) =>
+        shown.artefacts.length ? [[id, shown.artefacts] as const] : [],
+      ),
+    );
+  }
+
   /**
    * Read the first QUEST_PANE_LIMIT agents among the leaves. Resolves to
    * whether the shown quests changed and whether one of the agents is
    * working, or null when a later read started meanwhile.
    */
-  async read(
-    leaves: readonly WorldLeafObject[],
-  ): Promise<{ changed: boolean; working: boolean } | null> {
+  async read(leaves: readonly WorldLeafObject[]): Promise<{
+    changed: boolean;
+    working: boolean;
+    /** Some agent made artefacts, whose presence is worth rechecking. */
+    artefacts?: true;
+  } | null> {
     const sequence = ++this.started;
     let working = false;
     // One call per connection and runtime generation, its client resolved
@@ -186,15 +215,22 @@ export class AgentQuestReads {
           );
           for (const leaf of group) {
             const entry = byPane.get(leaf.pane.pane_id);
+            const artefacts = Array.isArray(entry?.artefacts)
+              ? entry.artefacts.flatMap((value) => {
+                  const artefact = parseAgentArtefact(value);
+                  return artefact ? [artefact] : [];
+                })
+              : [];
             if (!entry) keep(leaf);
             else if (entry.read_failed) keep(leaf, entry.session_fingerprint);
             else if (
-              (entry.quest || entry.usage_stop) &&
+              (entry.quest || entry.usage_stop || artefacts.length) &&
               entry.session_binding !== "guessed"
             )
               next.set(leaf.id, {
                 quest: entry.quest,
                 stop: entry.usage_stop ?? null,
+                artefacts,
                 session: entry.session_fingerprint ?? null,
                 leafSession: leaf.agentSessionFingerprint,
               });
@@ -207,11 +243,22 @@ export class AgentQuestReads {
     if (sequence !== this.started) return null;
     const shownOf = (shown: ReadonlyMap<string, ShownQuest>) =>
       JSON.stringify(
-        [...shown].map(([id, { quest, stop }]) => [id, quest, stop]),
+        [...shown].map(([id, { quest, stop, artefacts }]) => [
+          id,
+          quest,
+          stop,
+          artefacts,
+        ]),
       );
     const changed = shownOf(prior) !== shownOf(next);
     this.shown = next;
-    return { changed, working };
+    return {
+      changed,
+      working,
+      ...([...next.values()].some((shown) => shown.artefacts.length)
+        ? { artefacts: true }
+        : {}),
+    };
   }
 }
 
@@ -269,15 +316,24 @@ export function useAgentDeskReads(
       reading = true;
       lastRead.current = Date.now();
       let working = false;
+      let artefacts = false;
       if (document.visibilityState !== "hidden") {
         const result = await quests.read(latest.current);
         working = result?.working ?? false;
+        artefacts = result?.artefacts ?? false;
         if (result?.changed && mounted.current)
-          setReads({ quests: quests.quests(), stops: quests.stops() });
+          setReads({
+            quests: quests.quests(),
+            stops: quests.stops(),
+            artefacts: quests.artefacts(),
+          });
       }
       reading = false;
-      if (!cancelled && working)
-        timer = window.setTimeout(read, QUEST_REFRESH_MS);
+      if (!cancelled && (working || artefacts))
+        timer = window.setTimeout(
+          read,
+          working ? QUEST_REFRESH_MS : ARTEFACT_REFRESH_MS,
+        );
     };
     // A hidden page skips reads; catch up when it is shown again.
     const shownAgain = () => {

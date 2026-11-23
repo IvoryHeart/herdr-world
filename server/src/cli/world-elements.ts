@@ -22,6 +22,7 @@ export function parseBoardElementArgs(args: string[]) {
         "workspace",
         "path",
         "agent-ref",
+        "artefact-kind",
         "rev",
       ]
     : action === "delete"
@@ -70,18 +71,28 @@ export function parseBoardElementArgs(args: string[]) {
     const source =
       kind === "link"
         ? { url: required(values.url, "--url") }
-        : kind === "document" && values.text !== undefined
-          ? { text: values.text }
-          : {
+        : kind === "artefact"
+          ? {
               connection_id: required(values.connection, "--connection"),
               workspace_id: required(values.workspace, "--workspace"),
-              ...(values.path === undefined && kind === "memory"
-                ? {}
-                : { path: required(values.path, "--path") }),
-              ...(values["agent-ref"] === undefined
-                ? {}
-                : { agent_ref: values["agent-ref"] }),
-            };
+              agent_ref: required(values["agent-ref"], "--agent-ref"),
+              artefact_kind: values["artefact-kind"] ?? "file",
+              ...(values.url === undefined
+                ? { file: required(values.path, "--path") }
+                : { url: values.url }),
+            }
+          : kind === "document" && values.text !== undefined
+            ? { text: values.text }
+            : {
+                connection_id: required(values.connection, "--connection"),
+                workspace_id: required(values.workspace, "--workspace"),
+                ...(values.path === undefined && kind === "memory"
+                  ? {}
+                  : { path: required(values.path, "--path") }),
+                ...(values["agent-ref"] === undefined
+                  ? {}
+                  : { agent_ref: values["agent-ref"] }),
+              };
     try {
       const element: BoardElementInput & { rev?: number } = parseBoardElement(
         {

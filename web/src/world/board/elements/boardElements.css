@@ -150,6 +150,25 @@
     var(--element-paper);
 }
 
+/* Made by an agent: a small stack of its pages, the top one dog-eared. */
+.board-card.board-element-artefact {
+  --element-paper: #fbf7ec;
+  border-radius: 3px 14px 3px 3px;
+  background:
+    linear-gradient(
+      225deg,
+      transparent 0 9px,
+      color-mix(in srgb, var(--note-ink, #29281f) 14%, #fff) 9px 14px,
+      transparent 14px
+    ),
+    var(--element-paper);
+  box-shadow:
+    3px 3px 0 -1px var(--element-paper),
+    3px 3px 0 0 color-mix(in srgb, var(--note-ink, #29281f) 22%, transparent),
+    6px 6px 0 -1px var(--element-paper),
+    6px 6px 0 0 color-mix(in srgb, var(--note-ink, #29281f) 16%, transparent);
+}
+
 /* Link: a luggage tag, its eyelet on the pointed end. */
 .board-card.board-element-link {
   --element-paper: #f4e3c4;

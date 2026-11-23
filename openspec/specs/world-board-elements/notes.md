@@ -5,6 +5,7 @@
 **Surfaces:**
 
 - Board's **Add to Board** picker lists every registered kind; Memory, Agent log, Doc and Link are placed from it.
+- **Made by an agent** elements are added from an agent's artefact (pin on its Desk card or Town peek), not from the picker.
 - Element cards on Board open a reader (side panel on desktop, bottom sheet on phones) with Edit and Remove.
 - `herdr-world board element types|list|put|delete|read` and `world.board.elements.*` RPC share one service.
 - TUI and core hosts share the project Files handlers; a read names its saved connection and generation.
@@ -21,6 +22,7 @@
 - `web/src/world/board/boardDocument.ts`
 - `web/src/world/board/elements/`
 - `web/src/world/BoardElements.browser.tsx`
+- `web/src/world/artefactOpen.ts` (adds an agent's artefact to Board)
 
 **Tests:**
 
@@ -38,6 +40,7 @@
 - Board's presentation table (`boardElementKinds.ts`) must name every registry kind; a test fails otherwise.
 - Selectors for element cards need `.board-card.board-element*`; `.board-card` alone overrides the paper background.
 - A project read never falls back to another host or a newer generation.
+- An `artefact` file is the one absolute Board path; it reads through the same Files seam as the Inspector ([contract](../../changes/agent-artefacts/specs/world-board-elements/spec.md)).
 - Board never fetches a link; elements are not string ends yet.
 
 ## Usage reference
@@ -85,6 +88,11 @@ an opener or referrer.
   stays open with your draft and says so, and reopening shows the newer one.
   Elements are not string ends yet; strings still join notes to workspaces,
   tabs and panes.
+- **Made by an agent** (a small paper stack) is a report, page, image or link
+  an agent made. Add it with the pin beside it on the agent's Desk card or Town
+  peek; adding it twice says it is already on Board. It names the agent and
+  reads a file like a Doc, or offers **Open link** for a link. Board keeps the
+  place only, never the content; a deleted file reads as unavailable.
 
 The same registry and service serve agents:
 `herdr-world board element types|list|put|delete|read` and authenticated

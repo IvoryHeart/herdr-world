@@ -274,3 +274,45 @@ test("element count, duplicate identities and invalid writes leave the prior Boa
   ).toThrow("duplicate");
   expect(board.get()).toEqual(before);
 });
+
+test("an agent's artefact reads its absolute file through the named connection; a link is never fetched", async () => {
+  const f = await fixture();
+  const report = join(f.projectRoot, "weekly-report.md");
+  await writeFile(report, "# Weekly report");
+  const owner = {
+    connection_id: "studio",
+    workspace_id: "project-a",
+    agent_ref: "claude · reviews",
+    artefact_kind: "report",
+  };
+  await f.service.call("put", {
+    element: input("made-file", "artefact", { ...owner, file: report }),
+  });
+  expect(await f.service.call("read", { id: "made-file" })).toEqual({
+    status: "refused",
+    reason: "generation_required",
+  });
+  expect(
+    await f.service.call("read", { id: "made-file", connection_generation: 7 }),
+  ).toMatchObject({
+    status: "ready",
+    target: { connection_id: "studio", workspace_id: "project-a" },
+    content: { type: "text", text: "# Weekly report" },
+  });
+  await rm(report);
+  expect(
+    await f.service.call("read", { id: "made-file", connection_generation: 7 }),
+  ).toMatchObject({ status: "unavailable", reason: "source_unavailable" });
+  await f.service.call("put", {
+    element: input("made-link", "artefact", {
+      ...owner,
+      url: "https://github.com/example/project/pull/9",
+    }),
+  });
+  expect(await f.service.call("read", { id: "made-link" })).toMatchObject({
+    status: "ready",
+    content: { type: "link", link_kind: "pull_request", fetch: false },
+  });
+  // Board keeps the reference only, never the content it read.
+  expect(JSON.stringify(f.board.get())).not.toContain("Weekly report");
+});

@@ -1,4 +1,9 @@
 import { sessionWorktreeMetadata } from "./worktree-session";
+import {
+  localArtefactStat,
+  sessionArtefacts,
+  withArtefactPresence,
+} from "./artefacts";
 import { createHash, randomUUID } from "node:crypto";
 import type { AgentSessionFileAccess } from "./session-file-access";
 import type { AgentSessionResolved, SessionFile } from "./session-types";
@@ -49,6 +54,7 @@ export async function readSessionProjection(
     projectionFile,
     trajectory,
   );
+  const worktree = sessionWorktreeMetadata(agent, records);
   return {
     file,
     trajectory,
@@ -56,7 +62,8 @@ export async function readSessionProjection(
     entries: historyEntriesFromTrajectory(projectionFile, trajectory),
     quest: questFromSession(agent, trajectory, records),
     usage_stop: usageStopFromRecords(agent, records),
-    worktree: sessionWorktreeMetadata(agent, records),
+    worktree,
+    artefacts: sessionArtefacts(trajectory, worktree?.cwd),
     stats: {
       turns: messages.filter((message) => message.role === "user").length,
       records: records.length,
@@ -158,6 +165,7 @@ export function createSessionProjectionCache(
       signature: string;
       quest: Quest | null;
       usage_stop: AgentUsageStop | null;
+      artefacts: Projection["artefacts"];
     }
   >();
   // A session file's paging identity, kept even when its projection is too
@@ -310,6 +318,7 @@ export function createSessionProjectionCache(
         signature: value.signature,
         quest: projection.quest,
         usage_stop: projection.usage_stop,
+        artefacts: projection.artefacts,
       });
       while (quests.size > (limits.quests ?? 256))
         quests.delete(quests.keys().next().value!);
@@ -344,31 +353,57 @@ export function createSessionProjectionCache(
     return entries;
   }
   /**
-   * What Town and Board show at the agent's desk: its quest and its
-   * usage-limit stop, reusing the projection while its source is unchanged.
+   * What Town and Board show at the agent's desk: its quest, its usage-limit
+   * stop and the artefacts it made, reusing the projection while its source
+   * is unchanged.
    */
-  const desk = async (
+  const record = async (
     resolved: AgentSessionResolved,
-  ): Promise<{ quest: Quest | null; usage_stop: AgentUsageStop | null }> => {
+  ): Promise<{
+    quest: Quest | null;
+    usage_stop: AgentUsageStop | null;
+    artefacts: Projection["artefacts"];
+  }> => {
     const file = resolved.file;
     if (!file) throw new Error("Session file unavailable");
     const key = `${sessionKey(resolved)}:${file.path}`;
     const known = quests.get(key);
     const snapshot = known ? await readSnapshot(resolved) : undefined;
     if (known && snapshot && known.signature === snapshot.signature)
-      return { quest: known.quest, usage_stop: known.usage_stop };
+      return {
+        quest: known.quest,
+        usage_stop: known.usage_stop,
+        artefacts: known.artefacts,
+      };
     const { projection } = await load(resolved, snapshot);
-    return { quest: projection.quest, usage_stop: projection.usage_stop };
+    return {
+      quest: projection.quest,
+      usage_stop: projection.usage_stop,
+      artefacts: projection.artefacts,
+    };
   };
   return {
     invalidate,
     async get(resolved: AgentSessionResolved) {
       return (await load(resolved)).projection;
     },
-    desk,
+    /**
+     * The desk record with each file artefact's presence checked on every
+     * read, so a deleted file shows as gone; remote hosts are not probed.
+     */
+    async desk(resolved: AgentSessionResolved) {
+      const found = await record(resolved);
+      return {
+        ...found,
+        artefacts: await withArtefactPresence(
+          found.artefacts,
+          files.remote ? null : localArtefactStat,
+        ),
+      };
+    },
     /** The session's quest, reusing its unchanged projection. */
     async quest(resolved: AgentSessionResolved) {
-      return (await desk(resolved)).quest;
+      return (await record(resolved)).quest;
     },
     /** The page before an entry, for scrolling back past the window. */
     async older(

@@ -122,7 +122,7 @@ const doc = {
 
 test("browser RPC and CLI share committed rows, conflict responses and notifications", async () => {
   const f = await fixture();
-  expect((await f.call("types")).types).toHaveLength(11);
+  expect((await f.call("types")).types).toHaveLength(12);
   const pending = f.call("put", { element: doc });
   expect(f.events).toEqual([]);
   expect(f.storage.board().get().elements).toBeUndefined();
@@ -249,6 +249,70 @@ test("real CLI parser and transport produce JSON and meaningful refusal exit cod
     ],
   ])
     expect(() => parseWorldArgs("board", args)).toThrow();
+});
+
+test("CLI puts an agent's artefact as a file or link reference", () => {
+  const base = ["element", "put", "artefact", "a1", "--title", "Report"];
+  const who = [
+    "--connection",
+    "c1",
+    "--workspace",
+    "w1",
+    "--agent-ref",
+    "Claude",
+  ];
+  expect(
+    parseWorldArgs("board", [
+      ...base,
+      ...who,
+      "--path",
+      "/work/report.md",
+      "--artefact-kind",
+      "report",
+    ]).params,
+  ).toEqual({
+    element: {
+      id: "a1",
+      title: "Report",
+      x: 0,
+      y: 0,
+      kind: "artefact",
+      source: {
+        connection_id: "c1",
+        workspace_id: "w1",
+        agent_ref: "Claude",
+        artefact_kind: "report",
+        file: "/work/report.md",
+      },
+    },
+  });
+  expect(
+    parseWorldArgs("board", [...base, ...who, "--url", "https://example.com/r"])
+      .params,
+  ).toMatchObject({
+    element: {
+      source: { artefact_kind: "file", url: "https://example.com/r" },
+    },
+  });
+  for (const extra of [
+    ["--path", "work/report.md"],
+    ["--path", "/work/../x.md"],
+    [],
+  ])
+    expect(() =>
+      parseWorldArgs("board", [...base, ...who, ...extra]),
+    ).toThrow();
+  expect(() =>
+    parseWorldArgs("board", [
+      ...base,
+      "--connection",
+      "c1",
+      "--workspace",
+      "w1",
+      "--path",
+      "/w/r.md",
+    ]),
+  ).toThrow();
 });
 
 test("CLI ls selectors support successful project reads for every file-backed kind", async () => {

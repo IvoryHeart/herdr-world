@@ -19,7 +19,7 @@ bearer-authenticated `POST /api/world/cli`, with
 {"types":[{"kind":"memory","renderer":"memory","source":"project-memory-files","actions":["read","edit","move","remove"],"placement":"element"}],"limits":{"count":500,"id":128,"title":200,"path":1024,"text":16000,"url":2048,"readBytes":65536,"directoryEntries":32,"concurrentReads":8}}
 ```
 
-The example shows one entry; the real response contains all eleven. This is a
+The example shows one entry; the real response contains all twelve. This is a
 closed typed registry in `shared/boardElements.ts`, with no registration endpoint,
 plugin loading, executable renderer or network embed protocol. `renderer` is a
 semantic key for the UI. `actions` describe supported capabilities; they do not
@@ -32,6 +32,7 @@ authorize a call. Normal verb admission still applies.
 | `string` | `world.board.get` → `strings` | Existing `string.put`/`string.delete` |
 | `work` | Existing World work sources | Existing work cards and forge actions |
 | `memory`, `log`, `document`, `link` | Saved `elements` | The calls below |
+| `artefact` | Saved `elements`, added from an agent's Desk card or Town peek | The calls below; a file is an absolute path read through the agent's Files seam, a URL is never fetched |
 
 Existing kinds report `placement:"existing"`; keep their current acquisition and
 actions. Only `placement:"element"` kinds use `put`. An Add picker can enumerate
@@ -86,6 +87,7 @@ Each element has `id`, `kind`, `title`, `x`, `y` and a typed `source`:
 | `log` | `{"connection_id":"studio","workspace_id":"project-a","path":"logs/finished-agent.jsonl","agent_ref":"session-example"}` | Read an explicitly selected saved log/transcript as text, including JSONL. No live pane lookup. `agent_ref` is optional descriptive session/agent identity for future apartment mapping; it grants no authority. No apartment model/link exists yet. |
 | `document` | `{"text":"Draft"}` or `{"connection_id":"studio","workspace_id":"project-a","path":"docs/plan.md"}` | Inline text is editable here. File-backed content is read through Files; the element API does not edit files. |
 | `link` | `{"url":"https://github.com/example/project/pull/42"}` | Store an inert HTTP(S) target. Classify GitHub PR/issue URLs; do not fetch, resolve redirects, run forge actions or return iframe HTML. |
+| `artefact` | `{"connection_id":"studio","workspace_id":"project-a","agent_ref":"Claude · docs","artefact_kind":"report","file":"/work/project-a/weekly-report.md"}` or the same with `"url"` instead of `"file"` | What an agent made. `file` is the one absolute Board path, read through the agent's Files seam with the same authority as its Inspector; a `url` is classified like a link and never fetched. `agent_ref` grants no authority. CLI: `put artefact ID --title T --connection C --workspace W --agent-ref NAME (--path ABSOLUTE_PATH \| --url URL) [--artefact-kind KIND]`. |
 
 `read` takes `{"id":"memory","connection_generation":7}` for a project source,
 or just `{"id":"plan"}` for inline text/links. Obtain IDs and the current
@@ -156,7 +158,7 @@ herdr-world board element list --json
 herdr-world board element read crew-1016-plan --json
 ```
 
-Expect all eleven registry kinds, a saved record, then its text. Copy the returned
+Expect all twelve registry kinds, a saved record, then its text. Copy the returned
 element `rev` into `board element delete crew-1016-plan --rev REV --json` to remove
 it. No file editing or rare runtime state is needed.
 

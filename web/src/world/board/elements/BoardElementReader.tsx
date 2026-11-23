@@ -112,7 +112,14 @@ export function BoardElementReader({
     ? `${child ? `${project.path}/${child}` : project.path} · ${place?.workspaceLabel} · ${hostLabel}`
     : element.kind === "link"
       ? classifyLink(element.source.url).site
-      : "Written on Board";
+      : element.kind === "artefact" && "url" in element.source
+        ? classifyLink(element.source.url).site
+        : "Written on Board";
+  const url =
+    element.kind === "link" ||
+    (element.kind === "artefact" && "url" in element.source)
+      ? (element.source as { url: string }).url
+      : null;
 
   return createPortal(
     <div
@@ -197,10 +204,10 @@ export function BoardElementReader({
           <button type="button" className="ghost" onClick={onEdit}>
             <Pencil size={14} aria-hidden="true" /> Edit
           </button>
-          {element.kind === "link" ? (
+          {url ? (
             <a
               className="board-reader-open"
-              href={element.source.url}
+              href={url}
               target="_blank"
               rel="noopener noreferrer"
             >

@@ -10,6 +10,7 @@ import {
   townTargetActionable,
 } from "./town/townOpen";
 import { questMark, useAgentDeskReads } from "./agentQuests";
+import { useTownMadeMarks } from "./town/TownArtefactStack";
 import { useCurrentUsageStops, withTownOutOfFuel } from "./town/townOutOfFuel";
 import { useOutOfFuelTrial } from "./town/townOutOfFuelTrial";
 import { useCreationProgress } from "../creationRequests";
@@ -363,7 +364,8 @@ export default function TownView({
   );
   useTownStepReads(townSteps, world.leaves, stepScene);
   // A Town agent's key is its leaf ID, so the marks come straight from the
-  // quests (a dense town's roster is large).
+  // quests (a dense town's roster is large); what each made is a paper stack.
+  const madeMarks = useTownMadeMarks(deskReads.artefacts);
   const questMarks = useMemo(
     (): ReadonlyMap<string, TownQuestMark> =>
       new Map([...agentQuests].map(([key, quest]) => [key, questMark(quest)])),
@@ -613,6 +615,17 @@ export default function TownView({
         .sort((a, b) => a.device.order - b.device.order)
     : [];
   const peekLeaf = townLeaf(world, peekAgent?.nodeId);
+  // The peeked agent's Files view (an artefact's list asks for its file).
+  const openPeekFiles =
+    peekAgent &&
+    onOpenInspectorView &&
+    world.nodeById.get(peekAgent.nodeId)?.capabilities.files
+      ? () => {
+          holdPeek.current = false;
+          setPeek(null);
+          onOpenInspectorView(peekAgent.nodeId, "files", true);
+        }
+      : null;
   // The screen is read only for a waiting agent's question and answers; the
   // peek's message comes from Chat's conversation read model.
   const peekBlocked = peekAgent?.semanticStatus === "blocked";
@@ -839,17 +852,9 @@ export default function TownView({
               else void onOpenTerminal(peekAgent.nodeId).catch(() => undefined);
             }}
             leaf={peekLeaf}
-            onFiles={
-              peekAgent.viewOnly &&
-              onOpenInspectorView &&
-              world.nodeById.get(peekAgent.nodeId)?.capabilities.files
-                ? () => {
-                    holdPeek.current = false;
-                    setPeek(null);
-                    onOpenInspectorView(peekAgent.nodeId, "files", true);
-                  }
-                : null
-            }
+            artefacts={peekLeaf && deskReads.artefacts.get(peekLeaf.id)}
+            onOpenArtefact={openPeekFiles}
+            onFiles={peekAgent.viewOnly ? openPeekFiles : null}
             quiet={quiet.text(peekAgent.key)}
             onNext={
               reception.step(peekAgent.key, peek!.anchor) ??
@@ -895,6 +900,7 @@ export default function TownView({
             // A letter at reception: its question in Needs you.
             onActivateAsk={(nodeId) => openNeedsYou(needsYouLeafKey(nodeId))}
             quests={questMarks}
+            made={madeMarks}
             steps={townSteps}
             conversationTargets={conversationTargets}
             onSelect={tapTown}

@@ -1,3 +1,5 @@
+import { ARTEFACT_KINDS, type ArtefactKind } from "./agentArtefacts";
+
 /** Closed, built-in Board registry. Renderer keys are a UI contract, not executable plugins. */
 const native = <K extends string>(
   kind: K,
@@ -35,6 +37,9 @@ export const BOARD_ELEMENT_TYPES = Object.freeze(
     placed("log", "saved-project-transcript"),
     placed("document", "inline-or-project-file"),
     placed("link", "http-url"),
+    // A thing an agent made (shared/agentArtefacts.ts): a reference to its
+    // file on the agent's host or its published link, never its content.
+    placed("artefact", "agent-artefact"),
   ].map((entry) =>
     Object.freeze({ ...entry, actions: Object.freeze(entry.actions) }),
   ),
@@ -66,11 +71,24 @@ export type BoardProjectSource = {
   workspace_id: string;
   path: string;
 };
+/**
+ * An agent's artefact on Board: the agent's connection and workspace, who
+ * made it and either the absolute `file` its transcript names (read through
+ * the same Files seam as the Inspector) or its published `url` (never
+ * fetched).
+ */
+export type BoardArtefactSource = {
+  connection_id: string;
+  workspace_id: string;
+  agent_ref: string;
+  artefact_kind: ArtefactKind;
+} & ({ file: string } | { url: string });
 type Sources = {
   memory: BoardProjectSource;
   log: BoardProjectSource & { agent_ref?: string };
   document: BoardProjectSource | { text: string };
   link: { url: string };
+  artefact: BoardArtefactSource;
 };
 export type BoardElementKind = keyof Sources;
 export type BoardElement = {
@@ -166,6 +184,31 @@ export function boardElementPath(value: unknown): string {
     throw new Error("board element path must stay within the project");
   return path;
 }
+/** An absolute path on the agent's host, as the agent's transcript names it. */
+export function boardArtefactFile(value: unknown): string {
+  const path = text(value, "artefact file", BOARD_ELEMENT_LIMITS.path);
+  if (
+    !path.startsWith("/") ||
+    /[\x00-\x1f\x7f]/.test(path) ||
+    path
+      .slice(1)
+      .split("/")
+      .some((part) => !part || part === "." || part === "..")
+  )
+    throw new Error("board artefact file must be an absolute path");
+  return path;
+}
+function httpUrl(value: unknown): string {
+  const url = new URL(text(value, "URL", BOARD_ELEMENT_LIMITS.url));
+  if (
+    !["https:", "http:"].includes(url.protocol) ||
+    url.href.length > BOARD_ELEMENT_LIMITS.url ||
+    url.username ||
+    url.password
+  )
+    throw new Error("board links require HTTP(S) without credentials");
+  return url.href;
+}
 function project(
   value: Record<string, unknown>,
   memory: boolean,
@@ -233,16 +276,27 @@ export function parseBoardElement(value: unknown, rev: number): BoardElement {
               }
             : project(source, false),
       };
-    case "link": {
-      const url = new URL(text(source.url, "URL", BOARD_ELEMENT_LIMITS.url));
-      if (
-        !["https:", "http:"].includes(url.protocol) ||
-        url.href.length > BOARD_ELEMENT_LIMITS.url ||
-        url.username ||
-        url.password
-      )
-        throw new Error("board links require HTTP(S) without credentials");
-      return { ...base, kind: "link", source: { url: url.href } };
+    case "link":
+      return { ...base, kind: "link", source: { url: httpUrl(source.url) } };
+    case "artefact": {
+      if (!ARTEFACT_KINDS.includes(source.artefact_kind as ArtefactKind))
+        throw new Error("invalid board artefact kind");
+      const owner = {
+        connection_id: text(source.connection_id, "connection ID", 512),
+        workspace_id: text(source.workspace_id, "workspace ID", 512),
+        agent_ref: text(source.agent_ref, "agent reference", 512),
+        artefact_kind: source.artefact_kind as ArtefactKind,
+      };
+      if ("file" in source === "url" in source)
+        throw new Error("board artefact needs a file or a URL");
+      return {
+        ...base,
+        kind: "artefact",
+        source:
+          "file" in source
+            ? { ...owner, file: boardArtefactFile(source.file) }
+            : { ...owner, url: httpUrl(source.url) },
+      };
     }
     default:
       throw new Error("unregistered board element kind");

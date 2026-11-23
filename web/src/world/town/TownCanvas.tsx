@@ -1,4 +1,5 @@
 import { useDrawReadiness } from "../useDrawReadiness";
+import type { TownArtefactMark } from "./TownArtefactStack";
 import "../worldAsks.css";
 import { TownBoard, type TownQuietMarks } from "./TownBoard";
 import {
@@ -120,6 +121,7 @@ export function TownCanvas({
   quiet = { keys: NO_KEYS },
   onActivateAsk,
   quests = NO_QUESTS,
+  made,
   steps,
   conversationTargets,
   onSelect,
@@ -200,8 +202,9 @@ export function TownCanvas({
   ) => void;
   quiet?: TownQuietMarks;
   onActivateAsk?: (nodeId: string) => void;
-  /** Quest progress by agent key, marked over each agent's desk. */
+  /** By agent key: quest progress over each desk; what each agent made. */
   quests?: ReadonlyMap<string, TownQuestMark>;
+  made?: ReadonlyMap<string, TownArtefactMark>;
   /** Working agents' steps, as thought bubbles (useTownStepWants). */
   steps?: TownStepStore;
   conversationTargets: readonly WorldConversationAnchorTarget[];
@@ -960,6 +963,7 @@ export function TownCanvas({
             targets={lens.targets}
             deskBadges={deskBadges}
             quests={quests}
+            made={made}
             steps={steps}
             renderer={rendererRef}
             pennants={pennants.current}

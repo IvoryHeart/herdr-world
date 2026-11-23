@@ -285,6 +285,8 @@ function ElementForm({
       : choices;
 
   function source(): Record<string, string> {
+    // An agent's artefact keeps where it lives; only its title is edited.
+    if (kind === "artefact" && saved) return saved;
     if (kind === "link") return { url: url.trim() };
     if (kind === "document" && inline) return { text };
     const [connection_id, workspace_id] = project

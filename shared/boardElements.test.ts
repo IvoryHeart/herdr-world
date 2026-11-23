@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { BOARD_ELEMENT_TYPES, parseBoardElement } from "./boardElements";
 
-test("registry includes the existing Board kinds and four data additions", () => {
+test("registry includes the existing Board kinds and five data additions", () => {
   expect(BOARD_ELEMENT_TYPES.map((entry) => entry.kind)).toEqual([
     "host",
     "workspace",
@@ -14,8 +14,9 @@ test("registry includes the existing Board kinds and four data additions", () =>
     "log",
     "document",
     "link",
+    "artefact",
   ]);
-  expect(new Set(BOARD_ELEMENT_TYPES.map((entry) => entry.kind)).size).toBe(11);
+  expect(new Set(BOARD_ELEMENT_TYPES.map((entry) => entry.kind)).size).toBe(12);
 });
 
 const file = {
@@ -76,4 +77,49 @@ test("refuses unknown kinds, source escapes, oversized content and executable UR
       1,
     ),
   ).toThrow();
+});
+
+test("an agent's artefact keeps its agent and an absolute file or a link, never both", () => {
+  const owner = {
+    connection_id: "studio",
+    workspace_id: "project-a",
+    agent_ref: "claude · reviews",
+    artefact_kind: "report",
+  };
+  const artefact = {
+    id: "artefact-0123456789abcdef",
+    kind: "artefact",
+    title: "weekly-report.md",
+    x: 0,
+    y: 0,
+  };
+  expect(
+    parseBoardElement(
+      {
+        ...artefact,
+        source: {
+          ...owner,
+          file: "/work/project-a/weekly-report.md",
+          text: "x",
+        },
+      },
+      1,
+    ).source,
+  ).toEqual({ ...owner, file: "/work/project-a/weekly-report.md" });
+  expect(
+    parseBoardElement(
+      { ...artefact, source: { ...owner, url: "https://example.com/report" } },
+      1,
+    ).source,
+  ).toEqual({ ...owner, url: "https://example.com/report" });
+  for (const source of [
+    { ...owner, file: "relative/report.md" },
+    { ...owner, file: "/work/../secret.md" },
+    { ...owner, file: "/work/a.md", url: "https://example.com/" },
+    { ...owner },
+    { ...owner, url: "javascript:alert(1)" },
+    { ...owner, artefact_kind: "binary", file: "/work/a.md" },
+    { ...owner, agent_ref: "", file: "/work/a.md" },
+  ])
+    expect(() => parseBoardElement({ ...artefact, source }, 1)).toThrow();
 });
