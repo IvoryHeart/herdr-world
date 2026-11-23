@@ -6,6 +6,7 @@
  */
 
 import { HARNESS_CHOICES } from "../../../shared/agentProfile";
+import { HARNESS_LABELS } from "../../../shared/harnessLabels";
 import { agentStateWord } from "./agentMarks";
 import { officeDeskLabel } from "./officeAgent";
 import { officeDeskKey } from "./officeRoom";
@@ -29,8 +30,9 @@ export function worldTextMatches(text: string, words: readonly string[]) {
 
 /**
  * Words for what an agent or terminal runs and how it is (#1329): its runtime
- * ("herdr-core", or the TUI's "herdr tui"), its harness's name as the profile
- * editor gives it ("Claude", "Codex") and its state's one word ("Needs you",
+ * ("herdr-core", or the TUI's "herdr tui"), its harness's id, its name as the
+ * profile editor gives it ("Claude", "Codex") and its full product name
+ * ("Claude Code", HARNESS_LABELS) and its state's one word ("Needs you",
  * "Working", "Offline"), so a search for any of them finds it.
  */
 export function worldLeafTraitWords(leaf: WorldLeafObject) {
@@ -39,6 +41,7 @@ export function worldLeafTraitWords(leaf: WorldLeafObject) {
     leaf.runtime === "herdr-core" ? "herdr-core core" : "herdr tui",
     harness,
     harness ? HARNESS_CHOICES[harness]?.label : undefined,
+    harness ? HARNESS_LABELS[harness] : undefined,
     leaf.kind === "agent"
       ? agentStateWord(leaf.status, { offline: leaf.stale })
       : undefined,

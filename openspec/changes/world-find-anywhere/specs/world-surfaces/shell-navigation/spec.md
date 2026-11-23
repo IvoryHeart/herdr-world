@@ -3,15 +3,15 @@
 ### Requirement: Find any agent from the command box
 
 The command box SHALL find World's agents, rooms, tables and terminals on every
-connected runtime and machine from every view, reading the one World object within
-the Hosts filter; Spaces SHALL NOT keep its own agent list beside it. Enter SHALL open
-a result on its own connection and runtime generation, never another; a second
-action SHALL show it in Town, Board or Desk.
+connected runtime and machine from every view, reading the one World object whatever
+the Hosts filter shows; Spaces SHALL NOT keep its own agent list beside it. Enter SHALL
+open a result on its own connection and runtime generation, never another; a second
+action SHALL show it in Town, Board or Desk when that view shows its host.
 
 #### Scenario: Find an agent by any of its facts
 
 - **WHEN** the user types part of an agent's name, room, table, machine, runtime,
-  harness, status word or task summary
+  harness id or name (such as `Claude Code`), status word or task summary
 - **THEN** the agent is listed with its harness icon in its tab colour, its name,
   place, runtime and status mark, without a server request per keystroke and within
   100 ms for 300 agents
@@ -25,9 +25,17 @@ action SHALL show it in Town, Board or Desk.
 
 #### Scenario: Open a herdr-core terminal
 
-- **WHEN** the user presses Enter on a herdr-core terminal World watches
-- **THEN** it opens in World's window Terminal tab, as Spaces shows Herdr TUI
-  workspaces only
+- **WHEN** the user presses Enter on a live herdr-core terminal World watches, which
+  is never actionable as a Herdr node
+- **THEN** World's window admits it as a core resource and opens its Terminal tab,
+  as Spaces shows Herdr TUI workspaces only
+
+#### Scenario: Find an agent on a host the Hosts filter hides
+
+- **WHEN** the Hosts filter shows only machine A and the user finds an agent on
+  connected machine B
+- **THEN** the agent is listed and Enter opens it, and the row offers no Show action
+  because the view does not show B
 
 #### Scenario: Find an agent on an offline host
 

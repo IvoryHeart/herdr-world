@@ -29,7 +29,7 @@ export const WORLD_HELP: readonly HelpEntry[] = [
       "One box finds agents, rooms and actions on every host and runtime, from every view.",
     steps: [
       "Press Ctrl+K (Cmd+K on a Mac) or the ⌘ button beside the views; on a phone, open the views menu and choose Find or act.",
-      "Type a few letters of a name, room, machine, harness (Claude, Codex), status (needs you) or task, or of an action.",
+      "Type a few letters of a name, room, machine, harness (Claude Code, Codex), status (needs you) or task, or of an action.",
       "Press Enter to open an agent's terminal or do the action; in Town, Board or Desk, Shift+Enter or the row's Show button shows it in that view instead.",
     ],
     place: "world",

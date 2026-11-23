@@ -145,9 +145,10 @@
 - The command menu is also World's command box (**Find or act**) in every
   view, Spaces included. Type and its **In World** group finds buildings,
   rooms, tables, agents and terminals on every host and runtime (Herdr TUI and
-  herdr-core), as the views' search does, from the World object the Hosts
-  filter shows: by name, room, table, machine, runtime (`herdr-core`,
-  `herdr tui`), harness (`claude`, `codex`), status word (`working`, `idle`,
+  herdr-core), as the views' search does, from the whole World object whatever
+  the Hosts filter shows: by name, room, table, machine, runtime
+  (`herdr-core`, `herdr tui`), harness (`claude`, `Claude Code`, `codex`;
+  full names from `shared/harnessLabels.ts`), status word (`working`, `idle`,
   `needs you`) or task summary. A row shows the agent's icon ringed in its
   tab colour, its name, `host › room › table`, a runtime icon (server for
   Herdr TUI, chip for herdr-core) and its status mark, so two agents of one
@@ -157,11 +158,13 @@
   and pane selected, even when another host was Spaces' host
   (`openWorldFind`, through the store's qualified Spaces target). A
   herdr-core terminal opens in World's window Terminal tab (Spaces shows
-  Herdr TUI workspaces only); a core room opens its Files. An agent on an
+  Herdr TUI workspaces only); a core room opens its Files. The window admits
+  them through `inspectorAdmits`, as live core resources are never
+  actionable. An agent on an
   offline, stale or reconnecting host stays listed with its Offline mark,
   and opening it says why it cannot. In Town, Board and Desk, **Shift+Enter**
   or the row's **Show in …** button selects it in that view instead, as
-  clicking it there does. `worldFoundTarget` is the one place a found
+  clicking it there does; a host the Hosts filter hides has no Show button. `worldFoundTarget` is the one place a found
   agent's target is made (qualified pane identity today; #1309 can swap it).
   The box also goes to another view. In Zen it opens from the **⌘** button
   beside the view buttons; on a phone, from **Find or act** in the corner

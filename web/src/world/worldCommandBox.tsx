@@ -33,10 +33,11 @@ import {
   type TerminalColor,
   type TerminalColorTarget,
 } from "./terminalColor";
-import type {
-  WorldLeafObject,
-  WorldObject,
-  WorldObjectNode,
+import {
+  inspectorAdmits,
+  type WorldLeafObject,
+  type WorldObject,
+  type WorldObjectNode,
 } from "./worldObject";
 import { worldSearchResults, type WorldSearchResult } from "./worldSearch";
 import { WORLD_VIEW_DESTINATIONS } from "./WorldMobileNav";
@@ -109,11 +110,9 @@ export function worldFindOpenReason(node: WorldObjectNode): string | null {
       ? `${node.hostLabel} runs herdr-core, which Spaces doesn't show. Find one of its agents instead.`
       : null;
   if (node.capabilities.openSpaces) return null;
-  if (node.kind === "space")
-    return node.capabilities.files
-      ? null
-      : `World can't open ${node.label} here.`;
-  if (node.watch) return null;
+  // World's window opens a live herdr-core terminal or room (inspectorAdmits).
+  if (inspectorAdmits(node)) return null;
+  if (node.kind === "space") return `World can't open ${node.label} here.`;
   return node.viewOnly
     ? "World only watches this herdr-core terminal from another machine, so it can't open it here."
     : `World can't open ${node.label} here.`;
@@ -198,8 +197,15 @@ export function worldLeafColorTarget(
 export type WorldFindHandlers = {
   /** Enter or a click: open it (openWorldFind). */
   open(node: WorldObjectNode): void;
-  /** The second action, in a visual view: show it there. */
-  show?: { label: string; run(node: WorldObjectNode): void };
+  /**
+   * The second action, in a visual view: show it there, offered for what the
+   * view shows (a host the Hosts filter hides is found and opened, not shown).
+   */
+  show?: {
+    label: string;
+    shows?(node: WorldObjectNode): boolean;
+    run(node: WorldObjectNode): void;
+  };
   /** A leaf's tab colour as every view shows it (useTerminalColors). */
   colorOf?(leaf: WorldLeafObject): TerminalColor | null;
 };
@@ -281,7 +287,7 @@ function findAction(
     run: () => {
       if (node) handlers.open(node);
     },
-    ...(handlers.show && node
+    ...(handlers.show && node && (handlers.show.shows?.(node) ?? true)
       ? {
           secondary: {
             label: handlers.show.label,

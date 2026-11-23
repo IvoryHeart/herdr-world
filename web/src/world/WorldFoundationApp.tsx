@@ -157,13 +157,14 @@ export default function WorldFoundationApp() {
     (snapshot) => snapshot.catalogueReady,
   );
   const hostsFilter = useHostsFilter(hosts, catalogueReady);
+  // Every connected host's World; the finds search it whatever Hosts shows.
+  const fullWorld = useMemo(
+    () => buildWorldObject(topbarRuntime.connections, topbarConnectionId),
+    [topbarConnectionId, topbarRuntime.connections],
+  );
   const topbarWorld = useMemo(
-    () =>
-      worldObjectForHosts(
-        buildWorldObject(topbarRuntime.connections, topbarConnectionId),
-        hostsFilter.ids,
-      ),
-    [topbarConnectionId, topbarRuntime.connections, hostsFilter.ids],
+    () => worldObjectForHosts(fullWorld, hostsFilter.ids),
+    [fullWorld, hostsFilter.ids],
   );
   const conversationStatus = useStoreSelector((snapshot) => snapshot.status);
   const workspaceSurfaceInspectorConversation = inspectorConversations.find(
@@ -291,9 +292,10 @@ export default function WorldFoundationApp() {
     }
   };
 
-  // World's finds (#1329): one search of the World object, in every view.
-  // Enter opens what was found wherever it is; in a visual view the second
-  // action shows it there, as clicking it does.
+  // World's finds (#1329): one search of the whole World object, in every
+  // view, on every connected host whatever the Hosts filter shows. Enter opens
+  // what was found wherever it is; in a visual view the second action shows
+  // it there, as clicking it does, when the view shows its host.
   const terminalColors = useTerminalColors();
   // Only the views that draw World's nodes can show one; Code and Spaces can't.
   const showNode =
@@ -301,7 +303,7 @@ export default function WorldFoundationApp() {
       ? visualActionExtension.showNode
       : undefined;
   const worldFind = (search: string) =>
-    worldFindGroup(topbarWorld, search, {
+    worldFindGroup(fullWorld, search, {
       open: (node) =>
         void openWorldFind(node, {
           activateSpacesTarget: (target) =>
@@ -324,12 +326,13 @@ export default function WorldFoundationApp() {
         ? {
             show: {
               label: `Show in ${worldViewLabel(view)}`,
+              shows: (node) => topbarWorld.nodeById.has(node.id),
               run: (node) => showNode(node.id),
             },
           }
         : {}),
       colorOf: (leaf) =>
-        terminalColor(terminalColors, worldLeafColorTarget(topbarWorld, leaf)),
+        terminalColor(terminalColors, worldLeafColorTarget(fullWorld, leaf)),
     });
 
   // Panel windows (Town's summary and the like) beside the Inspectors.

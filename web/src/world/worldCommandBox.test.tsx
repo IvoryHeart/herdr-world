@@ -15,6 +15,8 @@ import {
   type WorldFindOpenDeps,
 } from "./worldCommandBox";
 import { buildWorldObject } from "./worldObject";
+import { worldObjectForHosts } from "./worldFilters";
+import { worldNodeForWorkspaceSurfaceSelection } from "./worldInspectorSelection";
 import { worldSearchResults } from "./worldSearch";
 
 const scene = townScaleConnections();
@@ -115,6 +117,60 @@ describe("the command box finds what the views' search finds", () => {
     room.secondary!.run();
     expect(shown).toEqual([worldSearchResults(world, "harbor")[0]!.nodeId]);
     expect(opened).toEqual([]);
+  });
+
+  test("finds every connected host's agents whatever Hosts shows; shows only what the view shows", () => {
+    const [shownHost, otherHost] = world.hosts;
+    const shownWorld = worldObjectForHosts(world, [shownHost!.connectionId]);
+    const other = world.leaves.find(
+      (leaf) =>
+        leaf.kind === "agent" && leaf.connectionId === otherHost!.connectionId,
+    )!;
+    expect(shownWorld.nodeById.has(other.id)).toBe(false);
+    const group = worldFindGroup(world, `${other.label} ${other.hostLabel}`, {
+      open: () => {},
+      show: {
+        label: "Show in Town",
+        shows: (node) => shownWorld.nodeById.has(node.id),
+        run: () => {},
+      },
+    })!;
+    const found = group.actions.find(
+      (action) => action.key === `world-find-${other.id}`,
+    );
+    expect(found).toBeDefined();
+    // Enter opens it; the view hides its host, so it isn't shown there.
+    expect(found!.secondary).toBeUndefined();
+    const shown = shownWorld.leaves.find((leaf) => leaf.kind === "agent")!;
+    const shownGroup = worldFindGroup(world, shown.label, {
+      open: () => {},
+      show: {
+        label: "Show in Town",
+        shows: (node) => shownWorld.nodeById.has(node.id),
+        run: () => {},
+      },
+    })!;
+    expect(
+      shownGroup.actions.find(
+        (action) => action.key === `world-find-${shown.id}`,
+      )?.secondary?.label,
+    ).toBe("Show in Town");
+  });
+
+  test("finds agents by their harness's full name", () => {
+    const agents = (search: string) =>
+      new Set(
+        worldSearchResults(world, search)
+          .filter((result) => result.kind === "agent")
+          .map((result) => result.nodeId),
+      );
+    const claude = world.leaves.filter(
+      (leaf) => leaf.kind === "agent" && leaf.pane.agent === "claude",
+    );
+    expect(claude.length).toBeGreaterThan(0);
+    expect(agents("Claude Code")).toEqual(
+      new Set(claude.map((leaf) => leaf.id)),
+    );
   });
 
   test("finds agents by harness, status and runtime", () => {
@@ -285,6 +341,32 @@ describe("opening a find", () => {
     expect(calls).toEqual([`window terminal ${agent.nativeId}`]);
     const host = all.hosts.find((item) => item.connectionId === "core-local")!;
     expect(worldFindOpenReason(host)).toMatch(/runs herdr-core/);
+  });
+
+  test("World's window admits a live herdr-core agent and room it is sent", () => {
+    // As the shell hands a found target to World's window.
+    const surface = (node: Parameters<typeof worldFoundTarget>[0]) => {
+      const { paneId, ...target } = worldFoundTarget(node);
+      return { ...target, ...(paneId ? { paneId } : {}) };
+    };
+    // Core nodes are never actionable; the window opens them as core resources.
+    const agent = agentOn("core-local");
+    expect(agent.actionable).toBe(false);
+    expect(worldNodeForWorkspaceSurfaceSelection(all, surface(agent))?.id).toBe(
+      agent.id,
+    );
+    const room = all.spaces.find(
+      (space) => space.connectionId === "core-local",
+    )!;
+    expect(worldFindOpenReason(room)).toBeNull();
+    expect(worldNodeForWorkspaceSurfaceSelection(all, surface(room))?.id).toBe(
+      room.id,
+    );
+    // A stale host's node is still refused.
+    const lost = agentOn("lost");
+    expect(
+      worldNodeForWorkspaceSurfaceSelection(all, surface(lost)),
+    ).toBeNull();
   });
 });
 

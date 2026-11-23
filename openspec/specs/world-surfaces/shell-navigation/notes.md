@@ -27,6 +27,7 @@
 - `web/src/world/worldCommandBox.tsx`
 - `web/src/components/CommandCombobox.tsx`
 - `web/src/components/CommandActionItem.tsx`
+- `shared/harnessLabels.ts`
 - `web/src/layerStack.ts`
 
 **Tests:**
