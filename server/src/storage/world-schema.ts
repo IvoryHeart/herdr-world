@@ -175,7 +175,7 @@ export function worldDatabaseVersion(
   ).user_version;
   if (version > migrations.length)
     throw new Error(
-      `world.sqlite schema ${version} is newer than this service supports; stop World, preserve the data directory, and restore its matching world.sqlite.v<version>.<snapshot>.bak before downgrading`,
+      `world.sqlite schema ${version} is newer than this service supports; stop World, preserve the data directory, and restore its matching world.sqlite.v<version>.<snapshot>.bak (beside world.sqlite or in its legacy/ folder) before downgrading`,
     );
   return version;
 }

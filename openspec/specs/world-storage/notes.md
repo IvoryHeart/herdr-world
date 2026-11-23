@@ -26,6 +26,12 @@
 - `server/src/world/question-backlog-storage.test.ts`
 - `web/src/world/NeedsYouAskerActions.dom.test.ts`
 - `server/src/storage/world-storage.ts`
+- `server/src/storage/legacy-archive.ts` (moves imported legacy JSON, backups and
+  snapshots beyond the newest three to `<data>/legacy/`)
+- `server/src/storage/legacy-archive.test.ts`
+- `server/src/storage/testing/legacy-data-fixture.ts` (testing only: seeds an
+  empty preview data folder as a pre-SQLite World left it, with five snapshot
+  stand-ins: `bun server/src/storage/testing/legacy-data-fixture.ts <data-dir>`)
 - `server/src/storage/world-storage-crash.test.ts`
 - `server/src/storage/`
 - `server/src/config/`

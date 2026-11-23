@@ -85,9 +85,17 @@ test("the real root backs up Board JSON once and stores concerns and verified bi
     },
   ]);
   const source = readFileSync(paths.board),
-    backup = `${paths.board}.${createHash("sha256").update(source).digest("hex")}.sqlite-import.bak`;
+    backup = join(
+      paths.root,
+      "legacy",
+      `board.json.${createHash("sha256").update(source).digest("hex")}.sqlite-import.bak`,
+    );
   const store = await open(paths);
-  expect(existsSync(backup)).toBe(true);
+  // Imported once, then the JSON and its backup move to <data>/legacy/.
+  expect(existsSync(paths.board)).toBe(false);
+  expect(readFileSync(join(paths.root, "legacy", "board.json"))).toEqual(
+    source,
+  );
   expect(readFileSync(backup)).toEqual(source);
   expect(store.board().get()).toEqual(document);
   const bindings = await store.bindings.list();
@@ -104,7 +112,9 @@ test("the real root backs up Board JSON once and stores concerns and verified bi
       rev: document.notes[0]!.rev,
     },
   ]);
-  expect(readFileSync(paths.board)).toEqual(source);
+  expect(readFileSync(join(paths.root, "legacy", "board.json"))).toEqual(
+    source,
+  );
   await store.close();
   const db = new Database(join(paths.root, "world.sqlite"), { readonly: true });
   let imported: unknown;
