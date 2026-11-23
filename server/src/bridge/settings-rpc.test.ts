@@ -562,21 +562,63 @@ test("server-wide interface preferences can be read, stored and cleared", async 
     readSettings: async () => settings,
     updateSettings: async (update) => (settings = await update(settings)),
   });
-  expect(await handler("bridge.ui_settings.get", {})).toEqual({ ui: {} });
+  expect(await handler("bridge.ui_settings.get", {})).toEqual({
+    ui: {},
+    revision: 0,
+  });
   const value = { version: 1, active: "mine", presets: [] };
   expect(
     await handler("bridge.ui_settings.update", {
       key: "keyboardShortcuts",
       value,
     }),
-  ).toEqual({ key: "keyboardShortcuts", value });
+  ).toEqual({ key: "keyboardShortcuts", value, revision: 1 });
   expect(settings.ui.keyboardShortcuts).toEqual(value);
   expect(
     await handler("bridge.ui_settings.update", { key: "keyboardShortcuts" }),
-  ).toEqual({ key: "keyboardShortcuts", value: null });
+  ).toEqual({ key: "keyboardShortcuts", value: null, revision: 2 });
   expect(settings.ui).toEqual({});
+  expect(await handler("bridge.ui_settings.get", {})).toEqual({
+    ui: {},
+    revision: 2,
+  });
   await expect(
     handler("bridge.ui_settings.update", { key: "../escape", value: 1 }),
   ).rejects.toThrow("require key");
   expect(settings.repositories).toEqual({});
+});
+
+test("an only-if-absent update initializes a preference and never replaces one", async () => {
+  let settings: GuiSettings = {
+    version: 1,
+    repositories: {},
+    workspace_auto_sync: {},
+    custom: {},
+    ui: {},
+  };
+  const handler = createUiSettingsRpcHandler({
+    readSettings: async () => settings,
+    updateSettings: async (update) => (settings = await update(settings)),
+  });
+  // A browser's one-time migration while the service holds no value.
+  expect(
+    await handler("bridge.ui_settings.update", {
+      key: "runtimeGrouping",
+      value: "runtime",
+      only_if_absent: true,
+    }),
+  ).toEqual({ key: "runtimeGrouping", value: "runtime", revision: 1 });
+  // An explicit choice replaces it; a later migration answers with it.
+  await handler("bridge.ui_settings.update", {
+    key: "runtimeGrouping",
+    value: "machine",
+  });
+  expect(
+    await handler("bridge.ui_settings.update", {
+      key: "runtimeGrouping",
+      value: "runtime",
+      only_if_absent: true,
+    }),
+  ).toEqual({ key: "runtimeGrouping", value: "machine", revision: 3 });
+  expect(settings.ui.runtimeGrouping).toBe("machine");
 });

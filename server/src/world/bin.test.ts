@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import type { BinEntry } from "../../../shared/bin";
-import { BinCloseNotRecorded, WorldBinRegistry, type BinAdd } from "./bin";
+import {
+  BinCloseNotRecorded,
+  ENDED_BEFORE_BUS,
+  WorldBinRegistry,
+  type BinAdd,
+} from "./bin";
 
 function fixture(
   epoch = "run1",
@@ -10,6 +15,7 @@ function fixture(
   const timers = new Set<{ at: number; run(): void }>();
   const committed: BinEntry[][] = [];
   const revisions: number[] = [];
+  const journal: string[] = [];
   const registry = new WorldBinRegistry({
     epoch,
     clock: { now: () => 1_000_000 + now, monotonic: () => now },
@@ -27,6 +33,7 @@ function fixture(
       if (options.failCommit === "unknown") throw new Error("reply lost");
     },
     publish: (revision) => revisions.push(revision),
+    info: (message) => journal.push(message),
     interval_ms: 60_000,
     trip_ms: 10_000,
   });
@@ -49,8 +56,11 @@ function fixture(
     registry,
     committed,
     revisions,
+    journal,
     advance,
     timers,
+    /** The wall clock now, as a pane list's read time. */
+    wall: () => 1_000_000 + now,
   };
 }
 
@@ -305,4 +315,150 @@ test("invalid targets are refused before anything is staged", () => {
     registry.add(agent("p1", { connection_generation: -1 })),
   ).toThrow("invalid bin target");
   expect(registry.list().entries).toEqual([]);
+});
+
+const pane = (id: string) => ({ pane_id: id, terminal_id: `term-${id}` });
+
+test("an agent that ends while held leaves the bin, and no bus comes for it", async () => {
+  const { registry, committed, advance, timers, wall } = fixture();
+  const id = registry.add(agent("p1")).entries[0]!.id;
+  await advance(1_000);
+  // Its pane is still there: it waits.
+  registry.observeComplete("studio", 3, [pane("p1"), pane("p2")], wall());
+  expect(registry.list().entries.map((entry) => entry.id)).toEqual([id]);
+  // Its pane and terminal are gone: it ended by itself.
+  registry.observeComplete("studio", 3, [pane("p2")], wall());
+  const state = registry.list();
+  expect(state.entries).toEqual([]);
+  expect(state.closing).toEqual([]);
+  expect(state.outcomes).toEqual([
+    {
+      id,
+      label: "agent p1",
+      view: "board",
+      result: "gone",
+      closed_tab: false,
+      detail: ENDED_BEFORE_BUS,
+    },
+  ]);
+  expect(timers.size).toBe(0);
+  await advance(120_000);
+  expect(committed).toEqual([]);
+});
+
+test("a rider that ends on the bus leaves it, and its close is never recorded", async () => {
+  const { registry, committed, advance, wall } = fixture();
+  registry.add(agent("p1"));
+  registry.add(agent("p2"));
+  await advance(60_000);
+  expect(registry.list().entries.every((entry) => entry.riding)).toBe(true);
+  registry.observeComplete("studio", 3, [pane("p2")], wall());
+  await advance(10_000);
+  expect(ids(committed)).toEqual([["p2"]]);
+  expect(registry.list().outcomes.map((outcome) => outcome.detail)).toEqual([
+    ENDED_BEFORE_BUS,
+  ]);
+});
+
+test("a stopped bus whose last rider ended drives on", async () => {
+  const { registry, committed, advance, wall } = fixture();
+  registry.add(agent("p1"));
+  await advance(60_000);
+  registry.stopBus();
+  registry.observeComplete("studio", 3, [], wall());
+  expect(registry.list().bus.stopped).toBe(false);
+  await advance(10_000);
+  expect(committed).toEqual([]);
+  expect(registry.list().bus.elapsed_ms).toBeNull();
+});
+
+test("a stopped bus whose last rider's host restarted drives on, and later agents still close", async () => {
+  const { registry, committed, advance } = fixture();
+  const core = (terminal: string, connection_generation: number) =>
+    agent(terminal, {
+      connection_id: "core-local",
+      connection_generation,
+      runtime: "herdr-core",
+      terminal_id: terminal,
+      confirmation: {
+        core_id: "c0ffee",
+        terminals: [{ address: terminal, pid: 4242, occupant: "claude" }],
+      },
+    });
+  registry.add(core("t1", 2));
+  await advance(60_000);
+  registry.stopBus();
+  registry.retireConnectionGeneration("core-local", 3);
+  expect(registry.list().bus.stopped).toBe(false);
+  // The replacement runtime's agent boards the next bus and closes.
+  registry.add(core("t2", 3));
+  await advance(10_000);
+  expect(registry.list().bus.elapsed_ms).toBeNull();
+  await advance(50_000);
+  expect(registry.list().entries[0]?.riding).toBe(true);
+  await advance(10_000);
+  expect(ids(committed)).toEqual([["t2"]]);
+});
+
+test("only a current, complete list read after the hold witnesses an end", async () => {
+  const { registry, advance, wall } = fixture();
+  await advance(5_000);
+  const readBefore = wall();
+  await advance(1);
+  const id = registry.add(agent("p1")).entries[0]!.id;
+  // Read before it was held: the agent may not have existed yet.
+  registry.observeComplete("studio", 3, [], readBefore);
+  // Another runtime of the host, or another host, says nothing about it.
+  registry.observeComplete("studio", 4, [], wall() + 1);
+  registry.observeComplete("garage", 3, [], wall() + 1);
+  // The terminal alone, or the pane alone, keeps it.
+  registry.observeComplete(
+    "studio",
+    3,
+    [{ pane_id: "moved", terminal_id: "term-p1" }],
+    wall() + 1,
+  );
+  registry.observeComplete("studio", 3, [{ pane_id: "p1" }], wall() + 1);
+  expect(registry.list().entries.map((entry) => entry.id)).toEqual([id]);
+  expect(registry.list().outcomes).toEqual([]);
+});
+
+test("a herdr-core agent killed outside World leaves the bin the same way", async () => {
+  const { registry, committed, advance, wall } = fixture();
+  const id = registry.add(
+    agent("t8", {
+      connection_id: "core-local",
+      connection_generation: 2,
+      runtime: "herdr-core",
+      terminal_id: "t8",
+      confirmation: {
+        core_id: "c0ffee",
+        terminals: [{ address: "t8", pid: 4242, occupant: "claude" }],
+      },
+    }),
+  ).entries[0]!.id;
+  await advance(1_000);
+  registry.observeComplete("core-local", 2, [pane("t1")], wall());
+  expect(registry.list().entries).toEqual([]);
+  expect(registry.list().outcomes[0]).toMatchObject({ id, result: "gone" });
+  await advance(120_000);
+  expect(committed).toEqual([]);
+});
+
+test("the bin journals each step of the journey", async () => {
+  const { registry, journal, advance, wall } = fixture();
+  const first = registry.add(agent("p1")).entries[0]!.id;
+  const second = registry.add(agent("p2")).entries.at(-1)!.id;
+  await advance(60_000);
+  registry.observeComplete("studio", 3, [pane("p2")], wall());
+  await advance(10_000);
+  registry.settle(second, { result: "closed", closed_tab: false });
+  expect(journal).toEqual([
+    `Bin holds ${first}: herdr studio generation 3 pane p1 terminal term-p1`,
+    `Bin holds ${second}: herdr studio generation 3 pane p2 terminal term-p2`,
+    "Bin bus 1 set off with 2 aboard",
+    `Bin dropped ${first}: pane p1 terminal term-p1 ended on the bus`,
+    `Bin closing ${second}`,
+    `Bin close of ${second}: closed`,
+  ]);
 });

@@ -25,15 +25,7 @@ for (const mode of ["success", "transient", "permanent", "install-failure"]) {
     () => {
       const root = mkdtempSync(join(tmpdir(), "install-apt-"));
       try {
-        // Execute only package setup, never the container's user/system changes.
-        const dockerfile = readFileSync(
-          "scripts/install-linux/Dockerfile",
-          "utf8",
-        );
-        const setup = dockerfile.match(
-          /^RUN ([\s\S]*?)\s+&& rm -rf \/var\/lib\/apt\/lists\/\*/m,
-        )?.[1];
-        expect(setup).toBeDefined();
+        // The cached base owns package setup; never run its user/system changes.
         writeFileSync(
           join(root, "apt-get"),
           `#!/bin/sh
@@ -54,19 +46,15 @@ esac
 `,
           { mode: 0o755 },
         );
-        const result = spawnSync(
-          "/bin/sh",
-          ["-c", setup!.replaceAll(/\\\r?\n/g, " ")],
-          {
-            encoding: "utf8",
-            env: {
-              ...process.env,
-              PATH: root,
-              APT_FIXTURE: root,
-              APT_MODE: mode,
-            },
+        const result = spawnSync("/bin/sh", ["scripts/install-linux/apt.sh"], {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${root}:${process.env.PATH}`,
+            APT_FIXTURE: root,
+            APT_MODE: mode,
           },
-        );
+        });
         expect(result.error).toBeUndefined();
         expect(result.status).toBe(
           mode === "permanent" || mode === "install-failure" ? 100 : 0,
@@ -83,7 +71,7 @@ esac
         for (const update of updates)
           expect(update).toContain("APT::Update::Error-Mode=any");
         for (const call of calls) {
-          expect(call).toContain("Acquire::Retries=3");
+          expect(call).toContain("Acquire::Retries=1");
           expect(call).not.toMatch(
             /AllowInsecure|AllowUnauthenticated|allow-unauthenticated/,
           );

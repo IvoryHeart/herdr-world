@@ -504,18 +504,33 @@ export function createSettingsRpcHandler(args: {
 }
 
 /**
- * Server-wide interface preferences (keyboard shortcuts) in the service's own
- * settings, available without a ready Herdr connection. Values are bounded
- * JSON with no execution meaning.
+ * Server-wide interface preferences (keyboard shortcuts, World's "Group
+ * runtimes") in the service's own settings, available without a ready Herdr
+ * connection. Values are bounded JSON with no execution meaning.
+ *
+ * Every committed update carries a `revision`, increasing in commit order
+ * for the life of this service, and `get` answers with a revision no newer
+ * than the values it returns. A browser orders its own acknowledgements and
+ * other browsers' pushes by it, so the last commit wins on every browser
+ * (web/src/world/runtimeGrouping.ts). `only_if_absent: true` stores the value
+ * only while the key has none, decided inside the serialized writer, so a
+ * browser's one-time migration never replaces a value another browser saved;
+ * the answer is the key's value either way.
  */
 export function createUiSettingsRpcHandler(args: {
   readSettings: () => Promise<GuiSettings>;
   updateSettings: GuiSettingsStore["update"];
 }) {
   const { readSettings, updateSettings } = args;
+  /** The last revision handed to a writer, and the last one committed. */
+  let issued = 0;
+  let committed = 0;
   return async (method: string, params: Record<string, unknown>) => {
-    if (method === "bridge.ui_settings.get")
-      return { ui: (await readSettings()).ui };
+    if (method === "bridge.ui_settings.get") {
+      // Read before the settings, so the values are at least this new.
+      const revision = committed;
+      return { ui: (await readSettings()).ui, revision };
+    }
     if (method !== "bridge.ui_settings.update")
       throw new Error("Unknown UI settings method");
     const key = params.key;
@@ -525,12 +540,17 @@ export function createUiSettingsRpcHandler(args: {
       );
     const valueError = uiSettingValueError(params.value);
     if (valueError) throw new Error(valueError);
+    const onlyIfAbsent = params.only_if_absent === true;
+    let revision = 0;
     const settings = await updateSettings((current) => {
+      revision = ++issued;
+      if (onlyIfAbsent && current.ui[key] !== undefined) return current;
       const ui = { ...current.ui };
       if (params.value === undefined) delete ui[key];
       else ui[key] = params.value;
       return { ...current, ui };
     });
-    return { key, value: settings.ui[key] ?? null };
+    committed = Math.max(committed, revision);
+    return { key, value: settings.ui[key] ?? null, revision };
   };
 }
