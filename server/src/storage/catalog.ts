@@ -1,0 +1,36 @@
+/** Storage declarations for the schema-17 stores; no database or startup effects. */
+export const storageCatalog = [
+  {
+    name: "command_changes",
+    owner: "CLI history and undo",
+    store: "world.sqlite",
+    identity: "change ID",
+    source: "source of truth",
+    limit: 2000,
+    trim: "existing command-history admission limit",
+    lifetime: "native",
+    browser: false,
+  },
+  {
+    name: "retired_ledger_changes",
+    owner: "schema-17 rollback",
+    store: "world.sqlite",
+    identity: "change ID",
+    source: "archive",
+    limit: null,
+    trim: "none; retained for one release",
+    lifetime: "retired",
+    browser: false,
+  },
+  {
+    name: "meta",
+    owner: "storage migrations and profile imports",
+    store: "world.sqlite",
+    identity: "metadata name",
+    source: "source of truth",
+    limit: null,
+    trim: "none",
+    lifetime: "native",
+    browser: false,
+  },
+] as const;

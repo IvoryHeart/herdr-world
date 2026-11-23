@@ -56,7 +56,7 @@ export function importLegacyLedger(
 ) {
   // Import once: a completed import never consults the retained JSON again,
   // even when an older binary rewrites it (each concept has one source).
-  if (db.query("SELECT 1 FROM imports WHERE name='ledger-json'").get()) return;
+  if (db.query("SELECT 1 FROM meta WHERE name='ledger-json'").get()) return;
   assertSafeDataPath(path);
   if (!existsSync(path)) return;
   let contents: string;
@@ -118,7 +118,7 @@ export function importLegacyLedger(
       );
     for (const [table, family] of [
       ["results", "results"],
-      ["ledger_changes", "changes"],
+      ["command_changes", "changes"],
     ] as const)
       for (const row of document[family])
         counts[family] += Number(
@@ -134,7 +134,7 @@ export function importLegacyLedger(
       document.revision,
     );
     db.query(
-      "INSERT INTO imports(name,content_hash,completed_at) VALUES('ledger-json',?,?)",
+      "INSERT INTO meta(name,body) VALUES('ledger-json',json_object('content_hash',?,'completed_at',?))",
     ).run(hash, at);
     db.exec("COMMIT");
   } catch (error) {

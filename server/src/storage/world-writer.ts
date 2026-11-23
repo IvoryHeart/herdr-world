@@ -1,5 +1,4 @@
 import { createTerminalMarkWriter, readTerminalMarks } from "./terminal-marks";
-import { readLegacyReviewArchiveState } from "./legacy-review-archive";
 import {
   recordAnswerAttempt,
   answerAttemptEvidence,
@@ -249,7 +248,7 @@ export function openWorldWriter(
       version: 1,
       revision: revision(),
       asks: rows("asks"),
-      changes: rows("ledger_changes"),
+      changes: rows("command_changes"),
       results: rows("results"),
     };
     const profiles = readProfiles(db);
@@ -259,7 +258,6 @@ export function openWorldWriter(
     return {
       document,
       terminalMarks: readTerminalMarks(db),
-      legacyReviewArchive: readLegacyReviewArchiveState(db),
       ...(profiles ? { profiles } : {}),
       ...(board ? { board } : {}),
       ...(runtimeStatus ? { runtimeStatus } : {}),
@@ -281,7 +279,7 @@ export function openWorldWriter(
     const removed: string[] = [];
     for (const [table, patch] of [
       ["asks", write.asks],
-      ["ledger_changes", write.changes],
+      ["command_changes", write.changes],
       ["results", write.results],
     ] as const) {
       for (const id of patch.remove) {
@@ -555,9 +553,7 @@ export function openWorldWriter(
         return executeBoardOperation(db, request.operation, bindings, at);
       case "runtime-status":
         if (
-          !db
-            .query("SELECT 1 FROM imports WHERE name='runtime-status-json'")
-            .get()
+          !db.query("SELECT 1 FROM meta WHERE name='runtime-status-json'").get()
         )
           throw new Error("Runtime status was not initialized");
         return writeRuntimeStatus(db, request.key, request.status);

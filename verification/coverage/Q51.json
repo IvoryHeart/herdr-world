@@ -5,11 +5,9 @@
   "requirement": "openspec/specs/world-storage/spec.md",
   "properties": "Stable World IDs and atomic verified bindings; unresolved restart recovery; ambiguous evidence never attaches; per-kind terminal/session lifetimes; committed-only shared projection; cross-connection retirement and monotonic notice revisions; unknown-session ownership admission; exact unavailable-watch removal, same-ID reattachment removal and stale capture protection; exact Undo, bounded recency and close drain; total first/aged current stops, protected current versus bounded history, byte-budget refusal, no fabricated unknown-session restart continuity",
   "existingTests": [
-    "server/src/world/legacy-review-boundaries.test.ts",
     "web/src/world/worldObject.test.ts",
     "web/src/agentName.test.ts",
     "server/src/storage/legacy-reviews.test.ts",
-    "server/src/world/legacy-review-resolution.test.ts",
     "server/src/rpc/review-retirement.test.ts",
     "web/src/world/watchlistStore.test.ts",
     "server/src/storage/terminal-marks.test.ts",
@@ -20,7 +18,8 @@
     "server/src/service/terminal-marks.test.ts",
     "server/src/world/review-stop-coverage.test.ts",
     "server/src/world/review-stop-scale.test.ts",
-    "server/src/world/review-stop-review.test.ts"
+    "server/src/world/review-stop-review.test.ts",
+    "server/src/storage/leftovers.test.ts"
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
   "technique": "direct-sqlite-recovery",
@@ -32,11 +31,9 @@
     "models": [],
     "contracts": ["verification/contracts/terminal-marks.md"],
     "tests": [
-      "server/src/world/legacy-review-boundaries.test.ts",
       "web/src/world/worldObject.test.ts",
       "web/src/agentName.test.ts",
       "server/src/storage/legacy-reviews.test.ts",
-      "server/src/world/legacy-review-resolution.test.ts",
       "server/src/rpc/review-retirement.test.ts",
       "web/src/world/watchlistStore.test.ts",
       "server/src/storage/terminal-marks.test.ts",
@@ -47,7 +44,8 @@
       "server/src/service/terminal-marks.test.ts",
       "server/src/world/review-stop-coverage.test.ts",
       "server/src/world/review-stop-scale.test.ts",
-      "server/src/world/review-stop-review.test.ts"
+      "server/src/world/review-stop-review.test.ts",
+      "server/src/storage/leftovers.test.ts"
     ],
     "checks": [
       "bun run test server/src/storage/terminal-marks.test.ts server/src/storage/terminal-marks-crash.test.ts server/src/world/persistent-terminal-marks.test.ts server/src/world/terminal-mark-bindings.test.ts server/src/world/terminal-mark-controls.test.ts server/src/service/terminal-marks.test.ts",
@@ -55,7 +53,7 @@
     ],
     "review": "The delivery link records the storage/identity design, not acceptance of these new lifetimes. Owner approved persistence in the brief; independent review and native CI are pending."
   },
-  "evidenceDecision": "The maintained binding/runtime models remain required within their accepted scope. New per-kind declarations are exhaustively checked directly; real SQLite savepoints and process schedules exercise actual storage and acknowledgement boundaries rather than modeling SQL. Source and compiled negative controls must fail named assertions, never loaders. Deferred real-SQLite operations cover another connection retiring/replacing while publication waits, including global recency trimming and monotonic revisions. RPC consumers fence explicit unknown and omitted completion fingerprints across replacement/return; terminal watch continuity is separate. Exact World watch IDs permit disconnected/restart removal, release capacity and refuse stale replacements; the browser forwards captured IDs. Same-ID reattachment in a newer runtime is removed before reply, with reply/list/two-client agreement and invalidation of the current generation; a compiled control restores the old runtime-tuple removal to prove detection. Multi-row repair may retain a committed prefix, freshly resolved on restart; one user mutation acknowledges only after all resulting writes finish. Production service and browser-store consumers retain ownership/ordering checks. Current stop coverage and retention: real SQLite/production RPC/two browser stores cover first-observed stopped agents without fabricated time, unreviewed/reviewed aged stops, known-session restart and null restart/replacement/returning-known no-carry. Current records survive 500; oldest inactive history yields under a fixed 500-row and 768 KiB budget. Known captures remain unresolved/protected during recovery; capacity refusal preserves current rows and service availability. Maintained 10-source wire/SQLite byte measurements and dense native-frame refusal are explicit; no composed dense success or null-session restart continuity is claimed. Three compiled stop/expiry/unknown-continuity controls complement existing mandatory storage/identity/publication controls. The compatible Chat rebuild and Part 1 have merged; schema 10 retires the separate completion family/API/browser fallback. Real historical SQLite upgrades preserve Desk/watch rows exactly and archive at most 4,096 old receipts within a separate 64 MiB serialized-row budget, draining on proof/absence or the original 30-day deadline. Fresh same-source/terminal/known-session/unchanged-native-sequence proof alone transfers review; unknown, replacement and returning old ownership never inherit it. Atomic resolution rollback, newer review/Undo, scheduler expiry and retired-runtime publication are direct consumers; three added compiled worker faults remove session/sequence/expiry fences and must fail named assertions. Browser missing stops refresh authoritative Desk and stay retryable; no terminal/activity fallback or null-session restart continuity is claimed. Review repairs add seven real-consumer cases and four compiled faults for 501-stop recovery re-entry, durable known-to-unknown supersession before restart, canonical whole-plan capacity refusal with no durable prefix, shrinking-before-growth ordering, whole-list malformed native identity refusal and retired-input fences. Canonical SQLite bytes are 180481 for sources-10 (179761 acknowledged-list bytes); no native runtime-instance continuity is claimed. Review repair enforces the original 30-day deadline inside each resolving Desk savepoint, including proof-to-put crossings and World restart. Shared display selection/activity normalization is compared with strict session-qualified proof; sparse, duplicate or obsolete agent metadata defers conversion without consuming the receipt whenever the actual World leaf would name a different activity token. Actual buildWorldObject/two-store regressions and two compiled boundary faults enforce both cases without weakening session/native-sequence/ownership fences.",
+  "evidenceDecision": "The maintained binding/runtime models remain required within their accepted scope. New per-kind declarations are exhaustively checked directly; real SQLite savepoints and process schedules exercise actual storage and acknowledgement boundaries rather than modeling SQL. Source and compiled negative controls must fail named assertions, never loaders. Deferred real-SQLite operations cover another connection retiring/replacing while publication waits, including global recency trimming and monotonic revisions. RPC consumers fence explicit unknown and omitted completion fingerprints across replacement/return; terminal watch continuity is separate. Exact World watch IDs permit disconnected/restart removal, release capacity and refuse stale replacements; the browser forwards captured IDs. Same-ID reattachment in a newer runtime is removed before reply, with reply/list/two-client agreement and invalidation of the current generation; a compiled control restores the old runtime-tuple removal to prove detection. Multi-row repair may retain a committed prefix, freshly resolved on restart; one user mutation acknowledges only after all resulting writes finish. Production service and browser-store consumers retain ownership/ordering checks. Current stop coverage and retention: real SQLite/production RPC/two browser stores cover first-observed stopped agents without fabricated time, unreviewed/reviewed aged stops, known-session restart and null restart/replacement/returning-known no-carry. Current records survive 500; oldest inactive history yields under a fixed 500-row and 768 KiB budget. Known captures remain unresolved/protected during recovery; capacity refusal preserves current rows and service availability. Maintained 10-source wire/SQLite byte measurements and dense native-frame refusal are explicit; no composed dense success or null-session restart continuity is claimed. Three compiled stop/expiry/unknown-continuity controls complement existing mandatory storage/identity/publication controls. The compatible Chat rebuild and Part 1 have merged; schema 10 retires the separate completion family/API/browser fallback. Historical schema-9 upgrades preserve Desk/watch rows exactly and privately export every retired receipt before dropping its archive table at schema 17. Export failure aborts the upgrade and names the pre-upgrade snapshot. Export files have no automatic expiry and are never consumed as live Desk review state. Obsolete conversion/deadline controls are retired with that runtime path; current Desk ownership/stop controls remain. Browser missing stops refresh authoritative Desk and stay retryable; no terminal/activity fallback or null-session restart continuity is claimed. Review repairs add seven real-consumer cases and four compiled faults for 501-stop recovery re-entry, durable known-to-unknown supersession before restart, canonical whole-plan capacity refusal with no durable prefix, shrinking-before-growth ordering, whole-list malformed native identity refusal and retired-input fences. Canonical SQLite bytes are 180481 for sources-10 (179761 acknowledged-list bytes); no native runtime-instance continuity is claimed.",
   "promotion": {
     "decision": "pending",
     "scope": "Desk/watch, the draining legacy-review migration and approved lifetime changes only; Board layout remains with Q50. Independent review required."

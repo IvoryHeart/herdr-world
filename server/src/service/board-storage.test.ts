@@ -131,7 +131,7 @@ test("the real root backs up Board JSON once and stores concerns and verified bi
     expect(
       db.query("SELECT row_revision FROM board_notes WHERE key='note-b'").get(),
     ).toEqual({ row_revision: document.revision });
-    imported = db.query("SELECT * FROM imports WHERE name='board-json'").get();
+    imported = db.query("SELECT * FROM meta WHERE name='board-json'").get();
   } finally {
     db.close();
   }
@@ -143,7 +143,7 @@ test("the real root backs up Board JSON once and stores concerns and verified bi
   });
   try {
     expect(
-      checked.query("SELECT * FROM imports WHERE name='board-json'").get(),
+      checked.query("SELECT * FROM meta WHERE name='board-json'").get(),
     ).toEqual(imported);
   } finally {
     checked.close();
@@ -279,7 +279,7 @@ test("malformed legacy Board is backed up exactly and import can be repaired wit
     ).toEqual({ count: 0 });
     expect(
       db
-        .query("SELECT count(*) AS count FROM imports WHERE name='board-json'")
+        .query("SELECT count(*) AS count FROM meta WHERE name='board-json'")
         .get(),
     ).toEqual({ count: 0 });
   } finally {

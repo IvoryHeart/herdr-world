@@ -1,9 +1,24 @@
 import type { Database } from "bun:sqlite";
-import {
-  LEGACY_REVIEW_LIMIT,
-  LEGACY_REVIEW_MAX_BYTES,
-  legacyReviewArchiveBytes,
-} from "./legacy-review-archive";
+export const LEGACY_REVIEW_MAX_BYTES = 64 * 1024 * 1024;
+
+/** Historical schema 9; never used to create the current live shape directly. */
+export const terminalMarksMigration = `CREATE TABLE terminal_marks (
+ id TEXT PRIMARY KEY REFERENCES world_ids(id),
+ kind TEXT NOT NULL CHECK(kind IN ('desk','watchlist','completion-seen')),
+ binding_id TEXT NOT NULL UNIQUE REFERENCES world_bindings(id),
+ revision INTEGER NOT NULL CHECK(revision>=0), body TEXT NOT NULL CHECK(json_valid(body)), open_order INTEGER NOT NULL DEFAULT 0
+);`;
+
+/** Historical schema 10 byte bound, including receipt metadata. */
+export function legacyReviewArchiveBytes(db: Database): number {
+  return (
+    db
+      .query(
+        `SELECT coalesce(sum(length(CAST(json_object('id',id,'source_id',source_id,'terminal_id',terminal_id,'original_order',original_order,'migrated_at',migrated_at,'eligible',eligible,'receipt',json(receipt)) AS BLOB))),0) AS bytes FROM retired_completion_reviews`,
+      )
+      .get() as { bytes: number }
+  ).bytes;
+}
 
 /** Migration 10 runs inside the schema transaction; migration 9 stays historical. */
 export function migrateLegacyCompletionReviews(db: Database, at: number) {
@@ -28,10 +43,7 @@ export function migrateLegacyCompletionReviews(db: Database, at: number) {
         AND json_extract(b.body,'$.state')!='ended' THEN 1 ELSE 0 END,
       json_object('id',m.id,'kind',m.kind,'revision',m.revision,'body',json(m.body),'binding',json(b.body))
     FROM terminal_marks m JOIN world_bindings b ON b.id=m.binding_id
-    WHERE m.kind='completion-seen' ORDER BY m.rowid DESC LIMIT ?`).run(
-    at,
-    LEGACY_REVIEW_LIMIT,
-  );
+    WHERE m.kind='completion-seen' ORDER BY m.rowid`).run(at);
   const bytes = legacyReviewArchiveBytes(db);
   if (bytes > LEGACY_REVIEW_MAX_BYTES)
     throw new Error(

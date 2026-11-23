@@ -151,73 +151,25 @@ refusal. Native listing validation uses the same binding writer validator and
 Desk identity bounds, rejects the complete listing rather than filtering it,
 and never converts arbitrary storage failures into benign input refusals.
 
-## Draining legacy-review archive
+## Retired review export
 
-Properties: one atomic/idempotent schema-9 upgrade preserves original Desk/watch
-rows, bindings, IDs, row order, revisions and open recency byte-for-byte. Original
-migration 9 remains historical. Legacy receipts leave the operational family and
-binding APIs; their original metadata enters a private archive with no public
-verb, UI or Desk/wire projection. Retention is newest 4,096 receipts, oldest-first
-on overflow, with its own 64 MiB canonical serialized-row budget. An excessive
-archive refuses upgrade with a labelled error and leaves schema 9 intact.
-No new receipt is inserted after migration. Resolution, fresh complete original
-source terminal absence, or 30 days after the original migration drains it;
-offline sources do not extend the deadline. A later release removes the table.
+Schema 17 privately exports every retired review row to a content-addressed JSON
+file in `<data>/legacy/` before dropping its table. Export failure rolls back the
+whole upgrade and names the consistent pre-upgrade snapshot. A retry verifies
+existing bytes instead of overwriting. Export files never expire automatically.
+Schema-9 folders still migrate through the historical completion kind; every
+receipt is preserved, subject to a fail-closed 64 MiB archive byte bound.
+Current Desk/watch rows, bindings, IDs, order, revisions and recency remain exact.
+The exported receipts no longer confer live reviews; their conversion, pruning
+and expiry consumers and corresponding fault controls retire with the table.
 
-Resolution requires a fresh complete unambiguous observation after migration:
-same connection ID, terminal, known session and unchanged native state-change
-sequence. Activity uses the same pane/matched-agent normalization as the World
-leaf, so the canonical stop shape remains `stop:[observed_stop_id,activity]`.
-Pane-only Desk action admission cannot attest that activity: opening either the
-same or another agent's report retains a deferred receipt until a complete
-matching observation. Explicit review and Undo still disqualify the receipt.
-There is no synthetic transition time. Unknown legacy sessions never resolve;
-missing sequence defers. Positive replacement, unknown ownership, changed
-sequence or busy status disqualifies the receipt permanently, including return
-to the former proof after restart. Review plus receipt deletion share one SQLite
-savepoint/acknowledgement; binding or capacity refusal rolls both back. Existing
-newer Desk review and explicit Undo win. Current/history/queue/frame bounds stay
-independent and unchanged; archive proof batches contain at most 32 targets.
+`storage/legacy-reviews.test.ts` checks schema-9 full-chain export, more than
+4,096 receipts, exact Desk/watch preservation, restart, rollback and byte refusal.
+`storage/leftovers.test.ts` checks populated schemas 13–16, protected semantic
+hashes, snapshot/export failures and retry, plus production history/undo against
+migrated command records. Current Desk ownership/publication/crash controls and
+all maintained models remain required. The migration is serialized before any
+request admission; real SQLite transactional failure boundaries are the direct
+evidence, with no new concurrent state machine to model.
 
-Mapping: `storage/legacy-reviews.test.ts` exercises historical schema 9, exact
-preservation, rollback, idempotence, count/byte limits, archive expiry and refused
-atomic resolution. `world/legacy-review-resolution.test.ts` runs production
-admission, actual SQLite worker/RPC and two browser stores through known carry,
-unknown/no-sequence no-carry, null-to-known, replacement and return, changed or
-missing native sequence, ambiguity, original-source absence, newer review/Undo,
-scheduled offline expiry and retirement during acknowledgement. A crash between
-archive proof and Desk checkpoint cannot forget disqualification. Three added
-compiled worker faults remove session, sequence and expiry fences and must fail
-those named assertions; a positive archive bundle validates the harness.
-`rpc/review-retirement.test.ts` checks retired methods are unregistered and receive
-the existing unknown-method refusal. Browser helper/Needs you/Town consumers
-exercise authoritative Desk refresh, exact shown-stop review and retry without
-terminal-only or last-activity-only success. Existing service/two-WebSocket,
-source/standalone crash, stop coverage/resource and mandatory ordering consumers
-remain required. Direct real-SQLite/finite consumers exercise these properties;
-a duplicate SQL model would not strengthen the actual transaction boundary.
-No native runtime-instance proof, null-session restart continuity, physical
-power-loss or dense composed success is claimed.
-
-## Review repair: deadline and actual World activity
-
-The original archive deadline is enforced again inside the resolving Desk
-savepoint with its injected writer timestamp. An earlier admitted proof cannot
-confer review at or after expiry; restart never extends that deadline. Expiry and
-receipt resolution remain atomic with the Desk operation.
-
-Display metadata matching and activity normalization are shared with the actual
-World leaf. Identity, status and native sequence admission keep their stricter
-unique current-session proof. If those two activity views disagree (including
-sparse-session, duplicate, missing-terminal or obsolete-session metadata),
-conversion defers and retains the receipt; a later safe matching observation can
-resolve it. Native pane activity can still establish the exact token despite
-ambiguous metadata. The canonical stop string shape stays unchanged.
-
-`world/legacy-review-boundaries.test.ts` covers just before, exactly at and after
-the deadline, with and without restart, plus actual `buildWorldObject` consumers
-for metadata disagreement, opening the same or another report, explicit review
-and Undo, and later valid transfer. Three compiled faults remove
-the resolving expiry check or falsely attest observed/action activity and must fail
-the named boundary regressions. Existing replacement/no-carry/sequence fences,
-real-SQLite rollback, all maintained models and native CI remain required.
+Rollback: stop World and restore the pre-upgrade snapshot named in the error.
