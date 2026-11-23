@@ -78,12 +78,28 @@ Each agent SHALL have a declared conversation field with per-field claims. Only 
 
 ### Requirement: One agent record for every view
 
-The World snapshot SHALL carry one entry per agent ID with its label, harness, state, conversation state and source or reason, seat, and facts, and SHALL carry `agent_id` on each terminal row it attributes, all under one revision. Town, Desk and Board SHALL select agents by `agent_id`, SHALL NOT decide which agent a terminal is, and SHALL change agent facts only through agent operations.
+The World snapshot SHALL carry one entry per agent ID with its name, colour, look, status text, Town and Board placement, groups, interest, profile, state, conversation state and source or reason, and seat, and SHALL carry `agent_id` on each terminal row it attributes, all under one revision. Town, Desk, Board, Spaces and the `herdr-world` CLI SHALL read these fields from that entry, SHALL select agents by `agent_id`, SHALL NOT decide which agent a terminal is, and SHALL change a field only through an agent operation naming the agent ID. An agent's room and host SHALL come from its seat. A shown colour SHALL come from one shared resolver: the agent's own colour, else the colour inherited from its spawning agent, else its tab's place colour, else its room's chosen colour, else the room's default. A rename SHALL update the record and then the runtime's name, and a rename observed in the runtime SHALL update the record. Grouping agents by machine or runtime SHALL follow the one World Group runtimes setting in every view.
 
 #### Scenario: Three views, one agent
 - **WHEN** Town, Desk and Board render from the same snapshot
-- **THEN** each agent appears once per view, with the same label, conversation state, pin and colour
+- **THEN** each agent appears once per view, with the same name, colour, look, status text, room, groups and conversation state
+
+#### Scenario: Colour set in Town
+- **WHEN** the user picks a colour for an agent in Town
+- **THEN** the colour is the agent's field, and Desk, Board and `herdr-world` show it at the next revision
+
+#### Scenario: Colour set from the CLI
+- **WHEN** `herdr-world colour set` changes an agent's colour
+- **THEN** Town, Desk and Board show the new colour at the next revision, through the same field
+
+#### Scenario: Renamed in Herdr
+- **WHEN** the user renames an agent's tab inside Herdr
+- **THEN** the agent's name changes in its record, and every view shows the new name
+
+#### Scenario: Grouping changed
+- **WHEN** the user switches Group runtimes from one per machine to one per runtime
+- **THEN** Town buildings, the Desk navigator and Board host zones split the same way for the same agents
 
 #### Scenario: Pin set in Town
 - **WHEN** the user pins an agent's desk in Town
-- **THEN** the pin is an agent fact, and Desk and Board read the same value at the next revision
+- **THEN** the pin is the agent's Town placement, and it stays with the agent after a rename or a move

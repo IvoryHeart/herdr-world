@@ -50,21 +50,35 @@ Each later step is one PR of about 300 changed lines or fewer, excluding tests.
 ## 6. Snapshot
 
 - [ ] 6.1 `agents` and `agent_id` on terminal rows under one revision, in the
-  World snapshot and its API types.
+  World snapshot and its API types, with every record field (name, colour, look,
+  status text, placement, groups, interest, profile).
 
 ## 7. Migration of facts
 
-- [ ] 7.1 Copy appearance, colours, desk pins and ranks, interest, groups, profile
-  assignment and Town Master when the key is unique. Leave other rows pending.
-- [ ] 7.2 Add `agent_id` to Desk marks and residents, add the verify-then-retire
+- [ ] 7.1 Stop `appearance.prune` from deleting colours and appearance rows; it
+  only hides them. Ships before any copy.
+- [ ] 7.2 Place entities for host, room and tab; copy `board_colors`, room spots
+  and tab colours of tabs without a single agent onto them.
+- [ ] 7.3 Copy tab colour, status text, avatar, desk pin and rank, Board card
+  placement, interest, groups, profile assignment and Town Master onto agents
+  when the key is unique. Leave other rows pending.
+- [ ] 7.4 Add `agent_id` to Desk marks and residents, add the verify-then-retire
   check (per table; any pending row keeps the table and its reader), and record
   the rollback snapshot.
 
-## 8. Views
+## 8. One record in every view
 
-- [ ] 8.1 Town desks and Desk records keyed by `agent_id`.
-- [ ] 8.2 Board agent cards keyed by `agent_id`. Cross-view test: one snapshot,
-  three projections, the same values per agent.
+- [ ] 8.1 One shared colour and look resolver over agent and place records, used
+  by the service, Town (replacing `townAppearance`'s own derivation), Board,
+  Spaces and Apartments.
+- [ ] 8.2 Agent operations `agent.set` and `agent.place`; the colour, look and
+  status pickers in every view, `herdr-world colour` and `board card colour`
+  write through them. Rename writes the record, then the runtime's name, and an
+  observed runtime rename updates the record.
+- [ ] 8.3 Town desks and Desk records keyed by `agent_id`.
+- [ ] 8.4 Board agent cards keyed by `agent_id`; Board host zones follow the Group
+  runtimes setting (#1307) through its shared derivation. Cross-view test: one
+  snapshot, Town, Desk, Board and the CLI, the same values per agent.
 
 ## 9. User choices
 
