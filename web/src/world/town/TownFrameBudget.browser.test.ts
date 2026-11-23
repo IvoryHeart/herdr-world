@@ -43,7 +43,13 @@ type TraceEvent = {
   args?: Record<string, any>;
 };
 
-const PAN_FRAMES = 120;
+/**
+ * Frames per traced pan. On four cores with SwiftShader, as on CI, a traced
+ * desk-level pan frame takes about 175 ms; the counts are per frame.
+ */
+const PAN_FRAMES = 60;
+/** Deadline for one traced pan or zoom: about 11 s there, 20 s was too tight. */
+const MEASURE_DEADLINE_MS = 60000;
 const TYPED_KEYS = 20;
 /**
  * Elements one zoom frame may restyle: the signs, plaques and cards that
@@ -126,12 +132,12 @@ test.skipIf(!chrome)(
         await waitForChromePort(child, profile, log),
       );
       const { command, on } = connection;
-      const evaluate = async (expression: string) => {
-        const reply = await command("Runtime.evaluate", {
-          expression,
-          awaitPromise: true,
-          returnByValue: true,
-        });
+      const evaluate = async (expression: string, deadlineMs?: number) => {
+        const reply = await command(
+          "Runtime.evaluate",
+          { expression, awaitPromise: true, returnByValue: true },
+          deadlineMs,
+        );
         if (reply.exceptionDetails)
           throw new Error(JSON.stringify(reply.exceptionDetails));
         return reply.result.value;
@@ -143,15 +149,15 @@ test.skipIf(!chrome)(
         const complete = Promise.withResolvers<void>();
         const done = () => complete.resolve();
         on("Tracing.tracingComplete", done);
+        // Only the categories the counts read: stacks and cc.debug slowed
+        // each traced frame by a third on four cores.
         await command("Tracing.start", {
           categories: [
             "devtools.timeline",
             "disabled-by-default-devtools.timeline",
             "disabled-by-default-devtools.timeline.frame",
-            "disabled-by-default-devtools.timeline.stack",
             "benchmark",
             "cc",
-            "disabled-by-default-cc.debug",
           ].join(","),
           transferMode: "ReportEvents",
         });
@@ -215,7 +221,10 @@ test.skipIf(!chrome)(
       const pan = async () => {
         const run = await trace(async () => {
           const before = await draws();
-          const timing = await evaluate(`window.townScale.pan(${PAN_FRAMES})`);
+          const timing = await evaluate(
+            `window.townScale.pan(${PAN_FRAMES})`,
+            MEASURE_DEADLINE_MS,
+          );
           return { ticks: timing.frames, draws: (await draws()) - before };
         });
         return {
@@ -228,7 +237,10 @@ test.skipIf(!chrome)(
       const zoomIn = async () => {
         const run = await trace(async () => {
           const before = await draws();
-          const state = await evaluate('window.townScale.zoom("in")');
+          const state = await evaluate(
+            'window.townScale.zoom("in")',
+            MEASURE_DEADLINE_MS,
+          );
           return { level: state.level, draws: (await draws()) - before };
         });
         return {
