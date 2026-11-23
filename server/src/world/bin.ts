@@ -44,6 +44,7 @@ export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
  */
 export type BinRouteReport = { ids: string[]; route_m: number; stops: number };
 
+/** @internal */
 export const ENDED_BEFORE_BUS =
   "It ended before the bus came, so nothing was closed.";
 

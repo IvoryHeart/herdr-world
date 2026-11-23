@@ -26,21 +26,23 @@ import { readOfficePreferences } from "./officePreferences";
  */
 export type RuntimeGrouping = "machine" | "runtime";
 
+/** @internal */
 export const RUNTIME_GROUPING_DEFAULT: RuntimeGrouping = "machine";
 /** The namespace this setting occupies in the service's settings.json `ui`. */
 export const RUNTIME_GROUPING_SETTING_KEY = "runtimeGrouping";
+/** @internal */
 export const RUNTIME_GROUPING_CACHE_KEY = "runtimeGrouping.v1";
 
 /** The service's answer to a write: the value it holds, and its revision. */
-export type RuntimeGroupingAck = { value: unknown; revision?: number };
-export type RuntimeGroupingSend = (
+type RuntimeGroupingAck = { value: unknown; revision?: number };
+type RuntimeGroupingSend = (
   value: RuntimeGrouping,
   options?: { onlyIfAbsent?: boolean },
 ) => Promise<RuntimeGroupingAck>;
 
 type PreferenceStorage = Pick<Storage, "getItem" | "setItem">;
 
-export function parseRuntimeGrouping(value: unknown): RuntimeGrouping | null {
+function parseRuntimeGrouping(value: unknown): RuntimeGrouping | null {
   return value === "machine" || value === "runtime" ? value : null;
 }
 
@@ -48,6 +50,7 @@ export function parseRuntimeGrouping(value: unknown): RuntimeGrouping | null {
  * One browser's copy of the setting. The page has one (below); the
  * exhaustive schedule test (server/src/bridge/runtime-grouping-schedules.test.ts) runs several
  * against one service.
+ * @internal
  */
 export function createRuntimeGroupingPreference(storage: PreferenceStorage) {
   let send: RuntimeGroupingSend | null = null;

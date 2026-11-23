@@ -1331,7 +1331,6 @@
       "web/src/world/town/townBusDrive.ts#TOWN_BUS_TURN_S",
       "web/src/world/town/townBusDrive.ts#townBusPath",
       "web/src/world/town/townBusDrive.ts#townBusPathAt",
-      "web/src/world/town/townBusDrive.ts#townBusWay",
       "web/src/world/town/townCamera.ts#TOWN_OVERVIEW_ROOMS",
       "web/src/world/town/townCamera.ts#townZoomLimits",
       "web/src/world/town/townChat.ts#TownReplyError",
@@ -1593,8 +1592,7 @@
       "web/src/world/worldTerminalPresentation.ts#retainWorldFloatingTerminals",
       "web/src/world/worldTerminalPresentation.ts#sameWorldInspector",
       "web/src/world/worldTerminalPresentation.ts#upsertWorldFloatingTerminal",
-      "web/src/world/worldTerminalPresentation.ts#upsertWorldInspectorConversation",
-      "web/src/worldHosts.ts#machineStatus"
+      "web/src/world/worldTerminalPresentation.ts#upsertWorldInspectorConversation"
     ],
     "types": [
       "scripts/browser-diagnostics.ts#DiagnosticChild",
@@ -1908,7 +1906,6 @@
       "web/src/world/town/townWeatherArt.ts#TownWeatherArt",
       "web/src/world/town/useTownCanvasSearch.ts#TownCanvasSearch",
       "web/src/world/townMasterGreeting.ts#GreetingDeps",
-      "web/src/world/treeProjection.ts#WorldTreeHost",
       "web/src/world/treeProjection.ts#WorldTreeSpace",
       "web/src/world/usage/usageFixture.ts#UsageFixtureMode",
       "web/src/world/usage/usageModel.ts#UsageHour",

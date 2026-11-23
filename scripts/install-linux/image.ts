@@ -13,7 +13,7 @@ import { dirname } from "node:path";
 type Run = (args: string[]) => Promise<string>;
 const context = "scripts/install-linux";
 
-/** Only dependency inputs belong here: scenario edits must still build on a cache hit. */
+/** Only dependency inputs belong here: scenario edits must still build on a cache hit. @internal */
 export function installBaseIdentity(
   inputs = [
     readFileSync(`${context}/Dockerfile.base`, "utf8"),
@@ -98,7 +98,7 @@ export async function buildInstallImage(
 }
 
 /** Run real apt, bypassing all Docker RUN caches, against a refused local proxy. */
-export function checkMirrorFailure() {
+function checkMirrorFailure() {
   const start = performance.now();
   const name = `world-install-mirror-${randomUUID()}`;
   try {
