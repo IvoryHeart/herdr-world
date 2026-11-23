@@ -1,6 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@6.48.0/schema.json",
-  // Unsuffixed test entries are development-only; production mode negates them.
+  // Unsuffixed test/support entries are development-only; production mode negates
+  // them even inside production globs. Put nonstandard test helpers in testing/.
+  // Production exports used only by tests still count unless tagged @internal.
   // Check entry exports too: adding an unused export to a CLI/worker must fail.
   "includeEntryExports": true,
   "workspaces": {
@@ -11,7 +13,9 @@
       "entry": [
         "scripts/**/*.{ts,js,mjs}!",
         "tools/**/*.{ts,js,mjs}!",
-        "**/*.{test,spec}.{ts,tsx,js,mjs}"
+        "**/*.{test,spec}.{ts,tsx,js,mjs}",
+        "**/testing/**/*.{ts,tsx,js,mjs}",
+        "**/*.{fixture,cases,browserMock}.{ts,tsx,js,mjs}"
       ],
       "project": [
         "scripts/**/*.{ts,js,mjs}!",
@@ -28,7 +32,9 @@
         "src/cli/**/*.ts!",
         "src/**/*worker.ts!",
         "src/features/index.gen.ts!",
-        "src/**/*.{test,spec}.ts"
+        "src/**/*.{test,spec}.ts",
+        "src/**/testing/**/*.ts",
+        "src/**/*.{fixture,cases,browserMock}.ts"
       ],
       "project": ["src/**/*.ts!"]
     },
@@ -54,7 +60,9 @@
         "src/world/devtools/release.ts!",
         "src/shiki.ts!",
         "src/shikiWasm.ts!",
-        "src/**/*.{test,spec,browser}.{ts,tsx}"
+        "src/**/*.{test,spec,browser}.{ts,tsx}",
+        "src/**/testing/**/*.{ts,tsx}",
+        "src/**/*.{fixture,cases,browserMock}.{ts,tsx}"
       ],
       "project": ["src/**/*.{ts,tsx}!", "vite.config.ts!", "!src/**/*.d.ts!"]
     }

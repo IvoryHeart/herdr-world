@@ -154,7 +154,10 @@ test("CLI fails new findings, prunes resolutions, publishes both reports, and ke
       },
     );
   report(["old", "added"]);
-  expect(run().exitCode).toBe(1);
+  const failure = run();
+  expect(failure.exitCode).toBe(1);
+  expect(failure.stdout.toString()).toContain("testing/");
+  expect(failure.stdout.toString()).toContain("@internal");
   expect(readFileSync(summary, "utf8")).toContain("src/live.ts#added");
   expect(readFileSync(summary, "utf8")).toContain("jscpd (report only)");
   report([]);
@@ -293,11 +296,40 @@ test("real production Knip follows RPC strings, feature namespaces, dynamic impo
   );
   write(
     "server/src/live.ts",
-    "export const used = () => 1; export const dead = () => 2; export const testOnly = () => 3; export type DeadType = string;",
+    "export const used = () => 1; export const dead = () => 2; export const testOnly = () => 3; export type DeadType = string;\n/** @internal */\nexport const intentionalTestSeam = () => 4;",
   );
   write(
     "server/src/live.test.ts",
-    'import { testOnly } from "./live"; import "test-tool"; console.log(testOnly());',
+    'import { testOnly, intentionalTestSeam } from "./live"; console.log(testOnly(), intentionalTestSeam());',
+  );
+  // These are development entries, not production findings or baseline additions.
+  // Exercise each workspace, including broad production script/CLI/worker globs.
+  const support = [
+    "scripts/probe/testing/helper.ts",
+    "tools/probe.fixture.mjs",
+    "shared/testing/helper.ts",
+    "server/src/probe/testing/fixture.ts",
+    "server/src/probe.fixture.ts",
+    "server/src/probe.cases.ts",
+    "server/src/probe.browserMock.ts",
+    "server/src/cli/testing/helper.ts",
+    "server/src/probe/testing/support-worker.ts",
+    "web/src/probe/testing/helper.tsx",
+    "web/src/probe.fixture.tsx",
+    "web/src/probe.cases.ts",
+    "web/src/probe.browserMock.ts",
+  ];
+  for (const path of support) {
+    write(path, "export const fixture = () => 1;");
+    write(
+      path.replace(/\.(ts|tsx|mjs)$/, ".test.$1"),
+      `import { fixture } from "./${path.split("/").at(-1)}"; console.log(fixture());`,
+    );
+  }
+  // Test-support imports must still keep development dependencies alive.
+  write(
+    "server/src/probe/testing/fixture.ts",
+    'import "test-tool"; export const fixture = () => 1;',
   );
   write("server/src/lazy.ts", 'export const lazy = () => "lazy";');
   write("server/src/orphan.ts", 'console.log("orphan");');

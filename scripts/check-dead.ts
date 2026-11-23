@@ -335,10 +335,12 @@ export async function checkDead(root: string, args: string[]) {
             ...KINDS.flatMap((kind) =>
               added[kind].map((entry) => `- ${kind}: ${cell(entry)}`),
             ),
+            "",
+            "Test support belongs in testing/ or *.fixture.*, *.cases.*, *.browserMock.* (development-only Knip entries); move nonstandard test helpers there, including renamed baseline helpers. For an intentional test-seam export in production code, use /** @internal */. Otherwise remove the unused export or wire the code into its production entry; do not pad the baseline.",
           ]
         : []),
       "",
-      "Largest 20 findings by file/declaration lines (test-only helpers count as unused; an unused export may still be used within its own file):",
+      "Largest 20 findings by file/declaration lines (test-support entries excluded; production exports used only by tests count unless tagged @internal; an unused export may still be used within its own file):",
       "",
       "| Lines | Kind | Path | Symbol |",
       "| ---: | --- | --- | --- |",
