@@ -34,13 +34,14 @@ export async function connectCapture(port: string) {
     if (message.error) request.reject(new Error(message.error.message));
     else request.resolve(message.result);
   };
-  const command = (method: string, params = {}) =>
+  /** Sends a CDP command; `deadlineMs` lengthens it for long measurements. */
+  const command = (method: string, params = {}, deadlineMs = 20000) =>
     new Promise<any>((resolve, reject) => {
       const id = ++nextId;
       const timer = setTimeout(() => {
         pending.delete(id);
         reject(new Error(`Capture CDP deadline: ${method}`));
-      }, 20000);
+      }, deadlineMs);
       pending.set(id, { resolve, reject, timer });
       socket.send(JSON.stringify({ id, method, params }));
     });
