@@ -34,6 +34,13 @@ Town, Board or Desk when that view shows its host.
 - **AND** a core room opens its focused terminal, else its first agent or terminal,
   and Spaces never follows the agent to another generation or connection
 
+#### Scenario: Open a found agent over an expanded Inspector
+
+- **WHEN** Spaces shows an expanded Inspector, or any Inspector on a phone, and the
+  user finds an agent on any runtime and presses Enter
+- **THEN** the Inspector closes and Spaces shows the agent's terminal and its controls,
+  as choosing a terminal in Spaces does
+
 #### Scenario: Find an agent on a host the Hosts filter hides
 
 - **WHEN** the Hosts filter shows only machine A and the user finds an agent on

@@ -36,6 +36,7 @@
 **Tests:**
 
 - `web/src/world/WorldFoundationApp.test.ts`
+- `web/src/foundTerminalReveal.dom.test.ts`
 - `web/src/world/visualRouteActions.test.ts`
 - `web/src/world/worldSearch.test.ts`
 - `web/src/world/worldCommandBox.test.tsx`
@@ -98,6 +99,8 @@
   separate list of its own connection's agents. Enter on a herdr-core agent
   shows its terminal in Spaces' terminal area in place of the Herdr tab
   (`web/src/world/SpacesCoreTerminal.tsx`); **Close** returns to the tab.
+  Every terminal a find opens closes an expanded Inspector (or any Inspector
+  on a phone) first, through App's `revealTerminal` request.
 - Toggle **Zen mode** (`Cmd+Shift+Z` on macOS, `Ctrl+Alt+Z` elsewhere) to hide
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
   Hovering the Exit Zen tab slides the topbar back, and it stays while one of its

@@ -781,6 +781,7 @@ export default function App({
   onSelectSpacesTab,
   onSpacesWindowLayerReady,
   spacesSurface = null,
+  revealTerminal = 0,
   onInspectorVisibilityChange,
   onInspectorViewChange,
   onTerminalPopOut,
@@ -823,6 +824,13 @@ export default function App({
    * (#1329). A new key brings the phone to it from the list.
    */
   spacesSurface?: { key: string; content: ReactNode } | null;
+  /**
+   * Each new value reveals Spaces' terminal, as choosing a terminal does: an
+   * Inspector that would hide it (expanded, or any on a phone) closes and the
+   * phone leaves its list. World bumps it whenever a found or chosen terminal
+   * opens in Spaces, on any runtime (#1329).
+   */
+  revealTerminal?: number;
   onInspectorVisibilityChange?: (open: boolean) => void;
   onInspectorViewChange?: (view: InspectorView) => void;
   onTerminalPopOut?: () => void;
@@ -1675,11 +1683,14 @@ export default function App({
       });
     }
   }, [mobile, updateInspectorState]);
-  // A terminal Spaces is sent to shows on a phone, as a Herdr one does.
-  const spacesSurfaceKey = spacesSurface?.key ?? null;
+  // A terminal World opens in Spaces shows, whatever Inspector was open
+  // over it: only a new request reveals, never a re-render or a resize.
+  const revealedTerminal = useRef(revealTerminal);
   useEffect(() => {
-    if (spacesSurfaceKey !== null && mobile) setMobileView("session");
-  }, [spacesSurfaceKey, mobile]);
+    if (revealTerminal === revealedTerminal.current) return;
+    revealedTerminal.current = revealTerminal;
+    activateTerminalSurface();
+  }, [revealTerminal, activateTerminalSurface]);
   const toggleSidebar = useCallback(() => {
     setMobileView("session");
     setSidebarHidden((value) => !value);

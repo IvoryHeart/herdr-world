@@ -139,11 +139,17 @@ export default function WorldFoundationApp() {
     (SpacesCoreChoice & { opened: number }) | null
   >(null);
   const spacesCoreOpens = useRef(0);
-  const showCoreInSpaces = (leaf: WorldLeafObject) =>
+  // Each terminal World opens in Spaces asks App to show it over whatever
+  // Inspector covered it (#1329), for every runtime alike.
+  const [terminalReveals, setTerminalReveals] = useState(0);
+  const revealSpacesTerminal = () => setTerminalReveals((count) => count + 1);
+  const showCoreInSpaces = (leaf: WorldLeafObject) => {
     setSpacesCore({
       ...spacesCoreChoice(leaf),
       opened: ++spacesCoreOpens.current,
     });
+    revealSpacesTerminal();
+  };
   const [inspectorTerminalPortals, setInspectorTerminalPortals] = useState<
     Record<string, HTMLDivElement | null>
   >({});
@@ -338,7 +344,10 @@ export default function WorldFoundationApp() {
             showCoreInSpaces(leaf);
             return true;
           },
-          goToSpaces: () => setView("spaces"),
+          goToSpaces: () => {
+            setView("spaces");
+            revealSpacesTerminal();
+          },
           notify: (message, detail) =>
             store.notify({ kind: "error", message, detail }),
         }),
@@ -696,6 +705,7 @@ export default function WorldFoundationApp() {
                 }
               : null
           }
+          revealTerminal={terminalReveals}
           workspaceSurfaceInspector={
             view !== "spaces" && workspaceSurfaceInspectorConversation
               ? {
