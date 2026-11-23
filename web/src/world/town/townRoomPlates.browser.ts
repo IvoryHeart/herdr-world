@@ -15,6 +15,8 @@ export async function checkTownRoomPlates(
     message: string | (() => string),
   ) => Promise<void>,
   target: Pick<LaunchTarget, "connectionId" | "generation" | "workspaceId">,
+  /** How many agents the town has opened or selected so far. */
+  activations: () => number,
 ) {
   const renderer = window.__HERDR_TOWN_RENDERER__!;
   await prepareTownRoomCard(host, renderer, waitFor);
@@ -130,18 +132,41 @@ export async function checkTownRoomPlates(
     );
   };
   const width = plate.getBoundingClientRect().width;
-  plate.focus();
-  check(
+  const heading = plate.querySelector<HTMLElement>(
+    ".town-room-plaque-heading",
+  )!;
+  const cardOpen = () =>
+    plate.classList.contains("is-open") &&
     !!actions &&
-      getComputedStyle(actions).visibility === "visible" &&
-      [...actions.querySelectorAll("button")].every(
+    getComputedStyle(actions).visibility === "visible";
+  // Hover and focus open nothing: only a click on the title does.
+  plate.dispatchEvent(
+    new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }),
+  );
+  plate.dispatchEvent(
+    new PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" }),
+  );
+  plate.focus();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  check(
+    !cardOpen() && plate.getAttribute("aria-expanded") === "false",
+    "hovering or focusing a room plate must not open its card",
+  );
+  heading.click();
+  await waitFor(
+    cardOpen,
+    "a click on the room plate's title never opened its card",
+  );
+  check(
+    plate.getAttribute("aria-expanded") === "true" &&
+      [...actions!.querySelectorAll("button")].every(
         (button) =>
           button.getBoundingClientRect().width >= 39.5 &&
           button.getBoundingClientRect().height >= 39.5 &&
           receivesPointer(button),
       ) &&
       Math.abs(plate.getBoundingClientRect().width - width) < 1,
-    "keyboard focus must reveal 40px room actions without widening the name plate",
+    "a click on the title must reveal 40px room actions without widening the name plate",
   );
   // One card holds the room's summary and its actions, hung from the plate.
   const card = plate.querySelector<HTMLElement>(".town-room-plaque-card");
@@ -162,6 +187,52 @@ export async function checkTownRoomPlates(
         plate.getBoundingClientRect().bottom - CARD_OVERLAP,
     "the room's card must show its summary with the actions, under the plate",
   );
+  // Only one card is open: another plate's title takes over.
+  const other = plates[1]!;
+  other.querySelector<HTMLElement>(".town-room-plaque-heading")!.click();
+  await waitFor(
+    () => other.classList.contains("is-open") && !cardOpen(),
+    "opening another room's card left the first one open",
+  );
+  // The runtime icon's tooltip is its own: a press on it opens no card.
+  const icon = plate.querySelector<HTMLElement>(".town-runtime-icon");
+  icon?.click();
+  check(
+    !cardOpen() && other.classList.contains("is-open"),
+    "a press on the runtime icon must not open or close a card",
+  );
+  // A second click on the title closes the card.
+  other.querySelector<HTMLElement>(".town-room-plaque-heading")!.click();
+  await waitFor(
+    () => !host.querySelector(".town-room-plaque.is-open"),
+    "a second click on the title never closed its card",
+  );
+  // Enter on the focused plate opens it; Escape closes it.
+  plate.focus();
+  plate.dispatchEvent(
+    new KeyboardEvent("keydown", { bubbles: true, key: "Enter" }),
+  );
+  await waitFor(
+    cardOpen,
+    "Enter on the focused room plate never opened its card",
+  );
+  plate.dispatchEvent(
+    new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+  );
+  await waitFor(() => !cardOpen(), "Escape never closed the room's card");
+  // A press outside the plate closes it.
+  heading.click();
+  await waitFor(cardOpen, "the room's card did not reopen");
+  document.body.dispatchEvent(
+    new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse" }),
+  );
+  await waitFor(
+    () => !cardOpen(),
+    "a press outside the room plate never closed its card",
+  );
+  plate.blur();
+  // With every card closed, each agent of each room's top row takes a tap.
+  await checkTopRowAgentsTappable(host, check, waitFor, activations);
   // A table's nameplate takes its own pointer and opens the table's card.
   plate.blur();
   const title = plate
@@ -243,13 +314,11 @@ export async function checkTownRoomPlates(
     );
   }
   plate.blur();
+  // A touch on the plate opens nothing; the tap on its title does.
   plate.dispatchEvent(
     new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }),
   );
-  check(
-    !!actions && getComputedStyle(actions).visibility === "visible",
-    "a touch on the room plate must reveal its management controls",
-  );
+  check(!cardOpen(), "a touch on the room plate must not open its card");
   plate.blur();
   const seat = host.querySelector<HTMLButtonElement>(
     '.town-new-seat[aria-label^="New agent or terminal in "]',
@@ -327,6 +396,149 @@ export async function checkTownRoomPlates(
   } finally {
     store.createQualifiedTab = originalCreate;
   }
+}
+
+/**
+ * Each room's plate stands above its floor, so with every card closed no
+ * plate covers an agent of the room's top row: a press on each, on a desktop
+ * and a phone screen, reaches the town and opens that agent (or, above desk
+ * level, its desk's pane).
+ */
+export async function checkTopRowAgentsTappable(
+  host: HTMLElement,
+  check: (condition: boolean, message: string) => void,
+  waitFor: (
+    condition: () => boolean,
+    message: string | (() => string),
+  ) => Promise<void>,
+  activations: () => number,
+) {
+  const renderer = window.__HERDR_TOWN_RENDERER__!;
+  const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
+  await waitFor(
+    () =>
+      !renderer.flying &&
+      host.querySelector('.town-targets[aria-busy="true"]') === null,
+    () =>
+      `Town's agent targets never settled (flying ${renderer.flying}, busy ${
+        host.querySelector(".town-targets")?.getAttribute("aria-busy") ?? "none"
+      })`,
+  );
+  check(
+    host.querySelector(".town-room-plaque.is-open") === null,
+    "every room card must be closed before tapping the top row",
+  );
+  const onScreen = (box: DOMRect) =>
+    box.width > 0 &&
+    box.left >= 0 &&
+    box.top >= 0 &&
+    box.right <= window.innerWidth &&
+    box.bottom <= window.innerHeight;
+  // Each visible room's top row: its desks' top edge, and the seats above
+  // their tables (the upper half of the row's 80px cells).
+  const rows = [...host.querySelectorAll<HTMLElement>(".town-room")]
+    .filter((room) => room.querySelector(".town-room-plaque"))
+    .map((room) => {
+      const cells = [
+        ...room.querySelectorAll<HTMLElement>(".town-desk-tags"),
+      ].map((cell) => cell.getBoundingClientRect());
+      const top = Math.min(...cells.map((cell) => cell.top));
+      const height = cells[0]?.height ?? 0;
+      return {
+        room: room.getBoundingClientRect(),
+        plates: [...room.querySelectorAll<HTMLElement>(".town-room-plaque")],
+        top,
+        bottom: top + height / 2,
+      };
+    })
+    .filter((row) => Number.isFinite(row.top));
+  const agentsOf = (row: (typeof rows)[number]) =>
+    [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="agent"]',
+      ),
+    ].filter((target) => {
+      const box = target.getBoundingClientRect();
+      const x = box.left + box.width / 2;
+      const y = box.top + box.height / 2;
+      return (
+        onScreen(box) &&
+        x > row.room.left &&
+        x < row.room.right &&
+        y >= row.top - box.height &&
+        y < row.bottom
+      );
+    });
+  // A mouse press on both screens: a finger's tap on a table may first open
+  // its card, and the hit test is the same either way. A tap opens what it
+  // lands on (TownView.tsx): the agent, or above desk level its desk's pane.
+  const kind = "mouse";
+  // A short wait of its own, so one miss reports with the rest.
+  const within = async (condition: () => boolean) => {
+    for (let wait = 0; wait < 40; wait++) {
+      if (condition()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return condition();
+  };
+  const misses: string[] = [];
+  let tapped = 0;
+  for (const row of rows)
+    for (const agent of agentsOf(row)) {
+      const box = agent.getBoundingClientRect();
+      const label = agent.getAttribute("aria-label") ?? "agent";
+      const covered = row.plates.some((plate) => {
+        const plateBox = plate.getBoundingClientRect();
+        return (
+          plateBox.width > 0 &&
+          plateBox.left < box.right &&
+          plateBox.right > box.left &&
+          plateBox.top < box.bottom &&
+          plateBox.bottom > box.top
+        );
+      });
+      if (covered) misses.push(`${label}: under its room's plate`);
+      const at = {
+        clientX: box.left + box.width / 2,
+        clientY: box.top + box.height / 2,
+      };
+      const hit = document.elementFromPoint(at.clientX, at.clientY);
+      if (!hit || !canvas.contains(hit)) {
+        misses.push(
+          `${label}: the pointer lands on ${hit?.closest("[class]")?.className ?? "nothing"}`,
+        );
+        continue;
+      }
+      const tap = (type: string) =>
+        hit.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            pointerId: 81,
+            pointerType: kind,
+            isPrimary: true,
+            button: 0,
+            buttons: type === "pointerdown" ? 1 : 0,
+            ...at,
+          }),
+        );
+      const before = activations();
+      tap("pointerdown");
+      tap("pointerup");
+      if (await within(() => activations() > before)) tapped++;
+      else
+        misses.push(
+          `${label}: a tap at ${renderer.level} level opened nothing`,
+        );
+      canvas.dispatchEvent(
+        new PointerEvent("pointerleave", { pointerId: 81, pointerType: kind }),
+      );
+      // Past the double-tap window, so the next agent's tap stands alone.
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+  check(
+    tapped > 0 && misses.length === 0,
+    `every top-row agent must take a tap with cards closed (${tapped} tapped): ${misses.join("; ")}`,
+  );
 }
 
 /**

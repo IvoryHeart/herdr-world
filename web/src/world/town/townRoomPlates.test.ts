@@ -33,11 +33,17 @@ test("plate checks wait for a committed overview card without another renderer f
   });
   try {
     await expect(
-      checkTownRoomPlates(host, () => {}, waitFor, {
-        connectionId: "synthetic-a",
-        generation: 1,
-        workspaceId: "synthetic-room",
-      }),
+      checkTownRoomPlates(
+        host,
+        () => {},
+        waitFor,
+        {
+          connectionId: "synthetic-a",
+          generation: 1,
+          workspaceId: "synthetic-room",
+        },
+        () => 0,
+      ),
     ).rejects.toBe(activated);
     expect(mounted).toBe(true);
     expect(clicked).toBe(true);

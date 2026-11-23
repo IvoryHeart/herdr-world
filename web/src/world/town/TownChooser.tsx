@@ -1,9 +1,12 @@
 import { useEffect, useRef } from "react";
+import { TownRuntimeMark, type TownRuntimeKind } from "./TownRuntimeIcon";
 
 export type TownChooserEntry = {
   key: string;
   label: string;
   detail: string;
+  /** The entry's runtime, as an icon before its label. */
+  runtime?: { kind: TownRuntimeKind; tag: string };
   onChoose(): void;
 };
 
@@ -65,7 +68,16 @@ export function TownChooser({
       <div className="town-chooser-list" ref={list}>
         {entries.map((entry) => (
           <button key={entry.key} type="button" onClick={entry.onChoose}>
-            <span>{entry.label}</span>
+            <span>
+              {entry.runtime ? (
+                <TownRuntimeMark
+                  kind={entry.runtime.kind}
+                  tag={entry.runtime.tag}
+                  size={12}
+                />
+              ) : null}
+              {entry.label}
+            </span>
             <small>{entry.detail}</small>
           </button>
         ))}

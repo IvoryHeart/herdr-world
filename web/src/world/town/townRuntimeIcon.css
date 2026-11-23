@@ -1,0 +1,80 @@
+/* A room's runtime beside its name (TownRuntimeIcon.tsx): a small pixel icon
+   whose tooltip names the runtime. */
+.town-runtime-icon,
+.town-runtime-mark {
+  position: relative;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.town-runtime-glyph {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.town-runtime-icon {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: inherit;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 233, 194, 0.25);
+  border-radius: 3px;
+  cursor: help;
+}
+
+.town-runtime-icon:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 1px;
+}
+
+/* The tooltip: the runtime in words, just above the icon. */
+.town-runtime-tip {
+  position: absolute;
+  z-index: 8;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  padding: 2px 6px;
+  font:
+    700 10px / 14px "Silkscreen",
+    ui-monospace,
+    monospace;
+  color: #fff7e0;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
+  background: rgba(14, 17, 24, 0.92);
+  border: 1px solid #ffd166;
+  border-radius: 4px;
+  transform: translateX(-50%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.town-runtime-icon:is(:hover, :focus-visible, .is-shown) .town-runtime-tip,
+.town-runtime-mark:hover .town-runtime-tip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Phones: the icon's press area grows to a finger's width, not its art. */
+@media (pointer: coarse) {
+  .town-runtime-icon {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+/* In a move menu, the icon leads the entry's label. */
+.town-chooser-list .town-runtime-mark {
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+
+/* On a room's overview card, the icon leads its name. */
+.town-room-card .town-runtime-mark .town-runtime-tip {
+  font-size: 9px;
+  line-height: 12px;
+}

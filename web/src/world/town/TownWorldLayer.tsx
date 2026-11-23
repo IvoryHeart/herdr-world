@@ -19,6 +19,7 @@ import {
   TownRoomPlaque,
   type TownPlaceCardContent,
 } from "./TownRoomPlaque";
+import { TownRuntimeMark } from "./TownRuntimeIcon";
 import { TownDeskTitle } from "./TownDeskTitle";
 import { TownStepBubble } from "./TownStepBubble";
 import { TownFuelMark } from "./TownFuelMark";
@@ -667,7 +668,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                     >
                       <button
                         type="button"
-                        className={`town-room-card${c.blocked ? " town-room-card-waiting" : ""}${selectedKey === room.key ? " town-selected" : ""}`}
+                        className={`town-room-card${c.blocked ? " town-room-card-waiting" : ""}${selectedKey === room.key ? " town-selected" : ""}${room.runtimeTag && room.runtimeKind ? " has-runtime" : ""}`}
                         style={
                           {
                             "--room-w": `${placed.w * T}px`,
@@ -698,12 +699,15 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                         }}
                         tabIndex={-1}
                       >
-                        <span className="town-room-card-name">{label}</span>
-                        {room.runtimeTag ? (
-                          <span className="town-room-card-runtime">
-                            {room.runtimeTag}
-                          </span>
+                        {room.runtimeTag && room.runtimeKind ? (
+                          <TownRuntimeMark
+                            kind={room.runtimeKind}
+                            tag={room.runtimeTag}
+                            size={10}
+                            help
+                          />
                         ) : null}
+                        <span className="town-room-card-name">{label}</span>
                         {c.blocked ? (
                           <span className="town-room-card-badge">
                             !{c.blocked}

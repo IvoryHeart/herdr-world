@@ -73,9 +73,15 @@
     visibility 0.2s;
 }
 
-/* Reception boards stand on their world point, above the front door. */
+/* Reception boards stand on their world point, above the front door; a room's
+   plaque on its room's top edge, two world pixels clear of its floor. */
 .town-reception {
   transform: translate(-50%, -100%) scale(var(--iz));
+  transform-origin: 50% 100%;
+}
+
+.town-room-plaque {
+  transform: translate(-50%, calc(-100% - 2px)) scale(var(--iz));
   transform-origin: 50% 100%;
 }
 
@@ -194,18 +200,10 @@
   padding: 0 5px;
 }
 
-/* In a building of more than one runtime: the room's runtime, under its bar. */
-.town-room-card-runtime {
-  grid-row: 4;
-  grid-column: 1 / -1;
-  overflow: hidden;
-  font:
-    700 8px / 11px "Silkscreen",
-    ui-monospace,
-    monospace;
-  color: #b9c2b4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* In a building of more than one runtime: the room's runtime icon, before its
+   name (TownRuntimeIcon.tsx). */
+.town-room-card.has-runtime {
+  grid-template-columns: auto minmax(0, auto) auto;
 }
 
 .town-room-card-meta {

@@ -77,6 +77,7 @@ import {
   NO_FOLDED_ACTIVITY,
   type TownFoldedActivity,
 } from "./townFoldedActivity";
+import { townPlaqueCard } from "./townPlaqueCard";
 import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
 import { TownBusLayer, useTownBin } from "./TownBusLayer";
@@ -675,6 +676,7 @@ export function TownCanvas({
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
       openReception: setOpenReception,
+      tapRoomName: townPlaqueCard.toggle,
       openCenter: ring.openRing,
       ...places.ports(document),
       move: (command) => {

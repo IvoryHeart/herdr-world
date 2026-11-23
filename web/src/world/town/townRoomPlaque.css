@@ -1,8 +1,11 @@
-/* Text stays readable at room/desk detail; the plate stays inside its carpet. */
+/* Text stays readable at room/desk detail. The plate stands on the room's
+   top edge, outside its floor, so it covers no desk or agent of the top row:
+   its bottom sits just above the room, in the gap rooms keep between them
+   (townRoomPlace.ts), and it stays within the room's width. */
 .town-room-plaque {
   z-index: 2;
   left: 50%;
-  top: 9px;
+  top: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -69,18 +72,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* In a building of more than one runtime: Herdr TUI or herdr-core. */
-.town-room-plaque-runtime {
-  flex: 0 0 auto;
-  padding: 0 5px;
-  font:
-    700 9px / 13px "Silkscreen",
-    ui-monospace,
-    monospace;
-  color: #3b2414;
-  background: #e9cfa0;
-  border-radius: 3px;
-}
 .town-room-plaque-runtime-line {
   margin: 0 0 4px;
   font-size: 11px;
@@ -138,8 +129,8 @@
 }
 
 /* A place's card: a room's or table's summary, in Town's overlay style
-   (townOverlay.css). A room's card also holds Rename and Close, so one hover
-   shows them all. */
+   (townOverlay.css). A room's card also holds Rename and Close, so one click
+   on its title shows them all. */
 .town-place-card {
   position: absolute;
   display: grid;
@@ -161,14 +152,21 @@
   min-width: calc(100% + 4px);
 }
 
-.town-room-plaque:is(:hover, :focus-within) {
+/* Hovered or focused, a plate rises over its neighbours; only a click on its
+   title opens its card (townPlaqueCard.ts). */
+.town-room-plaque:is(:hover, :focus-within, .is-open) {
   z-index: 6;
 }
 
-.town-room-plaque:is(:hover, :focus-within) .town-place-card {
+.town-room-plaque.is-open .town-place-card {
   opacity: 1;
   visibility: inherit;
   pointer-events: auto;
+}
+
+/* The title is the card's switch. */
+.town-room-plaque-heading {
+  cursor: pointer;
 }
 
 .town-room-plaque-actions {

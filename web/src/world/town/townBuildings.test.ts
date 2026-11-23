@@ -94,7 +94,12 @@ test("a machine's building holds each runtime's rooms; identity is untouched", (
     );
   // Each identity field, at every depth, equals the projection's: only
   // Town's display fields differ on a copy.
-  const display = new Set(["buildingKey", "buildingOrder", "runtimeTag"]);
+  const display = new Set([
+    "buildingKey",
+    "buildingOrder",
+    "runtimeTag",
+    "runtimeKind",
+  ]);
   const own = (item: unknown) =>
     JSON.stringify(item, (field, value) =>
       display.has(field) ? undefined : value,
@@ -107,6 +112,13 @@ test("a machine's building holds each runtime's rooms; identity is untouched", (
   expect(town.rooms.map((room) => room.runtimeTag)).toEqual([
     "Herdr TUI",
     "Herdr TUI",
+    "herdr-core",
+    undefined,
+  ]);
+  // Their icons follow the runtime's kind (TownRuntimeIcon.tsx).
+  expect(town.rooms.map((room) => room.runtimeKind)).toEqual([
+    "herdr",
+    "herdr",
     "herdr-core",
     undefined,
   ]);

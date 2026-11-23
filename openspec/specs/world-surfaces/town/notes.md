@@ -36,7 +36,7 @@
 - `web/src/world/town/townRendererActors.ts`
 - `web/src/world/town/TownWorldLayer.tsx`
 - `web/src/world/town/TownStepBubble.tsx`
-- `web/src/world/town/TownBoard.tsx`
+- `web/src/world/town/TownBoard.tsx`; plaques: `web/src/world/town/TownRoomPlaque.tsx`, `web/src/world/town/townPlaqueCard.ts` (one open card); runtime icons: `web/src/world/town/TownRuntimeIcon.tsx`, `web/src/world/town/townMoveMenu.ts` (menu words)
 - `web/src/world/town/townLayout.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
 - `server/src/world/observability.ts`
 
@@ -46,7 +46,7 @@
 - `web/src/world/town/TownCanvas.fold.test.ts`
 - `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases)
 - `web/src/world/town/townReceptionFilter.test.ts`
-- `web/src/world/town/townQuietWork.test.ts`
+- `web/src/world/town/townQuietWork.test.ts`; plaques and top-row taps: `web/src/world/town/townRoomPlates.browser.ts` (TownCanvas `plates` cases)
 
 **Pitfalls:**
 
@@ -71,8 +71,10 @@
   (`claude`); window and Inspector titles put the name first
   (`firstmate · claude`).
   - One machine is one building: this computer's Herdr TUI and herdr-core
-    rooms stand together under one sign, each room's nameplate naming its
-    runtime (**Herdr TUI** or **herdr-core**) and keeping its own controls,
+    rooms stand together under one sign, each room's plate showing its
+    runtime as a small icon before its name (a terminal window for **Herdr
+    TUI**, a diamond for **herdr-core**; hover, focus or tap it for the name;
+    the overview room cards show it too) and keeping its own controls,
     and every desk, agent and action stays on its own runtime's connection.
     **Settings → Town & views → Town buildings → One per runtime** gives each
     runtime its own building again (**One per machine** is the default).
@@ -741,8 +743,12 @@
     plates fit their room width; only the name truncates, with its full text in
     a tooltip. Colour, active/total agent count and blocked badge remain visible.
     Active means working or waiting on you; the total excludes plain terminals.
-    Hover the count for its working/waiting breakdown. Hover or focus a plate
-    (tap on touch screens) for its card below it: the Town board's numbers
+    Hover the count for its working/waiting breakdown. A plate stands just
+    above its room, outside the floor, so every agent of the top row stays
+    clickable. Click or tap a plate's title (or focus it and press Enter or
+    Space) for its card below it; hover and focus alone open nothing, and a
+    second click on the title, a press outside or Escape closes it. One card
+    is open at a time. The card holds the Town board's numbers
     for that room, without its agents list (Busy, Waiting, Done, Quiet,
     its agents, and its **Economy today**: estimated cost, tokens and models
     from [harness usage](../../../../docs/usage.md); without a price table it says

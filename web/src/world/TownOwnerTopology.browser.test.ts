@@ -552,13 +552,21 @@ test.skipIf(!chrome)(
             misses.push(`${label}: plaque not on screen`);
             continue;
           }
+          // Hovering the plaque opens nothing; a click on its title does.
+          const opened = () =>
+            evaluate<boolean>(`${plaque}.classList.contains('is-open')`);
           await move(name);
+          if (await opened()) misses.push(`${label}: hover opened its card`);
+          await click(name);
+          if (!(await opened()))
+            misses.push(`${label}: a click on its title opened no card`);
+          // The runtime is an icon beside the name, named in words.
           const tag = await evaluate<string | null>(
-            `${plaque}.querySelector('.town-room-plaque-runtime')?.textContent ?? null`,
+            `${plaque}.querySelector('.town-runtime-icon')?.getAttribute('aria-label')?.replace(/^Runtime: /, '') ?? null`,
           );
           const wanted =
             mode === "machine" ? (core ? "herdr-core" : "Herdr TUI") : null;
-          if (tag !== wanted) misses.push(`${label}: runtime tag ${tag}`);
+          if (tag !== wanted) misses.push(`${label}: runtime icon ${tag}`);
           const names = [
             `Rename room ${label}`,
             `Close room ${label}`,
@@ -583,7 +591,11 @@ test.skipIf(!chrome)(
             if (!state?.reached || state.disabled)
               misses.push(`${label}: ${each} ${JSON.stringify(state)}`);
           }
-          // Off the plaque, its card closes and uncovers the free seat.
+          // A second click on the title closes the card and uncovers the
+          // free seat.
+          await click(name);
+          if (await opened())
+            misses.push(`${label}: a second click left its card open`);
           await move({ x: 4, y: 4 });
           const add = `${plaque}.closest('.town-room').querySelector(${JSON.stringify(`.town-new-seat[aria-label="New agent or terminal in ${label}"]`)})`;
           const plus = await centre(add);
@@ -605,10 +617,9 @@ test.skipIf(!chrome)(
         )!;
         expect(await visit(mode, alpha.key, "core-alpha")).toBeNull();
         const plaque = plaqueOf("core-alpha");
-        // A camera move can leave the pointer over a room plaque. Its hover
-        // card covers the seat: isolate the launcher action from the preceding
-        // room-control sweep. Start hovered in both layouts to retain the
-        // failure deterministically, then leave the card before pressing +.
+        // A camera move can leave the pointer over a room plaque. Hovering
+        // it opens no card, so nothing covers the seat: start hovered in both
+        // layouts, then leave the plaque before pressing +.
         const heading = await centre(
           `${plaque}.querySelector('.town-room-plaque-name')`,
         );
@@ -694,7 +705,8 @@ test.skipIf(!chrome)(
             `${plaqueOf("Room 05")}?.querySelector('.town-room-plaque-name')`,
           );
           expect(name).not.toBeNull();
-          await move(name!);
+          // A click on the title opens the card that holds the arrows.
+          await click(name!);
           const arrow = await evaluate<string | null>(
             `[...${plaqueOf("Room 05")}.querySelectorAll('[aria-label^="Move room "]')].map((b) => b.getAttribute('aria-label')).find((n) => n.includes(' before ') || n.includes(' after ')) ?? null`,
           );

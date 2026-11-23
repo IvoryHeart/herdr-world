@@ -167,6 +167,8 @@ export type OfficeRoom = {
    * building holds rooms of more than one runtime (townBuildings.ts).
    */
   runtimeTag?: string;
+  /** Town only: the runtime whose icon stands beside the room's name. */
+  runtimeKind?: "herdr" | "herdr-core";
 };
 
 export type OfficeReception = {
