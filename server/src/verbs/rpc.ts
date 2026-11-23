@@ -523,20 +523,6 @@ export const rpcVerbs = [
   rpc("world.float.hide", "reconcilable", "world", object({ stream: text })),
   rpc("world.float.stop", "reconcilable", "world", object({ stream: text })),
   rpc("world.focused.observe", "reconcilable", "world"),
-  // World's skill per harness on the service's host; browser (operator) only.
-  rpc(
-    "world.integration.install",
-    "reconcilable",
-    "world",
-    object({ harness: text }),
-  ),
-  rpc("world.integration.list", "read", "world"),
-  rpc(
-    "world.integration.uninstall",
-    "reconcilable",
-    "world",
-    object({ harness: text }),
-  ),
   // Installed web IDEs for the Code view and their World-owned servers.
   rpc("world.ide.status", "read", "world"),
   rpc("world.ide.enable", "reconcilable", "world", object({ provider: text })),

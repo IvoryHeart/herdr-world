@@ -1,4 +1,5 @@
 import { createProfileServices } from "../features/appearance/service";
+import { createIntegrations } from "../features/integrations/service";
 import { createDesk } from "../features/desk/service";
 import { composeWorldUsage } from "../service/usage-analytics";
 import { createApartmentsService } from "../features/apartments/service";
@@ -13,12 +14,15 @@ export const testFeatureKernel = (ports: Partial<FeatureKernel> = {}) => {
     appearanceRpc: {} as FeatureKernel["appearanceRpc"],
     createAppearance: createProfileServices,
     createUsage: composeWorldUsage,
+    createIntegrations,
     createApartments: createApartmentsService,
     clock: { now: () => 0, monotonic: () => 0 },
     storage: {},
     revisionPublisher: () => () => {},
     logger: { warn() {} },
-    paths: { root: "/dev/null" },
+    paths: { root: "/dev/null", sourceSecrets: "/dev/null" },
+    profiles: { list: () => [], coreList: () => [] },
+    observations: { officeObservability: {} },
     connections: () => undefined,
     core: () => undefined,
     sources: () => undefined,

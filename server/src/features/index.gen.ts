@@ -2,6 +2,7 @@
 export * as feature_apartments from "./apartments/register";
 export * as feature_appearance from "./appearance/register";
 export * as feature_desk from "./desk/register";
+export * as feature_integrations from "./integrations/register";
 export * as feature_memory from "./memory/register";
 export * as feature_presence from "./presence/register";
 export * as feature_testing_probe from "./testing/probe/register";

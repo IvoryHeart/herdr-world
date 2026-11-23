@@ -196,6 +196,7 @@ test("every discovered feature implements exactly its registered RPC declaration
     "apartments",
     "appearance",
     "desk",
+    "integrations",
     "memory",
     "presence",
     "usage",
