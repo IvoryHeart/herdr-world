@@ -109,8 +109,6 @@ async function setup() {
     view: "town",
     riding: true,
     preserve_tab: false,
-    route_m: null,
-    stop: null,
   });
   return { w, storage, closer, outcomes, plan, entry, lead, helper, server };
 }

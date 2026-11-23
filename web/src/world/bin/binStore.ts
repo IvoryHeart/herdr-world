@@ -56,8 +56,6 @@ function entryOf(value: unknown): BinEntry | null {
       : "other") as BinView,
     riding: value.riding === true,
     preserve_tab: value.preserve_tab === true,
-    route_m: count(value.route_m) ? value.route_m : null,
-    stop: text(value.stop) ? value.stop : null,
   };
 }
 
@@ -108,6 +106,7 @@ export function parseBinState(value: unknown): BinState | null {
       next_ms: bus.next_ms as number | null,
       next_route_m: bus.next_route_m,
       next_trip_ms: bus.next_trip_ms,
+      next_measured: bus.next_measured === true,
     },
   };
 }
@@ -292,9 +291,12 @@ export class WorldBinStore {
   goBus() {
     return this.act("world.bin.resume", {});
   }
-  /** A Town's measure of waiting agents' routes to their stops. */
-  route(routes: readonly { id: string; route_m: number; stop: string }[]) {
-    return this.act("world.bin.route", { routes: [...routes] });
+  /**
+   * A Town's measure of the next trip: the bus's way past the stops of
+   * exactly the waiting agents `ids` and back, and how many stops it makes.
+   */
+  route(report: { ids: readonly string[]; route_m: number; stops: number }) {
+    return this.act("world.bin.route", { ...report, ids: [...report.ids] });
   }
 
   private async act(method: string, params: Record<string, unknown>) {

@@ -76,12 +76,12 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
   // The service's bin, as World's bridge serves it.
   let served: BinState;
   let notify: ((control: { type: string }) => void) | null = null;
-  /** The routes Town measured and sent World (world.bin.route). */
-  const reported: { id: string; route_m: number; stop: string }[] = [];
+  /** The next trips Town measured and sent World (world.bin.route). */
+  const reported: { ids: string[]; route_m: number; stops: number }[] = [];
   /** When `served` was read; a later reply is the same state, read now. */
   let servedAt = 0;
-  bridge.call = (async (method: string, params?: { routes?: never[] }) => {
-    if (method === "world.bin.route") reported.push(...(params?.routes ?? []));
+  bridge.call = (async (method: string, params?: never) => {
+    if (method === "world.bin.route") reported.push(params!);
     else if (method !== "world.bin.list")
       throw new Error(`unexpected ${method}`);
     const since = clock - servedAt;
@@ -160,8 +160,6 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
     view: "town",
     riding,
     preserve_tab: false,
-    route_m: null,
-    stop: null,
   });
   const TRIP = 45_000;
   let revision = 0;
@@ -184,6 +182,7 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
         next_ms: null,
         next_route_m: 0,
         next_trip_ms: 0,
+        next_measured: false,
         ...bus,
       },
     };
@@ -264,9 +263,9 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(agree()).toBe("1:45");
-    // Town measured the rider's stop on its roads and told World.
+    // Town measured the next trip on its roads and told World.
     expect(reported).toEqual([
-      { id: "bin-a", route_m: expect.any(Number), stop: expect.any(String) },
+      { ids: ["bin-a"], route_m: expect.any(Number), stops: 1 },
     ]);
     expect(reported[0]!.route_m).toBeGreaterThan(0);
     // Parked, the bus shows its speed and the route it is to drive.
@@ -286,8 +285,12 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
     });
     await changed();
     expect(shown().stops).toHaveLength(2);
-    expect(reported.map((route) => route.id)).toEqual(["bin-a", "bin-b"]);
-    expect(reported[1]!.stop).not.toBe(reported[0]!.stop);
+    // Town measures the new trip: its one way past both stops, at least the
+    // way to either (here the second stop is on the first one's way).
+    expect(reported.slice(1)).toEqual([
+      { ids: ["bin-a", "bin-b"], route_m: expect.any(Number), stops: 2 },
+    ]);
+    expect(reported[1]!.route_m).toBeGreaterThanOrEqual(reported[0]!.route_m);
     expect(agree()).toBe("1:52");
     await runTo(9_100);
     expect(agree()).toBe("1:46");
@@ -298,7 +301,9 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
     serve([entry("a", true), entry("b", true)], { ...out, elapsed_ms: 0 });
     await changed();
     expect(agree()).toBe("0:55");
-    expect(sign()?.textContent).toMatch(/^36 km\/h · \d+ m left$/);
+    // Driving, the plate counts World's route down, whatever this page's
+    // own roads measure.
+    expect(sign()?.textContent).toBe("36 km/h · 400 m left");
     // One joins while it is out: it waits for the next, which leaves once
     // this one is back; the clocks show the bus out's riders.
     clock = 70_000;
@@ -311,6 +316,12 @@ if (process.env.TOWN_BUS_COUNTDOWN_DOM !== "1") {
     });
     await changed();
     expect(agree()).toBe("0:45");
+    expect(reported[reported.length - 1]).toMatchObject({
+      ids: ["bin-c"],
+      stops: 1,
+    });
+    expect(sign()?.textContent).toMatch(/^36 km\/h · \d+ m left$/);
+    expect(sign()?.textContent).not.toBe("36 km/h · 400 m left");
     await runTo(72_000);
     expect(agree()).toBe("0:43");
     // Stopped on the map: the same word at the stop and on the bin.

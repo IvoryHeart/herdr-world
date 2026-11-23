@@ -117,10 +117,12 @@ agent starts waiting (`BIN_BUS_BOARDING_MS` in [shared/bin.ts](../shared/bin.ts)
 and never before the bus out is back, it sets off and everyone waiting boards.
 Its trip lasts `binBusTripMs`: its route at `BIN_BUS_SPEED_KMH` (36 km/h), plus
 pulling away and in on each leg, a wait at each stop and stepping off at
-Apartments. The route runs out to the farthest of its riders' stops and back. Town
-measures each waiting agent's route on its roads and reports it
-(`world.bin.route`); the first report for an agent stands, and an agent no Town has
-measured counts as its own stop on a 500 m route. Every view counts down to the
+Apartments. The route is the bus's one way past all its riders' stops and back.
+Town measures it on its roads for exactly the agents waiting and reports it
+(`world.bin.route`); the first measure of those agents stands, a change in who
+waits needs a new one, and until a Town has measured it the trip is a 500 m route
+with each waiting agent a stop. Every Town draws the bus to that one route, so
+each layout shows the same distance left. Every view counts down to the
 same moment: when the bus that takes them is back at Apartments, which is when
 their closes are recorded. Each browser fits Town's drive into that trip: from
 Apartments by road to each stop with riders and back, its riders walking in as the
@@ -134,10 +136,10 @@ bridge-scoped `world.*`, browser actor only):
 
 | Method | Effect |
 | --- | --- |
-| `world.bin.list` | The run's state: `epoch` (the service incarnation), revision, held entries (each `riding` once the bus on the map is taking it), entries whose close is in progress, recent outcomes, and `bus`: its speed; the route and trip length of the bus out; how long it has driven; whether it is stopped; its trip number; and for those waiting, the time to the next departure (null when nobody waits or the bus out is stopped) and that trip's route and length. Each entry carries its measured route and stop, or null |
+| `world.bin.list` | The run's state: `epoch` (the service incarnation), revision, held entries (each `riding` once the bus on the map is taking it), entries whose close is in progress, recent outcomes, and `bus`: its speed; the route and trip length of the bus out; how long it has driven; whether it is stopped; its trip number; and for those waiting, the time to the next departure (null when nobody waits or the bus out is stopped) and that trip's route and length, and whether a Town has measured it (`next_measured`) |
 | `world.bin.add` | Hold one pane, qualified by connection, runtime generation, workspace, tab, pane and terminal; the handler re-reads the pane on that connection's current runtime first. With `preserve_tab` (a pinned desk, or a tab pinned in Spaces), it refuses the tab's last pane that is not already held |
 | `world.bin.restore` | Put back one held entry, until its bus has left the map; nothing is closed |
-| `world.bin.route` | `routes`: up to 64 `{id, route_m, stop}`, each a waiting entry's route from Apartments to its stop and back in metres (0–50 000) and that stop's name. The first report for an entry stands; riders, unknown IDs and entries already measured are skipped; any out-of-range report refuses the request |
+| `world.bin.route` | `{ids, route_m, stops}`: the next trip as a Town measured it, for exactly the waiting entries `ids` (up to 64): the bus's way from Apartments past their stops and back in metres (0–50 000), and how many stops it halts at (1 to the number of IDs). The first measure of the entries waiting stands; a measure for any other set is ignored; an out-of-range report is refused |
 | `world.bin.pause` | Stop the bus on the map where it is; its trip clock stands. Without a bus out, nothing changes |
 | `world.bin.resume` | Let a stopped bus drive the rest of its trip |
 | `world.bin.close_now` | `ids`: an explicit list of this run's entry IDs (`bin-<incarnation>-<n>`). Any other run's ID refuses the whole request; there is no unscoped "all" |

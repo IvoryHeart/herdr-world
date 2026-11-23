@@ -37,7 +37,7 @@
 - `web/src/world/town/TownWorldLayer.tsx`
 - `web/src/world/town/TownStepBubble.tsx`, `web/src/world/town/TownBoard.tsx`
 - `web/src/world/town/townLayout.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
-- Bin and bus: `web/src/world/town/TownBusLayer.tsx` (route reports, the bus's speed and distance plate), `web/src/world/town/townBus.ts` (`townStopRouteM`, metres per pixel), `web/src/world/town/townBusDrive.ts` (`townBusTimeline`, `townBusLeft`), `web/src/world/bin/binStore.ts` (`binBusClock`, the countdown labels); tests `townBus.test.ts`, `townBusCountdown.dom.test.ts`, `web/src/world/bin/binStore.test.ts`
+- Bin and bus: `web/src/world/town/TownBusLayer.tsx` (the next trip's route report, the bus's speed and distance plate), `web/src/world/town/townBus.ts` (`townTourRouteM`, `townBusSign`, metres per pixel), `web/src/world/town/townBusDrive.ts` (`townBusTimeline`, `townBusLeft`), `web/src/world/bin/binStore.ts` (`binBusClock`, the countdown labels); tests `townBus.test.ts`, `townBusCountdown.dom.test.ts`, `web/src/world/bin/binStore.test.ts`
 - `server/src/world/observability.ts`
 
 **Tests:**
@@ -841,10 +841,11 @@
     waiting shows the bin's own countdown, from World's one bus: the time
     until the bus that takes them is back at Apartments (when they close),
     and **stopped** while it stands. World times each trip by the bus's
-    speed (36 km/h) and its route out to the farthest stop with riders and
-    back, which Town measures on its roads and reports for each waiting
-    agent (`townStopRouteM`, `world.bin.route`; a tile is 2 m), so a
-    farther stop gives a longer time. Every stop and the bin read
+    speed (36 km/h) and its one way past every stop with riders and back,
+    which the first Town to see those waiting measures on its roads and
+    reports (`townTourRouteM`, `world.bin.route`; a tile is 2 m), so a
+    farther stop gives a longer time. Every layout draws the bus to that
+    route: its plate shows World's metres, not its own roads'. Every stop and the bin read
     the same value at the same moment. The bin floats at the bottom of the screen and
     lights up during a drag, so a phone needs only a short drag, and the town
     does not scroll while the drag rests on it. A red

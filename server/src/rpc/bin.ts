@@ -28,11 +28,7 @@ export async function handleBinRpc(rpc: BridgeRpcContext): Promise<void> {
     if (method === "world.bin.pause") return reply(registry.stopBus());
     if (method === "world.bin.resume") return reply(registry.goBus());
     if (method === "world.bin.route")
-      return reply(
-        registry.route(
-          Array.isArray(p.routes) ? (p.routes as BinRouteReport[]) : [],
-        ),
-      );
+      return reply(registry.route(p as unknown as BinRouteReport));
     if (method === "world.bin.close_now")
       return reply(
         registry.closeNow(

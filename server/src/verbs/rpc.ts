@@ -274,20 +274,15 @@ export const rpcVerbs = [
   rpc("world.bin.pause", "reconcilable", "world"),
   rpc("world.bin.restore", "reconcilable", "world", object({ id: text })),
   rpc("world.bin.resume", "reconcilable", "world"),
-  // A Town's measure of where waiting agents' stops are on its roads.
+  // A Town's measure of the next bus's route past the waiting agents' stops.
   rpc(
     "world.bin.route",
     "reconcilable",
     "world",
     object({
-      routes: Type.Array(
-        object({
-          id: text,
-          route_m: Type.Number({ minimum: 0, maximum: 50_000 }),
-          stop: Type.String({ minLength: 1, maxLength: 128 }),
-        }),
-        { minItems: 1, maxItems: 64 },
-      ),
+      ids: Type.Array(text, { minItems: 1, maxItems: 64 }),
+      route_m: Type.Number({ minimum: 0, maximum: 50_000 }),
+      stops: Type.Integer({ minimum: 1, maximum: 64 }),
     }),
   ),
   rpc("world.board.elements.types", "read", "world"),

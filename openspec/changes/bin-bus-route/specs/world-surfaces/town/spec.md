@@ -3,12 +3,11 @@
 ### Requirement: Closure queues keep presentation separate from execution
 
 Town's bin and its bus SHALL display the shared qualified close intents and
-their deadline, with a bounded waiting queue at the bus stop. Leaving the view
-SHALL NOT cancel or duplicate execution. Undo before dispatch SHALL cancel the
-intent through its ordinary state-conditioned effect rule; uncertain native
-closure SHALL remain uncertain rather than being automatically replayed. The
-deadline SHALL be one World fact: when the bus is back at Apartments, from its
-speed and route to its stops.
+their deadline, with a bounded queue at the bus stop. Leaving the view SHALL
+NOT cancel or duplicate execution. Undo before dispatch SHALL cancel the intent
+by its state-conditioned effect rule; uncertain closure SHALL NOT be replayed.
+The deadline SHALL be one World fact: the bus back at Apartments at its speed
+over one route past every stop with riders, which every view SHALL show.
 
 #### Scenario: Reconnect while an agent waits for closure
 
@@ -23,9 +22,16 @@ speed and route to its stops.
   the bus's speed
 - **AND** Town's stops and the bin in every view show the same countdown
 
-#### Scenario: Different layouts measure one agent
+#### Scenario: Riders at two stops
 
-- **WHEN** two browsers with different Town layouts report different routes
-  for the same waiting agent
-- **THEN** World keeps the first report, so the deadline does not change back
+- **WHEN** agents wait at two different stops for the same bus
+- **THEN** its trip is timed by the bus's one way past both stops and back,
+  not by the way to either stop alone
+
+#### Scenario: Different layouts measure one trip
+
+- **WHEN** two browsers with different Town layouts measure different routes
+  for the same waiting agents
+- **THEN** World keeps the first measure, so the deadline does not change back
   and forth between them
+- **AND** both browsers show the bus's distance from that one route

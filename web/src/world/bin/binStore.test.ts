@@ -28,6 +28,7 @@ const state = (over: Partial<BinState> = {}): BinState => ({
     next_ms: 60_000,
     next_route_m: 200,
     next_trip_ms: 20_000,
+    next_measured: false,
   },
   ...over,
 });
@@ -44,8 +45,6 @@ const entry = (id: string, riding = false) => ({
   view: "town" as const,
   riding,
   preserve_tab: false,
-  route_m: null,
-  stop: null,
 });
 
 function fixture() {
@@ -139,9 +138,9 @@ test("actions take the service's reply, and report its refusal", async () => {
     { ids: ["a"] },
   ]);
   f.replies.push(state({ revision: 5 }));
-  const routes = [{ id: "a", route_m: 420, stop: "stop:park" }];
-  expect(await f.store.route(routes)).toBeNull();
-  expect(f.calls[f.calls.length - 1]).toEqual(["world.bin.route", { routes }]);
+  const report = { ids: ["a"], route_m: 420, stops: 1 };
+  expect(await f.store.route(report)).toBeNull();
+  expect(f.calls[f.calls.length - 1]).toEqual(["world.bin.route", report]);
 });
 
 test("malformed replies and entries are dropped", async () => {

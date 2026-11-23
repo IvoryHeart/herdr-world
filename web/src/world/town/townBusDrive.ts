@@ -764,9 +764,11 @@ export function townBusPose(
 }
 
 /**
- * How far the bus has still to drive, in world pixels, `elapsedMs` into its
- * trip: what is left of the leg it is on and every leg after it. Before it
- * pulls away, the whole drive; once it is back, nothing.
+ * How much of its drive the bus has still to go, `elapsedMs` into its
+ * trip, from 1 before it pulls away to 0 once it is back: what is left of
+ * the leg it is on and every leg after it, over the whole drive. Town shows
+ * this share of World's route (its metres), so every layout reads the same
+ * distance left.
  */
 export function townBusLeft(
   timeline: TownBusTimeline,
@@ -774,8 +776,10 @@ export function townBusLeft(
 ): number {
   const time = elapsedMs / 1000;
   let left = 0;
+  let total = 0;
   for (const piece of timeline.pieces) {
     if (piece.kind !== "drive") continue;
+    total += piece.path.length;
     if (time <= piece.t0) {
       left += piece.path.length;
       continue;
@@ -794,7 +798,7 @@ export function townBusLeft(
     const k = span > 0 ? Math.min(1, Math.max(0, (local - t[low]!) / span)) : 1;
     left += piece.path.length - (s[low]! + (s[high]! - s[low]!) * k);
   }
-  return left;
+  return total > 0 ? Math.min(1, Math.max(0, left / total)) : 0;
 }
 
 /**

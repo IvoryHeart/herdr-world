@@ -2,9 +2,12 @@
  * The agent bin and Town's bus. An agent put in the bin is held: nothing is
  * closed. The bus lives at Apartments. Once someone waits for it, it sets off
  * `BIN_BUS_BOARDING_MS` later (never before it is back from a trip), everyone
- * waiting boards, and it drives the route out to their stops and back at
+ * waiting boards, and it drives the route out past their stops and back at
  * `BIN_BUS_SPEED_KMH`: its trip's length is `binBusTripMs`, so the countdown
- * is when the bus is back at Apartments. When the trip ends World records one
+ * is when the bus is back at Apartments. The route is one shared measure for
+ * the whole trip: the first Town to see exactly those waiting measures the
+ * bus's way past all their stops on its roads (world.bin.route), and every
+ * view times and draws the bus by that one distance. When the trip ends World records one
  * durable close intent per rider, which the effect runner dispatches under
  * its recovery rules. Until the trip ends, Put back takes an agent out
  * again, even one Town shows aboard, and the bus can be stopped where it is
@@ -27,8 +30,9 @@ export const BIN_BUS_PULL_MS = 2_500;
  */
 export const BIN_BUS_ARRIVE_MS = 10_000;
 /**
- * A rider's route, Apartments to its stop and back, in metres, until a Town
- * has measured its stop on its roads (world.bin.route).
+ * The next trip's route, Apartments past every waiting agent's stop and
+ * back, in metres, until a Town has measured it on its roads
+ * (world.bin.route).
  */
 export const BIN_BUS_ROUTE_M = 500;
 /** The longest route a Town may report, in metres. */
@@ -51,21 +55,11 @@ export function binBusTripMs(route_m: number, stops: number): number {
 }
 
 /**
- * The route a bus takes for `riders`: out to the farthest of their stops and
- * back (each rider's measured route, or `BIN_BUS_ROUTE_M`), halting once at
- * each stop. A rider with no measured stop counts as a stop of its own.
+ * Who a route was measured for: the waiting agents' IDs, sorted, one a
+ * line. A measure stands only while exactly these agents wait.
  */
-export function binBusRoute(
-  riders: readonly Pick<BinEntry, "id" | "route_m" | "stop">[],
-): { route_m: number; stops: number } {
-  if (!riders.length) return { route_m: 0, stops: 0 };
-  const stops = new Set(riders.map((rider) => rider.stop ?? `\0${rider.id}`));
-  return {
-    route_m: Math.max(
-      ...riders.map((rider) => rider.route_m ?? BIN_BUS_ROUTE_M),
-    ),
-    stops: stops.size,
-  };
+export function binRiderKey(ids: readonly string[]): string {
+  return [...new Set(ids)].sort().join("\n");
 }
 
 /** The view an agent was put in the bin from (reported back with its outcome). */
@@ -111,13 +105,6 @@ export type BinEntry = BinTarget & {
   riding: boolean;
   /** Its tab is pinned: the close never takes the tab's last pane. */
   preserve_tab: boolean;
-  /**
-   * Its route, Apartments to the stop it waits at and back, in metres, as
-   * the first Town to place it measured it on its roads; null until then.
-   */
-  route_m: number | null;
-  /** That stop, as the same Town names it; null until measured. */
-  stop: string | null;
 };
 
 export type BinOutcome = {
@@ -139,7 +126,10 @@ export type BinOutcome = {
 export type BinBus = {
   /** Its speed along the route, in km/h. */
   speed_kmh: number;
-  /** The bus on the map: its route there and back, in metres (0 at home). */
+  /**
+   * The bus on the map: its route past every rider's stop and back, in
+   * metres (0 at home). Every Town draws its drive to this distance.
+   */
   route_m: number;
   /** Its trip's length (binBusTripMs), or 0 while it is at home. */
   trip_ms: number;
@@ -157,6 +147,11 @@ export type BinBus = {
   /** The next bus's route and trip, for those waiting now (0 with nobody). */
   next_route_m: number;
   next_trip_ms: number;
+  /**
+   * A Town has measured the next route for exactly those waiting now; until
+   * then it is `BIN_BUS_ROUTE_M` and every waiting agent counts as a stop.
+   */
+  next_measured: boolean;
 };
 
 export type BinState = {
@@ -192,6 +187,7 @@ export const EMPTY_BIN: BinState = {
     next_ms: null,
     next_route_m: 0,
     next_trip_ms: 0,
+    next_measured: false,
   },
 };
 

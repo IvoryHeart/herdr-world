@@ -1,10 +1,11 @@
 import {
   type BinCoreConfirmation,
   BIN_BUS_BOARDING_MS,
+  BIN_BUS_ROUTE_M,
   BIN_BUS_ROUTE_MAX_M,
   BIN_BUS_SPEED_KMH,
-  binBusRoute,
   binBusTripMs,
+  binRiderKey,
   type BinEntry,
   type BinOutcome,
   type BinState,
@@ -17,7 +18,6 @@ const MAX_ENTRIES = 64;
 const MAX_OUTCOMES = 12;
 const MAX_ID_LENGTH = 512;
 const MAX_LABEL_LENGTH = 100;
-const MAX_STOP_LENGTH = 128;
 /** The close's intent is known not to be in storage: nothing will be sent. */
 export class BinCloseNotRecorded extends Error {}
 export const NOT_RECORDED =
@@ -37,8 +37,12 @@ export type BinAdd = BinTarget & {
  */
 export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
 
-/** A Town's measure of a waiting agent's route (world.bin.route). */
-export type BinRouteReport = { id: string; route_m: number; stop: string };
+/**
+ * A Town's measure of the next trip (world.bin.route): the bus's way from
+ * Apartments past the stops of exactly the agents `ids` and back, in metres,
+ * and how many stops it halts at.
+ */
+export type BinRouteReport = { ids: string[]; route_m: number; stops: number };
 
 export const ENDED_BEFORE_BUS =
   "It ended before the bus came, so nothing was closed.";
@@ -47,8 +51,8 @@ export const ENDED_BEFORE_BUS =
  * The service's bin: reversible holding in memory, and one bus. It sets off
  * `boarding` ms after the first agent starts waiting, once it is back from
  * any trip, and everyone waiting boards. Its trip lasts as long as its route
- * takes at its speed (binBusTripMs): out to the farthest of its riders'
- * stops, as a Town measured them (route), and back. When its trip ends the
+ * takes at its speed (binBusTripMs): past all its riders' stops and back,
+ * as the first Town to see exactly those riders measured it (route). When its trip ends the
  * riders are handed to `commit`, which records one durable
  * close intent per entry for the effect runner; the runner reports back
  * through `settle`. Until then, Put back takes an entry out, riding or not,
@@ -71,6 +75,9 @@ export class WorldBinRegistry {
   private trip: number | null = null;
   /** The bus on the map's route there and back (m) and its trip's length. */
   private tripRoute = { route_m: 0, trip_ms: 0 };
+  /** A Town's measure of the next trip, for the riders `key` (binRiderKey). */
+  private measured: { key: string; route_m: number; stops: number } | null =
+    null;
   /** When someone stopped the bus on the map, or null while it drives. */
   private stoppedAt: number | null = null;
   private trips = 0;
@@ -103,7 +110,7 @@ export class WorldBinRegistry {
     const out = this.trip !== null;
     const at = this.departure();
     const waiting = this.waiting();
-    const next = binBusRoute(waiting);
+    const next = this.nextRoute();
     return {
       epoch: this.deps.epoch,
       revision: this.revision,
@@ -123,6 +130,7 @@ export class WorldBinRegistry {
         next_trip_ms: waiting.length
           ? this.tripMs(next.route_m, next.stops)
           : 0,
+        next_measured: next.measured,
       },
     };
   }
@@ -151,13 +159,7 @@ export class WorldBinRegistry {
       throw new Error(`The bin holds at most ${MAX_ENTRIES} agents`);
     const id = `bin-${this.deps.epoch}-${this.nextId++}`;
     // A bus already on the map has collected its riders: this one waits.
-    this.entries.set(id, {
-      ...target,
-      id,
-      riding: false,
-      route_m: null,
-      stop: null,
-    });
+    this.entries.set(id, { ...target, id, riding: false });
     this.heldAt.set(id, this.deps.clock.now());
     this.waitingSince.set(id, this.deps.clock.monotonic());
     this.deps.info?.(
@@ -181,36 +183,36 @@ export class WorldBinRegistry {
   }
 
   /**
-   * A Town's measure of where agents wait: each one's route, Apartments to
-   * its stop and back, on that Town's roads. The first measure of an agent
-   * waiting for a bus stands, so pages with different layouts never undo
-   * each other; a rider's route is fixed once its bus sets off.
+   * A Town's measure of the next trip: its way past the stops of everyone
+   * waiting and back, on that Town's roads. It stands only for exactly the
+   * agents it names, while they are the ones waiting: a measure for others
+   * (from a page that has yet to see a change) is ignored, and the first
+   * measure of those waiting stands, so pages with different layouts never
+   * undo each other. A trip's route is fixed once its bus sets off.
    */
-  route(reports: readonly BinRouteReport[]): BinState {
-    // All or nothing: a bad report refuses the lot before any is taken.
-    for (const report of reports) {
-      const metres = report?.route_m;
-      const stop = report?.stop;
-      if (
-        typeof metres !== "number" ||
-        !Number.isFinite(metres) ||
-        metres < 0 ||
-        metres > BIN_BUS_ROUTE_MAX_M ||
-        typeof stop !== "string" ||
-        !stop ||
-        stop.length > MAX_STOP_LENGTH
-      )
-        throw new Error("invalid bin route");
-    }
-    let changed = false;
-    for (const report of reports) {
-      const entry = this.entries.get(String(report.id));
-      if (!entry || entry.riding || entry.route_m !== null) continue;
-      entry.route_m = Math.round(report.route_m);
-      entry.stop = report.stop;
-      changed = true;
-    }
-    if (changed) this.changed();
+  route(report: BinRouteReport): BinState {
+    const ids = report?.ids;
+    const metres = report?.route_m;
+    const stops = report?.stops;
+    if (
+      !Array.isArray(ids) ||
+      !ids.length ||
+      ids.length > MAX_ENTRIES ||
+      ids.some((id) => typeof id !== "string") ||
+      typeof metres !== "number" ||
+      !Number.isFinite(metres) ||
+      metres < 0 ||
+      metres > BIN_BUS_ROUTE_MAX_M ||
+      !Number.isSafeInteger(stops) ||
+      stops < 1 ||
+      stops > ids.length
+    )
+      throw new Error("invalid bin route");
+    const key = binRiderKey(ids);
+    const waiting = binRiderKey(this.waiting().map((entry) => entry.id));
+    if (key !== waiting || this.measured?.key === key) return this.list();
+    this.measured = { key, route_m: Math.round(metres), stops };
+    this.changed();
     return this.list();
   }
 
@@ -371,6 +373,23 @@ export class WorldBinRegistry {
   }
 
   /**
+   * The next trip's route, for those waiting now: a Town's measure of
+   * exactly them, else `BIN_BUS_ROUTE_M` with each of them a stop.
+   */
+  private nextRoute(): { route_m: number; stops: number; measured: boolean } {
+    const waiting = this.waiting();
+    if (!waiting.length) return { route_m: 0, stops: 0, measured: false };
+    const key = binRiderKey(waiting.map((entry) => entry.id));
+    if (this.measured?.key === key)
+      return {
+        route_m: this.measured.route_m,
+        stops: this.measured.stops,
+        measured: true,
+      };
+    return { route_m: BIN_BUS_ROUTE_M, stops: waiting.length, measured: false };
+  }
+
+  /**
    * When the next bus sets off (monotonic): `boarding` after the first of
    * those waiting started to, and never before the bus out is back. Null
    * when nobody waits, or while the bus out is stopped.
@@ -426,7 +445,8 @@ export class WorldBinRegistry {
   private setOff() {
     if (this.trip !== null || !this.entries.size) return this.schedule();
     const riders = [...this.entries.values()];
-    const { route_m, stops } = binBusRoute(riders);
+    const { route_m, stops } = this.nextRoute();
+    this.measured = null;
     this.trip = this.deps.clock.monotonic();
     this.tripRoute = { route_m, trip_ms: this.tripMs(route_m, stops) };
     this.trips += 1;

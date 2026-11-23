@@ -214,8 +214,6 @@ const entry = (
   view: "board",
   riding: true,
   preserve_tab: false,
-  route_m: null,
-  stop: null,
 });
 
 const pane = (id: string, tab = "t1", workspace = "w1"): Pane => ({

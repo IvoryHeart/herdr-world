@@ -79,8 +79,6 @@ export function townBusDemoBin(
       view: "town",
       riding,
       preserve_tab: false,
-      route_m: null,
-      stop: null,
     }),
   );
   return {
@@ -100,6 +98,7 @@ export function townBusDemoBin(
       next_ms: riding ? null : TOWN_BUS_DEMO_WAIT_MS - since,
       next_route_m: riding ? 0 : BIN_BUS_ROUTE_M,
       next_trip_ms: riding ? 0 : TOWN_BUS_DEMO_TRIP_MS,
+      next_measured: false,
     },
     readAt: now,
     verified: true,

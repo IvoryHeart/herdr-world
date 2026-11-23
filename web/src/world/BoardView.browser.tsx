@@ -287,6 +287,7 @@ const binState = () => ({
     next_ms: 60_000,
     next_route_m: 500,
     next_trip_ms: 120_000,
+    next_measured: false,
   },
 });
 const originalAskCall = bridge.call.bind(bridge);
