@@ -64,10 +64,9 @@ receipts and inspect all five originals, especially Town floors/buildings/desks.
 
 The advisory [Town golden images workflow](../.github/workflows/town-golden.yml)
 compares the production `TownCanvas` (Pixi scene and DOM overlays) with stored
-PNGs at five viewports, including weather scenes (19 captures per run), on manual
-workflow dispatch. Automatic PR/main captures are quarantined
-under [#1259](https://github.com/IvoryHeart/herdr-world/issues/1259); the report
-remains separate from required Delivery checks.
+PNGs at five viewports, including weather scenes (19 captures per run), on
+renderer-related PRs, pushes to main, a nightly schedule and manual dispatch. The
+report remains advisory and separate from required Delivery checks.
 The fixture contains only synthetic hosts, four rooms, sixteen desks and mixed
 working, blocked, finished and idle agents, and the harbour shows the synthetic
 `ready` Shipyard pipeline read in memory. Its usage read is synthetic and
@@ -104,18 +103,24 @@ font hinting, and compares decoded RGBA pixels exactly. There is **no tolerance*
 mask or automatic golden refresh. Chrome, fonts and goldens must be reviewed
 together when the reference renderer changes.
 
-The quarantine concerns fractional DOM antialiasing in pinned Chrome 156: the
-Add room doorway can differ by one channel level even with identical final
-transforms and bounds. CI run
-[45070932409](https://github.com/IvoryHeart/herdr-world/actions/runs/45070932409)
-completed all 19 captures but differed at 134 linux-half pixels and one portrait
-pixel. A local four-runner, four-core batch completed 380 captures across twenty
-fresh-browser runs and reproduced these differences; it did not establish
-stability. CPU rasterization, explicit repaint/frame barriers, compositor-stage
-barriers and a single raster worker did not reliably remove the variation. The
-precise Chromium rasterizer cause remains open. Keep exact manual comparisons
-and the production visual negative control available; restore automatic captures
-only after twenty loaded runs and hosted stability acceptance pass.
+The DOM overlay (`.town-world`) follows the camera with a fractional translate
+and scale. During the settle the camera moves through 6,000 ms of test time in
+real task turns, so Chrome's compositor commits land at load-dependent points of
+that motion, and Chrome keeps raster-scale history on each composited layer. The
+same final transform therefore once rasterized the Add room doorway edges one
+channel level apart between page loads (134 linux-half pixels and one portrait
+pixel in CI run
+[45070932409](https://github.com/IvoryHeart/herdr-world/actions/runs/45070932409),
+[#1259](https://github.com/IvoryHeart/herdr-world/issues/1259)). CPU
+rasterization and repaint or frame barriers did not remove it.
+The fixture now holds the overlay unpainted (`visibility: hidden !important`)
+while the scene settles; it still mounts, lays out and runs every production
+step. At the checkpoint the fixture removes the hold and waits two real
+animation frames, so Chrome creates the overlay's layers once, at the final
+transform (`web/src/world/testing/town-golden/overlayHold.ts`). Stored goldens
+are unchanged: they already show the overlay at its final transform. A local
+batch of four concurrent runners on four cores with a CPU competitor matched all
+380 captures exactly, and the production visual negative control passed.
 
 Install the pinned browser using the existing [development guidance](development.md#verification),
 then run through the browser queue:
@@ -148,11 +153,11 @@ below, which still require real synthetic runtime work.
 
 ### Hosted stability and production visual negative control
 
-While quarantined, open **Actions → Town golden images → Run workflow**, choose
-the candidate branch and select **stability** for hosted acceptance. The PR label
-`town-golden-stability` does not bypass the manual-only job condition. Both manual
-modes stay advisory; stability has a finite 40-minute ceiling to cover twenty runs
-plus the negative control. Automatic PR/main workflow runs skip the report job.
+For hosted acceptance, open **Actions → Town golden images → Run workflow**,
+choose the candidate branch and select **stability**; on a PR, the
+`town-golden-stability` label selects the same mode. Every mode stays advisory;
+stability has a finite 40-minute ceiling to cover twenty runs plus the negative
+control.
 
 Stability mode first compares 380 captures against unchanged stored goldens.
 It then temporarily moves the actual production `.town-zoom` control by one CSS
@@ -176,7 +181,7 @@ defaults to `.agents/town-golden-control/` (override with
 `TOWN_GOLDEN_CONTROL_OUTPUT`). It includes `mutation.diff`, each child's exit code,
 logs and full capture report, the actual SwiftShader renderer strings, mismatch
 PNGs, and a restored-source/reference-hash check in `control.json`.
-CI places it inside the same `town-golden` artifact as the complete 100-capture
+CI places it inside the same `town-golden` artifact as the complete 380-capture
 report. Reports identify the checked-out source commit and GitHub run ID, so
 review evidence can be tied to the exact candidate without refreshing goldens.
 
