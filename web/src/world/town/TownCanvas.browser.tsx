@@ -1845,11 +1845,17 @@ async function run() {
         );
     }
 
-    await checkTownRoomPlates(host, check, waitFor, {
-      connectionId: base.connections[0]!.connectionId,
-      generation: base.connections[0]!.generation,
-      workspaceId: base.connections[0]!.snapshot!.workspaces[0]!.workspace_id,
-    });
+    await checkTownRoomPlates(
+      host,
+      check,
+      waitFor,
+      {
+        connectionId: base.connections[0]!.connectionId,
+        generation: base.connections[0]!.generation,
+        workspaceId: base.connections[0]!.snapshot!.workspaces[0]!.workspace_id,
+      },
+      () => opened.length + inspected.length + selected.length,
+    );
     root.unmount();
     await settle();
     return;

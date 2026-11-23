@@ -109,6 +109,11 @@ export type TownInteractionPorts = {
    * where the reception board is hidden, or null when it landed elsewhere.
    */
   openReception?(hostKey: string | null): void;
+  /**
+   * A tap (not a drag or hold) on a room plaque's name: it toggles the
+   * plaque's card (townPlaqueCard.ts).
+   */
+  tapRoomName?(roomKey: string): void;
   /** Open the town center's radial menu. */
   openCenter(): void;
   /**
@@ -170,6 +175,8 @@ export class TownInteraction {
   private pinch: null | { distance: number; z: number; world: Point } = null;
   /** The kind of pointer last pressed: a touch tap has no hover before it. */
   private pressedWith = "mouse";
+  /** Whether the last press was on a room's Move handle. */
+  private pressedHandle = false;
 
   constructor(private readonly ports: TownInteractionPorts) {}
 
@@ -249,6 +256,7 @@ export class TownInteraction {
     const stage = this.ports.stage();
     if (!stage) return;
     this.pressedWith = pointer.pointerType;
+    this.pressedHandle = pointer.handle === true;
     const hit = this.hitAt(pointer.at.x, pointer.at.y);
     const { model } = this.ports.world();
     let drag = townDragFor(hit, model, stage.level);
@@ -600,7 +608,12 @@ export class TownInteraction {
     const hit = target.hit;
     if (!stage) return;
     this.ports.openReception?.(hit?.kind === "reception" ? hit.key : null);
-    if (target.nameOnly) return;
+    if (target.nameOnly) {
+      // The plaque's name, not its Move handle, is its card's switch.
+      if (!this.pressedHandle && hit?.kind === "room")
+        this.ports.tapRoomName?.(hit.key);
+      return;
+    }
     if (
       this.pressedWith === "touch" &&
       this.ports.tapCard?.(hit?.kind === "desk" ? hit.key : null)
@@ -729,7 +742,12 @@ export class TownInteraction {
         this.tap(effect.target);
         return;
       case "doubleTap": {
-        if (effect.target.nameOnly) return;
+        // A plaque's name is its card's switch, however fast the presses
+        // come: a quick second click or tap closes the card it opened.
+        if (effect.target.nameOnly) {
+          this.tap(effect.target);
+          return;
+        }
         const hit = effect.target.hit;
         const key = townHitKey(hit);
         if (

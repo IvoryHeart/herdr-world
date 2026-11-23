@@ -143,6 +143,7 @@ function setup(
     activateAgent: (key) => log.push(["activate", key]),
     activateRoom: (key) => log.push(["room", key]),
     openReception: (key) => log.push(["reception", key]),
+    tapRoomName: (key) => log.push(["plaqueCard", key]),
     openCenter: () => log.push(["center"]),
     opensPlace: (key) => key === "post",
     openPlace: (key) => log.push(["place", key]),
@@ -1330,11 +1331,39 @@ test("a room's name carries the room: dragged, or held by a touch; a tap is the 
     });
     return id;
   };
-  // A click on the plate's name neither zooms nor selects.
+  // A click on the plate's name neither zooms nor selects: it toggles the
+  // plate's card (#1255), as a touch tap does.
   t.lift(down("mouse"), name);
   expect(t.log.some(([kind]) => kind === "room" || kind === "select")).toBe(
     false,
   );
+  expect(t.log.filter(([kind]) => kind === "plaqueCard")).toEqual([
+    ["plaqueCard", room.key],
+  ]);
+  t.time.advance(1000);
+  t.lift(down("touch"), name);
+  expect(t.log.filter(([kind]) => kind === "plaqueCard")).toHaveLength(2);
+  t.time.advance(1000);
+  // Two quick presses are two switches, not a double tap: the second closes
+  // the card the first opened, by mouse and by touch.
+  for (const pointerType of ["mouse", "touch"]) {
+    const before = t.log.filter(([kind]) => kind === "plaqueCard").length;
+    t.lift(down(pointerType), name);
+    t.time.advance(200);
+    t.lift(down(pointerType), name);
+    expect(t.log.filter(([kind]) => kind === "plaqueCard")).toHaveLength(
+      before + 2,
+    );
+    expect(t.log.some(([kind]) => kind === "room" || kind === "activate")).toBe(
+      false,
+    );
+    t.time.advance(1000);
+  }
+  // A drag from the name carries the room and opens no card.
+  const dragged = down("mouse");
+  t.moveTo(dragged, offset(name, 40));
+  t.lift(dragged, offset(name, 40));
+  expect(t.log.filter(([kind]) => kind === "plaqueCard")).toHaveLength(6);
   t.time.advance(1000);
   // A touch held still lifts the room.
   const touch = down("touch");
@@ -1379,9 +1408,11 @@ test("a room's Move handle lifts it at once, by touch too; a tap puts it back", 
   t.lift(touch, handle);
   expect(t.moves).toEqual([]);
   expect(t.log).toContainEqual(["end", "cancel"]);
-  expect(t.log.some(([kind]) => kind === "room" || kind === "select")).toBe(
-    false,
-  );
+  expect(
+    t.log.some(
+      ([kind]) => kind === "room" || kind === "select" || kind === "plaqueCard",
+    ),
+  ).toBe(false);
   // Dragged, it goes where it is dropped.
   t.time.advance(1000);
   const again = down("touch");
