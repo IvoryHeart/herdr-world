@@ -11,6 +11,10 @@ import { basename, join } from "node:path";
 import { assetUrlImports } from "../../../web/src/world/testing/assetUrlImports";
 import { createFileHandlers } from "./files";
 import { HTML_PREVIEW_CSP } from "./html-preview";
+import {
+  createPreviewCdp,
+  PreviewSessionDetachedError,
+} from "./html-preview-cdp.fixture";
 import { shQuote } from "../utils/process-utils";
 import {
   stopChrome,
@@ -207,15 +211,32 @@ test.skipIf(!chrome)(
         }),
         "CDP connection",
       );
-      let id = 0;
-      const pending = new Map<
-        number,
-        { resolve: (value: any) => void; reject: (error: Error) => void }
-      >();
+      const { cdp, receive, close } = createPreviewCdp((message) =>
+        socket!.send(message),
+      );
       type FrameContext = { id: number; sessionId?: string };
       const contexts = new Map<string, FrameContext>();
       const cdnRequests: { path: string; referer: unknown }[] = [];
       const interceptionErrors: string[] = [];
+      const interceptions = new Set<Promise<void>>();
+      const recordInterception = (operation: Promise<unknown>) => {
+        const tracked = operation
+          .catch((error) => {
+            if (!(error instanceof PreviewSessionDetachedError))
+              interceptionErrors.push(String(error));
+          })
+          .then(() => {})
+          .finally(() => interceptions.delete(tracked));
+        interceptions.add(tracked);
+        return tracked;
+      };
+      const detachWaiters = new Map<string, () => void>();
+      let racedSetup: Promise<void> | undefined;
+      let canarySetupHeld = false;
+      let canaryReady!: () => void;
+      const canarySetupReady = new Promise<void>((resolve) => {
+        canaryReady = resolve;
+      });
       const intercept = {
         patterns: [{ urlPattern: "https://cdn.example.invalid/*" }],
       };
@@ -228,19 +249,43 @@ test.skipIf(!chrome)(
       };
       socket.onmessage = (event) => {
         const message = JSON.parse(String(event.data));
+        receive(message);
+        if (message.method === "Target.detachedFromTarget") {
+          for (const [frameId, context] of contexts) {
+            if (context.sessionId === message.params.sessionId)
+              contexts.delete(frameId);
+          }
+          detachWaiters.get(message.params.sessionId)?.();
+        }
         if (message.method === "Target.attachedToTarget") {
-          void Promise.all([
+          // Force the reported race: this CSP-blocked frame is not paused by
+          // the debugger. Hold its resume continuation until navigation has
+          // detached it, rather than depending on a slow CI scheduling turn.
+          const hold =
+            message.params.targetInfo.url.endsWith("/canary/frame") &&
+            !racedSetup;
+          const detached = hold
+            ? new Promise<void>((resolve) =>
+                detachWaiters.set(message.params.sessionId, resolve),
+              )
+            : Promise.resolve();
+          const setup = Promise.all([
             cdp("Runtime.enable", {}, message.params.sessionId),
             cdp("Fetch.enable", intercept, message.params.sessionId),
-          ])
-            .then(() =>
-              cdp(
-                "Runtime.runIfWaitingForDebugger",
-                {},
-                message.params.sessionId,
-              ),
-            )
-            .catch((error) => interceptionErrors.push(String(error)));
+          ]).then(async () => {
+            if (hold) {
+              canarySetupHeld = true;
+              canaryReady();
+              await detached;
+            }
+            return cdp(
+              "Runtime.runIfWaitingForDebugger",
+              {},
+              message.params.sessionId,
+            );
+          });
+          const tracked = recordInterception(setup);
+          if (hold) racedSetup = tracked;
         }
         if (message.method === "Fetch.requestPaused") {
           const path = new URL(message.params.request.url).pathname;
@@ -248,20 +293,22 @@ test.skipIf(!chrome)(
             ([name]) => name.toLowerCase() === "referer",
           )?.[1];
           cdnRequests.push({ path, referer });
-          void cdp(
-            "Fetch.fulfillRequest",
-            {
-              requestId: message.params.requestId,
-              responseCode: 200,
-              responseHeaders: [
-                { name: "Content-Type", value: "text/css" },
-                { name: "Access-Control-Allow-Origin", value: "*" },
-                { name: "Referrer-Policy", value: "no-referrer" },
-              ],
-              body: Buffer.from(cdnStyles[path] ?? "").toString("base64"),
-            },
-            message.sessionId,
-          ).catch((error) => interceptionErrors.push(String(error)));
+          recordInterception(
+            cdp(
+              "Fetch.fulfillRequest",
+              {
+                requestId: message.params.requestId,
+                responseCode: 200,
+                responseHeaders: [
+                  { name: "Content-Type", value: "text/css" },
+                  { name: "Access-Control-Allow-Origin", value: "*" },
+                  { name: "Referrer-Policy", value: "no-referrer" },
+                ],
+                body: Buffer.from(cdnStyles[path] ?? "").toString("base64"),
+              },
+              message.sessionId,
+            ),
+          );
         }
         if (
           message.method === "Runtime.executionContextCreated" &&
@@ -271,34 +318,8 @@ test.skipIf(!chrome)(
             id: message.params.context.id,
             sessionId: message.sessionId,
           });
-        const request = pending.get(message.id);
-        if (!request) return;
-        pending.delete(message.id);
-        if (message.error)
-          request.reject(new Error(JSON.stringify(message.error)));
-        else request.resolve(message.result);
       };
-      socket.onclose = socket.onerror = () => {
-        for (const request of pending.values())
-          request.reject(new Error("CDP connection closed"));
-        pending.clear();
-      };
-      const cdp = (
-        method: string,
-        params: Record<string, unknown> = {},
-        sessionId?: string,
-      ): Promise<any> => {
-        const requestId = ++id;
-        return withBrowserDeadline(
-          new Promise((resolve, reject) => {
-            pending.set(requestId, { resolve, reject });
-            socket!.send(
-              JSON.stringify({ id: requestId, method, params, sessionId }),
-            );
-          }),
-          method,
-        ).finally(() => pending.delete(requestId));
-      };
+      socket.onclose = socket.onerror = close;
       const screenshot = async (name: string) => {
         const directory = Bun.env.HERDR_WORLD_TEST_SCREENSHOTS;
         if (!directory) return;
@@ -421,6 +442,7 @@ test.skipIf(!chrome)(
       expect(
         cdnRequests.every((request) => request.referer === undefined),
       ).toBe(true);
+      await Promise.all(interceptions);
       expect(interceptionErrors).toEqual([]);
       expect(
         await evaluate('document.querySelectorAll("td").length', context),
@@ -618,6 +640,7 @@ test.skipIf(!chrome)(
       expect(
         await evaluate('getComputedStyle(document.querySelector("h1")).color'),
       ).toBe("rgb(12, 34, 56)");
+      await withBrowserDeadline(canarySetupReady, "canary CDP setup");
       await cdp("Page.navigate", {
         url: new URL("/policy.html", server.url).href,
       });
@@ -640,6 +663,10 @@ test.skipIf(!chrome)(
       expect(cdnRequests.every((request) => request.path in cdnStyles)).toBe(
         true,
       );
+      expect(canarySetupHeld).toBe(true);
+      expect(racedSetup).toBeDefined();
+      await racedSetup;
+      await Promise.all(interceptions);
       expect(interceptionErrors).toEqual([]);
     } finally {
       socket?.close();
