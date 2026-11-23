@@ -15,7 +15,13 @@ test("composed service exposes authenticated catalog, real bound ports and the C
   configureServerLogger("error");
   const root = mkdtempSync(join(tmpdir(), "shipyard-service-"));
   const cli = createTestCli();
-  const { service, base, connected } = await startTestService(root);
+  // Its own instance registry: other test services (or a running World)
+  // registering at the same time would otherwise join the catalog.
+  const { service, base, connected } = await startTestService(
+    root,
+    {},
+    { HERDR_WORLD_INSTANCE_REGISTRY_DIR: join(root, "instances") },
+  );
   try {
     await connected;
     expect((await fetch(`${base}${SHIPYARD_PATH}`)).status).toBe(401);
