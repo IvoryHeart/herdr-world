@@ -21,6 +21,10 @@ phone and mixed actions with places.
   them all.
 - Counts stay on the buildings' signs. Both rings use the same geometry, so
   they fit a phone with targets of today's size.
+- Every entry's label sits outside its ring, beyond its icon, so no label
+  covers another entry or the ring, at every depth. Where a round ring
+  would leave a phone's side labels too little room, the ring is an upright
+  oval with its entries evenly spaced along it.
 - Help gains a town center entry with its picture.
 
 ## Capabilities

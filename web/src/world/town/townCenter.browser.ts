@@ -94,6 +94,101 @@ export async function checkTownCenter(
         `${action.dataset.action} is off screen or under 44 px: ${JSON.stringify(box)}`,
       );
     }
+    labelsClear();
+  };
+  // Each label sits outside the ring, beyond its icon (#1261): on screen,
+  // clear of the ring's circle, every medallion, the hub and each other.
+  const labelsClear = () => {
+    const medallions = [
+      ...ring()!.querySelectorAll(".town-center-medallion, .town-center-hub"),
+    ].map((element) => element.getBoundingClientRect());
+    const hub = ring()!
+      .querySelector(".town-center-hub")!
+      .getBoundingClientRect();
+    const middle = {
+      x: hub.left + hub.width / 2,
+      y: hub.top + hub.height / 2,
+    };
+    // The ring's outer edge: its oval through the medallions, widened by
+    // half a medallion.
+    const style = getComputedStyle(ring()!);
+    const half = medallions[0]!.width / 2 - 1;
+    const outer = {
+      x: Number.parseFloat(style.getPropertyValue("--ring-x")) + half,
+      y: Number.parseFloat(style.getPropertyValue("--ring-y")) + half,
+    };
+    // Scaled so the oval is a unit circle, a box stays a box.
+    const outside = (box: DOMRect) =>
+      Math.hypot(
+        Math.max(box.left - middle.x, 0, middle.x - box.right) / outer.x,
+        Math.max(box.top - middle.y, 0, middle.y - box.bottom) / outer.y,
+      ) >= 1;
+    // The nearest a box comes to a point.
+    const nearest = (box: DOMRect, x: number, y: number) =>
+      Math.hypot(
+        Math.max(box.left - x, 0, x - box.right),
+        Math.max(box.top - y, 0, y - box.bottom),
+      );
+    const labels = actions().map((action) => ({
+      id: action.dataset.action,
+      box: action
+        .querySelector(":scope > .town-center-label")!
+        .getBoundingClientRect(),
+    }));
+    for (const action of actions()) {
+      const name = action.querySelector(".town-center-label > span")!;
+      check(
+        name.scrollWidth <= name.clientWidth,
+        `${action.dataset.action}'s name is cut short: ${name.scrollWidth} > ${name.clientWidth}`,
+      );
+    }
+    for (const { id, box } of labels) {
+      check(
+        box.left >= 0 &&
+          box.top >= 0 &&
+          box.right <= window.innerWidth &&
+          box.bottom <= window.innerHeight,
+        `${id}'s label is off screen: ${JSON.stringify(box)}`,
+      );
+      check(
+        outside(box),
+        `${id}'s label is inside the ring: ${JSON.stringify({ box, middle, outer })}`,
+      );
+      for (const medallion of medallions)
+        check(
+          nearest(
+            box,
+            medallion.left + medallion.width / 2,
+            medallion.top + medallion.height / 2,
+          ) >=
+            medallion.width / 2 - 1,
+          `${id}'s label covers an entry: ${JSON.stringify({ box, medallion })}`,
+        );
+      for (const other of labels)
+        check(
+          other.id === id ||
+            box.right <= other.box.left ||
+            other.box.right <= box.left ||
+            box.bottom <= other.box.top ||
+            other.box.bottom <= box.top,
+          `${id}'s label overlaps ${other.id}'s`,
+        );
+    }
+    // A later ring's name, over its hub, covers no entry either.
+    const name = ring()!.querySelector(".town-center-hub > .town-center-label");
+    if (name) {
+      const box = name.getBoundingClientRect();
+      for (const medallion of medallions.slice(0, -1))
+        check(
+          nearest(
+            box,
+            medallion.left + medallion.width / 2,
+            medallion.top + medallion.height / 2,
+          ) >=
+            medallion.width / 2 - 1,
+          `the ring's name covers an entry: ${JSON.stringify({ box, medallion })}`,
+        );
+    }
   };
   fits();
   // Buildings opens the second ring around itself: its centre, Back, sits

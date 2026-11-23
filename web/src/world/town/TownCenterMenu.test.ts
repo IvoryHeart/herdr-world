@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import {
   townCenterAngle,
+  townCenterLabel,
   townCenterMenuPoint,
   townCenterRing,
+  townCenterSpot,
   townCenterStep,
 } from "./TownCenterMenu";
 
@@ -35,12 +37,48 @@ test("a phone's ring fits its width with 44 px medallions or larger", () => {
   const ring = townCenterRing(390);
   expect(ring.item).toBeGreaterThanOrEqual(44);
   expect(ring.reach.x * 2).toBeLessThanOrEqual(390);
-  // A view too small for the ring centres it between its reaches.
+  // A phone's labels keep to its width, so only a view too short for the
+  // ring centres it between its reaches.
   const small = townCenterRing(200).reach;
   expect(townCenterMenuPoint({ x: 0, y: 0 }, 200, 200)).toEqual({
-    x: 100,
+    x: small.x,
     y: (small.top + 200 - small.bottom) / 2,
   });
+});
+
+test("each label sits outside the ring, beyond its icon, within its reach", () => {
+  for (const width of [360, 390, 1440])
+    for (const count of [3, 5, 8]) {
+      const ring = townCenterRing(width);
+      for (let index = 0; index < count; index += 1) {
+        const spot = townCenterSpot(index, count, ring.radius);
+        const label = townCenterLabel(index, count, ring);
+        // Beyond the medallion's edge, along the entry's own direction.
+        expect(Math.hypot(label.at.x, label.at.y)).toBeGreaterThan(
+          ring.item / 2,
+        );
+        expect(label.at.x * spot.x).toBeGreaterThanOrEqual(0);
+        expect(label.at.y * spot.y).toBeGreaterThanOrEqual(0);
+        // It grows away from the ring.
+        expect(label.align.x * spot.x).toBeGreaterThanOrEqual(0);
+        expect(label.align.y * spot.y).toBeGreaterThanOrEqual(0);
+        // Its edges stay inside the ring's reach.
+        const from = spot.x + ring.beyond * spot.out.x;
+        const left = from - ((1 - label.align.x) / 2) * label.width;
+        const right = from + ((1 + label.align.x) / 2) * label.width;
+        expect(left).toBeGreaterThanOrEqual(-ring.reach.x - 0.5);
+        expect(right).toBeLessThanOrEqual(ring.reach.x + 0.5);
+      }
+    }
+  // The side entries of a phone's ring get the room its width leaves.
+  const phone = townCenterRing(390);
+  expect(townCenterLabel(2, 8, phone).width).toBe(
+    Math.floor(
+      phone.reach.x - townCenterSpot(2, 8, phone.radius).x - phone.beyond,
+    ),
+  );
+  expect(townCenterLabel(2, 8, phone).width).toBeGreaterThanOrEqual(88);
+  expect(townCenterLabel(0, 8, phone).width).toBe(phone.labelWidth);
 });
 
 test("actions run clockwise from the top", () => {
@@ -78,4 +116,26 @@ test("a later ring centres on the entry that opened it, at every depth, fitted",
     x: 390 - phone.reach.x,
     y: 422,
   });
+});
+
+test("a narrow phone's oval ring keeps its medallions apart and full size", () => {
+  for (const width of [320, 360, 390, 430, 600, 1440]) {
+    const ring = townCenterRing(width);
+    expect(ring.item).toBeGreaterThanOrEqual(width < 640 ? 56 : 52);
+    expect(ring.radius.y).toBeGreaterThanOrEqual(ring.radius.x);
+    for (let count = 2; count <= 8; count += 1)
+      for (let index = 0; index < count; index += 1) {
+        const a = townCenterStep(index, count, ring.radius);
+        const b = townCenterStep((index + 1) % count, count, ring.radius);
+        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(
+          ring.item + 9,
+        );
+      }
+  }
+  // Round where the width allows: a desktop and a wide phone.
+  expect(townCenterRing(1440).radius).toEqual({ x: 96, y: 96 });
+  expect(townCenterRing(430).radius.x).toBe(townCenterRing(430).radius.y);
+  expect(townCenterRing(390).radius.y).toBeGreaterThan(
+    townCenterRing(390).radius.x,
+  );
 });

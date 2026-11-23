@@ -40,20 +40,96 @@ export type TownCenterAction = {
   run(): void;
 };
 
-/** Ring geometry in screen pixels: phones get larger medallions. */
+/** The most entries a ring is laid out for (the first ring's eight). */
+const TOWN_CENTER_MOST = 8;
+
+/**
+ * Ring geometry in screen pixels: phones get larger medallions. Each label
+ * sits outside the ring, beyond its icon, so no label covers another entry
+ * or the ring at any depth. A phone keeps its side labels inside its width:
+ * when a round ring would leave them too little room, the ring narrows into
+ * an upright oval, tall enough to keep its medallions apart.
+ */
 export function townCenterRing(viewportWidth: number) {
+  const known = RINGS.get(viewportWidth);
+  if (known) return known;
+  const ring = layOutRing(viewportWidth);
+  RINGS.set(viewportWidth, ring);
+  return ring;
+}
+
+type TownCenterRadius = { x: number; y: number };
+type TownCenterGeometry = ReturnType<typeof layOutRing>;
+/** Ring geometry by view width: places it each frame, so laid out once. */
+const RINGS = new Map<number, TownCenterGeometry>();
+
+/** The nearest two neighbouring medallions come, in any ring up to eight. */
+function townCenterClosest(radius: TownCenterRadius) {
+  let closest = Infinity;
+  for (let count = 2; count <= TOWN_CENTER_MOST; count += 1)
+    for (let index = 0; index < count; index += 1) {
+      const a = townCenterSpot(index, count, radius);
+      const b = townCenterSpot((index + 1) % count, count, radius);
+      closest = Math.min(closest, Math.hypot(a.x - b.x, a.y - b.y));
+    }
+  return closest;
+}
+
+function layOutRing(viewportWidth: number) {
   const phone = viewportWidth < 640;
-  const radius = phone ? 100 : 96;
   const item = phone ? 56 : 52;
+  /** From a medallion's middle to where its label starts. */
+  const beyond = item / 2 + (phone ? 4 : 6);
+  const labelWidth = phone ? 120 : 132;
+  const half = Math.floor(viewportWidth / 2) - 2;
+  // A phone's side label gets 92 px (a long building name), down to 56 px.
+  const x = phone ? Math.max(56, Math.min(96, half - 92 - beyond)) : 96;
+  // Neighbouring medallions stay 10 px apart, edge to edge.
+  const apart = item + 10;
+  let y = x;
+  while (y < 4 * x && townCenterClosest({ x, y }) < apart) y += 2;
   return {
-    radius,
+    /** The ring's half-width and half-height, through the medallions. */
+    radius: { x, y },
     item,
+    beyond,
+    /** The widest a label grows before its text ends in an ellipsis. */
+    labelWidth,
     /** How far the ring and its labels reach from its middle. */
     reach: {
-      x: radius + item / 2 + 24,
-      top: radius + item / 2 + 8,
-      bottom: radius + item / 2 + 40,
+      x: phone ? Math.min(x + beyond + labelWidth, half) : x + beyond + 132,
+      top: y + beyond + 40,
+      bottom: y + beyond + 40,
     },
+  };
+}
+
+/**
+ * Where entry `index` of `count` puts its label: `at`, beyond its icon
+ * (from the entry's ring point), `align` the label's side on `at` (−1 to
+ * 1 on each axis: 1 starts the label there and grows it outward), and the
+ * widest it may be to stay inside the ring's reach.
+ */
+export function townCenterLabel(
+  index: number,
+  count: number,
+  ring: ReturnType<typeof townCenterRing>,
+) {
+  const spot = townCenterSpot(index, count, ring.radius);
+  const { x: cos, y: sin } = spot.out;
+  const toward = (value: number) =>
+    Math.max(-1, Math.min(1, Math.round(value * 200) / 100));
+  const align = { x: toward(cos), y: toward(sin) };
+  // The label's left and right edges stay within the ring's reach.
+  const from = spot.x + ring.beyond * cos;
+  const room = Math.min(
+    align.x > -1 ? (2 * (ring.reach.x - from)) / (1 + align.x) : Infinity,
+    align.x < 1 ? (2 * (ring.reach.x + from)) / (1 - align.x) : Infinity,
+  );
+  return {
+    at: { x: Math.round(cos * ring.beyond), y: Math.round(sin * ring.beyond) },
+    align,
+    width: Math.max(0, Math.floor(Math.min(ring.labelWidth, room))),
   };
 }
 
@@ -102,13 +178,63 @@ export function placeTownCenterMenu(
 export function townCenterStep(
   index: number,
   count: number,
-  radius: number,
+  radius: TownCenterRadius,
 ): TownCenterStep {
-  const angle = townCenterAngle(index, count);
-  return {
-    x: Math.round(Math.cos(angle) * radius),
-    y: Math.round(Math.sin(angle) * radius),
-  };
+  const spot = townCenterSpot(index, count, radius);
+  return { x: Math.round(spot.x), y: Math.round(spot.y) };
+}
+
+/**
+ * Entry `index` of `count` on a ring of half-axes `radius`: clockwise from
+ * the top, evenly spaced along the ring's length (on a round ring, evenly
+ * by angle), with `out` the unit direction from the centre through it.
+ */
+export function townCenterSpot(
+  index: number,
+  count: number,
+  radius: TownCenterRadius,
+) {
+  const along = townCenterAlong(index, count, radius);
+  const x = Math.cos(along) * radius.x;
+  const y = Math.sin(along) * radius.y;
+  const length = Math.hypot(x, y) || 1;
+  return { x, y, out: { x: x / length, y: y / length } };
+}
+
+/** An oval's cumulative length at evenly spaced angles, by its half-axes. */
+const LENGTHS = new Map<string, Float64Array>();
+const SAMPLES = 720;
+
+/** The ellipse angle for entry `index` of `count`, evenly along its length. */
+function townCenterAlong(
+  index: number,
+  count: number,
+  radius: TownCenterRadius,
+) {
+  const start = townCenterAngle(0, 1);
+  if (radius.x === radius.y) return townCenterAngle(index, count);
+  const key = `${radius.x}:${radius.y}`;
+  let lengths = LENGTHS.get(key);
+  if (!lengths) {
+    lengths = new Float64Array(SAMPLES + 1);
+    for (let at = 1; at <= SAMPLES; at += 1) {
+      const a = start + ((at - 1) * 2 * Math.PI) / SAMPLES;
+      const b = start + (at * 2 * Math.PI) / SAMPLES;
+      lengths[at] =
+        lengths[at - 1]! +
+        Math.hypot(
+          (Math.cos(b) - Math.cos(a)) * radius.x,
+          (Math.sin(b) - Math.sin(a)) * radius.y,
+        );
+    }
+    LENGTHS.set(key, lengths);
+  }
+  const target = (index / count) * lengths[SAMPLES]!;
+  let at = 1;
+  while (at < SAMPLES && lengths[at]! < target) at += 1;
+  const before = lengths[at - 1]!;
+  const part = (target - before) / (lengths[at]! - before || 1);
+  return start + ((at - 1 + part) * 2 * Math.PI) / SAMPLES;
 }
 
 /** One ring opened by an entry: its actions, around that entry. */
@@ -198,7 +324,8 @@ export function TownCenterMenu({
   const shown = inner?.actions ?? actions;
   const ringKey =
     levels.map((level) => level.from.id).join("/") || "town-center";
-  const { radius, item } = townCenterRing(viewportWidth);
+  const geometry = townCenterRing(viewportWidth);
+  const { radius, item } = geometry;
   // The style guide's icon sizes: a menu's 16 px, phone navigation's 22 px.
   const iconSize = item < 56 ? 16 : 22;
   const choose = (action: TownCenterAction, index: number) => {
@@ -259,7 +386,8 @@ export function TownCenterMenu({
         data-ring={ringKey}
         style={
           {
-            "--ring-radius": `${radius}px`,
+            "--ring-x": `${radius.x}px`,
+            "--ring-y": `${radius.y}px`,
             "--ring-item": `${item}px`,
           } as React.CSSProperties
         }
@@ -279,7 +407,8 @@ export function TownCenterMenu({
           role="none"
         >
           {shown.map((action, index) => {
-            const angle = townCenterAngle(index, shown.length);
+            const spot = townCenterStep(index, shown.length, radius);
+            const label = townCenterLabel(index, shown.length, geometry);
             const Icon = action.icon;
             return (
               <button
@@ -300,9 +429,14 @@ export function TownCenterMenu({
                   .join(", ")}
                 style={
                   {
-                    "--dx": `${Math.round(Math.cos(angle) * radius)}px`,
-                    "--dy": `${Math.round(Math.sin(angle) * radius)}px`,
+                    "--dx": `${spot.x}px`,
+                    "--dy": `${spot.y}px`,
                     "--delay": `${index * 18}ms`,
+                    "--lx": `${label.at.x}px`,
+                    "--ly": `${label.at.y}px`,
+                    "--ax": label.align.x,
+                    "--ay": label.align.y,
+                    "--label-width": `${label.width}px`,
                   } as React.CSSProperties
                 }
                 onClick={() => choose(action, index)}
@@ -312,7 +446,7 @@ export function TownCenterMenu({
                   {action.count ? <b>{action.count}</b> : null}
                 </span>
                 <span className="town-center-label" aria-hidden="true">
-                  {action.label}
+                  <span>{action.label}</span>
                   {action.detail ? <small>{action.detail}</small> : null}
                 </span>
               </button>

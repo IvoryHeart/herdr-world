@@ -464,7 +464,10 @@
     opens what its building opens (`townCenterBuildings.ts`, from the
     `townPlaces.ts` registry). Every ring opens around the entry that opened
     it, moved only to fit the screen, so Buildings' place becomes the centre:
-    **←** Back with its name. Back, Escape or **Back** on a phone step back one
+    **←** Back with its name above it. Every label sits outside its ring,
+    beyond its icon, at every depth (`townCenterLabel`); a phone too narrow
+    for side labels round a circle gets an upright oval, entries evenly
+    spaced along it (`townCenterSpot`). Back, Escape or **Back** on a phone step back one
     ring, focused on the entry that opened it. Arrow
     keys, Home and End move around either ring; Escape, a press outside, the
     centre **✕** or **Back** on a phone closes the first ring.
