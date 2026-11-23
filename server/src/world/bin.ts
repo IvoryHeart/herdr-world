@@ -147,12 +147,7 @@ export class WorldBinRegistry {
   restore(id: string): BinState {
     if (!this.forget(id)) return this.list();
     this.deps.info?.(`Bin put back ${id}`);
-    // A stopped bus with nobody left aboard has nothing to wait for.
-    if (
-      this.stoppedAt !== null &&
-      ![...this.entries.values()].some((entry) => entry.riding)
-    )
-      this.resumeTrip();
+    this.resumeIfEmpty();
     this.changed();
     return this.list();
   }
@@ -174,6 +169,19 @@ export class WorldBinRegistry {
     this.resumeTrip();
     this.changed();
     return this.list();
+  }
+
+  /**
+   * A stopped bus with nobody left aboard has nothing to wait for: however
+   * its last rider left (put back, ended by itself, or its host restarted),
+   * it drives on, so later agents still board and close.
+   */
+  private resumeIfEmpty() {
+    if (
+      this.stoppedAt !== null &&
+      ![...this.entries.values()].some((entry) => entry.riding)
+    )
+      this.resumeTrip();
   }
 
   private resumeTrip() {
@@ -222,7 +230,9 @@ export class WorldBinRegistry {
         });
         changed = true;
       }
-    if (changed) this.changed();
+    if (!changed) return;
+    this.resumeIfEmpty();
+    this.changed();
   }
 
   /**
@@ -267,12 +277,7 @@ export class WorldBinRegistry {
       changed = true;
     }
     if (!changed) return;
-    // A stopped bus with nobody left aboard has nothing to wait for.
-    if (
-      this.stoppedAt !== null &&
-      ![...this.entries.values()].some((entry) => entry.riding)
-    )
-      this.resumeTrip();
+    this.resumeIfEmpty();
     this.changed();
   }
 

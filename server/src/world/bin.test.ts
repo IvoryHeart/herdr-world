@@ -372,6 +372,34 @@ test("a stopped bus whose last rider ended drives on", async () => {
   expect(registry.list().bus.elapsed_ms).toBeNull();
 });
 
+test("a stopped bus whose last rider's host restarted drives on, and later agents still close", async () => {
+  const { registry, committed, advance } = fixture();
+  const core = (terminal: string, connection_generation: number) =>
+    agent(terminal, {
+      connection_id: "core-local",
+      connection_generation,
+      runtime: "herdr-core",
+      terminal_id: terminal,
+      confirmation: {
+        core_id: "c0ffee",
+        terminals: [{ address: terminal, pid: 4242, occupant: "claude" }],
+      },
+    });
+  registry.add(core("t1", 2));
+  await advance(60_000);
+  registry.stopBus();
+  registry.retireConnectionGeneration("core-local", 3);
+  expect(registry.list().bus.stopped).toBe(false);
+  // The replacement runtime's agent boards the next bus and closes.
+  registry.add(core("t2", 3));
+  await advance(10_000);
+  expect(registry.list().bus.elapsed_ms).toBeNull();
+  await advance(50_000);
+  expect(registry.list().entries[0]?.riding).toBe(true);
+  await advance(10_000);
+  expect(ids(committed)).toEqual([["t2"]]);
+});
+
 test("only a current, complete list read after the hold witnesses an end", async () => {
   const { registry, advance, wall } = fixture();
   await advance(5_000);

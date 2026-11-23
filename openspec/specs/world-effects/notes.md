@@ -28,3 +28,6 @@
   after it was held has ended by itself: it leaves the Bin with nothing
   closed. A list read before the hold witnesses nothing, so a just-started
   agent is never dropped by an earlier read.
+- A stopped bus drives on once its last rider leaves, however it left: put
+  back, ended by itself, or its host's runtime restarted. Otherwise it stands
+  empty with no timer and later agents never board.
