@@ -1,6 +1,6 @@
 # Board element data notes
 
-[Contract](../../changes/board-element-data/specs/world-board-elements/spec.md).
+[Contract](spec.md).
 Data, service, API and CLI foundation; #1030 owns presentation.
 
 **Surfaces:**
