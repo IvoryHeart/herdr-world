@@ -2,12 +2,10 @@ import { useState } from "react";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 import { agentName, where } from "./deskAgentLabels";
 import { deskRevealUnavailable, type DeskRevealResult } from "./deskReveal";
-import type { WorldHostGroup } from "../worldHosts";
+import type { HostGroupOf } from "../worldHosts";
 
 /** A connection's group under "Group runtimes" (worldHosts.ts `hostGroupOf`). */
-export type DeskHostGroupOf = (
-  connectionId: string,
-) => Pick<WorldHostGroup, "key" | "label"> | undefined;
+export type DeskHostGroupOf = HostGroupOf;
 
 type Elsewhere = {
   /** The group's key: a machine, or one runtime (worldHosts.ts). */

@@ -222,7 +222,10 @@ export function WorldNavigator({
             </button>
             {open
               ? group.members.map((host) =>
-                  renderHost(host, group.tags.get(host.source.id) ?? null),
+                  renderHost(
+                    host,
+                    group.tags.get(host.source.connectionId) ?? null,
+                  ),
                 )
               : null}
           </section>

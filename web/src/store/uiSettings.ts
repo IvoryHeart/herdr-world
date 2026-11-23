@@ -31,8 +31,6 @@ let uiSettingsPushVersion = 0;
 let latestShortcutPush: unknown;
 let receptionPushVersion = 0;
 let latestReceptionPush: unknown;
-let groupingPushVersion = 0;
-let latestGroupingPush: unknown;
 
 async function hydrateUiSettings() {
   if (uiSettingsHydrated) return;
@@ -40,7 +38,6 @@ async function hydrateUiSettings() {
   const epoch = uiSettingsEpoch;
   const pushVersion = uiSettingsPushVersion;
   const receptionVersion = receptionPushVersion;
-  const groupingVersion = groupingPushVersion;
   try {
     const result = await bridge.call("bridge.ui_settings.get");
     if (epoch !== uiSettingsEpoch) return;
@@ -67,18 +64,24 @@ async function hydrateUiSettings() {
         ? ui[TOWN_RECEPTION_SETTING_KEY]
         : latestReceptionPush,
     );
-    connectRuntimeGrouping(async (value) => {
-      await bridge.call("bridge.ui_settings.update", {
+    connectRuntimeGrouping(async (value, options) => {
+      const answer = await bridge.call("bridge.ui_settings.update", {
         key: RUNTIME_GROUPING_SETTING_KEY,
         value,
+        ...(options?.onlyIfAbsent ? { only_if_absent: true } : {}),
       });
+      return {
+        value: answer?.value,
+        revision:
+          typeof answer?.revision === "number" ? answer.revision : undefined,
+      };
     });
-    // Adopting a missing value may send this browser's older Town choice
-    // once (world/runtimeGrouping.ts), so the write path is installed first.
+    // Ordered by the service's revision against pushes that arrived first
+    // (world/runtimeGrouping.ts). Adopting a missing value may offer this
+    // browser's older Town choice, so the write path is installed first.
     adoptRuntimeGrouping(
-      groupingVersion === groupingPushVersion
-        ? ui[RUNTIME_GROUPING_SETTING_KEY]
-        : latestGroupingPush,
+      ui[RUNTIME_GROUPING_SETTING_KEY],
+      typeof result?.revision === "number" ? result.revision : undefined,
     );
   } catch {
     // Either the call lost a race with socket setup, or the service predates
@@ -102,9 +105,7 @@ export function installUiSettings(): void {
   });
   bridge.onUiSetting((push) => {
     if (push.key === RUNTIME_GROUPING_SETTING_KEY) {
-      groupingPushVersion += 1;
-      latestGroupingPush = push.value;
-      adoptRuntimeGrouping(push.value);
+      adoptRuntimeGrouping(push.value, push.revision);
       return;
     }
     if (push.key === TOWN_RECEPTION_SETTING_KEY) {

@@ -32,6 +32,7 @@
 - `web/src/world/WorldNavigator.tsx`
 - `web/src/worldHosts.ts`
 - `web/src/store/uiSettings.ts`
+- `server/src/bridge/settings-rpc.ts`
 
 **Tests:**
 
@@ -42,6 +43,8 @@
 - `web/src/world/runtimeGrouping.test.ts`
 - `web/src/world/navigatorGroups.test.ts`
 - `web/src/worldHosts.test.ts`
+- `server/src/bridge/runtime-grouping-schedules.test.ts`
+- `server/src/bridge/settings-rpc.test.ts`
 
 **Pitfalls:**
 
@@ -84,18 +87,20 @@
   its server; another server's menu only navigates. Stale hosts stay out, and a
   failed observation shows its error.
 - **Settings → This World → Group runtimes** decides how Town's buildings,
-  World's navigator and Desk's other-host summaries group a machine's
+  World's navigator, Desk's other-host summaries and Board's zones group a machine's
   runtimes, for every browser. **One per machine** (the default) puts this
   computer's Herdr TUI and herdr-core under one navigator heading with a
   **Herdr TUI** row and a **herdr-core** row (each with its own tree, colour
-  and actions), one Town building and one Desk host; **One per runtime** shows
+  and actions), one Town building, one Desk host and one Board zone; **One per runtime** shows
   each runtime apart. A machine on its own runtime keeps a plain host row.
   The value lives in the service's settings (`ui.runtimeGrouping`), with a
   browser copy (`runtimeGrouping.v1`) for the first paint; one browser's
-  earlier Town buildings choice moves there once. Groups come from one
-  derivation (`worldHostGroups` / `hostGroupOf` in `web/src/worldHosts.ts`);
-  Board keeps a zone per connection and the Hosts filter always lists
-  machines.
+  earlier Town buildings choice moves there once, as an `only_if_absent`
+  update the service applies inside its settings writer. Answers and pushes
+  carry the service's commit `revision`; a browser keeps the newest one it
+  has seen, so a late push never undoes a later save. Groups come from one
+  derivation (`worldHostGroups` / `hostGroupOf` / `groupByRuntime` in
+  `web/src/worldHosts.ts`); the Hosts filter always lists machines.
 - Workspace rows show numbered tab chips with each tab's agent status, folding
   extra tabs into **+N**, and keep the server badge in the right column. In
   Spaces a chip focuses its tab; in World's navigator it selects the workspace

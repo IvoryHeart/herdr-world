@@ -268,3 +268,67 @@ export function hostGroupOf(
     for (const host of group.hosts) byId.set(host.id, group);
   return (connectionId) => byId.get(connectionId);
 }
+
+/** A connection's group: `hostGroupOf`'s answer, or a test's stand-in. */
+export type HostGroupOf = (
+  connectionId: string,
+) => Pick<WorldHostGroup, "key" | "label"> | undefined;
+
+/** A view's items (navigator hosts, Board zones) in one runtime group. */
+export type RuntimeGroup<T> = {
+  key: string;
+  label: string;
+  members: T[];
+  /**
+   * In groups of two or more, each member's runtime tag by connection ID:
+   * "Herdr TUI", "herdr-core", or with its name when two share a kind.
+   */
+  tags: Map<string, string>;
+};
+
+/**
+ * A view's per-connection items, grouped as World's "Group runtimes" setting
+ * groups their connections (`hostGroupOf`), in first-seen order. An item
+ * whose connection the catalogue does not list stands alone. The navigator
+ * and Board both group through this, so they never disagree.
+ */
+export function groupByRuntime<T>(
+  items: readonly T[],
+  sourceOf: (item: T) => {
+    connectionId: string;
+    label: string;
+    runtime?: WorldHost["runtime"];
+  },
+  groupOf: HostGroupOf,
+): RuntimeGroup<T>[] {
+  const byKey = new Map<string, RuntimeGroup<T>>();
+  for (const item of items) {
+    const source = sourceOf(item);
+    const group = groupOf(source.connectionId);
+    const key = group?.key ?? `runtime:${source.connectionId}`;
+    const entry = byKey.get(key) ?? {
+      key,
+      label: group?.label ?? source.label,
+      members: [],
+      tags: new Map<string, string>(),
+    };
+    entry.members.push(item);
+    byKey.set(key, entry);
+  }
+  for (const entry of byKey.values()) {
+    if (entry.members.length < 2) continue;
+    const sources = entry.members.map(sourceOf);
+    const kinds = sources.map(({ runtime }) => runtime ?? "herdr");
+    sources.forEach((source, index) => {
+      const kind = kinds[index]!;
+      // Two runtimes of one kind on a machine: their names tell them apart.
+      entry.tags.set(
+        source.connectionId,
+        kinds.filter((each) => each === kind).length > 1
+          ? `${runtimeTag(kind)} · ${source.label}`
+          : runtimeTag(kind),
+      );
+    });
+  }
+  return [...byKey.values()];
+}
