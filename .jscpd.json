@@ -1,0 +1,19 @@
+{
+  "path": ["server/src", "web/src", "shared", "scripts", "tools"],
+  "format": ["typescript", "tsx", "javascript"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/*.gen.*",
+    "**/*.browser.*",
+    "**/public/**",
+    "**/dist/**"
+  ],
+  "minLines": 10,
+  "minTokens": 100,
+  "reporters": ["json"],
+  "silent": true,
+  "absolute": true,
+  "output": ".agents/dead-code"
+}

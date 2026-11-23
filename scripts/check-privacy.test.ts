@@ -417,6 +417,47 @@ test("published dependency attribution is reusable only in the root generated li
     expect(scanPrivacyRange(root, trusted, refreshed)).toEqual([]);
   }));
 
+test("reviewed Knip copyright address is allowed only in the root generated licence artifact", () =>
+  repository(({ base, commit, root }) => {
+    const address = ["hiroki.osame", "gmail.com"].join("@");
+    const copyright = `Copyright (c) Hiroki Osame <${address}>\n`;
+    const licensed = commit(copyright, "DEPENDENCY_LICENSES.md");
+    expect(scanPrivacyRange(root, base, licensed)).toEqual([]);
+    expect(privacyRules(copyright)).toContain("email");
+    mkdirSync(join(root, "nested"));
+    mkdirSync(join(root, "scripts"));
+    let previous = licensed;
+    for (const file of [
+      "report.md",
+      "DEPENDENCY_NOTICES.md",
+      "nested/DEPENDENCY_LICENSES.md",
+      "scripts/privacy-allowlist.ts",
+    ]) {
+      const outside = commit(copyright, file);
+      expect(scanPrivacyRange(root, previous, outside)).toContainEqual(
+        expect.objectContaining({ file, rule: "email" }),
+      );
+      previous = outside;
+    }
+    const otherAddresses = [
+      ["hiroki.osame", "mail-provider.com"].join("@"),
+      ["another-person", "gmail.com"].join("@"),
+      ["hiroki.osame", "gmail.com.evil.org"].join("@"),
+    ];
+    const bad = commit(
+      copyright + otherAddresses.join("\n") + `\n${login}\n${home}\n`,
+      "DEPENDENCY_LICENSES.md",
+    );
+    const findings = scanPrivacyRange(root, previous, bad);
+    expect(findings.filter((finding) => finding.rule === "email")).toHaveLength(
+      3,
+    );
+    for (const rule of ["login-token", "home-path"])
+      expect(findings).toContainEqual(
+        expect.objectContaining({ file: "DEPENDENCY_LICENSES.md", rule }),
+      );
+  }));
+
 test("main pushes cannot approve newly added attribution addresses", () =>
   repository(({ root, git, commit }) => {
     const before = commit(`Author <${email}>\n`, "DEPENDENCY_LICENSES.md");
