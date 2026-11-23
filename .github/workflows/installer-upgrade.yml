@@ -12,7 +12,12 @@ on:
       candidate_version:
         required: true
         type: string
+      build_hash:
+        required: true
+        type: string
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
 
 permissions:
   contents: read
@@ -32,6 +37,7 @@ jobs:
       tag: ${{ steps.plan.outputs.baseline_tag }}
       sha: ${{ steps.plan.outputs.baseline_sha }}
       version: ${{ steps.plan.outputs.candidate_version }}
+      hash: ${{ steps.plan.outputs.build_hash }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -69,6 +75,7 @@ jobs:
             runner: windows-11-arm
     env:
       HERDR_WORLD_BUILD_VERSION: ${{ inputs.candidate_version || needs.baseline.outputs.version }}
+      INSTALLER_BUILD_HASH: ${{ inputs.build_hash || needs.baseline.outputs.hash }}
       INSTALLER_BASELINE_TAG: ${{ inputs.baseline_tag || needs.baseline.outputs.tag }}
       INSTALLER_BASELINE_SHA: ${{ inputs.baseline_sha || needs.baseline.outputs.sha }}
       INSTALLER_BASELINE_DIR: ${{ github.workspace }}/.agents/worktrees/installer-baseline
@@ -125,7 +132,17 @@ jobs:
         with:
           path: .agents/installer-baseline-assets
           key: installer-baseline-${{ inputs.baseline_tag || needs.baseline.outputs.tag }}-${{ matrix.platform }}
+      - name: Restore the exact content-keyed native package
+        id: package-cache
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            dist
+            server/herdr-world-*
+          key: installer-build-v1-${{ matrix.platform }}-${{ env.ImageVersion }}-${{ env.INSTALLER_BASELINE_TAG }}-${{ env.INSTALLER_BUILD_HASH }}
       - name: Build the proposed merge with the release packaging script
+        if: steps.package-cache.outputs.cache-hit != 'true'
         shell: bash
         env:
           PACKAGE_PLATFORM: ${{ matrix.platform }}
@@ -139,6 +156,17 @@ jobs:
       - name: Verify real Linux installations and reboot in systemd containers
         if: matrix.platform == 'linux-x64'
         run: bun run test:install-linux --reuse --version "$HERDR_WORLD_BUILD_VERSION" --require-docker
+      - name: Verify Windows Bun-free plugin installation and frozen actions
+        if: runner.os == 'Windows'
+        run: bun run test scripts/install-plugin.windows.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts
+      - name: Save the validated native build
+        if: success() && steps.package-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            dist
+            server/herdr-world-*
+          key: installer-build-v1-${{ matrix.platform }}-${{ env.ImageVersion }}-${{ env.INSTALLER_BASELINE_TAG }}-${{ env.INSTALLER_BUILD_HASH }}
       - name: Compile the standalone plugin launcher
         if: runner.os == 'macOS'
         run: bun scripts/world-plugin.ts compile-launcher

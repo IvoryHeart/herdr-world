@@ -604,14 +604,24 @@ test.skipIf(!chrome)(
           room.label.includes("core-alpha"),
         )!;
         expect(await visit(mode, alpha.key, "core-alpha")).toBeNull();
-        // The pointer may rest where the camera just put a plaque: move it
-        // off so no plaque card covers the free seat, as the loop above does.
+        const plaque = plaqueOf("core-alpha");
+        // A camera move can leave the pointer over a room plaque. Its hover
+        // card covers the seat: isolate the launcher action from the preceding
+        // room-control sweep. Start hovered in both layouts to retain the
+        // failure deterministically, then leave the card before pressing +.
+        const heading = await centre(
+          `${plaque}.querySelector('.town-room-plaque-name')`,
+        );
+        expect(heading).not.toBeNull();
         await move({ x: 4, y: 4 });
-        const alphaPlus = `${plaqueOf("core-alpha")}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`;
-        const plus = await centre(alphaPlus);
+        await move(heading!);
+        expect(await reach(plaque)).toMatchObject({ reached: true });
+        await move({ x: 4, y: 4 });
+        const add = `${plaque}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`;
+        const plus = await centre(add);
         expect(plus).not.toBeNull();
         await move(plus!);
-        expect(await reach(alphaPlus)).toMatchObject({
+        expect(await reach(add)).toMatchObject({
           reached: true,
           disabled: false,
         });
@@ -625,11 +635,25 @@ test.skipIf(!chrome)(
           );
           throw new Error(`${error.message}: ${seen}`);
         });
-        await click(
-          (await centre(
-            "document.querySelector('.agent-launcher-card:not(:disabled)')",
-          ))!,
+        // Terminal is enabled before the catalog arrives. Its response grows
+        // and recentres the dialog, so do not carry pre-catalog coordinates
+        // into the click. The fixture holds that response to exercise the race.
+        await evaluate("window.__ownerTopology.releaseCatalog()");
+        await waitFor(
+          "!!document.querySelector('.agent-launcher-kind:not(:disabled)')",
+          "the launcher catalog paints",
         );
+        await frames();
+        const terminal =
+          "document.querySelector('.agent-launcher-card:not(:disabled)')";
+        const choice = await centre(terminal);
+        expect(choice).not.toBeNull();
+        await move(choice!);
+        expect(await reach(terminal)).toMatchObject({
+          reached: true,
+          disabled: false,
+        });
+        await click(choice!);
         await waitFor(
           "window.__ownerTopology.calls.some((c) => c.method === 'world.core.launch')",
           "a core start",

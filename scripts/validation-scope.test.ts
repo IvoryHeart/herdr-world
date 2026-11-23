@@ -22,7 +22,7 @@ import {
   worldRuntimeSuites,
   webBrowserSuites,
 } from "./world-browser-suites";
-import { selectedCITests } from "./ci-tests";
+import { ciTestBatches, selectedCITests } from "./ci-tests";
 
 test("only the explicit agent tooling paths qualify", () => {
   const allowed = [
@@ -147,6 +147,20 @@ test("shared browser-only inputs do not schedule native platforms; compiled impo
   expect(selectValidation(known, [ui]).packaging).toBe(false);
   expect(selectValidation(known, [binary]).packaging).toBe(true);
   expect(selectValidation(known, []).packaging).toBe(true);
+});
+
+test("a production web edit always reaches the built-entry boot journey across the Vite boundary", () => {
+  const source = "web/src/startupPreference.ts";
+  const boot = "web/src/productionBoot.browser.test.ts";
+  const known: Graph = {
+    ...graph,
+    files: new Set([...graph.files, source, boot]),
+    deps: new Map([...graph.deps, [unit, new Set([source])]]),
+  };
+  const selection = selectValidation(known, [source]);
+  expect(selection.full).toBe(false);
+  expect(selection.web).toContain(boot);
+  expect(selection.packaging).toBe(false);
 });
 
 test("owners and World runtime paths independently require their maintained suites", () => {
@@ -282,10 +296,7 @@ test("build-version changes select native jobs because the module is compiled in
   expect(selection.packaging).toBe(true);
 });
 
-const nativeJobTests = [
-  ["ci.yml", ["plugin-windows"]],
-  ["installer-upgrade.yml", ["upgrade"]],
-] as const;
+const nativeJobTests = [["installer-upgrade.yml", ["upgrade"]]] as const;
 const namedNativeTests = new Set<string>();
 for (const [file, jobs] of nativeJobTests) {
   const workflow = Bun.YAML.parse(
@@ -502,6 +513,115 @@ test("the real shard-table graph does not mistake installer test imports for nat
   ).toBe(true);
 });
 
+test("World CI isolates full scenes while keeping lightweight files parallel, with every selected suite once", () => {
+  const selection = selectValidation(graph, ["package.json"]);
+  const all = { ...selection, world: worldBrowserSuites };
+  const batches = ciTestBatches(all, "world");
+  expect(batches.map((batch) => batch.parallel)).toEqual([1, 2]);
+  expect(batches.flatMap((batch) => batch.files).sort()).toEqual(
+    [...worldBrowserSuites].sort(),
+  );
+  const isolated = batches[0]!.files;
+  for (const file of [
+    "ConcurrentContexts",
+    "ProductionContexts.town",
+    "ProductionContexts.animated",
+    "town/TownCanvas",
+    "BoardView",
+    "SharedViewCreation",
+    "WorldTerminalHandoff",
+  ])
+    expect(isolated).toContain(`web/src/world/${file}.test.ts`);
+  for (let shard = 1; shard <= 6; shard++) {
+    const actual = ciTestBatches(all, "world", String(shard));
+    expect(actual.flatMap((batch) => batch.files).sort()).toEqual(
+      selectedCITests(all, "world", String(shard)).sort(),
+    );
+    expect(actual.every((batch) => batch.files.length > 0)).toBe(true);
+  }
+  expect(ciTestBatches({ ...selection, world: [] }, "world")).toEqual([]);
+  expect(
+    ciTestBatches(
+      { ...selection, world: ["web/src/world/NewScene.test.ts"] },
+      "world",
+    ),
+  ).toEqual([{ files: ["web/src/world/NewScene.test.ts"], parallel: 1 }]);
+});
+
+test.each([
+  { runs: 1, failingPass: 0, failingBatch: "" },
+  ...[1, 3].flatMap((runs) =>
+    Array.from({ length: runs }, (_, index) => index + 1).flatMap(
+      (failingPass) =>
+        ["isolated", "parallel"].map((failingBatch) => ({
+          runs,
+          failingPass,
+          failingBatch,
+        })),
+    ),
+  ),
+  { runs: 3, failingPass: 0, failingBatch: "" },
+])(
+  "CI executes isolated and parallel batches with distinct artifacts and stops on failure (%j)",
+  ({ runs, failingPass, failingBatch }) => {
+    const root = mkdtempSync(join(tmpdir(), "ci-browser-batches-"));
+    try {
+      mkdirSync(join(root, "scripts"));
+      writeFileSync(
+        join(root, "scripts/run-world-tests.ts"),
+        `
+import {appendFileSync} from "node:fs";
+appendFileSync("executions.jsonl", JSON.stringify({args:process.argv.slice(2),label:process.env.HERDR_WORLD_TEST_LABEL})+"\\n");
+if (process.argv.includes("--parallel=${failingBatch === "isolated" ? 1 : 2}") && ${failingPass > 0} && (${runs} === 1 || process.env.HERDR_WORLD_TEST_LABEL?.includes("-pass-${failingPass}-"))) process.exit(7);
+`,
+      );
+      const selection = {
+        ...selectValidation(graph, ["package.json"]),
+        world: [
+          "web/src/world/WorldTerminalHandoff.test.ts",
+          "web/src/world/windows/WindowFrame.test.ts",
+        ],
+      };
+      const child = Bun.spawnSync(
+        [process.execPath, join(import.meta.dir, "ci-tests.ts"), "world"],
+        {
+          cwd: root,
+          env: {
+            ...process.env,
+            HERDR_CI_SELECTION: JSON.stringify(selection),
+            HERDR_WORLD_TEST_LABEL: "shard-5-of-6",
+            HERDR_CI_WORLD_RUNS: String(runs),
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(child.stderr.toString()).toBe("");
+      expect(child.exitCode).toBe(failingPass ? 7 : 0);
+      const executions = readFileSync(join(root, "executions.jsonl"), "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      const expected = [];
+      for (let pass = 1; pass <= runs; pass++) {
+        const prefix = `shard-5-of-6${runs > 1 ? `-pass-${pass}` : ""}`;
+        expected.push({
+          args: [selection.world[0], "--parallel=1", "--max-concurrency=1"],
+          label: `${prefix}-isolated`,
+        });
+        if (pass === failingPass && failingBatch === "isolated") break;
+        expected.push({
+          args: [selection.world[1], "--parallel=2", "--max-concurrency=1"],
+          label: `${prefix}-parallel`,
+        });
+        if (pass === failingPass) break;
+      }
+      expect(executions).toEqual(expected);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
 test("area files and shared metadata select the inventory check and preserve model policy", () => {
   for (const path of [
     "verification/coverage/Q01.json",
