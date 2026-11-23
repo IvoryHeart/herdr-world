@@ -84,6 +84,7 @@ const STATIC = [
   "spec:check",
   "help:check",
 ].map((script) => ["bun", "run", script]);
+STATIC.push(["bun", "scripts/check-knowledge-map-links.ts"]);
 
 function trackedTests() {
   const result = Bun.spawnSync(["git", "ls-files"], { cwd: root });
