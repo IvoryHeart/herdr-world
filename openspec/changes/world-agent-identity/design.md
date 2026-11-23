@@ -140,10 +140,12 @@ Migration copies and never guesses:
 
 3. A key that matches no agent or several agents stays where it is and keeps working
    as today. It is copied later, once it is unique. Facts for offline hosts wait.
-4. Old rows stay. Old readers remain until a check shows that every row is either
-   copied or still pending. Old tables are then renamed `retired_*`, kept for one
-   release and never deleted automatically. Rollback means restoring the named
-   snapshot.
+4. Old rows stay, and each old table keeps its reader while any of its rows is
+   pending. A table is retired only when a check shows every one of its rows
+   copied and none pending. A pending row (an offline host, a tab with two agents)
+   therefore keeps displaying and stays available to copy later, for as long as it
+   takes. A retired table is renamed `retired_*`, kept for one release and never
+   deleted automatically. Rollback means restoring the named snapshot.
 
 ## 5. One record for every view
 

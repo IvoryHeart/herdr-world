@@ -57,7 +57,8 @@ Each later step is one PR of about 300 changed lines or fewer, excluding tests.
 - [ ] 7.1 Copy appearance, colours, desk pins and ranks, interest, groups, profile
   assignment and Town Master when the key is unique. Leave other rows pending.
 - [ ] 7.2 Add `agent_id` to Desk marks and residents, add the verify-then-retire
-  check, and record the rollback snapshot.
+  check (per table; any pending row keeps the table and its reader), and record
+  the rollback snapshot.
 
 ## 8. Views
 

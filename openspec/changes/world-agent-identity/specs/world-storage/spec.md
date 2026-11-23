@@ -14,7 +14,7 @@ World SHALL store each agent as an `agent` entity in the single-model entities t
 
 ### Requirement: Lossless migration of agent facts
 
-The upgrade SHALL add agent storage without changing existing rows, after the usual pre-upgrade snapshot. On each connection's first complete, unambiguous observation after the upgrade, World SHALL create an agent for each harness occupant and copy a terminal appearance, tab colour, Town desk pin and rank, interest, group membership, profile assignment or Town Master onto an agent only when its old key resolves to exactly one agent. Desk marks and residents SHALL gain an agent reference and keep their own lifetimes. A key that resolves to no agent or to several agents SHALL stay in place, keep working as before, and be copied once it resolves uniquely. Old rows SHALL stay until a check shows every row copied or still pending. They SHALL then be retired by rename, never deleted automatically.
+The upgrade SHALL add agent storage without changing existing rows, after the usual pre-upgrade snapshot. On each connection's first complete, unambiguous observation after the upgrade, World SHALL create an agent for each harness occupant and copy a terminal appearance, tab colour, Town desk pin and rank, interest, group membership, profile assignment or Town Master onto an agent only when its old key resolves to exactly one agent. Desk marks and residents SHALL gain an agent reference and keep their own lifetimes. A key that resolves to no agent or to several agents SHALL stay in place, keep working as before, and be copied once it resolves uniquely. Old rows SHALL stay. Each old table SHALL keep its reader while any of its rows is pending, and SHALL be retired by rename only after a check shows every one of its rows copied and none pending. Old rows SHALL never be deleted automatically.
 
 #### Scenario: Tab with two agents
 - **WHEN** a pinned tab holds two agents at the first observation
@@ -23,6 +23,10 @@ The upgrade SHALL add agent storage without changing existing rows, after the us
 #### Scenario: Host offline during upgrade
 - **WHEN** a host is offline at the first start after the upgrade
 - **THEN** its facts stay pending and are copied after its first complete observation
+
+#### Scenario: Pending rows block retirement
+- **WHEN** the retirement check runs while an old table still holds a pending row
+- **THEN** that table and its reader stay in place, and the pending row keeps working and can still be copied later
 
 #### Scenario: Rollback
 - **WHEN** the user rolls back to the previous release
