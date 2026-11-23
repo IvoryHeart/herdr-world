@@ -12,6 +12,7 @@ import {
 import { tmpdir, homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { latestStableRelease } from "./installer-upgrade";
+import { buildInstallImage } from "./install-linux/image";
 import {
   herdrReleaseUrl,
   VERIFIED_HERDR_SHA256,
@@ -213,6 +214,17 @@ async function main() {
             /^\[(fresh|core-only|tui|stopped|upgrade)\]/.test(line),
           );
         for (const line of checks) console.info(line);
+        if (args[0] === "docker" && args[1] === "build") {
+          for (const line of (out + err)
+            .split("\n")
+            .filter((line) => /\[apt\]/.test(line))) {
+            console.info(line);
+            if (process.env.GITHUB_STEP_SUMMARY)
+              writeFileSync(process.env.GITHUB_STEP_SUMMARY, `- ${line}\n`, {
+                flag: "a",
+              });
+          }
+        }
         assert(
           code === 0,
           scrub(
@@ -300,16 +312,11 @@ async function main() {
       resources.image = `${name}:test`;
       console.info("Building disposable Ubuntu 24.04 systemd image...");
       // Narrow context: no source tree, credentials or host runtime files enter the image.
-      await run([
-        "docker",
-        "build",
-        "--platform",
-        "linux/amd64",
-        "--force-rm",
-        "--tag",
+      await buildInstallImage(
         resources.image,
-        "scripts/install-linux",
-      ]);
+        run,
+        process.env.INSTALLER_LINUX_BASE_CACHE,
+      );
       const failures: string[] = [];
       for (const scenario of cases.filter(
         (item) => !options.only || item === options.only,

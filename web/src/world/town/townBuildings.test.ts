@@ -63,15 +63,17 @@ const roomsOf = (town: typeof office, connectionId: string) =>
   town.rooms.filter((room) => room.workspaceRef.connectionId === connectionId);
 
 test("the setting picks the buildings; the page flag compares the two", () => {
-  expect(townBuildingsMode("")).toBe("host");
+  expect(townBuildingsMode("")).toBe("machine");
   expect(townBuildingsMode("", "runtime")).toBe("runtime");
   expect(townBuildingsMode("?view=town&townBuildings=runtime")).toBe("runtime");
-  expect(townBuildingsMode("?townBuildings=machine", "runtime")).toBe("host");
+  expect(townBuildingsMode("?townBuildings=machine", "runtime")).toBe(
+    "machine",
+  );
   expect(townBuildingsMode("?townBuildings=other", "runtime")).toBe("runtime");
 });
 
 test("a machine's building holds each runtime's rooms; identity is untouched", () => {
-  const town = createTownBuildings()(office, runtimes, "host");
+  const town = createTownBuildings()(office, runtimes, "machine");
   // One view of the shared socket: the writable profile, not the default.
   expect(roomsOf(town, "tui-default")).toEqual([]);
   expect(roomsOf(town, "tui-profile")).toHaveLength(2);
@@ -192,7 +194,7 @@ test("a live view of a socket wins over a writable one that is down", () => {
     ]),
     0,
   );
-  const town = createTownBuildings()(down, runtimes, "host");
+  const town = createTownBuildings()(down, runtimes, "machine");
   expect(town.rooms.map((room) => room.workspaceRef.connectionId)).toEqual([
     "tui-default",
   ]);
@@ -209,11 +211,13 @@ test("a machine of one runtime, or none known, is the projection itself", () => 
     0,
   );
   const buildings = createTownBuildings();
-  expect(buildings(lone, solo, "host")).toBe(lone);
-  expect(buildings(office, [], "host")).toBe(office);
+  expect(buildings(lone, solo, "machine")).toBe(lone);
+  expect(buildings(office, [], "machine")).toBe(office);
   // The same inputs give the same office, so Town does not lay out again.
   const again = createTownBuildings();
-  expect(again(office, runtimes, "host")).toBe(again(office, runtimes, "host"));
+  expect(again(office, runtimes, "machine")).toBe(
+    again(office, runtimes, "machine"),
+  );
 });
 
 test("the store's connections name each runtime's machine and endpoint", () => {
@@ -333,7 +337,7 @@ test("a takeover of a socket keeps its building, saved spots and colours", () =>
       0,
     );
   const pins: Record<string, { x: number; y: number }> = {};
-  const before = createTownBuildings()(twins(null), runtimes, "host");
+  const before = createTownBuildings()(twins(null), runtimes, "machine");
   // Spots saved while the profile is shown are kept under the profile.
   for (const [connectionId, spots] of roomSpotsByRuntime(
     before.rooms.map((room, index) => [room, { x: index, y: 1 }] as const),
@@ -377,7 +381,7 @@ test("a takeover of a socket keeps its building, saved spots and colours", () =>
   const takenOver = createTownBuildings()(
     twins("tui-profile"),
     runtimes,
-    "host",
+    "machine",
   );
   const flipped = shown(takenOver);
   // The live default's rooms now (their actions reach it) ...
@@ -395,9 +399,9 @@ test("a takeover of a socket keeps its building, saved spots and colours", () =>
       takenOver.rooms.map((room) => [room, { x: 0, y: 0 }] as const),
     ).keys(),
   ]).toEqual(["tui-profile", "core"]);
-  expect(shown(createTownBuildings()(twins(null), runtimes, "host"))).toEqual(
-    steady,
-  );
+  expect(
+    shown(createTownBuildings()(twins(null), runtimes, "machine")),
+  ).toEqual(steady);
   // One building per runtime keeps the same footing.
   const perRuntime = (down: string | null) =>
     shown(createTownBuildings()(twins(down), runtimes, "runtime")).buildings;
@@ -439,7 +443,7 @@ test("a takeover of a socket keeps its pinned desks at their seats", () => {
         new Set(Object.keys(deskPins)),
       ),
       runtimes,
-      "host",
+      "machine",
     );
     const model = townModelFromProjection(town, {}, deskPins);
     const room = town.rooms.find((each) => each.displayLabel === "Web")!;
@@ -507,7 +511,7 @@ test("during a takeover, pin controls on the live view pin and unpin the desk To
       0,
     ),
     runtimes,
-    "host",
+    "machine",
   );
   const shown = () => {
     const pins = anchoredDeskPins(saved as DeskPins, anchors);

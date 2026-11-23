@@ -150,14 +150,11 @@ const machinesCache = /* @__PURE__ */ new WeakMap<
 export function worldMachines(hosts: readonly WorldHost[]): WorldMachine[] {
   const cachedMachines = machinesCache.get(hosts);
   if (cachedMachines) return cachedMachines;
-  const byMachine = new Map<string, WorldHost[]>();
-  for (const host of hosts)
-    byMachine.set(host.machine, [...(byMachine.get(host.machine) ?? []), host]);
-  const machines = [...byMachine].map(([machine, members]) => ({
-    machine,
-    label: members[0]!.label,
-    ids: members.map(({ id }) => id),
-    status: machineStatus(members.map(({ state }) => state)),
+  const machines = worldHostGroups(hosts, "machine").map((group) => ({
+    machine: group.key,
+    label: group.label,
+    ids: group.hosts.map(({ id }) => id),
+    status: machineStatus(group.hosts.map(({ state }) => state)),
   }));
   machinesCache.set(hosts, machines);
   return machines;
@@ -200,7 +197,138 @@ export function hostCount(hosts: readonly Pick<WorldHost, "machine">[]) {
   return new Set(hosts.map(({ machine }) => machine)).size;
 }
 
+/** How a runtime reads beside its machine: a room plaque, a navigator row. */
+export function runtimeTag(runtime: WorldHost["runtime"]) {
+  return runtime === "herdr" ? "Herdr TUI" : runtime;
+}
+
 /** How a menu names a host's runtime; Herdr (TUI) hosts read as before. */
 export function hostRuntimeLabel(host: Pick<WorldHost, "runtime">) {
   return host.runtime === "herdr" ? null : host.runtime;
+}
+
+/**
+ * Which group a runtime stands in under the "Group runtimes" setting
+ * (world/runtimeGrouping.ts): its machine, or itself. The one rule every
+ * view groups runtimes by: Town's buildings, the navigator and Desk.
+ */
+export function runtimeGroupKey(
+  host: Pick<WorldHost, "id" | "machine">,
+  grouping: "machine" | "runtime",
+) {
+  return grouping === "machine" ? host.machine : `runtime:${host.id}`;
+}
+
+/** Runtimes a view shows together under the "Group runtimes" setting. */
+export type WorldHostGroup = {
+  key: string;
+  /** Its first runtime's name, as Town names the machine's building. */
+  label: string;
+  /** Its runtimes, in catalogue order. */
+  hosts: WorldHost[];
+};
+
+const groupsCache = /* @__PURE__ */ new WeakMap<
+  readonly WorldHost[],
+  Partial<Record<"machine" | "runtime", WorldHostGroup[]>>
+>();
+
+/** The catalogue's groups, in the order their first runtime appears. */
+export function worldHostGroups(
+  hosts: readonly WorldHost[],
+  grouping: "machine" | "runtime",
+): WorldHostGroup[] {
+  const cachedGroups = groupsCache.get(hosts) ?? {};
+  const known = cachedGroups[grouping];
+  if (known) return known;
+  const byKey = new Map<string, WorldHost[]>();
+  for (const host of hosts) {
+    const key = runtimeGroupKey(host, grouping);
+    byKey.set(key, [...(byKey.get(key) ?? []), host]);
+  }
+  const groups = [...byKey].map(([key, members]) => ({
+    key,
+    label: members[0]!.label,
+    hosts: members,
+  }));
+  groupsCache.set(hosts, { ...cachedGroups, [grouping]: groups });
+  return groups;
+}
+
+/**
+ * Each connection's group, by connection ID. A connection the catalogue does
+ * not list (yet) is a group of its own.
+ */
+export function hostGroupOf(
+  hosts: readonly WorldHost[],
+  grouping: "machine" | "runtime",
+): (connectionId: string) => WorldHostGroup | undefined {
+  const byId = new Map<string, WorldHostGroup>();
+  for (const group of worldHostGroups(hosts, grouping))
+    for (const host of group.hosts) byId.set(host.id, group);
+  return (connectionId) => byId.get(connectionId);
+}
+
+/** A connection's group: `hostGroupOf`'s answer, or a test's stand-in. */
+export type HostGroupOf = (
+  connectionId: string,
+) => Pick<WorldHostGroup, "key" | "label"> | undefined;
+
+/** A view's items (navigator hosts, Board zones) in one runtime group. */
+export type RuntimeGroup<T> = {
+  key: string;
+  label: string;
+  members: T[];
+  /**
+   * In groups of two or more, each member's runtime tag by connection ID:
+   * "Herdr TUI", "herdr-core", or with its name when two share a kind.
+   */
+  tags: Map<string, string>;
+};
+
+/**
+ * A view's per-connection items, grouped as World's "Group runtimes" setting
+ * groups their connections (`hostGroupOf`), in first-seen order. An item
+ * whose connection the catalogue does not list stands alone. The navigator
+ * and Board both group through this, so they never disagree.
+ */
+export function groupByRuntime<T>(
+  items: readonly T[],
+  sourceOf: (item: T) => {
+    connectionId: string;
+    label: string;
+    runtime?: WorldHost["runtime"];
+  },
+  groupOf: HostGroupOf,
+): RuntimeGroup<T>[] {
+  const byKey = new Map<string, RuntimeGroup<T>>();
+  for (const item of items) {
+    const source = sourceOf(item);
+    const group = groupOf(source.connectionId);
+    const key = group?.key ?? `runtime:${source.connectionId}`;
+    const entry = byKey.get(key) ?? {
+      key,
+      label: group?.label ?? source.label,
+      members: [],
+      tags: new Map<string, string>(),
+    };
+    entry.members.push(item);
+    byKey.set(key, entry);
+  }
+  for (const entry of byKey.values()) {
+    if (entry.members.length < 2) continue;
+    const sources = entry.members.map(sourceOf);
+    const kinds = sources.map(({ runtime }) => runtime ?? "herdr");
+    sources.forEach((source, index) => {
+      const kind = kinds[index]!;
+      // Two runtimes of one kind on a machine: their names tell them apart.
+      entry.tags.set(
+        source.connectionId,
+        kinds.filter((each) => each === kind).length > 1
+          ? `${runtimeTag(kind)} · ${source.label}`
+          : runtimeTag(kind),
+      );
+    });
+  }
+  return [...byKey.values()];
 }

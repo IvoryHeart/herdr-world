@@ -127,7 +127,7 @@ export function siteTownScene(now = Date.now(), { runtimes = false } = {}) {
   const world = buildWorldObject(connections, "site-host-0");
   const office = projectWorldOffice(world, now, null, TOWN_PRESENTATION_BOUNDS);
   const projection = runtimes
-    ? createTownBuildings()(office, SITE_RUNTIMES, "host")
+    ? createTownBuildings()(office, SITE_RUNTIMES, "machine")
     : office;
   // Finished agents are unreviewed, as after a morning away: they wait at
   // reception and the town board counts them done.

@@ -42,6 +42,15 @@
   gap: 10px;
   padding-left: 10px;
 }
+/* A machine's runtimes ("Group runtimes": one per machine) sit under it. */
+.world-navigator-machine {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.world-navigator-runtime {
+  padding-left: 10px;
+}
 .world-navigator-tree > .workspace-tree-panel,
 .world-navigator-tree > .agents-panel {
   flex: 0 0 auto;

@@ -43,6 +43,25 @@
   height: 100%;
 }
 
+/*
+ * Town's zoom (--z) and its inverse (--iz), written by townWorldTransform.ts
+ * onto each element that reads them (TOWN_ZOOM_READERS). Not inherited: a
+ * zoom step then restyles those elements, not the whole overlay (#1248).
+ * Syntax "*" keeps the written value as is: a "<number>" is substituted
+ * rounded, which moved sign text by subpixels.
+ */
+@property --z {
+  syntax: "*";
+  inherits: false;
+  initial-value: 1;
+}
+
+@property --iz {
+  syntax: "*";
+  inherits: false;
+  initial-value: 1;
+}
+
 /* World layer: children are positioned in world pixels. */
 .town-world {
   position: absolute;
@@ -50,8 +69,6 @@
   top: 0;
   transform-origin: 0 0;
   pointer-events: none;
-  --z: 1;
-  --iz: 1;
 }
 
 .town-world button {

@@ -19,17 +19,16 @@ building, and each admitted tab is a desk in its room.
   room's accessible label. Move menus SHALL show the same icon beside a
   room's name and add the runtime in words only where two entries would
   otherwise read the same. A building of one runtime SHALL show no runtime
-  icon. A browser-local Town buildings setting
-  (one per machine, the default, or one per runtime) SHALL restore a building
-  per runtime. The building key SHALL NOT change any entity's host key,
-  qualified references or actions, which stay on the owning connection and
-  generation. Two Herdr TUI connections to one endpoint SHALL present its
+  icon. World's Group runtimes setting (one per machine, the default, or one
+  per runtime) SHALL restore a building per runtime. The building key SHALL
+  NOT change any entity's host key, qualified references or actions, which
+  stay on the owning connection and generation. Two Herdr TUI connections to one endpoint SHALL present its
   rooms once, preferring the writable connection.
 
 #### Scenario: One machine, two runtimes, a duplicated connection
 
 - **WHEN** a machine has two Herdr TUI connections to one socket and a
-  herdr-core, and Town buildings is one per machine
+  herdr-core, and Group runtimes is one per machine
 - **THEN** Town shows one building for the machine with each TUI room once and
   every core room, each room naming its runtime with its icon
 - **AND** each room's Move handle, arrows, Rename, Close and New agent act on
