@@ -279,9 +279,9 @@ export function createApartmentsService<Core extends CoreLease>(deps: {
     },
     /** A complete pane list's observer that also moves ended agents out. */
     complete(observer: Complete): Complete {
-      return (...args) => {
-        observer(...args);
-        apartments.complete(...args);
+      return (connectionId, generation, panes, readAt) => {
+        observer(connectionId, generation, panes, readAt);
+        apartments.complete(connectionId, generation, panes);
       };
     },
     /** A resident's conversation, read from its host while it is connected. */

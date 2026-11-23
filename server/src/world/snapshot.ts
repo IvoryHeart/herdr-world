@@ -619,7 +619,12 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
               work.activityVersion,
         });
         if (!this.wasInvalidatedSinceStart(work)) {
-          observation.complete(this.onCompleteObservation, work.lease, raw[2]);
+          observation.complete(
+            this.onCompleteObservation,
+            work.lease,
+            raw[2],
+            observedAt,
+          );
           this.onFreshObservation?.(
             work.status.id,
             work.lease.generation,

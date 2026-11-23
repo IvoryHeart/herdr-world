@@ -544,7 +544,9 @@ test("UI settings sync globally while the selected Herdr connection is offline",
       3000,
     );
     const push = await delivered.promise.finally(() => clearTimeout(deadline));
-    expect(push).toEqual({ ui_settings: { key: "keyboardShortcuts", value } });
+    expect(push).toEqual({
+      ui_settings: { key: "keyboardShortcuts", value, revision: 1 },
+    });
     await first.rpc("bridge.ping");
     expect(own).toEqual([]);
     expect(

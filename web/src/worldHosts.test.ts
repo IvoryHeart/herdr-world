@@ -2,6 +2,9 @@ import { expect, test } from "bun:test";
 import type { ConnectionSummary } from "./api";
 import {
   hostCount as countHosts,
+  hostGroupOf,
+  runtimeGroupKey,
+  worldHostGroups,
   hostsFilterByMachine,
   machineStatus,
   worldHosts,
@@ -244,4 +247,47 @@ test("a selection saved per connection widens to its whole machine", () => {
     "local",
     "local-core",
   ]);
+});
+
+test("one grouping rule: a machine's runtimes together, or each runtime apart", () => {
+  const hosts = worldHosts({
+    connections: [
+      connection("tui"),
+      connection("remote", {
+        type: "ssh",
+        ssh_destination: "dev.example.test",
+      }),
+    ],
+    coreConnections: [core("core")],
+  });
+  const byMachine = worldHostGroups(hosts, "machine");
+  expect(
+    byMachine.map((group) => [
+      group.key,
+      group.label,
+      group.hosts.map(({ id }) => id),
+    ]),
+  ).toEqual([
+    ["local", "tui", ["tui", "core"]],
+    ["ssh:dev.example.test", "remote", ["remote"]],
+  ]);
+  expect(worldHostGroups(hosts, "machine")).toBe(byMachine);
+  const byRuntime = worldHostGroups(hosts, "runtime");
+  expect(byRuntime.map((group) => group.hosts.map(({ id }) => id))).toEqual([
+    ["tui"],
+    ["remote"],
+    ["core"],
+  ]);
+  // The Hosts list's machines are the same groups.
+  expect(worldMachines(hosts).map(({ ids }) => ids)).toEqual(
+    byMachine.map((group) => group.hosts.map(({ id }) => id)),
+  );
+  const groupOf = hostGroupOf(hosts, "machine");
+  expect(groupOf("core")).toBe(groupOf("tui"));
+  expect(groupOf("unknown")).toBeUndefined();
+  expect(hostGroupOf(hosts, "runtime")("core")).not.toBe(
+    hostGroupOf(hosts, "runtime")("tui"),
+  );
+  expect(runtimeGroupKey(hosts[0]!, "machine")).toBe("local");
+  expect(runtimeGroupKey(hosts[0]!, "runtime")).toBe("runtime:tui");
 });

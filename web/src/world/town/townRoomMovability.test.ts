@@ -39,7 +39,7 @@ afterEach(() => {
   board.patch = originalPatch;
 });
 
-function setup(mode: "host" | "runtime") {
+function setup(mode: "machine" | "runtime") {
   const connections: WorldRuntimeConnection[] = [
     ["core", ["hc:space:demo"], "herdr-core"],
     ["tui", ["w1", "w2"], undefined],
@@ -207,12 +207,12 @@ async function tidy(s: ReturnType<typeof setup>, key: string) {
   return undo;
 }
 
-for (const mode of ["host", "runtime"] as const)
+for (const mode of ["machine", "runtime"] as const)
   test(`core app space first: Tidy and Undo in ${mode} buildings`, async () => {
     const s = setup(mode);
     expect(officeRoomActionCapabilities(s.world, s.core).rename).toBe(false);
     expect(s.base.canMoveRoom(s.core.key)).toBe(true);
-    if (mode === "host")
+    if (mode === "machine")
       expect(townRoomDrag(s.core.key, s.model)).not.toBeNull();
     const buildings = s.layout().buildings.map((building) => building.hostKey);
     const before = new Map(
@@ -261,7 +261,7 @@ for (const mode of ["host", "runtime"] as const)
 
 test("Tidy skips unavailable core and TUI rooms individually; Undo uses current authority", async () => {
   for (const fixed of ["core", "tui", "unavailable"] as const) {
-    const s = setup("host");
+    const s = setup("machine");
     const host = townBuildingOf(s.core);
     const skipped = fixed === "core" ? s.core : s.tui[0]!;
     if (fixed === "unavailable")
@@ -298,7 +298,7 @@ test("Tidy skips unavailable core and TUI rooms individually; Undo uses current 
 });
 
 test("a fixed first room does not veto saving the other rooms", async () => {
-  const s = setup("host");
+  const s = setup("machine");
   s.core.stale = true;
   const placement = townRoomTidy(
     s.layout(),
@@ -313,7 +313,7 @@ test("a fixed first room does not veto saving the other rooms", async () => {
 });
 
 test("Spaces ordering filters each unavailable room, before or after a live room", async () => {
-  const s = setup("host");
+  const s = setup("machine");
   for (const stale of [false, true])
     for (const first of [false, true]) {
       const absent = {
@@ -336,7 +336,7 @@ test("Spaces ordering filters each unavailable room, before or after a live room
 });
 
 test("Undo with no rooms still movable explains the skips without saving", async () => {
-  const s = setup("host");
+  const s = setup("machine");
   const undo = await tidy(s, townBuildingOf(s.core));
   for (const room of s.model.rooms.values()) room.stale = true;
   s.toasts.length = 0;
@@ -349,7 +349,7 @@ test("Undo with no rooms still movable explains the skips without saving", async
 });
 
 test("save checks every changed room, including one after a movable first room", async () => {
-  const s = setup("host");
+  const s = setup("machine");
   const placement = townRoomTidy(s.layout(), townBuildingOf(s.core))!;
   const later = placement.order[placement.order.length - 1]!;
   s.model.rooms.get(later)!.stale = true;
@@ -363,7 +363,7 @@ test("save checks every changed room, including one after a movable first room",
 });
 
 test("movement authority ignores rename but requires qualified live room admission", () => {
-  const s = setup("host");
+  const s = setup("machine");
   for (const room of [s.core, ...s.tui]) {
     const space = s.world.nodeById.get(room.workspaceRef.worldId)!;
     for (const roomStale of [false, true])
@@ -389,7 +389,7 @@ test("movement authority ignores rename but requires qualified live room admissi
 });
 
 test("drag and neighbour moves reserve a fixed neighbour's spot", () => {
-  const s = setup("host");
+  const s = setup("machine");
   const fixed = s.tui[1]!;
   fixed.stale = true;
   const host = townBuildingOf(s.core);
@@ -418,7 +418,7 @@ test("drag and neighbour moves reserve a fixed neighbour's spot", () => {
 });
 
 test("all room authority subsets preserve fixed spots through Tidy, collisions and Undo", () => {
-  const s = setup("host");
+  const s = setup("machine");
   const host = townBuildingOf(s.core);
   const rooms = [...s.model.rooms.keys()];
   const before = townBuildingSpots(s.layout(), host);

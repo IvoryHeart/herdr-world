@@ -8,10 +8,12 @@ import {
   type ShipyardFixtureMode,
 } from "./shipyard/shipyardFixture";
 import { TownShipyard } from "./town/TownShipyard";
+import { townBrowserClock } from "./town/townBrowserClock";
 import { TownCamera } from "./town/townCamera";
 import { townHarbourLot, townLanesShown } from "./town/townHarbour";
 import { layoutTown, townShapeFor } from "./town/townLayout";
 import { townPhoneShape } from "./town/townLots";
+import { TownWorldTransform } from "./town/townWorldTransform";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "./town/town.css";
@@ -141,13 +143,13 @@ async function run() {
     inset: { top: 0, right: 0, bottom: 0, left: 0 },
   });
   const limits = camera.limits!;
-  const place = () => {
-    const tx = width / 2 - camera.x * camera.z;
-    const ty = height / 2 - camera.y * camera.z;
-    world.style.transform = `translate(${tx}px, ${ty}px) scale(${camera.z})`;
-    world.style.setProperty("--z", String(camera.z));
-    world.style.setProperty("--iz", String(1 / camera.z));
-  };
+  const transform = new TownWorldTransform(world, townBrowserClock);
+  const place = () =>
+    transform.place(
+      width / 2 - camera.x * camera.z,
+      height / 2 - camera.y * camera.z,
+      camera.z,
+    );
   const zooms = { widest: limits.min, home: limits.home, closest: limits.max };
   for (const [name, z] of Object.entries(zooms))
     for (const lamp of lamps()) {
