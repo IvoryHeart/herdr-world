@@ -17,7 +17,10 @@ import {
 import type { TownCenterAction } from "./TownCenterMenu";
 import type { TownPlaceKey, TownPlaces } from "./townPlaces";
 
-/** Every place with a building, in the second ring's order, clockwise. */
+/**
+ * Every place with a building, in the second ring's order, clockwise.
+ * @internal Exported for tests.
+ */
 export const TOWN_CENTER_BUILDINGS: readonly {
   key: TownPlaceKey;
   label: string;
@@ -35,6 +38,7 @@ export const TOWN_CENTER_BUILDINGS: readonly {
 /**
  * The second ring: the places that open now (a Library no host serves, a
  * warehouse still reading GitHub open nothing, so they are left out).
+ * @internal Exported for tests.
  */
 export function townCenterBuildings(
   places: Pick<TownPlaces, "opens" | "open">,

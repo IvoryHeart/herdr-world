@@ -109,6 +109,7 @@ function layOutRing(viewportWidth: number) {
  * (from the entry's ring point), `align` the label's side on `at` (−1 to
  * 1 on each axis: 1 starts the label there and grows it outward), and the
  * widest it may be to stay inside the ring's reach.
+ * @internal Exported for tests.
  */
 export function townCenterLabel(
   index: number,
@@ -174,7 +175,10 @@ export function placeTownCenterMenu(
   menu.style.transform = `translate(${Math.round(point.x)}px, ${Math.round(point.y)}px)`;
 }
 
-/** Where entry `index` of `count` sits from its ring's centre. */
+/**
+ * Where entry `index` of `count` sits from its ring's centre.
+ * @internal Exported for tests.
+ */
 export function townCenterStep(
   index: number,
   count: number,
@@ -188,6 +192,7 @@ export function townCenterStep(
  * Entry `index` of `count` on a ring of half-axes `radius`: clockwise from
  * the top, evenly spaced along the ring's length (on a round ring, evenly
  * by angle), with `out` the unit direction from the centre through it.
+ * @internal Exported for tests.
  */
 export function townCenterSpot(
   index: number,
