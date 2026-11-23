@@ -217,6 +217,7 @@ export function townBusSign(
  * Town's scale for measuring the bus's route: one tile is two metres of
  * road. Only the measure World keeps uses it; every page then draws the
  * bus's drive to World's distance, whatever its own layout.
+ * @internal
  */
 export const TOWN_METRES_PER_PX = 2 / T;
 

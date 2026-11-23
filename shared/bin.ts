@@ -23,12 +23,12 @@ export const BIN_BUS_BOARDING_MS = 60_000;
 /** It waits about this long at each stop where someone boards. */
 export const BIN_BUS_DWELL_MS = 10_000;
 /** Pulling away from a stand and pulling in at the next, per leg of the drive. */
-export const BIN_BUS_PULL_MS = 2_500;
+const BIN_BUS_PULL_MS = 2_500;
 /**
  * Turning round where it must go back the way it came, and back at
  * Apartments its doors opening and its riders stepping off and walking in.
  */
-export const BIN_BUS_ARRIVE_MS = 10_000;
+const BIN_BUS_ARRIVE_MS = 10_000;
 /**
  * The next trip's route, Apartments past every waiting agent's stop and
  * back, in metres, until a Town has measured it on its roads
