@@ -2,7 +2,7 @@
 
 Moving agents between runtimes failed (#1184, parked) because World has no
 agent. A desk is keyed by its runtime address, so a move or a rename makes a new
-desk, and facts are copied across by hand (`agent.rehome`). In the owner's try,
+desk, and facts are copied across by hand (`agent.rehome`). In one try,
 two desks were both called "reviewer-3-2-2". World also knew no conversation for
 most Codex agents, so every move started fresh.
 
@@ -53,6 +53,6 @@ entity is the agent, and a conversation is a claim and a history row. Implementa
 follows the steps in [tasks](tasks.md). Agent moves (#1184) build on it later and are
 out of scope. Spaces' browser pins and usage stay with their own single-model steps.
 
-Storage needs the owner's approval with this proposal: the agent becomes the first
+This proposal asks for storage approval: the agent becomes the first
 kind in the single-model plan's `entities` and `facts` tables, and one new table,
 `agent_conversations`, holds each agent's conversation history (see design).

@@ -32,7 +32,7 @@ flowchart LR
 
 ## 1. The agent
 
-An agent is one Claude Code or Codex worker as the owner sees it: "reviewer-3".
+An agent is one Claude Code or Codex worker as the user sees it: "reviewer-3".
 Its ID is store-issued (`a-` and eight symbols), immutable and never reused. Its
 name, folder and harness are observed labels and claims, never identity.
 
