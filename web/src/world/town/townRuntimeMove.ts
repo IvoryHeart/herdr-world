@@ -58,6 +58,37 @@ export const workspaceRoom = (workspace: BoardWorkspace) => ({
   },
 });
 
+/** The page's socket, as a move that outlives it sees it. */
+export type MoveLink = {
+  /** Changes whenever the page's socket closes. */
+  epoch(): number;
+  /** True once the socket is back, false after `waitMs`. */
+  back(waitMs: number): Promise<boolean>;
+};
+
+const bridgeLink: MoveLink = {
+  epoch: () => bridge.clientGeneration,
+  back: (waitMs) =>
+    new Promise((done) => {
+      let stop = () => {};
+      const timer = setTimeout(() => {
+        stop();
+        done(false);
+      }, waitMs);
+      stop = bridge.onStatus((status) => {
+        if (status !== "connected") return;
+        clearTimeout(timer);
+        queueMicrotask(() => stop());
+        done(true);
+      });
+    }),
+};
+
+const moveId = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+
 /**
  * Hand an agent to a room on another runtime (world.agent.move): it resumes
  * there and its desk keeps its pin, colour and links. With nothing to resume
@@ -74,6 +105,7 @@ export async function requestAgentHandoff(
   },
   call: typeof bridge.call = bridge.call.bind(bridge),
   confirm: (message: string) => boolean = (message) => window.confirm(message),
+  link: MoveLink = bridgeLink,
 ): Promise<TownMoveOutcome> {
   if (!source)
     return {
@@ -81,20 +113,35 @@ export async function requestAgentHandoff(
       reason: "unsupported",
       message: "Only a desk with one terminal moves to another runtime.",
     };
-  const move = (fresh: boolean) =>
-    call(
-      "world.agent.move",
-      {
-        source,
-        destination: {
-          connection_id: room.workspaceRef.connectionId,
-          generation: room.workspaceRef.generation,
-          workspace_id: room.workspaceRef.nativeId,
-        },
-        ...(fresh ? { fresh: true } : {}),
+  const move = async (fresh: boolean): Promise<AgentMoveOutcome> => {
+    const params = {
+      source,
+      destination: {
+        connection_id: room.workspaceRef.connectionId,
+        generation: room.workspaceRef.generation,
+        workspace_id: room.workspaceRef.nativeId,
       },
-      180_000,
-    ) as Promise<AgentMoveOutcome>;
+      ...(fresh ? { fresh: true } : {}),
+      move_id: moveId(),
+    };
+    // The move runs on in the service when the page's socket closes (a slow
+    // link): once it is back, ask how this move ended, never move again.
+    for (let follows = 0; ; follows += 1) {
+      const epoch = link.epoch();
+      try {
+        return (await call(
+          "world.agent.move",
+          follows ? { ...params, follow: true } : params,
+          180_000,
+        )) as AgentMoveOutcome;
+      } catch (error) {
+        const lost =
+          link.epoch() !== epoch ||
+          String((error as Error)?.message).startsWith("timeout:");
+        if (!lost || follows >= 3 || !(await link.back(60_000))) throw error;
+      }
+    }
+  };
   let result = await move(false);
   if (result.status === "confirm") {
     if (!confirm(result.message))

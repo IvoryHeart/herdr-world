@@ -2447,4 +2447,39 @@ describe("bridge connection lifecycle", () => {
     await Bun.sleep(5);
     expect(bridge.status).toBe("connected");
   });
+
+  // A slow link (a remote browser during an agent move): the ping's reply
+  // waits behind frames still arriving. Closing then lost the move's reply.
+  test.each([
+    ["keeps a slow socket that still delivers", true, "connected"],
+    ["closes a socket silent for the whole ping wait", false, "disconnected"],
+  ] as const)("heartbeat %s", async (_name, delivers, status) => {
+    class SlowWebSocket extends HangingWebSocket {
+      static instance: SlowWebSocket;
+      constructor() {
+        super();
+        SlowWebSocket.instance = this;
+        queueMicrotask(() => {
+          this.readyState = SlowWebSocket.OPEN;
+          this.onopen?.();
+        });
+      }
+      send() {}
+    }
+    installBrowserGlobals(SlowWebSocket as unknown as typeof WebSocket);
+    const bridge = new Bridge(50, 1000, undefined, 20);
+    testBridges.push(bridge);
+    bridge.connect();
+    await Bun.sleep(1);
+    sendHello(SlowWebSocket.instance);
+    await Bun.sleep(2);
+    bridge.probeConnectionNow();
+    await Bun.sleep(5);
+    if (delivers)
+      SlowWebSocket.instance.onmessage?.({
+        data: JSON.stringify({ event: "synthetic-frame" }),
+      } as MessageEvent);
+    await Bun.sleep(40);
+    expect(bridge.status).toBe(status);
+  });
 });

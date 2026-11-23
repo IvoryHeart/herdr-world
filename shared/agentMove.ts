@@ -19,6 +19,12 @@ export type AgentMoveRequest = {
   destination: AgentMoveDestination;
   /** Confirmed: start it fresh there when nothing can be resumed. */
   fresh?: boolean;
+  /**
+   * The page's ID for this move. Sent again (with `follow`) after a lost
+   * reply, it answers that move's outcome instead of starting another.
+   */
+  move_id?: string;
+  follow?: boolean;
 };
 /** Why a move was refused (the message says it in plain words). */
 export type AgentMoveRefusal =
@@ -34,7 +40,9 @@ export type AgentMoveRefusal =
   | "start_failed"
   | "close_failed"
   | "resume_failed"
-  | "native_refused";
+  | "native_refused"
+  /** A followed move World has no record of (it restarted). */
+  | "untracked";
 export type AgentMoveOutcome =
   | { status: "moved"; target: AgentAddress }
   | { status: "refused"; reason?: AgentMoveRefusal; message: string }

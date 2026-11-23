@@ -28,3 +28,7 @@
   and links.
 - Moving an agent again before its last move settles is refused instead of
   racing the first move.
+- A move no longer leaves the page waiting when its connection drops on a
+  slow or remote link: once the page reconnects it shows how the move ended.
+  A slow connection that still delivers is no longer closed by the page's
+  heartbeat.

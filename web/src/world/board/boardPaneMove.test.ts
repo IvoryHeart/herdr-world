@@ -145,6 +145,7 @@ test("a one-agent card dropped on another runtime's tab resumes there", async ()
     {
       method: "world.agent.move",
       params: {
+        move_id: expect.stringMatching(/^[0-9a-f]{24}$/),
         source: {
           connection_id: "alpha",
           generation: 1,
@@ -237,4 +238,43 @@ test("Move to… offers only rooms of another runtime: a second view of the same
   expect(keys("tui")).toEqual(["c"]);
   expect(keys("tui-saved")).toEqual(["c"]);
   expect(keys("core")).toEqual(["a", "b"]);
+});
+
+test("a move whose socket closed mid-way asks, once back, how that move ended", async () => {
+  const { model, request } = fixture();
+  const target = model.tabs.find(
+    (tab) => tab.hostKey !== request.target.hostKey,
+  )!;
+  const room = workspaceRoom(model.workspaceByKey.get(target.workspaceKey)!);
+  const source = cardAgentAddress(request.target, request.targetWorkspace);
+  let epoch = 0;
+  const sent: Array<{ move_id?: string; follow?: boolean }> = [];
+  const call = (async (
+    _method: string,
+    params: { move_id?: string; follow?: boolean },
+  ) => {
+    sent.push(params);
+    if (sent.length === 1) {
+      // The heartbeat or the network closed the socket: pending calls fail.
+      epoch += 1;
+      throw new Error("bridge heartbeat timed out");
+    }
+    return { status: "moved", target: { tab_id: "t9", workspace_id: "w9" } };
+  }) as never;
+  const link = { epoch: () => epoch, back: async () => true };
+  expect(
+    await requestAgentHandoff(source, room, call, () => true, link),
+  ).toMatchObject({ status: "moved", tab_id: "t9" });
+  expect(sent).toHaveLength(2);
+  expect(sent[0]!.move_id).toMatch(/^[0-9a-f]{24}$/);
+  expect(sent[1]).toMatchObject({ move_id: sent[0]!.move_id, follow: true });
+  expect(sent[0]!.follow).toBeUndefined();
+
+  // A service error on a live socket is the answer: no follow.
+  const failing = (async () => {
+    throw new Error("Invalid move address.");
+  }) as never;
+  await expect(
+    requestAgentHandoff(source, room, failing, () => true, link),
+  ).rejects.toThrow("Invalid move address.");
 });

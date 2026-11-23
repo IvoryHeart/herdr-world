@@ -198,7 +198,13 @@ no control for it. Platform and harness limits apply across the table.
   service under `agent-move` (`move admit`, `move start`, `move recheck`,
   `move rehome`, `move close`, `move outcome`), and a refused move's toast
   shows the reason. A moved agent can't
-  move again for about 20 seconds ("still settling").
+  move again for about 20 seconds ("still settling"). A move outlives the
+  page's socket: each move carries a `move_id`, and a page whose socket
+  closed mid-move asks again with `follow` once it reconnects and gets that
+  move's outcome (`server/src/rpc/agent-move.ts`, kept in memory ten minutes;
+  `move reply lost` and `move follow` in the log). The page's heartbeat keeps
+  a slow socket that still delivers (`web/src/api.ts`), so a remote link
+  doesn't close it mid-move.
 - **Core agent environment (Unix):** New agent finds and starts the harness
   through the core host's `$SHELL` (`/bin/sh` when unset): interactive on Linux,
   login and interactive on macOS. Supported shells are sh, bash, zsh, dash,

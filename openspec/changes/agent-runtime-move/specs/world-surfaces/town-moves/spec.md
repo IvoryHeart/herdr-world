@@ -12,7 +12,8 @@ move such a desk natively. A herdr-core desk moved to another core room SHALL
 keep running and keep its Board colour, pin and links under its new tab.
 Every move step SHALL be logged by the service, and a refusal SHALL tell the
 user its reason. Once an agent moves, World SHALL refuse to move it again until
-the move settles.
+the move settles. A move SHALL outlive the page's socket: a page that lost the
+reply SHALL learn that move's outcome once it reconnects, without moving again.
 
 #### Scenario: Agent moves between runtimes refusals
 
@@ -100,3 +101,8 @@ the move settles.
 
 - **WHEN** the user moves an agent again before its last move has settled
 - **THEN** World refuses with the reason that the agent is still settling
+
+#### Scenario: The page loses its socket during a move
+
+- **WHEN** the page's socket closes while a move runs (a slow or remote link)
+- **THEN** the move runs to its end, and once the page reconnects it shows how that move ended, and nothing moves twice
