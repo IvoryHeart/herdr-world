@@ -32,6 +32,10 @@ The upgrade SHALL add agent storage without changing existing rows, after the us
 - **WHEN** a pinned tab holds two agents at the first observation
 - **THEN** the tab pin stays on the tab, neither agent gets it, and the Town shows the pin as before; the tab's colour moves to the tab's place record and both agents still show it
 
+#### Scenario: Chosen tab colour beats inherited colour
+- **WHEN** a tab with a chosen red colour holds two agents, and one of them was spawned by an agent whose colour is green
+- **THEN** after the upgrade both agents still show red, because the tab's place colour comes before the inherited colour
+
 #### Scenario: Host offline during upgrade
 - **WHEN** a host is offline at the first start after the upgrade
 - **THEN** its facts stay pending and are copied after its first complete observation

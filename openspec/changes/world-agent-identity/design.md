@@ -1,12 +1,14 @@
 ## Context
 
 Today a Town desk, a Desk record and a Board card each name an agent their own way,
-from runtime addresses (`deskKey`, `cardKey`, `interestKey` and others). Colour
-alone has two stores with different keys (`board_colors` by card key in
-`shared/terminalColor.ts`, `board_appearance` by connection, kind and native ID in
-`shared/appearance.ts`), and Town and Board each derive the look they draw. So a
-tab rename, which the runtime owns, reaches every view, but a colour change can
-reach one view and not another. Only
+from runtime addresses (`deskKey`, `cardKey`, `interestKey` and others). A colour
+is saved once, in `board_colors` by card key (`shared/terminalColor.ts`). Status
+text and avatar live in `board_appearance` by connection, kind and native ID
+(`shared/appearance.ts`), which reaches colour only through a `color_key` alias
+into that same map. So one agent's appearance hangs off two address keys, and
+Town and Board each derive the look they draw. A tab rename, which the runtime
+owns, reaches every view; appearance depends on those keys and on each view's own
+derivation, so a move or a rename can leave it behind. Only
 `world_bindings` is a real identity layer. The #1184 postmortem traced its failed
 moves to two gaps: no stable agent (T3, T6) and no conversation for most agents
 (T2). [Evidence](evidence.md) shows that both harnesses already record, per
@@ -179,19 +181,23 @@ reads and writes the same agent record. No view keeps its own copy or its own ke
 | Field | Today | In the agent record | Written by |
 | --- | --- | --- | --- |
 | Name | the runtime's tab or pane name, read by each view | `name`; the runtime's name is evidence | a rename anywhere: World writes the record, then the runtime's name; a rename seen in Herdr or herdr-core updates the record |
-| Colour | `board_colors` by card key, plus `board_appearance` by connection, kind and native ID; Town and Board each resolve it | `colour`, or none | the colour picker in any view, `herdr-world colour` and `board card colour` |
+| Colour | `board_colors` by card key, reached from `board_appearance` through its `color_key` alias; Town and Board each resolve it | `colour`, or none | the colour picker in any view, `herdr-world colour` and `board card colour` |
 | Look | `board_appearance` avatar by pane; profile look by terminal; Town resolves it in `townAppearance` | `look` (avatar) and `profile` | the look picker, launch from a profile |
 | Status text | `board_appearance` by tab | `status_text` | any view, CLI |
 | Room and host | the seat's workspace and connection | read from the seat, never stored | moves only (later work, #1184) |
 | Placement | Town desk pin and rank by tab key; Board anchor, pin and fold by card key | `placement.town`, `placement.board` | each view for its own geometry |
 | Groups, interest | by terminal or session reference | `groups`, `interest` | group and interest operations |
 
-**One colour store.** `board_colors` and `board_appearance` are replaced by colour,
-look and status fields on agent records and on place records (host, room, and a tab
-that holds no single agent). One shared resolver, used by every surface and by the
-service, gives the colour shown: the agent's own colour, else the colour inherited
-from the agent that spawned it, else its tab's place colour, else its room's chosen
-colour, else the room's default. Town's look resolver and Board's card colour become
+**One appearance store.** `board_colors` and `board_appearance` are replaced by
+colour, look and status fields on agent records and on place records (host, room,
+and a tab that holds no single agent). One shared resolver, used by every surface
+and by the service, gives the colour shown: the agent's own colour, else its tab's
+place colour, else the colour inherited from the agent that spawned it, else its
+room's chosen colour, else the room's default. A chosen colour always beats an
+inherited one, as today: a tab's own colour wins over inheritance in
+`resolveTerminalColorByKeys` and `withInheritedColors`. So when a red tab holds
+two agents and one was spawned by a green agent, the red copied to the tab's
+place record still wins, and no agent changes colour on upgrade. Town's look resolver and Board's card colour become
 callers of it, never their own derivations. Board's surface and status-colour
 settings (`boardAppearance`) are a Board view preference, not agent data, and stay.
 

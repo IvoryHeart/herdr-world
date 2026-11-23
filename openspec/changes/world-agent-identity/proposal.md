@@ -6,8 +6,9 @@ desk, and facts are copied across by hand (`agent.rehome`). In one try,
 two desks were both called "reviewer-3-2-2". World also knew no conversation for
 most Codex agents, so every move started fresh. And each view keeps its own copy of
 an agent's details: a tab rename reaches Board, because the runtime owns the name,
-but a colour change may not, because colour lives in two stores with different
-keys.
+but its colour, look and status text hang off address keys in two stores
+(`board_colors` holds the colour; `board_appearance` holds status and avatar and
+aliases into that colour map), and Town and Board each derive the look.
 
 The harness already knows the conversation. Claude Code writes it per process, and
 Codex holds a lock file named after it for as long as the thread lives
@@ -34,10 +35,11 @@ Codex holds a lock file named after it for as long as the thread lives
   keyed by its ID. Every surface (Town, Desk, Board, Spaces, the CLI) reads and
   writes that one record through agent operations. Its room and host come from
   its seat.
-- **One colour store.** The two colour stores (`board_colors` by card key and
-  `board_appearance` by connection, kind and native ID) are replaced by fields on
-  agent and place records, with one shared resolver instead of Town's and
-  Board's own derivations.
+- **One appearance store.** `board_colors` (colours by card key) and
+  `board_appearance` (status and avatar by connection, kind and native ID, with a
+  colour alias into `board_colors`) are replaced by fields on agent and place
+  records, with one shared resolver instead of Town's and Board's own
+  derivations. A chosen tab colour still beats an inherited one.
 - **One grouping.** Every view groups agents by machine or runtime through the
   one Group runtimes setting (#1307).
 - **Lossless migration.** Today's colours, looks, pins, groups, interest,

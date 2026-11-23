@@ -68,7 +68,8 @@ Each later step is one PR of about 300 changed lines or fewer, excluding tests.
 
 ## 8. One record in every view
 
-- [ ] 8.1 One shared colour and look resolver over agent and place records, used
+- [ ] 8.1 One shared colour and look resolver over agent and place records (own,
+  tab place, inherited, room, room default; a chosen colour beats inheritance), used
   by the service, Town (replacing `townAppearance`'s own derivation), Board,
   Spaces and Apartments.
 - [ ] 8.2 Agent operations `agent.set` and `agent.place`; the colour, look and
