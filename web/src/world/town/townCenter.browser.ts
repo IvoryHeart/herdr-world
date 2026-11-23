@@ -1,13 +1,14 @@
 import { WORLD_AGENT_LAUNCH_EVENT } from "../agentProfiles";
 import { WORLD_APARTMENTS_EVENT } from "../apartments/apartmentsStore";
 import { spotlightHelpTarget } from "../../help/helpTry";
+import { townCenterMenuPoint } from "./TownCenterMenu";
 
 /**
  * The town center in a real renderer: its plaque is in the home view, a tap
  * on the building opens the ring around it, every action fits on screen,
  * Escape and a press outside close it, New agent opens the launcher, and
- * Buildings opens a second ring (#1261) whose Apartments opens as its
- * building's sign does; Escape there returns to the first ring.
+ * Buildings opens a second ring around itself (#1261) whose Apartments opens
+ * as its building's sign does; Escape there returns to the first ring.
  */
 export async function checkTownCenter(
   host: HTMLElement,
@@ -95,8 +96,23 @@ export async function checkTownCenter(
     }
   };
   fits();
-  // Buildings opens the second ring in place; it fits too, and Escape
+  // Buildings opens the second ring around itself: its centre, Back, sits
+  // where Buildings was, unless it moved to fit. It fits too, and Escape
   // returns to the first ring with Buildings focused.
+  const centre = (element: Element) => {
+    const box = element.getBoundingClientRect();
+    return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+  };
+  // Measured once the camera has panned the first ring into view.
+  await waitFor(
+    () => window.__HERDR_TOWN_RENDERER__?.flying === false,
+    "the camera kept panning under the ring",
+  );
+  const buildingsAt = centre(
+    actions()
+      .find((action) => action.dataset.action === "buildings")!
+      .querySelector(".town-center-medallion")!,
+  );
   actions()
     .find((action) => action.dataset.action === "buildings")!
     .click();
@@ -104,6 +120,24 @@ export async function checkTownCenter(
     () => ring()?.dataset.ring === "buildings",
     "Buildings opened no second ring",
   );
+  {
+    for (const animation of ring()!.getAnimations({ subtree: true }))
+      animation.finish();
+    const backAt = centre(host.querySelector(".town-center-hub")!);
+    const view = host
+      .querySelector(".town-center-layer")!
+      .getBoundingClientRect();
+    const fit = townCenterMenuPoint(
+      { x: buildingsAt.x - view.left, y: buildingsAt.y - view.top },
+      view.width,
+      view.height,
+    );
+    check(
+      Math.abs(backAt.x - view.left - fit.x) <= 2 &&
+        Math.abs(backAt.y - view.top - fit.y) <= 2,
+      `the Buildings ring is not around Buildings: ${JSON.stringify({ buildingsAt, backAt, fit })}`,
+    );
+  }
   check(
     ["apartments", "post", "observatory"].every((id) => ids().includes(id)),
     `the Buildings ring lacks a building: ${ids().join(", ")}`,

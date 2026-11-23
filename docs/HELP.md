@@ -86,12 +86,12 @@ Where: Town, beside the town board at the top left. Since 0.3.6.
 
 ![The town center's ring](../web/public/help/town.center.desktop.light.webp)
 
-Tap the town center to open a ring of actions around its doors: start an agent, talk to the Town master, focus, and more. Buildings opens a second ring with every place in Town.
+Tap the town center to open a ring of actions around its doors: start an agent, talk to the Town master, focus, and more. Buildings opens a second ring around itself with every place in Town.
 
 1. Tap the town center, or Tab to its plaque and press Enter.
 2. Choose an action, or Buildings to see Town's places.
 3. In Buildings, choose a place to open it, as tapping its building does.
-4. Press the centre arrow or Escape to go back; Escape again closes the ring.
+4. Press Back at the centre or Escape to go back; Escape again closes the ring.
 
 Where: Town, the domed building at the top of the town. Since 0.3.6.
 

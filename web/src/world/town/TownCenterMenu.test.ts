@@ -3,6 +3,7 @@ import {
   townCenterAngle,
   townCenterMenuPoint,
   townCenterRing,
+  townCenterStep,
 } from "./TownCenterMenu";
 
 test("the ring centres on the center's doors when every action fits", () => {
@@ -54,4 +55,27 @@ test("actions run clockwise from the top", () => {
   expect(at(1).x).toBeGreaterThan(0);
   expect(at(3)).toEqual({ x: 0, y: 10 });
   expect(at(5).x).toBeLessThan(0);
+});
+
+test("a later ring centres on the entry that opened it, at every depth, fitted", () => {
+  const { radius } = townCenterRing(1440);
+  // Buildings, third of six on the first ring; then a third-level entry.
+  const buildings = townCenterStep(2, 6, radius);
+  const library = townCenterStep(0, 5, radius);
+  const doors = { x: 700, y: 400 };
+  expect(townCenterMenuPoint(doors, 1440, 900, [buildings])).toEqual({
+    x: doors.x + buildings.x,
+    y: doors.y + buildings.y,
+  });
+  expect(townCenterMenuPoint(doors, 1440, 900, [buildings, library])).toEqual({
+    x: doors.x + buildings.x + library.x,
+    y: doors.y + buildings.y + library.y,
+  });
+  // On a phone the ring opened from an entry near the edge moves back in.
+  const phone = townCenterRing(390);
+  const right = townCenterStep(1, 4, phone.radius);
+  expect(townCenterMenuPoint({ x: 195, y: 422 }, 390, 844, [right])).toEqual({
+    x: 390 - phone.reach.x,
+    y: 422,
+  });
 });

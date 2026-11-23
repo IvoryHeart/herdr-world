@@ -53,13 +53,14 @@ if (process.env.TOWN_CENTER_DOM !== "1") {
     document.body.append(plaque);
     plaque.focus();
     const root = createRoot(host);
-    const placed: HTMLElement[] = [];
+    const placed: { menu: HTMLElement; steps: unknown[] }[] = [];
     function Probe() {
       const [open, setOpen] = useState(true);
       if (!open) return null;
       return createElement(TownCenterMenu, {
         viewportWidth: 1440,
-        place: (menu: HTMLElement) => placed.push(menu),
+        place: (menu: HTMLElement, steps: readonly unknown[]) =>
+          placed.push({ menu, steps: [...steps] }),
         onClose: () => {
           log.push("close");
           setOpen(false);
@@ -106,6 +107,20 @@ if (process.env.TOWN_CENTER_DOM !== "1") {
                   icon: Mail,
                   detail: "Needs you",
                   run: () => log.push("post"),
+                },
+                {
+                  id: "annex",
+                  label: "Annex",
+                  icon: Landmark,
+                  ring: () => [
+                    {
+                      id: "stacks",
+                      label: "Stacks",
+                      icon: LibraryBig,
+                      run: () => log.push("stacks"),
+                    },
+                  ],
+                  run: () => log.push("annex"),
                 },
               ];
             },
@@ -215,12 +230,15 @@ if (process.env.TOWN_CENTER_DOM !== "1") {
     expect(menu.buttons().map((button) => button.dataset.action)).toEqual([
       "library",
       "post",
+      "annex",
     ]);
     expect(menu.buttons()[1]!.getAttribute("aria-label")).toBe(
       "Post office, Needs you",
     );
     expect(document.activeElement).toBe(menu.buttons()[0]!);
     expect(hub(menu).getAttribute("aria-label")).toBe("Back to town center");
+    expect(hub(menu).dataset.from).toBe("buildings");
+    expect(hub(menu).textContent).toBe("Buildings");
     // Arrows move around the second ring as around the first.
     await menu.key(menu.buttons()[0]!, "ArrowRight");
     expect(document.activeElement).toBe(menu.buttons()[1]!);
@@ -261,6 +279,43 @@ if (process.env.TOWN_CENTER_DOM !== "1") {
     await act(async () => action(menu, "buildings").click());
     await act(async () => action(menu, "library").click());
     expect(menu.log).toEqual(["ring", "close", "library"]);
+    await menu.close();
+  });
+
+  const last = (menu: ReturnType<typeof mount>) =>
+    menu.placed[menu.placed.length - 1]!;
+
+  test("every ring opens around the entry that opened it, at any depth", async () => {
+    const menu = mount();
+    await menu.render();
+    // The first ring sits on the doors; Buildings is fourth of four.
+    expect(menu.placed.map(({ steps }) => steps)).toEqual([[]]);
+    await act(async () => action(menu, "buildings").click());
+    // Buildings, at the left of the first ring, is the second's centre.
+    expect(last(menu).steps).toEqual([{ x: -96, y: 0 }]);
+    expect(last(menu).menu).toBe(ring(menu));
+    // Annex, third of three, opens a third ring around itself.
+    await act(async () => action(menu, "annex").click());
+    expect(ring(menu).getAttribute("aria-label")).toBe("Annex");
+    expect(ring(menu).dataset.ring).toBe("buildings/annex");
+    expect(last(menu).steps).toEqual([
+      { x: -96, y: 0 },
+      { x: -83, y: 48 },
+    ]);
+    expect(hub(menu).getAttribute("aria-label")).toBe("Back to Buildings");
+    expect(hub(menu).textContent).toBe("Annex");
+    // Escape steps back one ring at a time, focused on the entry left.
+    await menu.key(menu.buttons()[0]!, "Escape");
+    expect(ring(menu).dataset.ring).toBe("buildings");
+    expect(document.activeElement).toBe(action(menu, "annex"));
+    expect(last(menu).steps).toEqual([{ x: -96, y: 0 }]);
+    await menu.key(action(menu, "annex"), "Escape");
+    expect(ring(menu).dataset.ring).toBe("town-center");
+    expect(document.activeElement).toBe(action(menu, "buildings"));
+    expect(last(menu).steps).toEqual([]);
+    expect(menu.log).toEqual(["ring"]);
+    await menu.key(action(menu, "buildings"), "Escape");
+    expect(menu.log).toEqual(["ring", "close"]);
     await menu.close();
   });
 }

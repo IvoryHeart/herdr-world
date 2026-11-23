@@ -1,6 +1,6 @@
 ## 1. Rings
 
-- [x] 1.1 Let a town center action open a second ring in place, with Back at its centre and its own layer for Escape and phone Back.
+- [x] 1.1 Let a town center action open a further ring around itself, with Back at its centre and its own layer for Escape and phone Back, at any depth.
 - [x] 1.2 Build the Buildings ring from Town's registered places; choosing one opens it as its building does.
 - [x] 1.3 Drop places and counts from the first ring; Focus shows "On".
 - [x] 1.4 Cover keyboard, pointer, focus return and the place list with unit and browser tests.

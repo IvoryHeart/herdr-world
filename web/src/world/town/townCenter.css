@@ -107,8 +107,11 @@
   cursor: pointer;
 }
 
+/* One column the medallion's width, so the medallion sits on its ring
+   point (and a later ring centres there) however wide its label is. */
 .town-center-action {
   display: grid;
+  grid-template-columns: 100%;
   justify-items: center;
   width: var(--ring-item);
   height: var(--ring-item);
@@ -212,7 +215,7 @@
   opacity: 0.45;
 }
 
-/* The hub closes the ring. */
+/* The hub closes the first ring and goes Back from a later one. */
 .town-center-hub {
   display: grid;
   place-items: center;
@@ -224,6 +227,14 @@
 
 .town-center-hub:hover {
   filter: brightness(1.12);
+}
+
+/* A later ring's hub is the entry that opened it: Back, with its name. */
+.town-center-hub > .town-center-label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 @keyframes town-center-open {

@@ -4,10 +4,12 @@
  * launch an agent, talk to the Town master and the town's other errands.
  * Escape, a press outside, Back on a phone or the hub closes it.
  *
- * An action with a `ring` (Buildings, #1261) opens a second ring in the
- * first one's place. There the hub is Back, and Escape or a phone's Back
- * return to the first ring (it is its own layer on the layer stack); a press
- * outside still closes both.
+ * An action with a `ring` (Buildings, #1261) opens the next ring around
+ * itself: the entry that opened a ring is that ring's centre, as the town
+ * center is the first ring's, and the same rule holds at every depth. There
+ * the hub is Back, and Escape or a phone's Back return to the ring before
+ * (each ring is its own layer on the layer stack); a press outside closes
+ * them all.
  */
 
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
@@ -55,22 +57,33 @@ export function townCenterRing(viewportWidth: number) {
   };
 }
 
+/** A ring's entry from its centre, in screen pixels. */
+export type TownCenterStep = { x: number; y: number };
+
 /**
- * Where the ring centres: on the center's doors, moved just enough to keep
- * every action inside a `width` × `height` view, else the view's middle.
+ * Where the open ring centres: on the center's doors, moved just enough to
+ * keep every action inside a `width` × `height` view, else the view's
+ * middle. Each of `steps` (the entries that opened the rings after the
+ * first) then moves the centre onto that entry, fitted again, so a ring
+ * opens around the entry that opened it.
  */
 export function townCenterMenuPoint(
   at: { x: number; y: number },
   width: number,
   height: number,
+  steps: readonly TownCenterStep[] = [],
 ) {
   const { reach } = townCenterRing(width);
   const clamp = (value: number, low: number, high: number) =>
     low > high ? (low + high) / 2 : Math.min(high, Math.max(low, value));
-  return {
-    x: clamp(at.x, reach.x, width - reach.x),
-    y: clamp(at.y, reach.top, height - reach.bottom),
-  };
+  const fit = (point: { x: number; y: number }) => ({
+    x: clamp(point.x, reach.x, width - reach.x),
+    y: clamp(point.y, reach.top, height - reach.bottom),
+  });
+  return steps.reduce(
+    (centre, step) => fit({ x: centre.x + step.x, y: centre.y + step.y }),
+    fit(at),
+  );
 }
 
 /** Place `menu` at the ring point for a screen point in a view. */
@@ -79,9 +92,47 @@ export function placeTownCenterMenu(
   at: { x: number; y: number },
   width: number,
   height: number,
+  steps: readonly TownCenterStep[] = [],
 ) {
-  const point = townCenterMenuPoint(at, width, height);
+  const point = townCenterMenuPoint(at, width, height, steps);
   menu.style.transform = `translate(${Math.round(point.x)}px, ${Math.round(point.y)}px)`;
+}
+
+/** Where entry `index` of `count` sits from its ring's centre. */
+export function townCenterStep(
+  index: number,
+  count: number,
+  radius: number,
+): TownCenterStep {
+  const angle = townCenterAngle(index, count);
+  return {
+    x: Math.round(Math.cos(angle) * radius),
+    y: Math.round(Math.sin(angle) * radius),
+  };
+}
+
+/** One ring opened by an entry: its actions, around that entry. */
+type TownCenterLevel = {
+  from: TownCenterAction;
+  actions: readonly TownCenterAction[];
+  /** The entry from the previous ring's centre. */
+  step: TownCenterStep;
+};
+
+/**
+ * A ring after the first on the layer stack: Escape and a phone's Back leave
+ * it for the ring before. Its element is its medallions only while it is the
+ * ring shown, so leaving it keeps focus on the entry that opened it.
+ */
+function TownCenterLevelLayer({
+  current,
+  back,
+}: {
+  current: () => Element | null;
+  back(): void;
+}) {
+  useLayer(true, back, { element: current });
+  return null;
 }
 
 /** The ring's angle for item `index` of `count`, clockwise from the top. */
@@ -96,36 +147,42 @@ export function TownCenterMenu({
 }: {
   actions: readonly TownCenterAction[];
   viewportWidth: number;
-  /** Position the ring for the camera as drawn (and again each frame). */
-  place(menu: HTMLElement): void;
+  /**
+   * Position the ring for the camera as drawn (and again each frame), its
+   * centre moved along `steps` onto the entry that opened it.
+   */
+  place(menu: HTMLElement, steps: readonly TownCenterStep[]): void;
   onClose(): void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const ring = useRef<HTMLDivElement>(null);
-  /** The second ring's own items and Back, only while it is open. */
-  const innerItems = useRef<HTMLDivElement>(null);
+  /** The shown ring's own medallions and hub. */
+  const items = useRef<HTMLDivElement>(null);
   const opened = useRef(performance.now());
-  /** The second ring open now: the action that opened it and its actions. */
-  const [inner, setInner] = useState<{
-    from: TownCenterAction;
-    actions: readonly TownCenterAction[];
-  } | null>(null);
-  /** The action whose second ring just closed, to take focus back. */
+  /** The rings opened after the first, innermost last. */
+  const [levels, setLevels] = useState<readonly TownCenterLevel[]>([]);
+  const depth = useRef(0);
+  depth.current = levels.length;
+  const inner = levels[levels.length - 1] ?? null;
+  /** The action whose ring just closed, to take focus back. */
   const returnTo = useRef<string | null>(null);
+  /** Leave the shown ring for the one before. */
   const back = () => {
-    returnTo.current = inner?.from.id ?? null;
-    setInner(null);
+    setLevels((open) => {
+      returnTo.current = open[open.length - 1]?.from.id ?? null;
+      return open.slice(0, -1);
+    });
   };
   useLayer(true, onClose, { element: () => ref.current });
-  // The second ring is the top layer while open: Escape and Back leave it.
-  // Its element is gone once it closes, so the layer stack leaves focus on
-  // the first ring's Buildings rather than restoring it elsewhere.
-  useLayer(!!inner, back, { element: () => innerItems.current });
   useLayoutEffect(() => {
-    if (ring.current) place(ring.current);
-    // Positioned once on open; frames re-place it as the camera moves.
+    if (ring.current)
+      place(
+        ring.current,
+        levels.map((level) => level.step),
+      );
+    // Placed as each ring opens; frames re-place it as the camera moves.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [levels]);
   useLayoutEffect(() => {
     const target = returnTo.current;
     returnTo.current = null;
@@ -137,16 +194,19 @@ export function TownCenterMenu({
           ".town-center-action:not([aria-disabled='true'])",
         );
     button?.focus({ preventScroll: true });
-  }, [inner]);
+  }, [levels]);
   const shown = inner?.actions ?? actions;
-  const ringKey = inner ? inner.from.id : "town-center";
+  const ringKey =
+    levels.map((level) => level.from.id).join("/") || "town-center";
   const { radius, item } = townCenterRing(viewportWidth);
   // The style guide's icon sizes: a menu's 16 px, phone navigation's 22 px.
   const iconSize = item < 56 ? 16 : 22;
-  const choose = (action: TownCenterAction) => {
+  const choose = (action: TownCenterAction, index: number) => {
     if (action.disabled) return;
     if (action.ring) {
-      setInner({ from: action, actions: action.ring() });
+      const opens = action.ring();
+      const step = townCenterStep(index, shown.length, radius);
+      setLevels((open) => [...open, { from: action, actions: opens, step }]);
       return;
     }
     onClose();
@@ -175,6 +235,13 @@ export function TownCenterMenu({
   };
   return (
     <div ref={ref} className="town-center-layer">
+      {levels.map((level, index) => (
+        <TownCenterLevelLayer
+          key={`${index}:${level.from.id}`}
+          current={() => (depth.current === index + 1 ? items.current : null)}
+          back={back}
+        />
+      ))}
       <div
         className="town-center-backdrop"
         aria-hidden="true"
@@ -207,7 +274,7 @@ export function TownCenterMenu({
         {/* Keyed by ring, so a ring's medallions open afresh. */}
         <div
           key={ringKey}
-          ref={inner ? innerItems : undefined}
+          ref={items}
           className="town-center-items"
           role="none"
         >
@@ -238,7 +305,7 @@ export function TownCenterMenu({
                     "--delay": `${index * 18}ms`,
                   } as React.CSSProperties
                 }
-                onClick={() => choose(action)}
+                onClick={() => choose(action, index)}
               >
                 <span className="town-center-medallion" aria-hidden="true">
                   <Icon size={iconSize} strokeWidth={2} />
@@ -252,15 +319,20 @@ export function TownCenterMenu({
             );
           })}
           {inner ? (
+            // The entry that opened this ring is its centre, and Back.
             <button
               type="button"
               className="town-center-hub"
               data-hub="back"
-              aria-label="Back to town center"
+              data-from={inner.from.id}
+              aria-label={`Back to ${levels[levels.length - 2]?.from.label ?? "town center"}`}
               title="Back"
               onClick={back}
             >
               <ArrowLeft size={iconSize} strokeWidth={2} aria-hidden="true" />
+              <span className="town-center-label" aria-hidden="true">
+                {inner.from.label}
+              </span>
             </button>
           ) : (
             <button

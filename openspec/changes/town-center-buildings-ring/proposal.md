@@ -11,11 +11,14 @@ phone and mixed actions with places.
   master, Focus, Summary, Lenses, Profiles, New room) plus one **Buildings**
   entry. First-ring entries show no counts; Focus shows "On" while a focus
   runs.
-- **Buildings** opens a second ring in place with every Town place that has a
+- **Buildings** opens a second ring around itself with every Town place that has a
   building and opens now: Apartments, Library, Post office, Observatory,
   Warehouse. Choosing one opens what a press on its building opens.
-- The second ring's centre is Back; Back, Escape and the phone's Back return
-  to the first ring, focused on Buildings. A press outside closes both.
+- Each ring opens around the entry that opened it, as the first opens around
+  the town center: Buildings' place is the second ring's centre, Back. The
+  same rule holds at any later depth. Back, Escape and the phone's Back step
+  back one ring, focused on the entry that opened it. A press outside closes
+  them all.
 - Counts stay on the buildings' signs. Both rings use the same geometry, so
   they fit a phone with targets of today's size.
 - Help gains a town center entry with its picture.
