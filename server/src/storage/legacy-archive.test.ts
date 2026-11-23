@@ -96,11 +96,11 @@ test("older importers skip the moved files and leave the database unchanged", as
   const db = new Database(database, { strict: true });
   try {
     const snapshot = () =>
-      ["asks", "agent_profiles", "board_meta", "imports"].map((table) =>
+      ["asks", "agent_profiles", "board_meta", "meta"].map((table) =>
         db.query(`SELECT * FROM ${table} ORDER BY rowid`).all(),
       );
     // Older binaries ran these importers without the import-once marker.
-    db.exec("DELETE FROM imports WHERE name='ledger-json'");
+    db.exec("DELETE FROM meta WHERE name='ledger-json'");
     const withoutMarker = snapshot();
     const ids = createWorldIds(db);
     importLegacyLedger(db, paths.ledger, 2000);

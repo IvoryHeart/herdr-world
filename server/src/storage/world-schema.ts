@@ -1,4 +1,5 @@
-import { terminalMarksMigration } from "./terminal-marks";
+import { terminalMarksMigration } from "./legacy-review-migration";
+import { migrateLeftovers } from "./leftovers";
 import type { Database } from "bun:sqlite";
 import {
   chmodSync,
@@ -29,7 +30,9 @@ import { assertSafeDataPath } from "../config/data-paths";
 import { systemClock } from "../service/clock";
 import { migrateLegacyCompletionReviews } from "./legacy-review-migration";
 
-export type WorldMigration = string | ((db: Database, at: number) => void);
+export type WorldMigration =
+  | string
+  | ((db: Database, at: number, path: string) => void);
 
 export const WORLD_APPLICATION_ID = 0x574f524c;
 const migration1 = `
@@ -110,6 +113,7 @@ export const worldMigrations = [
   apartmentsMigration,
   apartmentSessionsMigration,
   worldBoardElementsMigration,
+  migrateLeftovers,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */
@@ -216,7 +220,7 @@ export function migrateWorldDatabase(
       if (boardPreview && index === 15) continue;
       const migration = migrations[index]!;
       if (typeof migration === "string") db.exec(migration);
-      else migration(db, at);
+      else migration(db, at, path);
     }
     db.exec(
       `PRAGMA application_id=${WORLD_APPLICATION_ID}; PRAGMA user_version=${migrations.length}`,

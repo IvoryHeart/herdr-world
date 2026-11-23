@@ -22,10 +22,6 @@ import {
   type WorldWatchRecord,
 } from "./watchlist";
 import { deskHistoryEvictions, estimateDeskWrite } from "./desk-retention";
-import {
-  legacyReviewCandidates,
-  legacyReviewBudgetBody,
-} from "./legacy-review-resolution";
 import type { Scheduler } from "../service/ports";
 import {
   terminalEntities,
@@ -83,22 +79,6 @@ export class PersistentTerminalMarks {
   private deskCaptures = new Map<string, string>();
   private deskRefusals = new Map<string, string>();
   private recoveringSources: Set<string>;
-  private archiveTimer?: { cancel(): void };
-  private armArchiveExpiry() {
-    this.archiveTimer?.cancel();
-    this.archiveTimer = undefined;
-    const expiry = this.options.storage.archiveStatus().expires_at;
-    if (this.closed || !this.options.scheduler || expiry === null) return;
-    this.archiveTimer = this.options.scheduler.schedule(
-      () => {
-        this.archiveTimer = undefined;
-        void this.expire()
-          .catch(this.options.failed)
-          .finally(() => this.armArchiveExpiry());
-      },
-      Math.min(60_000, Math.max(0, expiry - this.options.now())),
-    );
-  }
   assertDeskAvailable() {
     const refusal = this.deskRefusals.values().next().value;
     if (refusal) throw new Error(refusal);
@@ -187,7 +167,6 @@ export class PersistentTerminalMarks {
         )
         .map((row) => row.binding.instance),
     );
-    this.armArchiveExpiry();
   }
   private enqueue<T>(work: () => Promise<T>): Promise<T> {
     if (this.closed || this.queued >= 256)
@@ -207,16 +186,12 @@ export class PersistentTerminalMarks {
   }
   async close() {
     this.closed = true;
-    this.archiveTimer?.cancel();
-    this.archiveTimer = undefined;
     await this.tail;
   }
   expire() {
     return this.enqueue(async () => {
       const at = this.options.now();
-      const expiry = this.options.storage.archiveStatus().expires_at;
       if (
-        !(expiry !== null && at >= expiry) &&
         !this.options.storage
           .list()
           .some(
@@ -234,7 +209,6 @@ export class PersistentTerminalMarks {
       draft.expire(at);
       live.desk.adopt(draft);
       this.publish(before);
-      this.armArchiveExpiry();
     });
   }
   /** Runtime replacement hides the projection; saved identity waits for a fresh list. */
@@ -569,16 +543,6 @@ export class PersistentTerminalMarks {
     const savedRows = this.options.storage.list();
     const savedById = new Map(savedRows.map((row) => [row.id, row]));
     const admitted = admittedAgentPanes(panes, agents);
-    const legacy = !ambiguous
-      ? await legacyReviewCandidates(
-          this.options.storage,
-          connectionId,
-          panes,
-          admitted,
-          !action,
-          isCurrent,
-        )
-      : { proofs: new Map(), resolvable: new Set<string>() };
     if (!isCurrent()) throw new Error("terminal mark runtime retired");
     const unknownOwners = new Set(
       admitted
@@ -673,12 +637,6 @@ export class PersistentTerminalMarks {
     if (!ambiguous)
       observeDeskPanes(draft.desk, connectionId, generation, panes, at, agents);
     draft.desk.expire(at);
-    const reviewsBeforeAction = new Map(
-      draft.desk
-        .storedRecords()
-        .filter((record) => record.connection_id === connectionId)
-        .map((record) => [record.terminal_id, record.reviewed_stop]),
-    );
     action?.(draft);
     const candidates = new Map<
       string,
@@ -739,18 +697,13 @@ export class PersistentTerminalMarks {
       if (!entity || ambiguous) continue;
       if (
         prior &&
-        !legacy.resolvable.has(candidate.terminal) &&
         JSON.stringify(prior.body) === JSON.stringify(candidate.body) &&
         prior.binding.native_id === savedById.get(prior.id)?.binding.native_id
       )
         continue;
       const estimate = estimateDeskWrite(
         prior,
-        legacyReviewBudgetBody(
-          candidate.body,
-          legacy.proofs.get(candidate.terminal),
-          legacy.resolvable.has(candidate.terminal),
-        ),
+        candidate.body,
         entity,
         connectionId,
         at,
@@ -792,7 +745,6 @@ export class PersistentTerminalMarks {
       if (!entity || ambiguous) continue;
       if (
         prior &&
-        !legacy.resolvable.has(candidate.terminal) &&
         JSON.stringify(prior.body) === JSON.stringify(candidate.body) &&
         prior.binding.native_id === savedById.get(prior.id)?.binding.native_id
       )
@@ -816,16 +768,6 @@ export class PersistentTerminalMarks {
         ...(prior ? { id: prior.id, revision: prior.revision } : {}),
         kind: candidate.kind,
         body: candidate.body,
-        ...(candidate.kind === "desk" && legacy.proofs.has(candidate.terminal)
-          ? {
-              legacy_review: {
-                ...legacy.proofs.get(candidate.terminal)!,
-                review_changed:
-                  (reviewsBeforeAction.get(candidate.terminal) ?? null) !==
-                  candidate.body.reviewed_stop,
-              },
-            }
-          : {}),
         target: {
           adapter: "herdr",
           instance: connectionId,
@@ -936,6 +878,5 @@ export class PersistentTerminalMarks {
         this.deskCaptures.set(capture, id);
     this.deskRefusals.delete(connectionId);
     this.publish(before, connectionId, generation);
-    this.armArchiveExpiry();
   }
 }

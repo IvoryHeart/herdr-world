@@ -39,7 +39,7 @@ export function importLegacyProfiles(
   try {
     writeProfiles(db, document);
     db.query(
-      "INSERT INTO imports(name,content_hash,completed_at) VALUES('agent-profiles-json',?,?)",
+      "INSERT INTO meta(name,body) VALUES('agent-profiles-json',json_object('content_hash',?,'completed_at',?))",
     ).run(hash, at);
     fault?.("before-commit");
     db.exec("COMMIT");

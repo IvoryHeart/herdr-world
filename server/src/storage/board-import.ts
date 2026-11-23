@@ -35,7 +35,7 @@ export function importBoard(
   try {
     writeBoard(db, doc, bindings, at);
     db.query(
-      "INSERT INTO imports(name,content_hash,completed_at) VALUES('board-json',?,?)",
+      "INSERT INTO meta(name,body) VALUES('board-json',json_object('content_hash',?,'completed_at',?))",
     ).run(hash, at);
     fault?.("before-commit");
     db.exec("COMMIT");

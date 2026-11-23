@@ -100,7 +100,7 @@ for (const compiled of [false, true]) {
           expect(
             db
               .query(
-                "SELECT count(*) AS count FROM imports WHERE name='agent-profiles-json'",
+                "SELECT count(*) AS count FROM meta WHERE name='agent-profiles-json'",
               )
               .get(),
           ).toEqual({ count });

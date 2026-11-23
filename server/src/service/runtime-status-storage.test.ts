@@ -87,7 +87,7 @@ test("the root imports only runtime status once after an exact backup and keeps 
   await store.close();
   const db = new Database(join(paths.root, "world.sqlite"), { readonly: true });
   const marker = db
-    .query("SELECT * FROM imports WHERE name='runtime-status-json'")
+    .query("SELECT * FROM meta WHERE name='runtime-status-json'")
     .get();
   db.close();
   writeFileSync(
@@ -105,7 +105,7 @@ test("the root imports only runtime status once after an exact backup and keeps 
   try {
     expect(
       inspected
-        .query("SELECT * FROM imports WHERE name='runtime-status-json'")
+        .query("SELECT * FROM meta WHERE name='runtime-status-json'")
         .get(),
     ).toEqual(marker);
   } finally {
@@ -153,7 +153,7 @@ test("an invalid initial settings import releases the worker and retries without
     expect(
       db
         .query(
-          "SELECT count(*) AS count FROM imports WHERE name='runtime-status-json'",
+          "SELECT count(*) AS count FROM meta WHERE name='runtime-status-json'",
         )
         .get(),
     ).toEqual({ count: 0 });

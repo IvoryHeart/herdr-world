@@ -45,7 +45,7 @@ export function runStatus(value: unknown): AutoSyncRunStatus {
 export function readRuntimeStatus(
   db: Database,
 ): Record<string, AutoSyncRunStatus> | null {
-  if (!db.query("SELECT 1 FROM imports WHERE name='runtime-status-json'").get())
+  if (!db.query("SELECT 1 FROM meta WHERE name='runtime-status-json'").get())
     return null;
   return Object.fromEntries(
     (

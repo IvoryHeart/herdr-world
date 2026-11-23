@@ -304,7 +304,7 @@ test("an interrupted Board import rolls back rows, reservations, bindings and ma
       });
     expect(
       db
-        .query("SELECT count(*) AS count FROM imports WHERE name='board-json'")
+        .query("SELECT count(*) AS count FROM meta WHERE name='board-json'")
         .get(),
     ).toEqual({ count: 0 });
   } finally {
@@ -327,7 +327,7 @@ test("a completed Board import ignores malformed retained JSON without replacing
   initial.close();
   const before = new Database(p.database);
   const marker = before
-      .query("SELECT * FROM imports WHERE name='board-json'")
+      .query("SELECT * FROM meta WHERE name='board-json'")
       .get(),
     bindings = before.query("SELECT * FROM world_bindings").all();
   before.close();
@@ -344,7 +344,7 @@ test("a completed Board import ignores malformed retained JSON without replacing
   const after = new Database(p.database);
   try {
     expect(
-      after.query("SELECT * FROM imports WHERE name='board-json'").get(),
+      after.query("SELECT * FROM meta WHERE name='board-json'").get(),
     ).toEqual(marker);
     expect(after.query("SELECT * FROM world_bindings").all()).toEqual(bindings);
   } finally {

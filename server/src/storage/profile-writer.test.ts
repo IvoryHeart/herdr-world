@@ -158,7 +158,7 @@ test("an interrupted profile import commits neither domain rows nor its completi
     expect(
       db
         .query(
-          "SELECT count(*) AS count FROM imports WHERE name='agent-profiles-json'",
+          "SELECT count(*) AS count FROM meta WHERE name='agent-profiles-json'",
         )
         .get(),
     ).toEqual({ count: 0 });

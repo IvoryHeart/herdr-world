@@ -117,7 +117,7 @@ test("interrupted status import commits no runtime rows or marker; retry and cha
     expect(
       db
         .query(
-          "SELECT count(*) AS count FROM imports WHERE name='runtime-status-json'",
+          "SELECT count(*) AS count FROM meta WHERE name='runtime-status-json'",
         )
         .get(),
     ).toEqual({ count: 0 });

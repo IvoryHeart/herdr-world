@@ -6,6 +6,7 @@
   "properties": "Committed-only profile/chime reads and RPC acknowledgement; fresh operation state and savepoint isolation; exact private once-only JSON import with atomic completion; durable master revision allocation and terminal import flags; closed admission, drain and restart; live terminal choices remain Herdr-owned",
   "existingTests": [
     "server/src/storage/profile-writer.test.ts",
+    "server/src/storage/leftovers.test.ts",
     "server/src/storage/profile-crash.test.ts",
     "server/src/service/profile-storage.test.ts",
     "server/src/rpc/profiles-storage.test.ts",
@@ -25,6 +26,7 @@
     "contracts": ["verification/contracts/agent-profile-storage.md"],
     "tests": [
       "server/src/storage/profile-writer.test.ts",
+      "server/src/storage/leftovers.test.ts",
       "server/src/storage/profile-crash.test.ts",
       "server/src/service/profile-storage.test.ts",
       "server/src/rpc/profiles-storage.test.ts",
@@ -39,7 +41,7 @@
     ],
     "review": "The accepted delivery link records the identity/storage design, not acceptance of this store migration; independent implementation review and CI are pending."
   },
-  "evidenceDecision": "Real SQLite transactions, worker admission and standalone embedded-worker recovery are the relevant persistence boundary. Direct exhaustive operation permutations establish bounded ordering without duplicating the SQL engine in Quint. Existing runtime/binding models and terminal-setting consumers retain their original fences and authority claims. Compiled assertion controls test sensitivity separately; no model or synthetic receiver is credited with filesystem or external-runtime guarantees.",
+  "evidenceDecision": "Real SQLite transactions, worker admission and standalone embedded-worker recovery are the relevant persistence boundary. Direct exhaustive operation permutations establish bounded ordering without duplicating the SQL engine in Quint. Existing runtime/binding models and terminal-setting consumers retain their original fences and authority claims. Compiled assertion controls test sensitivity separately; no model or synthetic receiver is credited with filesystem or external-runtime guarantees. Schema 17 serializes migration before admission; populated schema 13\u201316 semantic hashes, export/transaction rollback and retry, pre-SQLite import, real CLI history/conditional undo and unchanged profile operations provide direct SQLite evidence. It adds no concurrent owner or external-effect interleaving; existing models and the full gate remain required.",
   "promotion": {
     "decision": "pending",
     "scope": "Agent profile/chime persistence and their existing legacy terminal-import metadata only; separate contract and implementation acceptance required."

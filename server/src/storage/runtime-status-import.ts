@@ -11,7 +11,7 @@ export function importRuntimeStatus(
   at: number,
   fault?: (stage: "before-commit" | "after-commit") => void,
 ) {
-  if (db.query("SELECT 1 FROM imports WHERE name='runtime-status-json'").get())
+  if (db.query("SELECT 1 FROM meta WHERE name='runtime-status-json'").get())
     return;
   assertSafeDataPath(path);
   let hash = "absent";
@@ -56,7 +56,7 @@ export function importRuntimeStatus(
   try {
     for (const [key, status] of entries) writeRuntimeStatus(db, key, status);
     db.query(
-      "INSERT INTO imports(name,content_hash,completed_at) VALUES('runtime-status-json',?,?)",
+      "INSERT INTO meta(name,body) VALUES('runtime-status-json',json_object('content_hash',?,'completed_at',?))",
     ).run(hash, at);
     fault?.("before-commit");
     db.exec("COMMIT");

@@ -172,7 +172,7 @@ export function archiveLegacyFiles(
   };
   for (const { path, marker } of sources)
     discover(path, () =>
-      db.query("SELECT 1 FROM imports WHERE name=?").get(marker)
+      db.query("SELECT 1 FROM meta WHERE name=?").get(marker)
         ? [...(lstatIfPresent(path) ? [path] : []), ...backupCopies(path)]
         : [],
     );

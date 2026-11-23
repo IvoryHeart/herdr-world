@@ -56,11 +56,13 @@ export function readProfiles(db: Database): ProfilesDocument | null {
         .all() as { body: string }[]
     ).map((row) => JSON.parse(row.body)),
     chimes: JSON.parse(chimes.body),
-    assignments: db
-      .query(
-        "SELECT connection_id,terminal_id,profile_id FROM profile_legacy_assignments ORDER BY position",
-      )
-      .all() as ProfileAssignment[],
+    assignments: JSON.parse(
+      (
+        db
+          .query("SELECT body FROM meta WHERE name='profiles.assignments'")
+          .get() as { body: string }
+      ).body,
+    ),
     town_master:
       meta.legacy_master_connection === null
         ? null
@@ -70,13 +72,15 @@ export function readProfiles(db: Database): ProfilesDocument | null {
           },
     terminal_settings: {
       highest_master_revision: meta.highest_master_revision,
-      imported_connections: (
-        db
-          .query(
-            "SELECT connection_id FROM profile_imported_connections ORDER BY position",
-          )
-          .all() as { connection_id: string }[]
-      ).map((row) => row.connection_id),
+      imported_connections: JSON.parse(
+        (
+          db
+            .query(
+              "SELECT body FROM meta WHERE name='profiles.imported-connections'",
+            )
+            .get() as { body: string }
+        ).body,
+      ),
     },
   };
 }
@@ -112,23 +116,13 @@ export function writeProfiles(db: Database, next: ProfilesDocument) {
   );
   db.query(`INSERT INTO profile_chimes VALUES(1,?) ON CONFLICT(singleton) DO UPDATE SET body=excluded.body
     WHERE profile_chimes.body<>excluded.body`).run(JSON.stringify(next.chimes));
-  db.exec(
-    "DELETE FROM profile_legacy_assignments; DELETE FROM profile_imported_connections",
+  const metadata = db.query(
+    "INSERT INTO meta(name,body) VALUES(?,?) ON CONFLICT(name) DO UPDATE SET body=excluded.body",
   );
-  next.assignments.forEach((assignment, position) =>
-    db
-      .query("INSERT INTO profile_legacy_assignments VALUES(?,?,?,?)")
-      .run(
-        position,
-        assignment.connection_id,
-        assignment.terminal_id,
-        assignment.profile_id,
-      ),
-  );
-  state.imported_connections.forEach((id, position) =>
-    db
-      .query("INSERT INTO profile_imported_connections VALUES(?,?)")
-      .run(id, position),
+  metadata.run("profiles.assignments", JSON.stringify(next.assignments));
+  metadata.run(
+    "profiles.imported-connections",
+    JSON.stringify(state.imported_connections),
   );
   db.query(`INSERT INTO profile_store_meta VALUES(1,?,?,?,?) ON CONFLICT(singleton) DO UPDATE SET
     revision=excluded.revision,highest_master_revision=excluded.highest_master_revision,

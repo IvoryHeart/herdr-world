@@ -79,7 +79,7 @@ test("the real storage port backs up and imports profile JSON once, then uses SQ
     readonly: true,
   });
   const imported = inspected
-    .query("SELECT * FROM imports WHERE name='agent-profiles-json'")
+    .query("SELECT * FROM meta WHERE name='agent-profiles-json'")
     .get();
   inspected.close();
   // A retained source is never a second writer, even if edited after migration.
@@ -97,12 +97,12 @@ test("the real storage port backs up and imports profile JSON once, then uses SQ
       db.query("SELECT count(*) AS count FROM agent_profiles").get(),
     ).toEqual({ count: 4 });
     expect(
-      db.query("SELECT * FROM imports WHERE name='agent-profiles-json'").get(),
+      db.query("SELECT * FROM meta WHERE name='agent-profiles-json'").get(),
     ).toEqual(imported);
     expect(
       db
         .query(
-          "SELECT content_hash FROM imports WHERE name='agent-profiles-json'",
+          "SELECT json_extract(body,'$.content_hash') AS content_hash FROM meta WHERE name='agent-profiles-json'",
         )
         .get(),
     ).toEqual({
@@ -178,7 +178,7 @@ test("malformed initial JSON and conflicting backups fail closed and can be repa
     expect(
       db
         .query(
-          "SELECT count(*) AS count FROM imports WHERE name='agent-profiles-json'",
+          "SELECT count(*) AS count FROM meta WHERE name='agent-profiles-json'",
         )
         .get(),
     ).toEqual({ count: 0 });

@@ -203,7 +203,7 @@ for (const compiled of [false, true]) {
             expect(
               db
                 .query(
-                  "SELECT count(*) AS count FROM imports WHERE name='board-json'",
+                  "SELECT count(*) AS count FROM meta WHERE name='board-json'",
                 )
                 .get(),
             ).toEqual({ count });
