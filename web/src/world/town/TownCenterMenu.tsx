@@ -3,10 +3,15 @@
  * (or the plaque, or Enter on it) opens a ring of actions around the doors:
  * launch an agent, talk to the Town master and the town's other errands.
  * Escape, a press outside, Back on a phone or the hub closes it.
+ *
+ * An action with a `ring` (Buildings, #1261) opens a second ring in the
+ * first one's place. There the hub is Back, and Escape or a phone's Back
+ * return to the first ring (it is its own layer on the layer stack); a press
+ * outside still closes both.
  */
 
-import { useLayoutEffect, useRef, type KeyboardEvent } from "react";
-import { X, type LucideIcon } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { ArrowLeft, X, type LucideIcon } from "lucide-react";
 import { useLayer } from "../../layerStack";
 import { TOWN_TILE as T } from "./townLayout";
 import { townCenterEmblem, type TownCenterLot } from "./townCenter";
@@ -25,6 +30,11 @@ export type TownCenterAction = {
   disabled?: boolean;
   /** The ring's first and brightest action. */
   primary?: boolean;
+  /**
+   * Choosing it opens a second ring of these actions, read when it opens,
+   * instead of running (Buildings); `run` is then not called.
+   */
+  ring?: () => readonly TownCenterAction[];
   run(): void;
 };
 
@@ -92,22 +102,53 @@ export function TownCenterMenu({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const ring = useRef<HTMLDivElement>(null);
+  /** The second ring's own items and Back, only while it is open. */
+  const innerItems = useRef<HTMLDivElement>(null);
   const opened = useRef(performance.now());
+  /** The second ring open now: the action that opened it and its actions. */
+  const [inner, setInner] = useState<{
+    from: TownCenterAction;
+    actions: readonly TownCenterAction[];
+  } | null>(null);
+  /** The action whose second ring just closed, to take focus back. */
+  const returnTo = useRef<string | null>(null);
+  const back = () => {
+    returnTo.current = inner?.from.id ?? null;
+    setInner(null);
+  };
   useLayer(true, onClose, { element: () => ref.current });
+  // The second ring is the top layer while open: Escape and Back leave it.
+  // Its element is gone once it closes, so the layer stack leaves focus on
+  // the first ring's Buildings rather than restoring it elsewhere.
+  useLayer(!!inner, back, { element: () => innerItems.current });
   useLayoutEffect(() => {
     if (ring.current) place(ring.current);
-    const first = ring.current?.querySelector<HTMLButtonElement>(
-      ".town-center-action:not([aria-disabled='true'])",
-    );
-    first?.focus({ preventScroll: true });
     // Positioned once on open; frames re-place it as the camera moves.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useLayoutEffect(() => {
+    const target = returnTo.current;
+    returnTo.current = null;
+    const button = target
+      ? ring.current?.querySelector<HTMLButtonElement>(
+          `.town-center-action[data-action="${target}"]`,
+        )
+      : ring.current?.querySelector<HTMLButtonElement>(
+          ".town-center-action:not([aria-disabled='true'])",
+        );
+    button?.focus({ preventScroll: true });
+  }, [inner]);
+  const shown = inner?.actions ?? actions;
+  const ringKey = inner ? inner.from.id : "town-center";
   const { radius, item } = townCenterRing(viewportWidth);
   // The style guide's icon sizes: a menu's 16 px, phone navigation's 22 px.
   const iconSize = item < 56 ? 16 : 22;
   const choose = (action: TownCenterAction) => {
     if (action.disabled) return;
+    if (action.ring) {
+      setInner({ from: action, actions: action.ring() });
+      return;
+    }
     onClose();
     action.run();
   };
@@ -147,7 +188,8 @@ export function TownCenterMenu({
         ref={ring}
         className="town-center-ring"
         role="menu"
-        aria-label="Town center"
+        aria-label={inner ? inner.from.label : "Town center"}
+        data-ring={ringKey}
         style={
           {
             "--ring-radius": `${radius}px`,
@@ -156,54 +198,80 @@ export function TownCenterMenu({
         }
         onKeyDown={keyDown}
       >
-        <div className="town-center-track" aria-hidden="true" />
-        {actions.map((action, index) => {
-          const angle = townCenterAngle(index, actions.length);
-          const Icon = action.icon;
-          return (
-            <button
-              key={action.id}
-              type="button"
-              role="menuitem"
-              className="town-center-action"
-              data-action={action.id}
-              data-primary={action.primary || undefined}
-              aria-disabled={action.disabled || undefined}
-              aria-label={[
-                action.label,
-                action.count ? `${action.count} waiting` : null,
-                action.detail,
-              ]
-                .filter(Boolean)
-                .join(", ")}
-              style={
-                {
-                  "--dx": `${Math.round(Math.cos(angle) * radius)}px`,
-                  "--dy": `${Math.round(Math.sin(angle) * radius)}px`,
-                  "--delay": `${index * 18}ms`,
-                } as React.CSSProperties
-              }
-              onClick={() => choose(action)}
-            >
-              <span className="town-center-medallion" aria-hidden="true">
-                <Icon size={iconSize} strokeWidth={2} />
-                {action.count ? <b>{action.count}</b> : null}
-              </span>
-              <span className="town-center-label" aria-hidden="true">
-                {action.label}
-                {action.detail ? <small>{action.detail}</small> : null}
-              </span>
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          className="town-center-hub"
-          aria-label="Close town center"
-          onClick={onClose}
+        <div
+          key={`track:${ringKey}`}
+          className="town-center-track"
+          aria-hidden="true"
+        />
+        {/* Keyed by ring, so a ring's medallions open afresh. */}
+        <div
+          key={ringKey}
+          ref={inner ? innerItems : undefined}
+          className="town-center-items"
+          role="none"
         >
-          <X size={iconSize} strokeWidth={2} aria-hidden="true" />
-        </button>
+          {shown.map((action, index) => {
+            const angle = townCenterAngle(index, shown.length);
+            const Icon = action.icon;
+            return (
+              <button
+                key={action.id}
+                type="button"
+                role="menuitem"
+                className="town-center-action"
+                data-action={action.id}
+                data-primary={action.primary || undefined}
+                aria-disabled={action.disabled || undefined}
+                aria-haspopup={action.ring ? "menu" : undefined}
+                aria-label={[
+                  action.label,
+                  action.count ? `${action.count} waiting` : null,
+                  action.detail,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
+                style={
+                  {
+                    "--dx": `${Math.round(Math.cos(angle) * radius)}px`,
+                    "--dy": `${Math.round(Math.sin(angle) * radius)}px`,
+                    "--delay": `${index * 18}ms`,
+                  } as React.CSSProperties
+                }
+                onClick={() => choose(action)}
+              >
+                <span className="town-center-medallion" aria-hidden="true">
+                  <Icon size={iconSize} strokeWidth={2} />
+                  {action.count ? <b>{action.count}</b> : null}
+                </span>
+                <span className="town-center-label" aria-hidden="true">
+                  {action.label}
+                  {action.detail ? <small>{action.detail}</small> : null}
+                </span>
+              </button>
+            );
+          })}
+          {inner ? (
+            <button
+              type="button"
+              className="town-center-hub"
+              data-hub="back"
+              aria-label="Back to town center"
+              title="Back"
+              onClick={back}
+            >
+              <ArrowLeft size={iconSize} strokeWidth={2} aria-hidden="true" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="town-center-hub"
+              aria-label="Close town center"
+              onClick={onClose}
+            >
+              <X size={iconSize} strokeWidth={2} aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -229,6 +297,7 @@ export function TownCenterSign({
     <button
       type="button"
       className="town-center-sign"
+      data-help="town.center"
       style={{ left: at.x, top: at.y }}
       aria-haspopup="menu"
       aria-expanded={open}

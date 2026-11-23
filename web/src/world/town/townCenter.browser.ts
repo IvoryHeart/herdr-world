@@ -6,7 +6,8 @@ import { spotlightHelpTarget } from "../../help/helpTry";
  * The town center in a real renderer: its plaque is in the home view, a tap
  * on the building opens the ring around it, every action fits on screen,
  * Escape and a press outside close it, New agent opens the launcher, and
- * Apartments opens from the ring and from its building's sign.
+ * Buildings opens a second ring (#1261) whose Apartments opens as its
+ * building's sign does; Escape there returns to the first ring.
  */
 export async function checkTownCenter(
   host: HTMLElement,
@@ -53,14 +54,17 @@ export async function checkTownCenter(
     () => ring() !== null,
     "a tap on the town center opened no menu",
   );
-  check(actions().length === 10, `the ring has ${actions().length} actions`);
+  const ids = () => actions().map((action) => action.dataset.action);
+  check(actions().length === 8, `the ring has ${actions().length} actions`);
+  check(ids().includes("focus"), "the ring offers no Focus");
+  check(ids().includes("buildings"), "the ring offers no Buildings");
   check(
-    actions().some((action) => action.dataset.action === "focus"),
-    "the ring offers no Focus",
+    !ids().some((id) => ["library", "apartments", "needs-you"].includes(id!)),
+    `the first ring still offers a building: ${ids().join(", ")}`,
   );
   check(
-    actions().some((action) => action.dataset.action === "library"),
-    "the ring offers no Library",
+    !actions().some((action) => /\d/.test(action.textContent ?? "")),
+    "a first-ring entry shows a number",
   );
   check(
     document.activeElement === actions()[0],
@@ -73,21 +77,57 @@ export async function checkTownCenter(
   // Measured at the end of the ring's opening motion. A busy software
   // renderer can hold the animation clock for longer than the motion lasts,
   // so the check settles it rather than waiting a fixed time.
-  for (const animation of ring()!.getAnimations({ subtree: true }))
-    animation.finish();
-  for (const action of actions()) {
-    const box = action
-      .querySelector(".town-center-medallion")!
-      .getBoundingClientRect();
-    check(
-      box.width >= 44 &&
-        box.left >= 0 &&
-        box.top >= 0 &&
-        box.right <= window.innerWidth &&
-        box.bottom <= window.innerHeight,
-      `${action.dataset.action} is off screen or under 44 px: ${JSON.stringify(box)}`,
-    );
-  }
+  const fits = () => {
+    for (const animation of ring()!.getAnimations({ subtree: true }))
+      animation.finish();
+    for (const action of actions()) {
+      const box = action
+        .querySelector(".town-center-medallion")!
+        .getBoundingClientRect();
+      check(
+        box.width >= 44 &&
+          box.left >= 0 &&
+          box.top >= 0 &&
+          box.right <= window.innerWidth &&
+          box.bottom <= window.innerHeight,
+        `${action.dataset.action} is off screen or under 44 px: ${JSON.stringify(box)}`,
+      );
+    }
+  };
+  fits();
+  // Buildings opens the second ring in place; it fits too, and Escape
+  // returns to the first ring with Buildings focused.
+  actions()
+    .find((action) => action.dataset.action === "buildings")!
+    .click();
+  await waitFor(
+    () => ring()?.dataset.ring === "buildings",
+    "Buildings opened no second ring",
+  );
+  check(
+    ["apartments", "post", "observatory"].every((id) => ids().includes(id)),
+    `the Buildings ring lacks a building: ${ids().join(", ")}`,
+  );
+  check(
+    !actions().some((action) => /\d/.test(action.textContent ?? "")),
+    "a Buildings entry shows a number",
+  );
+  check(
+    document.activeElement === actions()[0],
+    "the Buildings ring did not focus its first building",
+  );
+  fits();
+  document.activeElement!.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  await waitFor(
+    () => ring()?.dataset.ring === "town-center",
+    "Escape did not return to the first ring",
+  );
+  check(
+    document.activeElement?.getAttribute("data-action") === "buildings",
+    "the first ring did not focus Buildings again",
+  );
   document.activeElement!.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
   );
@@ -123,7 +163,7 @@ export async function checkTownCenter(
     window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, launched);
   }
 
-  // Apartments opens from the ring and from the building's sign.
+  // Apartments opens from the Buildings ring and from the building's sign.
   let apartments = 0;
   const opened = () => {
     apartments += 1;
@@ -132,6 +172,26 @@ export async function checkTownCenter(
   try {
     sign()!.click();
     await waitFor(() => ring() !== null, "the plaque did not reopen the menu");
+    actions()
+      .find((action) => action.dataset.action === "buildings")!
+      .click();
+    await waitFor(
+      () => ring()?.dataset.ring === "buildings",
+      "Buildings opened no second ring",
+    );
+    // The centre's Back returns to the first ring; Buildings again.
+    host.querySelector<HTMLButtonElement>(".town-center-hub")!.click();
+    await waitFor(
+      () => ring()?.dataset.ring === "town-center",
+      "Back did not return to the first ring",
+    );
+    actions()
+      .find((action) => action.dataset.action === "buildings")!
+      .click();
+    await waitFor(
+      () => ring()?.dataset.ring === "buildings",
+      "Buildings did not reopen its ring",
+    );
     actions()
       .find((action) => action.dataset.action === "apartments")!
       .click();

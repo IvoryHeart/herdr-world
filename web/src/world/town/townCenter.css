@@ -64,6 +64,11 @@
   height: 0;
 }
 
+/* One ring's medallions and hub: a box for the layer stack, not for layout. */
+.town-center-items {
+  display: contents;
+}
+
 .town-center-track {
   position: absolute;
   left: calc(var(--ring-radius) * -1 - 44px);
