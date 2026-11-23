@@ -4,7 +4,8 @@
 
 **Surfaces:**
 
-- Town Library building, town center ring, Board hub (**Memory**) and supported agent Settings open one Library.
+- Town Library building, town center ring, Board hub (**Memory**) and supported agent Settings open one Library; its sign also counts what agents made.
+- The Library's **Made by agents** tab lists artefacts (world-artefacts); search covers them alongside memory.
 - Readers select host/project/agent; shelves support search, fresh reads and explicit revision-checked edits.
 - CLI memory list/search/read/create/update/delete shares the API; memory demo --json is synthetic.
 - TUI/core share adapters and host routing; Unix hosts need Python 3, Windows refuses.
@@ -24,6 +25,7 @@
 - `server/src/memory/worker.py`
 - `server/src/cli/memory.ts`
 - `web/src/world/memory/MemoryLibrary.tsx`
+- `web/src/world/memory/LibraryArtefacts.tsx`, `artefactShelfClient.ts`, `artefactShelfModel.ts`, `artefactFixture.ts` (the "Made by agents" wing; see world-artefacts notes)
 - `web/src/features/memory/mount.tsx`
 
 **Tests:**
