@@ -1,4 +1,5 @@
-import type { BridgeRpcContext } from "./context";
+import type { FeatureRpcHandler } from "../contract";
+import type { ApartmentsService } from "./service";
 
 /**
  * Apartments (world.apartments.*): finished agents' records. Reading the
@@ -7,10 +8,10 @@ import type { BridgeRpcContext } from "./context";
  * with `resume_resident`), qualified by that launch's own connection.
  */
 export async function handleApartmentsRpc(
-  rpc: BridgeRpcContext,
+  rpc: Parameters<FeatureRpcHandler>[0],
+  service: ApartmentsService | undefined,
 ): Promise<void> {
   const { id, method, params, sendReply, sendError } = rpc;
-  const service = rpc.services.apartments;
   const p = (params ?? {}) as Record<string, unknown>;
   const reply = (result: unknown) => {
     sendReply({ id, result }, "world-apartments");

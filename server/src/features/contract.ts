@@ -18,6 +18,7 @@ type Connections<T extends ConnectionRuntime> = Pick<
 export type FeatureKernel = Readonly<
   Pick<WorldServiceDeps, "clock" | "scheduler"> & {
     createUsage: typeof import("../service/usage-analytics").composeWorldUsage;
+    createApartments: typeof import("./apartments/service").createApartmentsService;
     paths: Pick<WorldServiceDeps["paths"], "root">;
     config: Pick<WorldServiceDeps["config"], "sshHost">;
     serviceIncarnation: string;
@@ -48,6 +49,12 @@ export type FeatureKernel = Readonly<
     coreHostRuntime: (
       ...args: Parameters<import("../rpc/core").CoreRpcServices["hostRuntime"]>
     ) => import("../memory/service").MemoryLease["runtime"];
+    coreApartmentRuntime: (
+      ...args: Parameters<import("../rpc/core").CoreRpcServices["hostRuntime"]>
+    ) => Pick<
+      import("../herdr-core/host-runtime").CoreHostRuntime,
+      "agentSessionFiles" | "agentSessions"
+    >;
     coreGit: (
       ...args: Parameters<import("../rpc/core").CoreRpcServices["hostRuntime"]>
     ) => import("../herdr-core/host-runtime").CoreHostRuntime["worktreeGit"];
@@ -63,9 +70,11 @@ export function featureKernel(
   sources: FeatureKernel["sources"],
   observations: FeatureKernel["observations"],
   createUsage: FeatureKernel["createUsage"],
+  createApartments: FeatureKernel["createApartments"],
 ): FeatureKernel {
   return Object.freeze({
     createUsage,
+    createApartments,
     paths: deps.paths,
     config: deps.config,
     serviceIncarnation: rpc.serviceIncarnation!,
@@ -83,6 +92,7 @@ export function featureKernel(
     connections: () => rpc.connectionManager,
     core: () => rpc.core!.manager,
     coreHostRuntime: (lease) => rpc.coreControl!.hostRuntime(lease),
+    coreApartmentRuntime: (lease) => rpc.coreControl!.hostRuntime(lease),
     coreGit: (lease) => rpc.coreControl!.hostRuntime(lease).worktreeGit,
     sources,
   });

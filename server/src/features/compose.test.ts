@@ -17,6 +17,7 @@ import { registeredVerb } from "../verbs/registry";
 
 import { testFeatureKernel } from "../testing/features";
 import { usageKey } from "./usage/register";
+import { apartmentsKey } from "./apartments/register";
 const kernel = testFeatureKernel();
 const verb = (name: string) =>
   declare(
@@ -192,6 +193,7 @@ test("missing and extra RPC handlers are refused", () => {
 
 test("every discovered feature implements exactly its registered RPC declarations", async () => {
   expect(serverFeatures.map((f) => String(f.id))).toEqual([
+    "apartments",
     "memory",
     "presence",
     "usage",
@@ -199,7 +201,7 @@ test("every discovered feature implements exactly its registered RPC declaration
   const composed = composeFeatures(kernel);
   expect(composed.hasStop("quiesce")).toBe(true);
   expect(composed.hasStop("drain")).toBe(false);
-  expect(composed.hasStop("close")).toBe(false);
+  expect(composed.hasStop("close")).toBe(true);
   const usage = composed.get(usageKey),
     calls: string[] = [];
   usage.connectionStatus = (status) => {
@@ -212,6 +214,17 @@ test("every discovered feature implements exactly its registered RPC declaration
   const stopping = composed.stop("quiesce");
   expect(calls).toEqual(["host-a", "close"]);
   await stopping;
+  const apartments = composed.get(apartmentsKey);
+  apartments.stop = async () => {
+    calls.push("apartments:stop");
+  };
+  apartments.apartments.connectionStatus = (status) => {
+    calls.push(`apartments:${status.id}`);
+  };
+  composed.connectionStatus({ id: "host-b" } as ConnectionStatus);
+  expect(calls).toContain("apartments:host-b");
+  await composed.stop("close");
+  expect(calls.at(-1)).toBe("apartments:stop");
   expect([...composed.rpc.keys()].sort()).toEqual(
     serverFeatures
       .flatMap((f) =>
