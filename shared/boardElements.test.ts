@@ -113,7 +113,16 @@ test("an agent's artefact keeps its agent and an absolute file or a link, never 
       1,
     ).source,
   ).toEqual({ ...owner, url: "https://example.com/report" });
+  // The maker's session fingerprint is kept as continuity evidence.
+  const session = "c".repeat(64);
+  expect(
+    parseBoardElement(
+      { ...artefact, source: { ...owner, session, file: "/work/a.md" } },
+      1,
+    ).source,
+  ).toEqual({ ...owner, session, file: "/work/a.md" });
   for (const source of [
+    { ...owner, session: "not-a-fingerprint", file: "/work/a.md" },
     { ...owner, file: "relative/report.md" },
     { ...owner, file: "/work/../secret.md" },
     { ...owner, file: "/work/a.md", url: "https://example.com/" },

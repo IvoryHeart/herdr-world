@@ -785,9 +785,9 @@ export function createHerdrConversationSource(args: {
             session_fingerprint: base.session_fingerprint,
           };
           try {
-            const room = listed.get(pane_id)?.workspace_id;
+            const info = listed.get(pane_id);
             const desk = resolved.file
-              ? await args.cache.desk(resolved, { ...found, room })
+              ? await args.cache.desk(resolved, { ...found, info })
               : { quest: null, usage_stop: null, artefacts: [] };
             return {
               ...found,

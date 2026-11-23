@@ -11,10 +11,11 @@ Board element kinds, their durable references and bounded reads.
 The registry SHALL include a placed `artefact` kind, added from an agent's
 artefact rather than from a Board form. Its source SHALL hold the artefact
 record's maker: the immutable connection ID, the creator room's workspace ID,
-the pane ID and harness, plus the artefact kind and exactly one of an absolute
-file path or a credential-free HTTP(S) URL. The source SHALL NOT keep a maker
-name; Board SHALL show the maker World names now on that connection, or its
-harness when that agent is gone. The maker reference SHALL NOT grant
+the pane ID, harness and maker session fingerprint when the record has one,
+plus the artefact kind and exactly one of an absolute file path or a
+credential-free HTTP(S) URL. The source SHALL NOT keep a maker name; Board
+SHALL show the name World gives the live agent in that pane on that connection
+only while it runs the maker session, else the harness. The maker reference SHALL NOT grant
 authority. Its element ID SHALL be the artefact's ID so the same place is
 added once.
 
@@ -33,6 +34,10 @@ agent there it SHALL say so.
 #### Scenario: The artefact file is deleted
 - **WHEN** Board reads an artefact element whose file is gone
 - **THEN** the read SHALL be unavailable without content or filesystem details
+
+#### Scenario: Another agent takes over the pane
+- **WHEN** a new session of the same harness replaces the maker in its pane
+- **THEN** Board SHALL show the harness, not the new agent's name
 
 #### Scenario: A pinned image
 - **WHEN** the owner opens a pinned PNG artefact on Board

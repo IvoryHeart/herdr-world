@@ -172,6 +172,7 @@ test("presence: a deleted file is gone, links and unchecked hosts are unknown", 
       pane_id: "w1:p1",
       agent: "claude",
       workspace_id: "w1",
+      session: null,
     }));
     expect(owned.map(parseAgentArtefact)).toEqual(owned);
   } finally {
@@ -199,6 +200,7 @@ test("the same path on two connections is two artefacts; one host's place is one
     pane_id: "w1:p1",
     agent: "codex",
     workspace_id: "w1",
+    session: null,
   });
   const present = found.map((entry) => ({ ...entry, exists: true }));
   const [first] = ownedArtefacts(present, "host-a", maker("host-a"));

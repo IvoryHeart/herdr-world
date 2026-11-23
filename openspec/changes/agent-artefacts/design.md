@@ -27,10 +27,16 @@ not place resolves only when the session had one folder.
 
 An artefact ID hashes the connection ID with the place, so the same path on
 two hosts is two artefacts. The service attaches `made_by` (connection, pane,
-harness, room) once per desk read. The room is first-seen per connection in a
-bounded in-memory map, so a moved agent keeps its artefact's room until the
-service restarts; after a restart the current room is used. Board saves
-`made_by` as the element source and names the maker from the live World.
+harness, session, room) once per desk read. `session` fingerprints the agent
+session Herdr reports for the pane, the same way World's agent leaf does
+(`agentSessionFingerprint`), so it is continuity evidence: Board names the live
+agent in that pane only while it runs that session, and a replacement agent of
+the same harness is never credited. The room is first-seen per artefact, pane
+and maker session in a bounded in-memory map, so a moved agent keeps its
+artefact's room until the service restarts, and another agent recreating a
+deleted path gets its own room; after a restart the current room is used.
+Board saves `made_by` as the element source and names the maker from the live
+World. A CLI-placed artefact has no session, so Board shows its harness.
 
 ## Presence
 

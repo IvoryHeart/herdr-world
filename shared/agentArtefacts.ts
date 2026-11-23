@@ -48,6 +48,13 @@ export type ArtefactMaker = {
   agent: string;
   /** Null when the agent's room was unknown when World first saw it. */
   workspace_id: string | null;
+  /**
+   * The maker's agent session as Herdr reported it, fingerprinted the same
+   * way as World's agent leaf (`agentSessionFingerprint`): continuity
+   * evidence, so a later agent in the same pane is never credited. Null when
+   * the harness reported no session.
+   */
+  session: string | null;
 };
 
 export type AgentArtefact = {
@@ -169,7 +176,15 @@ export function parseAgentArtefact(value: unknown): AgentArtefact | null {
     typeof made_by.connection_id !== "string" ||
     typeof made_by.pane_id !== "string" ||
     typeof made_by.agent !== "string" ||
-    !(made_by.workspace_id === null || typeof made_by.workspace_id === "string")
+    !(
+      made_by.workspace_id === null || typeof made_by.workspace_id === "string"
+    ) ||
+    !(
+      made_by.session === undefined ||
+      made_by.session === null ||
+      (typeof made_by.session === "string" &&
+        /^[a-f0-9]{64}$/u.test(made_by.session))
+    )
   )
     return null;
   if (
@@ -211,6 +226,8 @@ export function parseAgentArtefact(value: unknown): AgentArtefact | null {
       pane_id: made_by.pane_id,
       agent: made_by.agent,
       workspace_id: made_by.workspace_id as string | null,
+      // A service without session evidence sends none.
+      session: (made_by.session as string | undefined) ?? null,
     },
   };
 }

@@ -1,4 +1,6 @@
 import { sessionWorktreeMetadata } from "./worktree-session";
+import { reportedSessionClaim } from "./agent-claims";
+import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 import {
   callWorkingDirectories,
   localArtefactStat,
@@ -163,8 +165,9 @@ export function createSessionProjectionCache(
   connectionId = "",
 ) {
   const cache = new Map<string, Cached>();
-  // The room each artefact's agent was in when World first saw it, so a
-  // later move does not reassign where it was made (bounded, references only).
+  // The room each artefact's maker session was in when World first saw it,
+  // so a later move does not reassign where it was made, and another agent
+  // recreating the same path keeps its own (bounded, references only).
   const origins = new Map<string, string | null>();
   const pending = new Map<string, Promise<Cached>>();
   // Quests are small, so many more are kept than projections: an agent's
@@ -400,30 +403,50 @@ export function createSessionProjectionCache(
     /**
      * The desk record with each file artefact's presence checked on every
      * read, so a deleted file shows as gone; remote hosts are not probed.
-     * Each artefact is named on this connection and stamped with `maker`,
-     * in the room it was in when World first saw that artefact.
+     * Each artefact is named on this connection and stamped with its maker:
+     * this pane, harness and reported session, in the room that session was
+     * in when World first saw it make the artefact. The room is remembered
+     * per maker session, so another agent recreating the same path keeps its
+     * own room.
      */
     async desk(
       resolved: AgentSessionResolved,
-      maker: { pane_id: string; agent: string | null; room?: unknown },
+      maker: {
+        pane_id: string;
+        agent: string | null;
+        /** The pane as the runtime lists it (its room and reported session). */
+        info?: Record<string, unknown>;
+      },
     ) {
       const room =
-        typeof maker.room === "string" && maker.room ? maker.room : null;
+        typeof maker.info?.workspace_id === "string" && maker.info.workspace_id
+          ? maker.info.workspace_id
+          : null;
+      const reported = reportedSessionClaim(maker.info ?? null, Date.now());
+      const session = reported
+        ? taskSummarySessionFingerprint(reported.value)
+        : null;
       const found = await record(resolved);
       const present = await withArtefactPresence(
         found.artefacts,
         files.remote ? null : localArtefactStat,
       );
       const artefacts = ownedArtefacts(present, connectionId, (id) => {
-        if (!origins.has(id) && room !== null) {
-          origins.set(id, room);
+        const origin = JSON.stringify([
+          id,
+          maker.pane_id,
+          session ?? sessionKey(resolved),
+        ]);
+        if (!origins.has(origin) && room !== null) {
+          origins.set(origin, room);
           if (origins.size > 4096) origins.delete(origins.keys().next().value!);
         }
         return {
           connection_id: connectionId,
           pane_id: maker.pane_id,
           agent: maker.agent ?? "",
-          workspace_id: origins.get(id) ?? room,
+          workspace_id: origins.get(origin) ?? room,
+          session,
         };
       });
       return { ...found, artefacts };

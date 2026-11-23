@@ -223,6 +223,7 @@ test("artefacts are read with the quest, kept per agent, and a deleted file read
       pane_id: "w1:p1",
       agent: "claude",
       workspace_id: "w1",
+      session: "d".repeat(64),
     },
   };
   const first = reads.read([leaf("L1")]);

@@ -46,8 +46,8 @@ export function sourcePlace(
 
 /**
  * Where an artefact on Board comes from, as World sees it now. The element
- * keeps only World's reference to its maker (connection, pane, harness and
- * creator room); the maker's name comes from the live World, never from the
+ * keeps only World's reference to its maker (connection, pane, harness,
+ * session and creator room); the maker's name comes from the live World, never from the
  * view or the saved element. Only the saved connection is searched.
  */
 export function artefactPlace(
@@ -61,11 +61,15 @@ export function artefactPlace(
   const agents: WorldLeafObject[] = (host?.spaces ?? []).flatMap((space) =>
     space.children.filter((leaf) => leaf.kind === "agent" && !leaf.stale),
   );
-  const maker = agents.find(
-    (leaf) =>
-      leaf.pane.pane_id === source.pane_id &&
-      (!source.agent || !leaf.pane.agent || leaf.pane.agent === source.agent),
-  );
+  // Only the session that made it is its maker: a later agent in the same
+  // pane, even with the same harness, has another session and is not credited.
+  const maker = source.session
+    ? agents.find(
+        (leaf) =>
+          leaf.pane.pane_id === source.pane_id &&
+          leaf.agentSessionFingerprint === source.session,
+      )
+    : undefined;
   const viewer =
     maker ??
     agents.find((leaf) => leaf.pane.workspace_id === source.workspace_id) ??

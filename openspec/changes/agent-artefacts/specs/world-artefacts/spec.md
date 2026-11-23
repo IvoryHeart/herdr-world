@@ -15,9 +15,10 @@ herdr-core agents alike. Each record SHALL hold a stable ID for its place on
 its connection, title, kind (`document`, `report`, `page`, `image` or `file`),
 where it lives (an absolute file path on the agent's host or an HTTP(S) link),
 when it was made, its evidence, whether the file still exists and its maker:
-the immutable connection ID, pane ID, harness and the room (workspace) it was
-made in. The room SHALL be the one World first saw it in, kept while the
-service runs even if the agent moves rooms. Records SHALL be newest first, one
+the immutable connection ID, pane ID, harness, the agent session Herdr reported
+(as a fingerprint, or none) and the room (workspace) it was made in. The room
+SHALL be the one World first saw that maker session in, kept while the service
+runs even if the agent moves rooms, and never another agent's. Records SHALL be newest first, one
 per place, at most 24 per session. Views SHALL display these records only and
 SHALL NOT derive or keep their own maker, room or record.
 
@@ -32,6 +33,10 @@ SHALL NOT derive or keep their own maker, room or record.
 #### Scenario: The agent moves rooms
 - **WHEN** an agent that made a report moves to another workspace
 - **THEN** the record SHALL keep the room it was made in
+
+#### Scenario: Another agent recreates the same path
+- **WHEN** a report is deleted and an agent in another room writes the same path
+- **THEN** that agent's record SHALL name its own pane and room
 
 #### Scenario: A herdr-core agent makes a report
 - **WHEN** a Claude Code agent run by herdr-core writes a report

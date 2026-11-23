@@ -124,29 +124,55 @@ describe("where a project element reads from", () => {
 });
 
 describe("an artefact on Board", () => {
+  const ORIGINAL = "a".repeat(64);
+  const REPLACEMENT = "b".repeat(64);
+  // World's leaf in pane w1:p1 runs the session with this fingerprint.
+  const running = (fingerprint: string) => ({
+    ...world,
+    hosts: world.hosts.map((host) => ({
+      ...host,
+      spaces: host.spaces.map((space) => ({
+        ...space,
+        children: space.children.map((leaf) =>
+          leaf.id === "leaf:studio:w1:p1"
+            ? {
+                ...leaf,
+                pane: { ...leaf.pane, agent: "codex" },
+                agentSessionFingerprint: fingerprint,
+              }
+            : leaf,
+        ),
+      })),
+    })),
+  });
   const made = (fields: Record<string, string>) =>
     ({
       connection_id: "studio",
       workspace_id: "w2",
       pane_id: "w1:p1",
       agent: "codex",
+      session: ORIGINAL,
       artefact_kind: "report",
       file: "/work/example/report.md",
       ...fields,
     }) as never;
   test("names its live maker from World and opens through it", () => {
-    const place = artefactPlace(world, made({}));
+    const place = artefactPlace(running(ORIGINAL), made({}));
     expect(place.maker).toBe("main 1");
     expect(place.viewerId).toBe("leaf:studio:w1:p1");
     // The room is the one it was made in, not where the maker is now.
     expect(place.workspaceLabel).toBe("docs-site");
   });
   test("a gone or replaced maker shows its harness; Files opens through its room", () => {
-    const gone = artefactPlace(world, made({ pane_id: "w1:p9" }));
+    const gone = artefactPlace(running(ORIGINAL), made({ pane_id: "w1:p9" }));
     expect(gone.maker).toBe("Codex");
     expect(gone.viewerId).toBe("leaf:studio:w2:p1");
-    const replaced = artefactPlace(world, made({ agent: "claude" }));
-    expect(replaced.maker).toBe("Claude");
+    // Another Codex session in the same pane did not make it.
+    const replaced = artefactPlace(running(REPLACEMENT), made({}));
+    expect(replaced.maker).toBe("Codex");
+    // Without session evidence no live agent is credited.
+    const unknown = artefactPlace(running(ORIGINAL), made({ session: "" }));
+    expect(unknown.maker).toBe("Codex");
   });
   test("an offline connection is never swapped for another one", () => {
     const place = artefactPlace(

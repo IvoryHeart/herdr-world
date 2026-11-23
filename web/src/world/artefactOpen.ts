@@ -69,7 +69,7 @@ export function useArtefactFileRequests(
 
 /**
  * Put the artefact on Board as a reference to what World derived: the maker
- * (its connection, pane and harness) and the room it was made in, both from
+ * (its connection, pane, harness and session) and the room it was made in, from
  * the record, never from the card it was pinned from. Board shows the
  * maker's name from the live World. The same artefact is one element (its
  * ID is the artefact's), so adding it twice says so instead.
@@ -98,6 +98,7 @@ export async function addArtefactToBoard(
       workspace_id: maker.workspace_id,
       pane_id: maker.pane_id,
       agent: maker.agent,
+      ...(maker.session ? { session: maker.session } : {}),
       artefact_kind: artefact.kind,
       ...(artefact.where.type === "file"
         ? { file: artefact.where.path }

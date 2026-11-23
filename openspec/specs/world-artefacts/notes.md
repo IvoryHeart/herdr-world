@@ -44,7 +44,8 @@
 - Only Claude Code and Codex transcripts are read, on Herdr and herdr-core alike.
 - IDs hash the connection with the place; never compare artefacts across connections by path.
 - Relative paths resolve against the cwd recorded for that call, never the latest one.
-- The creator room is first-seen in memory; after a service restart a moved agent's artefact takes its current room.
+- The creator room is first-seen in memory per maker session; after a service restart a moved agent's artefact takes its current room.
+- Board names the maker only while the agent in its pane runs the maker session (`made_by.session`); a replacement agent, a harness with no reported session or a CLI-placed artefact shows the harness.
 - Remote hosts and links are never probed, so their presence is unknown, not gone.
 - Files written by shell redirection are not found; only the harness's own write and add-file records count.
 - World stores references only; never copy artefact content into a store or Board row.

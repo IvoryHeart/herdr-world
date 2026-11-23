@@ -84,6 +84,12 @@ export type BoardArtefactSource = {
   workspace_id: string;
   pane_id: string;
   agent: string;
+  /**
+   * The maker's session fingerprint from the record (`made_by.session`).
+   * Board names the maker only while the live agent in that pane has this
+   * session; without it Board shows the harness alone.
+   */
+  session?: string;
   artefact_kind: ArtefactKind;
 } & ({ file: string } | { url: string });
 type Sources = {
@@ -187,6 +193,11 @@ export function boardElementPath(value: unknown): string {
     throw new Error("board element path must stay within the project");
   return path;
 }
+function sessionFingerprint(value: unknown): string {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/u.test(value))
+    throw new Error("board artefact session must be a session fingerprint");
+  return value;
+}
 /** An absolute path on the agent's host, as the agent's transcript names it. */
 export function boardArtefactFile(value: unknown): string {
   const path = text(value, "artefact file", BOARD_ELEMENT_LIMITS.path);
@@ -289,6 +300,9 @@ export function parseBoardElement(value: unknown, rev: number): BoardElement {
         workspace_id: text(source.workspace_id, "workspace ID", 512),
         pane_id: text(source.pane_id, "pane ID", 512),
         agent: text(source.agent, "agent", 128),
+        ...(source.session === undefined
+          ? {}
+          : { session: sessionFingerprint(source.session) }),
         artefact_kind: source.artefact_kind as ArtefactKind,
       };
       if ("file" in source === "url" in source)
