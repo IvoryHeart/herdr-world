@@ -86,6 +86,8 @@ export async function followCoreDeskMove(
 }
 
 const READY_MS = 60_000;
+/** How long a closed Herdr pane may still show before the move says so. */
+const CLOSE_MS = 5_000;
 
 /** The real sides: a Herdr TUI connection or a herdr-core one. */
 export function moveSide(
@@ -240,7 +242,23 @@ export function moveSide(
       },
       async close(pane) {
         await call("pane.close", { pane_id: pane.pane_id });
-        return {};
+        // Herdr said ok: the move says moved only once Herdr stops showing
+        // it, else the original may still run (an uncertain move).
+        const shown = (row: TerminalRow) =>
+          pane.terminal_id
+            ? row.terminal_id === pane.terminal_id
+            : row.pane_id === pane.pane_id;
+        for (let waited = 0; ; waited += 500) {
+          const now = await rows().catch(() => null);
+          if (now && !now.panes.some(shown)) return {};
+          if (waited >= CLOSE_MS)
+            return {
+              uncertain: now
+                ? "Herdr still shows it after closing it."
+                : "World lost the host while it closed.",
+            };
+          await sleep(500);
+        }
       },
       pin: async (desk) => [
         { op: "desk.pin", key: desk.color_key, cell: null },

@@ -32,3 +32,6 @@
   slow or remote link: once the page reconnects it shows how the move ended.
   A slow connection that still delivers is no longer closed by the page's
   heartbeat.
+- A move that can't close the original, or whose original turns busy, keeps
+  the desk's pin. When Herdr still shows the original after closing it, the
+  move says the original may still be running instead of reporting moved.

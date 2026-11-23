@@ -44,8 +44,10 @@ reply SHALL learn that move's outcome once it reconnects, without moving again.
   the new copy and say the original still runs. When an end was asked but not
   confirmed, World SHALL say which agent may still be running instead of
   reporting a move or a clean refusal; this includes a lost close reply after
-  which the original can't be read (World keeps the new copy) and a lost start
-  reply (the original keeps running and the copy may be).
+  which the original can't be read (World keeps the new copy), a Herdr TUI
+  close after which Herdr still shows the original, and a lost start reply
+  (the original keeps running and the copy may be). A pin kept under another
+  connection of the same runtime SHALL stay until the original has closed.
   A harness that refuses or forks a conversation open elsewhere (Codex; or a
   copy that reports another conversation) SHALL be closed first and then
   resumed on the destination; if the destination does not start it, World
@@ -80,11 +82,11 @@ reply SHALL learn that move's outcome once it reconnects, without moving again.
 #### Scenario: The original starts working during the handoff
 
 - **WHEN** the original agent starts working before it closes
-- **THEN** World closes the new copy, keeps the original and its desk, and says why
+- **THEN** World closes the new copy, keeps the original and its desk with its pin and colour, and says why
 
 #### Scenario: A close that is not confirmed
 
-- **WHEN** herdr-core does not confirm that the original ended
+- **WHEN** herdr-core does not confirm that the original ended, or Herdr TUI still shows the original after closing it
 - **THEN** World says the agent runs in its new room and the original may still be running
 
 #### Scenario: Codex closes before it resumes

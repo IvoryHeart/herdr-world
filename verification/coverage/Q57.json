@@ -7,6 +7,7 @@
   "existingTests": [
     "quint/agent-move.test.ts",
     "server/src/world/agent-move.test.ts",
+    "server/src/world/agent-move-views.test.ts",
     "server/src/rpc/core.test.ts",
     "server/src/herdr-core/operations.test.ts"
   ],
@@ -22,6 +23,7 @@
     "tests": [
       "quint/agent-move.test.ts",
       "server/src/world/agent-move.test.ts",
+      "server/src/world/agent-move-views.test.ts",
       "server/src/rpc/core.test.ts",
       "server/src/herdr-core/operations.test.ts"
     ],

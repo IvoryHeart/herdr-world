@@ -60,7 +60,11 @@ Its invariant, checked by TLC over every bounded run:
 
 A pinned desk is not refused: the town-moves requirement carries the pin with
 the agent, so the model pins the copy before the desk moves, and a refused pin
-fails the move with the original intact.
+fails the move with the original intact. A pin kept under another connection
+of the same Herdr goes only after the original has closed, and a Herdr TUI
+close counts only once Herdr stops showing the original
+(`server/src/world/agent-move-views.test.ts` runs both connections of one
+Herdr through the real TUI side).
 
 `quint/agent-move.ts` replays sampled traces through the real
 `moveAgentAcross`, with both sides scripted by the trace and fenced like a

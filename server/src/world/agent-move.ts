@@ -572,6 +572,23 @@ async function handoff(
     );
   }
   const placed = started as Exclude<typeof started, { message: string }>;
+  /**
+   * Once the original has closed, drop its pins under the endpoint's other
+   * views (the copy carries the pin). A Board refusal only leaves a stale pin.
+   */
+  const unpinAliases = async () => {
+    const ops = source!.unpinAliases?.(from.color_key) ?? [];
+    if (!ops.length) return;
+    try {
+      const { revision } = await deps
+        .board()
+        .patch(planBoardPatch([from], () => ops));
+      log("unpin", { keys: ops.length, revision });
+      deps.publishBoardChanged(revision);
+    } catch (error) {
+      log("unpin", { outcome: "failed", message: reason(error) });
+    }
+  };
   /** Put the desk back on the original; say so when the Board refused. */
   const unhome = (to: AgentAddress) =>
     rehome(to, from, []).then(
@@ -602,10 +619,9 @@ async function handoff(
       await recheck("after-start");
       const pinOps = pinned ? await target!.pin(moved) : [];
       // The desk moves before the original closes, so its links outlive it.
-      await rehome(from, moved, [
-        ...pinOps,
-        ...(source!.unpinAliases?.(from.color_key) ?? []),
-      ]);
+      // Pins under the original's other views stay until it has closed:
+      // a refused or uncertain move keeps them (unpinAliases below).
+      await rehome(from, moved, pinOps);
       rehomed = true;
       await recheck("after-rehome");
     }
@@ -646,7 +662,10 @@ async function handoff(
       message: reason(error),
       still: still ?? "unknown",
     });
-    if (still === false) return { status: "moved", target: moved };
+    if (still === false) {
+      await unpinAliases();
+      return { status: "moved", target: moved };
+    }
     // Unreadable after a failed or lost close: it may have ended, so the
     // copy stays (Q57 model: dropping it could leave the agent nowhere).
     if (still === null)
@@ -668,6 +687,7 @@ async function handoff(
       target: moved,
       message: `${name} runs in its new room, but the original may still be running: ${closed.uncertain}`,
     };
+  await unpinAliases();
   return { status: "moved", target: moved };
 }
 

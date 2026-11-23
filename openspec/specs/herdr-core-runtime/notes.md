@@ -21,6 +21,8 @@
 - `server/src/herdr-core/history.test.ts`
 - `server/src/world/agent-move.ts`
 - `server/src/world/agent-move.test.ts`
+- `server/src/world/agent-move-views.test.ts` (two connections of one Herdr
+  through the real TUI side)
 - `server/src/world/agent-move-sides.ts`
 - `server/src/world/move-settle.ts`
 - `server/src/world/agent-rehome.ts`
@@ -196,8 +198,11 @@ no control for it. Platform and harness limits apply across the table.
   is Herdr's own. A core desk moved to another core room keeps running and
   keeps its Board colour, pin and links. Each move step is logged by the
   service under `agent-move` (`move admit`, `move start`, `move recheck`,
-  `move rehome`, `move close`, `move outcome`), and a refused move's toast
-  shows the reason. A moved agent can't
+  `move rehome`, `move close`, `move unpin`, `move outcome`), and a refused
+  move's toast shows the reason. A Herdr TUI original counts as closed only
+  once Herdr stops showing it (about five seconds), else the move says it may
+  still be running; a pin kept under the other connection of the same Herdr
+  goes only then. A moved agent can't
   move again for about 20 seconds ("still settling"). A move outlives the
   page's socket: each move carries a `move_id`, and a page whose socket
   closed mid-move asks again with `follow` once it reconnects and gets that
