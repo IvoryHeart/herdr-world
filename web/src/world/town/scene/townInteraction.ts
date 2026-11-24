@@ -84,6 +84,8 @@ export type TownInteractionPorts = {
   stage(): TownStage | null;
   /** The town as shown now. */
   world(): { model: TownModel; layout: TownLayout; teams: TownTeams };
+  /** The same per-room placement authority as Tidy and neighbour moves. */
+  canMoveRoom?(roomKey: string): boolean;
   /** The hover state key (an agent, desk or `building:` key) shown now. */
   hovered(): string | null;
   setHovered(key: string | null): void;
@@ -262,11 +264,13 @@ export class TownInteraction {
     this.pressedHandle = pointer.handle === true;
     const hit = this.hitAt(pointer.at.x, pointer.at.y);
     const { model } = this.ports.world();
-    const drag = townDragFor(hit, model, stage.level);
+    let drag = townDragFor(hit, model, stage.level);
+    if (drag?.kind === "room" && this.ports.canMoveRoom?.(drag.key) === false)
+      drag = null;
     const target: TownGestureTarget = pointer.roomName
       ? {
           hit: { kind: "room", key: pointer.roomName },
-          drag: townRoomDrag(pointer.roomName, model),
+          drag: townRoomDrag(pointer.roomName, model, this.ports.canMoveRoom),
           ...(pointer.card ? {} : { nameOnly: true as const }),
         }
       : pointer.card
@@ -328,7 +332,7 @@ export class TownInteraction {
     this.ports.cursor(
       hit?.kind === "room" &&
         hit.edge &&
-        townRoomDrag(hit.key, this.ports.world().model)
+        townRoomDrag(hit.key, this.ports.world().model, this.ports.canMoveRoom)
         ? "grab"
         : hit && hit.kind !== "building"
           ? "pointer"
@@ -557,6 +561,7 @@ export class TownInteraction {
       world.y + this.room.dy,
       world.x,
       world.y,
+      this.ports.canMoveRoom,
     );
     drag.target = target;
     this.room.at = placement;

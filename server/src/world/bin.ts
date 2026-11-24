@@ -545,7 +545,9 @@ function coreConfirmation(value: unknown): BinCoreConfirmation {
   };
 }
 
-function normalize(input: BinAdd): Omit<BinEntry, "id" | "riding"> {
+function normalize(
+  input: BinAdd,
+): Omit<BinEntry, "id" | "riding" | "route_m" | "stop"> {
   for (const key of [
     "connection_id",
     "workspace_id",

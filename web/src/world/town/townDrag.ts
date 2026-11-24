@@ -44,15 +44,16 @@ export type TownBinAim = { stop: string | null };
 
 /**
  * A room picked up by its name, its edge or its Move handle: it moves
- * anywhere in its own building. A stale room, one Spaces cannot open, or one
- * alone in its building stays where it is.
+ * anywhere in its own building. A stale or immovable room, or one alone in
+ * its building, stays where it is. Core rooms need no Spaces permission.
  */
 export function townRoomDrag(
   roomKey: string,
   model: TownModel,
+  canMove: (key: string) => boolean = () => true,
 ): TownDrag | null {
   const room = model.rooms.get(roomKey);
-  if (!room || !room.canOpenInSpaces || room.stale) return null;
+  if (!room || room.stale || !canMove(roomKey)) return null;
   if (
     ![...model.rooms.values()].some(
       (other) =>
@@ -325,6 +326,7 @@ export function townRoomDropTarget(
   y: number,
   px: number,
   py: number,
+  canMove: (key: string) => boolean = (key) => !model.rooms.get(key)?.stale,
 ): { target: TownDropTarget; placement: TownRoomPlacement | null } {
   const name = model.rooms.get(drag.key)?.displayLabel ?? "room";
   const over = layout.buildings.find(
@@ -341,7 +343,12 @@ export function townRoomDropTarget(
     };
   const spot = townRoomSpotAt(layout, drag.key, x / TOWN_TILE, y / TOWN_TILE);
   const placement = spot
-    ? townRoomPlacement(layout, drag.hostKey, new Map([[drag.key, spot]]))
+    ? townRoomPlacement(
+        layout,
+        drag.hostKey,
+        new Map([[drag.key, spot]]),
+        canMove,
+      )
     : null;
   if (!placement?.changed)
     return {

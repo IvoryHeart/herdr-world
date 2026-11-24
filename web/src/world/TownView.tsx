@@ -839,6 +839,7 @@ export default function TownView({
               else void onOpenTerminal(peekAgent.nodeId).catch(() => undefined);
             }}
             leaf={peekLeaf}
+            artefacts={peekLeaf && deskReads.artefacts.get(peekLeaf.id)}
             onFiles={
               peekAgent.viewOnly &&
               onOpenInspectorView &&

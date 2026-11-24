@@ -60,6 +60,7 @@ import { serverLogger } from "../utils/logger";
 import { afterHerdrClose } from "../world/board-closing";
 import { apartmentsKey } from "../features/apartments/register";
 import { createApartmentsService } from "../features/apartments/service";
+import { createArtefactShelf } from "../world/artefact-shelf";
 import { createBinService } from "./bin-service";
 import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
@@ -799,6 +800,7 @@ async function compose(
       { observedConnections, worldSnapshots, officeObservability },
       composeWorldUsage,
       createApartmentsService,
+      createArtefactShelf,
     ),
   );
   worldUsage = features.get(usageKey);
