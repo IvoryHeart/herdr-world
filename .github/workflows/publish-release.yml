@@ -19,12 +19,12 @@ on:
         required: true
         type: string
       release_pr:
-        description: Optional merged release PR; checks its identity and any digest when a signed-in receipt is supplied
-        required: false
+        description: Merged release PR recording the signed-in receipt digest
+        required: true
         type: string
       signed_in_receipt:
-        description: Optional JSON receipt from the local signed-in walk of a downloaded CI package
-        required: false
+        description: JSON receipt from the local signed-in walk of a downloaded CI package
+        required: true
         type: string
 
 permissions:
@@ -102,7 +102,7 @@ jobs:
             echo "error: tag already exists; reuse its original pre-tag authorization run" >&2
             exit 1
           fi
-          # The exact Linux/macOS bytes and any optional signed-in evidence pass before any tag exists.
+          # The exact Linux/macOS bytes and signed-in receipt pass before any tag exists.
           bun scripts/release-walk-gate.ts authorize "$release_sha" "$VERSION" "$WALK_RUN_ID" "$RELEASE_PR"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "sha=$release_sha" >> "$GITHUB_OUTPUT"

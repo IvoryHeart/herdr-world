@@ -62,16 +62,15 @@ def validate_publication(reports, signed, sha, version):
     expected = {'linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'}
     assert len(reports) == len(expected), 'Require all four native walk receipts'
     assert {report['platform'] for report in reports} == expected, 'Missing Linux or macOS architecture'
-    for report in reports + ([signed] if signed is not None else []):
+    for report in [*reports, signed]:
         validate_receipt(report, sha)
         assert report['version'] == version, 'Walk ran a different release version'
     assert all(report['mode'] == 'ci' for report in reports), 'Native receipts must be CI walks'
-    if signed is not None:
-        assert signed['mode'] == 'signed-in', 'Require the signed-in local walk'
-        match = next((report for report in reports if report['platform'] == signed['platform']), None)
-        assert match, 'Signed-in walk platform was not tested in CI'
-        for key in ('binary_sha256', 'archive_sha256', 'baseline'):
-            assert match[key] == signed[key], 'Signed-in walk did not use the same release package/baseline'
+    assert signed['mode'] == 'signed-in', 'Require the signed-in local walk'
+    match = next((report for report in reports if report['platform'] == signed['platform']), None)
+    assert match, 'Signed-in walk platform was not tested in CI'
+    for key in ('binary_sha256', 'archive_sha256', 'baseline'):
+        assert match[key] == signed[key], 'Signed-in walk did not use the same release package/baseline'
     control = next(report for report in reports if report['platform'] == 'linux-x64')['negative_control']
     assert control['tag'] == 'v0.3.5' and control['status'] == 'expected-failure', 'Missing v0.3.5 launch proof'
     assert control['journey'] == 'New agent starts: TUI quick Claude', 'Wrong negative-control journey'

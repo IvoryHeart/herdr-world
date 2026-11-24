@@ -1,4 +1,4 @@
-/** Bind pre-tag approval and publication to native CI and optional local receipts. */
+/** Bind pre-tag approval and publication to completed native CI and local receipts. */
 import {
   appendFileSync,
   mkdtempSync,
@@ -42,7 +42,7 @@ export async function releaseWalkGate(args: string[]) {
   try {
     let signed: unknown;
     let ciRunId = runId;
-    let releasePr = prNumber || undefined;
+    let releasePr = prNumber;
     if (mode === "publication") {
       if (
         run.path !== ".github/workflows/publish-release.yml" ||
@@ -74,20 +74,19 @@ export async function releaseWalkGate(args: string[]) {
         throw new Error(
           "Tag differs from its pre-tag release walk authorization",
         );
-      signed = authorization.signed ?? null;
+      signed = authorization.signed;
       ciRunId = authorization.ci_run_id;
-      releasePr = authorization.release_pr || undefined;
+      releasePr = authorization.release_pr;
     } else {
-      signed = JSON.parse(
-        process.env.RELEASE_WALK_SIGNED_RECEIPT?.trim() || "null",
-      );
+      signed = JSON.parse(process.env.RELEASE_WALK_SIGNED_RECEIPT ?? "null");
     }
     if (
-      (releasePr !== undefined && !/^[1-9]\d*$/.test(releasePr)) ||
+      !releasePr ||
+      !/^[1-9]\d*$/.test(releasePr) ||
       !/^[1-9]\d*$/.test(ciRunId)
     )
       throw new Error(
-        "Require a native walk CI run and a valid release PR number if supplied",
+        "Require the merged release PR and the native walk CI run",
       );
     const ci =
       mode === "authorize"
@@ -134,38 +133,27 @@ export async function releaseWalkGate(args: string[]) {
       sha,
       version,
     ]);
-    if (releasePr) {
-      const pr = JSON.parse(
-        await output([
-          "gh",
-          "pr",
-          "view",
-          releasePr,
-          "--repo",
-          repository,
-          "--json",
-          "mergedAt,mergeCommit,body,baseRefName",
-        ]),
+    const pr = JSON.parse(
+      await output([
+        "gh",
+        "pr",
+        "view",
+        releasePr,
+        "--repo",
+        repository,
+        "--json",
+        "mergedAt,mergeCommit,body,baseRefName",
+      ]),
+    );
+    if (
+      !pr.mergedAt ||
+      pr.baseRefName !== "main" ||
+      pr.mergeCommit?.oid !== sha ||
+      !pr.body.includes(`Release walk signed-in receipt: ${digest}`)
+    )
+      throw new Error(
+        "The merged release PR must record this exact signed-in local receipt",
       );
-      if (
-        !pr.mergedAt ||
-        pr.baseRefName !== "main" ||
-        pr.mergeCommit?.oid !== sha
-      )
-        throw new Error(
-          "The release PR must be merged to main at the exact release commit",
-        );
-      if (signed !== null) {
-        const recorded = pr.body.matchAll(
-          /^Release walk signed-in receipt:[ \t]*(.*)$/gm,
-        );
-        for (const [, value] of recorded)
-          if (value.trim() !== digest)
-            throw new Error(
-              "The release PR records a different signed-in local receipt",
-            );
-      }
-    }
     if (mode === "authorize") {
       const authorization = {
         before_tag: true,
