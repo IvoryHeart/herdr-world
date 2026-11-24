@@ -785,19 +785,19 @@ export function createHerdrConversationSource(args: {
             session_fingerprint: base.session_fingerprint,
           };
           try {
+            const info = listed.get(pane_id);
             const desk = resolved.file
-              ? await args.cache.desk(resolved)
-              : { quest: null, usage_stop: null };
+              ? await args.cache.desk(resolved, { ...found, info })
+              : { quest: null, usage_stop: null, artefacts: [] };
             return {
               ...found,
-              quest: desk.quest,
+              ...desk,
               usage_stop: usageStopCurrent(desk.usage_stop, Date.now())
                 ? desk.usage_stop
                 : null,
             };
           } catch {
-            // The session is known: say which, so a browser keeps the last
-            // quest only if it came from this session.
+            // Known session: a browser keeps its last quest only for it.
             return { ...found, quest: null, read_failed: true };
           }
         },

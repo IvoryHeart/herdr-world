@@ -17,6 +17,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { BunPlugin } from "bun";
+import { assetUrlImports } from "../web/src/world/testing/assetUrlImports";
 import { Cdp, endpoint } from "./town-golden";
 import {
   HELP_PICTURE_CROPS,
@@ -87,7 +88,8 @@ const page = join(ROOT, "web/src/help/testing/HelpShots.browser.tsx");
 export const helpPictureBuildConfig = {
   target: "browser",
   define: { __HERDR_WORLD_VERSION__: JSON.stringify("help") },
-  plugins: [RAW_TEXT],
+  // The Library's reader imports PDF.js's worker through Vite's `?url`.
+  plugins: [RAW_TEXT, assetUrlImports],
 } satisfies Partial<Bun.BuildConfig>;
 
 export async function runHelpPictures(options: {

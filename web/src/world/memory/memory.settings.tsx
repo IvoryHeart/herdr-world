@@ -16,7 +16,7 @@ defineSettings("memory", [
     category: "agents",
     title: "Library (memory)",
     description:
-      "See, search and edit what agents and projects remember on each host",
+      "See, search and edit what agents and projects remember on each host, and what agents made",
     words: [
       "memory",
       "memories",
@@ -25,6 +25,11 @@ defineSettings("memory", [
       "instructions",
       "notes",
       "remember",
+      "made",
+      "made by agents",
+      "artefacts",
+      "artifacts",
+      "reports",
     ],
     icon: <Library size={15} />,
     scope: "connection",

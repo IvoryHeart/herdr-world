@@ -1,4 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { AgentArtefact } from "../../../../shared/agentArtefacts";
+import { MadeSummary } from "../MadeSummary";
 import {
   FolderOpen,
   Hourglass,
@@ -55,6 +57,7 @@ export function TownPeek({
   onChat,
   onTerminal,
   leaf = null,
+  artefacts = [],
   onFiles,
   onNext,
   onClose,
@@ -102,6 +105,8 @@ export function TownPeek({
    * shell (Herdr Float, or World's own on core).
    */
   leaf?: WorldLeafObject | null;
+  /** What the agent made, newest first (its desk read): a "Made" summary. */
+  artefacts?: readonly AgentArtefact[] | null;
   /**
    * Open the agent's window on Files: offered for a herdr-core agent, whose
    * terminal World cannot open, but whose folder it can show.
@@ -314,6 +319,7 @@ export function TownPeek({
           {...(agent.viewOnly ? { viewOnly: agent.viewOnly } : {})}
         />
       </div>
+      {leaf ? <MadeSummary leaf={leaf} items={artefacts} /> : null}
       {choices.length && canReply ? (
         <div
           className="town-answers town-answers-question"

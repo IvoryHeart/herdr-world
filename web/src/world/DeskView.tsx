@@ -59,6 +59,7 @@ import {
 import { Search } from "lucide-react";
 export { otherHostSummaries } from "./DeskOtherHosts";
 import "./DeskView.css";
+import { MadeSummary, artefactsMade, useAgentArtefacts } from "./MadeSummary";
 
 type Lane = "needs" | "review" | "working";
 type Item = {
@@ -265,6 +266,7 @@ export function DeskBoard({
     error: stateError,
   } = useDeskState(agents, client, deskStore);
   const receipts = useTurnReceipts(agents, client, stopIds);
+  const made = useAgentArtefacts(agents);
   const receiptFor = (leaf: WorldLeafObject) => {
     const receipt = receipts(leaf);
     return { ...receipt, current: receipt.current && verified };
@@ -723,6 +725,7 @@ export function DeskBoard({
             ) : null}
           </div>
         ) : null}
+        <MadeSummary leaf={leaf} items={made.get(leaf.id)} />
         <div className="desk-card-actions">
           <button
             type="button"
@@ -780,6 +783,7 @@ export function DeskBoard({
       showWorkspace ? leaf.spaceLabel : null,
       leaf.tabLabel ? `desk ${leaf.tabLabel}` : null,
       agentFolder(leaf),
+      artefactsMade(made.get(leaf.id)),
     ].filter(Boolean);
     return (
       <li key={leaf.id}>

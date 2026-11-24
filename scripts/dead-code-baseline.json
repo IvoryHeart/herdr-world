@@ -1189,7 +1189,6 @@
       "web/src/world/hostsFilter.ts#writeHostsFilter",
       "web/src/world/inspectorTerminalFocus.ts#inspectorFocusBlocked",
       "web/src/world/interaction/gesture.ts#DRAG_THRESHOLD",
-      "web/src/world/memory/memoryClient.ts#MEMORY_CALL_MS",
       "web/src/world/memory/memoryClient.ts#MEMORY_CATALOG_FRESH_MS",
       "web/src/world/memory/memoryClient.ts#memoryClientOver",
       "web/src/world/memory/memoryClient.ts#setMemoryClientForTests",
