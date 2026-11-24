@@ -24,6 +24,8 @@
 - `web/src/world/WorldFoundationApp.tsx`
 - `web/src/world/visualRouteActions.ts`
 - `web/src/world/worldSearch.ts`
+- Find any agent: `web/src/world/worldCommandBox.tsx`, `web/src/components/CommandCombobox.tsx`, `web/src/components/CommandActionItem.tsx`, `shared/harnessLabels.ts`
+- Found herdr-core terminal in Spaces: `web/src/world/SpacesCoreTerminal.tsx`, `web/src/world/spacesCore.ts`, `web/src/world/spacesCoreTerminal.css`
 - `web/src/layerStack.ts`
 - `web/src/world/runtimeGrouping.ts`
 - `web/src/world/runtimeGrouping.settings.tsx`
@@ -39,6 +41,7 @@
 - `web/src/world/WorldFoundationApp.test.ts`
 - `web/src/world/visualRouteActions.test.ts`
 - `web/src/world/worldSearch.test.ts`
+- Find: `web/src/world/worldCommandBox.test.tsx`, `web/src/commandBoxKey.dom.test.ts`, `web/src/foundTerminalReveal.dom.test.ts`
 - `web/src/systemBack.browser.tsx`
 - `web/src/world/runtimeGrouping.test.ts`
 - `web/src/world/navigatorGroups.test.ts`
@@ -109,10 +112,16 @@
   Drag a pane handle onto another tab in the same workspace, onto a pane edge
   in that tab, or onto **+** to break it into a new tab. Hover a tab to open its
   panes before dropping. Overflowing desktop tab strips offer scroll controls.
-- Search workspace, worktree, file, tab, pane, and agent actions in the command
+- Search workspace, worktree, file, tab and pane actions in the command
   menu (`Cmd+K` on macOS, `Ctrl+K` elsewhere, or `Cmd+Option+K`/`Ctrl+Alt+K`
   from a terminal or text field). A workspace-relative or
-  absolute path opens the file.
+  absolute path opens the file. Agents are found in its **In World** group,
+  in every view (see Find or act in terminal-windows notes); Spaces has no
+  separate list of its own connection's agents. Enter on a herdr-core agent
+  shows its terminal in Spaces' terminal area in place of the Herdr tab
+  (`web/src/world/SpacesCoreTerminal.tsx`); **Close** returns to the tab.
+  Every terminal a find opens closes an expanded Inspector (or any Inspector
+  on a phone) first, through App's `revealTerminal` request.
 - Toggle **Zen mode** (`Cmd+Shift+Z` on macOS, `Ctrl+Alt+Z` elsewhere) to hide
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
   Hovering the Exit Zen tab slides the topbar back, and it stays while one of its

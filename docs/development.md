@@ -51,6 +51,11 @@ maintenance](react-19.md).
 
 ## Isolated worktree preview
 
+For acceptance checks against both real runtimes, use the
+[isolated runtime kit](isolated-runtimes.md). It creates and cleans up its own
+TUI session, core, World and scratch harness configurations, including after a
+crash; its self-test is run on demand.
+
 Keep one preview per worktree, on its own unused loopback port and data folder.
 Use a synthetic Herdr TUI session, with demo agents/repositories only, so a
 preview cannot act on real work. The standard `dev:server` script fixes port
@@ -150,6 +155,14 @@ to Ubuntu, GitHub releases and releases.herdr.dev. No root shell or
 `--require-docker` makes it an error in CI. An unavailable daemon, unsupported
 cgroups or a failed download fails the run. `--version` selects the candidate
 build version (or exact package in `dist/` with `--reuse`).
+
+The cached dependency base allows one additional package-index refresh when a
+mirror fails (including HTTP 520, which APT's native retries do not cover). Every index must
+refresh successfully before package installation; signature checks stay enabled.
+Repeated refresh failures and package installation failures still fail the run.
+Both refresh attempts and installation share the base's 300-second deadline;
+HTTP/HTTPS requests retain 15-second timeouts and one native retry. See the
+[image guide](../scripts/install-linux/README.md) for cache and failure evidence.
 
 Every default run uses five fresh containers:
 

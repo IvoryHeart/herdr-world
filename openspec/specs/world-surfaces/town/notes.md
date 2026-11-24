@@ -23,7 +23,7 @@
 - `web/src/world/town/townObservatory.test.ts`
 - `web/src/world/usage/UsageLens.browser.tsx`
 - `web/src/world/TownView.tsx`
-- `web/src/world/town/TownCanvas.tsx`; frames: `web/src/world/town/townWorldTransform.ts` (overlay, zoom readers), `web/src/world/town/townHostRect.ts`, `web/src/world/worldFrameScheduler.ts` (typing quiet)
+- `web/src/world/town/TownCanvas.tsx`; frames: `web/src/world/town/townWorldTransform.ts` (overlay, zoom readers), `web/src/world/town/townHostRect.ts`, `web/src/world/worldFrameScheduler.ts` (typing quiet); town center: `web/src/world/town/TownCenterMenu.tsx`, `web/src/world/town/townCenterBuildings.ts`
 - Room placement authority and Tidy/Undo: `web/src/world/town/townRoomMovability.ts`, `web/src/world/town/townMoveActions.tsx`, `web/src/world/town/townRoomPlace.ts`, `web/src/world/town/townRoomPins.ts`.
 - Room drag admission/preview: `web/src/world/town/townDrag.ts`, `web/src/world/town/scene/townInteraction.ts`.
 - Saved room spots: existing `room_pins` in `web/src/world/board/boardDocument.ts`; TUI order: `web/src/world/town/townMoves.ts`.
@@ -40,7 +40,7 @@
 **Tests:**
 
 - `web/src/world/town/TownCanvas.test.ts`, `web/src/world/town/TownCanvas.fold.test.ts`
-- `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases)
+- `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases); town center ring: `web/src/world/town/townCenterBuildings.dom.test.ts`
 - `web/src/world/town/townReceptionFilter.test.ts`
 - `web/src/world/town/townQuietWork.test.ts`; plaques and top-row taps: `web/src/world/town/townRoomPlates.browser.ts` (TownCanvas `plates` cases)
 - Room moves: `web/src/world/town/townRoomMovability.test.ts` (mixed core app space/TUI, both building modes, authority subsets and Undo), `web/src/world/town/townRoomTidy.test.ts`, `web/src/world/town/scene/townInteraction.test.ts`.
@@ -464,12 +464,24 @@
     preselecting the open room when it can start one there), **Town master**
     (the synced role holder from **Settings → Town master**, opened on Chat;
     a holder not in Town says so; with nobody assigned it opens **Sounds**),
-    **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
-    **New room** (disabled with the reason when no room can be created). With
-    no room open, New room asks for the **Destination host**, herdr-core hosts
-    included (`· herdr-core`); an empty core room name becomes "Room". Arrow
-    keys, Home and End move around the ring; Escape, a press outside, the
-    centre **✕** or **Back** on a phone closes it.
+    **Buildings**, **Focus** ("On" while one runs), **Summary**, **Lenses**,
+    **Profiles** and **New room** (disabled with the reason when no room can
+    be created). First-ring entries show no counts; those stay on the
+    buildings' signs. With no room open, New room asks for the **Destination
+    host**, herdr-core hosts included (`· herdr-core`); an empty core room name
+    becomes "Room". **Buildings** opens a second ring around itself with every place
+    that opens now (Apartments, Library, Post office for Needs you,
+    Observatory, Warehouse; a folded phone sign still counts); choosing one
+    opens what its building opens (`townCenterBuildings.ts`, from the
+    `townPlaces.ts` registry). Every ring opens around the entry that opened
+    it, moved only to fit the screen, so Buildings' place becomes the centre:
+    **←** Back with its name above it. Every label sits outside its ring,
+    beyond its icon, at every depth (`townCenterLabel`); a phone too narrow
+    for side labels round a circle gets an upright oval, entries evenly
+    spaced along it (`townCenterSpot`). Back, Escape or **Back** on a phone step back one
+    ring, focused on the entry that opened it. Arrow
+    keys, Home and End move around either ring; Escape, a press outside, the
+    centre **✕** or **Back** on a phone closes the first ring.
   - **Lenses** colour the whole map by one fact, as strategy games' map
     overlays do, so you see at a glance where it is high or low. Turn one on
     from the town center's **Lenses** or with `L` (`Shift+L` steps back); the

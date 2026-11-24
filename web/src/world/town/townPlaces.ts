@@ -73,7 +73,9 @@ export function townPlaceAt(
  * What each place opens, registered by the place's own component with the
  * same action its sign takes, so the building and the sign never differ.
  * A place without an opener (a town drawn alone, a Library no host serves)
- * is not a target.
+ * is not a target. A place folded to a sign, or with no room for its
+ * building, still registers: it has no box here, but the town center's
+ * Buildings ring (townCenterBuildings.ts) opens it.
  */
 export class TownPlaces {
   private readonly openers = new Map<TownPlaceKey, () => void>();
