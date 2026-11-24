@@ -1,25 +1,35 @@
 import { memoryHarness } from "../../../../shared/memory";
-import { memoryFixtureOn, memoryFixtureHasMemory } from "./memoryFixture";
+import { memoryFixtureOn } from "./memoryFixture";
 import type { MemoryLibraryRequest } from "./memoryEvents";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { agentName } from "../deskAgentLabels";
 import type { WorldObject } from "../worldObject";
-import { publishMemoryHosts, type MemoryHostTarget } from "./memoryClient";
+import {
+  hostHasMemory,
+  hostMade,
+  libraryHosts,
+  memoryHosts,
+  memoryTargetKey,
+  publishMemoryHosts,
+  type MemoryHostTarget,
+} from "./memoryClient";
+import { requestArtefactShelf } from "./artefactShelfClient";
+
+/** Memory-less hosts whose shelves are read to see if they hold anything. */
+const SHELF_HOSTS = 4;
 
 /**
  * The hosts the Library (#1027) may read: live connections World observes
  * now, each with its current generation, never a stale or cached one. The
  * names are World's for each pane, so a catalog's agent IDs read as people
- * know them. Agent IDs are pane IDs, as the memory service's are.
+ * know them. Agent IDs are pane IDs, as the memory service's are. A host
+ * with no agent whose harness keeps memory is marked `memory: false`: only
+ * what agents made there is read (#1342), so a host whose agents have all
+ * stopped still shows their work.
  */
 export function memoryHostsOf(world: WorldObject): MemoryHostTarget[] {
   return world.hosts
-    .filter(
-      (host) =>
-        !host.stale &&
-        (host.actionable || host.coreControl) &&
-        worldHasMemory(world, { connectionId: host.connectionId }),
-    )
+    .filter((host) => !host.stale && (host.actionable || host.coreControl))
     .map((host) => {
       const names: Record<string, string> = {};
       const rooms: Record<string, string> = {};
@@ -34,15 +44,33 @@ export function memoryHostsOf(world: WorldObject): MemoryHostTarget[] {
         label: host.label,
         names,
         rooms,
+        ...(worldHasMemory(world, { connectionId: host.connectionId })
+          ? {}
+          : { memory: false }),
       };
     });
 }
 
-/** Keep the Library's host list current with World's (WorldControlPlane). */
+/**
+ * Keep the Library's host list current with World's (WorldControlPlane),
+ * and read the "Made by agents" shelf of the first few hosts without
+ * memory, again as one loses its last memory agent, so every view knows
+ * whether the Library has something there (#1342).
+ */
 export function useMemoryHostPublisher(world: WorldObject) {
+  const published = useMemo(() => memoryHostsOf(world), [world]);
   useEffect(() => {
-    publishMemoryHosts(memoryHostsOf(world));
-  }, [world]);
+    publishMemoryHosts(published);
+  }, [published]);
+  // The testing switch's synthetic host stands in for World's.
+  const bare = (memoryFixtureOn() ? memoryHosts() : published)
+    .filter((host) => !hostHasMemory(host))
+    .slice(0, SHELF_HOSTS);
+  const bareKeys = bare.map(memoryTargetKey).join("\n");
+  useEffect(() => {
+    for (const host of bare) void requestArtefactShelf(host);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bareKeys]);
 }
 
 /** Capability follows current readers, including supported readers with no files yet. */
@@ -63,11 +91,22 @@ export function worldHasMemory(
   );
 }
 
+/**
+ * Whether the Library opens on `request`: an agent with memory matches it,
+ * or its host (any, when none is named) has things agents made on its shelf,
+ * even with every agent gone (#1342).
+ */
 export function libraryAvailable(
   world: Pick<WorldObject, "leaves">,
   request: MemoryLibraryRequest = {},
 ) {
-  return memoryFixtureOn()
-    ? memoryFixtureHasMemory()
-    : worldHasMemory(world, request);
+  if (memoryFixtureOn()) return libraryHosts().length > 0;
+  return (
+    worldHasMemory(world, request) ||
+    libraryHosts().some(
+      (host) =>
+        hostMade(host) > 0 &&
+        (!request.connectionId || host.connection_id === request.connectionId),
+    )
+  );
 }

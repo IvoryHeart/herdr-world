@@ -4,12 +4,15 @@ import type {
 } from "../../../../shared/agentArtefacts";
 import type { MemoryTarget } from "../../../../shared/memory";
 import type { FilePreview } from "../../types";
+import { MEMORY_FIXTURE_AGENT_NAMES } from "./memoryFixture";
 
 /**
  * The `?memoryFixture` host's "Made by agents" shelf (#1327): synthetic
  * artefacts covering the rare states (a deleted file, a maker that has gone,
  * a link that is only a guess), so the wing can be tried without real agents.
+ * `gone` is the same shelf after every agent on the host stopped (#1342).
  */
+const ROOMS: Record<string, string> = { w1: "web-app", w2: "docs-site" };
 
 const at = (now: number, minutes: number) =>
   new Date(now - minutes * 60_000).toISOString();
@@ -25,6 +28,7 @@ const maker = (pane: string, room: string, agent = "claude") => ({
 export function artefactFixtureShelf(
   target: MemoryTarget,
   now: number,
+  gone = false,
 ): ArtefactShelf {
   const artefacts: ShelvedArtefact[] = [
     {
@@ -100,7 +104,19 @@ export function artefactFixtureShelf(
     connection_id: target.connection_id,
     connection_generation: target.connection_generation,
     observed_at: now,
-    artefacts,
+    artefacts: gone
+      ? artefacts.map((artefact) => ({
+          ...artefact,
+          gone_maker:
+            artefact.gone_maker ??
+            MEMORY_FIXTURE_AGENT_NAMES[artefact.made_by.pane_id] ??
+            null,
+          gone_room:
+            artefact.gone_room ??
+            ROOMS[artefact.made_by.workspace_id ?? ""] ??
+            null,
+        }))
+      : artefacts,
     truncated: false,
   };
 }
