@@ -94,6 +94,17 @@ function serialize(rows: Findings) {
   return JSON.stringify({ version: 1, findings: rows }, null, 2) + "\n";
 }
 
+/** Print a pruned baseline as the repository's formatter would, so format:check still passes. */
+function formatBaseline(root: string, text: string) {
+  const biome = resolve(root, "node_modules/@biomejs/biome/bin/biome");
+  if (!existsSync(biome)) return text;
+  const result = Bun.spawnSync(
+    [process.execPath, biome, "format", `--stdin-file-path=${BASELINE}`],
+    { cwd: root, stdin: Buffer.from(text), stdout: "pipe", stderr: "pipe" },
+  );
+  return result.exitCode === 0 ? result.stdout.toString() : text;
+}
+
 /** Compare the committed allowance too, so adding a finding to the baseline cannot bless it. */
 function baselineAtBase(root: string): Findings | undefined {
   const target = process.env.HERDR_WORLD_RATCHET_TARGET;
@@ -315,7 +326,10 @@ export async function checkDead(root: string, args: string[]) {
     code = count(added) || (padding && count(padding)) ? 1 : 0;
     // A successful local run automatically retires resolved allowances. CI stays read-only.
     if (!code && resolved && process.env.CI !== "true")
-      writeFileSync(file, serialize(prune(baseline, current)));
+      writeFileSync(
+        file,
+        formatBaseline(root, serialize(prune(baseline, current))),
+      );
     knipText = [
       "### Knip (production code; development dependencies audited with tests enabled)",
       "",

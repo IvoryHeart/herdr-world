@@ -1593,8 +1593,7 @@
       "web/src/world/worldTerminalPresentation.ts#retainWorldFloatingTerminals",
       "web/src/world/worldTerminalPresentation.ts#sameWorldInspector",
       "web/src/world/worldTerminalPresentation.ts#upsertWorldFloatingTerminal",
-      "web/src/world/worldTerminalPresentation.ts#upsertWorldInspectorConversation",
-      "web/src/worldHosts.ts#machineStatus"
+      "web/src/world/worldTerminalPresentation.ts#upsertWorldInspectorConversation"
     ],
     "types": [
       "scripts/browser-diagnostics.ts#DiagnosticChild",
@@ -1860,7 +1859,6 @@
       "web/src/world/terminalWindowArrangementState.ts#TerminalWindowArrangementParticipant",
       "web/src/world/terminalWindowArrangementState.ts#TerminalWindowArrangementState",
       "web/src/world/town/TownToasts.tsx#TownToastAction",
-      "web/src/world/town/TownWorldLayer.tsx#TownRoomPress",
       "web/src/world/town/scene/townInteraction.ts#TownStage",
       "web/src/world/town/scene/townSceneDiff.ts#TownSceneDirty",
       "web/src/world/town/townActors.ts#TownActorMode",
@@ -1908,7 +1906,6 @@
       "web/src/world/town/townWeatherArt.ts#TownWeatherArt",
       "web/src/world/town/useTownCanvasSearch.ts#TownCanvasSearch",
       "web/src/world/townMasterGreeting.ts#GreetingDeps",
-      "web/src/world/treeProjection.ts#WorldTreeHost",
       "web/src/world/treeProjection.ts#WorldTreeSpace",
       "web/src/world/usage/usageFixture.ts#UsageFixtureMode",
       "web/src/world/usage/usageModel.ts#UsageHour",

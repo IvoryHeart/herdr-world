@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -245,6 +246,79 @@ test("CLI rejects padding the committed baseline", () => {
     "Baseline additions are forbidden",
   );
   expect(result.stdout.toString()).toContain("jscpd: 0 duplicated blocks");
+});
+
+test("a pruned baseline is written as the repository formatter prints it", () => {
+  const root = mkdtempSync(join(tmpdir(), "dead-code-format-"));
+  roots.push(root);
+  const write = (path: string, text: string) => {
+    const file = join(root, path);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, text);
+  };
+  write(
+    "biome.json",
+    readFileSync(new URL("../biome.json", import.meta.url), "utf8"),
+  );
+  write(".gitignore", "node_modules/\n.agents/\n");
+  mkdirSync(join(root, "node_modules"), { recursive: true });
+  symlinkSync(
+    new URL("../node_modules/@biomejs", import.meta.url).pathname,
+    join(root, "node_modules/@biomejs"),
+  );
+  // One short array survives the prune: JSON.stringify spreads it over lines,
+  // while the formatter keeps it on one.
+  write(
+    "scripts/dead-code-baseline.json",
+    JSON.stringify(
+      {
+        version: 1,
+        findings: { ...empty(), exports: ["src/a.ts#kept", "src/a.ts#gone"] },
+      },
+      null,
+      2,
+    ),
+  );
+  write(
+    "node_modules/knip/bin/knip.js",
+    'console.log(JSON.stringify({ issues: [{ file: "src/a.ts", exports: [{ name: "kept", line: 1, pos: 13 }] }] }));',
+  );
+  write(
+    "node_modules/jscpd/run-jscpd.js",
+    'await Bun.write(".agents/dead-code/jscpd-report.json", JSON.stringify({ duplicates: [] }));',
+  );
+  write("src/a.ts", "export const kept = 1;\n");
+  const result = Bun.spawnSync(
+    [process.execPath, new URL("./check-dead.ts", import.meta.url).pathname],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        CI: "false",
+        HERDR_WORLD_RATCHET_TARGET: "",
+        GITHUB_STEP_SUMMARY: "",
+      },
+    },
+  );
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toContain("1 resolved baseline entries");
+  const baseline = readFileSync(
+    join(root, "scripts/dead-code-baseline.json"),
+    "utf8",
+  );
+  expect(parseBaseline(baseline).exports).toEqual(["src/a.ts#kept"]);
+  // The same check format:check runs over the repository.
+  const check = Bun.spawnSync(
+    [
+      process.execPath,
+      join(root, "node_modules/@biomejs/biome/bin/biome"),
+      "format",
+      "scripts/dead-code-baseline.json",
+    ],
+    { cwd: root },
+  );
+  expect(check.stderr.toString() + check.stdout.toString()).not.toContain("×");
+  expect(check.exitCode).toBe(0);
 });
 
 test("real production Knip follows RPC strings, feature namespaces, dynamic imports and executable entries; tests do not keep exports alive", () => {

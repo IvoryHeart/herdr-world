@@ -12,6 +12,8 @@ import { useRuntimeGrouping } from "./runtimeGrouping";
  * Whether two catalogues group alike: the same runtimes, in order, with the
  * same names and machines. A runtime's state or generation changes no group,
  * so it re-renders no view that groups by it.
+ *
+ * @internal
  */
 export function sameHostGrouping(
   a: readonly WorldHost[],
