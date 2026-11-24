@@ -21,6 +21,7 @@ import {
 } from "./townApartmentsLot";
 import {
   TOWN_BUS_DOOR_DX,
+  townBusWay,
   townLaneY,
   townRoadGraph,
   type TownRoadGraph,
@@ -197,6 +198,54 @@ export function townBusRoute(layout: TownLayout): TownBusRoute {
     ...(terminus ? [terminus.halt] : []),
   ]);
   return { stops, terminus, graph };
+}
+
+/**
+ * The plate over the bus: its speed and a distance in World's metres, rounded to
+ * 10 m ("36 km/h · 420 m left").
+ */
+export function townBusSign(
+  speedKmh: number,
+  metres: number,
+  what: "left" | "route",
+) {
+  const m = Math.max(0, Math.round(metres / 10) * 10);
+  return `${speedKmh} km/h · ${m} m ${what}`;
+}
+
+/**
+ * Town's scale for measuring the bus's route: one tile is two metres of
+ * road. Only the measure World keeps uses it; every page then draws the
+ * bus's drive to World's distance, whatever its own layout.
+ * @internal
+ */
+export const TOWN_METRES_PER_PX = 2 / T;
+
+/**
+ * The next trip's route, as World times the bus by it (world.bin.route):
+ * the bus's way from the terminus past every one of `stops` and back, by the
+ * roads and in the order it drives them (townBusWay, as its drive does), in
+ * whole metres, and how many stops it halts at. Null when there are none,
+ * or the roads miss one, so World is never told a shorter tour than the
+ * bus would drive.
+ */
+export function townTourRouteM(
+  route: TownBusRoute,
+  stops: readonly TownBusStop[],
+): { route_m: number; stops: number } | null {
+  if (!route.terminus) return null;
+  const halts = [...new Map(stops.map((stop) => [stop.key, stop])).values()];
+  if (!halts.length) return null;
+  const way = townBusWay(
+    route.graph,
+    route.terminus.halt,
+    halts.map((stop) => ({ key: stop.key, at: stop.halt })),
+  );
+  if (way.order.length !== halts.length) return null;
+  return {
+    route_m: Math.round(way.length * TOWN_METRES_PER_PX),
+    stops: halts.length,
+  };
 }
 
 /**

@@ -689,12 +689,16 @@ const binState = () =>
     closing: [],
     outcomes: [],
     bus: {
-      interval_ms: 240_000,
-      trip_ms: 120_000,
-      next_ms: 60_000,
+      speed_kmh: 36,
+      route_m: 0,
+      trip_ms: 0,
       elapsed_ms: null,
       stopped: false,
       trip: null,
+      next_ms: 60_000,
+      next_route_m: 500,
+      next_trip_ms: 120_000,
+      next_measured: false,
     },
   };
 worldBridge.call = async (method, params) => {

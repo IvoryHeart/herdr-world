@@ -111,6 +111,18 @@ test("put back acts only on the held agent", async () => {
   expect(f.errors).toEqual(["unknown bin operation"]);
 });
 
+test("a Town's route report is taken for those waiting", async () => {
+  const f = fixture();
+  await f.add();
+  const id = f.registry.list().entries[0]!.id;
+  await f.rpc("world.bin.route", { ids: [id], route_m: 420, stops: 1 });
+  expect(f.errors).toEqual([]);
+  expect(f.registry.list().bus).toMatchObject({
+    next_route_m: 420,
+    next_measured: true,
+  });
+});
+
 test("a pinned tab's last agent is refused; one with another pane is held", async () => {
   const f = fixture();
   await f.add({ preserve_tab: true });

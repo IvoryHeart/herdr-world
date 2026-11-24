@@ -1328,7 +1328,6 @@
       "web/src/world/town/townBusDrive.ts#TOWN_BUS_TURN_S",
       "web/src/world/town/townBusDrive.ts#townBusPath",
       "web/src/world/town/townBusDrive.ts#townBusPathAt",
-      "web/src/world/town/townBusDrive.ts#townBusWay",
       "web/src/world/town/townCamera.ts#TOWN_OVERVIEW_ROOMS",
       "web/src/world/town/townCamera.ts#townZoomLimits",
       "web/src/world/town/townChat.ts#TownReplyError",

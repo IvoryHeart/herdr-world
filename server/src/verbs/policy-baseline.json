@@ -230,6 +230,7 @@
   "rpc:world.bin.pause": "allow deny deny deny deny deny",
   "rpc:world.bin.restore": "allow deny deny deny deny deny",
   "rpc:world.bin.resume": "allow deny deny deny deny deny",
+  "rpc:world.bin.route": "allow deny deny deny deny deny",
   "rpc:world.board.elements.delete": "allow deny deny deny deny deny",
   "rpc:world.board.elements.list": "allow deny deny deny deny deny",
   "rpc:world.board.elements.put": "allow deny deny deny deny deny",

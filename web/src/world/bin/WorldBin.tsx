@@ -130,7 +130,7 @@ const OUTCOME: Record<string, string> = {
 /**
  * The bin in every view: a chip while it holds agents (always in Town and on
  * Board, where agents are dragged onto it), and its tray (from the chip, or
- * Town's stops and bus) listing who waits with the time to the next bus,
+ * Town's stops and bus) listing who waits with the time the bus is back at Apartments,
  * with Put back and Close now. A stopped bus is let go from the tray, or
  * goes on as the tray closes. Only Town (`bus`) has a bus to speak of;
  * elsewhere the bin says when it closes what it holds. `dock` (Board's hub)
@@ -260,7 +260,7 @@ export function WorldBin({
                     <small>
                       {town
                         ? entry.riding
-                          ? "On the bus; closes when it leaves"
+                          ? "On the bus; closes at Apartments"
                           : "Waiting for the bus"
                         : entry.riding
                           ? "Closing soon"

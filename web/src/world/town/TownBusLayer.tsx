@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { binRiderKey } from "../../../../shared/bin";
 import {
   binBusClock,
   binBusCountdown,
@@ -20,6 +21,8 @@ import {
   townRiderReturns,
   townRiderWalk,
   townRiderWalkBack,
+  townBusSign,
+  townTourRouteM,
   townWalkAlong,
   townWalkLength,
   type TownBinRider,
@@ -29,6 +32,7 @@ import {
 } from "./townBus";
 import {
   townBusDoor,
+  townBusLeft,
   townBusParked,
   townBusPose,
   townBusTimeline,
@@ -69,6 +73,11 @@ const QUEUE_DROP_PAD = 14;
 const shownOutside = new Set<string>();
 /** Riders this page has counted in at Apartments' door, across mounts. */
 const arrived = new Set<string>();
+/**
+ * The waiting agents (binRiderKey) whose next trip this page last measured
+ * for World (world.bin.route), so it says so once.
+ */
+let reported: string | null = null;
 
 const reducedMotion = () =>
   matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -110,6 +119,33 @@ export function useTownBin(model: TownModel, layout: TownLayout) {
     () => townBinRiders(bin.entries, bin.closing, model, layout, route),
     [bin.entries, bin.closing, model, layout, route],
   );
+  // World times the bus by its route (binBusTripMs): until some Town has,
+  // measure the next trip on this town's roads, its one way past every
+  // waiting agent's stop and back. World keeps the first measure of exactly
+  // those waiting, and every page draws the bus to it.
+  useEffect(() => {
+    if (demoBin || !served.verified || served.bus.next_measured) return;
+    const ids = served.entries
+      .filter((entry) => !entry.riding)
+      .map((entry) => entry.id);
+    const key = binRiderKey(ids);
+    if (!ids.length || reported === key) return;
+    const stops = new Map(
+      placed.riders
+        .filter(({ entry }) => !entry.riding)
+        .map(({ entry, stop }) => [entry.id, stop]),
+    );
+    // One this town cannot place would make the tour too short.
+    if (ids.some((id) => !stops.has(id))) return;
+    const tour = townTourRouteM(route, [...stops.values()]);
+    if (!tour) return;
+    reported = key;
+    void worldBinStore()
+      .route({ ids, ...tour })
+      .then((error) => {
+        if (error && reported === key) reported = null;
+      });
+  }, [demoBin, served, placed.riders, route]);
   // Riders put back walk home from the queue; kept from the riders before.
   const [walks, setWalks] = useState<{
     riders: readonly TownBinRider[];
@@ -260,6 +296,7 @@ export const TownBusLayer = memo(function TownBusLayer({
   demo?: boolean;
 }) {
   const bus = useRef<HTMLButtonElement>(null);
+  const sign = useRef<HTMLSpanElement>(null);
   const riderRefs = useRef(new Map<string, HTMLElement>());
   const passengerRefs = useRef(new Map<string, HTMLCanvasElement>());
   const endRefs = useRef(new Map<string, HTMLCanvasElement>());
@@ -297,6 +334,8 @@ export const TownBusLayer = memo(function TownBusLayer({
     ...plan.current.order,
     ...riding.map((rider) => rider.entry.id),
   ]).size;
+  // The trip out, or parked, the next one for those waiting now.
+  const tripMs = bin.bus.trip_ms || bin.bus.next_trip_ms;
   const timeline = useMemo(
     () =>
       terminus
@@ -306,10 +345,10 @@ export const TownBusLayer = memo(function TownBusLayer({
             haltsOf(route, haltKey),
             seated,
             walkS,
-            bin.bus.trip_ms,
+            tripMs,
           )
         : null,
-    [route, terminus, haltKey, seated, walkS, bin.bus.trip_ms],
+    [route, terminus, haltKey, seated, walkS, tripMs],
   );
   if (timeline) {
     const haltAt = (rider: TownBinRider) =>
@@ -398,6 +437,24 @@ export const TownBusLayer = memo(function TownBusLayer({
           element.toggleAttribute("data-moving", pose.moving && !still);
           element.toggleAttribute("data-braking", pose.braking);
         }
+      }
+      // Its speed, and how far it has still to drive on its trip (or, at
+      // home with someone waiting, its next route there and back): World's
+      // metres, so every layout reads the same distance at the same time.
+      const plate = sign.current;
+      if (plate) {
+        const words =
+          elapsed !== null && timeline
+            ? townBusSign(
+                bin.bus.speed_kmh,
+                bin.bus.route_m * townBusLeft(timeline, elapsed),
+                "left",
+              )
+            : riders.length && bin.bus.next_ms !== null
+              ? townBusSign(bin.bus.speed_kmh, bin.bus.next_route_m, "route")
+              : "";
+        if (plate.textContent !== words) plate.textContent = words;
+        if (plate.hidden !== !words) plate.hidden = !words;
       }
       const handle = renderer.current;
       handle?.setWaitingStops(waitingStops);
@@ -733,10 +790,10 @@ export const TownBusLayer = memo(function TownBusLayer({
         data-trip={onTrip || undefined}
         aria-label={
           !onTrip
-            ? `The bus, at ${home}`
+            ? `The bus, at ${home}, ${bin.bus.speed_kmh} km/h`
             : bin.bus.stopped
               ? `The bus, stopped, ${passengers.length} aboard`
-              : `The bus to ${home}, ${passengers.length} aboard; stop it`
+              : `The bus to ${home}, ${bin.bus.speed_kmh} km/h, ${passengers.length} aboard; stop it`
         }
         onClick={() => {
           // Stopped, nothing closes until it goes on: from the tray, or as
@@ -759,6 +816,13 @@ export const TownBusLayer = memo(function TownBusLayer({
             {endSeats[1]}
           </span>
         </span>
+        <span
+          ref={sign}
+          className="town-bus-sign"
+          data-testid="town-bus-sign"
+          aria-hidden="true"
+          hidden
+        />
       </button>
     </div>
   );
