@@ -35,7 +35,7 @@ export function worldTextMatches(text: string, words: readonly string[]) {
  * ("Claude Code", HARNESS_LABELS) and its state's one word ("Needs you",
  * "Working", "Offline"), so a search for any of them finds it.
  */
-export function worldLeafTraitWords(leaf: WorldLeafObject) {
+function worldLeafTraitWords(leaf: WorldLeafObject) {
   const harness = leaf.kind === "agent" ? leaf.pane.agent : undefined;
   return [
     leaf.runtime === "herdr-core" ? "herdr-core core" : "herdr tui",

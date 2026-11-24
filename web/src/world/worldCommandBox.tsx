@@ -74,6 +74,7 @@ const RANK_SCORES = [0.95, 0.8, 0.6];
  * generation and its Herdr workspace and pane. The one place a found agent's
  * identity is made, so World's own agent IDs (#1309) can replace the
  * qualified pane identity here.
+ * @internal Exported for its unit tests.
  */
 export function worldFoundTarget(
   node: Exclude<WorldObjectNode, { kind: "host" }>,
@@ -119,6 +120,7 @@ export function coreSpacesLeaf(
 /**
  * Why Enter cannot open a found node, or null when it can. An offline or
  * reconnecting host's agents stay listed, marked, and opening one says this.
+ * @internal Exported for its unit tests.
  */
 export function worldFindOpenReason(node: WorldObjectNode): string | null {
   if (node.hostState === "reconnecting")

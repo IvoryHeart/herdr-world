@@ -24,13 +24,8 @@
 - `web/src/world/WorldFoundationApp.tsx`
 - `web/src/world/visualRouteActions.ts`
 - `web/src/world/worldSearch.ts`
-- `web/src/world/worldCommandBox.tsx`
-- `web/src/world/SpacesCoreTerminal.tsx`
-- `web/src/world/spacesCore.ts`
-- `web/src/world/spacesCoreTerminal.css`
-- `web/src/components/CommandCombobox.tsx`
-- `web/src/components/CommandActionItem.tsx`
-- `shared/harnessLabels.ts`
+- Find any agent: `web/src/world/worldCommandBox.tsx`, `web/src/components/CommandCombobox.tsx`, `web/src/components/CommandActionItem.tsx`, `shared/harnessLabels.ts`
+- Found herdr-core terminal in Spaces: `web/src/world/SpacesCoreTerminal.tsx`, `web/src/world/spacesCore.ts`, `web/src/world/spacesCoreTerminal.css`
 - `web/src/layerStack.ts`
 - `web/src/world/runtimeGrouping.ts`
 - `web/src/world/runtimeGrouping.settings.tsx`
@@ -44,11 +39,9 @@
 **Tests:**
 
 - `web/src/world/WorldFoundationApp.test.ts`
-- `web/src/foundTerminalReveal.dom.test.ts`
 - `web/src/world/visualRouteActions.test.ts`
 - `web/src/world/worldSearch.test.ts`
-- `web/src/world/worldCommandBox.test.tsx`
-- `web/src/commandBoxKey.dom.test.ts`
+- Find: `web/src/world/worldCommandBox.test.tsx`, `web/src/commandBoxKey.dom.test.ts`, `web/src/foundTerminalReveal.dom.test.ts`
 - `web/src/systemBack.browser.tsx`
 - `web/src/world/runtimeGrouping.test.ts`
 - `web/src/world/navigatorGroups.test.ts`
