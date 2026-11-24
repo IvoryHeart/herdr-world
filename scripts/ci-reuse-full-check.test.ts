@@ -136,6 +136,28 @@ test("metadata events reuse proof while code events always validate", async () =
   ).toBe("docs");
 });
 
+test("browser stability requests fresh full evidence even on metadata events", async () => {
+  for (const action of ["opened", "labeled", "edited"])
+    for (const [docs, tooling, scoped] of [
+      [false, false, false],
+      [true, false, false],
+      [false, true, false],
+      [false, false, true],
+    ] as const)
+      expect(
+        await selectValidationMode(
+          action,
+          docs,
+          async () => {
+            throw new Error("stability must not restore earlier evidence");
+          },
+          tooling,
+          scoped,
+          true,
+        ),
+      ).toBe("full");
+});
+
 test("metadata edits reuse the latest successful full check on the exact base and head", async () => {
   expect(
     await verify([run(4), run(3), run(2)], {

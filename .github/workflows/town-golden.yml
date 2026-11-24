@@ -4,6 +4,22 @@ name: Town golden images
 on:
     pull_request:
         types: [opened, synchronize, reopened]
+        paths:
+            - "web/**"
+            - "shared/**"
+            - "scripts/town-golden*"
+            - "scripts/capture-*"
+            - "scripts/test-chrome*"
+            - "scripts/ci-golden-scope*"
+            - "scripts/ci-content-key.ts"
+            - "scripts/affected.ts"
+            - "scripts/chrome-*"
+            - "tools/chrome/**"
+            - "package.json"
+            - "bun.lock"
+            - ".github/workflows/town-golden.yml"
+    schedule:
+        - cron: "43 3 * * *"
     push:
         branches: [main]
     workflow_dispatch:
@@ -22,10 +38,6 @@ concurrency:
 
 jobs:
     report:
-        # Quarantine #1259: pinned Chrome varies fractional DOM edge pixels
-        # under load despite identical geometry. Keep exact manual evidence
-        # while the rasterization follow-up is investigated.
-        if: github.event_name == 'workflow_dispatch'
         name: Town golden report (advisory)
         runs-on: ubuntu-24.04
         timeout-minutes: ${{ (inputs.stability || contains(github.event.pull_request.labels.*.name, 'town-golden-stability')) && 40 || 15 }}
@@ -34,18 +46,29 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
                   persist-credentials: false
+                  fetch-depth: 0
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
                   bun-version: "1.4.4"
                   no-cache: true
+            - name: Select changed renderer and asset inputs
+              id: scope
+              env:
+                  PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: bun scripts/ci-golden-scope.ts
             - run: bun install --frozen-lockfile
-            - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              if: steps.scope.outputs.run == 'true'
+            - if: steps.scope.outputs.run == 'true'
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: ~/.cache/herdr-test-chrome
                   key: test-chrome-${{ hashFiles('tools/chrome/test-chrome.json') }}
             - name: Install the pinned test Chrome
+              if: steps.scope.outputs.run == 'true'
               run: bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"
             - name: Compare five viewports
+              if: steps.scope.outputs.run == 'true'
               env:
                   TOWN_GOLDEN: "1"
                   TOWN_GOLDEN_RUNS: ${{ (inputs.stability || contains(github.event.pull_request.labels.*.name, 'town-golden-stability')) && '20' || '1' }}
@@ -58,7 +81,7 @@ jobs:
                   TOWN_GOLDEN_CONTROL_OUTPUT: ${{ runner.temp }}/town-golden/negative-control
               run: bun run test scripts/town-golden-negative.browser.test.ts
             - name: Summarize the comparison
-              if: always()
+              if: always() && steps.scope.outputs.run == 'true'
               run: |
                   if test -f "$RUNNER_TEMP/town-golden/summary.md"; then
                     cat "$RUNNER_TEMP/town-golden/summary.md" >> "$GITHUB_STEP_SUMMARY"
@@ -69,7 +92,7 @@ jobs:
                     cat "$RUNNER_TEMP/town-golden/negative-control/summary.md" >> "$GITHUB_STEP_SUMMARY"
                   fi
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-              if: always()
+              if: always() && steps.scope.outputs.run == 'true'
               with:
                   name: town-golden
                   path: ${{ runner.temp }}/town-golden

@@ -216,6 +216,7 @@
   "rpc:world.apartments.list": "allow deny deny deny deny deny",
   "rpc:world.appearance.patch": "allow deny deny deny deny deny",
   "rpc:world.appearance.rename": "allow deny deny deny deny deny",
+  "rpc:world.artefacts.list": "allow deny deny deny deny deny",
   "rpc:world.ask.answer": "allow deny deny deny deny deny",
   "rpc:world.ask.deliveries.get": "allow deny deny deny deny deny",
   "rpc:world.ask.delivery.close": "allow deny deny deny deny deny",

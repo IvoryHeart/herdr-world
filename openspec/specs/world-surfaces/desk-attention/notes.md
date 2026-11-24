@@ -14,6 +14,8 @@
 - `web/src/world/useReviewedWork.ts`
 - `web/src/world/useReviewedWork.test.ts`
 - `web/src/world/DeskView.tsx`
+- `web/src/world/DeskOtherHosts.tsx`
+- `web/src/world/MadeSummary.tsx` (what the agent made, on its card; opens the Library)
 - `web/src/world/handoffs.ts`
 - `server/src/world/desk-watches.ts`
 - `server/src/features/desk/register.ts` (RPCs and lifecycle)

@@ -9,6 +9,18 @@ import type {
 import { PlaceWindow } from "../PlaceWindow";
 import { townLibraryBanner } from "../town/townLibraryPaint";
 import { MemoryBook, type MemoryBookOpen } from "./MemoryBook";
+import type { ShelvedArtefact } from "../../../../shared/agentArtefacts";
+import {
+  ArtefactReader,
+  ArtefactShelfList,
+  type ArtefactRoute,
+} from "./LibraryArtefacts";
+import {
+  artefactShelfState,
+  requestArtefactShelf,
+  useArtefactShelves,
+} from "./artefactShelfClient";
+import { readerArtefacts, searchArtefacts } from "./artefactShelfModel";
 import {
   memoryCatalogState,
   memoryClient,
@@ -56,14 +68,23 @@ function initialReader(request: MemoryLibraryRequest): MemoryReader {
   return ALL_READERS;
 }
 
+const NO_ROUTE: ArtefactRoute = {
+  workspace: () => null,
+  openInFiles: () => null,
+};
+
 export function MemoryLibrary({
   request,
   onClose,
+  route = NO_ROUTE,
 }: {
   request: MemoryLibraryRequest;
   onClose(): void;
+  /** How a made file is read and opened in Files on its host. */
+  route?: ArtefactRoute;
 }) {
   useMemoryStore();
+  useArtefactShelves();
   const hosts = memoryHosts();
   // Only an open with no host named, before any host is known, takes the
   // first one to appear; a named or picked host is never replaced silently.
@@ -87,6 +108,16 @@ export function MemoryLibrary({
     initialReader(request),
   );
   const [book, setBook] = useState<MemoryBookOpen | null>(null);
+  // The "Made by agents" wing (#1327): its shelf, the picked one and matches.
+  const [wing, setWing] = useState(request.wing ?? "memory");
+  const shelf = host ? (artefactShelfState(host)?.shelf ?? null) : null;
+  // The picked one by ID: the reader shows the shelf's current record, so a
+  // refresh that finds the file deleted (or the record gone) shows that.
+  const [madeId, setMadeId] = useState<string | null>(null);
+  const made = madeId
+    ? (shelf?.artefacts.find((one) => one.id === madeId) ?? null)
+    : null;
+  const [madeFound, setMadeFound] = useState<string | null>(null);
   const [pane, setPane] = useState<Pane>("shelves");
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<MemorySearch | null>(null);
@@ -101,9 +132,12 @@ export function MemoryLibrary({
     setSearching(false);
     setSearchError(null);
     setBook(null);
+    setMadeId(null);
+    setMadeFound(null);
     setSearch(null);
     setPane("shelves");
     if (host) void requestMemoryCatalog(host, { force: true });
+    if (host) void requestArtefactShelf(host, { force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hostKey]);
 
@@ -116,12 +150,31 @@ export function MemoryLibrary({
     setSearching(false);
     setSearchError(null);
     setSearch(null);
+    setMadeFound(null);
   }, [readerKey]);
 
-  // A reader the host doesn't have (gone, or another host's) shows everything;
-  // the testing switch maps any agent to its first one.
+  // The made thing asked for opens once the shelf has it (after the resets
+  // above, which run first on open).
+  const [wanted, setWanted] = useState(request.artefactId ?? null);
   useEffect(() => {
-    if (!catalog || reader.kind === "all") return;
+    const found = wanted && shelf?.artefacts.find((one) => one.id === wanted);
+    if (!found) return;
+    setWanted(null);
+    setMadeId(found.id);
+    setPane("book");
+  }, [wanted, shelf]);
+
+  // A reader the host doesn't have (gone, or another host's) shows everything;
+  // the testing switch maps any agent to its first one. One that made things
+  // on this host's shelf stays (#1327), so it is kept until the shelf is read.
+  const shelfStatus = host ? artefactShelfState(host)?.status : "none";
+  const shelfRead =
+    shelfStatus === "ready" ||
+    shelfStatus === "failed" ||
+    shelfStatus === "none";
+  useEffect(() => {
+    if (!catalog || reader.kind === "all" || !shelfRead) return;
+    if (readerArtefacts(shelf?.artefacts ?? [], reader).length) return;
     const known =
       reader.kind === "project"
         ? catalog.agents.some(
@@ -137,7 +190,7 @@ export function MemoryLibrary({
         ? { kind: "agent", id: first.id }
         : ALL_READERS,
     );
-  }, [catalog, reader]);
+  }, [catalog, reader, shelf, shelfRead]);
 
   // A book whose file left the catalog (deleted elsewhere) closes.
   const live = useMemo(() => {
@@ -149,8 +202,27 @@ export function MemoryLibrary({
     return entry && source ? { ...book, entry, source } : null;
   }, [book, catalog]);
 
-  const refresh = () =>
-    host && void requestMemoryCatalog(host, { force: true });
+  const refresh = () => {
+    if (!host) return;
+    void requestMemoryCatalog(host, { force: true });
+    void requestArtefactShelf(host, { force: true });
+  };
+  const project = (id: string | null) =>
+    id === null
+      ? null
+      : (catalog?.projects.find((p) => p.id === id)?.label ??
+        host?.rooms?.[id] ??
+        null);
+  const shelved = readerArtefacts(shelf?.artefacts ?? [], reader);
+  const madeMatches =
+    madeFound === null
+      ? []
+      : searchArtefacts(shelved, madeFound, host?.names, project);
+  const openMade = (artefact: ShelvedArtefact) => {
+    setBook(null);
+    setMadeId(artefact.id);
+    setPane("book");
+  };
 
   const runSearch = (event: React.FormEvent) => {
     event.preventDefault();
@@ -163,6 +235,7 @@ export function MemoryLibrary({
           ? { workspace_id: reader.id }
           : {};
     const mine = ++searchToken.current;
+    setMadeFound(words);
     setSearching(true);
     setSearchError(null);
     memoryClient()
@@ -188,6 +261,7 @@ export function MemoryLibrary({
     entry: MemoryEntry,
     line?: number,
   ) => {
+    setMadeId(null);
     setBook({ kind: "entry", source, entry, line });
     setPane("book");
   };
@@ -272,7 +346,7 @@ export function MemoryLibrary({
                 type="search"
                 value={query}
                 maxLength={200}
-                placeholder="Search memory"
+                placeholder="Search memory and what agents made"
                 aria-label="Search memory"
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -331,12 +405,63 @@ export function MemoryLibrary({
                 }}
               />
               <div className="memory-middle">
+                <div className="library-wings" role="tablist">
+                  {(["memory", "artefacts"] as const).map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={wing === id}
+                      onClick={() => {
+                        setWing(id);
+                        setSearch(null);
+                        setMadeFound(null);
+                      }}
+                    >
+                      {id === "memory" ? "Memory" : "Made by agents"}
+                      {id === "artefacts" && shelf ? (
+                        <span>{shelved.length}</span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+                {madeFound !== null && madeMatches.length ? (
+                  <section className="memory-wing" aria-label="Made matches">
+                    <h4>
+                      Made by agents <span>{madeMatches.length} found</span>
+                    </h4>
+                    <ArtefactShelfList
+                      artefacts={madeMatches}
+                      names={host.names}
+                      project={project}
+                      selected={made?.id ?? null}
+                      onOpen={openMade}
+                      empty=""
+                    />
+                  </section>
+                ) : null}
                 {search ? (
                   <MemorySearchResults
                     search={search}
                     catalog={catalog}
                     onOpen={openEntry}
-                    onClear={() => setSearch(null)}
+                    onClear={() => {
+                      setSearch(null);
+                      setMadeFound(null);
+                    }}
+                  />
+                ) : madeFound !== null ? null : wing === "artefacts" ? (
+                  <ArtefactShelfList
+                    artefacts={shelved}
+                    names={host.names}
+                    project={project}
+                    selected={made?.id ?? null}
+                    onOpen={openMade}
+                    empty={
+                      shelf
+                        ? "Nothing made here yet. Reports, pages, images and links agents make show up here."
+                        : "Reading what agents made…"
+                    }
                   />
                 ) : (
                   <MemoryShelves
@@ -348,6 +473,7 @@ export function MemoryLibrary({
                     }
                     onOpen={(source, entry) => openEntry(source, entry)}
                     onAdd={(source, path) => {
+                      setMadeId(null);
                       setBook({ kind: "new", source, path });
                       setPane("book");
                     }}
@@ -355,7 +481,19 @@ export function MemoryLibrary({
                 )}
               </div>
               <div className="memory-right">
-                {live ? (
+                {made ? (
+                  <ArtefactReader
+                    target={host}
+                    artefact={made}
+                    names={host.names}
+                    project={project}
+                    route={route}
+                    onBack={() => {
+                      setPane("shelves");
+                      setMadeId(null);
+                    }}
+                  />
+                ) : live ? (
                   <MemoryBook
                     target={host}
                     open={live}

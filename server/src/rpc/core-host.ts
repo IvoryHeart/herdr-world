@@ -59,6 +59,16 @@ const CORE_HOST_CALLS = {
       host.agentSessions().link(params),
     ),
   "agent_turn.get": (host) => host.agentSessions().readTurn,
+  // Desk and Town read core agents' quests and artefacts as Herdr's.
+  "agent_quest.list": (host) => async (params) => ({
+    quests: await host
+      .agentSessions()
+      .conversation.quests(
+        Array.isArray(params.pane_ids)
+          ? params.pane_ids.filter((id): id is string => typeof id === "string")
+          : undefined,
+      ),
+  }),
   // A new room's folder, completed and checked on the core's host.
   "workspace.path": (host) => (params: Record<string, unknown>) =>
     inspectWorkspacePath(params.path, {

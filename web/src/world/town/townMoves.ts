@@ -235,17 +235,17 @@ export async function requestBuildingRoomOrder(
   ordersRooms: (room: OfficeRoom) => boolean,
 ): Promise<TownRoomMoveOutcome> {
   const outcomes = await Promise.all(
-    townRoomsByRuntime(rooms)
-      .filter((group) => !group[0]!.stale && ordersRooms(group[0]!))
-      .map((group) =>
-        requestRoomOrder(group).catch(
-          (cause: unknown): TownRoomMoveOutcome => ({
-            status: "refused",
-            reason: "failed",
-            message: String(cause),
-          }),
-        ),
+    townRoomsByRuntime(
+      rooms.filter((room) => !room.stale && ordersRooms(room)),
+    ).map((group) =>
+      requestRoomOrder(group).catch(
+        (cause: unknown): TownRoomMoveOutcome => ({
+          status: "refused",
+          reason: "failed",
+          message: String(cause),
+        }),
       ),
+    ),
   );
   return (
     outcomes.find((outcome) => outcome.status !== "moved") ?? {

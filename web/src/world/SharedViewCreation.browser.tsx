@@ -36,9 +36,12 @@ function check(condition: unknown, message: string) {
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
 async function until(condition: () => unknown, message: string) {
-  for (let attempt = 0; attempt < 200; attempt++) {
+  const deadline = performance.now() + 8_000;
+  while (performance.now() < deadline) {
     if (condition()) return;
-    await settle();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
   }
   throw new Error(
     `Timed out: ${message}; navigation=${JSON.stringify(store.get().browserNavigation)}; selected=${store.get().selectedPaneId}; notice=${JSON.stringify(store.get().notice)}; body=${document.body.innerText.slice(0, 1400)}; panes=${JSON.stringify([...document.querySelectorAll("[data-pane-id]")].map((e) => [e.getAttribute("data-pane-id"), e.getBoundingClientRect().height, e.closest(".world-terminal-parking") !== null]))}; labels=${JSON.stringify([...document.querySelectorAll(".world-new-seat-canvas-action")].map((e) => e.getAttribute("aria-label")))}`,
@@ -389,12 +392,22 @@ for (const host of hosts) {
     },
   });
 }
-function view(name: string) {
+async function view(name: string) {
   const select = document.querySelector<HTMLSelectElement>(
     '[aria-label="World view"]',
   )!;
   select.value = name;
   select.dispatchEvent(new Event("change", { bubbles: true }));
+  // Navigation updates the URL before React commits. Release held creation
+  // replies only once the destination view has rendered and run its effects.
+  await until(
+    () =>
+      document
+        .querySelector(".world-foundation-shell")
+        ?.getAttribute("data-view") === name &&
+      document.documentElement.getAttribute("data-world-view") === name,
+    `Committed ${name} view`,
+  );
 }
 function visiblePane(paneId: string) {
   return [
@@ -1058,8 +1071,7 @@ async function run() {
     `Add room created in ${String(roomCreate.params.cwd)}, not the chosen folder`,
   );
   for (const name of ["town", "desk", "board"]) {
-    view(name);
-    await settle();
+    await view(name);
     const beforeTab = created;
     await action("New tab");
     await createdInspector(beforeTab + 1);
@@ -1107,8 +1119,7 @@ async function run() {
       viewChangeCount + 1,
     "held creation dispatched before view change",
   );
-  view("board");
-  await settle();
+  await view("board");
   heldMutation = null;
   viewGate.resolve();
   await createdInspector(viewChangeCount + 1);
@@ -1148,8 +1159,15 @@ async function run() {
     lastCreated && !visiblePane(lastCreated.pane_id),
     "Late creation reopened an Inspector after explicit close",
   );
-  view("spaces");
-  await settle();
+  // Close the Inspectors the cases above left open. Each one remounts its
+  // terminal whenever a visual view mounts again, so a dozen of them made
+  // each completion below wait on that remount, not on its own creation.
+  await action("Close all terminal windows");
+  await until(
+    () => !document.querySelector(".world-managed-window"),
+    "earlier Inspectors closed",
+  );
+  await view("spaces");
   const count = created;
   await store.createTab("a");
   await until(
@@ -1171,8 +1189,7 @@ async function run() {
     ["town", "spaces"],
   ] as const) {
     for (const kind of ["tab", "workspace"] as const) {
-      view(from);
-      await settle();
+      await view(from);
       await store.focusWorkspace("a");
       const gate = Promise.withResolvers<void>();
       heldMutation = gate.promise;
@@ -1188,8 +1205,7 @@ async function run() {
           calls.filter((call) => call.method === method).length > beforeCalls,
         `${from} ${kind} pending dispatch`,
       );
-      view(to);
-      await settle();
+      await view(to);
       const inspectorsBeforeCompletion = document.querySelectorAll(
         ".world-managed-window",
       ).length;
@@ -1212,8 +1228,7 @@ async function run() {
     }
   }
 
-  view("spaces");
-  await settle();
+  await view("spaces");
   const first = alpha.panes.find((pane) => pane.pane_id === "a-1-pane")!;
   const sibling = {
     ...first,

@@ -11,6 +11,7 @@ import { yieldWorldTask } from "../worldObject";
 import { DEVTOOLS } from "../devtools/flag";
 import { countWorldWork } from "../devtools/renderer";
 import { cardKey, tabCardKey } from "../../../../shared/terminalColor";
+import { groupByRuntime, type HostGroupOf } from "../../worldHosts";
 
 /**
  * Board's projection of World's bounded topology: hosts as zones, workspaces as
@@ -28,8 +29,24 @@ export type BoardHost = {
   /** The runtime generation the topology was read from. */
   generation: number;
   label: string;
+  /** herdr-core, or absent for Herdr (TUI). */
+  runtime?: "herdr-core";
   stale: boolean;
   workspaceKeys: string[];
+};
+
+/**
+ * One zone frame on Board: the runtimes World's "Group runtimes" setting
+ * groups together (worldHosts.ts `groupByRuntime`), a machine's or one
+ * runtime's. Presentation only: each runtime keeps its own anchor, cards,
+ * colour and actions, qualified by its connection and generation.
+ */
+type BoardZone = {
+  key: string;
+  label: string;
+  hosts: BoardHost[];
+  /** Each runtime's tag by connection ID, in zones of two or more. */
+  tags: ReadonlyMap<string, string>;
 };
 
 export type BoardWorkspace = {
@@ -81,7 +98,10 @@ export type BoardTab = {
 };
 
 export type BoardModel = {
+  /** In zone order: a zone's runtimes are adjacent. */
   hosts: BoardHost[];
+  /** The zone frames; one per runtime until `groupBoardZones`. */
+  zones: BoardZone[];
   workspaces: BoardWorkspace[];
   tabs: BoardTab[];
   hostByKey: ReadonlyMap<string, BoardHost>;
@@ -142,6 +162,9 @@ function projectHost(host: WorldHostObject): HostProjection {
       connectionId: host.connectionId,
       generation: host.generation,
       label: host.label,
+      ...(host.connection.runtime === "herdr-core"
+        ? { runtime: "herdr-core" as const }
+        : {}),
       connectionState: host.connection.state,
       // Stale only when the host isn't live. A healthy herdr-core host is
       // not TUI-actionable but World controls it (coreControl, world.core.*);
@@ -196,10 +219,45 @@ export function projectBoard(world: WorldObject): BoardModel {
   }
   return {
     hosts,
+    zones: hosts.map((host) => ({
+      key: `runtime:${host.connectionId}`,
+      label: host.label,
+      hosts: [host],
+      tags: new Map(),
+    })),
     workspaces,
     tabs,
     hostByKey: new Map(hosts.map((host) => [host.key, host])),
     workspaceByKey: new Map(workspaces.map((space) => [space.key, space])),
     tabByKey: new Map(tabs.map((tab) => [tab.key, tab])),
   };
+}
+
+/**
+ * The board with its hosts in World's "Group runtimes" zones (`groupOf` is
+ * worldHosts.ts `hostGroupOf`): one frame per machine, or per runtime, as
+ * Town and the navigator group them. Hosts are reordered so a zone's
+ * runtimes are adjacent; nothing else changes.
+ */
+export function groupBoardZones(
+  model: BoardModel,
+  groupOf: HostGroupOf,
+): BoardModel {
+  const zones = groupByRuntime(model.hosts, (host) => host, groupOf).map(
+    (group) => ({
+      key: group.key,
+      label: group.label,
+      hosts: group.members,
+      tags: group.tags,
+    }),
+  );
+  return { ...model, hosts: zones.flatMap((zone) => zone.hosts), zones };
+}
+
+/** The host keys sharing a zone with `hostKey` (itself included). */
+export function zoneHostKeys(model: BoardModel, hostKey: string): string[] {
+  const zone = model.zones.find((each) =>
+    each.hosts.some((host) => host.key === hostKey),
+  );
+  return zone ? zone.hosts.map((host) => host.key) : [hostKey];
 }

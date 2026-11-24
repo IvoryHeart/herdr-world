@@ -33,6 +33,10 @@ export type BinAdd = BinTarget & {
  */
 export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
 
+/** @internal */
+export const ENDED_BEFORE_BUS =
+  "It ended before the bus came, so nothing was closed.";
+
 /**
  * The service's bin: reversible holding in memory, and one bus on a fixed
  * schedule. Buses set off every `interval` ms from the service's start; one
@@ -47,6 +51,8 @@ export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
 export class WorldBinRegistry {
   private revision = 0;
   private readonly entries = new Map<string, BinEntry>();
+  /** When each held entry was put in the bin (wall clock, ms). */
+  private readonly heldAt = new Map<string, number>();
   private readonly closing = new Map<string, BinEntry>();
   private outcomes: BinOutcome[] = [];
   private timer: { cancel(): void } | null = null;
@@ -70,6 +76,8 @@ export class WorldBinRegistry {
       commit: BinCommit;
       publish(revision: number): void;
       log?(message: string): void;
+      /** The bin's journey, one line per step, for the service journal. */
+      info?(message: string): void;
       interval_ms?: number;
       trip_ms?: number;
     },
@@ -124,6 +132,10 @@ export class WorldBinRegistry {
     const id = `bin-${this.deps.epoch}-${this.nextId++}`;
     // A bus already on the map has collected its riders: this one waits.
     this.entries.set(id, { ...target, id, riding: false });
+    this.heldAt.set(id, this.deps.clock.now());
+    this.deps.info?.(
+      `Bin holds ${id}: ${target.runtime ?? "herdr"} ${target.connection_id} generation ${target.connection_generation} pane ${target.pane_id} terminal ${target.terminal_id}`,
+    );
     this.changed();
     return this.list();
   }
@@ -134,13 +146,9 @@ export class WorldBinRegistry {
    * the bus has left the map and its close is recorded.
    */
   restore(id: string): BinState {
-    if (!this.entries.delete(id)) return this.list();
-    // A stopped bus with nobody left aboard has nothing to wait for.
-    if (
-      this.stoppedAt !== null &&
-      ![...this.entries.values()].some((entry) => entry.riding)
-    )
-      this.resumeTrip();
+    if (!this.forget(id)) return this.list();
+    this.deps.info?.(`Bin put back ${id}`);
+    this.resumeIfEmpty();
     this.changed();
     return this.list();
   }
@@ -162,6 +170,19 @@ export class WorldBinRegistry {
     this.resumeTrip();
     this.changed();
     return this.list();
+  }
+
+  /**
+   * A stopped bus with nobody left aboard has nothing to wait for: however
+   * its last rider left (put back, ended by itself, or its host restarted),
+   * it drives on, so later agents still board and close.
+   */
+  private resumeIfEmpty() {
+    if (
+      this.stoppedAt !== null &&
+      ![...this.entries.values()].some((entry) => entry.riding)
+    )
+      this.resumeTrip();
   }
 
   private resumeTrip() {
@@ -196,7 +217,10 @@ export class WorldBinRegistry {
         entry.connection_id === connectionId &&
         entry.connection_generation !== generation
       ) {
-        this.entries.delete(id);
+        this.forget(id);
+        this.deps.info?.(
+          `Bin dropped ${id}: ${connectionId} is now generation ${generation}`,
+        );
         this.record({
           id,
           label: entry.label,
@@ -207,13 +231,64 @@ export class WorldBinRegistry {
         });
         changed = true;
       }
-    if (changed) this.changed();
+    if (!changed) return;
+    this.resumeIfEmpty();
+    this.changed();
+  }
+
+  /**
+   * A complete pane list of a connection's runtime, read from `readAt`
+   * (wall clock): a held agent, waiting or riding, whose pane and terminal
+   * it no longer has has ended by itself. It leaves the bin with nothing
+   * closed, instead of waiting invisibly for a bus that would only find it
+   * gone. A list read before the agent was held cannot witness its end.
+   */
+  observeComplete(
+    connectionId: string,
+    generation: number,
+    panes: readonly Record<string, unknown>[],
+    readAt: number,
+  ) {
+    const paneIds = new Set<unknown>(panes.map((pane) => pane.pane_id));
+    const terminalIds = new Set<unknown>(panes.map((pane) => pane.terminal_id));
+    let changed = false;
+    for (const [id, entry] of this.entries) {
+      const heldAt = this.heldAt.get(id);
+      if (
+        entry.connection_id !== connectionId ||
+        entry.connection_generation !== generation ||
+        heldAt === undefined ||
+        readAt <= heldAt ||
+        paneIds.has(entry.pane_id) ||
+        terminalIds.has(entry.terminal_id)
+      )
+        continue;
+      this.forget(id);
+      this.deps.info?.(
+        `Bin dropped ${id}: pane ${entry.pane_id} terminal ${entry.terminal_id} ended ${entry.riding ? "on the bus" : "at the stop"}`,
+      );
+      this.record({
+        id,
+        label: entry.label,
+        view: entry.view,
+        result: "gone",
+        closed_tab: false,
+        detail: ENDED_BEFORE_BUS,
+      });
+      changed = true;
+    }
+    if (!changed) return;
+    this.resumeIfEmpty();
+    this.changed();
   }
 
   /** The durable close finished (or will never be sent). */
   settle(id: string, outcome: Omit<BinOutcome, "id" | "label" | "view">) {
     const entry = this.closing.get(id);
     this.closing.delete(id);
+    this.deps.info?.(
+      `Bin close of ${id}: ${outcome.result}${outcome.detail ? ` (${outcome.detail})` : ""}`,
+    );
     this.record({
       id,
       label: entry?.label ?? "Agent",
@@ -274,6 +349,9 @@ export class WorldBinRegistry {
     this.trip = at;
     this.trips += 1;
     for (const entry of this.entries.values()) entry.riding = true;
+    this.deps.info?.(
+      `Bin bus ${this.trips} set off with ${this.entries.size} aboard`,
+    );
     this.changed();
   }
 
@@ -290,9 +368,12 @@ export class WorldBinRegistry {
   private depart(due: BinEntry[]) {
     const leaving = due.map((entry) => ({ ...entry }));
     for (const entry of leaving) {
-      this.entries.delete(entry.id);
+      this.forget(entry.id);
       this.closing.set(entry.id, entry);
     }
+    this.deps.info?.(
+      `Bin closing ${leaving.map((entry) => entry.id).join(", ")}`,
+    );
     this.changed();
     this.deps.commit(leaving).catch((error: unknown) => {
       // Only a write storage refused before sending is known not to be
@@ -310,6 +391,12 @@ export class WorldBinRegistry {
             detail: NOT_RECORDED,
           });
     });
+  }
+
+  /** Take a held entry out of the bin; false when it was not held. */
+  private forget(id: string) {
+    this.heldAt.delete(id);
+    return this.entries.delete(id);
   }
 
   private record(outcome: BinOutcome) {

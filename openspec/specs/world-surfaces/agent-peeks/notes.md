@@ -14,6 +14,7 @@
 - `web/src/world/town/TownPeek.tsx`
 - `web/src/world/board/BoardPeek.tsx`
 - `web/src/world/WorldInspectorConversation.tsx`
+- `web/src/world/MadeSummary.tsx` (what the agent made, on its Town peek; opens the Library)
 - `server/src/agent/conversation.ts`
 - `web/src/attachmentUploads.ts`
 

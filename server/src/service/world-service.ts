@@ -63,6 +63,7 @@ import { serverLogger } from "../utils/logger";
 import { afterHerdrClose } from "../world/board-closing";
 import { apartmentsKey } from "../features/apartments/register";
 import { createApartmentsService } from "../features/apartments/service";
+import { createArtefactShelf } from "../world/artefact-shelf";
 import { createBinService } from "./bin-service";
 import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
@@ -282,10 +283,17 @@ async function compose(
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
   });
+  // The bin is made below; a core runtime seen before then holds nothing.
+  const binCore: {
+    generation?(connectionId: string, generation: number): void;
+  } = {};
   const { core, rpc: coreRpc } = composeCore({
     logger: logger.child("connections"),
     changed: publishConnectionsChanged,
-    observed: publishWorldInvalidation,
+    observed: (connectionId, generation) => {
+      binCore.generation?.(connectionId, generation);
+      publishWorldInvalidation(connectionId, generation);
+    },
     profiles: () => connectionProfiles,
     topology: storage.coreTopology,
     // Its pages are always this service's sockets.
@@ -307,9 +315,12 @@ async function compose(
     connections: () => connectionManager,
     publish: revisionPublisher("world_bin_changed", "world-bin"),
     log: (message) => logger.warn(message),
+    info: (message) => logger.info(message),
     retiring: (entries) =>
       features!.get(apartmentsKey).apartments.retire(entries),
   });
+  binCore.generation = (connectionId, generation) =>
+    bin.registry.retireConnectionGeneration(connectionId, generation);
   void bin.start();
   // Shared mark recovery needs Desk before connection profiles emit status.
   const desk = createDesk({
@@ -467,14 +478,17 @@ async function compose(
             observeHost(id, generation, panes, at, agents);
           worldUsage?.activity.observeFresh(id, generation, panes, at, agents);
         })(...args),
-    (...args) =>
+    (...args) => {
+      // Both runtimes: a held agent that ended by itself leaves the bin.
+      bin.registry.observeComplete(...args);
       features!
         .get(apartmentsKey)
         .complete(
-          ownedBy(connectionManager, (...args) =>
-            appearance().observeTerminalSettings(...args),
+          ownedBy(connectionManager, (id, generation, panes) =>
+            appearance().observeTerminalSettings(id, generation, panes),
           ),
-        )(...args),
+        )(...args);
+    },
     serviceIncarnation,
   );
 
@@ -770,6 +784,7 @@ async function compose(
       createApartmentsService,
       desk,
       createProfileServices,
+      createArtefactShelf,
       createIntegrations,
     ),
   );

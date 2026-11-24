@@ -16,11 +16,7 @@ import {
   townBuildingsMode,
   townRuntimes,
 } from "./townBuildings";
-import { worldLocalStorage } from "../../browserStorage";
-import {
-  readOfficePreferences,
-  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
-} from "../officePreferences";
+import { useRuntimeGrouping } from "../runtimeGrouping";
 
 /** Town reveals the first 24 native-order tabs, then 20 more per expansion. */
 export function useTownOffice(world: WorldObject, selectedId: string | null) {
@@ -90,25 +86,10 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
     [pinnedTabKeys],
   );
   const buildings = useMemo(() => createTownBuildings(), []);
-  // The Town buildings setting; the page flag, read once per mount, compares
-  // the two building layouts (townBuildings.ts).
+  // World's "Group runtimes" setting (runtimeGrouping.ts); the page flag,
+  // read once per mount, compares the two building layouts (townBuildings.ts).
   const [buildingsFlag] = useState(() => globalThis.location?.search ?? "");
-  const [buildingsSetting, setBuildingsSetting] = useState(
-    () => readOfficePreferences(worldLocalStorage).townBuildings,
-  );
-  useEffect(() => {
-    const refresh = () =>
-      setBuildingsSetting(
-        readOfficePreferences(worldLocalStorage).townBuildings,
-      );
-    window.addEventListener(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT, refresh);
-    return () =>
-      window.removeEventListener(
-        WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
-        refresh,
-      );
-  }, []);
-  const buildingsMode = townBuildingsMode(buildingsFlag, buildingsSetting);
+  const buildingsMode = townBuildingsMode(buildingsFlag, useRuntimeGrouping());
   const observedOffice = useMemo((): HerdrOfficeProjection => {
     if (DEVTOOLS) countWorldWork("office.project");
     const office = projectOffice(

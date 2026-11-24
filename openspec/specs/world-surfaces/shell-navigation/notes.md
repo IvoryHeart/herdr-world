@@ -24,14 +24,30 @@
 - `web/src/world/WorldFoundationApp.tsx`
 - `web/src/world/visualRouteActions.ts`
 - `web/src/world/worldSearch.ts`
+- Find any agent: `web/src/world/worldCommandBox.tsx`, `web/src/components/CommandCombobox.tsx`, `web/src/components/CommandActionItem.tsx`, `shared/harnessLabels.ts`
+- Found herdr-core terminal in Spaces: `web/src/world/SpacesCoreTerminal.tsx`, `web/src/world/spacesCore.ts`, `web/src/world/spacesCoreTerminal.css`
 - `web/src/layerStack.ts`
+- `web/src/world/runtimeGrouping.ts`
+- `web/src/world/runtimeGrouping.settings.tsx`
+- `web/src/world/useHostGroups.ts`
+- `web/src/world/navigatorGroups.ts`
+- `web/src/world/WorldNavigator.tsx`
+- `web/src/worldHosts.ts`
+- `web/src/store/uiSettings.ts`
+- `server/src/bridge/settings-rpc.ts`
 
 **Tests:**
 
 - `web/src/world/WorldFoundationApp.test.ts`
 - `web/src/world/visualRouteActions.test.ts`
 - `web/src/world/worldSearch.test.ts`
+- Find: `web/src/world/worldCommandBox.test.tsx`, `web/src/commandBoxKey.dom.test.ts`, `web/src/foundTerminalReveal.dom.test.ts`
 - `web/src/systemBack.browser.tsx`
+- `web/src/world/runtimeGrouping.test.ts`
+- `web/src/world/navigatorGroups.test.ts`
+- `web/src/worldHosts.test.ts`
+- `server/src/bridge/runtime-grouping-schedules.test.ts`
+- `server/src/bridge/settings-rpc.test.ts`
 
 **Pitfalls:**
 
@@ -72,7 +88,22 @@
   ready connection's workspaces and agents from World's shared observation,
   labels each with its server and keeps worktrees nested. Selecting a row opens
   its server; another server's menu only navigates. Stale hosts stay out, and a
-  failed observation shows its error. World's navigator keeps one tree per host.
+  failed observation shows its error.
+- **Settings → This World → Group runtimes** decides how Town's buildings,
+  World's navigator, Desk's other-host summaries and Board's zones group a machine's
+  runtimes, for every browser. **One per machine** (the default) puts this
+  computer's Herdr TUI and herdr-core under one navigator heading with a
+  **Herdr TUI** row and a **herdr-core** row (each with its own tree, colour
+  and actions), one Town building, one Desk host and one Board zone; **One per runtime** shows
+  each runtime apart. A machine on its own runtime keeps a plain host row.
+  The value lives in the service's settings (`ui.runtimeGrouping`), with a
+  browser copy (`runtimeGrouping.v1`) for the first paint; one browser's
+  earlier Town buildings choice moves there once, as an `only_if_absent`
+  update the service applies inside its settings writer. Answers and pushes
+  carry the service's commit `revision`; a browser keeps the newest one it
+  has seen, so a late push never undoes a later save. Groups come from one
+  derivation (`worldHostGroups` / `hostGroupOf` / `groupByRuntime` in
+  `web/src/worldHosts.ts`); the Hosts filter always lists machines.
 - Workspace rows show numbered tab chips with each tab's agent status, folding
   extra tabs into **+N**, and keep the server badge in the right column. In
   Spaces a chip focuses its tab; in World's navigator it selects the workspace
@@ -81,10 +112,16 @@
   Drag a pane handle onto another tab in the same workspace, onto a pane edge
   in that tab, or onto **+** to break it into a new tab. Hover a tab to open its
   panes before dropping. Overflowing desktop tab strips offer scroll controls.
-- Search workspace, worktree, file, tab, pane, and agent actions in the command
+- Search workspace, worktree, file, tab and pane actions in the command
   menu (`Cmd+K` on macOS, `Ctrl+K` elsewhere, or `Cmd+Option+K`/`Ctrl+Alt+K`
   from a terminal or text field). A workspace-relative or
-  absolute path opens the file.
+  absolute path opens the file. Agents are found in its **In World** group,
+  in every view (see Find or act in terminal-windows notes); Spaces has no
+  separate list of its own connection's agents. Enter on a herdr-core agent
+  shows its terminal in Spaces' terminal area in place of the Herdr tab
+  (`web/src/world/SpacesCoreTerminal.tsx`); **Close** returns to the tab.
+  Every terminal a find opens closes an expanded Inspector (or any Inspector
+  on a phone) first, through App's `revealTerminal` request.
 - Toggle **Zen mode** (`Cmd+Shift+Z` on macOS, `Ctrl+Alt+Z` elsewhere) to hide
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
   Hovering the Exit Zen tab slides the topbar back, and it stays while one of its

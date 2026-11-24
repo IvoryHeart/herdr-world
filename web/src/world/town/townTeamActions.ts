@@ -50,6 +50,8 @@ export type TownMenuEntry = {
   key: string;
   label: string;
   detail: string;
+  /** The runtime icon before the label (TownRuntimeIcon.tsx). */
+  runtime?: { kind: "herdr" | "herdr-core"; tag: string };
   onChoose(): void;
 };
 
