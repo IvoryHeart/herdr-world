@@ -39,6 +39,37 @@ type Run = {
   }>;
 };
 
+/**
+ * The ci.yml job and steps that check the description before choosing the scope.
+ * @internal
+ */
+export const SCOPE_JOB = "Validation scope";
+/** @internal */
+export const DESCRIPTION_STEP = "Check PR description";
+/** @internal */
+export const SCOPE_STEP = "Determine validation scope";
+
+/**
+ * The run failed only because `check:pr-body` rejected the description: the
+ * scope job failed at the description step and never chose a scope, so every
+ * code job was skipped and only the report jobs failed after it.
+ */
+function descriptionOnlyFailure(run: Run, jobs: Job[]): boolean {
+  if (run.conclusion !== "failure") return false;
+  const scope = jobs.filter(({ name }) => name === SCOPE_JOB);
+  if (scope.length !== 1) return false;
+  const [job] = scope;
+  const step = (name: string) =>
+    job.steps.find((step) => step.name === name)?.conclusion;
+  return (
+    job.run_id === run.id &&
+    job.run_attempt === run.run_attempt &&
+    job.conclusion === "failure" &&
+    step(DESCRIPTION_STEP) === "failure" &&
+    step(SCOPE_STEP) === "skipped"
+  );
+}
+
 /** Reuse passing full or identically selected scoped evidence on this exact PR/base/head. */
 export async function canReuseFullCheck(
   runs: Run[],
@@ -64,6 +95,11 @@ export async function canReuseFullCheck(
       )
     )
       continue;
+    const jobs =
+      run.conclusion === "success" ? undefined : await jobsForRun(run.id);
+    // A run stopped by its PR description tested no code, so it does not hide
+    // older evidence; a correction to the description can still reuse it.
+    if (jobs && descriptionOnlyFailure(run, jobs)) continue;
     // A failed or unfinished candidate may have no aggregate job at all.
     // Its workflow result is still a barrier to older passing evidence.
     if (run.conclusion !== "success") return false;

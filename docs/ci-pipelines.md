@@ -64,14 +64,18 @@ results pass. Reuse compares every selection field, including ordered test array
 (the order determines shards), and requires the scoped acceptance step to pass.
 A reused result is never fresh evidence. Default leaf checkouts retain the
 original event's `GITHUB_SHA`. A newer failed or cancelled candidate prevents
-reuse of an older success, even when its Delivery job was never created. A
+reuse of an older success, even when its Delivery job was never created. The
+one exception is a run whose Validation scope job failed at the description
+check before choosing a scope: it tested no code, so correcting the description
+still reuses the older result. A
 matching workflow must have succeeded before its job proof is considered;
 unfinished or other unsuccessful runs also fail closed. Missing, ambiguous or
 expired logs and API errors
 fall back to fresh validation for the current scope.
 The release-preview label can therefore request archives without repeating a
 successful applicable check. Other label changes still create workflow runs, but can
-take this same short path.
+take this same short path. A title or description edit rebuilds no preview
+archives; a new commit, a base change or a label does.
 
 A closed or merged PR starts no CI work. GitHub still creates a run for its
 edit or label, but Validation scope requires an open PR and every other job

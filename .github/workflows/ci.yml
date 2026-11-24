@@ -350,9 +350,11 @@ jobs:
                   if [ "$PACKAGING" = true ]; then expected=success; fi
                   test "$INSTALLER_RESULT" = "$expected"
 
+    # A title or description edit rebuilds no preview; a new commit, a new base
+    # or adding a label still does.
     release-preview:
         name: Downloadable preview (${{ matrix.platform }})
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview') && (github.event.action != 'edited' || github.event.changes.base)
         needs: delivery
         # Keep in step with Release's package job so previews predict its checks.
         runs-on: ubuntu-26.04
@@ -393,7 +395,7 @@ jobs:
 
     npm-preview:
         name: Downloadable npm preview
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview') && (github.event.action != 'edited' || github.event.changes.base)
         needs: [delivery, release-preview]
         runs-on: ubuntu-latest
         timeout-minutes: 15
@@ -439,7 +441,7 @@ jobs:
 
     homebrew-preview:
         name: Downloadable Homebrew preview
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview') && (github.event.action != 'edited' || github.event.changes.base)
         needs: [delivery, release-preview]
         runs-on: ubuntu-latest
         timeout-minutes: 10

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { DESCRIPTION_STEP, SCOPE_JOB, SCOPE_STEP } from "./ci-reuse-full-check";
 import {
   worldBrowserShards,
   worldLatencyTrendSuites,
@@ -446,6 +447,31 @@ test("labeled release PRs offer six downloadable previews without publishing", (
       step.uses?.includes("actions/upload-artifact"),
     ),
   ).toBe(true);
+});
+
+test("a title or description edit rebuilds no preview; commits, base changes and labels still do", () => {
+  const condition =
+    "github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview') && (github.event.action != 'edited' || github.event.changes.base)";
+  for (const name of ["release-preview", "npm-preview", "homebrew-preview"])
+    expect(workflow.jobs[name]!.if).toBe(condition);
+});
+
+test("reuse recognises a description-only failure by the scope job's real names", () => {
+  const scope = workflow.jobs["validation-scope"];
+  expect(scope.name).toBe(SCOPE_JOB);
+  const names = scope.steps.map((step) => step.name);
+  // The description is checked before, and stops, the scope decision.
+  expect(names.indexOf(DESCRIPTION_STEP)).toBeGreaterThanOrEqual(0);
+  expect(names.indexOf(SCOPE_STEP)).toBeGreaterThan(
+    names.indexOf(DESCRIPTION_STEP),
+  );
+  const description = scope.steps.find(
+    (step) => step.name === DESCRIPTION_STEP,
+  )!;
+  expect(description["continue-on-error"]).toBeUndefined();
+  expect(
+    scope.steps.find((step) => step.name === SCOPE_STEP)!.if,
+  ).toBeUndefined();
 });
 
 test("protected launchd reports require native work on the existing installer runners", async () => {

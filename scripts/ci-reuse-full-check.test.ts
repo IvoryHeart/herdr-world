@@ -265,6 +265,86 @@ test("a newer failed full gate cannot be hidden by an older success", async () =
   expect(await verify([run(4)], {})).toBe(false);
 });
 
+const scopeJob = (description: string, scope: string, result = "failure") => ({
+  id: 8,
+  run_attempt: 1,
+  name: "Validation scope",
+  conclusion: result,
+  steps: [
+    { name: "Check PR description", conclusion: description },
+    { name: "Determine validation scope", conclusion: scope },
+  ],
+});
+
+test("a run stopped by its description does not hide older code evidence", async () => {
+  // Green code, then a description check failure, then a corrected description.
+  const stopped = {
+    3: [scopeJob("failure", "skipped"), job("failure", "failure")],
+  };
+  expect(
+    await verify([run(4), run(3, base, "failure"), run(2)], {
+      ...stopped,
+      2: [job("success")],
+    }),
+  ).toBe(true);
+  expect(
+    await selectValidationMode("edited", false, () =>
+      verify([run(4), run(3, base, "failure"), run(2)], {
+        ...stopped,
+        2: [job("success")],
+      }),
+    ),
+  ).toBe("reuse");
+  // Without older evidence the correction validates afresh.
+  expect(await verify([run(4), run(3, base, "failure")], stopped)).toBe(false);
+  // An older code failure stays a barrier behind the description failure.
+  expect(
+    await verify(
+      [run(4), run(3, base, "failure"), run(2, base, "failure"), run(1)],
+      {
+        ...stopped,
+        2: [
+          scopeJob("success", "success", "success"),
+          job("failure", "failure"),
+        ],
+        1: [job("success")],
+      },
+    ),
+  ).toBe(false);
+});
+
+test("only a description failure that chose no scope is passed over", async () => {
+  const older = { 2: [job("success")] };
+  const barrier = (
+    jobs: ReturnType<typeof scopeJob>[],
+    conclusion: string | null = "failure",
+  ) =>
+    verify([run(4), run(3, base, conclusion), run(2)], { 3: jobs, ...older });
+  // Code jobs failed after a passing description and scope.
+  expect(await barrier([scopeJob("success", "success", "success")])).toBe(
+    false,
+  );
+  // The scope step itself failed.
+  expect(await barrier([scopeJob("success", "failure")])).toBe(false);
+  // The scope was chosen despite a failed description step.
+  expect(await barrier([scopeJob("failure", "success")])).toBe(false);
+  // Unfinished or cancelled runs, and ambiguous or stale scope jobs.
+  expect(await barrier([scopeJob("failure", "skipped")], null)).toBe(false);
+  expect(await barrier([scopeJob("failure", "skipped")], "cancelled")).toBe(
+    false,
+  );
+  expect(await barrier([])).toBe(false);
+  expect(
+    await barrier([
+      scopeJob("failure", "skipped"),
+      scopeJob("failure", "skipped"),
+    ]),
+  ).toBe(false);
+  expect(
+    await barrier([{ ...scopeJob("failure", "skipped"), run_attempt: 2 }]),
+  ).toBe(false);
+});
+
 test("documentation scope follows the PR diff and includes nested Markdown", () => {
   const root = mkdtempSync(join(tmpdir(), "ci-doc-scope-"));
   const git = (...args: string[]) =>
