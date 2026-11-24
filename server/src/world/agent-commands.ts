@@ -260,3 +260,14 @@ export function createAgentCommands(deps: Deps) {
 }
 
 export type AgentCommands = ReturnType<typeof createAgentCommands>;
+
+export function runAgentCommand(
+  service: AgentCommands | undefined,
+  command: string,
+  params: Record<string, unknown>,
+  recheck: () => void,
+) {
+  if (!service)
+    throw new CliError("unavailable", "World agent commands are unavailable");
+  return service.call(command, params, recheck);
+}

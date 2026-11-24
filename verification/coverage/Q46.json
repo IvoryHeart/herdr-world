@@ -27,7 +27,8 @@
     "server/src/sources/actions.test.ts",
     "server/src/world/agent-commands.test.ts",
     "server/src/cli/world-agents.test.ts",
-    "server/src/herdr-core/agent-cli.test.ts"
+    "server/src/herdr-core/agent-cli.test.ts",
+    "server/src/service/host-connections.test.ts"
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
   "technique": "direct-exhaustive-policy",
@@ -60,7 +61,8 @@
       "server/src/service/world-service.test.ts",
       "server/src/world/agent-commands.test.ts",
       "server/src/cli/world-agents.test.ts",
-      "server/src/herdr-core/agent-cli.test.ts"
+      "server/src/herdr-core/agent-cli.test.ts",
+      "server/src/service/host-connections.test.ts"
     ],
     "checks": ["bun run test server/src/verbs/"],
     "review": "Merged protocol design is not implementation acceptance. Independent PR review and selected CI remain required."
@@ -82,12 +84,14 @@
       "contract": "openspec/changes/world-agent-cli/design.md",
       "owners": [
         "server/src/world/agent-commands.ts",
-        "server/src/cli/world-agents.ts"
+        "server/src/cli/world-agents.ts",
+        "server/src/service/agent-commands.ts"
       ],
       "tests": [
         "server/src/world/agent-commands.test.ts",
         "server/src/cli/world-agents.test.ts",
-        "server/src/herdr-core/agent-cli.test.ts"
+        "server/src/herdr-core/agent-cli.test.ts",
+        "server/src/service/host-connections.test.ts"
       ]
     }
   ],

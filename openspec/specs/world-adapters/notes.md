@@ -14,6 +14,7 @@
 - `server/src/cli/world-agents.test.ts`
 - `server/src/world/world-cli-service.ts`
 - `server/src/service/world-service.ts`
+- `server/src/service/agent-commands.ts`
 - `server/src/herdr-core/host-runtime.ts`
 - `server/src/herdr-core/agent-cli.test.ts`
 - `server/src/adapters/runtime-ports.ts`

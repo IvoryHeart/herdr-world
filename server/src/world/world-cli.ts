@@ -1,4 +1,4 @@
-import type { AgentCommands } from "./agent-commands";
+import { runAgentCommand, type AgentCommands } from "./agent-commands";
 import { runBoardElementCommand } from "./world-cli-elements";
 import { planBoardPatch } from "./board-plan";
 import type { MemoryAction } from "../../../shared/memory";
@@ -75,14 +75,9 @@ import {
   type ResultStatus,
   type LedgerStore,
 } from "./world-ledger";
-/**
- * The World service's side of the `herdr-world` agent CLI (cli/world.ts).
- * Agents change World objects themselves: Board cards and colours, desk order
- * in Town, spawn claims, questions for the owner and task results. Every
- * Board change is recorded with its actor and time and can be conditionally
- * undone. Groups retain bounded recent attribution, separate from Board undo. Herdr changes need `herdr: true` and cannot be undone by World.
- * Nothing here merges, deletes Herdr objects or reaches outside World.
- */
+/** World CLI: typed runtime reads and attributed World changes.
+ * Board changes retain conditional undo; Groups retain bounded attribution.
+ * Native Herdr changes need `herdr: true` and cannot be undone here. */
 export type WorldCliDeps = {
   agents?: AgentCommands;
   memory?(
@@ -619,14 +614,8 @@ export function createWorldCli(deps: WorldCliDeps) {
     host: CliHost | undefined,
     recheck: () => void,
   ): Promise<unknown> {
-    if (command === "runtime ls" || command.startsWith("agent ")) {
-      if (!deps.agents)
-        throw new CliError(
-          "unavailable",
-          "World agent commands are unavailable",
-        );
-      return deps.agents.call(command, params, recheck);
-    }
+    if (command === "runtime ls" || command.startsWith("agent "))
+      return runAgentCommand(deps.agents, command, params, recheck);
     if (command.startsWith("memory "))
       return runMemoryCli(deps.memory, command, params, recheck);
     const record = recordWithDeps.bind(null, completion);

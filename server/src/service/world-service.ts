@@ -1,6 +1,4 @@
-import { createAgentCommands } from "../world/agent-commands";
-import { productionAdapterDescriptors } from "../adapters/registry";
-import { CORE_AGENT_CAPABILITIES } from "../herdr-core/host-runtime";
+import { composeAgentCommands } from "./agent-commands";
 import { composeBoardData } from "./board-element-sources";
 import { weatherCliHandler } from "../weather/cli";
 import { composeFeatures } from "../features/compose";
@@ -265,38 +263,12 @@ async function compose(
     alertConnectionId: () => ownerAlert(),
     ledger: () => storage.ledger(),
   });
-  const agentCommands = createAgentCommands({
-    snapshot: async () => {
-      if (!worldSnapshots)
-        throw new Error("World snapshot service is unavailable");
-      return worldSnapshots.snapshot({});
-    },
-    capabilities: (kind) =>
-      kind === "herdr-core"
-        ? CORE_AGENT_CAPABILITIES
-        : productionAdapterDescriptors().find(
-            (descriptor) => descriptor.kind === kind,
-          )?.agentCommands,
-    lease: (id) => {
-      if (core.manager.has(id)) {
-        const lease = core.manager.readyRuntimeLease(id);
-        return (
-          lease && {
-            ...lease,
-            get operations() {
-              return coreRpc.hostRuntime(lease).operations;
-            },
-            version: lease.runtime.core.version,
-          }
-        );
-      }
-      if (!connectionManager.has(id)) return null;
-      const lease = connectionManager.readyRuntimeLease(id);
-      return lease && { ...lease, operations: lease.runtime.operations };
-    },
-  });
   const worldCli = createWorldCliService({
-    agents: agentCommands,
+    agents: composeAgentCommands({
+      connections: () => connectionManager,
+      core: () => coreRpc,
+      snapshots: () => worldSnapshots,
+    }),
     elements: boardElements,
     peers: askPeers.peers,
     homeName: askPeers.homeName,
