@@ -58,7 +58,7 @@
 - Relative paths resolve against the cwd recorded for that call, never the latest one.
 - The creator room is first-seen in memory per transcript; after a service restart a moved agent's artefact takes its current room.
 - Gone makers come from Apartments' residents (newest 40 per host); an agent World never saw run leaves nothing.
-- The Library opens on a host while a live agent with memory support runs there, or while its shelf holds something made. Up to four hosts without memory have their shelves read (once a minute at most) so every entry point knows; a fifth is not offered until it has a memory agent.
+- The Library opens on a host while a live agent with memory support runs there, or while its shelf holds something made. Every host without memory has its shelf read (once a minute at most, four hosts at a time) so every entry point knows.
 - Remote hosts and links are never probed, so their presence is unknown, not gone.
 - Apartments records a gone maker's room by label. The shelf names the one room with that label now; when none or several have it, the room is unknown and the row shows the label as it was.
 - A view that asks for a fresh shelf is owed one read when the minute is up, so Chat's finished turn shows what it made without another change.

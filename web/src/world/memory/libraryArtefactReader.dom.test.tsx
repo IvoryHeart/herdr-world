@@ -348,4 +348,75 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
     setArtefactShelfClientForTests(null);
     setMemoryClientForTests(null);
   });
+
+  test("every host without memory has its shelf read, a few at a time", async () => {
+    await domWindow();
+    const React = await import("react");
+    const { act } = React;
+    const { createRoot } = await import("react-dom/client");
+    const { useMemoryHostPublisher, libraryAvailable } = await import(
+      "./memoryTargets"
+    );
+    const { libraryHosts, publishMemoryHosts } = await import("./memoryClient");
+    const { setArtefactShelfClientForTests } = await import(
+      "./artefactShelfClient"
+    );
+    type WorldObject = import("../worldObject").WorldObject;
+
+    // Five connected hosts, no agent anywhere; only the fifth made a report.
+    const world = {
+      hosts: ["c1", "c2", "c3", "c4", "c5"].map((id) => ({
+        connectionId: id,
+        connection: { generation: 1 },
+        label: id,
+        stale: false,
+        actionable: true,
+      })),
+      leaves: [],
+    } as unknown as WorldObject;
+    const read: string[] = [];
+    let running = 0;
+    let most = 0;
+    setArtefactShelfClientForTests({
+      list: async (target) => {
+        read.push(target.connection_id);
+        running += 1;
+        most = Math.max(most, running);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        running -= 1;
+        return {
+          connection_id: target.connection_id,
+          connection_generation: target.connection_generation,
+          observed_at: 1,
+          artefacts:
+            target.connection_id === "c5"
+              ? [{ id: "artefact-report" } as never]
+              : [],
+          truncated: false,
+        };
+      },
+      read: () => Promise.reject(new Error("unused")),
+    });
+    function Publisher() {
+      useMemoryHostPublisher(world);
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    await act(async () => root.render(<Publisher />));
+    for (let index = 0; index < 10 && read.length < 5; index++)
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(read.sort()).toEqual(["c1", "c2", "c3", "c4", "c5"]);
+    expect(most).toBeLessThanOrEqual(4);
+    expect(libraryHosts().map((one) => one.connection_id)).toEqual(["c5"]);
+    expect(libraryAvailable(world, { connectionId: "c5" })).toBe(true);
+
+    await act(async () => root.unmount());
+    publishMemoryHosts([]);
+    setArtefactShelfClientForTests(null);
+  });
 }

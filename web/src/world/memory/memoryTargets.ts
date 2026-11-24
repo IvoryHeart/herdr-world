@@ -15,8 +15,8 @@ import {
 } from "./memoryClient";
 import { requestArtefactShelf } from "./artefactShelfClient";
 
-/** Memory-less hosts whose shelves are read to see if they hold anything. */
-const SHELF_HOSTS = 4;
+/** Shelves of memory-less hosts read at once; the rest wait their turn. */
+const SHELF_READS = 4;
 
 /**
  * The hosts the Library (#1027) may read: live connections World observes
@@ -53,9 +53,9 @@ export function memoryHostsOf(world: WorldObject): MemoryHostTarget[] {
 
 /**
  * Keep the Library's host list current with World's (WorldControlPlane),
- * and read the "Made by agents" shelf of the first few hosts without
- * memory, again as one loses its last memory agent, so every view knows
- * whether the Library has something there (#1342).
+ * and read the "Made by agents" shelf of every host without memory, again
+ * as one loses its last memory agent, so every view knows whether the
+ * Library has something there (#1342). Only a few are read at once.
  */
 export function useMemoryHostPublisher(world: WorldObject) {
   const published = useMemo(() => memoryHostsOf(world), [world]);
@@ -63,14 +63,40 @@ export function useMemoryHostPublisher(world: WorldObject) {
     publishMemoryHosts(published);
   }, [published]);
   // The testing switch's synthetic host stands in for World's.
-  const bare = (memoryFixtureOn() ? memoryHosts() : published)
-    .filter((host) => !hostHasMemory(host))
-    .slice(0, SHELF_HOSTS);
+  const bare = (memoryFixtureOn() ? memoryHosts() : published).filter(
+    (host) => !hostHasMemory(host),
+  );
   const bareKeys = bare.map(memoryTargetKey).join("\n");
   useEffect(() => {
-    for (const host of bare) void requestArtefactShelf(host);
+    let stopped = false;
+    void readInTurn(bare, requestArtefactShelf, () => stopped);
+    return () => {
+      stopped = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bareKeys]);
+}
+
+/**
+ * Read every host's shelf, at most `limit` at a time, in order; once
+ * `stopped` says so (the host list changed) no further read starts.
+ */
+async function readInTurn<T>(
+  hosts: readonly T[],
+  read: (host: T) => Promise<unknown>,
+  stopped: () => boolean,
+  limit = SHELF_READS,
+) {
+  let next = 0;
+  const reader = async () => {
+    while (next < hosts.length && !stopped()) {
+      const host = hosts[next++] as T;
+      await read(host).catch(() => undefined);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(limit, hosts.length) }, reader),
+  );
 }
 
 /** Capability follows current readers, including supported readers with no files yet. */
