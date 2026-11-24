@@ -46,7 +46,6 @@ import {
   TownCenterSign,
   type TownCenterAction,
 } from "./TownCenterMenu";
-import { withBuildingsAction } from "./townCenterBuildings";
 import { TownScene } from "./scene/townScene";
 import { holdTownReflowOnInput } from "./townSceneInput";
 import { sharedTownJoinSeats, type TownJoinSeats } from "./townJoinSeats";
@@ -982,7 +981,7 @@ export function TownCanvas({
       />
       {ring.open && lens.ringActions ? (
         <TownCenterMenu
-          actions={withBuildingsAction(lens.ringActions, places)}
+          actions={lens.ringActions}
           viewportWidth={hostRef.current?.clientWidth ?? 0}
           place={ring.place}
           onClose={ring.close}

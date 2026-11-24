@@ -1261,6 +1261,7 @@
       "web/src/world/town/AnswerDeliveries.tsx#AnswerDeliveryCard",
       "web/src/world/town/AnswerDeliveries.tsx#answerDeliveryLabel",
       "web/src/world/town/TownCenterMenu.tsx#townCenterAngle",
+      "web/src/world/town/TownCenterMenu.tsx#townCenterRing",
       "web/src/world/town/TownEdgeLayer.tsx#TownEdgeArrows",
       "web/src/world/town/TownEdgeLayer.tsx#TownNextLabel",
       "web/src/world/town/TownFocus.tsx#useFocusRecap",

@@ -6,11 +6,7 @@
 
 import { useRef, useState, type RefObject } from "react";
 import { townCenterEmblem, type TownCenterLot } from "./townCenter";
-import {
-  placeTownCenterMenu,
-  townCenterMenuPoint,
-  type TownCenterStep,
-} from "./TownCenterMenu";
+import { placeTownCenterMenu, townCenterMenuPoint } from "./TownCenterMenu";
 import { TOWN_TILE } from "./townLayout";
 import type { TownRendererHandle } from "./townRenderer";
 
@@ -24,28 +20,16 @@ export function useTownCenterRing(
 ) {
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLElement | null>(null);
-  /** The entries that opened the rings after the first (TownCenterMenu). */
-  const steps = useRef<readonly TownCenterStep[]>([]);
   const emblem = () => townCenterEmblem(center(), TOWN_TILE);
-  /**
-   * The ring follows the center's doors on screen as the camera moves; a
-   * later ring sits on the entry that opened it.
-   */
-  const place = (element = menu.current, along = steps.current) => {
+  /** The ring follows the center's doors on screen as the camera moves. */
+  const place = (element = menu.current) => {
     const renderer = rendererRef.current;
     const host = hostRef.current;
     if (!element || !renderer || !host) return;
     menu.current = element;
-    steps.current = along;
     const at = emblem();
     const point = renderer.camera.toScreen(at.x, at.y);
-    placeTownCenterMenu(
-      element,
-      point,
-      host.clientWidth,
-      host.clientHeight,
-      along,
-    );
+    placeTownCenterMenu(element, point, host.clientWidth, host.clientHeight);
   };
   /** Keyboard focus on the plaque pans an off-screen center into view. */
   const focus = () => {
@@ -89,7 +73,6 @@ export function useTownCenterRing(
   };
   const close = () => {
     menu.current = null;
-    steps.current = [];
     setOpen(false);
   };
   /** Stable across renders, for handlers registered once. */

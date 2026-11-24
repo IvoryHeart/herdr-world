@@ -1,11 +1,9 @@
+import { libraryAvailable } from "../memory/memoryTargets";
 /**
  * The town center's actions (TownCenterMenu.tsx), each reusing what World
  * already has: the agent launcher and profiles, the Town master's chat,
- * Focus, the Town summary and room creation. Places with a building (Needs
- * you's post office, the Library, Apartments…) are not here: Town adds one
- * **Buildings** entry for them (townCenterBuildings.ts, #1261). Board's hub
- * beside the bin (board/BoardHub.tsx) offers these actions and some places,
- * built by the same helpers.
+ * Needs you, the Town summary, the Library and room creation. Board's hub beside the bin
+ * (board/BoardHub.tsx) offers the same actions, built by the same helpers.
  */
 
 import {
@@ -31,6 +29,7 @@ import type {
   OfficeAgent,
 } from "../herdrOfficeProjection";
 import { openApartments } from "../apartments/apartmentsStore";
+import { useApartments } from "../apartments/useApartments";
 import {
   type MemoryLibraryRequest,
   openMemoryLibrary,
@@ -94,7 +93,7 @@ export function useTownCenter(
     /** The room in view: a new agent starts there when it can. */
     selectedRoomKey: string | null;
     townRoomActions: RoomActions;
-    townSummary: { open(): void };
+    townSummary: { summary: { counts: { needsYou: number } }; open(): void };
     openChat(agentKey: string, focus?: boolean): void;
   },
   toast: (kind: "ok" | "error", text: string) => void,
@@ -103,8 +102,9 @@ export function useTownCenter(
   const holder = useAgentProfiles().document?.town_master ?? null;
   useTownMaster(world, holder, mobile, (key) => openChat(key, false));
   const focus = useFocusClock();
+  const residents = useApartments().residents.length;
   return townCenterActions({
-    focusing: !!focus.left,
+    focusLeft: focus.left,
     world,
     office,
     holder,
@@ -113,6 +113,7 @@ export function useTownCenter(
     summary,
     openChat,
     toast,
+    residents,
   });
 }
 
@@ -126,7 +127,8 @@ export function townCenterActions({
   summary,
   openChat,
   toast,
-  focusing = false,
+  focusLeft = null,
+  residents,
 }: {
   world: Pick<WorldObject, "leaves">;
   office: Pick<HerdrOfficeProjection, "rooms" | "roster">;
@@ -134,14 +136,13 @@ export function townCenterActions({
   holder: { connection_id: string; terminal_id: string } | null;
   selectedRoomKey: string | null;
   rooms: RoomActions;
-  summary: { open(): void };
+  summary: { summary: { counts: { needsYou: number } }; open(): void };
   openChat(agentKey: string): void;
   toast(kind: "ok" | "error", text: string): void;
-  /**
-   * Whether a focus session runs: Focus then reads "On". The ring shows no
-   * counts or numbers (#1261), so not its time left.
-   */
-  focusing?: boolean;
+  /** A running focus session's time left ("18 m left"), else null. */
+  focusLeft?: string | null;
+  /** Apartments' residents, shown on its medallion. */
+  residents?: number;
 }): TownCenterAction[] {
   const launchRoom =
     selectedRoomKey && rooms.canCreateSeat(selectedRoomKey)
@@ -164,9 +165,12 @@ export function townCenterActions({
       openChat,
       toast,
     }),
-    focusAction(focusing ? "On" : null),
+    needsYouAction(summary.summary.counts.needsYou),
+    focusAction(focusLeft),
     summaryAction(() => summary.open()),
     profilesAction(),
+    apartmentsAction(residents),
+    ...(libraryAvailable(world) ? [libraryAction()] : []),
     {
       id: "room",
       label: "New room",

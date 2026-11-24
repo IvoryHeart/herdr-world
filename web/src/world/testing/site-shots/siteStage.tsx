@@ -7,20 +7,11 @@
  * when called, after the page has seeded Math.random.
  */
 import { useState } from "react";
-import {
-  ClipboardList,
-  Crown,
-  DoorOpen,
-  Headphones,
-  Shirt,
-  UserPlus,
-} from "lucide-react";
 import { bridge } from "../../../api";
 import type { ConnectionClient } from "../../../connectionClient";
 import { BoardDocumentStore } from "../../board/boardDocument";
 import type { TownQuietMarks } from "../../town/TownBoard";
 import { TownCanvas, type TownRoomActions } from "../../town/TownCanvas";
-import type { TownCenterAction } from "../../town/TownCenterMenu";
 import {
   createTownBuildings,
   type TownRuntime,
@@ -158,25 +149,6 @@ export function siteTownScene(now = Date.now(), { runtimes = false } = {}) {
   return { world, projection, summary };
 }
 
-/**
- * The town center ring's first-ring actions (useTownCenter.ts), inert: the
- * help picture of the ring (#1261). Town adds Lenses and Buildings.
- */
-const centerActions: TownCenterAction[] = [
-  {
-    id: "launch",
-    label: "New agent",
-    icon: UserPlus,
-    primary: true,
-    run: noAction,
-  },
-  { id: "master", label: "Town master", icon: Crown, run: noAction },
-  { id: "focus", label: "Focus", icon: Headphones, run: noAction },
-  { id: "summary", label: "Summary", icon: ClipboardList, run: noAction },
-  { id: "profiles", label: "Profiles", icon: Shirt, run: noAction },
-  { id: "room", label: "New room", icon: DoorOpen, run: noAction },
-];
-
 export function SiteTown({
   scene,
   quiet,
@@ -202,7 +174,6 @@ export function SiteTown({
       selectedRoomKey={null}
       observability={EMPTY_OFFICE_OBSERVABILITY}
       quiet={quiet}
-      centerActions={centerActions}
     />
   );
 }

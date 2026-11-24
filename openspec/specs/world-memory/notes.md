@@ -4,7 +4,7 @@
 
 **Surfaces:**
 
-- Town Library building, town center ring (**Buildings**), Board hub (**Memory**) and supported agent Settings open one Library.
+- Town Library building, town center ring, Board hub (**Memory**) and supported agent Settings open one Library.
 - Readers select host/project/agent; shelves support search, fresh reads and explicit revision-checked edits.
 - CLI memory list/search/read/create/update/delete shares the API; memory demo --json is synthetic.
 - TUI/core share adapters and host routing; Unix hosts need Python 3, Windows refuses.
@@ -87,7 +87,7 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   The [testing fixture](../../../docs/memory-api.md#discovery-and-load-evidence) includes
   OpenCode and an unsupported-only project, plus a no-capable-host switch.
 - Open it from Town's **library**, right of the town center on the first street,
-  from the town center's ring (**Buildings** → **Library**), from Board's hub (**Memory**, on the
+  from the town center's ring (**Library**), from Board's hub (**Memory**, on the
   selected agent or workspace), from an agent window's settings (**Memory**)
   or from Settings (**Agents** → **Library (memory)**, or search "memory").
   On a phone the library folds to a book sign on the town center's left wing.
