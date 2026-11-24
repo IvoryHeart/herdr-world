@@ -26,7 +26,7 @@ import {
   type VisualRouteAction,
   type VisualRouteActionTarget,
 } from "./visualRouteActions";
-import { WORLD_COMMAND_PLACEHOLDER, worldFindGroup } from "./worldCommandBox";
+import { WORLD_COMMAND_PLACEHOLDER } from "./worldCommandBox";
 import { focusWorldNode } from "./worldInspectorSelection";
 import { type WorldInspectorController } from "./useWorldInspectorController";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
@@ -427,13 +427,9 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
           }
         : undefined,
       captureKey: resolved.node && target ? JSON.stringify(target) : null,
-      // Choosing what the box found selects it, as clicking it in the view.
-      find: (search) =>
-        worldFindGroup(
-          world,
-          search,
-          (nodeId) => void shellActionContext.current.selectNode(nodeId),
-        ),
+      // The finds' second action selects one here, as clicking it in the
+      // view does; the finds themselves are the shell's (worldCommandBox).
+      showNode: (nodeId) => void shellActionContext.current.selectNode(nodeId),
       placeholder: WORLD_COMMAND_PLACEHOLDER,
       groups: [
         { heading: "Create", actions: creationActions },
