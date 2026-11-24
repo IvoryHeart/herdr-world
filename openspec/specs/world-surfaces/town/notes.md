@@ -27,26 +27,24 @@
 - `web/src/world/town/townObservatory.test.ts`
 - `web/src/world/usage/UsageLens.browser.tsx`
 - `web/src/world/TownView.tsx`
-- `web/src/world/town/TownCanvas.tsx`
+- `web/src/world/town/TownCanvas.tsx`; frames: `web/src/world/town/townWorldTransform.ts` (overlay, zoom readers), `web/src/world/town/townHostRect.ts`, `web/src/world/worldFrameScheduler.ts` (typing quiet)
 - `web/src/world/officePreferences.ts`
 - `web/src/browserStorage.ts`
 - `web/src/world/town/town.settings.tsx`
 - `web/src/world/town/townQuietWork.ts`
 - `web/src/world/town/useTownQuiet.ts`
 - `web/src/world/town/townRendererActors.ts`
-- `web/src/world/town/TownWorldLayer.tsx`
-- `web/src/world/town/TownStepBubble.tsx`
-- `web/src/world/town/TownBoard.tsx`
+- `web/src/world/town/TownWorldLayer.tsx`, `web/src/world/town/TownStepBubble.tsx`, `web/src/world/town/TownBoard.tsx`; plaques: `web/src/world/town/TownRoomPlaque.tsx`, `web/src/world/town/townPlaqueCard.ts` (one open card); runtime icons: `web/src/world/town/TownRuntimeIcon.tsx`, `web/src/world/town/TownRoomOverviewCard.tsx` (a room's overview card, its icon a press of its own), `web/src/world/town/townMoveMenu.ts` (menu words)
 - `web/src/world/town/townLayout.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
 - `server/src/world/observability.ts`
 
 **Tests:**
 
-- `web/src/world/town/TownCanvas.test.ts`
-- `web/src/world/town/TownCanvas.fold.test.ts`
+- `web/src/world/town/TownCanvas.test.ts`, `web/src/world/town/TownCanvas.fold.test.ts`
 - `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases)
 - `web/src/world/town/townReceptionFilter.test.ts`
-- `web/src/world/town/townQuietWork.test.ts`
+- `web/src/world/town/townQuietWork.test.ts`; plaques and top-row taps: `web/src/world/town/townRoomPlates.browser.ts` (TownCanvas `plates` cases)
+- Frames: `web/src/world/town/townWorldTransform.test.ts`, `web/src/world/worldFrameScheduler.test.ts`, `web/src/world/town/TownFrameBudget.browser.test.ts` (budget on the town-scale page)
 
 **Pitfalls:**
 
@@ -55,6 +53,8 @@
 - Pins and selection do not pull hidden desks across the fold boundary.
 - Moving rooms on the canvas is separate from moving native desks; see town-moves.
 - CLI desk pins/moves use their feature contracts, not canvas coordinates.
+- `--z`/`--iz` are not inherited: a rule reading them needs its class in `TOWN_ZOOM_READERS` (`:focus` rules: `TOWN_ZOOM_FOCUS_READERS`).
+  Never read layout inside a Town frame: use `townHostRect.ts`, or measure in a task of its own as `useTownEdgeNav.ts` does.
 - Quiet-agent data: `officePreferences.ts`/`town.settings.tsx` → `TownView.tsx` → `useTownQuiet.ts`; `townRendererActors.ts` stops typing.
   `TownWorldLayer.tsx`/`TownStepBubble.tsx` draw the hourglass and elapsed time; `TownBoard.tsx` draws the count under Busy.
 
@@ -71,11 +71,14 @@
   (`claude`); window and Inspector titles put the name first
   (`firstmate · claude`).
   - One machine is one building: this computer's Herdr TUI and herdr-core
-    rooms stand together under one sign, each room's nameplate naming its
-    runtime (**Herdr TUI** or **herdr-core**) and keeping its own controls,
+    rooms stand together under one sign, each room's plate showing its
+    runtime as a small icon before its name (a terminal window for **Herdr
+    TUI**, a diamond for **herdr-core**; hover, focus or tap it for the name;
+    the overview room cards show it too) and keeping its own controls,
     and every desk, agent and action stays on its own runtime's connection.
-    **Settings → Town & views → Town buildings → One per runtime** gives each
-    runtime its own building again (**One per machine** is the default).
+    **Settings → This World → Group runtimes → One per runtime** gives each
+    runtime its own building again (**One per machine** is the default); the
+    same setting groups World's navigator and Desk (`web/src/world/runtimeGrouping.ts`).
     Two Herdr TUI connections to the same socket (the startup default and a
     saved profile) show its rooms once, through the writable one.
   - The Town board counts the whole town, every building, in four one-word
@@ -741,8 +744,12 @@
     plates fit their room width; only the name truncates, with its full text in
     a tooltip. Colour, active/total agent count and blocked badge remain visible.
     Active means working or waiting on you; the total excludes plain terminals.
-    Hover the count for its working/waiting breakdown. Hover or focus a plate
-    (tap on touch screens) for its card below it: the Town board's numbers
+    Hover the count for its working/waiting breakdown. A plate stands just
+    above its room, outside the floor, so every agent of the top row stays
+    clickable. Click or tap a plate's title (or focus it and press Enter or
+    Space) for its card below it; hover and focus alone open nothing, and a
+    second click on the title, a press outside or Escape closes it. One card
+    is open at a time. The card holds the Town board's numbers
     for that room, without its agents list (Busy, Waiting, Done, Quiet,
     its agents, and its **Economy today**: estimated cost, tokens and models
     from [harness usage](../../../../docs/usage.md); without a price table it says

@@ -63,7 +63,7 @@ test("the seat mark stands above the room's plate and below an open card", () =>
   expect(mark).toBeLessThan(
     zIndex(
       "./townRoomPlaque.css",
-      ".town-room-plaque:is(:hover, :focus-within)",
+      ".town-room-plaque:is(:hover, :focus-within, .is-open)",
     ),
   );
 });

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://unpkg.com/knip@6.48.0/schema.json",
+  // Unsuffixed test/support entries are development-only; production mode negates
+  // them even inside production globs. Put nonstandard test helpers in testing/.
+  // Production exports used only by tests still count unless tagged @internal.
+  // Check entry exports too: adding an unused export to a CLI/worker must fail.
+  "includeEntryExports": true,
+  "workspaces": {
+    ".": {
+      // check-dead.ts spawns this CLI by its installed path, outside JS imports.
+      "ignoreDependencies": ["jscpd"],
+      // Scripts are executable tooling, even when invoked by shell/CI rather than JS.
+      "entry": [
+        "scripts/**/*.{ts,js,mjs}!",
+        "tools/**/*.{ts,js,mjs}!",
+        "**/*.{test,spec}.{ts,tsx,js,mjs}",
+        "**/testing/**/*.{ts,tsx,js,mjs}",
+        "**/*.{fixture,cases,browserMock}.{ts,tsx,js,mjs}"
+      ],
+      "project": [
+        "scripts/**/*.{ts,js,mjs}!",
+        "tools/**/*.{ts,js,mjs}!",
+        "shared/**/*.ts!"
+      ]
+    },
+    "server": {
+      // CLI subcommands and the storage worker can be launched indirectly.
+      // Feature register.ts -> index.gen.ts -> catalog follows generated imports;
+      // RPC strings reach handlers through service/rpc-dispatch.ts, not file names.
+      "entry": [
+        "src/index.ts!",
+        "src/cli/**/*.ts!",
+        "src/**/*worker.ts!",
+        "src/features/index.gen.ts!",
+        "src/**/*.{test,spec}.ts",
+        "src/**/testing/**/*.ts",
+        "src/**/*.{fixture,cases,browserMock}.ts"
+      ],
+      "project": ["src/**/*.ts!"]
+    },
+    "web": {
+      // CSS font URLs are outside Knip's JS graph (web/src/world/worldFonts.css).
+      "ignoreDependencies": [
+        "@fontsource/jetbrains-mono",
+        "@fontsource/pixelify-sans"
+      ],
+      // Vite alias replacement modules expose interfaces to dependency code.
+      "ignoreIssues": {
+        "src/shiki.ts": ["exports"],
+        "src/shikiWasm.ts": ["exports"],
+        "src/world/devtools/release.ts": ["exports", "types"]
+      },
+      // Vite reads HTML and worker URLs. Literal/lazy import() edges are followed.
+      "entry": [
+        "*.html!",
+        "src/main.tsx!",
+        "src/**/*worker.ts!",
+        "src/features/index.gen.ts!",
+        "vite.config.ts!",
+        "src/world/devtools/release.ts!",
+        "src/shiki.ts!",
+        "src/shikiWasm.ts!",
+        "src/**/*.{test,spec,browser}.{ts,tsx}",
+        "src/**/testing/**/*.{ts,tsx}",
+        "src/**/*.{fixture,cases,browserMock}.{ts,tsx}"
+      ],
+      "project": ["src/**/*.{ts,tsx}!", "vite.config.ts!", "!src/**/*.d.ts!"]
+    }
+  }
+}

@@ -6,14 +6,19 @@
 export interface UiSettingPush {
   key: string;
   value: unknown;
+  /** The service's commit order for UI settings (settings-rpc.ts). */
+  revision?: number;
 }
 
 export function parseUiSettingPush(value: unknown): UiSettingPush | null {
   if (!value || typeof value !== "object") return null;
   const push = value as Record<string, unknown>;
-  return typeof push.key === "string" && push.key.length > 0
-    ? { key: push.key, value: push.value ?? null }
-    : null;
+  if (typeof push.key !== "string" || push.key.length === 0) return null;
+  return {
+    key: push.key,
+    value: push.value ?? null,
+    ...(typeof push.revision === "number" ? { revision: push.revision } : {}),
+  };
 }
 
 /**

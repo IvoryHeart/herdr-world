@@ -28,7 +28,7 @@ import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
 import { TownZoomControls } from "./TownZoomControls";
-import { townDeskOpensAtOnce } from "./townOpen";
+import { townDeskCardOpens } from "./townOpen";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type {
   WorldCanvasAnchor,
@@ -55,6 +55,8 @@ import { TownHudContext, useTownHud } from "./useTownHud";
 import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { TownInteraction } from "./scene/townInteraction";
 import { townBrowserClock, townBrowserFrames } from "./townBrowserClock";
+import { TownHostRect } from "./townHostRect";
+import { TownWorldTransform } from "./townWorldTransform";
 import { townSummary, type TownSummary } from "./townSummary";
 import { townCalls } from "./TownRail";
 import {
@@ -77,6 +79,7 @@ import {
   NO_FOLDED_ACTIVITY,
   type TownFoldedActivity,
 } from "./townFoldedActivity";
+import { townPlaqueCard } from "./townPlaqueCard";
 import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
 import { TownBusLayer, useTownBin } from "./TownBusLayer";
@@ -371,13 +374,15 @@ export function TownCanvas({
     rendererRef,
   );
   const anchorFrame = useRef<(() => void) | null>(null);
+  const hostRect = useRef<TownHostRect | null>(null);
+  const world = useRef<TownWorldTransform | null>(null);
   const reportAnchors = () => {
     const { onAnchorChange: report, onSelectedAnchorChange: reportSelected } =
       latest.current;
     const renderer = rendererRef.current;
     const host = hostRef.current;
     if ((!report && !reportSelected) || !renderer || !host) return;
-    const rect = host.getBoundingClientRect();
+    const rect = (hostRect.current ??= new TownHostRect(host)).get();
     const { model: m, layout: l } = latest.current;
     const worldAnchor = (key: string | null): WorldCanvasAnchors => {
       const at = townWorldAnchor(key, m, l, (agentKey) =>
@@ -454,9 +459,8 @@ export function TownCanvas({
     if (layer) {
       const tx = camera.viewport.width / 2 - camera.x * camera.z;
       const ty = camera.viewport.height / 2 - camera.y * camera.z;
-      layer.style.transform = `translate(${tx}px, ${ty}px) scale(${camera.z})`;
-      layer.style.setProperty("--z", String(camera.z));
-      layer.style.setProperty("--iz", String(1 / camera.z));
+      world.current ??= new TownWorldTransform(layer, townBrowserClock);
+      world.current.place(tx, ty, camera.z);
       boards.place(camera.z, latest.current.layout);
       if (levelRef.current !== level) {
         levelRef.current = level;
@@ -476,9 +480,9 @@ export function TownCanvas({
     ring.place();
     edge.frameArrows(camera, level);
     // Inspected agents walk under a still camera, so their lines follow every
-    // drawn frame. World keeps unchanged anchors, so idle frames commit nothing.
-    if (posed || latest.current.conversationTargets.length > 0)
-      scheduleAnchors();
+    // drawn frame, in it. World keeps unchanged anchors: idle frames commit
+    // nothing.
+    if (posed || latest.current.conversationTargets.length > 0) reportAnchors();
   };
   const onFrameRef = useRef(onFrame);
   onFrameRef.current = onFrame;
@@ -495,6 +499,7 @@ export function TownCanvas({
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer || !hostRef.current) return;
+    hostRect.current?.invalidate();
     view.reframe(latest.current.layout, viewport(), (next) =>
       renderer.setViewport(next),
     );
@@ -582,6 +587,10 @@ export function TownCanvas({
       observer.disconnect();
       anchorFrame.current?.();
       anchorFrame.current = null;
+      hostRect.current?.dispose();
+      hostRect.current = null;
+      world.current?.dispose();
+      world.current = null;
       latest.current.onAnchorChange?.(null);
       latest.current.onSelectedAnchorChange?.(null);
       view.detach();
@@ -660,21 +669,15 @@ export function TownCanvas({
       tapCard: (deskKey) => {
         const { tappedDesk: open, model: m, projection: p } = latest.current;
         const roomKey = deskKey ? m.desks.get(deskKey)?.roomKey : undefined;
-        // Only a table drawn with its nameplate, and with no pane a tap
-        // opens at once (townDeskOpensAtOnce), has a card; a second tap on
-        // the same table does what a tap always did.
-        const opens =
-          deskKey !== null &&
-          deskKey !== open &&
-          !townDeskOpensAtOnce(p, deskKey) &&
-          !!roomKey &&
-          hud.visible.tagRooms.has(roomKey);
+        const shown = hud.visible.tagRooms;
+        const opens = townDeskCardOpens(p, deskKey, open, roomKey, shown);
         setTappedDesk(opens ? deskKey : null);
         return opens;
       },
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
       openReception: setOpenReception,
+      tapRoomName: townPlaqueCard.toggle,
       openCenter: ring.openRing,
       ...places.ports(document),
       move: (command) => {
