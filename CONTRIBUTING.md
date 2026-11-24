@@ -160,8 +160,10 @@ credentials and synthetic home usernames; changing it requires review. There
 is one narrow attribution rule: `DEPENDENCY_LICENSES.md` may reuse exact public
 email addresses already published in that file on `origin/main` before the push, preserving
 upstream licence attribution across dependency refreshes. New addresses require
-a reviewed allowlist change. All other privacy rules still apply there, and the
-same emails remain disallowed elsewhere. Package versions such as
+a reviewed allowlist change. The owner-approved Knip copyright exception in that
+allowlist permits one exact upstream address only in `DEPENDENCY_LICENSES.md`.
+All other privacy rules still apply there, and the same emails remain disallowed
+elsewhere. Package versions such as
 `react-dom@19.3.1.patch` are not emails. There are no whole-file exclusions or
 inline bypasses. Keep credentials, runtime state,
 `*.local.md` notes and owner-only material in gitignored paths; `research-local/`
@@ -242,7 +244,10 @@ checks for ordinary Markdown-only PR diffs, and reuses a successful full result,
 selection, on the exact PR, base and head for description edits and label changes. These
 metadata events queue behind active CI instead of cancelling it; missing proof
 falls back to fresh validation for the current scope. One scope decision feeds every platform job,
-and Delivery checks includes both macOS lifecycle results. See the
+and Delivery checks includes both macOS lifecycle results. Windows plugin assertions share the native installer
+runners. Main executes fresh checks; nightly adds six-platform upgrades, newest-core
+drift and latency; golden images remain quarantined to manual reports. Exact content-matched model evidence and native
+builds may be reused on PRs, with validated origin receipts; see the CI guide. See the
 [pipeline ownership guide](docs/ci-pipelines.md) for the job boundaries and
 failure diagnosis.
 
@@ -271,6 +276,12 @@ Published-release bugs add or extend a release-walk journey in the same PR as th
 fix. See the [release walk and escape rule](docs/release.md#real-runtime-release-walk),
 including the signed-in local run required before any release tag.
 
+The production boot journey is selected for web source changes even across Vite's
+build boundary. It loads release-built assets with an older browser profile and
+checks background/resume, reload offers and real worker activation. Protocol
+vectors retain sanitized runtime/harness evidence. The real agent-start/release
+walk is maintained by #1023; release-channel staging is a separate #1044 change.
+
 The agent-tooling exception from #484 still covers `scripts/agent/**` (the worktree
 helper), the agent development guide and `changes/<slug>.md`: static checks and affected
 unit tests, with the agent test inventory for uncovered modules. It skips heavy
@@ -280,7 +291,7 @@ tests. Executable workflows and gate configuration run all checks. Browser
 shard-table edits retain inventory tests and every browser suite without selecting
 native work or models. Model-free owners (including Q41's scripts) run affected
 consumers and `scripts/verification-coverage.test.ts`; changed model mappings
-still select verification. Main always runs every suite. Browser Chat changes can skip verification/platform work; server
+still select verification. Main always runs every suite fresh. Browser Chat changes can skip verification/platform work; server
 agent changes remain contract owners.
 
 `Delivery checks`, `Repository validation`, browser/behavioral aggregates

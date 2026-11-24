@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
   publishedAttributionFile,
+  reviewedAttributionEmails,
   reservedEmailDomain,
   syntheticCredential,
   syntheticHomeUsers,
@@ -194,7 +195,10 @@ export function scanPrivacyRange(
     main === after
       ? (before.find((revision) => revision !== after) ?? null)
       : main;
-  const publishedEmails = publishedAttribution(cwd, attributionBase);
+  const publishedEmails = new Set([
+    ...publishedAttribution(cwd, attributionBase),
+    ...reviewedAttributionEmails,
+  ]);
   for (const commit of commits) {
     const parents = git(cwd, ["rev-list", "--parents", "-n", "1", commit])
       .trim()

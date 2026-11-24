@@ -780,6 +780,8 @@ export default function App({
   presentedSpacesTabId,
   onSelectSpacesTab,
   onSpacesWindowLayerReady,
+  spacesSurface = null,
+  revealTerminal = 0,
   onInspectorVisibilityChange,
   onInspectorViewChange,
   onTerminalPopOut,
@@ -817,6 +819,18 @@ export default function App({
   presentedSpacesTabId?: string | null;
   onSelectSpacesTab?: (tabId: string) => void;
   onSpacesWindowLayerReady?: (element: HTMLDivElement | null) => void;
+  /**
+   * What Spaces shows in place of a Herdr TUI tab: a herdr-core terminal
+   * (#1329). A new key brings the phone to it from the list.
+   */
+  spacesSurface?: { key: string; content: ReactNode } | null;
+  /**
+   * Each new value reveals Spaces' terminal, as choosing a terminal does: an
+   * Inspector that would hide it (expanded, or any on a phone) closes and the
+   * phone leaves its list. World bumps it whenever a found or chosen terminal
+   * opens in Spaces, on any runtime (#1329).
+   */
+  revealTerminal?: number;
   onInspectorVisibilityChange?: (open: boolean) => void;
   onInspectorViewChange?: (view: InspectorView) => void;
   onTerminalPopOut?: () => void;
@@ -839,6 +853,7 @@ export default function App({
   const creationSources = useCreationSources();
   const hasWorkspaceSurface =
     workspaceSurface !== null && workspaceSurfaceVisible;
+  const spacesSurfaceShown = !hasWorkspaceSurface && spacesSurface !== null;
   const focusExplicitTab = useCallback(
     async (tabId: string) => {
       if (hasWorkspaceSurface && onWorkspaceSurfaceSelect) {
@@ -1668,6 +1683,14 @@ export default function App({
       });
     }
   }, [mobile, updateInspectorState]);
+  // A terminal World opens in Spaces shows, whatever Inspector was open
+  // over it: only a new request reveals, never a re-render or a resize.
+  const revealedTerminal = useRef(revealTerminal);
+  useEffect(() => {
+    if (revealTerminal === revealedTerminal.current) return;
+    revealedTerminal.current = revealTerminal;
+    activateTerminalSurface();
+  }, [revealTerminal, activateTerminalSurface]);
   const toggleSidebar = useCallback(() => {
     setMobileView("session");
     setSidebarHidden((value) => !value);
@@ -4162,6 +4185,8 @@ export default function App({
             extension={
               operationalShortcutsEnabled ? undefined : visualActionExtension
             }
+            // World's finds in every view, Spaces included (#1329).
+            find={visualActionExtension?.find}
             onOpenFileExplorer={openFileExplorer}
             onOpenFile={openFileExplorerFile}
             onOpenDiffViewer={openDiffViewer}
@@ -4705,23 +4730,25 @@ export default function App({
           <OperationalContext.Provider
             value={hasWorkspaceSurface ? workspaceSurfaceContext : null}
           >
-            <TabBar
-              key={`${hasWorkspaceSurface && workspaceSurfaceContext ? JSON.stringify(workspaceSurfaceContext) : resourceUiKey}:tabs`}
-              mobile={mobile}
-              inspectorOpen={
-                !hasWorkspaceSurface && inspectorState?.open === true
-              }
-              showInspector={!hasWorkspaceSurface}
-              annotationsOpen={annotationsOpen}
-              annotationCount={annotations.length}
-              onToggleInspector={toggleWorkspaceInspector}
-              onToggleAnnotations={toggleAnnotations}
-              onFocusSurface={onWorkspaceSurfaceSelect}
-              onSelectTab={
-                operationalShortcutsEnabled ? onSelectSpacesTab : undefined
-              }
-              tabColors={worldTabColors}
-            />
+            {spacesSurfaceShown ? null : (
+              <TabBar
+                key={`${hasWorkspaceSurface && workspaceSurfaceContext ? JSON.stringify(workspaceSurfaceContext) : resourceUiKey}:tabs`}
+                mobile={mobile}
+                inspectorOpen={
+                  !hasWorkspaceSurface && inspectorState?.open === true
+                }
+                showInspector={!hasWorkspaceSurface}
+                annotationsOpen={annotationsOpen}
+                annotationCount={annotations.length}
+                onToggleInspector={toggleWorkspaceInspector}
+                onToggleAnnotations={toggleAnnotations}
+                onFocusSurface={onWorkspaceSurfaceSelect}
+                onSelectTab={
+                  operationalShortcutsEnabled ? onSelectSpacesTab : undefined
+                }
+                tabColors={worldTabColors}
+              />
+            )}
           </OperationalContext.Provider>
           <div
             className={`workspace-surfaces ${annotationsDocked ? "has-annotations" : ""} ${assistantDocked ? "has-assistant" : ""}`}
@@ -4750,7 +4777,13 @@ export default function App({
                     {workspaceSurface}
                   </div>
                 ) : null}
+                {spacesSurfaceShown ? (
+                  <div className="spaces-surface-owner">
+                    {spacesSurface.content}
+                  </div>
+                ) : null}
                 {onSpacesWindowLayerReady &&
+                !spacesSurfaceShown &&
                 !hasWorkspaceSurface &&
                 terminalPresentation === "spaces" ? (
                   <div
@@ -4759,6 +4792,7 @@ export default function App({
                   />
                 ) : null}
                 {!hasWorkspaceSurface &&
+                !spacesSurfaceShown &&
                 terminalPresentation === "spaces" &&
                 (!focusedWorkspace || !activeSpacesTabId) ? (
                   <TerminalView
@@ -4775,6 +4809,7 @@ export default function App({
                   />
                 ) : null}
                 {!hasWorkspaceSurface &&
+                !spacesSurfaceShown &&
                 terminalPresentation === "spaces" &&
                 visibleSpacesTabWindows.length === 0 &&
                 !spacesWindowsSuspended &&

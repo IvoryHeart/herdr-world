@@ -195,10 +195,14 @@ const chatPane: Pane = {
 
 /** Shows or clears the quiet marks; set while the Town stage is mounted. */
 let setQuietShown: (shown: boolean) => void = noAction;
+/** Swaps in the town of two runtimes; set while the Town stage is mounted. */
+let setRuntimesShown: (shown: boolean) => void = noAction;
 
 function Stage() {
   const [quietShown, setShown] = useState(false);
   setQuietShown = setShown;
+  const [runtimesShown, setRuntimes] = useState(false);
+  setRuntimesShown = setRuntimes;
   if (scene === "board")
     return (
       <div style={{ position: "fixed", inset: 0, display: "flex" }}>
@@ -258,14 +262,41 @@ function Stage() {
       </div>
     );
   return (
-    <div className="town-stage" style={{ position: "fixed", inset: 0 }}>
+    // Town's view shell carries its colour tokens (townAsks.css), as the
+    // town center ring's medallions and labels read them.
+    <div
+      className="town-stage town-view-shell"
+      style={{ position: "fixed", inset: 0 }}
+    >
       <TownMasterFigure />
-      <SiteTown scene={town!} quiet={quietShown ? quiet! : undefined} />
+      {/* A fresh town for each scene, so the usual one is as at load. */}
+      <SiteTown
+        key={runtimesShown ? "runtimes" : "town"}
+        scene={runtimesShown ? runtimesTown! : town!}
+        quiet={quietShown ? quiet! : undefined}
+      />
     </div>
   );
 }
 
 const town = scene === "town" ? siteTownScene() : null;
+/**
+ * The same town with its two hosts as one machine's two runtimes, so room
+ * plaques carry runtime icons. Only the runtimes' own picture shows it
+ * (helpShots.show), so the other Town pictures stay as they were.
+ */
+const runtimesTown =
+  scene === "town" ? siteTownScene(undefined, { runtimes: true }) : null;
+let runtimesSwapped = false;
+
+/** Swaps the Town stage and waits until the new town has settled. */
+async function swapTown(runtimes: boolean) {
+  setRuntimesShown(runtimes);
+  runtimesSwapped = runtimes;
+  await frames(10);
+  while (!stats()?.ready) await frame();
+  await settle(12_000);
+}
 
 /**
  * Two working agents have gone quiet (useTownQuiet.ts), so the town board
@@ -349,6 +380,7 @@ const helpShots = {
       setQuietShown(true);
       await frames(20);
     }
+    if (control === "town.runtime" && runtimesTown) await swapTown(true);
     if (!onScreen(document.querySelector(`[data-help="${control}"]`))) {
       for (const selector of press) {
         const button = document.querySelector<HTMLElement>(selector);
@@ -381,6 +413,7 @@ const helpShots = {
     pressed = [];
     setQuietShown(false);
     await frames(20);
+    if (runtimesSwapped) await swapTown(false);
   },
 };
 

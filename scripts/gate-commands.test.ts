@@ -35,7 +35,7 @@ function exercise(
     writeFileSync(record, "");
     writeFileSync(
       join(directory, "bun"),
-      '#!/bin/sh\nprintf "%s\\n" "$*" >> "$GATE_COMMANDS"\nif [ "$2" = "$GATE_FAIL_ON" ]; then exit 37; fi\n',
+      '#!/bin/sh\nprintf "%s\\n" "$*" >> "$GATE_COMMANDS"\nif [ -n "$GATE_FAIL_ON" ] && { [ "$1" = "$GATE_FAIL_ON" ] || [ "$2" = "$GATE_FAIL_ON" ]; }; then exit 37; fi\n',
       { mode: 0o755 },
     );
     if (paths) {
@@ -49,6 +49,11 @@ function exercise(
         '{"schemaVersion":1}',
       );
       mkdirSync(join(directory, "scripts/agent"), { recursive: true });
+      if (paths.some((path) => path.startsWith("openspec/")))
+        writeFileSync(
+          join(directory, "scripts/openspec-feature-map.test.ts"),
+          "// runtime OpenSpec directory scan\n",
+        );
       writeFileSync(
         join(directory, "scripts/agent/example.ts"),
         "export const value = 1;\n",
@@ -155,6 +160,7 @@ test("the static lane retains all checks and builds production assets once", () 
   const commands = [
     "features:check",
     "notices:check",
+    "check:dead",
     "changelog:check",
     "check:size",
     "check:commit",
@@ -165,13 +171,44 @@ test("the static lane retains all checks and builds production assets once", () 
     "spec:check",
     "help:check",
   ].map((script) => `run ${script}`);
+  commands.push("scripts/check-knowledge-map-links.ts");
   expect(exercise(["scripts/check-delivery.ts", "--static"])).toEqual({
     status: 0,
     commands,
   });
   expect(
+    exercise(["scripts/check-delivery.ts", "--static"], "check:dead"),
+  ).toEqual({ status: 1, commands: commands.slice(0, 3) });
+  expect(
     exercise(["scripts/check-delivery.ts", "--static"], "typecheck:quick"),
-  ).toEqual({ status: 1, commands: commands.slice(0, 6) });
+  ).toEqual({ status: 1, commands: commands.slice(0, 7) });
+  expect(
+    exercise(
+      ["scripts/check-delivery.ts", "--static"],
+      "scripts/check-knowledge-map-links.ts",
+    ),
+  ).toEqual({ status: 1, commands });
+});
+
+test.each([
+  "openspec/changes/example/specs/example/spec.md",
+  "web/src/example.help.ts",
+  "web/public/help/example.png",
+  "scripts/file-size-exceptions.json",
+])("static guards run for their input %s", (path) => {
+  const result = exercise(["scripts/check-delivery.ts"], "", [path]);
+  expect(result.status).toBe(0);
+  for (const command of [
+    "run spec:check",
+    "scripts/check-knowledge-map-links.ts",
+    "run help:check",
+    "run check:size",
+  ])
+    expect(result.commands).toContain(command);
+  if (path.startsWith("openspec/"))
+    expect(result.commands).toContain(
+      "scripts/run-tests.ts scripts/openspec-feature-map.test.ts",
+    );
 });
 
 test("the commit guard and source validation keep distinct acceptance boundaries", () => {
@@ -197,6 +234,7 @@ test("a changed gate always runs CI static checks and blocks size failures befor
   expect(result.commands).toEqual([
     "run features:check",
     "run notices:check",
+    "run check:dead",
     "run changelog:check",
     "run check:size",
   ]);
@@ -313,6 +351,7 @@ test("static failures report while all heavy check slots are held, regardless of
     expect(result.commands).toEqual([
       "run features:check",
       "run notices:check",
+      "run check:dead",
       "run changelog:check",
       "run check:size",
     ]);

@@ -142,15 +142,41 @@
   Check the selected host and target before acting. A host, generation or
   observation change invalidates an open target; Actions does not send input
   or assign tasks to an agent.
-- In Town, Board and Desk the command menu is also World's command box. Type
-  and it finds buildings, rooms, tables, agents and terminals as the views'
-  search does, each with its status mark and place (`host › room › table`);
-  **Enter** or a click selects it as clicking it in the view does. It also
-  goes to another view. In Zen it opens from the **⌘** button beside the
-  view buttons; on a phone, from **Find or act** in the corner view menu. In
-  a terminal, the Chat composer or a text field `Ctrl+K` and `Cmd+K` stay
-  shell and editor keys; `Ctrl+Alt+K` (`Cmd+Option+K` on a Mac) opens the box
-  from there.
+- The command menu is also World's command box (**Find or act**) in every
+  view, Spaces included. Type and its **In World** group finds buildings,
+  rooms, tables, agents and terminals on every host and runtime (Herdr TUI and
+  herdr-core), as the views' search does, from the whole World object whatever
+  the Hosts filter shows: by name, room, table, machine, runtime
+  (`herdr-core`, `herdr tui`), harness (`claude`, `Claude Code`, `codex`;
+  full names from `shared/harnessLabels.ts`), status word (`working`, `idle`,
+  `needs you`) or task summary. A row shows the agent's icon ringed in its
+  tab colour, its name, `host › room › table`, a runtime icon (server for
+  Herdr TUI, chip for herdr-core) and its status mark, so two agents of one
+  name differ by place and machine.
+- **Enter** or a click opens what was found: a Herdr TUI agent, terminal,
+  table or room opens in Spaces on its own connection, with its tab focused
+  and pane selected, even when another host was Spaces' host
+  (`openWorldFind`, through the store's qualified Spaces target). A live
+  herdr-core agent or terminal opens in Spaces too: Spaces' terminal area
+  shows World's watch of it (`SpacesCoreTerminal`, the same
+  `coreInspectorTerminal` as the window's Terminal tab) under a bar with its
+  name, `host › room › tab`, a **herdr-core** chip, its status mark and
+  **Close**, which returns to the Herdr TUI tab. A core room opens its focused
+  terminal, else its first agent or terminal (`coreSpacesLeaf`); a core room
+  with none says so. Spaces keeps the choice by World node, connection and
+  generation (`spacesCore.ts`) and shows "no longer where World last saw it"
+  rather than follow a reconnected core. Choosing a core agent in Spaces'
+  navigator opens it the same way. An agent on an
+  offline, stale or reconnecting host stays listed with its Offline mark,
+  and opening it says why it cannot. In Town, Board and Desk, **Shift+Enter**
+  or the row's **Show in …** button selects it in that view instead, as
+  clicking it there does; a host the Hosts filter hides has no Show button. `worldFoundTarget` is the one place a found
+  agent's target is made (qualified pane identity today; #1309 can swap it).
+  The box also goes to another view. In Zen it opens from the **⌘** button
+  beside the view buttons; on a phone, from **Find or act** in the corner
+  view menu. In a terminal, the Chat composer or a text field `Ctrl+K` and
+  `Cmd+K` stay shell and editor keys; `Ctrl+Alt+K` (`Cmd+Option+K` on a Mac)
+  opens the box from there.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 

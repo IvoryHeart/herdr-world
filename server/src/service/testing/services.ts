@@ -44,7 +44,16 @@ export async function startTestService(
 ) {
   const service = await createWorldService({
     config: testServerConfig(root, overrides),
-    paths: resolveDataPaths({ ...environment, HERDR_WORLD_DATA_DIR: root }),
+    paths: resolveDataPaths({
+      // Its own instance registry unless the caller shares one (through the
+      // registry folder or XDG_STATE_HOME): test files run in parallel, and
+      // a per-user registry lists other files' services.
+      ...(environment.XDG_STATE_HOME
+        ? {}
+        : { HERDR_WORLD_INSTANCE_REGISTRY_DIR: join(root, "instances") }),
+      ...environment,
+      HERDR_WORLD_DATA_DIR: root,
+    }),
     clock: systemClock,
     scheduler: systemScheduler,
     storage: openStorage,

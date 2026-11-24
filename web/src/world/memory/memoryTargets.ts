@@ -22,14 +22,18 @@ export function memoryHostsOf(world: WorldObject): MemoryHostTarget[] {
     )
     .map((host) => {
       const names: Record<string, string> = {};
+      const rooms: Record<string, string> = {};
       for (const leaf of world.leaves)
-        if (leaf.connectionId === host.connectionId)
+        if (leaf.connectionId === host.connectionId) {
           names[leaf.pane.pane_id ?? leaf.terminalId] = agentName(leaf);
+          rooms[leaf.workspaceId] = leaf.spaceLabel;
+        }
       return {
         connection_id: host.connectionId,
         connection_generation: host.connection.generation,
         label: host.label,
         names,
+        rooms,
       };
     });
 }

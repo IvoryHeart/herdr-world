@@ -10,6 +10,7 @@ import {
   pagesBuildConfig,
   filmBuildConfig,
 } from "../../../scripts/site-bundles";
+import { assetUrlImports } from "../world/testing/assetUrlImports";
 import { buildWorldBrowserBundle } from "../world/testing/browserBundles";
 import { stopChrome, withBrowserDeadline } from "../browserChrome";
 
@@ -115,9 +116,10 @@ test("generated web index runs in every browser build path", async () => {
     script = "probe.browser.js";
     await run("browserBundles.ts");
     // The index carries the shell's real features. Site and film bundles
-    // never load the shell, so they lack its `?raw` SVG loader; a test-only
-    // stub lets them still prove the static index itself. Golden carries its
-    // own loader, which resolves before the stub.
+    // never load the shell, so they lack its `?raw` SVG and `?url` asset
+    // loaders (the Library's PDF reader imports PDF.js's worker by URL); a
+    // test-only stub lets them still prove the static index itself. Golden
+    // and help pictures carry their own loaders, which resolve first.
     const rawSvg: Bun.BunPlugin = {
       name: "feature-index-raw-svg-stub",
       setup(builder) {
@@ -134,9 +136,9 @@ test("generated web index runs in every browser build path", async () => {
     for (const [label, config, plugins] of [
       ["help-picture", helpPictureBuildConfig, []],
       ["golden", townGoldenBuildConfig, [rawSvg]],
-      ["build-pages.ts site", pagesBuildConfig, [rawSvg]],
-      ["build-pages.ts film", filmBuildConfig, [rawSvg]],
-      ["film-render.ts", filmBuildConfig, [rawSvg]],
+      ["build-pages.ts site", pagesBuildConfig, [rawSvg, assetUrlImports]],
+      ["build-pages.ts film", filmBuildConfig, [rawSvg, assetUrlImports]],
+      ["film-render.ts", filmBuildConfig, [rawSvg, assetUrlImports]],
     ] as const) {
       const result = await Bun.build({
         ...config,

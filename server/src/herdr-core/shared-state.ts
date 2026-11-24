@@ -1,3 +1,4 @@
+import { harnessName } from "./harness";
 import type { CoreMirrorTerminal } from "./mirror";
 
 /**
@@ -44,6 +45,28 @@ export function coreTurn(record: object): number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0
     ? value
     : 0;
+}
+
+/**
+ * Harnesses whose own report ends a turn that has a result with `done`
+ * (recorded with Claude Code 2.1.330 and Codex 0.171 on herdr-core 0.1.21:
+ * `testing/recorded/core-0.1.21-harness-start.json`). A turn they end
+ * `idle` has nothing to review: Codex reports working for a moment while it
+ * starts, which core counts as a turn before anyone asked it anything.
+ */
+const REPORTS_DONE: ReadonlySet<string> = new Set(["claude", "codex"]);
+
+/**
+ * The program says it is waiting with no result to review: idle, from a
+ * harness that says `done` when a turn has one. Turns it has ended are not
+ * news, whatever `herdr.seen` holds.
+ */
+export function waitsWithoutResult(record: object): boolean {
+  const status = (record as { status?: unknown }).status;
+  if (!status || typeof status !== "object") return false;
+  const { state, app } = status as { state?: unknown; app?: unknown };
+  const harness = harnessName(app);
+  return state === "idle" && harness !== null && REPORTS_DONE.has(harness);
 }
 
 function labelsOf(record: object): Record<string, unknown> {
@@ -192,6 +215,8 @@ export class CoreAttention {
     // Turns ended unseen by World, and it is not working on another now.
     if (!kind && afterGap && turn > before.turns && next && next !== "working")
       kind = stuck(next) ? "blocked" : "completed";
+    // A harness that ends results with `done` finished nothing (a startup).
+    if (kind === "completed" && waitsWithoutResult(record)) return null;
     if (!kind) return null;
     // A cut's turn is final: a turn someone already saw is not news.
     if (kind === "completed" && afterGap) {

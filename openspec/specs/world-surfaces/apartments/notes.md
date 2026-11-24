@@ -4,7 +4,7 @@
 
 **Surfaces:**
 
-- Town's green building sign, town center ring and Board's hub (**Past sessions**) open one Apartments dialog.
+- Town's green building sign, town center ring (**Buildings**) and Board's hub (**Past sessions**) open one Apartments dialog.
 - Search opens resident detail, Read history, Resume in room and confirmed Evict on desktop/phone.
 - ?apartments-preview=avatars supplies one-load synthetic appearance cases and removes itself.
 - TUI resume opens the new terminal; core reports it back. Claude/Codex resume on the original host.
@@ -75,10 +75,10 @@ resident: an ending World sees replaces the found record of that session.
   room; a town too small for it hides the building), where the bus brings
   binned agents to its door and the sign's count goes up as each walks in
   (see **Bin and bus** under [Visual control plane](../notes.md#visual-control-plane)),
-  from **Apartments** in
+  from **Buildings** → **Apartments** in
   the town center ring, or from **Past sessions** in Board's hub (Board's
-  plain name). All three read the same residents, and the ring and hub show
-  how many live there.
+  plain name). All three read the same residents; the sign and hub show
+  how many live there, the ring does not.
 - Each resident shows its avatar, as Town and Inspector show a live agent:
   its Town character on its terminal colour, with its harness's icon, in the
   list (with its harness, project, room and host) and larger in the opened

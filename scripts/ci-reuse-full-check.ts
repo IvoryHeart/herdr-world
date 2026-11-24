@@ -180,7 +180,9 @@ export async function selectValidationMode(
   reuse: () => Promise<boolean>,
   toolingOnly = false,
   scoped = false,
+  stability = false,
 ): Promise<"docs" | "tooling" | "scoped" | "reuse" | "full"> {
+  if (stability) return "full";
   if (toolingOnly) return "tooling";
   if (docsOnly) return "docs";
   const fresh = scoped ? "scoped" : "full";
@@ -250,7 +252,10 @@ if (import.meta.main) {
   const common = execFileSync("git", ["merge-base", baseSha, headSha], {
     encoding: "utf8",
   }).trim();
-  let selection = repositorySelection(process.cwd(), common, headSha);
+  const stability = process.env.WORLD_BROWSER_STABILITY === "true";
+  let selection = stability
+    ? fullValidationSelection(process.cwd())
+    : repositorySelection(process.cwd(), common, headSha);
   try {
     mode = await selectValidationMode(
       process.env.PR_ACTION,
@@ -304,6 +309,7 @@ if (import.meta.main) {
       },
       selection.tooling,
       !selection.full,
+      stability,
     );
   } catch (error) {
     console.error(

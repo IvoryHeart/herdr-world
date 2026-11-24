@@ -410,6 +410,45 @@ test.skipIf(!chrome)(
         }
         for (let attempt = 0; attempt < 6; attempt++) {
           const now = await level();
+          if (now === "overview") {
+            // The card's runtime icon is its own control: a tap names the
+            // runtime and zooms nowhere, and the keyboard reaches it.
+            const frame = `${plaqueOf(label)}?.closest('.town-room')?.querySelector('.town-room-card-frame')`;
+            const icon = `${frame}?.querySelector('.town-room-card-runtime')`;
+            // One per machine, every room's building holds both runtimes.
+            if (mode === "machine" && !(await evaluate<boolean>(`!!(${icon})`)))
+              return "its card has no runtime icon";
+            const at = await centre(`(window.__runtimeIcon = ${icon} ?? null)`);
+            if (at) {
+              await click(at);
+              await frames();
+              const after = await evaluate<{
+                tapped: boolean;
+                shown: boolean;
+                focusable: boolean;
+                level: string;
+                flying: boolean;
+              }>(`(() => {
+                const icon = window.__runtimeIcon;
+                const renderer = window.__HERDR_TOWN_RENDERER__;
+                return {
+                  tapped: icon.isConnected && icon.classList.contains('is-shown'),
+                  shown: getComputedStyle(icon.querySelector('.town-runtime-tip')).visibility === 'visible',
+                  focusable: icon.tagName === 'BUTTON' && icon.tabIndex >= 0,
+                  level: renderer.level,
+                  flying: renderer.flying,
+                };
+              })()`);
+              if (
+                !after.tapped ||
+                !after.shown ||
+                !after.focusable ||
+                after.level !== "overview" ||
+                after.flying
+              )
+                return `a tap on its card's runtime icon: ${JSON.stringify(after)}`;
+            }
+          }
           if (now !== "desk") {
             const card = await centre(
               `${plaqueOf(label)}?.closest('.town-room')?.querySelector('.town-room-card')`,
@@ -552,13 +591,21 @@ test.skipIf(!chrome)(
             misses.push(`${label}: plaque not on screen`);
             continue;
           }
+          // Hovering the plaque opens nothing; a click on its title does.
+          const opened = () =>
+            evaluate<boolean>(`${plaque}.classList.contains('is-open')`);
           await move(name);
+          if (await opened()) misses.push(`${label}: hover opened its card`);
+          await click(name);
+          if (!(await opened()))
+            misses.push(`${label}: a click on its title opened no card`);
+          // The runtime is an icon beside the name, named in words.
           const tag = await evaluate<string | null>(
-            `${plaque}.querySelector('.town-room-plaque-runtime')?.textContent ?? null`,
+            `${plaque}.querySelector('.town-runtime-icon')?.getAttribute('aria-label')?.replace(/^Runtime: /, '') ?? null`,
           );
           const wanted =
             mode === "machine" ? (core ? "herdr-core" : "Herdr TUI") : null;
-          if (tag !== wanted) misses.push(`${label}: runtime tag ${tag}`);
+          if (tag !== wanted) misses.push(`${label}: runtime icon ${tag}`);
           const names = [
             `Rename room ${label}`,
             `Close room ${label}`,
@@ -583,7 +630,11 @@ test.skipIf(!chrome)(
             if (!state?.reached || state.disabled)
               misses.push(`${label}: ${each} ${JSON.stringify(state)}`);
           }
-          // Off the plaque, its card closes and uncovers the free seat.
+          // A second click on the title closes the card and uncovers the
+          // free seat.
+          await click(name);
+          if (await opened())
+            misses.push(`${label}: a second click left its card open`);
           await move({ x: 4, y: 4 });
           const add = `${plaque}.closest('.town-room').querySelector(${JSON.stringify(`.town-new-seat[aria-label="New agent or terminal in ${label}"]`)})`;
           const plus = await centre(add);
@@ -604,14 +655,23 @@ test.skipIf(!chrome)(
           room.label.includes("core-alpha"),
         )!;
         expect(await visit(mode, alpha.key, "core-alpha")).toBeNull();
-        // The pointer may rest where the camera just put a plaque: move it
-        // off so no plaque card covers the free seat, as the loop above does.
+        const plaque = plaqueOf("core-alpha");
+        // A camera move can leave the pointer over a room plaque. Hovering
+        // it opens no card, so nothing covers the seat: start hovered in both
+        // layouts, then leave the plaque before pressing +.
+        const heading = await centre(
+          `${plaque}.querySelector('.town-room-plaque-name')`,
+        );
+        expect(heading).not.toBeNull();
         await move({ x: 4, y: 4 });
-        const alphaPlus = `${plaqueOf("core-alpha")}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`;
-        const plus = await centre(alphaPlus);
+        await move(heading!);
+        expect(await reach(plaque)).toMatchObject({ reached: true });
+        await move({ x: 4, y: 4 });
+        const add = `${plaque}.closest('.town-room').querySelector('.town-new-seat[aria-label="New agent or terminal in core-alpha"]')`;
+        const plus = await centre(add);
         expect(plus).not.toBeNull();
         await move(plus!);
-        expect(await reach(alphaPlus)).toMatchObject({
+        expect(await reach(add)).toMatchObject({
           reached: true,
           disabled: false,
         });
@@ -625,11 +685,25 @@ test.skipIf(!chrome)(
           );
           throw new Error(`${error.message}: ${seen}`);
         });
-        await click(
-          (await centre(
-            "document.querySelector('.agent-launcher-card:not(:disabled)')",
-          ))!,
+        // Terminal is enabled before the catalog arrives. Its response grows
+        // and recentres the dialog, so do not carry pre-catalog coordinates
+        // into the click. The fixture holds that response to exercise the race.
+        await evaluate("window.__ownerTopology.releaseCatalog()");
+        await waitFor(
+          "!!document.querySelector('.agent-launcher-kind:not(:disabled)')",
+          "the launcher catalog paints",
         );
+        await frames();
+        const terminal =
+          "document.querySelector('.agent-launcher-card:not(:disabled)')";
+        const choice = await centre(terminal);
+        expect(choice).not.toBeNull();
+        await move(choice!);
+        expect(await reach(terminal)).toMatchObject({
+          reached: true,
+          disabled: false,
+        });
+        await click(choice!);
         await waitFor(
           "window.__ownerTopology.calls.some((c) => c.method === 'world.core.launch')",
           "a core start",
@@ -670,7 +744,8 @@ test.skipIf(!chrome)(
             `${plaqueOf("Room 05")}?.querySelector('.town-room-plaque-name')`,
           );
           expect(name).not.toBeNull();
-          await move(name!);
+          // A click on the title opens the card that holds the arrows.
+          await click(name!);
           const arrow = await evaluate<string | null>(
             `[...${plaqueOf("Room 05")}.querySelectorAll('[aria-label^="Move room "]')].map((b) => b.getAttribute('aria-label')).find((n) => n.includes(' before ') || n.includes(' after ')) ?? null`,
           );

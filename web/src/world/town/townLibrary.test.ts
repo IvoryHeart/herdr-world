@@ -10,10 +10,18 @@ import {
   memoryClientOver,
 } from "../memory/memoryClient";
 import { memoryHostsOf } from "../memory/memoryTargets";
+import {
+  requestArtefactShelf,
+  setArtefactShelfClientForTests,
+} from "../memory/artefactShelfClient";
+import { artefactFixtureShelf } from "../memory/artefactFixture";
 import type { WorldObject } from "../worldObject";
 import { townLibraryCounts, townLibrarySignText } from "./TownLibrary";
 
-afterEach(() => setMemoryClientForTests(null));
+afterEach(() => {
+  setMemoryClientForTests(null);
+  setArtefactShelfClientForTests(null);
+});
 
 const host = (id: string) => ({
   connection_id: id,
@@ -50,6 +58,19 @@ test("the sign counts files, stale files and shared shelves over its hosts", asy
   );
   expect(townLibrarySignText(townLibraryCounts())).toBe(
     "4 files · 1 stale · 2 shared",
+  );
+  setArtefactShelfClientForTests({
+    list: async (target) =>
+      target.connection_id === "down"
+        ? Promise.reject(new Error("unavailable: gone"))
+        : artefactFixtureShelf(target, 0),
+    read: async () => Promise.reject(new Error("unused")),
+  });
+  await Promise.all(
+    ["a", "b", "down"].map((id) => requestArtefactShelf(host(id))),
+  );
+  expect(townLibrarySignText(townLibraryCounts())).toBe(
+    "4 files · 1 stale · 2 shared · 10 made",
   );
   publishMemoryHosts([host("down")]);
   await requestMemoryCatalog(host("down"), { force: true });
@@ -96,6 +117,8 @@ test("the Library reads live hosts only, at their current generation, with World
         actionable: true,
         pane: { pane_id: "p1", agent: "opencode" },
         terminalId: "t1",
+        workspaceId: "w1",
+        spaceLabel: "web-app",
         agentName: "builder",
         label: "pane 1",
       },
@@ -105,6 +128,8 @@ test("the Library reads live hosts only, at their current generation, with World
         coreControl: true,
         pane: { agent: "codex" },
         terminalId: "t9",
+        workspaceId: "w9",
+        spaceLabel: "notes",
         agentName: "helper",
         label: "pane 9",
       },
@@ -116,12 +141,14 @@ test("the Library reads live hosts only, at their current generation, with World
       connection_generation: 3,
       label: "Laptop",
       names: { p1: "builder" },
+      rooms: { w1: "web-app" },
     },
     {
       connection_id: "c3",
       connection_generation: 2,
       label: "Core",
       names: { t9: "helper" },
+      rooms: { w9: "notes" },
     },
   ]);
 });

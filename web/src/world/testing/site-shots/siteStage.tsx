@@ -7,11 +7,24 @@
  * when called, after the page has seeded Math.random.
  */
 import { useState } from "react";
+import {
+  ClipboardList,
+  Crown,
+  DoorOpen,
+  Headphones,
+  Shirt,
+  UserPlus,
+} from "lucide-react";
 import { bridge } from "../../../api";
 import type { ConnectionClient } from "../../../connectionClient";
 import { BoardDocumentStore } from "../../board/boardDocument";
 import type { TownQuietMarks } from "../../town/TownBoard";
 import { TownCanvas, type TownRoomActions } from "../../town/TownCanvas";
+import type { TownCenterAction } from "../../town/TownCenterMenu";
+import {
+  createTownBuildings,
+  type TownRuntime,
+} from "../../town/townBuildings";
 import { TownStepStore } from "../../town/townStepStore";
 import { useTownStepReads } from "../../town/useTownStepReads";
 import { townCalls } from "../../town/TownRail";
@@ -90,15 +103,41 @@ export function installSiteBridge(
   };
 }
 
-/** Town's projection and summary, as after a morning away. */
-export function siteTownScene(now = Date.now()) {
-  const world = buildWorldObject(siteConnections(), "site-host-0");
-  const projection = projectWorldOffice(
-    world,
-    now,
-    null,
-    TOWN_PRESENTATION_BOUNDS,
-  );
+/**
+ * The scene's two hosts as one machine's two runtimes: studio's Herdr TUI and
+ * buildbox's rooms as herdr-core beside it, in one building (townBuildings.ts).
+ */
+const SITE_RUNTIMES: readonly TownRuntime[] = [
+  {
+    id: "site-host-0",
+    runtime: "herdr",
+    machine: "local",
+    endpoint: "site-host-0",
+    writable: true,
+  },
+  {
+    id: "site-host-1",
+    runtime: "herdr-core",
+    machine: "local",
+    endpoint: "site-host-1",
+    writable: true,
+  },
+];
+
+/**
+ * Town's projection and summary, as after a morning away. With `runtimes`,
+ * both hosts' rooms stand in one machine's building, one runtime each, so
+ * their plaques carry runtime icons (Help's picture of them).
+ */
+export function siteTownScene(now = Date.now(), { runtimes = false } = {}) {
+  const connections = siteConnections();
+  if (runtimes)
+    connections[1] = { ...connections[1]!, runtime: "herdr-core" as const };
+  const world = buildWorldObject(connections, "site-host-0");
+  const office = projectWorldOffice(world, now, null, TOWN_PRESENTATION_BOUNDS);
+  const projection = runtimes
+    ? createTownBuildings()(office, SITE_RUNTIMES, "machine")
+    : office;
   // Finished agents are unreviewed, as after a morning away: they wait at
   // reception and the town board counts them done.
   const entries = new Map(
@@ -118,6 +157,25 @@ export function siteTownScene(now = Date.now()) {
   );
   return { world, projection, summary };
 }
+
+/**
+ * The town center ring's first-ring actions (useTownCenter.ts), inert: the
+ * help picture of the ring (#1261). Town adds Lenses and Buildings.
+ */
+const centerActions: TownCenterAction[] = [
+  {
+    id: "launch",
+    label: "New agent",
+    icon: UserPlus,
+    primary: true,
+    run: noAction,
+  },
+  { id: "master", label: "Town master", icon: Crown, run: noAction },
+  { id: "focus", label: "Focus", icon: Headphones, run: noAction },
+  { id: "summary", label: "Summary", icon: ClipboardList, run: noAction },
+  { id: "profiles", label: "Profiles", icon: Shirt, run: noAction },
+  { id: "room", label: "New room", icon: DoorOpen, run: noAction },
+];
 
 export function SiteTown({
   scene,
@@ -144,6 +202,7 @@ export function SiteTown({
       selectedRoomKey={null}
       observability={EMPTY_OFFICE_OBSERVABILITY}
       quiet={quiet}
+      centerActions={centerActions}
     />
   );
 }

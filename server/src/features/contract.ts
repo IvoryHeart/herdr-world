@@ -27,6 +27,7 @@ export type FeatureKernel = Readonly<
     createAppearance: typeof import("./appearance/service").createProfileServices;
     createUsage: typeof import("../service/usage-analytics").composeWorldUsage;
     createApartments: typeof import("./apartments/service").createApartmentsService;
+    createArtefactShelf: typeof import("../world/artefact-shelf").createArtefactShelf;
     paths: Pick<WorldServiceDeps["paths"], "root">;
     config: Pick<WorldServiceDeps["config"], "sshHost">;
     serviceIncarnation: string;
@@ -81,6 +82,7 @@ export function featureKernel(
   createApartments: FeatureKernel["createApartments"],
   desk: FeatureKernel["desk"],
   createAppearance: FeatureKernel["createAppearance"],
+  createArtefactShelf: FeatureKernel["createArtefactShelf"],
 ): FeatureKernel {
   return Object.freeze({
     createAppearance,
@@ -94,6 +96,7 @@ export function featureKernel(
     },
     createUsage,
     createApartments,
+    createArtefactShelf,
     paths: deps.paths,
     config: deps.config,
     serviceIncarnation: rpc.serviceIncarnation!,

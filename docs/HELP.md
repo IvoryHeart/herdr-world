@@ -15,9 +15,11 @@ Every World screen answers this too: press ? beside the views (on a phone, the v
 
 - [The town board as a chip](#town-board-chip)
 - [What's new from the Town Master](#town-master)
+- [The town center's ring](#town-center)
 - [Focus for a while](#town-focus)
 - [Apartments: finished agents](#town-apartments)
 - [Quiet agents](#town-quiet)
+- [Which runtime a room runs on](#town-runtimes)
 - [Your VS Code in World](#code-project)
 - [What can I do here?](#world-help)
 - [Hosts on a phone](#world-phone-hosts)
@@ -79,6 +81,21 @@ The Town Master greets you when you come back: what happened since you left, and
 
 Where: Town, beside the town board at the top left. Since 0.3.6.
 
+<a id="town-center"></a>
+
+### The town center's ring
+
+![The town center's ring](../web/public/help/town.center.desktop.light.webp)
+
+Tap the town center to open a ring of actions around its doors: start an agent, talk to the Town master, focus, and more. Buildings opens a second ring around itself with every place in Town.
+
+1. Tap the town center, or Tab to its plaque and press Enter.
+2. Choose an action, or Buildings to see Town's places.
+3. In Buildings, choose a place to open it, as tapping its building does.
+4. Press Back at the centre or Escape to go back; Escape again closes the ring.
+
+Where: Town, the domed building at the top of the town. Since 0.3.6.
+
 <a id="town-focus"></a>
 
 ### Focus for a while
@@ -123,6 +140,20 @@ A working agent whose session has not moved for 10 minutes gets an hourglass wit
 4. Change how long in Settings, Quiet working agents, or turn it off.
 
 Where: Town board, under Busy, while an agent is quiet. Since 0.3.6.
+
+<a id="town-runtimes"></a>
+
+### Which runtime a room runs on
+
+![Which runtime a room runs on](../web/public/help/town.runtimes.desktop.light.webp)
+
+When one building holds rooms of both runtimes, a small icon before each room's name tells them apart: a terminal window for the Herdr TUI, a diamond for herdr-core.
+
+1. Zoom into a building until the rooms' name plates show.
+2. Point at the icon before a room's name, or tap it on a phone, to read its runtime.
+3. Buildings with one runtime show no icon.
+
+Where: Town, before a room's name on its plate and its card. Since 0.3.6.
 
 ## Board
 
@@ -263,11 +294,11 @@ Where: Beside the views at the top; on a phone, the views button. Since 0.3.6.
 
 ![Find or act](../web/public/help/world.command-box.desktop.light.webp)
 
-One box finds agents, rooms and actions anywhere in World.
+One box finds agents, rooms and actions on every host and runtime, from every view.
 
 1. Press Ctrl+K (Cmd+K on a Mac) or the ⌘ button beside the views; on a phone, open the views menu and choose Find or act.
-2. Type a few letters of a name or an action.
-3. Press Enter to go there or do it.
+2. Type a few letters of a name, room, machine, harness (Claude Code, Codex), status (needs you) or task, or of an action.
+3. Press Enter to open an agent's terminal or do the action; in Town, Board or Desk, Shift+Enter or the row's Show button shows it in that view instead.
 
 Where: Beside the views at the top; on a phone, in the views menu. Since 0.3.0.
 

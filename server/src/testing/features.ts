@@ -2,6 +2,7 @@ import { createProfileServices } from "../features/appearance/service";
 import { createDesk } from "../features/desk/service";
 import { composeWorldUsage } from "../service/usage-analytics";
 import { createApartmentsService } from "../features/apartments/service";
+import { createArtefactShelf } from "../world/artefact-shelf";
 import { composeFeatures } from "../features/compose";
 import type { FeatureKernel } from "../features/contract";
 import type { RpcServices } from "../rpc/context";
@@ -14,6 +15,7 @@ export const testFeatureKernel = (ports: Partial<FeatureKernel> = {}) => {
     createAppearance: createProfileServices,
     createUsage: composeWorldUsage,
     createApartments: createApartmentsService,
+    createArtefactShelf,
     clock: { now: () => 0, monotonic: () => 0 },
     storage: {},
     revisionPublisher: () => () => {},

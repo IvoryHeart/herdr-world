@@ -7,6 +7,11 @@ import {
   useMemoryStore,
 } from "../memory/memoryClient";
 import { openMemoryLibrary } from "../memory/memoryEvents";
+import {
+  artefactShelfState,
+  requestArtefactShelf,
+  useArtefactShelves,
+} from "../memory/artefactShelfClient";
 import { useTownPlace } from "./useTownPlace";
 import { memorySummary } from "../memory/memoryModel";
 import type { TownCenterLot } from "./townCenter";
@@ -21,7 +26,14 @@ export type TownLibraryCounts =
   | { status: "none" }
   | { status: "loading" }
   | { status: "failed" }
-  | { status: "ready"; files: number; stale: number; shared: number };
+  | {
+      status: "ready";
+      files: number;
+      stale: number;
+      shared: number;
+      /** What agents made, on the "Made by agents" shelves (#1327). */
+      made?: number;
+    };
 
 /** The sign's counts over the hosts' cached catalogs. */
 export function townLibraryCounts(): TownLibraryCounts {
@@ -30,9 +42,11 @@ export function townLibraryCounts(): TownLibraryCounts {
   let files = 0;
   let stale = 0;
   let shared = 0;
+  let made = 0;
   let ready = 0;
   let loading = false;
   for (const host of hosts) {
+    made += artefactShelfState(host)?.shelf?.artefacts.length ?? 0;
     const state = memoryCatalogState(host);
     if (state?.catalog) {
       const summary = memorySummary(state.catalog);
@@ -42,7 +56,7 @@ export function townLibraryCounts(): TownLibraryCounts {
       ready += 1;
     } else if (!state || state.status === "loading") loading = true;
   }
-  if (ready) return { status: "ready", files, stale, shared };
+  if (ready) return { status: "ready", files, stale, shared, made };
   return loading ? { status: "loading" } : { status: "failed" };
 }
 
@@ -53,6 +67,7 @@ export function townLibrarySignText(counts: TownLibraryCounts) {
   const parts = [`${counts.files} file${counts.files === 1 ? "" : "s"}`];
   if (counts.stale) parts.push(`${counts.stale} stale`);
   if (counts.shared) parts.push(`${counts.shared} shared`);
+  if (counts.made) parts.push(`${counts.made} made`);
   return parts.join(" · ");
 }
 
@@ -60,7 +75,7 @@ export function townLibrarySignText(counts: TownLibraryCounts) {
  * Town's library (#1027): what agents and projects remember, as a hall of
  * books right of the town center. Its sign counts the files, stale ones and
  * shelves several agents share, from catalogs read at most every few
- * minutes; it opens the Library. A narrow town folds it to a book sign on
+ * minutes, and what agents made (#1327); it opens the Library. A narrow town folds it to a book sign on
  * the center's left wing.
  */
 const openLibrary = () => openMemoryLibrary();
@@ -71,11 +86,14 @@ export const TownLibrary = memo(function TownLibrary({
   layout: TownLayout;
 }) {
   useMemoryStore();
+  useArtefactShelves();
   const hosts = memoryHosts().slice(0, SIGN_HOSTS);
   const hostKeys = hosts.map(memoryTargetKey).join("\n");
   useEffect(() => {
-    for (const host of memoryHosts().slice(0, SIGN_HOSTS))
+    for (const host of memoryHosts().slice(0, SIGN_HOSTS)) {
       void requestMemoryCatalog(host);
+      void requestArtefactShelf(host);
+    }
   }, [hostKeys]);
   const counts = townLibraryCounts();
   // The building opens what its sign does (#1170), while a host serves it.

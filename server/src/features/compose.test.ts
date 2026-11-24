@@ -195,6 +195,7 @@ test("every discovered feature implements exactly its registered RPC declaration
   expect(serverFeatures.map((f) => String(f.id))).toEqual([
     "apartments",
     "appearance",
+    "artefacts",
     "desk",
     "memory",
     "presence",
