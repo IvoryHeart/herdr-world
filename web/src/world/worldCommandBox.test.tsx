@@ -153,6 +153,30 @@ describe("the command box finds what the views' search finds", () => {
     expect(agent.secondary?.label).toBe("Open terminal");
   });
 
+  test("the view says when choosing a find leaves the box open", () => {
+    let shown = "";
+    const handlers = {
+      open: () => {},
+      go: {
+        stays: (result: { id: string }) => shown !== result.id,
+        run: (result: { id: string }) => {
+          shown = result.id;
+        },
+      },
+    };
+    const room = worldFindGroup(world, "harbor", handlers)!.actions[0]!;
+    const stay = room.stay as () => boolean;
+    expect(stay()).toBe(true);
+    room.run();
+    expect(stay()).toBe(false);
+    // A view that says nothing closes the box as each find is chosen.
+    const plain = worldFindGroup(world, "harbor", {
+      open: () => {},
+      go: { run: () => {} },
+    })!.actions[0]!;
+    expect(plain.stay).toBeUndefined();
+  });
+
   test("a view's own result goes there and has nothing to open", () => {
     const went: string[] = [];
     const group = worldFindGroup(world, "warehouse", {

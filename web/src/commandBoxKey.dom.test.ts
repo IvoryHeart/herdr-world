@@ -353,6 +353,96 @@ if (process.env.COMMAND_BOX_KEY_DOM !== "1") {
     act(() => root.unmount());
     element.remove();
   });
+  test("a find the view only showed keeps the list; choosing it again opens it", () => {
+    selectShortcutPreset("linux");
+    const log: string[] = [];
+    let shown = "";
+    const element = document.createElement("div");
+    document.body.append(element);
+    const root = createRoot(element);
+    act(() =>
+      root.render(
+        createElement(CommandCombobox, {
+          extension: { captureKey: null, groups: [] },
+          // Town's rule: the first choice flies there, the same one again opens.
+          find: () => ({
+            heading: "In World",
+            actions: ["harbor", "atlas"].map((name) => ({
+              key: `find-${name}`,
+              icon: null,
+              title: name,
+              score: 0.95,
+              stay: () => shown !== name,
+              run: () => {
+                log.push(shown === name ? `open ${name}` : `go ${name}`);
+                shown = name;
+              },
+            })),
+          }),
+        }),
+      ),
+    );
+    const popover = () => document.querySelector(".command-popover");
+    const input = () => popover()!.querySelector<HTMLInputElement>("input")!;
+    const row = (name: string) =>
+      document.querySelector<HTMLElement>(
+        `[cmdk-item][data-value*="find-${name}"]`,
+      )!;
+    const enter = () =>
+      act(() => {
+        input().dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "Enter",
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      });
+    const click = (name: string) =>
+      act(() => {
+        row(name).dispatchEvent(
+          new PointerEvent("pointermove", { bubbles: true }),
+        );
+        row(name).click();
+      });
+    act(() => {
+      document.body.dispatchEvent(keyK({ ctrlKey: true }));
+    });
+    act(() => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(input(), "a");
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    // A click does what Enter does: goes there, the list stays, Enter is next.
+    click("atlas");
+    expect(log).toEqual(["go atlas"]);
+    expect(popover()).not.toBeNull();
+    expect(document.activeElement).toBe(input());
+    expect(row("atlas").getAttribute("aria-selected")).toBe("true");
+    // Enter on the same row opens it and closes the box.
+    enter();
+    expect(log).toEqual(["go atlas", "open atlas"]);
+    expect(popover()).toBeNull();
+    // Clicking the shown row again opens it as well.
+    act(() => {
+      document.body.dispatchEvent(keyK({ ctrlKey: true }));
+    });
+    act(() => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(input(), "a");
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    click("harbor");
+    click("harbor");
+    expect(log).toEqual(["go atlas", "open atlas", "go harbor", "open harbor"]);
+    expect(popover()).toBeNull();
+    act(() => root.unmount());
+    element.remove();
+  });
   test("/, Ctrl+F and Cmd+K open the same box, sharing its search with the view", () => {
     selectShortcutPreset("linux");
     const log: string[] = [];

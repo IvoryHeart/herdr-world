@@ -81,6 +81,7 @@ import {
 } from "./worldCommandBox";
 import { useTerminalColors } from "./useTerminalColors";
 import { worldFinder } from "./worldFinder";
+import type { WorldSearchResult } from "./worldSearch";
 import { townLandmarkResults } from "./town/townSearch";
 import { terminalColor } from "./terminalColor";
 import { NeedsYouCounter } from "./NeedsYouTab";
@@ -347,6 +348,10 @@ export default function WorldFoundationApp() {
     }),
     [view, lights],
   );
+  const chosenAgain = (result: WorldSearchResult) => {
+    const running = worldFinder.get();
+    return running?.view === view && running.chosen?.result.id === result.id;
+  };
   const worldFind = (search: string, from: number) =>
     worldFindGroup(
       fullWorld,
@@ -378,11 +383,18 @@ export default function WorldFoundationApp() {
           ? {
               go: {
                 shows: (node) => topbarWorld.nodeById.has(node.id),
+                // Town's first choice keeps the list open; choosing the same
+                // find again closes it and opens its Inspector.
+                stays:
+                  view === "town"
+                    ? (result) =>
+                        !(
+                          chosenAgain(result) &&
+                          topbarWorld.nodeById.has(result.nodeId)
+                        )
+                    : undefined,
                 run: (result) => {
-                  const running = worldFinder.get();
-                  const again =
-                    running?.view === view &&
-                    running.chosen?.result.id === result.id;
+                  const again = chosenAgain(result);
                   if (lights) worldFinder.choose(view, search, result);
                   // Town flies to it on its map (useTownSearch) and selects it
                   // when it is chosen again, as `/` did; the other views

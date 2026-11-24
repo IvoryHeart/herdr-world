@@ -3385,16 +3385,37 @@ async function run() {
       ).length;
       // Choosing goes to it in the view; it never opens its terminal.
       result.click();
-      await waitFor(
-        () => !document.querySelector(".command-popover"),
-        `${title} kept the box open after a choice`,
-      );
-      if (view === "town")
+      if (view === "town") {
+        // Town flies there and keeps the list; choosing it again opens it.
         check(
           worldFinder.get()?.chosen?.result.nodeId === needle,
           `${title} did not go to the chosen result`,
         );
-      else {
+        check(
+          !!document.querySelector(".command-popover"),
+          `${title} closed the list on the first choice`,
+        );
+        check(
+          calls.filter((method) => method === "focus:beta").length ===
+            focusedBefore,
+          `${title} selected the result on the first choice`,
+        );
+        findRow(needle)!.click();
+        await waitFor(
+          () => !document.querySelector(".command-popover"),
+          `${title} kept the box open when the shown find was chosen again`,
+        );
+        await waitFor(
+          () =>
+            calls.filter((method) => method === "focus:beta").length >
+            focusedBefore,
+          `${title} did not open the Inspector when chosen again`,
+        );
+      } else {
+        await waitFor(
+          () => !document.querySelector(".command-popover"),
+          `${title} kept the box open after a choice`,
+        );
         await waitFor(
           () =>
             calls.filter((method) => method === "focus:beta").length >
@@ -3475,6 +3496,9 @@ async function run() {
           `${title} paging lost the later qualified match with colliding labels`,
         );
       laterResult.click();
+      // Town keeps the list after a first choice; closing keeps the choice.
+      if (view === "town")
+        document.querySelector<HTMLButtonElement>(".command-trigger")?.click();
       await waitFor(
         () => !document.querySelector(".command-popover"),
         `${title} kept the box open after choosing the paged match`,

@@ -54,7 +54,7 @@ import {
 import type { FileExplorerEntry, Pane, Tab, Workspace } from "../types";
 import { shortId } from "../utils";
 import { canCreateWorktree, worktreeCreationSource } from "../worktree";
-import { ActionItem } from "./CommandActionItem";
+import { ActionItem, runSecondaryKey } from "./CommandActionItem";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { ConfirmDialog, TextInputDialog } from "./ModalDialogs";
 import {
@@ -103,8 +103,12 @@ export type ActionDefinition = {
    * finds: open its terminal instead of going to it in the current view).
    */
   secondary?: { label: string; run: () => void };
-  /** Runs with the box left open, such as paging through finds. */
-  stay?: boolean;
+  /**
+   * Runs with the box left open: always (paging through finds), or when the
+   * function says so as it is chosen (a find the view only showed, so
+   * choosing it again opens it).
+   */
+  stay?: boolean | (() => boolean);
   run: () => void;
 };
 
@@ -496,9 +500,15 @@ function OwnedCommandCombobox({
     if (!operationalShortcutsEnabled) return;
     fn();
   };
-  // Choosing a row closes the box unless the row stays (paging finds).
-  const choose = (action: ActionDefinition) =>
-    !action.disabledReason && (action.stay ? action.run() : run(action.run));
+  // Choosing a row closes the box unless the row stays. A click left the
+  // input; it gets focus back, so Enter chooses again from the same list.
+  const choose = (action: ActionDefinition) => {
+    if (action.disabledReason) return;
+    const { stay } = action;
+    if (!(typeof stay === "function" ? stay() : stay)) return run(action.run);
+    action.run();
+    document.querySelector<HTMLElement>(".command-popover input")?.focus();
+  };
 
   const submitTextAction = (value: string) => {
     if (!operationalShortcutsEnabled) return;
@@ -1140,7 +1150,7 @@ function OwnedCommandCombobox({
               distinct: Boolean(group.page),
             })),
           )
-          .filter((entry) => entry.score > 0 && !entry.action.stay)
+          .filter((entry) => entry.score > 0 && entry.action.stay !== true)
           .sort(
             (a, b) =>
               b.score - a.score ||
@@ -1250,28 +1260,13 @@ function OwnedCommandCombobox({
           }}
           onKeyDownCapture={(event) => {
             if (!operationalShortcutsEnabled) return;
-            if (
-              event.key === "Enter" &&
-              event.shiftKey &&
-              !event.altKey &&
-              !event.ctrlKey &&
-              !event.metaKey &&
-              !event.nativeEvent.isComposing
-            ) {
-              const chosen = displayedActionGroups
-                .flatMap((group) => group.actions)
-                .find(
-                  (action) =>
-                    actionCommandValue(action) === commandSelectedValue,
-                );
-              if (chosen?.secondary && !chosen.disabledReason) {
-                event.preventDefault();
-                event.stopPropagation();
-                run(chosen.secondary.run);
-                return;
-              }
-            }
-            runCommandNumberShortcut(event, numberedActions, choose);
+            const selected = displayedActionGroups
+              .flatMap((group) => group.actions)
+              .find(
+                (action) => actionCommandValue(action) === commandSelectedValue,
+              );
+            if (!runSecondaryKey(event, selected, run))
+              runCommandNumberShortcut(event, numberedActions, choose);
           }}
         >
           <Command

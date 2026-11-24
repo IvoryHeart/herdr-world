@@ -20,7 +20,14 @@ view cannot show it; opening its terminal SHALL be a second action, never the de
 
 - **WHEN** the user in Town types part of an agent's name and chooses it
 - **THEN** Town moves its camera to the agent's table and marks it, the view stays Town,
-  and no terminal opens; choosing it again selects it
+  no terminal opens, and the box stays open with its list of matches
+- **AND** choosing the same result again closes the box and opens its Inspector
+
+#### Scenario: A click chooses as Enter does
+
+- **WHEN** the user clicks a found result
+- **THEN** it is chosen exactly as Enter on that row chooses it, and when the box stays
+  open its input keeps focus so Enter chooses again
 
 #### Scenario: Open its terminal instead
 

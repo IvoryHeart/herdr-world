@@ -4,7 +4,8 @@
  * (worldSearch.ts), and the views to go to. Every view, Spaces included,
  * lists the same finds from the one World object. Choosing one (Enter or a
  * click) goes to it in the current view, as `/` always did: Town flies to its
- * table, Board and Desk select it, Spaces shows its terminal. The second
+ * table and keeps the list open, so choosing it again opens its Inspector;
+ * Board and Desk select it, Spaces shows its terminal. The second
  * action (Shift+Enter, or the row's button) opens its terminal in Spaces, on
  * its own connection whichever runtime runs it. Where the current view cannot
  * show a find (Code, or a host the Hosts filter hides), choosing opens it and
@@ -234,6 +235,8 @@ export type WorldFindHandlers = {
    */
   go?: {
     shows?(node: WorldObjectNode): boolean;
+    /** Whether choosing it now leaves the box open (Town's first choice). */
+    stays?(result: WorldSearchResult): boolean;
     run(result: WorldSearchResult): void;
   };
   /** Said on a row whose choosing opens it, outside Spaces. */
@@ -334,6 +337,9 @@ function findAction(
       else open?.run();
     },
     ...(goes && open ? { secondary: open } : {}),
+    ...(goes && handlers.go!.stays
+      ? { stay: () => handlers.go!.stays!(result) }
+      : {}),
   };
 }
 
