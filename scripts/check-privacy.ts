@@ -128,13 +128,24 @@ export function scanPrivacyText(
   text: string,
   source: string,
 ): PrivacyFinding[] {
-  return text.split(/\r?\n/).flatMap((line, index) =>
-    privacyRules(line).map((rule) => ({
+  return text.split(/\r?\n/).flatMap((line, index) => {
+    // GitHub publishes these identities in bot signoffs and human coauthors.
+    // Permit only the email value in metadata; all other rules still apply.
+    const publicEmails = new Set(
+      emailMatches(line)
+        .filter(
+          (match) =>
+            match[0].toLowerCase() === ["support", "github.com"].join("@") ||
+            match[1].toLowerCase() === "users.noreply.github.com",
+        )
+        .map((match) => match[0].toLowerCase()),
+    );
+    return privacyRules(line, publicEmails).map((rule) => ({
       file: source,
       line: index + 1,
       rule,
-    })),
-  );
+    }));
+  });
 }
 
 export function formatPrivacyFinding(finding: PrivacyFinding): string {

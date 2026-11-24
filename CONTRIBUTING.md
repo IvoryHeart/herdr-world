@@ -155,6 +155,11 @@ and session secrets, literal World passwords, and non-reserved email addresses.
 It prints only the location, line and rule, with a commit SHA for commit findings;
 matched values and Git error details are suppressed. Email attribution exceptions
 for generated dependency licenses never apply to messages or PR metadata.
+Commit and PR metadata allow GitHub's public support identity and email addresses
+on the exact `users.noreply.github.com` domain, so bot signoffs and human coauthors
+pass. This exception permits only those email values; all other privacy rules
+still apply, including Claude coauthor detection. Added file content retains its
+existing email policy.
 A missing or rewritten previous push head falls back to `origin/main`
 (or all history if main is unavailable); an unavailable requested head fails.
 Branch pushes exclude published main history. Merge commits scan lines absent

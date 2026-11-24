@@ -10,7 +10,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { privacyRules, scanPrivacyRange } from "./check-privacy";
+import {
+  privacyRules,
+  scanPrivacyRange,
+  scanPrivacyText,
+} from "./check-privacy";
 import { checkPrBody, checkPrBodyEvent } from "./check-pr-body";
 
 // Assemble disallowed fixtures so these regressions obey the publication rule.
@@ -235,6 +239,107 @@ function cli(root: string, args: string[]) {
     env: process.env,
   });
 }
+
+const publicGitHubEmails = [
+  ["support", "github.com"].join("@"),
+  ["12345+example-user", "users.noreply.github.com"].join("@"),
+  ["example-user", "users.noreply.github.com"].join("@"),
+  ["49699333+dependabot[bot]", "users.noreply.github.com"].join("@"),
+];
+
+for (const [index, address] of publicGitHubEmails.entries()) {
+  test(`public GitHub identity ${index} passes commit and PR metadata scans`, () =>
+    repository(({ root, git, base }) => {
+      const message = [
+        "Bump example-package from 1.0.0 to 1.0.1",
+        "",
+        `Signed-off-by: dependabot[bot] <${publicGitHubEmails[0]}>`,
+        `Co-authored-by: Example <${address}>`,
+      ].join("\n");
+      git(
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "--allow-empty",
+        "-qm",
+        message,
+      );
+      const head = git("rev-parse", "HEAD");
+      const refs = join(root, "refs");
+      writeFileSync(
+        refs,
+        `refs/heads/topic ${head} refs/heads/topic ${base}\n`,
+      );
+      const event = join(root, "event.json");
+      writeFileSync(event, JSON.stringify({ before: base, after: head }));
+      for (const args of [
+        ["--range", base, head],
+        ["--pre-push", refs],
+        ["--event", event],
+      ]) {
+        const result = cli(root, args);
+        expect(result.status).toBe(0);
+        expect(result.stderr).toBe("");
+      }
+      writeFileSync(
+        event,
+        JSON.stringify({
+          action: "edited",
+          pull_request: {
+            base: { sha: base },
+            head: { sha: head },
+            title: address,
+            body: message,
+          },
+        }),
+      );
+      expect(cli(root, ["--event", event]).status).toBe(0);
+      expect(checkPrBodyEvent(event, root).join("\n")).not.toContain(
+        "privacy/",
+      );
+      const bodyFile = join(root, "body.md");
+      writeFileSync(bodyFile, message);
+      expect(checkPrBody(bodyFile, root).join("\n")).not.toContain("privacy/");
+    }));
+}
+
+test("public GitHub identities never exempt other metadata or file-content leaks", () => {
+  for (const address of publicGitHubEmails) {
+    for (const [rule, value] of metadataCases)
+      for (const text of [`${address}\n${value}`, `${value} (${address})`])
+        expect(scanPrivacyText(text, "PR body").map((f) => f.rule)).toContain(
+          rule,
+        );
+    expect(
+      scanPrivacyText(
+        ["Co-authored-by:", `Claude <${address}>`].join(" "),
+        "commit message",
+      ).map((f) => f.rule),
+    ).toContain("claude-coauthor");
+  }
+  repository(({ root, base, commit }) => {
+    const head = commit(publicGitHubEmails.slice(0, 3).join("\n"));
+    expect(scanPrivacyRange(root, base, head).map((f) => f.rule)).toEqual([
+      "email",
+      "email",
+      "email",
+    ]);
+  });
+});
+
+test("metadata email exceptions require exact public GitHub identities", () => {
+  for (const address of [
+    email,
+    ["operator", "github.com"].join("@"),
+    ["support", "sub.github.com"].join("@"),
+    ["support", "github.com.evil.org"].join("@"),
+    ["operator", "sub.users.noreply.github.com"].join("@"),
+    ["operator", "users.noreply.github.com.evil.org"].join("@"),
+  ])
+    expect(
+      scanPrivacyText(address, "commit message").map((f) => f.rule),
+    ).toContain("email");
+});
 
 for (const [rule, value] of metadataCases) {
   test(`commit messages reject ${rule} and identify the commit without its text`, () =>
