@@ -326,6 +326,26 @@ test("a pinned tab is carried to the close", () => {
   expect(registry.add(agent("p2")).entries[1]!.preserve_tab).toBe(false);
 });
 
+test("the Town stop an agent was dropped on is kept with it; a malformed one is dropped", () => {
+  const { registry } = fixture();
+  const stop = { building: "host-a", corner: "bottom-right" } as const;
+  registry.add(agent("p1", { stop }));
+  registry.add(agent("p2"));
+  registry.add(
+    agent("p3", {
+      stop: {
+        building: "host-a",
+        corner: "middle",
+      } as unknown as BinAdd["stop"],
+    }),
+  );
+  registry.add(agent("p4", { stop: { building: "", corner: "top-left" } }));
+  const [one, two, three, four] = registry.list().entries;
+  expect(one!.stop).toEqual(stop);
+  // Without one, Town has it wait at the stop nearest its room.
+  for (const entry of [two, three, four]) expect(entry!.stop).toBeUndefined();
+});
+
 test("invalid targets are refused before anything is staged", () => {
   const { registry } = fixture();
   expect(() => registry.add(agent("", {}))).toThrow("invalid bin target");

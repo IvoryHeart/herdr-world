@@ -1,5 +1,7 @@
 import {
   type BinCoreConfirmation,
+  BIN_STOP_CORNERS,
+  type BinStop,
   BIN_BUS_BOARDING_MS,
   BIN_BUS_ROUTE_M,
   BIN_BUS_ROUTE_MAX_M,
@@ -28,6 +30,8 @@ export type BinAdd = BinTarget & {
   view: BinView;
   /** Its tab is pinned: never close the tab's last pane. */
   preserve_tab?: boolean;
+  /** The Town bus stop it was dropped on, where it waits. */
+  stop?: BinStop;
 };
 
 /**
@@ -541,9 +545,7 @@ function coreConfirmation(value: unknown): BinCoreConfirmation {
   };
 }
 
-function normalize(
-  input: BinAdd,
-): Omit<BinEntry, "id" | "riding" | "route_m" | "stop"> {
+function normalize(input: BinAdd): Omit<BinEntry, "id" | "riding"> {
   for (const key of [
     "connection_id",
     "workspace_id",
@@ -583,5 +585,24 @@ function normalize(
       ? input.view
       : "other",
     preserve_tab: input.preserve_tab === true,
+    ...binStop(input.stop),
   };
+}
+
+/**
+ * The drop stop, when it is well formed. It only places the agent in Town,
+ * so a malformed one is dropped (the agent waits at the stop nearest its
+ * room) rather than refusing the bin.
+ */
+function binStop(stop: unknown): { stop?: BinStop } {
+  if (!stop || typeof stop !== "object") return {};
+  const { building, corner } = stop as Record<string, unknown>;
+  if (
+    typeof building !== "string" ||
+    !building ||
+    building.length > MAX_ID_LENGTH ||
+    !BIN_STOP_CORNERS.includes(corner as BinStop["corner"])
+  )
+    return {};
+  return { stop: { building, corner: corner as BinStop["corner"] } };
 }

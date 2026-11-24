@@ -84,7 +84,7 @@ import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
 import { TownBusLayer, useTownBin } from "./TownBusLayer";
 import { TownArrivalLayer, useTownArrivals } from "./TownArrivalLayer";
-import { aimAtBin } from "../bin/binDrop";
+import { townBinDropPorts } from "./townBinDrop";
 import {
   townReceptionTakesAll,
   type TownReceptionTakes,
@@ -341,6 +341,7 @@ export function TownCanvas({
     calm,
     model,
     layout,
+    busRoute: townBin.route,
     teams,
     selectedKey,
     hover,
@@ -717,16 +718,8 @@ export function TownCanvas({
       },
       held: () => navigator.vibrate?.(12),
       // The bin chip and the bus stops lie over the canvas: a carry over
-      // one is dropped in the bin.
-      binAt: (at) => {
-        if (!at || !latest.current.roomActions.onBinDrop) return aimAtBin(null);
-        const rect = host.getBoundingClientRect();
-        return aimAtBin({ x: rect.left + at.x, y: rect.top + at.y });
-      },
-      bin: (drag) =>
-        drag.kind === "room"
-          ? undefined
-          : latest.current.roomActions.onBinDrop?.(drag.kind, drag.key),
+      // one is dropped in the bin (at that stop).
+      ...townBinDropPorts(host, () => latest.current),
       // Town's targets are live hits and drags: trace a summary of each.
       trace: DEVTOOLS
         ? (before, after, event, effects) =>

@@ -35,7 +35,12 @@ export type TownDropTarget = {
   label: string;
   /** bin: over the bin or a bus stop, where a drop puts it in the bin. */
   action?: "move" | "reorder" | "group" | "ungroup" | "bin";
+  /** Over a bus stop (its key): put in the bin, it waits there. */
+  stop?: string | null;
 };
+
+/** A carry over the bin, or over the bus stop `stop` (its key). */
+export type TownBinAim = { stop: string | null };
 
 /**
  * A room picked up by its name, its edge or its Move handle: it moves

@@ -3,6 +3,7 @@
  * its room plaques, and a place's colour choice for the shared picker.
  */
 
+import type { BinStop } from "../../../../shared/bin";
 import type { TownMoveResult } from "./townMoves";
 import type { TownRoomPlacement } from "./townRoomPlace";
 
@@ -117,6 +118,9 @@ export type TownRoomActions = {
   onGroupDesk(deskKey: string, targetDeskKey: string): Promise<TownMoveResult>;
   /** A grouped desk dropped on its own room's floor: leave its team. */
   onUngroupDesk(deskKey: string): Promise<TownMoveResult>;
-  /** An agent, or a desk's agents, dropped on the bin or a bus stop. */
-  onBinDrop?(kind: "agent" | "desk", key: string): void;
+  /**
+   * An agent, or a desk's agents, dropped on the bin, or on a bus stop
+   * (`stop`, as World remembers it) where they wait.
+   */
+  onBinDrop?(kind: "agent" | "desk", key: string, stop: BinStop | null): void;
 };

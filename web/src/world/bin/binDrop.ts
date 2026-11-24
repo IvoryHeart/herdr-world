@@ -30,8 +30,13 @@ export function markBinDrop(target: Element | null) {
  * bin shows itself as a place to drop.
  */
 export function aimAtBin(at: { x: number; y: number } | null) {
+  return aimAtBinTarget(at) !== null;
+}
+
+/** As aimAtBin, but the drop target the drag is over, or null. */
+export function aimAtBinTarget(at: { x: number; y: number } | null) {
   document.documentElement.toggleAttribute("data-bin-carry", at !== null);
   const target = at ? binDropAt(at.x, at.y) : null;
   markBinDrop(target);
-  return target !== null;
+  return target;
 }

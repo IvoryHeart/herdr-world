@@ -23,6 +23,7 @@ import {
   townMagnetDesk,
   townRoomDrag,
   townRoomDropTarget,
+  type TownBinAim,
   type TownDrag,
 } from "../townDrag";
 import { TOWN_TILE } from "../townLayout";
@@ -132,12 +133,16 @@ export type TownInteractionPorts = {
   /** A touch hold lifted something. */
   held(): void;
   /**
-   * Whether canvas point `at` is over the bin or a bus stop (marking it), or
-   * null when the carry ended. Without it nothing is dropped in the bin.
+   * What canvas point `at` is over, the bin or a bus stop (marking it), or
+   * null when it is over neither or the carry ended (`at` null). Without it
+   * nothing is dropped in the bin.
    */
-  binAt?(at: Point | null): boolean;
-  /** The carried agent or desk was dropped on the bin. */
-  bin?(drag: Pick<TownDrag, "kind" | "key">): void;
+  binAt?(at: Point | null): TownBinAim | null;
+  /**
+   * The carried agent or desk was dropped on the bin, or on the bus stop
+   * `stop` (its key), where it waits.
+   */
+  bin?(drag: Pick<TownDrag, "kind" | "key">, stop: string | null): void;
   /** Development builds: each step of the gesture machine. */
   trace?(
     before: string,
@@ -565,11 +570,13 @@ export class TownInteraction {
     if (!this.carrying || !stage) return;
     // Rooms stay in their building: only desks and agents go in the bin.
     if (this.carrying.kind === "room") return this.aimRoom(this.carrying, at);
-    if (this.ports.binAt?.(at)) {
+    const aim = this.ports.binAt?.(at);
+    if (aim) {
       this.carrying.target = {
         key: "bin",
         label: "Put in the bin",
         action: "bin",
+        stop: aim.stop,
       };
       this.ports.ghost.aim("Put in the bin", true, "bin", at);
       const world = stage.camera.toWorld(at.x, at.y);
@@ -719,7 +726,10 @@ export class TownInteraction {
         if (drag.target?.action === "bin") {
           // It goes back to where it was and walks out to its stop.
           stage.endDrag("cancel");
-          this.ports.bin?.({ kind: drag.kind, key: drag.key });
+          this.ports.bin?.(
+            { kind: drag.kind, key: drag.key },
+            drag.target.stop ?? null,
+          );
           return;
         }
         // Wait at the target while Herdr moves it, then land or spring back.

@@ -93,6 +93,29 @@ export type BinCoreConfirmation = {
   }>;
 };
 
+/** The corners of a Town building, where its streets meet its side roads. */
+export const BIN_STOP_CORNERS = [
+  "top-left",
+  "top-right",
+  "bottom-left",
+  "bottom-right",
+] as const;
+
+/**
+ * The bus stop an agent was dropped on in Town, so it waits there: the stop
+ * at one corner of a building. A stop's place on the map moves whenever
+ * Town grows or another browser lays it out differently, but a building's
+ * corner keeps its stop, so every Town finds it in its own layout. Where
+ * that building has no stop at that corner (it is gone, or this browser
+ * groups buildings differently), the agent waits at the stop nearest its
+ * room, as one put in the bin any other way does.
+ */
+export type BinStop = {
+  /** The building's key in Town. */
+  building: string;
+  corner: (typeof BIN_STOP_CORNERS)[number];
+};
+
 export type BinEntry = BinTarget & {
   id: string;
   /** The agent's name, for the bin, the bus and the receipt. */
@@ -105,6 +128,8 @@ export type BinEntry = BinTarget & {
   riding: boolean;
   /** Its tab is pinned: the close never takes the tab's last pane. */
   preserve_tab: boolean;
+  /** The bus stop it was dropped on in Town; absent: the stop nearest its room. */
+  stop?: BinStop;
 };
 
 export type BinOutcome = {
