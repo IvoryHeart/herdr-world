@@ -11,6 +11,7 @@ import { readCoverageScope } from "./coverage-scope";
 import { readCapabilityNotes } from "./openspec-notes";
 import { coverageDirectory } from "./coverage";
 import { ordinaryDocumentation } from "./validation-scope";
+import { formatPrivacyFinding, scanPrivacyText } from "./check-privacy";
 
 function descriptionLines(body: string): string[] {
   let fence: string | undefined;
@@ -175,6 +176,7 @@ export function checkPrBodyText(
     body,
   );
   return [
+    ...scanPrivacyText(body, "PR body").map(formatPrivacyFinding),
     ...assessSpecEdits(paths),
     ...assessContractImpacts(
       paths,
@@ -211,6 +213,7 @@ export function checkPrBodyEvent(file: string, cwd = process.cwd()): string[] {
       base?: { sha?: string };
       head?: { sha?: string };
       body?: string | null;
+      title?: string;
     };
   };
   const pull = event.pull_request;
@@ -219,12 +222,10 @@ export function checkPrBodyEvent(file: string, cwd = process.cwd()): string[] {
     !/^[0-9a-f]{40}$/.test(pull?.head?.sha ?? "")
   )
     throw new Error("Missing or invalid pull-request base or head");
-  return checkPrBodyText(
-    pull?.body ?? "",
-    cwd,
-    pull?.base?.sha,
-    pull?.head?.sha,
-  );
+  return [
+    ...scanPrivacyText(pull?.title ?? "", "PR title").map(formatPrivacyFinding),
+    ...checkPrBodyText(pull?.body ?? "", cwd, pull?.base?.sha, pull?.head?.sha),
+  ];
 }
 
 if (import.meta.main) {

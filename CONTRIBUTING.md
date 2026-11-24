@@ -139,14 +139,23 @@ each commit introduced since `origin/main`; `bun run check:privacy --range
 <base-ref> <head-ref>` selects another range. The pre-push hook scans every actual
 pushed ref, before policy and delivery checks, including docs and merge shortcuts.
 The independent **Privacy guard** CI check runs on every branch push and PR,
-including branches without a PR and pushes that skip local hooks.
+including PR title/description edits, branches without a PR and pushes that skip
+local hooks. PR events scan the current title and description from the event
+payload. Before pushing, save the intended description and set
+`HERDR_WORLD_PR_BODY=<file>`; pre-push's PR policy scans that file, or the existing
+PR description when no file is supplied. `bun run check:pr-body <file>` also
+checks description privacy, including hidden Markdown comments and code blocks.
 
-The guard checks added lines in every introduced commit, so deleting a leak in a
-later commit of the same push does not hide it. It rejects private/CGNAT IPv4,
+The guard checks full messages and added lines in every introduced commit, so
+deleting a leak in a later commit of the same push does not hide it. It rejects
+Claude code session links, session trailers, Claude Code generation footers and
+Claude coauthor trailers alongside private/CGNAT IPv4,
 Tailscale IPv6 and `*.ts.net` hosts, absolute home paths, plausible login tokens
 and session secrets, literal World passwords, and non-reserved email addresses.
-It prints file, line and rule only; matched values and Git error details are
-suppressed. A missing or rewritten previous push head falls back to `origin/main`
+It prints only the location, line and rule, with a commit SHA for commit findings;
+matched values and Git error details are suppressed. Email attribution exceptions
+for generated dependency licenses never apply to messages or PR metadata.
+A missing or rewritten previous push head falls back to `origin/main`
 (or all history if main is unavailable); an unavailable requested head fails.
 Branch pushes exclude published main history. Merge commits scan lines absent
 from every parent, so syncing main does not reattribute published content.

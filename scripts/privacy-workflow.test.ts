@@ -39,7 +39,7 @@ test("privacy CI covers all branches and PRs without scope or metadata bypasses"
   ) as Workflow;
   expect(workflow.on.push).toEqual({ branches: ["**"] });
   expect(workflow.on.pull_request).toEqual({
-    types: ["opened", "synchronize", "reopened"],
+    types: ["opened", "synchronize", "reopened", "edited"],
   });
   expect(workflow.permissions).toEqual({ contents: "read" });
   expect(workflow.concurrency).toBeUndefined();
