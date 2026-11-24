@@ -1,6 +1,6 @@
 import {
   type BinCoreConfirmation,
-  BIN_STOP_CORNERS,
+  binStopField,
   type BinStop,
   BIN_BUS_BOARDING_MS,
   BIN_BUS_ROUTE_M,
@@ -585,24 +585,6 @@ function normalize(input: BinAdd): Omit<BinEntry, "id" | "riding"> {
       ? input.view
       : "other",
     preserve_tab: input.preserve_tab === true,
-    ...binStop(input.stop),
+    ...binStopField(input.stop),
   };
-}
-
-/**
- * The drop stop, when it is well formed. It only places the agent in Town,
- * so a malformed one is dropped (the agent waits at the stop nearest its
- * room) rather than refusing the bin.
- */
-function binStop(stop: unknown): { stop?: BinStop } {
-  if (!stop || typeof stop !== "object") return {};
-  const { building, corner } = stop as Record<string, unknown>;
-  if (
-    typeof building !== "string" ||
-    !building ||
-    building.length > MAX_ID_LENGTH ||
-    !BIN_STOP_CORNERS.includes(corner as BinStop["corner"])
-  )
-    return {};
-  return { stop: { building, corner: corner as BinStop["corner"] } };
 }

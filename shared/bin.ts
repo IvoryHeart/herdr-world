@@ -116,6 +116,26 @@ export type BinStop = {
   corner: (typeof BIN_STOP_CORNERS)[number];
 };
 
+/**
+ * An entry's drop stop field, when the stop is well formed; otherwise none,
+ * and the agent waits at the stop nearest its room. It only places the agent
+ * in Town, so a malformed one is dropped rather than refusing the bin. The
+ * service checks what Town sends, and the browser what the service replies,
+ * with this one rule.
+ */
+export function binStopField(value: unknown): { stop?: BinStop } {
+  if (!value || typeof value !== "object") return {};
+  const { building, corner } = value as Record<string, unknown>;
+  if (
+    typeof building !== "string" ||
+    !building ||
+    building.length > 512 ||
+    !BIN_STOP_CORNERS.includes(corner as BinStop["corner"])
+  )
+    return {};
+  return { stop: { building, corner: corner as BinStop["corner"] } };
+}
+
 export type BinEntry = BinTarget & {
   id: string;
   /** The agent's name, for the bin, the bus and the receipt. */

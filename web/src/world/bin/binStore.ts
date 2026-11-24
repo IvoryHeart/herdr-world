@@ -1,5 +1,6 @@
 import type { BridgeControlMsg, ConnectionStatus } from "../../api";
 import {
+  binStopField,
   EMPTY_BIN,
   type BinEntry,
   type BinOutcome,
@@ -57,6 +58,7 @@ function entryOf(value: unknown): BinEntry | null {
       : "other") as BinView,
     riding: value.riding === true,
     preserve_tab: value.preserve_tab === true,
+    ...binStopField(value.stop),
   };
 }
 
