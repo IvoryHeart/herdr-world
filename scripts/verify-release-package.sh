@@ -34,7 +34,12 @@ grep -Fx "$expected_manifest" "$manifest"
 
 extract_dir="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/herdr-world-release.XXXXXX")"
 trap 'rm -rf "$extract_dir"' EXIT
-tar -xJf "dist/$versioned_archive" -C "$extract_dir"
+# On Windows the temp folder is a drive path (D:\a\_temp); GNU tar would read
+# "D:" as a remote host without --force-local.
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*) tar --force-local -xJf "dist/$versioned_archive" -C "$extract_dir" ;;
+  *) tar -xJf "dist/$versioned_archive" -C "$extract_dir" ;;
+esac
 grep -Fx "herdr-world $version $platform" "$extract_dir/$package_dir/VERSION"
 for legal in LICENSE THIRD_PARTY_NOTICES.md DEPENDENCY_NOTICES.md DEPENDENCY_LICENSES.md UPSTREAM.md; do
   test -f "$extract_dir/$package_dir/$legal"

@@ -712,3 +712,24 @@ test("nightly native plugin regressions run each OS's own installer test", async
     }
   }
 });
+
+test("release candidate packages and verifies natively on Windows", async () => {
+  const candidate = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../.github/workflows/release-candidate.yml", import.meta.url),
+    ).text(),
+  ) as { jobs: Record<string, WorkflowJob> };
+  const build = candidate.jobs.package.steps.find(
+    (step) => step.name === "Build release package once",
+  )!;
+  // Bun's shell cannot execute a .sh script on Windows.
+  expect(build.run).toContain("bash scripts/package-release.sh");
+  expect(build.run).not.toContain("bun run package:");
+  const verify = await Bun.file(
+    new URL("./verify-release-package.sh", import.meta.url),
+  ).text();
+  // GNU tar reads "D:" in a Windows temp path as a remote host.
+  expect(verify).toMatch(
+    /MINGW\* \| MSYS\* \| CYGWIN\*\) tar --force-local -xJf/,
+  );
+});
