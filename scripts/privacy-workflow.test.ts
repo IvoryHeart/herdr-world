@@ -41,7 +41,10 @@ test("privacy CI covers all branches and PRs without scope or metadata bypasses"
   expect(workflow.on.pull_request).toEqual({
     types: ["opened", "synchronize", "reopened"],
   });
-  expect(workflow.permissions).toEqual({ contents: "read" });
+  expect(workflow.permissions).toEqual({
+    contents: "read",
+    "pull-requests": "read",
+  });
   expect(workflow.concurrency).toBeUndefined();
   const job = workflow.jobs.privacy;
   expect(job.if).toBe("github.event.deleted != true");
@@ -58,6 +61,50 @@ test("privacy CI covers all branches and PRs without scope or metadata bypasses"
   const scan = job.steps.find((step: { run?: string }) =>
     step.run?.includes("check-privacy.ts"),
   );
+  // A branch push with an open PR leaves the scan to the PR's run, which
+  // scans the same commits; main and branches without a PR are scanned.
+  const stand = job.steps[0] as Step & { id?: string; if?: string };
+  expect(stand.id).toBe("pr");
+  expect(stand.if).toBe(
+    "github.event_name == 'push' && github.ref != 'refs/heads/main'",
+  );
+  for (const step of job.steps.slice(1) as Array<Step & { if?: string }>)
+    expect(step.if).toBe("steps.pr.outputs.covered != 'true'");
+  for (const [answer, covered] of [
+    ["1", true],
+    ["0", false],
+    ["fail", false],
+  ] as const) {
+    const directory = mkdtempSync(join(tmpdir(), "privacy-open-pr-"));
+    try {
+      writeFileSync(
+        join(directory, "gh"),
+        answer === "fail"
+          ? "#!/bin/sh\nexit 1\n"
+          : `#!/bin/sh\nprintf '%s' '${answer}'\n`,
+        { mode: 0o755 },
+      );
+      const output = join(directory, "output");
+      writeFileSync(output, "");
+      const result = spawnSync("bash", ["-e", "-c", stand.run!], {
+        env: {
+          ...process.env,
+          PATH: `${directory}:${process.env.PATH}`,
+          GITHUB_OUTPUT: output,
+          GITHUB_REPOSITORY: "example/repo",
+          GITHUB_REPOSITORY_OWNER: "example",
+          BRANCH: "feature",
+        },
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(0);
+      expect(readFileSync(output, "utf8").includes("covered=true")).toBe(
+        covered,
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
   expect(workflow.on).toHaveProperty("workflow_dispatch");
   for (const event of ["push", "pull_request", "workflow_dispatch"]) {
     const directory = mkdtempSync(join(tmpdir(), "privacy-dispatch-"));
@@ -84,7 +131,10 @@ test("privacy CI covers all branches and PRs without scope or metadata bypasses"
       rmSync(directory, { recursive: true, force: true });
     }
   }
-  expect(scan?.if).toBeUndefined();
+  // The open-PR stand-down is the scan's only condition.
+  expect((scan as { if?: string } | undefined)?.if).toBe(
+    "steps.pr.outputs.covered != 'true'",
+  );
   expect(scan?.["continue-on-error"]).toBeUndefined();
 });
 

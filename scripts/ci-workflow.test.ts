@@ -318,6 +318,23 @@ test("the latency trend measures the trend suites on quiet runners and reports w
     "workflow_dispatch",
   ]);
   expect(trend.permissions).toEqual({ contents: "read", actions: "read" });
+  // Main pushes measure only when what the browser runs or how it is measured
+  // changed; the nightly run and labelled PRs are not filtered.
+  const push = trend.on.push as { branches: string[]; paths: string[] };
+  expect(push.branches).toEqual(["main"]);
+  for (const path of [
+    "web/src/**",
+    "shared/**",
+    "bun.lock",
+    "scripts/run-world-tests.ts",
+    "scripts/world-browser-suites.ts",
+    "scripts/latency-trend.ts",
+    ".github/workflows/world-latency-trend.yml",
+  ])
+    expect(push.paths).toContain(path);
+  expect(push.paths.some((path) => path.startsWith("server/"))).toBe(false);
+  expect(trend.on.pull_request).toEqual({ types: ["labeled", "synchronize"] });
+  expect(trend.on.schedule).toEqual([{ cron: "53 3 * * *" }]);
   const measure = trend.jobs.measure!;
   expect(
     (measure.strategy?.matrix?.suites ?? [])

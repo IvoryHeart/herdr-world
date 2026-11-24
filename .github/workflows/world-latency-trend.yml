@@ -4,11 +4,27 @@ name: World latency trend
 # runner with the pinned test Chrome, and set beside recent main runs on the
 # same CPU model. It reports and never blocks: CI's World shards assert what
 # does not depend on the runner, and no branch rule requires this workflow.
-# Main pushes add to the baseline; a pull request is measured while it carries
-# the latency-trend label.
+# Main pushes that change what the browser runs or how it is measured add to
+# the baseline; the nightly run covers everything else, including server code
+# the fixtures call. A pull request is measured while it carries the
+# latency-trend label.
 on:
     push:
         branches: [main]
+        paths:
+            - web/src/**
+            - web/package.json
+            - shared/**
+            - package.json
+            - bun.lock
+            - tools/chrome/**
+            - scripts/run-world-tests.ts
+            - scripts/world-browser-suites.ts
+            - scripts/check-lock.ts
+            - scripts/latency-trend.ts
+            - scripts/wait-for-quiet.ts
+            - scripts/test-chrome.ts
+            - .github/workflows/world-latency-trend.yml
     pull_request:
         types: [labeled, synchronize]
     schedule:

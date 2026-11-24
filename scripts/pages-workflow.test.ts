@@ -87,9 +87,12 @@ test("Pages deploys on main pushes or manual dispatch and checks installer avail
     paths: [
       "site/**",
       "openspec/specs/**",
-      "openspec/changes/**",
+      "openspec/changes/*/specs/**/spec.md",
       "scripts/pages-features.ts",
       "docs/TUTORIAL.md",
+      "docs/HELP.md",
+      "web/public/help/**",
+      "scripts/help-docs.ts",
       "docs/images/**",
       // The film bundles Town's art (site/film/town-art.ts).
       "web/src/world/town/**",
@@ -233,7 +236,7 @@ test("Pages rebuilds the generated feature reference when specs, notes or render
   const push = workflow.on.push as { paths: string[] };
   for (const path of [
     "openspec/specs/**",
-    "openspec/changes/**",
+    "openspec/changes/*/specs/**/spec.md",
     "scripts/pages-features.ts",
     "scripts/openspec-notes.ts",
   ])

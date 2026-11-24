@@ -138,8 +138,10 @@ when copying anything out of `.agents/` into tracked paths. The command scans
 each commit introduced since `origin/main`; `bun run check:privacy --range
 <base-ref> <head-ref>` selects another range. The pre-push hook scans every actual
 pushed ref, before policy and delivery checks, including docs and merge shortcuts.
-The independent **Privacy guard** CI check runs on every branch push and PR,
-including branches without a PR and pushes that skip local hooks.
+The independent **Privacy guard** CI check runs on every PR and every branch
+push, including branches without a PR and pushes that skip local hooks. A push
+to a branch with an open PR leaves the scan to that PR's run, which scans the
+same commits.
 
 The guard checks added lines in every introduced commit, so deleting a leak in a
 later commit of the same push does not hide it. It rejects private/CGNAT IPv4,

@@ -9,7 +9,7 @@ for compatibility with branch rules.
 | --- | --- | --- |
 | Local pre-commit | `check:commit`: no live `.agents/` files, read-only formatting and lint | Quick feedback before a commit; not a delivery gate |
 | Local pre-push | `check:changed`: static checks and affected non-browser units; gate/configuration changes run all non-browser units | Affected tests save local work; CI remains authoritative |
-| Privacy on every branch push and PR | Scan added lines in every introduced commit for private material, with redacted diagnostics | Independent of PR creation and validation scope; local pre-push scans the actual pushed refs too |
+| Privacy on every branch push and PR | Scan added lines in every introduced commit for private material, with redacted diagnostics | Independent of PR creation and validation scope; a push to a branch with an open PR leaves the scan to the PR run; local pre-push scans the actual pushed refs too |
 | CI on a PR | Validate the proposed merge; check its description and changelog policy | One shared scope decision; native platforms and browser shards keep separate runners |
 | CI on main | Execute the complete integrated matrix, unless the merged PR's full run tested the identical tree; then reuse it and report "Reused from run N" | A different tree is different code, so it runs in full |
 | Main gate | Classify failed push CI, rerun a recognized infrastructure failure once, or prepare an issue and revert | Does not merge a revert; green main resolves earlier alerts |
@@ -17,7 +17,7 @@ for compatibility with branch rules.
 | Town golden images | Compare five synthetic Town screenshots on manual dispatch while automatic reporting is quarantined | Advisory, separate from Delivery checks; exact pixels with pinned Chrome, fonts, clock and SwiftShader |
 | Prepare Release | Generate and validate release files in a checkout, then open a PR and dispatch CI | Generated files need validation before review |
 | Publish Release and Release | Authorize exact Linux/macOS release-walk bytes and signed-in local evidence before the maintainer tags; publish the same tested Unix packages | Publication requires the retained pre-tag authorization; tag protection remains in force |
-| Deploy Pages | Build and publish the documentation site and film | Site publication is separate from application release acceptance |
+| Deploy Pages | Build and publish the documentation site and film when their inputs change on main | Site publication is separate from application release acceptance |
 | Upstream automation | Detect a frozen source release, request local integration and independently review it | External runtime adoption remains a separate decision |
 
 ## Check commands
@@ -214,7 +214,8 @@ World/web suites, without escalating to native or model work. Executable gate
 policy still selects the full matrix. Browser jobs use the pinned test Chrome
 (`tools/chrome/test-chrome.json`) and never retry. Timing is not a CI check: the
 separate, non-blocking World latency trend workflow measures the dense suites on
-quiet runners nightly, for main pushes and `latency-trend`-labelled PRs and reports them
+quiet runners nightly, for main pushes that change the browser code or its
+measurement, and for `latency-trend`-labelled PRs, and reports them
 beside main's recent runs on the same CPU model.
 
 The [Town golden-image report](SCREENSHOTS.md#town-golden-image-report) remains

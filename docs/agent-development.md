@@ -37,9 +37,11 @@ A main push queues one `bot/openspec-archive` PR: completed changes are applied
 and archived oldest merge date first; incomplete tasks stay active. A conflict
 restores that item's partial writes and stops the batch, retaining earlier
 successful archives in the PR. Even an empty stopped batch fails the workflow and
-names the stopped change in its log and summary. Resolve the named delta in a normal PR
-or on the bot branch before the next batch; the bot merges main without overwriting
-branch repairs. Merge dates use first appearance on main, independent of timezone
+names the stopped change in its log and summary. Each run recreates the bot
+branch from current main, so an older batch never conflicts with later merges;
+resolve the named delta in a normal PR, as a repair on the bot branch is replaced
+by the next run. When main has nothing left to archive, the run closes an open
+batch PR. Merge dates use first appearance on main, independent of timezone
 or later edits. The bot never pushes main or merges; independent review still applies.
 The pinned CLI has no bulk command, so `scripts/archive-changes.ts` sequences its
 validated archive command. The feature-map migration archives the five completed

@@ -1,14 +1,21 @@
 name: Deploy Pages
 
+# Main pushes deploy only when something the site is built from changed: the
+# site sources, capability specs and notes (a new capability's contract can
+# still be its change's delta), the tutorial, Help, the pictures, the film's
+# Town art and the release-gate inputs. Other merges leave the site as it is.
 on:
     push:
         branches: [main]
         paths:
             - site/**
             - openspec/specs/**
-            - openspec/changes/**
+            - openspec/changes/*/specs/**/spec.md
             - scripts/pages-features.ts
             - docs/TUTORIAL.md
+            - docs/HELP.md
+            - web/public/help/**
+            - scripts/help-docs.ts
             - docs/images/**
             - web/src/world/town/**
             - web/src/world/terminalColor.ts

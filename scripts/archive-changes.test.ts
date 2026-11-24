@@ -163,9 +163,13 @@ test("archive workflow serializes one reviewed bot branch and never publishes ma
     .map((s) => s.run ?? "")
     .join("\n");
   expect(commands).toContain("branch=bot/openspec-archive");
-  expect(commands).toContain("git merge --no-edit origin/main");
-  expect(commands).toContain('git push origin "HEAD:refs/heads/$branch"');
-  expect(commands).not.toContain("--force");
+  // Each run starts from current main, so an older batch never conflicts.
+  expect(commands).toContain('git checkout -B "$branch" origin/main');
+  expect(commands).not.toContain("git merge");
+  expect(commands).toContain(
+    'git push --force-with-lease="refs/heads/$branch:$lease" origin "HEAD:refs/heads/$branch"',
+  );
+  expect(commands).not.toMatch(/--force(?!-with-lease)/);
   expect(commands).toContain("archive_status=$?");
   expect(commands).toContain('exit "$archive_status"');
   expect(commands).not.toMatch(

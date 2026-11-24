@@ -25,6 +25,7 @@ import type { TownQuietMarks } from "../../world/town/TownBoard";
 import BoardView from "../../world/BoardView";
 import CodeView from "../../world/code/CodeView";
 import { fixtureIdeClient, type IdeClient } from "../../world/code/ideClient";
+import { forgetTownCameras } from "../../world/town/TownCanvas";
 import { TownMasterFigure } from "../../world/TownMasterCard";
 import { quietGreetingForTest } from "../../world/townMasterGreeting";
 import {
@@ -289,8 +290,14 @@ const runtimesTown =
   scene === "town" ? siteTownScene(undefined, { runtimes: true }) : null;
 let runtimesSwapped = false;
 
-/** Swaps the Town stage and waits until the new town has settled. */
+/**
+ * Swaps the Town stage and waits until the new town has settled. Town keeps
+ * its camera per town shape for the page's lifetime, and both towns share a
+ * shape, so the new one would open where an earlier picture's press (ALL)
+ * left the camera; it opens at home instead, as at load.
+ */
 async function swapTown(runtimes: boolean) {
+  forgetTownCameras();
   setRuntimesShown(runtimes);
   runtimesSwapped = runtimes;
   await frames(10);
