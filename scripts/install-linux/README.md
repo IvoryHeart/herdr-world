@@ -20,12 +20,9 @@ Buildx driver or cache authentication setup. Changing to a regional mirror would
 still download packages on every run. Cache eviction or a dependency recipe
 change requires a cold build; cached packages refresh when the recipe changes.
 
-Cold apt runs use one native retry, 15-second HTTP/HTTPS connection and transfer
+Cold apt runs use one retry, 15-second HTTP/HTTPS connection and transfer
 timeouts, strict update errors, and a 300-second total deadline with a five-second
-kill grace. A failed index refresh gets one fresh attempt, including for HTTP 520
-which native retries do not cover. Both attempts require every index and retain
-signature checks; repeated refresh failures prevent installation. The total
-deadline covers both refresh attempts and installation, so a mirror
+kill grace. The total deadline covers both update and installation, so a mirror
 that trickles bytes cannot consume the command runner's 20-minute allowance.
 That outer allowance remains available for package builds and installer cases.
 Failure includes apt's diagnostics and an explicit dependency-cache error.

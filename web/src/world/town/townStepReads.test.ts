@@ -1,6 +1,5 @@
-import { expect, spyOn, test } from "bun:test";
+import { expect, test } from "bun:test";
 import type { ConnectionClient } from "../../api";
-import { installTestClock, type ClockTarget } from "../testing/testClock";
 import type { WorldLeafObject } from "../worldObject";
 import { TownStepStore } from "./townStepStore";
 import { TOWN_STEP_BATCH, TownStepReads } from "./useTownStepReads";
@@ -193,37 +192,21 @@ test("a change during a read waits for it, even with a fresh client per lookup, 
       return () => void watched.delete(paneId);
     },
   });
-  // A real-time wait can finish before the reply schedules its next batch.
-  // Drive both timers and promise continuations with the fixture clock.
-  const timers = {} as ClockTarget;
-  const clock = installTestClock(timers, { now: () => 0 });
-  const timeout = spyOn(globalThis, "setTimeout").mockImplementation(
-    timers.setTimeout,
-  );
-  const clear = spyOn(globalThis, "clearTimeout").mockImplementation(
-    timers.clearTimeout,
-  );
-  try {
-    store.onWant(() => reads.sync());
-    store.want(["a"]);
-    await clock.advance(16);
-    expect(calls).toHaveLength(1);
-    // The agent moves on while the first read is still out.
-    watched.get("pane-a")!();
-    await clock.advance(16);
-    expect(calls).toHaveLength(1);
-    replies[0]!({ conversations: [reply("pane-a", "Edit")] });
-    await clock.advance(16);
-    expect(store.get("a")?.kind).toBe("edit");
-    expect(calls).toHaveLength(2);
-    replies[1]!({ conversations: [reply("pane-a", "Read")] });
-    await clock.advance(16);
-    expect(store.get("a")?.kind).toBe("read");
-  } finally {
-    reads.dispose();
-    clear.mockRestore();
-    timeout.mockRestore();
-  }
+  store.onWant(() => reads.sync());
+  store.want(["a"]);
+  await settle();
+  expect(calls).toHaveLength(1);
+  // The agent moves on while the first read is still out.
+  watched.get("pane-a")!();
+  await settle();
+  expect(calls).toHaveLength(1);
+  replies[0]!({ conversations: [reply("pane-a", "Edit")] });
+  await settle();
+  expect(store.get("a")?.kind).toBe("edit");
+  expect(calls).toHaveLength(2);
+  replies[1]!({ conversations: [reply("pane-a", "Read")] });
+  await settle();
+  expect(store.get("a")?.kind).toBe("read");
 });
 
 test("every working agent on screen is read, in turns of at most TOWN_STEP_BATCH", async () => {

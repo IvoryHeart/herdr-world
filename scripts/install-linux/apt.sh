@@ -13,8 +13,7 @@ if timeout --kill-after=5s 300s sh -eu -c '
             -o Acquire::https::Timeout=15 -o APT::Update::Error-Mode=any "$@"
     }
     started=$(date +%s)
-    # APT does not retry HTTP 520; permit one fresh attempt within the deadline.
-    apt_get update || apt_get update
+    apt_get update
     printf "[apt] update: %ss\n" "$(($(date +%s) - started))"
     started=$(date +%s)
     apt_get install -y --no-install-recommends \
