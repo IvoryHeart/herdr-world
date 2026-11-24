@@ -75,6 +75,8 @@ export function townDeskOpenKey(
 /**
  * Whether a tap on the desk opens something at once (townDeskOpenKey), so a
  * touch tap opens it rather than the desk's summary card first.
+ *
+ * @internal
  */
 export function townDeskOpensAtOnce(
   office: HerdrOfficeProjection,
@@ -82,6 +84,28 @@ export function townDeskOpensAtOnce(
 ) {
   const key = townDeskOpenKey(office, deskKey);
   return key !== null && townTargetActionable(office, key);
+}
+
+/**
+ * Whether a tap on `deskKey` opens its table's card, with `open` the table
+ * whose card is open. Only a table drawn with its nameplate (its room among
+ * `shownRooms`), and with no pane a tap opens at once, has a card; a second
+ * tap on the same table does what a tap always did.
+ */
+export function townDeskCardOpens(
+  office: HerdrOfficeProjection,
+  deskKey: string | null,
+  open: string | null,
+  roomKey: string | undefined,
+  shownRooms: ReadonlySet<string>,
+): boolean {
+  return (
+    deskKey !== null &&
+    deskKey !== open &&
+    !townDeskOpensAtOnce(office, deskKey) &&
+    !!roomKey &&
+    shownRooms.has(roomKey)
+  );
 }
 
 export async function inspectTownTerminal(

@@ -186,7 +186,8 @@
 }
 
 /* A lens's room labels stand in for the room cards; taps reach the town. */
-.town-world[data-lens] .town-room-card {
+.town-world[data-lens] .town-room-card,
+.town-world[data-lens] .town-room-card-runtime {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
