@@ -26,7 +26,12 @@
     "scripts/pages-workflow.test.ts",
     "scripts/check-knowledge-map.test.ts",
     "scripts/archive-changes.test.ts",
-    "scripts/check-pr-body.test.ts"
+    "scripts/check-pr-body.test.ts",
+    "scripts/release-walk-gate.test.ts",
+    "scripts/release-plan.test.ts",
+    "scripts/release-publication.test.js",
+    "scripts/pipeline-retry.test.ts",
+    "scripts/open-homebrew-pr.test.ts"
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
   "technique": "alternative",
@@ -34,7 +39,7 @@
   "status": "alternative-evidence",
   "remaining": "Local tests cannot establish every packaged platform or published asset. Protected validation and release checks remain required.",
   "requiredChecks": ["bun run check", "bun run verification:gate"],
-  "evidenceDecision": "Real packaging/installer/release/CI tests exercise archive validation and dependency gates; actual platform/release workflows supply distribution evidence. Upstream-sync tests directly enumerate bounded repair/authority cases and reconstruct conflicting Git merges with exact ancestry and binary patches; hosted App eligibility, model quality and API execution remain platform evidence (docs/upstream-automation.md). Proposed installer-upgrade CI builds real native candidate archives and exercises latest-stable plugin installation, authenticated runtime/session migration and failed-checksum retention in isolated state. This direct platform evidence is more useful than a model of OS packaging; OS service/channel upgrades and older release combinations remain excluded (docs/release.md). OpenSpec notes source admission and public feature rendering use direct filesystem/Markdown/link regressions; Pages workflow checks cover build inputs and test wiring. Native OpenSpec owns agent discovery; no repository lookup remains. These static transformations introduce no ordering or recovery state, so direct build and policy checks are more useful than an additional model; synchronous OpenSpec batch archives use real Git and the pinned CLI to cover merge-date ordering, incomplete tasks, successful-prefix retention and restored conflict boundaries. Workflow wiring checks one serialized bot branch with no automatic main publication; hosted execution and review remain platform evidence. The feature-map repair additionally checks the complete tracked-source baseline, deleted-source admission without weakening spec deletion policy, the real legacy archive baseline and visible empty-batch failures.",
+  "evidenceDecision": "Real packaging/installer/release/CI tests exercise archive validation and dependency gates; actual platform/release workflows supply distribution evidence. Upstream-sync tests directly enumerate bounded repair/authority cases and reconstruct conflicting Git merges with exact ancestry and binary patches; hosted App eligibility, model quality and API execution remain platform evidence (docs/upstream-automation.md). Proposed installer-upgrade CI builds real native candidate archives and exercises latest-stable plugin installation, authenticated runtime/session migration and failed-checksum retention in isolated state. This direct platform evidence is more useful than a model of OS packaging; Older release combinations beyond the frozen previous release remain excluded (docs/release.md). OpenSpec notes source admission and public feature rendering use direct filesystem/Markdown/link regressions; Pages workflow checks cover build inputs and test wiring. Native OpenSpec owns agent discovery; no repository lookup remains. These static transformations introduce no ordering or recovery state, so direct build and policy checks are more useful than an additional model; synchronous OpenSpec batch archives use real Git and the pinned CLI to cover merge-date ordering, incomplete tasks, successful-prefix retention and restored conflict boundaries. Archive-helper fixtures cover reviewed preparation without automatic main publication; hosted execution and review remain platform evidence. The feature-map repair additionally checks the complete tracked-source baseline, deleted-source admission without weakening spec deletion policy, the real legacy archive baseline and visible empty-batch failures. Release waiting/failure/expiry transitions use an injected clock and exhaustive state cases; real registry/filesystem fixtures cover interruption at each serialized publication boundary, unchanged integrity and refusal of conflicting bytes. Workflow graph tests require every native install/upgrade/walk/audit before sealing and exact artifact consumption before publication. Native channel checks launch the same packages, test running installer/Homebrew upgrades and restart after old-keg deletion. Serialization removes overlapping publishers; immutable version/commit/digest checks refuse other owners. Hosted token/ruleset/registry/tap operation and the RC rehearsal remain platform acceptance, not claims from a model.",
   "partialEvidence": {
     "models": [],
     "contracts": ["verification/consumer-evidence.md"],
@@ -59,7 +64,12 @@
       "scripts/pages-workflow.test.ts",
       "scripts/check-knowledge-map.test.ts",
       "scripts/archive-changes.test.ts",
-      "scripts/check-pr-body.test.ts"
+      "scripts/check-pr-body.test.ts",
+      "scripts/release-walk-gate.test.ts",
+      "scripts/release-plan.test.ts",
+      "scripts/release-publication.test.js",
+      "scripts/pipeline-retry.test.ts",
+      "scripts/open-homebrew-pr.test.ts"
     ],
     "checks": ["bun run check"],
     "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

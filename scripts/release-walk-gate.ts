@@ -1,199 +1,108 @@
-/** Bind pre-tag approval and publication to native CI and optional local receipts. */
-import {
-  appendFileSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { join } from "node:path";
+/** Resolve the sealed candidate automatically; no cross-run authorization. */
+import { appendFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 
-async function output(argv: string[]) {
-  const child = Bun.spawn(argv, { stdout: "pipe", stderr: "pipe" });
-  const [code, stdout] = await Promise.all([
-    child.exited,
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ]);
-  if (code) throw new Error(`${argv[0]} evidence command failed`);
-  return stdout.trim();
+type Run = {
+  id: number;
+  head_sha: string;
+  head_branch: string;
+  event: string;
+  status: string;
+  conclusion: string | null;
+  run_attempt: number;
+};
+type Artifact = { id: number; name: string; expired: boolean };
+
+/** @internal */
+export function mainRun(runs: Run[], sha: string): Run | undefined {
+  return runs
+    .filter(
+      (run) =>
+        run.head_sha === sha &&
+        run.head_branch === "main" &&
+        run.event === "push",
+    )
+    .sort((a, b) => b.id - a.id)[0];
 }
 
-export async function releaseWalkGate(args: string[]) {
-  const [mode, sha, version, runId, prNumber] = args;
-  if (
-    !sha ||
-    !/^[a-f0-9]{40}$/.test(sha) ||
-    !version ||
-    !/^\d+\.\d+\.\d+(?:-rc\.[1-9]\d*)?$/.test(version) ||
-    !runId ||
-    !/^[1-9]\d*$/.test(runId)
-  )
-    throw new Error(
-      "Require mode, immutable release SHA, version and evidence run ID",
-    );
-  if (mode !== "authorize" && mode !== "publication")
-    throw new Error("Unknown release walk gate mode");
-  const repository = "IvoryHeart/herdr-world";
-  const run = JSON.parse(
-    await output(["gh", "api", `repos/${repository}/actions/runs/${runId}`]),
+/** @internal */
+export function sealedArtifact(artifacts: Artifact[]): Artifact | undefined {
+  const bundles = artifacts.filter(
+    (artifact) => artifact.name === "verified-release" && !artifact.expired,
   );
-  const root = mkdtempSync("/tmp/world-walk-gate-");
-  try {
-    let signed: unknown;
-    let ciRunId = runId;
-    let releasePr = prNumber || undefined;
-    if (mode === "publication") {
-      if (
-        run.path !== ".github/workflows/publish-release.yml" ||
-        run.event !== "workflow_dispatch"
-      )
+  if (bundles.length > 1) throw new Error("Ambiguous sealed release artifacts");
+  return bundles[0];
+}
+
+/** Eventual main CI selection; injectable clock/wait makes every transition testable. */
+/** @internal */
+export async function waitForMain(
+  sha: string,
+  readRuns: () => Promise<Run[]>,
+  wait = () => delay(30_000),
+  now = Date.now,
+) {
+  const deadline = now() + 350 * 60 * 1000;
+  // Pipeline wait includes queueing and the single infrastructure retry.
+  let run: Run | undefined;
+  let firstFailure: number | undefined;
+  while (now() < deadline) {
+    run = mainRun(await readRuns(), sha);
+    if (run?.status === "completed") {
+      if (run.conclusion === "success") break;
+      firstFailure ??= now();
+      if (run.run_attempt > 1 || now() - firstFailure > 180_000)
         throw new Error(
-          "Publication requires authorization from Publish Release before tagging",
+          "Main CI failed; re-run the failed main jobs, then re-run this tag",
         );
-      await output([
-        "gh",
-        "run",
-        "download",
-        runId,
-        "--repo",
-        repository,
-        "--name",
-        "release-walk-authorization",
-        "--dir",
-        root,
-      ]);
-      const authorization = JSON.parse(
-        readFileSync(join(root, "authorization.json"), "utf8"),
-      );
-      if (
-        authorization.commit !== sha ||
-        authorization.version !== version ||
-        authorization.before_tag !== true
-      )
-        throw new Error(
-          "Tag differs from its pre-tag release walk authorization",
-        );
-      signed = authorization.signed ?? null;
-      ciRunId = authorization.ci_run_id;
-      releasePr = authorization.release_pr || undefined;
-    } else {
-      signed = JSON.parse(
-        process.env.RELEASE_WALK_SIGNED_RECEIPT?.trim() || "null",
-      );
     }
-    if (
-      (releasePr !== undefined && !/^[1-9]\d*$/.test(releasePr)) ||
-      !/^[1-9]\d*$/.test(ciRunId)
-    )
-      throw new Error(
-        "Require a native walk CI run and a valid release PR number if supplied",
-      );
-    const ci =
-      mode === "authorize"
-        ? run
-        : JSON.parse(
-            await output([
-              "gh",
-              "api",
-              `repos/${repository}/actions/runs/${ciRunId}`,
-            ]),
-          );
-    const mainEvidence =
-      (ci.event === "push" && ci.head_branch === "main") ||
-      ci.event === "workflow_dispatch";
-    if (
-      ci.path !== ".github/workflows/ci.yml" ||
-      !mainEvidence ||
-      ci.head_sha !== sha ||
-      ci.conclusion !== "success"
-    )
-      throw new Error(
-        "Require successful main CI for the exact release commit",
-      );
-    const reports = join(root, "reports");
-    await output([
-      "gh",
-      "run",
-      "download",
-      ciRunId,
-      "--repo",
-      repository,
-      "--pattern",
-      "release-walk-report-*",
-      "--dir",
-      reports,
-    ]);
-    const signedFile = join(root, "signed.json");
-    writeFileSync(signedFile, JSON.stringify(signed));
-    const digest = await output([
-      "python3",
-      "scripts/release-walk/validate.py",
-      reports,
-      signedFile,
-      sha,
-      version,
-    ]);
-    if (releasePr) {
-      const pr = JSON.parse(
-        await output([
-          "gh",
-          "pr",
-          "view",
-          releasePr,
-          "--repo",
-          repository,
-          "--json",
-          "mergedAt,mergeCommit,body,baseRefName",
-        ]),
-      );
-      if (
-        !pr.mergedAt ||
-        pr.baseRefName !== "main" ||
-        pr.mergeCommit?.oid !== sha
-      )
-        throw new Error(
-          "The release PR must be merged to main at the exact release commit",
-        );
-      if (signed !== null) {
-        const recorded = pr.body.matchAll(
-          /^Release walk signed-in receipt:[ \t]*(.*)$/gm,
-        );
-        for (const [, value] of recorded)
-          if (value.trim() !== digest)
-            throw new Error(
-              "The release PR records a different signed-in local receipt",
-            );
-      }
-    }
-    if (mode === "authorize") {
-      const authorization = {
-        before_tag: true,
-        commit: sha,
-        version,
-        ci_run_id: ciRunId,
-        release_pr: releasePr,
-        signed,
-      };
-      const file = process.env.RELEASE_WALK_AUTHORIZATION;
-      if (!file) throw new Error("Require authorization artifact destination");
-      writeFileSync(file, JSON.stringify(authorization));
-    }
-    if (process.env.GITHUB_OUTPUT)
-      appendFileSync(process.env.GITHUB_OUTPUT, `walk_run_id=${ciRunId}\n`);
-    console.info(
-      "Release walk gate passed for the exact release commit and package bytes",
-    );
-  } finally {
-    rmSync(root, { recursive: true, force: true });
+    await wait();
   }
+  if (!run || run.status !== "completed" || run.conclusion !== "success")
+    throw new Error(
+      "Main CI wait timed out; re-running this tag resumes the wait",
+    );
+  return run;
+}
+
+export async function releaseWalkGate(sha: string) {
+  if (!/^[a-f0-9]{40}$/.test(sha))
+    throw new Error("Require exact release commit");
+  const repo = process.env.GITHUB_REPOSITORY!;
+  const api = (path: string) =>
+    JSON.parse(
+      execFileSync("gh", ["api", `repos/${repo}/${path}`], {
+        encoding: "utf8",
+      }),
+    );
+  const run = await waitForMain(
+    sha,
+    async () =>
+      api(
+        `actions/workflows/ci.yml/runs?head_sha=${sha}&event=push&per_page=100`,
+      ).workflow_runs,
+  );
+  const artifact = sealedArtifact(
+    api(`actions/runs/${run.id}/artifacts?per_page=100`).artifacts,
+  );
+  if (process.env.GITHUB_OUTPUT)
+    appendFileSync(
+      process.env.GITHUB_OUTPUT,
+      `run=${run.id}\nartifact=${artifact?.id ?? ""}\nrebuild=${!artifact}\n`,
+    );
+  console.log(
+    artifact
+      ? "Main CI passed; publishing its sealed bytes"
+      : "Seal expired; rebuilding and testing every release contract before publication",
+  );
 }
 
 if (import.meta.main) {
   try {
-    await releaseWalkGate(process.argv.slice(2));
+    await releaseWalkGate(process.argv[2]!);
   } catch (error) {
-    console.error((error as Error).message);
+    console.error(`::error::${(error as Error).message}`);
     process.exitCode = 1;
   }
 }

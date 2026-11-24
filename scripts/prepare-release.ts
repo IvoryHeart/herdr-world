@@ -10,13 +10,7 @@
 //   bun scripts/prepare-release.ts patch
 
 import { execFileSync, spawnSync } from "node:child_process";
-import {
-  appendFileSync,
-  existsSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { appendFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -169,13 +163,30 @@ export function promoteChangelog(
   );
 }
 
-export function draftCandidateNotes(version: string, stableNotes: string) {
-  if (!isReleaseCandidate(version)) {
-    throw new Error(`not a release candidate: ${version}`);
-  }
-  const body = stableNotes.replace(/^# [^\n]+\n/u, "").trim();
-  if (!body) throw new Error("stable release notes are empty");
-  return `# Herdr World ${version} release candidate\n\nThis candidate needs cross-platform validation before the stable release. Install this exact version; report defects against tag \`v${version}\`. A correction receives the next RC number.\n\n${body}\n`;
+/** Changelog sections are the public release notes on every channel. */
+export function releaseNotes(changelog: string, version: string): string {
+  const section = changelog.split(`## [${version}] - `)[1];
+  if (!section) throw new Error(`Missing changelog section for ${version}`);
+  const body = section
+    .slice(section.indexOf("\n") + 1)
+    .split(/^## \[/m)[0]
+    .trim();
+  if (!body) throw new Error(`Empty changelog section for ${version}`);
+  return body + "\n";
+}
+
+/** @internal */
+export function compactFragments(fragments: ReturnType<typeof readFragments>) {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    sections: fragment.sections.map((section) => ({
+      ...section,
+      body: section.body
+        .split("\n")
+        .filter((line) => line.startsWith("- "))
+        .join("\n"),
+    })),
+  }));
 }
 
 function git(...args: string[]): string {
@@ -254,48 +265,24 @@ function main() {
   if (originTagExists(tag)) {
     abort(`tag ${tag} already exists on origin`);
   }
-  const notesPath = join(REPO_ROOT, "docs", "releases", `${tag}.md`);
-  const candidate = isReleaseCandidate(version);
-  const notesExist = existsSync(notesPath);
-  const releaseNotes = notesExist
-    ? readFileSync(notesPath, "utf8")
-    : candidate
-      ? draftCandidateNotes(
-          version,
-          readFileSync(
-            join(
-              REPO_ROOT,
-              "docs",
-              "releases",
-              `v${version.replace(/-rc\.[1-9]\d*$/u, "")}.md`,
-            ),
-            "utf8",
-          ),
-        )
-      : "";
-  if (!releaseNotes.trim()) abort(`release notes for ${tag} are empty`);
-
-  // Compute every output before writing anything so a validation failure
-  // leaves the worktree untouched.
+  const fragments = readFragments(REPO_ROOT);
   const manifestWrite = replaceManifestVersion(manifestText, current, version);
-  // Stable releases first fold changes/ fragments into Unreleased; RCs leave
-  // both open for the stable release.
-  const fragments = candidate ? [] : readFragments(REPO_ROOT);
-  const changelogWrite = candidate
-    ? changelogText
-    : promoteChangelog(
-        assembleChangelog(changelogText, fragments),
-        version,
-        new Date().toISOString().slice(0, 10),
-      );
+  const assembled = assembleChangelog(
+    changelogText,
+    compactFragments(fragments),
+  );
+  const changelogWrite = promoteChangelog(
+    assembled,
+    version,
+    new Date().toISOString().slice(0, 10),
+  );
   writeFileSync(manifestPath, manifestWrite);
-  if (!notesExist) writeFileSync(notesPath, releaseNotes);
-  if (changelogWrite !== changelogText) {
-    writeFileSync(changelogPath, changelogWrite);
-  }
-  for (const { name } of fragments) {
-    rmSync(join(REPO_ROOT, FRAGMENT_DIR, name));
-  }
+  writeFileSync(changelogPath, changelogWrite);
+  // RCs retain fragments for the eventual stable section.
+  if (!isReleaseCandidate(version))
+    for (const { name } of fragments) {
+      rmSync(join(REPO_ROOT, FRAGMENT_DIR, name));
+    }
 
   console.log(
     `Prepared release ${version}. Review the changes and submit them as a release PR.`,

@@ -273,36 +273,30 @@ test("without a frozen baseline, container installs resolve the latest stable re
   expect(calls).toBe(1);
 });
 
-test("systemd acceptance blocks the existing native gate and release publication", async () => {
-  const native = Bun.YAML.parse(
-    await Bun.file(".github/workflows/installer-upgrade.yml").text(),
-  ) as any;
-  const release = Bun.YAML.parse(
-    await Bun.file(".github/workflows/release.yml").text(),
-  ) as any;
-  const ci = Bun.YAML.parse(
-    await Bun.file(".github/workflows/ci.yml").text(),
-  ) as any;
-  for (const job of [native.jobs.upgrade, release.jobs.package]) {
-    const step = job.steps.find((item: any) =>
-      item.run?.includes("test:install-linux"),
-    );
-    expect(step).toBeDefined();
-    expect(step.if).toBe("matrix.platform == 'linux-x64'");
-    expect(step.run).toContain("--reuse --version");
-    expect(step.run).toContain("--require-docker");
-    expect(step["continue-on-error"]).toBeUndefined();
-  }
+test("native PRs retain systemd containment; release checks running channel upgrades", async () => {
+  const workflow = async (name: string): Promise<any> =>
+    Bun.YAML.parse(await Bun.file(`.github/workflows/${name}.yml`).text());
+  const native = await workflow("installer-upgrade");
+  const release = await workflow("release");
+  const candidate = await workflow("release-candidate");
+  const ci = await workflow("ci");
+  const step = native.jobs.upgrade.steps.find((item: any) =>
+    item.run?.includes("test:install-linux"),
+  );
+  expect(step.if).toBe("matrix.platform == 'linux-x64'");
+  expect(step.run).toContain("--reuse --version");
+  expect(step.run).toContain("--require-docker");
+  expect(step["continue-on-error"]).toBeUndefined();
   expect(ci.jobs["installer-upgrade"].if).toContain(
     "outputs.packaging == 'true'",
   );
-  expect(ci.jobs.delivery.name).toBe("Delivery checks");
   expect(ci.jobs.delivery.needs).toContain("installer-upgrade");
-  for (const publisher of ["publish", "npm-publish", "homebrew-pr"]) {
-    expect(release.jobs[publisher].needs).toContain("package");
-  }
-  const releaseInstall = release.jobs.package.steps.find((item: any) =>
-    item.run?.includes("test:install-linux"),
-  );
-  expect(releaseInstall.env.GH_TOKEN).toBe("${{ github.token }}");
+  expect(ci.jobs["release-candidate"].uses).toBe(release.jobs.rebuild.uses);
+  expect(
+    candidate.jobs["homebrew-smoke"].steps.some((item: any) =>
+      item.run?.includes("release-channel-upgrade.py"),
+    ),
+  ).toBe(true);
+  expect(JSON.stringify(candidate)).not.toContain("test:install-linux");
+  expect(release.jobs.publish.needs).toContain("acquire");
 });

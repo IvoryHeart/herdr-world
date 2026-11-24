@@ -4,7 +4,7 @@
 
 **Surfaces:**
 
-- [Real-runtime release walk and pre-tag gate](../../../docs/release.md#real-runtime-release-walk) covers packaged runtime/agent launch journeys and receipts.
+- [Three owner release steps](../../../docs/release.md#three-owner-steps) and the native walk cover tested packages and automatic recovery.
 - Installers, updates, releases, contributor delivery and the public documentation site.
 - Server feature wiring and presence composition: [contributor guide](../../../docs/development.md#verification).
 
@@ -35,6 +35,11 @@
 - `web/src/testing/`
 - `scripts/release-walk.ts`
 - `scripts/release-walk-gate.ts`
+- `scripts/release-channel-upgrade.py`
+- `scripts/release-npm-smoke.ts`
+- `scripts/pipeline-retry.ts`
+- `server/src/config/service-executable.ts`
+- `server/src/cli/update-finish.ts`
 - `scripts/release-walk/`
 - `scripts/prepare-release.ts`
 - `scripts/prepare-release.test.ts`

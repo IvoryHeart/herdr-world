@@ -15,7 +15,9 @@ With core already installed and no Herdr TUI, World's first run discovers and
 saves the local core as its default without changing the runtime or its login item.
 
 Standalone replacements and World updates refresh the TUI and its integrations,
-then restart the matching managed World service. Installed core is left unchanged;
+then restart the matching managed World service. Homebrew services use the validated
+opt path; formula post-install finalization refreshes a running service from the
+same formula before old-keg cleanup. Installed core is left unchanged;
 upgrade it with core's own tools. `HERDR_WORLD_SKIP_HERDR=1` skips runtime changes
 while allowing World's restart. World's harness skills and Claude limits tap
 refresh separately; `HERDR_WORLD_SKIP_INTEGRATIONS=1` skips those. Explicitly
@@ -34,7 +36,7 @@ resolves `storage/world-worker.ts` relative to the bundled main entry; source
 execution resolves the sibling module. The crash fixture deliberately places
 its entry outside `storage/` and uses release minify/source-map flags, so it
 exercises that packaged layout with the production worker. The native installer
-matrix runs the storage crash suite on all six release targets when CI runs, including a
+matrix runs the storage crash suite on all six release targets for native PR inputs and nightly main, including a
 standalone compiled fixture copied away from its source. It records the SQLite
 version actually linked by each platform; a Bun version alone does not establish
 identical SQLite versions or filesystem durability behavior across platforms.
@@ -73,17 +75,16 @@ Each archive must contain:
 - `UPSTREAM.md` with the exact Roamgate synchronization point.
 
 Inspect the archive and validate its checksum before publication. Never commit
-archives, extracted package directories or compiled binaries. GitHub's Release
-workflow builds every supported target and runs
+archives, extracted package directories or compiled binaries. Main's reusable release candidate
+workflow builds every supported target once and runs
 [`scripts/verify-release-package.sh`](../scripts/verify-release-package.sh) on each
 archive. It checks the executable header's format and native machine ID rather than
-`file` output, whose wording changes between versions; the native Linux x64 binary is
-also executed to verify its version.
+`file` output, whose wording changes between versions; every native archive is installed and launched to verify its served behavior.
 
 The same verified archives feed six public npm platform packages and the
 `@ivoryheart/herdr-world` launcher. npm selects one binary through optional
 dependencies and runs no install script; Node.js 22.14.0 or newer is required for
-the launcher. The Release workflow also generates a checksum-pinned Homebrew
+the launcher. The candidate workflow also generates a checksum-pinned Homebrew
 Formula for macOS and Linux and opens a reviewable PR in
 `IvoryHeart/homebrew-tap` after the GitHub assets are published. Windows uses npm
 or the standalone archive; Homebrew does not manage Windows.

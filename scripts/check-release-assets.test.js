@@ -144,7 +144,7 @@ describe("Herdr World release boundary", () => {
   test("release boundary is enforced before sealing and public assets are digest-checked", async () => {
     const workflow = YAML.parse(
       await readFile(
-        new URL("../.github/workflows/release.yml", import.meta.url),
+        new URL("../.github/workflows/release-candidate.yml", import.meta.url),
         "utf8",
       ),
     );
@@ -174,15 +174,21 @@ describe("Herdr World release boundary", () => {
       ),
     );
     const jobs = workflow.jobs;
+    const candidate = YAML.parse(
+      await readFile(
+        new URL("../.github/workflows/release-candidate.yml", import.meta.url),
+        "utf8",
+      ),
+    ).jobs;
     for (const name of ["npm-stage", "homebrew-formula"]) {
-      expect(jobs[name].needs).toContain("archives");
-      const download = jobs[name].steps.find((step) =>
+      expect(candidate[name].needs).toContain("archives");
+      const download = candidate[name].steps.find((step) =>
         step.uses?.includes("actions/download-artifact"),
       );
       expect(download.with.name).toBe("verified-archives");
     }
     for (const name of ["publish", "npm-publish", "homebrew-pr"]) {
-      expect(jobs[name].needs).toContain("verify");
+      expect(jobs[name].needs).toContain("acquire");
       const download = jobs[name].steps.find((step) =>
         step.uses?.includes("actions/download-artifact"),
       );

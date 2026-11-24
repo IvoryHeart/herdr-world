@@ -11,7 +11,6 @@ import { dirname, join } from "node:path";
 import {
   isToolingOnlyChange,
   isToolingPath,
-  isInstallationInput,
   repositorySelection,
   selectValidation,
 } from "./validation-scope";
@@ -151,19 +150,22 @@ test("installation inputs require the native job containing systemd acceptance",
     "scripts/package-release.sh",
     "scripts/install-linux/scenarios.py",
     "server/src/herdr-core/install.ts",
+    "server/src/cli/update-finish.ts",
+    "server/src/cli/update.ts",
+    "server/src/cli/service-context.ts",
     "server/src/connections/profile-service.ts",
     "server/src/cli/connections.ts",
   ]) {
-    expect(isInstallationInput(path)).toBe(true);
     const known = { ...graph, files: new Set([...graph.files, path]) };
-    expect(selectValidation(known, [path]).packaging).toBe(true);
+    expect(selectValidation(known, [path]).packaging).toBe(
+      !path.includes("connections"),
+    );
     expect(selectValidation(known, [path], () => false, [chat]).packaging).toBe(
-      true,
+      !path.includes("connections"),
     );
   }
-  expect(isInstallationInput("docs/development.md")).toBe(false);
   expect(selectValidation(graph, ["README.md"]).packaging).toBe(false);
-  expect(selectValidation(graph, []).packaging).toBe(true);
+  expect(selectValidation(graph, []).packaging).toBe(false);
 });
 
 test("browser Chat selects nearby consumers without verification, runtime suites or platforms", () => {
@@ -194,8 +196,8 @@ test("shared browser-only inputs do not schedule native platforms; compiled impo
     ]),
   };
   expect(selectValidation(known, [ui]).packaging).toBe(false);
-  expect(selectValidation(known, [binary]).packaging).toBe(true);
-  expect(selectValidation(known, []).packaging).toBe(true);
+  expect(selectValidation(known, [binary]).packaging).toBe(false);
+  expect(selectValidation(known, []).packaging).toBe(false);
 });
 
 test("a production web edit always reaches the built-entry boot journey across the Vite boundary", () => {
@@ -225,7 +227,7 @@ test("owners and World runtime paths independently require their maintained suit
   });
   expect(selectValidation(graph, [native])).toMatchObject({
     verification: false,
-    packaging: true,
+    packaging: false,
     world: [],
   });
   expect(selectValidation(graph, [native], () => true).verification).toBe(true);
@@ -244,7 +246,7 @@ test("unknown paths, configuration and empty main selections run the full matrix
     expect(selectValidation(graph, paths)).toMatchObject({
       full: true,
       verification: true,
-      packaging: true,
+      packaging: false,
       world: worldBrowserSuites,
     });
   }
@@ -284,7 +286,7 @@ test("rename deletions retain World and native obligations", () => {
     files: new Set([...graph.files, ...gone]),
   };
   const selection = selectValidation(renamed, [...gone, chat]);
-  expect(selection.packaging).toBe(true);
+  expect(selection.packaging).toBe(false);
   expect(selection.world).toEqual(expect.arrayContaining(worldRuntimeSuites));
 });
 
@@ -324,7 +326,7 @@ test("an incremental full-gate path escalates every suite even when absent from 
     expect(selection.documentation).toBe(false);
     expect(selection.world).toEqual(worldBrowserSuites);
     expect(selection.verification).toBe(true);
-    expect(selection.packaging).toBe(true);
+    expect(selection.packaging).toBe(false);
   }
 });
 

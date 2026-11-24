@@ -325,7 +325,7 @@ export async function checkDead(root: string, args: string[]) {
     const resolved = count(baseline) - count(prune(baseline, current));
     code = count(added) || (padding && count(padding)) ? 1 : 0;
     // A successful local run automatically retires resolved allowances. CI stays read-only.
-    if (!code && resolved && process.env.CI !== "true")
+    if (!code && resolved && args.includes("--prune"))
       writeFileSync(
         file,
         formatBaseline(root, serialize(prune(baseline, current))),
@@ -338,7 +338,7 @@ export async function checkDead(root: string, args: string[]) {
           `- ${kind}: ${current[kind].length} (${added[kind].length} new)`,
       ),
       "",
-      `${resolved} resolved baseline entries${process.env.CI === "true" ? "; run check:dead locally to prune" : " pruned on success"}.`,
+      `${resolved} resolved baseline entries${args.includes("--prune") ? " pruned on success" : "; use --prune to retire"}.`,
       ...(padding && count(padding)
         ? ["Baseline additions are forbidden relative to the base revision."]
         : []),

@@ -33,14 +33,12 @@ same PR, including new storage and rendering paths, while its contract delta is
 still active; do not wait for archival. Existing broad directory ownership proves
 source coverage, not that a feature's navigation is current. Do not edit current
 `spec.md` files.
-A main push queues one `bot/openspec-archive` PR: completed changes are applied
-and archived oldest merge date first; incomplete tasks stay active. A conflict
-restores that item's partial writes and stops the batch, retaining earlier
-successful archives in the PR. Even an empty stopped batch fails the workflow and
-names the stopped change in its log and summary. Resolve the named delta in a normal PR
-or on the bot branch before the next batch; the bot merges main without overwriting
-branch repairs. Merge dates use first appearance on main, independent of timezone
-or later edits. The bot never pushes main or merges; independent review still applies.
+The broken automatic archive bot is retired. Completed merged changes synchronize
+through reviewed archive PRs using the pinned helper, oldest merge date first;
+incomplete tasks stay active. A conflict restores that item's partial writes and
+stops the batch while retaining earlier successful archives. Merge dates use first
+appearance on main, independent of timezone or later edits. Never push main or
+merge automatically; independent review remains required.
 The pinned CLI has no bulk command, so `scripts/archive-changes.ts` sequences its
 validated archive command. The feature-map migration archives the five completed
 legacy deltas with `--skip-specs`: they were already synchronized under the old

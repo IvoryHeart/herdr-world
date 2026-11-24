@@ -59,7 +59,15 @@ for (const platform of packages) {
   }
   const publish = spawnSync(
     "npm",
-    ["publish", archive, "--access", "public", "--tag", distTag],
+    [
+      "publish",
+      archive,
+      "--provenance",
+      "--access",
+      "public",
+      "--tag",
+      distTag,
+    ],
     {
       stdio: "inherit",
     },

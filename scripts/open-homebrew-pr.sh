@@ -97,10 +97,16 @@ fi
 if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
   git fetch origin "$branch":"refs/remotes/origin/$branch"
   git switch --track -c "$branch" "origin/$branch"
-  matches_candidate || {
-    echo "existing Homebrew PR branch has different Formula or runtime acceptance content" >&2
-    exit 1
-  }
+  if ! matches_candidate; then
+    for index in "${!sources[@]}"; do
+      mkdir -p "$(dirname "${targets[$index]}")"
+      cp "${sources[$index]}" "${targets[$index]}"
+    done
+    git add "${targets[@]}"
+    git -c user.name="Herdr World Release Bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Refresh verified Herdr World $version"
+    matches_candidate || exit 1
+    git push origin "$branch"
+  fi
 else
   git switch -c "$branch"
   mkdir -p Formula .github/scripts .github/workflows
@@ -127,7 +133,8 @@ if [[ -n "$existing_pr_sha" ]]; then
     echo "existing Homebrew PR head changed while checking its Formula" >&2
     exit 1
   fi
-  echo "Homebrew Formula pull request already open for $version"
+  gh pr edit --repo "$tap_repo" "$branch" --title "$title" --body-file "$body_file"
+  echo "Homebrew Formula pull request updated for $version"
   exit 0
 fi
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
-  draftCandidateNotes,
+  compactFragments,
+  releaseNotes,
   parseManifestVersion,
   parsePackageVersion,
   promoteChangelog,
@@ -145,12 +146,26 @@ describe("promoteChangelog", () => {
   });
 });
 
-test("draftCandidateNotes creates reviewed notes for a later RC", () => {
-  const notes = draftCandidateNotes(
-    "0.2.0-rc.2",
-    "# Herdr World 0.2.0\n\nCheck Office and Graph.\n",
-  );
-  expect(notes).toContain("# Herdr World 0.2.0-rc.2 release candidate");
-  expect(notes).toContain("Check Office and Graph.");
-  expect(() => draftCandidateNotes("0.2.0", "body")).toThrow();
+test("changelog is the notes for stable and RC, without a separate notes file", () => {
+  for (const version of ["0.3.8", "0.3.8-rc.1"]) {
+    const log = promoteChangelog(
+      "# Changelog\n\n## [Unreleased]\n\n- A fix.\n\n## [0.3.7] - old\n",
+      version,
+      "2026-11-24",
+    );
+    expect(releaseNotes(log, version)).toBe("- A fix.\n");
+  }
+  expect(
+    compactFragments([
+      {
+        name: "fix.md",
+        sections: [
+          {
+            heading: "Fixed",
+            body: "- A fix.\n  Long detail.\n- Another fix.",
+          },
+        ],
+      },
+    ])[0].sections[0].body,
+  ).toBe("- A fix.\n- Another fix.");
 });

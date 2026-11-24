@@ -23,7 +23,7 @@ test("live audit blocks the protected delivery result, release publication and P
   });
   expect(required.run).toContain('test "$SECURITY_RESULT" = "$expected"');
   for (const [path, job] of [
-    [".github/workflows/release.yml", "validate"],
+    [".github/workflows/release-candidate.yml", "validate"],
     [".github/workflows/pages.yml", "build"],
   ]) {
     const workflow = await yaml(path!);

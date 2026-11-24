@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // Several real Git clones, commits and pushes need a bounded integration budget.
-test("tap handoff synchronizes acceptance even when the Formula is unchanged and refuses a drifting retry", () => {
+test("tap handoff synchronizes acceptance even when the Formula is unchanged and refreshes a drifting retry", () => {
   const root = mkdtempSync(join(tmpdir(), "homebrew-tap-sync-"));
   try {
     const remote = join(root, "remote.git");
@@ -173,9 +173,19 @@ esac
     git(["commit", "-m", "Fixture acceptance drift"], seed);
     git(["push", "origin", `HEAD:refs/heads/${branch}`], seed);
     const drift = handoff();
-    expect(drift.exitCode).toBe(1);
-    expect(drift.stderr.toString()).toContain(
-      "different Formula or runtime acceptance content",
+    expect(drift.exitCode).toBe(0);
+    expect(
+      git([
+        "--git-dir",
+        remote,
+        "show",
+        `${branch}:.github/scripts/check-homebrew-runtime.rb`,
+      ]),
+    ).toBe(
+      readFileSync(
+        join(import.meta.dir, "check-homebrew-runtime.rb"),
+        "utf8",
+      ).trim(),
     );
     // Git attributes must not normalize verified bytes into different public blobs.
     git(["checkout", "main"], seed);

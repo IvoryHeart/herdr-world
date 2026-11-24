@@ -2,12 +2,12 @@ name: CI
 
 on:
     pull_request:
-        types: [opened, synchronize, reopened, edited, labeled]
-    # The post-merge gate: every main commit gets the full check, and Main gate
-    # reports a red one. Releases are cut only from a green main commit.
+        types: [opened, synchronize, reopened, labeled]
+    # The post-merge gate reuses an identical green PR tree or runs Linux checks.
+    # Version commits additionally test and seal installed release channels.
     push:
         branches: [main]
-    # Prepare Release uses this explicit dispatch because events created with its
+    # Release PR uses this explicit dispatch because events created with its
     # GITHUB_TOKEN do not start other workflows automatically.
     workflow_dispatch:
         inputs:
@@ -30,14 +30,12 @@ permissions:
     actions: read
 
 concurrency:
-    # Main pushes share one group: the running check finishes, and a batch of
-    # merges queued behind it is tested once, at its newest commit (GitHub
-    # keeps only the latest pending run). Main gate names every merge since the
-    # last green commit when that run fails.
-    group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && 'main-push') || github.ref }}
-    # Metadata runs queue behind active validation and reuse the head's latest
-    # result. A label must not cancel the check it needs as evidence.
-    cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' && github.event.action != 'labeled' }}
+    # Each main SHA has its own run so a later merge never evicts the release
+    # version commit whose seal an early tag is waiting for.
+    group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.sha) || github.ref }}
+    # PR events queue and inspect existing evidence for that head/tree.
+    # Main SHA groups never evict the version commit a tag is waiting for.
+    cancel-in-progress: false
 
 jobs:
     browser-diagnostics:
@@ -116,7 +114,7 @@ jobs:
     # starts no runner: GitHub has no workflow-level condition, only skipped jobs.
     validation-scope:
         name: Validation scope
-        if: github.event_name != 'pull_request' || github.event.pull_request.state == 'open'
+        if: github.event_name != 'pull_request' || (github.event.pull_request.state == 'open' && (github.event.action != 'labeled' || contains(fromJSON('["release-preview","world-browser-stability","latency-trend"]'), github.event.label.name)))
         runs-on: ubuntu-latest
         outputs:
             mode: ${{ steps.scope.outputs.mode || 'full' }}
@@ -124,9 +122,11 @@ jobs:
             world: ${{ steps.scope.outputs.world }}
             verification: ${{ steps.scope.outputs.verification }}
             packaging: ${{ steps.scope.outputs.packaging }}
+            release: ${{ steps.scope.outputs.release }}
             installer_tag: ${{ steps.installer-plan.outputs.baseline_tag }}
             installer_sha: ${{ steps.installer-plan.outputs.baseline_sha }}
             installer_version: ${{ steps.installer-plan.outputs.candidate_version }}
+            release_version: ${{ steps.version.outputs.version }}
             installer_hash: ${{ steps.installer-plan.outputs.build_hash }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -147,11 +147,15 @@ jobs:
                   PR_NUMBER: ${{ github.event.pull_request.number }}
                   PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
                   PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+                  PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
                   PR_ACTION: ${{ github.event.action }}
                   WORLD_BROWSER_STABILITY: ${{ contains(github.event.pull_request.labels.*.name, 'world-browser-stability') }}
                   REQUIRED_JOB_NAME: Delivery checks
                   REQUIRED_FULL_STEP: Run full repository check
               run: bun scripts/ci-reuse-full-check.ts
+            - id: version
+              if: steps.scope.outputs.release == 'true'
+              run: bun -e 'import { parseManifestVersion } from "./scripts/prepare-release"; console.log("version=" + parseManifestVersion(await Bun.file("herdr-plugin.toml").text()))' >> "$GITHUB_OUTPUT"
             # A title, description or label change on a head whose latest
             # result is red keeps it red and starts no code job. Re-running
             # this job decides again, so it reuses that result once it passes.
@@ -278,7 +282,7 @@ jobs:
 
     delivery:
         name: Delivery checks
-        needs: [validation-scope, validation, world-browser, behavioral, installer-upgrade, launchd, dependency-security]
+        needs: [validation-scope, validation, world-browser, behavioral, installer-upgrade, release-candidate, dependency-security]
         env:
             HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
         if: always() && needs.validation-scope.result != 'skipped'
@@ -312,7 +316,8 @@ jobs:
                   WORLD_RESULT: ${{ needs.world-browser.result }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
                   INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
-                  LAUNCHD_RESULT: ${{ needs.launchd.result }}
+                  RELEASE_RESULT: ${{ needs.release-candidate.result }}
+                  RELEASE: ${{ needs.validation-scope.outputs.release }}
               run: bun scripts/ci-delivery-result.ts
             - name: Verify applicable or reused results
               if: needs.validation-scope.outputs.mode != 'full'
@@ -323,10 +328,12 @@ jobs:
                   WORLD_RESULT: ${{ needs.world-browser.result }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
                   INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
-                  LAUNCHD_RESULT: ${{ needs.launchd.result }}
+                  RELEASE_RESULT: ${{ needs.release-candidate.result }}
+                  RELEASE: ${{ needs.validation-scope.outputs.release }}
               run: bun scripts/ci-delivery-result.ts
 
-    # Native inputs select packaging; main still runs the complete matrix.
+    # Native PR inputs select packaging. Main version commits use the sealed
+    # channel candidate; other main commits reuse their PR or run Linux.
     installer-upgrade:
         needs: validation-scope
         if: needs.validation-scope.outputs.packaging == 'true'
@@ -337,34 +344,18 @@ jobs:
             candidate_version: ${{ needs.validation-scope.outputs.installer_version }}
             build_hash: ${{ needs.validation-scope.outputs.installer_hash }}
 
-    launchd:
-        name: macOS launchd plugin lifecycle (${{ matrix.arch }})
-        needs: [validation-scope, installer-upgrade]
-        if: always() && needs.validation-scope.result != 'skipped'
-        # Keep the two protected names. Native work shares each Darwin installer
-        # runner, so the installer cannot queue behind our own launchd job.
-        runs-on: ubuntu-latest
-        strategy:
-            fail-fast: false
-            matrix:
-                arch: [arm64, x86_64]
-        steps:
-            - name: Require the applicable native lifecycle results
-              env:
-                  SCOPE_RESULT: ${{ needs.validation-scope.result }}
-                  PACKAGING: ${{ needs.validation-scope.outputs.packaging }}
-                  INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
-              run: |
-                  test "$SCOPE_RESULT" = success
-                  expected=skipped
-                  if [ "$PACKAGING" = true ]; then expected=success; fi
-                  test "$INSTALLER_RESULT" = "$expected"
+    release-candidate:
+        needs: validation-scope
+        if: needs.validation-scope.outputs.release == 'true'
+        uses: ./.github/workflows/release-candidate.yml
+        with:
+            version: ${{ needs.validation-scope.outputs.release_version }}
 
     # A title or description edit rebuilds no preview; a new commit, a new base
     # or adding a label still does.
     release-preview:
         name: Downloadable preview (${{ matrix.platform }})
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview') && (github.event.action != 'edited' || github.event.changes.base)
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
         needs: delivery
         # Keep in step with Release's package job so previews predict its checks.
         runs-on: ubuntu-26.04
@@ -405,7 +396,7 @@ jobs:
 
     npm-preview:
         name: Downloadable npm preview
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview') && (github.event.action != 'edited' || github.event.changes.base)
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
         needs: [delivery, release-preview]
         runs-on: ubuntu-latest
         timeout-minutes: 15
@@ -451,7 +442,7 @@ jobs:
 
     homebrew-preview:
         name: Downloadable Homebrew preview
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview') && (github.event.action != 'edited' || github.event.changes.base)
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
         needs: [delivery, release-preview]
         runs-on: ubuntu-latest
         timeout-minutes: 10

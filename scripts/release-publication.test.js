@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { spawnSync } from "bun";
 import { createHash } from "node:crypto";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -161,18 +160,6 @@ test("npm partial publication reports each public package and resumes without re
     ).toBe(1);
     const before = JSON.parse(readFileSync(join(f.root, "npm.json")));
     expect(Object.keys(before)).toHaveLength(2);
-    const status = f.run("release-status.mjs");
-    expect(status.exitCode).toBe(0);
-    const summary = status.stdout.toString();
-    expect(summary).toContain(
-      "npm @ivoryheart/herdr-world-linux-x64@0.3.6: PUBLIC",
-    );
-    expect(summary).toContain(
-      "npm @ivoryheart/herdr-world-darwin-x64@0.3.6: not published",
-    );
-    expect(summary).toContain(
-      "gh run rerun 123 --failed --repo fixture/release",
-    );
     const retry = f.run("publish-npm-release.mjs", args);
     expect(retry.exitCode).toBe(0);
     expect(retry.stdout.toString()).toContain("Already published");
@@ -198,15 +185,95 @@ test("npm partial publication reports each public package and resumes without re
   }
 });
 
-test("dry-run reporting never queries or mutates registries", () => {
-  const f = fixture();
-  try {
-    const status = f.run("release-status.mjs", [], { DRY_RUN: "true" });
-    expect(status.exitCode).toBe(0);
-    expect(status.stdout.toString()).toContain("publishers were disabled");
-    expect(existsSync(join(f.root, "calls"))).toBe(false);
-    expect(existsSync(join(f.root, "npm.json"))).toBe(false);
-  } finally {
-    f.cleanup();
-  }
-});
+test.each(
+  [0, 1, 2, 3].flatMap((count) => [true, false].map((draft) => [count, draft])),
+)(
+  "GitHub recovery at asset boundary %i (draft=%s) preserves identical public bytes",
+  (count, draft) => {
+    const f = fixture();
+    try {
+      const names = ["a.tar.xz", "b.sha256", "install-herdr-world.sh"];
+      for (const name of names)
+        writeFileSync(join(f.bundle, "github", name), `sealed ${name}`);
+      sealBundle(f.bundle, "0.3.6", "fixture-sha");
+      writeFileSync(
+        join(f.root, "github.json"),
+        JSON.stringify({ isDraft: draft }),
+      );
+      for (const name of names.slice(0, count))
+        writeFileSync(join(f.root, "remote", name), `sealed ${name}`);
+      const result = f.run("publish-github-release.mjs", [
+        "0.3.6",
+        f.bundle,
+        "fixture-sha",
+      ]);
+      expect(result.exitCode).toBe(draft || count === 3 ? 0 : 1);
+      for (const name of names.slice(0, count))
+        expect(readFileSync(join(f.root, "remote", name), "utf8")).toBe(
+          `sealed ${name}`,
+        );
+      if (draft || count === 3) {
+        const replay = f.run("publish-github-release.mjs", [
+          "0.3.6",
+          f.bundle,
+          "fixture-sha",
+        ]);
+        expect(replay.exitCode).toBe(0);
+        expect(readdirSync(join(f.root, "remote")).sort()).toEqual(names);
+      }
+    } finally {
+      f.cleanup();
+    }
+  },
+);
+
+test.each([
+  "linux-x64",
+  "linux-arm64",
+  "darwin-x64",
+  "darwin-arm64",
+  "windows-x64",
+  "windows-arm64",
+  "",
+])(
+  "npm interruption before %s resumes exactly the remaining immutable versions",
+  (cut) => {
+    const f = fixture();
+    try {
+      const platforms = [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "darwin-arm64",
+        "windows-x64",
+        "windows-arm64",
+        "",
+      ];
+      for (const platform of platforms)
+        writeFileSync(
+          join(
+            f.bundle,
+            "npm",
+            `ivoryheart-herdr-world${platform ? "-" + platform : ""}-0.3.6.tgz`,
+          ),
+          `sealed ${platform}`,
+        );
+      const args = ["0.3.6", join(f.bundle, "npm")];
+      const interrupted = f.run("publish-npm-release.mjs", args, {
+        FAIL_NPM_AT: cut ? `herdr-world-${cut}-` : "herdr-world-0.3.6.tgz",
+      });
+      expect(interrupted.exitCode).toBe(1);
+      expect(f.run("publish-npm-release.mjs", args).exitCode).toBe(0);
+      const replay = f.run("publish-npm-release.mjs", args);
+      expect(replay.exitCode).toBe(0);
+      expect(
+        replay.stdout.toString().match(/Already published:/g),
+      ).toHaveLength(7);
+      expect(
+        Object.keys(JSON.parse(readFileSync(join(f.root, "npm.json"), "utf8"))),
+      ).toHaveLength(7);
+    } finally {
+      f.cleanup();
+    }
+  },
+);
