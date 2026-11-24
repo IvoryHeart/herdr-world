@@ -20,9 +20,16 @@ import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
 import { quietGreetingForTest } from "./townMasterGreeting";
+import { setTownDaylightMode } from "./town/townDaylight";
 
 // The Town Master's greeting would sit over what these checks press.
 quietGreetingForTest();
+// CI draws Town's WebGL in software (SwiftShader), where night's lightmap
+// doubles each frame's cost and the run's cost would follow the runner's
+// clock. These checks are about creation, not light.
+setTownDaylightMode("day");
+// The renderer's counters say when a Town that mounted has drawn (view()).
+window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 
 const failures: string[] = [];
 window.addEventListener("error", (event) =>
@@ -35,8 +42,12 @@ function check(condition: unknown, message: string) {
   if (!condition) failures.push(message);
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
-async function until(condition: () => unknown, message: string) {
-  const deadline = performance.now() + 8_000;
+async function until(
+  condition: () => unknown,
+  message: string,
+  timeoutMs = 8_000,
+) {
+  const deadline = performance.now() + timeoutMs;
   while (performance.now() < deadline) {
     if (condition()) return;
     await new Promise<void>((resolve) =>
@@ -392,10 +403,19 @@ for (const host of hosts) {
     },
   });
 }
+/**
+ * How long a Town that has just mounted may take to start its renderer and
+ * draw once. In software WebGL that start (a WebGL context, every texture
+ * uploaded) takes seconds, and longer on a loaded runner; it is waited for
+ * here, apart from the creation checks' own deadlines.
+ */
+const TOWN_START_MS = 45_000;
 async function view(name: string) {
   const select = document.querySelector<HTMLSelectElement>(
     '[aria-label="World view"]',
   )!;
+  const town = () => window.__HERDR_TOWN_RENDERER__;
+  const mounted = select.value === "town" ? null : (town()?.mounts ?? 0);
   select.value = name;
   select.dispatchEvent(new Event("change", { bubbles: true }));
   // Navigation updates the URL before React commits. Release held creation
@@ -408,6 +428,15 @@ async function view(name: string) {
       document.documentElement.getAttribute("data-world-view") === name,
     `Committed ${name} view`,
   );
+  // Leaving another view mounts Town afresh. Let it start and draw before
+  // what follows is timed, so a creation's deadline measures its handoff,
+  // not a cold renderer.
+  if (name === "town" && mounted !== null)
+    await until(
+      () => (town()?.mounts ?? 0) > mounted && town()?.ready === true,
+      "Town's renderer started and drew",
+      TOWN_START_MS,
+    );
 }
 function visiblePane(paneId: string) {
   return [
