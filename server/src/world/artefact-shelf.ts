@@ -30,7 +30,28 @@ export type ArtefactShelfHost = {
   quests(): Promise<AgentQuest[]>;
   /** The host's transcript files. */
   files: AgentSessionFileAccess;
+  /**
+   * The host's rooms now (Herdr workspaces: ID and label). Apartments
+   * records a gone maker's room by its label, so the shelf finds the room
+   * that still has it.
+   */
+  rooms(): Promise<readonly ArtefactShelfRoom[]>;
 };
+
+export type ArtefactShelfRoom = { workspace_id: string; label: string };
+
+/**
+ * The room a gone maker sat in, by the label Apartments recorded: the one
+ * room on the host with that label now, else unknown (gone, renamed, or
+ * several share it).
+ */
+function roomIds(rooms: readonly ArtefactShelfRoom[]) {
+  const byLabel = new Map<string, string | null>();
+  for (const room of rooms)
+    byLabel.set(room.label, byLabel.has(room.label) ? null : room.workspace_id);
+  return (label: string | null) =>
+    label === null ? null : (byLabel.get(label) ?? null);
+}
 
 /**
  * The Library's "Made by agents" shelf for one host (#1327), derived on each
@@ -84,6 +105,7 @@ export function createArtefactShelf(deps: {
   async function goneArtefacts(
     connectionId: string,
     files: AgentSessionFileAccess,
+    roomOf: (label: string | null) => string | null,
   ): Promise<ShelvedArtefact[]> {
     const residents = deps
       .residents()
@@ -105,10 +127,14 @@ export function createArtefactShelf(deps: {
           connection_id: connectionId,
           pane_id: resident.terminal_id,
           agent: resident.harness ?? "",
-          workspace_id: resident.room,
+          workspace_id: roomOf(resident.room),
           // Continuity evidence matters only while a maker runs.
           session: null,
-        })).map((artefact) => ({ ...artefact, gone_maker: resident.name }));
+        })).map((artefact) => ({
+          ...artefact,
+          gone_maker: resident.name,
+          gone_room: resident.room,
+        }));
       }),
     );
     return lists.flat();
@@ -122,14 +148,17 @@ export function createArtefactShelf(deps: {
       const host = deps.host(connectionId, generation);
       if (!host)
         throw new Error("That host is not connected at this generation");
+      // A failed room read leaves gone makers' rooms unknown, not the shelf.
+      const rooms = await host.rooms().catch(() => []);
       const [quests, past] = await Promise.all([
         host.quests(),
-        goneArtefacts(connectionId, host.files),
+        goneArtefacts(connectionId, host.files, roomIds(rooms)),
       ]);
       const live: ShelvedArtefact[] = quests.flatMap((quest) =>
         (quest.artefacts ?? []).map((artefact) => ({
           ...artefact,
           gone_maker: null,
+          gone_room: null,
         })),
       );
       const byPlace = new Map<string, ShelvedArtefact>();

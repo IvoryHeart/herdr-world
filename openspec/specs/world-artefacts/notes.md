@@ -20,7 +20,7 @@
 - `server/src/agent/session-projection-cache.ts` (derived with the quest; creator room)
 - `server/src/agent/herdr-conversation.ts` (`agent_quest.list` rows)
 - `shared/coreHostMethods.ts`, `server/src/rpc/core-host.ts` (core desk read)
-- `server/src/world/artefact-shelf.ts` (one host's shelf: running and gone makers)
+- `server/src/world/artefact-shelf.ts` (one host's shelf: running and gone makers; a gone maker's room label resolved to the host's room)
 - `server/src/world/apartment-history.ts` (`resolveResidentSession`, shared with Apartments' history)
 - `server/src/features/artefacts/` (`world.artefacts.list`)
 - `web/src/world/agentQuests.ts` (`useAgentDeskReads`, refresh while shown)
@@ -44,6 +44,7 @@
 - `server/src/world/artefact-shelf.test.ts`
 - `web/src/world/agentQuests.test.ts`
 - `web/src/world/memory/artefactShelf.test.ts`
+- `web/src/world/memory/libraryArtefactReader.dom.test.tsx` (reader follows the current record)
 - `web/src/world/town/townLibrary.test.ts` (sign)
 
 **Pitfalls:**
@@ -56,5 +57,7 @@
 - Gone makers come from Apartments' residents (newest 40 per host); an agent World never saw run leaves nothing.
 - The Library opens only while a live agent with memory support runs on that host, as for memory.
 - Remote hosts and links are never probed, so their presence is unknown, not gone.
+- Apartments records a gone maker's room by label. The shelf names the one room with that label now; when none or several have it, the room is unknown and the row shows the label as it was.
+- A view that asks for a fresh shelf is owed one read when the minute is up, so Chat's finished turn shows what it made without another change.
 - Files written by shell redirection are not found; only the harness's own write and add-file records count.
 - World stores references only; the reader's content leaves with it.

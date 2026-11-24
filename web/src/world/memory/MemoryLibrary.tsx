@@ -111,7 +111,12 @@ export function MemoryLibrary({
   // The "Made by agents" wing (#1327): its shelf, the picked one and matches.
   const [wing, setWing] = useState(request.wing ?? "memory");
   const shelf = host ? (artefactShelfState(host)?.shelf ?? null) : null;
-  const [made, setMade] = useState<ShelvedArtefact | null>(null);
+  // The picked one by ID: the reader shows the shelf's current record, so a
+  // refresh that finds the file deleted (or the record gone) shows that.
+  const [madeId, setMadeId] = useState<string | null>(null);
+  const made = madeId
+    ? (shelf?.artefacts.find((one) => one.id === madeId) ?? null)
+    : null;
   const [madeFound, setMadeFound] = useState<string | null>(null);
   const [pane, setPane] = useState<Pane>("shelves");
   const [query, setQuery] = useState("");
@@ -127,7 +132,7 @@ export function MemoryLibrary({
     setSearching(false);
     setSearchError(null);
     setBook(null);
-    setMade(null);
+    setMadeId(null);
     setMadeFound(null);
     setSearch(null);
     setPane("shelves");
@@ -155,7 +160,7 @@ export function MemoryLibrary({
     const found = wanted && shelf?.artefacts.find((one) => one.id === wanted);
     if (!found) return;
     setWanted(null);
-    setMade(found);
+    setMadeId(found.id);
     setPane("book");
   }, [wanted, shelf]);
 
@@ -215,7 +220,7 @@ export function MemoryLibrary({
       : searchArtefacts(shelved, madeFound, host?.names, project);
   const openMade = (artefact: ShelvedArtefact) => {
     setBook(null);
-    setMade(artefact);
+    setMadeId(artefact.id);
     setPane("book");
   };
 
@@ -256,7 +261,7 @@ export function MemoryLibrary({
     entry: MemoryEntry,
     line?: number,
   ) => {
-    setMade(null);
+    setMadeId(null);
     setBook({ kind: "entry", source, entry, line });
     setPane("book");
   };
@@ -468,7 +473,7 @@ export function MemoryLibrary({
                     }
                     onOpen={(source, entry) => openEntry(source, entry)}
                     onAdd={(source, path) => {
-                      setMade(null);
+                      setMadeId(null);
                       setBook({ kind: "new", source, path });
                       setPane("book");
                     }}
@@ -485,7 +490,7 @@ export function MemoryLibrary({
                     route={route}
                     onBack={() => {
                       setPane("shelves");
-                      setMade(null);
+                      setMadeId(null);
                     }}
                   />
                 ) : live ? (

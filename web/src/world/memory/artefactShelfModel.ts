@@ -32,6 +32,17 @@ export function artefactMaker(
   return names[pane_id] ?? `${harnessLabel(agent)} ${pane_id}`;
 }
 
+/**
+ * The project an artefact was made in: its room's name now, else the room's
+ * name as a gone maker's record kept it.
+ */
+export function artefactProject(
+  artefact: Pick<ShelvedArtefact, "made_by" | "gone_room">,
+  project: (id: string | null) => string | null,
+) {
+  return project(artefact.made_by.workspace_id) ?? artefact.gone_room;
+}
+
 /** The artefacts `reader` made: by agent (pane) or by the room it was in. */
 export function readerArtefacts<T extends Pick<AgentArtefact, "made_by">>(
   artefacts: readonly T[],
@@ -62,7 +73,7 @@ export function searchArtefacts<T extends ShelvedArtefact>(
       artefact.title,
       ARTEFACT_KIND_LABELS[artefact.kind],
       artefactMaker(artefact, names),
-      project(artefact.made_by.workspace_id) ?? "",
+      artefactProject(artefact, project) ?? "",
       artefactPlace(artefact),
     ]
       .join("\n")

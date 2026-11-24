@@ -8,6 +8,7 @@ import {
 } from "./artefactShelfClient";
 import {
   artefactMaker,
+  artefactProject,
   artefactReadable,
   madeSummary,
   readerArtefacts,
@@ -69,6 +70,22 @@ test("search matches every word over title, kind, maker, project and place", () 
   expect(find("   ")).toEqual([]);
 });
 
+test("a gone maker's room is found by its name now, else as it was kept", () => {
+  const gone = shelf.artefacts[shelf.artefacts.length - 1]!;
+  const moved = {
+    ...gone,
+    made_by: { ...gone.made_by, workspace_id: null },
+    where: { type: "file" as const, path: "/srv/example/diagram.png" },
+    gone_room: "Project Alpha",
+  };
+  const rooms = (id: string | null) => (id === "w1" ? "Renamed room" : null);
+  expect(artefactProject(gone, rooms)).toBe("Renamed room");
+  expect(artefactProject(moved, rooms)).toBe("Project Alpha");
+  expect(titles(searchArtefacts([moved], "project alpha", {}, rooms))).toEqual([
+    "architecture.png",
+  ]);
+});
+
 test("a Made summary counts and names the latest two", () => {
   expect(madeSummary([])).toBeNull();
   expect(madeSummary(undefined)).toBeNull();
@@ -116,6 +133,54 @@ test("a shelf is read once a minute per generation and dropped with it", async (
   publishMemoryHosts([host(2)]);
   expect(artefactShelfState(host(1))).toBeNull();
   expect(artefactShelfState(host(2))).toBeNull();
+});
+
+test("a request the minute holds back is read once the minute is up", async () => {
+  let calls = 0;
+  setArtefactShelfClientForTests({
+    list: async (target) => {
+      calls += 1;
+      const shelf = artefactFixtureShelf(target, 0);
+      // Empty at first; the report appears after the first read.
+      return calls === 1 ? { ...shelf, artefacts: [] } : shelf;
+    },
+    read: () => Promise.reject(new Error("unused")),
+  });
+  publishMemoryHosts([host(1)]);
+  await requestArtefactShelf(host(1));
+  expect(artefactShelfState(host(1))?.shelf?.artefacts).toEqual([]);
+  // Chat's turn ends while the shelf is fresh: held back, but owed, once.
+  const at = (artefactShelfState(host(1)) as { at: number }).at;
+  const almost = at + ARTEFACT_SHELF_FRESH_MS - 5;
+  await requestArtefactShelf(host(1), { now: almost });
+  await requestArtefactShelf(host(1), { now: almost });
+  expect(calls).toBe(1);
+  await Bun.sleep(40);
+  await Promise.resolve();
+  expect(calls).toBe(2);
+  expect(artefactShelfState(host(1))?.shelf?.artefacts).toHaveLength(5);
+  await Bun.sleep(20);
+  expect(calls).toBe(2);
+});
+
+test("an owed read is dropped with its generation", async () => {
+  let calls = 0;
+  setArtefactShelfClientForTests({
+    list: async (target) => {
+      calls += 1;
+      return artefactFixtureShelf(target, 0);
+    },
+    read: () => Promise.reject(new Error("unused")),
+  });
+  publishMemoryHosts([host(1)]);
+  await requestArtefactShelf(host(1));
+  const at = (artefactShelfState(host(1)) as { at: number }).at;
+  await requestArtefactShelf(host(1), {
+    now: at + ARTEFACT_SHELF_FRESH_MS - 5,
+  });
+  publishMemoryHosts([host(2)]);
+  await Bun.sleep(40);
+  expect(calls).toBe(1);
 });
 
 test("a reply for a generation that went away is dropped", async () => {

@@ -11,6 +11,7 @@ import {
   SHELF_RESIDENT_TTL_MS,
   createArtefactShelf,
   type ArtefactShelfHost,
+  type ArtefactShelfRoom,
 } from "./artefact-shelf";
 
 const SESSION = "0f0e0d0c-0000-4000-8000-0000000000b7";
@@ -96,7 +97,7 @@ const resident = (
   name: "ada",
   harness: "claude",
   cwd: "/srv/example/project-alpha",
-  room: "w-alpha",
+  room: "Project Alpha",
   tab: "builder",
   connection_id: "local",
   connection_label: "This computer",
@@ -138,11 +139,19 @@ function shelfOver({
   quests = [] as AgentArtefact[][],
   residents = [resident()],
   now = { value: 1_000 },
+  rooms = [
+    { workspace_id: "w-alpha", label: "Project Alpha" },
+    { workspace_id: "w-beta", label: "Project Beta" },
+  ] as ArtefactShelfRoom[] | Error,
 } = {}) {
   const host: ArtefactShelfHost = {
     quests: async () =>
       quests.map((artefacts) => ({ artefacts }) as unknown as AgentQuest),
     files: files(),
+    rooms: async () => {
+      if (rooms instanceof Error) throw rooms;
+      return rooms;
+    },
   };
   return createArtefactShelf({
     host: (connectionId, generation) =>
@@ -168,7 +177,9 @@ test("a gone agent's work stays on the shelf, its maker named as it was", async 
     ["weekly-report.md", "ada", "t1"],
   ]);
   const report = shelf.artefacts.at(-1)!;
+  // Apartments keeps the room's label; the shelf names the room by its ID.
   expect(report.made_by.workspace_id).toBe("w-alpha");
+  expect(report.gone_room).toBe("Project Alpha");
   expect(report.where).toEqual({ type: "file", path: REPORT });
   // A remote host's files are not checked here: presence stays unknown.
   expect(report.exists).toBeNull();
@@ -222,4 +233,22 @@ test("a gone agent's transcript is read again only after a while", async () => {
   const again = await shelf.list("local", 4);
   expect(reads).toBeGreaterThan(first);
   expect(again.artefacts).toHaveLength(2);
+});
+
+test("a gone maker's room label that no single room has now stays unknown", async () => {
+  for (const rooms of [
+    [{ workspace_id: "w-beta", label: "Project Beta" }],
+    [
+      { workspace_id: "w-alpha", label: "Project Alpha" },
+      { workspace_id: "w-other", label: "Project Alpha" },
+    ],
+    new Error("listWorkspaces timed out"),
+  ]) {
+    const shelf = await shelfOver({ rooms }).list("local", 4);
+    expect(shelf.artefacts).toHaveLength(2);
+    for (const artefact of shelf.artefacts) {
+      expect(artefact.made_by.workspace_id).toBeNull();
+      expect(artefact.gone_room).toBe("Project Alpha");
+    }
+  }
 });

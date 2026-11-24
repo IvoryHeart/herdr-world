@@ -89,6 +89,9 @@ exactly its current generation, refusing any other generation and never
 answering from another connection. The shelf SHALL hold the records of the
 host's running agents and of its agents that have gone, re-derived from the
 transcripts Apartments recorded for them, with a gone maker named as it was.
+A gone maker's room SHALL be the host's room that has the label Apartments
+recorded, when exactly one room has it now; otherwise the room SHALL be unknown
+and the record SHALL keep that label as the room's name as it was.
 One record SHALL stand per ID, a running maker's first, newest first, at most
 400, saying when more were found. The shelf SHALL be derived on each read and
 SHALL NOT be stored.
@@ -96,6 +99,8 @@ SHALL NOT be stored.
 #### Scenario: The agent is stopped
 - **WHEN** an agent that wrote a report is stopped
 - **THEN** the report SHALL stay on its host's shelf, its maker named as it was
+- **AND** the Library's reader for its room and a search for the room's name
+  SHALL still find it
 
 #### Scenario: A stale generation asks
 - **WHEN** the shelf is asked for a host's earlier generation

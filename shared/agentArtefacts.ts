@@ -234,6 +234,11 @@ export function parseAgentArtefact(value: unknown): AgentArtefact | null {
 export type ShelvedArtefact = AgentArtefact & {
   /** The maker's name as it was, once it has gone; null while it runs. */
   gone_maker: string | null;
+  /**
+   * The gone maker's room by the label it had (Apartments' record), for
+   * when no room on the host has that label now; null while it runs.
+   */
+  gone_room: string | null;
 };
 
 /** One host's "Made by agents" shelf (`world.artefacts.list`). */
@@ -265,9 +270,11 @@ export function parseArtefactShelf(value: unknown): ArtefactShelf | null {
     const artefact = parseAgentArtefact(raw);
     if (!artefact || !isRecord(raw)) continue;
     const gone = raw.gone_maker;
+    const room = raw.gone_room;
     artefacts.push({
       ...artefact,
       gone_maker: typeof gone === "string" ? gone.slice(0, 200) : null,
+      gone_room: typeof room === "string" ? room.slice(0, 200) : null,
     });
   }
   return {

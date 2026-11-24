@@ -27,6 +27,7 @@ import { artefactShelfClient } from "./artefactShelfClient";
 import {
   artefactMaker,
   artefactPlace,
+  artefactProject,
   artefactReadable,
 } from "./artefactShelfModel";
 import { memoryErrorText } from "./memoryClient";
@@ -68,7 +69,7 @@ function facts(artefact: ShelvedArtefact, { names, project }: Shared) {
   return [
     ARTEFACT_KIND_LABELS[artefact.kind],
     artefactMaker(artefact, names) + (artefact.gone_maker ? " (gone)" : ""),
-    project(artefact.made_by.workspace_id),
+    artefactProject(artefact, project),
     artefact.made_at
       ? formatAge(Date.now() - Date.parse(artefact.made_at))
       : null,

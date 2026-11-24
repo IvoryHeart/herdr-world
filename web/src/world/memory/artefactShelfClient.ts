@@ -84,6 +84,8 @@ export function setArtefactShelfClientForTests(
   override = client;
   shelves.clear();
   pending.clear();
+  for (const timer of later.values()) clearTimeout(timer);
+  later.clear();
   emit();
 }
 
@@ -101,6 +103,8 @@ type ArtefactShelfState =
 const listeners = new Set<() => void>();
 const shelves = new Map<string, ArtefactShelfState>();
 const pending = new Map<string, Promise<void>>();
+/** A read owed to a view that asked while the shelf was fresh, per host. */
+const later = new Map<string, ReturnType<typeof setTimeout>>();
 let version = 0;
 const emit = () => {
   version += 1;
@@ -128,6 +132,10 @@ export function artefactShelfState(target: MemoryTarget) {
 /**
  * Read a host's shelf at most once a minute unless `force`; a read under
  * way is shared, and a reply for a generation that went away is dropped.
+ * A request the minute holds back (or that finds a read already under way,
+ * which may predate what it asks about) is owed one read once the minute
+ * is up, so a change a view reports (Chat's finished turn) always reaches
+ * it without another change to prompt it.
  */
 export function requestArtefactShelf(
   target: MemoryTarget,
@@ -135,15 +143,22 @@ export function requestArtefactShelf(
 ): Promise<void> {
   const key = memoryTargetKey(target);
   const running = pending.get(key);
-  if (running) return running;
   const state = shelves.get(key);
+  if (running) {
+    if (!force) readLater(target, key, ARTEFACT_SHELF_FRESH_MS);
+    return running;
+  }
   if (
     !force &&
     state &&
     state.status !== "loading" &&
     now - state.at < ARTEFACT_SHELF_FRESH_MS
-  )
+  ) {
+    readLater(target, key, state.at + ARTEFACT_SHELF_FRESH_MS - now);
     return Promise.resolve();
+  }
+  clearTimeout(later.get(key));
+  later.delete(key);
   shelves.set(key, { status: "loading", shelf: state?.shelf });
   emit();
   const job = artefactShelfClient()
@@ -169,6 +184,21 @@ export function requestArtefactShelf(
     });
   pending.set(key, job);
   return job;
+}
+
+/** One owed read per host, dropped with its generation. */
+function readLater(target: MemoryTarget, key: string, wait: number) {
+  if (later.has(key)) return;
+  later.set(
+    key,
+    setTimeout(
+      () => {
+        later.delete(key);
+        if (current(key)) void requestArtefactShelf(target, { force: true });
+      },
+      Math.max(0, wait),
+    ),
+  );
 }
 
 /** Re-renders on any shelf change. */

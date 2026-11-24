@@ -5,6 +5,27 @@ import { defineFeature, featureKey } from "../contract";
 import type { ArtefactShelfService } from "../../world/artefact-shelf";
 import { artefactsVerbs } from "./verbs";
 
+/** A host's rooms (workspace ID and label), read once per shelf read. */
+async function roomsOf(operations: {
+  listWorkspaces(
+    params: Record<string, never>,
+    options: { timeoutMs: number },
+  ): Promise<{ workspaces?: readonly Record<string, unknown>[] }>;
+}) {
+  const { workspaces = [] } = await operations.listWorkspaces(
+    {},
+    { timeoutMs: 5000 },
+  );
+  // Labelled as Apartments records them: trimmed, at most 200 characters.
+  return workspaces.flatMap((row) => {
+    const label =
+      typeof row.label === "string" ? row.label.trim().slice(0, 200) : "";
+    return typeof row.workspace_id === "string" && label
+      ? [{ workspace_id: row.workspace_id, label }]
+      : [];
+  });
+}
+
 export const artefactsKey = featureKey<ArtefactShelfService>("artefacts");
 
 /**
@@ -33,6 +54,7 @@ export const feature = defineFeature({
           return {
             quests: () => sessions.conversation.quests(),
             files: lease.runtime.agentSessionFiles,
+            rooms: () => roomsOf(lease.runtime.operations),
           };
         }
         const core = kernel.core();
@@ -44,6 +66,7 @@ export const feature = defineFeature({
         return {
           quests: () => host.agentSessions().conversation.quests(),
           files: host.agentSessionFiles,
+          rooms: () => roomsOf(kernel.coreHostRuntime(lease).operations),
         };
       },
     });

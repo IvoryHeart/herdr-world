@@ -37,6 +37,7 @@ export function artefactFixtureShelf(
       exists: true,
       made_by: maker("p1", "w1"),
       gone_maker: null,
+      gone_room: null,
     },
     {
       id: "artefact-fixture-pr",
@@ -52,6 +53,7 @@ export function artefactFixtureShelf(
       exists: null,
       made_by: maker("p1", "w1"),
       gone_maker: null,
+      gone_room: null,
     },
     {
       id: "artefact-fixture-guess",
@@ -67,6 +69,7 @@ export function artefactFixtureShelf(
       exists: null,
       made_by: maker("p3", "w2", "codex"),
       gone_maker: null,
+      gone_room: null,
     },
     {
       id: "artefact-fixture-deleted",
@@ -78,6 +81,7 @@ export function artefactFixtureShelf(
       exists: false,
       made_by: maker("p3", "w2", "codex"),
       gone_maker: null,
+      gone_room: null,
     },
     {
       id: "artefact-fixture-gone",
@@ -89,6 +93,7 @@ export function artefactFixtureShelf(
       exists: true,
       made_by: maker("p9", "w1"),
       gone_maker: "old-designer",
+      gone_room: "web-app",
     },
   ];
   return {
