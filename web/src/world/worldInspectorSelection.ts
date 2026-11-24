@@ -32,14 +32,20 @@ export function worldSelectionIsCurrent(
   return selected !== null && current?.generation === selected.generation;
 }
 
+/**
+ * The node a surface selection names, when World's window can open it: an
+ * actionable Herdr node or a live herdr-core terminal or room (inspectorAdmits).
+ */
 export function worldNodeForWorkspaceSurfaceSelection(
   world: WorldObject,
   selection: WorkspaceSurfaceSelection,
 ): WorldObjectNode | null {
   return (
     world.nodes.find((candidate) => {
+      // What World's window admits: actionable Herdr nodes and live
+      // herdr-core resources, which are never actionable (#1329).
       if (
-        !candidate.actionable ||
+        !inspectorAdmits(candidate) ||
         candidate.connectionId !== selection.connectionId ||
         candidate.generation !== selection.runtimeGeneration
       ) {

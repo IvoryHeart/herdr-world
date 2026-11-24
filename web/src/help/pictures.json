@@ -89,6 +89,15 @@
       "town.board-chip.phone.dark.webp"
     ]
   },
+  "town.center": {
+    "fingerprint": "a32e48867687c390",
+    "files": [
+      "town.center.desktop.light.webp",
+      "town.center.desktop.dark.webp",
+      "town.center.phone.light.webp",
+      "town.center.phone.dark.webp"
+    ]
+  },
   "town.daylight": {
     "fingerprint": "aa2f24bad34239e2",
     "files": [
