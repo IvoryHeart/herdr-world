@@ -38,6 +38,11 @@
 - `version.txt`
 - `scripts/release-plan.ts`
 - `scripts/release-validation.test.ts`
+- `scripts/release-publication.test.ts`
+- `herdr-plugin.toml`
+- `scripts/install-plugin.ps1`
+- `scripts/install-plugin.test.ts`
+- `scripts/install-plugin.windows.test.ts`
 - `scripts/release-walk.ts`
 - `scripts/release-channel-upgrade.py`
 - `scripts/release-npm-smoke.ts`

@@ -135,6 +135,7 @@ test("CI and release jobs install once from the workspace root", () => {
             "archives",
             "verify",
             "publication-status",
+            "release-label",
             "npm-publish",
             "homebrew-pr",
             "homebrew-smoke",

@@ -7,6 +7,7 @@ Release-please SHALL keep one reviewed release PR current using the simple strat
 - **WHEN** scheduled or dispatched release-please runs
 - **THEN** it refreshes one release PR and automatically dispatches its checks without change fragments, a separate notes file or a manual run identifier
 - **AND** the owner tags the merged release before the next release-please run
+- **AND** successful publication automatically replaces that exact merged release PR's pending label with the tagged label so the next release PR needs no manual bookkeeping
 
 #### Scenario: Cross-platform release candidate
 - **WHEN** an owner-created `vX.Y.Z-rc.N` tag selects the reviewed version commit on main
@@ -53,7 +54,8 @@ Publication SHALL use standard GitHub Release actions, npm publish with provenan
 
 #### Scenario: Publication is interrupted
 - **WHEN** a tag run stops after GitHub publication
-- **THEN** rerunning failed jobs consumes its retained tested artifact, retains matching existing publications and completes npm and the same tap PR without duplication
+- **THEN** rerunning failed jobs or all jobs consumes its retained tested artifact, retains matching existing publications and completes npm, the same tap PR and the exact merged release PR's tagged label without duplication
+- **AND** skipping a publisher or label completion is reported as incomplete rather than successful
 
 #### Scenario: Seal expired
 - **WHEN** a full rerun cannot retrieve its tested artifact

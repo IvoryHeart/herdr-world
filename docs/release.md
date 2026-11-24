@@ -3,7 +3,8 @@
 Release-please keeps one release PR current from squash-merged `fix:` and `feat:`
 PR titles. Its **simple** strategy owns `version.txt`, the release manifest and
 `CHANGELOG.md`; its generic updater changes the annotated version in
-`herdr-plugin.toml`. Development npm manifests remain at `0.0.0`.
+`herdr-plugin.toml`. The version uses block markers so system installers can
+still read the plain version assignment. Development npm manifests remain at `0.0.0`.
 The [configuration](../release-please-config.json) and
 [workflow](../.github/workflows/release-pr.yml) run in PR-only mode:
 `skip-github-release: true`. Automation never creates tags.
@@ -17,7 +18,10 @@ The [configuration](../release-please-config.json) and
    CI is automatically dispatched for the bot PR with the existing workflow token.
 2. **Create `vX.Y.Z` on that merge commit.** Only the owner creates tags, under
    the unchanged tag ruleset. Tag before the next release-please run; this is how
-   PR-only release-please recognizes the previous release. The tag starts
+   PR-only release-please finds the previous release. After all channels publish,
+   Release automatically changes that merged PR from `autorelease: pending` to
+   `autorelease: tagged`, allowing the next release PR without a manual label edit.
+   The tag starts
    **Release**, validates main ancestry and the version commit, builds each
    native package once, runs the channel contracts below and seals the bytes.
    It publishes GitHub with `softprops/action-gh-release`, npm with
@@ -73,7 +77,9 @@ The failed run summary names one stage and what rerunning does.
   all jobs also reuses that artifact within the same run; if absent or expired,
   all builds and channel tests run before publication. Existing GitHub assets
   must match and are kept; existing npm integrity must match and is skipped;
-  the same open tap PR is completed without another proposal.
+  the same open tap PR is completed without another proposal. Label completion
+  is retried too, using the PR merged at that exact tag commit. A skipped publisher
+  or label job is an incomplete release, never a successful summary.
 - **Tap check:** repair the existing tap PR and review it. GitHub/npm and Pages
   do not wait for the tap merge.
 

@@ -47,8 +47,14 @@ const fs = require('node:fs'), path = require('node:path');
 const args = process.argv.slice(2), root = process.env.FIXTURE;
 if(args[0] === 'api') {
   if(process.env.API_FAIL) process.exit(1);
-  if(args.some(arg => arg.includes('/contents/'))) console.log(Buffer.from('previous Formula').toString('base64'));
+  if(args.some(arg => arg.includes('/commits/'))) console.log(process.env.RELEASE_PRS || '[]');
+  else if(args.some(arg => arg.includes('/contents/'))) console.log(Buffer.from('previous Formula').toString('base64'));
   else console.log('v0.3.8-rc.1');
+} else if(args[0] === 'label' && args[1] === 'create') {
+  fs.appendFileSync(path.join(root,'labels'),JSON.stringify(args)+'\\n');
+} else if(args[0] === 'pr' && args[1] === 'edit') {
+  if(process.env.EDIT_FAIL) process.exit(1);
+  fs.appendFileSync(path.join(root,'edits'),JSON.stringify(args)+'\\n');
 } else if(args[0] === 'pr' && args[1] === 'list') {
   const result = require('node:child_process').spawnSync('jq', ['-r', args[args.indexOf('--jq')+1]], {input:process.env.TAP_PRS || '[]',encoding:'utf8'});
   process.stdout.write(result.stdout); process.exit(result.status ?? 1);
@@ -110,6 +116,112 @@ test("existing GitHub assets must match; missing and network failures never perm
     writeFileSync(join(f.root, "remote/unexpected"), "unverified bytes");
     expect(f.run(script).exitCode).toBe(1);
     expect(f.run(script, { API_FAIL: "1" }).exitCode).toBe(1);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("published tags complete only their merged release PR, including retries and the next release", () => {
+  const f = fixture();
+  try {
+    const script = command(
+      "release-label",
+      "Mark the published release PR as tagged",
+    );
+    const pull = (
+      number: number,
+      sha: string,
+      label = "autorelease: pending",
+    ) => ({
+      number,
+      merge_commit_sha: sha,
+      merged_at: "2026-11-24T00:00:00Z",
+      base: { ref: "main" },
+      labels: [{ name: label }],
+    });
+    const run = (
+      pulls: unknown[],
+      sha = "first",
+      extra: Record<string, string> = {},
+    ) =>
+      f.run(script, {
+        RELEASE_PRS: JSON.stringify(pulls),
+        TAG_COMMIT: sha,
+        ...extra,
+      });
+    const first = pull(11, "first");
+    expect(run([first, pull(12, "second")]).exitCode).toBe(0);
+    const edit = JSON.parse(readFileSync(join(f.root, "edits"), "utf8").trim());
+    expect(edit).toEqual([
+      "pr",
+      "edit",
+      "11",
+      "--add-label",
+      "autorelease: tagged",
+      "--remove-label",
+      "autorelease: pending",
+    ]);
+    expect(run([pull(11, "first", "autorelease: tagged")]).exitCode).toBe(0);
+    expect(run([pull(12, "second")], "second").exitCode).toBe(0);
+    const before = readFileSync(join(f.root, "edits"), "utf8");
+    for (const pulls of [
+      [],
+      [pull(11, "another")],
+      [pull(11, "first", "unrelated")],
+      [{ ...first, merged_at: null }],
+      [{ ...first, base: { ref: "other" } }],
+      [first, pull(13, "first")],
+    ])
+      expect(run(pulls).exitCode).not.toBe(0);
+    expect(run([first], "first", { API_FAIL: "1" }).exitCode).not.toBe(0);
+    expect(run([first], "first", { EDIT_FAIL: "1" }).exitCode).not.toBe(0);
+    expect(readFileSync(join(f.root, "edits"), "utf8")).toBe(before);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("release summary rejects skipped publication or label completion and permits retained candidates", () => {
+  const f = fixture();
+  try {
+    const script = command(
+      "publication-status",
+      "One-line failure and recovery",
+    );
+    for (const candidate of ["success", "skipped"]) {
+      const jobs = Object.fromEntries(
+        [
+          "validate",
+          "candidate",
+          "publish",
+          "npm-publish",
+          "homebrew-pr",
+          "release-label",
+        ].map((name) => [
+          name,
+          { result: name === "candidate" ? candidate : "success" },
+        ]),
+      );
+      const run = () =>
+        f.run(script, {
+          RESULTS: JSON.stringify(jobs),
+          GITHUB_STEP_SUMMARY: join(f.root, "summary"),
+        });
+      expect(run().exitCode).toBe(0);
+      for (const name of Object.keys(jobs).filter(
+        (name) => name !== "candidate",
+      )) {
+        for (const result of ["skipped", "failure", "cancelled"]) {
+          jobs[name].result = result;
+          const failed = run();
+          expect(failed.exitCode).toBe(1);
+          expect(failed.stdout.toString()).toContain(
+            `Release stopped at ${name};`,
+          );
+        }
+        jobs[name].result = "success";
+      }
+    }
   } finally {
     f.cleanup();
   }

@@ -4,6 +4,11 @@ Use release-please's standard simple strategy and generic annotated TOML updater
 in PR-only mode. Squash-merged fix/feat titles replace fragments. The owner tags
 before the next release-please run. GITHUB_TOKEN-created PR checks are dispatched
 automatically using the action output.
+After all channels publish, the tag workflow completes release-please's label
+lifecycle on the single merged release PR whose merge commit equals the validated
+tag commit. Pending and already-tagged labels permit an interrupted relabel to
+retry; absent or ambiguous PR identity fails closed. Block markers around the TOML
+version retain Windows installer's plain-assignment parsing.
 
 Only tags and nightly build native candidates. Acceptance consumes exact native
 archives and npm tarballs, running upgrades and real-agent starts. The standard
@@ -18,6 +23,10 @@ create-pull-request action completes mislav's same branch with those tested inpu
 and the tap's own install check. Find/reuse an existing proposal before invoking
 mislav; serialized release runs prevent duplicate proposals. Compare existing
 GitHub bytes/npm integrity before skipping them.
+Explicit job status conditions keep downstream publication running when a full
+rerun skips the candidate because its tested artifact was retained. The summary
+accepts only that intentional skip, requiring every publisher and label job to
+succeed.
 
 Linux PR jobs retry failed test steps once within the job. Main reports immutable
 PR proof without running heavy jobs; absence stays visible in the main-red issue.

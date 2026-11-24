@@ -107,7 +107,7 @@ test("release-please owns version/changelog preparation and never creates a tag"
     path: "herdr-plugin.toml",
   });
   expect(readFileSync("herdr-plugin.toml", "utf8")).toMatch(
-    /^version = "[^"]+" # x-release-please-version/m,
+    /^# x-release-please-start-version\nversion = "[^"]+"\n# x-release-please-end$/m,
   );
   expect(JSON.stringify(steps)).toContain("workflow run ci.yml");
   for (const removed of [
@@ -116,6 +116,56 @@ test("release-please owns version/changelog preparation and never creates a tag"
     "scripts/open-homebrew-pr.sh",
   ])
     expect(existsSync(removed)).toBe(false);
+});
+
+test("retained-artifact reruns continue every publisher despite the skipped candidate", () => {
+  const jobs = workflow("release").jobs;
+  for (const candidate of ["success", "skipped"]) {
+    const results: Record<string, any> = {
+      validate: {
+        result: "success",
+        outputs: { retained: candidate === "skipped" ? "true" : "false" },
+      },
+      candidate: { result: candidate },
+      publish: { result: "success" },
+      "npm-publish": { result: "success" },
+      "homebrew-pr": { result: "success" },
+    };
+    for (const name of [
+      "publish",
+      "npm-publish",
+      "homebrew-pr",
+      "release-label",
+    ]) {
+      expect(jobs[name]).toBeDefined();
+      const condition =
+        jobs[name]?.if?.replace(/^\$\{\{\s*|\s*\}\}$/g, "") ?? "success()";
+      const success = () =>
+        ancestors(jobs, name).every(
+          (parent) => results[parent]?.result === "success",
+        );
+      const evaluate = new Function(
+        "needs",
+        "cancelled",
+        "success",
+        `return (${condition.replace(/needs\.([\w-]+)/g, 'needs["$1"]')});`,
+      );
+      expect(evaluate(results, () => false, success)).toBe(true);
+      // Each publisher must stop when its direct predecessor failed or skipped.
+      const parent = [jobs[name].needs].flat().at(-1);
+      for (const result of ["failure", "cancelled", "skipped"]) {
+        const prior = results[parent];
+        results[parent] = { result };
+        if (
+          parent !== "candidate" ||
+          result !== "skipped" ||
+          candidate !== "skipped"
+        )
+          expect(evaluate(results, () => false, success)).toBe(false);
+        results[parent] = prior;
+      }
+    }
+  }
 });
 
 test("PR test steps retry once inside their Linux job; main runs no heavy jobs", () => {
