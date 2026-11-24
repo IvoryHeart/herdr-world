@@ -117,10 +117,15 @@ The fixture now holds the overlay unpainted (`visibility: hidden !important`)
 while the scene settles; it still mounts, lays out and runs every production
 step. At the checkpoint the fixture removes the hold and waits two real
 animation frames, so Chrome creates the overlay's layers once, at the final
-transform (`web/src/world/testing/town-golden/overlayHold.ts`). Stored goldens
-are unchanged: they already show the overlay at its final transform. A local
-batch of four concurrent runners on four cores with a CPU competitor matched all
-380 captures exactly, and the production visual negative control passed.
+transform (`web/src/world/testing/town-golden/overlayHold.ts`). The cold-pan fix
+in `townWorldTransform.ts` retains that layer with a 3D translation from the
+first paint, preventing missing overlay tiles when a gesture starts. This also
+changes Chrome's rasterization of the Shipyard signs at the laptop and wide
+viewports. Their nine reference images include that intentional change; the
+remaining ten references are unchanged. Reverting only the translation to 2D
+matches all prior references, while the production 3D translation matches the
+updated references. Keep the production transform in the fixture so the report
+continues to detect changes to those signs.
 
 Install the pinned browser using the existing [development guidance](development.md#verification),
 then run through the browser queue:
