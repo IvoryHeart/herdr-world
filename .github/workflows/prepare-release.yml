@@ -1,6 +1,6 @@
 name: Prepare Release
 
-# Create a normal, reviewable release PR after running the project gates.
+# Validate release preparation; the release PR's CI runs the full product suite.
 # Merging the PR does not publish the release; run Publish Release afterward.
 on:
   workflow_dispatch:
@@ -9,6 +9,10 @@ on:
         description: Version to release (X.Y.Z, X.Y.Z-rc.N, or patch/minor/major)
         required: true
         type: string
+      dry_run:
+        description: Prepare and validate only (no commit, push, PR or CI dispatch)
+        default: false
+        type: boolean
 
 permissions:
   actions: write
@@ -22,12 +26,12 @@ concurrency:
 
 jobs:
   prepare:
-    name: Create release PR
+    name: Prepare and validate release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: main
+          ref: ${{ inputs.dry_run && github.ref || 'main' }}
           fetch-depth: 0
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -42,10 +46,17 @@ jobs:
         run: bun scripts/prepare-release.ts "$VERSION_INPUT"
       - name: Validate prepared release
         env:
-          HERDR_TEST_PARALLEL: "1"
-          HERDR_TEST_MAX_CONCURRENCY: "2"
-        run: bun run check:source
+          VERSION: ${{ steps.release.outputs.version }}
+        run: bun scripts/validate-prepared-release.ts "$VERSION"
+      - name: Dry-run summary
+        if: ${{ inputs.dry_run }}
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          printf 'Prepared and validated %s. No commit, push, PR or CI dispatch.\n\n' "$TAG" >> "$GITHUB_STEP_SUMMARY"
+          git diff --stat >> "$GITHUB_STEP_SUMMARY"
       - name: Create release PR
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
@@ -68,5 +79,7 @@ jobs:
             --title "Release $VERSION" \
             --body "Prepare $TAG by updating the public plugin version and referencing its reviewed release notes. Stable versions also promote the changelog. Private development package manifests remain at 0.0.0; release builds derive their version from this reviewed tag. Review and merge this PR after its explicitly dispatched CI check passes, then run the Publish Release workflow for $VERSION.
 
-          Changelog: none — release preparation assembles the existing changelog fragments."
+          Changelog: none — release preparation assembles the existing changelog fragments.
+          Spec impact: none — release preparation changes version metadata and release prose only.
+          Verification impact: none — this release PR does not change validation or product behaviour."
           gh workflow run "CI" --ref "$branch"

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 type Step = {
   name?: string;
+  if?: string;
   run?: string;
   env?: Record<string, string>;
   "continue-on-error"?: boolean;
@@ -17,6 +18,7 @@ type Job = {
   steps?: Step[];
 };
 type Workflow = {
+  on?: { workflow_dispatch?: { inputs?: Record<string, unknown> } };
   env?: Record<string, string>;
   jobs: Record<string, Job>;
 };
@@ -38,7 +40,6 @@ test.each([
     true,
   ],
   ["release.yml", "validate", "bun run check:source", true],
-  ["prepare-release.yml", "prepare", "bun run check:source", false],
 ] as const)(
   "%s uses conservative file concurrency and preserves its World coverage",
   (name, jobName, command, separateWorld) => {
@@ -106,6 +107,37 @@ test("Prepare Release validates the generated working tree before opening its PR
   expect(prepare).toBeGreaterThan(-1);
   expect(validate).toBeGreaterThan(prepare);
   expect(publish).toBeGreaterThan(validate);
+  expect(steps[validate]?.run).toBe(
+    'bun scripts/validate-prepared-release.ts "$VERSION"',
+  );
+  expect(steps[validate]?.env?.VERSION).toBe(
+    "${{ steps.release.outputs.version }}",
+  );
+  expect(steps[validate]?.["continue-on-error"] ?? false).toBe(false);
+  expect(steps.some((step) => step.run?.includes("check:source"))).toBe(false);
+  expect(steps[publish]?.run).toContain('gh workflow run "CI" --ref "$branch"');
+});
+
+test("Prepare Release dry run validates without committing, pushing or dispatching CI", () => {
+  const workflow = readWorkflow("prepare-release.yml");
+  expect(workflow.on?.workflow_dispatch?.inputs?.dry_run).toMatchObject({
+    type: "boolean",
+    default: false,
+  });
+  const steps = workflow.jobs.prepare!.steps!;
+  const validate = steps.findIndex(
+    (step) => step.name === "Validate prepared release",
+  );
+  expect(steps[validate]?.if).toBeUndefined();
+  for (const step of steps.filter((step) =>
+    /git commit|git push|gh pr create|gh workflow run/.test(step.run ?? ""),
+  )) {
+    expect(step.if).toBe("${{ !inputs.dry_run }}");
+    expect(steps.indexOf(step)).toBeGreaterThan(validate);
+  }
+  expect(steps.find((step) => step.name === "Dry-run summary")).toMatchObject({
+    if: "${{ inputs.dry_run }}",
+  });
 });
 
 test("release packages and labeled previews share one verification and image", () => {

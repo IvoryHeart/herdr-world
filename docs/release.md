@@ -397,20 +397,23 @@ release's generated Formula.
 
 ## Publishing a candidate or stable release
 
-1. Create a clean release branch from current `origin/main`. For a stable release,
-   run `bun run changelog:assemble` and commit the result: it appends every
-   `changes/*.md` fragment to the Unreleased section of `CHANGELOG.md`, grouped by
-   heading and ordered by file name, and deletes the fragments. Ensure the Unreleased
-   changelog accurately describes user-visible changes and the current source lineage.
+1. Start from current `origin/main`. Ensure the Unreleased changelog and
+   `changes/*.md` fragments accurately describe user-visible changes and the
+   current source lineage; preparation assembles the fragments for stable releases.
    Prepare a concise, reviewed `docs/releases/vX.Y.Z.md` or
    `docs/releases/vX.Y.Z-rc.N.md` covering upgrade steps,
    distribution changes and important limits; the Release workflow uses it as the
-   public release body.
+   public release body. Start it with `# Herdr World X.Y.Z` (or
+   `# Herdr World X.Y.Z-rc.N release candidate`) and a nonempty body. Commit the
+   notes before preparation; the workflow needs them merged into `main`.
 2. Run `bun install --frozen-lockfile` and `bun run notices:generate` when the
    dependency graph changed. Run `bun run release:prepare -- X.Y.Z-rc.N` for each
    candidate, starting with `0.2.0-rc.1`, or `bun run release:prepare -- X.Y.Z`
-   (or `patch`, `minor`, `major`) for stable. Review the public plugin version and
-   release notes, then open a ready release PR. RCs leave the Unreleased changelog
+   (or `patch`, `minor`, `major`) for stable on a clean release branch from
+   `origin/main`. Alternatively, select **Actions → Prepare Release → Run workflow**
+   on `main` and enter the version; it runs the same helper and validation below,
+   then commits, pushes, opens a ready release PR and explicitly dispatches CI.
+   RCs leave the Unreleased changelog
    and fragments open; stable preparation assembles any remaining fragments, then
    promotes Unreleased into a dated release section. The release PR adds no
    fragment, so its description states
@@ -419,8 +422,27 @@ release's generated Formula.
    and edit that draft in the PR. If stable publication moves to another UTC date,
    update and review the date in that PR. Private root, web and server manifests
    remain at `0.0.0`; tagged builds inject the reviewed release version into binaries,
-   archives and update metadata. Run the repository checks on the prepared branch;
-   the tracked pre-push hook runs the full gate when pushing it.
+   archives and update metadata.
+
+   Validate locally with `bun scripts/validate-prepared-release.ts X.Y.Z-rc.N`
+   (or the resolved stable version, even when preparation used `patch`). This
+   checks the public plugin version against the requested version, all three
+   private package versions, release notes, changelog promotion and fragments;
+   then runs the prepare-release, prepared-release, changelog-fragments and
+   release-validation tests, format, lint and typecheck across all three projects.
+   It leaves full product/browser coverage to the release PR's CI with its normal
+   sharding. For a manual PR, review the changes, commit and push with the tracked
+   hooks, open a ready PR, and run `gh workflow run CI --ref RELEASE_BRANCH`.
+   Independent review and required CI must pass before merging either path.
+
+   To rehearse without publishing a branch, select **dry_run** in **Prepare Release**.
+   It prepares and validates the selected workflow ref, reports the diff summary,
+   and stops before commit, push, PR creation or CI dispatch. Normal preparation
+   always checks out `main`. The local equivalent is to run the prepare helper
+   and validator above without committing or pushing the generated changes. Keep
+   the validation log with the release PR. Missing or malformed notes and a
+   mismatched version fail before the static checks; an RC can draft missing
+   exact-version notes only when its stable notes already exist.
 3. After independent review and merge, identify the exact release PR merge
    commit on `main`. It needs successful CI for that exact commit, including
    the native release walk. Main's push queue can batch merges; if that leaves
@@ -458,9 +480,9 @@ release's generated Formula.
    [World browser workflow](../.github/workflows/world-browser.yml) as PR CI: six
    shards and the web browser job, each with one file worker per runner and the
    pinned test Chrome. Every shard, the web job and repository validation must pass
-   before any platform package builds. Prepare Release validates its generated
-   working tree in one checkout with one file worker and retains the complete World
-   suite; its World cases run one at a time.
+   before any platform package builds. Prepare Release runs only the focused
+   preparation checks above; its release PR dispatch runs the full product suite
+   using CI's existing shards.
    Release reuses the four Unix archives that passed the pre-tag walk and builds
    the two Windows archives, then verifies all six platform archives, their aliases,
    checksums, update manifests and installer. Before any publication it packs all
