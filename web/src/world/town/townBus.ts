@@ -5,7 +5,11 @@
  * rides; this places them, and townBusDrive.ts times the drive.
  */
 
-import type { BinEntry } from "../../../../shared/bin";
+import {
+  BIN_STOP_CORNERS,
+  type BinEntry,
+  type BinStop,
+} from "../../../../shared/bin";
 import {
   TOWN_TILE as T,
   type TownBuilding,
@@ -297,7 +301,7 @@ export function townQueueLeft(stop: TownBusStop, shown: number) {
     : townQueueSpot(stop, Math.max(0, shown - 1)).x;
 }
 
-/** A binned agent shown in Town, at the stop nearest its room. */
+/** A binned agent shown in Town, at its drop stop or the one nearest its room. */
 export type TownBinRider = {
   entry: BinEntry;
   agentKey: string;
@@ -352,8 +356,10 @@ export function townBinRiders(
     const agent = model.agents.get(agentKey)!;
     const home = townBuildingOf(agent);
     const building = layout.buildings.find((b) => b.hostKey === home);
+    // At the stop it was dropped on, or else the one nearest its room.
     const stop = building
-      ? townNearestStop(route, layout, building, agent.roomKey)
+      ? ((entry.stop && townBinStopAt(route, layout, entry.stop)) ??
+        townNearestStop(route, layout, building, agent.roomKey))
       : null;
     if (!building || !stop) continue;
     const slot = queues.get(stop.key) ?? 0;
@@ -382,6 +388,81 @@ export function townBinRiders(
 }
 
 /**
+ * A building's corner, in world pixels: where the side road down its left
+ * (a road's width out from its wall) or its right meets its top or bottom.
+ */
+function cornerAt(building: TownBuilding, corner: BinStop["corner"]) {
+  return {
+    x:
+      (corner.endsWith("left")
+        ? building.x - STREET
+        : building.x + building.w) * T,
+    y: (corner.startsWith("top") ? building.y : building.y + building.h) * T,
+  };
+}
+
+/** The stop nearest `at`, by the pavement (left/right then up/down). */
+function stopNearest(stops: readonly TownBusStop[], at: TownPoint) {
+  let best: TownBusStop | null = null;
+  let cost = Infinity;
+  for (const stop of stops) {
+    const next = Math.abs(stop.wait.x - at.x) + Math.abs(stop.wait.y - at.y);
+    if (next < cost) {
+      cost = next;
+      best = stop;
+    }
+  }
+  return best;
+}
+
+/**
+ * The stop World remembers an agent was dropped on (BinStop), in this
+ * town's layout: the stop at that corner of that building. Null when this
+ * town has no such building or corner, so the agent waits at the stop
+ * nearest its room instead (townNearestStop).
+ * @internal Exported for tests; townBinRiders places riders by it.
+ */
+export function townBinStopAt(
+  route: Pick<TownBusRoute, "stops">,
+  layout: Pick<TownLayout, "buildings">,
+  stop: BinStop,
+): TownBusStop | null {
+  const building = layout.buildings.find((b) => b.hostKey === stop.building);
+  if (!building || !BIN_STOP_CORNERS.includes(stop.corner)) return null;
+  return stopNearest(route.stops, cornerAt(building, stop.corner));
+}
+
+/**
+ * How World remembers the stop `key` an agent was dropped on: the building
+ * corner nearest it whose stop it is (townBinStopAt finds it again), which
+ * stays the same stop as the town grows or reflows, and is the like stop on
+ * another browser's layout. Null for no such stop, or one at no building's
+ * corner: the agent then waits at the stop nearest its room.
+ */
+export function townBinStopOf(
+  route: Pick<TownBusRoute, "stops">,
+  layout: Pick<TownLayout, "buildings">,
+  key: string,
+): BinStop | null {
+  const target = route.stops.find((stop) => stop.key === key);
+  if (!target) return null;
+  let best: BinStop | null = null;
+  let cost = Infinity;
+  for (const building of layout.buildings)
+    for (const corner of BIN_STOP_CORNERS) {
+      const at = cornerAt(building, corner);
+      if (stopNearest(route.stops, at) !== target) continue;
+      const next =
+        Math.abs(target.wait.x - at.x) + Math.abs(target.wait.y - at.y);
+      if (next < cost) {
+        cost = next;
+        best = { building: building.hostKey, corner };
+      }
+    }
+  return best;
+}
+
+/**
  * The stop an agent walks to: on the street its building's front door opens
  * onto, the one nearest its room; any stop when that street has none.
  */
@@ -400,18 +481,10 @@ export function townNearestStop(
   const onFront = route.stops.filter(
     (stop) => stop.wait.y === (front + STREET - 0.5) * T,
   );
-  const door = { x, y: building.y * T };
-  let best: TownBusStop | null = null;
-  let cost = Infinity;
-  for (const stop of onFront.length ? onFront : route.stops) {
-    const next =
-      Math.abs(stop.wait.x - door.x) + Math.abs(stop.wait.y - door.y);
-    if (next < cost) {
-      cost = next;
-      best = stop;
-    }
-  }
-  return best;
+  return stopNearest(onFront.length ? onFront : route.stops, {
+    x,
+    y: building.y * T,
+  });
 }
 
 /**

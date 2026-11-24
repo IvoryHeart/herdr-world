@@ -946,8 +946,8 @@ export default function TownView({
               onReorderDesk: runDeskReorder,
               onDropAgent: runAgentMove,
               ...roomMoves,
-              onBinDrop: (kind, key) =>
-                putTownDropInBin(office, world, kind, key),
+              onBinDrop: (kind, key, stop) =>
+                putTownDropInBin(office, world, kind, key, stop),
               onMoveDesk: (deskKey) => {
                 setPeek(null);
                 setMoveFlow({ step: "room", deskKey });

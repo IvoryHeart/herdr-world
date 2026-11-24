@@ -1,9 +1,11 @@
 import type { BridgeControlMsg, ConnectionStatus } from "../../api";
 import {
+  binStopField,
   EMPTY_BIN,
   type BinEntry,
   type BinOutcome,
   type BinState,
+  type BinStop,
   type BinTarget,
   type BinView,
 } from "../../../../shared/bin";
@@ -56,6 +58,7 @@ function entryOf(value: unknown): BinEntry | null {
       : "other") as BinView,
     riding: value.riding === true,
     preserve_tab: value.preserve_tab === true,
+    ...binStopField(value.stop),
   };
 }
 
@@ -188,18 +191,22 @@ export type BinAddRequest = BinTarget & {
   label: string;
   view: BinView;
   preserve_tab: boolean;
+  /** The Town bus stop it was dropped on, where it waits. */
+  stop?: BinStop;
 };
 
 /**
  * The request to hold `leaf`. Its tab keeps its last pane when its desk is
  * pinned in Town or its tab is pinned in Spaces (`pinnedTabs`, the tab pins
- * of the leaf's connection).
+ * of the leaf's connection). Dropped on a Town bus stop (`stop`), it waits
+ * there; otherwise Town has it wait at the stop nearest its room.
  */
 export function binAddRequest(
   leaf: WorldLeafObject,
   view: BinView,
   pinnedDesk: boolean,
   pinnedTabs: ReadonlySet<string>,
+  stop?: BinStop | null,
 ): BinAddRequest {
   return {
     connection_id: leaf.connectionId,
@@ -211,6 +218,7 @@ export function binAddRequest(
     label: leaf.label,
     view,
     preserve_tab: pinnedDesk || pinnedTabs.has(leaf.tabId),
+    ...(stop ? { stop } : {}),
   };
 }
 

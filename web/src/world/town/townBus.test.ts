@@ -1,14 +1,18 @@
 import { expect, test } from "bun:test";
 import {
   BIN_BUS_SPEED_KMH,
+  BIN_STOP_CORNERS,
   binBusTripMs,
   type BinEntry,
+  type BinStop,
 } from "../../../../shared/bin";
 import {
   TOWN_QUEUE_ROW,
   TOWN_QUEUE_ROWS,
   TOWN_STOP_SPACING,
   townBinRiders,
+  townBinStopAt,
+  townBinStopOf,
   townBusRoute,
   townNearestStop,
   townQueueMoreLeft,
@@ -271,6 +275,134 @@ test("bin entries become Town riders by connection, generation and pane", () => 
     x: (building.entryX + 0.5) * T,
     y: (building.y + 1) * T + 13,
   });
+});
+
+test("every stop an agent can be dropped on is remembered by a building corner and found again", () => {
+  for (const shape of shapes)
+    for (const hosts of towns) {
+      const { layout } = layoutTown(town(hosts), shape);
+      const route = townBusRoute(layout);
+      for (const stop of route.stops) {
+        const remembered = townBinStopOf(route, layout, stop.key)!;
+        expect(remembered).not.toBeNull();
+        expect(townBinStopAt(route, layout, remembered)).toBe(stop);
+      }
+      expect(townBinStopOf(route, layout, "no-such-stop")).toBeNull();
+      expect(
+        townBinStopAt(route, layout, { building: "gone", corner: "top-left" }),
+      ).toBeNull();
+    }
+});
+
+test("a remembered stop stays at its building's corner as the town grows", () => {
+  const before = layoutTown(town({ a: [2], b: [2] }), TOWN_SHAPES.wide).layout;
+  // More hosts reflow the town: b moves to another place in another row.
+  const after = layoutTown(
+    town({ a: [2], b: [2], c: [1], d: [1], e: [2] }),
+    TOWN_SHAPES.wide,
+  ).layout;
+  const corner = (layout: TownLayout, stop: BinStop) => {
+    const b = layout.buildings.find((item) => item.hostKey === stop.building)!;
+    return {
+      x: (stop.corner.endsWith("left") ? b.x - 5 : b.x + b.w) * T,
+      y: (stop.corner.startsWith("top") ? b.y : b.y + b.h) * T,
+    };
+  };
+  const routeBefore = townBusRoute(before);
+  const routeAfter = townBusRoute(after);
+  for (const corner_ of BIN_STOP_CORNERS) {
+    const remembered: BinStop = { building: "b", corner: corner_ };
+    const was = townBinStopAt(routeBefore, before, remembered)!;
+    const now = townBinStopAt(routeAfter, after, remembered)!;
+    // The same stop beside the same corner, wherever b now stands.
+    const at = [corner(before, remembered), corner(after, remembered)];
+    expect(now.wait.x - at[1]!.x).toBe(was.wait.x - at[0]!.x);
+    expect(now.wait.y - at[1]!.y).toBe(was.wait.y - at[0]!.y);
+  }
+});
+
+test("an agent dropped on a stop waits there; others wait at the stop nearest their room", () => {
+  const { layout } = layoutTown(
+    town({ a: [2], b: [2], c: [1], d: [1], e: [2] }),
+    TOWN_SHAPES.wide,
+  );
+  const route = townBusRoute(layout);
+  const agent = (key: string, pane: string) => ({
+    key,
+    hostKey: "a",
+    roomKey: "a/r0",
+    currentPaneRef: {
+      connectionId: "a",
+      generation: 1,
+      kind: "pane",
+      nativeId: pane,
+      worldId: pane,
+    },
+  });
+  const model = {
+    agents: new Map(
+      [
+        agent("w", "p1"),
+        agent("x", "p2"),
+        agent("y", "p3"),
+        agent("z", "p4"),
+      ].map((item) => [item.key, item]),
+    ),
+  } as unknown as TownModel;
+  const a = layout.buildings.find((b) => b.hostKey === "a")!;
+  const nearest = townNearestStop(route, layout, a, "a/r0")!;
+  // Two stops away from a's own: one far along the street, one a row down.
+  const [far, low] = [
+    route.stops[route.stops.length - 1]!,
+    route.stops[route.stops.length - 2]!,
+  ];
+  expect(new Set([nearest.key, far.key, low.key]).size).toBe(3);
+  const entry = (id: string, pane: string, stop?: BinStop): BinEntry => ({
+    id,
+    connection_id: "a",
+    connection_generation: 1,
+    workspace_id: "w",
+    tab_id: "t",
+    pane_id: pane,
+    terminal_id: `term-${pane}`,
+    label: pane,
+    view: "town",
+    riding: false,
+    preserve_tab: false,
+    ...(stop ? { stop } : {}),
+  });
+  const { riders } = townBinRiders(
+    [
+      entry("1", "p1", townBinStopOf(route, layout, far.key)!),
+      entry("2", "p2", townBinStopOf(route, layout, low.key)!),
+      entry("3", "p3"),
+      // A building this town does not have: the stop nearest its room.
+      entry("4", "p4", { building: "gone", corner: "top-left" }),
+    ],
+    [],
+    model,
+    layout,
+    route,
+  );
+  expect(riders.map((rider) => [rider.agentKey, rider.stop.key])).toEqual([
+    ["w", far.key],
+    ["x", low.key],
+    ["y", nearest.key],
+    ["z", nearest.key],
+  ]);
+  // Each waits at the front of its own stop's queue.
+  expect(riders[0]!.at).toEqual(far.wait);
+  expect(riders[1]!.at).toEqual(low.wait);
+  // One bus calls at all three stops: its tour is longer than to any one.
+  const tour = townTourRouteM(
+    route,
+    riders.map((rider) => rider.stop),
+  )!;
+  expect(tour.stops).toBe(3);
+  for (const stop of [far, low, nearest])
+    expect(tour.route_m).toBeGreaterThan(
+      townTourRouteM(route, [stop])!.route_m,
+    );
 });
 
 /** The halts a trip makes at `stops`, as TownBusLayer asks for them. */

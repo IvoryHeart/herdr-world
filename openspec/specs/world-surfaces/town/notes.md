@@ -34,7 +34,7 @@
 - `web/src/world/town/townRendererActors.ts`
 - `web/src/world/town/TownWorldLayer.tsx`, `web/src/world/town/TownStepBubble.tsx`, `web/src/world/town/TownBoard.tsx`; plaques: `web/src/world/town/TownRoomPlaque.tsx`, `web/src/world/town/townPlaqueCard.ts` (one open card); runtime icons: `web/src/world/town/TownRuntimeIcon.tsx`, `web/src/world/town/TownRoomOverviewCard.tsx` (a room's overview card, its icon a press of its own), `web/src/world/town/townMoveMenu.ts` (menu words)
 - `web/src/world/town/townLayout.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
-- Bin and bus: `web/src/world/town/TownBusLayer.tsx` (the next trip's route report, the bus's speed and distance plate), `web/src/world/town/townBus.ts` (`townTourRouteM`, `townBusSign`, metres per pixel), `web/src/world/town/townBusDrive.ts` (`townBusTimeline`, `townBusLeft`), `web/src/world/bin/binStore.ts` (`binBusClock`, the countdown labels); tests `townBus.test.ts`, `townBusCountdown.dom.test.ts`, `web/src/world/bin/binStore.test.ts`
+- Bin and bus: `web/src/world/town/TownBusLayer.tsx` (the next trip's route report, the bus's speed and distance plate), `web/src/world/town/townBus.ts` (`townTourRouteM`, `townBusSign`, metres per pixel; `townBinStopOf`/`townBinStopAt`, the drop stop as a building corner), `web/src/world/town/townBinDrop.ts` and `TownCanvas.tsx` (the stop a drag was dropped on, kept as the bin entry's `stop` in `shared/bin.ts`), `web/src/world/town/townBusDrive.ts` (`townBusTimeline`, `townBusLeft`), `web/src/world/bin/binStore.ts` (`binBusClock`, the countdown labels); tests `townBus.test.ts`, `townBusCountdown.dom.test.ts`, `web/src/world/bin/binStore.test.ts`
 - `server/src/world/observability.ts`
 
 **Tests:**
@@ -852,9 +852,13 @@
     bottom of Town or Board, or onto a Town bus stop, or **Put in bin** in an
     agent window's **⋯** menu (from Town, Board or Desk) holds the agent;
     nothing closes yet. In Town it walks out of its building's front door to
-    the London bus stop (red roundel) nearest its room, the same character
-    walking as it does indoors, whether it was dropped on the bin or a stop
-    (one binned on Board walks out the first time Town shows it); its seat
+    the London bus stop (red roundel) it was dropped on, or, put in the bin
+    any other way, the stop nearest its room, the same character walking as
+    it does indoors (one binned on Board walks out the first time Town shows
+    it). World keeps the dropped-on stop with the bin entry as a corner of a
+    building, so it stays the same stop as Town grows and is the like stop
+    on another layout (a phone); where a Town has no stop at that corner,
+    the agent waits at the stop nearest its room; its seat
     fades into the carpet and crumbles, the whole desk when all its agents
     are binned;
     those waiting at a stop queue along its pavement in joining order, in

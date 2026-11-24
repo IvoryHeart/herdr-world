@@ -1,5 +1,7 @@
 import {
   type BinCoreConfirmation,
+  binStopField,
+  type BinStop,
   BIN_BUS_BOARDING_MS,
   BIN_BUS_ROUTE_M,
   BIN_BUS_ROUTE_MAX_M,
@@ -28,6 +30,8 @@ export type BinAdd = BinTarget & {
   view: BinView;
   /** Its tab is pinned: never close the tab's last pane. */
   preserve_tab?: boolean;
+  /** The Town bus stop it was dropped on, where it waits. */
+  stop?: BinStop;
 };
 
 /**
@@ -583,5 +587,6 @@ function normalize(
       ? input.view
       : "other",
     preserve_tab: input.preserve_tab === true,
+    ...binStopField(input.stop),
   };
 }
