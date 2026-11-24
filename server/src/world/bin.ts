@@ -33,6 +33,7 @@ export type BinAdd = BinTarget & {
  */
 export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
 
+/** @internal */
 export const ENDED_BEFORE_BUS =
   "It ended before the bus came, so nothing was closed.";
 
