@@ -13,14 +13,10 @@
 
 **Code:**
 
-- `web/src/world/town/`
+- `web/src/world/town/`, including `web/src/world/town/townLens.ts` and `web/src/world/town/townReceptionFilter.ts`.
 - `web/src/world/useDeskPins.ts`
-- `web/src/world/town/townLens.ts`
 - `web/src/world/town/townLens.test.ts`
-- `web/src/world/town/townReceptionFilter.ts`
-- `web/src/world/usage/UsageLens.tsx`
-- `web/src/world/usage/usageModel.ts`
-- `web/src/world/usage/UsageBreakdown.tsx`
+- `web/src/world/usage/UsageLens.tsx`, `web/src/world/usage/usageModel.ts`, `web/src/world/usage/UsageBreakdown.tsx`
 - `web/src/world/town/TownObservatory.tsx`
 - `web/src/world/usage/usageModel.test.ts`
 - `web/src/world/usage/UsageScreens.dom.test.ts`
@@ -28,6 +24,9 @@
 - `web/src/world/usage/UsageLens.browser.tsx`
 - `web/src/world/TownView.tsx`
 - `web/src/world/town/TownCanvas.tsx`; frames: `web/src/world/town/townWorldTransform.ts` (overlay, zoom readers), `web/src/world/town/townHostRect.ts`, `web/src/world/worldFrameScheduler.ts` (typing quiet); town center: `web/src/world/town/TownCenterMenu.tsx`, `web/src/world/town/townCenterBuildings.ts`
+- Room placement authority and Tidy/Undo: `web/src/world/town/townRoomMovability.ts`, `web/src/world/town/townMoveActions.tsx`, `web/src/world/town/townRoomPlace.ts`, `web/src/world/town/townRoomPins.ts`.
+- Room drag admission/preview: `web/src/world/town/townDrag.ts`, `web/src/world/town/scene/townInteraction.ts`.
+- Saved room spots: existing `room_pins` in `web/src/world/board/boardDocument.ts`; TUI order: `web/src/world/town/townMoves.ts`.
 - `web/src/world/officePreferences.ts`, `web/src/browserStorage.ts`
 - `web/src/world/town/town.settings.tsx`
 - `web/src/world/town/townQuietWork.ts`
@@ -44,11 +43,12 @@
 - `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases); town center ring: `web/src/world/town/townCenterBuildings.dom.test.ts`
 - `web/src/world/town/townReceptionFilter.test.ts`
 - `web/src/world/town/townQuietWork.test.ts`; plaques and top-row taps: `web/src/world/town/townRoomPlates.browser.ts` (TownCanvas `plates` cases)
+- Room moves: `web/src/world/town/townRoomMovability.test.ts` (mixed core app space/TUI, both building modes, authority subsets and Undo), `web/src/world/town/townRoomTidy.test.ts`, `web/src/world/town/scene/townInteraction.test.ts`.
 - Frames: `web/src/world/town/townWorldTransform.test.ts`, `web/src/world/worldFrameScheduler.test.ts`, `web/src/world/town/TownFrameBudget.browser.test.ts` (budget on the town-scale page)
 
 **Pitfalls:**
 
-- Each runtime connection keeps its own building and qualified room actions.
+- Machine buildings may combine runtimes; each room keeps its qualified runtime actions.
 - Room counts cover all observed agents; drawn desks are a native-order prefix.
 - Pins and selection do not pull hidden desks across the fold boundary.
 - Moving rooms on the canvas is separate from moving native desks; see town-moves.
@@ -202,6 +202,15 @@
     browser and device shows the same one. Zoomed in to desks, where the
     reception boards are put away, tap a building's reception lobby to bring
     its board and sign back; any other tap or zoom level puts it away again.
+  - **Tidy rooms** (Rearrange) on the reception board compacts the building's
+    rooms; **Undo** in its note restores their spots. Live herdr-core rooms,
+    including app spaces managed in Herdr, can move because World owns their
+    spots. Live TUI rooms also follow that reading order in Spaces. Drag and
+    **Move before/after** use the same movement permission. Stale rooms and
+    rooms whose connections cannot reorder stay in place; Tidy and Undo name
+    skipped rooms and say why. Other rooms arrange clear of those spots.
+    Undo checks availability again when pressed. This works with **Settings →
+    This World → Group runtimes → One per machine** and **One per runtime** alike.
   - A working agent whose session has not moved for 10 minutes looks quiet:
     it stays seated with its room's working light on and its hands stop
     typing. From the room level its step bubble adds an hourglass with how

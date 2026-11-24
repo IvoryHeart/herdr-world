@@ -93,7 +93,9 @@ export type TownRoomActions = {
     hostLabel: string,
     undo: (() => Promise<TownMoveResult>) | null,
   ): void;
-  /** Whether the room's host can change its rooms now. */
+  /** Rooms skipped by Tidy or Undo, with their current reasons in a note. */
+  onRoomsStayed?(roomKeys: readonly string[]): void;
+  /** Whether this room can change its World spot and any TUI order now. */
   canMoveRoom?(roomKey: string): boolean;
   /**
    * Filled in by TownCanvas from the town it shows: the room a Move before

@@ -50,7 +50,11 @@ export function createAgentSessionHandlers(args: {
   const resolverContext = createAgentSessionResolverContext(args.runtimeScope, {
     claudeConfigDir: args.claudeConfigDir,
   });
-  const cache = createSessionProjectionCache(args.files);
+  const cache = createSessionProjectionCache(
+    args.files,
+    undefined,
+    args.runtimeScope?.connectionId,
+  );
   const linker = createCodexSessionLinker(args.herdrCall, args.files);
   let watcher: ReturnType<typeof createConversationWatcher> | null = null;
   const conversation = createHerdrConversationSource({

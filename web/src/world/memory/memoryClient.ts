@@ -191,6 +191,8 @@ export function memoryErrorText(error: unknown): string {
 export type MemoryHostTarget = MemoryTarget & {
   label: string;
   names: Readonly<Record<string, string>>;
+  /** World's room names on the host (workspace ID → label). */
+  rooms?: Readonly<Record<string, string>>;
 };
 
 export type MemoryCatalogState =
@@ -224,7 +226,8 @@ export function publishMemoryHosts(next: readonly MemoryHostTarget[]) {
       (host, index) =>
         memoryTargetKey(host) === memoryTargetKey(hosts[index]!) &&
         host.label === hosts[index]!.label &&
-        JSON.stringify(host.names) === JSON.stringify(hosts[index]!.names),
+        JSON.stringify(host.names) === JSON.stringify(hosts[index]!.names) &&
+        JSON.stringify(host.rooms) === JSON.stringify(hosts[index]!.rooms),
     );
   if (same) return;
   hosts = next;

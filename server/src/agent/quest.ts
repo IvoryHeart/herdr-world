@@ -1,3 +1,4 @@
+import type { AgentArtefact } from "../../../shared/agentArtefacts";
 import type { AgentUsageStop } from "../../../shared/usageStop";
 import type { AtifTrajectory } from "./session-types";
 import { isRecord, stringValue } from "./session-utils";
@@ -57,6 +58,11 @@ export type AgentQuest = {
    * session records, while that stop still holds; null otherwise.
    */
   usage_stop?: AgentUsageStop | null;
+  /**
+   * What the agent made besides code, newest first, from this session's
+   * transcript (shared/agentArtefacts.ts). References only.
+   */
+  artefacts?: AgentArtefact[];
   /**
    * The quest could not be read just now, for example while the transcript
    * was being written. A browser keeps the last one only for the same

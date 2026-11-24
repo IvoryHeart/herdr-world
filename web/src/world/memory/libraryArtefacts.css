@@ -1,0 +1,131 @@
+/* The Library's "Made by agents" wing (#1327): its tabs, rows and reader. */
+.library-wings {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.library-wings button {
+  margin-bottom: -1px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.library-wings button[aria-selected="true"] {
+  border-color: var(--border-soft);
+  border-bottom-color: var(--panel, var(--bg));
+  background: var(--panel, var(--bg));
+  color: var(--text-strong);
+}
+
+.library-wings span {
+  margin-left: 5px;
+  color: var(--muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.library-artefact {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "icon title marks"
+    "icon facts facts";
+  align-items: center;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.library-artefact > svg {
+  grid-area: icon;
+  align-self: start;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.library-artefact:hover {
+  background: var(--panel-2);
+}
+
+.library-artefact[aria-current="true"] {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: var(--accent-soft);
+}
+
+.library-artefact-title {
+  grid-area: title;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-artefact-facts {
+  grid-area: facts;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-artefact.is-gone .library-artefact-title {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.library-artefact-mark {
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.library-artefact-mark.is-gone {
+  color: var(--warning-text);
+}
+
+.library-artefact-marks {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.library-artefact > .library-artefact-marks {
+  grid-area: marks;
+}
+
+.library-artefact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.library-artefact-body {
+  min-height: 0;
+  overflow: auto;
+}
+
+.library-artefact-text {
+  margin: 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.library-artefact-body img {
+  max-width: 100%;
+}

@@ -53,6 +53,7 @@ function testFrames() {
 
 function setup(
   options: {
+    canMoveRoom?: (roomKey: string) => boolean;
     level?: TownLevel;
     zoom?: number;
     teams?: TownTeams;
@@ -122,6 +123,7 @@ function setup(
     view,
     stage: () => (ready ? stage : null),
     world: () => ({ model, layout, teams: options.teams ?? NO_TOWN_TEAMS }),
+    canMoveRoom: options.canMoveRoom,
     hovered: () => hovered,
     setHovered: (key) => {
       hovered = key;
@@ -1227,6 +1229,29 @@ const roomEdge = (t: ReturnType<typeof setup>, index: number) => {
   const room = t.rooms[index]!;
   return t.screen({ x: room.x * T + 3, y: (room.y + room.h / 2) * T });
 };
+
+test("room movement authority gates both canvas edges and name handles", () => {
+  for (const byName of [false, true]) {
+    const t = setup({ canMoveRoom: () => false });
+    const at = roomEdge(t, 0);
+    t.interaction.move({ id: 99, at, pointerType: "mouse", client: at });
+    expect(last(t.log.filter(([kind]) => kind === "cursor"))).not.toEqual([
+      "cursor",
+      "grab",
+    ]);
+    t.interaction.down({
+      id: 500,
+      at,
+      primary: true,
+      pointerType: "mouse",
+      ...(byName ? { roomName: t.rooms[0]!.key, handle: true } : {}),
+    });
+    t.moveTo(500, offset(at, 30, 10));
+    t.lift(500, offset(at, 30, 10));
+    expect(t.log.some(([kind]) => kind === "begin")).toBe(false);
+    expect(t.moves).toEqual([]);
+  }
+});
 
 test("a room dragged by its edge goes where it is dropped, waits, then lands", async () => {
   const t = setup();
