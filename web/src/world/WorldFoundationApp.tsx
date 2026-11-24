@@ -347,57 +347,62 @@ export default function WorldFoundationApp() {
     }),
     [view, lights],
   );
-  const worldFind = (search: string) =>
-    worldFindGroup(fullWorld, search, {
-      open: (node) =>
-        void openWorldFind(node, {
-          activateSpacesTarget: async (target) => {
-            const opened = await store.activateQualifiedSpacesTarget(target);
-            if (opened) setSpacesCore(null);
-            return opened;
-          },
-          activateHost: async (host) => {
-            await activateWorldNodeHost(host);
-            setSpacesCore(null);
-          },
-          openCoreInSpaces: (leaf) => {
-            showCoreInSpaces(leaf);
-            return true;
-          },
-          goToSpaces: () => {
-            setView("spaces");
-            revealSpacesTerminal();
-          },
-          notify: (message, detail) =>
-            store.notify({ kind: "error", message, detail }),
-        }),
-      ...(showNode
-        ? {
-            go: {
-              shows: (node) => topbarWorld.nodeById.has(node.id),
-              run: (result) => {
-                const running = worldFinder.get();
-                const again =
-                  running?.view === view &&
-                  running.chosen?.result.id === result.id;
-                if (lights) worldFinder.choose(view, search, result);
-                // Town flies to it on its map (useTownSearch) and selects it
-                // when it is chosen again, as `/` did; the other views
-                // select it at once. A landmark has no node to select.
-                if (
-                  (view !== "town" || again) &&
-                  topbarWorld.nodeById.has(result.nodeId)
-                )
-                  showNode(result.nodeId);
-              },
+  const worldFind = (search: string, from: number) =>
+    worldFindGroup(
+      fullWorld,
+      search,
+      {
+        open: (node) =>
+          void openWorldFind(node, {
+            activateSpacesTarget: async (target) => {
+              const opened = await store.activateQualifiedSpacesTarget(target);
+              if (opened) setSpacesCore(null);
+              return opened;
             },
-          }
-        : {}),
-      ...(view === "spaces" ? {} : { opensNote: "Opens in Spaces" }),
-      ...(view === "town" ? { extra: townLandmarkResults } : {}),
-      colorOf: (leaf) =>
-        terminalColor(terminalColors, worldLeafColorTarget(fullWorld, leaf)),
-    });
+            activateHost: async (host) => {
+              await activateWorldNodeHost(host);
+              setSpacesCore(null);
+            },
+            openCoreInSpaces: (leaf) => {
+              showCoreInSpaces(leaf);
+              return true;
+            },
+            goToSpaces: () => {
+              setView("spaces");
+              revealSpacesTerminal();
+            },
+            notify: (message, detail) =>
+              store.notify({ kind: "error", message, detail }),
+          }),
+        ...(showNode
+          ? {
+              go: {
+                shows: (node) => topbarWorld.nodeById.has(node.id),
+                run: (result) => {
+                  const running = worldFinder.get();
+                  const again =
+                    running?.view === view &&
+                    running.chosen?.result.id === result.id;
+                  if (lights) worldFinder.choose(view, search, result);
+                  // Town flies to it on its map (useTownSearch) and selects it
+                  // when it is chosen again, as `/` did; the other views
+                  // select it at once. A landmark has no node to select.
+                  if (
+                    (view !== "town" || again) &&
+                    topbarWorld.nodeById.has(result.nodeId)
+                  )
+                    showNode(result.nodeId);
+                },
+              },
+            }
+          : {}),
+        ...(view === "spaces" ? {} : { opensNote: "Opens in Spaces" }),
+        ...(view === "town" ? { extra: townLandmarkResults } : {}),
+        colorOf: (leaf) =>
+          terminalColor(terminalColors, worldLeafColorTarget(fullWorld, leaf)),
+      },
+      from,
+    );
 
   // Panel windows (Town's summary and the like) beside the Inspectors.
   const panelRegistry = useWorldPanelRegistry();

@@ -246,6 +246,113 @@ if (process.env.COMMAND_BOX_KEY_DOM !== "1") {
     act(() => root.unmount());
     element.remove();
   });
+  test("finds that read alike page, and every one can be chosen", () => {
+    selectShortcutPreset("linux");
+    const chosen: string[] = [];
+    const asked: number[] = [];
+    const size = 12;
+    const total = 13;
+    const element = document.createElement("div");
+    document.body.append(element);
+    const root = createRoot(element);
+    act(() =>
+      root.render(
+        createElement(CommandCombobox, {
+          extension: { captureKey: null, groups: [] },
+          // Thirteen agents no further word tells apart: same name and place.
+          find: (search, from) => {
+            if (!search.includes("codex")) return null;
+            asked.push(from);
+            const start = Math.min(from, total - 1);
+            return {
+              heading: "In World",
+              actions: Array.from(
+                { length: Math.min(size, total - start) },
+                (_, index) => ({
+                  key: `find-codex-${start + index + 1}`,
+                  icon: null,
+                  title: "codex",
+                  detail: "Agent · atlas › harbor",
+                  score: 0.95,
+                  run: () => chosen.push(`codex ${start + index + 1}`),
+                }),
+              ),
+              page: { from: start, size, total },
+            };
+          },
+        }),
+      ),
+    );
+    const popover = () => document.querySelector(".command-popover");
+    const rows = () => [
+      ...document.querySelectorAll<HTMLElement>("[cmdk-item]"),
+    ];
+    const finds = () =>
+      rows().filter((row) => row.dataset.value?.includes("find-codex-"));
+    const type = (value: string) => {
+      const input = popover()!.querySelector<HTMLInputElement>("input")!;
+      act(() => {
+        Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          "value",
+        )!.set!.call(input, value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    };
+    act(() => {
+      document.body.dispatchEvent(keyK({ ctrlKey: true }));
+    });
+    type("codex");
+    // Alike finds stay separate rows: a bounded page and a row to the next.
+    expect(finds()).toHaveLength(size);
+    expect(popover()!.textContent).toContain("Next 1");
+    expect(popover()!.textContent).toContain("13 of 13");
+    expect(popover()!.textContent).not.toContain("Previous");
+    act(() => {
+      rows()
+        .find((item) => item.dataset.value?.includes("find-page-next"))!
+        .click();
+    });
+    // Paging keeps the box open on the next page, with a way back.
+    expect(popover()).not.toBeNull();
+    expect(chosen).toEqual([]);
+    expect(finds().map((item) => item.dataset.value?.split(" ").pop())).toEqual(
+      ["find-codex-13"],
+    );
+    expect(
+      rows().some((item) => item.dataset.value?.includes("find-page-previous")),
+    ).toBe(true);
+    expect(
+      rows().some((item) => item.dataset.value?.includes("find-page-next")),
+    ).toBe(false);
+    // The thirteenth is chosen like any other find.
+    act(() => {
+      finds()[0]!.click();
+    });
+    expect(chosen).toEqual(["codex 13"]);
+    expect(popover()).toBeNull();
+    // A new search starts again at the first page.
+    act(() => {
+      document.body.dispatchEvent(keyK({ ctrlKey: true }));
+    });
+    type("codex");
+    act(() => {
+      rows()
+        .find((item) => item.dataset.value?.includes("find-page-next"))!
+        .click();
+    });
+    type("codex harbor");
+    expect(asked[asked.length - 1]).toBe(0);
+    expect(finds()).toHaveLength(size);
+    act(() => {
+      popover()!
+        .querySelector("input")!
+        .dispatchEvent(keyK({ ctrlKey: true }));
+    });
+    expect(popover()).toBeNull();
+    act(() => root.unmount());
+    element.remove();
+  });
   test("/, Ctrl+F and Cmd+K open the same box, sharing its search with the view", () => {
     selectShortcutPreset("linux");
     const log: string[] = [];

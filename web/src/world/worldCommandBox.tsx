@@ -17,7 +17,6 @@ import {
   Cpu,
   DoorOpen,
   Landmark,
-  Search,
   Server,
   SquareTerminal,
 } from "lucide-react";
@@ -45,7 +44,10 @@ import { worldSearchResults, type WorldSearchResult } from "./worldSearch";
 import { WORLD_VIEW_DESTINATIONS } from "./WorldMobileNav";
 import type { WorldView } from "./worldViewRouting";
 
-/** Found items the box lists; more words narrow the rest. */
+/**
+ * Found items the box lists at once; its Next and Previous rows page through
+ * the rest, so every match stays reachable however alike they look.
+ */
 export const WORLD_COMMAND_FINDS = 12;
 
 export const WORLD_COMMAND_PLACEHOLDER =
@@ -335,11 +337,15 @@ function findAction(
   };
 }
 
-/** The found items for a search, or null when it finds nothing. */
+/**
+ * A page of the found items for a search, from the `from`th, or null when it
+ * finds nothing. The box pages through the rest (ActionGroupDefinition.page).
+ */
 export function worldFindGroup(
   world: WorldObject,
   search: string,
   handlers: WorldFindHandlers,
+  from = 0,
 ): ActionGroupDefinition | null {
   const extra = handlers.extra?.(search) ?? [];
   // A stable sort keeps the view's own results first within a rank.
@@ -350,22 +356,24 @@ export function worldFindGroup(
   const isCore = (connectionId: string) =>
     world.hosts.find((host) => host.connectionId === connectionId)?.connection
       .runtime === "herdr-core";
+  // A page World emptied as it changed shows its last page instead.
+  const lastPage =
+    Math.floor((results.length - 1) / WORLD_COMMAND_FINDS) *
+    WORLD_COMMAND_FINDS;
+  const start = Math.min(
+    Math.max(0, Math.floor(from / WORLD_COMMAND_FINDS) * WORLD_COMMAND_FINDS),
+    lastPage,
+  );
   const actions = results
-    .slice(0, WORLD_COMMAND_FINDS)
+    .slice(start, start + WORLD_COMMAND_FINDS)
     .map((result) =>
       findAction(result, world.nodeById.get(result.nodeId), handlers, isCore),
     );
-  const more = results.length - actions.length;
-  if (more > 0)
-    actions.push({
-      key: "world-find-more",
-      icon: <Search size={15} />,
-      title: `${more} more in World`,
-      disabledReason: "Add a word to narrow the search",
-      score: 0.01,
-      run: () => {},
-    });
-  return { heading: "In World", actions };
+  return {
+    heading: "In World",
+    actions,
+    page: { from: start, size: WORLD_COMMAND_FINDS, total: results.length },
+  };
 }
 
 /** Going to each view but the current one. */

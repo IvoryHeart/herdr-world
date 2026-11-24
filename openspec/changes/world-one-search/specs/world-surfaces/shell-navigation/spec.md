@@ -33,6 +33,14 @@ view cannot show it; opening its terminal SHALL be a second action, never the de
   hides, and chooses it
 - **THEN** it opens, and its row says so before it is chosen
 
+#### Scenario: Every match stays reachable
+
+- **WHEN** a search finds more World objects than one page of the box shows, including
+  ones whose names, places and status read alike so that no further word tells them apart
+- **THEN** the box shows a bounded page of them with rows to the next and previous pages
+  that keep it open, and every match can be reached and chosen
+- **AND** matches that read alike stay separate rows
+
 #### Scenario: A command from the same box
 
 - **WHEN** the user in Board presses Cmd+K and types "new workspace" and chooses it

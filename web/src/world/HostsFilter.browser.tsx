@@ -3431,7 +3431,8 @@ async function run() {
           worldFinder.get() === null,
         `${title} search did not end`,
       );
-      // Many matches stay a bounded page that says how to narrow it.
+      // Many matches stay a bounded page; its Next row pages to the rest,
+      // so a later match whose label repeats is still reachable and chosen.
       namedButton("Find in World")?.click();
       await waitFor(
         () => !!document.querySelector(".command-popover input"),
@@ -3442,13 +3443,73 @@ async function run() {
         () => finds().length > 0,
         `${title} found no repeated agents`,
       );
-      check(
-        finds().length <= WORLD_COMMAND_FINDS + 1,
-        `${title} search DOM is unbounded`,
+      const later = worldObjectId("beta", "terminal", "shared-39");
+      const nextPage = () =>
+        [...document.querySelectorAll<HTMLElement>("[cmdk-item]")].find(
+          (item) => item.dataset.value?.includes("find-page-next"),
+        );
+      for (let page = 0; page < 5 && !findRow(later); page += 1) {
+        check(
+          finds().length <= WORLD_COMMAND_FINDS,
+          `${title} search DOM is unbounded`,
+        );
+        const next = nextPage();
+        if (!next)
+          throw new Error(
+            `${title} has no path to matching observations beyond the first page`,
+          );
+        const shown = finds()[0]?.dataset.value;
+        next.click();
+        await waitFor(
+          () => finds()[0]?.dataset.value !== shown,
+          `${title} Next did not page the search`,
+        );
+        check(
+          !!document.querySelector(".command-popover"),
+          `${title} paging closed the box`,
+        );
+      }
+      const laterResult = findRow(later);
+      if (!laterResult)
+        throw new Error(
+          `${title} paging lost the later qualified match with colliding labels`,
+        );
+      laterResult.click();
+      await waitFor(
+        () => !document.querySelector(".command-popover"),
+        `${title} kept the box open after choosing the paged match`,
       );
-      check(
-        finds().some((item) => /more in World/.test(item.textContent ?? "")),
-        `${title} search hides how many more match`,
+      if (view === "town")
+        check(
+          worldFinder.get()?.chosen?.result.nodeId === later,
+          `${title} did not go to the later paged match`,
+        );
+      else
+        await waitFor(
+          () =>
+            [
+              ...document.querySelectorAll<HTMLElement>(
+                "[data-world-node-anchor]",
+              ),
+            ].some(
+              (element) =>
+                element.dataset.worldNodeAnchor === later &&
+                element.getAttribute("aria-pressed") === "true",
+            ),
+          `${title} did not reveal the later paged match`,
+        );
+      namedButton("End search")?.click();
+      await frame();
+      check(worldFinder.get() === null, `${title} paged search did not end`);
+      namedButton("Find in World")?.click();
+      await waitFor(
+        () => !!document.querySelector(".command-popover input"),
+        `${title} search did not reopen`,
+      );
+      typeInBox("Repeated synthetic agent");
+      await waitFor(
+        () => finds().length > 0,
+        `${title} found no repeated agents`,
       );
       // Closing the box without a choice ends the search.
       document.querySelector<HTMLButtonElement>(".command-trigger")?.click();

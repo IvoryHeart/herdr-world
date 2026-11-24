@@ -71,13 +71,26 @@ describe("the command box finds what the views' search finds", () => {
     const results = worldSearchResults(world, "harbor");
     expect(results.length).toBeGreaterThan(WORLD_COMMAND_FINDS);
     expect(group.heading).toBe("In World");
-    // A page of finds, then how many more a narrower search would show.
-    expect(group.actions).toHaveLength(WORLD_COMMAND_FINDS + 1);
-    const more = group.actions[WORLD_COMMAND_FINDS]!;
-    expect(more.title).toBe(
-      `${results.length - WORLD_COMMAND_FINDS} more in World`,
+    // A page of finds; the box pages through the rest.
+    expect(group.actions).toHaveLength(WORLD_COMMAND_FINDS);
+    expect(group.page).toEqual({
+      from: 0,
+      size: WORLD_COMMAND_FINDS,
+      total: results.length,
+    });
+    // The next page holds the matches after it, ending with the last one.
+    const lastFrom =
+      Math.floor((results.length - 1) / WORLD_COMMAND_FINDS) *
+      WORLD_COMMAND_FINDS;
+    const last = worldFindGroup(world, "harbor", none, lastFrom)!;
+    expect(last.page!.from).toBe(lastFrom);
+    expect(last.actions[last.actions.length - 1]!.key).toBe(
+      `world-find-${results[results.length - 1]!.id}`,
     );
-    expect(more.disabledReason).toBe("Add a word to narrow the search");
+    // A page past the end, as after a narrower search, is the last page.
+    expect(worldFindGroup(world, "harbor", none, 10_000)!.page!.from).toBe(
+      lastFrom,
+    );
     const [room] = group.actions;
     expect(room!.title).toBe("harbor");
     expect(room!.detail).toBe("Room · atlas");

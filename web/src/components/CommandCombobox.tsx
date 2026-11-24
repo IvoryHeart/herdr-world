@@ -28,6 +28,7 @@ import { useEffect, useMemo, useState } from "react";
 import { COMMAND_BOX_OPEN_EVENT, commandBoxKey } from "../commandBoxKey";
 import { useViewSearchShortcut } from "../world/viewSearchShortcut";
 import { type FinderSearch, useFinderBoxClosed } from "../world/worldFinder";
+import { findPages } from "./commandFindPages";
 import { luckyWorktreeBranchName } from "../luckyName";
 import { normalizeSearchText } from "../searchText";
 import { SHORTCUT_NUMBERS } from "../shortcutBindings";
@@ -102,12 +103,16 @@ export type ActionDefinition = {
    * finds: open its terminal instead of going to it in the current view).
    */
   secondary?: { label: string; run: () => void };
+  /** Runs with the box left open, such as paging through finds. */
+  stay?: boolean;
   run: () => void;
 };
 
 export type ActionGroupDefinition = {
   heading: string;
   actions: ActionDefinition[];
+  /** A page of a longer list of finds, alike rows distinct (commandFindPages). */
+  page?: { from: number; size: number; total: number };
 };
 
 export type CommandExtension = {
@@ -119,7 +124,7 @@ export type CommandExtension = {
    * terminals on every runtime. The shell gives it to the box in every view,
    * Spaces included (#1329).
    */
-  find?: (search: string) => ActionGroupDefinition | null;
+  find?: (search: string, from: number) => ActionGroupDefinition | null;
   /**
    * A visual view's own select for a World node, as clicking it there does:
    * what choosing a find does there. The box itself never calls it.
@@ -333,6 +338,7 @@ function OwnedCommandCombobox({
     useState<CommandExtension | null>(null);
   useCloseGlobalMenuForDialog(open, setOpen);
   const [search, setSearch] = useState("");
+  const [findFrom, setFindFrom] = useState(0);
   const [selectedActionValue, setSelectedActionValue] = useState("");
   const [selectedActionSearch, setSelectedActionSearch] = useState("");
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
@@ -479,6 +485,7 @@ function OwnedCommandCombobox({
   function openBox(resume = false) {
     setCapturedExtension(extension);
     setSearch(resume ? (finderSearch?.seed() ?? "") : "");
+    setFindFrom(0);
     setOpen(true);
   }
   useFinderBoxClosed(open, finderSearch);
@@ -489,6 +496,9 @@ function OwnedCommandCombobox({
     if (!operationalShortcutsEnabled) return;
     fn();
   };
+  // Choosing a row closes the box unless the row stays (paging finds).
+  const choose = (action: ActionDefinition) =>
+    !action.disabledReason && (action.stay ? action.run() : run(action.run));
 
   const submitTextAction = (value: string) => {
     if (!operationalShortcutsEnabled) return;
@@ -1048,9 +1058,7 @@ function OwnedCommandCombobox({
         },
       )
     : [];
-  const findGroups = (search.trim() ? [find?.(search)] : []).filter(
-    (group): group is ActionGroupDefinition => Boolean(group),
-  );
+  const findGroups = findPages(find, search, findFrom, setFindFrom);
   const actionGroups: ActionGroupDefinition[] = [
     ...(!extension.groups.length || extension.context
       ? [
@@ -1122,15 +1130,17 @@ function OwnedCommandCombobox({
   const rankedActions = normalizedSearch
     ? (() => {
         const seen = new Set<string>();
+        // Paging rows stay with the results they page; alike finds stay apart.
         return actionGroups
           .flatMap((group) =>
             group.actions.map((action) => ({
               action,
               group: group.heading,
               score: rankAction(action, search),
+              distinct: Boolean(group.page),
             })),
           )
-          .filter((entry) => entry.score > 0)
+          .filter((entry) => entry.score > 0 && !entry.action.stay)
           .sort(
             (a, b) =>
               b.score - a.score ||
@@ -1138,6 +1148,7 @@ function OwnedCommandCombobox({
               a.action.title.localeCompare(b.action.title),
           )
           .filter((entry) => {
+            if (entry.distinct) return true;
             const signature = actionDisplaySignature(entry.action);
             if (seen.has(signature)) return false;
             seen.add(signature);
@@ -1166,6 +1177,7 @@ function OwnedCommandCombobox({
           if (topActionKeys.has(action.key)) return false;
           if (!normalizedSearch) return true;
           if (rankAction(action, search) <= 0) return false;
+          if (group.page) return true; // Alike finds are different things.
           const signature = actionDisplaySignature(action);
           if (displayedSignatures.has(signature)) return false;
           displayedSignatures.add(signature);
@@ -1259,11 +1271,7 @@ function OwnedCommandCombobox({
                 return;
               }
             }
-            runCommandNumberShortcut(
-              event,
-              numberedActions,
-              (action) => !action.disabledReason && run(action.run),
-            );
+            runCommandNumberShortcut(event, numberedActions, choose);
           }}
         >
           <Command
@@ -1279,6 +1287,7 @@ function OwnedCommandCombobox({
               value={search}
               onValueChange={(value) => {
                 setSearch(value);
+                setFindFrom(0);
                 finderSearch?.change(value);
               }}
               placeholder={
@@ -1315,13 +1324,7 @@ function OwnedCommandCombobox({
                             }
                           : undefined
                       }
-                      onSelect={() => {
-                        if (
-                          operationalShortcutsEnabled &&
-                          !action.disabledReason
-                        )
-                          run(action.run);
-                      }}
+                      onSelect={() => choose(action)}
                     />
                   ))}
                 </CommandGroup>

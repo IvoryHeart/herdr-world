@@ -121,7 +121,9 @@
   phone's **Find or act**. A workspace-relative or
   absolute path opens the file. Agents are found in its **In World** group,
   in every view (see Find or act in terminal-windows notes); Spaces has no
-  separate list of its own connection's agents. Enter goes to a found agent in
+  separate list of its own connection's agents. The group shows 12 finds at a
+  time; its **Next** and **Previous** rows page through the rest without closing
+  the box, so agents that read alike stay reachable. Enter goes to a found agent in
   the current view; in Spaces, or with Shift+Enter or the row's **Open
   terminal**, a herdr-core agent shows its terminal in Spaces' terminal area in place of the Herdr tab
   (`web/src/world/SpacesCoreTerminal.tsx`); **Close** returns to the tab.
