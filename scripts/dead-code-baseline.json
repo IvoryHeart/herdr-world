@@ -1858,7 +1858,6 @@
       "web/src/world/terminalWindowArrangementState.ts#TerminalWindowArrangementParticipant",
       "web/src/world/terminalWindowArrangementState.ts#TerminalWindowArrangementState",
       "web/src/world/town/TownToasts.tsx#TownToastAction",
-      "web/src/world/town/TownWorldLayer.tsx#TownRoomPress",
       "web/src/world/town/scene/townInteraction.ts#TownStage",
       "web/src/world/town/scene/townSceneDiff.ts#TownSceneDirty",
       "web/src/world/town/townActors.ts#TownActorMode",

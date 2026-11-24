@@ -75,6 +75,8 @@ export function townDeskOpenKey(
 /**
  * Whether a tap on the desk opens something at once (townDeskOpenKey), so a
  * touch tap opens it rather than the desk's summary card first.
+ *
+ * @internal
  */
 export function townDeskOpensAtOnce(
   office: HerdrOfficeProjection,
