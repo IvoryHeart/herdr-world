@@ -11,7 +11,7 @@ import {
 } from "./runtime-isolated-kit";
 
 /** Browser RPC, with a bounded event-driven snapshot wait instead of polling. */
-export async function worldProbe(kit: Kit) {
+async function worldProbe(kit: Kit) {
   const base = `http://127.0.0.1:${kit.port}`;
   const password = readFileSync(
     `${paths(kit).world}/auth-token`,

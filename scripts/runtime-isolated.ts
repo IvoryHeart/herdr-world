@@ -10,7 +10,7 @@ import {
 } from "./runtime-isolated-kit";
 import { selfTest } from "./runtime-isolated-self-test";
 
-export async function main(args: string[]) {
+async function main(args: string[]) {
   const [action, ...rest] = args;
   let name = "check";
   if (rest[0] === "--name" && rest[1]) {

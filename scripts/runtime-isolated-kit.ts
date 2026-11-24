@@ -29,6 +29,7 @@ export type Kit = {
 
 const repository = resolve(import.meta.dir, "..");
 const helper = join(import.meta.dir, "runtime-isolated-processes.py");
+/** @internal */
 export const kitBase = () => `/tmp/world-kit-${process.getuid!()}`;
 
 /** Lock the stable private directory inode: no stale lock file/PID to recover. */
@@ -60,6 +61,7 @@ export async function controlOperation<T>(
     await child.exited;
   }
 }
+/** @internal */
 export function kitRoot(name: string) {
   if (!/^[a-z][a-z0-9-]{0,19}$/.test(name) || name === "default")
     throw new Error(
@@ -141,6 +143,7 @@ export function kitEnv(
   };
 }
 
+/** @internal */
 export function saveKit(kit: Kit) {
   const path = join(kit.root, "kit.json");
   writeFileSync(`${path}.new`, `${JSON.stringify(kit, null, 2)}\n`, {
@@ -224,7 +227,7 @@ export async function processHelper(
 }
 
 /** Filesystem event wait: no sleep/retry or runtime auto-start probes. */
-export function fileEvent<T>(
+function fileEvent<T>(
   root: string,
   check: () => T | undefined,
   timeout = 20_000,
@@ -272,6 +275,7 @@ function launch(kit: Kit, label: string, command: string[]) {
   }
 }
 
+/** @internal */
 export function isolationEndpoints(kit: Kit) {
   const p = paths(kit);
   privateDirectory(p.core);
