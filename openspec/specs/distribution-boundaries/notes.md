@@ -4,7 +4,7 @@
 
 **Surfaces:**
 
-- [Real-runtime release walk and pre-tag gate](../../../docs/release.md#real-runtime-release-walk) covers packaged runtime/agent launch journeys and receipts.
+- [Three owner release steps](../../../docs/release.md#three-owner-steps) and the native walk cover tested packages and automatic recovery.
 - Installers, updates, releases, contributor delivery and the public documentation site.
 - Server feature wiring and presence composition: [contributor guide](../../../docs/development.md#verification).
 
@@ -33,11 +33,23 @@
 - `server/src/testing/`
 - `web/src/features/`
 - `web/src/testing/`
+- `release-please-config.json`
+- `.release-please-manifest.json`
+- `version.txt`
+- `scripts/release-plan.ts`
+- `scripts/release-validation.test.ts`
+- `scripts/release-publication.test.ts`
+- `herdr-plugin.toml`
+- `scripts/install-plugin.ps1`
+- `scripts/install-plugin.test.ts`
+- `scripts/install-plugin.windows.test.ts`
 - `scripts/release-walk.ts`
-- `scripts/release-walk-gate.ts`
+- `scripts/release-channel-upgrade.py`
+- `scripts/release-npm-smoke.ts`
+- `scripts/pipeline-retry.ts`
+- `server/src/config/service-executable.ts`
+- `server/src/cli/update-finish.ts`
 - `scripts/release-walk/`
-- `scripts/prepare-release.ts`
-- `scripts/prepare-release.test.ts`
 - `server/src/config/service-discovery.ts`
 - `server/src/config/service-uninstall.test.ts`
 - `scripts/`

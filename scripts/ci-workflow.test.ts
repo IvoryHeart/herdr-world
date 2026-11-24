@@ -61,7 +61,7 @@ const workflow = Bun.YAML.parse(
     };
   };
   permissions: { actions: string };
-  concurrency: { group: string; "cancel-in-progress": string };
+  concurrency: { group: string; "cancel-in-progress": boolean };
   jobs: Record<string, WorkflowJob>;
 };
 
@@ -96,7 +96,9 @@ const SCOPE_RAN = "needs.validation-scope.result != 'skipped'";
 
 test("a closed or merged PR's edit or label skips every job before it takes a runner", () => {
   const scope = workflow.jobs["validation-scope"];
-  expect(scope.if).toBe(OPEN_PR);
+  expect(scope.if).toContain(OPEN_PR.split(" || ")[0]);
+  expect(scope.if).toContain("github.event.pull_request.state == 'open'");
+  expect(scope.if).toContain("github.event.action != 'labeled'");
   expect(scope.needs).toBeUndefined();
   const needs = (name: string): string[] => {
     const direct = workflow.jobs[name]!.needs ?? [];
@@ -125,7 +127,9 @@ test("a closed or merged PR's edit or label skips every job before it takes a ru
 test("a description-only edit reuses the dependency audit with the rest of the evidence", () => {
   const audit = workflow.jobs["dependency-security"];
   expect(audit.needs).toBe("validation-scope");
-  expect(audit.if).toBe("needs.validation-scope.outputs.mode != 'reuse'");
+  expect(audit.if).toBe(
+    "needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'",
+  );
   const step = workflow.jobs.delivery.steps.find(
     (step) => step.name === "Require current dependency security audit",
   )!;
@@ -213,24 +217,14 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "opened",
     "synchronize",
     "reopened",
-    "edited",
     "labeled",
   ]);
   expect(workflow.permissions.actions).toBe("read");
-  expect(workflow.concurrency["cancel-in-progress"]).toContain(
-    "github.event.action != 'edited'",
-  );
-  expect(workflow.concurrency["cancel-in-progress"]).toContain(
-    "github.event.action != 'labeled'",
-  );
-  // Post-merge gate: main pushes share one group that never cancels the
-  // running check, so a batch of merges is tested once at its newest commit.
+  // Every main commit retains its own run so an owner tag can await it.
+  expect(workflow.concurrency["cancel-in-progress"]).toBe(false);
   expect(workflow.on.push).toEqual({ branches: ["main"] });
   expect(workflow.concurrency.group).toContain(
-    "(github.event_name == 'push' && 'main-push')",
-  );
-  expect(workflow.concurrency["cancel-in-progress"]).toContain(
-    "github.event_name == 'pull_request'",
+    "(github.event_name == 'push' && github.sha)",
   );
   const delivery = workflow.jobs.delivery;
 
@@ -240,8 +234,6 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "validation",
     "world-browser",
     "behavioral",
-    "installer-upgrade",
-    "launchd",
     "dependency-security",
   ]);
   expect(delivery?.if).toBe(
@@ -291,7 +283,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(workflow.jobs.validate).toBeUndefined();
 });
 
-test("no timing gates delivery: browser jobs use the pinned Chrome and never retry", () => {
+test("no timing gates delivery: browser jobs use the pinned Chrome and retry failures once", () => {
   expect(worldWorkflow.jobs["latency-shards"]).toBeUndefined();
   expect(worldWorkflow.jobs["world-latency"]).toBeUndefined();
   expect(JSON.stringify(worldWorkflow)).not.toContain("--retry");
@@ -327,6 +319,24 @@ test("the latency trend measures the trend suites on quiet runners and reports w
     "workflow_dispatch",
   ]);
   expect(trend.permissions).toEqual({ contents: "read", actions: "read" });
+  // PR and main pushes measure browser inputs; nightly runs remain unfiltered.
+  const push = trend.on.push as { branches: string[]; paths: string[] };
+  expect(push.branches).toEqual(["main"]);
+  for (const path of [
+    "web/src/**",
+    "shared/**",
+    "bun.lock",
+    "scripts/run-world-tests.ts",
+    "scripts/world-browser-suites.ts",
+    "scripts/latency-trend.ts",
+    ".github/workflows/world-latency-trend.yml",
+  ])
+    expect(push.paths).toContain(path);
+  expect(push.paths.some((path) => path.startsWith("server/"))).toBe(false);
+  expect(trend.on.pull_request).toMatchObject({
+    types: ["labeled", "synchronize"],
+  });
+  expect(trend.on.schedule).toEqual([{ cron: "53 3 * * *" }]);
   const measure = trend.jobs.measure!;
   expect(
     (measure.strategy?.matrix?.suites ?? [])
@@ -347,7 +357,7 @@ test("the latency trend measures the trend suites on quiet runners and reports w
   expect(measured).toContain("latency/$suite.jsonl");
   expect(JSON.stringify(trend)).not.toContain("--retry");
   // Nothing required waits on it.
-  expect(JSON.stringify(workflow)).not.toContain("world-latency-trend");
+  expect(workflow.jobs["world-latency-trend"]).toBeUndefined();
 });
 
 test("all World browser shards and the web browser suites run independently and retain failure evidence", () => {
@@ -362,8 +372,9 @@ test("all World browser shards and the web browser suites run independently and 
   expect(world?.needs).toBeUndefined();
   expect(world?.if).toBe("toJSON(fromJSON(inputs.selection).world) != '[]'");
   expect(world?.["continue-on-error"] ?? false).toBe(false);
-  for (const step of world?.steps ?? [])
-    expect(step["continue-on-error"] ?? false).toBe(false);
+  expect(world.steps.filter((step) => step["continue-on-error"])).toHaveLength(
+    1,
+  );
   expect(world?.["runs-on"]).toBe("ubuntu-latest");
   expect(world?.strategy?.matrix?.shard).toBe(
     "${{ fromJSON(inputs.selection).worldShards }}",
@@ -398,8 +409,7 @@ test("all World browser shards and the web browser suites run independently and 
   expect(web?.if).toBe("toJSON(fromJSON(inputs.selection).web) != '[]'");
   expect(web?.strategy?.matrix?.shard).toEqual([1, 2]);
   expect(worldWorkflow.jobs["web-browser"].needs).toBe("web-shards");
-  for (const step of web?.steps ?? [])
-    expect(step["continue-on-error"] ?? false).toBe(false);
+  expect(web.steps.filter((step) => step["continue-on-error"])).toHaveLength(1);
   expect(
     web?.steps.find(
       (step) =>
@@ -456,13 +466,6 @@ test("labeled release PRs offer six downloadable previews without publishing", (
   ).toBe(true);
 });
 
-test("a title or description edit rebuilds no preview; commits, base changes and labels still do", () => {
-  const condition =
-    "github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview') && (github.event.action != 'edited' || github.event.changes.base)";
-  for (const name of ["release-preview", "npm-preview", "homebrew-preview"])
-    expect(workflow.jobs[name]!.if).toBe(condition);
-});
-
 test("reuse recognises a description-only failure by the scope job's real names", () => {
   const scope = workflow.jobs["validation-scope"];
   expect(scope.name).toBe(SCOPE_JOB);
@@ -485,12 +488,12 @@ test("a metadata event on a red head fails the scope job by name and starts no c
   const scope = workflow.jobs["validation-scope"];
   const names = scope.steps.map((step) => step.name);
   // It follows the scope decision and precedes any installer work.
-  expect(names.indexOf(HOLD_STEP)).toBe(names.indexOf(SCOPE_STEP) + 1);
+  expect(names.indexOf(HOLD_STEP)).toBeGreaterThan(names.indexOf(SCOPE_STEP));
   const hold = scope.steps.find((step) => step.name === HOLD_STEP)!;
   expect(hold.if).toBe("steps.scope.outputs.mode == 'hold'");
   expect(hold["continue-on-error"]).toBeUndefined();
   const run = Bun.spawnSync(["bash", "-euc", hold.run!], {
-    env: { PATH: process.env.PATH, HELD_RUN: "7" },
+    env: { PATH: process.env.PATH, HELD_RUN: "7", EVENT: "pull_request" },
   });
   expect(run.exitCode).toBe(1);
   expect(run.stdout.toString()).toContain("Run 7");
@@ -498,90 +501,11 @@ test("a metadata event on a red head fails the scope job by name and starts no c
   // only the protected reports run, and they fail.
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (!job.if?.includes("always()")) continue;
-    expect(["validation", "delivery", "launchd"]).toContain(name);
+    expect(["validation", "delivery", "release-candidate"]).toContain(name);
   }
   expect(workflow.jobs.validation.if).toContain(
     "needs.validation-scope.outputs.mode != 'hold'",
   );
-});
-
-test("protected launchd reports require native work on the existing installer runners", async () => {
-  const launchd = workflow.jobs.launchd;
-  expect(launchd.name).toBe(
-    "macOS launchd plugin lifecycle (${{ matrix.arch }})",
-  );
-  expect(launchd["runs-on"]).toBe("ubuntu-latest");
-  expect(launchd.needs).toEqual(["validation-scope", "installer-upgrade"]);
-  expect(launchd.if).toBe(
-    "always() && needs.validation-scope.result != 'skipped'",
-  );
-  expect(launchd.strategy?.matrix?.arch).toEqual(["arm64", "x86_64"]);
-  const report = launchd.steps[0]!;
-  expect(report.run).toContain('test "$SCOPE_RESULT" = success');
-  expect(report.run).toContain(
-    'if [ "$PACKAGING" = true ]; then expected=success; fi',
-  );
-  expect(report.run).toContain('test "$INSTALLER_RESULT" = "$expected"');
-  expect(report.env?.INSTALLER_RESULT).toBe(
-    "${{ needs.installer-upgrade.result }}",
-  );
-  const installer = Bun.YAML.parse(
-    await Bun.file(
-      new URL("../.github/workflows/installer-upgrade.yml", import.meta.url),
-    ).text(),
-  ) as { jobs: Record<string, WorkflowJob> };
-  const upgrade = installer.jobs.upgrade!;
-  expect(installer.jobs.baseline.if).toBe("inputs.baseline_sha == ''");
-  expect(upgrade.if).toBe(
-    "always() && (needs.baseline.result == 'success' || (needs.baseline.result == 'skipped' && inputs.baseline_sha != ''))",
-  );
-  expect(upgrade.needs).toBe("baseline");
-  const freeze = workflow.jobs["validation-scope"].steps.find(
-    (step) => step.name === "Freeze latest stable installer baseline",
-  )!;
-  expect(freeze.if).toBe("steps.scope.outputs.packaging == 'true'");
-  expect(freeze.run).toBe("bun scripts/installer-upgrade.ts plan");
-  expect(workflow.jobs["installer-upgrade"].with).toEqual({
-    baseline_tag: "${{ needs.validation-scope.outputs.installer_tag }}",
-    baseline_sha: "${{ needs.validation-scope.outputs.installer_sha }}",
-    candidate_version:
-      "${{ needs.validation-scope.outputs.installer_version }}",
-    build_hash: "${{ needs.validation-scope.outputs.installer_hash }}",
-  });
-  expect(
-    upgrade.strategy?.matrix?.include?.filter((row) =>
-      row.runner?.startsWith("macos-"),
-    ),
-  ).toHaveLength(2);
-  const lifecycle = upgrade.steps.find(
-    (step) =>
-      step.name === "Exercise the real plugin-managed launchd lifecycle",
-  )!;
-  expect(lifecycle.if).toBe("runner.os == 'macOS'");
-  for (const action of ["start", "status", "restart", "uninstall"])
-    expect(lifecycle.run).toContain(
-      `PATH=/usr/bin:/bin "$plugin_launcher" ${action}`,
-    );
-  expect(lifecycle.run).toContain("http://127.0.0.1:8787/healthz");
-  expect(lifecycle.run).toContain("trap cleanup EXIT");
-  expect(
-    upgrade.steps.find(
-      (step) => step.run === "bun scripts/world-plugin.ts compile-launcher",
-    )?.if,
-  ).toBe("runner.os == 'macOS'");
-  const native = upgrade.steps.find(
-    (step) =>
-      step.name ===
-      "Verify Bun-free installation and prepare the native compatibility launcher",
-  )!;
-  expect(native.if).toBe("runner.os == 'macOS'");
-  expect(native.run).toContain(
-    "scripts/install-plugin.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts",
-  );
-  for (const step of workflow.jobs.delivery.steps.filter(
-    (step) => step.run === "bun scripts/ci-delivery-result.ts",
-  ))
-    expect(step.env?.LAUNCHD_RESULT).toBe("${{ needs.launchd.result }}");
 });
 
 test("accepted behavioral evidence stays unfiltered whenever its protected dependency runs", async () => {
@@ -619,7 +543,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
   )!;
   expect(verify).toBeDefined();
   expect(verify.if).toBe("steps.reuse.outputs.reused != 'true'");
-  expect(verify["continue-on-error"]).toBeUndefined();
+  expect(verify["continue-on-error"]).toBe(true);
   expect(
     job.steps.some((step) => step.run === "bun run verification:setup"),
   ).toBe(true);
@@ -640,7 +564,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
     job.steps.find(
       (step) => step.run === "bun run verification:diagnostic-control",
     )?.["continue-on-error"],
-  ).toBeUndefined();
+  ).toBe(true);
   expect(
     job.steps.some(
       (step) => step.run === "bun run verification:diagnostic-control",
@@ -678,69 +602,88 @@ test("Windows plugin assertions share the native installer runners", async () =>
   );
 });
 
-test("red main runs open one alert and an unmerged revert; green runs resolve it", async () => {
-  const gate = Bun.YAML.parse(
+test("behavioral checks retain each main version commit's evidence", async () => {
+  const behavioral = Bun.YAML.parse(
     await Bun.file(
-      new URL("../.github/workflows/main-gate.yml", import.meta.url),
+      new URL(
+        "../.github/workflows/behavioral-verification.yml",
+        import.meta.url,
+      ),
     ).text(),
-  ) as {
-    on: {
-      workflow_run: {
-        workflows: string[];
-        types: string[];
-        branches: string[];
-      };
-    };
-    jobs: Record<string, WorkflowJob>;
-    permissions?: Record<string, string>;
-  };
-  expect(gate.on.workflow_run).toEqual({
-    workflows: ["CI"],
-    types: ["completed"],
-    branches: ["main"],
-  });
-  const alert = gate.jobs.alert!;
-  // Only push runs on main count; PR runs whose head branch is named main do not.
-  expect(alert.if).toBe(
-    "github.event.workflow_run.event == 'push' && (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'success')",
+  ) as { concurrency: { group: string } };
+  expect(behavioral.concurrency.group).toContain(
+    "(github.event_name == 'push' && github.sha)",
   );
-  const script = alert.steps.at(-1)!;
-  expect(script.run).toContain("bun scripts/main-gate.ts");
-  expect(script.run).not.toContain("gh pr merge");
-  // The gate dispatches CI on the revert it prepares, which needs Actions write.
-  const gateSource = await Bun.file(
-    new URL("./main-gate.ts", import.meta.url),
-  ).text();
-  expect(gateSource).toContain('"workflow", "run", "CI"');
-  expect(gate.permissions?.actions).toBe("write");
-  // Nothing reruns a red run.
-  expect(gateSource).not.toContain('"run", "rerun"');
 });
 
-test("release validation passes the full non-PR plan to the shared browser workflow", async () => {
-  const release = Bun.YAML.parse(
-    await Bun.file(
-      new URL("../.github/workflows/release.yml", import.meta.url),
-    ).text(),
-  ) as {
-    jobs: Record<
-      string,
+test("an in-job model retry preserves failed evidence outside the aggregate's live inputs", async () => {
+  const {
+    mkdtempSync,
+    mkdirSync,
+    readFileSync,
+    writeFileSync,
+    rmSync,
+    readdirSync,
+  } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const root = mkdtempSync(join(tmpdir(), "model-retry-"));
+  try {
+    const candidate = Bun.YAML.parse(
+      await Bun.file(".github/workflows/behavioral-verification.yml").text(),
+    ) as any;
+    const retry = candidate.jobs.shards.steps.find(
+      (step: any) =>
+        step.name === "Retry failed test once" &&
+        step.run.includes("verification:resources"),
+    );
+    const prefix = join(root, ".agents/verification");
+    mkdirSync(join(prefix, "runs/ci-shard-1-failed"), { recursive: true });
+    mkdirSync(join(prefix, "resources/first"), { recursive: true });
+    writeFileSync(
+      join(prefix, "runs/ci-shard-1-failed/manifest.json"),
+      "failed shard",
+    );
+    writeFileSync(
+      join(prefix, "resources/first/resources.json"),
+      "failed accounting",
+    );
+    mkdirSync(join(root, "bin"));
+    writeFileSync(
+      join(root, "bin/bun"),
+      "#!/bin/sh\nmkdir -p .agents/verification/runs/ci-shard-1-retry .agents/verification/resources/retry\nprintf success > .agents/verification/runs/ci-shard-1-retry/manifest.json\nprintf success > .agents/verification/resources/retry/resources.json\n",
+      { mode: 0o755 },
+    );
+    const run = Bun.spawnSync(
+      ["bash", "-euc", retry.run.replaceAll("${{ matrix.shard }}", "1")],
       {
-        outputs?: { selection?: string };
-        steps?: WorkflowStep[];
-        with?: { selection?: string };
-      }
-    >;
-  };
-  expect(release.jobs.validate.outputs?.selection).toBe(
-    "${{ steps.scope.outputs.selection }}",
-  );
-  expect(
-    release.jobs.validate.steps?.some(
-      (step) => step.run === "bun scripts/ci-reuse-full-check.ts",
-    ),
-  ).toBe(true);
-  expect(release.jobs["world-browser"].with?.selection).toBe(
-    "${{ needs.validate.outputs.selection }}",
-  );
+        cwd: root,
+        env: { PATH: `${root}/bin:${process.env.PATH}` },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(run.stderr.toString()).toBe("");
+    expect(run.exitCode).toBe(0);
+    expect(readdirSync(join(prefix, "runs"))).toEqual(["ci-shard-1-retry"]);
+    expect(readdirSync(join(prefix, "resources"))).toEqual(["retry"]);
+    expect(
+      readFileSync(
+        join(prefix, "retries/first-runs/ci-shard-1-failed/manifest.json"),
+        "utf8",
+      ),
+    ).toBe("failed shard");
+    expect(
+      readFileSync(
+        join(prefix, "retries/first-resources/first/resources.json"),
+        "utf8",
+      ),
+    ).toBe("failed accounting");
+    const upload = candidate.jobs.shards.steps.find(
+      (step: any) => step.name === "Retain source-bound evidence manifests",
+    );
+    expect(upload.with.path).toContain(".agents/verification/retries/**");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

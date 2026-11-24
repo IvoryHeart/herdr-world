@@ -25,6 +25,8 @@ type TestedSource = {
   checkoutSha: string;
   commitSha: string;
   parents: string[];
+  /** The tested checkout commit's tree: identical trees are identical code and workflows. */
+  tree?: string;
   validation?: ValidationProof;
 };
 type Run = {
@@ -32,6 +34,7 @@ type Run = {
   run_attempt: number;
   head_sha: string;
   conclusion: string | null;
+  status?: string;
   pull_requests: Array<{
     number: number;
     base: { sha: string };
@@ -230,6 +233,89 @@ export async function canReuseFullCheck(
   return false;
 }
 
+/**
+ * Find a passing run that already tested this exact tree. A squash merge gives
+ * main the tree its PR run tested, and a re-push of the same tree to a PR gives
+ * the same merge tree; equal trees also mean an equal ci.yml, so the evidence
+ * binds by tree rather than by mutable PR associations.
+ *
+ * The newest finished run that tested this tree decides: a pass with fresh
+ * evidence returns its ID, while a red or cancelled verdict returns nothing so
+ * the tree validates afresh. A reused result is not evidence of its own tree,
+ * and `requireFull` refuses scoped evidence (main always runs the full check).
+ * Returns the reused run's ID, or undefined to validate afresh.
+ *
+ * @internal
+ */
+export async function treeEvidence(
+  runs: Run[],
+  currentRunId: number,
+  tree: string,
+  jobName: string,
+  fullStepName: string,
+  jobsForRun: (runId: number) => Promise<Job[]>,
+  testedSourceForJob: (jobId: number) => Promise<TestedSource | undefined>,
+  options: {
+    requireFull: boolean;
+    selection?: ValidationSelection;
+    acceptScoped?: boolean;
+  },
+): Promise<number | undefined> {
+  if (!/^[0-9a-f]{40}$/.test(tree)) return undefined;
+  for (const run of [...runs].sort((left, right) => right.id - left.id)) {
+    // Unfinished runs are no verdict yet; the newest finished one decides.
+    if (run.id === currentRunId || run.conclusion === null) continue;
+    const jobs = await jobsForRun(run.id);
+    if (testedNothing(run, jobs)) continue;
+    const scope = jobs.filter(({ name }) => name === SCOPE_JOB);
+    const tested =
+      scope.length === 1 &&
+      scope[0].run_id === run.id &&
+      scope[0].conclusion !== "skipped"
+        ? await testedSourceForJob(scope[0].id)
+        : undefined;
+    if (!tested?.tree) {
+      // A run that chose no scope tested nothing; a red run whose tree is
+      // unknown may have tested this one, so it stops the search.
+      if (run.conclusion === "success" || scope.length === 0) continue;
+      return undefined;
+    }
+    if (tested.tree !== tree) continue;
+    if (run.conclusion !== "success") return undefined;
+    const job = jobs.find(({ name }) => name === jobName);
+    if (
+      !job ||
+      job.run_id !== run.id ||
+      job.run_attempt !== run.run_attempt ||
+      job.conclusion !== "success"
+    )
+      return undefined;
+    const source = await testedSourceForJob(job.id);
+    if (
+      !source?.validation ||
+      source.checkoutSha !== source.commitSha ||
+      source.tree !== tree
+    )
+      return undefined;
+    if (source.validation.mode === "reuse") continue;
+    const step = (name: string) =>
+      job.steps.find((step) => step.name === name)?.conclusion;
+    if (source.validation.mode === "full")
+      return step(fullStepName) === "success" ? run.id : undefined;
+    if (options.requireFull) return undefined;
+    return step("Verify applicable or reused results") === "success" &&
+      (options.acceptScoped ||
+        (options.selection !== undefined &&
+          sameValidationSelection(
+            source.validation.selection,
+            options.selection,
+          )))
+      ? run.id
+      : undefined;
+  }
+  return undefined;
+}
+
 /** Read only the checkout action's full commit output; ambiguous logs fail closed. */
 export function checkoutCommitFromLog(log: string): string | undefined {
   const lines = log
@@ -254,7 +340,6 @@ export function checkoutCommitFromLog(log: string): string | undefined {
  * Evidence contracts, execution policy and packaged notices must receive the
  * full candidate gate.
  */
-export { isDocumentationPath } from "./validation-scope";
 
 /** Only ordinary documentation changes may use the shorter gate. */
 export function isDocsOnlyChange(
@@ -338,8 +423,10 @@ export function isEarlierBase(
  * A title or description edit, or a label other than the stability label,
  * changes no tested input, so it reuses the head's passing proof before
  * stability, tooling or docs would validate afresh, and holds the head's red
- * result (`heldRed`) rather than retesting the unchanged code. A new base is a
- * new merge and always validates afresh; so does adding the stability label.
+ * result (`heldRed`) rather than retesting the unchanged code. A new base is a new merge
+ * and always validates afresh; so does adding the stability label. A new
+ * commit reuses only a passing run that tested the identical merge tree
+ * (`sameTree`), never while the stability label asks for fresh runs.
  */
 export async function selectValidationMode(
   action: string | undefined,
@@ -350,6 +437,7 @@ export async function selectValidationMode(
   stability = false,
   newBase = false,
   stabilityAdded = false,
+  sameTree?: () => Promise<boolean>,
   heldRed?: () => Promise<boolean>,
 ): Promise<"docs" | "tooling" | "scoped" | "reuse" | "hold" | "full"> {
   const reusable = async (check = reuse) => {
@@ -368,12 +456,16 @@ export async function selectValidationMode(
   if (metadata && (await reusable())) return "reuse";
   // An unreadable answer validates, as before: retesting is never unsafe.
   if (metadata && heldRed && (await reusable(heldRed))) return "hold";
+  const commit = ["opened", "synchronize", "reopened"].includes(action ?? "");
+  if (commit && !stability && sameTree && (await reusable(sameTree)))
+    return "reuse";
   if (stability) return "full";
   if (toolingOnly) return "tooling";
   if (docsOnly) return "docs";
   return scoped ? "scoped" : "full";
 }
 
+/** Write only the lanes that this run must execute; release sealing is independent. */
 export function writeValidationOutputs(
   output: string,
   mode: string,
@@ -392,6 +484,117 @@ export function writeValidationOutputs(
   );
 }
 
+function treeOf(sha: string): string {
+  return execFileSync("git", ["rev-parse", `${sha}^{tree}`], {
+    encoding: "utf8",
+  }).trim();
+}
+
+function jobsReader(repo: string, token: string) {
+  return async (runId: number) =>
+    (
+      await githubJson<{ jobs: Job[] }>(
+        `/repos/${repo}/actions/runs/${runId}/jobs?per_page=100`,
+        token,
+      )
+    ).jobs;
+}
+
+function testedSourceReader(repo: string, token: string) {
+  return async (jobId: number): Promise<TestedSource | undefined> => {
+    const log = await (
+      await githubResponse(`/repos/${repo}/actions/jobs/${jobId}/logs`, token)
+    ).text();
+    const commit = checkoutCommitFromLog(log);
+    if (!commit) return undefined;
+    const data = await githubJson<{
+      sha: string;
+      tree: { sha: string };
+      parents: Array<{ sha: string }>;
+    }>(`/repos/${repo}/git/commits/${commit}`, token);
+    return {
+      checkoutSha: commit,
+      commitSha: data.sha,
+      parents: data.parents.map(({ sha }) => sha),
+      tree: data.tree?.sha,
+      validation: validationProofFromLog(log),
+    };
+  };
+}
+
+/** Recent CI runs of one PR branch, newest first. */
+async function branchRuns(
+  repo: string,
+  token: string,
+  branch: string,
+  event = "pull_request",
+) {
+  const query = new URLSearchParams({
+    event,
+    branch,
+    per_page: "30",
+  });
+  return (
+    await githubJson<{ workflow_runs: Run[] }>(
+      `/repos/${repo}/actions/workflows/ci.yml/runs?${query}`,
+      token,
+    )
+  ).workflow_runs;
+}
+
+function reportReuse(repo: string, runId: number, tree: string) {
+  const url = `${process.env.GITHUB_SERVER_URL ?? "https://github.com"}/${repo}/actions/runs/${runId}`;
+  const line = `Reused from run ${runId}, which tested the same tree ${tree.slice(0, 12)}: ${url}`;
+  console.log(line);
+  if (process.env.GITHUB_STEP_SUMMARY)
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${line}\n`);
+}
+
+/**
+ * A main commit reuses the full PR run that tested its exact tree: the squash
+ * merge of a PR whose last full run was on the base it merged onto.
+ */
+async function mainPushEvidence(
+  repo: string,
+  token: string,
+  sha: string,
+  currentRunId: number,
+  jobName: string,
+  fullStepName: string,
+): Promise<number | undefined> {
+  const pulls = (
+    await githubJson<
+      Array<{
+        merged_at: string | null;
+        merge_commit_sha: string | null;
+        base: { ref: string };
+        head: { ref: string };
+      }>
+    >(`/repos/${repo}/commits/${sha}/pulls`, token)
+  ).filter(
+    (pull) =>
+      pull.merged_at &&
+      pull.merge_commit_sha === sha &&
+      pull.base.ref === "main",
+  );
+  if (pulls.length !== 1) return undefined;
+  return treeEvidence(
+    (
+      await Promise.all([
+        branchRuns(repo, token, pulls[0].head.ref),
+        branchRuns(repo, token, pulls[0].head.ref, "workflow_dispatch"),
+      ])
+    ).flat(),
+    currentRunId,
+    treeOf(sha),
+    jobName,
+    fullStepName,
+    jobsReader(repo, token),
+    testedSourceReader(repo, token),
+    { requireFull: false, acceptScoped: true },
+  );
+}
+
 if (import.meta.main) {
   const repo = process.env.GITHUB_REPOSITORY;
   const token = process.env.GITHUB_TOKEN;
@@ -402,11 +605,44 @@ if (import.meta.main) {
   const fullStepName = process.env.REQUIRED_FULL_STEP;
   if (process.env.GITHUB_EVENT_NAME !== "pull_request") {
     if (!output) throw new Error("Missing CI output file");
-    writeValidationOutputs(
-      output,
-      "full",
-      fullValidationSelection(process.cwd()),
-    );
+    const sha = process.env.GITHUB_SHA ?? "";
+    const runId = Number(process.env.GITHUB_RUN_ID);
+    let mode = process.env.GITHUB_EVENT_NAME === "push" ? "hold" : "full";
+    // Only main pushes reuse; dispatches and Release always validate fully.
+    if (
+      process.env.GITHUB_EVENT_NAME === "push" &&
+      process.env.GITHUB_REF === "refs/heads/main" &&
+      repo?.match(/^[\w.-]+\/[\w.-]+$/) &&
+      token &&
+      jobName &&
+      fullStepName &&
+      /^[0-9a-f]{40}$/.test(sha) &&
+      Number.isSafeInteger(runId)
+    ) {
+      try {
+        const reused = await mainPushEvidence(
+          repo,
+          token,
+          sha,
+          runId,
+          jobName,
+          fullStepName,
+        );
+        if (reused) {
+          mode = "reuse";
+          reportReuse(repo, reused, treeOf(sha));
+        }
+      } catch (error) {
+        console.error(
+          `Cannot reuse the PR run: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    writeValidationOutputs(output, mode, {
+      ...fullValidationSelection(process.cwd()),
+      packaging: false,
+    });
+    console.log(`${jobName ?? "Validation"}: ${mode} validation`);
     process.exit(0);
   }
 
@@ -431,9 +667,13 @@ if (import.meta.main) {
     encoding: "utf8",
   }).trim();
   const stability = process.env.WORLD_BROWSER_STABILITY === "true";
+  const changedSelection = repositorySelection(process.cwd(), common, headSha);
   let selection = stability
-    ? fullValidationSelection(process.cwd())
-    : repositorySelection(process.cwd(), common, headSha);
+    ? {
+        ...fullValidationSelection(process.cwd()),
+        packaging: changedSelection.packaging,
+      }
+    : changedSelection;
   try {
     const event: unknown = JSON.parse(
       readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8"),
@@ -451,13 +691,6 @@ if (import.meta.main) {
         )
       ).workflow_runs;
     };
-    const jobsForRun = async (runId: number) =>
-      (
-        await githubJson<{ jobs: Job[] }>(
-          `/repos/${repo}/actions/runs/${runId}/jobs?per_page=100`,
-          token,
-        )
-      ).jobs;
     mode = await selectValidationMode(
       process.env.PR_ACTION,
       selection.documentation,
@@ -471,27 +704,8 @@ if (import.meta.main) {
           headSha,
           jobName,
           fullStepName,
-          jobsForRun,
-          async (jobId) => {
-            const log = await (
-              await githubResponse(
-                `/repos/${repo}/actions/jobs/${jobId}/logs`,
-                token,
-              )
-            ).text();
-            const commit = checkoutCommitFromLog(log);
-            if (!commit) return undefined;
-            const data = await githubJson<{
-              sha: string;
-              parents: Array<{ sha: string }>;
-            }>(`/repos/${repo}/git/commits/${commit}`, token);
-            return {
-              checkoutSha: commit,
-              commitSha: data.sha,
-              parents: data.parents.map(({ sha }) => sha),
-              validation: validationProofFromLog(log),
-            };
-          },
+          jobsReader(repo, token),
+          testedSourceReader(repo, token),
           selection,
           async (sha) => isEarlierBase(sha, baseSha),
         );
@@ -502,12 +716,27 @@ if (import.meta.main) {
       baseChanged(event),
       stabilityLabelAdded(event),
       async () => {
+        const tree = treeOf(process.env.GITHUB_SHA ?? "HEAD");
+        const reused = await treeEvidence(
+          await branchRuns(repo, token, process.env.PR_HEAD_REF ?? ""),
+          currentRunId,
+          tree,
+          jobName,
+          fullStepName,
+          jobsReader(repo, token),
+          testedSourceReader(repo, token),
+          { requireFull: false, selection },
+        );
+        if (reused) reportReuse(repo, reused, tree);
+        return reused !== undefined;
+      },
+      async () => {
         heldRun = await redHeadResult(
           await headRuns(),
           currentRunId,
           prNumber,
           headSha,
-          jobsForRun,
+          jobsReader(repo, token),
         );
         return heldRun !== undefined;
       },
@@ -516,7 +745,10 @@ if (import.meta.main) {
     console.error(
       `Cannot shorten validation: ${error instanceof Error ? error.message : String(error)}`,
     );
-    selection = fullValidationSelection(process.cwd());
+    selection = {
+      ...fullValidationSelection(process.cwd()),
+      packaging: changedSelection.packaging,
+    };
   }
   writeValidationOutputs(output, mode, selection);
   if (mode === "hold" && heldRun) {

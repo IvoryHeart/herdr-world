@@ -1,4 +1,4 @@
-# Synced by herdr-world's release PR with check-homebrew-runtime.rb.
+# Updated automatically with the release Formula and check-homebrew-runtime.rb.
 name: Herdr World runtime reuse
 
 on:
@@ -31,6 +31,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - name: Select the changed stable or RC Formula
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ -n "$PR_NUMBER" ] && gh pr diff "$PR_NUMBER" --name-only | grep -qx 'Formula/herdr-world-rc.rb'; then
+            echo 'HERDR_WORLD_PACKAGE=herdr-world-rc' >> "$GITHUB_ENV"
+          fi
       - name: Install World without a mandatory Herdr formula
         shell: bash
         run: |

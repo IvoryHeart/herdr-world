@@ -1,3 +1,6 @@
+import { ownsHomebrewService } from "../config/service-executable";
+import { runServiceCommand } from "../config/service-manager";
+import { serviceRuntime } from "./service-context";
 import { readFileSync } from "node:fs";
 import {
   escapeSystemdExecPath,
@@ -44,6 +47,17 @@ export function restartServiceUsing(
       `The service was not restarted: could not read ${status.definition}: ${(error as Error).message}`,
     );
     return EXIT_FAILURE;
+  }
+  if (ownsHomebrewService(executable, definition)) {
+    // Homebrew calls finalization before pruning the old keg. Re-register with
+    // opt while the old process is still alive, then start the new executable.
+    const installed = runServiceCommand(["service", "install"], {
+      runtime: serviceRuntime(context.runtime),
+      runCommand: context.runCommand,
+      log: context.log,
+      error: context.error,
+    });
+    return typeof installed === "number" ? installed : EXIT_FAILURE;
   }
   const forms = [
     executable,

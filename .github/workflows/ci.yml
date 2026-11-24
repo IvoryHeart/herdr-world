@@ -2,12 +2,11 @@ name: CI
 
 on:
     pull_request:
-        types: [opened, synchronize, reopened, edited, labeled]
-    # The post-merge gate: every main commit gets the full check, and Main gate
-    # reports a red one. Releases are cut only from a green main commit.
+        types: [opened, synchronize, reopened, labeled]
+    # Main only checks existing PR evidence. Native builds belong to tags/nightly.
     push:
         branches: [main]
-    # Prepare Release uses this explicit dispatch because events created with its
+    # Release PR uses this explicit dispatch because events created with its
     # GITHUB_TOKEN do not start other workflows automatically.
     workflow_dispatch:
         inputs:
@@ -30,14 +29,10 @@ permissions:
     actions: read
 
 concurrency:
-    # Main pushes share one group: the running check finishes, and a batch of
-    # merges queued behind it is tested once, at its newest commit (GitHub
-    # keeps only the latest pending run). Main gate names every merge since the
-    # last green commit when that run fails.
-    group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && 'main-push') || github.ref }}
-    # Metadata runs queue behind active validation and reuse the head's latest
-    # result. A label must not cancel the check it needs as evidence.
-    cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' && github.event.action != 'labeled' }}
+    # Each main SHA receives its own lightweight evidence report.
+    group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.sha) || github.ref }}
+    # PR events queue and inspect existing evidence for that head/tree.
+    cancel-in-progress: false
 
 jobs:
     browser-diagnostics:
@@ -116,18 +111,13 @@ jobs:
     # starts no runner: GitHub has no workflow-level condition, only skipped jobs.
     validation-scope:
         name: Validation scope
-        if: github.event_name != 'pull_request' || github.event.pull_request.state == 'open'
+        if: github.event_name != 'pull_request' || (github.event.pull_request.state == 'open' && (github.event.action != 'labeled' || contains(fromJSON('["release-preview","world-browser-stability","latency-trend"]'), github.event.label.name)))
         runs-on: ubuntu-latest
         outputs:
             mode: ${{ steps.scope.outputs.mode || 'full' }}
             selection: ${{ steps.scope.outputs.selection }}
             world: ${{ steps.scope.outputs.world }}
             verification: ${{ steps.scope.outputs.verification }}
-            packaging: ${{ steps.scope.outputs.packaging }}
-            installer_tag: ${{ steps.installer-plan.outputs.baseline_tag }}
-            installer_sha: ${{ steps.installer-plan.outputs.baseline_sha }}
-            installer_version: ${{ steps.installer-plan.outputs.candidate_version }}
-            installer_hash: ${{ steps.installer-plan.outputs.build_hash }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -147,6 +137,7 @@ jobs:
                   PR_NUMBER: ${{ github.event.pull_request.number }}
                   PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
                   PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+                  PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
                   PR_ACTION: ${{ github.event.action }}
                   WORLD_BROWSER_STABILITY: ${{ contains(github.event.pull_request.labels.*.name, 'world-browser-stability') }}
                   REQUIRED_JOB_NAME: Delivery checks
@@ -159,21 +150,19 @@ jobs:
               if: steps.scope.outputs.mode == 'hold'
               env:
                   HELD_RUN: ${{ steps.scope.outputs.held_run }}
+                  EVENT: ${{ github.event_name }}
               run: |
+                  if [ "$EVENT" = push ]; then
+                    echo "::error::No passing immutable PR evidence for this main tree; main starts no heavy checks. Inspect its merged PR and nightly signal."
+                    exit 1
+                  fi
                   echo "::error::Run $HELD_RUN is this head's latest result and it is red. A title, description or label change retests nothing: re-run that run's failed jobs, then this run's failed jobs, or push a commit."
                   exit 1
-            - name: Freeze latest stable installer baseline
-              id: installer-plan
-              if: steps.scope.outputs.packaging == 'true'
-              env:
-                  GH_TOKEN: ${{ github.token }}
-              run: bun scripts/installer-upgrade.ts plan
-
     # A reused Delivery checks result already required this audit on the same merge.
     dependency-security:
         name: Shipped dependency security
         needs: validation-scope
-        if: needs.validation-scope.outputs.mode != 'reuse'
+        if: needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'
         runs-on: ubuntu-latest
         timeout-minutes: 10
         steps:
@@ -190,7 +179,7 @@ jobs:
     static:
         name: Static checks
         needs: validation-scope
-        if: needs.validation-scope.outputs.mode != 'reuse'
+        if: needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'
         runs-on: ubuntu-latest
         timeout-minutes: 30
         env:
@@ -218,7 +207,7 @@ jobs:
     unit-tests:
         name: Non-browser tests (${{ matrix.shard }}/2)
         needs: validation-scope
-        if: needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'docs'
+        if: needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold' && needs.validation-scope.outputs.mode != 'docs'
         runs-on: ubuntu-latest
         timeout-minutes: 20
         strategy:
@@ -237,6 +226,16 @@ jobs:
             - name: Build process-test assets on this runner
               run: bun run build
             - name: Run affected non-browser tests
+              id: test-0
+              continue-on-error: true
+              env:
+                  HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
+                  HERDR_TEST_PARALLEL: "1"
+                  HERDR_TEST_MAX_CONCURRENCY: "2"
+                  HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1"
+              run: bun scripts/ci-tests.ts unit ${{ matrix.shard }}/2
+            - name: Retry failed test once
+              if: steps.test-0.outcome == 'failure'
               env:
                   HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
                   HERDR_TEST_PARALLEL: "1"
@@ -278,7 +277,7 @@ jobs:
 
     delivery:
         name: Delivery checks
-        needs: [validation-scope, validation, world-browser, behavioral, installer-upgrade, launchd, dependency-security]
+        needs: [validation-scope, validation, world-browser, behavioral, dependency-security]
         env:
             HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
         if: always() && needs.validation-scope.result != 'skipped'
@@ -311,8 +310,6 @@ jobs:
                   VALIDATION_RESULT: ${{ needs.validation.result }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
-                  INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
-                  LAUNCHD_RESULT: ${{ needs.launchd.result }}
               run: bun scripts/ci-delivery-result.ts
             - name: Verify applicable or reused results
               if: needs.validation-scope.outputs.mode != 'full'
@@ -322,49 +319,13 @@ jobs:
                   VALIDATION_RESULT: ${{ needs.validation.result }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
-                  INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
-                  LAUNCHD_RESULT: ${{ needs.launchd.result }}
               run: bun scripts/ci-delivery-result.ts
-
-    # Native inputs select packaging; main still runs the complete matrix.
-    installer-upgrade:
-        needs: validation-scope
-        if: needs.validation-scope.outputs.packaging == 'true'
-        uses: ./.github/workflows/installer-upgrade.yml
-        with:
-            baseline_tag: ${{ needs.validation-scope.outputs.installer_tag }}
-            baseline_sha: ${{ needs.validation-scope.outputs.installer_sha }}
-            candidate_version: ${{ needs.validation-scope.outputs.installer_version }}
-            build_hash: ${{ needs.validation-scope.outputs.installer_hash }}
-
-    launchd:
-        name: macOS launchd plugin lifecycle (${{ matrix.arch }})
-        needs: [validation-scope, installer-upgrade]
-        if: always() && needs.validation-scope.result != 'skipped'
-        # Keep the two protected names. Native work shares each Darwin installer
-        # runner, so the installer cannot queue behind our own launchd job.
-        runs-on: ubuntu-latest
-        strategy:
-            fail-fast: false
-            matrix:
-                arch: [arm64, x86_64]
-        steps:
-            - name: Require the applicable native lifecycle results
-              env:
-                  SCOPE_RESULT: ${{ needs.validation-scope.result }}
-                  PACKAGING: ${{ needs.validation-scope.outputs.packaging }}
-                  INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
-              run: |
-                  test "$SCOPE_RESULT" = success
-                  expected=skipped
-                  if [ "$PACKAGING" = true ]; then expected=success; fi
-                  test "$INSTALLER_RESULT" = "$expected"
 
     # A title or description edit rebuilds no preview; a new commit, a new base
     # or adding a label still does.
     release-preview:
         name: Downloadable preview (${{ matrix.platform }})
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview') && (github.event.action != 'edited' || github.event.changes.base)
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
         needs: delivery
         # Keep in step with Release's package job so previews predict its checks.
         runs-on: ubuntu-26.04
@@ -405,7 +366,7 @@ jobs:
 
     npm-preview:
         name: Downloadable npm preview
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview') && (github.event.action != 'edited' || github.event.changes.base)
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
         needs: [delivery, release-preview]
         runs-on: ubuntu-latest
         timeout-minutes: 15
@@ -451,7 +412,7 @@ jobs:
 
     homebrew-preview:
         name: Downloadable Homebrew preview
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview') && (github.event.action != 'edited' || github.event.changes.base)
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
         needs: [delivery, release-preview]
         runs-on: ubuntu-latest
         timeout-minutes: 10

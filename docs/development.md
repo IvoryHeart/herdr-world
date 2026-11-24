@@ -507,12 +507,11 @@ discovered from `web/src/world/*.browser.tsx`. Inventory checks reject missing
 or duplicate assignments. The required Delivery checks status succeeds only when
 repository validation, every World shard and the web browser job pass.
 Markdown-only and exact-head reuse keep their existing shorter paths.
-Release packaging requires repository validation, all six shards and the web
-browser job to pass. **Web browser tests** runs the
-Chrome-driven suites outside World (`webBrowserSuites` in the same inventory) one
-file at a time; an inventory check rejects an unlisted one.
-Prepare Release validates its generated working tree in one checkout with one file
-worker; it retains the complete World suite, with one active World case at a time.
+PR CI supplies Linux source/browser evidence; main reports the same immutable
+PR result without heavy checks. Release tags build/test installed channel bytes
+before sealing. Release-please updates version/changelog metadata and dispatches
+ordinary PR CI automatically. **Web browser tests** runs the Chrome-driven suites outside
+World (`webBrowserSuites`) one file at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
 CI uploads them as `world-browser-N-attempt-M` artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare

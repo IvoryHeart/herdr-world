@@ -332,7 +332,7 @@ embed those assets in a Bun executable. [Package tooling](../scripts/package-rel
 [npm staging](../scripts/stage-npm-release.ts),
 [Homebrew Formula generation](../scripts/generate-homebrew-formula.ts),
 [installer](../scripts/install-herdr-world.sh), [plugin tooling](../scripts/world-plugin.ts)
-and [release preparation](../scripts/prepare-release.ts) form the distribution
+and [release-please preparation](../.github/workflows/release-pr.yml) form the distribution
 path. [Packaging](packaging.md), [release](release.md) and [UPSTREAM](../UPSTREAM.md)
 own exact artifacts, versions and source lineage. [CI](../.github/workflows/ci.yml)
 runs the selected lanes described in [contributor validation](../CONTRIBUTING.md#validation). Generated assets and binaries stay out of
@@ -448,19 +448,19 @@ splits honest; see their [ratchet](../scripts/file-size-ratchet.test.ts) and
 [Development verification](development.md#verification) describes local and CI
 runner settings. [CI](../.github/workflows/ci.yml) runs on pull requests and on
 every push to main; [Main gate](../.github/workflows/main-gate.yml) turns a red
-main run into one `main-red` issue and a prepared revert PR through
+main run into one `main-red` issue with one infrastructure retry through
 [its script](../scripts/main-gate.ts) and [regressions](../scripts/main-gate.test.ts).
 [Web asset headroom](../.github/workflows/web-asset-headroom.yml) judges each
 PR's asset delta against current main through [its script](../scripts/web-asset-headroom.ts)
 and [regressions](../scripts/web-asset-headroom.test.ts).
-CI and [Release](../.github/workflows/release.yml) call the same
-[World browser workflow](../.github/workflows/world-browser.yml).
-[Prepare Release](../.github/workflows/prepare-release.yml) validates generated
-files in its own checkout. Start with [CI workflow tests](../scripts/ci-workflow.test.ts)
-and [release validation tests](../scripts/release-validation.test.ts) when changing
-concurrency, shard coverage or publication dependencies. Release and labeled PR
-previews share [package verification](../scripts/verify-release-package.sh) and its
-[executable header check](../scripts/check-binary-format.ts).
+CI calls the [World browser workflow](../.github/workflows/world-browser.yml).
+[Release PR](../.github/workflows/release-pr.yml) assembles version/changelog
+changes. Main's [release candidate](../.github/workflows/release-candidate.yml)
+tests installed package bytes and seals them; the tag's
+[Release](../.github/workflows/release.yml) consumes that seal. Start with
+[workflow tests](../scripts/ci-workflow.test.ts) and
+[channel graph tests](../scripts/release-validation.test.ts) for pipeline edits.
+Release and labelled previews retain the shared package/header verification.
 For first-case browser timeouts, use the opt-in lifecycle comparison described in
 [development verification](development.md#verification), the
 [diagnostic adapter](../scripts/browser-diagnostics.ts) and its
@@ -512,9 +512,9 @@ The persisted `hostsFilter.ts` affects visibility only;
 `spaceAdmission.ts` shares the navigator's capacity fairly and `WorldSearchResults.tsx`
 pages full-observation matches beyond renderer bounds.
 
-Local pre-push runs unqueued static checks and affected non-browser units through
-[the lane runner](../scripts/check-delivery.ts); CI owns browser and behavioral
-acceptance. [Command regressions](../scripts/gate-commands.test.ts) cover scope,
+Local pre-push runs formatting/privacy only. Explicit local gates use
+[the lane runner](../scripts/check-delivery.ts); CI owns static, unit, browser and
+behavioral acceptance. [Command regressions](../scripts/gate-commands.test.ts) cover scope,
 log reset, disk-guard removal and queue isolation; [queue tests](../scripts/check-lock.test.ts)
 cover slot ownership and recovery.
 

@@ -1,22 +1,8 @@
 name: Release
 
 on:
-  # Dispatches on main/PR branches rehearse every channel without publishing.
-  # Publication on a tag requires authorization retained before that tag existed.
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Verify every channel and generate the tap PR without publishing
-        type: boolean
-        default: true
-      version:
-        description: Candidate version for a dry run (defaults to plugin version)
-        type: string
-        required: false
-      publish_run_id:
-        description: Publish Release run that authorized this tag before its creation (required for publication)
-        required: false
-        type: string
+  push:
+    tags: ["v*"]
 
 permissions:
   contents: read
@@ -29,14 +15,12 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate release
-    outputs:
-      selection: ${{ steps.scope.outputs.selection }}
-      walk_run_id: ${{ steps.walk.outputs.walk_run_id }}
-      version: ${{ steps.metadata.outputs.version }}
-      tag: ${{ steps.metadata.outputs.tag }}
-      dry_run: ${{ steps.metadata.outputs.dry_run }}
+    name: Validate owner tag and recover retained tested bytes
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      commit: ${{ steps.metadata.outputs.commit }}
+      retained: ${{ steps.retained.outcome == 'success' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -45,386 +29,69 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: "1.4.4"
-          no-cache: true
-      - run: bun install --frozen-lockfile
-      - name: Refuse fixable high or critical shipped vulnerabilities
-        run: bun run security:check
-      - name: Select the complete release suite inventory
-        id: scope
-        run: bun scripts/ci-reuse-full-check.ts
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
-      - name: Verify release metadata
-        id: metadata
-        env:
-          DRY_RUN: ${{ inputs.dry_run }}
-          VERSION_INPUT: ${{ inputs.version }}
+      - id: metadata
         run: bun scripts/release-plan.ts
-      - name: Require pre-tag release walk authorization
-        id: walk
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PUBLISH_RUN_ID: ${{ inputs.publish_run_id }}
-          DRY_RUN: ${{ steps.metadata.outputs.dry_run }}
-        run: |
-          set -euo pipefail
-          if [ "$DRY_RUN" = true ]; then
-            echo "Channel rehearsal only; publication still requires the pre-tag release walk."
-          else
-            bun scripts/release-walk-gate.ts publication "$GITHUB_SHA" "${GITHUB_REF_NAME#v}" "$PUBLISH_RUN_ID"
-          fi
-      - name: Verify npm package bootstrap before publication
-        shell: bash
-        run: |
-          set -euo pipefail
-          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
-            npm view "@ivoryheart/herdr-world-$platform@0.0.0-seed.0" version --json >/dev/null || {
-              echo "Bootstrap @ivoryheart/herdr-world-$platform and configure its trusted publisher before release" >&2
-              exit 1
-            }
-          done
-      - name: Validate repository except World browser shards
-        env:
-          HERDR_TEST_PARALLEL: "1"
-          HERDR_TEST_MAX_CONCURRENCY: "2"
-          HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1"
-        run: bun run check:source
-
-  world-browser:
-    name: World browser tests
-    needs: validate
-    uses: ./.github/workflows/world-browser.yml
-    with:
-      selection: ${{ needs.validate.outputs.selection }}
-
-  package:
-    name: Package ${{ matrix.platform }}
-    needs: [validate, world-browser]
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - linux-x64
-          - linux-arm64
-          - darwin-x64
-          - darwin-arm64
-          - windows-x64
-          - windows-arm64
-    env:
-      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-    # Keep in step with CI's release-preview job, which verifies the same packages.
-    runs-on: ubuntu-26.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.4"
-          no-cache: true
-      - run: bun install --frozen-lockfile
-      - name: Download the exact Unix package that passed the pre-tag walk
-        if: needs.validate.outputs.dry_run == 'false' && !startsWith(matrix.platform, 'windows-')
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          github-token: ${{ github.token }}
-          run-id: ${{ needs.validate.outputs.walk_run_id }}
-          name: release-walk-package-${{ matrix.platform }}
-          path: dist
-      - name: Build release package
-        if: startsWith(matrix.platform, 'windows-')
-        shell: bash
-        run: |
-          version="$RELEASE_VERSION"
-          HERDR_WORLD_BUILD_VERSION="$version" bun run package:${{ matrix.platform }}
-      - name: Build Unix channel rehearsal package
-        if: needs.validate.outputs.dry_run == 'true' && !startsWith(matrix.platform, 'windows-')
-        shell: bash
-        run: |
-          version="$RELEASE_VERSION"
-          HERDR_WORLD_BUILD_VERSION="$version" bun run package:${{ matrix.platform }}
-      - name: Verify release package
-        shell: bash
-        run: scripts/verify-release-package.sh "$RELEASE_VERSION" "${{ matrix.platform }}"
-      - name: Verify real Linux installations and reboot before publication
-        if: matrix.platform == 'linux-x64'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bun run test:install-linux --reuse --version "$RELEASE_VERSION" --require-docker
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: herdr-world-${{ matrix.platform }}
-          path: |
-            dist/herdr-world-*.tar.xz*
-            dist/herdr-world-*.update.json
-          if-no-files-found: error
-          retention-days: 30
-
-  archives:
-    name: Verify complete archive set
-    needs: [validate, package]
-    runs-on: ubuntu-latest
-    env:
-      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
+      # Same workflow run only. The immutable artifact exists only after all
+      # acceptance jobs pass. A full rerun can resume it; expiry rebuilds/tests.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          path: dist
-          pattern: herdr-world-*
-          merge-multiple: true
-      - name: Verify all archives, aliases, checksums, update feeds and installer
-        run: |
-          node scripts/check-release-assets.mjs "$RELEASE_VERSION"
-          cp scripts/install-herdr-world.sh dist/
-          node scripts/check-release-assets.mjs "$RELEASE_VERSION" dist --published
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: verified-archives
-          path: dist/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 30
-
-  npm-stage:
-    name: Verify npm tarballs
-    needs: [validate, archives]
-    runs-on: ubuntu-latest
-    env:
-      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.4"
-          no-cache: true
-      - run: bun install --frozen-lockfile
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: verified-archives
-          path: dist
-      - name: Stage and pack the verified binaries
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="$RELEASE_VERSION"
-          bun scripts/stage-npm-release.ts "$version"
-          mkdir -p dist/npm-tarballs
-          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
-            npm pack "dist/npm/$platform" --pack-destination dist/npm-tarballs --silent
-          done
-          npm pack dist/npm/launcher --pack-destination dist/npm-tarballs --silent
-          test "$(find dist/npm-tarballs -name '*.tgz' | wc -l)" -eq 7
-          npm install --ignore-scripts --offline --prefix dist/npm-smoke \
-            "./dist/npm-tarballs/ivoryheart-herdr-world-linux-x64-$version.tgz" \
-            "./dist/npm-tarballs/ivoryheart-herdr-world-$version.tgz"
-          test "$(dist/npm-smoke/node_modules/.bin/herdr-world --version)" = "herdr-world $version"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: npm-packages
-          path: dist/npm-tarballs/*.tgz
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 30
-
-  homebrew-formula:
-    name: Verify Homebrew Formula and tap PR input
-    needs: [validate, archives]
-    runs-on: ubuntu-latest
-    env:
-      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.4"
-          no-cache: true
-      - run: bun install --frozen-lockfile
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: verified-archives
-          path: dist
-      - name: Generate and stage-check Formula for the release channel
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="$RELEASE_VERSION"
-          formula="herdr-world.rb"
-          formula_class="HerdrWorld"
-          if [[ "$version" == *-rc.* ]]; then
-            formula="herdr-world-rc.rb"
-            formula_class="HerdrWorldRc"
-          fi
-          bun scripts/generate-homebrew-formula.ts "$version" dist "dist/$formula"
-          ruby -c "dist/$formula"
-          for platform in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
-            ruby scripts/check-homebrew-formula-stage.rb "dist/$formula" \
-              "dist/herdr-world-v$version-$platform.tar.xz" "$formula_class"
-          done
-      - name: Generate tap change and pull request without pushing
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          formula="herdr-world.rb"
-          if [[ "$RELEASE_VERSION" == *-rc.* ]]; then formula="herdr-world-rc.rb"; fi
-          bash scripts/open-homebrew-pr.sh "$RELEASE_VERSION" "dist/$formula" --dry-run "$PWD/tap"
-          bun -e 'const workflow = Bun.YAML.parse(await Bun.file("tap/.github/workflows/herdr-world.yml").text()); if (!workflow.jobs.ownership) throw new Error("Missing tap acceptance job");'
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: homebrew-formula
-          path: tap/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 30
-
-  homebrew-smoke:
-    name: Homebrew install (${{ matrix.runner }})
-    needs: [validate, archives, homebrew-formula]
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [macos-15, macos-15-intel]
-    runs-on: ${{ matrix.runner }}
-    env:
-      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: homebrew-formula
-          path: tap
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: verified-archives
-          path: dist
-      - name: Install the candidate archive through Homebrew before publication
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="$RELEASE_VERSION"
-          formula="herdr-world.rb"
-          package="herdr-world"
-          if [[ "$version" == *-rc.* ]]; then
-            formula="herdr-world-rc.rb"
-            package="herdr-world-rc"
-          fi
-          export HOMEBREW_NO_AUTO_UPDATE=1
-          export HOMEBREW_NO_INSTALL_CLEANUP=1
-          brew update
-          tap="herdrworld/release-smoke"
-          brew tap-new --no-git "$tap"
-          # Only transport differs before the public tag exists. Keep the original
-          # Formula and PR input intact; Homebrew checks the same archive digests.
-          ruby -e 'text = File.read(ARGV[0]); prefix = "https://github.com/IvoryHeart/herdr-world/releases/download/v#{ARGV[2]}/"; File.write(ARGV[1], text.gsub(prefix, "file://#{Dir.pwd}/dist/"))' \
-            "tap/Formula/$formula" "$(brew --repository "$tap")/Formula/$formula" "$version"
-          brew install --formula "$tap/$package"
-          test -z "$(brew deps "$tap/$package")"
-          test ! -e "$(brew --prefix "$tap/$package")/bin/herdr"
-          test "$("$(brew --prefix "$tap/$package")/bin/herdr-world" --version)" = "herdr-world $version"
-          brew test "$tap/$package"
-          world="$(brew --prefix "$tap/$package")/bin/herdr-world"
-          fixture_home="$(mktemp -d /tmp/hw.XXXXXX)"
-          trap 'rm -rf "$fixture_home"' EXIT
-          ruby tap/.github/scripts/check-homebrew-runtime.rb "$world" "$fixture_home"
-          brew reinstall --formula "$tap/$package"
-          ruby tap/.github/scripts/check-homebrew-runtime.rb "$world" "$fixture_home"
-
-  verify:
-    name: Seal every verified channel
-    needs: [validate, archives, npm-stage, homebrew-formula, homebrew-smoke]
-    runs-on: ubuntu-latest
-    outputs:
-      bundle_digest: ${{ steps.bundle.outputs.artifact-digest }}
-    env:
-      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: verified-archives
-          path: candidate/github
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: npm-packages
-          path: candidate/npm
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: homebrew-formula
-          path: candidate/tap
-      - name: Seal immutable publication input
-        env:
-          DRY_RUN: ${{ needs.validate.outputs.dry_run }}
-        run: |
-          if test -f "docs/releases/v$RELEASE_VERSION.md"; then
-            cp "docs/releases/v$RELEASE_VERSION.md" candidate/notes.md
-          elif test "$DRY_RUN" = true; then
-            printf 'Dry-run candidate v%s; no publication.\n' "$RELEASE_VERSION" > candidate/notes.md
-          else
-            exit 1
-          fi
-          node scripts/release-bundle.mjs seal candidate "$RELEASE_VERSION" "$GITHUB_SHA"
-          node scripts/release-bundle.mjs verify candidate "$RELEASE_VERSION" "$GITHUB_SHA"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        id: bundle
+        id: retained
+        continue-on-error: true
         with:
           name: verified-release
-          path: candidate/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 30
+          path: candidate
+
+  candidate:
+    name: Build and test the tagged bytes once
+    needs: validate
+    if: needs.validate.outputs.retained != 'true'
+    uses: ./.github/workflows/release-candidate.yml
+    with:
+      version: ${{ needs.validate.outputs.version }}
 
   publish:
-    name: Publish GitHub Release
-    needs: [validate, package, archives, npm-stage, homebrew-formula, homebrew-smoke, verify]
-    if: needs.validate.outputs.dry_run == 'false'
+    name: Publish tested GitHub assets
+    needs: [validate, candidate]
+    if: ${{ !cancelled() && needs.validate.result == 'success' && (needs.candidate.result == 'success' || (needs.candidate.result == 'skipped' && needs.validate.outputs.retained == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    env:
-      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: verified-release
           path: candidate
-      - name: Check verified digests at publish time
-        run: node scripts/release-bundle.mjs verify candidate "$RELEASE_VERSION" "$GITHUB_SHA"
-      - name: Publish GitHub Release
+      - name: Refuse changes to existing published bytes
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
         run: |
-          node scripts/publish-github-release.mjs "$RELEASE_VERSION" candidate "$GITHUB_SHA"
+          set -euo pipefail
+          # Distinguish a missing release from authentication/network failure.
+          gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[].tag_name' > tags.txt
+          if grep -Fxq "$TAG" tags.txt; then
+            mkdir existing
+            gh release view "$TAG" --json assets --jq '.assets[].name' > names.txt
+            if [ -s names.txt ]; then
+              gh release download "$TAG" --dir existing
+              for file in existing/*; do
+                cmp "$file" "candidate/github/$(basename "$file")"
+              done
+            fi
+          fi
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: candidate/github/*
+          fail_on_unmatched_files: true
+          overwrite_files: false
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-rc.') }}
+          make_latest: ${{ !contains(github.ref_name, '-rc.') }}
 
   npm-publish:
-    name: Publish npm packages
-    needs: [validate, package, archives, npm-stage, homebrew-formula, homebrew-smoke, verify, publish]
-    if: needs.validate.outputs.dry_run == 'false'
+    name: Publish npm with provenance
+    needs: [validate, publish]
+    if: ${{ !cancelled() && needs.validate.result == 'success' && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -432,9 +99,6 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
@@ -443,69 +107,151 @@ jobs:
         with:
           name: verified-release
           path: candidate
-      - name: Check verified digests at publish time
-        run: node scripts/release-bundle.mjs verify candidate "$RELEASE_VERSION" "$GITHUB_SHA"
-      - name: Publish npm packages
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Publish the tested tarballs, retaining matching existing versions
+        shell: bash
         run: |
-          node scripts/publish-npm-release.mjs "$RELEASE_VERSION" candidate/npm
+          set -euo pipefail
+          channel=latest
+          if [[ "$RELEASE_VERSION" == *-rc.* ]]; then channel=next; fi
+          # Platform packages first, launcher last; never pack again here.
+          files=(candidate/npm/*-linux-*.tgz candidate/npm/*-darwin-*.tgz candidate/npm/*-windows-*.tgz "candidate/npm/ivoryheart-herdr-world-$RELEASE_VERSION.tgz")
+          for file in "${files[@]}"; do
+            package="$(tar -xOf "$file" package/package.json | jq -r '.name + "@" + .version')"
+            integrity="sha512-$(openssl dgst -sha512 -binary "$file" | openssl base64 -A)"
+            if npm view "$package" dist.integrity --json > integrity.json 2> npm-error.txt; then
+              test "$(jq -r . integrity.json)" = "$integrity" || { echo "::error::Existing npm bytes differ for $package"; exit 1; }
+            elif grep -q 'E404' npm-error.txt; then
+              npm publish "$file" --provenance --access public --tag "$channel"
+            else
+              cat npm-error.txt >&2
+              exit 1
+            fi
+          done
 
   homebrew-pr:
-    name: Propose Homebrew Formula update
-    needs: [validate, package, archives, npm-stage, homebrew-formula, homebrew-smoke, verify, publish, npm-publish]
-    if: needs.validate.outputs.dry_run == 'false'
+    name: Propose the tested multi-platform Formula
+    needs: [validate, npm-publish]
+    if: ${{ !cancelled() && needs.validate.result == 'success' && needs.npm-publish.result == 'success' }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     env:
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: verified-release
           path: candidate
-      - name: Check verified digests at publish time
-        run: node scripts/release-bundle.mjs verify candidate "$RELEASE_VERSION" "$GITHUB_SHA"
-      - name: Propose Homebrew Formula update
+      - name: Find an existing tap proposal or already merged Formula
+        id: tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          formula="herdr-world.rb"
-          if [[ "$RELEASE_VERSION" == *-rc.* ]]; then formula="herdr-world-rc.rb"; fi
-          bash scripts/open-homebrew-pr.sh "$RELEASE_VERSION" "candidate/tap/Formula/$formula" --prepared "$PWD/candidate/tap"
+          set -euo pipefail
+          formula=herdr-world
+          if [[ "$RELEASE_VERSION" == *-rc.* ]]; then formula=herdr-world-rc; fi
+          title="$formula $RELEASE_VERSION"
+          branch="$(gh pr list -R IvoryHeart/homebrew-tap --base main --state open --json title,headRefName,isCrossRepository --jq ".[] | select(.title == \"$title\" and .isCrossRepository == false) | .headRefName")"
+          if [ -n "$branch" ]; then
+            [[ "$branch" =~ ^update-${formula}[.]rb-[0-9]+$ ]] || exit 1
+          fi
+          echo "formula=$formula" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          gh api "repos/IvoryHeart/homebrew-tap/contents/Formula/$formula.rb" --jq .content | base64 -d > published.rb
+          merged=false
+          if cmp -s published.rb "candidate/tap/Formula/$formula.rb"; then merged=true; fi
+          echo "merged=$merged" >> "$GITHUB_OUTPUT"
+      # This standard action handles one URL. The standard PR action below
+      # completes its SAME PR with our product's four URLs and install check.
+      - uses: mislav/bump-homebrew-formula-action@56a283fa15557e9abaa4bdb63b8212abc68e655c # v3
+        if: steps.tap.outputs.branch == '' && steps.tap.outputs.merged != 'true'
+        with:
+          formula-name: ${{ steps.tap.outputs.formula }}
+          homebrew-tap: IvoryHeart/homebrew-tap
+          push-to: IvoryHeart/homebrew-tap
+          create-pullrequest: true
+          download-url: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/herdr-world-${{ github.ref_name }}-darwin-arm64.tar.xz
+          commit-message: "${{ steps.tap.outputs.formula }} ${{ needs.validate.outputs.version }}"
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      - name: Resolve the standard action's proposal branch
+        id: proposal
+        if: steps.tap.outputs.merged != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          FORMULA: ${{ steps.tap.outputs.formula }}
+        run: |
+          branch="$(gh pr list -R IvoryHeart/homebrew-tap --base main --state open --json title,headRefName,isCrossRepository --jq ".[] | select(.title == \"$FORMULA $RELEASE_VERSION\" and .isCrossRepository == false) | .headRefName")"
+          [[ "$branch" =~ ^update-${FORMULA}[.]rb-[0-9]+$ ]]
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.tap.outputs.merged != 'true'
+        with:
+          repository: IvoryHeart/homebrew-tap
+          ref: main
+          path: tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      - name: Apply the exact tested product Formula and tap check
+        if: steps.tap.outputs.merged != 'true'
+        run: cp -R candidate/tap/. tap/
+      - uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        if: steps.tap.outputs.merged != 'true'
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+          branch: ${{ steps.proposal.outputs.branch }}
+          base: main
+          title: "${{ steps.tap.outputs.formula }} ${{ needs.validate.outputs.version }}"
+          commit-message: "${{ steps.tap.outputs.formula }} ${{ needs.validate.outputs.version }}"
+          body: Update the four native URLs and digests to the tested release bytes, retaining the tap's own macOS install check. Merge to publish Homebrew.
+
+  release-label:
+    name: Complete release-please lifecycle
+    needs: [validate, homebrew-pr]
+    if: ${{ !cancelled() && needs.validate.result == 'success' && needs.homebrew-pr.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      # PR-only release-please never runs createReleases, which normally clears
+      # pending. Finish its lifecycle automatically after every channel publishes.
+      - name: Mark the published release PR as tagged
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GH_REPO/commits/$TAG_COMMIT/pulls?per_page=100" > pulls.json
+          pr="$(jq -ser --arg sha "$TAG_COMMIT" '[.[][] | select(.base.ref == "main" and .merged_at != null and .merge_commit_sha == $sha) | select(any(.labels[]; .name == "autorelease: pending" or .name == "autorelease: tagged"))] | if length == 1 then .[0].number else error("Expected one merged release PR for the published tag") end' pulls.json)"
+          gh label create 'autorelease: tagged' --force --color ededed --description 'Release published'
+          gh pr edit "$pr" --add-label 'autorelease: tagged' --remove-label 'autorelease: pending'
 
   publication-status:
-    name: Publication status and recovery
-    needs: [validate, verify, publish, npm-publish, homebrew-pr]
+    name: Release result
+    needs: [validate, candidate, publish, npm-publish, homebrew-pr, release-label]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
-      - name: Report public channels and the no-rebuild recovery command
+      - name: One-line failure and recovery
         env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-          DRY_RUN: ${{ needs.validate.outputs.dry_run }}
-          VERIFY_RESULT: ${{ needs.verify.result }}
-          BUNDLE_DIGEST: ${{ needs.verify.outputs.bundle_digest }}
-        run: node scripts/release-status.mjs
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          jobs = json.loads(os.environ['RESULTS'])
+          failed = [name for name, job in jobs.items() if job['result'] != 'success' and not (name == 'candidate' and job['result'] == 'skipped')]
+          line = ('Release complete; merge the Homebrew tap PR.' if not failed else
+                  'Release stopped at ' + failed[0] + '; re-run failed jobs to resume the tested bytes and finish remaining channels.')
+          print(line)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary: summary.write(line + '\n')
+          if failed: raise SystemExit(1)
+          PYTHON
 
   deploy-pages:
     name: Request stable Pages deployment
-    needs: [publish, npm-publish, homebrew-pr]
-    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.')
+    needs: [publish, npm-publish]
+    if: ${{ !cancelled() && !failure() && !contains(github.ref_name, '-rc.') }}
     runs-on: ubuntu-latest
     permissions:
       actions: write

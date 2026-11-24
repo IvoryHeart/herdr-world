@@ -11,6 +11,7 @@ import {
 } from "../../browserChrome";
 import { buildWorldBrowserBundle } from "../testing/browserBundles";
 import { SWIFTSHADER_FLAGS } from "../testing/chromeRendering";
+import { gestureTrace } from "../testing/frameTrace";
 import { connectCapture } from "../testing/connectCapture";
 
 /*
@@ -158,13 +159,28 @@ test.skipIf(!chrome)(
             "disabled-by-default-devtools.timeline.frame",
             "benchmark",
             "cc",
+            "blink.user_timing",
           ].join(","),
           transferMode: "ReportEvents",
         });
+        // PipelineReporter can arrive during this trace for a frame that
+        // began before Tracing.start. Mark the actual gesture in Chrome's
+        // clock so cold setup frames cannot count as missing pan content.
+        await evaluate(
+          'performance.clearMarks(); performance.mark("world-gesture-start")',
+        );
         const result = await run();
+        await evaluate('performance.mark("world-gesture-end")');
         await command("Tracing.end");
         await complete.promise;
-        return { result, events: [...events] };
+        return {
+          result,
+          events: gestureTrace(
+            [...events],
+            "world-gesture-start",
+            "world-gesture-end",
+          ),
+        };
       };
       const draws = () =>
         evaluate("window.__HERDR_TOWN_RENDERER__.frames") as Promise<number>;

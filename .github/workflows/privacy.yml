@@ -1,10 +1,8 @@
 name: Privacy
 
-# Independent of PR creation, validation scope and the main-only full matrix.
+# Scan each PR change once; the local hook guards branch and tag pushes.
 on:
     workflow_dispatch:
-    push:
-        branches: ["**"]
     pull_request:
         types: [opened, synchronize, reopened]
 
@@ -14,7 +12,6 @@ permissions:
 jobs:
     privacy:
         name: Privacy guard
-        if: github.event.deleted != true
         runs-on: ubuntu-latest
         timeout-minutes: 5
         steps:

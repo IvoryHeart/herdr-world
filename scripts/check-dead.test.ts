@@ -141,9 +141,13 @@ test("CLI fails new findings, prunes resolutions, publishes both reports, and ke
       }),
     );
   const summary = join(root, "summary.md");
-  const run = (ci = false) =>
+  const run = (ci = false, prune = false) =>
     Bun.spawnSync(
-      [process.execPath, new URL("./check-dead.ts", import.meta.url).pathname],
+      [
+        process.execPath,
+        new URL("./check-dead.ts", import.meta.url).pathname,
+        ...(prune ? ["--prune"] : []),
+      ],
       {
         cwd: root,
         env: {
@@ -169,6 +173,12 @@ test("CLI fails new findings, prunes resolutions, publishes both reports, and ke
     ).exports,
   ).toEqual(["src/live.ts#old"]);
   expect(run().exitCode).toBe(0);
+  expect(
+    parseBaseline(
+      readFileSync(join(root, "scripts/dead-code-baseline.json"), "utf8"),
+    ).exports,
+  ).toEqual(["src/live.ts#old"]);
+  expect(run(false, true).exitCode).toBe(0);
   expect(
     parseBaseline(
       readFileSync(join(root, "scripts/dead-code-baseline.json"), "utf8"),
@@ -289,7 +299,11 @@ test("a pruned baseline is written as the repository formatter prints it", () =>
   );
   write("src/a.ts", "export const kept = 1;\n");
   const result = Bun.spawnSync(
-    [process.execPath, new URL("./check-dead.ts", import.meta.url).pathname],
+    [
+      process.execPath,
+      new URL("./check-dead.ts", import.meta.url).pathname,
+      "--prune",
+    ],
     {
       cwd: root,
       env: {

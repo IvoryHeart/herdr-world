@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { isDocumentationPath } from "./validation-scope";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   mkdirSync,
@@ -15,12 +16,12 @@ import {
   checkoutCommitFromLog,
   HOLD_STEP,
   isDocsOnlyChange,
-  isDocumentationPath,
   isEarlierBase,
   redHeadResult,
   selectValidationMode,
   STABILITY_LABEL,
   stabilityLabelAdded,
+  treeEvidence,
   writeValidationOutputs,
 } from "./ci-reuse-full-check";
 
@@ -604,7 +605,7 @@ test("classified PRs use fresh scoped validation, while unknown changes retain f
   ).toBe("reuse");
 });
 
-test("every main push forces all suite classes even when a tracked doc is dirty", () => {
+test("unmatched main pushes report missing evidence without starting any heavy lane", () => {
   const root = mkdtempSync(join(tmpdir(), "main-scope-"));
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -646,10 +647,10 @@ test("every main push forces all suite classes even when a tracked doc is dirty"
         ]),
     );
     expect(fields).toMatchObject({
-      mode: "full",
-      world: "true",
-      verification: "true",
-      packaging: "true",
+      mode: "hold",
+      world: "false",
+      verification: "false",
+      packaging: "false",
     });
     expect(JSON.parse(fields.selection!).full).toBe(true);
   } finally {
@@ -779,6 +780,293 @@ test.each(["full", "scoped"])(
   },
 );
 
+const tree = "f".repeat(40);
+const other = "e".repeat(40);
+const merge = "d".repeat(40);
+const finished = (id: number, conclusion: string | null = "success") => ({
+  ...run(id, base, conclusion),
+  head_sha: "c".repeat(40),
+});
+const treeScopeJob = (
+  id: number,
+  conclusion = "success",
+  steps?: string[],
+) => ({
+  id: id * 10,
+  run_id: id,
+  run_attempt: 1,
+  name: "Validation scope",
+  conclusion,
+  steps: [
+    { name: "Check PR description", conclusion: steps?.[0] ?? "success" },
+    { name: "Determine validation scope", conclusion: steps?.[1] ?? "success" },
+  ],
+});
+const treeDeliveryJob = (
+  id: number,
+  full = "success",
+  applicable = "skipped",
+) => ({
+  id: id * 10 + 1,
+  run_id: id,
+  run_attempt: 1,
+  name: "Delivery checks",
+  conclusion: "success",
+  steps: [
+    { name: "Run full repository check", conclusion: full },
+    { name: "Verify applicable or reused results", conclusion: applicable },
+  ],
+});
+const selection = {
+  reason: "synthetic",
+  full: false,
+  tooling: false,
+  documentation: false,
+  verification: false,
+  packaging: false,
+  unit: ["scripts/a.test.ts"],
+  world: [],
+  web: [],
+  worldShards: [],
+};
+const sameTree = (
+  runs: ReturnType<typeof finished>[],
+  jobs: Record<number, Array<Record<string, unknown>>>,
+  trees: Record<number, string | undefined>,
+  proofs: Record<number, { mode: string; selection: typeof selection }> = {},
+  options: {
+    requireFull: boolean;
+    selection?: typeof selection;
+    acceptScoped?: boolean;
+  } = {
+    requireFull: true,
+  },
+) =>
+  treeEvidence(
+    runs,
+    99,
+    tree,
+    "Delivery checks",
+    "Run full repository check",
+    async (id) => (jobs[id] ?? []) as never,
+    async (jobId) => {
+      const runId = Math.floor(jobId / 10);
+      return {
+        checkoutSha: merge,
+        commitSha: merge,
+        parents: [base, head],
+        tree: trees[runId],
+        validation:
+          jobId % 10 === 1
+            ? (proofs[runId] ?? { mode: "full", selection })
+            : undefined,
+      };
+    },
+    options,
+  );
+
+test("a main commit reuses only a passing full run that tested its exact tree", async () => {
+  const green = { 5: [treeScopeJob(5), treeDeliveryJob(5)] };
+  expect(await sameTree([finished(5)], green, { 5: tree })).toBe(5);
+  // A different tree is different code, whatever the PR association says.
+  expect(await sameTree([finished(5)], green, { 5: other })).toBeUndefined();
+  // A red, cancelled or scoped verdict on this tree is never turned green.
+  for (const conclusion of ["failure", "cancelled"])
+    expect(
+      await sameTree(
+        [finished(6, conclusion), finished(5)],
+        {
+          ...green,
+          6: [treeScopeJob(6), treeDeliveryJob(6)],
+        },
+        { 5: tree, 6: tree },
+      ),
+    ).toBeUndefined();
+  expect(
+    await sameTree(
+      [finished(5)],
+      { 5: [treeScopeJob(5), treeDeliveryJob(5, "skipped", "success")] },
+      { 5: tree },
+      {
+        5: { mode: "scoped", selection },
+      },
+    ),
+  ).toBeUndefined();
+  expect(
+    await sameTree(
+      [finished(5)],
+      { 5: [treeScopeJob(5), treeDeliveryJob(5, "failure")] },
+      { 5: tree },
+    ),
+  ).toBeUndefined();
+  // Newer runs on other trees and unfinished runs do not hide the evidence.
+  expect(
+    await sameTree(
+      [finished(7, "failure"), finished(8, null), finished(5)],
+      { ...green, 7: [treeScopeJob(7)], 8: [] },
+      { 5: tree, 7: other },
+    ),
+  ).toBe(5);
+  // A red run whose tested tree is unknown may have tested this one.
+  expect(
+    await sameTree(
+      [finished(7, "failure"), finished(5)],
+      { ...green, 7: [treeScopeJob(7)] },
+      { 5: tree },
+    ),
+  ).toBeUndefined();
+  // A description failure tested no code.
+  expect(
+    await sameTree(
+      [finished(7, "failure"), finished(5)],
+      { ...green, 7: [treeScopeJob(7, "failure", ["failure", "skipped"])] },
+      { 5: tree },
+    ),
+  ).toBe(5);
+  // A reused result is not evidence of its own tree; the older proof is.
+  expect(
+    await sameTree(
+      [finished(6), finished(5)],
+      {
+        ...green,
+        6: [treeScopeJob(6), treeDeliveryJob(6, "skipped", "success")],
+      },
+      { 5: tree, 6: tree },
+      { 6: { mode: "reuse", selection } },
+    ),
+  ).toBe(5);
+  // The Delivery job must have checked out the same tree in this attempt.
+  expect(
+    await sameTree(
+      [finished(5)],
+      { 5: [treeScopeJob(5), { ...treeDeliveryJob(5), run_attempt: 2 }] },
+      { 5: tree },
+    ),
+  ).toBeUndefined();
+  expect(
+    await sameTree([finished(99)], { 99: green[5] }, { 99: tree }),
+  ).toBeUndefined();
+  expect(
+    await sameTree(
+      [finished(5)],
+      green,
+      { 5: tree },
+      {},
+      { requireFull: true },
+    ),
+  ).toBe(5);
+});
+
+test("main may reuse scoped passing evidence of the identical tree without requiring its old PR scope", async () => {
+  const jobs = {
+    5: [treeScopeJob(5), treeDeliveryJob(5, "skipped", "success")],
+  };
+  const proof = { 5: { mode: "scoped", selection } };
+  expect(
+    await sameTree([finished(5)], jobs, { 5: tree }, proof, {
+      requireFull: false,
+      acceptScoped: true,
+    }),
+  ).toBe(5);
+  expect(
+    await sameTree([finished(5)], jobs, { 5: other }, proof, {
+      requireFull: false,
+      acceptScoped: true,
+    }),
+  ).toBeUndefined();
+  expect(
+    await sameTree([finished(5, "failure")], jobs, { 5: tree }, proof, {
+      requireFull: false,
+      acceptScoped: true,
+    }),
+  ).toBeUndefined();
+});
+
+test("a PR re-push of an identical tree reuses scoped evidence only with the same selection", async () => {
+  const jobs = {
+    5: [treeScopeJob(5), treeDeliveryJob(5, "skipped", "success")],
+  };
+  const proofs = { 5: { mode: "scoped", selection } };
+  expect(
+    await sameTree([finished(5)], jobs, { 5: tree }, proofs, {
+      requireFull: false,
+      selection,
+    }),
+  ).toBe(5);
+  expect(
+    await sameTree([finished(5)], jobs, { 5: tree }, proofs, {
+      requireFull: false,
+      selection: { ...selection, unit: ["scripts/b.test.ts"] },
+    }),
+  ).toBeUndefined();
+  expect(
+    await sameTree([finished(5)], jobs, { 5: tree }, proofs, {
+      requireFull: false,
+    }),
+  ).toBeUndefined();
+});
+
+test("a new commit tries tree reuse unless the stability label asks for fresh runs", async () => {
+  const yes = async () => true;
+  for (const action of ["opened", "synchronize", "reopened"]) {
+    expect(
+      await selectValidationMode(
+        action,
+        false,
+        yes,
+        false,
+        true,
+        false,
+        false,
+        false,
+        yes,
+      ),
+    ).toBe("reuse");
+    expect(
+      await selectValidationMode(
+        action,
+        false,
+        yes,
+        false,
+        true,
+        true,
+        false,
+        false,
+        yes,
+      ),
+    ).toBe("full");
+    expect(
+      await selectValidationMode(
+        action,
+        false,
+        yes,
+        false,
+        true,
+        false,
+        false,
+        false,
+        async () => {
+          throw new Error("API unavailable");
+        },
+      ),
+    ).toBe("scoped");
+  }
+  // A base change is a new merge and never reuses by tree either.
+  expect(
+    await selectValidationMode(
+      "edited",
+      false,
+      yes,
+      false,
+      false,
+      false,
+      true,
+      false,
+      yes,
+    ),
+  ).toBe("full");
+});
+
 const heldScopeJob = (id = 0) => ({
   id: id * 10 || 8,
   ...(id ? { run_id: id } : {}),
@@ -821,6 +1109,7 @@ test("a metadata event on a red head holds that result instead of retesting", as
         false,
         false,
         false,
+        undefined,
         async () => (await red(pushed, failed)) !== undefined,
       ),
     ).toBe("hold");
@@ -886,6 +1175,7 @@ test("a metadata event on a red head holds that result instead of retesting", as
         false,
         newBase,
         added,
+        undefined,
         hold,
       ),
     ).toBe("full");
@@ -899,6 +1189,7 @@ test("a metadata event on a red head holds that result instead of retesting", as
       false,
       false,
       false,
+      undefined,
       async () => {
         throw new Error("API unavailable");
       },
@@ -915,6 +1206,7 @@ test("a metadata event on a red head holds that result instead of retesting", as
       false,
       false,
       false,
+      undefined,
       hold,
     ),
   ).toBe("reuse");
@@ -936,6 +1228,17 @@ test("a held run neither hides a rerun's green result nor counts as evidence", a
       2: [job("success")],
     }),
   ).toBe(false);
+  // Main and identical-tree reuse pass over it to the run that tested the tree.
+  expect(
+    await sameTree(
+      [finished(6, "failure"), finished(5)],
+      {
+        5: [treeScopeJob(5), treeDeliveryJob(5)],
+        6: [heldScopeJob(6)],
+      },
+      { 5: tree, 6: tree },
+    ),
+  ).toBe(5);
 });
 
 test("a held result starts no code job", () => {

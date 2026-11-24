@@ -1,0 +1,411 @@
+name: Release candidate
+
+on:
+  workflow_call:
+    inputs:
+      nightly:
+        type: boolean
+        default: false
+      version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    name: Freeze candidate inputs and audit shipped dependencies
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ inputs.nightly && steps.baseline.outputs.candidate_version || inputs.version }}
+      baseline_tag: ${{ steps.baseline.outputs.baseline_tag }}
+      baseline_sha: ${{ steps.baseline.outputs.baseline_sha }}
+      build_hash: ${{ steps.baseline.outputs.build_hash }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.4"
+      - run: bun install --frozen-lockfile
+      - run: bun run security:check
+      - id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BASELINE_BEFORE: ${{ !inputs.nightly && inputs.version || '' }}
+        run: bun scripts/installer-upgrade.ts plan
+
+  package:
+    name: Package ${{ matrix.platform }}
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-24.04
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+          - platform: darwin-x64
+            runner: macos-15-intel
+          - platform: darwin-arm64
+            runner: macos-15
+          - platform: windows-x64
+            runner: windows-latest
+          - platform: windows-arm64
+            runner: windows-11-arm
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.4"
+          no-cache: true
+      - run: bun install --frozen-lockfile
+      - name: Nightly native storage and plugin regressions
+        if: inputs.nightly
+        env:
+          HERDR_TEST_PARALLEL: "1"
+          HERDR_TEST_MAX_CONCURRENCY: "1"
+        run: >-
+          bun run test
+          server/src/storage/world-storage.test.ts
+          server/src/storage/world-storage-crash.test.ts
+          server/src/storage/world-writer.test.ts
+          server/src/storage/answer-transitions.test.ts
+          server/src/storage/answer-migration.test.ts
+          server/src/storage/answer-delivery-crash.test.ts
+          server/src/storage/runtime-status-crash.test.ts
+          server/src/storage/board-crash.test.ts
+          server/src/storage/profile-crash.test.ts
+          server/src/storage/terminal-marks-crash.test.ts
+          scripts/install-plugin.test.ts
+          scripts/plugin-native.test.ts
+          server/src/config/plugin-command.test.ts
+      - name: Build release package once
+        shell: bash
+        run: HERDR_WORLD_BUILD_VERSION="$RELEASE_VERSION" bun run package:${{ matrix.platform }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.validate.outputs.baseline_sha }}
+          path: .agents/worktrees/installer-baseline
+          persist-credentials: false
+      - name: Fresh archive installation starts World on this native OS
+        env:
+          INSTALLER_RELEASE_CANDIDATE: "1"
+          INSTALLER_NIGHTLY: ${{ inputs.nightly }}
+          HERDR_WORLD_BUILD_VERSION: ${{ needs.validate.outputs.version }}
+          INSTALLER_BASELINE_TAG: ${{ needs.validate.outputs.baseline_tag }}
+          INSTALLER_BASELINE_SHA: ${{ needs.validate.outputs.baseline_sha }}
+          INSTALLER_BUILD_HASH: ${{ needs.validate.outputs.build_hash }}
+          INSTALLER_BASELINE_DIR: ${{ github.workspace }}/.agents/worktrees/installer-baseline
+          INSTALLER_BASELINE_ASSETS: ${{ runner.temp }}/baseline-assets
+          INSTALLER_REPORT_DIR: ${{ runner.temp }}/installer-report
+        run: bun scripts/installer-upgrade.ts verify
+      - name: Verify release package
+        shell: bash
+        run: scripts/verify-release-package.sh "$RELEASE_VERSION" "${{ matrix.platform }}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: herdr-world-${{ matrix.platform }}
+          path: |
+            dist/herdr-world-*.tar.xz*
+            dist/herdr-world-*.update.json
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+
+  release-walk:
+    needs: [validate, package]
+    uses: ./.github/workflows/release-walk.yml
+    with:
+      version: ${{ needs.validate.outputs.version }}
+      package_artifacts: true
+      baseline_tag: ${{ needs.validate.outputs.baseline_tag }}
+
+  archives:
+    name: Verify complete archive set
+    needs: [validate, package]
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.4"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          path: dist
+          pattern: herdr-world-*
+          merge-multiple: true
+      - name: Verify all archives, aliases, checksums, update feeds and installer
+        run: |
+          node scripts/check-release-assets.mjs "$RELEASE_VERSION"
+          cp scripts/install-herdr-world.sh dist/
+          node scripts/check-release-assets.mjs "$RELEASE_VERSION" dist --published
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: verified-archives
+          path: dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+
+  npm-stage:
+    name: Verify npm tarballs
+    needs: [validate, archives]
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.4"
+          no-cache: true
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: verified-archives
+          path: dist
+      - name: Stage and pack the verified binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$RELEASE_VERSION"
+          bun scripts/stage-npm-release.ts "$version"
+          mkdir -p dist/npm-tarballs
+          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
+            npm pack "dist/npm/$platform" --pack-destination dist/npm-tarballs --silent
+          done
+          npm pack dist/npm/launcher --pack-destination dist/npm-tarballs --silent
+          test "$(find dist/npm-tarballs -name '*.tgz' | wc -l)" -eq 7
+          npm install --ignore-scripts --offline --prefix dist/npm-smoke \
+            "./dist/npm-tarballs/ivoryheart-herdr-world-linux-x64-$version.tgz" \
+            "./dist/npm-tarballs/ivoryheart-herdr-world-$version.tgz"
+          test "$(dist/npm-smoke/node_modules/.bin/herdr-world --version)" = "herdr-world $version"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: npm-packages
+          path: dist/npm-tarballs/*.tgz
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+
+  npm-smoke:
+    name: npm fresh install (${{ matrix.runner }})
+    needs: [validate, npm-stage]
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.4"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: npm-packages
+          path: dist/npm-tarballs
+      - run: bun scripts/release-npm-smoke.ts "${{ needs.validate.outputs.version }}"
+
+  homebrew-formula:
+    name: Verify Homebrew Formula and tap PR input
+    needs: [validate, archives]
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.4"
+          no-cache: true
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: verified-archives
+          path: dist
+      - name: Generate and stage-check Formula for the release channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$RELEASE_VERSION"
+          formula="herdr-world.rb"
+          formula_class="HerdrWorld"
+          if [[ "$version" == *-rc.* ]]; then
+            formula="herdr-world-rc.rb"
+            formula_class="HerdrWorldRc"
+          fi
+          bun scripts/generate-homebrew-formula.ts "$version" dist "dist/$formula"
+          ruby -c "dist/$formula"
+          for platform in darwin-arm64 darwin-x64 linux-arm64 linux-x64; do
+            ruby scripts/check-homebrew-formula-stage.rb "dist/$formula" \
+              "dist/herdr-world-v$version-$platform.tar.xz" "$formula_class"
+          done
+      - name: Stage the product Formula and tap install check
+        run: |
+          formula="herdr-world.rb"
+          if [[ "$RELEASE_VERSION" == *-rc.* ]]; then formula="herdr-world-rc.rb"; fi
+          mkdir -p tap/Formula tap/.github/scripts tap/.github/workflows
+          cp "dist/$formula" tap/Formula/
+          cp scripts/check-homebrew-runtime.rb tap/.github/scripts/
+          cp scripts/homebrew-tap-workflow.yml tap/.github/workflows/herdr-world.yml
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: homebrew-formula
+          path: tap/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+
+  homebrew-smoke:
+    name: Homebrew install (${{ matrix.runner }})
+    needs: [validate, archives, homebrew-formula]
+    if: ${{ !cancelled() && !failure() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel, ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.4"
+      - name: Start native user manager
+        if: runner.os == 'Linux'
+        run: |
+          sudo loginctl enable-linger "$(id -un)"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: runner.os == 'Linux'
+        with:
+          repository: Homebrew/install
+          ref: c9c975046f78e6e6d662deb801bd461ebd6a54ed
+          path: .agents/homebrew-install
+          persist-credentials: false
+      - name: Prepare Homebrew on the native Linux runner
+        if: runner.os == 'Linux'
+        run: |
+          brew_bin="$(dirname "$HOME")/linuxbrew/.linuxbrew/bin"
+          if [ ! -x "$brew_bin/brew" ]; then
+            NONINTERACTIVE=1 bash .agents/homebrew-install/install.sh
+          fi
+          echo "$brew_bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: homebrew-formula
+          path: tap
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: verified-archives
+          path: dist
+      - name: Install the candidate archive through Homebrew before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$RELEASE_VERSION"
+          formula="herdr-world.rb"
+          package="herdr-world"
+          if [[ "$version" == *-rc.* ]]; then
+            formula="herdr-world-rc.rb"
+            package="herdr-world-rc"
+          fi
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          export HOMEBREW_NO_INSTALL_CLEANUP=1
+          brew update
+          tap="herdrworld/release-smoke"
+          brew tap-new --no-git "$tap"
+          # Only transport differs before the public tag exists. Keep the original
+          # Formula and PR input intact; Homebrew checks the same archive digests.
+          ruby -e 'text = File.read(ARGV[0]); prefix = "https://github.com/IvoryHeart/herdr-world/releases/download/v#{ARGV[2]}/"; File.write(ARGV[1], text.gsub(prefix, "file://#{Dir.pwd}/dist/"))' \
+            "tap/Formula/$formula" "$(brew --repository "$tap")/Formula/$formula" "$version"
+          brew install --formula "$tap/$package"
+          test -z "$(brew deps "$tap/$package")"
+          test ! -e "$(brew --prefix "$tap/$package")/bin/herdr"
+          test "$("$(brew --prefix "$tap/$package")/bin/herdr-world" --version)" = "herdr-world $version"
+          brew test "$tap/$package"
+          world="$(brew --prefix "$tap/$package")/bin/herdr-world"
+          fixture_home="$(mktemp -d /tmp/hw.XXXXXX)"
+          trap 'rm -rf "$fixture_home"' EXIT
+          ruby tap/.github/scripts/check-homebrew-runtime.rb "$world" "$fixture_home"
+      - name: Upgrade running service from previous published release through installer and Homebrew
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASELINE_TAG: ${{ needs.validate.outputs.baseline_tag }}
+        run: python3 scripts/release-channel-upgrade.py "$RELEASE_VERSION" "$BASELINE_TAG" --disposable-host
+
+  verify:
+    name: Seal tested bytes with the immutable Actions artifact
+    needs: [validate, archives, npm-stage, npm-smoke, homebrew-formula, homebrew-smoke, release-walk]
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    outputs:
+      bundle_digest: ${{ steps.bundle.outputs.artifact-digest }}
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.4"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: verified-archives
+          path: candidate/github
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: npm-packages
+          path: candidate/npm
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: homebrew-formula
+          path: candidate/tap
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        id: bundle
+        with:
+          name: verified-release
+          path: candidate/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
