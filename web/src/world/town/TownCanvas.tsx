@@ -660,6 +660,7 @@ export function TownCanvas({
       view,
       stage: () => rendererRef.current,
       world: () => latest.current,
+      canMoveRoom: (k) => latest.current.roomActions.canMoveRoom?.(k) ?? true,
       hovered: () => latest.current.hover,
       setHovered: setHover,
       hover: (hover) => latest.current.onHover?.(hover),
