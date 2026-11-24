@@ -43,7 +43,7 @@ export const TOWN_ZOOM_READERS = [
   ".town-pulse",
   ".town-quest",
   ".town-reception",
-  ".town-room-card",
+  ".town-room-card-frame",
   ".town-room-overview-card",
   ".town-room-plaque",
   ".town-step",

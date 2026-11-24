@@ -79,7 +79,6 @@
 .town-building-sign,
 .town-reception,
 .town-board,
-.town-room-card,
 .town-room-plaque {
   position: absolute;
   transform: translate(-50%, -50%) scale(var(--iz));
@@ -90,9 +89,15 @@
     visibility 0.2s;
 }
 
-/* Reception boards stand on their world point, above the front door. */
+/* Reception boards stand on their world point, above the front door; a room's
+   plaque on its room's top edge, two world pixels clear of its floor. */
 .town-reception {
   transform: translate(-50%, -100%) scale(var(--iz));
+  transform-origin: 50% 100%;
+}
+
+.town-room-plaque {
+  transform: translate(-50%, calc(-100% - 2px)) scale(var(--iz));
   transform-origin: 50% 100%;
 }
 
@@ -155,18 +160,26 @@
 /* A room's slim label (#903) hangs from its rug's top edge (the rug starts
    3px inside the room), clear of the town at hundreds of agents: the name,
    the waiting badge and a thin status bar. The count line opens on hover or
-   focus. */
-.town-room-card {
+   focus. Its frame places it; the room's runtime icon stands in the frame
+   beside it, over the card's slot (townRuntimeIcon.css). */
+.town-room-card-frame {
+  position: absolute;
   left: 50%;
   top: 3px;
+  max-width: clamp(72px, calc(var(--z) * var(--room-w) - 8px), 200px);
   transform: translateX(-50%) scale(var(--iz));
   transform-origin: 50% 0;
+  pointer-events: none;
+}
+
+.town-room-card {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, auto) auto;
   align-items: center;
   gap: 2px 5px;
   box-sizing: border-box;
-  max-width: clamp(72px, calc(var(--z) * var(--room-w) - 8px), 200px);
+  max-width: 100%;
   padding: 2px 7px 3px;
   text-align: left;
   color: #f1efe6;
@@ -180,6 +193,9 @@
   pointer-events: none;
   /* Hidden overlays take no taps, including their buttons. */
   visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s;
 }
 
 .town-room-card-waiting {
@@ -211,18 +227,15 @@
   padding: 0 5px;
 }
 
-/* In a building of more than one runtime: the room's runtime, under its bar. */
-.town-room-card-runtime {
-  grid-row: 4;
-  grid-column: 1 / -1;
-  overflow: hidden;
-  font:
-    700 8px / 11px "Silkscreen",
-    ui-monospace,
-    monospace;
-  color: #b9c2b4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* In a building of more than one runtime: a slot before the name for the
+   room's runtime icon (TownRuntimeIcon.tsx), which stands over it. */
+.town-room-card.has-runtime {
+  grid-template-columns: auto minmax(0, auto) auto;
+}
+
+.town-room-card-runtime-slot {
+  width: 10px;
+  height: 10px;
 }
 
 .town-room-card-meta {
@@ -236,7 +249,8 @@
   white-space: nowrap;
 }
 
-.town-room-card:is(:hover, :focus-visible) .town-room-card-meta {
+.town-room-card:is(:hover, :focus-visible) .town-room-card-meta,
+.town-room-card-frame:hover .town-room-card-meta {
   display: block;
 }
 
@@ -346,7 +360,8 @@
 }
 
 /* Level visibility. Cards at overview; plaques and seat actions further in. */
-.town-world[data-level="overview"] .town-room-card {
+.town-world[data-level="overview"] .town-room-card,
+.town-world[data-level="overview"] .town-room-card-runtime {
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
@@ -694,6 +709,7 @@
   .town-building-sign,
   .town-reception,
   .town-room-card,
+  .town-room-card-runtime,
   .town-room-plaque {
     transition: none;
   }

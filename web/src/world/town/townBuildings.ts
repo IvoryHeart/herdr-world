@@ -127,7 +127,7 @@ type Plan = {
   /** Building key by office host key, for a machine's later runtimes. */
   buildingOf: Map<string, string>;
   /** A room's runtime, in buildings of more than one runtime. */
-  tagOf: Map<string, string>;
+  tagOf: Map<string, { tag: string; kind: TownRuntime["runtime"] }>;
   /** Room order offset, so a machine's runtimes' rooms stay apart. */
   orderOffset: Map<string, number>;
   /** A merged building's first host, stale only when all its runtimes are. */
@@ -245,7 +245,7 @@ function plan(
     [...views.placeOf].map(([kept, anchor]) => [kept.key, anchor]),
   );
   const buildingOf = new Map<string, string>();
-  const tagOf = new Map<string, string>();
+  const tagOf: Plan["tagOf"] = new Map();
   const orderOffset = new Map<string, number>();
   const primaryStale = new Map<string, boolean>();
   const byGroup = new Map<string, OfficeHost[]>();
@@ -266,12 +266,13 @@ function plan(
       const tag = townRuntimeTag(kind);
       const label = (placeOf.get(host.key) ?? host).displayLabel;
       // Two runtimes of one kind on a machine: their names tell them apart.
-      tagOf.set(
-        host.key,
-        kinds.filter((each) => each === kind).length > 1
-          ? `${tag} · ${label}`
-          : tag,
-      );
+      tagOf.set(host.key, {
+        tag:
+          kinds.filter((each) => each === kind).length > 1
+            ? `${tag} · ${label}`
+            : tag,
+        kind,
+      });
       if (index) orderOffset.set(host.key, index * RUNTIME_ORDER_STRIDE);
     });
     for (const host of later) buildingOf.set(host.key, first.key);
@@ -389,7 +390,8 @@ function apply(
       ? memo(cache.rooms, item, () => ({
           ...placed(item),
           ...(tagOf.has(item.hostKey) && {
-            runtimeTag: tagOf.get(item.hostKey),
+            runtimeTag: tagOf.get(item.hostKey)!.tag,
+            runtimeKind: tagOf.get(item.hostKey)!.kind,
             buildingOrder: item.order + (orderOffset.get(item.hostKey) ?? 0),
           }),
           ...(placeOf.has(item.hostKey) && {
