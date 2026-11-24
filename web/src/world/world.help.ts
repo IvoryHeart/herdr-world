@@ -15,7 +15,7 @@ export const WORLD_HELP: readonly HelpEntry[] = [
     place: "world",
     where: "Beside the views at the top; on a phone, the views button",
     control: "world.help",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: {
       scene: "town",
       press: ['[data-help-opens~="world.help"]'],
@@ -50,7 +50,7 @@ export const WORLD_HELP: readonly HelpEntry[] = [
     place: "world",
     where: "On a phone, the views button in the bottom corner",
     control: "world.phone-hosts",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: {
       scene: "town",
       sizes: ["phone"],
