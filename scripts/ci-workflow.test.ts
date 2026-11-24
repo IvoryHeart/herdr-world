@@ -687,3 +687,28 @@ test("an in-job model retry preserves failed evidence outside the aggregate's li
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("nightly native plugin regressions run each OS's own installer test", async () => {
+  const candidate = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../.github/workflows/release-candidate.yml", import.meta.url),
+    ).text(),
+  ) as { jobs: Record<string, WorkflowJob> };
+  const steps = candidate.jobs.package.steps;
+  const windows = steps.find(
+    (step) => step.name === "Nightly native Windows plugin regressions",
+  )!;
+  const unix = steps.find(
+    (step) => step.name === "Nightly native Unix plugin regressions",
+  )!;
+  expect(windows.if).toBe("inputs.nightly && runner.os == 'Windows'");
+  expect(windows.run).toContain("scripts/install-plugin.windows.test.ts");
+  expect(windows.run).not.toContain("scripts/install-plugin.test.ts");
+  expect(unix.if).toBe("inputs.nightly && runner.os != 'Windows'");
+  expect(unix.run).toContain("scripts/install-plugin.test.ts");
+  for (const step of steps) {
+    if (step.run?.includes("scripts/install-plugin.test.ts")) {
+      expect(step.if).toContain("runner.os != 'Windows'");
+    }
+  }
+});
