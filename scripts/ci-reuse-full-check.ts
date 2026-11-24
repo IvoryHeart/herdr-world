@@ -51,6 +51,12 @@ export const SCOPE_JOB = "Validation scope";
 export const DESCRIPTION_STEP = "Check PR description";
 /** @internal */
 export const SCOPE_STEP = "Determine validation scope";
+/**
+ * The scope job's step that fails when a title, description or label change
+ * meets a head whose latest result is red (mode `hold`).
+ * @internal
+ */
+export const HOLD_STEP = "Hold the head's red result";
 
 /**
  * The run failed only because `check:pr-body` rejected the description: the
@@ -71,6 +77,64 @@ function descriptionOnlyFailure(run: Run, jobs: Job[]): boolean {
     step(DESCRIPTION_STEP) === "failure" &&
     step(SCOPE_STEP) === "skipped"
   );
+}
+
+/**
+ * The run only held its head's red result for a title, description or label
+ * change: it tested no code, so like a description failure it neither hides
+ * older evidence nor counts as a verdict of its own. Re-running its failed
+ * jobs decides again.
+ */
+function heldResult(run: Run, jobs: Job[]): boolean {
+  if (run.conclusion !== "failure") return false;
+  const scope = jobs.filter(({ name }) => name === SCOPE_JOB);
+  return (
+    scope.length === 1 &&
+    scope[0].run_id === run.id &&
+    scope[0].run_attempt === run.run_attempt &&
+    scope[0].steps.find(({ name }) => name === HOLD_STEP)?.conclusion ===
+      "failure"
+  );
+}
+
+/** The run tested no code: its description was refused, or it held a result. */
+function testedNothing(run: Run, jobs: Job[]): boolean {
+  return descriptionOnlyFailure(run, jobs) || heldResult(run, jobs);
+}
+
+/**
+ * The head's latest result on this PR is red. A title, description or label
+ * change retests nothing, so it holds that red result instead of running the
+ * code jobs again (#1373: an edit after an infrastructure failure doubled the
+ * PR's macOS demand). Returns the red run's ID. The newest finished run that
+ * tested code decides, on any base; a pass, a cancelled run or an unfinished
+ * one is no red result to hold, and the event validates as before.
+ *
+ * @internal
+ */
+export async function redHeadResult(
+  runs: Run[],
+  currentRunId: number,
+  prNumber: number,
+  headSha: string,
+  jobsForRun: (runId: number) => Promise<Job[]>,
+): Promise<number | undefined> {
+  for (const run of [...runs].sort((left, right) => right.id - left.id)) {
+    if (
+      run.id === currentRunId ||
+      run.head_sha !== headSha ||
+      !run.pull_requests.some(
+        (pr) => pr.number === prNumber && pr.head.sha === headSha,
+      )
+    )
+      continue;
+    if (run.conclusion === "failure" || run.conclusion === "timed_out") {
+      if (testedNothing(run, await jobsForRun(run.id))) continue;
+      return run.id;
+    }
+    return undefined;
+  }
+  return undefined;
 }
 
 /**
@@ -106,9 +170,10 @@ export async function canReuseFullCheck(
       continue;
     const jobs =
       run.conclusion === "success" ? undefined : await jobsForRun(run.id);
-    // A run stopped by its PR description tested no code, so it does not hide
-    // older evidence; a correction to the description can still reuse it.
-    if (jobs && descriptionOnlyFailure(run, jobs)) continue;
+    // A run stopped by its PR description, or one that only held the head's
+    // red result, tested no code, so it does not hide older evidence; a
+    // correction to the description can still reuse it.
+    if (jobs && testedNothing(run, jobs)) continue;
     // A failed or unfinished candidate may have no aggregate job at all.
     // Its workflow result is still a barrier to older passing evidence.
     if (run.conclusion !== "success") return false;
@@ -197,7 +262,7 @@ export async function treeEvidence(
     // Unfinished runs are no verdict yet; the newest finished one decides.
     if (run.id === currentRunId || run.conclusion === null) continue;
     const jobs = await jobsForRun(run.id);
-    if (descriptionOnlyFailure(run, jobs)) continue;
+    if (testedNothing(run, jobs)) continue;
     const scope = jobs.filter(({ name }) => name === SCOPE_JOB);
     const tested =
       scope.length === 1 &&
@@ -370,7 +435,8 @@ export function isEarlierBase(
 /**
  * A title or description edit, or a label other than the stability label,
  * changes no tested input, so it reuses the head's passing proof before
- * stability, tooling or docs would validate afresh. A new base is a new merge
+ * stability, tooling or docs would validate afresh, and holds the head's red
+ * result (`heldRed`) rather than retesting the unchanged code. A new base is a new merge
  * and always validates afresh; so does adding the stability label. A new
  * commit reuses only a passing run that tested the identical merge tree
  * (`sameTree`), never while the stability label asks for fresh runs.
@@ -385,7 +451,8 @@ export async function selectValidationMode(
   newBase = false,
   stabilityAdded = false,
   sameTree?: () => Promise<boolean>,
-): Promise<"docs" | "tooling" | "scoped" | "reuse" | "full"> {
+  heldRed?: () => Promise<boolean>,
+): Promise<"docs" | "tooling" | "scoped" | "reuse" | "hold" | "full"> {
   const reusable = async (check = reuse) => {
     try {
       return await check();
@@ -400,6 +467,8 @@ export async function selectValidationMode(
     (action === "edited" && !newBase) ||
     (action === "labeled" && !stabilityAdded);
   if (metadata && (await reusable())) return "reuse";
+  // An unreadable answer validates, as before: retesting is never unsafe.
+  if (metadata && heldRed && (await reusable(heldRed))) return "hold";
   const commit = ["opened", "synchronize", "reopened"].includes(action ?? "");
   if (commit && !stability && sameTree && (await reusable(sameTree)))
     return "reuse";
@@ -420,7 +489,7 @@ export function writeValidationOutputs(
   selection: ValidationSelection,
   releaseWalk = false,
 ) {
-  const active = mode !== "reuse";
+  const active = mode !== "reuse" && mode !== "hold";
   appendFileSync(
     output,
     [
@@ -605,6 +674,7 @@ if (import.meta.main) {
     throw new Error("Missing CI reuse context");
 
   let mode = "full";
+  let heldRun: number | undefined;
   const common = execFileSync("git", ["merge-base", baseSha, headSha], {
     encoding: "utf8",
   }).trim();
@@ -616,18 +686,24 @@ if (import.meta.main) {
     const event: unknown = JSON.parse(
       readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8"),
     );
+    const headRuns = async () => {
+      const query = new URLSearchParams({
+        head_sha: headSha,
+        event: "pull_request",
+        per_page: "100",
+      });
+      return (
+        await githubJson<{ workflow_runs: Run[] }>(
+          `/repos/${repo}/actions/workflows/ci.yml/runs?${query}`,
+          token,
+        )
+      ).workflow_runs;
+    };
     mode = await selectValidationMode(
       process.env.PR_ACTION,
       selection.documentation,
       async () => {
-        const query = new URLSearchParams({
-          head_sha: headSha,
-          event: "pull_request",
-          per_page: "100",
-        });
-        const { workflow_runs: runs } = await githubJson<{
-          workflow_runs: Run[];
-        }>(`/repos/${repo}/actions/workflows/ci.yml/runs?${query}`, token);
+        const runs = await headRuns();
         return canReuseFullCheck(
           runs,
           currentRunId,
@@ -662,6 +738,16 @@ if (import.meta.main) {
         if (reused) reportReuse(repo, reused, tree);
         return reused !== undefined;
       },
+      async () => {
+        heldRun = await redHeadResult(
+          await headRuns(),
+          currentRunId,
+          prNumber,
+          headSha,
+          jobsReader(repo, token),
+        );
+        return heldRun !== undefined;
+      },
     );
   } catch (error) {
     console.error(
@@ -670,5 +756,13 @@ if (import.meta.main) {
     selection = fullValidationSelection(process.cwd());
   }
   writeValidationOutputs(output, mode, selection);
+  if (mode === "hold" && heldRun) {
+    const url = `${process.env.GITHUB_SERVER_URL ?? "https://github.com"}/${repo}/actions/runs/${heldRun}`;
+    const line = `This head's latest result, run ${heldRun}, is red, and a title, description or label change retests nothing: ${url}. Re-run that run's failed jobs, then this run's failed jobs, or push a commit.`;
+    appendFileSync(output, `held_run=${heldRun}\n`);
+    console.log(line);
+    if (process.env.GITHUB_STEP_SUMMARY)
+      appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${line}\n`);
+  }
   console.log(`${jobName}: ${mode} validation`);
 }

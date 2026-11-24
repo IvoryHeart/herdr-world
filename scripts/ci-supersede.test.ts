@@ -29,6 +29,7 @@ test("a new commit keeps a run testing its identical tree and cancels the rest",
       if (id === 6) throw new Error("API unavailable");
       return trees[id];
     },
+    10,
   );
   expect(decisions).toEqual([
     { id: 1, action: "keep", reason: "tests the identical tree" },
@@ -37,10 +38,36 @@ test("a new commit keeps a run testing its identical tree and cancels the rest",
   ]);
   // An unreadable tree is treated as unknown, as before this check existed.
   expect(
-    await supersede([run(6)], head, tree, async () => {
-      throw new Error("API unavailable");
-    }),
+    await supersede(
+      [run(6)],
+      head,
+      tree,
+      async () => {
+        throw new Error("API unavailable");
+      },
+      10,
+    ),
   ).toEqual([
     { id: 6, action: "cancel", reason: "has not recorded its tree yet" },
   ]);
+});
+
+test("a handler never cancels a run created after its own, whatever the delivery order", async () => {
+  // Push A's handler (run 20) sees push B's queued CI (run 21): GitHub may
+  // deliver A's event late, and B's tree is not recorded yet.
+  const read: number[] = [];
+  const decisions = await supersede(
+    [run(21, "queued", "d".repeat(40)), run(19, "in_progress")],
+    head,
+    tree,
+    async (id) => {
+      read.push(id);
+      return undefined;
+    },
+    20,
+  );
+  expect(decisions).toEqual([
+    { id: 19, action: "cancel", reason: "has not recorded its tree yet" },
+  ]);
+  expect(read).toEqual([19]);
 });

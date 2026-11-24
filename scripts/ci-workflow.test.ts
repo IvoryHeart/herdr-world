@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
   DESCRIPTION_STEP,
+  HOLD_STEP,
   SCOPE_JOB,
   SCOPE_STEP,
   STABILITY_LABEL,
@@ -144,6 +145,8 @@ test("a description-only edit reuses the dependency audit with the rest of the e
   expect(passes("full", "success")).toBe(true);
   expect(passes("scoped", "success")).toBe(true);
   expect(passes("reuse", "skipped")).toBe(true);
+  // A held red result reaches the step that names it.
+  expect(passes("hold", "skipped")).toBe(true);
   expect(passes("full", "skipped")).toBe(false);
   expect(passes("docs", "skipped")).toBe(false);
   expect(passes("full", "failure")).toBe(false);
@@ -489,6 +492,30 @@ test("reuse recognises a description-only failure by the scope job's real names"
   ).toBeUndefined();
 });
 
+test("a metadata event on a red head fails the scope job by name and starts no code job", () => {
+  const scope = workflow.jobs["validation-scope"];
+  const names = scope.steps.map((step) => step.name);
+  // It follows the scope decision and precedes any installer work.
+  expect(names.indexOf(HOLD_STEP)).toBe(names.indexOf(SCOPE_STEP) + 1);
+  const hold = scope.steps.find((step) => step.name === HOLD_STEP)!;
+  expect(hold.if).toBe("steps.scope.outputs.mode == 'hold'");
+  expect(hold["continue-on-error"]).toBeUndefined();
+  const run = Bun.spawnSync(["bash", "-euc", hold.run!], {
+    env: { PATH: process.env.PATH, HELD_RUN: "7" },
+  });
+  expect(run.exitCode).toBe(1);
+  expect(run.stdout.toString()).toContain("Run 7");
+  // A failed scope job skips every job that does not run always(); of those,
+  // only the protected reports run, and they fail.
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (!job.if?.includes("always()")) continue;
+    expect(["validation", "delivery", "launchd"]).toContain(name);
+  }
+  expect(workflow.jobs.validation.if).toContain(
+    "needs.validation-scope.outputs.mode != 'hold'",
+  );
+});
+
 test("protected launchd reports require native work on the existing installer runners", async () => {
   const launchd = workflow.jobs.launchd;
   expect(launchd.name).toBe(
@@ -734,7 +761,11 @@ test("CI supersede cancels only in-flight CI runs of a different tree", () => {
     readFileSync(".github/workflows/ci-supersede.yml", "utf8"),
   ) as any;
   expect(supersede.on).toEqual({ pull_request: { types: ["synchronize"] } });
-  expect(supersede.permissions).toEqual({ contents: "read", actions: "write" });
+  expect(supersede.permissions).toEqual({
+    contents: "read",
+    actions: "write",
+    "pull-requests": "read",
+  });
   const job = supersede.jobs.supersede;
   expect(job.if).toBe("github.event.pull_request.state == 'open'");
   const step = job.steps.find(
@@ -743,6 +774,8 @@ test("CI supersede cancels only in-flight CI runs of a different tree", () => {
   expect(step.env.PR_HEAD_REF).toBe(
     "${{ github.event.pull_request.head.ref }}",
   );
+  // The handler checks that its push is still the PR head before cancelling.
+  expect(step.env.PR_NUMBER).toBe("${{ github.event.pull_request.number }}");
   expect(
     job.steps.find((step: any) => step.uses?.startsWith("actions/checkout@"))
       .with["persist-credentials"],

@@ -263,3 +263,17 @@ test("a reused main release commit still requires its native installer and relea
   expect(reuse(["failure", "success"], true)).toThrow();
   expect(reuse(ok, false)).toThrow();
 });
+
+test("a held red result never passes, whatever its jobs report", () => {
+  for (const scope of ["success", "failure"])
+    expect(() =>
+      assertDeliveryResults(
+        "hold",
+        scope,
+        "skipped",
+        "skipped",
+        "skipped",
+        skip,
+      ),
+    ).toThrow("keep this head's red result");
+});

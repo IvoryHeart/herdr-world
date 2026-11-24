@@ -3,7 +3,9 @@ name: CI supersede
 # CI never cancels a run in flight. A new commit's CI run queues behind the
 # PR's current one; this cancels that older run only when it tests a different
 # tree, so a re-push of an identical tree keeps its run and the queued run
-# reuses the result (scripts/ci-supersede.ts).
+# reuses the result (scripts/ci-supersede.ts). Events may arrive out of order:
+# a handler acts only while its push is the PR head, and only on runs created
+# before its own.
 on:
     pull_request:
         types: [synchronize]
@@ -11,6 +13,7 @@ on:
 permissions:
     contents: read
     actions: write
+    pull-requests: read
 
 concurrency:
     group: ci-supersede-${{ github.event.pull_request.number }}
@@ -33,6 +36,7 @@ jobs:
             - name: Cancel in-flight CI runs that test a different tree
               env:
                   GITHUB_TOKEN: ${{ github.token }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
                   PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
                   PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
               run: bun scripts/ci-supersede.ts

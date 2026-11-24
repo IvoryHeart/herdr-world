@@ -4,6 +4,10 @@
  * different tree, so the queued run starts at once, and keeps a run that tests
  * the identical tree: the queued run then reuses its result instead of
  * restarting it. A run whose tree is not known yet is cancelled, as before.
+ *
+ * GitHub does not promise to deliver push events in order, so a handler acts
+ * only for the PR's current head and cancels only runs created before its own
+ * run: a stale handler for an earlier push can never cancel a newer push's CI.
  */
 import { execFileSync } from "node:child_process";
 import { checkoutCommitFromLog, SCOPE_JOB } from "./ci-reuse-full-check";
@@ -16,16 +20,26 @@ type Decision = {
   reason: string;
 };
 
-/** @internal Decide, for each unfinished run of an older head, whether it is kept. */
+/**
+ * @internal Decide, for each unfinished run of an older head, whether it is
+ * kept. `currentRunId` is this handler's own run: GitHub numbers runs in the
+ * order it creates them, so only a lower ID can belong to an earlier push.
+ */
 export async function supersede(
   runs: Run[],
   headSha: string,
   tree: string,
   testedTree: (runId: number) => Promise<string | undefined>,
+  currentRunId: number,
 ): Promise<Decision[]> {
   const decisions: Decision[] = [];
   for (const run of runs) {
-    if (run.status === "completed" || run.head_sha === headSha) continue;
+    if (
+      run.status === "completed" ||
+      run.head_sha === headSha ||
+      !(run.id < currentRunId)
+    )
+      continue;
     let tested: string | undefined;
     try {
       tested = await testedTree(run.id);
@@ -69,13 +83,27 @@ if (import.meta.main) {
   const token = process.env.GITHUB_TOKEN ?? "";
   const headRef = process.env.PR_HEAD_REF ?? "";
   const headSha = process.env.PR_HEAD_SHA ?? "";
+  const prNumber = Number(process.env.PR_NUMBER);
+  const currentRunId = Number(process.env.GITHUB_RUN_ID);
   if (
     !/^[\w.-]+\/[\w.-]+$/.test(repo) ||
     !token ||
     !headRef ||
-    !/^[0-9a-f]{40}$/.test(headSha)
+    !/^[0-9a-f]{40}$/.test(headSha) ||
+    !Number.isSafeInteger(prNumber) ||
+    !Number.isSafeInteger(currentRunId)
   )
     throw new Error("Missing CI supersede context");
+  const current = (await (
+    await github(`/repos/${repo}/pulls/${prNumber}`, token)
+  ).json()) as { head: { sha: string } };
+  if (current.head.sha !== headSha) {
+    // A newer push arrived; its own handler decides, so this one cancels nothing.
+    console.log(
+      `The PR head moved past ${headSha.slice(0, 12)}; its newer push supersedes.`,
+    );
+    process.exit(0);
+  }
   const tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], {
     encoding: "utf8",
   }).trim();
@@ -87,22 +115,29 @@ if (import.meta.main) {
   const { workflow_runs: runs } = (await (
     await github(`/repos/${repo}/actions/workflows/ci.yml/runs?${query}`, token)
   ).json()) as { workflow_runs: Run[] };
-  const decisions = await supersede(runs, headSha, tree, async (runId) => {
-    const { jobs } = (await (
-      await github(`/repos/${repo}/actions/runs/${runId}/jobs`, token)
-    ).json()) as { jobs: Job[] };
-    const scope = jobs.find(({ name }) => name === SCOPE_JOB);
-    if (!scope?.conclusion || scope.conclusion === "skipped") return undefined;
-    const log = await (
-      await github(`/repos/${repo}/actions/jobs/${scope.id}/logs`, token)
-    ).text();
-    const commit = checkoutCommitFromLog(log);
-    if (!commit) return undefined;
-    const data = (await (
-      await github(`/repos/${repo}/git/commits/${commit}`, token)
-    ).json()) as { tree: { sha: string } };
-    return data.tree.sha;
-  });
+  const decisions = await supersede(
+    runs,
+    headSha,
+    tree,
+    async (runId) => {
+      const { jobs } = (await (
+        await github(`/repos/${repo}/actions/runs/${runId}/jobs`, token)
+      ).json()) as { jobs: Job[] };
+      const scope = jobs.find(({ name }) => name === SCOPE_JOB);
+      if (!scope?.conclusion || scope.conclusion === "skipped")
+        return undefined;
+      const log = await (
+        await github(`/repos/${repo}/actions/jobs/${scope.id}/logs`, token)
+      ).text();
+      const commit = checkoutCommitFromLog(log);
+      if (!commit) return undefined;
+      const data = (await (
+        await github(`/repos/${repo}/git/commits/${commit}`, token)
+      ).json()) as { tree: { sha: string } };
+      return data.tree.sha;
+    },
+    currentRunId,
+  );
   for (const { id, action, reason } of decisions) {
     if (action === "cancel") {
       try {

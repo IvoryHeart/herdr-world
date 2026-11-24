@@ -9,7 +9,7 @@ for compatibility with branch rules.
 | --- | --- | --- |
 | Local pre-commit | `check:commit`: no live `.agents/` files, read-only formatting and lint | Quick feedback before a commit; not a delivery gate |
 | Local pre-push | `check:changed`: static checks and affected non-browser units; gate/configuration changes run all non-browser units | Affected tests save local work; CI remains authoritative |
-| Privacy on every branch push and PR | Scan added lines in every introduced commit for private material, with redacted diagnostics | Independent of PR creation and validation scope; a push to a branch with an open PR leaves the scan to the PR run; local pre-push scans the actual pushed refs too |
+| Privacy on every branch push and PR | Scan added lines in every introduced commit for private material, with redacted diagnostics | Independent of PR creation and validation scope; every push is scanned (GitHub starts no PR run for a conflicted PR), so a PR from a branch of this repository starts no second scan and only a fork PR's run scans; local pre-push scans the actual pushed refs too |
 | CI on a PR | Validate the proposed merge; check its description and changelog policy | One shared scope decision; native platforms and browser shards keep separate runners |
 | CI on main | Execute the complete integrated matrix, unless the merged PR's full run tested the identical tree; then reuse it and report "Reused from run N" | A different tree is different code, so it runs in full |
 | Main gate | Classify failed push CI, rerun a recognized infrastructure failure once, or prepare an issue and revert | Does not merge a revert; green main resolves earlier alerts |
@@ -60,8 +60,13 @@ that label requests a fresh stability run. When main has moved since the head
 was last tested, a title or description edit or such a label restores the head's
 latest Delivery checks verdict if it was tested on the current base commit or
 one of its ancestors: the event changed no code, so a green status stays as it
-was. A red, cancelled or unfinished latest verdict is never passed over; that
-event validates afresh. The selection is not re-derived for the new base.
+was. A red latest verdict is held instead: Validation scope fails at "Hold the
+head's red result", naming the red run, and no code job starts, so the required
+checks stay red without testing the unchanged code again. Re-running the red
+run's failed jobs, then the held run's failed jobs, decides afresh; a held run
+tested no code, so it never hides another result or counts as evidence. A
+cancelled or unfinished latest verdict is never passed over; that event
+validates afresh. The selection is not re-derived for the new base.
 A new commit or base change tests the new merge as usual. GitHub's historical PR association can change, so
 it is not proof of the tested base. Reuse binds the selected Delivery job
 to its run and attempt, reads the full checkout SHA only from that job's checkout
@@ -93,6 +98,9 @@ for every later run of that tree. Nothing cancels a CI run in flight
 and [CI supersede](../.github/workflows/ci-supersede.yml) cancels that run only
 when its checkout tested a different tree, or has not recorded its tree yet. A
 re-push of an identical tree keeps the run, and the queued run reuses its result.
+GitHub may deliver push events out of order, so a supersede handler acts only
+while its push is still the PR head, and cancels only runs created before its
+own run.
 A fork's read-only token cannot cancel, so its older run finishes first.
 
 A new commit (`opened`, `synchronize`, `reopened`) reuses the newest finished
