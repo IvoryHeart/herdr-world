@@ -163,7 +163,9 @@ browser suites and behavioral verification run in CI. The explicit local
 `check:delivery` always runs the complete `verification:gate`.
 
 CI partitions all accepted models across three runners by measured work
-(`scripts/verification-timings.json`), retaining the same model inventory and bounds. Every model still runs
+(`scripts/verification-timings.json`), retaining the same model inventory and bounds.
+The core runtime and IDE lifecycle models each own a runner and run their
+independent exhaustive checks two at a time; the third runner takes the rest. Every model still runs
 its maintained bounds, replay and sensitivity checks. Partial `ci-shard` artifacts
 are not canonical evidence. The final aggregate requires all groups and every
 model exactly once, current source/revision and matching tool identities, plus

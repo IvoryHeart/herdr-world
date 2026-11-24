@@ -22,19 +22,29 @@ import execution from "../tools/quint/execution.json";
 import limits from "../tools/quint/resources.json";
 
 export const CI_VERIFICATION_SHARDS = 3;
+/**
+ * Models whose exhaustive checks run two at a time, each on a whole two-CPU
+ * shard. Each is longer than any other model and, run one check at a time,
+ * ide-lifecycle alone passed the shard deadline on slower hosted runners
+ * (#1346). Their isolation is structural, whatever the timing weights say.
+ */
+const DEDICATED_VERIFICATION_MODELS = [
+  "herdr-core-runtime",
+  "ide-lifecycle",
+] as const;
+const dedicated = new Set<string>(DEDICATED_VERIFICATION_MODELS);
 export function verificationShard(index: number): string[] {
   assert(
     Number.isInteger(index) && index >= 1 && index <= CI_VERIFICATION_SHARDS,
     "Invalid verification shard",
   );
-  // The core control pool owns two CPUs. Keep its isolation structural even
-  // after a faster timing refresh; balance all remaining models over two groups.
+  // Remaining models share the other groups, balanced by measured weight.
   return [
-    ["herdr-core-runtime"],
+    ...DEDICATED_VERIFICATION_MODELS.map((model) => [model]),
     ...balanceShards(
-      verificationModels.filter((model) => model !== "herdr-core-runtime"),
+      verificationModels.filter((model) => !dedicated.has(model)),
       timings.seconds,
-      CI_VERIFICATION_SHARDS - 1,
+      CI_VERIFICATION_SHARDS - DEDICATED_VERIFICATION_MODELS.length,
     ),
   ][index - 1]!;
 }
@@ -114,10 +124,10 @@ export async function runVerificationShard(
   signal: AbortSignal,
 ) {
   const models = verificationShard(index);
-  const core = models.includes("herdr-core-runtime");
+  const parallel = models.some((model) => dedicated.has(model));
   assert(
-    !core || models.length === 1,
-    "Parallel core controls require a dedicated shard",
+    !parallel || models.length === 1,
+    "Parallel model controls require a dedicated shard",
   );
   const identity = await source(root, signal);
   const output = resolve(
@@ -154,7 +164,7 @@ export async function runVerificationShard(
             graceMs: execution.workerGraceMs,
             env: {
               ...process.env,
-              HERDR_CORE_CONTROL_WORKERS: core ? "2" : "1",
+              HERDR_VERIFICATION_CONTROL_WORKERS: parallel ? "2" : "1",
             },
           },
         );
