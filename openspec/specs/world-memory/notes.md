@@ -92,7 +92,7 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   from the town center's ring (**Buildings** → **Library**), from Board's hub (**Memory**, on the
   selected agent or workspace), from an agent window's settings (**Memory**)
   or from Settings (**Agents** → **Library (memory)**, or search "memory").
-  On a phone the library folds to a book sign on the town center's left wing.
+  A phone stands the library there too: pan right from Town's first view.
   The library's sign counts files, stale files and shared files across up to four
   hosts, read at most every five minutes; it never shows contents.
 - The left column (a picker on a phone) chooses a reader: everything on a host,

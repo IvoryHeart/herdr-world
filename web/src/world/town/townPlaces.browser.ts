@@ -39,21 +39,41 @@ export async function checkTownPlaces(
     keys.includes("post") && keys.includes("warehouse"),
     `Town has no post office or warehouse building: ${keys.join(", ")}`,
   );
-  if (phone)
+  // A phone stands every civic building a desktop does (#1351).
+  check(
+    ["library", "observatory", "apartments"].every((key) =>
+      keys.includes(key as TownPlaceKey),
+    ),
+    `${phone ? "a phone's" : "a desktop"} Town lacks a place building: ${keys.join(", ")}`,
+  );
+
+  const rect = () => canvas.getBoundingClientRect();
+  if (phone) {
+    // At home, the post office's full sign stands over its own house, on
+    // screen and clear of the town center beside it (#1351).
+    const sign = host
+      .querySelector<HTMLElement>('[data-town-place="post"]')!
+      .getBoundingClientRect();
+    const view = rect();
+    const { zoom, camera, layout } = town();
+    // The town center stands two tiles of lawn right of the post office.
+    const centerLeft =
+      view.left +
+      (layout!.places.post!.x1 + 2 * 16 - camera.x) * zoom +
+      view.width / 2;
     check(
-      !keys.includes("library") && !keys.includes("observatory"),
-      "a phone's Town drew the library or observatory as buildings",
+      sign.left >= view.left &&
+        sign.right <= view.right &&
+        sign.top >= view.top,
+      `a phone's post office sign is off screen at home: ${JSON.stringify(sign)}`,
     );
-  else
     check(
-      ["library", "observatory", "apartments"].every((key) =>
-        keys.includes(key as TownPlaceKey),
-      ),
-      `a desktop Town lacks a place building: ${keys.join(", ")}`,
+      sign.right <= centerLeft,
+      `a phone's post office sign covers the town center: ${sign.right} > ${centerLeft}`,
     );
+  }
 
   // Zoom all the way out, so every building is on screen at once.
-  const rect = () => canvas.getBoundingClientRect();
   for (let step = 0; step < 40; step += 1) {
     const before = town().zoom;
     const box = rect();

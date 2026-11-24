@@ -247,29 +247,21 @@ export function townOutdoor(
   add(paintTownWarehouseYard(), house.x * T, house.yardY * T, house.yardY * T);
   // The library right of the center: its hall, its reading garden.
   const library = townLibraryLot(layout);
-  if (library) {
-    add(
-      paintTownLibraryHouse(),
-      library.x * T,
-      library.y * T,
-      library.yardY * T,
-    );
-    add(
-      paintTownLibraryYard(),
-      library.x * T,
-      library.yardY * T,
-      library.yardY * T,
-    );
-  }
+  add(paintTownLibraryHouse(), library.x * T, library.y * T, library.yardY * T);
+  add(
+    paintTownLibraryYard(),
+    library.x * T,
+    library.yardY * T,
+    library.yardY * T,
+  );
   // The observatory right of the library, its door on the street.
   const observatory = townObservatoryLot(layout);
-  if (observatory)
-    add(
-      paintTownObservatory(),
-      observatory.x * T,
-      observatory.y * T,
-      (observatory.y + observatory.h) * T,
-    );
+  add(
+    paintTownObservatory(),
+    observatory.x * T,
+    observatory.y * T,
+    (observatory.y + observatory.h) * T,
+  );
   // The apartment building beside the plaza, where finished agents live on.
   const apartments = townApartmentsLot(layout);
   if (apartments)

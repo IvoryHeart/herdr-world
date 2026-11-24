@@ -23,8 +23,8 @@ const ROOF = T;
 
 /**
  * Each place's building in world pixels: the house itself, never its yard,
- * whose letters, parcels and benches are their own targets. A narrow town
- * folds the library and observatory to signs, so they have no building.
+ * whose letters, parcels and benches are their own targets. A narrow
+ * (phone) town stands every one of them too (#1351).
  */
 export function townPlaceBoxes(
   layout: TownLayout,
@@ -47,10 +47,9 @@ export function townPlaceBoxes(
   const post = townPostLotBeside(layout.center);
   house("post", post, post.yardY);
   const library = townLibraryLot(layout);
-  if (library) house("library", library, library.yardY);
+  house("library", library, library.yardY);
   const observatory = townObservatoryLot(layout);
-  if (observatory)
-    house("observatory", observatory, observatory.y + observatory.h);
+  house("observatory", observatory, observatory.y + observatory.h);
   const apartments = townApartmentsLot(layout);
   if (apartments) house("apartments", apartments, apartments.y + apartments.h);
   const warehouse = townHarbourLot(layout).warehouse;
@@ -73,8 +72,7 @@ export function townPlaceAt(
  * What each place opens, registered by the place's own component with the
  * same action its sign takes, so the building and the sign never differ.
  * A place without an opener (a town drawn alone, a Library no host serves)
- * is not a target. A place folded to a sign, or with no room for its
- * building, still registers: it has no box here, but the town center's
+ * is not a target. A place with no room for its building still registers: it has no box here, but the town center's
  * Buildings ring (townCenterBuildings.ts) opens it.
  */
 export class TownPlaces {

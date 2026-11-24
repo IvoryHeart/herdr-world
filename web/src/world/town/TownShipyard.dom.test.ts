@@ -472,7 +472,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     await harbour.close();
   });
 
-  test("a phone's town has the harbour too, and a signpost that flies there", async () => {
+  test("a phone's town has the harbour as a building, reached by panning", async () => {
     serve("ready");
     // A phone's camera, at home on the first building.
     const camera = new TownCamera();
@@ -507,22 +507,15 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     // Off-screen at home: the coast lies right of what the phone shows.
     const coast = camera.toScreen(lot.coast * T, 0).x;
     expect(coast).toBeGreaterThan(viewport.width);
-    const fold =
-      harbour.host.querySelector<HTMLButtonElement>(".town-harbour-fold")!;
-    expect(fold.textContent).toContain(`${repos.length}`);
-    expect(fold.querySelectorAll(".town-harbour-fold-lanes i").length).toBe(
-      repos.length,
-    );
-    expect(fold.getAttribute("aria-label")).toBe(
-      `Shipyard: ${repos.length} projects. Go to the harbour`,
-    );
-    // The signpost flies to the sea: the promenade and a whole pier across
-    // the phone, the harbour's sign at the top.
-    await act(async () => fold.click());
-    expect(harbour.opened).toEqual([]);
-    expect(invalidated).toEqual(["harbour"]);
+    // The harbour is the building, reached by panning (#1351): no signpost
+    // stands on the town center in its place.
+    expect(harbour.host.querySelector(".town-harbour-fold")).toBeNull();
+    // At home zoom, panned to the shore, the promenade and a whole pier fit
+    // across the phone, the harbour's sign at the top.
     const placed = townHarbourPlaced(lot, repos.length);
     const pier = townLanePierAt(placed, 0);
+    const home = camera.limits!.home;
+    camera.jumpTo((lot.streetEnd * T + pier.x + pier.w) / 2, camera.y, home);
     const from = camera.toScreen(
       lot.streetEnd * T,
       townHarbourSignRow(placed) * T,
@@ -530,19 +523,14 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     const to = camera.toScreen(pier.x + pier.w, pier.y);
     expect(from.x).toBeGreaterThanOrEqual(viewport.inset.left - 1);
     expect(to.x).toBeLessThanOrEqual(viewport.width - viewport.inset.right + 1);
-    expect(from.y).toBeGreaterThanOrEqual(viewport.inset.top - 1);
-    expect(to.y).toBeLessThan(viewport.height);
+    expect(invalidated).toEqual([]);
     await harbour.close();
   });
 
-  test("a town drawn alone: the signpost opens the releases", async () => {
+  test("a town drawn alone: the harbour's sign opens the releases on a phone too", async () => {
     serve("ready");
     const harbour = await mount(true);
-    await act(async () =>
-      harbour.host
-        .querySelector<HTMLButtonElement>(".town-harbour-fold")!
-        .click(),
-    );
+    await act(async () => harbour.sign()!.click());
     expect(harbour.opened).toEqual(["releases"]);
     await harbour.close();
   });

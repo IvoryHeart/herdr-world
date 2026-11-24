@@ -14,9 +14,8 @@ import {
 } from "../memory/artefactShelfClient";
 import { useTownPlace } from "./useTownPlace";
 import { memorySummary } from "../memory/memoryModel";
-import type { TownCenterLot } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
-import { townLibraryFoldAt, townLibraryLot } from "./townLibraryLot";
+import { townLibraryLot } from "./townLibraryLot";
 import "./townLibrary.css";
 
 /** Hosts the sign counts at most, so a big fleet never fans out reads. */
@@ -75,8 +74,8 @@ export function townLibrarySignText(counts: TownLibraryCounts) {
  * Town's library (#1027): what agents and projects remember, as a hall of
  * books right of the town center. Its sign counts the files, stale ones and
  * shelves several agents share, from catalogs read at most every few
- * minutes, and what agents made (#1327); it opens the Library. A narrow town folds it to a book sign on
- * the center's left wing.
+ * minutes, and what agents made (#1327); it opens the Library. A narrow
+ * (phone) town stands it beside the center as a wide one does (#1351).
  */
 const openLibrary = () => openMemoryLibrary();
 
@@ -102,8 +101,6 @@ export const TownLibrary = memo(function TownLibrary({
   const text = townLibrarySignText(counts);
   const label = `Library: ${text === "…" ? "reading" : text}. Open`;
   const lot = townLibraryLot(layout);
-  if (!lot)
-    return <FoldedSign center={layout.center} counts={counts} label={label} />;
   return (
     <button
       type="button"
@@ -127,34 +124,3 @@ export const TownLibrary = memo(function TownLibrary({
     </button>
   );
 });
-
-function FoldedSign({
-  center,
-  counts,
-  label,
-}: {
-  center: TownCenterLot;
-  counts: TownLibraryCounts;
-  label: string;
-}) {
-  const at = townLibraryFoldAt(center, T);
-  return (
-    <button
-      type="button"
-      className="town-library-fold"
-      style={{ left: at.x, top: at.y }}
-      aria-label={label}
-      title="Library"
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => {
-        event.stopPropagation();
-        openMemoryLibrary();
-      }}
-    >
-      <span className="town-library-book" aria-hidden="true" />
-      {counts.status === "ready" ? (
-        <b aria-hidden="true">{counts.files}</b>
-      ) : null}
-    </button>
-  );
-}

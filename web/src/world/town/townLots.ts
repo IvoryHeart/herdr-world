@@ -229,13 +229,14 @@ export function townPlaceLots(
     width += shift;
   } else width = Math.max(width, left + widestLot + ROAD_GAP);
   // The library stands right of the center (townLibraryLot.ts) and the
-  // observatory right of the library (townObservatoryLot.ts) on the lawn a
-  // wide town keeps there; a town narrower than that grows to hold them,
-  // which moves nothing that stands.
-  if (!narrow)
-    width = Math.max(
-      width,
-      center.x + center.w + TOWN_LIBRARY_ROOM + TOWN_OBSERVATORY_ROOM + MARGIN,
-    );
+  // observatory right of the library (townObservatoryLot.ts) on the lawn
+  // there; a town narrower than that grows to hold them, which moves nothing
+  // that stands. A stacked (phone) town's civic row runs right of its column
+  // the same way, above its side roads, which start below the first street
+  // (#1351).
+  width = Math.max(
+    width,
+    center.x + center.w + TOWN_LIBRARY_ROOM + TOWN_OBSERVATORY_ROOM + MARGIN,
+  );
   return { buildings: placed, verticalRoads, roads, width, center, shift };
 }

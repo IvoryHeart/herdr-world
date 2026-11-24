@@ -32,11 +32,9 @@ import {
   TOWN_PIER_BOLLARDS,
   TOWN_PIER_SLIPWAY,
   townBerthAt,
-  townHarbourFoldAt,
   townHarbourLot,
   townHarbourPlaced,
   townHarbourSignRow,
-  townHarbourView,
   townLanePierAt,
   townLaneSignAt,
   townLanesShown,
@@ -194,8 +192,8 @@ export function townHarbourSignText(
  * hull or a ship's "All releases" opens that project in the Work lens's
  * Releases tab; a ship opens its release's card. Open pull requests are the
  * warehouse's (TownWarehouse.tsx). A narrow (phone) town has the same
- * harbour right of its stacked buildings, reached by panning or zooming,
- * and a signpost on the town center's left wing that flies there.
+ * harbour right of its stacked buildings and civic row, reached by panning
+ * or zooming (#1351).
  */
 export const TownShipyard = memo(function TownShipyard({
   layout,
@@ -224,7 +222,6 @@ export const TownShipyard = memo(function TownShipyard({
     townHarbourLot(layout),
     shown + (rest.length ? 1 : 0),
   );
-  const fold = townHarbourFoldAt(layout.center, T);
   /** Keyboard focus on an off-screen ship or sign pans it into view. */
   const reveal: Reveal = (event) => {
     const handle = renderer.current;
@@ -241,75 +238,16 @@ export const TownShipyard = memo(function TownShipyard({
     )
       return;
     const own = target.closest<HTMLElement>("[data-at-x]");
-    const at = own
-      ? { x: Number(own.dataset.atX), y: Number(own.dataset.atY) }
-      : fold;
+    if (!own) return;
+    const at = { x: Number(own.dataset.atX), y: Number(own.dataset.atY) };
     handle.camera.flyTo(at.x, at.y, handle.camera.z, 0.4);
     handle.invalidate("focus");
-  };
-  /**
-   * The folded sign's signpost: fly to the harbour, framing the promenade
-   * and the first lanes' piers across the view at no more than home zoom;
-   * without a camera (a town drawn alone), open the releases instead.
-   */
-  const sail = () => {
-    const handle = renderer.current;
-    if (!handle) {
-      openWork?.("releases");
-      return;
-    }
-    const { camera } = handle;
-    const { width, inset } = camera.viewport;
-    const view = townHarbourView(lot, width - inset.left - inset.right);
-    // Never closer than the town's own first view: a large portrait screen
-    // shows the harbour at the scale it shows the buildings.
-    const z = camera.clampZoom(Math.min(view.z, camera.limits?.home ?? view.z));
-    const focus = camera.focusPoint();
-    camera.flyTo(view.x, view.top + (focus.y - inset.top) / z, z);
-    handle.invalidate("harbour");
   };
   const signText = townHarbourSignText(lanes, chosen);
   const label = `Shipyard: ${signText}${openWork ? ". Open releases" : ""}`;
   const signAt = { x: lot.streetEnd * T + 4, y: townHarbourSignRow(lot) * T };
-  // A phone's first view keeps the stacked buildings; a signpost on the
-  // town center's left wing points the way to the sea.
-  const signpost =
-    layout.formFactor === "narrow" ? (
-      <button
-        type="button"
-        className="town-harbour-fold"
-        data-quiet={!lanes.length || undefined}
-        style={{ left: fold.x, top: fold.y }}
-        aria-label={`Shipyard: ${signText}. Go to the harbour`}
-        title="Shipyard"
-        onPointerDown={(event) => event.stopPropagation()}
-        onFocus={reveal}
-        onClick={(event) => {
-          event.stopPropagation();
-          sail();
-        }}
-      >
-        <span className="town-harbour-icon" aria-hidden="true" />
-        {lanes.length ? (
-          <span className="town-harbour-fold-lanes" aria-hidden="true">
-            {lanes.slice(0, 8).map((lane) => (
-              <i
-                key={lane.repo}
-                style={{ "--lane": lane.color } as CSSProperties}
-                data-tone={beaconOf(lane.view)}
-              />
-            ))}
-          </span>
-        ) : null}
-        <span aria-hidden="true">{foldedText(lanes, chosen)}</span>
-        <span className="town-harbour-fold-arrow" aria-hidden="true">
-          →
-        </span>
-      </button>
-    ) : null;
   return (
     <>
-      {signpost}
       <div
         className="town-harbour"
         data-quiet={!lanes.length || undefined}
@@ -368,13 +306,6 @@ function focusVisible(element: HTMLElement) {
   } catch {
     return false;
   }
-}
-
-/** The folded sign's words: the projects, or why there are none. */
-function foldedText(lanes: readonly Lane[], chosen: ShipyardView) {
-  if (lanes.length) return `${lanes.length}`;
-  if (chosen.status === "loading" || chosen.status === "reading") return "…";
-  return chosen.status === "open" ? "0" : "closed";
 }
 
 /** The waiting count on the slipway's board: "4", "200+", "?". */

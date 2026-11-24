@@ -277,52 +277,7 @@
   white-space: nowrap;
 }
 
-/* Folded: a wooden plate on the town center, like the billboard's. */
-.town-world .town-warehouse-fold {
-  position: absolute;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 24px;
-  padding: 2px 6px;
-  color: #ffe9c2;
-  background: #6e4a2e;
-  border: 2px solid #3b2414;
-  border-radius: 4px;
-  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
-  font:
-    700 10px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  white-space: nowrap;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.town-world .town-warehouse-fold:focus-visible {
-  outline: 2px solid #ffd166;
-  outline-offset: 2px;
-}
-
-/* A crate, the folded sign's and the card's mark. */
-.town-warehouse-mark {
-  position: relative;
-  flex: none;
-  display: inline-block;
-  width: 16px;
-  height: 13px;
-  background: transparent no-repeat 0 0 / 16px 13px;
-  image-rendering: pixelated;
-}
-
-.town-warehouse-popover-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* The folded sign's and the pile's list. */
+/* The pile's list. */
 .popover-content.town-warehouse-popover {
   z-index: 6100;
   display: grid;
@@ -339,22 +294,6 @@
     inset 0 0 0 2px #3b2414,
     0 3px 0 #3b2414;
   font-size: 12px;
-}
-
-.town-warehouse-popover-title {
-  font:
-    700 11px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  letter-spacing: 0.06em;
-  color: #ffd166;
-}
-
-.town-warehouse-popover-counts,
-.town-warehouse-popover-note {
-  margin: 0;
-  color: #a9b2a4;
 }
 
 .town-warehouse-list {
@@ -414,7 +353,6 @@
   color: #a9b2a4;
 }
 
-.town-warehouse-setup,
 .town-warehouse-all {
   justify-self: start;
   min-height: 28px;

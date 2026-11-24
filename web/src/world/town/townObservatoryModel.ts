@@ -5,8 +5,6 @@ import {
   usageRuns,
 } from "../usage/usageModel";
 import type { UsageReadState } from "../usage/usageStore";
-import { TOWN_CENTER_FRIEZE_Y, type TownCenterLot } from "./townCenter";
-import { TOWN_TILE } from "./townLayout";
 import {
   townFuelGauges,
   townFuelNotes,
@@ -37,19 +35,6 @@ export {
   townObservatoryReserve,
   type TownObservatoryLot,
 } from "./townObservatoryLot";
-
-/**
- * Where a narrow town's folded observatory sign hangs, in world pixels: on
- * the center's right wing, inside a phone's home view. The library's folded
- * sign hangs on the left wing (townLibraryLot.ts); the warehouse's sign
- * hangs below this one on the right wing (townWarehouseModel.ts).
- */
-export function townObservatoryFoldAt(center: TownCenterLot) {
-  return {
-    x: (center.x + center.w) * TOWN_TILE - 60,
-    y: center.y * TOWN_TILE + TOWN_CENTER_FRIEZE_Y + 4,
-  };
-}
 
 /** One window of one harness on the sign. */
 export type TownObservatoryCell =

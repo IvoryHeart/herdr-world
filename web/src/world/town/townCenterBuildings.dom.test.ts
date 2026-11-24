@@ -76,10 +76,11 @@ if (process.env.TOWN_BUILDINGS_DOM !== "1") {
       shape,
     ).layout;
 
-  test("a phone's folded observatory still opens Usage from the Buildings ring", async () => {
+  test("a phone's observatory opens Usage from its building and the Buildings ring", async () => {
     const layout = town(TOWN_SHAPES.phone);
-    // A phone folds the observatory to a sign: it has no building.
-    expect(townObservatoryLot(layout)).toBeNull();
+    // A phone stands the observatory as a building, as a wide town does (#1351).
+    const lot = townObservatoryLot(layout);
+    expect(lot.x).toBeGreaterThan(layout.center.x + layout.center.w);
     const usage: string[] = [];
     let opened = 0;
     const onApartments = () => {
@@ -113,9 +114,9 @@ if (process.env.TOWN_BUILDINGS_DOM !== "1") {
       "apartments",
       "observatory",
     ]);
-    // The ring's entry and the folded sign open the same place.
+    // The ring's entry and the building's sign open the same place.
     ring.find((action) => action.id === "observatory")!.run();
-    host.querySelector<HTMLButtonElement>(".town-observatory-fold")!.click();
+    host.querySelector<HTMLButtonElement>(".town-observatory-sign")!.click();
     expect(usage).toEqual(["budget", "budget"]);
     ring.find((action) => action.id === "apartments")!.run();
     expect(opened).toBe(1);
