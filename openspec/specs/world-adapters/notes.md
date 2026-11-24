@@ -8,6 +8,16 @@
 
 **Code:**
 
+- `server/src/world/agent-commands.ts`
+- `server/src/world/agent-commands.test.ts`
+- `server/src/cli/world-agents.ts`
+- `server/src/cli/world-agents.test.ts`
+- `server/src/world/world-cli-service.ts`
+- `server/src/service/world-service.ts`
+- `server/src/herdr-core/host-runtime.ts`
+- `server/src/herdr-core/agent-cli.test.ts`
+- `server/src/adapters/runtime-ports.ts`
+- `server/src/adapters/herdr.ts`
 - `server/src/adapters/registry.ts`
 - `server/src/adapters/conformance.test.ts`
 - `server/src/agent/`
@@ -18,6 +28,27 @@
 - Unsupported or missing observations stay explicit rather than guessed.
 
 ## Usage reference
+
+### Runtime-neutral agent reads
+
+With the local World service running, `herdr-world runtime ls [--json]` lists
+connections per host with runtime kind, version (unknown when unavailable), state,
+actionability, supported agent verbs and a native manual pointer. These commands
+reach local and SSH runtimes through World without requiring their native CLI.
+
+`herdr-world agent ls [--connection ID] [--json]` returns current agents and status.
+Use its percent-encoded `CONNECTION/ADDRESS` target with
+`herdr-world agent read TARGET [--lines N] [--json]`. Any verified local agent can
+read another connection's screen. Reads print plain text even when piped;
+`--lines` keeps the last 1–10000 screen lines without scrolling the native terminal.
+A bare address is accepted only when unique across actionable connections.
+Ambiguity names the qualified candidates. Unknown targets, non-actionable connections
+and unsupported runtime verbs have explicit reasons; refresh the listing after a
+reconnect. World never substitutes another connection or a retired reply.
+Group `agent://` names retain their separate group-target meaning.
+
+The [active contract](../../changes/world-agent-cli/specs/world-agent-cli/spec.md)
+also plans send, wait and start; those write commands are not delivered here.
 
 ### Session task summaries
 

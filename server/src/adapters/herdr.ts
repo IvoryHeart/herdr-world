@@ -83,6 +83,7 @@ export const herdrAdapter: AdapterDefinition<
   descriptor: {
     kind: "herdr",
     version: 1,
+    agentCommands: { verbs: ["ls", "read"], manual: "herdr --skill" },
     capabilities: {
       completeListings: true,
       events: true,

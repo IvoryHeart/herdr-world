@@ -456,12 +456,26 @@ use [core's official installation/upgrade instructions](https://github.com/herdr
 on that host, then reconnect. The
 [runtime table](../openspec/specs/herdr-core-runtime/notes.md#runtime-support) covers versions and platform limits.
 
-| Command | Effect on the default local runtime |
+| Command | Effect |
 | --- | --- |
+| `herdr-world runtime ls [--json]` | List each host's runtime connections, kinds, versions, state, actionability, agent verbs and native manual pointers. |
+| `herdr-world agent ls [--connection ID] [--json]` | List current agents with qualified targets and observed status through World. |
+| `herdr-world agent read TARGET [--lines N] [--json]` | Any verified local caller can read the target's screen through its exact runtime port. |
 | `herdr-world herdr status` | Show the Herdr TUI installation and running server. |
 | `herdr-world herdr setup` | Register login startup and start if down; keep a running server. With no TUI, use/install core. |
 | `herdr-world herdr upgrade` | Upgrade the TUI to World's verified release and refresh its integrations/plugin. |
 | `herdr-world herdr upgrade --install` | Also install core if neither runtime exists. |
+
+Agent read targets use the percent-encoded `CONNECTION/ADDRESS` returned by agent ls,
+for example `core-a/t2` or `tui-a/w1%3Ap2`. A bare address must be unique across all
+actionable connections; ambiguity lists candidates. Stale/non-actionable connections,
+unknown targets and unsupported verbs are refused explicitly, without another
+connection as fallback. Reads print text even through a pipe; `--json` returns the
+World response envelope. `--lines` accepts 1–10000 and trims current screen text,
+never native scrollback. Runtime manuals (`herdr --skill`, `hc --skill`) are pointers,
+not forwarding commands. These reads use the local authenticated World service,
+including its SSH connections; the native runtime CLIs need not be installed locally.
+`herdr status|setup|upgrade` continue to manage installation on the default local runtime.
 
 Core setup uses its official HTTPS releases and checks the archive's SHA-256
 before running it. macOS also verifies the signed app executable. It installs:

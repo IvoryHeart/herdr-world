@@ -1,10 +1,11 @@
 import type { TObject, TSchema } from "typebox";
-import type { RuntimePorts } from "./runtime-ports";
+import type { RuntimeAgentCapabilities, RuntimePorts } from "./runtime-ports";
 
 /** Data only: safe to serialize to clients. Configuration contains no secrets. */
 export type AdapterDescriptor = {
   kind: string;
   version: number;
+  agentCommands?: RuntimeAgentCapabilities;
   capabilities: {
     completeListings: boolean;
     events: boolean;

@@ -1,3 +1,4 @@
+import { agentHuman, parseAgentArgs } from "./world-agents";
 import { parseBoardElementArgs } from "./world-elements";
 import {
   type CliCommand,
@@ -290,6 +291,7 @@ export function parseWorldArgs(
   word: string,
   args: string[],
 ): { command: string; params: Record<string, unknown>; json?: boolean } {
+  if (word === "agent" || word === "runtime") return parseAgentArgs(word, args);
   if (word === "group" || word === "pod" || word === "team")
     return parseGroupArgs(word, args);
   if (word === "memory") return parseMemoryArgs(args);
@@ -616,6 +618,8 @@ export function parseWorldArgs(
 
 /** One line per result for people; agents should prefer --json. */
 function human(command: string, reply: Reply): string {
+  if (command === "runtime ls" || command.startsWith("agent "))
+    return agentHuman(command, reply.result);
   if (command === "usage") {
     const usage = reply.result as WorldUsageAnalytics;
     const number = (v: number | null) => (v === null ? "unknown" : String(v));
@@ -724,7 +728,7 @@ export async function runWorldCommand(
     if (String(params.markdown).length > 48_000)
       throw new UsageError("Pod import is limited to 48000 characters");
   }
-  const asJson = json === true || !isTty;
+  const asJson = json === true || (!isTty && command !== "agent read");
   const wait = params.wait === true;
   const timeoutMs = Math.max(0, Number(params.timeout) || 0) * 1000;
   delete params.wait;
@@ -866,6 +870,16 @@ export async function runWorldCommand(
 
 const WORDS: { name: string; summary: string; actions?: string[] }[] = [
   {
+    name: "runtime",
+    summary: "agents: list connected runtimes and supported agent verbs",
+    actions: ["ls"],
+  },
+  {
+    name: "agent",
+    summary: "agents: list and read agents on any World runtime",
+    actions: ["ls", "read"],
+  },
+  {
     name: "usage",
     summary: "read local effort, token, cost and pull request analytics",
   },
@@ -923,34 +937,38 @@ export function worldCommands(): CliCommand[] {
     summary,
     actions,
     flags:
-      name === "usage"
-        ? [
-            "--json",
-            "--window",
-            "--group-by",
-            "--connection",
-            "--generation",
-            "--pane",
-            "--room",
-            "--project",
-            "--fixture",
-          ]
-        : name === "memory"
-          ? [
-              "--json",
-              "--connection",
-              "--generation",
-              "--workspace",
-              "--agent",
-              "--harness",
-              "--source",
-              "--path",
-              "--file",
-              "--revision",
-              "--user-action",
-              "--yes",
-            ]
-          : ["--json", "--connection"],
+      name === "runtime"
+        ? ["--json"]
+        : name === "agent"
+          ? ["--json", "--connection", "--lines"]
+          : name === "usage"
+            ? [
+                "--json",
+                "--window",
+                "--group-by",
+                "--connection",
+                "--generation",
+                "--pane",
+                "--room",
+                "--project",
+                "--fixture",
+              ]
+            : name === "memory"
+              ? [
+                  "--json",
+                  "--connection",
+                  "--generation",
+                  "--workspace",
+                  "--agent",
+                  "--harness",
+                  "--source",
+                  "--path",
+                  "--file",
+                  "--revision",
+                  "--user-action",
+                  "--yes",
+                ]
+              : ["--json", "--connection"],
     help: () =>
       name === "usage"
         ? USAGE_HELP

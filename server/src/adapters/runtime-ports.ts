@@ -1,3 +1,9 @@
+/** Agent verbs offered by typed ports; native manuals are documentation only. */
+export type RuntimeAgentCapabilities = {
+  verbs: readonly ("ls" | "read")[];
+  manual?: string;
+};
+
 /** Operations belong to the captured connection/runtime, never a global client. */
 export type OperationOptions = {
   timeoutMs?: number;

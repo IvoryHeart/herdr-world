@@ -1,3 +1,4 @@
+import type { AgentCommands } from "./agent-commands";
 import { runBoardElementCommand } from "./world-cli-elements";
 import { planBoardPatch } from "./board-plan";
 import type { MemoryAction } from "../../../shared/memory";
@@ -83,6 +84,7 @@ import {
  * Nothing here merges, deletes Herdr objects or reaches outside World.
  */
 export type WorldCliDeps = {
+  agents?: AgentCommands;
   memory?(
     action: MemoryAction,
     params: Record<string, unknown>,
@@ -617,6 +619,14 @@ export function createWorldCli(deps: WorldCliDeps) {
     host: CliHost | undefined,
     recheck: () => void,
   ): Promise<unknown> {
+    if (command === "runtime ls" || command.startsWith("agent ")) {
+      if (!deps.agents)
+        throw new CliError(
+          "unavailable",
+          "World agent commands are unavailable",
+        );
+      return deps.agents.call(command, params, recheck);
+    }
     if (command.startsWith("memory "))
       return runMemoryCli(deps.memory, command, params, recheck);
     const record = recordWithDeps.bind(null, completion);
