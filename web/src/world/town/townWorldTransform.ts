@@ -7,6 +7,7 @@ import type { TownClock } from "./scene/ports";
  * restyles only these elements, not the whole overlay under `.town-world`
  * (about 2,000 elements, #1248). townWorldTransform.test.ts fails when a rule
  * that reads either variable selects an element this list misses.
+ *
  * @internal
  */
 export const TOWN_ZOOM_READERS = [
@@ -59,6 +60,7 @@ export const TOWN_ZOOM_READERS = [
  * Elements that read the zoom only while focused: about one semantic target
  * per desk, agent and room (over 1,000 at scale), whose keyboard focus ring
  * keeps one width on screen. Only the focused one carries the zoom.
+ *
  * @internal
  */
 export const TOWN_ZOOM_FOCUS_READERS = [
@@ -74,6 +76,7 @@ const FOCUS_READERS = TOWN_ZOOM_FOCUS_READERS.join(",");
  * re-rasterizing its many children each frame (which showed undrawn tiles);
  * once still, it goes back to an ordinary layer, so text is rasterized at the
  * settled zoom exactly as before.
+ *
  * @internal
  */
 export const TOWN_WORLD_SETTLE_MS = 250;

@@ -50,6 +50,7 @@ function parseRuntimeGrouping(value: unknown): RuntimeGrouping | null {
  * One browser's copy of the setting. The page has one (below); the
  * exhaustive schedule test (server/src/bridge/runtime-grouping-schedules.test.ts) runs several
  * against one service.
+ *
  * @internal
  */
 export function createRuntimeGroupingPreference(storage: PreferenceStorage) {

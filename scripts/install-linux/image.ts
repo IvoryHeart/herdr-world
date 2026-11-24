@@ -13,7 +13,11 @@ import { dirname } from "node:path";
 type Run = (args: string[]) => Promise<string>;
 const context = "scripts/install-linux";
 
-/** Only dependency inputs belong here: scenario edits must still build on a cache hit. @internal */
+/**
+ * Only dependency inputs belong here: scenario edits must still build on a cache hit.
+ *
+ * @internal
+ */
 export function installBaseIdentity(
   inputs = [
     readFileSync(`${context}/Dockerfile.base`, "utf8"),
