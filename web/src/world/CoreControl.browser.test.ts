@@ -431,3 +431,165 @@ test.skipIf(!chrome).each([1440, 390])(
   },
   120000,
 );
+
+// Cmd+K opens a found herdr-core agent in Spaces (#1356), with Chrome's own
+// mouse and keys: a click, Enter and the row's Open terminal button.
+test.skipIf(!chrome)(
+  "core control: a found core agent opens in Spaces by click and by Enter",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "core-control-find-"));
+    const { assets } = await buildWorldBrowserBundle("CoreControl", dir);
+    const snapshot = JSON.stringify(await coreSnapshot());
+    const result = Promise.withResolvers<string[]>();
+    const requested = Promise.withResolvers<void>();
+    const profile = join(dir, "profile"),
+      log = join(dir, "chrome.log");
+    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let socket: WebSocket | undefined;
+    let driver: InputDriver | undefined;
+    const KEYS: Record<
+      string,
+      { code: string; keyCode: number; text?: string; modifiers?: number }
+    > = {
+      k: { code: "KeyK", keyCode: 75, modifiers: 2 },
+      Enter: { code: "Enter", keyCode: 13, text: "\r" },
+      Escape: { code: "Escape", keyCode: 27 },
+    };
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        const url = new URL(request.url);
+        const path = url.pathname;
+        if (path === "/result") {
+          result.resolve(await request.json());
+          return new Response("ok");
+        }
+        if (path === "/snapshot") return new Response(snapshot);
+        if (path === "/input") {
+          const body = (await request.json()) as {
+            click?: { x: number; y: number };
+            key?: string;
+            text?: string;
+          };
+          if (body.click) {
+            const at = { x: body.click.x, y: body.click.y };
+            await driver!.call("Input.dispatchMouseEvent", {
+              type: "mouseMoved",
+              ...at,
+            });
+            await driver!.call("Input.dispatchMouseEvent", {
+              type: "mousePressed",
+              button: "left",
+              buttons: 1,
+              clickCount: 1,
+              ...at,
+            });
+            await driver!.call("Input.dispatchMouseEvent", {
+              type: "mouseReleased",
+              button: "left",
+              buttons: 0,
+              clickCount: 1,
+              ...at,
+            });
+          }
+          if (body.key) {
+            const key = KEYS[body.key]!;
+            const common = {
+              key: body.key,
+              code: key.code,
+              windowsVirtualKeyCode: key.keyCode,
+              modifiers: key.modifiers ?? 0,
+            };
+            await driver!.call("Input.dispatchKeyEvent", {
+              type: key.text ? "keyDown" : "rawKeyDown",
+              ...common,
+              ...(key.text ? { text: key.text } : {}),
+            });
+            await driver!.call("Input.dispatchKeyEvent", {
+              type: "keyUp",
+              ...common,
+            });
+          }
+          if (body.text)
+            await driver!.call("Input.insertText", { text: body.text });
+          return new Response("ok");
+        }
+        if (path === "/viewport-ready") {
+          const port = await waitForChromePort(child!, profile, log);
+          const targets = (await (
+            await fetch(`http://127.0.0.1:${port}/json/list`)
+          ).json()) as { type: string; webSocketDebuggerUrl: string }[];
+          socket = new WebSocket(
+            targets.find((target) => target.type === "page")!
+              .webSocketDebuggerUrl,
+          );
+          await new Promise<void>((resolve, reject) => {
+            socket!.onopen = () => resolve();
+            socket!.onerror = () => reject(new Error("CDP connection failed"));
+          });
+          driver = new InputDriver(socket);
+          await driver.call("Emulation.setEmulatedMedia", {
+            features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+          });
+          await driver.call("Emulation.setDeviceMetricsOverride", {
+            width: 1440,
+            height: 1000,
+            deviceScaleFactor: 1,
+            mobile: false,
+          });
+          return new Response("1440");
+        }
+        if (path === "/") requested.resolve();
+        const asset =
+          path === "/"
+            ? Bun.file(join(dir, "CoreControl/index.html"))
+            : assets.get(path);
+        if (asset) return new Response(asset);
+        if (path.startsWith("/world/") || path.endsWith(".svg")) {
+          const file = Bun.file(
+            join(import.meta.dir, "../../public", path.slice(1)),
+          );
+          if (await file.exists()) return new Response(file);
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+    try {
+      child = Bun.spawn(
+        [
+          chrome!,
+          "--headless=new",
+          "--remote-debugging-port=0",
+          "--window-size=1440,1000",
+          "--enable-webgl",
+          ...(await chromeRenderingFlags(chrome!)),
+          "--disable-dev-shm-usage",
+          "--no-first-run",
+          "--no-default-browser-check",
+          `--user-data-dir=${profile}`,
+          `${server.url.href}?scene=find`,
+        ],
+        { stdout: "ignore", stderr: Bun.file(log) },
+      );
+      const exited = child.exited.then(async (code) => {
+        throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
+      });
+      expect(
+        await waitForBrowserFixture(
+          requested.promise,
+          result.promise,
+          exited,
+          "Core control find",
+          BROWSER_STARTUP_TIMEOUT_MS + 60_000,
+        ),
+      ).toEqual([]);
+    } finally {
+      socket?.close();
+      await stopChrome(child);
+      server.stop(true);
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+  180000,
+);

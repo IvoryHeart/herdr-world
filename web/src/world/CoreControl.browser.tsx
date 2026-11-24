@@ -292,6 +292,138 @@ async function startScene() {
   );
 }
 
+/**
+ * Cmd+K finds a herdr-core agent and opens it in Spaces (#1356), with real
+ * input from the test (Chrome's own mouse and keys, so focus moves as it does
+ * for a person): from Town, Board and Spaces, by a click and by Enter.
+ */
+async function findScene() {
+  const width = Number(await (await fetch("/viewport-ready")).text());
+  check(window.innerWidth === width, `viewport ${window.innerWidth}/${width}`);
+  observed.snapshot = await (await fetch("/snapshot")).json();
+  const [
+    { __storeTesting, emptyServerSessionState, store },
+    { worldRuntimeStore },
+    { initializeLayoutPreferences },
+    { initializeShortcutPreferences },
+    { quietGreetingForTest },
+    { default: WorldFoundationApp },
+  ] = await Promise.all([
+    import("../store"),
+    import("./runtimeStore"),
+    import("../layoutPreferences"),
+    import("../shortcutPreferences"),
+    import("./townMasterGreeting"),
+    import("./WorldFoundationApp"),
+  ]);
+  quietGreetingForTest();
+  history.replaceState(null, "", "/");
+  initializeLayoutPreferences();
+  initializeShortcutPreferences();
+  store.init = () => {};
+  const id = "core-fixture";
+  __storeTesting.replaceState({
+    ...store.get(),
+    ...emptyServerSessionState(1),
+    status: "connected",
+    catalogueReady: true,
+    activeConnectionId: id,
+    defaultConnectionId: id,
+    connections: [
+      {
+        id,
+        label: "Fixture core",
+        source: "local-profile",
+        state: "ready",
+        generation: 1,
+        is_default: true,
+      },
+    ],
+  });
+  await worldRuntimeStore.refresh();
+  const root = document.createElement("div");
+  document.body.append(root);
+  createRoot(root).render(<WorldFoundationApp />);
+  const until = async (condition: () => unknown, label: string) => {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      if (condition()) return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error(`timed out: ${label}`);
+  };
+  const input = (body: Record<string, unknown>) =>
+    fetch("/input", { method: "POST", body: JSON.stringify(body) });
+  const clickAt = async (element: Element) => {
+    const box = element.getBoundingClientRect();
+    await input({
+      click: { x: box.left + box.width / 2, y: box.top + box.height / 2 },
+    });
+  };
+  const row = (name: string) =>
+    [...document.querySelectorAll<HTMLElement>("[cmdk-item]")].find(
+      (item) =>
+        item.dataset.value?.includes("world-find-") &&
+        item
+          .querySelector(".command-item-title")
+          ?.textContent?.startsWith(`${name} ·`) === true,
+    );
+  const spacesShows = (address: string) =>
+    document.querySelector(".spaces-core-name") !== null &&
+    store.get().notice === null &&
+    document.querySelector(`.spaces-core [data-core-watch="${address}"]`) !==
+      null;
+  const view = () =>
+    document.querySelector<HTMLSelectElement>('select[aria-label="World view"]')
+      ?.value;
+  const setView = async (next: string) => {
+    const select = document.querySelector<HTMLSelectElement>(
+      'select[aria-label="World view"]',
+    )!;
+    select.value = next;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await until(() => view() === next, `the ${next} view`);
+  };
+  const find = async (name: string) => {
+    await input({ key: "k" });
+    await until(
+      () => document.querySelector(".command-popover input"),
+      "the command box opens",
+    );
+    await input({ text: name });
+    await until(
+      () => row(name),
+      `the box finds ${name}: ${JSON.stringify([...document.querySelectorAll("[cmdk-item]")].map((item) => item.textContent))} input=${document.querySelector<HTMLInputElement>(".command-popover input")?.value}`,
+    );
+    await settle();
+  };
+  await until(
+    () => document.querySelector(".town-new-seat"),
+    "Town shows the core",
+  );
+  await settle(10);
+  for (const [where, how, name, address] of [
+    ["town", "click", "builder", "t2"],
+    ["town", "enter", "reviewer", "t1"],
+    ["board", "click", "builder", "t2"],
+    ["spaces", "click", "reviewer", "t1"],
+    ["spaces", "enter", "builder", "t2"],
+  ] as const) {
+    store.clearNotice();
+    await setView(where);
+    await settle(10);
+    await find(name);
+    if (how === "click") await clickAt(row(name)!);
+    else await input({ key: "Enter" });
+    await settle(20);
+    check(
+      spacesShows(address),
+      `${where}: ${how} on ${name} did not open it in Spaces (view ${view()}, Spaces shows ${document.querySelector(".spaces-core-name")?.textContent ?? "no core terminal"}, notice ${JSON.stringify(store.get().notice)})`,
+    );
+    if (document.querySelector(".command-popover"))
+      await input({ key: "Escape" });
+    await settle();
+  }
+}
 async function run() {
   const viewport = document.createElement("meta");
   viewport.name = "viewport";
@@ -313,6 +445,7 @@ async function run() {
   document.body.append(root);
   const scene = new URLSearchParams(location.search).get("scene");
   if (scene === "start") return startScene();
+  if (scene === "find") return findScene();
   if (scene === "launcher") {
     let closed = 0;
     flushSync(() =>
@@ -405,5 +538,8 @@ async function run() {
 void run()
   .catch((error) => failures.push(String(error)))
   .finally(() =>
-    fetch("/result", { method: "POST", body: JSON.stringify(failures) }),
+    fetch("/result", {
+      method: "POST",
+      body: JSON.stringify(failures),
+    }),
   );
