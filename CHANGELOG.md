@@ -9,7 +9,9 @@ prepared.
 
 ## [Unreleased]
 
-## [0.3.6] - 2026-11-24
+## [0.3.7] - 2026-11-24
+
+0.3.6 was tagged but never published; 0.3.7 ships all of it.
 
 ### Added
 
@@ -40,6 +42,7 @@ prepared.
 - The Code view keeps VS Code loaded behind other views, says why an IDE didn't open, and shows Markdown previews and extension panels in VS Code and OpenVSCode Server.
 - Typing in Chat no longer lags with many agents open, and releases verify every channel before publishing.
 - Many smaller Town, Board, Bin, Needs you and release-check fixes.
+- Releases publish with their native CI walk; a signed-in agent walk is optional.
 
 ### Known issues
 
@@ -48,7 +51,7 @@ prepared.
 - Codex on Linux core stays unknown when core supplies no native status.
 - Microsoft's VS Code in the Code view needs World on HTTPS or localhost.
 
-Every 0.3.6 change is listed in [docs/changelog/v0.3.6.md](docs/changelog/v0.3.6.md).
+Every 0.3.7 change is listed in [docs/changelog/v0.3.7.md](docs/changelog/v0.3.7.md).
 
 ## [0.3.5] - 2026-11-18
 
