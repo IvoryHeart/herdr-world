@@ -3,6 +3,7 @@
   "cli:ask acknowledge": "deny allow allow deny deny deny",
   "cli:ask answer": "deny allow deny deny deny deny",
   "cli:ask get": "deny allow allow deny deny deny",
+  "cli:ask ls": "deny allow deny deny deny deny",
   "cli:ask withdraw": "deny allow deny deny deny deny",
   "cli:board card group": "deny allow allow deny deny deny",
   "cli:board card move": "deny allow allow deny deny deny",
