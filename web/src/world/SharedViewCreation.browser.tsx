@@ -1159,6 +1159,14 @@ async function run() {
     lastCreated && !visiblePane(lastCreated.pane_id),
     "Late creation reopened an Inspector after explicit close",
   );
+  // Close the Inspectors the cases above left open. Each one remounts its
+  // terminal whenever a visual view mounts again, so a dozen of them made
+  // each completion below wait on that remount, not on its own creation.
+  await action("Close all terminal windows");
+  await until(
+    () => !document.querySelector(".world-managed-window"),
+    "earlier Inspectors closed",
+  );
   await view("spaces");
   const count = created;
   await store.createTab("a");

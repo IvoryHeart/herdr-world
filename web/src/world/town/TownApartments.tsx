@@ -26,8 +26,9 @@ export const TownApartments = memo(function TownApartments({
   const { residents, verified } = useApartments();
   const { pending, now } = useTownApartmentsArrivals();
   const lot = townApartmentsLot(layout);
-  // The building opens what its sign does (#1170).
-  useTownPlace("apartments", lot ? openTownApartments : null);
+  // The building opens what its sign does (#1170). A town too small for it
+  // still opens Apartments from the town center's Buildings ring (#1261).
+  useTownPlace("apartments", openTownApartments);
   if (!lot) return null;
   const count = townApartmentsCount(residents, pending, now);
   const text = count
