@@ -544,7 +544,6 @@
       "server/src/ide/world-ide.ts#ideConnection",
       "server/src/integrations/http.ts#createIntegrationsHttpHandler",
       "server/src/integrations/http.ts#serviceIntegrationsInputs",
-      "server/src/integrations/registry.ts#HARNESS_LABELS",
       "server/src/integrations/registry.ts#harnessEntry",
       "server/src/integrations/registry.ts#metricsEntry",
       "server/src/integrations/registry.ts#runtimeEntry",

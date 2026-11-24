@@ -147,23 +147,28 @@ if (process.env.COMMAND_BOX_KEY_DOM !== "1") {
               },
             ],
             placeholder: "Find an agent",
-            find: (search) =>
-              search.includes("harbor")
-                ? {
-                    heading: "In World",
-                    actions: [
-                      {
-                        key: "find-builder",
-                        icon: null,
-                        title: "builder",
-                        detail: "Agent · atlas › harbor",
-                        score: 0.8,
-                        run: () => chosen.push("builder"),
-                      },
-                    ],
-                  }
-                : null,
           },
+          // World's finds, given in every view, Spaces included (#1329).
+          find: (search) =>
+            search.includes("harbor")
+              ? {
+                  heading: "In World",
+                  actions: [
+                    {
+                      key: "find-builder",
+                      icon: null,
+                      title: "builder",
+                      detail: "Agent · atlas › harbor",
+                      score: 0.8,
+                      run: () => chosen.push("builder"),
+                      secondary: {
+                        label: "Show in Town",
+                        run: () => chosen.push("show builder"),
+                      },
+                    },
+                  ],
+                }
+              : null,
         }),
       ),
     );
@@ -204,6 +209,30 @@ if (process.env.COMMAND_BOX_KEY_DOM !== "1") {
       );
     });
     expect(chosen).toEqual(["builder"]);
+    expect(popover()).toBeNull();
+    // Shift+Enter takes the find's second action: show it in this view.
+    act(() => {
+      document.body.dispatchEvent(keyK({ ctrlKey: true }));
+    });
+    const again = popover()!.querySelector<HTMLInputElement>("input")!;
+    act(() => {
+      setValue.call(again, "harbor");
+      again.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(
+      popover()!.querySelector(".command-item-secondary")?.textContent,
+    ).toBe("Show in Town");
+    act(() => {
+      again.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(chosen).toEqual(["builder", "show builder"]);
     expect(popover()).toBeNull();
     // The phone's menu opens it by event; its key, pressed inside, closes it.
     act(() => openCommandBox());

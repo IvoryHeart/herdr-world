@@ -5,9 +5,9 @@ import {
   sourceEntry,
   type VaultStatus,
 } from "../../../shared/integrations";
+import { HARNESS_LABELS } from "../../../shared/harnessLabels";
 import type { WorldSourceStatus } from "../../../shared/worldSources";
 import type { WorldIntegrationStatus } from "../cli/integration";
-import type { WorldHarness } from "../cli/integration-paths";
 import type { ConnectionState } from "../connections/types";
 import type { OfficeObservabilityConfiguration } from "../world/observability";
 
@@ -152,27 +152,6 @@ export function metricsEntry(
     control: "metrics",
   };
 }
-
-export const HARNESS_LABELS: Partial<Record<WorldHarness, string>> = {
-  claude: "Claude Code",
-  codex: "Codex",
-  pi: "Pi",
-  omp: "Oh My Pi",
-  copilot: "GitHub Copilot",
-  devin: "Devin",
-  droid: "Droid",
-  kimi: "Kimi Code",
-  opencode: "OpenCode",
-  kilo: "Kilo Code",
-  hermes: "Hermes",
-  qodercli: "Qoder",
-  qwen: "Qwen Code",
-  letta: "Letta",
-  cursor: "Cursor",
-  mastracode: "Mastra Code",
-  "antigravity-cli": "Antigravity",
-  grok: "Grok",
-};
 
 /**
  * A harness is listed once it is installed here or carries World's skill. A

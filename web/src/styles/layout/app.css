@@ -123,6 +123,15 @@
   display: contents;
 }
 
+/* What Spaces shows in place of a Herdr tab (a herdr-core terminal). */
+.spaces-surface-owner {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 .workspace-terminal-surface > .terminal-shell,
 .workspace-terminal-surface > .pane-layout,
 .workspace-terminal-surface > .pane-switcher-layout {

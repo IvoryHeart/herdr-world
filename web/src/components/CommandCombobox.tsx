@@ -1,5 +1,5 @@
 import { useCreationProgress } from "../creationRequests";
-import { paneAgentListing, paneAgentTitle } from "../agentName";
+import { paneAgentListing } from "../agentName";
 import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import {
   ArrowDown,
@@ -28,9 +28,8 @@ import { useEffect, useMemo, useState } from "react";
 import { COMMAND_BOX_OPEN_EVENT, commandBoxKey } from "../commandBoxKey";
 import { luckyWorktreeBranchName } from "../luckyName";
 import { normalizeSearchText } from "../searchText";
-import { SHORTCUT_NUMBERS, type ShortcutNumber } from "../shortcutBindings";
+import { SHORTCUT_NUMBERS } from "../shortcutBindings";
 import {
-  getShortcutSnapshot,
   shortcutLabel,
   shortcutMatches,
   shortcutTitle,
@@ -52,7 +51,7 @@ import {
 import type { FileExplorerEntry, Pane, Tab, Workspace } from "../types";
 import { shortId } from "../utils";
 import { canCreateWorktree, worktreeCreationSource } from "../worktree";
-import { AgentIcon } from "./AgentIcon";
+import { ActionItem } from "./CommandActionItem";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { ConfirmDialog, TextInputDialog } from "./ModalDialogs";
 import {
@@ -60,9 +59,7 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandInput,
-  CommandItem,
   CommandList,
-  CommandShortcut,
 } from "./ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
@@ -96,6 +93,13 @@ export type ActionDefinition = {
   disabledReason?: string | null;
   /** How well it matches the search, where something else matched it. */
   score?: number;
+  /** Shown at the row's end, such as a found agent's runtime and status. */
+  trailing?: React.ReactNode;
+  /**
+   * A second way to choose it: Shift+Enter, or the row's button (World's
+   * finds: show it in the current view instead of opening it).
+   */
+  secondary?: { label: string; run: () => void };
   run: () => void;
 };
 
@@ -108,8 +112,17 @@ export type CommandExtension = {
   context?: OwnerContext;
   captureKey: string | null;
   groups: readonly ActionGroupDefinition[];
-  /** What a search finds besides actions, such as World's agents. */
+  /**
+   * What a search finds besides actions: World's agents, rooms and
+   * terminals on every runtime. The shell gives it to the box in every view,
+   * Spaces included (#1329).
+   */
   find?: (search: string) => ActionGroupDefinition | null;
+  /**
+   * A visual view's own select for a World node, as clicking it there does:
+   * the finds' second action. The box itself never calls it.
+   */
+  showNode?: (nodeId: string) => void;
   placeholder?: string;
 };
 
@@ -275,6 +288,7 @@ function OwnedCommandCombobox({
   onSelectTab,
   arrangementControl,
   extension = EMPTY_COMMAND_EXTENSION,
+  find,
   onShowShortcuts,
 }: {
   operationalShortcutsEnabled?: boolean;
@@ -284,6 +298,8 @@ function OwnedCommandCombobox({
   onSelectTab?: (tabId: string) => void | Promise<unknown>;
   arrangementControl?: WindowArrangementControl;
   extension?: CommandExtension;
+  /** World's finds (CommandExtension.find), in every view. */
+  find?: CommandExtension["find"];
   onShowShortcuts?: () => void;
 }) {
   useCreationProgress();
@@ -384,13 +400,6 @@ function OwnedCommandCombobox({
     s.panes.find((p) => p.pane_id === s.layout?.focused_pane_id) ??
     s.panes.find((p) => p.tab_id === activeTab?.tab_id && p.focused) ??
     s.panes.find((p) => p.tab_id === activeTab?.tab_id);
-  const agents = useMemo(
-    () =>
-      s.panes
-        .filter((p) => p.agent && p.agent_status !== "unknown")
-        .sort((a, b) => paneAgentListing(a).localeCompare(paneAgentListing(b))),
-    [s.panes],
-  );
   const focusedWorkspaceTabs = useMemo(
     () =>
       s.tabs.filter(
@@ -968,21 +977,8 @@ function OwnedCommandCombobox({
       },
     });
   }
-  for (const pane of agents) {
-    agentActions.push({
-      key: `focus-agent-${pane.pane_id}`,
-      icon: <AgentIcon agent={pane.agent} compact />,
-      title: `Focus agent: ${paneAgentListing(pane)}`,
-      detail: pane.agent_status,
-      keywords: [
-        "switch agent",
-        "open agent",
-        "select agent",
-        paneAgentTitle(pane),
-      ],
-      run: () => store.focusPane(pane.pane_id),
-    });
-  }
+  // Finding an agent is World's (#1329): its finds list every runtime's
+  // agents, so this connection's own list is not repeated here.
 
   const settingsGroups = useSettingsCommandGroups(search);
   const helpActions: ActionDefinition[] = onShowShortcuts
@@ -1027,7 +1023,7 @@ function OwnedCommandCombobox({
         },
       )
     : [];
-  const findGroups = (search.trim() ? [extension.find?.(search)] : []).filter(
+  const findGroups = (search.trim() ? [find?.(search)] : []).filter(
     (group): group is ActionGroupDefinition => Boolean(group),
   );
   const actionGroups: ActionGroupDefinition[] = [
@@ -1053,8 +1049,9 @@ function OwnedCommandCombobox({
           { heading: "Workspaces", actions: workspaceActions },
           { heading: "Worktrees", actions: worktreeActions },
           { heading: "Tabs", actions: tabActions },
-          { heading: "Panes", actions: paneActions },
-          { heading: "Agents", actions: agentActions },
+          // Closing the active agent is a pane action; finding agents is
+          // World's "In World" group.
+          { heading: "Panes", actions: [...paneActions, ...agentActions] },
         ]
       : [
           {
@@ -1216,6 +1213,27 @@ function OwnedCommandCombobox({
           }}
           onKeyDownCapture={(event) => {
             if (!operationalShortcutsEnabled) return;
+            if (
+              event.key === "Enter" &&
+              event.shiftKey &&
+              !event.altKey &&
+              !event.ctrlKey &&
+              !event.metaKey &&
+              !event.nativeEvent.isComposing
+            ) {
+              const chosen = displayedActionGroups
+                .flatMap((group) => group.actions)
+                .find(
+                  (action) =>
+                    actionCommandValue(action) === commandSelectedValue,
+                );
+              if (chosen?.secondary && !chosen.disabledReason) {
+                event.preventDefault();
+                event.stopPropagation();
+                run(chosen.secondary.run);
+                return;
+              }
+            }
             runCommandNumberShortcut(
               event,
               numberedActions,
@@ -1257,6 +1275,18 @@ function OwnedCommandCombobox({
                       keywords={action.keywords}
                       danger={action.danger}
                       disabledReason={action.disabledReason}
+                      trailing={action.trailing}
+                      secondary={
+                        action.secondary && !action.disabledReason
+                          ? {
+                              label: action.secondary.label,
+                              run: () => {
+                                if (operationalShortcutsEnabled)
+                                  run(action.secondary!.run);
+                              },
+                            }
+                          : undefined
+                      }
                       onSelect={() => {
                         if (
                           operationalShortcutsEnabled &&
@@ -1401,66 +1431,5 @@ function OwnedCommandCombobox({
         />
       ) : null}
     </>
-  );
-}
-
-function ActionItem({
-  value,
-  icon,
-  title,
-  detail,
-  shortcut,
-  numberShortcutIndex,
-  keywords,
-  danger,
-  onSelect,
-  disabledReason,
-}: {
-  value: string;
-  icon: React.ReactNode;
-  title: string;
-  detail?: string;
-  shortcut?: string;
-  numberShortcutIndex?: number;
-  keywords?: string[];
-  danger?: boolean;
-  onSelect: () => void;
-  disabledReason?: string | null;
-}) {
-  useShortcutPreferences();
-  const id =
-    numberShortcutIndex === undefined
-      ? null
-      : (`command.${numberShortcutIndex + 1}` as `command.${ShortcutNumber}`);
-  const numberShortcut = id ? shortcutLabel(id) : null;
-  return (
-    <CommandItem
-      value={value}
-      disabled={!!disabledReason}
-      title={disabledReason ?? undefined}
-      keywords={keywords}
-      onSelect={onSelect}
-      className={danger ? "is-danger" : undefined}
-      aria-keyshortcuts={
-        id
-          ? getShortcutSnapshot()
-              .preset.bindings[id].map((key) => key.replace("Ctrl", "Control"))
-              .join(" ") || undefined
-          : undefined
-      }
-    >
-      <span className="command-item-icon">{icon}</span>
-      <span className="command-item-text">
-        <span className="command-item-title">{title}</span>
-        {disabledReason || detail ? (
-          <span className="command-item-detail">
-            {disabledReason ?? detail}
-          </span>
-        ) : null}
-      </span>
-      {numberShortcut || shortcut ? (
-        <CommandShortcut>{numberShortcut ?? shortcut}</CommandShortcut>
-      ) : null}
-    </CommandItem>
   );
 }
