@@ -1,9 +1,8 @@
 import { apartmentsKey } from "../apartments/register";
 import { defineFeature, featureKey } from "../contract";
-import {
-  createArtefactShelf,
-  type ArtefactShelfService,
-} from "../../world/artefact-shelf";
+// Type only: the service passes the factory in through the kernel, so the
+// feature catalog (loaded by the storage worker) stays free of runtime code.
+import type { ArtefactShelfService } from "../../world/artefact-shelf";
 import { artefactsVerbs } from "./verbs";
 
 export const artefactsKey = featureKey<ArtefactShelfService>("artefacts");
@@ -20,7 +19,7 @@ export const feature = defineFeature({
   verbs: artefactsVerbs,
   create(kernel, get) {
     const apartments = get(apartmentsKey).apartments;
-    const shelf = createArtefactShelf({
+    const shelf = kernel.createArtefactShelf({
       now: () => kernel.clock.now(),
       residents: () =>
         apartments.available ? apartments.list().residents : [],
