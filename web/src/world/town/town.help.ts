@@ -47,7 +47,7 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     place: "town",
     where: "Town, top left corner",
     control: "town.board-chip",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: { scene: "town" },
   },
   {
@@ -63,7 +63,7 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     place: "town",
     where: "Town, beside the town board at the top left",
     control: "town.master",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: { scene: "town", sizes: ["desktop"] },
   },
   {
@@ -80,7 +80,7 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     place: "town",
     where: "Town, the domed building at the top of the town",
     control: "town.center",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: { scene: "town", press: ['[data-help-opens~="town.center"]'] },
   },
   {
@@ -98,7 +98,7 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     where:
       "Town, the town board at the top left; also the town center ring and Menu",
     control: "town.focus",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: { scene: "town", press: ['[data-help-opens~="town.focus"]'] },
   },
   {
@@ -116,7 +116,7 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     where:
       "Town, the building beside the town center; also Apartments in the town center ring, and Past sessions in Board's hub",
     control: "town.apartments",
-    since: "0.3.6",
+    since: "0.3.7",
     // On a phone the building is below the first view: ALL brings it in.
     picture: { scene: "town", press: [".town-zoom-all"] },
   },
@@ -134,7 +134,7 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     place: "town",
     where: "Town board, under Busy, while an agent is quiet",
     control: "town.quiet",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: { scene: "town", press: ['[data-help="town.board-chip"]'] },
   },
   {
@@ -150,7 +150,7 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     place: "town",
     where: "Town, before a room's name on its plate and its card",
     control: "town.runtime",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: {
       scene: "town",
       press: ['.town-room-card[aria-label*="(herdr-core"]'],
