@@ -13,6 +13,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import {
   appendFileSync,
   existsSync,
+  mkdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -20,8 +21,8 @@ import {
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  assembleChangelog,
   FRAGMENT_DIR,
+  planChangelogAssembly,
   readFragments,
 } from "./changelog-fragments";
 import { isReleaseCandidate, RELEASE_VERSION_RE } from "./release-version";
@@ -281,13 +282,22 @@ function main() {
   // Stable releases first fold changes/ fragments into Unreleased; RCs leave
   // both open for the stable release.
   const fragments = candidate ? [] : readFragments(REPO_ROOT);
+  const assembly = candidate
+    ? null
+    : planChangelogAssembly(REPO_ROOT, changelogText, fragments, version);
   const changelogWrite = candidate
     ? changelogText
     : promoteChangelog(
-        assembleChangelog(changelogText, fragments),
+        assembly?.changelog ?? changelogText,
         version,
         new Date().toISOString().slice(0, 10),
       );
+  if (assembly) {
+    mkdirSync(join(REPO_ROOT, "docs/changelog"), { recursive: true });
+    writeFileSync(join(REPO_ROOT, assembly.detailPath), assembly.detail, {
+      flag: "wx",
+    });
+  }
   writeFileSync(manifestPath, manifestWrite);
   if (!notesExist) writeFileSync(notesPath, releaseNotes);
   if (changelogWrite !== changelogText) {

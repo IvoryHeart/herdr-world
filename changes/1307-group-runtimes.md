@@ -1,5 +1,9 @@
 ### Changed
 
+- Settings → This World → Group runtimes groups a machine's runtimes consistently across Town, navigator, Desk and Board, and shares the choice across browsers.
+
+<!-- detail -->
+
 - One **Group runtimes** setting, under Settings → This World, now groups a
   machine's Herdr TUI and herdr-core the same way in Town, the navigator,
   Desk and Board, and is shared by every browser. With **One per machine**

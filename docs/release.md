@@ -400,6 +400,12 @@ release's generated Formula.
 1. Start from current `origin/main`. Ensure the Unreleased changelog and
    `changes/*.md` fragments accurately describe user-visible changes and the
    current source lineage; preparation assembles the fragments for stable releases.
+   Each summary bullet is one line of at most 280 characters; put optional
+   longer context after `<!-- detail -->` within its heading (see
+   [fragment rules](../changes/README.md)). Run `bun run changelog:check` to
+   check the limits. Rehearse assembly with
+   `bun run changelog:assemble X.Y.Z --dry-run`: it prints the short changelog
+   and full `docs/changelog/vX.Y.Z.md` without changing or deleting files.
    Prepare a concise, reviewed `docs/releases/vX.Y.Z.md` or
    `docs/releases/vX.Y.Z-rc.N.md` covering upgrade steps,
    distribution changes and important limits; the Release workflow uses it as the
@@ -414,8 +420,11 @@ release's generated Formula.
    on `main` and enter the version; it runs the same helper and validation below,
    then commits, pushes, opens a ready release PR and explicitly dispatches CI.
    RCs leave the Unreleased changelog
-   and fragments open; stable preparation assembles any remaining fragments, then
-   promotes Unreleased into a dated release section. The release PR adds no
+   and fragments open; stable preparation assembles short bullets into
+   `CHANGELOG.md` and summaries plus detail into `docs/changelog/vX.Y.Z.md`,
+   links the short section to the full file, then promotes Unreleased into a
+   dated release section. Review both generated files; assembly refuses to
+   overwrite an existing full changelog when new fragments remain. The release PR adds no
    fragment, so its description states
    `Changelog: none — release preparation assembles the existing fragments.` The helper
    drafts later RC notes from the stable notes when no exact RC notes exist; review

@@ -1,5 +1,9 @@
 ### Changed
 
+- Town and the Bin share a countdown based on the bus's route and speed; it leaves a minute after the first rider waits and shows its speed and distance.
+
+<!-- detail -->
+
 - The bin's countdown now comes from Town's bus: its speed (36 km/h) and the
   route past the stops where agents wait and back. The countdown reads when the
   bus is back at Apartments, and an agent at a farther stop gets a longer time.

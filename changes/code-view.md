@@ -1,5 +1,9 @@
 ### Added
 
+- Open a project's host-side VS Code in World's Code view, with local or SSH access, your extensions and theme, and explicit controls to enable, reconnect or stop IDE servers.
+
+<!-- detail -->
+
 - Code view (`/code`, beside Town, Board and Desk): the complete VS Code of
   the host a project is on, inside World on its own address, with your
   extensions, settings and profile there. For a project on an SSH host World

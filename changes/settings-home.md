@@ -1,5 +1,9 @@
 ### Changed
 
+- Find every setting in one Settings home and search, change settings from Cmd+K and open individual settings with a link; Menu now lists the main actions.
+
+<!-- detail -->
+
 - One Settings home and one search replace the old Menu and the Configuration
   dialog on desktop and phone. The Menu now lists Settings, Find or act, Zen
   mode, Help, Upgrade (when offered) and Log out (when signed in); every

@@ -1,5 +1,9 @@
 ### Fixed
 
+- Remove agents from the Bin as soon as they end elsewhere, explain that nothing was closed, and return held agents when their core host restarts.
+
+<!-- detail -->
+
 - An agent held in the Bin that ends by itself (killed or closed outside the
   Bin, on Herdr or herdr-core) now leaves the Bin as soon as World sees it
   gone, with "It ended before the bus came, so nothing was closed.", instead

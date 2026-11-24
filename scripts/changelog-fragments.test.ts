@@ -50,12 +50,12 @@ test("a fragment is one or more known headings followed by bullets", () => {
   expect(
     parseFragment(
       "262.md",
-      "### Fixed\n\n- Repair a thing\n  across two lines.\n- Another fix.\n\n### Added\n\n- New thing.\n",
+      "### Fixed\n\n- Repair a thing.\n- Another fix.\n\n### Added\n\n- New thing.\n",
     ).sections,
   ).toEqual([
     {
       heading: "Fixed",
-      body: "- Repair a thing\n  across two lines.\n- Another fix.",
+      body: "- Repair a thing.\n- Another fix.",
     },
     { heading: "Added", body: "- New thing." },
   ]);
@@ -71,6 +71,48 @@ test("a fragment is one or more known headings followed by bullets", () => {
   ];
   for (const [name, text, error] of bad) {
     expect(() => parseFragment(name, text)).toThrow(error);
+  }
+});
+
+test("summary bullets fit on one line within 280 Unicode characters", () => {
+  expect(() =>
+    parseFragment("limit.md", `### Fixed\r\n\r\n- ${"🙂".repeat(280)}\r\n`),
+  ).not.toThrow();
+  expect(() =>
+    parseFragment("long.md", `### Fixed\n\n- ${"a".repeat(281)}\n`),
+  ).toThrow(
+    "changes/long.md: line 3: summary is 281 characters; maximum is 280. Shorten the bullet and move extra text after <!-- detail -->",
+  );
+  expect(() =>
+    parseFragment("wrapped.md", "### Fixed\n\n- A fix\n  on two lines.\n"),
+  ).toThrow(/line 4:.*one line.*detail/);
+  expect(() => parseFragment("blank.md", "### Fixed\n\n-   \n")).toThrow(
+    /empty bullet/,
+  );
+});
+
+test("each section may end with optional detail excluded from summaries", () => {
+  const fragment = parseFragment(
+    "detail.md",
+    `### Added\n\n- A short addition.\n\n<!-- detail -->\n\nA longer explanation.\n\n- ${"x".repeat(400)}\n  with a continuation.\n\n### Fixed\n\n- A short fix.\n\n<!-- detail -->\n\nMore context.\n`,
+  );
+  expect(fragment.sections).toEqual([
+    {
+      heading: "Added",
+      body: "- A short addition.",
+      detail: `A longer explanation.\n\n- ${"x".repeat(400)}\n  with a continuation.`,
+    },
+    { heading: "Fixed", body: "- A short fix.", detail: "More context." },
+  ]);
+  expect(assembleChangelog(CHANGELOG, [fragment])).not.toContain(
+    "longer explanation",
+  );
+  for (const text of [
+    "### Fixed\n\n<!-- detail -->\n\nOnly detail.",
+    "### Fixed\n\n- A fix.\n\n<!-- detail -->\n",
+    "### Fixed\n\n- A fix.\n\n<!-- detail -->\n\nContext.\n<!-- detail -->\nMore.",
+  ]) {
+    expect(() => parseFragment("bad-detail.md", text)).toThrow(/detail/);
   }
 });
 
@@ -135,7 +177,7 @@ test("the repository changelog and fragments are well formed", () => {
   expect(() => readFragments(root)).not.toThrow();
 });
 
-test("assembling writes CHANGELOG.md, deletes fragments and keeps the README", () => {
+test("assembly writes linked summaries and full detail before deleting fragments", () => {
   const root = mkdtempSync(join(tmpdir(), "changelog-fragments-"));
   roots.push(root);
   mkdirSync(join(root, "changes"));
@@ -144,16 +186,71 @@ test("assembling writes CHANGELOG.md, deletes fragments and keeps the README", (
     join(root, "changes/README.md"),
     "# Changes\n\nNot a fragment.\n",
   );
-  writeFileSync(join(root, "changes/2.md"), "### Added\n\n- Two.\n");
+  writeFileSync(
+    join(root, "changes/2.md"),
+    "### Added\n\n- Two.\n\n<!-- detail -->\n\nTwo's full explanation.\n",
+  );
   writeFileSync(join(root, "changes/11.md"), "### Added\n\n- Eleven.\n");
-  expect(assembleFragments(root)).toEqual(["2.md", "11.md"]);
-  expect(readFileSync(join(root, "CHANGELOG.md"), "utf8")).toContain(
+  expect(assembleFragments(root, "0.2.0")?.names).toEqual(["2.md", "11.md"]);
+  const summary = readFileSync(join(root, "CHANGELOG.md"), "utf8");
+  expect(summary).toContain(
     "- Existing addition.\n- Two.\n- Eleven.\n\n### Fixed",
   );
+  expect(summary).toContain("[Full changelog](docs/changelog/v0.2.0.md)");
+  expect(summary).not.toContain("Two's full explanation.");
+  expect(promoteChangelog(summary, "0.2.0", "2026-02-02")).toContain(
+    "## [0.2.0] - 2026-02-02\n\n[Full changelog](docs/changelog/v0.2.0.md)",
+  );
+  const detail = readFileSync(join(root, "docs/changelog/v0.2.0.md"), "utf8");
+  expect(detail).toBe(
+    "# Herdr World 0.2.0 — full changelog\n\n[All releases](../../CHANGELOG.md)\n\n### Added\n\n- Existing addition.\n\n- Two.\n\nTwo's full explanation.\n\n- Eleven.\n\n### Fixed\n\n- Existing fix\n  with a continuation line.\n",
+  );
+  expect(detail).not.toContain("<!-- detail -->");
+  expect(detail).not.toContain("Released entry.");
   expect(existsSync(join(root, "changes/2.md"))).toBe(false);
   expect(existsSync(join(root, "changes/11.md"))).toBe(false);
   expect(existsSync(join(root, "changes/README.md"))).toBe(true);
-  expect(assembleFragments(root)).toEqual([]);
+  expect(assembleFragments(root, "0.2.0")).toBeNull();
+  expect(readFileSync(join(root, "docs/changelog/v0.2.0.md"), "utf8")).toBe(
+    detail,
+  );
+});
+
+test("dry assembly returns both outputs and leaves every input untouched", () => {
+  const root = mkdtempSync(join(tmpdir(), "changelog-dry-"));
+  roots.push(root);
+  mkdirSync(join(root, "changes"));
+  writeFileSync(join(root, "CHANGELOG.md"), CHANGELOG);
+  const fragment = "### Fixed\n\n- A fix.\n\n<!-- detail -->\n\nIts detail.\n";
+  writeFileSync(join(root, "changes/fix.md"), fragment);
+  const result = assembleFragments(root, "0.2.0", true);
+  expect(result?.changelog).toContain(
+    "[Full changelog](docs/changelog/v0.2.0.md)",
+  );
+  expect(result?.detail).toContain("Its detail.");
+  expect(result?.detailPath).toBe("docs/changelog/v0.2.0.md");
+  expect(readFileSync(join(root, "CHANGELOG.md"), "utf8")).toBe(CHANGELOG);
+  expect(readFileSync(join(root, "changes/fix.md"), "utf8")).toBe(fragment);
+  expect(existsSync(join(root, "docs"))).toBe(false);
+});
+
+test("invalid assembly inputs and an existing full changelog preserve inputs", () => {
+  const root = mkdtempSync(join(tmpdir(), "changelog-invalid-"));
+  roots.push(root);
+  mkdirSync(join(root, "changes"));
+  writeFileSync(join(root, "CHANGELOG.md"), CHANGELOG);
+  writeFileSync(join(root, "changes/fix.md"), "### Fixed\n\n- A fix.\n");
+  for (const version of ["", "../escape", "0.2", "0.2.0-rc.1"]) {
+    expect(() => assembleFragments(root, version)).toThrow(/stable version/);
+  }
+  mkdirSync(join(root, "docs/changelog"), { recursive: true });
+  writeFileSync(join(root, "docs/changelog/v0.2.0.md"), "Reviewed detail.\n");
+  expect(() => assembleFragments(root, "0.2.0")).toThrow(/already exists/);
+  expect(readFileSync(join(root, "CHANGELOG.md"), "utf8")).toBe(CHANGELOG);
+  expect(existsSync(join(root, "changes/fix.md"))).toBe(true);
+  expect(readFileSync(join(root, "docs/changelog/v0.2.0.md"), "utf8")).toBe(
+    "Reviewed detail.\n",
+  );
 });
 
 test("a code PR needs a fragment or a stated reason; docs-only PRs do not", () => {

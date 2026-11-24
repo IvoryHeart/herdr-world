@@ -1,7 +1,11 @@
 ### Changed
 
-- Reduce CI contention with parallel core model controls, concurrent static and unit lanes, precise native inputs, shared macOS installer/launchd runners and exact-input checker/film caches. Reuse owned core checkers and generate targeted replay witnesses after exhaustive fault checks.
+- Reduce CI contention with parallel model and unit checks, precise native inputs, shared macOS runners and reusable checker caches.
 - Check PR description and changelog policy before pushing, and report bounded CI and delivery measurements with `bun run ci:health`.
+
+<!-- detail -->
+
+- Reduce CI contention with parallel core model controls, concurrent static and unit lanes, precise native inputs, shared macOS installer/launchd runners and exact-input checker/film caches. Reuse owned core checkers and generate targeted replay witnesses after exhaustive fault checks.
 
 ### Fixed
 

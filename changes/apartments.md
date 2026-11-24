@@ -1,5 +1,9 @@
 ### Added
 
+- Find sleeping agents in Town's Apartments, search and read their histories, resume Claude and Codex into a room, or evict them; Board and the town center open the same residents.
+
+<!-- detail -->
+
 - Apartments: an apartment building in Town holds every agent not running
   now, asleep and resumable: agents found in each connected host's Claude,
   Codex, Pi and Oh My Pi histories (including those from before Apartments),
@@ -10,5 +14,4 @@
 
 ### Fixed
 
-- A large, animated Town no longer leaves its keyboard and screen-reader
-  targets unfinished for seconds on a slow machine.
+- A large, animated Town no longer leaves its keyboard and screen-reader targets unfinished for seconds on a slow machine.

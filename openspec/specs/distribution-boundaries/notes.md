@@ -38,6 +38,11 @@
 - `scripts/release-walk/`
 - `scripts/prepare-release.ts`
 - `scripts/prepare-release.test.ts`
+- `scripts/changelog-fragments.ts`
+- `scripts/changelog-fragments.test.ts`
+- `scripts/changelog-assembly.test.ts`
+- `changes/README.md`
+- `docs/changelog/` (versioned full changelog output)
 - `server/src/config/service-discovery.ts`
 - `server/src/config/service-uninstall.test.ts`
 - `scripts/`
@@ -67,6 +72,13 @@
   belongs to `build:site`; internal notes parsing also serves source-ownership checks.
 
 ## Usage reference
+
+- Release changelog assembly keeps one-line summaries in `CHANGELOG.md`, links
+  to summaries plus optional detail in `docs/changelog/vX.Y.Z.md`, and consumes
+  fragments only after writing both. [Fragment rules](../../../changes/README.md)
+  own the 280-character limit, detail marker and non-mutating assembly rehearsal;
+  [release preparation](../../../docs/release.md#publishing-a-candidate-or-stable-release)
+  covers the stable-version handoff. Publication notes remain in `docs/releases/`.
 
 ## World update notifications
 

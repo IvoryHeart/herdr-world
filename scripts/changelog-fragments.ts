@@ -1,15 +1,16 @@
 #!/usr/bin/env bun
 // Per-PR changelog fragments (after towncrier news fragments and Changesets).
 // Each user-facing PR adds changes/<pr-number-or-slug>.md; stable release
-// preparation appends them to CHANGELOG.md's Unreleased section and deletes them.
+// preparation writes concise CHANGELOG.md entries and versioned full detail.
 //
 // Usage:
 //   bun scripts/changelog-fragments.ts check            validate every fragment
-//   bun scripts/changelog-fragments.ts assemble         fold fragments into CHANGELOG.md
+//   bun scripts/changelog-fragments.ts assemble X.Y.Z [--dry-run]
 //   bun scripts/changelog-fragments.ts pr <event.json>  require a fragment or opt-out in a PR
 
 import {
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -19,6 +20,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { changedPathsBetween } from "./check-knowledge-map";
 import { isDocumentationPath } from "./ci-reuse-full-check";
+import { isReleaseCandidate, RELEASE_VERSION_RE } from "./release-version";
 
 export const FRAGMENT_DIR = "changes";
 const README = "README.md";
@@ -35,8 +37,10 @@ export const FRAGMENT_HEADINGS = [
 const FRAGMENT_NAME = /^[a-z0-9][a-z0-9-]*\.md$/;
 const NO_CHANGELOG_REASON = /^\s*(?:-\s*)?Changelog:\s*none\s*[-–—:]\s*(.+)$/im;
 const UNRELEASED = "## [Unreleased]\n";
+const SUMMARY_LIMIT = 280;
+const DETAIL_MARKER = "<!-- detail -->";
 
-export type Section = { heading: string; body: string };
+export type Section = { heading: string; body: string; detail?: string };
 export type Fragment = { name: string; sections: Section[] };
 
 /** Parse and validate one fragment; throws with the first problem found. */
@@ -47,7 +51,8 @@ export function parseFragment(name: string, text: string): Fragment {
   if (!FRAGMENT_NAME.test(name)) {
     fail("name must be lower-case letters, digits and hyphens, ending in .md");
   }
-  const raw: Array<{ heading: string; lines: string[] }> = [];
+  const raw: Array<{ heading: string; lines: string[]; detail?: string[] }> =
+    [];
   for (const [index, line] of text
     .replace(/\r\n/g, "\n")
     .split("\n")
@@ -71,27 +76,52 @@ export function parseFragment(name: string, text: string): Fragment {
       raw.push({ heading: title, lines: [] });
       continue;
     }
-    if (!line.trim()) {
-      current?.lines.push("");
-      continue;
-    }
+    if (!line.trim() && !current) continue;
     if (!current) {
       return fail(
         `${at}: start with a "### Added", "### Changed" or "### Fixed" heading`,
       );
     }
-    const first = current.lines.every((entry) => !entry.trim());
-    if (first ? !line.startsWith("- ") : !/^(- |\s{2,}\S)/.test(line)) {
+    if (line.trim() === DETAIL_MARKER) {
+      if (current.detail)
+        fail(`${at}: detail marker appears twice in this section`);
+      if (!current.lines.some((entry) => entry.startsWith("- "))) {
+        fail(`${at}: detail must follow summary bullets`);
+      }
+      current.detail = [];
+      continue;
+    }
+    if (current.detail) {
+      current.detail.push(line.trimEnd());
+      continue;
+    }
+    if (!line.trim()) continue;
+    if (!line.startsWith("- ")) {
       fail(
-        `${at}: entries are "- " bullets; indent continuation lines by two spaces`,
+        `${at}: summary bullets must each be on one line starting with "- "; move extra text after ${DETAIL_MARKER}`,
+      );
+    }
+    const summary = line.slice(2).trim();
+    if (!summary) fail(`${at}: empty bullet`);
+    const length = Array.from(summary).length;
+    if (length > SUMMARY_LIMIT) {
+      fail(
+        `${at}: summary is ${length} characters; maximum is ${SUMMARY_LIMIT}. Shorten the bullet and move extra text after ${DETAIL_MARKER}`,
       );
     }
     current.lines.push(line.trimEnd());
   }
-  const sections: Section[] = raw.map(({ heading, lines }) => {
+  const sections: Section[] = raw.map(({ heading, lines, detail }) => {
     const body = lines.join("\n").trim();
     if (!body) fail(`"### ${heading}" has no entries`);
-    return { heading, body };
+    if (detail && !detail.some((line) => line.trim())) {
+      fail(`"### ${heading}" has an empty detail part`);
+    }
+    return {
+      heading,
+      body,
+      ...(detail ? { detail: detail.join("\n").trim() } : {}),
+    };
   });
   if (!sections.length) fail("no entries");
   return { name, sections };
@@ -112,16 +142,25 @@ export function readFragments(root: string): Fragment[] {
     .map((name) => parseFragment(name, readFileSync(join(dir, name), "utf8")));
 }
 
-/** Append fragment entries to the Unreleased section, grouped by heading. */
-export function assembleChangelog(
-  changelog: string,
-  fragments: Fragment[],
-): string {
+function unreleasedBounds(changelog: string) {
   const start = changelog.indexOf(UNRELEASED);
   if (start < 0) throw new Error("CHANGELOG.md has no Unreleased section");
   const bodyStart = start + UNRELEASED.length;
   const nextRelease = changelog.indexOf("\n## [", bodyStart);
   const end = nextRelease < 0 ? changelog.length : nextRelease + 1;
+  return { bodyStart, end };
+}
+
+/**
+ * Append fragment entries to the Unreleased section, grouped by heading.
+ * @internal Exported for direct assembly regression tests.
+ */
+export function assembleChangelog(
+  changelog: string,
+  fragments: Fragment[],
+  includeDetail = false,
+): string {
+  const { bodyStart, end } = unreleasedBounds(changelog);
   if (!fragments.length) return changelog;
 
   const body = changelog.slice(bodyStart, end);
@@ -140,19 +179,26 @@ export function assembleChangelog(
   };
   for (const fragment of fragments) {
     for (const entry of fragment.sections) {
+      const entryBody =
+        includeDetail && entry.detail
+          ? `${entry.body}\n\n${entry.detail}`
+          : entry.body;
       const existing = sections.find(
         ({ heading }) => heading === entry.heading,
       );
       if (existing) {
         existing.body = existing.body
-          ? `${existing.body}\n${entry.body}`
-          : entry.body;
+          ? `${existing.body}${includeDetail ? "\n\n" : "\n"}${entryBody}`
+          : entryBody;
         continue;
       }
       const before = sections.findIndex(
         ({ heading }) => rank(heading) > rank(entry.heading),
       );
-      sections.splice(before < 0 ? sections.length : before, 0, { ...entry });
+      sections.splice(before < 0 ? sections.length : before, 0, {
+        heading: entry.heading,
+        body: entryBody,
+      });
     }
   }
   const blocks = [
@@ -162,14 +208,56 @@ export function assembleChangelog(
   return `${changelog.slice(0, bodyStart)}\n${blocks.join("\n\n")}\n\n${changelog.slice(end)}`;
 }
 
-/** Fold every fragment into CHANGELOG.md and delete the fragments. */
-export function assembleFragments(root: string): string[] {
+/** Compute both outputs before any release files are changed. */
+export function planChangelogAssembly(
+  root: string,
+  changelog: string,
+  fragments: Fragment[],
+  version: string,
+) {
+  if (!RELEASE_VERSION_RE.test(version) || isReleaseCandidate(version)) {
+    throw new Error("changelog assembly needs a stable version (X.Y.Z)");
+  }
+  if (!fragments.length) return null;
+  const detailPath = `docs/changelog/v${version}.md`;
+  if (existsSync(join(root, detailPath))) {
+    throw new Error(
+      `${detailPath} already exists; refusing to overwrite full changelog`,
+    );
+  }
+  const full = assembleChangelog(changelog, fragments, true);
+  const { bodyStart, end } = unreleasedBounds(full);
+  return {
+    names: fragments.map(({ name }) => name),
+    changelog: assembleChangelog(changelog, fragments).replace(
+      UNRELEASED,
+      `${UNRELEASED}\n[Full changelog](${detailPath})\n`,
+    ),
+    detailPath,
+    detail: `# Herdr World ${version} — full changelog\n\n[All releases](../../CHANGELOG.md)\n\n${full.slice(bodyStart, end).trim()}\n`,
+  };
+}
+
+/** Write both changelogs before deleting fragments; dry runs only compute. */
+export function assembleFragments(
+  root: string,
+  version: string,
+  dryRun = false,
+) {
   const fragments = readFragments(root);
-  if (!fragments.length) return [];
   const path = join(root, "CHANGELOG.md");
-  writeFileSync(path, assembleChangelog(readFileSync(path, "utf8"), fragments));
-  for (const { name } of fragments) rmSync(join(root, FRAGMENT_DIR, name));
-  return fragments.map(({ name }) => name);
+  const result = planChangelogAssembly(
+    root,
+    readFileSync(path, "utf8"),
+    fragments,
+    version,
+  );
+  if (!result || dryRun) return result;
+  mkdirSync(join(root, "docs/changelog"), { recursive: true });
+  writeFileSync(join(root, result.detailPath), result.detail, { flag: "wx" });
+  writeFileSync(path, result.changelog);
+  for (const name of result.names) rmSync(join(root, FRAGMENT_DIR, name));
+  return result;
 }
 
 /**
@@ -214,10 +302,27 @@ function main(argv: string[]) {
     return;
   }
   if (command === "assemble") {
-    const names = assembleFragments(root);
+    const [, version, ...options] = argv;
+    if (
+      !version ||
+      options.some((option) => option !== "--dry-run") ||
+      options.length > 1
+    ) {
+      throw new Error(
+        "Usage: changelog-fragments.ts assemble X.Y.Z [--dry-run]",
+      );
+    }
+    const dryRun = options.includes("--dry-run");
+    const result = assembleFragments(root, version, dryRun);
+    if (dryRun && result) {
+      console.log(
+        `--- CHANGELOG.md ---\n${result.changelog}\n--- ${result.detailPath} ---\n${result.detail}`,
+      );
+      return;
+    }
     console.log(
-      names.length
-        ? `Added ${names.length} fragment(s) to CHANGELOG.md: ${names.join(", ")}`
+      result
+        ? `Added ${result.names.length} fragment(s) to CHANGELOG.md and ${result.detailPath}: ${result.names.join(", ")}`
         : "No changelog fragments to assemble.",
     );
     return;
@@ -263,7 +368,7 @@ function main(argv: string[]) {
     return;
   }
   throw new Error(
-    "Usage: changelog-fragments.ts check | assemble | pr <event.json>",
+    "Usage: changelog-fragments.ts check | assemble X.Y.Z [--dry-run] | pr <event.json>",
   );
 }
 
