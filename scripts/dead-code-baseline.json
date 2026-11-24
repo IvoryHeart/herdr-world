@@ -1209,7 +1209,6 @@
       "web/src/world/officePreferences.ts#DEFAULT_OFFICE_PREFERENCES",
       "web/src/world/officeRoomActions.ts#createdPaneAdmissionRetryDelay",
       "web/src/world/officeRoomActions.ts#createdRootPaneId",
-      "web/src/world/officeRoomActions.ts#officeSpaceForRoom",
       "web/src/world/officeSelection.ts#findOfficeSelection",
       "web/src/world/officeSelection.ts#formatOfficeActivityAge",
       "web/src/world/officeSelection.ts#officeSeatAvailability",

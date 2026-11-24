@@ -14,6 +14,8 @@
 - `web/src/world/town/TownPeek.tsx`
 - `web/src/world/board/BoardPeek.tsx`
 - `web/src/world/WorldInspectorConversation.tsx`
+- `web/src/components/WorkspaceInspectorHost.tsx` (top selector; folds the tabs into the view menu when they do not fit)
+- `web/src/components/WorkspaceInspectorViewSelect.tsx` (the one view menu: phone header and narrow desktop bar)
 - `web/src/world/MadeSummary.tsx` (what the agent made, on its Town peek; opens the Library)
 - `server/src/agent/conversation.ts`
 - `web/src/attachmentUploads.ts`
@@ -23,6 +25,8 @@
 - `web/src/world/WorldInspectorChatWorktree.test.ts`
 - `web/src/components/TerminalComposer.uploads.test.ts`
 - `web/src/world/DeskView.test.ts`
+- `web/src/components/WorkspaceInspectorViewSelect.test.ts`
+- `web/src/world/WorldTerminalHandoff.browser.tsx` (narrow desktop window chooses each view from the view menu)
 
 **Pitfalls:**
 
