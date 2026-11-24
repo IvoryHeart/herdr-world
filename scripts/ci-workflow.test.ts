@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { DESCRIPTION_STEP, SCOPE_JOB, SCOPE_STEP } from "./ci-reuse-full-check";
+import {
+  DESCRIPTION_STEP,
+  SCOPE_JOB,
+  SCOPE_STEP,
+  STABILITY_LABEL,
+} from "./ci-reuse-full-check";
 import {
   worldBrowserShards,
   worldLatencyTrendSuites,
@@ -70,8 +75,7 @@ const worldWorkflow = Bun.YAML.parse(
 };
 
 test("World stability label selects fresh full evidence and three consecutive passes", () => {
-  const requested =
-    "${{ contains(github.event.pull_request.labels.*.name, 'world-browser-stability') }}";
+  const requested = `\${{ contains(github.event.pull_request.labels.*.name, '${STABILITY_LABEL}') }}`;
   expect(workflow.jobs["world-browser"].with?.stability).toBe(requested);
   expect(
     workflow.jobs["validation-scope"].steps.find((step) => step.id === "scope")

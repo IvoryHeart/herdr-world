@@ -54,7 +54,15 @@ description edit tries this before any other choice, so it also reuses a
 documentation, tooling or `world-browser-stability` result with the identical
 selection; it then runs only Validation scope (with the description check),
 Delivery checks and the two macOS report names. The dependency audit is skipped
-with the other leaf jobs, because the reused Delivery result already required it. GitHub's historical PR association can change, so
+with the other leaf jobs, because the reused Delivery result already required it.
+A label other than `world-browser-stability` takes the same first step; adding
+that label requests a fresh stability run. When main has moved since the head
+was last tested, a title or description edit or such a label restores the head's
+latest Delivery checks verdict if it was tested on the current base commit or
+one of its ancestors: the event changed no code, so a green status stays as it
+was. A red, cancelled or unfinished latest verdict is never passed over; that
+event validates afresh. The selection is not re-derived for the new base.
+A new commit or base change tests the new merge as usual. GitHub's historical PR association can change, so
 it is not proof of the tested base. Reuse binds the selected Delivery job
 to its run and attempt, reads the full checkout SHA only from that job's checkout
 action log, and resolves the immutable merge commit. Its returned SHA must match

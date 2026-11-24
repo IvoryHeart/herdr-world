@@ -10,7 +10,7 @@ import {
   isDocumentationPath,
   type ValidationSelection,
 } from "./validation-scope";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 
 type Step = { name: string; conclusion: string | null };
 type Job = {
@@ -70,7 +70,12 @@ function descriptionOnlyFailure(run: Run, jobs: Job[]): boolean {
   );
 }
 
-/** Reuse passing full or identically selected scoped evidence on this exact PR/base/head. */
+/**
+ * Reuse passing full or identically selected scoped evidence on this exact
+ * PR/base/head. With `earlierBase`, a metadata event also restores the head's
+ * latest verdict when it was tested on an earlier commit of the base branch:
+ * the event changed no code, so the status stays what it was before main moved.
+ */
 export async function canReuseFullCheck(
   runs: Run[],
   currentRunId: number,
@@ -82,6 +87,7 @@ export async function canReuseFullCheck(
   jobsForRun: (runId: number) => Promise<Job[]>,
   testedSourceForJob: (jobId: number) => Promise<TestedSource | undefined>,
   selection?: ValidationSelection,
+  earlierBase?: (sha: string) => Promise<boolean>,
 ): Promise<boolean> {
   for (const run of [...runs].sort((left, right) => right.id - left.id)) {
     if (
@@ -90,7 +96,7 @@ export async function canReuseFullCheck(
       !run.pull_requests.some(
         (pr) =>
           pr.number === prNumber &&
-          pr.base.sha === baseSha &&
+          (earlierBase !== undefined || pr.base.sha === baseSha) &&
           pr.head.sha === headSha,
       )
     )
@@ -124,25 +130,32 @@ export async function canReuseFullCheck(
       !source ||
       source.checkoutSha !== source.commitSha ||
       source.parents.length !== 2 ||
-      source.parents[0] !== baseSha ||
       source.parents[1] !== headSha
     )
+      return false;
+    // Any result on this head is the latest verdict, so a red or unrelated
+    // one stops the search instead of exposing older evidence.
+    const movedBase = source.parents[0] !== baseSha;
+    if (movedBase && !(earlierBase && (await earlierBase(source.parents[0]))))
       return false;
     if (fullStep.conclusion === "success") return true;
     if (reuseStep?.conclusion !== "success") return false;
     const applicable = job.steps.find(
       ({ name }) => name === "Verify applicable or reused results",
     );
-    // Docs and tooling proofs reach here only for description edits; their
-    // identical selection binds them exactly as a scoped proof does.
+    // Docs and tooling proofs reach here only for metadata events; their
+    // identical selection binds them exactly as a scoped proof does. On an
+    // earlier base the selection was right for that merge, and its verdict is
+    // restored as it stood rather than re-derived for the new base.
     if (
       source.validation &&
       ["scoped", "docs", "tooling"].includes(source.validation.mode)
     )
       return (
         applicable?.conclusion === "success" &&
-        selection !== undefined &&
-        sameValidationSelection(source.validation.selection, selection)
+        (movedBase ||
+          (selection !== undefined &&
+            sameValidationSelection(source.validation.selection, selection)))
       );
     // Reused successes are not fresh evidence. Older jobs without a proof
     // record cannot establish scoped success, but may lead to a full run.
@@ -223,11 +236,44 @@ export function baseChanged(event: unknown): boolean {
   return changes?.base !== undefined && changes.base !== null;
 }
 
+/** @internal */
+export const STABILITY_LABEL = "world-browser-stability";
+
 /**
- * A title or description edit changes no tested input, so it reuses any
- * passing exact-revision proof before stability, tooling or docs would
- * validate afresh. A new base is a new merge and always validates afresh.
- * Labels reuse only ordinary full or scoped proof.
+ * A PR `labeled` event added the browser stability label, which requests a
+ * fresh stability run.
+ * @internal
+ */
+export function stabilityLabelAdded(event: unknown): boolean {
+  const label = (event as { label?: { name?: unknown } } | null)?.label;
+  return label?.name === STABILITY_LABEL;
+}
+
+/**
+ * `older` is the current base commit or one of its ancestors.
+ * @internal
+ */
+export function isEarlierBase(
+  older: string,
+  current: string,
+  cwd = process.cwd(),
+): boolean {
+  if (!/^[0-9a-f]{40}$/.test(older)) return false;
+  const result = spawnSync(
+    "git",
+    ["merge-base", "--is-ancestor", older, current],
+    { cwd, encoding: "utf8" },
+  );
+  if (result.status === 0) return true;
+  if (result.status === 1) return false;
+  throw new Error(`Cannot compare base commits: ${result.stderr.trim()}`);
+}
+
+/**
+ * A title or description edit, or a label other than the stability label,
+ * changes no tested input, so it reuses the head's passing proof before
+ * stability, tooling or docs would validate afresh. A new base is a new merge
+ * and always validates afresh; so does adding the stability label.
  */
 export async function selectValidationMode(
   action: string | undefined,
@@ -237,6 +283,7 @@ export async function selectValidationMode(
   scoped = false,
   stability = false,
   newBase = false,
+  stabilityAdded = false,
 ): Promise<"docs" | "tooling" | "scoped" | "reuse" | "full"> {
   const reusable = async () => {
     try {
@@ -248,13 +295,14 @@ export async function selectValidationMode(
       return false;
     }
   };
-  if (action === "edited" && !newBase && (await reusable())) return "reuse";
+  const metadata =
+    (action === "edited" && !newBase) ||
+    (action === "labeled" && !stabilityAdded);
+  if (metadata && (await reusable())) return "reuse";
   if (stability) return "full";
   if (toolingOnly) return "tooling";
   if (docsOnly) return "docs";
-  const fresh = scoped ? "scoped" : "full";
-  if (action !== "labeled") return fresh;
-  return (await reusable()) ? "reuse" : fresh;
+  return scoped ? "scoped" : "full";
 }
 
 export function writeValidationOutputs(
@@ -317,6 +365,9 @@ if (import.meta.main) {
     ? fullValidationSelection(process.cwd())
     : repositorySelection(process.cwd(), common, headSha);
   try {
+    const event: unknown = JSON.parse(
+      readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8"),
+    );
     mode = await selectValidationMode(
       process.env.PR_ACTION,
       selection.documentation,
@@ -365,14 +416,14 @@ if (import.meta.main) {
             };
           },
           selection,
+          async (sha) => isEarlierBase(sha, baseSha),
         );
       },
       selection.tooling,
       !selection.full,
       stability,
-      baseChanged(
-        JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8")),
-      ),
+      baseChanged(event),
+      stabilityLabelAdded(event),
     );
   } catch (error) {
     console.error(

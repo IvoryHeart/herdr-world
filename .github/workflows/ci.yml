@@ -35,7 +35,7 @@ concurrency:
     # keeps only the latest pending run). Main gate names every merge since the
     # last green commit when that run fails.
     group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && 'main-push') || github.ref }}
-    # Metadata runs queue behind active validation and reuse its exact-revision
+    # Metadata runs queue behind active validation and reuse the head's latest
     # result. A label must not cancel the check it needs as evidence.
     cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' && github.event.action != 'labeled' }}
 

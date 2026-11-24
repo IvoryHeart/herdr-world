@@ -15,7 +15,10 @@ import {
   checkoutCommitFromLog,
   isDocsOnlyChange,
   isDocumentationPath,
+  isEarlierBase,
   selectValidationMode,
+  STABILITY_LABEL,
+  stabilityLabelAdded,
 } from "./ci-reuse-full-check";
 
 const base = "a".repeat(40);
@@ -50,6 +53,7 @@ const verify = (
   jobs: Record<number, Array<ReturnType<typeof job> & { run_id?: number }>>,
   parents = [base, head],
   commitSha = "d".repeat(40),
+  earlierBase?: (sha: string) => Promise<boolean>,
 ) =>
   canReuseFullCheck(
     runs,
@@ -62,6 +66,8 @@ const verify = (
     async (id) =>
       (jobs[id] ?? []).map((job) => ({ ...job, run_id: job.run_id ?? id })),
     async () => ({ checkoutSha: "d".repeat(40), commitSha, parents }),
+    undefined,
+    earlierBase,
   );
 
 test("mutable PR associations cannot substitute a different tested base", async () => {
@@ -130,18 +136,20 @@ test("metadata events reuse proof while code events always validate", async () =
       }),
     ).toBe("full");
   }
-  expect(
-    await selectValidationMode("labeled", true, async () => {
-      throw new Error("must not query reuse");
-    }),
-  ).toBe("docs");
+  expect(await selectValidationMode("labeled", true, async () => true)).toBe(
+    "reuse",
+  );
+  expect(await selectValidationMode("labeled", true, async () => false)).toBe(
+    "docs",
+  );
 });
 
-test("browser stability requests fresh full evidence even on labels and base changes", async () => {
-  for (const [action, newBase] of [
-    ["opened", false],
-    ["labeled", false],
-    ["edited", true],
+test("browser stability requests fresh full evidence on its label and base changes", async () => {
+  let queried = 0;
+  for (const [action, newBase, added] of [
+    ["opened", false, false],
+    ["labeled", false, true],
+    ["edited", true, false],
   ] as const)
     for (const [docs, tooling, scoped] of [
       [false, false, false],
@@ -154,14 +162,44 @@ test("browser stability requests fresh full evidence even on labels and base cha
           action,
           docs,
           async () => {
-            throw new Error("stability must not restore earlier evidence");
+            queried++;
+            return true;
           },
           tooling,
           scoped,
           true,
           newBase,
+          added,
         ),
       ).toBe("full");
+  expect(queried).toBe(0);
+  // Another label on a stability PR keeps the head's stability verdict.
+  expect(
+    await selectValidationMode(
+      "labeled",
+      false,
+      async () => true,
+      false,
+      false,
+      true,
+    ),
+  ).toBe("reuse");
+  expect(
+    await selectValidationMode(
+      "labeled",
+      false,
+      async () => false,
+      false,
+      false,
+      true,
+    ),
+  ).toBe("full");
+  expect(stabilityLabelAdded({ label: { name: STABILITY_LABEL } })).toBe(true);
+  expect(stabilityLabelAdded({ label: { name: "release-preview" } })).toBe(
+    false,
+  );
+  expect(stabilityLabelAdded({ action: "edited" })).toBe(false);
+  expect(stabilityLabelAdded(null)).toBe(false);
 });
 
 test("a title or description edit reuses exact-revision proof in every mode", async () => {
@@ -345,6 +383,129 @@ test("only a description failure that chose no scope is passed over", async () =
   ).toBe(false);
 });
 
+test("after main moves, a metadata event restores the head's latest verdict on an earlier base", async () => {
+  const older = "c".repeat(40);
+  const ancestor = async (sha: string) => sha === older;
+  const unrelated = async () => false;
+  const earlier = [run(4), run(3, older)];
+  const green = { 3: [job("success")] };
+  // Exact binding alone skips the earlier merge and finds nothing.
+  expect(await verify(earlier, green, [older, head])).toBe(false);
+  expect(await verify(earlier, green, [older, head], undefined, ancestor)).toBe(
+    true,
+  );
+  // A merge on another branch's commit is not an earlier base.
+  expect(
+    await verify(earlier, green, [older, head], undefined, unrelated),
+  ).toBe(false);
+  // The head still binds the tested merge.
+  expect(await verify(earlier, green, [older, base], undefined, ancestor)).toBe(
+    false,
+  );
+  // Chains of reused results lead back to the original verdict.
+  expect(
+    await verify(
+      [run(4), run(3, older), run(2, older)],
+      { 3: [job("skipped", "success", true)], 2: [job("success")] },
+      [older, head],
+      undefined,
+      ancestor,
+    ),
+  ).toBe(true);
+  // Red stays red: a failure on an earlier base stops the search.
+  expect(
+    await verify(
+      [run(4), run(3, older, "failure"), run(2, older)],
+      { 3: [job("failure", "failure")], 2: [job("success")] },
+      [older, head],
+      undefined,
+      ancestor,
+    ),
+  ).toBe(false);
+});
+
+test("an earlier-base scoped verdict is restored without re-deriving its selection", async () => {
+  const { selectValidation } = await import("./validation-scope");
+  const selection = selectValidation(
+    {
+      files: new Set(["scripts/example.test.ts"]),
+      gone: new Set(),
+      deps: new Map(),
+    },
+    ["scripts/example.test.ts"],
+  );
+  const older = "c".repeat(40);
+  const proof = {
+    ...job("skipped", "success", true),
+    run_id: 3,
+    steps: [
+      ...job("skipped", "success", true).steps,
+      { name: "Verify applicable or reused results", conclusion: "success" },
+    ],
+  };
+  const attempt = (parents: string[], applicable = "success") =>
+    canReuseFullCheck(
+      [run(3, older)],
+      4,
+      126,
+      base,
+      head,
+      "Delivery checks",
+      "Run full repository check",
+      async () => [
+        {
+          ...proof,
+          steps: proof.steps.map((step) =>
+            step.name === "Verify applicable or reused results"
+              ? { ...step, conclusion: applicable }
+              : step,
+          ),
+        },
+      ],
+      async () => ({
+        checkoutSha: "d".repeat(40),
+        commitSha: "d".repeat(40),
+        parents,
+        validation: {
+          mode: "scoped",
+          selection: { ...selection, unit: ["scripts/other.test.ts"] },
+        },
+      }),
+      selection,
+      async (sha) => sha === older,
+    );
+  expect(await attempt([older, head])).toBe(true);
+  expect(await attempt([older, head], "failure")).toBe(false);
+  // On the current base the selection must still match exactly.
+  expect(await attempt([base, head])).toBe(false);
+});
+
+test("an earlier base must be the current base or its ancestor", () => {
+  const root = mkdtempSync(join(tmpdir(), "ci-earlier-base-"));
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q");
+    git("config", "user.email", "example@example.invalid");
+    git("config", "user.name", "Example");
+    git("commit", "-q", "--allow-empty", "-m", "first");
+    const first = git("rev-parse", "HEAD");
+    git("commit", "-q", "--allow-empty", "-m", "second");
+    const second = git("rev-parse", "HEAD");
+    git("checkout", "-q", "-b", "other", first);
+    git("commit", "-q", "--allow-empty", "-m", "other");
+    const other = git("rev-parse", "HEAD");
+    expect(isEarlierBase(first, second, root)).toBe(true);
+    expect(isEarlierBase(second, second, root)).toBe(true);
+    expect(isEarlierBase(second, first, root)).toBe(false);
+    expect(isEarlierBase(other, second, root)).toBe(false);
+    expect(isEarlierBase("--all", second, root)).toBe(false);
+    expect(() => isEarlierBase("f".repeat(40), second, root)).toThrow();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("documentation scope follows the PR diff and includes nested Markdown", () => {
   const root = mkdtempSync(join(tmpdir(), "ci-doc-scope-"));
   const git = (...args: string[]) =>
@@ -399,8 +560,14 @@ test("behavioral contracts and packaged notices cannot take the Markdown shortcu
     expect(isDocumentationPath(path)).toBe(true);
 });
 
-test("tooling mode validates every code or label event afresh without querying reuse", async () => {
-  for (const action of ["opened", "synchronize", "reopened", "labeled"]) {
+test("tooling mode validates every code event afresh without querying reuse", async () => {
+  expect(
+    await selectValidationMode("labeled", false, async () => true, true),
+  ).toBe("reuse");
+  expect(
+    await selectValidationMode("labeled", false, async () => false, true),
+  ).toBe("tooling");
+  for (const action of ["opened", "synchronize", "reopened"]) {
     expect(
       await selectValidationMode(
         action,
