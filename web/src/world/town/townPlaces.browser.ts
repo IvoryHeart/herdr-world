@@ -73,6 +73,38 @@ export async function checkTownPlaces(
     );
   }
 
+  // The library's and the observatory's signs keep their screen size, and
+  // filled in they are wider than the lawn between them at a phone's zoom:
+  // neither covers the other, at home or zoomed out (#1351).
+  const civicApart = async (when: string) => {
+    const sign = (key: TownPlaceKey) =>
+      host.querySelector<HTMLElement>(`[data-town-place="${key}"]`);
+    await waitFor(
+      () =>
+        sign("observatory")?.querySelector(".town-observatory-dials") != null &&
+        !sign("library")?.hasAttribute("data-quiet"),
+      "the observatory or library sign never filled in",
+    );
+    const apart = (a: DOMRect, b: DOMRect) =>
+      a.right <= b.left ||
+      b.right <= a.left ||
+      a.bottom <= b.top ||
+      b.bottom <= a.top;
+    const library = sign("library")!.getBoundingClientRect();
+    const others = [
+      ["observatory", sign("observatory")!],
+      ["town center", host.querySelector<HTMLElement>(".town-center-sign")!],
+    ] as const;
+    for (const [name, other] of others) {
+      const box = other.getBoundingClientRect();
+      check(
+        apart(library, box),
+        `a phone's library and ${name} signs overlap ${when}: ${JSON.stringify([library, box])}`,
+      );
+    }
+  };
+  if (phone) await civicApart("at home");
+
   // Zoom all the way out, so every building is on screen at once.
   for (let step = 0; step < 40; step += 1) {
     const before = town().zoom;
@@ -94,6 +126,8 @@ export async function checkTownPlaces(
     await waitFor(() => !town().flying, "the camera kept flying");
     if (Math.abs(town().zoom - before) < 1e-4) break;
   }
+
+  if (phone) await civicApart("zoomed out");
 
   const signs = () =>
     [...host.querySelectorAll<HTMLElement>("[data-town-place]")].map((sign) =>

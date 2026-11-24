@@ -18,8 +18,11 @@ on a wide Town.
   harbour SHALL stay at the town's right edge; each building SHALL be
   reachable by panning at home zoom, at least 44 CSS pixels wide and tall
   there, with its sign readable; no civic building SHALL overlap a host's
-  building, the town center, another civic building or a bus stop; a wide
-  Town's layout SHALL be unchanged
+  building, the town center, another civic building or a bus stop; no
+  civic building's sign SHALL cover another civic building's sign or the
+  town center's plaque at home zoom or zoomed out, whatever the signs say,
+  so a tap on a sign opens that sign's place; a wide Town's layout SHALL be
+  unchanged
 
 #### Scenario: Pan to the library on a phone
 

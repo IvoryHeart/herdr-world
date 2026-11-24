@@ -15,6 +15,7 @@ import {
   type TownObservatory as Observatory,
   type TownObservatoryCell,
 } from "./townObservatoryModel";
+import { townCivicSigns } from "./townCivicSigns";
 import { useOpenTownUsage } from "./TownUsageLens";
 import { useTownPlace } from "./useTownPlace";
 import "./townObservatory.css";
@@ -39,6 +40,7 @@ export const TownObservatory = memo(function TownObservatory({
   const observatory = townObservatory(state, working, Date.now());
   const open = useOpenTownUsage();
   const lot = townObservatoryLot(layout);
+  const at = townCivicSigns(layout, T).observatory;
   const name = `Observatory: ${townObservatorySpoken(observatory)}${open ? ". Open Usage" : ""}`;
   const press = (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -59,7 +61,7 @@ export const TownObservatory = memo(function TownObservatory({
         className="town-observatory-sign"
         data-town-place="observatory"
         data-quiet={observatory.status !== "ready" || undefined}
-        style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 2 }}
+        style={{ left: at.x, top: at.y }}
         aria-label={name}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={press}

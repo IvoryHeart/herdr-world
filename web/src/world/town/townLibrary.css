@@ -26,6 +26,14 @@
   image-rendering: pixelated;
 }
 
+/* A phone hangs it by its top-left corner over the roof, below the
+   observatory's sign and right of the town center's plaque
+   (townCivicSigns.ts), so it covers neither at a phone's zoom (#1351). */
+.town-world .town-library-sign[data-hangs] {
+  transform: scale(clamp(0.5, var(--iz), 2.4));
+  transform-origin: 0 0;
+}
+
 .town-world .town-library-sign:hover {
   filter: brightness(1.06);
 }

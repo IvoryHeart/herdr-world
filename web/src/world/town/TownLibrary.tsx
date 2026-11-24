@@ -15,7 +15,7 @@ import {
 import { useTownPlace } from "./useTownPlace";
 import { memorySummary } from "../memory/memoryModel";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
-import { townLibraryLot } from "./townLibraryLot";
+import { townCivicSigns } from "./townCivicSigns";
 import "./townLibrary.css";
 
 /** Hosts the sign counts at most, so a big fleet never fans out reads. */
@@ -100,14 +100,16 @@ export const TownLibrary = memo(function TownLibrary({
   if (counts.status === "none") return null;
   const text = townLibrarySignText(counts);
   const label = `Library: ${text === "…" ? "reading" : text}. Open`;
-  const lot = townLibraryLot(layout);
+  // A phone hangs it below the observatory's sign (townCivicSigns.ts).
+  const at = townCivicSigns(layout, T).library;
   return (
     <button
       type="button"
       className="town-library-sign"
       data-town-place="library"
       data-quiet={counts.status !== "ready" || undefined}
-      style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 30 }}
+      data-hangs={at.hangs || undefined}
+      style={{ left: at.x, top: at.y }}
       aria-label={label}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {

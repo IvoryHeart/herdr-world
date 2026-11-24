@@ -15,6 +15,8 @@ import {
   townLibraryLot,
   townLibraryReserve,
 } from "./townLibraryLot";
+import { townCivicSigns, TOWN_CIVIC_SIGN_GAP } from "./townCivicSigns";
+import { townObservatoryLot } from "./townObservatoryLot";
 import { townPlaceBoxes } from "./townPlaces";
 import { townPostLotBeside, townPostReserve } from "./townPostLot";
 
@@ -178,5 +180,45 @@ test.each([
     // Wide and tall enough to tap (44 px), without zooming in.
     expect(bottomRight.x - topLeft.x).toBeGreaterThanOrEqual(44);
     expect(bottomRight.y - topLeft.y).toBeGreaterThanOrEqual(44);
+  },
+);
+
+test.each(towns)(
+  "the library's sign never reaches the observatory's at any zoom (%s)",
+  (_, input, shape) => {
+    const { layout } = layoutTown(input, shape);
+    const signs = townCivicSigns(layout, T);
+    const library = townLibraryLot(layout);
+    const observatory = townObservatoryLot(layout);
+    // The observatory's sign stands on its dome, reaching only up.
+    expect(signs.observatory).toEqual({
+      x: (observatory.x + observatory.w / 2) * T,
+      y: observatory.y * T + 2,
+    });
+    if (layout.formFactor === "wide") {
+      // A wide town keeps it on the eave, as before (#1027).
+      expect(signs.library).toEqual({
+        x: (library.x + library.w / 2) * T,
+        y: library.y * T + 30,
+        hangs: false,
+      });
+      return;
+    }
+    // Both signs keep their screen size, so at a phone's zoom they are
+    // wider than the lawn between their lots (#1351 review: 208 world
+    // pixels apart at zoom 0.38). The library's hangs from just below the
+    // observatory sign's foot, reaching only down: apart at every scale.
+    expect(signs.library.hangs).toBe(true);
+    expect(signs.library.y).toBe(signs.observatory.y + TOWN_CIVIC_SIGN_GAP);
+    // It grows right from the library's left edge, so it never reaches
+    // left over the town center and its plaque.
+    expect(signs.library.x).toBe(library.x * T);
+    expect(signs.library.x).toBeGreaterThan(
+      (layout.center.x + layout.center.w) * T,
+    );
+    // At its largest (2.4 × a two-line sign of about 30 px) it still hangs
+    // over the library's house, not its garden or the street.
+    expect(signs.library.y).toBeGreaterThanOrEqual((library.y - 2) * T);
+    expect(signs.library.y + 30 * 2.4).toBeLessThanOrEqual(library.yardY * T);
   },
 );
