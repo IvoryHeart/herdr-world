@@ -244,3 +244,17 @@ test("scoped delivery accepts only its planned jobs and rejects every absent or 
     ),
   ).toThrow();
 });
+
+test("a held red result never passes, whatever its jobs report", () => {
+  for (const scope of ["success", "failure"])
+    expect(() =>
+      assertDeliveryResults(
+        "hold",
+        scope,
+        "skipped",
+        "skipped",
+        "skipped",
+        skip,
+      ),
+    ).toThrow("keep this head's red result");
+});

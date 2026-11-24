@@ -152,6 +152,16 @@ jobs:
                   REQUIRED_JOB_NAME: Delivery checks
                   REQUIRED_FULL_STEP: Run full repository check
               run: bun scripts/ci-reuse-full-check.ts
+            # A title, description or label change on a head whose latest
+            # result is red keeps it red and starts no code job. Re-running
+            # this job decides again, so it reuses that result once it passes.
+            - name: Hold the head's red result
+              if: steps.scope.outputs.mode == 'hold'
+              env:
+                  HELD_RUN: ${{ steps.scope.outputs.held_run }}
+              run: |
+                  echo "::error::Run $HELD_RUN is this head's latest result and it is red. A title, description or label change retests nothing: re-run that run's failed jobs, then this run's failed jobs, or push a commit."
+                  exit 1
             - name: Freeze latest stable installer baseline
               id: installer-plan
               if: steps.scope.outputs.packaging == 'true'
@@ -237,7 +247,7 @@ jobs:
     validation:
         name: Repository validation
         needs: [validation-scope, static, unit-tests]
-        if: always() && needs.validation-scope.result != 'skipped' && needs.validation-scope.outputs.mode != 'reuse'
+        if: always() && needs.validation-scope.result != 'skipped' && needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'
         runs-on: ubuntu-latest
         steps:
             - name: Require static checks and applicable unit shards
@@ -287,7 +297,7 @@ jobs:
                   VALIDATION_MODE: ${{ needs.validation-scope.outputs.mode }}
               run: |
                   expected=success
-                  if [ "$VALIDATION_MODE" = reuse ]; then expected=skipped; fi
+                  if [ "$VALIDATION_MODE" = reuse ] || [ "$VALIDATION_MODE" = hold ]; then expected=skipped; fi
                   test "$SECURITY_RESULT" = "$expected"
             - name: Determine validation scope
               run: echo "Validation mode is $VALIDATION_MODE"

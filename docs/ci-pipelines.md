@@ -60,8 +60,13 @@ that label requests a fresh stability run. When main has moved since the head
 was last tested, a title or description edit or such a label restores the head's
 latest Delivery checks verdict if it was tested on the current base commit or
 one of its ancestors: the event changed no code, so a green status stays as it
-was. A red, cancelled or unfinished latest verdict is never passed over; that
-event validates afresh. The selection is not re-derived for the new base.
+was. A red latest verdict is held instead: Validation scope fails at "Hold the
+head's red result", naming the red run, and no code job starts, so the required
+checks stay red without testing the unchanged code again. Re-running the red
+run's failed jobs, then the held run's failed jobs, decides afresh; a held run
+tested no code, so it never hides another result or counts as evidence. A
+cancelled or unfinished latest verdict is never passed over; that event
+validates afresh. The selection is not re-derived for the new base.
 A new commit or base change tests the new merge as usual. GitHub's historical PR association can change, so
 it is not proof of the tested base. Reuse binds the selected Delivery job
 to its run and attempt, reads the full checkout SHA only from that job's checkout

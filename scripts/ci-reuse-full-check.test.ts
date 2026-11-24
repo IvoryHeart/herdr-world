@@ -13,12 +13,15 @@ import {
   baseChanged,
   canReuseFullCheck,
   checkoutCommitFromLog,
+  HOLD_STEP,
   isDocsOnlyChange,
   isDocumentationPath,
   isEarlierBase,
+  redHeadResult,
   selectValidationMode,
   STABILITY_LABEL,
   stabilityLabelAdded,
+  writeValidationOutputs,
 } from "./ci-reuse-full-check";
 
 const base = "a".repeat(40);
@@ -775,3 +778,186 @@ test.each(["full", "scoped"])(
     }
   },
 );
+
+const heldScopeJob = (id = 0) => ({
+  id: id * 10 || 8,
+  ...(id ? { run_id: id } : {}),
+  run_attempt: 1,
+  name: "Validation scope",
+  conclusion: "failure",
+  steps: [
+    { name: "Check PR description", conclusion: "success" },
+    { name: "Determine validation scope", conclusion: "success" },
+    { name: HOLD_STEP, conclusion: "failure" },
+  ],
+});
+const red = (
+  runs: ReturnType<typeof run>[],
+  jobs: Record<number, Array<Record<string, unknown>>> = {},
+) =>
+  redHeadResult(
+    runs,
+    4,
+    126,
+    head,
+    async (id) =>
+      (jobs[id] ?? []).map((job) => ({ run_id: id, ...job })) as never,
+  );
+
+test("a metadata event on a red head holds that result instead of retesting", async () => {
+  // #1373: the push run went red when GitHub cancelled a macOS job that got no
+  // runner; the description edit queued behind it ran every job again.
+  const pushed = [run(4), run(3, base, "failure")];
+  const failed = { 3: [scopeJob("success", "success", "success")] };
+  expect(await red(pushed, failed)).toBe(3);
+  for (const action of ["edited", "labeled"])
+    expect(
+      await selectValidationMode(
+        action,
+        false,
+        async () => false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        async () => (await red(pushed, failed)) !== undefined,
+      ),
+    ).toBe("hold");
+  // On an earlier base too: the edit changed no code.
+  expect(await red([run(4), run(3, "c".repeat(40), "timed_out")], failed)).toBe(
+    3,
+  );
+  // A pass, a cancelled or an unfinished run is no red result to hold.
+  for (const conclusion of ["success", "cancelled", null])
+    expect(await red([run(4), run(3, base, conclusion)], failed)).toBe(
+      undefined,
+    );
+  // Nothing tested yet, or only a refused description: validate.
+  expect(await red([run(4)])).toBeUndefined();
+  expect(
+    await red([run(4), run(3, base, "failure")], {
+      3: [scopeJob("failure", "skipped")],
+    }),
+  ).toBeUndefined();
+  // Another head or another PR is not this head's result.
+  expect(
+    await red([run(4), { ...run(3, base, "failure"), head_sha: base }], failed),
+  ).toBeUndefined();
+  expect(
+    await red(
+      [
+        run(4),
+        {
+          ...run(3, base, "failure"),
+          pull_requests: [{ ...pr, number: 127 }],
+        },
+      ],
+      failed,
+    ),
+  ).toBeUndefined();
+  // A held run is passed over: the result it held decides.
+  expect(
+    await red([run(4), run(3, base, "failure"), run(2, base, "failure")], {
+      3: [heldScopeJob()],
+      2: failed[3],
+    }),
+  ).toBe(2);
+  expect(
+    await red([run(4), run(3, base, "failure"), run(2)], {
+      3: [heldScopeJob()],
+    }),
+  ).toBeUndefined();
+  // A commit, a new base or the stability label never holds; nor does an
+  // unreadable answer, which validates as before.
+  const hold = async () => true;
+  for (const [action, newBase, added] of [
+    ["synchronize", false, false],
+    ["edited", true, false],
+    ["labeled", false, true],
+  ] as const)
+    expect(
+      await selectValidationMode(
+        action,
+        false,
+        async () => false,
+        false,
+        false,
+        false,
+        newBase,
+        added,
+        hold,
+      ),
+    ).toBe("full");
+  expect(
+    await selectValidationMode(
+      "edited",
+      false,
+      async () => false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      async () => {
+        throw new Error("API unavailable");
+      },
+    ),
+  ).toBe("full");
+  // Passing proof still wins.
+  expect(
+    await selectValidationMode(
+      "edited",
+      false,
+      async () => true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      hold,
+    ),
+  ).toBe("reuse");
+});
+
+test("a held run neither hides a rerun's green result nor counts as evidence", async () => {
+  // The red run was rerun and passed; the held run between is no barrier.
+  const held = { 3: [heldScopeJob(), job("failure", "failure")] };
+  expect(
+    await verify([run(4), run(3, base, "failure"), run(2)], {
+      ...held,
+      2: [job("success")],
+    }),
+  ).toBe(true);
+  // A stale held step from an earlier attempt is not this attempt's hold.
+  expect(
+    await verify([run(4), run(3, base, "failure"), run(2)], {
+      3: [{ ...heldScopeJob(), run_attempt: 2 }],
+      2: [job("success")],
+    }),
+  ).toBe(false);
+});
+
+test("a held result starts no code job", () => {
+  const directory = mkdtempSync(join(tmpdir(), "ci-hold-"));
+  try {
+    const output = join(directory, "output");
+    writeFileSync(output, "");
+    writeValidationOutputs(output, "hold", {
+      full: true,
+      tooling: false,
+      documentation: false,
+      verification: true,
+      packaging: true,
+      world: ["synthetic"],
+      web: [],
+    } as never);
+    const lines = readFileSync(output, "utf8");
+    expect(lines).toContain("mode=hold");
+    expect(lines).toContain("world=false");
+    expect(lines).toContain("verification=false");
+    expect(lines).toContain("packaging=false");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

@@ -14,6 +14,10 @@ export function assertDeliveryResults(
   packaging: Array<string | undefined>,
   selection?: ValidationSelection,
 ) {
+  if (mode === "hold")
+    throw new Error(
+      "Delivery checks keep this head's red result: a title, description or label change retests nothing (see Validation scope)",
+    );
   if (mode === "scoped" && !selection)
     throw new Error("Missing scoped selection");
   const native = mode === "full" || (mode === "scoped" && selection!.packaging);
