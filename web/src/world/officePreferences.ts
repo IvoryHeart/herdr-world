@@ -14,7 +14,7 @@ export type OfficeInspectorPresentation = "docked" | "floating";
 export type TownOpens = "chat" | "terminal";
 
 /** Town's buildings: one per host (machine), or one per runtime (#1047). */
-export type TownBuildings = "host" | "runtime";
+type TownBuildings = "host" | "runtime";
 
 /** Rooms per row in a Town building: Auto keeps each one about square (#1188). */
 export type TownRoomsPerRow = "auto" | 2 | 3 | 4 | 5;
