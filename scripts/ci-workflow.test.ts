@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import {
   DESCRIPTION_STEP,
   SCOPE_JOB,
@@ -60,7 +61,7 @@ const workflow = Bun.YAML.parse(
     };
   };
   permissions: { actions: string };
-  concurrency: { group: string; "cancel-in-progress": string };
+  concurrency: { group: string; "cancel-in-progress": boolean };
   jobs: Record<string, WorkflowJob>;
 };
 
@@ -214,20 +215,13 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "labeled",
   ]);
   expect(workflow.permissions.actions).toBe("read");
-  expect(workflow.concurrency["cancel-in-progress"]).toContain(
-    "github.event.action != 'edited'",
-  );
-  expect(workflow.concurrency["cancel-in-progress"]).toContain(
-    "github.event.action != 'labeled'",
-  );
-  // Post-merge gate: main pushes share one group that never cancels the
-  // running check, so a batch of merges is tested once at its newest commit.
+  // Nothing cancels a run in flight: CI supersede cancels an older run only
+  // when it tests a different tree, and main batches queue behind the running
+  // check, so a batch of merges is tested once at its newest commit.
+  expect(workflow.concurrency["cancel-in-progress"]).toBe(false);
   expect(workflow.on.push).toEqual({ branches: ["main"] });
   expect(workflow.concurrency.group).toContain(
     "(github.event_name == 'push' && 'main-push')",
-  );
-  expect(workflow.concurrency["cancel-in-progress"]).toContain(
-    "github.event_name == 'pull_request'",
   );
   const delivery = workflow.jobs.delivery;
 
@@ -716,4 +710,38 @@ test("release validation passes the full non-PR plan to the shared browser workf
   expect(release.jobs["world-browser"].with?.selection).toBe(
     "${{ needs.validate.outputs.selection }}",
   );
+});
+
+test("CI supersede cancels only in-flight CI runs of a different tree", () => {
+  const supersede = Bun.YAML.parse(
+    readFileSync(".github/workflows/ci-supersede.yml", "utf8"),
+  ) as any;
+  expect(supersede.on).toEqual({ pull_request: { types: ["synchronize"] } });
+  expect(supersede.permissions).toEqual({ contents: "read", actions: "write" });
+  const job = supersede.jobs.supersede;
+  expect(job.if).toBe("github.event.pull_request.state == 'open'");
+  const step = job.steps.find(
+    (step: any) => step.run === "bun scripts/ci-supersede.ts",
+  );
+  expect(step.env.PR_HEAD_REF).toBe(
+    "${{ github.event.pull_request.head.ref }}",
+  );
+  expect(
+    job.steps.find((step: any) => step.uses?.startsWith("actions/checkout@"))
+      .with["persist-credentials"],
+  ).toBe(false);
+  // Delivery learns whether a reused main release commit ran its release walk.
+  const delivery = workflow.jobs.delivery.steps;
+  for (const name of [
+    "Run full repository check",
+    "Verify applicable or reused results",
+  ])
+    expect(delivery.find((step) => step.name === name)?.env?.PACKAGING).toBe(
+      "${{ needs.validation-scope.outputs.packaging }}",
+    );
+  expect(
+    workflow.jobs["validation-scope"].steps.find(
+      (step) => step.name === "Determine validation scope",
+    )?.env?.PR_HEAD_REF,
+  ).toBe("${{ github.event.pull_request.head.ref }}");
 });

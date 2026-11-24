@@ -266,6 +266,51 @@ test("channel rehearsals cannot publish or replace approved Unix release bytes",
   );
   for (const name of ["publish", "npm-publish", "homebrew-pr"])
     expect(release.jobs[name].if).toBe(
-      "needs.validate.outputs.dry_run == 'false'",
+      "${{ !cancelled() && !failure() && needs.validate.outputs.dry_run == 'false' }}",
     );
+});
+
+test("a publication reuses main's evidence and runs main's gate on the tag's code", () => {
+  const release = workflow("release");
+  const steps = release.jobs.validate.steps;
+  const gate = steps.find((step: any) => step.id === "walk");
+  const main = steps.find((step: any) => step.with?.ref === "main");
+  // Main's gate scripts only, outside the tree the tag's checks scan.
+  expect(main.with.path).toBe(".agents/release-gate");
+  expect(main.with["sparse-checkout"]).toContain(
+    "scripts/release-walk-gate.ts",
+  );
+  expect(main.with["persist-credentials"]).toBe(false);
+  expect(gate["working-directory"]).toBe(main.with.path);
+  const tag = steps.find((step: any) =>
+    step.uses?.startsWith("actions/checkout@"),
+  );
+  expect(tag.with.ref).toBeUndefined();
+  // The live audit always runs; the repository check and browser tests run
+  // only for a rehearsal, because a publication requires main's Delivery checks.
+  const audit = steps.find(
+    (step: any) => step.run === "bun run security:check",
+  );
+  expect(audit.if).toBeUndefined();
+  const source = steps.find((step: any) => step.run === "bun run check:source");
+  expect(source.if).toBe("steps.metadata.outputs.dry_run == 'true'");
+  expect(release.jobs["world-browser"].if).toBe(
+    "needs.validate.outputs.dry_run == 'true'",
+  );
+  expect(release.jobs.package.if).toContain(
+    "needs.world-browser.result == 'success' || (needs.world-browser.result == 'skipped' && needs.validate.outputs.dry_run == 'false')",
+  );
+  // A skipped browser job must not skip later jobs; a failure still stops them.
+  for (const name of [
+    "archives",
+    "npm-stage",
+    "homebrew-formula",
+    "homebrew-smoke",
+    "verify",
+    "publish",
+    "npm-publish",
+    "homebrew-pr",
+    "deploy-pages",
+  ])
+    expect(release.jobs[name].if).toStartWith("${{ !cancelled() && !failure()");
 });

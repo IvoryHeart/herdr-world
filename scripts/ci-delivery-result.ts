@@ -4,6 +4,8 @@ import { VALIDATION_PROOF_PREFIX } from "./ci-validation-proof";
  * Native results include Windows plugin installation, installer upgrades and
  * both macOS lifecycle jobs. The macOS jobs keep their protected names and
  * skip native steps on shorter paths, so their aggregate must still succeed.
+ * A reused main release commit still runs the native matrix and release walk
+ * (`releaseWalk`), because Publish Release takes them from that exact commit.
  */
 export function assertDeliveryResults(
   mode: string | undefined,
@@ -13,10 +15,14 @@ export function assertDeliveryResults(
   behavioral: string | undefined,
   packaging: Array<string | undefined>,
   selection?: ValidationSelection,
+  releaseWalk = false,
 ) {
   if (mode === "scoped" && !selection)
     throw new Error("Missing scoped selection");
-  const native = mode === "full" || (mode === "scoped" && selection!.packaging);
+  const native =
+    mode === "full" ||
+    (mode === "scoped" && selection!.packaging) ||
+    (mode === "reuse" && releaseWalk);
   const browser =
     mode === "full" ||
     (mode === "scoped" && !!(selection!.world.length + selection!.web.length));
@@ -58,6 +64,7 @@ if (import.meta.main) {
     Bun.env.HERDR_CI_SELECTION
       ? (JSON.parse(Bun.env.HERDR_CI_SELECTION) as ValidationSelection)
       : undefined,
+    Bun.env.VALIDATION_MODE === "reuse" && Bun.env.PACKAGING === "true",
   );
   console.info("Delivery checks passed");
   if (Bun.env.HERDR_CI_SELECTION)

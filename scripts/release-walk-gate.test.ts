@@ -55,6 +55,12 @@ print(json.dumps(dict(reports=reports, signed=signed, digest=receipt_digest(sign
     writeFileSync(join(root, `${name}.json`), JSON.stringify(value));
   save("ci", ci);
   save("pr", pr);
+  save("jobs", {
+    jobs: [
+      { name: "Validation scope", conclusion: "success", run_attempt: 1 },
+      { name: "Delivery checks", conclusion: "success", run_attempt: 1 },
+    ],
+  });
   writeFileSync(
     join(bin, "gh"),
     `#!/usr/bin/env bun
@@ -65,6 +71,7 @@ const args = process.argv.slice(2);
 appendFileSync(join(root, 'calls.jsonl'), JSON.stringify(args) + '\\n');
 if (args[0] === 'api') {
   if (args[1].endsWith('/123')) console.log(readFileSync(join(root, 'ci.json'), 'utf8'));
+  else if (args[1].includes('/123/jobs')) console.log(readFileSync(join(root, 'jobs.json'), 'utf8'));
   else if (args[1].endsWith('/456')) console.log(JSON.stringify({path: '.github/workflows/publish-release.yml', event: 'workflow_dispatch'}));
   else process.exit(64);
 } else if (args[0] === 'run' && args[1] === 'download') {
@@ -247,6 +254,31 @@ test("omitting signed-in evidence preserves native CI and pre-tag identity check
       recursive: true,
     });
     expect(f.run().exitCode).toBe(1);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("Release relies on main's Delivery checks for the exact commit", () => {
+  const f = fixture();
+  try {
+    expect(f.run().exitCode).toBe(0);
+    expect(f.run("publication").exitCode).toBe(0);
+    const delivery = (conclusion: string, attempt = 1) => [
+      { name: "Delivery checks", conclusion, run_attempt: attempt },
+    ];
+    for (const jobs of [
+      [],
+      delivery("failure"),
+      delivery("skipped"),
+      delivery("success", 2),
+      [...delivery("success"), ...delivery("success")],
+    ]) {
+      f.save("jobs", { jobs });
+      f.save("ci", { ...f.ci, run_attempt: 1 });
+      expect(f.run().exitCode).toBe(1);
+      expect(f.run("publication").exitCode).toBe(1);
+    }
   } finally {
     f.cleanup();
   }

@@ -244,3 +244,22 @@ test("scoped delivery accepts only its planned jobs and rejects every absent or 
     ),
   ).toThrow();
 });
+
+test("a reused main release commit still requires its native installer and release walk", () => {
+  const reuse = (packaging: string[], releaseWalk: boolean) => () =>
+    assertDeliveryResults(
+      "reuse",
+      "success",
+      "skipped",
+      "skipped",
+      "skipped",
+      packaging,
+      undefined,
+      releaseWalk,
+    );
+  expect(reuse(skip, false)).not.toThrow();
+  expect(reuse(ok, true)).not.toThrow();
+  expect(reuse(skip, true)).toThrow();
+  expect(reuse(["failure", "success"], true)).toThrow();
+  expect(reuse(ok, false)).toThrow();
+});

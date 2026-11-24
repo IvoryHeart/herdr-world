@@ -190,8 +190,8 @@ Registry failures also fail closed. Do not disable the gate to publish.
 ## Pre-merge installer upgrades
 
 Installation/package/compiled-entry inputs select
-`.github/workflows/installer-upgrade.yml` on PRs. Every main push and the nightly
-schedule run it in full. Delivery checks requires every selected native assertion: Linux x64/ARM64, macOS Intel/Apple Silicon, and
+`.github/workflows/installer-upgrade.yml` on PRs. Every main push that does
+not reuse its PR run, every release commit and the nightly schedule run it in full. Delivery checks requires every selected native assertion: Linux x64/ARM64, macOS Intel/Apple Silicon, and
 Windows x64/ARM64 on standard hosted runners. The workflow can also be dispatched
 manually against a selected ref. It publishes no release, tag, npm package or Formula.
 Documentation-only runs (Markdown outside the packaged notices, which run
@@ -463,12 +463,19 @@ release's generated Formula.
    only the maintainer account to create `v*` tags. Preserve those rules. If the
    tag ruleset later permits the workflow token, **create_tag** can perform the
    same authorized tagging and dispatch steps automatically.
-4. The Release workflow revalidates metadata and repository tests with one file
-   worker and at most two concurrent cases. Its World browser tests use the same
+4. The Release workflow revalidates metadata and runs `security:check` live. It
+   does not rerun `check:source` or the World browser tests for a publication:
+   the release walk gate requires main's successful **Delivery checks** job for
+   the exact release commit, fresh or reused from the PR run of the identical
+   tree. The gate runs main's current copy of `scripts/release-walk-gate.ts` and
+   `scripts/release-walk/`, so a gate fix on main applies to an earlier release
+   commit, while the packages are still built from the tag's code. A dry run
+   still validates fully: repository tests with one file worker and at most two
+   concurrent cases, and the same
    [World browser workflow](../.github/workflows/world-browser.yml) as PR CI: six
    shards and the web browser job, each with one file worker per runner and the
-   pinned test Chrome. Every shard, the web job and repository validation must pass
-   before any platform package builds. Prepare Release validates its generated
+   pinned test Chrome. In a dry run, every shard, the web job and repository
+   validation must pass before any platform package builds. Prepare Release validates its generated
    working tree in one checkout with one file worker and retains the complete World
    suite; its World cases run one at a time.
    Release reuses the four Unix archives that passed the pre-tag walk and builds

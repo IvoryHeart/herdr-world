@@ -42,6 +42,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # The publication gate runs main's scripts, so a gate fix merged after the
+      # release commit applies; everything built and published is the tag's code.
+      - name: Check out main's release gate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          path: .agents/release-gate
+          sparse-checkout: |
+            scripts/release-walk-gate.ts
+            scripts/release-walk
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: "1.4.4"
@@ -63,6 +75,7 @@ jobs:
         run: bun scripts/release-plan.ts
       - name: Require pre-tag release walk authorization
         id: walk
+        working-directory: .agents/release-gate
         env:
           GH_TOKEN: ${{ github.token }}
           PUBLISH_RUN_ID: ${{ inputs.publish_run_id }}
@@ -84,7 +97,10 @@ jobs:
               exit 1
             }
           done
+      # A publication relies on main's Delivery checks for this exact commit,
+      # which the walk gate requires; only a rehearsal validates afresh.
       - name: Validate repository except World browser shards
+        if: steps.metadata.outputs.dry_run == 'true'
         env:
           HERDR_TEST_PARALLEL: "1"
           HERDR_TEST_MAX_CONCURRENCY: "2"
@@ -94,6 +110,7 @@ jobs:
   world-browser:
     name: World browser tests
     needs: validate
+    if: needs.validate.outputs.dry_run == 'true'
     uses: ./.github/workflows/world-browser.yml
     with:
       selection: ${{ needs.validate.outputs.selection }}
@@ -101,6 +118,8 @@ jobs:
   package:
     name: Package ${{ matrix.platform }}
     needs: [validate, world-browser]
+    # World browser tests run only for a rehearsal; a publication skips them.
+    if: ${{ !cancelled() && needs.validate.result == 'success' && (needs.world-browser.result == 'success' || (needs.world-browser.result == 'skipped' && needs.validate.outputs.dry_run == 'false')) }}
     strategy:
       fail-fast: false
       matrix:
@@ -164,6 +183,7 @@ jobs:
   archives:
     name: Verify complete archive set
     needs: [validate, package]
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     env:
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
@@ -195,6 +215,7 @@ jobs:
   npm-stage:
     name: Verify npm tarballs
     needs: [validate, archives]
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     env:
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
@@ -241,6 +262,7 @@ jobs:
   homebrew-formula:
     name: Verify Homebrew Formula and tap PR input
     needs: [validate, archives]
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     env:
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
@@ -293,6 +315,7 @@ jobs:
   homebrew-smoke:
     name: Homebrew install (${{ matrix.runner }})
     needs: [validate, archives, homebrew-formula]
+    if: ${{ !cancelled() && !failure() }}
     strategy:
       fail-fast: false
       matrix:
@@ -347,6 +370,7 @@ jobs:
   verify:
     name: Seal every verified channel
     needs: [validate, archives, npm-stage, homebrew-formula, homebrew-smoke]
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     outputs:
       bundle_digest: ${{ steps.bundle.outputs.artifact-digest }}
@@ -396,7 +420,7 @@ jobs:
   publish:
     name: Publish GitHub Release
     needs: [validate, package, archives, npm-stage, homebrew-formula, homebrew-smoke, verify]
-    if: needs.validate.outputs.dry_run == 'false'
+    if: ${{ !cancelled() && !failure() && needs.validate.outputs.dry_run == 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -424,7 +448,7 @@ jobs:
   npm-publish:
     name: Publish npm packages
     needs: [validate, package, archives, npm-stage, homebrew-formula, homebrew-smoke, verify, publish]
-    if: needs.validate.outputs.dry_run == 'false'
+    if: ${{ !cancelled() && !failure() && needs.validate.outputs.dry_run == 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -454,7 +478,7 @@ jobs:
   homebrew-pr:
     name: Propose Homebrew Formula update
     needs: [validate, package, archives, npm-stage, homebrew-formula, homebrew-smoke, verify, publish, npm-publish]
-    if: needs.validate.outputs.dry_run == 'false'
+    if: ${{ !cancelled() && !failure() && needs.validate.outputs.dry_run == 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -505,7 +529,7 @@ jobs:
   deploy-pages:
     name: Request stable Pages deployment
     needs: [publish, npm-publish, homebrew-pr]
-    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.')
+    if: ${{ !cancelled() && !failure() && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.') }}
     runs-on: ubuntu-latest
     permissions:
       actions: write

@@ -35,9 +35,11 @@ concurrency:
     # keeps only the latest pending run). Main gate names every merge since the
     # last green commit when that run fails.
     group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && 'main-push') || github.ref }}
-    # Metadata runs queue behind active validation and reuse the head's latest
-    # result. A label must not cancel the check it needs as evidence.
-    cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' && github.event.action != 'labeled' }}
+    # Nothing here cancels a run in flight. A new commit queues behind it, and
+    # CI supersede (ci-supersede.yml) cancels that run only when it tests a
+    # different tree; an identical tree is kept and the queued run reuses it.
+    # Metadata runs likewise queue and reuse the head's latest result.
+    cancel-in-progress: false
 
 jobs:
     browser-diagnostics:
@@ -147,6 +149,7 @@ jobs:
                   PR_NUMBER: ${{ github.event.pull_request.number }}
                   PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
                   PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+                  PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
                   PR_ACTION: ${{ github.event.action }}
                   WORLD_BROWSER_STABILITY: ${{ contains(github.event.pull_request.labels.*.name, 'world-browser-stability') }}
                   REQUIRED_JOB_NAME: Delivery checks
@@ -297,6 +300,7 @@ jobs:
               if: needs.validation-scope.outputs.mode == 'full'
               env:
                   VALIDATION_MODE: full
+                  PACKAGING: ${{ needs.validation-scope.outputs.packaging }}
                   SCOPE_RESULT: ${{ needs.validation-scope.result }}
                   VALIDATION_RESULT: ${{ needs.validation.result }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
@@ -308,6 +312,7 @@ jobs:
               if: needs.validation-scope.outputs.mode != 'full'
               env:
                   VALIDATION_MODE: ${{ needs.validation-scope.outputs.mode }}
+                  PACKAGING: ${{ needs.validation-scope.outputs.packaging }}
                   SCOPE_RESULT: ${{ needs.validation-scope.result }}
                   VALIDATION_RESULT: ${{ needs.validation.result }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
@@ -316,7 +321,8 @@ jobs:
                   LAUNCHD_RESULT: ${{ needs.launchd.result }}
               run: bun scripts/ci-delivery-result.ts
 
-    # Native inputs select packaging; main still runs the complete matrix.
+    # Native inputs select packaging; main runs the complete matrix unless it
+    # reuses the PR run of its exact tree, and a reused release commit still runs it.
     installer-upgrade:
         needs: validation-scope
         if: needs.validation-scope.outputs.packaging == 'true'

@@ -111,6 +111,25 @@ export async function releaseWalkGate(args: string[]) {
       throw new Error(
         "Require successful main CI for the exact release commit",
       );
+    // Release no longer reruns the repository check or World browser tests:
+    // main's Delivery checks for this commit, fresh or reused from the PR run
+    // of the identical tree, are its test evidence.
+    const delivery = JSON.parse(
+      await output([
+        "gh",
+        "api",
+        `repos/${repository}/actions/runs/${ciRunId}/jobs?per_page=100`,
+      ]),
+    ).jobs.filter((job: { name: string }) => job.name === "Delivery checks");
+    if (
+      delivery.length !== 1 ||
+      delivery[0].conclusion !== "success" ||
+      (ci.run_attempt !== undefined &&
+        delivery[0].run_attempt !== ci.run_attempt)
+    )
+      throw new Error(
+        "Require main's Delivery checks to pass for the exact release commit",
+      );
     const reports = join(root, "reports");
     await output([
       "gh",

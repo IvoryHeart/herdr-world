@@ -89,7 +89,6 @@
       "scripts/ci-health-stack.ts#runCost",
       "scripts/ci-health.ts#healthReport",
       "scripts/ci-reuse-full-check.ts#canReuseFullCheck",
-      "scripts/ci-reuse-full-check.ts#checkoutCommitFromLog",
       "scripts/ci-reuse-full-check.ts#isDocsOnlyChange",
       "scripts/ci-reuse-full-check.ts#selectValidationMode",
       "scripts/ci-reuse-full-check.ts#writeValidationOutputs",

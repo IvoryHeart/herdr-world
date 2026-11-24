@@ -65,7 +65,11 @@ test("PR and release validation call the same World workflow", () => {
     uses: ci.jobs["world-browser"]!.uses,
     needs: "validate",
   });
-  expect(release.jobs["world-browser"]?.if).toBeUndefined();
+  // A publication relies on main's Delivery checks for the exact commit
+  // (scripts/release-walk-gate.ts); only a rehearsal reruns World browser.
+  expect(release.jobs["world-browser"]?.if).toBe(
+    "needs.validate.outputs.dry_run == 'true'",
+  );
 });
 
 test("release packaging and publication require repository validation and every World shard", () => {
@@ -237,19 +241,25 @@ test("dispatch rehearses the full graph and all publishers check sealed input", 
     on: { workflow_dispatch: { inputs: { dry_run: { default: boolean } } } };
   };
   expect(workflow.on.workflow_dispatch.inputs.dry_run.default).toBe(true);
+  // Packaging runs after a passing World browser, or after the skipped one
+  // of a publication; a failed or cancelled job still stops everything.
+  expect(workflow.jobs.package?.if).toBe(
+    "${{ !cancelled() && needs.validate.result == 'success' && (needs.world-browser.result == 'success' || (needs.world-browser.result == 'skipped' && needs.validate.outputs.dry_run == 'false')) }}",
+  );
   for (const name of [
-    "package",
     "archives",
     "npm-stage",
     "homebrew-formula",
     "homebrew-smoke",
     "verify",
   ]) {
-    expect(workflow.jobs[name]?.if).toBeUndefined();
+    expect(workflow.jobs[name]?.if).toBe("${{ !cancelled() && !failure() }}");
   }
   for (const name of ["publish", "npm-publish", "homebrew-pr"]) {
     const job = workflow.jobs[name]!;
-    expect(job.if).toBe("needs.validate.outputs.dry_run == 'false'");
+    expect(job.if).toBe(
+      "${{ !cancelled() && !failure() && needs.validate.outputs.dry_run == 'false' }}",
+    );
     const steps = job.steps!;
     const check = steps.findIndex((step) =>
       step.run?.includes("release-bundle.mjs verify"),
