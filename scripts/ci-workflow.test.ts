@@ -84,6 +84,88 @@ test("World stability label selects fresh full evidence and three consecutive pa
   ).toBe("${{ inputs.stability && '3' || '1' }}");
 });
 
+const OPEN_PR =
+  "github.event_name != 'pull_request' || github.event.pull_request.state == 'open'";
+const SCOPE_RAN = "needs.validation-scope.result != 'skipped'";
+
+test("a closed or merged PR's edit or label skips every job before it takes a runner", () => {
+  const scope = workflow.jobs["validation-scope"];
+  expect(scope.if).toBe(OPEN_PR);
+  expect(scope.needs).toBeUndefined();
+  const needs = (name: string): string[] => {
+    const direct = workflow.jobs[name]!.needs ?? [];
+    return typeof direct === "string" ? [direct] : direct;
+  };
+  const reachesScope = (name: string): boolean =>
+    needs(name).some(
+      (need) => need === "validation-scope" || reachesScope(need),
+    );
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (name === "validation-scope") continue;
+    if (name === "browser-diagnostics") {
+      // Manual dispatch only; never a PR event.
+      expect(job.if).toStartWith("github.event_name == 'workflow_dispatch'");
+      continue;
+    }
+    // A skipped scope skips every dependent job, except one that runs always().
+    expect(reachesScope(name)).toBe(true);
+    if (job.if?.includes("always()")) {
+      expect(needs(name)).toContain("validation-scope");
+      expect(job.if).toContain(SCOPE_RAN);
+    }
+  }
+});
+
+test("a description-only edit reuses the dependency audit with the rest of the evidence", () => {
+  const audit = workflow.jobs["dependency-security"];
+  expect(audit.needs).toBe("validation-scope");
+  expect(audit.if).toBe("needs.validation-scope.outputs.mode != 'reuse'");
+  const step = workflow.jobs.delivery.steps.find(
+    (step) => step.name === "Require current dependency security audit",
+  )!;
+  expect(step.env).toEqual({
+    SECURITY_RESULT: "${{ needs.dependency-security.result }}",
+    VALIDATION_MODE: "${{ needs.validation-scope.outputs.mode }}",
+  });
+  const passes = (mode: string, result: string) =>
+    Bun.spawnSync(["bash", "-euc", step.run!], {
+      env: {
+        PATH: process.env.PATH,
+        VALIDATION_MODE: mode,
+        SECURITY_RESULT: result,
+      },
+    }).exitCode === 0;
+  expect(passes("full", "success")).toBe(true);
+  expect(passes("scoped", "success")).toBe(true);
+  expect(passes("reuse", "skipped")).toBe(true);
+  expect(passes("full", "skipped")).toBe(false);
+  expect(passes("docs", "skipped")).toBe(false);
+  expect(passes("full", "failure")).toBe(false);
+  expect(passes("reuse", "failure")).toBe(false);
+  expect(passes("", "skipped")).toBe(false);
+});
+
+test("release-note labels skip closed PRs and description-only edits", async () => {
+  const label = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../.github/workflows/label-pull-requests.yml", import.meta.url),
+    ).text(),
+  ) as {
+    on: { pull_request_target: { types: string[] } };
+    jobs: Record<string, WorkflowJob>;
+  };
+  expect(label.on.pull_request_target.types).toContain("edited");
+  expect(label.jobs.label.if).toBe(
+    "github.event.pull_request.state == 'open' && (github.event.action != 'edited' || github.event.changes.title || github.event.changes.base)",
+  );
+  // The classifier reads no description, so skipping body edits loses nothing.
+  const classify = label.jobs.label.steps.find(
+    (step) => step.name === "Classify pull request",
+  )!;
+  expect(Object.keys(classify.env ?? {})).not.toContain("PR_BODY");
+  expect(classify.run).not.toContain("body");
+});
+
 test("browser lifecycle comparisons are opt-in and retain both revisions' evidence", () => {
   expect(
     workflow.on.workflow_dispatch.inputs.browser_diagnostics,
@@ -154,7 +236,9 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "launchd",
     "dependency-security",
   ]);
-  expect(delivery?.if).toBe("always()");
+  expect(delivery?.if).toBe(
+    "always() && needs.validation-scope.result != 'skipped'",
+  );
   expect(
     delivery?.steps.find((step) => step.name === "Run full repository check"),
   ).toMatchObject({
@@ -371,7 +455,9 @@ test("protected launchd reports require native work on the existing installer ru
   );
   expect(launchd["runs-on"]).toBe("ubuntu-latest");
   expect(launchd.needs).toEqual(["validation-scope", "installer-upgrade"]);
-  expect(launchd.if).toBe("always()");
+  expect(launchd.if).toBe(
+    "always() && needs.validation-scope.result != 'skipped'",
+  );
   expect(launchd.strategy?.matrix?.arch).toEqual(["arm64", "x86_64"]);
   const report = launchd.steps[0]!;
   expect(report.run).toContain('test "$SCOPE_RESULT" = success');

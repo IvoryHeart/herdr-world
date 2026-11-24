@@ -112,8 +112,11 @@ jobs:
                   if-no-files-found: warn
                   retention-days: 7
 
+    # Every other PR job needs this one, so a closed or merged PR's edit or label
+    # starts no runner: GitHub has no workflow-level condition, only skipped jobs.
     validation-scope:
         name: Validation scope
+        if: github.event_name != 'pull_request' || github.event.pull_request.state == 'open'
         runs-on: ubuntu-latest
         outputs:
             mode: ${{ steps.scope.outputs.mode || 'full' }}
@@ -156,8 +159,11 @@ jobs:
                   GH_TOKEN: ${{ github.token }}
               run: bun scripts/installer-upgrade.ts plan
 
+    # A reused Delivery checks result already required this audit on the same merge.
     dependency-security:
         name: Shipped dependency security
+        needs: validation-scope
+        if: needs.validation-scope.outputs.mode != 'reuse'
         runs-on: ubuntu-latest
         timeout-minutes: 10
         steps:
@@ -231,7 +237,7 @@ jobs:
     validation:
         name: Repository validation
         needs: [validation-scope, static, unit-tests]
-        if: always() && needs.validation-scope.outputs.mode != 'reuse'
+        if: always() && needs.validation-scope.result != 'skipped' && needs.validation-scope.outputs.mode != 'reuse'
         runs-on: ubuntu-latest
         steps:
             - name: Require static checks and applicable unit shards
@@ -265,7 +271,7 @@ jobs:
         needs: [validation-scope, validation, world-browser, behavioral, installer-upgrade, launchd, dependency-security]
         env:
             HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
-        if: always()
+        if: always() && needs.validation-scope.result != 'skipped'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -278,7 +284,11 @@ jobs:
             - name: Require current dependency security audit
               env:
                   SECURITY_RESULT: ${{ needs.dependency-security.result }}
-              run: test "$SECURITY_RESULT" = success
+                  VALIDATION_MODE: ${{ needs.validation-scope.outputs.mode }}
+              run: |
+                  expected=success
+                  if [ "$VALIDATION_MODE" = reuse ]; then expected=skipped; fi
+                  test "$SECURITY_RESULT" = "$expected"
             - name: Determine validation scope
               run: echo "Validation mode is $VALIDATION_MODE"
               env:
@@ -320,7 +330,7 @@ jobs:
     launchd:
         name: macOS launchd plugin lifecycle (${{ matrix.arch }})
         needs: [validation-scope, installer-upgrade]
-        if: always()
+        if: always() && needs.validation-scope.result != 'skipped'
         # Keep the two protected names. Native work shares each Darwin installer
         # runner, so the installer cannot queue behind our own launchd job.
         runs-on: ubuntu-latest

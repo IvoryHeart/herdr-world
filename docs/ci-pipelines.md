@@ -45,10 +45,16 @@ commands to verify coverage, ordering and failure propagation without rebuilding
 
 ## Scope and scheduling
 
-Code events (`opened`, `synchronize`, `reopened`) receive fresh validation.
-Description edits and labels queue behind a running check instead of cancelling
+Code events (`opened`, `synchronize`, `reopened`) receive fresh validation, and
+so does an `edited` event that changes the base branch: it is a new merge.
+Title or description edits and labels queue behind a running check instead of cancelling
 it. They may reuse a successful full Delivery checks job, or a scoped job with the
-identical selection, for the same PR, base commit and head commit. GitHub's historical PR association can change, so
+identical selection, for the same PR, base commit and head commit. A title or
+description edit tries this before any other choice, so it also reuses a
+documentation, tooling or `world-browser-stability` result with the identical
+selection; it then runs only Validation scope (with the description check),
+Delivery checks and the two macOS report names. The dependency audit is skipped
+with the other leaf jobs, because the reused Delivery result already required it. GitHub's historical PR association can change, so
 it is not proof of the tested base. Reuse binds the selected Delivery job
 to its run and attempt, reads the full checkout SHA only from that job's checkout
 action log, and resolves the immutable merge commit. Its returned SHA must match
@@ -66,6 +72,17 @@ fall back to fresh validation for the current scope.
 The release-preview label can therefore request archives without repeating a
 successful applicable check. Other label changes still create workflow runs, but can
 take this same short path.
+
+A closed or merged PR starts no CI work. GitHub still creates a run for its
+edit or label, but Validation scope requires an open PR and every other job
+depends on it, so all jobs are skipped before they wait for a runner. Label
+Pull Requests likewise skips closed PRs, and skips description-only edits
+because the release-note category reads only the title, author and changed files.
+
+Before any bulk edit of PRs or issues (for example rewriting many descriptions),
+check the `on:` triggers in `.github/workflows/`: every workflow that listens to
+`edited` creates a run per edited item. On 2026-11-24 an edit of about 340 PR
+descriptions created about 650 runs that held the runners for three hours.
 
 Ordinary Markdown-only diffs receive documentation checks. Verification inputs or
 model-backed contract owners still require behavioral verification, even when
@@ -103,8 +120,8 @@ unit tests (or the agent test inventory for uncovered agent modules), and skips
 World browser suites, behavioral verification, Windows installation and installer
 upgrades. macOS jobs still report their protected names without native work.
 `Delivery checks` requires repository validation and macOS success, and the exact
-expected skips; failure, cancellation or missing results fail closed. It never
-reuses an earlier tooling result. Other classified PRs use the suite rules below; unknown paths retain the full matrix.
+expected skips; failure, cancellation or missing results fail closed. Only a
+title or description edit reuses an earlier tooling result with the identical selection. Other classified PRs use the suite rules below; unknown paths retain the full matrix.
 Main pushes and explicit full local gates always run everything.
 
 ### Shared suite plan and sharding

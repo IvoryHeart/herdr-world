@@ -10,16 +10,18 @@ test("live audit blocks the protected delivery result, release publication and P
       (step: any) => step.run === "bun run security:check",
     ),
   ).toBe(true);
-  expect(ci.jobs["dependency-security"].if).toBeUndefined();
+  // Only a reused Delivery result, which already required the audit, skips it.
+  expect(ci.jobs["dependency-security"].if).toBe(
+    "needs.validation-scope.outputs.mode != 'reuse'",
+  );
   expect(ci.jobs.delivery.needs).toContain("dependency-security");
-  expect(
-    ci.jobs.delivery.steps.find(
-      (step: any) => step.name === "Require current dependency security audit",
-    ),
-  ).toMatchObject({
-    run: 'test "$SECURITY_RESULT" = success',
-    env: { SECURITY_RESULT: "${{ needs.dependency-security.result }}" },
+  const required = ci.jobs.delivery.steps.find(
+    (step: any) => step.name === "Require current dependency security audit",
+  );
+  expect(required.env).toMatchObject({
+    SECURITY_RESULT: "${{ needs.dependency-security.result }}",
   });
+  expect(required.run).toContain('test "$SECURITY_RESULT" = "$expected"');
   for (const [path, job] of [
     [".github/workflows/release.yml", "validate"],
     [".github/workflows/pages.yml", "build"],

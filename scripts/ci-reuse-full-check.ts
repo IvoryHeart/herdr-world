@@ -1,4 +1,4 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import {
   validationProofFromLog,
   sameValidationSelection,
@@ -97,7 +97,12 @@ export async function canReuseFullCheck(
     const applicable = job.steps.find(
       ({ name }) => name === "Verify applicable or reused results",
     );
-    if (source.validation?.mode === "scoped")
+    // Docs and tooling proofs reach here only for description edits; their
+    // identical selection binds them exactly as a scoped proof does.
+    if (
+      source.validation &&
+      ["scoped", "docs", "tooling"].includes(source.validation.mode)
+    )
       return (
         applicable?.conclusion === "success" &&
         selection !== undefined &&
@@ -173,7 +178,21 @@ async function githubJson<T>(path: string, token: string): Promise<T> {
   return (await (await githubResponse(path, token)).json()) as T;
 }
 
-/** Tooling/docs validate afresh; other metadata may reuse exact-revision proof. */
+/**
+ * A PR `edited` event changed its base branch, not only its title or description.
+ * @internal
+ */
+export function baseChanged(event: unknown): boolean {
+  const changes = (event as { changes?: { base?: unknown } } | null)?.changes;
+  return changes?.base !== undefined && changes.base !== null;
+}
+
+/**
+ * A title or description edit changes no tested input, so it reuses any
+ * passing exact-revision proof before stability, tooling or docs would
+ * validate afresh. A new base is a new merge and always validates afresh.
+ * Labels reuse only ordinary full or scoped proof.
+ */
 export async function selectValidationMode(
   action: string | undefined,
   docsOnly: boolean,
@@ -181,20 +200,25 @@ export async function selectValidationMode(
   toolingOnly = false,
   scoped = false,
   stability = false,
+  newBase = false,
 ): Promise<"docs" | "tooling" | "scoped" | "reuse" | "full"> {
+  const reusable = async () => {
+    try {
+      return await reuse();
+    } catch (error) {
+      console.error(
+        `Cannot reuse validation: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  };
+  if (action === "edited" && !newBase && (await reusable())) return "reuse";
   if (stability) return "full";
   if (toolingOnly) return "tooling";
   if (docsOnly) return "docs";
   const fresh = scoped ? "scoped" : "full";
-  if (action !== "edited" && action !== "labeled") return fresh;
-  try {
-    return (await reuse()) ? "reuse" : fresh;
-  } catch (error) {
-    console.error(
-      `Cannot reuse validation: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return fresh;
-  }
+  if (action !== "labeled") return fresh;
+  return (await reusable()) ? "reuse" : fresh;
 }
 
 export function writeValidationOutputs(
@@ -310,6 +334,9 @@ if (import.meta.main) {
       selection.tooling,
       !selection.full,
       stability,
+      baseChanged(
+        JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8")),
+      ),
     );
   } catch (error) {
     console.error(

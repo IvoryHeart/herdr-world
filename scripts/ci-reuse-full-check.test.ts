@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  baseChanged,
   canReuseFullCheck,
   checkoutCommitFromLog,
   isDocsOnlyChange,
@@ -136,8 +137,12 @@ test("metadata events reuse proof while code events always validate", async () =
   ).toBe("docs");
 });
 
-test("browser stability requests fresh full evidence even on metadata events", async () => {
-  for (const action of ["opened", "labeled", "edited"])
+test("browser stability requests fresh full evidence even on labels and base changes", async () => {
+  for (const [action, newBase] of [
+    ["opened", false],
+    ["labeled", false],
+    ["edited", true],
+  ] as const)
     for (const [docs, tooling, scoped] of [
       [false, false, false],
       [true, false, false],
@@ -154,8 +159,82 @@ test("browser stability requests fresh full evidence even on metadata events", a
           tooling,
           scoped,
           true,
+          newBase,
         ),
       ).toBe("full");
+});
+
+test("a title or description edit reuses exact-revision proof in every mode", async () => {
+  for (const [docs, tooling, scoped, stability] of [
+    [false, false, false, false],
+    [true, false, false, false],
+    [false, true, false, false],
+    [false, false, true, false],
+    [false, false, false, true],
+  ] as const) {
+    expect(
+      await selectValidationMode(
+        "edited",
+        docs,
+        async () => true,
+        tooling,
+        scoped,
+        stability,
+      ),
+    ).toBe("reuse");
+    // Without passing proof the edit validates afresh exactly as before.
+    expect(
+      await selectValidationMode(
+        "edited",
+        docs,
+        async () => false,
+        tooling,
+        scoped,
+        stability,
+      ),
+    ).toBe(
+      stability
+        ? "full"
+        : tooling
+          ? "tooling"
+          : docs
+            ? "docs"
+            : scoped
+              ? "scoped"
+              : "full",
+    );
+  }
+});
+
+test("a new base branch is a new merge and never reuses", async () => {
+  for (const scoped of [false, true])
+    expect(
+      await selectValidationMode(
+        "edited",
+        false,
+        async () => {
+          throw new Error("a base change must not query reuse");
+        },
+        false,
+        scoped,
+        false,
+        true,
+      ),
+    ).toBe(scoped ? "scoped" : "full");
+  expect(
+    baseChanged({
+      action: "edited",
+      changes: { base: { ref: { from: "main" } } },
+    }),
+  ).toBe(true);
+  expect(
+    baseChanged({ action: "edited", changes: { body: { from: "old" } } }),
+  ).toBe(false);
+  expect(
+    baseChanged({ action: "edited", changes: { title: { from: "old" } } }),
+  ).toBe(false);
+  expect(baseChanged({ action: "synchronize" })).toBe(false);
+  expect(baseChanged(null)).toBe(false);
 });
 
 test("metadata edits reuse the latest successful full check on the exact base and head", async () => {
@@ -240,14 +319,8 @@ test("behavioral contracts and packaged notices cannot take the Markdown shortcu
     expect(isDocumentationPath(path)).toBe(true);
 });
 
-test("tooling mode validates every event afresh without querying full-result reuse", async () => {
-  for (const action of [
-    "opened",
-    "synchronize",
-    "reopened",
-    "edited",
-    "labeled",
-  ]) {
+test("tooling mode validates every code or label event afresh without querying reuse", async () => {
+  for (const action of ["opened", "synchronize", "reopened", "labeled"]) {
     expect(
       await selectValidationMode(
         action,
@@ -334,57 +407,60 @@ test("every main push forces all suite classes even when a tracked doc is dirty"
   }
 });
 
-test("metadata can reuse a passing scoped merge only with the identical selection", async () => {
-  const { selectValidation } = await import("./validation-scope");
-  const selection = selectValidation(
-    {
-      files: new Set(["scripts/example.test.ts"]),
-      gone: new Set(),
-      deps: new Map(),
-    },
-    ["scripts/example.test.ts"],
-  );
-  const proof = {
-    ...job("skipped", "success", true),
-    run_id: 3,
-    steps: [
-      ...job("skipped", "success", true).steps,
-      { name: "Verify applicable or reused results", conclusion: "success" },
-    ],
-  };
-  const attempt = (
-    recorded = selection,
-    result = "success",
-    parents = [base, head],
-  ) =>
-    canReuseFullCheck(
-      [run(3)],
-      4,
-      126,
-      base,
-      head,
-      "Delivery checks",
-      "Run full repository check",
-      async () => [{ ...proof, conclusion: result }],
-      async () => ({
-        checkoutSha: "d".repeat(40),
-        commitSha: "d".repeat(40),
-        parents,
-        validation: { mode: "scoped", selection: recorded },
-      }),
-      selection,
+test.each(["scoped", "docs", "tooling"])(
+  "metadata can reuse a passing %s merge only with the identical selection",
+  async (mode) => {
+    const { selectValidation } = await import("./validation-scope");
+    const selection = selectValidation(
+      {
+        files: new Set(["scripts/example.test.ts"]),
+        gone: new Set(),
+        deps: new Map(),
+      },
+      ["scripts/example.test.ts"],
     );
-  expect(await attempt()).toBe(true);
-  expect(
-    await attempt({ ...selection, verification: !selection.verification }),
-  ).toBe(false);
-  expect(await attempt({ ...selection, unit: ["scripts/new.test.ts"] })).toBe(
-    false,
-  );
-  expect(await attempt(selection, "failure")).toBe(false);
-  expect(await attempt(selection, "cancelled")).toBe(false);
-  expect(await attempt(selection, "success", [head, base])).toBe(false);
-});
+    const proof = {
+      ...job("skipped", "success", true),
+      run_id: 3,
+      steps: [
+        ...job("skipped", "success", true).steps,
+        { name: "Verify applicable or reused results", conclusion: "success" },
+      ],
+    };
+    const attempt = (
+      recorded = selection,
+      result = "success",
+      parents = [base, head],
+    ) =>
+      canReuseFullCheck(
+        [run(3)],
+        4,
+        126,
+        base,
+        head,
+        "Delivery checks",
+        "Run full repository check",
+        async () => [{ ...proof, conclusion: result }],
+        async () => ({
+          checkoutSha: "d".repeat(40),
+          commitSha: "d".repeat(40),
+          parents,
+          validation: { mode, selection: recorded },
+        }),
+        selection,
+      );
+    expect(await attempt()).toBe(true);
+    expect(
+      await attempt({ ...selection, verification: !selection.verification }),
+    ).toBe(false);
+    expect(await attempt({ ...selection, unit: ["scripts/new.test.ts"] })).toBe(
+      false,
+    );
+    expect(await attempt(selection, "failure")).toBe(false);
+    expect(await attempt(selection, "cancelled")).toBe(false);
+    expect(await attempt(selection, "success", [head, base])).toBe(false);
+  },
+);
 
 test.each(["full", "scoped"])(
   "a newer unsuccessful workflow without a Delivery job blocks older %s success",
