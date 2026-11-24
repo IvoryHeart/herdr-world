@@ -15,6 +15,7 @@ Every World screen answers this too: press ? beside the views (on a phone, the v
 
 - [The town board as a chip](#town-board-chip)
 - [What's new from the Town Master](#town-master)
+- [The town center's ring](#town-center)
 - [Focus for a while](#town-focus)
 - [Apartments: finished agents](#town-apartments)
 - [Quiet agents](#town-quiet)
@@ -79,6 +80,21 @@ The Town Master greets you when you come back: what happened since you left, and
 3. Untick Show this on start to stop the greeting.
 
 Where: Town, beside the town board at the top left. Since 0.3.6.
+
+<a id="town-center"></a>
+
+### The town center's ring
+
+![The town center's ring](../web/public/help/town.center.desktop.light.webp)
+
+Tap the town center to open a ring of actions around its doors: start an agent, talk to the Town master, focus, and more. Buildings opens a second ring around itself with every place in Town.
+
+1. Tap the town center, or Tab to its plaque and press Enter.
+2. Choose an action, or Buildings to see Town's places.
+3. In Buildings, choose a place to open it, as tapping its building does.
+4. Press Back at the centre or Escape to go back; Escape again closes the ring.
+
+Where: Town, the domed building at the top of the town. Since 0.3.6.
 
 <a id="town-focus"></a>
 

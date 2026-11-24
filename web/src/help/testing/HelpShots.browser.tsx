@@ -262,7 +262,12 @@ function Stage() {
       </div>
     );
   return (
-    <div className="town-stage" style={{ position: "fixed", inset: 0 }}>
+    // Town's view shell carries its colour tokens (townAsks.css), as the
+    // town center ring's medallions and labels read them.
+    <div
+      className="town-stage town-view-shell"
+      style={{ position: "fixed", inset: 0 }}
+    >
       <TownMasterFigure />
       {/* A fresh town for each scene, so the usual one is as at load. */}
       <SiteTown
