@@ -41,7 +41,7 @@ export type BoardHost = {
  * runtime's. Presentation only: each runtime keeps its own anchor, cards,
  * colour and actions, qualified by its connection and generation.
  */
-export type BoardZone = {
+type BoardZone = {
   key: string;
   label: string;
   hosts: BoardHost[];

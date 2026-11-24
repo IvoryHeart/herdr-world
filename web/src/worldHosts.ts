@@ -233,7 +233,11 @@ const groupsCache = /* @__PURE__ */ new WeakMap<
   Partial<Record<"machine" | "runtime", WorldHostGroup[]>>
 >();
 
-/** The catalogue's groups, in the order their first runtime appears. */
+/**
+ * The catalogue's groups, in the order their first runtime appears.
+ *
+ * @internal
+ */
 export function worldHostGroups(
   hosts: readonly WorldHost[],
   grouping: "machine" | "runtime",
