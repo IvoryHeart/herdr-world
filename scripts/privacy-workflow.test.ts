@@ -44,12 +44,7 @@ test("privacy CI covers all branches and PRs without scope or metadata bypasses"
   expect(workflow.permissions).toEqual({ contents: "read" });
   expect(workflow.concurrency).toBeUndefined();
   const job = workflow.jobs.privacy;
-  // Every push is scanned, including a PR branch whose PR has merge conflicts
-  // (GitHub then starts no pull_request run). A same-repository PR's commits
-  // all arrived by such pushes, so only a fork PR's run scans.
-  expect(job.if).toBe(
-    "github.event.deleted != true && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository)",
-  );
+  expect(job.if).toBe("github.event.deleted != true");
   expect(job.needs).toBeUndefined();
   expect(job["continue-on-error"]).toBeUndefined();
   const checkout = job.steps.find((step: { uses?: string }) =>
@@ -63,9 +58,6 @@ test("privacy CI covers all branches and PRs without scope or metadata bypasses"
   const scan = job.steps.find((step: { run?: string }) =>
     step.run?.includes("check-privacy.ts"),
   );
-  // No step may stand the scan down once the job runs.
-  for (const step of job.steps as Array<Step & { if?: string }>)
-    expect(step.if).toBeUndefined();
   expect(workflow.on).toHaveProperty("workflow_dispatch");
   for (const event of ["push", "pull_request", "workflow_dispatch"]) {
     const directory = mkdtempSync(join(tmpdir(), "privacy-dispatch-"));
@@ -92,6 +84,7 @@ test("privacy CI covers all branches and PRs without scope or metadata bypasses"
       rmSync(directory, { recursive: true, force: true });
     }
   }
+  expect(scan?.if).toBeUndefined();
   expect(scan?.["continue-on-error"]).toBeUndefined();
 });
 

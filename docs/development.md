@@ -529,8 +529,7 @@ registrations, Board commits, World preparations, construction units and
 projections, counted by dev-only counters in the production modules; see
 `web/src/world/testing/workCeilings.ts`). Their input delays go to the
 non-blocking [World latency trend](../.github/workflows/world-latency-trend.yml):
-nightly, on each main push that changes the browser code or its measurement,
-and on a pull request labelled `latency-trend`, it runs each
+on every main push, and on a pull request labelled `latency-trend`, it runs each
 of those suites alone on a quiet runner (`scripts/wait-for-quiet.ts`: three
 consecutive seconds at least 90% idle, at most 60 s) with the pinned Chrome, and
 its summary sets each p95 and worst delay beside the median of recent main runs

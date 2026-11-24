@@ -1,8 +1,6 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import {
   DESCRIPTION_STEP,
-  HOLD_STEP,
   SCOPE_JOB,
   SCOPE_STEP,
   STABILITY_LABEL,
@@ -62,7 +60,7 @@ const workflow = Bun.YAML.parse(
     };
   };
   permissions: { actions: string };
-  concurrency: { group: string; "cancel-in-progress": boolean };
+  concurrency: { group: string; "cancel-in-progress": string };
   jobs: Record<string, WorkflowJob>;
 };
 
@@ -145,8 +143,6 @@ test("a description-only edit reuses the dependency audit with the rest of the e
   expect(passes("full", "success")).toBe(true);
   expect(passes("scoped", "success")).toBe(true);
   expect(passes("reuse", "skipped")).toBe(true);
-  // A held red result reaches the step that names it.
-  expect(passes("hold", "skipped")).toBe(true);
   expect(passes("full", "skipped")).toBe(false);
   expect(passes("docs", "skipped")).toBe(false);
   expect(passes("full", "failure")).toBe(false);
@@ -218,13 +214,20 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "labeled",
   ]);
   expect(workflow.permissions.actions).toBe("read");
-  // Nothing cancels a run in flight: CI supersede cancels an older run only
-  // when it tests a different tree, and main batches queue behind the running
-  // check, so a batch of merges is tested once at its newest commit.
-  expect(workflow.concurrency["cancel-in-progress"]).toBe(false);
+  expect(workflow.concurrency["cancel-in-progress"]).toContain(
+    "github.event.action != 'edited'",
+  );
+  expect(workflow.concurrency["cancel-in-progress"]).toContain(
+    "github.event.action != 'labeled'",
+  );
+  // Post-merge gate: main pushes share one group that never cancels the
+  // running check, so a batch of merges is tested once at its newest commit.
   expect(workflow.on.push).toEqual({ branches: ["main"] });
   expect(workflow.concurrency.group).toContain(
     "(github.event_name == 'push' && 'main-push')",
+  );
+  expect(workflow.concurrency["cancel-in-progress"]).toContain(
+    "github.event_name == 'pull_request'",
   );
   const delivery = workflow.jobs.delivery;
 
@@ -321,23 +324,6 @@ test("the latency trend measures the trend suites on quiet runners and reports w
     "workflow_dispatch",
   ]);
   expect(trend.permissions).toEqual({ contents: "read", actions: "read" });
-  // Main pushes measure only when what the browser runs or how it is measured
-  // changed; the nightly run and labelled PRs are not filtered.
-  const push = trend.on.push as { branches: string[]; paths: string[] };
-  expect(push.branches).toEqual(["main"]);
-  for (const path of [
-    "web/src/**",
-    "shared/**",
-    "bun.lock",
-    "scripts/run-world-tests.ts",
-    "scripts/world-browser-suites.ts",
-    "scripts/latency-trend.ts",
-    ".github/workflows/world-latency-trend.yml",
-  ])
-    expect(push.paths).toContain(path);
-  expect(push.paths.some((path) => path.startsWith("server/"))).toBe(false);
-  expect(trend.on.pull_request).toEqual({ types: ["labeled", "synchronize"] });
-  expect(trend.on.schedule).toEqual([{ cron: "53 3 * * *" }]);
   const measure = trend.jobs.measure!;
   expect(
     (measure.strategy?.matrix?.suites ?? [])
@@ -490,30 +476,6 @@ test("reuse recognises a description-only failure by the scope job's real names"
   expect(
     scope.steps.find((step) => step.name === SCOPE_STEP)!.if,
   ).toBeUndefined();
-});
-
-test("a metadata event on a red head fails the scope job by name and starts no code job", () => {
-  const scope = workflow.jobs["validation-scope"];
-  const names = scope.steps.map((step) => step.name);
-  // It follows the scope decision and precedes any installer work.
-  expect(names.indexOf(HOLD_STEP)).toBe(names.indexOf(SCOPE_STEP) + 1);
-  const hold = scope.steps.find((step) => step.name === HOLD_STEP)!;
-  expect(hold.if).toBe("steps.scope.outputs.mode == 'hold'");
-  expect(hold["continue-on-error"]).toBeUndefined();
-  const run = Bun.spawnSync(["bash", "-euc", hold.run!], {
-    env: { PATH: process.env.PATH, HELD_RUN: "7" },
-  });
-  expect(run.exitCode).toBe(1);
-  expect(run.stdout.toString()).toContain("Run 7");
-  // A failed scope job skips every job that does not run always(); of those,
-  // only the protected reports run, and they fail.
-  for (const [name, job] of Object.entries(workflow.jobs)) {
-    if (!job.if?.includes("always()")) continue;
-    expect(["validation", "delivery", "launchd"]).toContain(name);
-  }
-  expect(workflow.jobs.validation.if).toContain(
-    "needs.validation-scope.outputs.mode != 'hold'",
-  );
 });
 
 test("protected launchd reports require native work on the existing installer runners", async () => {
@@ -754,44 +716,4 @@ test("release validation passes the full non-PR plan to the shared browser workf
   expect(release.jobs["world-browser"].with?.selection).toBe(
     "${{ needs.validate.outputs.selection }}",
   );
-});
-
-test("CI supersede cancels only in-flight CI runs of a different tree", () => {
-  const supersede = Bun.YAML.parse(
-    readFileSync(".github/workflows/ci-supersede.yml", "utf8"),
-  ) as any;
-  expect(supersede.on).toEqual({ pull_request: { types: ["synchronize"] } });
-  expect(supersede.permissions).toEqual({
-    contents: "read",
-    actions: "write",
-    "pull-requests": "read",
-  });
-  const job = supersede.jobs.supersede;
-  expect(job.if).toBe("github.event.pull_request.state == 'open'");
-  const step = job.steps.find(
-    (step: any) => step.run === "bun scripts/ci-supersede.ts",
-  );
-  expect(step.env.PR_HEAD_REF).toBe(
-    "${{ github.event.pull_request.head.ref }}",
-  );
-  // The handler checks that its push is still the PR head before cancelling.
-  expect(step.env.PR_NUMBER).toBe("${{ github.event.pull_request.number }}");
-  expect(
-    job.steps.find((step: any) => step.uses?.startsWith("actions/checkout@"))
-      .with["persist-credentials"],
-  ).toBe(false);
-  // Delivery learns whether a reused main release commit ran its release walk.
-  const delivery = workflow.jobs.delivery.steps;
-  for (const name of [
-    "Run full repository check",
-    "Verify applicable or reused results",
-  ])
-    expect(delivery.find((step) => step.name === name)?.env?.PACKAGING).toBe(
-      "${{ needs.validation-scope.outputs.packaging }}",
-    );
-  expect(
-    workflow.jobs["validation-scope"].steps.find(
-      (step) => step.name === "Determine validation scope",
-    )?.env?.PR_HEAD_REF,
-  ).toBe("${{ github.event.pull_request.head.ref }}");
 });

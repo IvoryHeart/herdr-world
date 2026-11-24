@@ -16,10 +16,6 @@ on:
         required: true
         type: string
   workflow_dispatch:
-  # Not every main push runs this matrix: a merge that reuses its PR run of
-  # the identical tree skips it, and a queued main run can be replaced by a
-  # newer one. The baseline is also the latest published stable release, which
-  # changes without a push. The nightly run keeps main's upgrade path checked.
   schedule:
     - cron: "17 3 * * *"
 

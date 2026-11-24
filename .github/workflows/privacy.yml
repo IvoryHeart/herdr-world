@@ -1,11 +1,6 @@
 name: Privacy
 
 # Independent of PR creation, validation scope and the main-only full matrix.
-# Every branch push is scanned, as a branch can be public without a PR, and
-# GitHub starts no pull_request run for a PR with merge conflicts. A PR from a
-# branch of this repository is therefore already scanned by its pushes, so its
-# pull_request run starts no job; a fork PR's run scans it, as forks push
-# elsewhere. Each PR push is scanned once.
 on:
     workflow_dispatch:
     push:
@@ -19,7 +14,7 @@ permissions:
 jobs:
     privacy:
         name: Privacy guard
-        if: github.event.deleted != true && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository)
+        if: github.event.deleted != true
         runs-on: ubuntu-latest
         timeout-minutes: 5
         steps:

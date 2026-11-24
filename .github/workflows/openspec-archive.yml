@@ -38,22 +38,17 @@ jobs:
           branch=bot/openspec-archive
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # The branch is recreated from current main each run: the archive
-          # derives every completed delta from main again, so an older batch
-          # never conflicts with what main has since merged. The lease names
-          # the branch head seen here, so a push made meanwhile is not lost.
-          lease="$(git rev-parse --verify --quiet "refs/remotes/origin/$branch" || true)"
-          git checkout -B "$branch" origin/main
+          if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+            git checkout -b "$branch" "origin/$branch"
+            git merge --no-edit origin/main
+          else
+            git checkout -b "$branch"
+          fi
           archive_status=0
           bun scripts/archive-changes.ts > "$RUNNER_TEMP/openspec-archive.json" || archive_status=$?
           cat "$RUNNER_TEMP/openspec-archive.json" >> "$GITHUB_STEP_SUMMARY"
           git add -A openspec/
-          if git diff --cached --quiet; then
-            # Nothing left to archive: an open batch from an earlier main is stale.
-            pr="$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number // empty')"
-            if [ -n "$pr" ]; then gh pr close "$pr" --comment "Main has nothing left to archive."; fi
-            exit "$archive_status"
-          fi
+          if git diff --cached --quiet; then exit "$archive_status"; fi
           bun run spec:check
           git commit -m "docs: archive merged OpenSpec changes"
           bun run check:privacy
@@ -70,7 +65,7 @@ jobs:
           cat "$RUNNER_TEMP/openspec-archive.json" >> "$body"
           bun run check:pr-body "$body"
           gh auth setup-git
-          git push --force-with-lease="refs/heads/$branch:$lease" origin "HEAD:refs/heads/$branch"
+          git push origin "HEAD:refs/heads/$branch"
           pr="$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number // empty')"
           if [ -n "$pr" ]; then
             gh pr edit "$pr" --body-file "$body"

@@ -25,8 +25,6 @@ type TestedSource = {
   checkoutSha: string;
   commitSha: string;
   parents: string[];
-  /** The tested checkout commit's tree: identical trees are identical code and workflows. */
-  tree?: string;
   validation?: ValidationProof;
 };
 type Run = {
@@ -34,7 +32,6 @@ type Run = {
   run_attempt: number;
   head_sha: string;
   conclusion: string | null;
-  status?: string;
   pull_requests: Array<{
     number: number;
     base: { sha: string };
@@ -51,12 +48,6 @@ export const SCOPE_JOB = "Validation scope";
 export const DESCRIPTION_STEP = "Check PR description";
 /** @internal */
 export const SCOPE_STEP = "Determine validation scope";
-/**
- * The scope job's step that fails when a title, description or label change
- * meets a head whose latest result is red (mode `hold`).
- * @internal
- */
-export const HOLD_STEP = "Hold the head's red result";
 
 /**
  * The run failed only because `check:pr-body` rejected the description: the
@@ -77,64 +68,6 @@ function descriptionOnlyFailure(run: Run, jobs: Job[]): boolean {
     step(DESCRIPTION_STEP) === "failure" &&
     step(SCOPE_STEP) === "skipped"
   );
-}
-
-/**
- * The run only held its head's red result for a title, description or label
- * change: it tested no code, so like a description failure it neither hides
- * older evidence nor counts as a verdict of its own. Re-running its failed
- * jobs decides again.
- */
-function heldResult(run: Run, jobs: Job[]): boolean {
-  if (run.conclusion !== "failure") return false;
-  const scope = jobs.filter(({ name }) => name === SCOPE_JOB);
-  return (
-    scope.length === 1 &&
-    scope[0].run_id === run.id &&
-    scope[0].run_attempt === run.run_attempt &&
-    scope[0].steps.find(({ name }) => name === HOLD_STEP)?.conclusion ===
-      "failure"
-  );
-}
-
-/** The run tested no code: its description was refused, or it held a result. */
-function testedNothing(run: Run, jobs: Job[]): boolean {
-  return descriptionOnlyFailure(run, jobs) || heldResult(run, jobs);
-}
-
-/**
- * The head's latest result on this PR is red. A title, description or label
- * change retests nothing, so it holds that red result instead of running the
- * code jobs again (#1373: an edit after an infrastructure failure doubled the
- * PR's macOS demand). Returns the red run's ID. The newest finished run that
- * tested code decides, on any base; a pass, a cancelled run or an unfinished
- * one is no red result to hold, and the event validates as before.
- *
- * @internal
- */
-export async function redHeadResult(
-  runs: Run[],
-  currentRunId: number,
-  prNumber: number,
-  headSha: string,
-  jobsForRun: (runId: number) => Promise<Job[]>,
-): Promise<number | undefined> {
-  for (const run of [...runs].sort((left, right) => right.id - left.id)) {
-    if (
-      run.id === currentRunId ||
-      run.head_sha !== headSha ||
-      !run.pull_requests.some(
-        (pr) => pr.number === prNumber && pr.head.sha === headSha,
-      )
-    )
-      continue;
-    if (run.conclusion === "failure" || run.conclusion === "timed_out") {
-      if (testedNothing(run, await jobsForRun(run.id))) continue;
-      return run.id;
-    }
-    return undefined;
-  }
-  return undefined;
 }
 
 /**
@@ -170,10 +103,9 @@ export async function canReuseFullCheck(
       continue;
     const jobs =
       run.conclusion === "success" ? undefined : await jobsForRun(run.id);
-    // A run stopped by its PR description, or one that only held the head's
-    // red result, tested no code, so it does not hide older evidence; a
-    // correction to the description can still reuse it.
-    if (jobs && testedNothing(run, jobs)) continue;
+    // A run stopped by its PR description tested no code, so it does not hide
+    // older evidence; a correction to the description can still reuse it.
+    if (jobs && descriptionOnlyFailure(run, jobs)) continue;
     // A failed or unfinished candidate may have no aggregate job at all.
     // Its workflow result is still a barrier to older passing evidence.
     if (run.conclusion !== "success") return false;
@@ -231,101 +163,6 @@ export async function canReuseFullCheck(
     return false;
   }
   return false;
-}
-
-/**
- * Find a passing run that already tested this exact tree. A squash merge gives
- * main the tree its PR run tested, and a re-push of the same tree to a PR gives
- * the same merge tree; equal trees also mean an equal ci.yml, so the evidence
- * binds by tree rather than by mutable PR associations.
- *
- * The newest finished run that tested this tree decides: a pass with fresh
- * evidence returns its ID, while a red or cancelled verdict returns nothing so
- * the tree validates afresh. A reused result is not evidence of its own tree,
- * and `requireFull` refuses scoped evidence (main always runs the full check).
- * Returns the reused run's ID, or undefined to validate afresh.
- *
- * @internal
- */
-export async function treeEvidence(
-  runs: Run[],
-  currentRunId: number,
-  tree: string,
-  jobName: string,
-  fullStepName: string,
-  jobsForRun: (runId: number) => Promise<Job[]>,
-  testedSourceForJob: (jobId: number) => Promise<TestedSource | undefined>,
-  options: { requireFull: boolean; selection?: ValidationSelection },
-): Promise<number | undefined> {
-  if (!/^[0-9a-f]{40}$/.test(tree)) return undefined;
-  for (const run of [...runs].sort((left, right) => right.id - left.id)) {
-    // Unfinished runs are no verdict yet; the newest finished one decides.
-    if (run.id === currentRunId || run.conclusion === null) continue;
-    const jobs = await jobsForRun(run.id);
-    if (testedNothing(run, jobs)) continue;
-    const scope = jobs.filter(({ name }) => name === SCOPE_JOB);
-    const tested =
-      scope.length === 1 &&
-      scope[0].run_id === run.id &&
-      scope[0].conclusion !== "skipped"
-        ? await testedSourceForJob(scope[0].id)
-        : undefined;
-    if (!tested?.tree) {
-      // A run that chose no scope tested nothing; a red run whose tree is
-      // unknown may have tested this one, so it stops the search.
-      if (run.conclusion === "success" || scope.length === 0) continue;
-      return undefined;
-    }
-    if (tested.tree !== tree) continue;
-    if (run.conclusion !== "success") return undefined;
-    const job = jobs.find(({ name }) => name === jobName);
-    if (
-      !job ||
-      job.run_id !== run.id ||
-      job.run_attempt !== run.run_attempt ||
-      job.conclusion !== "success"
-    )
-      return undefined;
-    const source = await testedSourceForJob(job.id);
-    if (
-      !source?.validation ||
-      source.checkoutSha !== source.commitSha ||
-      source.tree !== tree
-    )
-      return undefined;
-    if (source.validation.mode === "reuse") continue;
-    const step = (name: string) =>
-      job.steps.find((step) => step.name === name)?.conclusion;
-    if (source.validation.mode === "full")
-      return step(fullStepName) === "success" ? run.id : undefined;
-    if (options.requireFull) return undefined;
-    return step("Verify applicable or reused results") === "success" &&
-      options.selection !== undefined &&
-      sameValidationSelection(source.validation.selection, options.selection)
-      ? run.id
-      : undefined;
-  }
-  return undefined;
-}
-
-/**
- * The commit changes the public plugin version: it is a release commit, and
- * Publish Release needs its own release walk and native packages from main CI.
- * @internal
- */
-export function isReleaseCommit(sha: string, cwd = process.cwd()): boolean {
-  const version = (revision: string) => {
-    const result = spawnSync("git", ["show", `${revision}:herdr-plugin.toml`], {
-      cwd,
-      encoding: "utf8",
-    });
-    return result.status === 0
-      ? /^version = "([^"]+)"/m.exec(result.stdout)?.[1]
-      : undefined;
-  };
-  const current = version(sha);
-  // An unreadable version fails safe: the walk and native packages run.
-  return current === undefined || current !== version(`${sha}^1`);
 }
 
 /** Read only the checkout action's full commit output; ambiguous logs fail closed. */
@@ -435,11 +272,8 @@ export function isEarlierBase(
 /**
  * A title or description edit, or a label other than the stability label,
  * changes no tested input, so it reuses the head's passing proof before
- * stability, tooling or docs would validate afresh, and holds the head's red
- * result (`heldRed`) rather than retesting the unchanged code. A new base is a new merge
- * and always validates afresh; so does adding the stability label. A new
- * commit reuses only a passing run that tested the identical merge tree
- * (`sameTree`), never while the stability label asks for fresh runs.
+ * stability, tooling or docs would validate afresh. A new base is a new merge
+ * and always validates afresh; so does adding the stability label.
  */
 export async function selectValidationMode(
   action: string | undefined,
@@ -450,12 +284,10 @@ export async function selectValidationMode(
   stability = false,
   newBase = false,
   stabilityAdded = false,
-  sameTree?: () => Promise<boolean>,
-  heldRed?: () => Promise<boolean>,
-): Promise<"docs" | "tooling" | "scoped" | "reuse" | "hold" | "full"> {
-  const reusable = async (check = reuse) => {
+): Promise<"docs" | "tooling" | "scoped" | "reuse" | "full"> {
+  const reusable = async () => {
     try {
-      return await check();
+      return await reuse();
     } catch (error) {
       console.error(
         `Cannot reuse validation: ${error instanceof Error ? error.message : String(error)}`,
@@ -467,29 +299,18 @@ export async function selectValidationMode(
     (action === "edited" && !newBase) ||
     (action === "labeled" && !stabilityAdded);
   if (metadata && (await reusable())) return "reuse";
-  // An unreadable answer validates, as before: retesting is never unsafe.
-  if (metadata && heldRed && (await reusable(heldRed))) return "hold";
-  const commit = ["opened", "synchronize", "reopened"].includes(action ?? "");
-  if (commit && !stability && sameTree && (await reusable(sameTree)))
-    return "reuse";
   if (stability) return "full";
   if (toolingOnly) return "tooling";
   if (docsOnly) return "docs";
   return scoped ? "scoped" : "full";
 }
 
-/**
- * `releaseWalk` keeps the native installer matrix and release walk on a reused
- * main release commit: Publish Release takes its packages and walk reports
- * from that exact commit's main CI run.
- */
 export function writeValidationOutputs(
   output: string,
   mode: string,
   selection: ValidationSelection,
-  releaseWalk = false,
 ) {
-  const active = mode !== "reuse" && mode !== "hold";
+  const active = mode !== "reuse";
   appendFileSync(
     output,
     [
@@ -497,109 +318,8 @@ export function writeValidationOutputs(
       `selection=${JSON.stringify(selection)}`,
       `world=${active && !!(selection.world.length + selection.web.length)}`,
       `verification=${active && selection.verification}`,
-      `packaging=${(active && selection.packaging) || releaseWalk}`,
+      `packaging=${active && selection.packaging}`,
     ].join("\n") + "\n",
-  );
-}
-
-function treeOf(sha: string): string {
-  return execFileSync("git", ["rev-parse", `${sha}^{tree}`], {
-    encoding: "utf8",
-  }).trim();
-}
-
-function jobsReader(repo: string, token: string) {
-  return async (runId: number) =>
-    (
-      await githubJson<{ jobs: Job[] }>(
-        `/repos/${repo}/actions/runs/${runId}/jobs?per_page=100`,
-        token,
-      )
-    ).jobs;
-}
-
-function testedSourceReader(repo: string, token: string) {
-  return async (jobId: number): Promise<TestedSource | undefined> => {
-    const log = await (
-      await githubResponse(`/repos/${repo}/actions/jobs/${jobId}/logs`, token)
-    ).text();
-    const commit = checkoutCommitFromLog(log);
-    if (!commit) return undefined;
-    const data = await githubJson<{
-      sha: string;
-      tree: { sha: string };
-      parents: Array<{ sha: string }>;
-    }>(`/repos/${repo}/git/commits/${commit}`, token);
-    return {
-      checkoutSha: commit,
-      commitSha: data.sha,
-      parents: data.parents.map(({ sha }) => sha),
-      tree: data.tree?.sha,
-      validation: validationProofFromLog(log),
-    };
-  };
-}
-
-/** Recent CI runs of one PR branch, newest first. */
-async function branchRuns(repo: string, token: string, branch: string) {
-  const query = new URLSearchParams({
-    event: "pull_request",
-    branch,
-    per_page: "30",
-  });
-  return (
-    await githubJson<{ workflow_runs: Run[] }>(
-      `/repos/${repo}/actions/workflows/ci.yml/runs?${query}`,
-      token,
-    )
-  ).workflow_runs;
-}
-
-function reportReuse(repo: string, runId: number, tree: string) {
-  const url = `${process.env.GITHUB_SERVER_URL ?? "https://github.com"}/${repo}/actions/runs/${runId}`;
-  const line = `Reused from run ${runId}, which tested the same tree ${tree.slice(0, 12)}: ${url}`;
-  console.log(line);
-  if (process.env.GITHUB_STEP_SUMMARY)
-    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${line}\n`);
-}
-
-/**
- * A main commit reuses the full PR run that tested its exact tree: the squash
- * merge of a PR whose last full run was on the base it merged onto.
- */
-async function mainPushEvidence(
-  repo: string,
-  token: string,
-  sha: string,
-  currentRunId: number,
-  jobName: string,
-  fullStepName: string,
-): Promise<number | undefined> {
-  const pulls = (
-    await githubJson<
-      Array<{
-        merged_at: string | null;
-        merge_commit_sha: string | null;
-        base: { ref: string };
-        head: { ref: string };
-      }>
-    >(`/repos/${repo}/commits/${sha}/pulls`, token)
-  ).filter(
-    (pull) =>
-      pull.merged_at &&
-      pull.merge_commit_sha === sha &&
-      pull.base.ref === "main",
-  );
-  if (pulls.length !== 1) return undefined;
-  return treeEvidence(
-    await branchRuns(repo, token, pulls[0].head.ref),
-    currentRunId,
-    treeOf(sha),
-    jobName,
-    fullStepName,
-    jobsReader(repo, token),
-    testedSourceReader(repo, token),
-    { requireFull: true },
   );
 }
 
@@ -613,48 +333,11 @@ if (import.meta.main) {
   const fullStepName = process.env.REQUIRED_FULL_STEP;
   if (process.env.GITHUB_EVENT_NAME !== "pull_request") {
     if (!output) throw new Error("Missing CI output file");
-    const sha = process.env.GITHUB_SHA ?? "";
-    const runId = Number(process.env.GITHUB_RUN_ID);
-    let mode = "full";
-    let releaseWalk = false;
-    // Only main pushes reuse; dispatches and Release always validate fully.
-    if (
-      process.env.GITHUB_EVENT_NAME === "push" &&
-      process.env.GITHUB_REF === "refs/heads/main" &&
-      repo?.match(/^[\w.-]+\/[\w.-]+$/) &&
-      token &&
-      jobName &&
-      fullStepName &&
-      /^[0-9a-f]{40}$/.test(sha) &&
-      Number.isSafeInteger(runId)
-    ) {
-      try {
-        const reused = await mainPushEvidence(
-          repo,
-          token,
-          sha,
-          runId,
-          jobName,
-          fullStepName,
-        );
-        if (reused) {
-          mode = "reuse";
-          releaseWalk = isReleaseCommit(sha);
-          reportReuse(repo, reused, treeOf(sha));
-        }
-      } catch (error) {
-        console.error(
-          `Cannot reuse the PR run: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    }
     writeValidationOutputs(
       output,
-      mode,
+      "full",
       fullValidationSelection(process.cwd()),
-      releaseWalk,
     );
-    console.log(`${jobName ?? "Validation"}: ${mode} validation`);
     process.exit(0);
   }
 
@@ -674,7 +357,6 @@ if (import.meta.main) {
     throw new Error("Missing CI reuse context");
 
   let mode = "full";
-  let heldRun: number | undefined;
   const common = execFileSync("git", ["merge-base", baseSha, headSha], {
     encoding: "utf8",
   }).trim();
@@ -686,24 +368,18 @@ if (import.meta.main) {
     const event: unknown = JSON.parse(
       readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8"),
     );
-    const headRuns = async () => {
-      const query = new URLSearchParams({
-        head_sha: headSha,
-        event: "pull_request",
-        per_page: "100",
-      });
-      return (
-        await githubJson<{ workflow_runs: Run[] }>(
-          `/repos/${repo}/actions/workflows/ci.yml/runs?${query}`,
-          token,
-        )
-      ).workflow_runs;
-    };
     mode = await selectValidationMode(
       process.env.PR_ACTION,
       selection.documentation,
       async () => {
-        const runs = await headRuns();
+        const query = new URLSearchParams({
+          head_sha: headSha,
+          event: "pull_request",
+          per_page: "100",
+        });
+        const { workflow_runs: runs } = await githubJson<{
+          workflow_runs: Run[];
+        }>(`/repos/${repo}/actions/workflows/ci.yml/runs?${query}`, token);
         return canReuseFullCheck(
           runs,
           currentRunId,
@@ -712,8 +388,33 @@ if (import.meta.main) {
           headSha,
           jobName,
           fullStepName,
-          jobsReader(repo, token),
-          testedSourceReader(repo, token),
+          async (runId) =>
+            (
+              await githubJson<{ jobs: Job[] }>(
+                `/repos/${repo}/actions/runs/${runId}/jobs?per_page=100`,
+                token,
+              )
+            ).jobs,
+          async (jobId) => {
+            const log = await (
+              await githubResponse(
+                `/repos/${repo}/actions/jobs/${jobId}/logs`,
+                token,
+              )
+            ).text();
+            const commit = checkoutCommitFromLog(log);
+            if (!commit) return undefined;
+            const data = await githubJson<{
+              sha: string;
+              parents: Array<{ sha: string }>;
+            }>(`/repos/${repo}/git/commits/${commit}`, token);
+            return {
+              checkoutSha: commit,
+              commitSha: data.sha,
+              parents: data.parents.map(({ sha }) => sha),
+              validation: validationProofFromLog(log),
+            };
+          },
           selection,
           async (sha) => isEarlierBase(sha, baseSha),
         );
@@ -723,31 +424,6 @@ if (import.meta.main) {
       stability,
       baseChanged(event),
       stabilityLabelAdded(event),
-      async () => {
-        const tree = treeOf(process.env.GITHUB_SHA ?? "HEAD");
-        const reused = await treeEvidence(
-          await branchRuns(repo, token, process.env.PR_HEAD_REF ?? ""),
-          currentRunId,
-          tree,
-          jobName,
-          fullStepName,
-          jobsReader(repo, token),
-          testedSourceReader(repo, token),
-          { requireFull: false, selection },
-        );
-        if (reused) reportReuse(repo, reused, tree);
-        return reused !== undefined;
-      },
-      async () => {
-        heldRun = await redHeadResult(
-          await headRuns(),
-          currentRunId,
-          prNumber,
-          headSha,
-          jobsReader(repo, token),
-        );
-        return heldRun !== undefined;
-      },
     );
   } catch (error) {
     console.error(
@@ -756,13 +432,5 @@ if (import.meta.main) {
     selection = fullValidationSelection(process.cwd());
   }
   writeValidationOutputs(output, mode, selection);
-  if (mode === "hold" && heldRun) {
-    const url = `${process.env.GITHUB_SERVER_URL ?? "https://github.com"}/${repo}/actions/runs/${heldRun}`;
-    const line = `This head's latest result, run ${heldRun}, is red, and a title, description or label change retests nothing: ${url}. Re-run that run's failed jobs, then this run's failed jobs, or push a commit.`;
-    appendFileSync(output, `held_run=${heldRun}\n`);
-    console.log(line);
-    if (process.env.GITHUB_STEP_SUMMARY)
-      appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${line}\n`);
-  }
   console.log(`${jobName}: ${mode} validation`);
 }

@@ -9,15 +9,15 @@ for compatibility with branch rules.
 | --- | --- | --- |
 | Local pre-commit | `check:commit`: no live `.agents/` files, read-only formatting and lint | Quick feedback before a commit; not a delivery gate |
 | Local pre-push | `check:changed`: static checks and affected non-browser units; gate/configuration changes run all non-browser units | Affected tests save local work; CI remains authoritative |
-| Privacy on every branch push and PR | Scan added lines in every introduced commit for private material, with redacted diagnostics | Independent of PR creation and validation scope; every push is scanned (GitHub starts no PR run for a conflicted PR), so a PR from a branch of this repository starts no second scan and only a fork PR's run scans; local pre-push scans the actual pushed refs too |
+| Privacy on every branch push and PR | Scan added lines in every introduced commit for private material, with redacted diagnostics | Independent of PR creation and validation scope; local pre-push scans the actual pushed refs too |
 | CI on a PR | Validate the proposed merge; check its description and changelog policy | One shared scope decision; native platforms and browser shards keep separate runners |
-| CI on main | Execute the complete integrated matrix, unless the merged PR's full run tested the identical tree; then reuse it and report "Reused from run N" | A different tree is different code, so it runs in full |
+| CI on main | Execute the complete integrated matrix, without model-result or installer-build reuse | PR success cannot prove the result of later merges |
 | Main gate | Classify failed push CI, rerun a recognized infrastructure failure once, or prepare an issue and revert | Does not merge a revert; green main resolves earlier alerts |
 | Web asset headroom | Compare PR asset deltas with current main and re-evaluate open PRs after merges | Catches concurrent budget consumption beyond one PR's tested base |
 | Town golden images | Compare five synthetic Town screenshots on manual dispatch while automatic reporting is quarantined | Advisory, separate from Delivery checks; exact pixels with pinned Chrome, fonts, clock and SwiftShader |
 | Prepare Release | Generate and validate release files in a checkout, then open a PR and dispatch CI | Generated files need validation before review |
 | Publish Release and Release | Authorize exact Linux/macOS release-walk bytes and signed-in local evidence before the maintainer tags; publish the same tested Unix packages | Publication requires the retained pre-tag authorization; tag protection remains in force |
-| Deploy Pages | Build and publish the documentation site and film when their inputs change on main | Site publication is separate from application release acceptance |
+| Deploy Pages | Build and publish the documentation site and film | Site publication is separate from application release acceptance |
 | Upstream automation | Detect a frozen source release, request local integration and independently review it | External runtime adoption remains a separate decision |
 
 ## Check commands
@@ -60,13 +60,8 @@ that label requests a fresh stability run. When main has moved since the head
 was last tested, a title or description edit or such a label restores the head's
 latest Delivery checks verdict if it was tested on the current base commit or
 one of its ancestors: the event changed no code, so a green status stays as it
-was. A red latest verdict is held instead: Validation scope fails at "Hold the
-head's red result", naming the red run, and no code job starts, so the required
-checks stay red without testing the unchanged code again. Re-running the red
-run's failed jobs, then the held run's failed jobs, decides afresh; a held run
-tested no code, so it never hides another result or counts as evidence. A
-cancelled or unfinished latest verdict is never passed over; that event
-validates afresh. The selection is not re-derived for the new base.
+was. A red, cancelled or unfinished latest verdict is never passed over; that
+event validates afresh. The selection is not re-derived for the new base.
 A new commit or base change tests the new merge as usual. GitHub's historical PR association can change, so
 it is not proof of the tested base. Reuse binds the selected Delivery job
 to its run and attempt, reads the full checkout SHA only from that job's checkout
@@ -89,37 +84,6 @@ The release-preview label can therefore request archives without repeating a
 successful applicable check. Other label changes still create workflow runs, but can
 take this same short path. A title or description edit rebuilds no preview
 archives; a new commit, a base change or a label does.
-
-### Test a tree once
-
-A git tree is the exact tested content, so a run that tested a tree is evidence
-for every later run of that tree. Nothing cancels a CI run in flight
-(`cancel-in-progress: false`). A new commit queues behind the PR's current run,
-and [CI supersede](../.github/workflows/ci-supersede.yml) cancels that run only
-when its checkout tested a different tree, or has not recorded its tree yet. A
-re-push of an identical tree keeps the run, and the queued run reuses its result.
-GitHub may deliver push events out of order, so a supersede handler acts only
-while its push is still the PR head, and cancels only runs created before its
-own run.
-A fork's read-only token cannot cancel, so its older run finishes first.
-
-A new commit (`opened`, `synchronize`, `reopened`) reuses the newest finished
-run on the PR branch that tested the identical tree with the identical selection
-(`scripts/ci-reuse-full-check.ts`, `treeEvidence`). The tree is read from the
-Validation scope job's checkout log, never from the PR association. The newest
-run of that tree decides: a red or cancelled verdict is never passed over, a red
-run whose tree is unknown also stops the search, and a reused result is not
-evidence of its own tree. The `world-browser-stability` label still asks for a
-fresh run.
-
-A push to main reuses the merged PR's latest full Delivery checks run when the
-squash commit's tree equals the tree that run tested, which holds when the PR was
-merged on an up-to-date base. Main accepts only a full run; a scoped run never
-stands in for main. The run summary says "Reused from run N" with the run's link.
-A merge whose tree differs, a missing or ambiguous PR, and any API error run the
-complete matrix. A reused release commit (one that changes the version in
-`herdr-plugin.toml`) still runs the installer matrix and the release walk, because
-Publish Release needs their reports and package bytes from that main run.
 
 A closed or merged PR starts no CI work. GitHub still creates a run for its
 edit or label, but Validation scope requires an open PR and every other job
@@ -222,8 +186,7 @@ World/web suites, without escalating to native or model work. Executable gate
 policy still selects the full matrix. Browser jobs use the pinned test Chrome
 (`tools/chrome/test-chrome.json`) and never retry. Timing is not a CI check: the
 separate, non-blocking World latency trend workflow measures the dense suites on
-quiet runners nightly, for main pushes that change the browser code or its
-measurement, and for `latency-trend`-labelled PRs, and reports them
+quiet runners nightly, for main pushes and `latency-trend`-labelled PRs and reports them
 beside main's recent runs on the same CPU model.
 
 The [Town golden-image report](SCREENSHOTS.md#town-golden-image-report) remains

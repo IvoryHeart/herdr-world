@@ -105,13 +105,6 @@ export type { PlaceColorChoice, TownRoomActions } from "./townRoomActions";
 import type { TownRoomActions } from "./townRoomActions";
 /** Camera kept across Office visits within one page session. */
 const savedCameras = new Map<string, { x: number; y: number; z: number }>();
-/**
- * @internal Forgets the kept cameras, so the next town opens at home (the
- * Help picture stage mounts a fresh town for each picture).
- */
-export function forgetTownCameras() {
-  savedCameras.clear();
-}
 const NO_COLORS: TerminalColors = {};
 const NO_RELATIONS = { relations: [], places: new Map() };
 const NO_PINS: DeskPins = {};
