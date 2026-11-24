@@ -571,8 +571,9 @@ draws it.
   entity's own connection and generation.
 - **Observation decides.** A runtime acknowledgement does not change World's value;
   the next read that started after it does. A read that began before a write is
-  discarded, so an old value cannot return. Until then the asking browser shows the
-  requested value as pending; a refusal shows World's value again at once.
+  discarded, so an old value cannot return. The asking browser shows the requested
+  value as pending until its replica has the World revision that carries the outcome;
+  a refusal shows World's value again at once.
 - **Offline hosts** stay visible, stale and non-actionable. Runtime commands to them
   are refused, never queued; World-owned facts about them can still change.
 - **History.** Every command is a history entry; undo is a new command, refused if

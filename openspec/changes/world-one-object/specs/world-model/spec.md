@@ -83,7 +83,10 @@ observation.
 ### Requirement: Pending, refused and uncertain commands
 
 Between a command and its observation, the browser that sent it SHALL show the
-requested value, marked pending, in every view of that browser. World SHALL list
+requested value, marked pending, in every view of that browser. A stored or observed
+outcome SHALL travel in the World revision that carries its value, and the browser
+SHALL keep the pending value until its replica has that revision, so the old value
+never shows in between. World SHALL list
 commands in progress so other clients can mark the entity as changing. A refused or
 failed command SHALL show World's value again at once, with the reason where the user
 acted. A command whose acknowledgement was lost SHALL be uncertain until the first
@@ -94,6 +97,12 @@ service restart loses nothing.
 #### Scenario: Refusal
 - **WHEN** World or the runtime refuses a command
 - **THEN** the pending value disappears and every view shows World's value
+
+#### Scenario: Observed before the browser has it
+- **WHEN** World observes a rename the browser asked for, and the revision carrying it
+  has not yet reached that browser
+- **THEN** that browser keeps showing the requested name, marked pending, and drops
+  the mark when the revision arrives; it never shows the old name in between
 
 #### Scenario: Reload during a move
 - **WHEN** the browser reloads while a multi-step move is running

@@ -5,11 +5,12 @@
 - [x] 1.2 Design-stage Quint model [`write-path.qnt`](write-path.qnt), with the
   tooling locked by `bun run verification:setup`
   (`Q=tools/quint/node_modules/@informalsystems/quint/dist/src/cli.js`):
-  - `node $Q test write-path.qnt`: 5 scenarios pass.
+  - `node $Q test write-path.qnt`: 6 scenarios pass.
   - `node $Q run write-path.qnt --invariant safety --max-samples 200000 --max-steps 30 --seed 7 --backend=rust`:
     no violation.
   - Control: with `FENCED = false` the same run finds a violation and
-    `lateReadIsDiscardedTest` fails.
+    `lateReadIsDiscardedTest` fails; settling a command without naming its
+    revision fails `noFlashBack` and `observedHoldsUntilAdoptedTest`.
 
 Each later step is one PR of about 300 changed lines, excluding tests. Each leaves
 `main` working and moves at least one fact fully onto the World path: derived on the

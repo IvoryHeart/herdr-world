@@ -136,7 +136,7 @@ The command states reuse the existing `command_evidence` stages
 | `accepted` | Checked and recorded | The asking browser shows the requested value, marked pending |
 | `stored` | World-owned fact committed | The new value, in every view |
 | `sent` | Runtime acknowledged on the named connection and generation | Still pending in the asking browser; the old value elsewhere |
-| `observed` | A read that started after the acknowledgement was applied | Whatever that read found, in every view |
+| `observed` | A read that started after the acknowledgement was applied | Whatever that read found, in every view, once each browser has the revision that carries it |
 | `refused` | Checked and refused; nothing was sent | World's value at once, with the reason where the user acted |
 | `failed` | The source reported an error | World's value at once, with the reason |
 | `uncertain` | The connection was lost before an acknowledgement | World's value, marked stale; settled by the first read after reconnection |
@@ -144,7 +144,12 @@ The command states reuse the existing `command_evidence` stages
 **Between write and observation.** The pending value lives in the browser's World
 replica, not in a view, so Town, Board, Desk and Spaces in that browser all show the
 same pending value. It is drawn as the new value with a pending mark. It is replaced
-when the command reaches `observed`, `stored`, `refused`, `failed` or `uncertain`.
+when the command reaches `refused`, `failed` or `uncertain`, or when the browser's
+replica reaches the World revision that carries the `stored` or `observed` outcome.
+The outcome and the value travel together: World records the command's outcome with
+the revision that carries the value it observed, and the browser learns the outcome
+only by adopting that revision (or a later one). So a requested value that World now
+holds never flashes back to the old value while the new revision is on its way.
 Other browsers and the CLI show World's value until the observation lands; World also
 lists commands in progress so they can mark the entity as changing.
 
@@ -250,6 +255,8 @@ going offline and back. It checks:
 
 - World only holds values the source really held, and never goes back in time.
 - Views only hold values World published, and never go back in time.
+- Settling a command never makes a view show anything but World's current value: the
+  pending value stays until the view adopts the revision that carries the outcome.
 - A confirmed command is never undone by a late observation.
 - Nothing is sent to an offline source.
 - Once everything is delivered and read, World and every view show the source's
@@ -258,13 +265,17 @@ going offline and back. It checks:
 Commands (`Q=tools/quint/node_modules/@informalsystems/quint/dist/src/cli.js`, after
 `bun run verification:setup`):
 
-- `node $Q test write-path.qnt`: 5 scenarios pass (late read discarded, source change
-  after a command wins, refusal restores, offline, two views converge).
+- `node $Q test write-path.qnt`: 6 scenarios pass (late read discarded, source change
+  after a command wins, refusal restores, offline, observed command holds until its
+  revision is adopted, two views converge).
 - `node $Q run write-path.qnt --invariant safety --max-samples 200000 --max-steps 30 --seed 7 --backend=rust`:
   no violation.
 - Control: with `FENCED = false` (World applies any late read, takes an
   acknowledgement as the value, views take any push) the same run finds a violation
-  and the late-read scenario fails.
+  and the late-read scenario fails. A second control, settling the command without
+  naming its revision (`crev` 0 in `applyRead`), fails `noFlashBack` and the
+  observed-holds scenario: the asking view shows the old value after World took the
+  new one.
 
 The model stays design-stage in this folder, like `agent-identity.qnt`. The step that
 adds the command records and epoch fence (tasks.md step 4) moves it into `quint/`
