@@ -2052,39 +2052,46 @@ async function run() {
     "close shared navigator Inspector",
   );
   // World's one search in Town: the first choice goes to the result on the
-  // map; choosing it again selects it, as `/` did.
-  const findLocal = async () => {
-    const box = await openOneSearch("");
-    enterSearch(box, "Local");
-    await until(
-      () => document.querySelector("[cmdk-item][data-selected=true]"),
-      "Town's one search finding Local",
-    );
-    box.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "Enter",
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
-    await until(
-      () => !document.querySelector(".command-popover"),
-      "choosing closing the one search",
-    );
-  };
-  await findLocal();
+  // map and keeps the list open; choosing it again closes the box and selects
+  // it, as `/` did.
+  const box = await openOneSearch("");
+  enterSearch(box, "Local");
+  await until(
+    () => document.querySelector("[cmdk-item][data-selected=true]"),
+    "Town's one search finding Local",
+  );
+  const chooseLocal = () =>
+    document
+      .querySelector<HTMLInputElement>(".command-popover input")!
+      .dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+  chooseLocal();
+  await until(
+    () =>
+      document
+        .querySelector('[aria-label="Town search"]')
+        ?.textContent?.includes("Local") === true,
+    "Town keeps the chosen search",
+  );
   await settle();
+  check(
+    !!document.querySelector(".command-popover [cmdk-item]"),
+    "Town's first search choice keeps the list open",
+  );
   check(
     !document.querySelector('.world-selection-panel[data-kind="host"]'),
     "first Town search choice only goes to the result",
   );
-  check(
-    document
-      .querySelector('[aria-label="Town search"]')
-      ?.textContent?.includes("Local") === true,
-    "Town does not keep the chosen search",
+  chooseLocal();
+  await until(
+    () => !document.querySelector(".command-popover"),
+    "choosing again closing the one search",
   );
-  await findLocal();
   await until(
     () =>
       document
