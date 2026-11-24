@@ -162,8 +162,8 @@ if (process.env.COMMAND_BOX_KEY_DOM !== "1") {
                       score: 0.8,
                       run: () => chosen.push("builder"),
                       secondary: {
-                        label: "Show in Town",
-                        run: () => chosen.push("show builder"),
+                        label: "Open terminal",
+                        run: () => chosen.push("open builder"),
                       },
                     },
                   ],
@@ -210,7 +210,7 @@ if (process.env.COMMAND_BOX_KEY_DOM !== "1") {
     });
     expect(chosen).toEqual(["builder"]);
     expect(popover()).toBeNull();
-    // Shift+Enter takes the find's second action: show it in this view.
+    // Shift+Enter takes the find's second action: open its terminal.
     act(() => {
       document.body.dispatchEvent(keyK({ ctrlKey: true }));
     });
@@ -221,7 +221,7 @@ if (process.env.COMMAND_BOX_KEY_DOM !== "1") {
     });
     expect(
       popover()!.querySelector(".command-item-secondary")?.textContent,
-    ).toBe("Show in Town");
+    ).toBe("Open terminal");
     act(() => {
       again.dispatchEvent(
         new KeyboardEvent("keydown", {
@@ -232,7 +232,7 @@ if (process.env.COMMAND_BOX_KEY_DOM !== "1") {
         }),
       );
     });
-    expect(chosen).toEqual(["builder", "show builder"]);
+    expect(chosen).toEqual(["builder", "open builder"]);
     expect(popover()).toBeNull();
     // The phone's menu opens it by event; its key, pressed inside, closes it.
     act(() => openCommandBox());
@@ -243,6 +243,88 @@ if (process.env.COMMAND_BOX_KEY_DOM !== "1") {
         .dispatchEvent(keyK({ ctrlKey: true }));
     });
     expect(popover()).toBeNull();
+    act(() => root.unmount());
+    element.remove();
+  });
+  test("/, Ctrl+F and Cmd+K open the same box, sharing its search with the view", () => {
+    selectShortcutPreset("linux");
+    const log: string[] = [];
+    let running = "";
+    const element = document.createElement("div");
+    document.body.append(element);
+    const root = createRoot(element);
+    act(() =>
+      root.render(
+        createElement(CommandCombobox, {
+          extension: { captureKey: null, groups: [] },
+          find: () => null,
+          finderSearch: {
+            seed: () => running,
+            change: (value: string) => {
+              running = value;
+              log.push(`type ${value}`);
+            },
+            closed: () => log.push("closed"),
+          },
+        }),
+      ),
+    );
+    const popover = () => document.querySelector(".command-popover");
+    const press = (init: KeyboardEventInit) => {
+      const event = new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      act(() => {
+        document.body.dispatchEvent(event);
+      });
+      return event.defaultPrevented;
+    };
+    const input = () => popover()!.querySelector<HTMLInputElement>("input")!;
+    const close = () =>
+      act(() => {
+        input().dispatchEvent(keyK({ ctrlKey: true }));
+      });
+    // `/` opens it, and what is typed reaches the view as it is typed.
+    expect(press({ key: "/", code: "Slash" })).toBe(true);
+    expect(popover()).not.toBeNull();
+    act(() => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(input(), "harbor");
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(log).toEqual(["type harbor"]);
+    close();
+    expect(log).toEqual(["type harbor", "closed"]);
+    // Ctrl+F and Ctrl+K open the same box, empty, for a new search.
+    expect(press({ key: "f", code: "KeyF", ctrlKey: true })).toBe(true);
+    expect(input().value).toBe("");
+    close();
+    expect(press({ key: "k", code: "KeyK", ctrlKey: true })).toBe(true);
+    expect(input().value).toBe("");
+    close();
+    // The view's search chip resumes the running search.
+    act(() => openCommandBox({ resume: true }));
+    expect(input().value).toBe("harbor");
+    close();
+    // In a text field `/` types there.
+    const typedField = document.createElement("input");
+    document.body.append(typedField);
+    const slash = new KeyboardEvent("keydown", {
+      key: "/",
+      code: "Slash",
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      typedField.dispatchEvent(slash);
+    });
+    expect(slash.defaultPrevented).toBe(false);
+    expect(popover()).toBeNull();
+    typedField.remove();
     act(() => root.unmount());
     element.remove();
   });

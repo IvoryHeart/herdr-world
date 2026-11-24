@@ -80,6 +80,8 @@ import {
   worldLeafColorTarget,
 } from "./worldCommandBox";
 import { useTerminalColors } from "./useTerminalColors";
+import { worldFinder } from "./worldFinder";
+import { townLandmarkResults } from "./town/townSearch";
 import { terminalColor } from "./terminalColor";
 import { NeedsYouCounter } from "./NeedsYouTab";
 import { needsYouInTopbar } from "./needsYou";
@@ -316,17 +318,35 @@ export default function WorldFoundationApp() {
     }
   };
 
-  // World's finds (#1329): one search of the whole World object, in every
-  // view, on every connected host whatever the Hosts filter shows. Enter opens
-  // what was found in Spaces, whichever runtime runs it; in a visual view the
-  // second action shows it there, as clicking it does, when the view shows
-  // its host.
+  // World's one search (#1329, #1355): the whole World object, in every
+  // view, on every connected host whatever the Hosts filter shows. Choosing a
+  // find goes to it in the current view, as clicking it there does (Town
+  // flies to it, and selects it when chosen again); the row's second action
+  // (Shift+Enter) opens its terminal in Spaces, whichever
+  // runtime runs it. Where the view cannot show it, choosing opens it.
   const terminalColors = useTerminalColors();
   // Only the views that draw World's nodes can show one; Code and Spaces can't.
   const showNode =
     view === "town" || view === "board" || view === "desk"
       ? visualActionExtension.showNode
       : undefined;
+  // The search Town and Board light as it is typed (worldFinder.ts).
+  const lights = view === "town" || view === "board";
+  // A view change ends the search the last view showed.
+  useEffect(() => () => worldFinder.end(), [view]);
+  const finderSearch = useMemo(
+    () => ({
+      seed: () => {
+        const running = worldFinder.get();
+        return running?.view === view ? running.query : "";
+      },
+      change: (query: string) => {
+        if (lights) worldFinder.type(view, query);
+      },
+      closed: () => worldFinder.closed(),
+    }),
+    [view, lights],
+  );
   const worldFind = (search: string) =>
     worldFindGroup(fullWorld, search, {
       open: (node) =>
@@ -353,13 +373,28 @@ export default function WorldFoundationApp() {
         }),
       ...(showNode
         ? {
-            show: {
-              label: `Show in ${worldViewLabel(view)}`,
+            go: {
               shows: (node) => topbarWorld.nodeById.has(node.id),
-              run: (node) => showNode(node.id),
+              run: (result) => {
+                const running = worldFinder.get();
+                const again =
+                  running?.view === view &&
+                  running.chosen?.result.id === result.id;
+                if (lights) worldFinder.choose(view, search, result);
+                // Town flies to it on its map (useTownSearch) and selects it
+                // when it is chosen again, as `/` did; the other views
+                // select it at once. A landmark has no node to select.
+                if (
+                  (view !== "town" || again) &&
+                  topbarWorld.nodeById.has(result.nodeId)
+                )
+                  showNode(result.nodeId);
+              },
             },
           }
         : {}),
+      ...(view === "spaces" ? {} : { opensNote: "Opens in Spaces" }),
+      ...(view === "town" ? { extra: townLandmarkResults } : {}),
       colorOf: (leaf) =>
         terminalColor(terminalColors, worldLeafColorTarget(fullWorld, leaf)),
     });
@@ -492,7 +527,11 @@ export default function WorldFoundationApp() {
           onZenActiveChange={setZenActive}
           topbarPortal={topbarPortal}
           visualActionExtension={withWorldViews(
-            { ...visualActionExtension, find: worldFind },
+            {
+              ...visualActionExtension,
+              find: worldFind,
+              finderSearch,
+            },
             view,
             setView,
           )}

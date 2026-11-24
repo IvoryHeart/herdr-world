@@ -173,7 +173,6 @@ import {
   resolveTerminalByKeys,
   TERMINAL_COLOR_HEX,
 } from "./terminalColor";
-import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import { useBoardSearch } from "./board/useBoardSearch";
 import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
@@ -3376,7 +3375,7 @@ export default function BoardView({
   const togglePulses = () => setBoardPulses(!boardPulses());
 
   /* ---------- Search ---------- */
-  const search = useBoardSearch(world, model, onSelect);
+  const search = useBoardSearch(world, model);
   const { matches } = search;
 
   const selectedKeys = useMemo(() => {
@@ -3540,18 +3539,6 @@ export default function BoardView({
   return (
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
-      {/* Search covers everything observed, including what the board leaves
-          out, as in the other views. The board fills the view, so the
-          results float over its top edge rather than under the board. */}
-      {search.open ? (
-        <div className="board-search-results">
-          <WorldSearchResults
-            world={world}
-            onSelect={onSelect}
-            {...search.results}
-          />
-        </div>
-      ) : null}
       {paneMoves.dialog}
       {herdr.dialogs}
       <div

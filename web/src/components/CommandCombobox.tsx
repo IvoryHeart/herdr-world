@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { COMMAND_BOX_OPEN_EVENT, commandBoxKey } from "../commandBoxKey";
+import { useViewSearchShortcut } from "../world/viewSearchShortcut";
+import { type FinderSearch, useFinderBoxClosed } from "../world/worldFinder";
 import { luckyWorktreeBranchName } from "../luckyName";
 import { normalizeSearchText } from "../searchText";
 import { SHORTCUT_NUMBERS } from "../shortcutBindings";
@@ -97,7 +99,7 @@ export type ActionDefinition = {
   trailing?: React.ReactNode;
   /**
    * A second way to choose it: Shift+Enter, or the row's button (World's
-   * finds: show it in the current view instead of opening it).
+   * finds: open its terminal instead of going to it in the current view).
    */
   secondary?: { label: string; run: () => void };
   run: () => void;
@@ -120,9 +122,14 @@ export type CommandExtension = {
   find?: (search: string) => ActionGroupDefinition | null;
   /**
    * A visual view's own select for a World node, as clicking it there does:
-   * the finds' second action. The box itself never calls it.
+   * what choosing a find does there. The box itself never calls it.
    */
   showNode?: (nodeId: string) => void;
+  /**
+   * The search the box shares with the current view (world/worldFinder.ts):
+   * the text it resumes with, each change as it is typed, and its closing.
+   */
+  finderSearch?: FinderSearch;
   placeholder?: string;
 };
 
@@ -289,6 +296,7 @@ function OwnedCommandCombobox({
   arrangementControl,
   extension = EMPTY_COMMAND_EXTENSION,
   find,
+  finderSearch,
   onShowShortcuts,
 }: {
   operationalShortcutsEnabled?: boolean;
@@ -300,6 +308,8 @@ function OwnedCommandCombobox({
   extension?: CommandExtension;
   /** World's finds (CommandExtension.find), in every view. */
   find?: CommandExtension["find"];
+  /** The search shared with the current view (CommandExtension.finderSearch). */
+  finderSearch?: FinderSearch;
   onShowShortcuts?: () => void;
 }) {
   useCreationProgress();
@@ -441,14 +451,12 @@ function OwnedCommandCombobox({
       if (open) {
         setOpen(false);
         setSearch("");
-      } else {
-        setCapturedExtension(extension);
-        setOpen(true);
-      }
+      } else openBox();
     };
-    const onOpen = () => {
-      setCapturedExtension(extension);
-      setOpen(true);
+    const onOpen = (event: Event) => {
+      const resume =
+        event instanceof CustomEvent && event.detail?.resume === true;
+      if (!open) openBox(resume);
     };
     window.addEventListener("keydown", onKey, true);
     window.addEventListener(COMMAND_BOX_OPEN_EVENT, onOpen);
@@ -457,6 +465,23 @@ function OwnedCommandCombobox({
       window.removeEventListener(COMMAND_BOX_OPEN_EVENT, onOpen);
     };
   }, [extension, open, operationalShortcutsEnabled]);
+  // `/` and Ctrl+F (`view.search`) open the same box, outside text and
+  // terminals (viewSearchShortcut.ts); inside it they type.
+  useViewSearchShortcut(() => {
+    if (!open) openBox();
+  }, operationalShortcutsEnabled);
+
+  /**
+   * Open the box, empty, or with the search the current view still shows when
+   * `resume` (its search chip). A search chosen before stays in the view until
+   * something new is typed.
+   */
+  function openBox(resume = false) {
+    setCapturedExtension(extension);
+    setSearch(resume ? (finderSearch?.seed() ?? "") : "");
+    setOpen(true);
+  }
+  useFinderBoxClosed(open, finderSearch);
 
   const run = (fn: () => void) => {
     setOpen(false);
@@ -1180,8 +1205,8 @@ function OwnedCommandCombobox({
 
   const setCommandOpen = (next: boolean) => {
     if (next && !operationalShortcutsEnabled) return;
-    if (next && !open) setCapturedExtension(extension);
-    setOpen(next);
+    if (next && !open) openBox();
+    else setOpen(next);
     if (!next) setSearch("");
   };
 
@@ -1196,8 +1221,8 @@ function OwnedCommandCombobox({
             type="button"
             disabled={!operationalShortcutsEnabled}
             className={`topbar-button command-trigger ${open ? "is-active" : ""}`}
-            aria-label="Open command menu"
-            title={shortcutTitle("Open command menu", "command.menu")}
+            aria-label="Find or act"
+            title={shortcutTitle("Find or act", "command.menu")}
           >
             <Keyboard size={15} />
             <span>Actions</span>
@@ -1252,7 +1277,10 @@ function OwnedCommandCombobox({
           >
             <CommandInput
               value={search}
-              onValueChange={setSearch}
+              onValueChange={(value) => {
+                setSearch(value);
+                finderSearch?.change(value);
+              }}
               placeholder={
                 extension.placeholder ?? "Search actions or enter file path..."
               }

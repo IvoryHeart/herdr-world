@@ -1,0 +1,52 @@
+## ADDED Requirements
+
+### Requirement: One search
+
+World SHALL have one search, the command box: `/`, Ctrl+F or Cmd+F, Ctrl+K or Cmd+K, a
+view's search button and Find or act SHALL open the same box, and no view SHALL keep its
+own. Its results SHALL come from pluggable sources, commands in their own group.
+Choosing a found World object SHALL go to it in the current view, or open it where the
+view cannot show it; opening its terminal SHALL be a second action, never the default.
+
+#### Scenario: The same box from every key
+
+- **WHEN** the user presses `/` in Town and types part of an agent's name, then closes
+  the box and presses Cmd+K and types the same name
+- **THEN** both open the same box with the same results in the same order, drawn from
+  World's objects through World's one matcher, places only the current view draws, the
+  box's commands and the settings registry
+
+#### Scenario: Choose goes to the result in Town
+
+- **WHEN** the user in Town types part of an agent's name and chooses it
+- **THEN** Town moves its camera to the agent's table and marks it, the view stays Town,
+  and no terminal opens; choosing it again selects it
+
+#### Scenario: Open its terminal instead
+
+- **WHEN** the user presses Shift+Enter on a found agent, or the row's Open terminal
+- **THEN** its terminal opens in Spaces on its own connection and runtime generation
+
+#### Scenario: A result the view cannot show
+
+- **WHEN** the user is in Spaces or Code, or finds an agent on a host the Hosts filter
+  hides, and chooses it
+- **THEN** it opens, and its row says so before it is chosen
+
+#### Scenario: A command from the same box
+
+- **WHEN** the user in Board presses Cmd+K and types "new workspace" and chooses it
+- **THEN** the new workspace command runs
+
+#### Scenario: The view keeps a chosen search
+
+- **WHEN** the user in Town or Board types a search and chooses a result
+- **THEN** the view lights its matches and its toolbar shows the search and its count
+  until the user ends it, presses Escape in the view or changes view
+- **AND** closing the box without choosing ends the search
+- **AND** the search holds only what was typed and chosen, never a copy of World state
+
+#### Scenario: Typing in a terminal
+
+- **WHEN** a terminal or text field has focus and the user types `/` or Ctrl+F
+- **THEN** the key reaches the terminal or field and the box stays closed

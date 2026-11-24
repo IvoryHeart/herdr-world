@@ -932,28 +932,29 @@
     only an explicit move changes Herdr's layout, always within one host.
     Terminal title-spinner and scroll repaints keep healthy hosts actionable;
     topology or agent-state changes still require a fresh observation.
-  - **Search shows where things are.** Town's search hangs from the top
-    edge beside the view buttons in Zen, World's default, and sits in the top
-    bar when the bars are shown; on a phone in Zen it is the search button in
-    the bottom-right corner. On a desktop the search of Town, Board and Desk
-    rests as a search icon whose tooltip names its keys; a click unfolds the
-    search box with the cursor in it. **Escape**, or leaving an empty box,
-    folds it back into the icon; a query keeps it open. Typing in Town's search lights up the
-    matching buildings, rooms, tables and agents on the map and dims the rest
-    of Town a little; the camera stays put. The result line counts matches and
-    how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
-    click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
-    a readable zoom and pulses it; choosing it again, or **Enter** a second
-    time, opens it as selecting does. Town's own places are found too:
-    "warehouse" (or "pull requests") lists the **Warehouse**, and choosing it
-    moves the camera there; choosing it again only shows it again. A result Town does not draw, such as
-    an agent at a table its room folds away, opens at once and counts as
-    off-screen. Under **Town calm motion** or reduced motion the camera jumps
-    and nothing pulses. **Escape** (in the box, on a result or on the map),
-    the phone search's **✕** or an empty box ends the search and returns the
-    camera to where the search found it. **/** or **Ctrl+F** (**Cmd+F** on a
-    Mac) unfolds the search of Town, Board or Desk with the cursor in it, or
-    opens the phone's search, unless you are typing in a terminal, the Chat composer or
-    another text field; the browser's own find stays closed. Change the keys
-    under **Search the current view** in Settings → Shortcuts.
+  - **Search shows where things are.** Town's search is World's one search,
+    the command box (**Find or act**; see terminal-windows notes). Its button
+    hangs from the top edge beside the view buttons in Zen, World's default,
+    and sits in the top bar when the bars are shown; on a phone in Zen it is
+    the search button in the bottom-right corner. **/**, **Ctrl+F** (**Cmd+F**
+    on a Mac) and **Ctrl+K** (**Cmd+K**) open the same box, unless you are
+    typing in a terminal, the Chat composer or another text field; the
+    browser's own find stays closed. Typing in the box lights up the matching
+    buildings, rooms, tables and agents on the map and dims the rest of Town a
+    little; the camera stays put. Choosing a result (a click, or **Up**/**Down**
+    then **Enter**) moves the camera to it at a readable zoom and pulses it;
+    choosing it again opens it as selecting does. **Shift+Enter** or the row's
+    **Open terminal** (**Open in Spaces** for a room or table) opens it in
+    Spaces instead. Town's own places are found too: "warehouse" (or "pull
+    requests") lists the **Warehouse**, and choosing it moves the camera
+    there; it has nothing to open. A result Town does not draw, such as an
+    agent at a table its room folds away, opens at once. After a choice the
+    search stays: the toolbar shows it with its count and how many matches are
+    off-screen ("7 matches · 3 off-screen"); clicking it reopens the box, and
+    its **✕** or **Escape** on the map ends it and returns the camera to
+    where the search found it. Closing the box without choosing, or going to
+    another view, ends it too. Under **Town calm motion** or reduced motion
+    the camera jumps and nothing pulses. The shared search lives in
+    `web/src/world/worldFinder.ts`; Town reads it in
+    `web/src/world/town/useTownSearch.ts`.
   See the [Town exercise](../../../../docs/TUTORIAL.md#town).

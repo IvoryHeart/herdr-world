@@ -78,7 +78,7 @@ export function worldSearchMatches(world: WorldObject, rawQuery: string) {
   );
 }
 
-export type WorldSearchKind =
+type WorldSearchKind =
   | "building"
   | "room"
   | "table"
