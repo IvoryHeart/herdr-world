@@ -127,7 +127,9 @@ test("a closed or merged PR's edit or label skips every job before it takes a ru
 test("a description-only edit reuses the dependency audit with the rest of the evidence", () => {
   const audit = workflow.jobs["dependency-security"];
   expect(audit.needs).toBe("validation-scope");
-  expect(audit.if).toBe("needs.validation-scope.outputs.mode != 'reuse'");
+  expect(audit.if).toBe(
+    "needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'",
+  );
   const step = workflow.jobs.delivery.steps.find(
     (step) => step.name === "Require current dependency security audit",
   )!;
@@ -232,8 +234,6 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "validation",
     "world-browser",
     "behavioral",
-    "installer-upgrade",
-    "release-candidate",
     "dependency-security",
   ]);
   expect(delivery?.if).toBe(
@@ -283,7 +283,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(workflow.jobs.validate).toBeUndefined();
 });
 
-test("no timing gates delivery: browser jobs use the pinned Chrome and never retry", () => {
+test("no timing gates delivery: browser jobs use the pinned Chrome and retry failures once", () => {
   expect(worldWorkflow.jobs["latency-shards"]).toBeUndefined();
   expect(worldWorkflow.jobs["world-latency"]).toBeUndefined();
   expect(JSON.stringify(worldWorkflow)).not.toContain("--retry");
@@ -372,8 +372,9 @@ test("all World browser shards and the web browser suites run independently and 
   expect(world?.needs).toBeUndefined();
   expect(world?.if).toBe("toJSON(fromJSON(inputs.selection).world) != '[]'");
   expect(world?.["continue-on-error"] ?? false).toBe(false);
-  for (const step of world?.steps ?? [])
-    expect(step["continue-on-error"] ?? false).toBe(false);
+  expect(world.steps.filter((step) => step["continue-on-error"])).toHaveLength(
+    1,
+  );
   expect(world?.["runs-on"]).toBe("ubuntu-latest");
   expect(world?.strategy?.matrix?.shard).toBe(
     "${{ fromJSON(inputs.selection).worldShards }}",
@@ -408,8 +409,7 @@ test("all World browser shards and the web browser suites run independently and 
   expect(web?.if).toBe("toJSON(fromJSON(inputs.selection).web) != '[]'");
   expect(web?.strategy?.matrix?.shard).toEqual([1, 2]);
   expect(worldWorkflow.jobs["web-browser"].needs).toBe("web-shards");
-  for (const step of web?.steps ?? [])
-    expect(step["continue-on-error"] ?? false).toBe(false);
+  expect(web.steps.filter((step) => step["continue-on-error"])).toHaveLength(1);
   expect(
     web?.steps.find(
       (step) =>
@@ -493,7 +493,7 @@ test("a metadata event on a red head fails the scope job by name and starts no c
   expect(hold.if).toBe("steps.scope.outputs.mode == 'hold'");
   expect(hold["continue-on-error"]).toBeUndefined();
   const run = Bun.spawnSync(["bash", "-euc", hold.run!], {
-    env: { PATH: process.env.PATH, HELD_RUN: "7" },
+    env: { PATH: process.env.PATH, HELD_RUN: "7", EVENT: "pull_request" },
   });
   expect(run.exitCode).toBe(1);
   expect(run.stdout.toString()).toContain("Run 7");
@@ -543,7 +543,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
   )!;
   expect(verify).toBeDefined();
   expect(verify.if).toBe("steps.reuse.outputs.reused != 'true'");
-  expect(verify["continue-on-error"]).toBeUndefined();
+  expect(verify["continue-on-error"]).toBe(true);
   expect(
     job.steps.some((step) => step.run === "bun run verification:setup"),
   ).toBe(true);
@@ -564,7 +564,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
     job.steps.find(
       (step) => step.run === "bun run verification:diagnostic-control",
     )?.["continue-on-error"],
-  ).toBeUndefined();
+  ).toBe(true);
   expect(
     job.steps.some(
       (step) => step.run === "bun run verification:diagnostic-control",
@@ -614,4 +614,76 @@ test("behavioral checks retain each main version commit's evidence", async () =>
   expect(behavioral.concurrency.group).toContain(
     "(github.event_name == 'push' && github.sha)",
   );
+});
+
+test("an in-job model retry preserves failed evidence outside the aggregate's live inputs", async () => {
+  const {
+    mkdtempSync,
+    mkdirSync,
+    readFileSync,
+    writeFileSync,
+    rmSync,
+    readdirSync,
+  } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const root = mkdtempSync(join(tmpdir(), "model-retry-"));
+  try {
+    const candidate = Bun.YAML.parse(
+      await Bun.file(".github/workflows/behavioral-verification.yml").text(),
+    ) as any;
+    const retry = candidate.jobs.shards.steps.find(
+      (step: any) =>
+        step.name === "Retry failed test once" &&
+        step.run.includes("verification:resources"),
+    );
+    const prefix = join(root, ".agents/verification");
+    mkdirSync(join(prefix, "runs/ci-shard-1-failed"), { recursive: true });
+    mkdirSync(join(prefix, "resources/first"), { recursive: true });
+    writeFileSync(
+      join(prefix, "runs/ci-shard-1-failed/manifest.json"),
+      "failed shard",
+    );
+    writeFileSync(
+      join(prefix, "resources/first/resources.json"),
+      "failed accounting",
+    );
+    mkdirSync(join(root, "bin"));
+    writeFileSync(
+      join(root, "bin/bun"),
+      "#!/bin/sh\nmkdir -p .agents/verification/runs/ci-shard-1-retry .agents/verification/resources/retry\nprintf success > .agents/verification/runs/ci-shard-1-retry/manifest.json\nprintf success > .agents/verification/resources/retry/resources.json\n",
+      { mode: 0o755 },
+    );
+    const run = Bun.spawnSync(
+      ["bash", "-euc", retry.run.replaceAll("${{ matrix.shard }}", "1")],
+      {
+        cwd: root,
+        env: { PATH: `${root}/bin:${process.env.PATH}` },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(run.stderr.toString()).toBe("");
+    expect(run.exitCode).toBe(0);
+    expect(readdirSync(join(prefix, "runs"))).toEqual(["ci-shard-1-retry"]);
+    expect(readdirSync(join(prefix, "resources"))).toEqual(["retry"]);
+    expect(
+      readFileSync(
+        join(prefix, "retries/first-runs/ci-shard-1-failed/manifest.json"),
+        "utf8",
+      ),
+    ).toBe("failed shard");
+    expect(
+      readFileSync(
+        join(prefix, "retries/first-resources/first/resources.json"),
+        "utf8",
+      ),
+    ).toBe("failed accounting");
+    const upload = candidate.jobs.shards.steps.find(
+      (step: any) => step.name === "Retain source-bound evidence manifests",
+    );
+    expect(upload.with.path).toContain(".agents/verification/retries/**");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

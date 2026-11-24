@@ -17,7 +17,7 @@
 - SSH profiles accept OpenSSH aliases or `user@host`; policy belongs in OpenSSH config. Never persist passwords, keys, passphrases or arbitrary SSH options.
 - Feature PRs do not regenerate Help pictures unless adding or changing a help entry; capture only those entries with `HELP_PICTURES_IDS="<id>" bun run help:pictures`. Stale fingerprints warn; the broken automatic refresh bot is removed; capture changed entries explicitly.
 - Never commit generated `web/dist/`, `server/public/`, binaries, `.pages-dist/` or `dist/`.
-- Add a changelog fragment before pushing, or state `Changelog: none — <reason>` in the PR; [format](changes/README.md). Never edit `CHANGELOG.md` directly.
+- Use `fix:` or `feat:` PR titles for release notes (squash merge preserves the title). Release-please owns `CHANGELOG.md` and release version updates; no change fragments.
 - Feature PRs never edit `scripts/web-asset-budget.json` or `scripts/check-web-assets.mjs` to accommodate bundle growth. Request a separate owner-approved budget-data PR with the exact raise printed by Web asset headroom and a short reason history; main's status and workflow summary show remaining headroom. Lowering the budget is free; other asset limits stay unchanged.
 - Non-documentation PRs require plain `Spec impact:` and `Verification impact:` lines naming changed specs/OpenSpec changes and evidence/owners/checks, or `none — <reason>`; `check:pr-body` enforces presence and diff consistency, and reviewers assess the decision.
 - Update current docs with significant product, API, configuration, installation or workflow changes:

@@ -12,13 +12,13 @@ function ancestors(jobs: any, name: string): string[] {
     ]);
 }
 
-test("main version CI builds once; only channel contracts can seal bytes", () => {
+test("only tags and nightly build native bytes; every channel contract precedes the seal", () => {
   const ci = workflow("ci");
-  expect(ci.jobs["release-candidate"]).toMatchObject({
-    if: "needs.validation-scope.outputs.release == 'true'",
-    uses: "./.github/workflows/release-candidate.yml",
-  });
-  expect(ci.jobs.delivery.needs).toContain("release-candidate");
+  expect(ci.jobs["release-candidate"]).toBeUndefined();
+  expect(ci.jobs["installer-upgrade"]).toBeUndefined();
+  expect(workflow("release").jobs.candidate.uses).toBe(
+    "./.github/workflows/release-candidate.yml",
+  );
   const candidate = workflow("release-candidate");
   const all = JSON.stringify(candidate);
   expect(all).not.toContain("check:source");
@@ -67,59 +67,74 @@ test("main version CI builds once; only channel contracts can seal bytes", () =>
   );
 });
 
-test("tag automatically waits, downloads the seal or fully retests expired bytes", () => {
+test("standard publishers consume the tested artifact and serialize channels", () => {
   const release = workflow("release");
   expect(release.on).toEqual({ push: { tags: ["v*"] } });
-  expect(
-    release.jobs.validate.steps.some((step: any) =>
-      step.run?.includes("release-walk-gate.ts"),
-    ),
-  ).toBe(true);
-  expect(release.jobs.rebuild).toMatchObject({
-    if: "needs.validate.outputs.rebuild == 'true'",
-    uses: "./.github/workflows/release-candidate.yml",
-  });
-  expect(release.jobs.acquire.needs).toEqual(["validate", "rebuild"]);
-  expect(release.jobs.acquire.if).toContain(
-    "needs.rebuild.result == 'success'",
-  );
-  expect(release.jobs.acquire.if).toContain(
-    "needs.validate.outputs.rebuild == 'false'",
-  );
+  expect(release.jobs.candidate.needs).toBe("validate");
   for (const name of ["publish", "npm-publish", "homebrew-pr"]) {
-    const job = release.jobs[name];
-    expect(ancestors(release.jobs, name)).toContain("acquire");
-    const check = job.steps.findIndex((step: any) =>
-      step.run?.includes("release-bundle.mjs verify"),
-    );
-    expect(check).toBeGreaterThan(-1);
-    expect(check).toBeLessThan(job.steps.length - 1);
-    expect(
-      job.steps.map((step: any) => step.run ?? "").join("\n"),
-    ).not.toContain("npm pack ");
-    expect(JSON.stringify(job)).not.toContain("package-release.sh");
+    expect(ancestors(release.jobs, name)).toContain("candidate");
+    expect(JSON.stringify(release.jobs[name])).not.toContain("npm pack ");
   }
-  expect(release.jobs["npm-publish"].needs).toContain("publish");
+  expect(JSON.stringify(release.jobs.publish)).toContain(
+    "softprops/action-gh-release@",
+  );
+  expect(JSON.stringify(release.jobs["npm-publish"])).toContain("npm publish");
+  expect(JSON.stringify(release.jobs["npm-publish"])).toContain("--provenance");
   expect(release.jobs["npm-publish"].permissions["id-token"]).toBe("write");
+  expect(release.jobs["npm-publish"].needs).toContain("publish");
   expect(release.jobs["homebrew-pr"].needs).toContain("npm-publish");
-  expect(release.jobs["homebrew-pr"].steps.at(-1).env.GH_TOKEN).toBe(
-    "${{ secrets.HOMEBREW_TAP_TOKEN }}",
+  const brew = release.jobs["homebrew-pr"].steps.find((s: any) =>
+    s.uses?.includes("mislav/bump-homebrew-formula-action@"),
+  );
+  expect(brew.with["create-pullrequest"]).toBe(true);
+  expect(brew.env.COMMITTER_TOKEN).toBe("${{ secrets.HOMEBREW_TAP_TOKEN }}");
+  expect(JSON.stringify(release)).not.toMatch(
+    /publish-(?:github|npm)-release|open-homebrew-pr|release-walk-gate|release-bundle/,
   );
   expect(release.jobs["deploy-pages"].needs).not.toContain("homebrew-pr");
-  expect(release.jobs["publication-status"].if).toBe("always()");
 });
 
-test("release PR assembles changelog without retesting main or creating tags", () => {
-  const prepare = workflow("release-pr");
-  const steps = JSON.stringify(prepare.jobs.prepare.steps);
-  expect(steps).toContain("prepare-release.ts");
-  expect(steps).toContain("workflow run ci.yml");
-  expect(steps).toContain("release/next");
-  expect(steps).not.toContain("check:source");
-  expect(steps).not.toContain("git tag");
-  expect(steps).not.toContain("docs/releases/");
-  for (const removed of ["prepare-release", "publish-release"])
-    expect(existsSync(`.github/workflows/${removed}.yml`)).toBe(false);
+test("release-please owns version/changelog preparation and never creates a tag", () => {
+  const steps = workflow("release-pr").jobs.prepare.steps;
+  const action = steps.find((s: any) =>
+    s.uses?.startsWith("googleapis/release-please-action@"),
+  );
+  expect(action.with["skip-github-release"]).toBe(true);
+  const config = JSON.parse(readFileSync("release-please-config.json", "utf8"));
+  expect(config.packages["."]["release-type"]).toBe("simple");
+  expect(config.packages["."]["extra-files"]).toContainEqual({
+    type: "generic",
+    path: "herdr-plugin.toml",
+  });
+  expect(readFileSync("herdr-plugin.toml", "utf8")).toMatch(
+    /^version = "[^"]+" # x-release-please-version/m,
+  );
+  expect(JSON.stringify(steps)).toContain("workflow run ci.yml");
+  for (const removed of [
+    "scripts/prepare-release.ts",
+    "scripts/changelog-fragments.ts",
+    "scripts/open-homebrew-pr.sh",
+  ])
+    expect(existsSync(removed)).toBe(false);
+});
+
+test("PR test steps retry once inside their Linux job; main runs no heavy jobs", () => {
+  const ci = workflow("ci");
+  for (const name of ["static", "unit-tests", "dependency-security"])
+    expect(ci.jobs[name].if).toContain("'hold'");
+  for (const [file, name, needle] of [
+    ["ci", "unit-tests", "ci-tests.ts unit"],
+    ["world-browser", "world-browser", "ci-tests.ts world"],
+    ["world-browser", "web-shards", "ci-tests.ts web"],
+    ["behavioral-verification", "shards", "verification:resources"],
+  ]) {
+    const job = workflow(file).jobs[name];
+    expect(job["runs-on"]).toMatch(/^ubuntu-/);
+    const steps = job.steps.filter((s: any) => s.run?.includes(needle));
+    expect(steps).toHaveLength(2);
+    expect(steps[0]["continue-on-error"]).toBe(true);
+    expect(steps[1].if).toContain(".outcome == 'failure'");
+  }
 });
 
 test("channel upgrades exercise a running previous release and verify persisted stable path", () => {

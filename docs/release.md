@@ -1,33 +1,41 @@
 # Release process
 
-Release automation is started in **Actions → Release PR → Run workflow** with
-`X.Y.Z`, `X.Y.Z-rc.N`, `patch`, `minor` or `major`. It requires green main,
-opens or refreshes one `release/next` PR and dispatches its CI with the existing
-workflow token. The PR bumps `herdr-plugin.toml` and assembles a short changelog
-section from `changes/`. That section is the release notes; no separate notes
-file is required. Development manifests stay at `0.0.0`.
+Release-please keeps one release PR current from squash-merged `fix:` and `feat:`
+PR titles. Its **simple** strategy owns `version.txt`, the release manifest and
+`CHANGELOG.md`; its generic updater changes the annotated version in
+`herdr-plugin.toml`. Development npm manifests remain at `0.0.0`.
+The [configuration](../release-please-config.json) and
+[workflow](../.github/workflows/release-pr.yml) run in PR-only mode:
+`skip-github-release: true`. Automation never creates tags.
 
 ## Three owner steps
 
-1. **Merge the release PR.** Review the version and changelog, then merge once
-   **Delivery checks** and independent review pass. Main CI builds the packages,
-   checks their installed behavior and retains one sealed `verified-release`
-   artifact for 30 days.
-2. **Create `vX.Y.Z` on that merge commit.** Only the owner creates tags; the tag
-   ruleset is unchanged. The tag starts **Release** automatically. It verifies
-   main ancestry, the version-changing commit and the matching plugin version,
-   then waits for that commit's main CI. It publishes the tested seal to GitHub,
-   publishes npm with OIDC provenance, then opens or updates the Homebrew tap PR
-   using `HOMEBREW_TAP_TOKEN`. No run ID, receipt or further dispatch is needed.
-3. **Merge the Homebrew tap PR.** Its own macOS check installs the formula and
-   verifies runtime ownership. Pages deployment runs independently of that merge
-   and of tap publication failure.
+1. **Merge the release PR.** Review the version/changelog and merge after
+   **Delivery checks** and independent review. Automation opens or refreshes it
+   weekly; **Actions → Release PR → Run workflow** can refresh it sooner.
+   The optional `release_as` override accepts `0.3.8-rc.1` for the RC rehearsal.
+   CI is automatically dispatched for the bot PR with the existing workflow token.
+2. **Create `vX.Y.Z` on that merge commit.** Only the owner creates tags, under
+   the unchanged tag ruleset. Tag before the next release-please run; this is how
+   PR-only release-please recognizes the previous release. The tag starts
+   **Release**, validates main ancestry and the version commit, builds each
+   native package once, runs the channel contracts below and seals the bytes.
+   It publishes GitHub with `softprops/action-gh-release`, npm with
+   `npm publish --provenance` (OIDC), and proposes the tap PR automatically.
+3. **Merge the Homebrew tap PR.** `mislav/bump-homebrew-formula-action` opens it
+   with `create-pullrequest: true` and `HOMEBREW_TAP_TOKEN`. The action updates
+   one URL; `peter-evans/create-pull-request` completes that same PR with our
+   generated four-platform Formula and the tap's own macOS install check.
+   An existing proposal is reused on reruns. Pages deploys independently of tap.
 
-For `vX.Y.Z-rc.N`, GitHub marks a prerelease, npm uses `next`, and the tap PR
-updates `herdr-world-rc`. Stable Latest channels remain unchanged. To rehearse
-`0.3.8-rc.1`, run Release PR for that version and follow the same three steps.
-On a Mac with the previous World service running, upgrade through the RC formula
-and confirm World answers on the new version with its existing data.
+These are the only owner steps. There are no run IDs, receipts, authorization
+inputs, copied values or separate release-note files. GitHub generates release
+notes; the release PR's changelog is produced by release-please.
+
+For `vX.Y.Z-rc.N`, GitHub marks a prerelease, npm uses `next`, and Homebrew uses
+`herdr-world-rc`; stable Latest stays unchanged. Rehearse with `0.3.8-rc.1`.
+After the tap merge, upgrade on a Mac with the prior service running and confirm
+the new served version, preserved data and a healthy restart after keg cleanup.
 
 ## What blocks publication
 
@@ -44,35 +52,30 @@ builds each of the six native packages once. Every channel consumes those bytes:
 - Claude and Codex start on Herdr TUI and herdr-core and World lists each agent.
 - The shipped-dependency security audit passes.
 
-Only then does the workflow seal the GitHub assets (including installer), npm
-packs, formula/tap inputs and changelog notes with their content digests, version
-and source commit. Every publisher verifies that manifest immediately before its
-effects. Release runs do not repeat source or browser tests. Main CI supplies
-those results, reusing the PR result when its tested tree is identical.
+Only then does the standard immutable Actions artifact `verified-release` seal
+the tested GitHub assets, npm tarballs and product Formula/tap inputs in this tag
+run. Standard download-artifact checks its digest when publishers retrieve it.
+No source or browser suite runs in Release. No candidate is built on main.
 
 ## When a step fails
 
-A failed release's summary gives one line naming the failed stage and what a
-rerun does. Open its failed job for the underlying error.
+The failed run summary names one stage and what rerunning does.
 
-- **Release PR:** fix red main or the version/changelog input, then rerun Release
-  PR. It refreshes the same PR rather than opening another.
-- **Main CI or a channel contract:** fix the failing code. The release waits for
-  queued/running CI and the single infrastructure retry; a real CI failure
-  refuses publication. Do not retag a published version. Start a new release PR
-  when code must change.
-- **Transient runner/setup/download failure:** automation retries failed jobs
-  once. A second failure stays visible. Re-run the tag workflow after resolving
-  infrastructure; no authorization ceremony is required.
-- **Interrupted publication:** use **Actions → Release → the tag run → Re-run all
-  jobs** (or failed jobs while its retained seal is available). Identical existing
-  GitHub assets are checked and kept; existing npm versions are checked by
-  integrity and skipped; an open tap PR is updated in place. Different public
-  bytes are refused, never overwritten.
-- **Expired seal:** rerunning the tag automatically rebuilds and repeats every
-  channel contract above before publication. It never publishes untested bytes.
-- **Tap check:** repair the formula/acceptance change in the existing tap PR and
-  review it. GitHub/npm publication and Pages do not wait for the tap merge.
+- **Release PR:** rerun the workflow to refresh the existing PR. If a merged
+  release has not been tagged, create that owner tag before its next run.
+- **A channel contract:** fix the failing code through a new reviewed release
+  PR. Do not move an already published tag. A failed install, upgrade, agent
+  start or shipped audit prevents every publication step.
+- **Infrastructure:** runner/setup/download failures get one automatic failed-job
+  retry. A second failure remains visible; rerun failed jobs after recovery.
+- **Interrupted publication:** open **Actions → Release → the tag run → Re-run
+  failed jobs**. The retained tested artifact supplies the same bytes. Rerunning
+  all jobs also reuses that artifact within the same run; if absent or expired,
+  all builds and channel tests run before publication. Existing GitHub assets
+  must match and are kept; existing npm integrity must match and is skipped;
+  the same open tap PR is completed without another proposal.
+- **Tap check:** repair the existing tap PR and review it. GitHub/npm and Pages
+  do not wait for the tap merge.
 
 ## Real-runtime release walk
 
@@ -99,13 +102,12 @@ runtime observation without credentials or transcripts. Optional
 `listing_repetitions` on **Release walk** adds independent journeys and stops at
 the first failure; it never retries a failed assertion.
 
-## Pre-merge installer upgrades
+## Native platform signal
 
-Installer, service-manager, plugin, release and native test inputs select the
-six-OS native matrix on PRs. Ordinary server changes use Linux static, unit,
-browser and behavioral checks. **Delivery checks** is the only required
-aggregate. **Nightly native** exercises all six targets and running channel
-upgrades on main; one issue tracks failures as a signal rather than a merge gate.
+Every required PR check runs on Linux, including installer/release changes.
+Native platform, storage/plugin and running-service upgrade acceptance runs
+nightly on main and on release tags. Nightly maintains one advisory issue and
+blocks nobody. Main only reports the existing PR proof; it starts no heavy jobs.
 
 ## Linux systemd installation gate
 

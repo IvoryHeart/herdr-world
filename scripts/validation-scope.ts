@@ -18,9 +18,7 @@ export function isToolingPath(path: string): boolean {
   )
     return false;
   return (
-    path.startsWith("scripts/agent/") ||
-    path === "docs/agent-development.md" ||
-    /^changes\/[a-z0-9][a-z0-9-]*\.md$/.test(path)
+    path.startsWith("scripts/agent/") || path === "docs/agent-development.md"
   );
 }
 
@@ -59,7 +57,7 @@ export type ValidationSelection = {
 };
 
 const NATIVE =
-  /^(?:scripts\/(?:install|installer|package|release|prepare-release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
+  /^(?:scripts\/(?:install|installer|package|release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
 const WORLD_RUNTIME =
   /^(?:web\/src\/world\/|server\/src\/(?:world|connections|bridge)\/|server\/src\/index\.ts$|web\/src\/(?:store(?:\/|\.ts$)|api\.ts$|worldSnapshotDecode\.ts$)|shared\/world)/;
 

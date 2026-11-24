@@ -1,20 +1,20 @@
 ## MODIFIED Requirements
 
 ### Requirement: Reviewed release identity
-Release preparation SHALL open or refresh one reviewed PR from green main. Main CI SHALL build and test the merged version commit's packages once and seal them. Publication SHALL require an owner-created version tag on that commit and green main CI, waiting while CI runs. The owner SHALL only merge the release PR, create its tag and merge the automatic Homebrew tap PR; no manual authorization, receipts or dispatch inputs intervene.
+Release-please SHALL keep one reviewed release PR current using the simple strategy in PR-only mode (`skip-github-release: true`). It SHALL update CHANGELOG from squash-merged fix/feat titles and the plugin version through its generic marker updater. Only the owner SHALL create a release tag on the merged version commit; no automation SHALL create tags. The owner SHALL only merge the release PR, create its tag and merge the automatic tap PR.
 
 #### Scenario: Release preparation
-- **WHEN** release PR automation is started with a version
-- **THEN** it bumps the plugin version, assembles a short changelog section from change fragments, opens or refreshes one PR and dispatches its CI without pushing main or creating a tag
-- **AND** that changelog section supplies the public release notes without a separate notes file
+- **WHEN** scheduled or dispatched release-please runs
+- **THEN** it refreshes one release PR and automatically dispatches its checks without change fragments, a separate notes file or a manual run identifier
+- **AND** the owner tags the merged release before the next release-please run
 
 #### Scenario: Cross-platform release candidate
-- **WHEN** an owner-created `vX.Y.Z-rc.N` tag selects the reviewed version commit
-- **THEN** all six desktop archives and downstream packages use that exact version, GitHub marks it as a prerelease, npm uses `next` and a reviewed tap PR proposes the separate RC formula without changing stable Latest channels
+- **WHEN** an owner-created `vX.Y.Z-rc.N` tag selects the reviewed version commit on main
+- **THEN** the tag workflow builds and tests all six native packages once with that exact version, marks GitHub as a prerelease, publishes npm under next and proposes the separate RC formula without changing stable Latest
 
-#### Scenario: Early tag
-- **WHEN** the tag arrives while the version commit's main CI is queued or running
-- **THEN** publication waits for that CI to complete green and consumes its sealed bytes without rebuilding or retesting
+#### Scenario: Main is still reporting evidence
+- **WHEN** an owner tag arrives while main's metadata result is running
+- **THEN** Release independently builds and tests the tagged bytes; main SHALL start no heavy checks and provide no release artifact
 
 ### Requirement: Reviewed post-merge contract synchronization
 Feature PRs SHALL express contract changes in their OpenSpec change folder alongside implementation and capability notes. Completed merged changes SHALL synchronize through reviewed archive PRs in merge order; incomplete tasks SHALL stay active. The archive helper SHALL restore a conflicting change's partial writes and retain earlier successful archives. No Help or archive bot SHALL run on main pushes. Automation SHALL never push main or merge the PR.
@@ -42,22 +42,22 @@ Feature PRs SHALL express contract changes in their OpenSpec change folder along
 ## ADDED Requirements
 
 ### Requirement: Tested release channels
-A release SHALL publish only bytes that pass fresh installer starts on Linux/macOS x64/arm64, npm, Homebrew and native Windows archive starts; running-service upgrades from the previous published release through installer and Homebrew on Linux/macOS preserving data and service health; real Claude/Codex starts and World listings on TUI/core; and the shipped-dependency audit. The seal SHALL bind every publication file to the version and source commit.
+A release SHALL publish only bytes that pass fresh installer starts on Linux/macOS x64/arm64, npm, Homebrew and native Windows archive starts; running-service upgrades from the previous published release through installer and Homebrew on Linux/macOS preserving data and service health; real Claude/Codex starts and World listings on TUI/core; and the shipped-dependency audit. Only the tag run and advisory nightly SHALL build native candidates. The standard immutable Actions artifact SHALL seal every tested publication file within that source run. Required PR checks SHALL run on Linux only and retry a failed test step once inside its job.
 
 #### Scenario: A channel or agent fails
 - **WHEN** a Windows archive cannot launch, a running service upgrade loses health or data, an agent fails to start or list, or the shipped security audit fails
 - **THEN** no verified seal is produced and no release channel is published
 
 ### Requirement: Recoverable release publication
-Publication SHALL verify and keep identical existing GitHub assets, skip identical npm integrity and refresh one tap PR. A rerun SHALL finish remaining channels. Expired sealed artifacts SHALL trigger a complete rebuild and all release channel checks before publishing. Infrastructure failures SHALL retry once automatically. A failed release SHALL give one line identifying the failed stage and what a rerun does; Pages SHALL deploy independently of tap success.
+Publication SHALL use standard GitHub Release actions, npm publish with provenance and the Homebrew bump action with create-pullrequest and the tap token. Product-specific multi-platform Formula generation MAY complete the same PR through a standard PR action. Publication SHALL keep identical existing GitHub assets, skip matching npm integrity and reuse one tap PR. Infrastructure failures SHALL retry once automatically. Failed release summaries SHALL name the failed stage and rerun behavior; Pages SHALL deploy independently of tap success.
 
 #### Scenario: Publication is interrupted
-- **WHEN** a run stops after GitHub publication
-- **THEN** rerunning the same tag checks the sealed assets, retains the existing release and completes npm and the same tap PR without duplication
+- **WHEN** a tag run stops after GitHub publication
+- **THEN** rerunning failed jobs consumes its retained tested artifact, retains matching existing publications and completes npm and the same tap PR without duplication
 
 #### Scenario: Seal expired
-- **WHEN** the exact commit's successful main run no longer retains its seal
-- **THEN** the tag workflow rebuilds and verifies every channel contract before any publisher can proceed
+- **WHEN** a full rerun cannot retrieve its tested artifact
+- **THEN** it rebuilds the tagged packages and verifies every channel contract before publication
 
 ### Requirement: Stable managed release service
 A managed Homebrew World service SHALL execute through the selected formula's stable opt path, never a versioned Cellar path. A Homebrew upgrade SHALL refresh and restart a running generated service belonging to that formula, preserving its configuration and data, without taking over another installation's service.

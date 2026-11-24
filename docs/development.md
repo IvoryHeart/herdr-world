@@ -507,10 +507,10 @@ discovered from `web/src/world/*.browser.tsx`. Inventory checks reject missing
 or duplicate assignments. The required Delivery checks status succeeds only when
 repository validation, every World shard and the web browser job pass.
 Markdown-only and exact-head reuse keep their existing shorter paths.
-Main CI supplies source/browser evidence for a version commit; release channel
-checks then consume the exact built packages before sealing. Release PR automation
-assembles version/changelog files and dispatches ordinary CI without another full
-checkout retest. **Web browser tests** runs the Chrome-driven suites outside
+PR CI supplies Linux source/browser evidence; main reports the same immutable
+PR result without heavy checks. Release tags build/test installed channel bytes
+before sealing. Release-please updates version/changelog metadata and dispatches
+ordinary PR CI automatically. **Web browser tests** runs the Chrome-driven suites outside
 World (`webBrowserSuites`) one file at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.

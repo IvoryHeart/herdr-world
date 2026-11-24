@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { isDocumentationPath } from "./validation-scope";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   mkdirSync,
@@ -15,9 +16,7 @@ import {
   checkoutCommitFromLog,
   HOLD_STEP,
   isDocsOnlyChange,
-  isDocumentationPath,
   isEarlierBase,
-  isReleaseCommit,
   redHeadResult,
   selectValidationMode,
   STABILITY_LABEL,
@@ -606,7 +605,7 @@ test("classified PRs use fresh scoped validation, while unknown changes retain f
   ).toBe("reuse");
 });
 
-test("unmatched main pushes force Linux suite classes even when a tracked doc is dirty", () => {
+test("unmatched main pushes report missing evidence without starting any heavy lane", () => {
   const root = mkdtempSync(join(tmpdir(), "main-scope-"));
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -648,9 +647,9 @@ test("unmatched main pushes force Linux suite classes even when a tracked doc is
         ]),
     );
     expect(fields).toMatchObject({
-      mode: "full",
-      world: "true",
-      verification: "true",
+      mode: "hold",
+      world: "false",
+      verification: "false",
       packaging: "false",
     });
     expect(JSON.parse(fields.selection!).full).toBe(true);
@@ -1066,34 +1065,6 @@ test("a new commit tries tree reuse unless the stability label asks for fresh ru
       yes,
     ),
   ).toBe("full");
-});
-
-test("a release commit is one that changes the public plugin version", () => {
-  const root = mkdtempSync(join(tmpdir(), "ci-release-commit-"));
-  const git = (...args: string[]) =>
-    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
-  try {
-    git("init", "-q");
-    git("config", "user.email", "example@example.invalid");
-    git("config", "user.name", "Example");
-    writeFileSync(join(root, "herdr-plugin.toml"), 'version = "0.3.6"\n');
-    git("add", ".");
-    git("commit", "-qm", "base");
-    writeFileSync(join(root, "notes.md"), "change\n");
-    git("add", ".");
-    git("commit", "-qm", "feature");
-    expect(isReleaseCommit(git("rev-parse", "HEAD"), root)).toBe(false);
-    writeFileSync(join(root, "herdr-plugin.toml"), 'version = "0.3.7"\n');
-    git("add", ".");
-    git("commit", "-qm", "release");
-    expect(isReleaseCommit(git("rev-parse", "HEAD"), root)).toBe(true);
-    // Without a readable parent, the walk runs.
-    expect(
-      isReleaseCommit(git("rev-list", "--max-parents=0", "HEAD"), root),
-    ).toBe(true);
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
 });
 
 const heldScopeJob = (id = 0) => ({

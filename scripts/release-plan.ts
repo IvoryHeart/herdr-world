@@ -1,13 +1,13 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { parseManifestVersion, releaseNotes } from "./prepare-release";
+
 import { RELEASE_VERSION_RE } from "./release-version";
 
 /** @internal */
 export function releasePlan() {
-  const version = parseManifestVersion(
-    readFileSync("herdr-plugin.toml", "utf8"),
-  );
+  const parseVersion = (text: string) =>
+    /^version = "([^"]+)"/m.exec(text)?.[1];
+  const version = parseVersion(readFileSync("herdr-plugin.toml", "utf8")) ?? "";
   if (!RELEASE_VERSION_RE.test(version))
     throw new Error("Invalid release version");
   const sha = execFileSync("git", ["rev-parse", "HEAD"], {
@@ -19,7 +19,7 @@ export function releasePlan() {
   const previous = execFileSync("git", ["show", `${sha}^1:herdr-plugin.toml`], {
     encoding: "utf8",
   });
-  if (parseManifestVersion(previous) === version)
+  if (parseVersion(previous) === version)
     throw new Error("Tag must select the version commit on main");
   for (const file of [
     "package.json",
@@ -28,7 +28,6 @@ export function releasePlan() {
   ])
     if (JSON.parse(readFileSync(file, "utf8")).version !== "0.0.0")
       throw new Error(`Unexpected development version: ${file}`);
-  releaseNotes(readFileSync("CHANGELOG.md", "utf8"), version);
   if (process.env.GITHUB_OUTPUT)
     appendFileSync(
       process.env.GITHUB_OUTPUT,

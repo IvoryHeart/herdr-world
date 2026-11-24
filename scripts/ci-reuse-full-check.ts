@@ -316,26 +316,6 @@ export async function treeEvidence(
   return undefined;
 }
 
-/**
- * The commit changes the public plugin version: it is a release commit, and
- * main CI must test and seal its installed packages.
- * @internal
- */
-export function isReleaseCommit(sha: string, cwd = process.cwd()): boolean {
-  const version = (revision: string) => {
-    const result = spawnSync("git", ["show", `${revision}:herdr-plugin.toml`], {
-      cwd,
-      encoding: "utf8",
-    });
-    return result.status === 0
-      ? /^version = "([^"]+)"/m.exec(result.stdout)?.[1]
-      : undefined;
-  };
-  const current = version(sha);
-  // An unreadable version fails safe: the release candidate runs.
-  return current === undefined || current !== version(`${sha}^1`);
-}
-
 /** Read only the checkout action's full commit output; ambiguous logs fail closed. */
 export function checkoutCommitFromLog(log: string): string | undefined {
   const lines = log
@@ -360,7 +340,6 @@ export function checkoutCommitFromLog(log: string): string | undefined {
  * Evidence contracts, execution policy and packaged notices must receive the
  * full candidate gate.
  */
-export { isDocumentationPath } from "./validation-scope";
 
 /** Only ordinary documentation changes may use the shorter gate. */
 export function isDocsOnlyChange(
@@ -544,9 +523,14 @@ function testedSourceReader(repo: string, token: string) {
 }
 
 /** Recent CI runs of one PR branch, newest first. */
-async function branchRuns(repo: string, token: string, branch: string) {
+async function branchRuns(
+  repo: string,
+  token: string,
+  branch: string,
+  event = "pull_request",
+) {
   const query = new URLSearchParams({
-    event: "pull_request",
+    event,
     branch,
     per_page: "30",
   });
@@ -595,7 +579,12 @@ async function mainPushEvidence(
   );
   if (pulls.length !== 1) return undefined;
   return treeEvidence(
-    await branchRuns(repo, token, pulls[0].head.ref),
+    (
+      await Promise.all([
+        branchRuns(repo, token, pulls[0].head.ref),
+        branchRuns(repo, token, pulls[0].head.ref, "workflow_dispatch"),
+      ])
+    ).flat(),
     currentRunId,
     treeOf(sha),
     jobName,
@@ -618,11 +607,7 @@ if (import.meta.main) {
     if (!output) throw new Error("Missing CI output file");
     const sha = process.env.GITHUB_SHA ?? "";
     const runId = Number(process.env.GITHUB_RUN_ID);
-    let mode = "full";
-    const releaseCandidate =
-      process.env.GITHUB_EVENT_NAME === "push" &&
-      process.env.GITHUB_REF === "refs/heads/main" &&
-      isReleaseCommit(sha);
+    let mode = process.env.GITHUB_EVENT_NAME === "push" ? "hold" : "full";
     // Only main pushes reuse; dispatches and Release always validate fully.
     if (
       process.env.GITHUB_EVENT_NAME === "push" &&
@@ -657,7 +642,6 @@ if (import.meta.main) {
       ...fullValidationSelection(process.cwd()),
       packaging: false,
     });
-    appendFileSync(output, `release=${releaseCandidate}\n`);
     console.log(`${jobName ?? "Validation"}: ${mode} validation`);
     process.exit(0);
   }

@@ -9,18 +9,18 @@ required. The native launchd shim reports have been removed.
 | Pre-push | Read-only formatting and privacy scan of every pushed ref, including tags |
 | Privacy | One scan for each PR open/synchronize/reopen, plus explicit bot dispatches |
 | PR CI | Linux static, affected units, browser shards and behavioral verification; description policy remains in CI |
-| Native PR matrix | Installer, release, service-manager, plugin and native input changes only |
-| Main CI | Reuse the merged PR's successful identical tree; otherwise run the Linux suite |
-| Version commit on main | Build each native package once, test installed channels and agents, audit shipped dependencies, then seal |
+| Native checks | Tags and nightly only, including packaging changes |
+| Main CI | Report the merged PR's successful identical tree; missing evidence raises the main issue, without running suites |
+| Release tag | Build each native package once, test installed channels and agents, audit shipped dependencies, then seal |
 | Nightly native | Full native/platform and running-service channel upgrade signal; maintain one issue on failure |
 | Main gate | Keep one red-main issue, retry infrastructure once, close on a later green main; never open revert PRs |
-| Release PR and Release | [Three owner steps](release.md); automatic seal selection, wait, fallback and idempotent publication |
+| Release PR and Release | [Three owner steps](release.md); release-please and standard publication actions |
 | Pages, latency, golden images, asset headroom | Separate workflows filtered by their actual inputs; advisory measurements never gate Delivery |
 
 ## Check commands
 
 `bun run typecheck:quick` checks all three TypeScript projects. Use focused
-`bun run test <path>` while iterating. `check:static` retains notices, fragments,
+`bun run test <path>` while iterating. `check:static` retains notices,
 size, formatting/lint, types, build, site and OpenSpec checks; CI runs that lane
 alongside non-browser shards. `check:changed` remains an explicit local affected
 check and `check:delivery` an explicit complete local gate. Neither is a push hook.
@@ -38,28 +38,24 @@ opt-ins on open PRs. Unrelated labels and closed PRs start no runners.
 PR CI validates the proposed merge and uses one selection from
 `scripts/validation-scope.ts`. Scope includes both sides of renames and the
 complete PR, even if incremental unit scope narrows. Unknown/configuration
-changes select full Linux validation; they do not turn every server dependency
-into a native packaging input. Explicit installer, release, service-manager,
-plugin and native test paths select native work. Native storage assertions and
-plugin/launchd lifecycle checks share the existing installer runners.
+changes select full Linux validation. Packaging scope remains descriptive; every
+PR check runs on Linux. Native storage/plugin/launchd checks and running upgrades
+belong to the nightly or release candidate, never a PR matrix.
 
-The main run may reuse a full or scoped passing PR result only when immutable
-checkout evidence proves an identical tree. A newer red/cancelled verdict is
-never skipped; absent/expired proof or API errors select fresh Linux validation.
-A reused result cannot serve as new evidence of its own tree. PR reuse still
-requires the same scope and checkout/base/head identities. The stability opt-in
-requires fresh passes. CI supersede cancels only an older PR run of a different
-tree and only while the triggering head is current.
+Main reports passing full or scoped PR evidence only when immutable checkout
+proof establishes an identical tree. A newer red/cancelled verdict is never
+skipped; absent proof or API errors keep a red metadata result without starting
+another suite. Nightly catches integration/platform failures as one advisory issue.
+PR reuse still requires the same scope and checkout/base/head identities.
+The stability opt-in explicitly requests fresh repeated browser passes.
 
-Each main SHA has its own concurrency group. A later merge cannot evict the
-version commit whose sealed artifact a tag is waiting for. Release candidates
-run independently of the reusable Linux proof. Nightly native includes the same
-channel upgrade checks but does not become a required PR status.
-
-Failures with no acquired runner, or recognized setup/download/artifact/docker
-infrastructure signatures, receive one automatic retry. Test assertions do not
-qualify. Main's issue remains visible through the retry; there are no automatic
-revert branches or PRs. A later green main closes the issue.
+A failing unit, browser or behavioral test step retries once inside its existing
+job. A second failure fails the job. Before a behavioral retry, the failed
+run and resource receipts move into retained `retries/` diagnostics. The aggregate
+reads only the current `runs/` and `resources/`, keeping its one-receipt-per-shard
+check intact. Release/nightly infrastructure failures
+receive one automatic failed-job retry; main's issue remains visible through its
+infrastructure retry. There are no automatic revert branches or PRs.
 
 ## Side workflows
 
@@ -87,7 +83,7 @@ base. Keep those fixes and their assertions:
 | Owner topology | Plaque cards open on the real click contract (`18811673d`) and camera readiness gates pointer input. |
 | Lighthouse lamps | Hold overflow catalogue responses explicitly; visible and overflow lanes settle independently (`fe80db7a6`). |
 | Windows Board after-commit | Reap the child after stdio close before reopening/removing its tree (`740a1dfa3`); the crash marker remains the actual commit boundary. |
-| Behavioral timeout | Core controls have a dedicated shard, bounded parallel faults and reused checker sessions (`fe80db7a6`); complete verification remains mandatory, with no assertion retries. |
+| Behavioral timeout | Core controls have a dedicated shard, bounded parallel faults and reused checker sessions (`fe80db7a6`); complete verification remains mandatory, with one in-job retry of a failed test step. |
 | Core/Codex listing | Disable pinned Codex startup updates in the transparent recorder, including cached-update controls (`efddfb837`); every launched identity must still appear in World and CLI. |
 
 Local targeted runs cover the browser cases, fixture/recorder regressions and
@@ -102,7 +98,7 @@ explicit consumers. Model-backed owners select behavioral verification;
 model-free owners retain affected tests and inventory checks. World runtime
 changes select production/concurrent context suites. Non-browser and web test
 inventories are disjoint; browser shards retain the pinned Chrome and existing
-isolation rules. There are no assertion retries or timing gates. See the nightly
+isolation rules. Each failed test step retries once; timing gates remain separate. See the nightly
 latency signal for measured input delays.
 
 Three verification runners partition the complete accepted model inventory by
@@ -204,16 +200,10 @@ of the main policy baseline. CI passes the event's exact base SHA, so a merge in
 a stale stack is checked as that merge, rather than silently integrating main.
 Draft PR descriptions should pass `check:pr-body` before creation, using the same
 policy functions as Validation scope.
-Pre-push also checks those policies against the complete PR diff and the existing
-PR body, or the intended body named by `HERDR_WORLD_PR_BODY`. Existing PRs use
-their immutable base commit, including stacked PRs. GitHub records that commit
-at the PR's last push, so when it is an ancestor of `origin/<base branch>` (the
-branch merged a newer base), the hook uses that newer commit, as CI does; a
-rewritten base keeps the recorded commit. A first push without
-a body must carry the fragment/capability notes changes needed to pass on their own.
+Pre-push runs read-only formatting and privacy only. PR description and size
+policies remain in CI and the explicit candidate handoff; they never block the
+push hook. Main's lightweight report preserves immutable PR evidence.
 
-Main pushes keep a running check and retain only the newest pending run. Main
-gate accounts for the intervening merges when attributing a later failure.
 Avoid a second scheduler or independent platform scope decisions around this
 shared policy.
 

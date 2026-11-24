@@ -35,7 +35,6 @@ test("aggregate accepts exactly the selected lanes; failure, cancellation and mi
             mode === "reuse" ? "skipped" : "success",
             browser ? "success" : "skipped",
             verification ? "success" : "skipped",
-            native ? "success" : "skipped",
           ];
           const check = (rows: Array<string | undefined>) =>
             assertDeliveryResults(
@@ -44,7 +43,6 @@ test("aggregate accepts exactly the selected lanes; failure, cancellation and mi
               rows[1],
               rows[2],
               rows[3],
-              [rows[4]],
               plan,
             );
           expect(check(expected)).toBeUndefined();
@@ -64,17 +62,9 @@ test("aggregate accepts exactly the selected lanes; failure, cancellation and mi
   }
 });
 
-test("unknown modes, missing scoped plan and obsolete shim arrays cannot pass", () => {
+test("unknown modes and missing scoped plans cannot pass", () => {
   for (const mode of [undefined, "unknown", "hold", "scoped"])
     expect(() =>
-      assertDeliveryResults(mode, "success", "success", "skipped", "skipped", [
-        "skipped",
-      ]),
+      assertDeliveryResults(mode, "success", "success", "skipped", "skipped"),
     ).toThrow();
-  expect(() =>
-    assertDeliveryResults("reuse", "success", "skipped", "skipped", "skipped", [
-      "skipped",
-      "success",
-    ]),
-  ).toThrow();
 });

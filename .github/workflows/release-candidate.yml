@@ -271,14 +271,14 @@ jobs:
             ruby scripts/check-homebrew-formula-stage.rb "dist/$formula" \
               "dist/herdr-world-v$version-$platform.tar.xz" "$formula_class"
           done
-      - name: Generate tap change and pull request without pushing
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Stage the product Formula and tap install check
         run: |
           formula="herdr-world.rb"
           if [[ "$RELEASE_VERSION" == *-rc.* ]]; then formula="herdr-world-rc.rb"; fi
-          bash scripts/open-homebrew-pr.sh "$RELEASE_VERSION" "dist/$formula" --dry-run "$PWD/tap"
-          bun -e 'const workflow = Bun.YAML.parse(await Bun.file("tap/.github/workflows/herdr-world.yml").text()); if (!workflow.jobs.ownership) throw new Error("Missing tap acceptance job");'
+          mkdir -p tap/Formula tap/.github/scripts tap/.github/workflows
+          cp "dist/$formula" tap/Formula/
+          cp scripts/check-homebrew-runtime.rb tap/.github/scripts/
+          cp scripts/homebrew-tap-workflow.yml tap/.github/workflows/herdr-world.yml
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: homebrew-formula
@@ -373,7 +373,7 @@ jobs:
         run: python3 scripts/release-channel-upgrade.py "$RELEASE_VERSION" "$BASELINE_TAG" --disposable-host
 
   verify:
-    name: Seal every verified channel
+    name: Seal tested bytes with the immutable Actions artifact
     needs: [validate, archives, npm-stage, npm-smoke, homebrew-formula, homebrew-smoke, release-walk]
     if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
@@ -400,13 +400,6 @@ jobs:
         with:
           name: homebrew-formula
           path: candidate/tap
-      - name: Seal immutable publication input
-        env:
-          NIGHTLY: ${{ inputs.nightly }}
-        run: |
-          bun -e 'import { releaseNotes } from "./scripts/prepare-release"; await Bun.write("candidate/notes.md", process.env.NIGHTLY === "true" ? "Nightly channel verification; no publication.\n" : releaseNotes(await Bun.file("CHANGELOG.md").text(), process.env.RELEASE_VERSION))'
-          node scripts/release-bundle.mjs seal candidate "$RELEASE_VERSION" "$GITHUB_SHA"
-          node scripts/release-bundle.mjs verify candidate "$RELEASE_VERSION" "$GITHUB_SHA"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         id: bundle
         with:

@@ -3,14 +3,16 @@ name: Release PR
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: X.Y.Z, X.Y.Z-rc.N, patch, minor or major
-        required: true
+      release_as:
+        description: Optional version override, for example 0.3.8-rc.1
         type: string
+  schedule:
+    - cron: "27 6 * * 1"
 
 permissions:
   contents: write
   actions: write
+  issues: write
   pull-requests: write
 
 concurrency:
@@ -21,50 +23,24 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+        id: release
         with:
-          ref: main
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.4"
-      - run: bun install --frozen-lockfile
-      - name: Prepare or refresh one release PR from green main
+          target-branch: main
+          skip-github-release: true
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          release-as: ${{ inputs.release_as }}
+      # GITHUB_TOKEN-created PR events do not trigger CI. The action's PR output
+      # gives us its ref: dispatch automatically, without another token/input.
+      - name: Dispatch checks for the release-please PR
+        if: steps.release.outputs.prs_created == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION_INPUT: ${{ inputs.version }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
         run: |
-          set -euo pipefail
-          sha="$(git rev-parse HEAD)"
-          conclusion="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&event=push&branch=main" --jq '.workflow_runs[0].conclusion')"
-          test "$conclusion" = success || { echo '::error::Main CI is not green; re-run Release PR when main is green.'; exit 1; }
-          branch=release/next
-          lease="$(git rev-parse --verify --quiet "refs/remotes/origin/$branch" || true)"
-          git switch -c "$branch"
-          bun scripts/prepare-release.ts "$VERSION_INPUT"
-          version="$(bun -e 'import { parseManifestVersion } from "./scripts/prepare-release"; console.log(parseManifestVersion(await Bun.file("herdr-plugin.toml").text()))')"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A herdr-plugin.toml CHANGELOG.md changes/
-          git commit -m "Release $version"
-          bun run check:privacy
-          gh auth setup-git
-          git push --force-with-lease="refs/heads/$branch:$lease" origin "HEAD:refs/heads/$branch"
-          body="$RUNNER_TEMP/release-pr.md"
-          cat > "$body" <<'BODY'
-          Bump the public plugin version and assemble short changelog notes from changes/. Merge this PR, create its vX.Y.Z tag on the merge commit, then merge the automatically proposed Homebrew tap PR. Main CI tests and seals all installed channels; the tag waits and publishes those bytes.
-
-          Changelog: none — assembles existing release fragments.
-          Spec impact: none — prepares an existing release contract.
-          Verification impact: none — version metadata and release prose only.
-          BODY
-          pr="$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number // empty')"
-          if [ -n "$pr" ]; then
-            gh pr edit "$pr" --title "Release $version" --body-file "$body"
-          else
-            gh pr create --base main --head "$branch" --title "Release $version" --body-file "$body"
-          fi
-          # GITHUB_TOKEN-created PRs need an explicit CI dispatch, no new token.
+          branch="$(jq -r '.[0].headBranchName' <<< "$RELEASE_PRS")"
+          test -n "$branch" && test "$branch" != null
           gh workflow run ci.yml --ref "$branch"
           gh workflow run privacy.yml --ref "$branch"

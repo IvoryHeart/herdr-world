@@ -4,10 +4,11 @@ Issue #1382 authorizes one automated release path with three owner steps. Manual
 
 ## What Changes
 
-- Build and seal all release channels on the merged version commit; tags wait and publish that seal, with complete contract checks on expired-seal recovery.
+- Use release-please simple PR-only preparation from fix/feat titles; delete fragments and custom release preparation.
+- Build and test native bytes once on the owner tag; seal with standard Actions artifacts and publish with standard GitHub/npm/Homebrew tools.
 - Keep native agent launch, channel install/upgrade and shipped security checks; remove signed-in authorization and duplicate source/browser release gates.
 - Use stable Homebrew service paths and automatically migrate a running old keg service during upgrade.
-- Narrow PR native selection, keep one aggregate, reuse identical trees on main, report nightly native failures, retry infrastructure once and retain red-main issues without automatic reverts.
+- Run required PR checks once on Linux with one failed-test retry inside the job; main only reports PR evidence. Keep one aggregate, nightly native signal and main-red issues without automatic reverts.
 - Make pre-push formatting/privacy only and remove the broken Help/archive bots and filter noisy side workflows.
 
 ## Capabilities

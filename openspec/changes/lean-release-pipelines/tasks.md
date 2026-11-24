@@ -1,11 +1,11 @@
 ## 1. Release pipeline
 - [x] Replace manual Prepare/Publish dispatches with one release PR and automatic owner-tag publication.
 - [x] Build native packages once, consume exact bytes through channel checks and walk, then seal.
-- [x] Add automatic wait, expired-seal contract fallback, idempotent publishers and independent Pages.
+- [x] Use standard immutable artifacts, publication actions, retry recovery and independent Pages.
 - [x] Remove signed-in walk and receipt authorization.
 
 ## 2. Merge pipeline and service upgrades
-- [x] Narrow native selection, remove shim reports, reuse identical main trees and retain Linux gates.
+- [x] Run PR checks on Linux only with one in-job retry; report main evidence without heavy jobs.
 - [x] Add nightly signal and one infrastructure retry; remove automatic revert PRs.
 - [x] Reduce hooks and side-workflow noise.
 - [x] Persist stable service executable paths and verify running channel upgrades.

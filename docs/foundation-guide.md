@@ -332,7 +332,7 @@ embed those assets in a Bun executable. [Package tooling](../scripts/package-rel
 [npm staging](../scripts/stage-npm-release.ts),
 [Homebrew Formula generation](../scripts/generate-homebrew-formula.ts),
 [installer](../scripts/install-herdr-world.sh), [plugin tooling](../scripts/world-plugin.ts)
-and [release preparation](../scripts/prepare-release.ts) form the distribution
+and [release-please preparation](../.github/workflows/release-pr.yml) form the distribution
 path. [Packaging](packaging.md), [release](release.md) and [UPSTREAM](../UPSTREAM.md)
 own exact artifacts, versions and source lineage. [CI](../.github/workflows/ci.yml)
 runs the selected lanes described in [contributor validation](../CONTRIBUTING.md#validation). Generated assets and binaries stay out of

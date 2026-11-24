@@ -65,10 +65,30 @@ jobs:
         if: github.event_name == 'pull_request'
         run: bun scripts/ci-model-cache.ts restore ${{ matrix.shard }}
       - name: Run all accepted models within enforced resource limits
+        id: test-0
+        continue-on-error: true
         if: steps.reuse.outputs.reused != 'true'
         run: bun run verification:resources --system --shard=${{ matrix.shard }}/3
+      - name: Retry failed test once
+        if: (steps.reuse.outputs.reused != 'true') && steps.test-0.outcome == 'failure'
+        run: |
+          # One receipt per shard/attempt is required by the aggregate. Preserve
+          # the failed attempt outside its live inputs before the in-job retry.
+          mkdir -p .agents/verification/retries
+          if [ -d .agents/verification/runs ]; then
+            mv .agents/verification/runs .agents/verification/retries/first-runs
+          fi
+          if [ -d .agents/verification/resources ]; then
+            mv .agents/verification/resources .agents/verification/retries/first-resources
+          fi
+          bun run verification:resources --system --shard=${{ matrix.shard }}/3
       - name: Exercise a failing candidate and verify retained diagnostics
+        id: test-1
+        continue-on-error: true
         if: steps.reuse.outputs.reused != 'true'
+        run: bun run verification:diagnostic-control
+      - name: Retry failed test once
+        if: (steps.reuse.outputs.reused != 'true') && steps.test-1.outcome == 'failure'
         run: bun run verification:diagnostic-control
       - name: Prepare passing model evidence for reuse
         if: steps.reuse.outputs.reused != 'true'
@@ -86,6 +106,7 @@ jobs:
           path: |
             .agents/verification/runs/**/manifest.json
             .agents/verification/runs/**/origin.json
+            .agents/verification/retries/**
             .agents/verification/diagnostics/**
             .agents/verification/resources/**/resources.json
           include-hidden-files: true

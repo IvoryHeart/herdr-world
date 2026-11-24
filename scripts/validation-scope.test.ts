@@ -29,7 +29,6 @@ test("only the explicit agent tooling paths qualify", () => {
     "scripts/agent/worktree.test.ts",
     "scripts/agent/example/rules.test.ts",
     "docs/agent-development.md",
-    "changes/482.md",
   ];
   expect(isToolingOnlyChange(allowed)).toBe(true);
   for (const path of [
@@ -557,7 +556,7 @@ test("the real shard-table graph does not mistake installer test imports for nat
     path.includes("/town/TownCanvas"),
   ))
     expect(town.world).toContain(path);
-  const mixed = [...paths, "scripts/prepare-release.ts"];
+  const mixed = [...paths, "scripts/release-plan.ts"];
   expect(
     selectValidation(realGraph, mixed, coverage.owns, mixed, coverage.models)
       .packaging,

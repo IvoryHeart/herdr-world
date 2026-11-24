@@ -1,13 +1,30 @@
-## Decisions
+# Design
 
-The existing channel packers/checks become `release-candidate.yml`, called by version-commit main CI and expired-seal recovery. Six native package jobs build once and launch their archives. Npm staging consumes those archives and its native matrix launches the packed launcher. Homebrew checks the same archives on four Unix platforms, including actual previous-release service upgrades. The agent walk downloads those package artifacts. Only these channel checks and the shipped audit precede the content manifest seal.
+Use release-please's standard simple strategy and generic annotated TOML updater,
+in PR-only mode. Squash-merged fix/feat titles replace fragments. The owner tags
+before the next release-please run. GITHUB_TOKEN-created PR checks are dispatched
+automatically using the action output.
 
-The tag workflow selects the exact main push, waits through queueing and one infrastructure retry, then copies its verified artifact into the publishing run. A missing/expired seal calls the same candidate workflow. Publishers retain the manifest check immediately before effects. Existing GitHub/npm/tap identities make retry effects idempotent. Only the owner creates tags; no change to that ruleset or credentials.
+Only tags and nightly build native candidates. Acceptance consumes exact native
+archives and npm tarballs, running upgrades and real-agent starts. The standard
+immutable Actions artifact seals the tested package set within that workflow run;
+reruns reuse it or rebuild and repeat all acceptance when unavailable. No cross-run
+main authorization, receipt, bespoke seal manifest or custom publisher remains.
 
-Homebrew services resolve executable Cellar paths to the validated opt symlink. Formula finalization refreshes a running generated service from this same formula before cleanup removes the old keg. Installer finalization retains its existing executable ownership check.
+Use softprops for GitHub assets, npm publish --provenance for tarballs and mislav
+for the tap proposal. Mislav updates only the first URL. Our existing product
+Formula generator owns all four platform URLs and the launcher; the standard
+create-pull-request action completes mislav's same branch with those tested inputs
+and the tap's own install check. Find/reuse an existing proposal before invoking
+mislav; serialized release runs prevent duplicate proposals. Compare existing
+GitHub bytes/npm integrity before skipping them.
 
-PR packaging selection uses explicit native inputs rather than the entire server dependency graph. Main accepts the successful PR result only for an identical tree; otherwise the full Linux suite runs. Nightly native/upgrade failures maintain one advisory issue. Main-gate retains its issue through one infrastructure retry and never creates revert branches. The mandate explicitly permits deleting the broken Help and OpenSpec archive bots. Both are removed; targeted capture and the existing reviewed archive helper remain, without an automatic bot-branch repair loop.
+Linux PR jobs retry failed test steps once within the job. Main reports immutable
+PR proof without running heavy jobs; absence stays visible in the main-red issue.
+Nightly provides native/storage/plugin and running upgrade signal without a gate.
+Keep stable Homebrew opt registration and owned-service migration before cleanup.
 
-## Evidence and limits
-
-Workflow graph tests assert all contract jobs precede sealing/publication, source/browser gates are absent from release, exact artifact reuse and fallback wiring, native selection, publisher ordering and independent Pages. Registry filesystem fixtures exercise interrupted publication and mismatched bytes; gate tests exhaust waiting/failure/expiry selection; service tests replace and remove kegs while retaining opt. Native channel jobs remain authoritative for actual OS package/service behavior. Q41/Q36 mappings name these consumers; the complete verification gate remains required. The owner's RC rehearsal checks hosted permissions, registries, tap CI and a real upgrade; a one-week comparison checks cost, queue and red-main trends.
+Direct workflow graph, real subprocess/retry/registry fixtures and OS channel
+acceptance cover the ordering/recovery boundaries more directly than an abstract
+model of GitHub/npm/Homebrew. Hosted token, native service and RC behavior remains
+platform acceptance. No local test claims to execute publication or owner merges.

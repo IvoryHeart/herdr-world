@@ -12,7 +12,7 @@ test("live audit blocks the protected delivery result, release publication and P
   ).toBe(true);
   // Only a reused Delivery result, which already required the audit, skips it.
   expect(ci.jobs["dependency-security"].if).toBe(
-    "needs.validation-scope.outputs.mode != 'reuse'",
+    "needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'",
   );
   expect(ci.jobs.delivery.needs).toContain("dependency-security");
   const required = ci.jobs.delivery.steps.find(

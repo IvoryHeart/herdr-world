@@ -35,7 +35,7 @@ for the shipping boundary, response policy and exact expiring exception format.
 synthetic input, without editing files or installing vulnerable code.
 
 Same-repository Dependabot PRs receive automatic maintenance from trusted base
-policy: refreshed notices, a generated fragment when the shipped graph changes,
+policy: refreshed notices, a fix PR title when the shipped graph changes,
 or a specific `Changelog: none` reason for development/Actions-only updates, plus
 PR-body documentation metadata and reasoned `Spec impact:` / `Verification impact:`
 lines for routine version updates. Notice generation follows workspace dependency
@@ -77,7 +77,7 @@ assets required by server typechecks and process tests.
 | Disk hygiene | `bun run agent:worktree -- prune` removes merged, clean agent worktrees (see [agent development](docs/agent-development.md#keep-the-disk-healthy)); manage disk capacity separately; it never blocks a check. |
 
 `test:quick` excludes only `{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,ThemedSelect.browser,HerdrSetupCard}.test.ts`; it includes other browser and integration tests.
-Native inputs select the six-OS installer matrix, including launchd acceptance. Ordinary server PRs and unmatched main trees use Linux validation. Version commits build/test/seal release bytes; nightly native checks remain advisory.
+All required PR checks run on Linux, including native input changes. Main reports existing PR evidence without heavy checks. Release tags build/test/seal native bytes; nightly native checks remain advisory.
 
 Tests sit beside their source. `bun scripts/affected.ts origin/main` lists branch impact.
 
@@ -211,7 +211,7 @@ For OpenSpec work, use the adapted `world-openspec-*` skills in the
 skills do not carry this repository's authorization and delivery guidance.
 
 Use focused checks
-only for a specific question while developing. For a code push, the hook runs
+only for a specific question while developing.
 `bun run check:changed` explicitly runs static checks and affected non-browser
 units against a base. It is available during local development, separate from the
 format/privacy push hook. CI owns browser, behavioral and native acceptance.
@@ -221,16 +221,16 @@ only reports size slack; it is not a reason to block publication. Use
 `check:dead --prune` explicitly to retire resolved allowances.
 
 Main reuses a passing full or scoped PR result only for an identical tested tree;
-otherwise it runs the Linux suite. Native installer, service-manager, plugin and
-release inputs select native PR jobs. Version commits build/test/seal every
-channel; nightly repeats native and running-service upgrade checks as a signal.
+otherwise it keeps a red metadata result without starting another suite. Native
+installation, plugin and service acceptance runs on tags and nightly only.
+The tag builds/tests/seals each channel; nightly upgrades are an advisory signal.
 See the [pipeline guide](docs/ci-pipelines.md) for scope, recovery and measurements.
 
 Lane logs are cleared at the start of each run, including skipped lanes.
 See the [local queue](#local-check-queue) for shared slot ownership.
 
-PR CI and explicit local affected checks share unit selection; CI also selects browser,
-behavioral and platform suites. Static checks always run for code;
+PR CI and explicit local affected checks share unit selection; CI also selects browser and
+behavioral suites on Linux. Static checks always run for code;
 ordinary Markdown uses `check:docs`. The complete PR determines applicability,
 including both rename paths; a local incremental push may narrow unit consumers.
 The graph retains deletions from both diffs, so adding then removing an unused
@@ -238,14 +238,14 @@ file across pushes does not widen the remaining change's scope.
 A reverted gate/configuration edit in the incremental delta still selects the
 full unit inventory locally and full CI gate, even when that input is absent from the net PR diff.
 
-| Suite | PR selection | Full/main execution |
+| Suite | PR selection | Full execution |
 | --- | --- | --- |
 | Non-browser tests | Tests reaching changed inputs | All tests, across two CI runners |
 | Behavioral verification | Model/tooling/OpenSpec inputs or model-backed coverage owners; model-free owners run the cheap coverage inventory check | All accepted models, across three CI groups balanced by measured work |
 | World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
 | Web browser tests | Affected registered browser suites | All suites, across two runners |
-| Native installation | Explicit installer, release, service-manager, plugin and native test inputs | Native nightly signal and version-commit release channels |
-| Release walk | Native installation and release-walk inputs | Exact packaged executable, real TUI/core and real signed-out Claude/Codex on Linux and macOS, through the required installer workflow |
+| Native installation | None; PRs run Linux checks | Tags and advisory nightly |
+| Release walk | None; runs with release acceptance | Exact tagged/nightly package, real TUI/core and signed-out Claude/Codex on Linux/macOS |
 
 Published-release bugs add or extend a release-walk journey in the same PR as the
 fix. See the [release walk and escape rule](docs/release.md#real-runtime-release-walk),
@@ -258,7 +258,7 @@ vectors retain sanitized runtime/harness evidence. The real agent-start/release
 walk is maintained by #1023; release-channel staging is a separate #1044 change.
 
 The agent-tooling exception from #484 still covers `scripts/agent/**` (the worktree
-helper), the agent development guide and `changes/<slug>.md`: static checks and affected
+helper) and the agent development guide: static checks and affected
 unit tests, with the agent test inventory for uncovered modules. It skips heavy
 suites even though the inventory's broad scripts owner would otherwise apply.
 Contributor docs and skill Markdown run documentation checks or named consumer
@@ -290,25 +290,15 @@ no model filters.
 
 Use the [candidate-delivery skill](.agents/skills/candidate-delivery/SKILL.md) for
 formatting, commits, pushing and the exact PR-body validation/creation procedure.
-The [changelog guide](changes/README.md) owns the fragment format and exemption.
+Release-please creates release notes from squash-merged `fix:` and `feat:` PR titles.
 
 `check:commit` names the hook's guard: it refuses staged files under `.agents/`
-other than the shared skills (`check:agents`), then checks format and lint. Release workflows use
-`check:source` for the guard, asset-building type check and tests; `precommit`
+other than the shared skills (`check:agents`), then checks format and lint. `check:source` is an explicit local guard/type/test command; `precommit`
 remains its compatibility alias. `check` delegates static validation to the same
 lane used by local delivery, then runs tests. That lane checks source types and
 builds production assets once, instead of building the web app during both type
 checking and compilation.
 
-A push that only merges `origin/main` into the already-pushed branch runs
-`bun run check:static` (the static lane alone): both sides were tested and CI runs
-the full gate on the merge. `scripts/merge-push.ts` decides this conservatively.
-The push must add exactly one merge commit on top of the remote branch tip, its
-second parent must be in `origin/main`, and `git merge-tree` must reproduce it
-without conflicts, except a `CHANGELOG.md` conflict resolved by taking main's file.
-The merge commit's tree must equal that clean merge apart from changelog
-fragments. Any other conflict resolution or edit, including one that touches
-code, gets the normal check.
 The protected CI job names remain unchanged. `bun run check:delivery` runs all
 local lanes: static checks first (later lanes read the build), then behavioral
 verification alongside units and World browser suites, followed by the other
@@ -565,23 +555,19 @@ behavior, verification, and compatibility impact. For UI changes, upload
 screenshots as GitHub attachments and embed them in the PR description. Do not
 commit screenshot files to the repository solely for PR review. Do not commit
 generated assets (`dist/`, `server/public/`) or binaries.
-Record a user-facing change as a changelog fragment, `changes/<pr-number-or-slug>.md`,
-before the first push, rather than editing `CHANGELOG.md`. See
-[changes/README.md](changes/README.md) for the format; `bun run changelog:check`
-validates it. CI requires a fragment from every PR that is not documentation-only.
-A PR with nothing user-facing (tests, CI, contributor tooling) instead puts
-`Changelog: none — <specific reason>` in its description. PR links in entries are
-optional; do not push again solely to add one after the PR opens.
+Use `fix:` or `feat:` PR titles for user-facing changes and squash merge them.
+Release-please keeps one reviewed release PR current, updating `herdr-plugin.toml`,
+its simple-strategy version metadata and `CHANGELOG.md`; do not add fragments or
+edit the changelog by hand. Tag the merged release before the next release-please
+run. See [the three owner release steps](docs/release.md#three-owner-steps).
 
-After a merge, CI runs the full check again on main. Merges that land while a
-main check is running are checked together, once, at the newest of them. If a
-check fails, the Main gate workflow opens one `main-red` issue. It names the
-merge commit and its PR and prepares a revert PR, which it never merges; when the
-check covered several merges, it lists them all and prepares no revert. Nothing
-is rerun automatically: a failing test is fixed at its cause, not retried. Merge
-the revert, revert the merge that broke it, or land a fix; rerun only after a
-GitHub service failure. Later red commits are added to the open issue, not to new ones, and the next
-green main run at or after the red commit closes the issue and its revert PR.
+Main checks existing immutable PR evidence without running heavy checks. Missing
+or failed evidence stays visible in one main-red issue; no automatic revert PR
+is created. A later green result closes the issue. PR test jobs retry a failed
+test step once in the same job, preserving a second failure. Native platform and
+running-service upgrade checks run on tags and nightly, with nightly failures
+reported in one advisory issue.
+
 
 The **Web asset headroom** status on a PR projects its web asset delta onto
 current main and fails if together they would exceed the bundle budgets in

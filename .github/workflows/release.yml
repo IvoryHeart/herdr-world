@@ -15,15 +15,11 @@ concurrency:
 
 jobs:
   validate:
-    name: Wait for this version commit on main
+    name: Validate owner tag and recover retained tested bytes
     runs-on: ubuntu-latest
-    timeout-minutes: 360
     outputs:
       version: ${{ steps.metadata.outputs.version }}
-      commit: ${{ steps.metadata.outputs.commit }}
-      run: ${{ steps.seal.outputs.run }}
-      artifact: ${{ steps.seal.outputs.artifact }}
-      rebuild: ${{ steps.seal.outputs.rebuild }}
+      retained: ${{ steps.retained.outcome == 'success' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -34,78 +30,66 @@ jobs:
           bun-version: "1.4.4"
       - id: metadata
         run: bun scripts/release-plan.ts
-      - id: seal
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bun scripts/release-walk-gate.ts "${{ steps.metadata.outputs.commit }}"
+      # Same workflow run only. The immutable artifact exists only after all
+      # acceptance jobs pass. A full rerun can resume it; expiry rebuilds/tests.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        id: retained
+        continue-on-error: true
+        with:
+          name: verified-release
+          path: candidate
 
-  rebuild:
+  candidate:
+    name: Build and test the tagged bytes once
     needs: validate
-    if: needs.validate.outputs.rebuild == 'true'
+    if: needs.validate.outputs.retained != 'true'
     uses: ./.github/workflows/release-candidate.yml
     with:
       version: ${{ needs.validate.outputs.version }}
 
-  acquire:
-    name: Retain the tested seal in this run
-    needs: [validate, rebuild]
-    if: ${{ !cancelled() && needs.validate.result == 'success' && (needs.rebuild.result == 'success' || (needs.rebuild.result == 'skipped' && needs.validate.outputs.rebuild == 'false')) }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        if: needs.validate.outputs.rebuild == 'false'
-        with:
-          github-token: ${{ github.token }}
-          run-id: ${{ needs.validate.outputs.run }}
-          artifact-ids: ${{ needs.validate.outputs.artifact }}
-          path: candidate
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        if: needs.validate.outputs.rebuild == 'true'
-        with:
-          name: verified-release
-          path: candidate
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        if: needs.validate.outputs.rebuild == 'false'
-        with:
-          name: verified-release
-          path: candidate/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 30
-          overwrite: true
-
   publish:
-    name: Publish GitHub Release
-    needs: [validate, acquire]
-    if: ${{ !cancelled() && !failure() }}
+    name: Publish tested GitHub assets
+    needs: [validate, candidate]
+    if: ${{ !cancelled() && needs.validate.result == 'success' && (needs.candidate.result == 'success' || (needs.candidate.result == 'skipped' && needs.validate.outputs.retained == 'true')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    env:
-      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: verified-release
           path: candidate
-      - name: Check verified digests at publish time
-        run: node scripts/release-bundle.mjs verify candidate "$RELEASE_VERSION" "${{ needs.validate.outputs.commit }}"
-      - name: Publish GitHub Release
+      - name: Refuse changes to existing published bytes
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
         run: |
-          node scripts/publish-github-release.mjs "$RELEASE_VERSION" candidate "${{ needs.validate.outputs.commit }}"
+          set -euo pipefail
+          # Distinguish a missing release from authentication/network failure.
+          gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[].tag_name' > tags.txt
+          if grep -Fxq "$TAG" tags.txt; then
+            mkdir existing
+            gh release view "$TAG" --json assets --jq '.assets[].name' > names.txt
+            if [ -s names.txt ]; then
+              gh release download "$TAG" --dir existing
+              for file in existing/*; do
+                cmp "$file" "candidate/github/$(basename "$file")"
+              done
+            fi
+          fi
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: candidate/github/*
+          fail_on_unmatched_files: true
+          overwrite_files: false
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-rc.') }}
+          make_latest: ${{ !contains(github.ref_name, '-rc.') }}
 
   npm-publish:
-    name: Publish npm packages
-    needs: [validate, acquire, publish]
-    if: ${{ !cancelled() && !failure() }}
+    name: Publish npm with provenance
+    needs: [validate, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -113,9 +97,6 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
@@ -124,47 +105,104 @@ jobs:
         with:
           name: verified-release
           path: candidate
-      - name: Check verified digests at publish time
-        run: node scripts/release-bundle.mjs verify candidate "$RELEASE_VERSION" "${{ needs.validate.outputs.commit }}"
-      - name: Publish npm packages
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Publish the tested tarballs, retaining matching existing versions
+        shell: bash
         run: |
-          node scripts/publish-npm-release.mjs "$RELEASE_VERSION" candidate/npm
+          set -euo pipefail
+          channel=latest
+          if [[ "$RELEASE_VERSION" == *-rc.* ]]; then channel=next; fi
+          # Platform packages first, launcher last; never pack again here.
+          files=(candidate/npm/*-linux-*.tgz candidate/npm/*-darwin-*.tgz candidate/npm/*-windows-*.tgz "candidate/npm/ivoryheart-herdr-world-$RELEASE_VERSION.tgz")
+          for file in "${files[@]}"; do
+            package="$(tar -xOf "$file" package/package.json | jq -r '.name + "@" + .version')"
+            integrity="sha512-$(openssl dgst -sha512 -binary "$file" | openssl base64 -A)"
+            if npm view "$package" dist.integrity --json > integrity.json 2> npm-error.txt; then
+              test "$(jq -r . integrity.json)" = "$integrity" || { echo "::error::Existing npm bytes differ for $package"; exit 1; }
+            elif grep -q 'E404' npm-error.txt; then
+              npm publish "$file" --provenance --access public --tag "$channel"
+            else
+              cat npm-error.txt >&2
+              exit 1
+            fi
+          done
 
   homebrew-pr:
-    name: Propose Homebrew Formula update
-    needs: [validate, acquire, npm-publish]
-    if: ${{ !cancelled() && !failure() }}
+    name: Propose the tested multi-platform Formula
+    needs: [validate, npm-publish]
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     env:
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: verified-release
           path: candidate
-      - name: Check verified digests at publish time
-        run: node scripts/release-bundle.mjs verify candidate "$RELEASE_VERSION" "${{ needs.validate.outputs.commit }}"
-      - name: Propose Homebrew Formula update
+      - name: Find an existing tap proposal or already merged Formula
+        id: tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          formula="herdr-world.rb"
-          if [[ "$RELEASE_VERSION" == *-rc.* ]]; then formula="herdr-world-rc.rb"; fi
-          bash scripts/open-homebrew-pr.sh "$RELEASE_VERSION" "candidate/tap/Formula/$formula" --prepared "$PWD/candidate/tap"
+          set -euo pipefail
+          formula=herdr-world
+          if [[ "$RELEASE_VERSION" == *-rc.* ]]; then formula=herdr-world-rc; fi
+          title="$formula $RELEASE_VERSION"
+          branch="$(gh pr list -R IvoryHeart/homebrew-tap --base main --state open --json title,headRefName,isCrossRepository --jq ".[] | select(.title == \"$title\" and .isCrossRepository == false) | .headRefName")"
+          if [ -n "$branch" ]; then
+            [[ "$branch" =~ ^update-${formula}[.]rb-[0-9]+$ ]] || exit 1
+          fi
+          echo "formula=$formula" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          gh api "repos/IvoryHeart/homebrew-tap/contents/Formula/$formula.rb" --jq .content | base64 -d > published.rb
+          merged=false
+          if cmp -s published.rb "candidate/tap/Formula/$formula.rb"; then merged=true; fi
+          echo "merged=$merged" >> "$GITHUB_OUTPUT"
+      # This standard action handles one URL. The standard PR action below
+      # completes its SAME PR with our product's four URLs and install check.
+      - uses: mislav/bump-homebrew-formula-action@56a283fa15557e9abaa4bdb63b8212abc68e655c # v3
+        if: steps.tap.outputs.branch == '' && steps.tap.outputs.merged != 'true'
+        with:
+          formula-name: ${{ steps.tap.outputs.formula }}
+          homebrew-tap: IvoryHeart/homebrew-tap
+          push-to: IvoryHeart/homebrew-tap
+          create-pullrequest: true
+          download-url: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/herdr-world-${{ github.ref_name }}-darwin-arm64.tar.xz
+          commit-message: "${{ steps.tap.outputs.formula }} ${{ needs.validate.outputs.version }}"
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      - name: Resolve the standard action's proposal branch
+        id: proposal
+        if: steps.tap.outputs.merged != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          FORMULA: ${{ steps.tap.outputs.formula }}
+        run: |
+          branch="$(gh pr list -R IvoryHeart/homebrew-tap --base main --state open --json title,headRefName,isCrossRepository --jq ".[] | select(.title == \"$FORMULA $RELEASE_VERSION\" and .isCrossRepository == false) | .headRefName")"
+          [[ "$branch" =~ ^update-${FORMULA}[.]rb-[0-9]+$ ]]
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: steps.tap.outputs.merged != 'true'
+        with:
+          repository: IvoryHeart/homebrew-tap
+          ref: main
+          path: tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      - name: Apply the exact tested product Formula and tap check
+        if: steps.tap.outputs.merged != 'true'
+        run: cp -R candidate/tap/. tap/
+      - uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        if: steps.tap.outputs.merged != 'true'
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+          branch: ${{ steps.proposal.outputs.branch }}
+          base: main
+          title: "${{ steps.tap.outputs.formula }} ${{ needs.validate.outputs.version }}"
+          commit-message: "${{ steps.tap.outputs.formula }} ${{ needs.validate.outputs.version }}"
+          body: Update the four native URLs and digests to the tested release bytes, retaining the tap's own macOS install check. Merge to publish Homebrew.
 
   publication-status:
     name: Release result
-    needs: [validate, rebuild, acquire, publish, npm-publish, homebrew-pr]
+    needs: [validate, candidate, publish, npm-publish, homebrew-pr]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -176,9 +214,8 @@ jobs:
           import json, os
           jobs = json.loads(os.environ['RESULTS'])
           failed = [name for name, job in jobs.items() if job['result'] in ('failure', 'cancelled')]
-          failed = failed or [name for name, job in jobs.items() if name != 'rebuild' and job['result'] != 'success']
           line = ('Release complete; merge the Homebrew tap PR.' if not failed else
-                  'Release stopped at ' + failed[0] + '; re-run this tag to verify existing publications and finish remaining channels.')
+                  'Release stopped at ' + failed[0] + '; re-run failed jobs to resume the tested bytes and finish remaining channels.')
           print(line)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary: summary.write(line + '\n')
           if failed: raise SystemExit(1)
@@ -187,7 +224,7 @@ jobs:
   deploy-pages:
     name: Request stable Pages deployment
     needs: [publish, npm-publish]
-    if: ${{ !cancelled() && !failure() && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.') }}
+    if: ${{ !cancelled() && !failure() && !contains(github.ref_name, '-rc.') }}
     runs-on: ubuntu-latest
     permissions:
       actions: write

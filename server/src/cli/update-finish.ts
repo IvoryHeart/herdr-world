@@ -51,12 +51,13 @@ export function restartServiceUsing(
   if (ownsHomebrewService(executable, definition)) {
     // Homebrew calls finalization before pruning the old keg. Re-register with
     // opt while the old process is still alive, then start the new executable.
-    return runServiceCommand(["service", "install"], {
+    const installed = runServiceCommand(["service", "install"], {
       runtime: serviceRuntime(context.runtime),
       runCommand: context.runCommand,
       log: context.log,
       error: context.error,
-    }) as number;
+    });
+    return typeof installed === "number" ? installed : EXIT_FAILURE;
   }
   const forms = [
     executable,

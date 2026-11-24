@@ -112,6 +112,7 @@ test("CI and release jobs install once from the workspace root", () => {
       }
       // Native Windows installer/compatibility tests use only Bun and Node builtins.
       const noBunInstall =
+        file === "release-pr.yml" ||
         (file === "dependency-security.yml" && name === "queue") ||
         (["installer-upgrade.yml", "release-walk.yml"].includes(file) &&
           name === "baseline") ||

@@ -49,13 +49,12 @@ Do not issue 30-second status loops or separate `ps`/`gh pr checks` probes while
 the blocking command is running. Do not add a Codex lifecycle hook for polling;
 it cannot intercept `write_stdin`.
 
-Use the [changelog fragment policy](../../../changes/README.md) for format,
-timing and exemptions; mention the fragment or the specific no-change reason
-in the PR description.
+Use `fix:` or `feat:` PR titles for user-facing release notes. Release-please
+updates the changelog and version in its reviewed PR; do not add change fragments.
 Prepare the PR body in a local file after committing the candidate. Run
 `bun run check:pr-body <file>` (append the base ref for a stacked PR), then use
 that same file with `gh pr create --body-file <file>` to open one ready PR.
-The check shares CI's changelog, source-coverage, spec and verification impact
+The check shares CI's source-coverage, spec and verification impact
 policies against the committed PR diff. Every non-documentation PR needs two
 plain lines without bold labels:
 

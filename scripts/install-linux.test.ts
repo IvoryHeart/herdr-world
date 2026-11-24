@@ -273,7 +273,7 @@ test("without a frozen baseline, container installs resolve the latest stable re
   expect(calls).toBe(1);
 });
 
-test("native PRs retain systemd containment; release checks running channel upgrades", async () => {
+test("native acceptance is isolated from Linux PRs; releases check running channel upgrades", async () => {
   const workflow = async (name: string): Promise<any> =>
     Bun.YAML.parse(await Bun.file(`.github/workflows/${name}.yml`).text());
   const native = await workflow("installer-upgrade");
@@ -287,16 +287,17 @@ test("native PRs retain systemd containment; release checks running channel upgr
   expect(step.run).toContain("--reuse --version");
   expect(step.run).toContain("--require-docker");
   expect(step["continue-on-error"]).toBeUndefined();
-  expect(ci.jobs["installer-upgrade"].if).toContain(
-    "outputs.packaging == 'true'",
+  expect(ci.jobs["installer-upgrade"]).toBeUndefined();
+  expect(ci.jobs.delivery.needs).not.toContain("installer-upgrade");
+  expect(ci.jobs["release-candidate"]).toBeUndefined();
+  expect(release.jobs.candidate.uses).toBe(
+    "./.github/workflows/release-candidate.yml",
   );
-  expect(ci.jobs.delivery.needs).toContain("installer-upgrade");
-  expect(ci.jobs["release-candidate"].uses).toBe(release.jobs.rebuild.uses);
   expect(
     candidate.jobs["homebrew-smoke"].steps.some((item: any) =>
       item.run?.includes("release-channel-upgrade.py"),
     ),
   ).toBe(true);
   expect(JSON.stringify(candidate)).not.toContain("test:install-linux");
-  expect(release.jobs.publish.needs).toContain("acquire");
+  expect(release.jobs.publish.needs).toContain("candidate");
 });

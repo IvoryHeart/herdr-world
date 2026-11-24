@@ -1,13 +1,12 @@
 import type { ValidationSelection } from "./validation-scope";
 import { VALIDATION_PROOF_PREFIX } from "./ci-validation-proof";
-/** Linux delivery plus the explicitly selected native lane; no protected shims. */
+/** The single aggregate requires every selected Linux lane. */
 export function assertDeliveryResults(
   mode: string | undefined,
   scope: string | undefined,
   validation: string | undefined,
   world: string | undefined,
   behavioral: string | undefined,
-  packaging: Array<string | undefined>,
   selection?: ValidationSelection,
 ) {
   if (mode === "hold")
@@ -16,9 +15,6 @@ export function assertDeliveryResults(
     );
   if (mode === "scoped" && !selection)
     throw new Error("Missing scoped selection");
-  const native =
-    (mode === "full" && (selection?.packaging ?? true)) ||
-    (mode === "scoped" && selection!.packaging);
   const browser =
     mode === "full" ||
     (mode === "scoped" && !!(selection!.world.length + selection!.web.length));
@@ -36,14 +32,10 @@ export function assertDeliveryResults(
     !known ||
     behavioral !== (verify ? "success" : "skipped") ||
     validation !== expected[0] ||
-    world !== expected[1] ||
-    packaging.length !== 1 ||
-    packaging
-      .slice(0, 1)
-      .some((result) => result !== (native ? "success" : "skipped"))
+    world !== expected[1]
   ) {
     throw new Error(
-      `Delivery checks failed: mode=${mode}, scope=${scope}, validation=${validation}, world=${world}, behavioral=${behavioral}, packaging=${packaging.join(",")}`,
+      `Delivery checks failed: mode=${mode}, scope=${scope}, validation=${validation}, world=${world}, behavioral=${behavioral}`,
     );
   }
 }
@@ -55,16 +47,10 @@ if (import.meta.main) {
     Bun.env.VALIDATION_RESULT,
     Bun.env.WORLD_RESULT,
     Bun.env.BEHAVIORAL_RESULT,
-    [Bun.env.INSTALLER_RESULT],
     Bun.env.HERDR_CI_SELECTION
       ? (JSON.parse(Bun.env.HERDR_CI_SELECTION) as ValidationSelection)
       : undefined,
   );
-  if (
-    Bun.env.RELEASE_RESULT !==
-    (Bun.env.RELEASE === "true" ? "success" : "skipped")
-  )
-    throw new Error("Release candidate contracts did not pass");
   console.info("Delivery checks passed");
   if (Bun.env.HERDR_CI_SELECTION)
     console.info(
