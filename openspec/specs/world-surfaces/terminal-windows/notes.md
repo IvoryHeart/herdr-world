@@ -165,8 +165,8 @@
   or the row's **Open terminal** (**Open in Spaces** for a room, table or
   host) opens what was found: a Herdr TUI agent, terminal,
   table or room opens in Spaces on its own connection, with its tab focused
-  and pane selected, even when another host was Spaces' host
-  (`openWorldFind`, through the store's qualified Spaces target). A live
+  and pane selected, whether its host already was Spaces' host or another
+  was (`openWorldFind`, through the store's `activateQualifiedSpacesTarget`). A live
   herdr-core agent or terminal opens in Spaces too: Spaces' terminal area
   shows World's watch of it (`SpacesCoreTerminal`, the same
   `coreInspectorTerminal` as the window's Terminal tab) under a bar with its
