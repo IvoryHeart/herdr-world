@@ -591,7 +591,10 @@
     **Open Terminal** to fix its size. Unknown sizes do not produce the note.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
-    that, and below 360px only the active view, with the others under ⋯.
+    that, and when even the icons do not fit (always below 360px) one view
+    menu in their place, drawn as the active view's tab with a chevron: click
+    it to choose Chat, Terminal, Files, Changes or Commits. The window's ⋯
+    holds window actions only.
   - The Town master's chat (**Settings → Town master**, the same synced role
     in every browser) opens docked on Chat once per visit on wide screens in
     Town and Board, without moving the pane's focus. The town center and
