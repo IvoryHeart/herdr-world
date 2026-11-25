@@ -100,7 +100,7 @@ test.each(["playing", "muted"])(
   },
 );
 
-test("audio unlock and suspension immediately refresh the worker policy", () => {
+test("audio unlock and suspension immediately refresh the worker policy", async () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, "window");
   class FakeAudioContext extends EventTarget {
     state = "running";
@@ -135,6 +135,9 @@ test("audio unlock and suspension immediately refresh the worker policy", () => 
     expect(policies[policies.length - 1]).toBe("fallback");
     installChimeUnlock();
     page.dispatchEvent(new Event("pointerdown"));
+    // The audio is created after the tap, not inside it.
+    expect(policies[policies.length - 1]).toBe("fallback");
+    await new Promise((done) => setTimeout(done, 0));
     expect(policies[policies.length - 1]).toBe("playing");
     audio.state = "suspended";
     audio.dispatchEvent(new Event("statechange"));

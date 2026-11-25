@@ -752,6 +752,12 @@ export async function checkAnnotationUX(
         "tab did not close floating annotations",
       );
       toggleAnnotations();
+      // Reopening focuses the saved comment after two animation frames. Let
+      // that finish before opening a picker that closes when focus leaves it.
+      await until(
+        () => document.activeElement?.matches(".annotation-card textarea"),
+        "floating annotations restored comment focus",
+      );
       await hoverAnnotations(true);
       click('button[aria-label="Agent pane"]');
       await until(

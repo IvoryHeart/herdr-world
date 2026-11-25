@@ -46,11 +46,11 @@ export const TownObservatory = memo(function TownObservatory({
     event.stopPropagation();
     open?.("budget");
   };
-  // The building opens what its sign does (#1170).
-  const built = lot !== null;
+  // The building, and on a narrow town the folded sign, opens what the sign
+  // does (#1170); the town center's Buildings ring opens it too (#1261).
   const openBudget = useMemo(
-    () => (open && built ? () => open("budget") : null),
-    [open, built],
+    () => (open ? () => open("budget") : null),
+    [open],
   );
   useTownPlace("observatory", openBudget);
   if (!lot) {

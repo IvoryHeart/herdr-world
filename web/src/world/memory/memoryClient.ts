@@ -15,6 +15,7 @@ import {
   memoryFixtureClient,
   memoryFixtureOn,
   memoryFixtureHasMemory,
+  memoryFixtureGone,
 } from "./memoryFixture";
 
 /**
@@ -144,6 +145,7 @@ let override: MemoryClient | null = null;
 export function setMemoryClientForTests(client: MemoryClient | null) {
   override = client;
   catalogs.clear();
+  made.clear();
   pending.clear();
   hosts = [];
   emit();
@@ -191,7 +193,19 @@ export function memoryErrorText(error: unknown): string {
 export type MemoryHostTarget = MemoryTarget & {
   label: string;
   names: Readonly<Record<string, string>>;
+  /** World's room names on the host (workspace ID → label). */
+  rooms?: Readonly<Record<string, string>>;
+  /**
+   * False when no agent whose harness keeps memory runs on the host now
+   * (#1342): its memory is not read, but what agents made there, gone
+   * makers' included, still is. Absent means it has memory.
+   */
+  memory?: boolean;
 };
+
+/** Whether the Library reads `host`'s memory, not only what agents made. */
+export const hostHasMemory = (host: Pick<MemoryHostTarget, "memory">) =>
+  host.memory !== false;
 
 export type MemoryCatalogState =
   | { status: "loading"; catalog?: MemoryCatalog }
@@ -201,6 +215,8 @@ export type MemoryCatalogState =
 const listeners = new Set<() => void>();
 let hosts: readonly MemoryHostTarget[] = [];
 const catalogs = new Map<string, MemoryCatalogState>();
+/** How many things each host's last read "Made by agents" shelf holds. */
+const made = new Map<string, number>();
 let version = 0;
 const emit = () => {
   version += 1;
@@ -224,24 +240,73 @@ export function publishMemoryHosts(next: readonly MemoryHostTarget[]) {
       (host, index) =>
         memoryTargetKey(host) === memoryTargetKey(hosts[index]!) &&
         host.label === hosts[index]!.label &&
-        JSON.stringify(host.names) === JSON.stringify(hosts[index]!.names),
+        hostHasMemory(host) === hostHasMemory(hosts[index]!) &&
+        JSON.stringify(host.names) === JSON.stringify(hosts[index]!.names) &&
+        JSON.stringify(host.rooms) === JSON.stringify(hosts[index]!.rooms),
     );
   if (same) return;
   hosts = next;
   // A generation that went away never answers for the new one.
   const live = new Set(next.map(memoryTargetKey));
   for (const key of catalogs.keys()) if (!live.has(key)) catalogs.delete(key);
+  for (const key of made.keys()) if (!live.has(key)) made.delete(key);
   emit();
+}
+
+/**
+ * The shelf client reports each host's "Made by agents" count as it reads
+ * it (artefactShelfClient.ts), so the Library is offered on a host whose
+ * agents have all stopped while their work is still there (#1342). Null
+ * forgets every host's (the shelf cache was cleared).
+ */
+export function noteHostMade(target: MemoryTarget | null, count = 0) {
+  if (!target) {
+    if (!made.size) return;
+    made.clear();
+    emit();
+    return;
+  }
+  const key = memoryTargetKey(target);
+  if ((made.get(key) ?? 0) === count) return;
+  if (count) made.set(key, count);
+  else made.delete(key);
+  emit();
+}
+
+/** What the host's last read shelf holds (0 before any read). */
+export const hostMade = (target: MemoryTarget) =>
+  made.get(memoryTargetKey(target)) ?? 0;
+
+/**
+ * The hosts the Library offers, in World's order: those with memory, and
+ * those without whose shelf holds something agents made (#1342). Town's
+ * sign, the Library's host choice, Settings and the command box, Board's
+ * hub and opening all use this one list.
+ */
+export function libraryHosts(): readonly MemoryHostTarget[] {
+  return memoryHosts().filter(
+    (host) => hostHasMemory(host) || hostMade(host) > 0,
+  );
 }
 
 const fixtureHosts: readonly MemoryHostTarget[] = [
   { ...MEMORY_FIXTURE_TARGET, names: MEMORY_FIXTURE_AGENT_NAMES },
 ];
+const fixtureGoneHosts: readonly MemoryHostTarget[] = [
+  { ...fixtureHosts[0]!, memory: false },
+];
 
-/** The hosts to offer: the published ones, or the testing switch's one. */
+/**
+ * The live hosts World publishes (with or without memory), or the testing
+ * switch's one; libraryHosts() is the ones the Library offers.
+ */
 export function memoryHosts(): readonly MemoryHostTarget[] {
   if (!override && memoryFixtureOn())
-    return memoryFixtureHasMemory() ? fixtureHosts : [];
+    return memoryFixtureHasMemory()
+      ? fixtureHosts
+      : memoryFixtureGone()
+        ? fixtureGoneHosts
+        : [];
   return hosts;
 }
 

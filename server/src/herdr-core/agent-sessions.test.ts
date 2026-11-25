@@ -146,6 +146,52 @@ describe("one Chat for both runtimes", () => {
     expect(sends(w)).toEqual([]);
   });
 
+  test("a core agent's desk read names what it made on core's own connection", async () => {
+    const { t, call, transcript } = await setup();
+    const report = join(transcript, "..", "core-report.md");
+    await writeFile(report, "# Report\n");
+    const record = {
+      type: "assistant",
+      uuid: "core-write",
+      cwd: join(transcript, ".."),
+      timestamp: "2026-11-23T10:00:00.000Z",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "call_core_write",
+            name: "Write",
+            input: { file_path: "core-report.md", content: "# Report" },
+          },
+        ],
+      },
+    };
+    await writeFile(
+      transcript,
+      `${await readFile(transcript, "utf8")}${JSON.stringify(record)}\n`,
+    );
+    const { quests } = (await call("agent_quest.list", {
+      pane_ids: [t],
+    })) as {
+      quests: Array<{
+        pane_id: string;
+        artefacts?: Array<{
+          title: string;
+          exists: boolean;
+          made_by: { connection_id: string; pane_id: string; agent: string };
+        }>;
+      }>;
+    };
+    const [entry] = quests;
+    expect(entry?.pane_id).toBe(t);
+    const made = entry?.artefacts?.find((a) => a.title === "core-report.md");
+    expect(made?.exists).toBe(true);
+    expect(made?.made_by.pane_id).toBe(t);
+    expect(made?.made_by.agent).toBe("claude");
+    expect(made?.made_by.connection_id).toBeTruthy();
+  });
+
   test("a message goes through core's send to the program the person saw", async () => {
     const { w, t, call, recipient } = await setup();
     const shown = (await call("agent_conversation.get")) as {

@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import pin from "../tools/chrome/test-chrome.json";
-import { rawSvgImports } from "../web/src/world/testing/assetUrlImports";
+import {
+  assetUrlImports,
+  rawSvgImports,
+} from "../web/src/world/testing/assetUrlImports";
 import { SWIFTSHADER_FLAGS } from "../web/src/world/testing/chromeRendering";
 import {
   TOWN_GOLDEN_WEATHER,
@@ -41,10 +44,11 @@ const goldenDirectory = join(fixture, "images");
 
 // Town's place windows (the warehouse's Integrations page) import agent
 // icons through Vite's `?raw`; the fixture bundle loads them as text too.
+// The Library's reader imports PDF.js's worker through Vite's `?url`.
 export const townGoldenBuildConfig = {
   target: "browser",
   loader: { ".woff2": "file" },
-  plugins: [rawSvgImports],
+  plugins: [rawSvgImports, assetUrlImports],
 } satisfies Partial<Bun.BuildConfig>;
 
 /** A request/event connection; every operation has a deadline, never a status loop. */

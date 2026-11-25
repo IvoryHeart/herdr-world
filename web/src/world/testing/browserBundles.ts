@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { assetUrlImports, rawSvgImports } from "./assetUrlImports";
 
 // Entry names are checked against the source files at runtime.
@@ -17,9 +17,14 @@ export async function discoverWorldBrowserEntries(
 async function entryDirectory(
   entry: WorldBrowserEntry,
   root: string,
-  source?: string,
+  source = join(import.meta.dir, ".."),
 ) {
-  if (!(await discoverWorldBrowserEntries(source)).includes(entry))
+  if (
+    !/^[A-Za-z][\w-]*(?:\/[A-Za-z][\w-]*)*$/.test(entry) ||
+    !(await discoverWorldBrowserEntries(join(source, dirname(entry)))).includes(
+      basename(entry),
+    )
+  )
     throw new Error(`Unknown World browser entry: ${entry}`);
   return join(root, entry);
 }
@@ -54,7 +59,7 @@ export async function buildWorldBrowserBundle(
   }
   await Bun.write(
     join(directory, "index.html"),
-    `<link rel="stylesheet" href="/${entry}.browser.css"><script type="module" src="/${entry}.browser.js"></script>`,
+    `<link rel="stylesheet" href="/${basename(entry)}.browser.css"><script type="module" src="/${basename(entry)}.browser.js"></script>`,
   );
   return { directory, assets };
 }

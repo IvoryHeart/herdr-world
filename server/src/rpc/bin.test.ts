@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { BinState } from "../../../shared/bin";
+import { WorldBinStore } from "../../../web/src/world/bin/binStore";
 import { WorldBinRegistry } from "../world/bin";
 import type { BinLease } from "../world/bin-close";
 import { handleBinRpc } from "./bin";
@@ -84,6 +85,46 @@ test("adding stages the agent only while its pane holds the same terminal", asyn
   });
 });
 
+test("each agent's drop stop reaches the browser's bin through add and list replies", async () => {
+  // Two agents of one room dropped on different Town stops, through this
+  // handler and the browser's bin store over a JSON wire: each keeps its own.
+  const f = fixture();
+  f.host.others = [
+    { pane_id: "p2", tab_id: "t1", terminal_id: "term-2", workspace_id: "w1" },
+  ];
+  const wire = (value: unknown) => JSON.parse(JSON.stringify(value ?? {}));
+  const store = new WorldBinStore({
+    call: async (method, params) => {
+      const replies = f.replies.length;
+      await f.rpc(method, wire(params));
+      if (f.replies.length === replies) throw new Error(f.errors.join("; "));
+      return wire(f.replies[f.replies.length - 1]);
+    },
+    onControl: () => () => {},
+    onStatus: () => () => {},
+  });
+  const east = { building: "host-a", corner: "top-right" } as const;
+  const west = { building: "host-b", corner: "bottom-left" } as const;
+  const agent = (pane: string, stop: typeof east | typeof west) => ({
+    connection_id: "studio",
+    connection_generation: 3,
+    workspace_id: "w1",
+    tab_id: "t1",
+    pane_id: pane,
+    terminal_id: pane === "p1" ? "term-1" : "term-2",
+    label: `Agent ${pane}`,
+    view: "town" as const,
+    preserve_tab: false,
+    stop,
+  });
+  expect(await store.add(agent("p1", east))).toBeNull();
+  expect(store.get().entries.map((entry) => entry.stop)).toEqual([east]);
+  expect(await store.add(agent("p2", west))).toBeNull();
+  await store.refresh();
+  expect(f.errors).toEqual([]);
+  expect(store.get().entries.map((entry) => entry.stop)).toEqual([east, west]);
+});
+
 test("an old runtime, an absent host or a new occupant is refused", async () => {
   const f = fixture();
   await f.add({ connection_generation: 2 });
@@ -109,6 +150,18 @@ test("put back acts only on the held agent", async () => {
   expect(f.registry.list().bus.stopped).toBe(false);
   await f.rpc("world.bin.countdown.set", { countdown_s: 10 });
   expect(f.errors).toEqual(["unknown bin operation"]);
+});
+
+test("a Town's route report is taken for those waiting", async () => {
+  const f = fixture();
+  await f.add();
+  const id = f.registry.list().entries[0]!.id;
+  await f.rpc("world.bin.route", { ids: [id], route_m: 420, stops: 1 });
+  expect(f.errors).toEqual([]);
+  expect(f.registry.list().bus).toMatchObject({
+    next_route_m: 420,
+    next_measured: true,
+  });
 });
 
 test("a pinned tab's last agent is refused; one with another pane is held", async () => {

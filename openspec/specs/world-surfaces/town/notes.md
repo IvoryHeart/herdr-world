@@ -13,48 +13,48 @@
 
 **Code:**
 
-- `web/src/world/town/`
+- `web/src/world/town/`, including `web/src/world/town/townLens.ts` and `web/src/world/town/townReceptionFilter.ts`.
 - `web/src/world/useDeskPins.ts`
-- `web/src/world/town/townLens.ts`
 - `web/src/world/town/townLens.test.ts`
-- `web/src/world/town/townReceptionFilter.ts`
-- `web/src/world/usage/UsageLens.tsx`
-- `web/src/world/usage/usageModel.ts`
-- `web/src/world/usage/UsageBreakdown.tsx`
+- `web/src/world/usage/UsageLens.tsx`, `web/src/world/usage/usageModel.ts`, `web/src/world/usage/UsageBreakdown.tsx`
 - `web/src/world/town/TownObservatory.tsx`
 - `web/src/world/usage/usageModel.test.ts`
 - `web/src/world/usage/UsageScreens.dom.test.ts`
 - `web/src/world/town/townObservatory.test.ts`
 - `web/src/world/usage/UsageLens.browser.tsx`
 - `web/src/world/TownView.tsx`
-- `web/src/world/town/TownCanvas.tsx`
-- `web/src/world/officePreferences.ts`
-- `web/src/browserStorage.ts`
+- `web/src/world/town/TownCanvas.tsx`; frames: `web/src/world/town/townWorldTransform.ts` (overlay, zoom readers), `web/src/world/town/townHostRect.ts`, `web/src/world/worldFrameScheduler.ts` (typing quiet); town center: `web/src/world/town/TownCenterMenu.tsx`, `web/src/world/town/townCenterBuildings.ts`
+- Room placement authority and Tidy/Undo: `web/src/world/town/townRoomMovability.ts`, `web/src/world/town/townMoveActions.tsx`, `web/src/world/town/townRoomPlace.ts`, `web/src/world/town/townRoomPins.ts`.
+- Room drag admission/preview: `web/src/world/town/townDrag.ts`, `web/src/world/town/scene/townInteraction.ts`.
+- Saved room spots: existing `room_pins` in `web/src/world/board/boardDocument.ts`; TUI order: `web/src/world/town/townMoves.ts`.
+- `web/src/world/officePreferences.ts`, `web/src/browserStorage.ts`
 - `web/src/world/town/town.settings.tsx`
 - `web/src/world/town/townQuietWork.ts`
 - `web/src/world/town/useTownQuiet.ts`
 - `web/src/world/town/townRendererActors.ts`
-- `web/src/world/town/TownWorldLayer.tsx`
-- `web/src/world/town/TownStepBubble.tsx`
-- `web/src/world/town/TownBoard.tsx`
+- `web/src/world/town/TownWorldLayer.tsx`, `web/src/world/town/TownStepBubble.tsx`, `web/src/world/town/TownBoard.tsx`; plaques: `web/src/world/town/TownRoomPlaque.tsx`, `web/src/world/town/townPlaqueCard.ts` (one open card); runtime icons: `web/src/world/town/TownRuntimeIcon.tsx`, `web/src/world/town/TownRoomOverviewCard.tsx` (a room's overview card, its icon a press of its own), `web/src/world/town/townMoveMenu.ts` (menu words)
 - `web/src/world/town/townLayout.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
+- Bin and bus: `web/src/world/town/TownBusLayer.tsx` (the next trip's route report, the bus's speed and distance plate), `web/src/world/town/townBus.ts` (`townTourRouteM`, `townBusSign`, metres per pixel; `townBinStopOf`/`townBinStopAt`, the drop stop as a building corner), `web/src/world/town/townBinDrop.ts` and `TownCanvas.tsx` (the stop a drag was dropped on, kept as the bin entry's `stop` in `shared/bin.ts`), `web/src/world/town/townBusDrive.ts` (`townBusTimeline`, `townBusLeft`), `web/src/world/bin/binStore.ts` (`binBusClock`, the countdown labels); tests `townBus.test.ts`, `townBusCountdown.dom.test.ts`, `web/src/world/bin/binStore.test.ts`
 - `server/src/world/observability.ts`
 
 **Tests:**
 
-- `web/src/world/town/TownCanvas.test.ts`
-- `web/src/world/town/TownCanvas.fold.test.ts`
-- `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases)
+- `web/src/world/town/TownCanvas.test.ts`, `web/src/world/town/TownCanvas.fold.test.ts`
+- `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases); town center ring: `web/src/world/town/townCenterBuildings.dom.test.ts`
 - `web/src/world/town/townReceptionFilter.test.ts`
-- `web/src/world/town/townQuietWork.test.ts`
+- `web/src/world/town/townQuietWork.test.ts`; plaques and top-row taps: `web/src/world/town/townRoomPlates.browser.ts` (TownCanvas `plates` cases)
+- Room moves: `web/src/world/town/townRoomMovability.test.ts` (mixed core app space/TUI, both building modes, authority subsets and Undo), `web/src/world/town/townRoomTidy.test.ts`, `web/src/world/town/scene/townInteraction.test.ts`.
+- Frames: `web/src/world/town/townWorldTransform.test.ts`, `web/src/world/worldFrameScheduler.test.ts`, `web/src/world/town/TownFrameBudget.browser.test.ts` (budget on the town-scale page)
 
 **Pitfalls:**
 
-- Each runtime connection keeps its own building and qualified room actions.
+- Machine buildings may combine runtimes; each room keeps its qualified runtime actions.
 - Room counts cover all observed agents; drawn desks are a native-order prefix.
 - Pins and selection do not pull hidden desks across the fold boundary.
 - Moving rooms on the canvas is separate from moving native desks; see town-moves.
 - CLI desk pins/moves use their feature contracts, not canvas coordinates.
+- `--z`/`--iz` are not inherited: a rule reading them needs its class in `TOWN_ZOOM_READERS` (`:focus` rules: `TOWN_ZOOM_FOCUS_READERS`).
+  Never read layout inside a Town frame: use `townHostRect.ts`, or measure in a task of its own as `useTownEdgeNav.ts` does.
 - Quiet-agent data: `officePreferences.ts`/`town.settings.tsx` → `TownView.tsx` → `useTownQuiet.ts`; `townRendererActors.ts` stops typing.
   `TownWorldLayer.tsx`/`TownStepBubble.tsx` draw the hourglass and elapsed time; `TownBoard.tsx` draws the count under Busy.
 
@@ -71,11 +71,14 @@
   (`claude`); window and Inspector titles put the name first
   (`firstmate · claude`).
   - One machine is one building: this computer's Herdr TUI and herdr-core
-    rooms stand together under one sign, each room's nameplate naming its
-    runtime (**Herdr TUI** or **herdr-core**) and keeping its own controls,
+    rooms stand together under one sign, each room's plate showing its
+    runtime as a small icon before its name (a terminal window for **Herdr
+    TUI**, a diamond for **herdr-core**; hover, focus or tap it for the name;
+    the overview room cards show it too) and keeping its own controls,
     and every desk, agent and action stays on its own runtime's connection.
-    **Settings → Town & views → Town buildings → One per runtime** gives each
-    runtime its own building again (**One per machine** is the default).
+    **Settings → This World → Group runtimes → One per runtime** gives each
+    runtime its own building again (**One per machine** is the default); the
+    same setting groups World's navigator and Desk (`web/src/world/runtimeGrouping.ts`).
     Two Herdr TUI connections to the same socket (the startup default and a
     saved profile) show its rooms once, through the writable one.
   - The Town board counts the whole town, every building, in four one-word
@@ -199,6 +202,15 @@
     browser and device shows the same one. Zoomed in to desks, where the
     reception boards are put away, tap a building's reception lobby to bring
     its board and sign back; any other tap or zoom level puts it away again.
+  - **Tidy rooms** (Rearrange) on the reception board compacts the building's
+    rooms; **Undo** in its note restores their spots. Live herdr-core rooms,
+    including app spaces managed in Herdr, can move because World owns their
+    spots. Live TUI rooms also follow that reading order in Spaces. Drag and
+    **Move before/after** use the same movement permission. Stale rooms and
+    rooms whose connections cannot reorder stay in place; Tidy and Undo name
+    skipped rooms and say why. Other rooms arrange clear of those spots.
+    Undo checks availability again when pressed. This works with **Settings →
+    This World → Group runtimes → One per machine** and **One per runtime** alike.
   - A working agent whose session has not moved for 10 minutes looks quiet:
     it stays seated with its room's working light on and its hands stop
     typing. From the room level its step bubble adds an hourglass with how
@@ -452,12 +464,24 @@
     preselecting the open room when it can start one there), **Town master**
     (the synced role holder from **Settings → Town master**, opened on Chat;
     a holder not in Town says so; with nobody assigned it opens **Sounds**),
-    **Needs you** with its count, **Summary**, **Lenses**, **Profiles** and
-    **New room** (disabled with the reason when no room can be created). With
-    no room open, New room asks for the **Destination host**, herdr-core hosts
-    included (`· herdr-core`); an empty core room name becomes "Room". Arrow
-    keys, Home and End move around the ring; Escape, a press outside, the
-    centre **✕** or **Back** on a phone closes it.
+    **Buildings**, **Focus** ("On" while one runs), **Summary**, **Lenses**,
+    **Profiles** and **New room** (disabled with the reason when no room can
+    be created). First-ring entries show no counts; those stay on the
+    buildings' signs. With no room open, New room asks for the **Destination
+    host**, herdr-core hosts included (`· herdr-core`); an empty core room name
+    becomes "Room". **Buildings** opens a second ring around itself with every place
+    that opens now (Apartments, Library, Post office for Needs you,
+    Observatory, Warehouse; a folded phone sign still counts); choosing one
+    opens what its building opens (`townCenterBuildings.ts`, from the
+    `townPlaces.ts` registry). Every ring opens around the entry that opened
+    it, moved only to fit the screen, so Buildings' place becomes the centre:
+    **←** Back with its name above it. Every label sits outside its ring,
+    beyond its icon, at every depth (`townCenterLabel`); a phone too narrow
+    for side labels round a circle gets an upright oval, entries evenly
+    spaced along it (`townCenterSpot`). Back, Escape or **Back** on a phone step back one
+    ring, focused on the entry that opened it. Arrow
+    keys, Home and End move around either ring; Escape, a press outside, the
+    centre **✕** or **Back** on a phone closes the first ring.
   - **Lenses** colour the whole map by one fact, as strategy games' map
     overlays do, so you see at a glance where it is high or low. Turn one on
     from the town center's **Lenses** or with `L` (`Shift+L` steps back); the
@@ -567,7 +591,10 @@
     **Open Terminal** to fix its size. Unknown sizes do not produce the note.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
-    that, and below 360px only the active view, with the others under ⋯.
+    that, and when even the icons do not fit (always below 360px) one view
+    menu in their place, drawn as the active view's tab with a chevron: click
+    it to choose Chat, Terminal, Files, Changes or Commits. The window's ⋯
+    holds window actions only.
   - The Town master's chat (**Settings → Town master**, the same synced role
     in every browser) opens docked on Chat once per visit on wide screens in
     Town and Board, without moving the pane's focus. The town center and
@@ -741,8 +768,12 @@
     plates fit their room width; only the name truncates, with its full text in
     a tooltip. Colour, active/total agent count and blocked badge remain visible.
     Active means working or waiting on you; the total excludes plain terminals.
-    Hover the count for its working/waiting breakdown. Hover or focus a plate
-    (tap on touch screens) for its card below it: the Town board's numbers
+    Hover the count for its working/waiting breakdown. A plate stands just
+    above its room, outside the floor, so every agent of the top row stays
+    clickable. Click or tap a plate's title (or focus it and press Enter or
+    Space) for its card below it; hover and focus alone open nothing, and a
+    second click on the title, a press outside or Escape closes it. One card
+    is open at a time. The card holds the Town board's numbers
     for that room, without its agents list (Busy, Waiting, Done, Quiet,
     its agents, and its **Economy today**: estimated cost, tokens and models
     from [harness usage](../../../../docs/usage.md); without a price table it says
@@ -826,9 +857,13 @@
     bottom of Town or Board, or onto a Town bus stop, or **Put in bin** in an
     agent window's **⋯** menu (from Town, Board or Desk) holds the agent;
     nothing closes yet. In Town it walks out of its building's front door to
-    the London bus stop (red roundel) nearest its room, the same character
-    walking as it does indoors, whether it was dropped on the bin or a stop
-    (one binned on Board walks out the first time Town shows it); its seat
+    the London bus stop (red roundel) it was dropped on, or, put in the bin
+    any other way, the stop nearest its room, the same character walking as
+    it does indoors (one binned on Board walks out the first time Town shows
+    it). World keeps the dropped-on stop with the bin entry as a corner of a
+    building, so it stays the same stop as Town grows and is the like stop
+    on another layout (a phone); where a Town has no stop at that corner,
+    the agent waits at the stop nearest its room; its seat
     fades into the carpet and crumbles, the whole desk when all its agents
     are binned;
     those waiting at a stop queue along its pavement in joining order, in
@@ -840,16 +875,23 @@
     under labels and panels, and shrinking with the town as it zooms out (on
     a phone zoomed far out, the floating bin is the easier target). A
     countdown board over those
-    waiting shows the bin's own countdown, from the one bus timetable: the
-    time until the next bus sets off from Apartments, **on its way** while a
-    trip is out and **stopped** while it stands. Every stop and the bin read
+    waiting shows the bin's own countdown, from World's one bus: the time
+    until the bus that takes them is back at Apartments (when they close),
+    and **stopped** while it stands. World times each trip by the bus's
+    speed (36 km/h) and its one way past every stop with riders and back,
+    which the first Town to see those waiting measures on its roads and
+    reports (`townTourRouteM`, `world.bin.route`; a tile is 2 m), so a
+    farther stop gives a longer time. Every layout draws the bus to that
+    route: its plate shows World's metres, not its own roads'. Every stop and the bin read
     the same value at the same moment. The bin floats at the bottom of the screen and
     lights up during a drag, so a phone needs only a short drag, and the town
     does not scroll while the drag rests on it. A red
     double-decker lives at Apartments' stop, on the last street by a
     footpath down to the building's door (its green house sign marks it),
-    and sets off every four minutes on a fixed schedule when someone is
-    waiting. It drives only the town's roads, by the nearest way round the
+    and sets off a minute after the first agent starts waiting (never
+    before the bus out is back). A plate over it shows its speed and the
+    route it is to drive (**36 km/h · 420 m route**), then on its trip how
+    far it has left (**… m left**). It drives only the town's roads, by the nearest way round the
     stops with riders and back, never off the map: it turns its corners,
     slows to each stop and waits there about ten seconds with its door open
     while its riders step on, and its riders show in its windows the whole
@@ -864,7 +906,7 @@
     is and opens the tray (nothing closes while it stands); **Let the bus
     go**, or closing the tray, sends it on. The bin (always shown in Town and on Board, in other views while
     it holds agents; on a phone, also a stop or the bus in Town) opens the
-    tray: who waits, the time to the next bus, **Put back** (until the trip
+    tray: who waits, when the bus is back (**bus back in 1:45**), **Put back** (until the trip
     ends, even after boarding; it walks back to its desk from its stop) and
     **Close now**. A pinned desk's or pinned tab's last agent cannot go
     in the bin, and its close never takes a pinned tab's last pane. Closes are qualified by host
@@ -895,28 +937,30 @@
     only an explicit move changes Herdr's layout, always within one host.
     Terminal title-spinner and scroll repaints keep healthy hosts actionable;
     topology or agent-state changes still require a fresh observation.
-  - **Search shows where things are.** Town's search hangs from the top
-    edge beside the view buttons in Zen, World's default, and sits in the top
-    bar when the bars are shown; on a phone in Zen it is the search button in
-    the bottom-right corner. On a desktop the search of Town, Board and Desk
-    rests as a search icon whose tooltip names its keys; a click unfolds the
-    search box with the cursor in it. **Escape**, or leaving an empty box,
-    folds it back into the icon; a query keeps it open. Typing in Town's search lights up the
-    matching buildings, rooms, tables and agents on the map and dims the rest
-    of Town a little; the camera stays put. The result line counts matches and
-    how many are off-screen ("7 matches · 3 off-screen"). Choosing a result (a
-    click or tap, or **Up**/**Down** then **Enter**) moves the camera to it at
-    a readable zoom and pulses it; choosing it again, or **Enter** a second
-    time, opens it as selecting does. Town's own places are found too:
-    "warehouse" (or "pull requests") lists the **Warehouse**, and choosing it
-    moves the camera there; choosing it again only shows it again. A result Town does not draw, such as
-    an agent at a table its room folds away, opens at once and counts as
-    off-screen. Under **Town calm motion** or reduced motion the camera jumps
-    and nothing pulses. **Escape** (in the box, on a result or on the map),
-    the phone search's **✕** or an empty box ends the search and returns the
-    camera to where the search found it. **/** or **Ctrl+F** (**Cmd+F** on a
-    Mac) unfolds the search of Town, Board or Desk with the cursor in it, or
-    opens the phone's search, unless you are typing in a terminal, the Chat composer or
-    another text field; the browser's own find stays closed. Change the keys
-    under **Search the current view** in Settings → Shortcuts.
+  - **Search shows where things are.** Town's search is World's one search,
+    the command box (**Find or act**; see terminal-windows notes). Its button
+    hangs from the top edge beside the view buttons in Zen, World's default,
+    and sits in the top bar when the bars are shown; on a phone in Zen it is
+    the search button in the bottom-right corner. **/**, **Ctrl+F** (**Cmd+F**
+    on a Mac) and **Ctrl+K** (**Cmd+K**) open the same box, unless you are
+    typing in a terminal, the Chat composer or another text field; the
+    browser's own find stays closed. Typing in the box lights up the matching
+    buildings, rooms, tables and agents on the map and dims the rest of Town a
+    little; the camera stays put. Choosing a result (a click, or **Up**/**Down**
+    then **Enter**) moves the camera to it at a readable zoom and pulses it,
+    and the box stays open with its list; choosing the same result again
+    closes the box and opens its Inspector. **Shift+Enter** or the row's
+    **Open terminal** (**Open in Spaces** for a room or table) opens it in
+    Spaces instead. Town's own places are found too: "warehouse" (or "pull
+    requests") lists the **Warehouse**, and choosing it moves the camera
+    there; it has nothing to open. A result Town does not draw, such as an
+    agent at a table its room folds away, opens at once. After a choice the
+    search stays: the toolbar shows it with its count and how many matches are
+    off-screen ("7 matches · 3 off-screen"); clicking it reopens the box, and
+    its **✕** or **Escape** on the map ends it and returns the camera to
+    where the search found it. Closing the box without choosing, or going to
+    another view, ends it too. Under **Town calm motion** or reduced motion
+    the camera jumps and nothing pulses. The shared search lives in
+    `web/src/world/worldFinder.ts`; Town reads it in
+    `web/src/world/town/useTownSearch.ts`.
   See the [Town exercise](../../../../docs/TUTORIAL.md#town).

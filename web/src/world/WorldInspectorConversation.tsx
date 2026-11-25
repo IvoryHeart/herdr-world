@@ -70,6 +70,7 @@ import {
   worldInspectorWindowId,
   type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
+import { useArtefactFileRequests } from "./artefactOpen";
 import {
   INSPECTOR_TERMINAL_FILE_EVENT,
   inspectorTerminalFileAdmitted,
@@ -609,6 +610,12 @@ function InspectorResources({
     target,
     workspace,
   ]);
+
+  useArtefactFileRequests(conversation, !!(scope && workspace), (entry) => {
+    onChange({ view: "files" });
+    onResourceFocus();
+    loadFile(entry);
+  });
 
   useEffect(() => {
     if (conversation.view !== "files" || !scope || fileSelection.entry) return;

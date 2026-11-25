@@ -92,6 +92,12 @@ export default defineConfig(({ mode }) => {
                 tags: ["$initial"],
               },
               {
+                // The Library, its Town sign and Chat's Made summary read memory and
+                // the artefact shelf together; keep both clients in one lazy asset.
+                name: "memoryClient",
+                test: /src[\\/]world[\\/]memory[\\/](?:memoryClient|artefactShelfClient)\.ts$/,
+              },
+              {
                 // Feature-only icons and name dictionaries share one lazy asset.
                 name: "feature-icons",
                 test: /node_modules[\\/](?:lucide-react|unique-names-generator)[\\/]/,

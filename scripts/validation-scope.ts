@@ -75,13 +75,27 @@ export function isInstallationInput(path: string): boolean {
 const WORLD_RUNTIME =
   /^(?:web\/src\/world\/|server\/src\/(?:world|connections|bridge)\/|server\/src\/index\.ts$|web\/src\/(?:store(?:\/|\.ts$)|api\.ts$|worldSnapshotDecode\.ts$)|shared\/world)/;
 
+/** Runtime directory scans have no import edges from their guarded inputs. */
+const STRUCTURE_CHECKS = [
+  [
+    /^openspec\//,
+    [
+      "scripts/openspec-feature-map.test.ts",
+      "scripts/check-knowledge-map.test.ts",
+      "scripts/check-knowledge-map-links.test.ts",
+      "scripts/pages-features.test.ts",
+    ],
+  ],
+  [
+    /^(?:(?:web\/src\/|server\/src\/(?:world|features|shipyard)\/).*\.tsx?$|openspec\/specs\/world-storage\/notes\.md$)/,
+    ["server/src/storage/catalog.test.ts"],
+  ],
+] as const;
+
 // Native jobs are the authority for their explicitly named test consumers.
 // Derive these paths so adding a native test cannot leave scoped PR CI skipping it.
 const nativeTestConsumers = new Set<string>();
-for (const [file, jobs] of [
-  ["ci.yml", ["plugin-windows"]],
-  ["installer-upgrade.yml", ["upgrade"]],
-] as const) {
+for (const [file, jobs] of [["installer-upgrade.yml", ["upgrade"]]] as const) {
   const workflow = Bun.YAML.parse(
     readFileSync(
       new URL(`../.github/workflows/${file}`, import.meta.url),
@@ -188,6 +202,14 @@ export function selectValidation(
         : tests.unit;
   if (!full && paths.some((path) => isCoveragePath(path) || owns(path)))
     chosen.push("scripts/verification-coverage.test.ts");
+  // Use the complete PR even when a local push narrows affected units.
+  for (const [inputs, checks] of STRUCTURE_CHECKS)
+    if ([...paths, ...testPaths].some((path) => inputs.test(path)))
+      chosen.push(
+        ...checks.filter(
+          (path) => graph.files.has(path) && !graph.gone.has(path),
+        ),
+      );
   const browserPlanPaths = [
     "scripts/world-browser-suites.ts",
     "scripts/world-browser-timings.json",
@@ -220,6 +242,11 @@ export function selectValidation(
       (runtime && worldRuntimeSuites.includes(path)),
   );
   const binaryInputs = nativeInputs(graph);
+  // Production build calls do not import main.tsx into the Bun test process.
+  // Keep the real-entry journey selected even across that build-tool seam.
+  const boot = "web/src/productionBoot.browser.test.ts";
+  const bootChanged =
+    paths.some((path) => path.startsWith("web/src/")) && graph.files.has(boot);
   return {
     full,
     tooling,
@@ -236,7 +263,14 @@ export function selectValidation(
     unit: [
       ...new Set(chosen.filter((path) => !world.has(path) && !web.has(path))),
     ].sort(),
-    web: shardTable ? webBrowserSuites : chosen.filter((path) => web.has(path)),
+    web: shardTable
+      ? webBrowserSuites
+      : [
+          ...new Set([
+            ...chosen.filter((path) => web.has(path)),
+            ...(bootChanged ? [boot] : []),
+          ]),
+        ],
     world: chosenWorld,
     worldShards: worldBrowserShards.flatMap((shard, index) =>
       chosenWorld.some((path) => shard.includes(path)) ? [index + 1] : [],

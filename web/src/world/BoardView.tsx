@@ -96,8 +96,11 @@ import {
   type BoardTab,
   type BoardWorkspace,
   boardStatusOrder,
+  groupBoardZones,
   projectBoard,
+  zoneHostKeys,
 } from "./board/boardModel";
+import { useHostGroupOf } from "./useHostGroups";
 import {
   cool,
   type PhysicsCard,
@@ -170,7 +173,6 @@ import {
   resolveTerminalByKeys,
   TERMINAL_COLOR_HEX,
 } from "./terminalColor";
-import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import { useBoardSearch } from "./board/useBoardSearch";
 import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
@@ -547,7 +549,13 @@ export default function BoardView({
   useEffect(() => worldRuntimeStore.retainView("board"), []);
   const deferredWorld = useDeferredValue(world);
   const shownWorld = boardObservation(world, deferredWorld);
-  const fullModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
+  // Zones follow World's "Group runtimes" setting, as Town and Desk do.
+  const groupOf = useHostGroupOf();
+  const projectedModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
+  const fullModel = useMemo(
+    () => groupBoardZones(projectedModel, groupOf),
+    [projectedModel, groupOf],
+  );
   // Each agent's quest, as a progress chip on its card.
   const quests = useAgentQuests(shownWorld.leaves);
   const asks = useWorldAsks();
@@ -756,8 +764,14 @@ export default function BoardView({
   } | null>(null);
   const gesture = useRef(initialGesture());
   const holdTimer = useRef(0);
-  /** A host zone's place before its label drag, for a cancelled drag. */
-  const hostStart = useRef<{ key: string; anchor?: Point } | null>(null);
+  /**
+   * A zone's runtimes' places before its label drag, for a cancelled drag.
+   * A zone holds one runtime, or a machine's under "Group runtimes".
+   */
+  const hostStart = useRef<{
+    key: string;
+    anchors: Map<string, Point | undefined>;
+  } | null>(null);
   useEffect(() => () => window.clearTimeout(holdTimer.current), []);
   const pinchStart = useRef<{ cam: Camera; mid: Point } | null>(null);
   const setTrace = (on: boolean) => {
@@ -1691,14 +1705,14 @@ export default function BoardView({
     // Measure every zone first, then write: reading a card's size after
     // writing the previous zone forced a full layout per host.
     const zones: [HTMLElement, number, number, number, number][] = [];
-    for (const host of m.hosts) {
-      const zone = zoneEls.current.get(host.key);
+    for (const each of m.zones) {
+      const zone = zoneEls.current.get(each.key);
       if (!zone) continue;
       let x0 = Infinity,
         y0 = Infinity,
         x1 = -Infinity,
         y1 = -Infinity;
-      for (const space of host.workspaceKeys) {
+      for (const space of each.hosts.flatMap((host) => host.workspaceKeys)) {
         const keys = [
           space,
           ...(farRef.current || latest.current.collapsed.has(space)
@@ -2230,20 +2244,23 @@ export default function BoardView({
         return;
       }
       case "moveHost": {
-        const anchor = layout.current.anchors.get(effect.key) ?? {
-          x: 0,
-          y: 0,
-        };
+        // The whole zone moves: each of its runtimes keeps its own anchor.
+        const keys = zoneHostKeys(latest.current.model, effect.key);
         // Remember where the zone was, in case the drag is cancelled.
         if (hostStart.current?.key !== effect.key)
           hostStart.current = {
             key: effect.key,
-            anchor: layout.current.anchors.get(effect.key),
+            anchors: new Map(
+              keys.map((key) => [key, layout.current.anchors.get(key)]),
+            ),
           };
-        layout.current.anchors.set(effect.key, {
-          x: anchor.x + effect.dx / cam.current.s,
-          y: anchor.y + effect.dy / cam.current.s,
-        });
+        for (const key of keys) {
+          const anchor = layout.current.anchors.get(key) ?? { x: 0, y: 0 };
+          layout.current.anchors.set(key, {
+            x: anchor.x + effect.dx / cam.current.s,
+            y: anchor.y + effect.dy / cam.current.s,
+          });
+        }
         warmUp();
         return;
       }
@@ -2257,9 +2274,9 @@ export default function BoardView({
         const start = hostStart.current;
         hostStart.current = null;
         if (start?.key === effect.key) {
-          if (start.anchor)
-            layout.current.anchors.set(effect.key, start.anchor);
-          else layout.current.anchors.delete(effect.key);
+          for (const [key, anchor] of start.anchors)
+            if (anchor) layout.current.anchors.set(key, anchor);
+            else layout.current.anchors.delete(key);
           warmUp();
         }
         return;
@@ -3358,7 +3375,7 @@ export default function BoardView({
   const togglePulses = () => setBoardPulses(!boardPulses());
 
   /* ---------- Search ---------- */
-  const search = useBoardSearch(world, model, onSelect);
+  const search = useBoardSearch(world, model);
   const { matches } = search;
 
   const selectedKeys = useMemo(() => {
@@ -3522,18 +3539,6 @@ export default function BoardView({
   return (
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
-      {/* Search covers everything observed, including what the board leaves
-          out, as in the other views. The board fills the view, so the
-          results float over its top edge rather than under the board. */}
-      {search.open ? (
-        <div className="board-search-results">
-          <WorldSearchResults
-            world={world}
-            onSelect={onSelect}
-            {...search.results}
-          />
-        </div>
-      ) : null}
       {paneMoves.dialog}
       {herdr.dialogs}
       <div
@@ -3606,40 +3611,29 @@ export default function BoardView({
           </div>
         ) : null}
         <div ref={worldRef} className="board-world">
-          {model.hosts.map((host) => {
-            // A host's chosen colour tints its zone (it is not inherited).
-            const hostKey = hostColorKey(host.connectionId);
-            const hostColor = placeColor(cardColors, hostKey);
-            return (
-              <div
-                key={host.key}
-                className={`board-zone${host.stale ? " board-stale" : ""}`}
-                style={
-                  hostColor
-                    ? ({
-                        "--board-zone": TERMINAL_COLOR_HEX[hostColor],
-                      } as CSSProperties)
-                    : undefined
-                }
-                ref={(el) => {
-                  if (el) zoneEls.current.set(host.key, el);
-                  else zoneEls.current.delete(host.key);
-                }}
-              >
-                <div
-                  className="board-zone-label"
-                  data-host={host.key}
-                  data-world-node-anchor={host.id}
-                  title="Drag to move the whole host"
-                >
+          {model.zones.map((zone) => {
+            // One frame per zone: a runtime, or a machine's runtimes under
+            // World's "Group runtimes" setting. Each runtime keeps its own
+            // heading, colour, counts and actions inside it.
+            const lead = zone.hosts[0]!;
+            const single = zone.hosts.length === 1;
+            // The first runtime's chosen colour tints the frame (not inherited).
+            const zoneColor = placeColor(
+              cardColors,
+              hostColorKey(lead.connectionId),
+            );
+            const heading = (host: BoardHost, tag: string | undefined) => {
+              const hostKey = hostColorKey(host.connectionId);
+              return (
+                <>
                   <span className="board-zone-heading">
                     <BoardZoneColor
                       colorKey={hostKey}
                       hostLabel={host.label}
-                      color={hostColor}
+                      color={placeColor(cardColors, hostKey)}
                       onColor={setZoneColor}
                     />
-                    <span className="board-zone-name">{host.label}</span>
+                    <span className="board-zone-name">{tag ?? host.label}</span>
                     <BoardZoneCounts host={hostFacts.get(host.connectionId)} />
                     {host.stale ? (
                       <ConnectionRecoveryBanner
@@ -3651,7 +3645,7 @@ export default function BoardView({
                       <button
                         type="button"
                         className="board-zone-add"
-                        aria-label={`New workspace on ${host.label}`}
+                        aria-label={`New workspace on ${tag ? `${zone.label} (${tag})` : host.label}`}
                         onClick={() => setNewWorkspaceOn(host)}
                       >
                         +
@@ -3659,7 +3653,55 @@ export default function BoardView({
                     )}
                   </span>
                   <BoardZoneFacts host={hostFacts.get(host.connectionId)} />
-                </div>
+                </>
+              );
+            };
+            return (
+              <div
+                key={zone.key}
+                data-zone={zone.key}
+                className={`board-zone${zone.hosts.every((host) => host.stale) ? " board-stale" : ""}`}
+                style={
+                  zoneColor
+                    ? ({
+                        "--board-zone": TERMINAL_COLOR_HEX[zoneColor],
+                      } as CSSProperties)
+                    : undefined
+                }
+                ref={(el) => {
+                  if (el) zoneEls.current.set(zone.key, el);
+                  else zoneEls.current.delete(zone.key);
+                }}
+              >
+                {single ? (
+                  <div
+                    className="board-zone-label"
+                    data-host={lead.key}
+                    data-world-node-anchor={lead.id}
+                    title="Drag to move the whole host"
+                  >
+                    {heading(lead, undefined)}
+                  </div>
+                ) : (
+                  <div
+                    className="board-zone-label board-zone-machine"
+                    data-host={lead.key}
+                    title="Drag to move the whole machine"
+                  >
+                    <span className="board-zone-machine-name">
+                      {zone.label}
+                    </span>
+                    {zone.hosts.map((host) => (
+                      <div
+                        key={host.key}
+                        className="board-zone-runtime"
+                        data-world-node-anchor={host.id}
+                      >
+                        {heading(host, zone.tags.get(host.connectionId))}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

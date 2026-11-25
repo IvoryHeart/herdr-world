@@ -16,7 +16,7 @@ import type {
 } from "../herdrOfficeProjection";
 import type { Relation } from "../../../../shared/relations";
 import { terminalColorKey, type TerminalColor } from "../terminalColor";
-import { officeRoomActionCapabilities } from "../officeRoomActions";
+import { townRoomMoveReason } from "./townRoomMovability";
 import type { WorldObject } from "../worldObject";
 import { saveDeskPinOrder, type DeskPins } from "../useDeskPins";
 import { TownChooser } from "./TownChooser";
@@ -293,11 +293,9 @@ export function townMoveActions({
       setMovingKey(null);
     }
   };
-  /** Whether a room's host can change its rooms now, as renaming needs. */
-  const canMoveRoom = (roomKey: string) => {
-    const room = roomForKey(roomKey);
-    return Boolean(room && officeRoomActionCapabilities(world, room).rename);
-  };
+  const moveReason = (roomKey: string) =>
+    townRoomMoveReason(world, roomForKey(roomKey));
+  const canMoveRoom = (roomKey: string) => moveReason(roomKey) === null;
   /**
    * Save where a building's rooms stand (World keeps the spots, so a reload
    * and every device show them), then put Herdr's workspace order in their
@@ -311,13 +309,26 @@ export function townMoveActions({
     const room = roomForKey(roomKey);
     if (!room || movingKey) return "returned";
     const label = what ?? room.displayLabel;
-    if (!canMoveRoom(roomKey)) {
-      toast("error", `${label} not moved: this host cannot change rooms now.`);
-      return "returned";
-    }
     const rooms = placement.order.map(roomForKey);
     if (rooms.some((other) => !other)) {
       toast("error", `${label} not moved: the building changed.`);
+      return "returned";
+    }
+    // The first room can be fixed, or a core app space. Check every changed
+    // spot instead; collision placement must never displace a fixed room.
+    const refused = [...placement.spots].find(([key, spot]) => {
+      const before = placement.before.get(key);
+      return (
+        (!before || before.x !== spot.x || before.y !== spot.y) &&
+        !canMoveRoom(key)
+      );
+    });
+    if (refused) {
+      const key = refused[0];
+      toast(
+        "error",
+        `${label} not moved: ${roomForKey(key)!.displayLabel}: ${moveReason(key)}.`,
+      );
       return "returned";
     }
     // A building per host can hold several runtimes' rooms: each runtime
@@ -336,6 +347,7 @@ export function townMoveActions({
       const outcome = await requestBuildingRoomOrder(
         rooms as OfficeRoom[],
         (each) =>
+          canMoveRoom(each.key) &&
           world.hosts.find(
             (host) => host.connectionId === each.workspaceRef.connectionId,
           )?.connection.runtime !== "herdr-core",
@@ -405,6 +417,17 @@ export function townMoveActions({
     roomMoves: {
       onPlaceRooms: runRoomPlace,
       canMoveRoom,
+      onRoomsStayed: (keys: readonly string[]) => {
+        toast(
+          "ok",
+          `Stayed in place: ${keys
+            .map(
+              (key) =>
+                `“${roomForKey(key)?.displayLabel ?? "Room"}” (${moveReason(key) ?? "the room cannot move now"})`,
+            )
+            .join("; ")}.`,
+        );
+      },
       onRoomsTidied: (
         hostLabel: string,
         undo: (() => Promise<TownMoveResult>) | null,

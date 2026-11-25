@@ -121,7 +121,12 @@ export function townSummaryAgents(counts: TownSummaryCounts): number {
 const roomContributions = new WeakMap<OfficeStatusCounts, TownSummaryCounts>();
 const topologies = new WeakMap<
   HerdrOfficeProjection,
-  { hosts: TownSummaryHost[]; totals: TownSummaryCounts; harnesses: string[] }
+  {
+    hosts: TownSummaryHost[];
+    totals: TownSummaryCounts;
+    harnesses: string[];
+    buildings: number;
+  }
 >();
 
 function summaryTopology(office: HerdrOfficeProjection) {
@@ -174,7 +179,10 @@ function summaryTopology(office: HerdrOfficeProjection) {
   const harnesses = [
     ...new Set([...hostHarnesses.values()].flatMap((set) => [...set])),
   ].sort();
-  const result = { hosts, totals, harnesses };
+  // A machine's later runtimes stand in its first runtime's building under
+  // "Group runtimes": one per machine (townBuildings.ts), so they add none.
+  const buildings = office.hosts.filter((host) => !host.buildingKey).length;
+  const result = { hosts, totals, harnesses, buildings };
   topologies.set(office, result);
   return result;
 }
@@ -203,7 +211,7 @@ export function townSummary(
     .sort((left, right) => (right.since ?? 0) - (left.since ?? 0));
   // Complete room contributions were counted cooperatively before publication.
   // Asks, metrics and the display clock do not recount raw agent topology.
-  const { hosts, totals, harnesses } = summaryTopology(office);
+  const { hosts, totals, harnesses, buildings } = summaryTopology(office);
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
   return {
@@ -215,7 +223,7 @@ export function townSummary(
       unknown: totals.unknown,
       outOfFuel: totals.outOfFuel,
       agents: townSummaryAgents(totals),
-      buildings: hosts.length,
+      buildings,
     },
     needsYou,
     asks,

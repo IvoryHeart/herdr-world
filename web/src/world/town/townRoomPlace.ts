@@ -190,6 +190,8 @@ export function townReadingOrder(
 /** Where a building's rooms would stand after a move, and what it changes. */
 export type TownRoomPlacement = {
   hostKey: string;
+  /** Spots before this placement, for checking every room that changes. */
+  before: TownRoomSpots;
   /** Every room of the building: its spot, tiles from the building's corner. */
   spots: Map<string, TownRoomSpot>;
   /** The building's rooms in reading order, which Herdr's order follows. */
@@ -211,12 +213,14 @@ const spotOf = (
  * once the spots are saved: the moved rooms first, the others moving down
  * out of their way, the building's floor fitted to its rooms, and the
  * buildings placed on their streets again. Null when a room is not in that
- * host's building.
+ * host's building. Rooms rejected by `canMove` reserve their current spots
+ * first and never make way for another room.
  */
 export function townRoomPlacement(
   layout: TownLayout,
   hostKey: string,
   moves: ReadonlyMap<string, TownRoomSpot>,
+  canMove: (key: string) => boolean = () => true,
 ): TownRoomPlacement | null {
   const index = layout.buildings.findIndex((b) => b.hostKey === hostKey);
   const building = layout.buildings[index];
@@ -230,10 +234,13 @@ export function townRoomPlacement(
   const current = new Map(
     building.rooms.map((room) => [room.key, spotOf(room, building)]),
   );
+  // Fixed rooms reserve their spots before moved rooms and those making way.
+  const fixed = building.rooms.filter((room) => !canMove(room.key));
+  const allowed = [...moves].filter(([key]) => canMove(key));
   const spots = townArrangeRooms(
     building.rooms,
-    new Map([...current, ...moves]),
-    [...moves.keys()],
+    new Map([...current, ...allowed]),
+    [...fixed.map((room) => room.key), ...allowed.map(([key]) => key)],
   );
   const { spans, width } = townRoomSpans(building.rooms, spots);
   const floors = layout.buildings.map((b, i) =>
@@ -260,6 +267,7 @@ export function townRoomPlacement(
   });
   return {
     hostKey,
+    before: current,
     spots,
     order: townReadingOrder(spots),
     rooms,
@@ -292,6 +300,7 @@ export function townBuildingSpots(
 export function townRoomTidy(
   layout: TownLayout,
   hostKey: string,
+  canMove: (key: string) => boolean = () => true,
 ): TownRoomPlacement | null {
   const building = layout.buildings.find((b) => b.hostKey === hostKey);
   if (!building) return null;
@@ -310,6 +319,7 @@ export function townRoomTidy(
         { x: positions[index]!.rx, y: positions[index]!.ry },
       ]),
     ),
+    canMove,
   );
 }
 
@@ -322,6 +332,7 @@ export function townRoomRestore(
   layout: TownLayout,
   hostKey: string,
   spots: TownRoomSpots,
+  canMove: (key: string) => boolean = () => true,
 ): TownRoomPlacement | null {
   const building = layout.buildings.find((b) => b.hostKey === hostKey);
   if (!building) return null;
@@ -334,6 +345,7 @@ export function townRoomRestore(
         .filter((key) => present.has(key))
         .map((key) => [key, spots.get(key)!]),
     ),
+    canMove,
   );
 }
 
@@ -365,13 +377,15 @@ export function townRoomSwap(
   layout: TownLayout,
   roomKey: string,
   step: -1 | 1,
+  canMove: (key: string) => boolean = () => true,
 ): TownRoomPlacement | null {
   const building = layout.buildings.find((b) =>
     b.rooms.some((room) => room.key === roomKey),
   );
   const room = building?.rooms.find((r) => r.key === roomKey);
   const other = townRoomNeighbor(layout, roomKey, step);
-  if (!building || !room || !other) return null;
+  if (!building || !room || !other || !canMove(room.key) || !canMove(other.key))
+    return null;
   return townRoomPlacement(
     layout,
     building.hostKey,
@@ -379,6 +393,7 @@ export function townRoomSwap(
       [room.key, spotOf(other, building)],
       [other.key, spotOf(room, building)],
     ]),
+    canMove,
   );
 }
 

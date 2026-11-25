@@ -1,0 +1,117 @@
+/* A herdr-core terminal in Spaces' terminal area, in place of a Herdr tab. */
+.spaces-core {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.spaces-core-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 8px 4px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.spaces-core-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.spaces-core-name {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.spaces-core-place {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.spaces-core-runtime {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.spaces-core-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.spaces-core-close:hover,
+.spaces-core-close:focus-visible {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.spaces-core-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Spaces' herdr-core strip (#1390) takes the Herdr TUI strip's look. */
+.spaces-core-tab {
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+}
+
+.spaces-core-tab.is-gone .tabbar-name {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.spaces-core-tab-gone {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.spaces-core-strip-room {
+  flex: 0 0 auto;
+  padding: 0 4px 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.spaces-core-strip-room:not(:first-child) {
+  margin-left: 6px;
+  border-left: 1px solid var(--shell-border);
+}

@@ -118,7 +118,12 @@ retain this result. To walk a downloaded old archive directly, supply
 `--archive PACKAGE.tar.xz --version 0.3.5`; its first journey must fail at
 **New agent starts: TUI quick Claude**, saying **agent never started**.
 
-Before tagging, download `release-walk-package-PLATFORM` from the successful
+Starting an agent does not need model credentials: a signed-out Claude or Codex
+reaching its first screen proves launch. The four native CI walks are the release
+gate. The signed-in walk below is an optional additional check, worth running for
+releases that change launching, Chat, transcripts or sign-in.
+
+For that optional check, download `release-walk-package-PLATFORM` from the successful
 **main CI run for the release commit**. Each contains the actual archives and
 checksums later used by Release; these packages are retained for 30 days.
 In a disposable native account, create a dedicated test home with
@@ -135,15 +140,19 @@ bun run test:release-walk --disposable-host \
 Use the checkout at that exact release commit and the baseline tag in its CI
 receipt. This runs every signed-out journey plus a signed-in launch, Chat send
 and readable assistant reply for both harnesses on both runtimes. It prints
-`Release walk signed-in receipt: DIGEST`. Edit the merged release PR body to add
-that line and the run/platform details, retaining the JSON receipt locally.
+`Release walk signed-in receipt: DIGEST`. Optionally add that line and the
+run/platform details to the merged release PR body, retaining the JSON receipt locally.
 The receipt contains synthetic evidence and digests, never credentials or chat
 transcripts. Never upload the dedicated credential home.
 
-Dispatch **Publish Release** with the version, successful CI run ID for main's release commit, merged
-release PR number and signed-in JSON receipt. Before creating any tag it checks
+Dispatch **Publish Release** with only the version and successful CI run ID for
+main's release commit. Before creating any tag it checks
 all four native receipts, the v0.3.5 proof, exact commit/version, matching archive
-and executable digests and the release PR's recorded local receipt. Leave its
+and executable digests. The signed-in JSON receipt and merged release PR number
+are independent optional inputs. A supplied receipt must match its native CI
+package; a supplied PR must be merged to main at the exact release commit. When
+both are supplied, any `Release walk signed-in receipt:` line must match the
+receipt digest; the line itself is optional. Leave its
 **create_tag** option off under the current maintainer-only tag ruleset; the
 maintainer tags the authorized SHA after this run succeeds. **Release**
 requires that pre-tag authorization and publishes the same tested Unix archives;
@@ -180,21 +189,24 @@ Registry failures also fail closed. Do not disable the gate to publish.
 
 ## Pre-merge installer upgrades
 
-Every CI run with code changes calls `.github/workflows/installer-upgrade.yml`, and
-Delivery checks requires the entire native matrix: Linux x64/ARM64, macOS Intel/Apple Silicon, and
+Installation/package/compiled-entry inputs select
+`.github/workflows/installer-upgrade.yml` on PRs. Every main push and the nightly
+schedule run it in full. Delivery checks requires every selected native assertion: Linux x64/ARM64, macOS Intel/Apple Silicon, and
 Windows x64/ARM64 on standard hosted runners. The workflow can also be dispatched
 manually against a selected ref. It publishes no release, tag, npm package or Formula.
 Documentation-only runs (Markdown outside the packaged notices, which run
-`check:docs`) and exact-head reuse runs skip it and the Windows plugin check;
-Delivery checks then requires both to be skipped.
+`check:docs`), unrelated scoped PRs and exact-head reuse runs skip native work.
+Windows plugin assertions share both Windows platform jobs; macOS lifecycle
+assertions share both Darwin jobs. The protected macOS reports remain and require
+the correct selected success or skip.
 
 Compact installer evidence uploads retry once after an upload failure, including
 transient artifact-service DNS errors. The retry replaces any partial artifact;
 a second upload failure still fails the job. Native checks remain strict.
 
 One planning job freezes the current latest stable World release tag and its source
-SHA. Each runner builds the proposed merge revision with `scripts/package-release.sh`
-and a synthetic next-patch release-candidate version unique to the CI run. It uses
+SHA. Each runner builds the proposed merge revision (or restores its exact content-keyed PR build) with `scripts/package-release.sh`
+and a synthetic next-patch release-candidate version derived from the production input hash. It uses
 a loopback artifact server to exercise the same candidate installers before public
 release assets exist. The baseline uses its published tag's real plugin build
 command and downloaded release executable; older baselines may require Bun at setup.
@@ -254,6 +266,20 @@ installer fault/rollback tests, release archive checks and npm/Homebrew package 
 They do not claim every historical upgrade, real Herdr plugin registration, OS service
 upgrade/reboot, npm/Homebrew channel upgrade or manual browser interaction. Test the
 published RC on an existing installation before promoting a stable release.
+
+## Production browser and release-walk boundaries
+
+The small production boot journey loads the release-built browser assets through
+index/main, with sanitized v0.3.5 browser profile state. It covers background,
+freeze/resume, the new-build offer and real service-worker update/activation.
+It uses a static fixture and synthetic HTTP responses, so it does not establish
+that a real agent starts in a packaged service. That acceptance belongs to the
+maintained Linux/macOS exact-build release walk from #1023 (PR #1031).
+The release must retain its signed-in prompt/reply and
+every distribution-channel requirement. The all-channel staging and verification
+from #1044 runs before any public channel is published; its channel ordering and
+retry rules remain required. A release escape should add its seam scenario to the
+appropriate journey, rather than only another source-text workflow assertion.
 
 ## Linux systemd installation gate
 
@@ -409,9 +435,10 @@ release's generated Formula.
    the native release walk. Main's push queue can batch merges; if that leaves
    the release commit without its own run, create a `release-check/vX.Y.Z`
    branch at that immutable commit and dispatch CI there. Use that successful
-   run's exact packages for the signed-in local walk above. Add its receipt
-   digest to the merged release PR, then dispatch **Publish Release** with all
-   four evidence inputs and leave **create_tag** off.
+   run's ID to dispatch **Publish Release** with the version and **walk_run_id**,
+   leaving **create_tag** off. The signed-in local walk above, its JSON receipt
+   input and the merged release PR input are optional; consider the walk for
+   launching, Chat, transcript or sign-in changes.
 
    Wait for its green pre-tag authorization and retained authorization artifact.
    Only then create and push the annotated tag using the maintainer account
@@ -430,8 +457,8 @@ release's generated Formula.
    ```
 
    Tag pushes alone do not publish. Release requires the retained authorization
-   from before that tag existed and checks the native and signed-in receipts
-   again. Reuse the original authorization when retrying an existing tag.
+   from before that tag existed and checks the native receipts and any supplied
+   optional evidence again. Reuse the original authorization when retrying an existing tag.
    Current repository settings prohibit Actions from creating PRs and permit
    only the maintainer account to create `v*` tags. Preserve those rules. If the
    tag ruleset later permits the workflow token, **create_tag** can perform the

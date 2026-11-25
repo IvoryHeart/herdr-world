@@ -1,12 +1,18 @@
 import { memo, useEffect } from "react";
 import {
+  hostHasMemory,
+  libraryHosts,
   memoryCatalogState,
-  memoryHosts,
   memoryTargetKey,
   requestMemoryCatalog,
   useMemoryStore,
 } from "../memory/memoryClient";
 import { openMemoryLibrary } from "../memory/memoryEvents";
+import {
+  artefactShelfState,
+  requestArtefactShelf,
+  useArtefactShelves,
+} from "../memory/artefactShelfClient";
 import { useTownPlace } from "./useTownPlace";
 import { memorySummary } from "../memory/memoryModel";
 import type { TownCenterLot } from "./townCenter";
@@ -21,18 +27,33 @@ export type TownLibraryCounts =
   | { status: "none" }
   | { status: "loading" }
   | { status: "failed" }
-  | { status: "ready"; files: number; stale: number; shared: number };
+  | {
+      status: "ready";
+      files: number;
+      stale: number;
+      shared: number;
+      /** What agents made, on the "Made by agents" shelves (#1327). */
+      made?: number;
+      /**
+       * False when no host it counts has an agent that keeps memory, so
+       * only what agents made is there (#1342).
+       */
+      memory?: false;
+    };
 
-/** The sign's counts over the hosts' cached catalogs. */
+/** The sign's counts over the hosts' cached catalogs and shelves. */
 export function townLibraryCounts(): TownLibraryCounts {
-  const hosts = memoryHosts().slice(0, SIGN_HOSTS);
+  const hosts = libraryHosts().slice(0, SIGN_HOSTS);
   if (!hosts.length) return { status: "none" };
   let files = 0;
   let stale = 0;
   let shared = 0;
+  let made = 0;
   let ready = 0;
   let loading = false;
   for (const host of hosts) {
+    made += artefactShelfState(host)?.shelf?.artefacts.length ?? 0;
+    if (!hostHasMemory(host)) continue;
     const state = memoryCatalogState(host);
     if (state?.catalog) {
       const summary = memorySummary(state.catalog);
@@ -42,7 +63,10 @@ export function townLibraryCounts(): TownLibraryCounts {
       ready += 1;
     } else if (!state || state.status === "loading") loading = true;
   }
-  if (ready) return { status: "ready", files, stale, shared };
+  if (ready) return { status: "ready", files, stale, shared, made };
+  // Only hosts whose agents have all gone: what they made (#1342).
+  if (!hosts.some(hostHasMemory))
+    return { status: "ready", files, stale, shared, made, memory: false };
   return loading ? { status: "loading" } : { status: "failed" };
 }
 
@@ -50,9 +74,11 @@ export function townLibrarySignText(counts: TownLibraryCounts) {
   if (counts.status === "none") return "no host";
   if (counts.status === "loading") return "…";
   if (counts.status === "failed") return "unavailable";
+  if (counts.memory === false) return `${counts.made ?? 0} made`;
   const parts = [`${counts.files} file${counts.files === 1 ? "" : "s"}`];
   if (counts.stale) parts.push(`${counts.stale} stale`);
   if (counts.shared) parts.push(`${counts.shared} shared`);
+  if (counts.made) parts.push(`${counts.made} made`);
   return parts.join(" · ");
 }
 
@@ -60,8 +86,10 @@ export function townLibrarySignText(counts: TownLibraryCounts) {
  * Town's library (#1027): what agents and projects remember, as a hall of
  * books right of the town center. Its sign counts the files, stale ones and
  * shelves several agents share, from catalogs read at most every few
- * minutes; it opens the Library. A narrow town folds it to a book sign on
- * the center's left wing.
+ * minutes, and what agents made (#1327); it opens the Library. With every
+ * agent on its hosts gone it stays while they made something, counting only
+ * that (#1342). A narrow town folds it to a book sign on the center's left
+ * wing.
  */
 const openLibrary = () => openMemoryLibrary();
 
@@ -71,11 +99,16 @@ export const TownLibrary = memo(function TownLibrary({
   layout: TownLayout;
 }) {
   useMemoryStore();
-  const hosts = memoryHosts().slice(0, SIGN_HOSTS);
-  const hostKeys = hosts.map(memoryTargetKey).join("\n");
+  useArtefactShelves();
+  const hosts = libraryHosts().slice(0, SIGN_HOSTS);
+  const hostKeys = hosts
+    .map((host) => `${memoryTargetKey(host)}:${hostHasMemory(host)}`)
+    .join("\n");
   useEffect(() => {
-    for (const host of memoryHosts().slice(0, SIGN_HOSTS))
-      void requestMemoryCatalog(host);
+    for (const host of libraryHosts().slice(0, SIGN_HOSTS)) {
+      if (hostHasMemory(host)) void requestMemoryCatalog(host);
+      void requestArtefactShelf(host);
+    }
   }, [hostKeys]);
   const counts = townLibraryCounts();
   // The building opens what its sign does (#1170), while a host serves it.
@@ -135,7 +168,9 @@ function FoldedSign({
     >
       <span className="town-library-book" aria-hidden="true" />
       {counts.status === "ready" ? (
-        <b aria-hidden="true">{counts.files}</b>
+        <b aria-hidden="true">
+          {counts.memory === false ? (counts.made ?? 0) : counts.files}
+        </b>
       ) : null}
     </button>
   );
