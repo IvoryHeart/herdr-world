@@ -33,7 +33,7 @@
 - `web/src/world/town/useTownQuiet.ts`
 - `web/src/world/town/townRendererActors.ts`
 - `web/src/world/town/TownWorldLayer.tsx`, `web/src/world/town/TownStepBubble.tsx`, `web/src/world/town/TownBoard.tsx`; plaques: `web/src/world/town/TownRoomPlaque.tsx`, `web/src/world/town/townPlaqueCard.ts` (one open card); runtime icons: `web/src/world/town/TownRuntimeIcon.tsx`, `web/src/world/town/TownRoomOverviewCard.tsx` (a room's overview card, its icon a press of its own), `web/src/world/town/townMoveMenu.ts` (menu words)
-- `web/src/world/town/townLayout.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
+- `web/src/world/town/townLayout.ts`; civic row on every form factor (#1351): `web/src/world/town/townLots.ts`, `web/src/world/town/townLibraryLot.ts`, `web/src/world/town/townObservatoryLot.ts`; the library and observatory signs (a phone hangs the library's below the observatory's, right of the center plaque): `web/src/world/town/townCivicSigns.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
 - Bin and bus: `web/src/world/town/TownBusLayer.tsx` (the next trip's route report, the bus's speed and distance plate), `web/src/world/town/townBus.ts` (`townTourRouteM`, `townBusSign`, metres per pixel; `townBinStopOf`/`townBinStopAt`, the drop stop as a building corner), `web/src/world/town/townBinDrop.ts` and `TownCanvas.tsx` (the stop a drag was dropped on, kept as the bin entry's `stop` in `shared/bin.ts`), `web/src/world/town/townBusDrive.ts` (`townBusTimeline`, `townBusLeft`), `web/src/world/bin/binStore.ts` (`binBusClock`, the countdown labels); tests `townBus.test.ts`, `townBusCountdown.dom.test.ts`, `web/src/world/bin/binStore.test.ts`
 - `server/src/world/observability.ts`
 
@@ -263,9 +263,9 @@
     agent waits. Click it, or focus it and press Enter, to open the same
     **Needs you** tab as the top bar's counter, where you answer, withdraw
     and reach the Outbox as usual; it is not a second inbox. It counts the
-    hosts the Hosts filter shows, as Needs you does. On a phone the sign
-    folds to a smaller red plate across the house's front, in view at home
-    zoom, with the marks and numbers only; tap it for Needs you. Each open
+    hosts the Hosts filter shows, as Needs you does. On a phone the same
+    sign stands centred over the roof with its counts one to a line, so it
+    stays over the house and in view at home zoom; tap it for Needs you. Each open
     question for you (from `herdr-world ask`) is a letter in its yard,
     oldest first; a letter from a caller World could not verify has a grey
     seal. Hover or focus a letter for "Letter from orbit: …"; click or tap
@@ -305,9 +305,8 @@
     place window; `?townWarehouseFixture=off` shows this), with no crates and no
     counts; when a refresh fails it keeps the last list as unknown and says
     GitHub is out of date. On a phone it stands on the harbour's shore too,
-    and a sign on the town center's right wing, in view at home zoom (a crate
-    and "PRs", no counts: the post office counts what needs you), opens the
-    crates as a list with their counts. Searching Town for "warehouse" (or
+    with the same sign; pan right to reach it, or open it from the town
+    center's **Buildings** ring. Searching Town for "warehouse" (or
     "pull requests") lists the **Warehouse** and choosing it takes the map
     there, on a phone or a wide screen. For trying it without
     real pull requests, open World with `?townWarehouseFixture` (synthetic
@@ -327,8 +326,9 @@
     the runs that answered in the last ten minutes where those are more. A
     harness with no reading, including one at work whose budget World cannot
     read (such as Cursor), says "no reading", never 0%; an old reading is dimmed "out of date".
-    On a phone it folds to a night-blue sign with a telescope on the town
-    center's right wing, such as "Claude 71% Codex 18%". Either sign opens
+    A phone stands it, and the library, in the same row right of the town
+    center (the phone's town grows rightwards for them; pan right from the
+    first view). Its sign opens
     **Usage**, a lens over Town with four tabs (Escape, Back, the close
     button or a press outside closes it):
     - **Budget**: each harness's windows with a meter, a line where even use
@@ -386,8 +386,8 @@
     warehouse's building opens Integrations, in the same window, while GitHub
     is off, and nothing
     while it is still being read). Hovering a building lights its sign; the
-    signs stay the keyboard targets. A phone's library and observatory fold
-    to signs on the town center, so only their signs open them. The town
+    signs stay the keyboard targets. A phone stands every one of these
+    buildings, so each opens the same way there. The town
     center keeps its ring, and the Town summary its own managed window.
   - Every place opens in **one window frame**: a centred window of one size
     over dimmed Town, with the place's title and the same close button at
@@ -471,7 +471,7 @@
     host**, herdr-core hosts included (`· herdr-core`); an empty core room name
     becomes "Room". **Buildings** opens a second ring around itself with every place
     that opens now (Apartments, Library, Post office for Needs you,
-    Observatory, Warehouse; a folded phone sign still counts); choosing one
+    Observatory, Warehouse); choosing one
     opens what its building opens (`townCenterBuildings.ts`, from the
     `townPlaces.ts` registry). Every ring opens around the entry that opened
     it, moved only to fit the screen, so Buildings' place becomes the centre:

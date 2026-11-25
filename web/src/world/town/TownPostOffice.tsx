@@ -39,7 +39,6 @@ import {
   townLetterLabel,
   townLetterLine,
   townPostCounts,
-  townPostFoldAt,
   townPostOffice,
   townPostParts,
   townPostSignAt,
@@ -162,8 +161,8 @@ function revealer(
  * never cargo. Its sign counts Needs you's items by kind without hovering
  * (questions, blocked agents, finished work to review) and the Outbox's
  * answers to check; clicking it, or Enter on it, opens Needs you, the same
- * list as the top bar's counter. A narrow town folds the sign to a smaller
- * one across its house's front. In its yard each open question lies as a
+ * list as the top bar's counter, on a narrow (phone) town too (#1351). In
+ * its yard each open question lies as a
  * letter, oldest first, opening a letter card whose **Answer** opens Needs
  * you at that question; your answers still on their way ride the mail
  * trolley, which opens Town's Outbox.
@@ -183,12 +182,14 @@ export const TownPostOffice = memo(function TownPostOffice({
   const source = useContext(TownPostContext);
   const fixture = useFixtureOffice();
   useTownPlace("post", openPost);
-  const folded = layout.formFactor === "narrow";
-  const lot = townPostLotBeside(layout.center);
-  const at = folded ? townPostFoldAt(lot) : townPostSignAt(lot);
+  const narrow = layout.formFactor === "narrow";
+  const at = townPostSignAt(
+    townPostLotBeside(layout.center),
+    layout.formFactor,
+  );
   const reveal = revealer(renderer, at);
   const sign = (counts: TownPostCounts | null) => (
-    <Sign counts={counts} folded={folded} at={at} onFocus={reveal} />
+    <Sign counts={counts} narrow={narrow} at={at} onFocus={reveal} />
   );
   const counted = fixture ? (
     sign(fixtureCounts(fixture))
@@ -225,12 +226,13 @@ const fixtureCounts = (office: Office): TownPostCounts => ({
 
 function Sign({
   counts,
-  folded,
+  narrow,
   at,
   onFocus,
 }: {
   counts: TownPostCounts | null;
-  folded: boolean;
+  /** A phone's sign stands at the ridge's middle, its counts stacked. */
+  narrow: boolean;
   at: { x: number; y: number };
   onFocus(event: FocusEvent<HTMLElement>): void;
 }) {
@@ -239,7 +241,8 @@ function Sign({
   return (
     <button
       type="button"
-      className={folded ? "town-post-fold" : "town-post-sign"}
+      className="town-post-sign"
+      data-narrow={narrow || undefined}
       data-waiting={waiting > 0 || undefined}
       style={{ left: at.x, top: at.y }}
       aria-label={`Post office: ${counts ? townPostSpoken(counts) : "Needs you"}. Open Needs you`}
@@ -252,14 +255,10 @@ function Sign({
         openPost();
       }}
     >
-      {folded ? (
-        <span className="town-post-mark" aria-hidden="true" />
-      ) : (
-        <span className="town-post-sign-title" aria-hidden="true">
-          <span className="town-post-mark" />
-          POST OFFICE
-        </span>
-      )}
+      <span className="town-post-sign-title" aria-hidden="true">
+        <span className="town-post-mark" />
+        POST OFFICE
+      </span>
       {counts ? (
         <span className="town-post-counts" aria-hidden="true">
           {parts.length ? (
@@ -270,11 +269,11 @@ function Sign({
                 ) : (
                   <span className="town-post-letter">✉</span>
                 )}
-                {folded ? part.count : part.text}
+                {part.text}
               </span>
             ))
           ) : (
-            <span data-kind="none">{folded ? "0" : "Nothing for you"}</span>
+            <span data-kind="none">Nothing for you</span>
           )}
         </span>
       ) : null}

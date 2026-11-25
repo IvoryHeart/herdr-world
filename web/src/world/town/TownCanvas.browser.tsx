@@ -83,6 +83,10 @@ if (scale === "places") {
   // Synthetic residents and memory, so Apartments and the Library open.
   setApartmentsClient(fixtureApartmentsClient(Date.now()));
   setMemoryFixtureForTests(true);
+  // A busy week's usage, so the observatory's sign is at its widest (#1351).
+  const url = new URL(location.href);
+  url.searchParams.set("usageFixture", "busy");
+  history.replaceState(history.state, "", url);
 }
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {

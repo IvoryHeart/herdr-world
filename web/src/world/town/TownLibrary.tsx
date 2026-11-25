@@ -15,9 +15,8 @@ import {
 } from "../memory/artefactShelfClient";
 import { useTownPlace } from "./useTownPlace";
 import { memorySummary } from "../memory/memoryModel";
-import type { TownCenterLot } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
-import { townLibraryFoldAt, townLibraryLot } from "./townLibraryLot";
+import { townCivicSigns } from "./townCivicSigns";
 import "./townLibrary.css";
 
 /** Hosts the sign counts at most, so a big fleet never fans out reads. */
@@ -88,8 +87,8 @@ export function townLibrarySignText(counts: TownLibraryCounts) {
  * shelves several agents share, from catalogs read at most every few
  * minutes, and what agents made (#1327); it opens the Library. With every
  * agent on its hosts gone it stays while they made something, counting only
- * that (#1342). A narrow town folds it to a book sign on the center's left
- * wing.
+ * that (#1342). A narrow (phone) town stands it beside the center as a wide
+ * one does (#1351).
  */
 const openLibrary = () => openMemoryLibrary();
 
@@ -116,16 +115,16 @@ export const TownLibrary = memo(function TownLibrary({
   if (counts.status === "none") return null;
   const text = townLibrarySignText(counts);
   const label = `Library: ${text === "…" ? "reading" : text}. Open`;
-  const lot = townLibraryLot(layout);
-  if (!lot)
-    return <FoldedSign center={layout.center} counts={counts} label={label} />;
+  // A phone hangs it below the observatory's sign (townCivicSigns.ts).
+  const at = townCivicSigns(layout, T).library;
   return (
     <button
       type="button"
       className="town-library-sign"
       data-town-place="library"
       data-quiet={counts.status !== "ready" || undefined}
-      style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 30 }}
+      data-hangs={at.hangs || undefined}
+      style={{ left: at.x, top: at.y }}
       aria-label={label}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
@@ -142,36 +141,3 @@ export const TownLibrary = memo(function TownLibrary({
     </button>
   );
 });
-
-function FoldedSign({
-  center,
-  counts,
-  label,
-}: {
-  center: TownCenterLot;
-  counts: TownLibraryCounts;
-  label: string;
-}) {
-  const at = townLibraryFoldAt(center, T);
-  return (
-    <button
-      type="button"
-      className="town-library-fold"
-      style={{ left: at.x, top: at.y }}
-      aria-label={label}
-      title="Library"
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => {
-        event.stopPropagation();
-        openMemoryLibrary();
-      }}
-    >
-      <span className="town-library-book" aria-hidden="true" />
-      {counts.status === "ready" ? (
-        <b aria-hidden="true">
-          {counts.memory === false ? (counts.made ?? 0) : counts.files}
-        </b>
-      ) : null}
-    </button>
-  );
-}

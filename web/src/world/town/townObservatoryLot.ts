@@ -57,13 +57,10 @@ export function townObservatoryReserve(lot: TownObservatoryLot) {
 }
 
 /**
- * The observatory's lot: right of the library on the first street. A narrow
- * (stacked) town folds it to a sign on the center's right wing.
+ * The observatory's lot: right of the library on the first street, on a
+ * narrow (phone) town too (#1351).
  */
-export function townObservatoryLot(
-  layout: TownLayout,
-): TownObservatoryLot | null {
-  if (layout.formFactor === "narrow") return null;
+export function townObservatoryLot(layout: TownLayout): TownObservatoryLot {
   return townObservatoryLotBeside(layout.center);
 }
 

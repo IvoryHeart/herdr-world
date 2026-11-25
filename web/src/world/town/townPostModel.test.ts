@@ -3,8 +3,6 @@ import { needsYouCount, type NeedsYouItem } from "../needsYou";
 import type { WorldAsk } from "../worldAsks";
 import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { TownCamera } from "./townCamera";
-import { townHarbourFoldAt } from "./townHarbourLot";
-import { townLibraryFoldAt } from "./townLibraryLot";
 import { layoutTown, TOWN_SHAPES, TOWN_TILE as T } from "./townLayout";
 import {
   TOWN_LETTER_SIZE,
@@ -14,7 +12,6 @@ import {
   townLetterAge,
   townLetterLabel,
   townPostCounts,
-  townPostFoldAt,
   townPostOffice,
   townPostParts,
   townPostSignAt,
@@ -33,7 +30,6 @@ import {
   townPostFixture,
   townPostFixtureMode,
 } from "./townPostFixture";
-import { townWarehouseFoldAt } from "./townWarehouseModel";
 
 const items = (
   ...kinds: NeedsYouItem["kind"][]
@@ -88,7 +84,7 @@ test.each([
   ["three single-desk rooms, small phone", [1, 1, 1], 360, 640],
   ["a tall building", [6, 4, 3, 2], 390, 844],
 ] as const)(
-  "a narrow town folds it to a sign across its own house, in a phone's home view (%s)",
+  "a narrow town stands the full sign on its roof, in a phone's home view (%s)",
   (_, rooms, width, height) => {
     const { layout } = layoutTown(town([...rooms]), TOWN_SHAPES.phone);
     const viewport = townViewport(width, height, { left: 0, right: 0 });
@@ -96,35 +92,24 @@ test.each([
     camera.viewport = viewport;
     new TownSceneCamera(new Map(), () => {}).attach(camera, layout, viewport);
     const lot = townPostLotBeside(layout.center);
-    const at = townPostFoldAt(lot);
-    const sign = camera.toScreen(at.x, at.y);
-    // A folded sign keeps its screen size near home zoom (--iz, up to 1.6):
-    // the post office's is up to about 138 by 28 pixels with all four
-    // counts, the wings' signs about 100 by 28.
+    const at = townPostSignAt(lot, layout.formFactor);
+    // The wide sign, not a folded one (#1351), centred on the ridge and
+    // growing straight up with its counts stacked. It keeps its screen size
+    // near home zoom (--iz): at most about 104 by 68 pixels with all four
+    // counts, so it stays on screen and about its house's width.
     const z = camera.z;
-    const scale = z * Math.min(1.6, Math.max(0.55, 1 / z));
+    const scale = z * Math.min(2.4, Math.max(0.5, 1 / z));
+    const sign = camera.toScreen(at.x, at.y);
     const { inset } = viewport;
-    expect(sign.x - 69 * scale).toBeGreaterThanOrEqual(inset.left);
-    expect(sign.y - 14 * scale).toBeGreaterThanOrEqual(inset.top);
-    expect(sign.y + 14 * scale).toBeLessThanOrEqual(height - inset.bottom);
-    // On the post office's front, under its roof and above its yard.
-    expect(at.x).toBeGreaterThan(lot.x * T);
-    expect(at.x).toBeLessThan((lot.x + lot.w) * T);
-    expect(at.y).toBeGreaterThan(lot.y * T);
+    expect(sign.x - 52 * scale).toBeGreaterThanOrEqual(inset.left);
+    expect(sign.y - 68 * scale).toBeGreaterThanOrEqual(inset.top);
+    expect(sign.x + 52 * scale).toBeLessThanOrEqual(width - inset.right);
+    // Clear of the town center across the lawn.
+    expect(camera.toScreen(layout.center.x * T, 0).x).toBeGreaterThan(
+      sign.x + 52 * scale,
+    );
+    expect(at.x).toBe((lot.x + lot.w / 2) * T);
     expect(at.y).toBeLessThan(lot.yardY * T);
-    // Clear of the signs on the town center's wings.
-    const center = layout.center;
-    for (const other of [
-      townHarbourFoldAt(center, T),
-      townLibraryFoldAt(center, T),
-      townWarehouseFoldAt(center),
-    ]) {
-      const there = camera.toScreen(other.x, other.y);
-      const apart =
-        Math.abs(sign.x - there.x) > (69 + 50) * scale ||
-        Math.abs(sign.y - there.y) > 28 * scale;
-      expect(apart).toBe(true);
-    }
   },
 );
 

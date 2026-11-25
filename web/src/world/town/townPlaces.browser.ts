@@ -39,21 +39,73 @@ export async function checkTownPlaces(
     keys.includes("post") && keys.includes("warehouse"),
     `Town has no post office or warehouse building: ${keys.join(", ")}`,
   );
-  if (phone)
+  // A phone stands every civic building a desktop does (#1351).
+  check(
+    ["library", "observatory", "apartments"].every((key) =>
+      keys.includes(key as TownPlaceKey),
+    ),
+    `${phone ? "a phone's" : "a desktop"} Town lacks a place building: ${keys.join(", ")}`,
+  );
+
+  const rect = () => canvas.getBoundingClientRect();
+  if (phone) {
+    // At home, the post office's full sign stands over its own house, on
+    // screen and clear of the town center beside it (#1351).
+    const sign = host
+      .querySelector<HTMLElement>('[data-town-place="post"]')!
+      .getBoundingClientRect();
+    const view = rect();
+    const { zoom, camera, layout } = town();
+    // The town center stands two tiles of lawn right of the post office.
+    const centerLeft =
+      view.left +
+      (layout!.places.post!.x1 + 2 * 16 - camera.x) * zoom +
+      view.width / 2;
     check(
-      !keys.includes("library") && !keys.includes("observatory"),
-      "a phone's Town drew the library or observatory as buildings",
+      sign.left >= view.left &&
+        sign.right <= view.right &&
+        sign.top >= view.top,
+      `a phone's post office sign is off screen at home: ${JSON.stringify(sign)}`,
     );
-  else
     check(
-      ["library", "observatory", "apartments"].every((key) =>
-        keys.includes(key as TownPlaceKey),
-      ),
-      `a desktop Town lacks a place building: ${keys.join(", ")}`,
+      sign.right <= centerLeft,
+      `a phone's post office sign covers the town center: ${sign.right} > ${centerLeft}`,
     );
+  }
+
+  // The library's and the observatory's signs keep their screen size, and
+  // filled in they are wider than the lawn between them at a phone's zoom:
+  // neither covers the other, at home or zoomed out (#1351).
+  const civicApart = async (when: string) => {
+    const sign = (key: TownPlaceKey) =>
+      host.querySelector<HTMLElement>(`[data-town-place="${key}"]`);
+    await waitFor(
+      () =>
+        sign("observatory")?.querySelector(".town-observatory-dials") != null &&
+        !sign("library")?.hasAttribute("data-quiet"),
+      "the observatory or library sign never filled in",
+    );
+    const apart = (a: DOMRect, b: DOMRect) =>
+      a.right <= b.left ||
+      b.right <= a.left ||
+      a.bottom <= b.top ||
+      b.bottom <= a.top;
+    const library = sign("library")!.getBoundingClientRect();
+    const others = [
+      ["observatory", sign("observatory")!],
+      ["town center", host.querySelector<HTMLElement>(".town-center-sign")!],
+    ] as const;
+    for (const [name, other] of others) {
+      const box = other.getBoundingClientRect();
+      check(
+        apart(library, box),
+        `a phone's library and ${name} signs overlap ${when}: ${JSON.stringify([library, box])}`,
+      );
+    }
+  };
+  if (phone) await civicApart("at home");
 
   // Zoom all the way out, so every building is on screen at once.
-  const rect = () => canvas.getBoundingClientRect();
   for (let step = 0; step < 40; step += 1) {
     const before = town().zoom;
     const box = rect();
@@ -74,6 +126,8 @@ export async function checkTownPlaces(
     await waitFor(() => !town().flying, "the camera kept flying");
     if (Math.abs(town().zoom - before) < 1e-4) break;
   }
+
+  if (phone) await civicApart("zoomed out");
 
   const signs = () =>
     [...host.querySelectorAll<HTMLElement>("[data-town-place]")].map((sign) =>
