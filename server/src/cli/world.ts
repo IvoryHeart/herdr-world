@@ -26,6 +26,7 @@ import { readFileSync } from "node:fs";
 import { parseAnalyticsQuery } from "../usage/analytics";
 import { usageAnalyticsFixture } from "../usage/fixture";
 import type { WorldUsageAnalytics } from "../../../shared/usageAnalytics";
+import { askQuestionHint } from "../../../shared/askCommands";
 
 const USAGE_HELP = `Usage: herdr-world usage [--window today|7d] [--group-by agent|project|room|day|run]
   [--connection ID --generation N] [--pane ID] [--room ID] [--project ID] [--json]
@@ -516,6 +517,14 @@ export function parseWorldArgs(
       };
     }
     case "ask": {
+      if (sub === "ls") {
+        const { values } = parsed(rest, {}, 0);
+        return { command: "ask ls", params: {}, json: values.json as boolean };
+      }
+      if (args.length === 1) {
+        const hint = askQuestionHint(sub!);
+        if (hint) throw new UsageError(hint);
+      }
       if (sub === "get" || sub === "answer" || sub === "withdraw") {
         const { values, positionals } = parsed(
           rest,
@@ -533,7 +542,12 @@ export function parseWorldArgs(
           params: {
             ...(values.key
               ? { key: values.key }
-              : { id: need(positionals[0], "question ID") }),
+              : {
+                  id: need(
+                    positionals[0],
+                    `question ID; ${askQuestionHint(sub)}`,
+                  ),
+                }),
             ...(sub === "answer"
               ? { answer: need(positionals[1], "answer") }
               : {
@@ -555,10 +569,13 @@ export function parseWorldArgs(
         },
         1,
       );
+      const question = need(positionals[0], "question");
+      const hint = askQuestionHint(question);
+      if (hint) throw new UsageError(hint);
       return {
         command: "ask",
         params: {
-          question: need(positionals[0], "question"),
+          question,
           ...(values.key ? { key: values.key } : {}),
           options: values.options
             ? String(values.options)
@@ -690,7 +707,7 @@ export async function runWorldCommand(
   isTty = Boolean(process.stdout.isTTY),
   alert: OwnerAlert = herdrAlert(context),
 ): Promise<number> {
-  if (wantsHelp(args)) {
+  if (wantsHelp(args) && !(word === "ask" && args[0] === "help")) {
     context.log(
       word === "usage"
         ? USAGE_HELP
@@ -902,8 +919,8 @@ const WORDS: { name: string; summary: string; actions?: string[] }[] = [
   },
   {
     name: "ask",
-    summary: "agents: ask the owner a question in World",
-    actions: ["get", "answer"],
+    summary: "agents: ask the owner or list your questions in World",
+    actions: ["ls", "get", "answer", "withdraw"],
   },
   { name: "result", summary: "agents: report a task result", actions: ["ls"] },
   {
