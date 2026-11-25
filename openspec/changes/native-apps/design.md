@@ -77,7 +77,8 @@ Push (developer.apple.com/forums/thread/760767), WebView2 `NotificationReceived`
 
 ### 2. One origin
 
-The main window loads `WebviewUrl::External(<World origin>)`. The app grants no
+The main window loads `WebviewUrl::External(<World origin>)` (on Android, the
+plugin's World web view; see section 3). The app grants no
 capability with `remote.urls`, so World's page cannot call native commands.
 Navigation outside the World's origin is cancelled in the navigation handler and
 opened in the system browser. The app does not inject scripts into World pages.
@@ -99,27 +100,52 @@ originless native client the bridge-access contract already admits.
   (CameraX and the bundled ML Kit model, no Google Play services). Every platform
   accepts a pasted link or origin. Accepted: `http`/`https`, a host, path `/`, at
   most one query parameter, `token`. Anything else is refused before it is stored.
-- Stored, in the app's data folder (`worlds.json`): origin, display name (the
+- Stored, in the app's data folder (`worlds.json`): a random app ID per World (it
+  names the World's web view store), origin, display name (the
   host, editable), per-World notification switch, added time. Never the token, a
   password or a PIN. The link with its token goes only to the web view's first
   navigation; World's 303 strips it, so it stays out of history, and the response
   is `no-store`. Form-data saving is off in the web view.
-- Session: World's own cookie in the web view's storage for that World, nothing
-  else. Desktop gives each World its own web view data folder (`data_directory`
-  on Windows and Linux, `data_store_identifier` on macOS), so two Worlds on one
-  host with different ports keep separate sessions and Forget deletes one folder.
-  Android has one WebView store per app: cookies are kept per host, as in a browser.
+- Session: World's own cookie in that World's own web view store, nothing else.
+  Cookies are scoped by host, not port (RFC 6265 section 8.5), and every World
+  names its cookie `herdr_world_auth` with `Path=/`, so two Worlds on one host
+  (`world.example:9001` and `world.example:9002`) would overwrite each other's
+  session in a shared store. The app therefore never shares a store between Worlds:
+  - Desktop: each World gets its own web view data folder (`data_directory` on
+    Windows and Linux, `data_store_identifier` on macOS).
+  - Android: each World gets its own WebView profile (`androidx.webkit`
+    `ProfileStore.getOrCreateProfile("world-<id>")`, `<id>` a random ID kept in
+    `worlds.json`), with its own `CookieManager`, web storage and service workers.
+    `WebViewCompat.setProfile` has to run before the web view loads anything, so on
+    Android the Kotlin plugin owns the World web view (one activity, recreated when
+    the user switches World) and Tauri's web view shows only the World list. That
+    also keeps Tauri's command bridge out of World pages on Android.
+  - Android without profiles (`WebViewFeature.MULTI_PROFILE` unsupported, an old
+    WebView): Worlds share the default profile, and the app refuses to pair a World
+    whose host already belongs to a paired World, naming that World. Each host then
+    holds at most one World's cookie.
+  World's login model is unchanged: the separation is entirely in the app.
 - Several Worlds: the list shows each with its name and origin; opening one swaps
   the window's web view. A second pairing of an origin already listed is refused.
-- **Sign out**: the World list (and the tray menu) posts to World's
-  `/api/logout` from the World's web view, which revokes that session's Web Push
-  enrolment as today, then deletes the cookie locally. The World stays listed.
+- **Sign out**: the app's native layer (Rust on desktop, Kotlin on Android) sends
+  `POST <origin>/api/logout` with `x-herdr-world-logout: 1` and the cookie read
+  from that World's store. It is an originless native request, which the logout
+  route already accepts, so no script is injected into World's page. World revokes
+  that session's Web Push enrolment as today and closes its streams (section 4).
+  Logout does not invalidate the signed cookie on the server, so the app then
+  deletes it from that
+  World's store: an expired `herdr_world_auth` cookie through the profile's
+  `CookieManager` on Android, and on desktop Tauri's cookie API, or clearing that
+  World's own data folder where it cannot delete one cookie (spike 1.2 checks).
+  The World stays listed. World's own Sign out inside the page keeps working.
 - **Forget this World**: sign out when reachable, stop the connection, delete the
-  entry, the web view data folder (desktop) or the origin's cookies,
-  `WebStorage.deleteOrigin` data and the WebView cache (Android), and the
-  notification channel. If World is unreachable the app says the World's own
-  session could not be revoked; the cookie it cannot reach expires in 30 days and
-  `herdr-world auth rotate` revokes every session at once.
+  entry, the web view data folder (desktop) or the profile with
+  `ProfileStore.deleteProfile` (Android; with no profile support, that host's
+  cookies, `WebStorage.deleteOrigin` data and the WebView cache), and the
+  notification channel. No other World's data is touched. If World is unreachable
+  the app says the World's own session could not be revoked; the cookie it cannot
+  reach expires in 30 days and `herdr-world auth rotate` revokes every session at
+  once.
 
 ### 4. Notifications
 
@@ -140,10 +166,12 @@ because Needs you keeps the durable item. No new persisted data.
 `cookies_for_url` (async on Windows), opens the stream with `reqwest`, and shows
 notifications with `tauri-plugin-notification`; `on_action` opens the World at
 `<origin>/#herdr-world-task=<target JSON>` and focuses the window. Android: the
-Kotlin plugin's service reads the cookie from `CookieManager` (Tauri's cookie API
-returns nothing on Android) and holds the stream; a notification's tap intent
-carries origin and target. Same backoff everywhere: 2 s doubling to 5 min, reset on
-network change. A 401 stops that World and posts one "Sign in again" notification.
+Kotlin plugin's service reads the cookie from that World's profile
+`CookieManager` (Tauri's cookie API returns nothing on Android) and holds the
+stream; a notification's tap intent carries origin and target. Native notification
+IDs join the World's app ID and the payload tag, because tags hold World-local
+runtime identities and two Worlds can send the same tag. Same backoff everywhere:
+2 s doubling to 5 min, reset on network change. A 401 stops that World and posts one "Sign in again" notification.
 Both parsers run one shared fixture of stream frames.
 
 **Web.** `taskNotifications.ts` also handles a `hashchange` to
@@ -257,6 +285,9 @@ later, under the organisation). The bundled list page reuses World's icons.
 - Tauri's Android support is younger than its desktop support; the Kotlin plugin
   owns everything Android-specific. A first spike (task 1.1) proves cookie access,
   the foreground service and the APK size before the rest is built.
+- Per-World Android profiles need a WebView with `MULTI_PROFILE` (androidx.webkit
+  1.9+ API, a recent WebView from the store). Older WebViews fall back to one World
+  per host, which is refused at pairing rather than broken later.
 - Battery: a persistent connection costs some battery; it is visible, switchable
   per World and measured.
 - Without an updater, users stay on old versions. Mitigated by the OS-patched

@@ -58,12 +58,30 @@ entry for an origin already paired.
 
 ### Requirement: Sign out and forget
 
-The session SHALL live only in the app's web view storage for that World. Sign out
-SHALL call World's existing logout and delete the World's session cookie in the web
-view, keeping the World in the list. Forget this World SHALL sign out when World is
+The session SHALL live only in the app's web view storage for that World, and each
+World SHALL have its own cookie and web storage, never shared with another World,
+so two Worlds on one host at different ports keep separate sessions. Where the
+platform cannot give a World its own store, the app SHALL refuse to pair a World
+whose host already belongs to a paired World. Sign out SHALL call World's existing
+logout from the app's native layer, without injecting script into World's page, and
+delete the World's session cookie in its web view store, keeping the World in the
+list. Forget this World SHALL sign out when World is
 reachable, then delete the World's entry, its cookies, its web storage, its cache and
-its notification settings from the app, and stop its connection. After Forget the
-app SHALL hold nothing that names or authenticates that World.
+its notification settings from the app, and stop its connection, leaving every
+other World's session in place. After Forget the app SHALL hold nothing that names
+or authenticates that World.
+
+#### Scenario: Two Worlds on one host
+
+- **WHEN** the user pairs a World at `http://world.example:9001` and another at
+  `http://world.example:9002`, then reloads the first and forgets the second
+- **THEN** the first World stays signed in and its notifications keep arriving
+
+#### Scenario: Same host without separate stores
+
+- **WHEN** the device's web view cannot keep a separate store per World and the user
+  pairs a second World on a host already paired
+- **THEN** the app refuses it, names the World already on that host and stores nothing
 
 #### Scenario: Forget the last World
 
@@ -82,7 +100,8 @@ app SHALL hold nothing that names or authenticates that World.
 Each paired World with notifications on SHALL have one app connection to World's
 notification stream, authenticated by the web view's session cookie for that World,
 never by a stored token. The app SHALL show each streamed notification as an OS
-notification with its title and body, replacing one with the same tag. Tapping it
+notification with its title and body, replacing one with the same tag from the
+same World. Tapping it
 SHALL open that World at the notification's target through the
 `#herdr-world-task=` link, bringing the app forward. The app SHALL NOT decide on its
 own which agent states notify. When the stream is refused for lack of a session,

@@ -4,8 +4,8 @@ Design approved before any task starts (#1400). Each task lands with its tests.
 
 ## 1. Prove the risky parts first
 
-- [ ] 1.1 Spike in `apps/native/`: Tauri 2 app that loads a synthetic World origin with no remote capability; on Android, prove `CookieManager` returns World's HttpOnly cookie, a `remoteMessaging` foreground service holds a stream with the activity closed, and measure the arm64 APK size. Record results here before 2.x.
-- [ ] 1.2 Desktop spike: per-World `data_directory` / `data_store_identifier`, `cookies_for_url` on all three OSes, notification `on_action` opening a hash.
+- [ ] 1.1 Spike in `apps/native/`: Tauri 2 app that loads a synthetic World origin with no remote capability; on Android, prove a plugin-owned World web view with its own `androidx.webkit` profile per World (two synthetic Worlds on one host, different ports, keep separate sessions; deleting one profile leaves the other signed in), that the profile's `CookieManager` returns World's HttpOnly cookie, the same-host refusal when `MULTI_PROFILE` is unsupported, a `remoteMessaging` foreground service holds a stream with the activity closed, and measure the arm64 APK size. Record results here before 2.x.
+- [ ] 1.2 Desktop spike: per-World `data_directory` / `data_store_identifier`, `cookies_for_url` and single-cookie deletion on all three OSes, two same-host Worlds on different ports keep separate sessions, notification `on_action` opening a hash.
 
 ## 2. World service and web (small)
 
@@ -15,11 +15,11 @@ Design approved before any task starts (#1400). Each task lands with its tests.
 
 ## 3. The app
 
-- [ ] 3.1 Bundled World list page: add (paste, QR on Android), validate links, choose, rename, sign out, forget, per-World notifications; no World fetch. Tests for link validation and storage holding no token.
+- [ ] 3.1 Bundled World list page: add (paste, QR on Android), validate links, refuse a same-host pairing where sessions cannot be separated, choose, rename, sign out, forget, per-World notifications; no World fetch. Tests for link validation and storage holding no token.
 - [ ] 3.2 Window: external World origin, navigation to other origins to the system browser, user agent suffix, form-data saving off, swap web view per World.
 - [ ] 3.3 Desktop notifications client (Rust): cookie, stream, backoff, 401 → sign-in notification, `on_action` deep link. Fixture tests.
 - [ ] 3.4 Desktop tray, close-to-tray, autostart (off by default, `--hidden`), single instance, `--pair`.
-- [ ] 3.5 Android Kotlin plugin: foreground service, cookie, stream, notification channels and tap intents, share target, Back to the World list, forget clean-up. JVM tests on the fixture.
+- [ ] 3.5 Android Kotlin plugin: foreground service, cookie, stream, per-World profiles, native logout and cookie deletion, notification channels and tap intents with IDs namespaced by World, share target, Back to the World list, forget clean-up. JVM tests on the fixture.
 
 ## 4. Builds, smoke tests and docs
 
