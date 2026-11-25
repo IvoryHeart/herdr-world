@@ -14,6 +14,7 @@
     "herdr-core-seen": 32.46,
     "ide-lifecycle": 564.68,
     "claude-tap-lock": 18.4,
+    "agent-move": 15.49,
     "space-admission": 176.76,
     "chunk-credits": 39.3,
     "observation-base": 133.45,
@@ -30,5 +31,5 @@
     "ranger-authority": 17.69,
     "connection-registry": 12.68
   },
-  "note": "Measured on a fast hosted runner; slower runners took about 1.55x as long (run 45317710455). ide-lifecycle is its one-check-at-a-time time before #1346; it and herdr-core-runtime each own a dedicated shard, so their weights do not move other models. Weights affect scheduling only; every model keeps its bounds, replay and controls."
+  "note": "Measured on a fast hosted runner; slower runners took about 1.55x as long (run 45317710455). ide-lifecycle is its one-check-at-a-time time before #1346; it and herdr-core-runtime each own a dedicated shard, so their weights do not move other models. agent-move (added with #1184) keeps its local measurement until a hosted run measures it. Weights affect scheduling only; every model keeps its bounds, replay and controls."
 }

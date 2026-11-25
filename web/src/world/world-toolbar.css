@@ -14,59 +14,38 @@
   align-items: center;
   gap: 5px;
 }
-.world-view-toolbar-search,
-.world-view-search-overlay {
+/* A running search: what was searched, its count and its end. */
+.world-view-toolbar-search {
   min-width: 0;
   height: 30px;
+  flex: 0 1 auto;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 7px;
-  border: 1px solid var(--topbar-control-border, var(--border, #343942));
+  padding: 0 3px 0 7px;
+  border: 1px solid var(--accent, #79a6ff);
   border-radius: 7px;
   color: var(--topbar-control-text, var(--muted, #9da7b4));
   background: var(--topbar-control-bg, var(--bg, #0e1116));
 }
-.world-view-toolbar-search {
-  flex: 1 1 180px;
-  /* Unfolds from the search icon it replaces. */
-  animation: world-view-search-unfold 140ms ease-out;
-}
-@keyframes world-view-search-unfold {
-  from {
-    max-width: 30px;
-  }
-  to {
-    max-width: 100%;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .world-view-toolbar-search {
-    animation: none;
-  }
-}
-.world-view-toolbar-search:focus-within,
-.world-view-search-overlay:focus-within {
-  border-color: var(--accent, #79a6ff);
-}
-.world-view-toolbar-search label,
-.world-view-search-overlay label {
+.world-view-search-query {
   min-width: 0;
-  display: flex;
-  flex: 1 1 auto;
-}
-.world-view-toolbar-search input,
-.world-view-search-overlay input {
-  min-width: 0;
-  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
   border: 0;
-  outline: 0;
-  /* The box's own border shows focus; no second ring inside it. */
-  box-shadow: none;
-  color: inherit;
+  color: var(--text, #edf2f7);
   background: transparent;
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
+}
+.world-view-search-query > span {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .world-view-toolbar-results {
   max-width: 130px;
@@ -81,8 +60,7 @@
   flex: 0 0 auto;
   align-items: center;
 }
-.world-view-search-toggle,
-.world-view-search-overlay button {
+.world-view-search-toggle {
   width: 30px;
   min-width: 30px;
   height: 30px;
@@ -96,11 +74,29 @@
   color: var(--topbar-control-text, var(--muted, #9da7b4));
   background: var(--topbar-control-bg, var(--bg, #0e1116));
 }
+.world-view-search-end {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted, #9da7b4);
+  background: transparent;
+}
 
 .world-view-search-toggle:hover,
 .world-view-search-toggle:focus-visible,
-.world-view-search-overlay button:hover,
-.world-view-search-overlay button:focus-visible {
+.world-view-search-end:hover,
+.world-view-search-end:focus-visible {
   border-color: var(--accent, #79a6ff);
   color: var(--text, #edf2f7);
+}
+.world-view-search-query:hover > span,
+.world-view-search-query:focus-visible > span {
+  text-decoration: underline;
 }

@@ -53,6 +53,7 @@ function testFrames() {
 
 function setup(
   options: {
+    canMoveRoom?: (roomKey: string) => boolean;
     level?: TownLevel;
     zoom?: number;
     teams?: TownTeams;
@@ -115,6 +116,8 @@ function setup(
   const ghost: unknown[][] = [];
   /** Where the bin lies on the canvas, when a test puts one there. */
   let binAt: ((at: Point) => boolean) | null = null;
+  /** The bus stop the bin lies under, when a test puts it on one. */
+  let binStop: string | null = null;
   const binned: unknown[] = [];
   const interaction = new TownInteraction({
     clock: time.clock,
@@ -122,6 +125,7 @@ function setup(
     view,
     stage: () => (ready ? stage : null),
     world: () => ({ model, layout, teams: options.teams ?? NO_TOWN_TEAMS }),
+    canMoveRoom: options.canMoveRoom,
     hovered: () => hovered,
     setHovered: (key) => {
       hovered = key;
@@ -156,8 +160,8 @@ function setup(
       remove: () => ghost.push(["remove"]),
     },
     held: () => log.push(["held"]),
-    binAt: (at) => Boolean(at && binAt?.(at)),
-    bin: (drag) => binned.push(drag),
+    binAt: (at) => (at && binAt?.(at) ? { stop: binStop } : null),
+    bin: (drag, stop) => binned.push(stop ? { ...drag, stop } : drag),
   });
   /** Draw a frame, as the renderer does, so presses hit what is drawn. */
   const draw = () => view.drew(camera, level, layout);
@@ -191,7 +195,10 @@ function setup(
     moves,
     ghost,
     binned,
-    setBin: (over: (at: Point) => boolean) => (binAt = over),
+    setBin: (over: (at: Point) => boolean, stop: string | null = null) => {
+      binAt = over;
+      binStop = stop;
+    },
     reasons,
     draw,
     press,
@@ -534,6 +541,20 @@ test("a carry near the edge pans the town each frame until it drops", () => {
   expect(t.frames.pending()).toBe(1);
   t.lift(pointer, { x: 720, y: 450 });
   expect(t.frames.pending()).toBe(0);
+});
+
+test("an agent dropped on a bus stop is put in the bin at that stop", () => {
+  const t = setup();
+  t.setBin((at) => at.x < 10 && at.y < 10, "7:12");
+  const cell = t.deskCell(0);
+  const at = t.deskCentre(cell);
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  t.moveTo(pointer, { x: 4, y: 4 });
+  expect(last(t.ghost)).toEqual(["aim", "Put in the bin", true, "bin"]);
+  t.lift(pointer, { x: 4, y: 4 });
+  expect(t.moves).toEqual([]);
+  expect(t.binned).toEqual([{ kind: "desk", key: cell.deskKey, stop: "7:12" }]);
 });
 
 test("a carry resting on the bin in the edge band holds the town still", () => {
@@ -1227,6 +1248,29 @@ const roomEdge = (t: ReturnType<typeof setup>, index: number) => {
   const room = t.rooms[index]!;
   return t.screen({ x: room.x * T + 3, y: (room.y + room.h / 2) * T });
 };
+
+test("room movement authority gates both canvas edges and name handles", () => {
+  for (const byName of [false, true]) {
+    const t = setup({ canMoveRoom: () => false });
+    const at = roomEdge(t, 0);
+    t.interaction.move({ id: 99, at, pointerType: "mouse", client: at });
+    expect(last(t.log.filter(([kind]) => kind === "cursor"))).not.toEqual([
+      "cursor",
+      "grab",
+    ]);
+    t.interaction.down({
+      id: 500,
+      at,
+      primary: true,
+      pointerType: "mouse",
+      ...(byName ? { roomName: t.rooms[0]!.key, handle: true } : {}),
+    });
+    t.moveTo(500, offset(at, 30, 10));
+    t.lift(500, offset(at, 30, 10));
+    expect(t.log.some(([kind]) => kind === "begin")).toBe(false);
+    expect(t.moves).toEqual([]);
+  }
+});
 
 test("a room dragged by its edge goes where it is dropped, waits, then lands", async () => {
   const t = setup();

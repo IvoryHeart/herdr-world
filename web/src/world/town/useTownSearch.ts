@@ -1,14 +1,15 @@
 /**
- * Town's search (#159): its results, the row Up and Down are on, and the
- * result chosen to show on the map. Choosing a result shows it; choosing it
- * again opens it as selecting does. A result Town does not draw opens at
- * once. Clearing the search ends it.
+ * Town's part of World's one search (#159, #1355): what the search box
+ * (worldFinder.ts) lights on the map as it is typed, and the result chosen
+ * there, which the camera flies to and pulses. A result Town does not draw
+ * opens as selecting does. Escape or the toolbar's × ends the search.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import { officePresentationKey } from "../officeSelection";
 import type { WorldObject } from "../worldObject";
+import { worldFinder, useWorldFinderSearch } from "../worldFinder";
 import { worldSearchResults, type WorldSearchResult } from "../worldSearch";
 import { townLandmarkKey, townLandmarkResults } from "./townSearch";
 
@@ -37,8 +38,8 @@ export function townSearchResults(world: WorldObject, query: string) {
   ].sort((a, b) => a.rank - b.rank);
 }
 
-/** Where Escape ends Town's search: its results and the map. */
-const TOWN_SEARCH_ESCAPE_SCOPE = ".world-search-results, .town-canvas-host";
+/** Where Escape ends Town's search: the map, or nothing focused. */
+const TOWN_SEARCH_ESCAPE_SCOPE = ".town-canvas-host";
 
 /** "7 matches · 3 off-screen", or "No matches". */
 export function townSearchLabel(matches: number, offscreen: number) {
@@ -52,35 +53,20 @@ export function useTownSearch(
   office: HerdrOfficeProjection,
   onSelect: (id: string) => unknown,
 ) {
-  const [query, setQuery] = useState("");
+  const running = useWorldFinderSearch("town");
+  const query = running?.query ?? "";
   const results = useMemo(
     () => townSearchResults(world, query),
     [query, world],
   );
-  const [active, setActive] = useState<{ query: string; id: string } | null>(
-    null,
-  );
-  const [chosenResult, setChosenResult] = useState<{
-    query: string;
-    id: string;
-    nodeId: string;
-    key: string;
-    seq: number;
-  } | null>(null);
-  const chosenSeq = useRef(0);
   const [offscreen, setOffscreen] = useState(0);
-
   const open = query.trim() !== "";
-  const activeId =
-    active?.query === query && results.some(({ id }) => id === active.id)
-      ? active.id
-      : (results[0]?.id ?? null);
-  const chosen = chosenResult?.query === query ? chosenResult : null;
+  const chosen = running?.chosen ?? null;
   const keys = useMemo(
     () => results.map((result) => townSearchKey(office, result)),
     [results, office],
   );
-  const chosenKey = chosen?.key ?? null;
+  const chosenKey = chosen ? townSearchKey(office, chosen.result) : null;
   const chosenAt = chosen?.seq ?? null;
   const search = useMemo(
     () =>
@@ -95,38 +81,12 @@ export function useTownSearch(
         : null,
     [open, keys, chosenKey, chosenAt],
   );
+  /** End the search: Town as it was, its camera back. */
+  const clear = () => worldFinder.end("town");
 
-  /**
-   * Show a result on the map, or open it when chosen again (a landmark is
-   * shown again). True if opened.
-   */
-  const choose = (result: WorldSearchResult) => {
-    setActive({ query, id: result.id });
-    if (chosen?.id === result.id && result.kind !== "landmark") {
-      void onSelect(result.nodeId);
-      return true;
-    }
-    chosenSeq.current += 1;
-    setChosenResult({
-      query,
-      id: result.id,
-      nodeId: result.nodeId,
-      key: townSearchKey(office, result),
-      seq: chosenSeq.current,
-    });
-    return false;
-  };
-  const activate = (id: string) => setActive({ query, id });
-  /** End the search: Town as it was, no result shown or chosen. */
-  const clear = () => {
-    setQuery("");
-    setActive(null);
-    setChosenResult(null);
-  };
-
-  // Escape ends the search from its results or the map too, not only from
-  // the search box (which handles its own). A key something else took, such
-  // as putting back a carried desk, is left alone.
+  // Escape ends the search from the map too, not only from the toolbar. A
+  // key something else took, such as putting back a carried desk, is left
+  // alone.
   useEffect(() => {
     if (!open) return;
     const keydown = (event: KeyboardEvent) => {
@@ -139,46 +99,20 @@ export function useTownSearch(
       )
         return;
       event.preventDefault();
-      clear();
+      worldFinder.end("town");
     };
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
   }, [open]);
 
   return {
-    /** WorldViewToolbar's search props. */
+    /** WorldViewToolbar's props. */
     toolbar: {
       query,
-      // A new query starts afresh: a result chosen for an earlier one is
-      // not chosen again when that query comes back.
-      onQueryChange: (next: string) => {
-        setQuery(next);
-        setActive(null);
-        setChosenResult(null);
-      },
       resultLabel: open
         ? townSearchLabel(results.length, offscreen)
         : undefined,
-      onSubmit: () => {
-        const result = results.find(({ id }) => id === activeId);
-        return result ? choose(result) : false;
-      },
-      onNavigate: (step: 1 | -1) => {
-        if (!results.length) return;
-        const at = results.findIndex(({ id }) => id === activeId);
-        const next = Math.min(results.length - 1, Math.max(0, at + step));
-        activate(results[next]!.id);
-      },
       onClear: clear,
-    },
-    /** WorldSearchResults' props, besides the world and onSelect. */
-    results: {
-      query,
-      results,
-      activeId,
-      onActivate: activate,
-      onChoose: choose,
-      offscreen,
     },
     /** TownCanvas's search prop. */
     canvas: {
@@ -186,8 +120,8 @@ export function useTownSearch(
       onOffscreen: setOffscreen,
       onUnmapped: (key: string) => {
         // Nothing to show on the map: open it as selecting does.
-        if (chosen?.key === key && !townLandmarkKey(key))
-          void onSelect(chosen.nodeId);
+        if (chosen && chosenKey === key && !townLandmarkKey(key))
+          void onSelect(chosen.result.nodeId);
       },
     },
   };

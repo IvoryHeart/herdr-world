@@ -1,21 +1,33 @@
 {
   "id": "Q57",
-  "area": "Open agent runtime move candidate",
-  "owner": "verification/contracts/agent-move-audit.md",
-  "requirement": "verification/contracts/agent-move-audit.md",
-  "properties": "Quit before resume; at most one running conversation; details follow or loss/uncertainty reported",
-  "existingTests": ["quint/replay.test.ts", "quint/binding-resolution.test.ts"],
-  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/990",
+  "area": "Agent move between runtimes (world.agent.move)",
+  "owner": "server/src/world/agent-move.ts",
+  "requirement": "openspec/changes/agent-runtime-move/specs/world-surfaces/town-moves/spec.md",
+  "properties": "Native move when both connections reach one runtime; across runtimes a re-attaching harness starts first and the original closes only after the destination is ready and the original is rechecked idle and alone; a harness that locks or forks its conversation closes first and resumes there, resuming back on a failed start and naming the saved conversation if both fail; core ends only the admitted terminals; one owner of the agent and its desk after every outcome; every call is bound to the admitted connection ID and generation; a failed or abandoned move leaves the source intact with a reason; an unconfirmed end or cleanup is reported; a moved agent refuses a second move until it settles",
+  "existingTests": [
+    "quint/agent-move.test.ts",
+    "server/src/world/agent-move.test.ts",
+    "server/src/world/agent-move-views.test.ts",
+    "server/src/rpc/core.test.ts",
+    "server/src/herdr-core/operations.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1184",
   "status": "pending",
-  "technique": "external-candidate-exhaustive-assessment",
-  "assessment": "Frozen open #990 df398319a031f840668f7e6ea0dff765c5764c11: actual serial controller 576-outcome matrix ran; native and persistence consumers mapped in contract",
-  "remaining": "Feature and candidate consumer files are not merged. Current listed tests cover only existing shared runtime/binding fences; native, metadata, browser acceptance remains with #990. Independent Worlds and crash atomicity are not claimed.",
+  "technique": "finite-model-with-production-replay",
+  "assessment": "TLC explores both directions and the native route through admission, start, the fork check, recheck, pin and desk move, second recheck, close-first close and resume, resume back, close and cleanup, and a second move, interleaved with the source turning busy, splitting, ending or starting a child, either connection dropping or reconnecting, and lost or unconfirmed replies (14,086 states). Three sampled seeds replay through the real moveAgentAcross with lease-fenced sides; seven model faults and six production mutants are rejected. The first model found that an unreadable source after a lost close dropped the copy and that a lost start reply did not name the copy. Both are fixed and kept as replay witnesses. The close-first extension found that a reconnect during the pre-close recheck escaped as a raw error instead of a refusal; it is fixed and has a unit test. Probes of Claude Code 2.1.330 and Codex CLI 0.171 (verification/contracts/agent-move-audit.md) fixed which harness starts first.",
+  "remaining": "Independent acceptance of the model and Q57 mapping. A source turning busy between the last recheck and the close, independent Worlds, a service crash during a handoff and real harness startup are not proved. A close-first move whose Board update fails leaves the desk details on the old address; the agent itself moved. A forking harness that does not report its session is not detected and falls to start-first. Chains of moves are covered by unit tests, not the model, beyond the settle refusal.",
   "requiredChecks": ["bun run check", "bun run verification:gate"],
   "partialEvidence": {
-    "models": [],
+    "models": ["quint/agent-move.qnt"],
     "contracts": ["verification/contracts/agent-move-audit.md"],
-    "tests": ["quint/replay.test.ts", "quint/binding-resolution.test.ts"],
+    "tests": [
+      "quint/agent-move.test.ts",
+      "server/src/world/agent-move.test.ts",
+      "server/src/world/agent-move-views.test.ts",
+      "server/src/rpc/core.test.ts",
+      "server/src/herdr-core/operations.test.ts"
+    ],
     "checks": ["bun run verification:gate"],
-    "review": "New audit mapping; independent PR review required. No inherited acceptance claim."
+    "review": "Remapped from the serial-controller matrix to a finite model with production replay; independent PR review required."
   }
 }

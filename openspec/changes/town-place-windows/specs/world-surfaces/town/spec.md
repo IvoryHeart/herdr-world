@@ -13,9 +13,7 @@ sign opens, as a press on the sign does.
   touch tap alike; hovering it SHALL mark its sign as the target; the signs
   SHALL remain the keyboard targets; a building whose sign opens nothing at
   that moment (such as the warehouse while GitHub is still being read) SHALL
-  open nothing; a place folded into a sign on the town center (a phone's
-  library and observatory) SHALL have no building to press; the town center
-  SHALL keep its radial menu
+  open nothing; the town center SHALL keep its radial menu
 
 #### Scenario: Press the post office building
 

@@ -51,6 +51,7 @@ export const WORLD_CLI_COMMANDS = [
   "colour reset",
   "town desk move",
   "ask",
+  "ask ls",
   "ask get",
   "ask acknowledge",
   "ask answer",

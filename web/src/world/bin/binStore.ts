@@ -1,9 +1,11 @@
 import type { BridgeControlMsg, ConnectionStatus } from "../../api";
 import {
+  binStopField,
   EMPTY_BIN,
   type BinEntry,
   type BinOutcome,
   type BinState,
+  type BinStop,
   type BinTarget,
   type BinView,
 } from "../../../../shared/bin";
@@ -56,6 +58,7 @@ function entryOf(value: unknown): BinEntry | null {
       : "other") as BinView,
     riding: value.riding === true,
     preserve_tab: value.preserve_tab === true,
+    ...binStopField(value.stop),
   };
 }
 
@@ -70,10 +73,13 @@ export function parseBinState(value: unknown): BinState | null {
     !Array.isArray(value.entries) ||
     !Array.isArray(value.closing) ||
     !record(bus) ||
-    !count(bus.interval_ms) ||
+    !count(bus.speed_kmh) ||
+    !count(bus.route_m) ||
     !count(bus.trip_ms) ||
-    !count(bus.next_ms) ||
-    !(bus.elapsed_ms === null || count(bus.elapsed_ms))
+    !(bus.elapsed_ms === null || count(bus.elapsed_ms)) ||
+    !(bus.next_ms === null || count(bus.next_ms)) ||
+    !count(bus.next_route_m) ||
+    !count(bus.next_trip_ms)
   )
     return null;
   const entries = (list: unknown[]) =>
@@ -91,15 +97,19 @@ export function parseBinState(value: unknown): BinState | null {
         RESULTS.has(outcome.result as string),
     ),
     bus: {
-      interval_ms: bus.interval_ms,
+      speed_kmh: bus.speed_kmh,
+      route_m: bus.route_m,
       trip_ms: bus.trip_ms,
-      next_ms: bus.next_ms,
       elapsed_ms: bus.elapsed_ms as number | null,
       stopped: bus.stopped === true && bus.elapsed_ms !== null,
       trip:
         bus.elapsed_ms !== null && Number.isSafeInteger(bus.trip)
           ? (bus.trip as number)
           : null,
+      next_ms: bus.next_ms as number | null,
+      next_route_m: bus.next_route_m,
+      next_trip_ms: bus.next_trip_ms,
+      next_measured: bus.next_measured === true,
     },
   };
 }
@@ -110,17 +120,27 @@ export function parseBinState(value: unknown): BinState | null {
  */
 export function binBusClock(bin: WorldBin, now: number) {
   const since = Math.max(0, now - bin.readAt);
-  const { interval_ms, trip_ms, next_ms, elapsed_ms, stopped } = bin.bus;
-  const elapsed =
-    elapsed_ms === null ? null : elapsed_ms + (stopped ? 0 : since);
+  const { trip_ms, next_ms, next_trip_ms, elapsed_ms, stopped } = bin.bus;
+  const run = elapsed_ms === null ? null : elapsed_ms + (stopped ? 0 : since);
+  const elapsed = run !== null && run < trip_ms ? run : null;
+  const next = next_ms === null ? null : Math.max(0, next_ms - since);
+  const riding = bin.entries.some((entry) => entry.riding);
   return {
     /** How far into its trip the bus on the map is, or null. */
-    elapsed: elapsed !== null && elapsed < trip_ms ? elapsed : null,
-    /** Until the next bus sets off (the schedule repeats). */
-    next: interval_ms
-      ? (((next_ms - since) % interval_ms) + interval_ms) % interval_ms ||
-        interval_ms
-      : 0,
+    elapsed,
+    /** Until the next bus sets off for those waiting, or null. */
+    next,
+    /**
+     * Until the bus that takes those held is back at Apartments, which is
+     * when they close: the bus out, while it has riders, else the next one
+     * (its departure and its trip). Null when no bus is due.
+     */
+    closes:
+      run !== null && riding
+        ? Math.max(0, trip_ms - run)
+        : next !== null
+          ? next + next_trip_ms
+          : null,
   };
 }
 
@@ -132,59 +152,61 @@ export const binClockLabel = (ms: number) => {
 
 /**
  * The bus's countdown at `now`, as Town shows it everywhere: on each stop's
- * sign and on the bin. One value from the timetable, the same for every stop
- * and every rider: the time until the next bus sets off ("2:05"), "on its
- * way" while a trip is out and "stopped" while it stands. Riders who join
- * while a trip is out wait for the next one, which sets off once that trip is
- * back. Null when the bin is unavailable.
+ * sign and on the bin. One value for every stop and every rider: the time
+ * until the bus that takes them is back at Apartments ("1:45"), which the
+ * service times from the bus's speed and its route (binBusTripMs), and
+ * "stopped" while it stands. Riders who join while a trip is out wait for
+ * the next one, which sets off once that trip is back. Null when the bin is
+ * unavailable or no bus is due.
  */
 export function binBusCountdown(bin: WorldBin, now: number) {
   if (!bin.verified) return null;
-  const { elapsed, next } = binBusClock(bin, now);
-  if (elapsed !== null) return bin.bus.stopped ? "stopped" : "on its way";
-  return binClockLabel(next);
+  if (bin.bus.stopped && bin.bus.elapsed_ms !== null) return "stopped";
+  const { closes } = binBusClock(bin, now);
+  return closes === null ? null : binClockLabel(closes);
 }
 
 /** Town's words for the bin's clock: its bus (binBusCountdown). */
 export function binBusLabel(bin: WorldBin, now: number) {
+  if (!bin.verified) return "bin unavailable";
   const countdown = binBusCountdown(bin, now);
-  if (countdown === null) return "bin unavailable";
-  return countdown === "stopped" || countdown === "on its way"
-    ? `bus ${countdown}`
-    : `bus in ${countdown}`;
+  if (countdown === null) return "no bus due";
+  return countdown === "stopped" ? "bus stopped" : `bus back in ${countdown}`;
 }
 
 /**
  * Every other view's words for the bin's clock: there is no bus there, only
- * when what it holds closes, which is when the bus that takes it has left the
- * map (its departure plus its trip). Those that came after the bus set off
- * wait for the next one.
+ * when what it holds closes, which is when the bus that takes it is back at
+ * Apartments (binBusClock's `closes`): the same time Town shows.
  */
 export function binCloseLabel(bin: WorldBin, now: number) {
   if (!bin.verified) return "bin unavailable";
-  const { elapsed, next } = binBusClock(bin, now);
-  const leaving = elapsed !== null && bin.entries.some((entry) => entry.riding);
-  if (leaving && bin.bus.stopped) return "paused";
-  const closes = leaving ? bin.bus.trip_ms - elapsed : next + bin.bus.trip_ms;
-  return `closes in ${binClockLabel(closes)}`;
+  const aboard = bin.entries.some((entry) => entry.riding);
+  if (aboard && bin.bus.stopped && bin.bus.elapsed_ms !== null) return "paused";
+  const { closes } = binBusClock(bin, now);
+  return closes === null ? "nothing due" : `closes in ${binClockLabel(closes)}`;
 }
 
 export type BinAddRequest = BinTarget & {
   label: string;
   view: BinView;
   preserve_tab: boolean;
+  /** The Town bus stop it was dropped on, where it waits. */
+  stop?: BinStop;
 };
 
 /**
  * The request to hold `leaf`. Its tab keeps its last pane when its desk is
  * pinned in Town or its tab is pinned in Spaces (`pinnedTabs`, the tab pins
- * of the leaf's connection).
+ * of the leaf's connection). Dropped on a Town bus stop (`stop`), it waits
+ * there; otherwise Town has it wait at the stop nearest its room.
  */
 export function binAddRequest(
   leaf: WorldLeafObject,
   view: BinView,
   pinnedDesk: boolean,
   pinnedTabs: ReadonlySet<string>,
+  stop?: BinStop | null,
 ): BinAddRequest {
   return {
     connection_id: leaf.connectionId,
@@ -196,6 +218,7 @@ export function binAddRequest(
     label: leaf.label,
     view,
     preserve_tab: pinnedDesk || pinnedTabs.has(leaf.tabId),
+    ...(stop ? { stop } : {}),
   };
 }
 
@@ -275,6 +298,13 @@ export class WorldBinStore {
   /** Let a stopped bus drive on. */
   goBus() {
     return this.act("world.bin.resume", {});
+  }
+  /**
+   * A Town's measure of the next trip: the bus's way past the stops of
+   * exactly the waiting agents `ids` and back, and how many stops it makes.
+   */
+  route(report: { ids: readonly string[]; route_m: number; stops: number }) {
+    return this.act("world.bin.route", { ...report, ids: [...report.ids] });
   }
 
   private async act(method: string, params: Record<string, unknown>) {

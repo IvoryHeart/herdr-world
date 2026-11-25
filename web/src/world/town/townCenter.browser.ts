@@ -2,6 +2,7 @@ import { WORLD_AGENT_LAUNCH_EVENT } from "../agentProfiles";
 import { WORLD_APARTMENTS_EVENT } from "../apartments/apartmentsStore";
 import { spotlightHelpTarget } from "../../help/helpTry";
 import { townCenterMenuPoint } from "./TownCenterMenu";
+import { worldFinder } from "../worldFinder";
 
 /**
  * The town center in a real renderer: its plaque is in the home view, a tap
@@ -433,24 +434,8 @@ async function checkSearchOverLens(
     );
   const before = tints();
   const name = host.querySelector(".town-lens-room-label b")!.textContent!;
-  // Phones keep the search behind its toggle.
-  document
-    .querySelector<HTMLButtonElement>(".world-view-search-toggle")
-    ?.click();
-  await waitFor(
-    () => document.querySelector('input[type="search"]') !== null,
-    "Town has no search box",
-  );
-  const input = document.querySelector<HTMLInputElement>(
-    'input[type="search"]',
-  )!;
-  const type = (value: string) => {
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  };
+  // Typed into World's one search box, as it is in Town.
+  const type = (value: string) => worldFinder.type("town", value);
   type(name.toLowerCase());
   const marks = () => [
     ...host.querySelectorAll<HTMLElement>(
@@ -484,7 +469,7 @@ async function checkSearchOverLens(
     () => host.querySelector(".town-lens-search") === null,
     "Escape on the map did not end the search",
   );
-  check(input.value === "", "Escape on the map left the query");
+  check(worldFinder.get() === null, "Escape on the map left the query");
   check(
     host.querySelector(".town-lens-legend") !== null,
     "ending the search left the lens",

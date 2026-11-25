@@ -19,4 +19,5 @@ export const verificationModels = [
   "herdr-core-seen",
   "connection-registry",
   "claude-tap-lock",
+  "agent-move",
 ] as const;

@@ -83,6 +83,10 @@ if (scale === "places") {
   // Synthetic residents and memory, so Apartments and the Library open.
   setApartmentsClient(fixtureApartmentsClient(Date.now()));
   setMemoryFixtureForTests(true);
+  // A busy week's usage, so the observatory's sign is at its widest (#1351).
+  const url = new URL(location.href);
+  url.searchParams.set("usageFixture", "busy");
+  history.replaceState(history.state, "", url);
 }
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -689,12 +693,16 @@ const binState = () =>
     closing: [],
     outcomes: [],
     bus: {
-      interval_ms: 240_000,
-      trip_ms: 120_000,
-      next_ms: 60_000,
+      speed_kmh: 36,
+      route_m: 0,
+      trip_ms: 0,
       elapsed_ms: null,
       stopped: false,
       trip: null,
+      next_ms: 60_000,
+      next_route_m: 500,
+      next_trip_ms: 120_000,
+      next_measured: false,
     },
   };
 worldBridge.call = async (method, params) => {

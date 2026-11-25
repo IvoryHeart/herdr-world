@@ -97,9 +97,11 @@ and user instructions have descriptions and load at start; **opencode-builder**
 shows both in its startup list. **no-memory-app** and its unsupported agent are
 absent from the picker. Open a fresh page with `?memoryFixture=unsupported` to
 simulate an unsupported-only host: Town has no Library sign or ring entry, Board
-has no Library hub entry, and Settings/search omit Library. Both parameters are
-removed immediately; reload to return to real topology. Neither fixture reads
-real files or starts agents.
+has no Library hub entry, and Settings/search omit Library. `?memoryFixture=gone`
+simulates a host whose agents have all stopped after making things: Town's sign
+reads "5 made" and the Library opens on **Made by agents** alone, every maker
+named "(gone)", without reading memory. The parameters are removed immediately;
+reload to return to real topology. No fixture reads real files or starts agents.
 
 The worker uses the owning host's `HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and
 `PI_CODING_AGENT_DIR`, plus `XDG_CONFIG_HOME`, `COPILOT_HOME`, `HERMES_HOME`,

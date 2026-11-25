@@ -281,30 +281,20 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     await office.close();
   });
 
-  test("a narrow town keeps it on the shore, with a folded sign on the town center", async () => {
+  test("a narrow town keeps it on the shore with its own sign, no fold (#1351)", async () => {
     await publish([
       fixturePullRequest(1),
       fixturePullRequest(2, { draft: true }),
     ]);
     const office = await mount(true);
-    // The warehouse itself stands on the harbour's shore, as on a wide town.
-    expect(office.sign()).not.toBeNull();
-    expect(office.parcels().length).toBe(2);
-    const fold = office.host.querySelector<HTMLButtonElement>(
-      ".town-warehouse-fold",
-    )!;
-    // The town center's wing shows no pull request counts (#1098): the
-    // list inside has them.
-    expect(fold.getAttribute("aria-label")).toBe(
-      "Warehouse: your pull requests. Open",
+    // The warehouse stands on the harbour's shore, as on a wide town, with
+    // the same sign and counts; the town center carries no sign for it.
+    const sign = office.sign()!;
+    expect(sign.getAttribute("aria-label")).toBe(
+      "Warehouse: 1 ready to merge, 0 failing, 0 waiting, 1 draft",
     );
-    expect(fold.textContent).toBe("PRs");
-    // A crate marks the folded sign, as crates stand in the yard.
-    expect(fold.querySelector(".town-warehouse-mark")).not.toBeNull();
-    await act(async () => fold.click());
-    expect(
-      document.querySelector(".town-warehouse-popover-counts")?.textContent,
-    ).toBe("1 ready · 0 failing · 0 waiting · 1 draft");
+    expect(office.parcels().length).toBe(2);
+    expect(office.host.querySelector(".town-warehouse-fold")).toBeNull();
     await office.close();
   });
 
@@ -342,22 +332,11 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     expect(document.querySelector(".town-warehouse-popover")).toBeNull();
     await office.close();
 
-    // On a phone the folded sign's list offers it too.
-    const folded = await mount(true, work);
-    await act(async () =>
-      folded.host
-        .querySelector<HTMLButtonElement>(".town-warehouse-fold")!
-        .click(),
-    );
-    await act(async () =>
-      document
-        .querySelector<HTMLButtonElement>(
-          ".town-warehouse-popover .town-warehouse-all",
-        )!
-        .click(),
-    );
+    // On a phone the same sign opens them too (#1351).
+    const narrow = await mount(true, work);
+    await act(async () => narrow.sign()!.click());
     expect(opened).toBe(3);
-    await folded.close();
+    await narrow.close();
 
     // Without GitHub, the sign still says how to connect and opens Integrations.
     await publish([], "not_connected", "Sign in with gh auth login.");

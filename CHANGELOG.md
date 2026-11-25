@@ -9,6 +9,50 @@ prepared.
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-11-24
+
+0.3.6 was tagged but never published; 0.3.7 ships all of it.
+
+### Added
+
+- Apartments: every agent not running now lives in a Town building (Board's **Past sessions**); search them, read their history, resume Claude and Codex agents into a room, or evict them.
+- Code view: the VS Code installed on a project's computer, locally or over SSH, inside World; its server keeps running when you close the view or World restarts.
+- Library: see, edit and delete what each agent and project remembers, browse memory sources of 14 more harnesses such as OpenCode and Cursor, and find the reports, pages and links agents made under **Made by agents**.
+- Usage: Town's observatory shows each harness's 5-hour and weekly budget and opens Usage, with time at work, time waiting on you, tokens and cost per agent, project and day.
+- A fuller Town: weather and a Sky panel, a harbour with each project's checks and releases, pull requests as crates at the warehouse, questions as letters at the post office, and an hourglass on a working agent quiet for 10 minutes.
+- Focus sessions hold chimes, notifications and badge counts on every device for 25, 45 or 90 minutes, then give one chime and a recap.
+- Draw on Board: pen, shapes, text and arrows that attach to cards and notes, saved with the board.
+- **What can I do here?** gives help on every screen, with a picture and **Try** for each entry, and one **Integrations** screen lists runtimes, GitHub, Jira, usage, agent skills and the vault.
+- API and CLI access to usage, weather, memory, Shipyard releases and Board references.
+
+### Changed
+
+- One Settings home with its own search replaces the Configuration dialog; Cmd+K (Ctrl+K) changes settings and finds any agent on every host and runtime, and Enter opens its terminal.
+- Town shows one building per machine with as many rooms per row as you choose; the Hosts filter lists one row per machine, and **Group runtimes** groups its Herdr TUI and herdr-core the same way in Town, Desk, Board and the navigator.
+- Town pans and zooms at the display's full frame rate, and World's web files load compressed and cached.
+- Town's places open in one window from their building or sign, the town center's ring groups them under **Buildings**, and the Town board folds into a status chip.
+- Tapping a Town table opens its default pane, and New room offers the host's recent folders.
+- Town's bus lives at Apartments and calls at each stop with an agent waiting; the bin's countdown comes from its route, the same in every view.
+- Needs you shows questions another World on the same runtime holds, and connection CLI edits apply without a restart.
+
+### Fixed
+
+- herdr-core agents start with your shell's environment (bun, nvm), open on the first click and move between desks and rooms in Town; a new Codex agent shows ready, not done, and core questions alert you when core is the default host.
+- Claude starts again from **New agent** in Unix Herdr TUI rooms.
+- The Code view keeps VS Code loaded behind other views, says why an IDE didn't open, and shows Markdown previews and extension panels in VS Code and OpenVSCode Server.
+- Typing in Chat no longer lags with many agents open, and releases verify every channel before publishing.
+- Many smaller Town, Board, Bin, Needs you and release-check fixes.
+- Releases publish with their native CI walk; a signed-in agent walk is optional.
+
+### Known issues
+
+- Concurrent offline connection edits can lose an addition (#1084); live CLI and Settings edits go through the service's queue.
+- A Claude limits tap suspended across stale-lock recovery can overwrite a newer reading (#1086).
+- Codex on Linux core stays unknown when core supplies no native status.
+- Microsoft's VS Code in the Code view needs World on HTTPS or localhost.
+
+Every 0.3.7 change is listed in [docs/changelog/v0.3.7.md](docs/changelog/v0.3.7.md).
+
 ## [0.3.5] - 2026-11-18
 
 ### Added

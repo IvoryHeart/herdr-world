@@ -137,16 +137,18 @@ if (process.env.TOWN_POST_DOM !== "1") {
     await office.close();
   });
 
-  test("a narrow town folds it to a sign of marks and numbers", async () => {
+  test("a narrow town stands the same sign, in words, not a fold (#1351)", async () => {
     resetNeedsYouForTest();
     const office = await mountSign(
       { counts: { asks: 0, needs: 2, done: 1, outbox: 0 } },
       true,
     );
-    expect(office.sign.className).toBe("town-post-fold");
+    expect(office.sign.className).toBe("town-post-sign");
+    expect(office.sign.hasAttribute("data-narrow")).toBe(true);
+    expect(office.sign.textContent).toContain("POST OFFICE");
     expect(office.counts()).toEqual([
-      ["needs", "!2"],
-      ["done", "✓1"],
+      ["needs", "!2 blocked"],
+      ["done", "✓1 to review"],
     ]);
     // Keyboard: a button, so Enter and Space open it as a click does.
     expect(office.sign.type).toBe("button");
@@ -366,11 +368,11 @@ if (process.env.TOWN_POST_DOM !== "1") {
     }
   });
 
-  test("a narrow town has the same yard beside its folded sign", async () => {
+  test("a narrow town has the same yard under its sign", async () => {
     let opened = 0;
     const view = await mount(true, stores([ask(1)], 1, 0), () => (opened += 1));
     try {
-      expect(view.host.querySelector(".town-post-fold")).not.toBeNull();
+      expect(view.host.querySelector(".town-post-sign")).not.toBeNull();
       expect(view.letters()).toHaveLength(1);
       await click(view.trolley());
       expect(opened).toBe(1);

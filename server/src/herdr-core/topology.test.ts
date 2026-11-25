@@ -621,7 +621,7 @@ describe("rooms follow Herdr's desktop app placement", () => {
       cwd: "/w",
     }),
     record({ address: "t2", parent: "t1", argv: ["codex"] }),
-    record({ address: "t3", argv: ["bash"] }),
+    record({ address: "t3", name: "build shell", argv: ["bash"] }),
     record({ address: "t4", state: "finished", argv: ["claude"] }),
     record({ address: "mac/t1", remote: true, argv: ["claude"] }),
     record({
@@ -671,6 +671,7 @@ describe("rooms follow Herdr's desktop app placement", () => {
       tab_id: "hc:space:s1:tab:c2",
       focused: false,
       runtime: "herdr-core",
+      label: "reviewer",
       cwd: "/w",
       foreground_cwd: "/w/a",
       agent_status: "blocked",
@@ -687,8 +688,10 @@ describe("rooms follow Herdr's desktop app placement", () => {
       name: "reviewer",
       agent_status: "blocked",
     });
+    // A plain terminal keeps its own name: every view labels it with it.
     expect(topology.panes[2]).toMatchObject({
       pane_id: "t3",
+      label: "build shell",
       agent_status: "unknown",
     });
     expect(topology.panes[2]).not.toHaveProperty("agent");

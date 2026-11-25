@@ -1,7 +1,8 @@
 /**
  * The connection methods a herdr-core connection answers: workspace Files,
  * Git, an agent's worktree and its Chat, History and Details (the same
- * Inspector components as a Herdr agent's), and a new room's folder
+ * Inspector components as a Herdr agent's), its desk read (quest, usage
+ * stop and artefacts, `agent_quest.list`), and a new room's folder
  * completion (`workspace.path`). Every other method a Herdr
  * (TUI) connection answers is Herdr-only; the service refuses it for core
  * and the page never sends it (core terminals and kills go through
@@ -43,6 +44,7 @@ export const CORE_HOST_METHODS = [
   "agent_session.link_preview",
   "agent_session.link",
   "agent_turn.get",
+  "agent_quest.list",
   "workspace.path",
 ] as const;
 

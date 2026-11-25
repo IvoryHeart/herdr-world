@@ -150,17 +150,18 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
     await view.close();
   });
 
-  test("a narrow town shows the folded sign with each harness's fuller window", async () => {
+  test("a narrow town shows the same sign on its building, not a fold (#1351)", async () => {
     fixture("busy");
     const opened: (string | undefined)[] = [];
     const view = await mount(observatory(true, (tab) => opened.push(tab)));
-    expect(view.host.querySelector(".town-observatory-sign")).toBeNull();
-    const fold = view.host.querySelector<HTMLButtonElement>(
-      ".town-observatory-fold",
+    expect(view.host.querySelector(".town-observatory-fold")).toBeNull();
+    const sign = view.host.querySelector<HTMLButtonElement>(
+      ".town-observatory-sign",
     )!;
-    // Cursor keeps no budget World reads: its dial says so, never zero.
-    expect(fold.textContent).toBe("Claude 71%Codex 18%Cursor ?");
-    await act(async () => fold.click());
+    expect(sign.textContent).toContain("OBSERVATORY");
+    expect(sign.textContent).toContain("40% · ");
+    expect(sign.textContent).toContain("71% · ");
+    await act(async () => sign.click());
     expect(opened).toEqual(["budget"]);
     await view.close();
   });
@@ -168,9 +169,11 @@ if (process.env.USAGE_SCREENS_DOM !== "1") {
   test("a reached limit reads as a limit; nothing observed reads as no reading, never zero", async () => {
     fixture("reached");
     let view = await mount(observatory(true, () => {}));
-    expect(view.host.querySelector(".town-observatory-fold")!.textContent).toBe(
-      "Claude limitCodex 18%Cursor ?",
-    );
+    const reached = view.host.querySelector(".town-observatory-sign")!;
+    // A phone shows the wide sign (#1351): Claude's 5 h window at its limit,
+    // Cursor's windows with no reading, never zero.
+    expect(reached.textContent).toContain("Claude2limit · ");
+    expect(reached.textContent).toContain("Cursor1no readingno reading");
     await view.close();
     fixture("empty");
     view = await mount(observatory(false, () => {}));

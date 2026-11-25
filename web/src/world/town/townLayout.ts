@@ -802,9 +802,8 @@ export function layoutTown(
   }
 
   const post = townPostLotBeside(center);
-  const library = formFactor === "narrow" ? null : townLibraryLotBeside(center);
-  const observatory =
-    formFactor === "narrow" ? null : townObservatoryLotBeside(center);
+  const library = townLibraryLotBeside(center);
+  const observatory = townObservatoryLotBeside(center);
   const lamps: TownPoint[] = [];
   // Spaced from the town's first column, shifted with it (townLots.ts).
   for (const ry of roads)
@@ -825,14 +824,12 @@ export function layoutTown(
       if (underWarehouse) continue;
       // So does the library's reading garden (townLibraryLot.ts).
       const underLibrary =
-        library &&
         ry === center.street &&
         tx >= library.x - 1 &&
         tx <= library.x + library.w;
       if (underLibrary) continue;
       // So does the observatory's door (townObservatoryLot.ts).
       const underObservatory =
-        observatory &&
         ry === center.street &&
         tx >= observatory.x - 1 &&
         tx <= observatory.x + observatory.w;

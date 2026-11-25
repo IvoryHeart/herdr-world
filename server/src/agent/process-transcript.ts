@@ -9,6 +9,11 @@ const CODEX = new RegExp(
   "i",
 );
 const CLAUDE = new RegExp(`^(${UUID})\\.jsonl$`, "i");
+
+/** The session ID a Codex rollout path names (`codex resume <id>`), if any. */
+export function codexRolloutId(path: string): string | null {
+  return CODEX.exec(path.split("/").at(-1) ?? "")?.[1] ?? null;
+}
 const CLAUDE_DEBUG = new RegExp(`^(${UUID})\\.txt$`, "i");
 
 /**

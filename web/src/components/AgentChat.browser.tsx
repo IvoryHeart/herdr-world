@@ -24,6 +24,14 @@ function check(condition: boolean, message: string) {
 async function settle() {
   await new Promise((resolve) => setTimeout(resolve, 80));
 }
+/**
+ * An upload's answer reaches its chip through async body parsing and a
+ * render, which can take longer than one settle on a busy machine: wait,
+ * bounded, for the state the next check reads.
+ */
+async function settleUntil(condition: () => boolean) {
+  for (let i = 0; i < 40 && !condition(); i++) await settle();
+}
 
 type Messages = NonNullable<Conversation["messages"]>;
 
@@ -778,6 +786,14 @@ async function run() {
         )!;
       const chip = () =>
         container.querySelector<HTMLElement>(".agent-chat .attachment-chip");
+      const chipFor = (name: string) =>
+        [
+          ...container.querySelectorAll<HTMLElement>(
+            ".agent-chat .attachment-chip",
+          ),
+        ].find((item) => (item.textContent ?? "").includes(name));
+      const draftText = () =>
+        container.querySelector<HTMLTextAreaElement>("textarea")?.value ?? "";
       pick();
       await settle();
       check(
@@ -797,7 +813,7 @@ async function run() {
         "The same file picked again while uploading must not upload twice",
       );
       uploadRequests[0]!.answer(false);
-      await settle();
+      await settleUntil(() => chip()?.dataset.status === "failed");
       check(
         chip()?.dataset.status === "failed" &&
           (chip()?.textContent ?? "").includes("disk full"),
@@ -810,7 +826,7 @@ async function run() {
       await settle();
       check(uploadRequests.length === 2, "Retry must upload the file again");
       uploadRequests[1]!.answer(true);
-      await settle();
+      await settleUntil(() => chip()?.dataset.status === "done");
       check(
         chip()?.dataset.status === "done",
         "A finished upload must show a done chip",
@@ -838,7 +854,9 @@ async function run() {
       pickFile(notes);
       await settle();
       uploadRequests[2]!.answer(false);
-      await settle();
+      await settleUntil(
+        () => chipFor("notes.txt")?.dataset.status === "failed",
+      );
       pickFile(notes);
       await settle();
       check(
@@ -852,7 +870,7 @@ async function run() {
       uploadRequests[3]!.answer(true);
       await settle();
       render("idle");
-      await settle();
+      await settleUntil(() => draftText().includes("/uploads/notes.txt"));
       check(
         (
           container.querySelector<HTMLTextAreaElement>("textarea")?.value ?? ""
@@ -868,7 +886,7 @@ async function run() {
       );
       await settle();
       uploadRequests[4]!.answer(false);
-      await settle();
+      await settleUntil(() => chipFor("log.txt")?.dataset.status === "failed");
       root.render(<div />);
       await settle();
       render("idle");
@@ -878,7 +896,7 @@ async function run() {
         .click();
       await settle();
       uploadRequests[5]!.answer(true);
-      await settle();
+      await settleUntil(() => draftText().includes("/uploads/log.txt"));
       check(
         (
           container.querySelector<HTMLTextAreaElement>("textarea")?.value ?? ""
@@ -906,7 +924,7 @@ async function run() {
         "Pasting a screenshot must start the owning host's image upload",
       );
       uploadRequests[6]!.answer(true);
-      await settle();
+      await settleUntil(() => draftText().includes("/uploads/screenshot.png"));
       const attachedText =
         container.querySelector<HTMLTextAreaElement>("textarea")!.value;
       check(

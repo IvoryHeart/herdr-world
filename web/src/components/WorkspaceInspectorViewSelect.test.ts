@@ -60,7 +60,7 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
         {},
         createElement(WorkspaceInspectorViewSelect, {
           value: view,
-          availableViews: ["terminal", "history"],
+          views: ["history", "terminal"],
           historyAvailable: true,
           onChange(next) {
             setIntent(next === "history" ? requestChatInputFocus() : null);
@@ -143,7 +143,7 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
             {},
             createElement(WorkspaceInspectorViewSelect, {
               value: "terminal",
-              availableViews: views,
+              views: ["history", "terminal", "files", "changes"],
               historyAvailable,
               onChange: change,
             }),
@@ -236,6 +236,53 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
       expect(unavailableChat.disabled).toBe(true);
       await act(async () => unavailableChat.click());
       expect(change.mock.calls.length).toBe(calls);
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+    }
+  });
+  // #1361: a desktop bar too narrow for its tabs keeps one chip, the active
+  // view's, and that chip is the view menu, Commits included.
+  test("a narrow desktop bar's active-view chip opens every view", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const change = mock(() => {});
+    try {
+      await act(async () =>
+        root.render(
+          createElement(WorkspaceInspectorViewSelect, {
+            value: "history",
+            views: ["history", "terminal", "files", "changes", "commits"],
+            historyAvailable: true,
+            bar: true,
+            onChange: change,
+          }),
+        ),
+      );
+      const trigger = host.querySelector<HTMLButtonElement>(
+        '.workspace-inspector-tabs > [aria-label="Inspector view: Chat"]',
+      )!;
+      expect(trigger.classList.contains("is-active")).toBe(true);
+      for (const view of ["terminal", "files", "changes", "commits"]) {
+        await act(async () => trigger.click());
+        expect(
+          Array.from(
+            document.querySelectorAll('[aria-label="Inspector views"] button'),
+          ).map((button) => button.textContent?.trim()),
+        ).toEqual(["Chat", "Terminal", "Files", "Changes", "Commits"]);
+        await act(async () =>
+          document
+            .querySelector<HTMLButtonElement>(
+              `[aria-label="Inspector views"] [data-view="${view}"]`,
+            )!
+            .click(),
+        );
+        expect(change).toHaveBeenLastCalledWith(view);
+        expect(document.querySelector('[aria-label="Inspector views"]')).toBe(
+          null,
+        );
+      }
     } finally {
       await act(async () => root.unmount());
       host.remove();
