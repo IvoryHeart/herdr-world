@@ -23,7 +23,6 @@ import {
   launchCore,
   parseCoreKillConfirmation,
   planCoreKill,
-  renameCoreRoom,
 } from "../herdr-core/operations";
 import type { CoreConnectionRuntime } from "../herdr-core/runtime";
 import {
@@ -368,15 +367,6 @@ export async function handleCoreRpc(rpc: BridgeRpcContext): Promise<void> {
         );
         return invalidate();
       }
-      case "world.core.room.rename":
-        await renameCoreRoom(
-          lease,
-          core.topology,
-          String(p.workspace_id ?? ""),
-          String(p.label ?? ""),
-        );
-        reply({ ok: true });
-        return invalidate();
       case "world.core.room.close": {
         const outcome = await closeCoreRoom(
           lease,

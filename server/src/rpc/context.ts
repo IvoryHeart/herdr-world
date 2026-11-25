@@ -115,6 +115,10 @@ export type RpcServices = {
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;
   worldSnapshots: ObservedSnapshots | null;
+  /** Publish World's own values (settings, commands) under a new revision. */
+  publishWorld?(): void;
+  /** World commands (world.command); absent in narrow test services. */
+  worldCommands?: import("../world/commands").WorldCommands;
   boardElements?: import("../world/board-element-service").BoardElementService;
   /** Installed web IDEs and their World-owned servers (world.ide.*). */
   ide?: import("../ide/service").IdeService;

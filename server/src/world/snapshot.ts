@@ -68,7 +68,24 @@ type CachedSnapshot = {
   watchRevision: number;
   freshUntil: number;
   dirty: boolean;
+  /** Every room the admitted read returned, before any view bound. */
+  rooms: readonly Record<string, unknown>[];
 };
+
+/**
+ * An admitted read: it began at the host's current epoch, on the current
+ * generation, after every read already applied. Commands settle only here.
+ */
+export type AdmittedRead = {
+  connectionId: string;
+  generation: number;
+  /** The host epoch the read began in (its invalidation version). */
+  epoch: number;
+  rooms: readonly Record<string, unknown>[];
+};
+
+/** World's own published values beside topology, under the same revision. */
+export type WorldPublished = Record<string, unknown>;
 
 type RawHostSnapshot = readonly [unknown, unknown, unknown, unknown];
 type HostOutcome = { raw: RawHostSnapshot } | { error: string };
@@ -78,6 +95,8 @@ type HostWork<Runtime> = {
   priorities: readonly WorldSnapshotPriority[];
   invalidationVersion: number;
   activityVersion: number;
+  /** Order of the read's start across the service; set when it runs. */
+  readNumber: number;
   selected: boolean;
   state: "queued" | "running";
   late: boolean;
@@ -294,6 +313,11 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   private priorityRotation = 0;
   private backgroundRotation = 0;
   private lateInvalidationScheduled = false;
+  private readNumber = 0;
+  /** Per host, the newest read applied to the cache (the epoch fence). */
+  private readonly lastApplied = new Map<string, number>();
+  private admittedReadHook?: (read: AdmittedRead) => boolean;
+  private publishedValues?: () => Promise<WorldPublished> | WorldPublished;
 
   constructor(
     private readonly registry: Registry<Runtime>,
@@ -312,6 +336,39 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     incarnation?: string,
   ) {
     this.observation = new WorldObservation(incarnation);
+  }
+
+  /**
+   * The values World publishes beside topology (settings, commands). Read
+   * after the revision is taken, so a reply's values are at least that new.
+   */
+  publishWith(values: () => Promise<WorldPublished> | WorldPublished) {
+    this.publishedValues = values;
+  }
+
+  /** Called on each admitted read; true when it changed a published value. */
+  onAdmittedRead(hook: (read: AdmittedRead) => boolean) {
+    this.admittedReadHook = hook;
+  }
+
+  /** A published value beside topology changed: advance the revision. */
+  publish(): number {
+    this.revision += 1;
+    return this.revision;
+  }
+
+  /** The host's epoch: reads that began before it are never applied. */
+  epoch(connectionId: string): number {
+    return this.invalidationVersions.get(connectionId) ?? 0;
+  }
+
+  /** Rooms from the newest admitted read of this generation, if any. */
+  rooms(
+    connectionId: string,
+    generation: number,
+  ): readonly Record<string, unknown>[] | null {
+    const cached = this.cache.get(connectionId);
+    return cached && cached.generation === generation ? cached.rooms : null;
   }
 
   /** Activity refreshes the cache without rejecting a read; late results only notify. */
@@ -362,6 +419,9 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     }
     for (const activeId of this.activityVersions.keys()) {
       if (!managedIds.has(activeId)) this.activityVersions.delete(activeId);
+    }
+    for (const appliedId of this.lastApplied.keys()) {
+      if (!managedIds.has(appliedId)) this.lastApplied.delete(appliedId);
     }
     const rotate = (group: typeof statuses, cursor: number) => {
       const offset = group.length ? cursor % group.length : 0;
@@ -434,8 +494,11 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       if (hostWork) hostWork.late = true;
       return this.fallback(status, "observation deadline exceeded");
     });
+    const revision = this.revision;
+    const published = this.publishedValues ? await this.publishedValues() : {};
     return {
-      revision: this.revision,
+      ...published,
+      revision,
       observed_at: this.now(),
       connections,
       ...(this.registry.hosts
@@ -527,6 +590,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       priorities,
       invalidationVersion: this.invalidationVersions.get(status.id) ?? 0,
       activityVersion: this.activityVersions.get(status.id) ?? 0,
+      readNumber: 0,
       selected,
       state: "queued",
       late: false,
@@ -580,6 +644,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
 
   private async runWork(work: HostWork<Runtime>) {
     const observedAt = this.now();
+    work.readNumber = ++this.readNumber;
     let outcome: HostOutcome;
     try {
       const raw: RawHostSnapshot = await readRuntimeSnapshot(
@@ -592,7 +657,14 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (!this.current(work)) {
         outcome = { error: "connection changed during snapshot" };
+      } else if (!this.admitted(work)) {
+        // The epoch fence: a read that began before the host's last change,
+        // or before a read already applied, never replaces what is published.
+        // A fresh read follows.
+        this.queueLateInvalidation(work.status.id, work.lease.generation);
+        outcome = { raw };
       } else {
+        this.lastApplied.set(work.status.id, work.readNumber);
         const snapshot = this.projectSnapshot(
           work.status,
           raw,
@@ -606,6 +678,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
         const changed =
           previous?.generation !== work.lease.generation ||
           previous.rawDigest !== rawDigest;
+        const rooms = records(raw[0], "workspaces");
         this.cache.set(work.status.id, {
           generation: work.lease.generation,
           snapshot,
@@ -614,27 +687,35 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
           watchRevision: this.watchlist().revision,
           freshUntil: this.now() + SNAPSHOT_FRESH_MS,
           dirty:
-            this.wasInvalidatedSinceStart(work) ||
             (this.activityVersions.get(work.status.id) ?? 0) !==
-              work.activityVersion,
+            work.activityVersion,
+          rooms,
         });
-        if (!this.wasInvalidatedSinceStart(work)) {
-          observation.complete(
-            this.onCompleteObservation,
-            work.lease,
-            raw[2],
-            observedAt,
-          );
-          this.onFreshObservation?.(
-            work.status.id,
-            work.lease.generation,
-            snapshot.panes,
-            observedAt,
-            snapshot.agents,
-            { workspaces: snapshot.workspaces, tabs: snapshot.tabs },
-          );
-        }
-        if ((work.late && changed) || this.wasInvalidatedSinceStart(work)) {
+        observation.complete(
+          this.onCompleteObservation,
+          work.lease,
+          raw[2],
+          observedAt,
+        );
+        this.onFreshObservation?.(
+          work.status.id,
+          work.lease.generation,
+          snapshot.panes,
+          observedAt,
+          snapshot.agents,
+          { workspaces: snapshot.workspaces, tabs: snapshot.tabs },
+        );
+        // A changed value, or a command settled by this read, is published
+        // under a new revision even when the topology itself is unchanged.
+        const settled =
+          this.admittedReadHook?.({
+            connectionId: work.status.id,
+            generation: work.lease.generation,
+            epoch: work.invalidationVersion,
+            rooms,
+          }) === true;
+        if (changed || settled) this.revision += 1;
+        if (work.late && changed) {
           this.queueLateInvalidation(work.status.id, work.lease.generation);
         }
         outcome = { raw };
@@ -649,6 +730,14 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       this.workByConnection.delete(work.status.id);
     }
     this.drain();
+  }
+
+  /** The per-host epoch fence (openspec world-one-object, task 4.2). */
+  private admitted(work: HostWork<Runtime>) {
+    return (
+      !this.wasInvalidatedSinceStart(work) &&
+      work.readNumber > (this.lastApplied.get(work.status.id) ?? 0)
+    );
   }
 
   private current(work: HostWork<Runtime>) {
@@ -707,7 +796,10 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     if (!this.current(work)) {
       return this.fallback(status, "connection changed during snapshot");
     }
-    if (this.wasInvalidatedSinceStart(work)) {
+    if (
+      this.wasInvalidatedSinceStart(work) ||
+      this.lastApplied.get(status.id) !== work.readNumber
+    ) {
       return this.fallback(status, "observation changed during snapshot");
     }
     return {

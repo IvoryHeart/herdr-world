@@ -379,17 +379,6 @@ export const rpcVerbs = [
     }),
   ),
   rpc(
-    "world.core.room.rename",
-    "reconcilable",
-    "world",
-    object({
-      connection_id: text,
-      connection_generation: Type.Integer({ minimum: 0 }),
-      workspace_id: text,
-      label: text,
-    }),
-  ),
-  rpc(
     "world.core.room.close",
     "reconcilable",
     "world",
@@ -596,6 +585,24 @@ export const rpcVerbs = [
   rpc("world.profiles.delete", "reconcilable", "world"),
   rpc("world.profiles.get", "read", "world"),
   rpc("world.profiles.save", "reconcilable", "world"),
+  // A change through World: entity, field, expected and new value.
+  rpc(
+    "world.command",
+    "reconcilable",
+    "world",
+    object({
+      id: text,
+      entity: object({
+        kind: text,
+        connection_id: text,
+        generation: Type.Integer({ minimum: 0 }),
+        room_id: text,
+      }),
+      field: text,
+      expected: Type.String({ maxLength: 4096 }),
+      value: text,
+    }),
+  ),
   rpc("world.snapshot", "read", "world"),
   rpc("world.town_master.set", "reconcilable", "world"),
   rpc("world.watchlist.list", "read", "world"),

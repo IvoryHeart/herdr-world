@@ -71,7 +71,8 @@ test("a lost base discards the whole reply and follows once with a complete requ
   store.subscribe(() => published++);
   const pending = store.refresh();
   await arrived.promise;
-  store.get().connections = [];
+  // The published hosts the base named are gone before the reply decodes.
+  (store as unknown as { published: unknown[] }).published = [];
   release.resolve();
   await pending;
   expect(calls).toHaveLength(3);

@@ -524,15 +524,15 @@ test("UI settings sync globally while the selected Herdr connection is offline",
     expect(initial.connection_id).toBeUndefined();
     expect(initial.result.ui).toEqual({});
     const delivered = Promise.withResolvers<any>();
-    const own: any[] = [];
-    f.browsers[0]!.addEventListener("message", (event) => {
-      const message = JSON.parse(String(event.data));
-      if (message.ui_settings) own.push(message);
-    });
     f.browsers[1]!.addEventListener("message", (event) => {
       const message = JSON.parse(String(event.data));
-      if (message.ui_settings) delivered.resolve(message);
+      if (message.control?.type === "world_invalidated")
+        delivered.resolve(message);
+      // Settings travel only in World's one publication now.
+      if (message.ui_settings)
+        delivered.reject(new Error("separate settings push"));
     });
+    const before = (await second.rpc("world.snapshot", {})).result.revision;
     const value = { version: 1, active: "windows", presets: [] };
     const result = await first.rpc("bridge.ui_settings.update", {
       key: "keyboardShortcuts",
@@ -540,15 +540,16 @@ test("UI settings sync globally while the selected Herdr connection is offline",
     });
     expect(result.error).toBeUndefined();
     const deadline = setTimeout(
-      () => delivered.reject(new Error("UI settings push timed out")),
+      () => delivered.reject(new Error("World publication timed out")),
       3000,
     );
-    const push = await delivered.promise.finally(() => clearTimeout(deadline));
-    expect(push).toEqual({
-      ui_settings: { key: "keyboardShortcuts", value, revision: 1 },
+    await delivered.promise.finally(() => clearTimeout(deadline));
+    const published = (await second.rpc("world.snapshot", {})).result;
+    expect(published.revision).toBeGreaterThan(before);
+    expect(published.ui_settings).toEqual({
+      ui: { keyboardShortcuts: value },
+      revision: 1,
     });
-    await first.rpc("bridge.ping");
-    expect(own).toEqual([]);
     expect(
       (await second.rpc("bridge.ui_settings.get")).result.ui.keyboardShortcuts,
     ).toEqual(value);

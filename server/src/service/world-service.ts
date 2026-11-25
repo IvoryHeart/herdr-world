@@ -4,6 +4,7 @@ import { composeFeatures } from "../features/compose";
 import { featureKernel } from "../features/contract";
 import { findHerdrBinary } from "../herdr/bootstrap";
 import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
+import { composeWorldCommands } from "./world-commands";
 import { createCoreInstall } from "../herdr-core/install";
 import { createSharedTerminalMarks } from "./terminal-mark-service";
 import { randomUUID } from "node:crypto";
@@ -506,6 +507,34 @@ async function compose(
     },
     serviceIncarnation,
   );
+  const uiSettings = createUiSettingsRpcHandler({
+    readSettings: () => settings.read(),
+    updateSettings: (update, shouldCommit) =>
+      settings.update(update, shouldCommit),
+  });
+  /** World's own values changed: one revision, one notice to every browser. */
+  const publishWorld = () => {
+    const revision = worldSnapshots!.publish();
+    broadcast(
+      JSON.stringify({ control: { type: "world_invalidated", revision } }),
+      "world-invalidation",
+    );
+  };
+  const worldCommands = composeWorldCommands({
+    now: () => clock.now(),
+    connectionManager,
+    core: () => coreRpc,
+    snapshots: worldSnapshots,
+    ledger: () => storage.ledger(),
+    invalidate: (id, generation) => publishWorldInvalidation(id, generation),
+    publish: publishWorld,
+    log: (message) => logger.warn(message),
+  });
+  // Settings and commands are published with topology, under its revision.
+  worldSnapshots.publishWith(async () => ({
+    ui_settings: await uiSettings("bridge.ui_settings.get", {}),
+    commands: worldCommands.published(),
+  }));
 
   const assistantContext = createRuntimeAssistantContext({
     profiles: () => [
@@ -781,11 +810,9 @@ async function compose(
     snapshotAdmission,
     townMoveQueues,
     moveSettle,
-    uiSettings: createUiSettingsRpcHandler({
-      readSettings: () => settings.read(),
-      updateSettings: (update, shouldCommit) =>
-        settings.update(update, shouldCommit),
-    }),
+    uiSettings,
+    publishWorld,
+    worldCommands,
     ...terminalMarks,
     bin,
     focus,

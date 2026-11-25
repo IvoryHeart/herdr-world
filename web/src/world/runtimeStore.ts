@@ -23,6 +23,15 @@ import {
 import { worldObjectForHosts } from "./worldFilters";
 import { DEVTOOLS } from "./devtools/flag";
 import { countWorldWork } from "./devtools/renderer";
+import {
+  inProgress,
+  parseWorldCommands,
+  parseWorldUiSettings,
+  pendingNames,
+  presentPending,
+  type WorldCommand,
+  type WorldUiSettings,
+} from "./worldReplica";
 
 const INVALIDATION_DEBOUNCE_MS = 80;
 const FALLBACK_REFRESH_MS = 15_000;
@@ -101,9 +110,17 @@ export type WorldRuntimeConnection = {
 export type WorldRuntimeState = {
   serviceIncarnation?: string;
   status: "idle" | "loading" | "ready" | "error";
+  /** World's publication revision; only newer ones are adopted. */
   revision: number;
   observedAt: number;
+  /** As published, with pending names shown (worldReplica.ts). */
   connections: WorldRuntimeConnection[];
+  /** The host catalogue World publishes beside topology. */
+  hosts?: Record<string, unknown>[];
+  /** The settings World publishes under the same revision. */
+  uiSettings?: WorldUiSettings;
+  /** Commands in progress and recently settled. */
+  commands?: WorldCommand[];
   error: string | null;
 };
 
@@ -352,6 +369,7 @@ export function parseWorldSnapshotResult(
     seen.add(connection.connectionId);
     connections.push(connection);
   }
+  const uiSettings = parseWorldUiSettings(item.ui_settings);
   return {
     ...(typeof item.service_incarnation === "string"
       ? { serviceIncarnation: item.service_incarnation }
@@ -359,6 +377,16 @@ export function parseWorldSnapshotResult(
     revision: item.revision as number,
     observedAt: item.observed_at,
     connections,
+    ...(Array.isArray(item.hosts)
+      ? {
+          hosts: item.hosts.flatMap((host) => {
+            const value = record(host);
+            return value ? [value] : [];
+          }),
+        }
+      : {}),
+    ...(uiSettings ? { uiSettings } : {}),
+    commands: parseWorldCommands(item.commands),
   };
 }
 
@@ -431,6 +459,103 @@ export class WorldRuntimeStore {
   private viewProjection: ((world: WorldObject) => WorldObject) | null = null;
   private viewScopeVersion = 0;
   private visibleViewScope: readonly string[] | null = null;
+  /** Connections exactly as World published them (observation base). */
+  private published: WorldRuntimeConnection[] = [];
+  /**
+   * This browser's commands until World publishes their outcome; `after` is
+   * the first request that began once World answered the command.
+   */
+  private readonly local = new Map<
+    string,
+    {
+      command: WorldCommand;
+      incarnation?: string;
+      after?: number;
+      settled?: (outcome: WorldCommand | null) => void;
+    }
+  >();
+  private requestSeq = 0;
+  /** The newest publication adopted, even one that changed nothing shown. */
+  private adoptedRevision = -1;
+
+  /**
+   * Hold a pending value from a command this browser sends, so every view
+   * shows it until World publishes the outcome. `settled` hears the outcome,
+   * or null when World no longer reports the command (it restarted).
+   */
+  holdPending(
+    command: WorldCommand,
+    settled?: (outcome: WorldCommand | null) => void,
+  ) {
+    this.local.set(command.id, {
+      command,
+      incarnation: this.state.serviceIncarnation,
+      settled,
+    });
+    this.present();
+    return {
+      /** World answered: a publication that starts now carries the command. */
+      answered: () => {
+        const held = this.local.get(command.id);
+        if (held) {
+          held.after = this.requestSeq + 1;
+          this.scheduleRefresh();
+        }
+      },
+      release: () => {
+        if (this.local.delete(command.id)) this.present();
+      },
+    };
+  }
+
+  private presented(
+    connections: WorldRuntimeConnection[],
+    commands: readonly WorldCommand[] | undefined,
+  ) {
+    return presentPending(
+      connections,
+      pendingNames(
+        [...this.local.values()].map(({ command }) => command),
+        commands ?? [],
+      ),
+    );
+  }
+
+  private present() {
+    const connections = this.presented(this.published, this.state.commands);
+    if (
+      connections.length !== this.state.connections.length ||
+      connections.some((c, i) => c !== this.state.connections[i])
+    )
+      this.set({ ...this.state, connections });
+  }
+
+  /**
+   * Release this browser's commands the publication settled, or that it
+   * should carry and does not (settled long ago, or World restarted).
+   */
+  private settleLocal(
+    parsed: Omit<WorldRuntimeState, "status" | "error">,
+    requestSeq: number,
+  ) {
+    const commands = new Map((parsed.commands ?? []).map((c) => [c.id, c]));
+    for (const [id, held] of this.local) {
+      const published = commands.get(id);
+      if (published && inProgress(published)) continue;
+      const restarted =
+        held.incarnation !== undefined &&
+        parsed.serviceIncarnation !== undefined &&
+        held.incarnation !== parsed.serviceIncarnation;
+      if (
+        !published &&
+        !restarted &&
+        (held.after === undefined || requestSeq < held.after)
+      )
+        continue;
+      this.local.delete(id);
+      held.settled?.(published ?? null);
+    }
+  }
 
   /** The same Hosts/watch/appearance projection passed to mounted views. */
   presentViewsFrom(project: (world: WorldObject) => WorldObject) {
@@ -635,18 +760,24 @@ export class WorldRuntimeStore {
           ...(priority.terminalId ? { terminal_id: priority.terminalId } : {}),
         })),
       };
+      const requestSeq = ++this.requestSeq;
       const parsed = await this.readObservation(params, observationEpoch);
       if (observationEpoch !== this.observationEpoch) return;
       if (!parsed) throw new Error("invalid World snapshot response");
       const current = () => observationEpoch === this.observationEpoch;
-      if (
+      const sameService =
         this.state.status === "ready" &&
-        parsed.serviceIncarnation &&
-        parsed.serviceIncarnation === this.state.serviceIncarnation &&
-        parsed.connections.length === this.state.connections.length &&
+        !!parsed.serviceIncarnation &&
+        parsed.serviceIncarnation === this.state.serviceIncarnation;
+      // One ordered publication: an older revision never replaces a newer one.
+      if (sameService && parsed.revision < this.adoptedRevision) return;
+      this.settleLocal(parsed, requestSeq);
+      if (
+        sameService &&
+        parsed.connections.length === this.published.length &&
         parsed.connections.every(
           (host, i) =>
-            host === this.state.connections[i] &&
+            host === this.published[i] &&
             this.withConnectionHealth(host) === host &&
             (!host.actionable ||
               !this.client.connection ||
@@ -659,6 +790,7 @@ export class WorldRuntimeStore {
           this.appliedPriorityVersion,
           priorityVersion,
         );
+        this.adopt({ ...parsed, connections: this.published });
         return;
       }
       // Preparation yields to input and lifecycle events. Revalidate each
@@ -670,14 +802,19 @@ export class WorldRuntimeStore {
         if (DEVTOOLS) countWorldWork("world.prepare");
         const selected = this.presentedSelection();
         const viewScopeVersion = this.viewScopeVersion;
-        const world = await prepareWorldObject(parsed.connections, current, {
-          selectedConnectionId: selected,
-          yieldTask: () => this.preparationYield("object"),
-          // Units, not slices: a construction slice also ends after 8 ms.
-          onWorkSlice: DEVTOOLS
-            ? (_checkpoint, units) => countWorldWork("world.build-units", units)
-            : undefined,
-        });
+        const world = await prepareWorldObject(
+          this.presented(parsed.connections, parsed.commands),
+          current,
+          {
+            selectedConnectionId: selected,
+            yieldTask: () => this.preparationYield("object"),
+            // Units, not slices: a construction slice also ends after 8 ms.
+            onWorkSlice: DEVTOOLS
+              ? (_checkpoint, units) =>
+                  countWorldWork("world.build-units", units)
+              : undefined,
+          },
+        );
         if (!world) return;
         const viewWorld =
           this.viewConsumers.get("town") || this.viewConsumers.get("board")
@@ -748,13 +885,31 @@ export class WorldRuntimeStore {
       const retained = new Set(parsed.connections.map((c) => c.connectionId));
       for (const id of this.connectionHealth.keys())
         if (!retained.has(id)) this.connectionHealth.delete(id);
-      this.set({ ...parsed, status: "ready", error: null });
+      this.adopt(parsed);
     } catch (error) {
       if (observationEpoch !== this.observationEpoch) return;
       this.markUnavailable(
         error instanceof Error ? error.message : String(error),
       );
     }
+  }
+
+  /** Adopt a publication: published connections, then pending names over them. */
+  private adopt(parsed: Omit<WorldRuntimeState, "status" | "error">) {
+    this.published = parsed.connections;
+    this.adoptedRevision = parsed.revision;
+    const connections = this.presented(parsed.connections, parsed.commands);
+    // Nothing shown changed: views are not asked to render again.
+    if (
+      this.state.status === "ready" &&
+      this.state.serviceIncarnation === parsed.serviceIncarnation &&
+      this.state.uiSettings?.revision === parsed.uiSettings?.revision &&
+      connections.length === this.state.connections.length &&
+      connections.every((c, i) => c === this.state.connections[i]) &&
+      JSON.stringify(parsed.commands) === JSON.stringify(this.state.commands)
+    )
+      return;
+    this.set({ ...parsed, connections, status: "ready", error: null });
   }
 
   private async readObservation(
@@ -776,9 +931,13 @@ export class WorldRuntimeStore {
       hello?.capabilities.world_observation_v1 === true
         ? hello.service_incarnation
         : undefined;
+    // The base is what World published, never this browser's pending names.
     let base =
       incarnation && !this.baseRefused
-        ? observationBase(this.state, incarnation)
+        ? observationBase(
+            { ...this.state, connections: this.published },
+            incarnation,
+          )
         : undefined;
     for (let attempt = 0; attempt < 2; attempt++) {
       let response: unknown;
@@ -822,7 +981,7 @@ export class WorldRuntimeStore {
             ? (row) =>
                 decodeObservationHost(
                   row,
-                  this.state,
+                  { ...this.state, connections: this.published },
                   incarnation,
                   base,
                   parseConnection,
@@ -859,11 +1018,11 @@ export class WorldRuntimeStore {
     )
       return;
     this.connectionHealth.set(id, { generation: generation!, state });
-    const connections = this.state.connections.map((c) =>
-      this.withConnectionHealth(c),
-    );
-    if (connections.some((c, index) => c !== this.state.connections[index]))
-      this.set({ ...this.state, connections });
+    const published = this.published.map((c) => this.withConnectionHealth(c));
+    if (published.some((c, index) => c !== this.published[index])) {
+      this.published = published;
+      this.present();
+    }
   }
 
   private withConnectionHealth(
@@ -899,15 +1058,16 @@ export class WorldRuntimeStore {
   }
 
   private markUnavailable(message: string) {
+    this.published = this.published.map((connection) => ({
+      ...connection,
+      stale: connection.stale || connection.snapshot !== null,
+      actionable: false,
+    }));
     this.set({
       ...this.state,
       status: "error",
       error: message,
-      connections: this.state.connections.map((connection) => ({
-        ...connection,
-        stale: connection.stale || connection.snapshot !== null,
-        actionable: false,
-      })),
+      connections: this.presented(this.published, this.state.commands),
     });
   }
 

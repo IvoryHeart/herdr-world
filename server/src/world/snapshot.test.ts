@@ -1339,14 +1339,68 @@ describe("WorldSnapshotService", () => {
     service.invalidate("local");
     release.resolve();
     const uncertain = await first;
+    // The epoch fence discards the read: nothing it saw is published.
     expect(uncertain.connections[0]).toMatchObject({
-      stale: true,
+      snapshot: null,
       actionable: false,
       snapshot_error: "observation changed during snapshot",
     });
     const refreshed = await service.snapshot();
     expect(refreshed.connections[0].actionable).toBe(true);
     expect(calls).toBe(8);
+  });
+
+  test("only admitted reads reach World commands, with their epoch; a settle publishes", async () => {
+    const release = deferred<void>();
+    let label = "Before";
+    let hold = true;
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("local")],
+      readyRuntimeLease: () => ({
+        connectionId: "local",
+        generation: 1,
+        runtime: {
+          ...herdrRuntimeFixture({
+            async call(method) {
+              if (hold) await release.promise;
+              return runtime(label).herdr.call(method);
+            },
+          }),
+        },
+        isCurrent: () => true,
+      }),
+    });
+    const reads: { epoch: number; labels: unknown[] }[] = [];
+    let settle = false;
+    service.onAdmittedRead((read) => {
+      reads.push({
+        epoch: read.epoch,
+        labels: read.rooms.map((room) => room.label),
+      });
+      return settle;
+    });
+    // A read that began before the change is discarded: it never settles.
+    const late = service.snapshot();
+    label = "After";
+    service.invalidate("local");
+    const epoch = service.epoch("local");
+    release.resolve();
+    await late;
+    hold = false;
+    expect(reads).toEqual([]);
+    const first = await service.snapshot();
+    expect(reads).toEqual([{ epoch, labels: ["After workspace"] }]);
+    expect(service.rooms("local", 1)?.[0]?.label).toBe("After workspace");
+    expect(service.rooms("local", 2)).toBeNull();
+    // An unchanged read that settles a command still publishes a revision.
+    settle = true;
+    service.invalidate("local");
+    const settled = await service.snapshot();
+    // The invalidation advances once; the settle once more.
+    expect(settled.revision).toBe(first.revision + 2);
+    settle = false;
+    service.invalidate("local");
+    expect((await service.snapshot()).revision).toBe(settled.revision + 1);
   });
 
   test("a replaced generation cannot publish its late result over the new host", async () => {
