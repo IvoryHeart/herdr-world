@@ -62,6 +62,18 @@ export const cliVerbs = [
   cli("board element read", { id: text }, "read"),
   cli("whoami", {}, "read"),
   cli("ls", {}, "read"),
+  cli("runtime ls", {}, "read"),
+  cli("agent ls", { connection: optionalText }, "read"),
+  cli(
+    "agent read",
+    {
+      target: text,
+      lines: Type.Optional(Type.Integer({ minimum: 1, maximum: 10000 })),
+    },
+    "read",
+    [],
+    true,
+  ),
   cli("usage", {}, "read"),
   cli("history", {}, "read"),
   cli("undo", { id: text }),

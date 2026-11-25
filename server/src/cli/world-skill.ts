@@ -5,9 +5,10 @@ Herdr World shows your Herdr panes as Town desks and Board cards. These
 commands let you arrange them, ask the owner questions and report results.
 World installs this guide automatically; remove it with
 herdr-world integration uninstall <harness>. It does not start World or Herdr.
-Run them inside your Herdr pane: World reads HERDR_PANE_ID and checks that
-you really run in that pane. Without a pane, or in a pane World cannot
-check, your changes are marked unverified. Board changes have history and
+Run service commands inside your runtime terminal: World checks HERDR_PANE_ID
+(Herdr TUI) or HC_TERMINAL_ID (herdr-core) against the calling process.
+Without a terminal World can verify, screen reads are refused and other changes
+retain their unverified policy. Board changes have history and
 conditional undo for card/layout actions. Registry element writes use revisions
 and have no CLI history/undo. Groups keep the latest 128 changes with the sender claim
 and its reported/inferred basis (unknown when absent), including deletion;
@@ -39,6 +40,9 @@ write pane metadata through Herdr; they do not require the World service.
 
     herdr-world whoami
     herdr-world ls --json
+    herdr-world runtime ls --json
+    herdr-world agent ls --connection core-a
+    herdr-world agent read core-a/t2 --lines 40
     herdr-world usage --window 7d --group-by agent --json
     herdr-world spawned-by w1:p3                  # the pane that started you
     herdr-world colour set me teal                # your tab's colour
@@ -76,6 +80,21 @@ Targets are on your own host; add --connection ID for another one.
 
 ## Commands
 
+  runtime ls [--json]
+         list each host's runtime connections, versions, state, actionability,
+         supported agent verbs and native manual pointers (herdr --skill / hc --skill).
+  agent ls [--connection ID] [--json]
+         list current agents with qualified targets and observed status.
+  agent read TARGET [--lines N] [--json]
+         any verified local agent can read any actionable World connection.
+         TARGET is CONNECTION/ADDRESS from agent ls; each component is percent-encoded.
+         A bare address works only when unique across all actionable connections.
+         Ambiguous targets name every candidate; unknown target, not actionable and
+         not supported by runtime kind X are explicit refusals. Refresh the listing
+         after a reconnect; World never falls back to another connection.
+         Prints screen text even through a pipe. --lines keeps the last 1–10000
+         screen lines; no native scrolling or history fetch. --json returns the envelope.
+         Native manuals are pointers only; these commands use World's typed ports.
   whoami | ls | history [--actor A] [--limit N] | undo CHANGE
   usage [--window today|7d] [--group-by agent|project|room|day] [--json]
          read numeric usage and observed status time; missing values are unknown.

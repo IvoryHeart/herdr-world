@@ -2,6 +2,7 @@ import type {
   HostResources,
   ListQuery,
   RuntimeOperations,
+  RuntimeAgentCapabilities,
   TerminalRow,
   WorkspaceRow,
 } from "../adapters/runtime-ports";
@@ -39,6 +40,12 @@ import { readCoreScreen, type CoreConnectionRuntime } from "./runtime";
 import { createCoreUploads } from "./uploads";
 
 type Lease = ReadyRuntimeLease<CoreConnectionRuntime>;
+
+/** The typed host ports below implement these runtime-neutral agent reads. */
+export const CORE_AGENT_CAPABILITIES: RuntimeAgentCapabilities = {
+  verbs: ["ls", "read"],
+  manual: "hc --skill",
+};
 
 /** What a core connection's host consumers run processes with. */
 export type CoreHostProcesses = {

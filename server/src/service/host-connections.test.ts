@@ -97,14 +97,14 @@ async function fixture() {
       installed = value;
     },
     cookie,
-    async ls() {
+    async ls(command = "ls") {
       return (
         await fetch(`${started.base}/api/world/cli`, {
           method: "POST",
           headers: {
             authorization: `Bearer ${readWorldCliToken(started.service.paths.sessionSecret)}`,
           },
-          body: JSON.stringify({ command: "ls", params: {} }),
+          body: JSON.stringify({ command, params: {} }),
         })
       ).json();
     },
@@ -144,6 +144,20 @@ test("a runtime-free CLI add discovers the host, lists rooms, and preserves the 
   expect(ls.result.hosts[1].runtimes[0].workspaces).toEqual(
     ls.result.connections[1].workspaces,
   );
+  const inventory = await f.ls("runtime ls");
+  expect(inventory).toMatchObject({ ok: true });
+  expect(inventory.result.connections).toHaveLength(2);
+  expect(inventory.result.connections[1]).toMatchObject({
+    kind: "herdr",
+    version: "0.9.5",
+    actionable: true,
+    agent_verbs: ["ls", "read"],
+    manual: "herdr --skill",
+  });
+  const agents = await f.ls("agent ls");
+  expect(agents).toMatchObject({ ok: true });
+  expect(agents.result.agents.length).toBeGreaterThan(0);
+  expect(agents.result.agents[0].target).toContain("/");
 });
 
 test("empty hosts survive reconnect and Integrations alone offers additional runtimes", async () => {

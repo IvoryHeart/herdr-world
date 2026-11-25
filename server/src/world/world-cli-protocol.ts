@@ -36,6 +36,9 @@ export type WorldCliResponse = (
 export const WORLD_CLI_COMMANDS = [
   ...MEMORY_ACTIONS.map((action) => `memory ${action}` as const),
   ...GROUP_CLI_COMMANDS,
+  "runtime ls",
+  "agent ls",
+  "agent read",
   "whoami",
   "ls",
   "usage",

@@ -1,3 +1,4 @@
+import type { AgentCommands } from "./agent-commands";
 import {
   identifyCoreAsker,
   type CoreAnswerConnections,
@@ -37,6 +38,7 @@ import type { TownMoveContext } from "./town-move";
 type Lease = AnswerLease;
 
 export function createWorldCliService(deps: {
+  agents?: AgentCommands;
   elements?: import("./board-element-service").BoardElementService;
   memory?(): import("../memory/service").MemoryService;
   core?(): CoreAnswerConnections | CoreCallerSource | null;
@@ -228,6 +230,7 @@ export function createWorldCliService(deps: {
       log: (message) => console.warn(message),
     });
   const cli = createWorldCli({
+    agents: deps.agents,
     identifyCore: async (terminal, locate) => {
       const core = deps.core?.();
       return core && "list" in core

@@ -1,4 +1,6 @@
 {
+  "cli:agent ls": "deny allow allow deny deny deny",
+  "cli:agent read": "deny allow deny deny deny deny",
   "cli:ask": "deny allow allow deny deny deny",
   "cli:ask acknowledge": "deny allow allow deny deny deny",
   "cli:ask answer": "deny allow deny deny deny deny",
@@ -37,6 +39,7 @@
   "cli:memory update": "deny acknowledge acknowledge deny deny deny",
   "cli:result": "deny allow allow deny deny deny",
   "cli:result ls": "deny allow allow deny deny deny",
+  "cli:runtime ls": "deny allow allow deny deny deny",
   "cli:spawned-by": "deny allow deny deny deny deny",
   "cli:town desk move": "deny acknowledge acknowledge deny deny deny",
   "cli:undo": "deny allow allow deny deny deny",

@@ -1,3 +1,4 @@
+import { composeAgentCommands } from "./agent-commands";
 import { composeBoardData } from "./board-element-sources";
 import { weatherCliHandler } from "../weather/cli";
 import { composeFeatures } from "../features/compose";
@@ -263,6 +264,11 @@ async function compose(
     ledger: () => storage.ledger(),
   });
   const worldCli = createWorldCliService({
+    agents: composeAgentCommands({
+      connections: () => connectionManager,
+      core: () => coreRpc,
+      snapshots: () => worldSnapshots,
+    }),
     elements: boardElements,
     peers: askPeers.peers,
     homeName: askPeers.homeName,
