@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { worldSearchResults } from "../worldSearch";
 import { fixtureHost, fixtureWorld } from "./boardFixture";
 import { projectBoard } from "./boardModel";
-import { boardSearchMatches } from "./boardSearch";
+import { boardSearchKey, boardSearchMatches } from "./boardSearch";
 
 function world() {
   const host = fixtureHost("example-host", [
@@ -35,4 +35,16 @@ test("Board's cards match a task summary as its results list does", () => {
   }
   expect(boardSearchMatches(model, "login nowhere")!.size).toBe(0);
   expect(boardSearchMatches(model, "  ")).toBeNull();
+});
+
+test("a chosen result goes to the card that draws it", () => {
+  const shared = world();
+  const model = projectBoard(shared);
+  const builder = model.tabs.find((tab) => tab.label === "Builder")!;
+  const leaf = builder.panes[0]!.leaf;
+  const space = model.workspaceByKey.get(builder.workspaceKey)!;
+  expect(boardSearchKey(model, leaf.id)).toBe(builder.key);
+  expect(boardSearchKey(model, space.space.id)).toBe(space.key);
+  // A host has no card: the board opens it as selecting does.
+  expect(boardSearchKey(model, shared.hosts[0]!.id)).toBeNull();
 });

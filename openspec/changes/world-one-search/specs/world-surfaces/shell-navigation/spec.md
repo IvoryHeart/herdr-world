@@ -5,8 +5,9 @@
 World SHALL have one search, the command box: `/`, Ctrl+F or Cmd+F, Ctrl+K or Cmd+K, a
 view's search button and Find or act SHALL open the same box, and no view SHALL keep its
 own. Its results SHALL come from pluggable sources, commands in their own group.
-Choosing a found World object SHALL go to it in the current view, or open it where the
-view cannot show it; opening its terminal SHALL be a second action, never the default.
+Choosing a found World object SHALL go to it in the current view, or open it there where
+the view cannot show it; opening its terminal SHALL be a second action. Nothing chosen
+SHALL change the view.
 
 #### Scenario: The same box from every key
 
@@ -23,6 +24,14 @@ view cannot show it; opening its terminal SHALL be a second action, never the de
   no terminal opens, and the box stays open with its list of matches
 - **AND** choosing the same result again closes the box and opens its Inspector
 
+#### Scenario: Choose goes to the result in Board
+
+- **WHEN** the user in Board types part of an agent's name and chooses it
+- **THEN** Board pans to the agent's card, unfolding its workspace if folded, and marks
+  it, the view stays Board, no window opens, and the box stays open with its list
+- **AND** choosing the same result again closes the box and opens its Inspector, as in
+  Town; Desk and Code, which have no map, open it on the first choice
+
 #### Scenario: A click chooses as Enter does
 
 - **WHEN** the user clicks a found result
@@ -31,14 +40,18 @@ view cannot show it; opening its terminal SHALL be a second action, never the de
 
 #### Scenario: Open its terminal instead
 
-- **WHEN** the user presses Shift+Enter on a found agent, or the row's Open terminal
-- **THEN** its terminal opens in Spaces on its own connection and runtime generation
+- **WHEN** the user in Town, Board, Desk or Code presses Shift+Enter on a found agent,
+  or the row's Open terminal
+- **THEN** its terminal window opens in that view on the agent's own connection and
+  runtime generation, on Herdr TUI and herdr-core alike, and the view stays the same
+- **AND** in Spaces the same action opens it in Spaces, and Spaces stays the view
 
 #### Scenario: A result the view cannot show
 
 - **WHEN** the user is in Spaces or Code, or finds an agent on a host the Hosts filter
   hides, and chooses it
-- **THEN** it opens, and its row says so before it is chosen
+- **THEN** it opens without changing the view (Spaces shows it; elsewhere its window
+  opens), and its row says so before it is chosen
 
 #### Scenario: Every match stays reachable
 

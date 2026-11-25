@@ -101,7 +101,8 @@
     border-color 0.2s;
 }
 .board-card:focus-visible,
-.board-card.board-selected {
+.board-card.board-selected,
+.board-card.board-found {
   outline: 2.5px solid var(--board-accent);
   outline-offset: 3px;
 }
@@ -186,7 +187,8 @@
   pointer-events: none;
 }
 .board-tab.board-s-working::after,
-.board-tab.board-selected::after {
+.board-tab.board-selected::after,
+.board-tab.board-found::after {
   animation: board-ring var(--pace, 5s) ease-out infinite;
 }
 .board-s-working {

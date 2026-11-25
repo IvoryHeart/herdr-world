@@ -62,9 +62,11 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
 
   function mount() {
     let matches: Set<string> | null = null;
+    let chosen: ReturnType<typeof useBoardSearch>["chosen"] = null;
     function Probe() {
       const search = useBoardSearch(world, model);
       matches = search.matches;
+      chosen = search.chosen;
       return createElement(WorldViewToolbar, {
         viewLabel: "Board",
         ...search.toolbar,
@@ -92,7 +94,14 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
       act(() => worldFinder.end());
       element.remove();
     };
-    return { element, matches: () => matches, key, chip, unmount };
+    return {
+      element,
+      matches: () => matches,
+      chosen: () => chosen,
+      key,
+      chip,
+      unmount,
+    };
   }
 
   test("typing in the box lights Board's matches and counts World's", () => {
@@ -106,6 +115,25 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
     expect(
       board.element.querySelector(".world-view-toolbar-results")?.textContent,
     ).toBe(`${count} matches`);
+    board.unmount();
+  });
+
+  test("a choice in the box names its card, again on each choice", () => {
+    const board = mount();
+    expect(board.chosen()).toBeNull();
+    const result = worldSearchResults(world, "builder").find(
+      (found) => found.kind === "agent" || found.kind === "terminal",
+    )!;
+    const builder = model.tabs.find((tab) => tab.label === "Builder")!;
+    act(() => worldFinder.choose("board", "builder", result));
+    const first = board.chosen()!;
+    expect(first.key).toBe(builder.key);
+    expect(first.nodeId).toBe(result.nodeId);
+    act(() => worldFinder.choose("board", "builder", result));
+    expect(board.chosen()!.seq).toBeGreaterThan(first.seq);
+    // Town's choices are not Board's.
+    act(() => worldFinder.choose("town", "builder", result));
+    expect(board.chosen()).toBeNull();
     board.unmount();
   });
 

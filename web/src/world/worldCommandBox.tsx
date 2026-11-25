@@ -1,15 +1,18 @@
 /**
- * World's part of the one search box (#782, #1329, #1355): what a search
- * finds in World on every runtime and machine, with the views' own matching
- * (worldSearch.ts), and the views to go to. Every view, Spaces included,
- * lists the same finds from the one World object. Choosing one (Enter or a
- * click) goes to it in the current view, as `/` always did: Town flies to its
- * table and keeps the list open, so choosing it again opens its Inspector;
- * Board and Desk select it, Spaces shows its terminal. The second
- * action (Shift+Enter, or the row's button) opens its terminal in Spaces, on
- * its own connection whichever runtime runs it. Where the current view cannot
- * show a find (Code, or a host the Hosts filter hides), choosing opens it and
- * the row says so. worldFinder.ts holds the search the box shares with a view.
+ * World's part of the one search box (#782, #1329, #1355, #1356): what a
+ * search finds in World on every runtime and machine, with the views' own
+ * matching (worldSearch.ts), and the views to go to. Every view, Spaces
+ * included, lists the same finds from the one World object. Choosing one
+ * (Enter or a click) goes to it in the current view, as `/` always did: Town
+ * flies to its table and Board pans to its card, each keeping the list open,
+ * so choosing it again opens its Inspector; Desk selects it, Spaces shows its
+ * terminal. The second
+ * action (Shift+Enter, or the row's button) opens its terminal in the current
+ * view, as that view opens an agent window: Town, Board, Desk and Code open its
+ * Inspector window there (openWorldFindHere), Spaces shows it (openWorldFind).
+ * Nothing here changes the view. Where the current view cannot show a find
+ * (Code, or a host the Hosts filter hides), choosing opens its window and the
+ * row says so. worldFinder.ts holds the search the box shares with a view.
  */
 
 import {
@@ -37,6 +40,7 @@ import {
   type TerminalColorTarget,
 } from "./terminalColor";
 import {
+  inspectorAdmits,
   type WorldLeafObject,
   type WorldObject,
   type WorldObjectNode,
@@ -166,10 +170,12 @@ export type WorldFindOpenDeps = {
 };
 
 /**
- * Open a found node (#1329) in Spaces, on its own connection with its tab and
- * pane focused, whichever host Spaces showed: a Herdr TUI agent, terminal,
- * table or room through Herdr's focus, a herdr-core terminal (or a core
- * room's terminal) through World's watch of it. What cannot open says why.
+ * Open a found node (#1329) chosen in Spaces, on its own connection with its
+ * tab and pane focused, whichever host Spaces showed: a Herdr TUI agent,
+ * terminal, table or room through Herdr's focus, a herdr-core terminal (or a
+ * core room's terminal) through World's watch of it. What cannot open says
+ * why. Only Spaces uses it: the other views open a find where they are
+ * (openWorldFindHere).
  */
 export async function openWorldFind(
   node: WorldObjectNode,
@@ -204,6 +210,75 @@ export async function openWorldFind(
   }
 }
 
+/**
+ * Why a found node's window cannot open in the current view (Town, Board,
+ * Desk, Code), or null when it can: an agent's or terminal's Terminal, or a
+ * room's Inspector. An offline or reconnecting host's agents stay listed,
+ * marked, and opening one says this.
+ * @internal Exported for its unit tests.
+ */
+export function worldFindHereReason(node: WorldObjectNode): string | null {
+  if (node.hostState === "reconnecting")
+    return `${node.hostLabel} is reconnecting. Try again when it is back.`;
+  if (node.stale || node.hostState === "offline-stale")
+    return `${node.hostLabel} is offline. World shows what it last saw there.`;
+  if (node.kind === "host")
+    return `${node.hostLabel} is a host, so it has no window. Find one of its agents or rooms to open it.`;
+  if (node.kind === "space")
+    return inspectorAdmits(node) ? null : `World can't open ${node.label}.`;
+  // A Herdr TUI terminal, or a live herdr-core one World watches.
+  if (node.capabilities.openTerminal || coreSpacesLeaf(node)) return null;
+  return node.viewOnly
+    ? "World only watches this herdr-core terminal from another machine, so it can't open it here."
+    : `World can't open ${node.label}'s terminal.`;
+}
+
+/** What opening a found node in the current view needs from World's shell. */
+export type WorldFindHereDeps = {
+  /**
+   * Open its window in the current view, as the view opens an agent window
+   * (the shared Inspector admission), on its own connection and runtime
+   * generation: on its terminal, or for a room its Inspector's first view.
+   * False when World no longer sees it there.
+   */
+  openWindow(
+    target: QualifiedFocusTarget,
+    view: "terminal" | null,
+  ): Promise<boolean>;
+  notify(message: string, detail: string): void;
+};
+
+/**
+ * Open a found node (#1356) in the view the box was opened in, never changing
+ * the view: Town, Board, Desk and Code open its Inspector window on its
+ * terminal (a room on its Inspector), on its own connection and runtime
+ * generation, for Herdr TUI and herdr-core alike. What cannot open says why.
+ */
+export async function openWorldFindHere(
+  node: WorldObjectNode,
+  deps: WorldFindHereDeps,
+): Promise<boolean> {
+  const fail = (detail: string) => {
+    deps.notify(`Can't open ${node.label}`, detail);
+    return false;
+  };
+  const reason = worldFindHereReason(node);
+  if (reason || node.kind === "host")
+    return fail(reason ?? `${node.label} has no window.`);
+  try {
+    if (
+      await deps.openWindow(
+        worldFoundTarget(node),
+        node.kind === "space" ? null : "terminal",
+      )
+    )
+      return true;
+    return fail(`${node.label} is no longer where World last saw it.`);
+  } catch (cause) {
+    return fail(cause instanceof Error ? cause.message : String(cause));
+  }
+}
+
 /** The tab a leaf sits at, as the views look its colour up. */
 export function worldLeafColorTarget(
   world: Pick<WorldObject, "spaces">,
@@ -224,21 +299,28 @@ export function worldLeafColorTarget(
 /** What choosing a find does, and the colour the views give a tab. */
 export type WorldFindHandlers = {
   /**
-   * Open its terminal in Spaces (openWorldFind): the second action, or what
-   * choosing does where the current view cannot show it.
+   * Open its terminal in the current view (openWorldFindHere, or in Spaces
+   * openWorldFind): the second action, or what choosing does where the
+   * current view cannot show it.
    */
   open(node: WorldObjectNode): void;
+  /**
+   * Whether `open` opens a window in the current view (Town, Board, Desk,
+   * Code) rather than Spaces: a room's opens its Inspector, and a host,
+   * which has no window, has no second action.
+   */
+  opensHere?: boolean;
   /**
    * Go to it in the current view (Town, Board, Desk): what choosing does, for
    * what the view shows (a host the Hosts filter hides is opened instead).
    */
   go?: {
     shows?(node: WorldObjectNode): boolean;
-    /** Whether choosing it now leaves the box open (Town's first choice). */
+    /** Whether choosing it now leaves the box open (a map's first choice). */
     stays?(result: WorldSearchResult): boolean;
     run(result: WorldSearchResult): void;
   };
-  /** Said on a row whose choosing opens it, outside Spaces. */
+  /** Said on a row whose choosing opens it rather than going to it. */
   opensNote?: string;
   /** Results only the current view has, such as Town's landmarks. */
   extra?(search: string): readonly WorldSearchResult[];
@@ -295,10 +377,16 @@ function findAction(
   );
   const open = node
     ? {
-        label: leaf ? "Open terminal" : "Open in Spaces",
+        label: leaf
+          ? "Open terminal"
+          : handlers.opensHere
+            ? "Open Inspector"
+            : "Open in Spaces",
         run: () => handlers.open(node),
       }
     : null;
+  // A host has no window to open beside the view.
+  const second = handlers.opensHere && node?.kind === "host" ? null : open;
   return {
     key: `world-find-${result.id}`,
     icon: findIcon(
@@ -335,7 +423,7 @@ function findAction(
       if (goes) handlers.go!.run(result);
       else open?.run();
     },
-    ...(goes && open ? { secondary: open } : {}),
+    ...(goes && second ? { secondary: second } : {}),
     ...(goes && handlers.go!.stays
       ? { stay: () => handlers.go!.stays!(result) }
       : {}),

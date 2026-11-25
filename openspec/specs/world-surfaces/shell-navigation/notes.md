@@ -125,8 +125,9 @@
   time; its **Next** and **Previous** rows page through the rest without closing
   the box, so agents that read alike stay reachable. Enter or a click goes to a
   found agent in the current view (in Town the box stays open, and choosing the
-  same row again opens its Inspector: `go.stays` in `worldCommandBox.tsx`); in Spaces, or with Shift+Enter or the row's **Open
-  terminal**, a herdr-core agent shows its terminal in Spaces' terminal area in place of the Herdr tab
+  same row again opens its Inspector: `go.stays` in `worldCommandBox.tsx`). Shift+Enter or the row's **Open
+  terminal** opens its terminal window in the view you are in and never changes the view
+  (`openWorldFindHere`); in Spaces, a herdr-core agent shows its terminal in Spaces' terminal area in place of the Herdr tab
   (`web/src/world/SpacesCoreTerminal.tsx`); **Close** returns to the tab.
   Clicking an agent or terminal of a live herdr-core host in Spaces' navigator
   opens it the same way; those rows only choose (no menus, dragging or **New

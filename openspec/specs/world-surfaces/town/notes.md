@@ -950,8 +950,8 @@
     then **Enter**) moves the camera to it at a readable zoom and pulses it,
     and the box stays open with its list; choosing the same result again
     closes the box and opens its Inspector. **Shift+Enter** or the row's
-    **Open terminal** (**Open in Spaces** for a room or table) opens it in
-    Spaces instead. Town's own places are found too: "warehouse" (or "pull
+    **Open terminal** (**Open Inspector** for a room or table) opens its
+    window in Town instead; Town stays the view. Town's own places are found too: "warehouse" (or "pull
     requests") lists the **Warehouse**, and choosing it moves the camera
     there; it has nothing to open. A result Town does not draw, such as an
     agent at a table its room folds away, opens at once. After a choice the
