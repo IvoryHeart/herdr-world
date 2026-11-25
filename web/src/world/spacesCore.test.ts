@@ -106,9 +106,10 @@ describe("Spaces' herdr-core strip (#1390)", () => {
     const world = coreWorld(panes);
     const choice = spacesCoreChoice(leaf(world, "t3"));
     const groups = spacesCoreStrip(world, choice);
+    // An agent shows its name; a plain terminal its own name from core.
     expect(labels(groups)).toEqual([
-      ["Alpha room", [leaf(world, "t1").label, leaf(world, "t2").label]],
-      ["Beta room", [leaf(world, "t3").label]],
+      ["Alpha room", ["Planner", "build shell"]],
+      ["Beta room", ["Reviewer"]],
     ]);
     // The room a tab sits in is World's room, as Town and Board show it.
     expect(groups.map((group) => group.id)).toEqual(

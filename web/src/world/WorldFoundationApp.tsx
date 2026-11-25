@@ -1,4 +1,5 @@
 import { useAssistantShow } from "./useAssistantShow";
+import { useSpacesCore } from "./useSpacesCore";
 import { useWorldAsks } from "./worldAsks";
 import "./world.css";
 import "./windows/WorldLayout.css";
@@ -30,11 +31,7 @@ import {
 } from "../workspaceResource";
 import { coreAuthorityFrom, provideFloatShellAuthority } from "./floatShell";
 import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
-import {
-  buildWorldObject,
-  type WorldLeafObject,
-  type WorldObject,
-} from "./worldObject";
+import { buildWorldObject, type WorldObject } from "./worldObject";
 import { worldObjectForHosts } from "./worldFilters";
 import { useHostsFilter } from "./hostsFilter";
 import { HostsControl, selectedHostCount } from "./HostsControl";
@@ -88,12 +85,7 @@ import { NeedsYouCounter } from "./NeedsYouTab";
 import { needsYouInTopbar } from "./needsYou";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { SpacesCoreTerminal } from "./SpacesCoreTerminal";
-import {
-  spacesCoreChoice,
-  spacesCoreStrip,
-  spacesCoreStripStep,
-  type SpacesCoreChoice,
-} from "./spacesCore";
+import { spacesCoreStrip, spacesCoreStripStep } from "./spacesCore";
 import { SpacesCoreStrip } from "./SpacesCoreStrip";
 import { coreSpacesLeaf, worldFindOpenReason } from "./worldCommandBox";
 import {
@@ -143,22 +135,14 @@ export default function WorldFoundationApp() {
     null,
   );
   // The herdr-core terminal Spaces shows in place of a Herdr tab (#1329).
-  // Each open is a new choice, so a phone comes back to it from the list.
-  const [spacesCore, setSpacesCore] = useState<
-    (SpacesCoreChoice & { opened: number }) | null
-  >(null);
-  const spacesCoreOpens = useRef(0);
-  // Each terminal World opens in Spaces asks App to show it over whatever
-  // Inspector covered it (#1329), for every runtime alike.
-  const [terminalReveals, setTerminalReveals] = useState(0);
-  const revealSpacesTerminal = () => setTerminalReveals((count) => count + 1);
-  const showCoreInSpaces = (leaf: WorldLeafObject) => {
-    setSpacesCore({
-      ...spacesCoreChoice(leaf),
-      opened: ++spacesCoreOpens.current,
-    });
-    revealSpacesTerminal();
-  };
+  const {
+    shown: spacesCore,
+    reveals: terminalReveals,
+    reveal: revealSpacesTerminal,
+    show: showCoreInSpaces,
+    choose: chooseSpacesCore,
+    close: closeSpacesCore,
+  } = useSpacesCore();
   const [inspectorTerminalPortals, setInspectorTerminalPortals] = useState<
     Record<string, HTMLDivElement | null>
   >({});
@@ -204,12 +188,6 @@ export default function WorldFoundationApp() {
     () => (spacesCore ? spacesCoreStrip(fullWorld, spacesCore) : []),
     [fullWorld, spacesCore],
   );
-  // Choosing in the strip, by click or tab key, only changes what Spaces
-  // shows: herdr-core has no focus to send.
-  const chooseSpacesCore = (choice: SpacesCoreChoice) =>
-    setSpacesCore((current) =>
-      current ? { ...choice, opened: current.opened } : current,
-    );
   const conversationStatus = useStoreSelector((snapshot) => snapshot.status);
   const workspaceSurfaceInspectorConversation = inspectorConversations.find(
     (conversation) =>
@@ -378,12 +356,12 @@ export default function WorldFoundationApp() {
           void openWorldFind(node, {
             activateSpacesTarget: async (target) => {
               const opened = await store.activateQualifiedSpacesTarget(target);
-              if (opened) setSpacesCore(null);
+              if (opened) closeSpacesCore();
               return opened;
             },
             activateHost: async (host) => {
               await activateWorldNodeHost(host);
-              setSpacesCore(null);
+              closeSpacesCore();
             },
             openCoreInSpaces: (leaf) => {
               showCoreInSpaces(leaf);
@@ -593,7 +571,7 @@ export default function WorldFoundationApp() {
                       worldFindOpenReason(node) ??
                         `${node.label} has no live terminal on herdr-core.`,
                     );
-                  setSpacesCore(null);
+                  closeSpacesCore();
                   if (store.get().activeConnectionId !== node.connectionId)
                     await activateWorldNodeHost(node);
                   const resourceView =
@@ -779,7 +757,7 @@ export default function WorldFoundationApp() {
                     <SpacesCoreTerminal
                       world={fullWorld}
                       choice={spacesCore}
-                      onClose={() => setSpacesCore(null)}
+                      onClose={() => closeSpacesCore()}
                     />
                   ),
                   tabs: (
