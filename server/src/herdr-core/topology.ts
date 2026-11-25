@@ -733,6 +733,9 @@ export function coreTopology(
         ? record.parent
         : coreSpawnedBy(record);
     const summary = coreId ? coreSummaryOf(coreId, record, now) : null;
+    // The terminal's own name in core ("build shell"): World's views label a
+    // plain terminal with it (#1390); an agent's name comes with its row below.
+    const name = text(record.name, 64);
     const pane: TerminalRow = {
       pane_id: record.address,
       terminal_id: record.address,
@@ -740,6 +743,7 @@ export function coreTopology(
       tab_id: tabId,
       focused: false,
       runtime: "herdr-core",
+      ...(name ? { label: name } : {}),
       ...(cwd ? { cwd } : {}),
       ...(foregroundCwd ? { foreground_cwd: foregroundCwd } : {}),
       ...(parent && parent !== record.address
@@ -789,7 +793,6 @@ export function coreTopology(
       if (seen !== null) pane.seen_turn = seen;
     }
     if (isFavourite(record)) pane.favourite = true;
-    const name = text(record.name, 64);
     const title = text(record.title);
     agents.push({
       pane_id: record.address,

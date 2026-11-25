@@ -18,7 +18,9 @@ import type { MemoryClient } from "./memoryClient";
  * an agent whose harness has no reader. Edits, adds and
  * deletes work and conflicts can be forced (`memoryFixtureTouch`); saving
  * text with `[uncertain]` in it acts out a lost, uncertain write. Paths
- * are synthetic and nothing reaches a host.
+ * are synthetic and nothing reaches a host. `?memoryFixture=gone` is the
+ * same host after every agent on it stopped (#1342): no memory to read,
+ * and everything on its "Made by agents" shelf made by agents now gone.
  */
 
 const PARAM = "memoryFixture";
@@ -29,9 +31,15 @@ const PARAM = "memoryFixture";
 export const UNCERTAIN_MARK = "[uncertain]";
 let on: boolean | undefined;
 let unsupportedOnly = false;
+let goneOnly = false;
 
 export function memoryFixtureHasMemory() {
-  return !unsupportedOnly;
+  return !unsupportedOnly && !goneOnly;
+}
+
+/** The `=gone` switch: a host with no agents left, only what they made. */
+export function memoryFixtureGone() {
+  return goneOnly;
 }
 
 /** The switch, read once per page load; the parameter is removed. */
@@ -43,6 +51,7 @@ export function memoryFixtureOn(): boolean {
   if (!url.searchParams.has(PARAM)) return on;
   on = true;
   unsupportedOnly = url.searchParams.get(PARAM) === "unsupported";
+  goneOnly = url.searchParams.get(PARAM) === "gone";
   url.searchParams.delete(PARAM);
   history.replaceState(history.state, "", url);
   return on;
@@ -52,8 +61,10 @@ export function memoryFixtureOn(): boolean {
 export function setMemoryFixtureForTests(
   value: boolean | undefined,
   unsupported = false,
+  gone = false,
 ) {
   unsupportedOnly = unsupported;
+  goneOnly = gone;
   on = value;
   library = null;
 }

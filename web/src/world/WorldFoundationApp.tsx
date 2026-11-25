@@ -1,4 +1,5 @@
 import { useAssistantShow } from "./useAssistantShow";
+import { useSpacesCore } from "./useSpacesCore";
 import { useWorldAsks } from "./worldAsks";
 import "./world.css";
 import "./windows/WorldLayout.css";
@@ -30,11 +31,7 @@ import {
 } from "../workspaceResource";
 import { coreAuthorityFrom, provideFloatShellAuthority } from "./floatShell";
 import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
-import {
-  buildWorldObject,
-  type WorldLeafObject,
-  type WorldObject,
-} from "./worldObject";
+import { buildWorldObject, type WorldObject } from "./worldObject";
 import { worldObjectForHosts } from "./worldFilters";
 import { useHostsFilter } from "./hostsFilter";
 import { HostsControl, selectedHostCount } from "./HostsControl";
@@ -80,13 +77,17 @@ import {
   worldLeafColorTarget,
 } from "./worldCommandBox";
 import { useTerminalColors } from "./useTerminalColors";
+import { worldFinder } from "./worldFinder";
+import type { WorldSearchResult } from "./worldSearch";
+import { townLandmarkResults } from "./town/townSearch";
 import { terminalColor } from "./terminalColor";
 import { NeedsYouCounter } from "./NeedsYouTab";
 import { needsYouInTopbar } from "./needsYou";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { SpacesCoreTerminal } from "./SpacesCoreTerminal";
-import { spacesCoreChoice, type SpacesCoreChoice } from "./spacesCore";
-import { coreSpacesLeaf } from "./worldCommandBox";
+import { spacesCoreStrip, spacesCoreStripStep } from "./spacesCore";
+import { SpacesCoreStrip } from "./SpacesCoreStrip";
+import { coreSpacesLeaf, worldFindOpenReason } from "./worldCommandBox";
 import {
   WorldPanelsContext,
   useWorldPanelRegistry,
@@ -134,22 +135,14 @@ export default function WorldFoundationApp() {
     null,
   );
   // The herdr-core terminal Spaces shows in place of a Herdr tab (#1329).
-  // Each open is a new choice, so a phone comes back to it from the list.
-  const [spacesCore, setSpacesCore] = useState<
-    (SpacesCoreChoice & { opened: number }) | null
-  >(null);
-  const spacesCoreOpens = useRef(0);
-  // Each terminal World opens in Spaces asks App to show it over whatever
-  // Inspector covered it (#1329), for every runtime alike.
-  const [terminalReveals, setTerminalReveals] = useState(0);
-  const revealSpacesTerminal = () => setTerminalReveals((count) => count + 1);
-  const showCoreInSpaces = (leaf: WorldLeafObject) => {
-    setSpacesCore({
-      ...spacesCoreChoice(leaf),
-      opened: ++spacesCoreOpens.current,
-    });
-    revealSpacesTerminal();
-  };
+  const {
+    shown: spacesCore,
+    reveals: terminalReveals,
+    reveal: revealSpacesTerminal,
+    show: showCoreInSpaces,
+    choose: chooseSpacesCore,
+    close: closeSpacesCore,
+  } = useSpacesCore();
   const [inspectorTerminalPortals, setInspectorTerminalPortals] = useState<
     Record<string, HTMLDivElement | null>
   >({});
@@ -189,6 +182,11 @@ export default function WorldFoundationApp() {
   const topbarWorld = useMemo(
     () => worldObjectForHosts(fullWorld, hostsFilter.ids),
     [fullWorld, hostsFilter.ids],
+  );
+  // The strip of the shown core terminal's host (#1390), live from World.
+  const spacesCoreGroups = useMemo(
+    () => (spacesCore ? spacesCoreStrip(fullWorld, spacesCore) : []),
+    [fullWorld, spacesCore],
   );
   const conversationStatus = useStoreSelector((snapshot) => snapshot.status);
   const workspaceSurfaceInspectorConversation = inspectorConversations.find(
@@ -316,53 +314,102 @@ export default function WorldFoundationApp() {
     }
   };
 
-  // World's finds (#1329): one search of the whole World object, in every
-  // view, on every connected host whatever the Hosts filter shows. Enter opens
-  // what was found in Spaces, whichever runtime runs it; in a visual view the
-  // second action shows it there, as clicking it does, when the view shows
-  // its host.
+  // World's one search (#1329, #1355): the whole World object, in every
+  // view, on every connected host whatever the Hosts filter shows. Choosing a
+  // find goes to it in the current view, as clicking it there does (Town
+  // flies to it, and selects it when chosen again); the row's second action
+  // (Shift+Enter) opens its terminal in Spaces, whichever
+  // runtime runs it. Where the view cannot show it, choosing opens it.
   const terminalColors = useTerminalColors();
   // Only the views that draw World's nodes can show one; Code and Spaces can't.
   const showNode =
     view === "town" || view === "board" || view === "desk"
       ? visualActionExtension.showNode
       : undefined;
-  const worldFind = (search: string) =>
-    worldFindGroup(fullWorld, search, {
-      open: (node) =>
-        void openWorldFind(node, {
-          activateSpacesTarget: async (target) => {
-            const opened = await store.activateQualifiedSpacesTarget(target);
-            if (opened) setSpacesCore(null);
-            return opened;
-          },
-          activateHost: async (host) => {
-            await activateWorldNodeHost(host);
-            setSpacesCore(null);
-          },
-          openCoreInSpaces: (leaf) => {
-            showCoreInSpaces(leaf);
-            return true;
-          },
-          goToSpaces: () => {
-            setView("spaces");
-            revealSpacesTerminal();
-          },
-          notify: (message, detail) =>
-            store.notify({ kind: "error", message, detail }),
-        }),
-      ...(showNode
-        ? {
-            show: {
-              label: `Show in ${worldViewLabel(view)}`,
-              shows: (node) => topbarWorld.nodeById.has(node.id),
-              run: (node) => showNode(node.id),
+  // The search Town and Board light as it is typed (worldFinder.ts).
+  const lights = view === "town" || view === "board";
+  // A view change ends the search the last view showed.
+  useEffect(() => () => worldFinder.end(), [view]);
+  const finderSearch = useMemo(
+    () => ({
+      seed: () => {
+        const running = worldFinder.get();
+        return running?.view === view ? running.query : "";
+      },
+      change: (query: string) => {
+        if (lights) worldFinder.type(view, query);
+      },
+      closed: () => worldFinder.closed(),
+    }),
+    [view, lights],
+  );
+  const chosenAgain = (result: WorldSearchResult) => {
+    const running = worldFinder.get();
+    return running?.view === view && running.chosen?.result.id === result.id;
+  };
+  const worldFind = (search: string, from: number) =>
+    worldFindGroup(
+      fullWorld,
+      search,
+      {
+        open: (node) =>
+          void openWorldFind(node, {
+            activateSpacesTarget: async (target) => {
+              const opened = await store.activateQualifiedSpacesTarget(target);
+              if (opened) closeSpacesCore();
+              return opened;
             },
-          }
-        : {}),
-      colorOf: (leaf) =>
-        terminalColor(terminalColors, worldLeafColorTarget(fullWorld, leaf)),
-    });
+            activateHost: async (host) => {
+              await activateWorldNodeHost(host);
+              closeSpacesCore();
+            },
+            openCoreInSpaces: (leaf) => {
+              showCoreInSpaces(leaf);
+              return true;
+            },
+            goToSpaces: () => {
+              setView("spaces");
+              revealSpacesTerminal();
+            },
+            notify: (message, detail) =>
+              store.notify({ kind: "error", message, detail }),
+          }),
+        ...(showNode
+          ? {
+              go: {
+                shows: (node) => topbarWorld.nodeById.has(node.id),
+                // Town's first choice keeps the list open; choosing the same
+                // find again closes it and opens its Inspector.
+                stays:
+                  view === "town"
+                    ? (result) =>
+                        !(
+                          chosenAgain(result) &&
+                          topbarWorld.nodeById.has(result.nodeId)
+                        )
+                    : undefined,
+                run: (result) => {
+                  const again = chosenAgain(result);
+                  if (lights) worldFinder.choose(view, search, result);
+                  // Town flies to it on its map (useTownSearch) and selects it
+                  // when it is chosen again, as `/` did; the other views
+                  // select it at once. A landmark has no node to select.
+                  if (
+                    (view !== "town" || again) &&
+                    topbarWorld.nodeById.has(result.nodeId)
+                  )
+                    showNode(result.nodeId);
+                },
+              },
+            }
+          : {}),
+        ...(view === "spaces" ? {} : { opensNote: "Opens in Spaces" }),
+        ...(view === "town" ? { extra: townLandmarkResults } : {}),
+        colorOf: (leaf) =>
+          terminalColor(terminalColors, worldLeafColorTarget(fullWorld, leaf)),
+      },
+      from,
+    );
 
   // Panel windows (Town's summary and the like) beside the Inspectors.
   const panelRegistry = useWorldPanelRegistry();
@@ -492,7 +539,11 @@ export default function WorldFoundationApp() {
           onZenActiveChange={setZenActive}
           topbarPortal={topbarPortal}
           visualActionExtension={withWorldViews(
-            { ...visualActionExtension, find: worldFind },
+            {
+              ...visualActionExtension,
+              find: worldFind,
+              finderSearch,
+            },
             view,
             setView,
           )}
@@ -513,7 +564,14 @@ export default function WorldFoundationApp() {
                     onSelectionAdmitted();
                     return;
                   }
-                  if (!node.coreControl) setSpacesCore(null);
+                  // A core node with no live terminal says why, as Cmd+K
+                  // does; it has no Herdr host to make Spaces' own.
+                  if (node.coreControl)
+                    throw new Error(
+                      worldFindOpenReason(node) ??
+                        `${node.label} has no live terminal on herdr-core.`,
+                    );
+                  closeSpacesCore();
                   if (store.get().activeConnectionId !== node.connectionId)
                     await activateWorldNodeHost(node);
                   const resourceView =
@@ -699,9 +757,24 @@ export default function WorldFoundationApp() {
                     <SpacesCoreTerminal
                       world={fullWorld}
                       choice={spacesCore}
-                      onClose={() => setSpacesCore(null)}
+                      onClose={() => closeSpacesCore()}
                     />
                   ),
+                  tabs: (
+                    <SpacesCoreStrip
+                      groups={spacesCoreGroups}
+                      choice={spacesCore}
+                      onChoose={chooseSpacesCore}
+                    />
+                  ),
+                  selectTab: (step: "previous" | "next" | number) => {
+                    const next = spacesCoreStripStep(
+                      spacesCoreGroups,
+                      spacesCore.nodeId,
+                      step,
+                    );
+                    if (next) chooseSpacesCore(next);
+                  },
                 }
               : null
           }

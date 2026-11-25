@@ -88,6 +88,12 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   Library entry. Supported harnesses still offer their missing files to create.
   The [testing fixture](../../../docs/memory-api.md#discovery-and-load-evidence) includes
   OpenCode and an unsupported-only project, plus a no-capable-host switch.
+- A host with no such agent (every agent stopped) still offers the Library while
+  agents made something there: it opens on **Made by agents** alone, says memory
+  shows again when an agent with memory starts, and never reads the host's
+  memory. `memoryHostsOf` publishes every live host, marking these
+  `memory: false`; `libraryHosts()` (memoryClient.ts) is the one list every
+  entry point uses. Try it with `?memoryFixture=gone`.
 - Open it from Town's **library**, right of the town center on the first street,
   from the town center's ring (**Buildings** → **Library**), from Board's hub (**Memory**, on the
   selected agent or workspace), from an agent window's settings (**Memory**)

@@ -12,8 +12,9 @@ import {
   memoryErrorText,
   memoryHosts,
   memoryTargetKey,
+  noteHostMade,
 } from "./memoryClient";
-import { memoryFixtureOn } from "./memoryFixture";
+import { memoryFixtureGone, memoryFixtureOn } from "./memoryFixture";
 
 /**
  * The browser's side of `world.artefacts.list` (#1327): one host's "Made by
@@ -69,7 +70,8 @@ const bridgeClient: ArtefactShelfClient = {
 };
 
 const fixtureClient: ArtefactShelfClient = {
-  list: async (target) => artefactFixtureShelf(target, Date.now()),
+  list: async (target) =>
+    artefactFixtureShelf(target, Date.now(), memoryFixtureGone()),
   read: async (_target, _workspaceId, path) => artefactFixtureRead(path),
 };
 
@@ -86,6 +88,7 @@ export function setArtefactShelfClientForTests(
   pending.clear();
   for (const timer of later.values()) clearTimeout(timer);
   later.clear();
+  noteHostMade(null);
   emit();
 }
 
@@ -165,8 +168,10 @@ export function requestArtefactShelf(
     .list(target)
     .then(
       (shelf) => {
-        if (current(key))
-          shelves.set(key, { status: "ready", shelf, at: Date.now() });
+        if (!current(key)) return;
+        shelves.set(key, { status: "ready", shelf, at: Date.now() });
+        // Whether the Library is offered on a host with no memory (#1342).
+        noteHostMade(target, shelf.artefacts.length);
       },
       (error: unknown) => {
         if (current(key))

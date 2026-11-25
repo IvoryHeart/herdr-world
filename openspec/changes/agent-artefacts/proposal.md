@@ -18,7 +18,8 @@ Library (#1327).
   the Library's readers (everything, a project, an agent) filter it, its search
   finds artefacts alongside memory, and its reader shows Markdown, text,
   images and PDFs, with **Open in Files** for a file and **Open link** for a
-  link. Town's Library sign counts them.
+  link. Town's Library sign counts them. A host whose agents have all
+  stopped keeps the Library for what they made (#1342).
 - Desk cards, Town peeks and Chat show a short **Made** summary (the count and
   the latest one or two) that opens the Library on that agent; Chat also shows
   each artefact as a small card in the turn that made it.
@@ -30,6 +31,11 @@ Library (#1327).
 
 - `world-artefacts`: discovery, the record, presence, the Library wing, the
   views' summaries, opening and privacy.
+
+### Modified Capabilities
+
+- `world-memory`: a host without a memory adapter offers the Library while
+  agents made something there, showing only that.
 
 ## Impact
 

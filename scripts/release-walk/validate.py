@@ -19,4 +19,5 @@ if __name__ == '__main__':
     reports = [json.loads(path.read_text()) for path in Path(args.reports).rglob('report.json')]
     signed = json.loads(Path(args.signed).read_text())
     validate_publication(reports, signed, args.commit, args.version)
-    print(receipt_digest(signed))
+    if signed is not None:
+        print(receipt_digest(signed))

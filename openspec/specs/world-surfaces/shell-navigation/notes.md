@@ -24,8 +24,9 @@
 - `web/src/world/WorldFoundationApp.tsx`
 - `web/src/world/visualRouteActions.ts`
 - `web/src/world/worldSearch.ts`
+- One search: `web/src/world/worldFinder.ts`, `web/src/world/WorldViewToolbar.tsx`, `web/src/world/viewSearchShortcut.ts`, `web/src/commandBoxKey.ts`, `web/src/world/town/useTownSearch.ts`, `web/src/world/board/useBoardSearch.ts`
 - Find any agent: `web/src/world/worldCommandBox.tsx`, `web/src/components/CommandCombobox.tsx`, `web/src/components/CommandActionItem.tsx`, `shared/harnessLabels.ts`
-- Found herdr-core terminal in Spaces: `web/src/world/SpacesCoreTerminal.tsx`, `web/src/world/spacesCore.ts`, `web/src/world/spacesCoreTerminal.css`
+- herdr-core terminal in Spaces and its strip (#1390): `web/src/world/SpacesCoreTerminal.tsx`, `web/src/world/SpacesCoreStrip.tsx`, `web/src/world/spacesCore.ts`, `web/src/world/useSpacesCore.ts`, `web/src/world/spacesCoreTerminal.css`, `spacesSurface.tabs`/`selectTab` in `web/src/App.tsx`, `selectOnly` in `web/src/components/WorkspaceTree.tsx`
 - `web/src/layerStack.ts`
 - `web/src/world/runtimeGrouping.ts`
 - `web/src/world/runtimeGrouping.settings.tsx`
@@ -41,7 +42,8 @@
 - `web/src/world/WorldFoundationApp.test.ts`
 - `web/src/world/visualRouteActions.test.ts`
 - `web/src/world/worldSearch.test.ts`
-- Find: `web/src/world/worldCommandBox.test.tsx`, `web/src/commandBoxKey.dom.test.ts`, `web/src/foundTerminalReveal.dom.test.ts`
+- One search: `web/src/world/worldFinder.test.ts`, `web/src/world/viewSearchShortcut.dom.test.ts`, `web/src/world/worldSearchMatches.test.ts`, `web/src/world/HostsFilter.browser.tsx`, `web/src/world/WorldTerminalHandoff.browser.tsx`
+- Find: `web/src/world/spacesCore.test.ts`, `web/src/world/useSpacesCore.dom.test.ts`, `web/src/world/WorldNavigatorWorktree.browser.tsx` (core host rows), `web/src/world/worldCommandBox.test.tsx`, `web/src/commandBoxKey.dom.test.ts`, `web/src/foundTerminalReveal.dom.test.ts`
 - `web/src/systemBack.browser.tsx`
 - `web/src/world/runtimeGrouping.test.ts`
 - `web/src/world/navigatorGroups.test.ts`
@@ -114,12 +116,32 @@
   panes before dropping. Overflowing desktop tab strips offer scroll controls.
 - Search workspace, worktree, file, tab and pane actions in the command
   menu (`Cmd+K` on macOS, `Ctrl+K` elsewhere, or `Cmd+Option+K`/`Ctrl+Alt+K`
-  from a terminal or text field). A workspace-relative or
+  from a terminal or text field). It is World's one search: `/` and
+  `Cmd+F`/`Ctrl+F` open the same box, and so do a view's search button and the
+  phone's **Find or act**. A workspace-relative or
   absolute path opens the file. Agents are found in its **In World** group,
   in every view (see Find or act in terminal-windows notes); Spaces has no
-  separate list of its own connection's agents. Enter on a herdr-core agent
-  shows its terminal in Spaces' terminal area in place of the Herdr tab
+  separate list of its own connection's agents. The group shows 12 finds at a
+  time; its **Next** and **Previous** rows page through the rest without closing
+  the box, so agents that read alike stay reachable. Enter or a click goes to a
+  found agent in the current view (in Town the box stays open, and choosing the
+  same row again opens its Inspector: `go.stays` in `worldCommandBox.tsx`); in Spaces, or with Shift+Enter or the row's **Open
+  terminal**, a herdr-core agent shows its terminal in Spaces' terminal area in place of the Herdr tab
   (`web/src/world/SpacesCoreTerminal.tsx`); **Close** returns to the tab.
+  Clicking an agent or terminal of a live herdr-core host in Spaces' navigator
+  opens it the same way; those rows only choose (no menus, dragging or **New
+  workspace**, which are Herdr TUI operations), and a stale host's rows stay
+  inert. While a core terminal shows, the tab strip lists that host's live core
+  terminals in World's room order, room names between them when there are
+  several rooms, the open one marked (`SpacesCoreStrip`). An agent's tab shows
+  its name; a plain terminal's shows its own herdr-core name (the pane row's
+  `label` from `coreTopology` in `server/src/herdr-core/topology.ts`, which
+  World's leaf label uses in every view). A click, the
+  previous/next tab shortcuts (`Alt+Shift+←`/`→` by default) or the numbered
+  tab shortcuts switch terminals; nothing is sent to herdr-core, and new/close tab keys do
+  nothing. Like a find, choosing a tab shows its terminal over an expanded
+  Inspector. A terminal that stops leaves the strip; the open one stays, struck
+  through as gone. On a phone the strip scrolls and hides with one tab.
   Every terminal a find opens closes an expanded Inspector (or any Inspector
   on a phone) first, through App's `revealTerminal` request.
 - Toggle **Zen mode** (`Cmd+Shift+Z` on macOS, `Ctrl+Alt+Z` elsewhere) to hide
@@ -265,7 +287,7 @@ Common defaults (Linux/Android overrides follow the table):
 | Zen mode | `Cmd+Shift+Z` | `Ctrl+Alt+Z` |
 | Recent pane switcher | `Ctrl+Tab` | `Ctrl+Alt+J` |
 | Pane Search | `Alt+K` | `Alt+K` |
-| Search the current view (Town, Board, Desk) | `/` or `Cmd+F` | `/` or `Ctrl+F` |
+| Find or act (World's one search, same box as the command menu) | `/` or `Cmd+F` | `/` or `Ctrl+F` |
 | Create / close tab or pane | `Cmd+T` / `Cmd+W` | `Ctrl+Alt+T` / `Ctrl+Alt+W` |
 | Previous / next tab | `Cmd+Option+Left/Right` | `Alt+Shift+Left/Right` |
 | Focus neighboring pane | `Cmd+Ctrl+Arrow` | `Ctrl+Shift+Arrow` |

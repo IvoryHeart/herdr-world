@@ -1,11 +1,15 @@
 /**
- * World's part of the command box (#782, #1329): what a search finds in World
- * on every runtime and machine, with the views' own matching (worldSearch.ts),
- * and the views to go to. Every view, Spaces included, lists the same finds
- * from the one World object. Enter opens what was found in Spaces, its
- * terminal on its own connection whichever runtime runs it; the second action
- * (Shift+Enter, or the row's button) shows it in the current view as clicking
- * it there does.
+ * World's part of the one search box (#782, #1329, #1355): what a search
+ * finds in World on every runtime and machine, with the views' own matching
+ * (worldSearch.ts), and the views to go to. Every view, Spaces included,
+ * lists the same finds from the one World object. Choosing one (Enter or a
+ * click) goes to it in the current view, as `/` always did: Town flies to its
+ * table and keeps the list open, so choosing it again opens its Inspector;
+ * Board and Desk select it, Spaces shows its terminal. The second
+ * action (Shift+Enter, or the row's button) opens its terminal in Spaces, on
+ * its own connection whichever runtime runs it. Where the current view cannot
+ * show a find (Code, or a host the Hosts filter hides), choosing opens it and
+ * the row says so. worldFinder.ts holds the search the box shares with a view.
  */
 
 import {
@@ -13,7 +17,7 @@ import {
   Building,
   Cpu,
   DoorOpen,
-  Search,
+  Landmark,
   Server,
   SquareTerminal,
 } from "lucide-react";
@@ -41,8 +45,11 @@ import { worldSearchResults, type WorldSearchResult } from "./worldSearch";
 import { WORLD_VIEW_DESTINATIONS } from "./WorldMobileNav";
 import type { WorldView } from "./worldViewRouting";
 
-/** Found items the box lists; more words narrow the rest. */
-export const WORLD_COMMAND_FINDS = 8;
+/**
+ * Found items the box lists at once; its Next and Previous rows page through
+ * the rest, so every match stays reachable however alike they look.
+ */
+export const WORLD_COMMAND_FINDS = 12;
 
 export const WORLD_COMMAND_PLACEHOLDER =
   "Find an agent, room or table, or an action…";
@@ -61,6 +68,7 @@ const KIND_ICONS = {
   room: <DoorOpen size={15} />,
   table: <Armchair size={15} />,
   terminal: <SquareTerminal size={15} />,
+  landmark: <Landmark size={15} />,
 };
 
 /**
@@ -120,7 +128,6 @@ export function coreSpacesLeaf(
 /**
  * Why Enter cannot open a found node, or null when it can. An offline or
  * reconnecting host's agents stay listed, marked, and opening one says this.
- * @internal Exported for its unit tests.
  */
 export function worldFindOpenReason(node: WorldObjectNode): string | null {
   if (node.hostState === "reconnecting")
@@ -216,17 +223,25 @@ export function worldLeafColorTarget(
 
 /** What choosing a find does, and the colour the views give a tab. */
 export type WorldFindHandlers = {
-  /** Enter or a click: open it (openWorldFind). */
+  /**
+   * Open its terminal in Spaces (openWorldFind): the second action, or what
+   * choosing does where the current view cannot show it.
+   */
   open(node: WorldObjectNode): void;
   /**
-   * The second action, in a visual view: show it there, offered for what the
-   * view shows (a host the Hosts filter hides is found and opened, not shown).
+   * Go to it in the current view (Town, Board, Desk): what choosing does, for
+   * what the view shows (a host the Hosts filter hides is opened instead).
    */
-  show?: {
-    label: string;
+  go?: {
     shows?(node: WorldObjectNode): boolean;
-    run(node: WorldObjectNode): void;
+    /** Whether choosing it now leaves the box open (Town's first choice). */
+    stays?(result: WorldSearchResult): boolean;
+    run(result: WorldSearchResult): void;
   };
+  /** Said on a row whose choosing opens it, outside Spaces. */
+  opensNote?: string;
+  /** Results only the current view has, such as Town's landmarks. */
+  extra?(search: string): readonly WorldSearchResult[];
   /** A leaf's tab colour as every view shows it (useTerminalColors). */
   colorOf?(leaf: WorldLeafObject): TerminalColor | null;
 };
@@ -274,6 +289,16 @@ function findAction(
   const excerpt = result.excerpt?.map((part) => part.text).join("");
   const core = node ? isCore(node.connectionId) : false;
   const runtime = core ? "herdr-core" : "Herdr TUI";
+  // A view's own result (a landmark) has no node: the view always shows it.
+  const goes = Boolean(
+    handlers.go && (!node || (handlers.go.shows?.(node) ?? true)),
+  );
+  const open = node
+    ? {
+        label: leaf ? "Open terminal" : "Open in Spaces",
+        run: () => handlers.open(node),
+      }
+    : null;
   return {
     key: `world-find-${result.id}`,
     icon: findIcon(
@@ -288,10 +313,11 @@ function findAction(
       result.stale && !mark ? "stale" : null,
       result.place.join(" › ") || null,
       excerpt ?? null,
+      !goes ? (handlers.opensNote ?? null) : null,
     ]
       .filter(Boolean)
       .join(" · "),
-    trailing: (
+    trailing: node ? (
       <>
         <span
           className="world-find-runtime"
@@ -303,49 +329,56 @@ function findAction(
         </span>
         {mark ? <AgentMark kind={mark} /> : null}
       </>
-    ),
+    ) : undefined,
     score: RANK_SCORES[result.rank] ?? 0.5,
     run: () => {
-      if (node) handlers.open(node);
+      if (goes) handlers.go!.run(result);
+      else open?.run();
     },
-    ...(handlers.show && node && (handlers.show.shows?.(node) ?? true)
-      ? {
-          secondary: {
-            label: handlers.show.label,
-            run: () => handlers.show!.run(node),
-          },
-        }
+    ...(goes && open ? { secondary: open } : {}),
+    ...(goes && handlers.go!.stays
+      ? { stay: () => handlers.go!.stays!(result) }
       : {}),
   };
 }
 
-/** The found items for a search, or null when it finds nothing. */
+/**
+ * A page of the found items for a search, from the `from`th, or null when it
+ * finds nothing. The box pages through the rest (ActionGroupDefinition.page).
+ */
 export function worldFindGroup(
   world: WorldObject,
   search: string,
   handlers: WorldFindHandlers,
+  from = 0,
 ): ActionGroupDefinition | null {
-  const results = worldSearchResults(world, search);
+  const extra = handlers.extra?.(search) ?? [];
+  // A stable sort keeps the view's own results first within a rank.
+  const results = [...extra, ...worldSearchResults(world, search)].sort(
+    (a, b) => a.rank - b.rank,
+  );
   if (!results.length) return null;
   const isCore = (connectionId: string) =>
     world.hosts.find((host) => host.connectionId === connectionId)?.connection
       .runtime === "herdr-core";
+  // A page World emptied as it changed shows its last page instead.
+  const lastPage =
+    Math.floor((results.length - 1) / WORLD_COMMAND_FINDS) *
+    WORLD_COMMAND_FINDS;
+  const start = Math.min(
+    Math.max(0, Math.floor(from / WORLD_COMMAND_FINDS) * WORLD_COMMAND_FINDS),
+    lastPage,
+  );
   const actions = results
-    .slice(0, WORLD_COMMAND_FINDS)
+    .slice(start, start + WORLD_COMMAND_FINDS)
     .map((result) =>
       findAction(result, world.nodeById.get(result.nodeId), handlers, isCore),
     );
-  const more = results.length - actions.length;
-  if (more > 0)
-    actions.push({
-      key: "world-find-more",
-      icon: <Search size={15} />,
-      title: `${more} more in World`,
-      disabledReason: "Add a word to narrow the search",
-      score: 0.01,
-      run: () => {},
-    });
-  return { heading: "In World", actions };
+  return {
+    heading: "In World",
+    actions,
+    page: { from: start, size: WORLD_COMMAND_FINDS, total: results.length },
+  };
 }
 
 /** Going to each view but the current one. */
